@@ -4369,7 +4369,8 @@ What was built, all through the extension seam — registered builtins in each
   process's directory, which are two different directories the moment a script
   writes `cd`. Corpus: `zmodload/the-startup-modules-a-prompt-narrows`,
   `stat/*`, `files/*`.
-- **zsh `zsh/system`'s three byte-moving builtins** (dialect/zsh/systemio.go):
+- **zsh `zsh/system`'s six builtins** (dialect/zsh/systemio.go,
+  systemlock.go, systemseek.go):
   `sysopen`, `sysread` and `syswrite`, measured 2026-09-10 against zsh 5.9.2
   with `zsh -f`. The module already loaded here — its two parameters and its
   math function are implemented — and installed none of its builtins, which is
@@ -4378,13 +4379,14 @@ What was built, all through the extension seam — registered builtins in each
   not found: sysopen`, inside a prompt theme's asynchronous worker on the line
   its `|| return` guards (#1737).
 
-  **Three of six.** `zsystem`, `sysseek` and `syserror` are not registered, so
-  they refuse by their own names — at their call site, and under `zmodload -F
-  zsh/system b:zsystem`, which is 1 here and 0 in zsh. That difference is
-  recorded rather than hidden; see the corpus row named below. A lock is a
-  promise about what two shells do to one file at once and wants its own
-  measurements, and the other two are written nowhere in the tree this shell
-  starts with.
+  **Six of six, in two halves.** #1737 was the three that move bytes and left
+  `zsystem`, `sysseek` and `syserror` registered in the feature table and
+  refused *by name* — at their call site, and under `zmodload -F zsh/system
+  b:zsystem`, which was 1 here and 0 in zsh. That is the right state for a
+  half-written module and not the right state to leave one in, and #1749
+  closed it. The corpus row that recorded the difference now records
+  agreement, and keeps one line — `-F` naming a feature nobody has — that must
+  still be able to say no.
 
   `sysopen` is `exec {fd}<file` with the flags spelled out. `-u name`
   allocates a descriptor and puts the *number* in the named parameter, by the
@@ -4421,7 +4423,96 @@ What was built, all through the extension seam — registered builtins in each
   unreachable, where every number named here is the number it goes on; and
   `-o nonblock` on a process substitution reads end-of-file where zsh reads the
   command's output, because this shell's `<(cmd)` is a named pipe unlinked when
-  the command that named it ends (#1750). Corpus: `system/*`.
+  the command that named it ends (#1750).
+
+  `zsystem` is `supports` and `flock`. **`supports` answers about what was
+  built** — `flock` and `supports` are the whole subcommand vocabulary and
+  everything else is 1, *including the module's own builtins' names* — and it
+  is a status with nothing printed, which is why a version answering 0 to
+  everything would look correct from every angle except a script asking before
+  it commits to a lock. Its two operand-count refusals are **255**, the only
+  status like it in the module.
+
+  `flock` is a **POSIX record lock**, not flock(2), and that is measured rather
+  than chosen: locking one file twice in one shell succeeds both times, and a
+  lock does not survive into a forked child. Both are what fcntl does and
+  neither is what flock(2) does. A read lock opens the file for reading and a
+  write lock for writing, so `-r` works on a file nobody may write. The three
+  ways a lock somebody else holds can end are distinct and a caller reads all
+  three: `-t 0` is 1 *and says so*, a positive `-t` is 2 **in silence** after
+  the wait, and no `-t` at all blocks until the holder lets go. The silence is
+  load-bearing — `zsystem flock -t 1 … || fallback` is written inside a prompt,
+  and a diagnostic there would put a line on a person's terminal every time the
+  lock was busy. `-t` and `-i` are **arithmetic expressions in seconds**, so
+  `-t bogus` is a zero timeout (an unset variable is 0) while `-i bogus` is
+  refused, because zero is not an interval. Unlocking closes the descriptor,
+  which is what releases the lock: a process's record locks on a file all go
+  when any descriptor it holds on that file closes, so a shell holding two
+  locks on one file gives up both when it unlocks either. zsh closes it too.
+
+  Two divergences, both from this shell's subshells being cloned Runners in one
+  process rather than forks. A lock taken in a subshell is the *process's*, so
+  the parent is not excluded by it and the parent's lock does not exclude the
+  subshell — in zsh a subshell is a fork and both hold. And the descriptor `-f`
+  reports is a real entry in this shell's table, so `print -u $fd` reaches it
+  here, where zsh keeps its lock descriptors to itself and answers `bad file
+  number`.
+
+  `sysseek` is one lseek: `-u` the descriptor and 0 the default, `-w start`,
+  `current` or `end` (whole words, case-insensitive, not abbreviated), and an
+  offset that is arithmetic — so a word that is not a number is zero. A seek
+  the kernel refuses is a **silent 2**, the same vocabulary `syswrite` uses.
+
+  `syserror` is the platform's own sentence for an error number or an `$errnos`
+  name, in the platform's own **capitalization**, which is not this dialect's
+  elsewhere: `syserror 2` is `No such file or directory` and `sysopen /no/such`
+  is `no such file or directory`, both measured in zsh. `-p` prefixes and `-e`
+  **diverts** the sentence into a parameter instead of printing it. A word that
+  is neither a number nor a name is a silent 2. **The no-operand form refuses
+  by name**, which is a deliberate divergence: in zsh it reports the C
+  library's `errno` at that instant — measured twice in one session as `No such
+  file or directory` and then `Interrupted system call`, so not a behavior a
+  shell can be held to — and this shell has no such variable. Answering the
+  `Undefined error: 0` that *means nothing went wrong*, at status 0, to a
+  script asking what went wrong is the accepting-and-inert failure this module
+  has produced twice. A script that has put a number in `ERRNO` gets that
+  number's sentence, which is the part that can be answered honestly.
+
+  Corpus: `system/*`.
+- **zsh `zsh/zselect`** (dialect/zsh/zselect.go): one builtin, which waits
+  until a descriptor is ready and says which one. Measured 2026-09-10 against
+  zsh 5.9.2 with `zsh -f`.
+
+  It is the wall behind `sysopen` in the same prompt theme's worker (#1768):
+  `zmodload zsh/zselect || return` and `! { zselect -t0 || (( $? != 1 )) } ||
+  return` are consecutive lines, and the module was not in the feature table at
+  all. The second is a *probe* — a wait of no time on nothing at all, insisting
+  the answer is exactly 1 — so a shell answering 0 there fails the guard as
+  surely as one with no builtin, and so does one answering 1 with a diagnostic.
+
+  **`-t` is in hundredths of a second**, which nothing else in this shell uses:
+  the theme's `zselect -t 1000` is a ten-second wait, and reading the number as
+  milliseconds turns its heartbeat loop into a spin. `-r`, `-w` and `-e` name
+  descriptors to watch and a **bare number joins the set the last letter
+  named**, defaulting to reading. Letters bundle, and one for a set takes the
+  rest of its word only when the rest is a number — so `-r0` is `-r 0` and
+  `-rt 0` is a read set with a timeout. A dash before a digit is a sign rather
+  than an option marker.
+
+  The answer is `$reply`, or the array `-a` names: a set's letter followed by
+  every descriptor ready in it, the sets in `r`, `w`, `e` order and ascending
+  inside each. `-A` keys an association by the descriptor instead, whose value
+  is the letters it was ready in. **Nothing is assigned when nothing was
+  ready** — a shell that emptied the array would tell a caller holding a stale
+  answer that it now has a fresh one. A descriptor this shell cannot ask the
+  kernel about is dropped before the call rather than complained about, because
+  the kernel's answer to a set with one dead entry is a complaint about the
+  *call*, so every live descriptor beside it would lose its turn. An option
+  letter this builtin has not got is `expecting file descriptor`, not `bad
+  option`, since a dashed word that is none of the six is read as one that
+  should have been a descriptor.
+
+  Corpus: `zselect/*`.
 - **zsh `zsh/datetime`** (dialect/zsh/datetime.go): the clock, as a script
   reads it — `$EPOCHSECONDS`, `$EPOCHREALTIME`, `$epochtime` and the
   `strftime` builtin. Measured 2026-09-06 against zsh 5.9.2 with a scratch

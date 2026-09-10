@@ -4507,10 +4507,11 @@ than missing:
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150; neither was the count
   the table produces. It is now counted from the constructors.)
-- zsh `emulate -L`: function-local emulation needs a restore-on-return seam
-  the runner does not have; refused out loud rather than silently made
-  global. `emulate csh` records the mode and changes nothing it could —
-  csh's differences are not modeled anywhere else either.
+- zsh `emulate csh`: the mode is recorded and nothing changes with it —
+  csh's differences are not modeled anywhere else either. (`emulate -L` was
+  on this list, refused for want of a restore-on-return seam. The seam is
+  `Runner.AtEveryFunctionCall` and the rule is `LOCAL_OPTIONS`, which is what
+  the letter turns out to be; see dialect/zsh/localoptions.go.)
 - ksh93 `print -v`/`-C` and `whence -f`: value quoting, compound output and
   the function skip; each is refused as not implemented rather than unknown,
   which would be the worse answer. `whence -a` was on this list and is

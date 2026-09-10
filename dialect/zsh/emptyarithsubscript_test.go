@@ -114,7 +114,7 @@ func TestAnEmptyArithmeticSubscriptRefusesAnIncrement(t *testing.T) {
 	}
 }
 
-// The neighbouring rows this must not have moved: they already agreed, and a
+// The neighboring rows this must not have moved: they already agreed, and a
 // fix that reached them would have been a fix in the wrong place.
 func TestTheSubscriptsThatWereAlreadyRight(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{

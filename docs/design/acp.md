@@ -336,6 +336,31 @@ gate is deliberately not consulted on the *line*, because a line is not an
 access and asking the boundary to rule on `echo hi > f` as a path would be
 inventing one nobody performs.
 
+**What that buys, and exactly where it stops.** Measured 2026-09-10 with the
+interpreting route in, Claude Code 0.16.2 asked to create a file *with a shell
+command* under `-deny write:/**`. It asked us to run three commands, in this
+order, and the trace tells the whole story:
+
+| the agent asked us to run | what the gate did |
+| --- | --- |
+| `echo 'hello' > ./made.txt` | `denied open … write=true` |
+| `printf 'hello' > ./made.txt` | `denied open … write=true` |
+| `echo hello \| tee ./made.txt` | allowed the `exec` of `tee` — **and the file appeared** |
+
+The first two are new: before this change the policy never saw them at all, and
+before #1777 the agent was never allowed to ask. A redirection the *shell*
+performs is an open the shell makes, so the gate rules on it, and it refused
+twice.
+
+The third is the boundary rule holding exactly as stated: `tee` is a process of
+its own, it opened the file itself, and an allowed `exec` is outside the
+boundary once it has started. `-deny write:/**` constrains what **this shell**
+writes; it does not constrain what a command it was allowed to start writes. The
+agent found that in two tries, unprompted, which is the strongest argument
+available that **a write policy is only as good as the exec policy beside it** —
+a default-deny on `exec` is what makes a `write` rule mean what a person reads
+it as meaning.
+
 Three consequences worth stating, because each is a place this could have been
 got wrong:
 

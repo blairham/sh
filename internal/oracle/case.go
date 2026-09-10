@@ -12869,8 +12869,33 @@ echo "read=[$l]"`,
 	},
 	{
 		ID: "zmodload/loading-by-feature", Category: "builtins",
-		Snippet: `zmodload -F zsh/zutil; echo "st=$?"`,
-		Why:     "`-F` names the features to act on and, given none, loads the module whole: silence and 0 in zsh. A feature here is a builtin or a parameter the shell either has or has not, and `+zparseopts` cannot conjure one, so `-F` without `-l` is named as missing — the row records the difference rather than hiding it behind a 0 this shell has not earned",
+		Snippet: `zmodload -F zsh/zutil; echo "st=$?"; zmodload -lF zsh/zutil`,
+		Why:     "`-F` names the features to act on and, given none, loads the module with every one of them *off* — which the status alone cannot say, so the listing is the second half of the row. It was recorded here as \"loads the module whole\" while `-F` without `-l` was refused outright (#1619), and nothing could tell the two apart at 0 against 1. `_fzf_completion` writes exactly this line as `zmodload -F zsh/compctl`",
+	},
+	{
+		ID: "zmodload/selecting-one-of-a-modules-features", Category: "builtins",
+		Snippet: `zmodload -F zsh/zutil b:zstyle; echo "st=$?"; zmodload -lF zsh/zutil; zmodload -e zsh/zutil; echo "e=$?"`,
+		Why:     "the shape every real caller writes — `zmodload -F zsh/stat b:zstat || return` in a prompt theme, `zmodload -F zsh/parameter p:functions` in a completion — and the three questions that grade it: the status, which feature the module is left showing, and whether it is loaded at all. A bare feature name means `+`, so one of the four is on and the three nobody asked for are off. A shell that took the letters and did nothing answers 0 to the first and fails both the others",
+	},
+	{
+		ID: "zmodload/a-selection-is-a-delta-on-a-module-already-loaded", Category: "builtins",
+		Snippet: `zmodload zsh/zutil; zmodload -F zsh/zutil -b:zparseopts; echo "st=$?"; zmodload -lF zsh/zutil`,
+		Why:     "the starting point is the whole of what makes `-F` a selection rather than a set of deltas, and it turns on one thing: a module that is *not* loaded starts with nothing on, and one that is starts with whatever it has. So the same command that leaves one feature on above leaves three on here. Pair it with the row above — either on its own is satisfied by a shell that only ever does the other",
+	},
+	{
+		ID: "zmodload/an-operand-that-names-no-feature", Category: "builtins",
+		Snippet: `zmodload -F zsh/zutil +b:zstyle +b:nosuch; echo "st=$?"; zmodload -e zsh/zutil; echo "e=$?"`,
+		Why:     "every operand is checked before any is applied: the complaint names the second one and the module is left *unloaded*, so the good spec in front of the bad one buys nothing. The `-e` afterwards is what says so — a shell that applied as it went would answer 0 there with `zstyle` on",
+	},
+	{
+		ID: "zmodload/the-selection-as-the-command-that-would-make-it", Category: "builtins",
+		Snippet: `zmodload -F zsh/zutil b:zformat b:zstyle; zmodload -LF zsh/zutil; zmodload -F zsh/zutil -b:zstyle; zmodload -LF zsh/zutil; echo "st=$?"`,
+		Why:     "`-LF` writes the selection as the command that would reproduce it, which is `-L`'s job one level down — and twice, because zsh writes the trailing newline only when the *last* feature in the module's list is one of the enabled ones. The first listing ends in `b:zstyle` and gets one; the second has `zstyle` switched off, so zsh's line ends in a space and stops and `st=0` lands on the end of it. A bug rather than a behavior: this shell writes the newline both times, and the row records the difference rather than reproducing it",
+	},
+	{
+		ID: "zmodload/the-unload-letter-cannot-be-combined-with-the-feature-letter", Category: "builtins",
+		Snippet: `zmodload -uF zsh/zutil +b:zstyle; echo "st=$?"`,
+		Why:     "a sentence about the combination rather than about either letter — `-b, -c, -f, -p and -u cannot be combined with -F` and 1 — and worth pinning because `-F` reaches for the same operands `-u` does, so a shell that dispatched on the wrong letter first would quietly load the module it was asked to unload",
 	},
 	// `zparseopts` and `zformat`, the two of `zsh/zutil`'s other three
 	// builtins that can be learned by running the real one (#1058). What is

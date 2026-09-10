@@ -343,28 +343,119 @@ print -r -- "loaded=$?"`)
 }
 
 // **Narrowing moves the verdict**, which is the reason the letter is worth
-// having in a shell that cannot load a module at all. `zsh/complete` is held
-// shut by its four conditions — the kind with no registry to ask and no call
-// site to refuse at — and a caller naming one of its builtins instead is
-// asking a question this shell can answer yes to.
+// having in a shell that cannot load a module at all — and since #1634 it
+// moves in *both* directions, which is the whole of what that issue settled.
 //
-// The third line is the control that keeps the first two honest: naming one
-// of the conditions is still refused, and refused by that condition's name
-// alone rather than by all four, so the selection is being read rather than
-// waved through.
+// `zsh/zutil` is four builtins and this shell has three of them. A plain load
+// is 0, because a builtin nobody has written is loud at its own call site and
+// so never holds a module shut. Naming one of the three under `-F` is 0 for
+// the same reason and a different one: it is there. Naming `zregexparse` — the
+// one that is not — is **1**, where the plain load of the same module a line
+// earlier was 0.
+//
+// That is not the plain rule being contradicted. `zmodload zsh/zutil` is the
+// *shell* inferring that a script wanting the module wants all of it, and a
+// plugin manager writing `|| return 1` there calls three of the four and never
+// the fourth. `zmodload -F zsh/zutil b:zregexparse` is the script saying which
+// one it wants, and the only honest answer to that question is whether it can
+// have it — measured against zsh 5.9.2, a `-F` at status 0 is followed by a
+// builtin that runs, which is why `zmodload -F zsh/stat b:zstat || return` is
+// written as a guard by a prompt theme and a plugin manager alike.
+//
+// The last line is the control that keeps the rest honest: a condition is
+// still refused by its own name and not by all four of its module's, so the
+// selection is being read rather than waved through.
 func TestZmodloadDashFNarrowingMovesTheVerdict(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `zmodload zsh/complete 2>&1
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil 2>&1
 print -r -- "whole=$?"
-zmodload -F zsh/complete b:compadd 2>&1
-print -r -- "narrowed=$?"
+zmodload -F zsh/zutil b:zstyle 2>&1
+print -r -- "named-what-we-have=$?"
+zmodload -F zsh/zutil b:zregexparse 2>&1
+print -r -- "named-what-we-have-not=$?"
 zmodload -F zsh/complete c:prefix 2>&1
 print -r -- "held=$?"`)
-	want := "zsh:1: failed to load module `zsh/complete': " +
-		"after, between, prefix and suffix are not implemented yet\nwhole=1\n" +
-		"narrowed=0\n" +
-		"zsh:5: failed to load module `zsh/complete': prefix is not implemented yet\nheld=1\n"
+	want := "whole=0\n" +
+		"named-what-we-have=0\n" +
+		"zsh:5: failed to load module `zsh/zutil': zregexparse is not implemented yet\n" +
+		"named-what-we-have-not=1\n" +
+		"zsh:7: failed to load module `zsh/complete': prefix is not implemented yet\nheld=1\n"
 	if out != want || st != 0 {
 		t.Errorf("narrowing = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The four lines a real startup writes about these three modules, and the four
+// answers they now get (#1634).
+//
+// Three are a prompt theme's, written one after another with no `||` guard at
+// all, so each of them was a line of `failed to load module` on every start of
+// this shell. The fourth is a plugin manager's, guarded — and a guard is the
+// case the rule above is *for*: answering 0 there without `zf_rm` would make
+// the `|| return` not fire and leave the failure to turn up later, in a
+// function whose caller has gone.
+func TestTheThreeModulesAStartupNarrowsAreLoadedByTheFeaturesItNames(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/stat b:zstat 2>&1
+print -r -- "stat=$?"
+zmodload -F zsh/net/socket b:zsocket 2>&1
+print -r -- "socket=$?"
+zmodload -F zsh/files b:zf_mv b:zf_rm 2>&1
+print -r -- "files=$?"
+zmodload -F zsh/files b:zf_rm 2>&1 || print -r -- "guard returned"
+print -r -- "guard=$?"`)
+	want := "stat=0\nsocket=0\nfiles=0\nguard=0\n"
+	if out != want || st != 0 {
+		t.Errorf("the startup lines = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And the half of each module this shell deliberately has not got, refused by
+// the builtin's own name.
+//
+// `stat`, `rm`, `mv` and the six beside them are real features of these
+// modules and are **not** registered here, because this shell's builtins are
+// registered before any script runs: a `stat` registered at all is a `stat`
+// registered always, and every script's `stat -f %z` would stop reaching the
+// command on the machine. The `zf_` spellings exist in zsh for exactly that
+// reason and the manual recommends the narrowed load for exactly that reason.
+//
+// So the answer is a refusal that names what is missing rather than a silent
+// success — which is the same sentence the module gets for a builtin nobody
+// has written at all, because it is the same fact.
+//
+// The last line names two and gets them back in the *table's* order rather
+// than the order it wrote them, which is deliberate: a refusal reads against
+// the `zmodload -lF` listing of the same module, so the two are in step.
+func TestTheNamesThatWouldShadowACommandRefuseByName(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/stat b:stat 2>&1
+print -r -- "stat=$?"
+zmodload -F zsh/files b:rm 2>&1
+print -r -- "rm=$?"
+zmodload -F zsh/files b:mv b:ln 2>&1
+print -r -- "two=$?"`)
+	want := "zsh:1: failed to load module `zsh/stat': stat is not implemented yet\nstat=1\n" +
+		"zsh:3: failed to load module `zsh/files': rm is not implemented yet\nrm=1\n" +
+		"zsh:5: failed to load module `zsh/files': ln and mv are not implemented yet\ntwo=1\n"
+	if out != want || st != 0 {
+		t.Errorf("the shadowing names = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A whole load of the same three modules is still 0, and that is the plain
+// rule standing where it always did rather than an inconsistency.
+//
+// `zmodload zsh/files` names eighteen builtins and this shell has nine of
+// them. Nothing in that line says which nine the script wanted, so nothing is
+// gained by refusing: a script that goes on to call `rm` gets the `rm` on its
+// `$PATH`, which is the command it would have got in any other shell in the
+// world, and one that calls `zf_rm` gets this shell's. The refusal is reserved
+// for the line that *asked*.
+func TestAWholeLoadOfTheThreeModulesIsStillTheInferredQuestion(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/stat zsh/net/socket zsh/files 2>&1
+print -r -- "st=$?"
+zmodload -lF zsh/stat`)
+	want := "st=0\n+b:stat\n+b:zstat\n"
+	if out != want || st != 0 {
+		t.Errorf("a whole load = %q (status %d), want %q", out, st, want)
 	}
 }
 

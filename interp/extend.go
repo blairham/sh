@@ -6,6 +6,7 @@ package interp
 import (
 	"context"
 	"io"
+	"os"
 	"sort"
 	"sync"
 
@@ -545,6 +546,37 @@ func (r *Runner) DescriptorOffset(fd int) (int64, bool) {
 	}
 	return seekCurrent(sys)
 }
+
+// OpenDescriptor puts a file this shell has *already opened* into its
+// descriptor table and reports the number a script may reach it by, and
+// SetDescriptor does the same at a number the script chose.
+//
+// The inward half of [Runner.SystemDescriptor], and needed for the same reason
+// that one is: the shell's table and the kernel's are two tables. A registered
+// builtin that opens something — a socket, a file at a number a script names —
+// has an *os.File and no way to say "and this is descriptor 12 from here on",
+// which is what makes `zsocket path; print -u $REPLY hello` and `sysopen -u 5
+// f` expressible at all. Without it a builtin could open anything and hand
+// back nothing a redirection could name.
+//
+// The file becomes the shell's: it is closed when the script writes `exec
+// {n}>&-`, and it is handed to an external child the way every other entry in
+// the table is, because it is an *os.File and that is the only question the
+// child's descriptor rebuild asks. A caller that wants the descriptor to
+// survive nothing should not put it here.
+//
+// SetDescriptor replaces whatever the number held without closing it, which is
+// the same thing `exec 3>&4` does to a 3 that was already open. Numbers are the
+// script's to reuse and the shell does not audit them.
+func (r *Runner) OpenDescriptor(f *os.File) int {
+	fd := r.nextFreeFd()
+	r.setFd(fd, f)
+	return fd
+}
+
+// SetDescriptor puts a file at one of this shell's descriptor numbers. See
+// [Runner.OpenDescriptor], which chooses the number instead.
+func (r *Runner) SetDescriptor(fd int, f *os.File) { r.setFd(fd, f) }
 
 // NamedOption reads one `set -o` name's current state, for a registered
 // builtin that presents the same state under its own names — a listing has to

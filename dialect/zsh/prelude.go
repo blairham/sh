@@ -8,7 +8,7 @@ package zsh
 // With the dialect rather than in the binary, so that `sh -dialect zsh` and
 // `./zsh` are the same shell reached by two roads — see the same file under
 // dialect/bash for what went wrong when they were not.
-func Prelude() string { return identity + functions }
+func Prelude() string { return identity + "WORDCHARS='" + wordCharacters + "'\n" + functions }
 
 // The directory stack, as shell. The same machinery the bash dialect's
 // prelude carries, with the measured differences kept: this engine's `pushd`

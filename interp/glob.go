@@ -137,11 +137,16 @@ func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern, ext
 			i++
 			continue
 		}
-		if extendedOperators && strings.IndexByte(extendedPatternMeta, s[i]) >= 0 {
-			// The closure, the exclusion and the negation. They are only
-			// metacharacters while the option is on, which is why the answer
-			// is threaded in rather than read off the byte: `echo a#` reaches
-			// the filesystem there and prints two characters everywhere else.
+		if extendedOperators && strings.IndexByte(extendedGlobTrigger, s[i]) >= 0 {
+			// The closure and the negation. They are only metacharacters
+			// while the option is on, which is why the answer is threaded in
+			// rather than read off the byte: `echo a#` reaches the
+			// filesystem there and prints two characters everywhere else.
+			//
+			// The exclusion is deliberately not here: it says what to take
+			// out of a search, not that there is one. Measured, `keep_a~zzz`
+			// prints itself where `keep#_a~zzz` globs — see
+			// [extendedGlobTrigger].
 			return true
 		}
 		if extendedPattern && quantifiesAGroup(s, i) {
@@ -344,21 +349,24 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		r.MatchOption(ExtendedPatternOperators)) {
 		return nil, false
 	}
-	if r.MatchOption(ExtendedPatternOperators) &&
-		hasTopLevelExclusion(field, patternOpts{extended: true}) &&
-		strings.Contains(field, "/") {
-		// The exclusion is looser than `/` — measured, `**/x~*bar*` takes
-		// `bar/x` out by matching the whole path — and this walk reads a
-		// pattern one component at a time, so an exclusion that crosses a
-		// component is not something it can answer. Refused by name rather
-		// than answered per component, which would quietly compare the right
-		// side against a file's name alone.
-		r.diagf("%s: a `~` exclusion spanning a path component is not implemented\n",
-			globUnescape(whole))
-		r.status = 1
-		r.ctl = controlExit
-		return nil, false
-	}
+	// The `~` exclusions, taken off the field before it is split into
+	// components, because they are the one pattern operator that is *looser*
+	// than `/`.
+	//
+	// Measured on zsh 5.9.2, 2026-09-10, in a tree holding `/tmp/gx/keep_a`
+	// and `/tmp/gx/gxdir`: `print -l -- /tmp/gx/*~*gx*` answers nothing,
+	// where the same exclusion run from inside that directory keeps
+	// `keep_a`. So the right side is matched against **the whole word the
+	// left side produced**, with `/` an ordinary character in it — a `*`
+	// there crosses directories where the same `*` on the left does not —
+	// and it is the word *as written* rather than a cleaned or absolute
+	// path: `cd /tmp; ./gx/*~./gx/keep_a` takes `keep_a` out and
+	// `./gx/*~gx/keep_a` does not.
+	//
+	// This is why it cannot be answered inside [Runner.matchIn] with the
+	// rest of a component's pattern, which was the shape that refused it
+	// by name until now (#1719).
+	field, excl := r.fieldExclusions(field)
 	// A list makes the field a pattern whatever is in front of it: `f1(.)`
 	// is `f1` where the name alone is no pattern at all, so the qualifiers
 	// are what sent it to the filesystem.
@@ -397,6 +405,14 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		}
 		r.globMissed = true
 		return nil, r.MatchOption(UnmatchedPatternIsEmpty)
+	}
+	if len(excl) > 0 && strings.HasSuffix(field, "/") {
+		// The left side ends at a `/`, so its last component is the empty
+		// pattern — and no file is named nothing. The trailing slash that
+		// means "directories only" is the one at the end of the *word*, and
+		// this one is not: measured, `/tmp/gx/sub/` lists `/tmp/gx/sub/` and
+		// `/tmp/gx/sub/~*zzzz*` lists nothing at all.
+		return missed()
 	}
 	// `D` is `glob_dots` for one pattern, and the option is the other way
 	// into the same question.
@@ -531,25 +547,19 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		}
 	}
 
-	if hasQuals {
-		// Narrowed here, on the absolute paths the walk produced, because a
-		// type test is a question about a file and the relative names below
-		// are not what would answer it.
-		dirs = r.keepQualified(dirs, quals)
-		if len(dirs) == 0 {
-			return missed()
-		}
-	}
-
 	// Results are reported the way the pattern was written: relative if it
 	// was relative, so `echo *` lists names and not paths — and spelled the
 	// way the pattern spelled it, which is why this strips a prefix rather
 	// than asking filepath.Rel. Rel *cleans*, so it would answer `cx/ax`
 	// where all six columns answer `./cx/ax` even once the walk carries the
 	// component; the whole point of globJoin is undone by one call here.
+	//
+	// A function because the exclusions below need the same answer: they are
+	// matched against the word rather than against the absolute path the
+	// walk is holding, and rendering it twice two ways is how the two would
+	// drift apart.
 	rel := strings.TrimSuffix(base, "/") + "/"
-	out := make([]string, 0, len(dirs))
-	for _, d := range dirs {
+	render := func(d string) (string, bool) {
 		self := selfDirs[d]
 		if prefix == "" {
 			if d == base {
@@ -561,7 +571,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 				// legitimately produce — zsh's `.(/)` is `.` — and the two
 				// are different strings here: this one is `<base>`, that one
 				// is `<base>/.`.
-				continue
+				return "", false
 			}
 			d = strings.TrimPrefix(d, rel)
 		}
@@ -573,8 +583,58 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			// slash and not two.
 			d += "/"
 		}
-		d += trail
-		out = append(out, d)
+		return d + trail, true
+	}
+
+	if len(excl) > 0 {
+		// Ahead of the qualifiers, which is measured: `/tmp/gx/*~*gxdir*([1])`
+		// is `/tmp/gx/keep_a`, so the list `[1]` counts into has already had
+		// the exclusion taken out of it — the other order would pick `gxdir`
+		// and then throw it away.
+		//
+		// **A mutation that swaps these two blocks survives today**, and is
+		// recorded so the next reader does not go hunting for the row that
+		// would kill it: both are filters, and two filters commute. The
+		// order becomes observable only for a qualifier that *selects* —
+		// `[1]`, `[-1]`, `om` — and none of those is implemented. What is
+		// observable is the order against a **modifier**, which replaces the
+		// word rather than filtering it, and that is pinned:
+		// `d/p_*~*d/*(N:t)` is empty here and in zsh, where running `:t`
+		// first would leave all three.
+		var kept []string
+		for _, d := range dirs {
+			w, ok := render(d)
+			if !ok {
+				continue
+			}
+			if r.excludedBy(w, excl) {
+				continue
+			}
+			kept = append(kept, d)
+		}
+		dirs = kept
+		if len(dirs) == 0 {
+			return missed()
+		}
+	}
+
+	if hasQuals {
+		// Narrowed here, on the absolute paths the walk produced, because a
+		// type test is a question about a file and the relative names below
+		// are not what would answer it.
+		dirs = r.keepQualified(dirs, quals)
+		if len(dirs) == 0 {
+			return missed()
+		}
+	}
+
+	out := make([]string, 0, len(dirs))
+	for _, d := range dirs {
+		w, ok := render(d)
+		if !ok {
+			continue
+		}
+		out = append(out, w)
 	}
 	if quals.modifiers != "" {
 		// Before the sort, because the shell sorts what the modifiers
@@ -598,6 +658,45 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		return missed()
 	}
 	return out, false
+}
+
+// fieldExclusions peels a field's top-level `~` exclusions off, returning the
+// pattern the walk should generate from and the patterns that take matches
+// back out of it.
+//
+// Nothing is peeled where the operator is off, where the field carries no
+// top-level `~`, or where the `~` is inside a group — `(*~sub)/*` keeps its
+// exclusion inside the one component, which is the reading the walk already
+// gives it and which zsh agrees with.
+func (r *Runner) fieldExclusions(field string) (string, []string) {
+	if !r.MatchOption(ExtendedPatternOperators) {
+		return field, nil
+	}
+	o := patternOpts{extended: true}
+	left, rights, ok := splitExclusion(field, &o)
+	if !ok {
+		return field, nil
+	}
+	return left, rights
+}
+
+// excludedBy reports whether a generated word is taken back out by one of a
+// pattern's `~` exclusions.
+//
+// The word is the subject and the exclusion is an ordinary pattern over it:
+// no component splitting, so a `*` crosses `/`, and no leading-period rule,
+// so `*~*hidden*` takes `.hidden` out of a listing that `(D)` put it into.
+// Both are measured, and both are the opposite of what the walk does with the
+// left side.
+func (r *Runner) excludedBy(word string, rights []string) bool {
+	for _, x := range rights {
+		o := r.patternOpts(x, word)
+		o.fold = r.MatchOption(GlobFoldsCase)
+		if matchPattern(x, word, o) {
+			return true
+		}
+	}
+	return false
 }
 
 // lastComponent reports whether nothing but trailing slashes follows parts[i].

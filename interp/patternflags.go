@@ -234,16 +234,6 @@ func splitExclusion(p string, o *patternOpts) (left string, rights []string, ok 
 	return left, rights, true
 }
 
-// hasTopLevelExclusion reports whether a whole field carries a `~` that would
-// be an exclusion. It is the question pathname expansion has to ask before it
-// splits a field into components, because the exclusion is measured to be
-// *looser* than `/` — `**/x~*bar*` takes `bar/x` out by matching the whole
-// path — where every other operator here is read inside one component.
-func hasTopLevelExclusion(field string, o patternOpts) bool {
-	_, _, ok := splitExclusion(field, &o)
-	return ok
-}
-
 // bracketEnd is the offset of the `]` that closes the bracket expression
 // starting at i, so a scan over a pattern can step over one whole.
 //

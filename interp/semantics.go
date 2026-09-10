@@ -3171,6 +3171,46 @@ type Semantics struct {
 	// rather than given a value here.
 	PatternEscapeReaches string
 
+	// PatternClasses is the character-class names a dialect answers **beyond
+	// the twelve POSIX ones**, space separated. Empty is the common ground:
+	// alnum, alpha, blank, cntrl, digit, graph, lower, print, punct, space,
+	// upper and xdigit, which every shell in the panel answers alike.
+	//
+	// A roster rather than a flag per name, and a roster rather than an
+	// enumeration, for the reason EchoOptions and ReadOptions are strings:
+	// what differs between shells is **which names exist**, and that is data.
+	// What each name *means* is not in dispute — no shell disagrees with
+	// another about `ascii` — so there is no axis to switch, only a set to
+	// declare. A dialect that leaves it empty is not unanswered; it is saying
+	// the twelve and nothing else, which is the measured answer for two of
+	// the five.
+	//
+	// Measured 2026-09-10, `[[ $c = [[:NAME:]] ]]` a character at a time:
+	//
+	//	ascii       zsh, bash 5.3, bash 3.2 — not ksh93, not dash
+	//	IDENT       zsh alone
+	//	IFS         zsh alone
+	//	IFSSPACE    zsh alone
+	//	INCOMPLETE  zsh alone
+	//	INVALID     zsh alone
+	//	WORD        zsh alone
+	//
+	// A name outside the twelve **and** outside this roster matches nothing,
+	// silently, at status 0 — and that is not a gap: it is what every shell
+	// in the panel does with `[[:nosuchclass:]]`, bash 3.2 included, and it
+	// is measured rather than assumed. So the defect this was written for was
+	// never generic. `[[:IDENT:]]` came back empty because the *name* was
+	// missing, and only the names go here.
+	//
+	// The names are case-sensitive in the shell that has them: `[[:ident:]]`
+	// and `[[:ASCII:]]` both match nothing.
+	//
+	// Two of the seven read shell state rather than a fixed set of
+	// characters — `IFS` is the field separators as they stand and `WORD` is
+	// the letters and digits together with `$WORDCHARS` — which is why they
+	// are resolved where a Runner can be asked and not in a table.
+	PatternClasses string
+
 	// BracketEscapeIsAlsoAMember says a backslash that protects a member of
 	// a bracket expression is a member of the set itself.
 	//
@@ -6593,6 +6633,7 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		fold:    r.MatchOption(MatchFoldsCase),
 		chars:   r.patternCountsCharacters(pattern, s),
 		escapes: r.sem().PatternEscapeReaches,
+		classes: r.patternClasses(pattern),
 	}
 	// The status a rejected pattern exits with is the surface's, and the two
 	// this function serves do not agree: measured, `[[ x == (#Z)a ]]` exits 2

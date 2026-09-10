@@ -10993,6 +10993,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pat/the-remaining-character-classes` | `cntrl blank graph print` | `cntrl blank graph print` | `cntrl blank graph print` | `cntrl blank graph print` | `cntrl blank graph print` | `cntrl blank graph print` |
 | `pat/classes-that-overlap-and-differ` | `blank noprint nograph` | `blank noprint nograph` | `blank noprint nograph` | `blank noprint nograph` | `blank noprint nograph` | `blank noprint nograph` |
 | `pat/an-unknown-character-class` | `no no` | `no no` | `no no` | `no lit` | `no no` | `no no` |
+| `pat/the-identifier-character-class` | `a-no u-no d-no low-no` | `a-no u-no d-no low-no` | `a-no u-no d-no low-no` | `a-no u-no d-no low-no` | `a-no u-no d-no low-no` | `a-yes u-yes d-no low-no` |
+| `pat/the-ascii-character-class` | `a-no e-no` | `a-yes e-no` | `a-yes e-no` | `a-yes e-no` | `a-no e-no` | `a-yes e-no` |
+| `pat/the-character-classes-that-read-shell-state` | `sep-no sp-no w-no` | `sep-no sp-no w-no` | `sep-no sp-no w-no` | `sep-no sp-no w-no` | `sep-no sp-no w-no` | `sep-yes sp-no w-yes` |
 | `pat/escaped-metacharacter-is-literal` | `escaped no` | `escaped no` | `escaped no` | `escaped no` | `escaped no` | `escaped no` |
 | `pat/quoting-decides-pattern-or-literal` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` |
 | `pat/case-subject-is-not-split` | `blank one-word` | `blank one-word` | `blank one-word` | `blank one-word` | `blank one-word` | `blank one-word` |
@@ -11064,6 +11067,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pat/a-pattern-flag-reaches-to-the-end-of-its-group` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected argument `(' to conditional binary operator~<shell>: -c: line 1: syntax error near `(('~<shell>: -c: line 1: `setopt extendedglob 2>/dev/null; [[ ABCd == ((#i)abc)d ]] && echo in-hit \|\| echo in-miss; [[ ABCD == ((#i)abc)d ]] && echo out-hit \|\| echo out-miss'` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected argument `(' to conditional binary operator~<shell>: -c: line 1: syntax error near `(('~<shell>: -c: line 1: `setopt extendedglob 2>/dev/null; [[ ABCd == ((#i)abc)d ]] && echo in-hit \|\| echo in-miss; [[ ABCD == ((#i)abc)d ]] && echo out-hit \|\| echo out-miss'` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected argument `(' to conditional binary operator~<shell>: -c: line 0: syntax error near `(('~<shell>: -c: line 0: `setopt extendedglob 2>/dev/null; [[ ABCd == ((#i)abc)d ]] && echo in-hit \|\| echo in-miss; [[ ABCD == ((#i)abc)d ]] && echo out-hit \|\| echo out-miss'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `' unexpected` *(status 3)* | `in-hit~out-miss` |
 | `pat/an-extended-negation-and-exclusion` | `neg-miss~ex-miss~ex2-miss` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `neg-miss~ex-miss~ex2-miss` | `neg-miss~ex-miss~ex2-miss` | `neg-miss~ex-miss~ex2-miss` | `neg-miss~ex-miss~ex2-miss` | `neg-hit~ex-hit~ex2-miss` |
 | `pat/an-exclusion-binds-looser-than-an-alternation` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected argument `(' to conditional binary operator~<shell>: -c: line 1: syntax error near `(a'~<shell>: -c: line 1: `setopt extendedglob 2>/dev/null; [[ zz == (a*~*b*\|zz) ]] && echo hit \|\| echo miss'` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected argument `(' to conditional binary operator~<shell>: -c: line 1: syntax error near `(a'~<shell>: -c: line 1: `setopt extendedglob 2>/dev/null; [[ zz == (a*~*b*\|zz) ]] && echo hit \|\| echo miss'` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected argument `(' to conditional binary operator~<shell>: -c: line 0: syntax error near `(a'~<shell>: -c: line 0: `setopt extendedglob 2>/dev/null; [[ zz == (a*~*b*\|zz) ]] && echo hit \|\| echo miss'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `hit` |
+| `pat/an-exclusion-against-the-filesystem` | **2>** `<script>: 4: Syntax error: "(" unexpected` *(status 2)* | **2>** `<script>: line 4: syntax error near unexpected token `('~<script>: line 4: `set -- d/p_*~*(~\|.zwc)'` *(status 2)* | **2>** `<script>: line 4: syntax error near unexpected token `('~<script>: line 4: `set -- d/p_*~*(~\|.zwc)'` *(status 2)* | **2>** `<script>: line 4: syntax error near unexpected token `('~<script>: line 4: `set -- d/p_*~*(~\|.zwc)'` *(status 2)* | `n=1~backup` | `n=1~git` |
+| `pat/an-exclusion-is-compared-with-the-whole-word` | `in=1~out=1~after` | `in=1~out=1~after` | `in=1~out=1~after` | `in=1~out=1~after` | `in=1~out=1~after` | `in=2` **2>** `<script>:8: no matches found: d/p_*~*d*` *(status 1)* |
+| `pat/a-tilde-alone-does-not-make-a-word-a-pattern` | `literal~literal` | `literal~literal` | `literal~literal` | `literal~literal` | `literal~literal` | `literal~globbed` |
 | `pat/a-closure-repeats-one-item` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected argument `(' to conditional binary operator~<shell>: -c: line 1: syntax error near `(a'~<shell>: -c: line 1: `setopt extendedglob 2>/dev/null; [[ abbb == ab# ]] && echo one-hit \|\| echo one-miss; [[ abab == ab# ]] && echo run-hit \|\| echo run-miss; [[ ababab == (ab)# ]] && echo grp-hit \|\| echo grp-miss'` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected argument `(' to conditional binary operator~<shell>: -c: line 1: syntax error near `(a'~<shell>: -c: line 1: `setopt extendedglob 2>/dev/null; [[ abbb == ab# ]] && echo one-hit \|\| echo one-miss; [[ abab == ab# ]] && echo run-hit \|\| echo run-miss; [[ ababab == (ab)# ]] && echo grp-hit \|\| echo grp-miss'` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected argument `(' to conditional binary operator~<shell>: -c: line 0: syntax error near `(a'~<shell>: -c: line 0: `setopt extendedglob 2>/dev/null; [[ abbb == ab# ]] && echo one-hit \|\| echo one-miss; [[ abab == ab# ]] && echo run-hit \|\| echo run-miss; [[ ababab == (ab)# ]] && echo grp-hit \|\| echo grp-miss'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `one-hit~run-miss~grp-hit` |
 | `pat/a-closure-with-nothing-to-repeat` | `st=127~after` **2>** `<shell>: 1: [[: not found` | `st=1~after` | `st=1~after` | `st=1~after` | `st=1~after` | **2>** `<shell>:1: bad pattern: *#` *(status 2)* |
 | `pat/a-pattern-flag-letter-no-shell-has` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected argument `(' to conditional binary operator~<shell>: -c: line 1: syntax error near `(#'~<shell>: -c: line 1: `setopt extendedglob 2>/dev/null; [[ abc == (#Z)abc ]]; echo "st=$?"; echo after'` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected argument `(' to conditional binary operator~<shell>: -c: line 1: syntax error near `(#'~<shell>: -c: line 1: `setopt extendedglob 2>/dev/null; [[ abc == (#Z)abc ]]; echo "st=$?"; echo after'` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected argument `(' to conditional binary operator~<shell>: -c: line 0: syntax error near `(#'~<shell>: -c: line 0: `setopt extendedglob 2>/dev/null; [[ abc == (#Z)abc ]]; echo "st=$?"; echo after'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | **2>** `<shell>:1: bad pattern: (#Z)abc` *(status 2)* |
@@ -11313,6 +11319,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pat/an-unknown-character-class` — a class name nothing defines matches nothing, silently — no error, no output, status 0 — in every panel shell but bash 3.2, which alone falls back to reading the brackets as literal characters, so `b]` matches there and nowhere else
   ```sh
   case b in [[:bogus:]]) printf yes;; *) printf no;; esac; case "b]" in [[:bogus:]]) printf " lit";; *) printf " no";; esac
+  ```
+- `pat/the-identifier-character-class` — a class name one shell in the panel has and the rest do not: the characters a parameter name may hold. It is the row a guard written `[[ $name != [[:IDENT:]]## ]]` depends on, and a shell that does not know the name answers a-no — which reads as `not an identifier` and takes the wrong branch silently. The last column is the same name in lowercase, which is unknown everywhere: the names are case-sensitive
+  ```sh
+  case a in [[:IDENT:]]) printf a-yes;; *) printf a-no;; esac; case _ in [[:IDENT:]]) printf " u-yes";; *) printf " u-no";; esac; case - in [[:IDENT:]]) printf " d-yes";; *) printf " d-no";; esac; case a in [[:ident:]]) printf " low-yes";; *) printf " low-no";; esac
+  ```
+- `pat/the-ascii-character-class` — the one class name outside the twelve that more than one shell has — three of the six — and the character that says it means what it says rather than aliasing `print`: a two-byte `é` is not in it anywhere. The columns without the name answer a-no, silently, which is what every shell does with a name it does not know
+  ```sh
+  e=$(printf '\303\251'); case a in [[:ascii:]]) printf a-yes;; *) printf a-no;; esac; case "$e" in [[:ascii:]]) printf " e-yes";; *) printf " e-no";; esac
+  ```
+- `pat/the-character-classes-that-read-shell-state` — two class names whose membership is not a fixed set of characters but a variable read as it stands: `IFS` is the field separators and `WORD` is letters and digits together with `$WORDCHARS`. Reassigning IFS moves the first, which is what says the class is resolved at match time rather than compiled from a table
+  ```sh
+  IFS=:x; case : in [[:IFS:]]) printf sep-yes;; *) printf sep-no;; esac; case " " in [[:IFS:]]) printf " sp-yes";; *) printf " sp-no";; esac; case - in [[:WORD:]]) printf " w-yes";; *) printf " w-no";; esac
   ```
 - `pat/escaped-metacharacter-is-literal` — an escaped star matches a literal star and nothing else
   ```sh
@@ -11611,6 +11629,37 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pat/an-exclusion-binds-looser-than-an-alternation` — the precedence, which cannot be seen from either operator alone: if the `|` bound tighter the exclusion would be `a*` minus `(*b*|zz)` and `zz` would be taken out, so hit is what says the `~` groups first
   ```sh
   setopt extendedglob 2>/dev/null; [[ zz == (a*~*b*|zz) ]] && echo hit || echo miss
+  ```
+- `pat/an-exclusion-against-the-filesystem` — the shape every real call site writes, since a script searching a path list has a directory to search in — `vcs_info` sweeps `$fpath` with exactly this. The fixture discriminates on purpose: `p_git` matches the left side alone, `p_git.zwc` and `p_hg~` match both sides and `other` matches neither, so a walk that dropped the exclusion, ran it against a file's name alone, or refused the pattern gives three different wrong answers. The shell with the operator answers n=1 and git; the rest have no bare group and refuse the parenthesis. Nothing prints a path, because a `~` in recorded output is how the record spells a newline
+  ```sh
+  setopt extendedglob 2>/dev/null
+  mkdir -p d
+  touch d/p_git d/p_git.zwc 'd/p_hg~' d/other
+  set -- d/p_*~*(~|.zwc)
+  echo "n=$#"
+  for f; do case $f in *.zwc) echo zwc;; *p_git) echo git;; *other) echo other;; *) echo backup;; esac; done
+  ```
+- `pat/an-exclusion-is-compared-with-the-whole-word` — which subject the right side is matched against, and it takes both halves to see. `*d*` matches neither *name*, so from inside the directory both files survive and in=2; it matches every *word* the second pattern produces, because each begins with `d/`, so nothing survives there and the miss stops the script before `out=` and `after`. A walk comparing the right side with one component would answer in=2, out=2 and after
+  ```sh
+  setopt extendedglob 2>/dev/null
+  mkdir -p d
+  touch d/p_git d/p_hg
+  cd d
+  set -- p_*~*d*
+  echo "in=$#"
+  cd ..
+  set -- d/p_*~*d*
+  echo "out=$#"
+  echo after
+  ```
+- `pat/a-tilde-alone-does-not-make-a-word-a-pattern` — the other half of the exclusion: it says what to take out of a search rather than that there is one. The shell with the operator leaves the first word alone and globs the second — literal then globbed — where a shell counting `~` among the characters that send a field to the filesystem would answer globbed twice
+  ```sh
+  setopt extendedglob 2>/dev/null
+  touch keep_a
+  set -- keep_a~zzz
+  case $1 in keep_a) echo globbed;; *) echo literal;; esac
+  set -- keep#_a~zzz
+  case $1 in keep_a) echo globbed;; *) echo literal;; esac
   ```
 - `pat/a-closure-repeats-one-item` — what a closure binds to. It repeats the single item in front of it and never the run of characters before it, so this is one-hit, run-miss, grp-hit — the middle row is the one a matcher that repeated the whole preceding text would get wrong
   ```sh

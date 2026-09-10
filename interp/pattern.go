@@ -27,6 +27,23 @@ const patternMeta = `*?[\()<|`
 // that has nothing wrong with it.
 const extendedPatternMeta = "#~^"
 
+// extendedGlobTrigger is the subset of those three that makes a *field* a
+// pattern in the first place, and the exclusion is not in it.
+//
+// Measured on zsh 5.9.2 with `extendedglob` on, in a directory holding one
+// file called `keep_a`: `print -l -- keep_a~zzz` prints those eleven
+// characters, where `print -l -- keep#_a~zzz` prints `keep_a` and `^zzz`
+// lists the directory. So a `~` on its own never sends a word to the
+// filesystem — it only says what to take out of a search something else
+// started — while a closure or a negation does.
+//
+// It is a separate set from [extendedPatternMeta] rather than a smaller one
+// because the two questions differ: what has to be escaped when an expansion
+// is pasted into a field, and what makes a field worth globbing. A `~` still
+// belongs to the first, since an unescaped one in an expanded word would
+// otherwise take matches out of a pattern the script never wrote.
+const extendedGlobTrigger = "#^"
+
 // bracketMeta is the characters that mean something only *inside* a bracket
 // expression: the terminator, the range operator and the portable negation.
 // Outside one they are ordinary text, which is why they are not in
@@ -357,6 +374,11 @@ type patternOpts struct {
 	// only ever moves when the pattern or the subject holds a byte above
 	// ASCII, which is where the callers ask.
 	chars bool
+	// classes is the character-class names beyond the twelve POSIX ones that
+	// this dialect answers, with the shell state two of them read already
+	// resolved. Its own value rather than a Runner because the matcher has
+	// none, which is the same reason chars and fold are here.
+	classes patternClasses
 	// extended says the operators one shell keeps behind an option of its
 	// own are live: `(#…)` flag groups, the `#` and `##` closures, the `^`
 	// negation and the `~` exclusion. Off, all four are ordinary characters,
@@ -1119,7 +1141,8 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 		if strings.HasPrefix(p[i:], "[:") {
 			if end := strings.Index(p[i+2:], ":]"); end >= 0 {
 				name := p[i+2 : i+2+end]
-				if inClass(name, c) || (o.fold && inClass(name, swapUnitCase(c))) {
+				if inClass(name, c, o.classes) ||
+					(o.fold && inClass(name, swapUnitCase(c), o.classes)) {
 					matched = true
 				}
 				i += 2 + end + 2
@@ -1221,12 +1244,135 @@ func hasUnterminatedBracket(p string) bool {
 	return false
 }
 
-// inClass answers the POSIX character classes, over bytes, in the C locale
-// the corpus is measured under. All twelve are here and unanimous across the
-// panel. A name outside the twelve matches nothing, silently — the answer of
-// every panel shell but bash 3.2, which falls back to reading the characters
-// literally (see docs/spec/grammar/patterns.md).
-func inClass(name string, unit string) bool {
+// inClass answers one character-class name for one unit of a subject.
+//
+// The twelve POSIX names first, since they are the ones every shell answers
+// and the ones nearly every pattern uses; then whatever else the dialect
+// declared. A name in neither set matches nothing and says nothing, at status
+// 0, which is measured across the whole panel — see [Semantics.PatternClasses].
+func inClass(name string, unit string, extra patternClasses) bool {
+	if inPosixClass(name, unit) {
+		return true
+	}
+	return extra.holds(name, unit)
+}
+
+// patternClasses is a dialect's extra character-class names together with the
+// shell state the two dynamic ones read.
+//
+// The state is captured when the pattern is read rather than looked up when a
+// name is answered, because the matcher recurses and memoizes: a class whose
+// answer moved part-way through one match would make the memo lie.
+type patternClasses struct {
+	// names is the roster, space separated, exactly as the dialect wrote it.
+	names string
+	// ifs is `$IFS` as it stands, with the default already applied where the
+	// name is unset — `[[:IFS:]]` reads the separators a shell would split
+	// on, not a fixed set.
+	ifs string
+	// word is `$WORDCHARS`: the characters that join letters and digits into
+	// one word. `[[:WORD:]]` is the union of the two.
+	word string
+}
+
+// holds answers one of the extra names, and answers false for any name the
+// dialect did not declare — including a POSIX name, which never reaches here.
+//
+// The names are compared byte for byte and are case-sensitive: measured,
+// `[[:ident:]]` and `[[:ASCII:]]` match nothing where `[[:IDENT:]]` and
+// `[[:ascii:]]` match.
+func (c patternClasses) holds(name, unit string) bool {
+	if unit == "" || !classDeclared(c.names, name) {
+		return false
+	}
+	switch name {
+	case "ascii":
+		// One byte below 0x80. A character outside ASCII is not in it in
+		// either shell that has the name: measured, `é` and `日` are both a
+		// miss where `a` is a hit.
+		return len(unit) == 1 && unit[0] < 0x80
+	case "IDENT":
+		// The characters a parameter name may hold: letters, digits and the
+		// underscore. Letters and digits rather than ASCII ones — measured,
+		// `é`, `日` and `٣` are all in it, which is the alnum answer this
+		// matcher already gives.
+		return unit == "_" || inPosixClass("alnum", unit)
+	case "WORD":
+		// A word to the line editor: the same letters and digits, plus
+		// whatever `$WORDCHARS` names. Measured dynamic — `WORDCHARS='@%'`
+		// puts `@` and `%` in it and takes `-` and `.` out.
+		return inPosixClass("alnum", unit) || unitIn(c.word, unit)
+	case "IFS":
+		// The field separators as they stand, so `IFS=':x'` puts those two
+		// characters in it and takes the space out.
+		return unitIn(c.ifs, unit)
+	case "IFSSPACE":
+		// The separators that are also whitespace, which is the half of IFS
+		// a run of counts as one delimiter.
+		return len(unit) == 1 && isIFSWhitespace(unit[0]) && unitIn(c.ifs, unit)
+	case "INCOMPLETE", "INVALID":
+		// A byte that is not a character. A unit is one of these only when
+		// it stands alone and is above ASCII: a lead byte that could have
+		// begun a character is INCOMPLETE, and anything else — a
+		// continuation byte with no lead, an overlong lead, a lead above the
+		// last legal one — is INVALID. Measured a byte at a time: 0xC2
+		// through 0xF4 are INCOMPLETE and 0x80 through 0xC1 and 0xF5 upward
+		// are INVALID.
+		if len(unit) != 1 || unit[0] < 0x80 {
+			return false
+		}
+		lead := unit[0] >= 0xC2 && unit[0] <= 0xF4
+		return lead == (name == "INCOMPLETE")
+	}
+	return false
+}
+
+// classDeclared reports whether a space-separated roster holds a name.
+//
+// The comparison is exact, and a mutation that folds case here survives: the
+// switch above is the second gate and compares the name exactly too, so
+// `[[:ASCII:]]` is still a miss with either. Recorded rather than tightened —
+// the roster is what bounds the set, and the switch is what reads a name.
+func classDeclared(names, name string) bool {
+	if names == "" || name == "" {
+		return false
+	}
+	for rest := names; rest != ""; {
+		var one string
+		if i := strings.IndexByte(rest, ' '); i >= 0 {
+			one, rest = rest[:i], rest[i+1:]
+		} else {
+			one, rest = rest, ""
+		}
+		if one == name {
+			return true
+		}
+	}
+	return false
+}
+
+// unitIn reports whether a set of characters holds one whole unit. Written as
+// a walk rather than as strings.Contains so that a multi-byte unit cannot be
+// found straddling two characters of the set.
+func unitIn(set, unit string) bool {
+	for i := 0; i < len(set); {
+		n := characterWidth(set[i:])
+		if set[i:i+n] == unit {
+			return true
+		}
+		i += n
+	}
+	return false
+}
+
+// isIFSWhitespace is the whitespace half of IFS: the three characters a run of
+// which counts as one field separator.
+func isIFSWhitespace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' }
+
+// inPosixClass answers the POSIX character classes, over bytes, in the C
+// locale the corpus is measured under. All twelve are here and unanimous
+// across the panel.
+func inPosixClass(name string, unit string) bool {
 	if len(unit) > 1 {
 		return inWideClass(name, ordOf(unit))
 	}
@@ -1353,6 +1499,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		quantified:   r.readsQuantifiedGroups(false),
 		numericRange: r.dialect().NumericRangePattern,
 		escapes:      r.sem().PatternEscapeReaches,
+		classes:      r.patternClasses(pattern),
 	}, pattern, 1)
 }
 
@@ -1366,4 +1513,26 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 func (r *Runner) readsQuantifiedGroups(condition bool) bool {
 	d := r.dialect()
 	return d.ExtendedPattern || (condition && d.ExtendedPatternInCondition)
+}
+
+// patternClasses resolves the dialect's extra character-class roster, and the
+// shell state two of the names read, for one pattern.
+//
+// Nothing is looked up unless the pattern actually opens a class. Asking for
+// `$IFS` on every glob would be a variable lookup per directory listing for a
+// question almost no pattern asks, and the guard is exact: `[:` is how a class
+// begins and there is no other spelling.
+func (r *Runner) patternClasses(pattern string) patternClasses {
+	names := r.sem().PatternClasses
+	if names == "" || !strings.Contains(pattern, "[:") {
+		return patternClasses{}
+	}
+	c := patternClasses{names: names}
+	if classDeclared(names, "IFS") || classDeclared(names, "IFSSPACE") {
+		c.ifs, _ = r.ifs()
+	}
+	if classDeclared(names, "WORD") {
+		c.word, _ = r.getVar("WORDCHARS")
+	}
+	return c
 }

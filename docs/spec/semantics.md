@@ -4216,6 +4216,59 @@ What was built, all through the extension seam — registered builtins in each
   process's directory, which are two different directories the moment a script
   writes `cd`. Corpus: `zmodload/the-startup-modules-a-prompt-narrows`,
   `stat/*`, `files/*`.
+- **zsh `zsh/system`'s three byte-moving builtins** (dialect/zsh/systemio.go):
+  `sysopen`, `sysread` and `syswrite`, measured 2026-09-10 against zsh 5.9.2
+  with `zsh -f`. The module already loaded here — its two parameters and its
+  math function are implemented — and installed none of its builtins, which is
+  the worse half of a silent failure: a script's `zmodload zsh/system ||
+  return` passed and the wall arrived several hundred lines later as `command
+  not found: sysopen`, inside a prompt theme's asynchronous worker on the line
+  its `|| return` guards (#1737).
+
+  **Three of six.** `zsystem`, `sysseek` and `syserror` are not registered, so
+  they refuse by their own names — at their call site, and under `zmodload -F
+  zsh/system b:zsystem`, which is 1 here and 0 in zsh. That difference is
+  recorded rather than hidden; see the corpus row named below. A lock is a
+  promise about what two shells do to one file at once and wants its own
+  measurements, and the other two are written nowhere in the tree this shell
+  starts with.
+
+  `sysopen` is `exec {fd}<file` with the flags spelled out. `-u name`
+  allocates a descriptor and puts the *number* in the named parameter, by the
+  same route `exec {name}<` takes, so `-u 'h[k]'` resolves as it does there; a
+  `-u` that is all digits is a number instead. No direction letter is
+  read-only, `-w` is write-only and **does not truncate**, `-a` appends, and
+  `-r` with either of the others is read-write. `-o` is a comma list of nine
+  names — case-insensitive, an `O_` prefix allowed, and not prefix-matched —
+  of which `excl` carries O_CREAT with it (measured: `-o excl` alone *creates*
+  the file, and O_EXCL without it is ignored by the system, so a guard written
+  that way would claim a lock somebody holds) and `cloexec` is a mark on the
+  shell's descriptor table rather than a flag on the open, because the runtime
+  opens everything close-on-exec already and the boundary a child inherits is
+  rebuilt from that table. `-m` is an octal mode and 0666 is the default the
+  umask then trims.
+
+  `sysread` is **one** read: `-s` bounds it, a short read is a success, nothing
+  is split, and the status is its whole vocabulary — 1 a usage error, 2 the
+  read failed, 3 the copy `-o` asked for failed, 4 `-t` elapsed, 5 end of
+  input. A theme's receive loop reads on for the 4 and gives its worker up for
+  anything else, so collapsing any two of those stops the worker on its first
+  idle turn. `-o` **diverts rather than duplicates**: the bytes go to the
+  descriptor and the parameter is left unset. A subscripted destination refuses
+  by name — zsh splices characters into the string a scalar holds and this
+  shell's assignment path would make it an array (#1746), and a `buf` that
+  looks assigned is the one answer that must not be given.
+
+  `syswrite` writes every byte or reports why it could not, and a descriptor
+  that refuses is a status with **nothing said**, which is what lets `while
+  syswrite $'\x05'; do …; done` end quietly when the far side goes.
+
+  Two places this does not reproduce zsh, both measured and both filed: a
+  numeric `-u` of 10, 20 or `07` is status 0 in zsh with the descriptor then
+  unreachable, where every number named here is the number it goes on; and
+  `-o nonblock` on a process substitution reads end-of-file where zsh reads the
+  command's output, because this shell's `<(cmd)` is a named pipe unlinked when
+  the command that named it ends (#1750). Corpus: `system/*`.
 - **zsh `zsh/datetime`** (dialect/zsh/datetime.go): the clock, as a script
   reads it — `$EPOCHSECONDS`, `$EPOCHREALTIME`, `$epochtime` and the
   `strftime` builtin. Measured 2026-09-06 against zsh 5.9.2 with a scratch

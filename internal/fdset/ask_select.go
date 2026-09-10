@@ -8,6 +8,7 @@ package fdset
 import (
 	"errors"
 	"syscall"
+	"time"
 )
 
 // ReadableNow reports whether a read on fd would return at once, waiting no
@@ -39,6 +40,49 @@ func ReadableNow(fd int) bool {
 			return true
 		}
 		return has(&set, fd)
+	}
+}
+
+// ReadableWithin is ReadableNow with a deadline: it waits up to d for a read
+// on fd to become one that would not block, and reports whether it became one.
+//
+// The third answer this has and ReadableNow does not is *whether the question
+// could be asked at all*. A caller that only wants to avoid blocking can treat
+// "cannot ask" as "go ahead" and find out from the read; a caller implementing
+// a builtin whose whole contract is a timeout cannot, because a shell that
+// reported a timeout it never waited for, or read where it was asked to wait,
+// is wrong in a way no later call recovers from.
+//
+// A negative or zero d is the same look ReadableNow takes, which is what
+// `-t 0` means: ask, do not wait.
+func ReadableWithin(fd int, d time.Duration) (ready, asked bool) {
+	var set syscall.FdSet
+	if fd < 0 || fd/nfdbits >= len(set.Bits) {
+		return false, false
+	}
+	deadline := time.Now().Add(d)
+	for {
+		left := time.Until(deadline)
+		if d <= 0 || left < 0 {
+			left = 0
+		}
+		tv := timeval(left)
+		set = syscall.FdSet{}
+		add(&set, fd)
+		err := selectRead(fd+1, &set, &tv)
+		if errors.Is(err, syscall.EINTR) {
+			// A signal arrived mid-wait. The deadline is absolute, so the
+			// question is asked again for what is left of it rather than for
+			// the whole of it again.
+			if d <= 0 {
+				return false, true
+			}
+			continue
+		}
+		if err != nil {
+			return false, false
+		}
+		return has(&set, fd), true
 	}
 }
 

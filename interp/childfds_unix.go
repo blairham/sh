@@ -75,7 +75,27 @@ func (r *Runner) childFiles() []*os.File {
 		}
 	}
 	r.dropExecOpened(files)
+	r.dropCloseOnExec(files)
 	return files
+}
+
+// dropCloseOnExec takes out the descriptors a builtin was told to keep from
+// what this shell runs.
+//
+// A nil rather than a gap, for the reason dropExecOpened gives: the number
+// must be *closed* in the child, and a nil is what says so on both routes out
+// of this table.
+//
+// No axis is asked, which is the difference from its neighbor. `exec 3>f`
+// leaves a shell to decide whether the descriptor is the script's or its own,
+// and the shells disagree; `sysopen -o cloexec` is the script having decided,
+// by name, on that line.
+func (r *Runner) dropCloseOnExec(files []*os.File) {
+	for fd := range r.cloexecFds {
+		if i := fd - firstExtraFd; i >= 0 && i < len(files) {
+			files[i] = nil
+		}
+	}
 }
 
 // replacementFiles is the whole of the table a *replacement* is given: the

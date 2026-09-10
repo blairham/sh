@@ -119,6 +119,10 @@ func corpusGrammar() syntax.Dialect {
 	d.FunctionMultipleNames = true
 	d.MultiDigitFdNumber = true
 	d.ParamCaseChange = true
+	// `<(cmd)`. Three cases are written with it — the ones about `sysopen`,
+	// where the substitution *is* the subject — and the core reads `<` as a
+	// redirection and the parenthesis as a subshell after it.
+	d.ProcessSubstitution = true
 	d.ParamIndirection = true
 	d.ParamTransformations = true
 	d.PipeBothStreams = true

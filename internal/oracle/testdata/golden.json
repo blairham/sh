@@ -111995,6 +111995,50 @@
         "TimedOut": false
       }
     },
+    "system/a-lock-taken-and-given-back": {
+      "bash": {
+        "Stdout": "held=127~named=127 high=0~again=127~released=127~twice=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "held=127~named=127 high=0~again=127~released=127~twice=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "held=127~named=127 high=0~again=127~released=127~twice=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "held=127~named=127 high=0~again=127~released=127~twice=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "held=127~named=127 high=0~again=127~released=127~twice=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "held=0~named=0 high=1~again=0~released=0~twice=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "system/an-error-number-becomes-a-name": {
       "bash": {
         "Stdout": "st=127 [[1]] [[2]] [[9]]",
@@ -112122,6 +112166,50 @@
       "zsh": {
         "Stdout": "wrote=0 n=4~file=[a~b]~refused=2~none=1~two=1",
         "Stderr": "\u003cshell\u003e:syswrite:1: not enough arguments~\u003cshell\u003e:syswrite:1: too many arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/every-one-of-the-modules-six-builtins": {
+      "bash": {
+        "Stdout": "plain=127~have=127~zsystem=127~rest=127~invented=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "plain=127~have=127~zsystem=127~rest=127~invented=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "plain=127~have=127~zsystem=127~rest=127~invented=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "plain=127~have=127~zsystem=127~rest=127~invented=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "plain=127~have=127~zsystem=127~rest=127~invented=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "plain=0~have=0~zsystem=0~rest=0~invented=1",
+        "Stderr": "\u003cshell\u003e:1: module `zsh/system' has no such feature: `b:nosuchthing'",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -112391,45 +112479,45 @@
         "TimedOut": false
       }
     },
-    "system/the-three-builtins-this-shell-has-not-got": {
+    "system/the-sentence-the-system-has-for-an-error": {
       "bash": {
-        "Stdout": "plain=127~have=127~zsystem=127~rest=127",
-        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Stdout": "number=127~name=127~prefixed=127~held=[] diverted=127~unknown=127~lowercase=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: syserror: command not found~\u003cshell\u003e: line 1: syserror: command not found~\u003cshell\u003e: line 1: syserror: command not found~\u003cshell\u003e: line 1: syserror: command not found~\u003cshell\u003e: line 1: syserror: command not found~\u003cshell\u003e: line 1: syserror: command not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "plain=127~have=127~zsystem=127~rest=127",
-        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Stdout": "number=127~name=127~prefixed=127~held=[] diverted=127~unknown=127~lowercase=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: syserror: command not found~\u003cshell\u003e: line 1: syserror: command not found~\u003cshell\u003e: line 1: syserror: command not found~\u003cshell\u003e: line 1: syserror: command not found~\u003cshell\u003e: line 1: syserror: command not found~\u003cshell\u003e: line 1: syserror: command not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "plain=127~have=127~zsystem=127~rest=127",
-        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found",
+        "Stdout": "number=127~name=127~prefixed=127~held=[] diverted=127~unknown=127~lowercase=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: syserror: command not found~\u003cshell\u003e: syserror: command not found~\u003cshell\u003e: syserror: command not found~\u003cshell\u003e: syserror: command not found~\u003cshell\u003e: syserror: command not found~\u003cshell\u003e: syserror: command not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "dash": {
-        "Stdout": "plain=127~have=127~zsystem=127~rest=127",
-        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found",
+        "Stdout": "number=127~name=127~prefixed=127~held=[] diverted=127~unknown=127~lowercase=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: syserror: not found~\u003cshell\u003e: 1: syserror: not found~\u003cshell\u003e: 1: syserror: not found~\u003cshell\u003e: 1: syserror: not found~\u003cshell\u003e: 1: syserror: not found~\u003cshell\u003e: 1: syserror: not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
-        "Stdout": "plain=127~have=127~zsystem=127~rest=127",
-        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found",
+        "Stdout": "number=127~name=127~prefixed=127~held=[] diverted=127~unknown=127~lowercase=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: syserror: not found~\u003cshell\u003e: syserror: not found~\u003cshell\u003e: syserror: not found~\u003cshell\u003e: syserror: not found~\u003cshell\u003e: syserror: not found~\u003cshell\u003e: syserror: not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "plain=0~have=0~zsystem=0~rest=0",
-        "Stderr": "",
+        "Stdout": "number=0~name=0~prefixed=0~held=[Permission denied] diverted=0~unknown=2~lowercase=2",
+        "Stderr": "No such file or directory~No such file or directory~oops: Permission denied",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -112479,6 +112567,94 @@
         "TimedOut": false
       }
     },
+    "system/what-this-shells-zsystem-supports": {
+      "bash": {
+        "Stdout": "flock=127~supports=127~subshell=127~sysread=127~none=127~two=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "flock=127~supports=127~subshell=127~sysread=127~none=127~two=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "flock=127~supports=127~subshell=127~sysread=127~none=127~two=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "flock=127~supports=127~subshell=127~sysread=127~none=127~two=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "flock=127~supports=127~subshell=127~sysread=127~none=127~two=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "flock=0~supports=0~subshell=1~sysread=1~none=255~two=255",
+        "Stderr": "\u003cshell\u003e:zsystem:1: supports: not enough arguments~\u003cshell\u003e:zsystem:1: supports: too many arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/what-zsystem-refuses": {
+      "bash": {
+        "Stdout": "none=127~sub=127~nofile=127~missing=127~reading=127~letter=127~interval=127~notlocked=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "none=127~sub=127~nofile=127~missing=127~reading=127~letter=127~interval=127~notlocked=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found~\u003cshell\u003e: line 1: zsystem: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "none=127~sub=127~nofile=127~missing=127~reading=127~letter=127~interval=127~notlocked=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found~\u003cshell\u003e: zsystem: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "none=127~sub=127~nofile=127~missing=127~reading=127~letter=127~interval=127~notlocked=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found~\u003cshell\u003e: 1: zsystem: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "none=127~sub=127~nofile=127~missing=127~reading=127~letter=127~interval=127~notlocked=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found~\u003cshell\u003e: zsystem: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "none=1~sub=1~nofile=1~missing=1~reading=1~letter=1~interval=1~notlocked=1",
+        "Stderr": "\u003cshell\u003e:zsystem:1: not enough arguments~\u003cshell\u003e:zsystem:1: unknown subcommand: bogus~\u003cshell\u003e:zsystem:1: flock: not enough arguments~\u003cshell\u003e:zsystem:1: failed to open /no/such/file for writing: no such file or directory~\u003cshell\u003e:zsystem:1: failed to open /no/such/file for reading: no such file or directory~\u003cshell\u003e:zsystem:1: flock: unknown option: x~\u003cshell\u003e:zsystem:1: flock: invalid interval value: 'bogus'~\u003cshell\u003e:zsystem:1: flock: file descriptor 99 not in use for locking",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "system/where-a-descriptor-is-positioned": {
       "bash": {
         "Stdout": "",
@@ -112518,6 +112694,50 @@
       "zsh": {
         "Stdout": "a=0~b=4 [one] c=-1",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/where-a-descriptor-is-reading-from": {
+      "bash": {
+        "Stdout": "first=[] rewound=[]~tail=[]~onward=[]~before=127~origin=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysseek: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysseek: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysseek: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysseek: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysseek: command not found~\u003cshell\u003e: line 1: sysseek: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "first=[] rewound=[]~tail=[]~onward=[]~before=127~origin=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysseek: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysseek: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysseek: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysseek: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysseek: command not found~\u003cshell\u003e: line 1: sysseek: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "first=[] rewound=[]~tail=[]~onward=[]~before=127~origin=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysseek: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysseek: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysseek: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysseek: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysseek: command not found~\u003cshell\u003e: sysseek: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "first=[] rewound=[]~tail=[]~onward=[]~before=127~origin=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysread: not found~\u003cshell\u003e: 1: sysseek: not found~\u003cshell\u003e: 1: sysread: not found~\u003cshell\u003e: 1: sysseek: not found~\u003cshell\u003e: 1: sysread: not found~\u003cshell\u003e: 1: sysseek: not found~\u003cshell\u003e: 1: sysread: not found~\u003cshell\u003e: 1: sysseek: not found~\u003cshell\u003e: 1: sysread: not found~\u003cshell\u003e: 1: sysseek: not found~\u003cshell\u003e: 1: sysseek: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "first=[] rewound=[]~tail=[]~onward=[]~before=127~origin=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysseek: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysseek: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysseek: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysseek: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysseek: not found~\u003cshell\u003e: sysseek: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "first=[hello] rewound=[hello]~tail=[world]~onward=[wor]~before=2~origin=1",
+        "Stderr": "\u003cshell\u003e:sysseek:1: unknown argument to -w: bogus",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -124409,6 +124629,138 @@
       },
       "zsh": {
         "Stdout": "st=0 arr=[-a|-b] argv=[c]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zselect/the-probe-a-prompt-worker-guards-on": {
+      "bash": {
+        "Stdout": "module=failed~module=2~probe=failed~probe=ok~named=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: return: can only `return' from a function or sourced script~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: return: can only `return' from a function or sourced script~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "module=failed",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: return: can only `return' from a function or sourced script",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `}'~\u003cshell\u003e: -c: line 0: `zmodload zsh/zselect || { echo \"module=failed\"; return; }; echo \"module=$?\"; ! { zselect -t0 || (( $? != 1 )) } || { echo \"probe=failed\"; return; }; echo \"probe=ok\"; zmodload -F zsh/zselect b:zselect; echo \"named=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "module=failed",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "module=failed",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "module=0~probe=ok~named=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zselect/what-zselect-refuses": {
+      "bash": {
+        "Stdout": "letter=127~novalue=127~notanumber=127~badarray=127~operand=127~garbage=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "letter=127~novalue=127~notanumber=127~badarray=127~operand=127~garbage=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "letter=127~novalue=127~notanumber=127~badarray=127~operand=127~garbage=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zselect: command not found~\u003cshell\u003e: zselect: command not found~\u003cshell\u003e: zselect: command not found~\u003cshell\u003e: zselect: command not found~\u003cshell\u003e: zselect: command not found~\u003cshell\u003e: zselect: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "letter=127~novalue=127~notanumber=127~badarray=127~operand=127~garbage=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zselect: not found~\u003cshell\u003e: 1: zselect: not found~\u003cshell\u003e: 1: zselect: not found~\u003cshell\u003e: 1: zselect: not found~\u003cshell\u003e: 1: zselect: not found~\u003cshell\u003e: 1: zselect: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "letter=127~novalue=127~notanumber=127~badarray=127~operand=127~garbage=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zselect: not found~\u003cshell\u003e: zselect: not found~\u003cshell\u003e: zselect: not found~\u003cshell\u003e: zselect: not found~\u003cshell\u003e: zselect: not found~\u003cshell\u003e: zselect: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "letter=1~novalue=1~notanumber=1~badarray=1~operand=1~garbage=1",
+        "Stderr": "\u003cshell\u003e:zselect:1: expecting file descriptor: q~\u003cshell\u003e:zselect:1: argument expected after -t~\u003cshell\u003e:zselect:1: number expected after -t~\u003cshell\u003e:zselect:1: invalid array name: bad name~\u003cshell\u003e:zselect:1: expecting file descriptor: extra~\u003cshell\u003e:zselect:1: garbage after file descriptor: x",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zselect/which-descriptors-came-back-ready": {
+      "bash": {
+        "Stdout": "reply=()~mine=()",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: keyed=(${(kv)keyed}): bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "reply=()~mine=()",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: zselect: command not found~\u003cshell\u003e: line 1: keyed=(${(kv)keyed}): bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "reply=()~mine=()",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: zselect: command not found~\u003cshell\u003e: zselect: command not found~\u003cshell\u003e: zselect: command not found~\u003cshell\u003e: keyed=(${(kv)keyed}): bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "reply=()~mine=()",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: zselect: not found~\u003cshell\u003e: zselect: not found~\u003cshell\u003e: zselect: not found~\u003cshell\u003e: syntax error at line 1: `keyed}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "reply=(-w 7 8)~mine=(-w 8)~keyed=(7 rw)~bare=(-w 7 8)~nothing=1 reply=(kept)",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -13826,8 +13826,8 @@ echo "read=[$l]"`,
 	},
 	{
 		ID: "system/a-lock-taken-and-given-back", Category: "builtins",
-		Snippet: `zmodload zsh/system; : > lk; zsystem flock lk; echo "held=$?"; zsystem flock -f fd lk; echo "named=$? high=$(( fd > 2 ))"; zsystem flock -t 0 -f second lk; echo "again=$?"; zsystem flock -u $fd; echo "released=$?"; zsystem flock -u $fd; echo "twice=$?"`,
-		Why:     "a lock file locked three ways and unlocked once. The third line is the discriminating one and it is not about contention at all: **a shell can lock a file it is already holding**, because these are per-process record locks rather than per-descriptor ones — measured, and a shell reaching for flock(2) instead has the second call wait for the first. The double unlock is the pair that says the first one did something, since the second names a descriptor that is no longer one",
+		Snippet: `zmodload zsh/system; : > lk; zsystem flock lk; echo "held=$?"; zsystem flock -f fd lk; echo "named=$? high=$(( fd > 2 ))"; zsystem flock -t 0 -f second lk; echo "again=$?"; zsystem flock -u $fd; echo "released=$?"; zsystem flock -u $fd 2>/dev/null; echo "twice=$?"`,
+		Why:     "a lock file locked three ways and unlocked once. The third line is the discriminating one and it is not about contention at all: **a shell can lock a file it is already holding**, because these are per-process record locks rather than per-descriptor ones — measured, and a shell reaching for flock(2) instead has the second call wait for the first. The double unlock is the pair that says the first one did something, since the second names a descriptor that is no longer one. Its *wording* is thrown away here and pinned by the refusals row instead: the sentence names the descriptor number, and which number a fresh allocation lands on is each shell's own bookkeeping — 12 there and 11 here — so a row keeping it would grade the allocator",
 	},
 	{
 		ID: "system/what-zsystem-refuses", Category: "builtins",

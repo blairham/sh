@@ -103,6 +103,10 @@ func TestOnlyALoneInputRedirectionIsTheFile(t *testing.T) {
 		// A command word takes the redirection as its input instead.
 		{"a command word", `printf "[%s]" "$(<f echo hi)"`, "[hi]"},
 		{"an assignment prefix", `printf "[%s]" "$(x=1 <f)"`, "[]"},
+		// Two sources on one descriptor is also the multios axis — see
+		// Semantics.RedirectsUseEveryTarget — and this row runs under the
+		// answer the rest of these do. The row is about the body no longer
+		// being the form, which it is not under either answer.
 		{"a second redirection", `printf "[%s]" "$(<f <g)"`, "[]"},
 		{"a descriptor other than zero", `printf "[%s]" "$(3<f)"`, "[]"},
 		{"another command in the list", `printf "[%s]" "$(<f; :)"`, "[]"},

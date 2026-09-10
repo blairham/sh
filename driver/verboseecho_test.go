@@ -116,6 +116,11 @@ func TestVerboseEchoesThePhysicalLinesAsTheyAreRead(t *testing.T) {
 			// whole loop *after* running it.
 			var out strings.Builder
 			sh := shell()
+			// Two here-documents on one command is the multios axis, which
+			// nothing here is about: this suite asserts *when* a line is
+			// echoed, so the axis is answered rather than left to refuse the
+			// command and print a complaint in the middle of the echo.
+			sh.Semantics.RedirectsUseEveryTarget = interp.No
 			sh.Stdout, sh.Stderr = &out, &out
 			if code := driver.MainArgs(sh, []string{"testsh", "-v", writeScript(t, c.src)}); code != 0 {
 				t.Fatalf("status %d", code)

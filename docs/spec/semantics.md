@@ -2947,11 +2947,11 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 11 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e` |
-| axis- or matcher-backed | 8 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`). `ksharrays` is one name over **five** axes — see below |
+| axis- or matcher-backed | 9 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`). `ksharrays` is one name over **five** axes — see below |
 | fixed | 18 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted |
-| store-backed, read by the front end | 2 | `histignorespace`, read by the line editor before it records a line, and `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for. Both are kept where a recorded name is kept, because the substrate has no `set -o` name for either |
+| store-backed, read by the front end | 4 | `histignorespace`, read by the line editor before it records a line; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All four are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 2 | `autocd` and `checkjobs`: each moves a capability the substrate holds under no option name of its own — a bare directory name really is read as a `cd`, and a job still running really does hold the exit |
-| **recorded** | 144 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 141 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -2981,9 +2981,16 @@ governs both. `localtraps` is the seventh name to move (#1731): a trap a
 function sets goes back at the return, and it is *not* the trap-side reading
 of `localoptions` — measured, that option leaves a function's trap installed,
 and the save this one takes is per condition and taken at the modification
-rather than at the call. Nothing else about the split moved: 144 of 185 is
-still most of the table, and the count above is the one produced by counting
-the constructors in `dialect/zsh/setopt.go`.
+rather than at the call. `multios`, `cshnullcmd` and `shnullcmd` are the
+eighth, ninth and tenth (#1779), and they left together because they are two
+questions in one neighbourhood: `multios` is zsh's name for the axis that
+sends a stream to every target it names and reads it from every source, and
+the other two are what a command that is only redirections runs — csh's
+reading refuses it, sh's runs `:`, and both are reached by pointing the
+null-command parameters at a name a script cannot write. Nothing else about
+the split moved: 141 of 185 is still most of the table, and the count above
+is the one produced by counting the constructors in
+`dialect/zsh/setopt.go`.
 
 The recorded kind is the change of position, and it is deliberate. A real
 `~/.zshrc` opens with a dozen `setopt` lines about completion, correction,
@@ -3050,7 +3057,7 @@ call back into the table it was called from.
 
 Two consequences worth stating, because both are divergences rather than
 wins. Recording is unchanged: a listing 185 rows long still says nothing
-about whether a name is acted on, and 144 of them are remembered and not
+about whether a name is acted on, and 141 of them are remembered and not
 acted on exactly as before — the table is longer in the listing because zsh
 lists that many, not because more of it is implemented. And a `set -o` name
 this shell has and will not move now answers `can't change option` at 1,
@@ -4631,7 +4638,7 @@ than missing:
   the chain rather than the last; `-x` sets the tab width of a printed body.
   Each is refused as not implemented rather than as unknown, the same
   distinction `compgen` draws between an action a shell lacks and a typo.
-- zsh `setopt` names of the **recorded** kind: 144 of the 185 are recognized,
+- zsh `setopt` names of the **recorded** kind: 141 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150; neither was the count
   the table produces. It is now counted from the constructors.)

@@ -44,6 +44,12 @@ func testSemantics() Semantics {
 	// Arrays, subscripts and the expansions that read them. The standard has
 	// no arrays, so it answers none of this and every array test is refused
 	// without it.
+	// A stream redirected twice, which is bash's answer here: the last target
+	// alone. The suite that is *about* it sets both — see redirect_test.go
+	// and multiosdup_test.go — and the tests that merely write `cat <<A <<B`
+	// on the way to something else need an answer rather than a refusal.
+	s.RedirectsUseEveryTarget = No
+
 	s.ArraysAreSparse = Yes
 	s.ArrayScalarIsTheWholeArray = No
 	// And which element the one-element answer means on a keyed table: the

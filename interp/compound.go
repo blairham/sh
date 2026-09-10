@@ -730,6 +730,15 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// second call starts over, which is why one shell's own function library
 	// is written without the `local OPTIND=1` the others need.
 	r.localizeGetoptsCursor(sc)
+	// And whatever a dialect saves around every call, taken now rather than
+	// when the body asks for it: the option table, in the shell whose
+	// options are function-scoped. See AtEveryFunctionCall for why the
+	// moment has to be this one and why the runner is handed in.
+	for _, save := range r.aroundFunctionCalls {
+		if restore := save(r); restore != nil {
+			sc.onReturn = append(sc.onReturn, restore)
+		}
+	}
 	// What the EXIT trap was on the way in, so zsh can tell whether this
 	// function set one of its own.
 	outerTrap, outerDepth := r.exitTrap, r.trapDepth

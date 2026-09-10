@@ -25,10 +25,16 @@ import (
 //
 // The rest of what real zsh folds into an emulation — its ~180 options, csh's
 // separate glob wording, `$0`-versus-function-name rules — is not modeled;
-// `emulate csh` here records the mode and changes nothing. `emulate -L`, the
-// function-local form, is refused out loud rather than silently made global:
-// this shell has no seam for restoring semantics on function return.
-// docs/spec/semantics.md records both boundaries.
+// `emulate csh` here records the mode and changes nothing.
+// docs/spec/semantics.md records the boundary.
+//
+// `emulate -L`, the function-local form, is `setopt localoptions` after the
+// emulation and nothing else. It had a save-and-restore of its own once, and
+// that was two mistakes: it saved at its own line rather than at the function
+// entry, so an option moved earlier in the same body leaked, and it restored
+// whether or not the option was still on at the return. Both are measured the
+// other way; localoptions.go carries the rule now, and both spellings reach
+// it.
 //
 // Measured shapes: a bare `emulate` prints the current mode and 0; a word
 // that names no emulation — `fish`, or `SH` in the wrong case — is passed
@@ -117,26 +123,29 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return 0
 	}
 	if !e.hasCode {
-		if e.local {
-			// `-L` is LOCAL_OPTIONS: the emulation, and everything moved
-			// after it, last as long as the enclosing function call. What
-			// is saved is the state *before* the emulation, so a `setopt`
-			// later in the same function is undone too — which is the
-			// option's whole point and is measured.
-			//
-			// Outside a function there is nothing to return to and the
-			// letter changes nothing: measured, `emulate -L zsh -o
-			// extendedglob` at the top level leaves the option on.
-			saved := saveEmulationState(r)
-			r.AtFunctionReturn(func() { saved.restore(r) })
-		}
 		applyEmulation(r, e.mode)
+		if e.local {
+			// `-L` is LOCAL_OPTIONS and nothing besides, which is measured
+			// rather than assumed: inside `emulate -L zsh` the option reads
+			// on, and at the top level — where there is no call to return
+			// from — it stays on afterwards and localizes the *next*
+			// function call. So the letter is one `setopt` and the
+			// function-call machinery does the rest; localoptions.go is
+			// where the rest is, and it is the same machinery `setopt
+			// localoptions` reaches.
+			//
+			// After the emulation rather than before it, because a plain
+			// emulation resets every option to that emulation's default and
+			// `localoptions` defaults off — which is exactly why a bare
+			// `emulate sh` in a function does *not* localize, measured.
+			setLocalOptions(r, true)
+		}
 		return e.applyOptions(r)
 	}
 	// `-c` runs the string under the emulation and restores everything after
 	// — measured, an option set before it comes back: `setopt no_glob;
 	// emulate sh -c '…'` still refuses to glob afterwards.
-	saved := saveEmulationState(r)
+	saved := saveOptionState(r)
 	applyEmulation(r, e.mode)
 	st := e.applyOptions(r)
 	if eval, ok := r.Builtin("eval"); ok {
@@ -256,47 +265,4 @@ func (e emulateCall) applyOptions(r *interp.Runner) int {
 		}
 	}
 	return status
-}
-
-// emulationState is what `-c` puts back: the semantics vector by pointer, the
-// mode, and each changeable option's state — the vector restore covers the
-// axes, and the option flags live outside it.
-type emulationState struct {
-	sem     *interp.Semantics
-	mode    string
-	options map[string]bool
-	// recorded is the recorded-option store as it stood, saved whole for the
-	// same reason applyEmulation clears it whole.
-	recorded []string
-}
-
-func saveEmulationState(r *interp.Runner) emulationState {
-	s := emulationState{
-		sem: r.Semantics, mode: currentEmulation(r),
-		options: map[string]bool{}, recorded: recordedOptions(r),
-	}
-	for _, o := range zshOptions {
-		if o.set != nil && !o.recorded {
-			s.options[o.base] = o.get(r)
-		}
-	}
-	return s
-}
-
-func (s emulationState) restore(r *interp.Runner) {
-	r.Semantics = s.sem
-	setRecordedOptions(r, s.recorded)
-	for _, o := range zshOptions {
-		if o.set == nil || o.recorded {
-			continue
-		}
-		switch o.base {
-		case "shwordsplit", "nomatch", "ksharrays":
-			// The vector restore has these, and re-setting them would swap
-			// in a fresh copy for nothing.
-			continue
-		}
-		_ = o.set(r, s.options[o.base])
-	}
-	r.SetVar(emulationMode, s.mode)
 }

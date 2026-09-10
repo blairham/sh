@@ -417,6 +417,8 @@ func Semantics() interp.Semantics {
 	// only the moment differs. What this dialect does not yet reproduce is
 	// that moment: it reads the word and refuses it at the run.
 	s.ProcessSubstitutionInCondition = interp.No
+	// As zsh: `more tokens expected` and the input is abandoned.
+	s.ConditionArithmeticErrorIsFatal = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
 	// Leading digits and no further: `return 3abc` is 3 and `return r` is 0
 	// whatever `r` holds. Not arithmetic, which the leading zero settles —

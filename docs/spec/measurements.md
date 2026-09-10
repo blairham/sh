@@ -11143,6 +11143,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cond/rhs-is-a-pattern` | ` quoted-literal` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `pattern quoted-literal` | `pattern quoted-literal` | `pattern quoted-literal` | `pattern quoted-literal` | `pattern quoted-literal` |
 | `cond/pattern-through-a-variable-diverges` | `var-is-literal` **2>** `<shell>: 1: [[: not found` | `var-is-pattern` | `var-is-pattern` | `var-is-pattern` | `var-is-pattern` | `var-is-literal` |
 | `cond/numeric-versus-string-comparison` | ` string-lt` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `numeric string-lt` | `numeric string-lt` | `numeric string-lt` | `numeric string-lt` | `numeric string-lt` |
+| `cond/comparison-operands-are-expressions` | ` not-zero` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` *(status 127)* | `name-is-value not-zero expression` | `name-is-value not-zero expression` | `name-is-value not-zero expression` | `name-is-value not-zero expression` | `name-is-value not-zero expression` |
+| `cond/comparison-operand-expands-once` | `once` **2>** `<shell>: 1: [[: not found` | `once` **2>** `<shell>: line 1: [[: $x: arithmetic syntax error: operand expected (error token is "$x")` | `once` **2>** `<shell>: line 1: [[: $x: arithmetic syntax error: operand expected (error token is "$x")` | `once` **2>** `<shell>: [[: $x: syntax error: operand expected (error token is "$x")` | **2>** `<shell>: $x: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `x'` *(status 1)* |
+| `cond/an-unreadable-comparison-operand` | `one~two st=127` **2>** `<script>: 1: [[: not found` | `one~two st=1` **2>** `<script>: line 1: [[: 1+: arithmetic syntax error: operand expected (error token is "+")` | `one~two st=1` **2>** `<script>: line 1: [[: 1+: arithmetic syntax error: operand expected (error token is "+")` | `one~two st=1` **2>** `<script>: line 1: [[: 1+: syntax error: operand expected (error token is "+")` | `one` **2>** `<script>: line 1: 1+: more tokens expected` *(status 1)* | `one` **2>** `<script>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `cond/regex-match` | `no-regex` **2>** `<shell>: 1: [[: not found` | `regex` | `regex` | `regex` | `regex` | `regex` |
 | `cond/quoted-regex-diverges` | `literal` **2>** `<shell>: 1: [[: not found` | `literal` | `literal` | `literal` | `still-regex` | `still-regex` |
 | `cond/regex-captures-are-recorded` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[bc\|b\|c]` | `[bc\|b\|c]` | `[bc\|b\|c]` | `[\|\|]` | `[\|\|]` |
@@ -11198,6 +11201,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cond/numeric-versus-string-comparison` — the sharpest trap in the construct: -gt compares numbers and > compares strings, so 10 sorts before 9
   ```sh
   [[ 10 -gt 9 ]] && printf numeric; [[ 10 > 9 ]] && printf " string-gt" || printf " string-lt"
+  ```
+- `cond/comparison-operands-are-expressions` — the operands of the word-spelled comparisons are arithmetic expressions and not literals, so a bare name is its value — every shell in the panel that has `[[ ]]` agrees, which is what makes it the core's answer rather than an axis. The second clause is the control: a shell that read every non-number as zero would pass the first alone (#1616)
+  ```sh
+  n=5; [[ n -eq 5 ]] && printf name-is-value; [[ n -eq 0 ]] && printf " and-zero" || printf " not-zero"; k=3; [[ k*2 -eq 6 ]] && printf " expression"
+  ```
+- `cond/comparison-operand-expands-once` — the word is expanded once and what reaches the arithmetic is text: a second expansion would find x and answer 7. None of the panel does, so the two characters `$x` are an operand the arithmetic cannot use (#1616)
+  ```sh
+  x=7; v='$x'; [[ v -eq 7 ]] && printf twice || printf once
+  ```
+- `cond/an-unreadable-comparison-operand` — what an operand that is not an expression does to the rest of the input. zsh and ksh93 abandon it and bash lets the condition be false and carries on, all three at status 1 — a conflict rather than a wording difference, and the ConditionArithmeticErrorIsFatal axis. From a file, because the trailing text is the measurement and -c muddies where the shell stopped (#1616)
+  ```sh
+  echo one; [[ 1+ -eq 0 ]]; echo two st=$?
   ```
 - `cond/regex-match` — the one place in the shell where the pattern language is regular expressions rather than globs
   ```sh

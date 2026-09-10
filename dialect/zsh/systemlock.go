@@ -129,7 +129,7 @@ func zsystemBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 //
 // **255, not 1, for the wrong number of operands.** Measured, and it is the
 // only status like it in the module — every other refusal here is 1 — which is
-// why it is pinned rather than rounded to the neighbours. A script writing
+// why it is pinned rather than rounded to the neighbors. A script writing
 // `zsystem supports` with the name it meant to pass left empty gets a status
 // no ordinary failure produces.
 func zsystemSupports(r *interp.Runner, args []string) int {

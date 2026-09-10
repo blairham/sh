@@ -82,6 +82,16 @@ var Retired = map[string]string{
 	// (#1379).
 	"array/a-quoted-empty-array-is-not-the-same-question": "the snippet measured ksh93's compound variable rather than an empty array; replaced by array/a-quoted-at-on-a-name-that-holds-nothing, array/a-declared-empty-array-quoted-at and param/an-empty-array-literal-shows-what-its-field-holds",
 	"param/an-empty-array-quoted-at":                      "the same snippet and the same confound; replaced by param/an-empty-array-literal-shows-what-its-field-holds, which records the field's contents",
+	// A retirement for the other reason a case can outlive its ID: the ID was
+	// a statement about this shell, and this shell changed. The row recorded
+	// that `zsystem`, `sysseek` and `syserror` were refused by name here and
+	// answered in zsh, which was the honest half-state #1737 left and #1749
+	// closed. Its own text said "it flips to agreement the day the three
+	// land"; a row still called `the-three-builtins-this-shell-has-not-got`
+	// while recording that they are all present would be worse than the lost
+	// evidence, and that evidence cannot be re-measured in any case — the
+	// shell that produced it no longer exists.
+	"system/the-three-builtins-this-shell-has-not-got": "the ID was a claim about this shell that stopped being true; the same snippet, plus a line that must still be able to say no, is system/every-one-of-the-modules-six-builtins (#1749)",
 }
 
 // idLine matches the ID field of a corpus entry in the *text* of case.go.

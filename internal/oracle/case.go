@@ -15394,4 +15394,29 @@ echo "read=[$l]"`,
 		Snippet: "f() { local -z; echo \"local=$?\"; }\nf\ninteger -z\necho \"integer=$?\"\nexport -z\necho \"export=$?\"\nreadonly -z\necho \"readonly=$?\"\n",
 		Why:     "and the paired-table half of the row above: the letter is `typeset` and `declare`'s alone in the shell that has it, and its `local`, `integer`, `export` and `readonly` each call it a bad option. A set that gave every declaration word the same letters would answer all four wrongly, and the failure is silent -- a letter wrongly accepted declares the name and says nothing",
 	},
+	{
+		ID: "scalarsubscript/an-assignment-splices-the-characters", Category: "arrays",
+		Snippet: `v=abc; v[2]=X; echo "[$v]"; v=abc; v[2]=XY; echo "[$v]"; v=abc; v[2]=; echo "[$v]"`,
+		Why:     "the writing half of the rule whose reading half `${s[2]}` already showed. One column splices the value into the string at the character the subscript names and the rest write an element, leaving `$v` reading the string it always did — so the row is discriminating in both directions at once. The three writes are the ones a length-preserving reading gets wrong: a one-character value, a two-character value and an empty one give `aXc`, `aXYc` and `ac` in the splicing column, so the span is replaced by whatever goes in rather than a position being overwritten. A shell that turned the name into an array answers `[ X]` here, at status 0 and with nothing said (#1746)",
+	},
+	{
+		ID: "scalarsubscript/an-index-past-the-end-appends-without-padding", Category: "arrays",
+		Snippet: `v=abc; v[4]=X; echo "[$v]"; v=abc; v[10]=X; echo "[$v]"; v=xy; v[$#v+1]=Q; echo "[$v]"`,
+		Why:     "the row that makes the construct worth a P1 rather than a curiosity. `name[$#name+1]=x` is how a script appends to a string in the splicing column, and the third write is that spelling; the first two show why it works at any length -- a subscript past the last character appends and does *not* pad the gap, where the same subscript on an array leaves empty elements in front. A prompt theme's worker reads its responses exactly this way, one `sysread` at a time, and an answer that padded or that built an array is not a diagnostic anywhere: it is a response silently misread",
+	},
+	{
+		ID: "scalarsubscript/a-pair-names-a-span-of-characters", Category: "arrays",
+		Snippet: `v=abc; v[2,3]=XY; echo "[$v]"; v=abc; v[3,2]=X; echo "[$v]"; v=abc; v[-1]=X; echo "[$v]"`,
+		Why:     "the same span arithmetic an array's range takes, read over characters: the pair replaces both characters, a reversed pair is an empty span *at* the start so the value goes in and nothing comes out, and a negative subscript counts back from the last character. Recorded together because a shell can get the plain pair right off a substring routine and still answer the other two wrongly -- the reversed range inserting is the row a symmetry argument gets backwards",
+	},
+	{
+		ID: "scalarsubscript/only-a-name-already-holding-a-string-splices", Category: "arrays",
+		Snippet: `v=abc; v[2]=X; typeset -p v; unset u; u[2]=X; typeset -p u; typeset w; w[2]=X; typeset -p w`,
+		Why:     "the boundary, and the declarations are what show it: a name holding a string keeps its kind and is spliced, a name nobody set becomes an array with the gap in front of the subscript, and a name *declared* and never assigned is holding the empty string and splices like the first. The second and third lines differ only in whether there is a name there at all, which is why the question is not `has this a value` but `is this a name`. `typeset -p` rather than `echo` throughout, because the bug this records was never about the value -- it was that the name came back an array, and only its declaration says so",
+	},
+	{
+		ID: "scalarsubscript/read-fills-a-subscripted-operand", Category: "arrays",
+		Snippet: `a=(x y z); printf Q | read "a[2]"; typeset -p a 2>/dev/null || declare -p a`,
+		Why:     "the same store reached from a builtin, and the half that is nobody's dialect: every column with arrays fills the element, so a shell that resolved the operand as a whole name and never looked at the brackets is alone. It created a parameter *called* `a[2]` and left the array alone -- nothing assigned, nothing said, status 0. Recorded on an array rather than on a string so that the row is about the operand and not about the splice",
+	},
 }

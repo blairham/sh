@@ -100838,6 +100838,226 @@
         "TimedOut": false
       }
     },
+    "scalarsubscript/a-pair-names-a-span-of-characters": {
+      "bash": {
+        "Stdout": "[abc]~[abc]~[abc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[abc]~[abc]~[abc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[abc]~[abc]",
+        "Stderr": "\u003cshell\u003e: v[-1]: bad array subscript",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[abc]~[abc]~[abc]",
+        "Stderr": "\u003cshell\u003e: 1: v[2,3]=XY: not found~\u003cshell\u003e: 1: v[3,2]=X: not found~\u003cshell\u003e: 1: v[-1]=X: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[abc]~[abc]~[abc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[aXY]~[abXc]~[abX]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "scalarsubscript/an-assignment-splices-the-characters": {
+      "bash": {
+        "Stdout": "[abc]~[abc]~[abc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[abc]~[abc]~[abc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[abc]~[abc]~[abc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[abc]~[abc]~[abc]",
+        "Stderr": "\u003cshell\u003e: 1: v[2]=X: not found~\u003cshell\u003e: 1: v[2]=XY: not found~\u003cshell\u003e: 1: v[2]=: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[abc]~[abc]~[abc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[aXc]~[aXYc]~[ac]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "scalarsubscript/an-index-past-the-end-appends-without-padding": {
+      "bash": {
+        "Stdout": "[abc]~[abc]",
+        "Stderr": "\u003cshell\u003e: line 1: 0v: value too great for base (error token is \"0v\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[abc]~[abc]",
+        "Stderr": "\u003cshell\u003e: line 1: 0v: value too great for base (error token is \"0v\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[abc]~[abc]",
+        "Stderr": "\u003cshell\u003e: 0v: value too great for base (error token is \"0v\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[abc]~[abc]~[xy]",
+        "Stderr": "\u003cshell\u003e: 1: v[4]=X: not found~\u003cshell\u003e: 1: v[10]=X: not found~\u003cshell\u003e: 1: v[0v+1]=Q: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[abc]~[abc]",
+        "Stderr": "\u003cshell\u003e: 0v+1: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[abcX]~[abcX]~[xyQ]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "scalarsubscript/only-a-name-already-holding-a-string-splices": {
+      "bash": {
+        "Stdout": "declare -a v=([0]=\"abc\" [2]=\"X\")~declare -a u=([2]=\"X\")~declare -a w=([2]=\"X\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -a v=([0]=\"abc\" [2]=\"X\")~declare -a u=([2]=\"X\")~declare -a w=([2]=\"X\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -a v='([0]=\"abc\" [2]=\"X\")'~declare -a u='([2]=\"X\")'~declare -a w='([0]=\"\" [2]=\"X\")'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: v[2]=X: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: u[2]=X: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: w[2]=X: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -a v=([0]=abc [2]=X)~typeset -a u=([2]=X)~typeset -a w=([2]=X)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset v=aXc~typeset -a u=( '' X )~typeset w=X",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "scalarsubscript/read-fills-a-subscripted-operand": {
+      "bash": {
+        "Stdout": "declare -a a=([0]=\"x\" [1]=\"y\" [2]=\"z\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -a a=([0]=\"x\" [1]=\"y\" [2]=\"z\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -a a='([0]=\"x\" [1]=\"y\" [2]=\"z\")'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -a a=(x y Q)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -a a=( x Q z )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "sched/an-empty-table-says-nothing": {
       "bash": {
         "Stdout": "st=127",

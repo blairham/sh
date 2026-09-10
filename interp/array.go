@@ -225,6 +225,18 @@ func (r *Runner) markIndexed(name string) {
 // where the first element is 1 it is `a[0]`, which is below it. Neither shell
 // has both, and that is why one rule needs two spellings to show it.
 func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
+	if r.subscriptSplicesCharacters(name) {
+		// The name is holding a string and this dialect's subscript names one
+		// of its characters, so the value is spliced in rather than an
+		// element being written and the string being lost. Here rather than
+		// at the assignment statement because every way of writing an element
+		// has to agree: `v[2]=X`, `typeset "v[2]"=X`, `(( v[2] = 5 ))`,
+		// `${(P)x::=Z}` with `x` naming `v[2]`, and the descriptor a
+		// redirection leaves behind all arrive at this one store, and a rule
+		// stated at one of them is a rule the other four contradict.
+		r.spliceScalarElem(name, idx, sub, value, false)
+		return
+	}
 	a := r.Arrays[name]
 	if a == nil {
 		a = Array{}
@@ -276,6 +288,15 @@ func insertAtTheFront(a Array, value string) Array {
 // value as it stands: `a=(x y); a[5]+=Q` leaves `Q` at subscript 5, not an
 // error and not an empty string joined to anything.
 func (r *Runner) appendArrayElem(name string, idx int, sub, value string) {
+	if r.subscriptSplicesCharacters(name) {
+		// A string joins at the span the subscript names rather than at an
+		// element: `v=abc; v[2]+=X` is `abXc`, the character that was there
+		// with the value after it and back in its place. Ahead of the join
+		// below because that one reads an *element* to join to, and a string
+		// has none.
+		r.spliceScalarElem(name, idx, sub, value, true)
+		return
+	}
 	if pos, ok := r.elemPos(r.Arrays[name], idx); ok {
 		// Joined through appendedValue rather than with `+`, because the
 		// name's attribute decides which of the two joins this is:
@@ -713,7 +734,15 @@ const (
 // span 2 through 3 with something put after it. `a[2,3]+=x` gives `[1][2][3x]`
 // for the same reason: it appends to element *3*.
 func (r *Runner) assignSpan(a *syntax.Assign, text string) (from, to int, outcome spanOutcome) {
-	if a.Append {
+	return r.subscriptSpan(text, a.Append)
+}
+
+// subscriptSpan is assignSpan with the operator handed over rather than read
+// off a parsed assignment, so that a builtin taking a subscripted *operand* —
+// `read 'buf[2,3]'` — resolves the pair by the same rule an assignment does.
+// One reading of a comma, reached two ways.
+func (r *Runner) subscriptSpan(text string, appended bool) (from, to int, outcome spanOutcome) {
+	if appended {
 		return 0, 0, spanNotARange
 	}
 	lo, hi, ok := splitSubscriptPair(text)
@@ -801,6 +830,72 @@ func (r *Runner) spliceElementSpan(name, text string, elems []string, from, to i
 	out = append(out, words...)
 	out = append(out, elems[tail:]...)
 	r.setArray(name, out)
+}
+
+// storeThroughOperand writes a value through a name that may carry a
+// subscript, which is the shape a *builtin* is handed one in: `read 'buf[2]'`
+// and `read m[k]` arrive as a single word rather than as a parsed assignment,
+// and the word has to be split and read before anything can be stored.
+//
+// It is the assignment statement's own dispatch, reached from the other side
+// and deliberately not restated: a declared table takes the text as a key, a
+// pair takes the span, and a single subscript reaches setArrayElem — which is
+// where the string dialect's character splice lives, so a builtin gets it by
+// arriving here rather than by knowing about it.
+//
+// `read` did not arrive at all. It resolved its operand with setVar and never
+// looked at the brackets, so `read 'buf[$#buf+1]'` created a parameter *named*
+// `buf[3]` and left `buf` exactly as it was — nothing assigned, nothing said,
+// status 0. Measured 2026-09-10, the whole panel fills the element for the
+// array spelling: `a=(x y z); read 'a[2]'` on `Q` is `x Q z` in zsh 5.9.2,
+// bash 5.3, bash 3.2 and ksh93 alike, so this is not the string dialect's
+// question — it is one every shell answers and this one did not.
+//
+// A subscript that will not evaluate ends the script, which is the same
+// complaint the identical text makes on the left of an assignment: measured,
+// `read 'v[1/0]'` is `division by zero` at status 1.
+func (r *Runner) storeThroughOperand(name, value string) {
+	base, sub, ok := r.subscriptOperand(name)
+	if !ok || !isPlainName(base) {
+		r.setVar(name, value)
+		return
+	}
+	// The *store* is speaking from here on, not the builtin that reached it,
+	// and the location says so: measured, `read 'a[1/0]'` is `zsh:1: division
+	// by zero` and `read 'v[0]'` is `zsh:1: v: assignment to invalid subscript
+	// range` — the same two sentences, in the same place, as the bare
+	// assignments `a[1/0]=x` and `v[0]=x`. Naming `read` in front of them
+	// would report a builtin for a complaint the language makes.
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	if r.assocDeclared(base) {
+		r.setAssocElem(base, sub, value)
+		return
+	}
+	from, to, outcome := r.subscriptSpan(sub, false)
+	switch {
+	case outcome == spanReported:
+		return
+	case outcome == spanResolved && r.spanReplacesElements(base):
+		elems, _ := r.arrayElemsOfTheName(base)
+		r.spliceElementSpan(base, sub, elems, from, to, []string{value})
+		return
+	case outcome == spanResolved && r.subscriptSplicesCharacters(base):
+		if r.spanIsBelowTheFirstElement(from, to) {
+			r.fatal("%s\n", Wording(r.diag().BadArraySubscript,
+				"%[1]s[%[2]s]: bad array subscript", base, sub))
+			return
+		}
+		r.spliceCharacterSpan(base, from, to, value, false)
+		return
+	}
+	idx, err := r.subscriptValue(sub)
+	if err != nil {
+		r.fatal("%s\n", r.subscriptFailure(sub, err))
+		return
+	}
+	r.setArrayElem(base, idx, sub, value)
 }
 
 // spanReplacesElements reports whether a range on the left of a *scalar*

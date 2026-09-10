@@ -51,7 +51,12 @@ func (e *editor) reverseSearch(prompt drawnPrompt) {
 	e.drawSearch(prompt, query, failed)
 	var buf [1]byte
 	for {
-		n, err := e.in.Read(buf[:])
+		// Through nextByte and not the reader, for the reason confirmList
+		// gives: the rest of the search string may already be buffered, and a
+		// read of the descriptor would wait for bytes this editor has been
+		// given. `C-r` and what follows it arrive in one write from anything
+		// but a human.
+		n, err := e.nextByte(buf[:])
 		if err != nil {
 			// The input ended mid-search. The line goes back to what it was,
 			// and the caller's own read reports the same error a moment later.

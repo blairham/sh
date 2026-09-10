@@ -84,13 +84,34 @@ func newSessionWith(t *testing.T, configure func(*Shell)) *session {
 	return se
 }
 
-// typeLine waits for the next prompt and types one line at it.
+// typeLine waits for the next prompt and types one line at it, a byte at a
+// time.
+//
+// A byte at a time and not one write, which is the difference between typing
+// and pasting and is load-bearing for what these tests assert. The editor draws
+// once per byte only while each byte arrives on its own; input already in hand
+// is drawn once when it runs out (#1742). A harness that wrote the whole line
+// in one call therefore produced a single redraw, and every assertion about an
+// *intermediate* state — the highlighter colouring an unclosed quotation as it
+// is typed, the move back up to the prompt row on the second draw — silently
+// stopped testing anything while still passing.
+//
+// Each byte waits for the screen to grow rather than for a fixed delay, so this
+// is as fast as the editor is and does not race it. The wait is bounded and
+// does not fail: a key that draws nothing is a real possibility and not this
+// helper's business to judge.
 func (s *session) typeLine(keys string) {
 	s.t.Helper()
 	s.prompt++
 	waitFor(s.t, s.screen, "["+itoa(s.prompt)+"]", "the prompt")
-	if _, err := s.control.WriteString(keys); err != nil {
-		s.t.Fatal(err)
+	for i := 0; i < len(keys); i++ {
+		drawn := s.screen.Len()
+		if _, err := s.control.WriteString(keys[i : i+1]); err != nil {
+			s.t.Fatal(err)
+		}
+		for waited := 0; waited < 200 && s.screen.Len() == drawn; waited++ {
+			time.Sleep(time.Millisecond)
+		}
 	}
 }
 

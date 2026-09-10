@@ -50,7 +50,7 @@ func typedStyled(t *testing.T, style EditorStyle, keys string) string {
 	t.Helper()
 	var out strings.Builder
 	e := Shell{Editor: style}.newEditor(t.Context(), nil)
-	e.in, e.out = strings.NewReader(keys), &out
+	e.in, e.out = typing(keys), &out
 	line, err := e.readLine(drawPrompt("$ "))
 	if err != nil {
 		t.Fatalf("%q: %v", keys, err)
@@ -294,16 +294,16 @@ func TestAKillSurvivesTheLineItCameFrom(t *testing.T) {
 	e := Shell{Editor: zeroAnswers}.newEditor(t.Context(), nil)
 	e.out = &out
 
-	e.in = strings.NewReader("echo one two\x17\r")
+	e.in = typing("echo one two\x17\r")
 	if line, err := e.readLine(drawPrompt("$ ")); err != nil || line != "echo one " {
 		t.Fatalf("first line gave %q %v", line, err)
 	}
-	e.in = strings.NewReader("mv \x19\r")
+	e.in = typing("mv \x19\r")
 	if line, err := e.readLine(drawPrompt("$ ")); err != nil || line != "mv two" {
 		t.Errorf("second line gave %q %v, want the kill from the first line back", line, err)
 	}
 	// A kill on this line does not join onto the one from the last.
-	e.in = strings.NewReader("cp here\x17\x19\r")
+	e.in = typing("cp here\x17\x19\r")
 	if line, err := e.readLine(drawPrompt("$ ")); err != nil || line != "cp here" {
 		t.Errorf("third line gave %q %v, want only its own kill back", line, err)
 	}
@@ -362,11 +362,11 @@ func TestAModifiedUpArrowIsNotTheUpArrow(t *testing.T) {
 	e.out = &out
 	e.remember("earlier")
 
-	e.in = strings.NewReader("x\x1b[1;5A\r")
+	e.in = typing("x\x1b[1;5A\r")
 	if line, err := e.readLine(drawPrompt("$ ")); err != nil || line != "x" {
 		t.Errorf("Ctrl-Up gave %q %v, want the line untouched", line, err)
 	}
-	e.in = strings.NewReader("x\x1b[A\r")
+	e.in = typing("x\x1b[A\r")
 	if line, err := e.readLine(drawPrompt("$ ")); err != nil || line != "earlier" {
 		t.Errorf("the bare arrow gave %q %v, want the line from the history", line, err)
 	}

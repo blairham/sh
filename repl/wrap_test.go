@@ -18,7 +18,7 @@ func typedAt(t *testing.T, cols int, keys string) string {
 func typedAtWith(t *testing.T, cols int, prompt, keys string) string {
 	t.Helper()
 	var out strings.Builder
-	e := &editor{in: strings.NewReader(keys), out: &out, width: func() int { return cols }}
+	e := &editor{in: typing(keys), out: &out, width: func() int { return cols }}
 	if _, err := e.readLine(drawPrompt(prompt)); err != nil {
 		t.Fatalf("readLine: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestDisplayWidthSkipsEscapeSequences(t *testing.T) {
 // has to draw, and draws the way it always did.
 func TestWithoutAWidthTheOldDrawingStands(t *testing.T) {
 	var out strings.Builder
-	e := &editor{in: strings.NewReader("hi\r"), out: &out}
+	e := &editor{in: typing("hi\r"), out: &out}
 	if _, err := e.readLine(drawPrompt("$ ")); err != nil {
 		t.Fatal(err)
 	}

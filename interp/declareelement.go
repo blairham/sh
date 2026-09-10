@@ -35,16 +35,22 @@ func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows
 		return
 	}
 	r.applyAttributes(base, f)
+	fresh := false
 	if shadows && !f.global {
 		// The array the element belongs to is what becomes local, and it has
 		// to become local before the element is written or the write lands
 		// on the caller's array and the shadow puts an empty one over it.
-		r.shadowTypeset(base)
+		fresh = r.shadowTypeset(base)
 		if r.unspecified {
 			return
 		}
 	}
-	r.markDeclaredCompound(base, f)
+	// And the cell that shadow made holds none of the caller's elements, so
+	// the subscript this declaration writes is the only one in it: measured,
+	// `arr=(a b c); f(){ local arr[1]=z; }` lists `([1]="z")` and the same
+	// line at the top level lists all three with `b` replaced. See
+	// freshcell.go.
+	r.markDeclaredCompound(base, fresh, f)
 	if r.refuseReadonly(base, assignedByDeclaration) {
 		// A name already frozen refuses the element as it refuses the
 		// variable, and by the base's name: `readonly a; typeset a[1]=v`

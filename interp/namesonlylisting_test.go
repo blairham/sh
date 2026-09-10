@@ -161,6 +161,48 @@ func TestAPlusSignedAttributeLetterIsAFilterOverTheWholeTable(t *testing.T) {
 	}
 }
 
+// The *minus* sign on the same attribute letter is not this listing. It is the
+// filtered listing carrying values — the names selected, each with what it
+// holds — and that one is not built (#1756).
+//
+// What must not happen is the third answer: the minus form quietly reaching
+// the *names* listing, which would look exactly like a working `-x` to
+// anything reading it and is a shape no shell writes. So the assertion is the
+// pair rather than either row — the two signs must not answer alike, and the
+// minus must write no bare-name row at all.
+func TestAMinusSignedAttributeLetterIsNotTheNamesListing(t *testing.T) {
+	src := "qa=1\nexport qb=2\n"
+	plus, errs, st := declRun(t, src+"typeset +x", withNamesOnly, Diagnostics{})
+	if onlyQ(plus) != "qb\n" || errs != "" || st != 0 {
+		t.Fatalf("typeset +x = %q (stderr %q, status %d), want %q", plus, errs, st, "qb\n")
+	}
+	minus, errs, st := declRun(t, src+"typeset -x", withNamesOnly, Diagnostics{})
+	if st != 0 || errs != "" {
+		t.Errorf("typeset -x = %q (stderr %q, status %d), want a silent 0", minus, errs, st)
+	}
+	if onlyQ(minus) == onlyQ(plus) {
+		t.Errorf("typeset -x and typeset +x both wrote %q: the sign picks between two "+
+			"listings and the minus one carries values, so answering them alike is a "+
+			"third shape no shell writes", onlyQ(plus))
+	}
+	for _, row := range []string{"qa\n", "qb\n"} {
+		if containsDeclLine(minus, row) {
+			t.Errorf("typeset -x = %q, want no bare-name row %q — that is the plus "+
+				"form's shape, and this one is unbuilt rather than named (#1756)", minus, row)
+		}
+	}
+}
+
+// containsDeclLine reports whether a listing holds exactly this line.
+func containsDeclLine(out, line string) bool {
+	for _, have := range strings.SplitAfter(out, "\n") {
+		if have == line {
+			return true
+		}
+	}
+	return false
+}
+
 // A letter the dialect spells and this engine records nothing for is still an
 // attribute to select on: nothing carries it, so the listing is empty rather
 // than whole. The control is the letter that says where a declaration lands

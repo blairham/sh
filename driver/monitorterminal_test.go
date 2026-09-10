@@ -44,8 +44,8 @@ func TestTheTerminalFactReachesEveryRoute(t *testing.T) {
 				}
 				t.Fatal(err)
 			}
-			defer control.Close()
-			defer terminal.Close()
+			defer func() { _ = control.Close() }()
+			defer func() { _ = terminal.Close() }()
 
 			var out, errs bytes.Buffer
 			sh := shell()

@@ -125,12 +125,27 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 		if text, live, ok := r.markedSeparatorPattern(s); ok {
 			return text, live
 		}
+		// An unbraced subscript the run does not read as one is the
+		// parameter followed by the brackets as text — here as much as in a
+		// word, since a `case` arm and a condition read the same spans. See
+		// baresubscript.go.
+		s, tail := r.unreadBareSubscript(s)
 		// The `${~spec}` flag reaches here too, and that is measured rather
 		// than assumed: `p='a*'; [[ abc == ${~p} ]]` is true in the shell
 		// that has the construct where `${p}` alone is false, and
 		// `${v#${~p}}` trims where `${v#${p}}` does not. It is the same
 		// question GlobExpansionResults answers, so it is the same override.
-		return r.expansionPattern(r.expandParam(s.Param), s.Quoting, r.globSubstAnswer(s))
+		text, live := r.expansionPattern(r.expandParam(s.Param), s.Quoting, r.globSubstAnswer(s))
+		if tail == nil {
+			return text, live
+		}
+		// Two provenances in one span now, and only one flag to report them
+		// with: whatever the value was worth is settled here, and what comes
+		// back is the finished pattern.
+		if !live {
+			text = escapePatternMeta(text)
+		}
+		return text + r.bareSubscriptPattern(tail), true
 	case syntax.CommandSubst:
 		return r.expansionPattern(r.commandSubst(r.ctx, s), s.Quoting, r.sem().GlobExpansionResults)
 	case syntax.ArithSubst:

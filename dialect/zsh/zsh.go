@@ -480,6 +480,11 @@ func Semantics() interp.Semantics {
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.Yes
+	// Asked only under `ksharrays`, which is what makes a bare name one
+	// element here: the tables keep their insertion order, so the element is
+	// the first value in it rather than the one keyed `0` — measured, `h=(a 1
+	// 0 x); $h` is `1` and not `x`.
+	s.KeyedTableScalarIsTheFirstValue = interp.Yes
 	s.ArrayNameWithoutSubscriptIsTheList = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.No
 	s.TestAndArithmeticUpdatePipelineStatus = interp.No
@@ -771,6 +776,11 @@ func Semantics() interp.Semantics {
 	s.ConditionArithmeticErrorIsFatal = interp.Yes
 	s.ShiftPastEndFatal = interp.No
 	s.ArrayBaseIsZero = interp.No
+	// And the brackets an unbraced name carries are that element's, which is
+	// the reading the grammar flag BareSubscript exists for. `ksharrays`
+	// moves this with the base and the other three array axes — see
+	// ksharrays.go, which is where the group and its measurement live.
+	s.BareSubscriptIsASubscript = interp.Yes
 	// `${a[1,3]}` is elements one through three here, where the shells that
 	// read the same characters as arithmetic take the comma operator's value
 	// and name element three alone. Measured on `a=(w x y z)`: `w x y` here,

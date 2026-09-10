@@ -682,8 +682,26 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 	// node — a `for` loop expands one node many times, and a value from the
 	// wrong pass is exactly the silent kind of wrong.
 	r.nestedHeld = nestedHold{}
+	// The same rewrite the scalar path makes, made first: the shapes below
+	// are read off the node, and a node still carrying a subscript nothing
+	// is going to read would be answered as `$a[@]` rather than as `$a`
+	// followed by three characters. See baresubscript.go.
+	s, tail := r.unreadBareSubscript(s)
 	if parts, ok := r.expandAtList(s, sp, head); ok {
-		return r.splitFlagFields(s, sp, parts), true
+		parts = r.splitFlagFields(s, sp, parts)
+		if tail != nil {
+			text, _ := r.bareSubscriptText(tail, sp)
+			// Onto the last field, which is the one still open for whatever
+			// follows the expansion — and a field of its own where the
+			// expansion produced none, since the brackets are text and text
+			// makes a word whether or not anything expanded in front of it.
+			if len(parts) == 0 {
+				parts = []string{text}
+			} else {
+				parts[len(parts)-1] += text
+			}
+		}
+		return parts, true
 	}
 	if !splitFlagOn(s, sp) {
 		return nil, false
@@ -1277,6 +1295,10 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 		}
 		return globEscape(s.Value), false
 	case syntax.ParamExp:
+		// An unbraced subscript the run does not read as one leaves the
+		// parameter behind and hands the brackets back as text. See
+		// baresubscript.go.
+		s, tail := r.unreadBareSubscript(s)
 		v := r.expandParam(s.Param)
 		text, split := r.expansionResult(v, unquoted, r.globSubstAnswer(s),
 			splitFlagAnswer(s, sp, r.sem().SplitParamExpansion),
@@ -1284,7 +1306,13 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 		// Before the split, which is measured: `${~v}` on `~/zz ~/qq` is the
 		// head expanded and the second tilde left alone, so the value's head
 		// is what the flag reaches and not each field's.
-		return r.tildeFlagHead(s, head, text), split
+		text = r.tildeFlagHead(s, head, text)
+		if tail != nil {
+			t, tailSplit := r.bareSubscriptText(tail, sp)
+			text += t
+			split = split || tailSplit
+		}
+		return text, split
 	case syntax.CommandSubst:
 		v := r.commandSubst(r.ctx, s)
 		return r.expansionResult(v, unquoted, r.sem().GlobExpansionResults,

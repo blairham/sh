@@ -29,6 +29,7 @@ var (
 	wordType  = reflect.TypeOf(Word{})
 	stmtType  = reflect.TypeOf(Stmt{})
 	redirType = reflect.TypeOf(Redirect{})
+	spanType  = reflect.TypeOf(Span{})
 )
 
 // SameProgram reports whether two trees are the same program, and where they
@@ -49,15 +50,28 @@ func SameProgram(a, b *File) (string, bool) {
 // spellingOnly reports whether a field holds the source *spelling* of a node
 // rather than anything the program does.
 //
-// Three of them, and each exists because something has to quote the input
+// Four of them, and each exists because something has to quote the input
 // back long after it was read: a background statement's text is what a jobs
 // listing shows, a redirection's is what one grammar's ambiguous-redirect
 // diagnostic names, and a loop or `case` header's is what an execution trace
 // writes. All three are the input's spelling by definition, so a printer that
 // re-spelled the construct re-spells them with it.
+//
+// The fourth is a span's Bare, which says a parameter expansion was written
+// without braces. `${x}` and `$x` are one program and the printer moves
+// between them freely — it adds braces wherever what follows would run into
+// the name — so the flag on its own is spelling. What is *not* spelling is
+// the reading the short form can carry, and that has a field of its own:
+// ParamExpr.BareIndexText is set exactly where an unbraced expansion took a
+// subscript, and it is compared like any other node. So `$a[1]` printed as
+// `${a[1]}` is still caught, by the field that says the two mean different
+// things, rather than by the one that says they are spelled differently.
 func spellingOnly(t reflect.Type, name string) bool {
 	if name == "Text" {
 		return t == stmtType || t == redirType
+	}
+	if name == "Bare" {
+		return t == spanType
 	}
 	// Header, which only the clauses that keep one have.
 	return name == "Header"

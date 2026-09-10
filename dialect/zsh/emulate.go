@@ -80,7 +80,12 @@ func applyEmulation(r *interp.Runner, mode string) {
 		swapAxes(r, func(s *interp.Semantics) {
 			s.SplitParamExpansion = answer(e.split)
 			s.GlobNoMatchIsError = answer(!e.nomatchOk)
-			s.ArrayBaseIsZero = answer(e.zeroBase)
+			// Five axes rather than the base alone: `ksharrays` is what the
+			// two sh-family emulations turn on, and the whole of what it
+			// means is in ksharrays.go. Setting only the base left `emulate
+			// sh` reading `$a` as the joined list and `$a[1]` as an element,
+			// which is neither shell's answer (#1726).
+			setKshArrays(s, e.zeroBase)
 			s.RedirectErrorOnSpecialBuiltinFatal = answer(e.redirFatal)
 		})
 	}

@@ -3001,10 +3001,72 @@ type Semantics struct {
 	// is absent rather than false there.
 	ArrayScalarIsTheWholeArray Answer
 
+	// KeyedTableScalarIsTheFirstValue says *which* element a plain `$m`
+	// gives when `m` is a keyed table and the axis above has answered "one
+	// element". Two readings, and they are the same disagreement about
+	// whether such a table has an order at all: bash and ksh93 look up the
+	// key `0` and hand back nothing when there is no such key, while the
+	// shell whose tables keep their insertion order hands back the first
+	// value in it.
+	//
+	// A second axis rather than a widening of the first, because the shells
+	// that share the first answer do not share this one, and because it is
+	// reachable only after the first has been answered — a dialect where a
+	// bare name is the whole table never asks it.
+	//
+	// Measured 2026-09-10 on zsh 5.9.2 under the option that moves the array
+	// axes, against bash 5.3.15 and ksh93u+ with the same table:
+	//
+	//	m=(a 1 b 2)   $m   zsh 1      bash, ksh93 empty
+	//	m=(z 9 a 1)   $m   zsh 9      so it is the order and not the sort
+	//	m=(a 1 0 x)   $m   zsh 1      and not the key `0` under another name
+	//
+	// "First" is whatever order `${m[@]}` yields, which is this shell's own
+	// and is a separate question from this one: the shell being modeled
+	// keeps a table's insertion order and this one sorts by key, so the two
+	// agree on a table of one and on any table written in sorted order and
+	// disagree elsewhere. That divergence is `${m[@]}`'s and predates this
+	// axis; the axis says which end of the order to read, not what the order
+	// is.
+	KeyedTableScalarIsTheFirstValue Answer
+
 	// ArrayBaseIsZero indexes arrays from 0. True in bash and ksh93, false in
 	// zsh, which counts from 1. dash has no arrays at all, which is why the
 	// axis is absent rather than false there.
 	ArrayBaseIsZero Answer
+
+	// BareSubscriptIsASubscript reads the `[…]` an *unbraced* `$name`
+	// carries as a subscript, rather than as three ordinary characters
+	// behind the parameter. `$a[1]` is an element where it says yes and
+	// `${a[0]}` followed by `[1]` where it says no; `${a[1]}` is unaffected
+	// either way, because the braces settle where the expansion ends.
+	//
+	// An axis rather than a grammar flag, and the difference from
+	// syntax.Dialect.BareSubscript is the whole point. That flag decides
+	// whether a grammar has the construct at all — whether the brackets
+	// belong to the expansion or are the next thing in the word — and it is
+	// answered when the word is read. This decides what the construct
+	// *means*, and it is answered when the word is expanded: the one shell
+	// with the grammar moves this at run time, and a function body written
+	// under one answer and called under the other takes the caller's.
+	// Deciding it while reading gives a shell that is right in a script and
+	// wrong in `eval`, or the reverse.
+	//
+	// Only reachable where the grammar flag is on, which is why the presets
+	// that have no such construct leave it unanswered rather than false: a
+	// dialect that turns the grammar on and does not answer this is a gap,
+	// and should say so out loud rather than pick a side.
+	//
+	// The two halves of the no answer are one answer. The parameter loses
+	// the subscript *and* the brackets become text, and the text is the
+	// word's like any other — expanded, split and read as a pattern where
+	// the word around it would be. Measured on the shell with the
+	// construct: `a=(x y z)` and the option that says no gives `x[1]` for
+	// `$a[1]`, `b=2` makes `$a[$b]` into `x[2]`, and an unquoted `$a[1]` is
+	// the pattern `x[1]` — which is the point of saying no at all, since it
+	// is what leaves a `$dir[0-9]*` written in a script for another shell
+	// the glob its author meant.
+	BareSubscriptIsASubscript Answer
 
 	// SubscriptCommaIsARange reads the comma in `${a[1,3]}` as the separator
 	// of a range — elements 1 through 3 — rather than as the arithmetic comma

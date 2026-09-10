@@ -15274,4 +15274,24 @@ echo "read=[$l]"`,
 		Snippet: `typeset -x qa=1; typeset -xa qb=(x); typeset +m 'q*'`,
 		Why:     "an exported scalar at the top level is an entry in the environment and this listing says nothing about it, where an array cannot be one and keeps the word. Recorded as a pair because the rule is invisible in either row alone -- writing the word everywhere put an attribute on most of the environment, and writing it nowhere lost it from the kinds that earn it",
 	},
+	{
+		ID: "ksharrays/the-brackets-after-an-unbraced-name", Category: "arrays",
+		Snippet: `setopt ksharrays; a=(xx yy zz); echo "[$a[1]][${a[1]}][$a][${#a}]"`,
+		Why:     "the option is described as moving the array base and what it does is make an array read the way the ksh family reads one, which shows here as four answers moving together. The discriminating one is the first: `$a[1]` is `xx[1]` under the option — the element at the base position and then the three characters — where the same text without it is `xx`, and where reading the subscript against a zero base would be `yy`. So a wrong answer here is wrong in both halves at once, which is why the row prints the braced spelling beside it: `${a[1]}` *is* `yy`, because the braces settle where the expansion ends and only the base moves. The column with the option answers exactly what the three bashes and ksh93 answer without needing one, which is the point of the option and is also what makes the row hard to fake — a shell that only moved the base matches nothing here (#1726)",
+	},
+	{
+		ID: "ksharrays/is-answered-when-the-word-expands", Category: "arrays",
+		Snippet: `a=(xx yy zz); f() { echo "[$a[1]]"; }; f; setopt ksharrays; f`,
+		Why:     "one body, parsed once, called twice, with the option moved between the calls: `[xx]` and then `[xx[1]]`. So whether an unbraced name's brackets are a subscript is decided when the word is *expanded* and not when it was read, which is what makes it a semantics axis rather than a grammar flag — a shell that decided it while reading would print one answer twice, and would then be right in a script and wrong in an `eval` or the other way round",
+	},
+	{
+		ID: "ksharrays/the-brackets-are-the-words-own-text", Category: "arrays",
+		Snippet: `setopt ksharrays; a=(xx yy zz); i=2; echo "[$a[$i]]"; : > xx1; echo $a[1]`,
+		Why:     "text, and the word's own text rather than a second kind of it: what is written between the brackets is still expanded — `[xx[2]]` — and unquoted the whole word is a pattern, so it finds the file `xx1`. That second half is the reason the option exists at all: a script written for another shell has `$dir[0-9]*` in it meaning a glob, and a shell that read the brackets as a subscript would quietly answer with an element instead. Both halves are unanimous with the columns that never had the construct",
+	},
+	{
+		ID: "ksharrays/an-emulation-carries-the-whole-of-it", Category: "arrays",
+		Snippet: `emulate sh; a=(xx yy zz); echo "[$a[1]][${a[1]}][$a][${#a}]"`,
+		Why:     "the same four answers reached the way scripts actually reach them. `emulate sh` and `emulate ksh` turn the option on, so this is not a corner an option name gates: it is every script that emulates, and a wrong answer is a wrong answer for two whole emulation modes at once and silently. Recorded beside the option's own row so that a change moving one and not the other is visible",
+	},
 }

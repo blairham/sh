@@ -184,6 +184,12 @@ func TestAssocScalarFollowsTheArrayScalarAxis(t *testing.T) {
 	whole.ArrayScalarIsTheWholeArray = Yes
 	one := testSemantics()
 	one.ArrayScalarIsTheWholeArray = No
+	one.KeyedTableScalarIsTheFirstValue = No
+	// The other answer to the second axis: the first value in the order the
+	// table yields, which is what a shell with an ordered table gives.
+	first := testSemantics()
+	first.ArrayScalarIsTheWholeArray = No
+	first.KeyedTableScalarIsTheFirstValue = Yes
 
 	src := `typeset -A m; m[b]=2; m[a]=1; printf "[%s]" "$m"`
 	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &whole }); got != "[1 2]" {
@@ -195,5 +201,14 @@ func TestAssocScalarFollowsTheArrayScalarAxis(t *testing.T) {
 	withZero := `typeset -A m; m[0]=z; m[a]=1; printf "[%s]" "$m"`
 	if got, _ := run(t, withZero, func(r *Runner) { r.Semantics = &one }); got != "[z]" {
 		t.Errorf("one-element answer gave %q, want [z] — the key 0, not the lowest key", got)
+	}
+	// And the second axis moves it off the key `0` and onto the order: the
+	// same table with no `0` in it has a first value, where the answer above
+	// has nothing at all.
+	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &first }); got != "[1]" {
+		t.Errorf("first-value answer without a 0 key gave %q, want [1]", got)
+	}
+	if got, _ := run(t, withZero, func(r *Runner) { r.Semantics = &first }); got != "[z]" {
+		t.Errorf("first-value answer gave %q, want [z] — the first, which is the 0 key here", got)
 	}
 }

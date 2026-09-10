@@ -4,6 +4,7 @@
 package syntax_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/blairham/sh/syntax"
@@ -258,5 +259,93 @@ func TestPrintingABareSubscript(t *testing.T) {
 		if second := syntax.Print(again); second != got {
 			t.Errorf("printing %q again gave %q", got, second)
 		}
+	}
+}
+
+// The subscript an unbraced expansion carries is recorded twice: as a
+// subscript, and as the text it would be if nothing read it as one. Which of
+// the two a run takes is a semantics axis and not the grammar's, so the
+// grammar keeps both.
+//
+// Only the unbraced spelling has the second reading. `${a[1]}` cannot mean
+// anything but a subscript — the braces say where the expansion ends — which
+// is why the field is nil there and why the field is what tells the two
+// spellings apart once they are parsed.
+func TestABareSubscriptIsKeptAsTextAsWell(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		// The spans the bracket text was lexed into, as `kind:value`. nil
+		// says the field itself must be absent.
+		text []string
+	}{
+		{"an element", "echo $a[1]", []string{"lit:[1]"}},
+		{"a range", "echo $a[1,3]", []string{"lit:[1,3]"}},
+		{
+			"a subscript holding an expansion", "echo $a[$i]",
+			[]string{"lit:[", "param:i", "lit:]"},
+		},
+		{
+			"a nested subscript", "echo $a[$b[1]]",
+			[]string{"lit:[", "param:b[1]", "lit:]"},
+		},
+		{"only the first subscript", "echo $a[1][2]", []string{"lit:[1]"}},
+		{"the braced spelling has no second reading", "echo ${a[1]}", nil},
+		{"a name with no subscript at all", "echo $a", nil},
+		{"a bracket that never closed", "echo $a[1", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spans := spansOf(t, tc.src, bare())
+			e := spans[0].Param
+			if e == nil {
+				t.Fatalf("%q: the first span is not an expansion", tc.src)
+			}
+			if tc.text == nil {
+				if e.BareIndexText != nil {
+					t.Errorf("%q: BareIndexText set, want nil", tc.src)
+				}
+				return
+			}
+			if e.BareIndexText == nil {
+				t.Fatalf("%q: BareIndexText nil, want %v", tc.src, tc.text)
+			}
+			var got []string
+			for _, s := range e.BareIndexText.Spans {
+				kind := "lit"
+				if s.Kind == syntax.ParamExp {
+					kind = "param"
+				}
+				got = append(got, kind+":"+s.Value)
+			}
+			if !slices.Equal(got, tc.text) {
+				t.Errorf("%q: BareIndexText spans %v, want %v", tc.src, got, tc.text)
+			}
+		})
+	}
+}
+
+// The text reading is lexed in the expansion's own quoting, so what stands
+// between the brackets is performed exactly as the word around it would
+// perform it. Inside double quotes the spans are the quoted ones.
+func TestABareSubscriptsTextKeepsTheExpansionsQuoting(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want syntax.Quoting
+	}{
+		{"unquoted", "echo $a[$i]", syntax.Unquoted},
+		{"double quoted", `echo "$a[$i]"`, syntax.DoubleQuoted},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := spansOf(t, tc.src, bare())[0].Param
+			if e == nil || e.BareIndexText == nil {
+				t.Fatalf("%q: no bracket text", tc.src)
+			}
+			for i, s := range e.BareIndexText.Spans {
+				if s.Quoting != tc.want {
+					t.Errorf("%q: span %d quoting %v, want %v", tc.src, i, s.Quoting, tc.want)
+				}
+			}
+		})
 	}
 }

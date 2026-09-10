@@ -61370,6 +61370,182 @@
         "TimedOut": false
       }
     },
+    "ksharrays/an-emulation-carries-the-whole-of-it": {
+      "bash": {
+        "Stdout": "[xx[1]][yy][xx][2]",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[xx[1]][yy][xx][2]",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[xx[1]][yy][xx][2]",
+        "Stderr": "\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[xx[1]][yy][xx][2]",
+        "Stderr": "\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[xx[1]][yy][xx][2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "ksharrays/is-answered-when-the-word-expands": {
+      "bash": {
+        "Stdout": "[xx[1]]~[xx[1]]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[xx[1]]~[xx[1]]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[xx[1]]~[xx[1]]",
+        "Stderr": "\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[xx[1]]~[xx[1]]",
+        "Stderr": "\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[xx]~[xx[1]]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "ksharrays/the-brackets-after-an-unbraced-name": {
+      "bash": {
+        "Stdout": "[xx[1]][yy][xx][2]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[xx[1]][yy][xx][2]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[xx[1]][yy][xx][2]",
+        "Stderr": "\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[xx[1]][yy][xx][2]",
+        "Stderr": "\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[xx[1]][yy][xx][2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "ksharrays/the-brackets-are-the-words-own-text": {
+      "bash": {
+        "Stdout": "[xx[2]]~xx1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[xx[2]]~xx1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[xx[2]]~xx1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[xx[2]]~xx1",
+        "Stderr": "\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[xx[2]]~xx1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "langinfo/the-c-locale-vocabulary": {
       "bash": {
         "Stdout": "[[DAY_1]] [[D_FMT]] [[RADIXCHAR]] [[YESEXPR]] [[THOUSEP]]",

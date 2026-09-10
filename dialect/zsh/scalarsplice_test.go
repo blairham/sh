@@ -74,7 +74,7 @@ func TestASubscriptOnAStringSplicesItsCharacters(t *testing.T) {
 
 // A name nobody set is not a string, and the subscript builds an array with
 // the gap in front of it — which is the boundary, and the half that must not
-// move: `typeset -a u=( '' X )` is what zsh leaves.
+// move: `typeset -a u=( ” X )` is what zsh leaves.
 func TestASubscriptOnANameThatHoldsNothingBuildsAnArray(t *testing.T) {
 	for _, tc := range []struct{ start, want string }{
 		{"", "typeset -a u=( '' X )"},

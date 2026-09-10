@@ -644,6 +644,17 @@ func Semantics() interp.Semantics {
 	// `a[*]`. A name that holds a scalar is refused rather than emptied, and
 	// one that holds nothing at all is quietly left alone.
 	s.UnsetArraySpan = interp.UnsetArraySpanRemovesTheElements
+	// Brackets with nothing between them are named and then answered: the
+	// subscript is reported and the operand is zero, and the script carries
+	// on at status 0. Measured 2026-09-10 in 5.3.15 and in 3.2.57, and it
+	// does not depend on the name — declared, undeclared, a table, an array
+	// and a scalar all report alike, which is what separates this from zsh's
+	// answer and is why the axis is not a rule about arrays.
+	//
+	// The real shell writes the sentence *twice* for one subscript, in both
+	// builds; that is an artifact of evaluating the word twice rather than a
+	// fact about the construct, and once is what this writes.
+	s.EmptyArithSubscript = interp.EmptyArithSubscriptIsReported
 	// `a[1]=(p q)` is refused and the script ends: measured 2026-09-07 in
 	// 5.3.15 and in 3.2.57, which give the same sentence at status 1 and run
 	// nothing after it. It does not depend on what the name holds — an array,
@@ -937,6 +948,7 @@ func Diagnostics() interp.Diagnostics {
 		// A subscript before the first element, named as it was written:
 		// `a[x-2]`, not the -1 it evaluated to. Identical in bash 3.2.
 		BadArraySubscript:             "%[1]s[%[2]s]: bad array subscript",
+		ArithEmptySubscript:           "%[1]s[]: bad array subscript",
 		ArrayLiteralThroughASubscript: "%[1]s[%[2]s]: cannot assign list to array member",
 		// Through a literal the element is named as it stands between the
 		// parentheses, with no array name in front of it. bash 3.2 says the

@@ -647,6 +647,13 @@ func Semantics() interp.Semantics {
 	// takes the whole name away, which both shells that read elements do.
 	s.UnsetSubscriptOnAScalarIsAnError = interp.No
 	s.UnsetArraySpan = interp.UnsetArraySpanIsAnExpression
+	// Brackets with nothing between them hold an expression that is empty,
+	// and an empty expression is zero — so the operand is element zero and
+	// not the number zero. Measured 2026-09-10: `a=(5 6 7); $(( a[] ))` is 5,
+	// `typeset -A m; m[""]=4; $(( m[] ))` is 4, and `(( a[]++ ))` steps the
+	// first element. The stream stays clean and the status stays 0, which is
+	// the only one of the three answers the panel gives that says nothing.
+	s.EmptyArithSubscript = interp.EmptyArithSubscriptIsTheEmptyExpression
 	// And the complaint is the builtin's: `unset` reports 1 and the script
 	// goes on, which is what makes `unset a[@]` survivable here.
 	s.BadSubscriptToUnsetFatal = interp.No

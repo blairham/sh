@@ -2386,6 +2386,18 @@ type Diagnostics struct {
 	// DivisionByZero is the reason itself, which dash and ksh93 spell
 	// differently. No verbs.
 	DivisionByZero string
+	// ArithEmptySubscript is the complaint about a subscript written with
+	// nothing between the brackets where an expression reads it: `$(( a[] ))`,
+	// which is what `$(( a[$w] ))` is once an empty `$w` has gone in. One
+	// verb, the name — used by the dialect that names it and ignored by the
+	// one whose sentence is about the subscript rather than about the name.
+	//
+	// Two of the three shells that reach it write something, and they write
+	// different shapes: `m[]: bad array subscript` names the subscript back
+	// and `invalid subscript` names nothing at all. Which of them a dialect
+	// writes, and whether the expression survives it, is
+	// Semantics.EmptyArithSubscript; this is only the wording.
+	ArithEmptySubscript string
 
 	// The math-function sentences: `functions -M` registers a shell function
 	// under a name arithmetic can call, and one shell in the panel has the

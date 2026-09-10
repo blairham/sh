@@ -1015,6 +1015,24 @@ func Semantics() interp.Semantics {
 	// is one such span and comes back empty; an array with nothing in it has
 	// no span and gains no element.
 	s.UnsetArraySpan = interp.UnsetArraySpanLeavesOneEmptyElement
+	// A subscript on a name nothing has set is never looked at: measured
+	// 2026-09-10, `$(( nodecl[1/0] ))` is a quiet 0 and `i=0;
+	// $(( nodecl[i++] ))` leaves i at 0, where bash 5.3, bash 3.2 and ksh93
+	// all divide by zero and all step i. Set-ness and not emptiness — `e=`
+	// then `$(( e[1/0] ))` divides by zero here too.
+	s.ArithSubscriptSkippedWhenNameUnset = interp.Yes
+	// And on a name that *is* set, brackets with nothing between them are the
+	// subscript machinery's own refusal rather than the expression parser's:
+	// `invalid subscript`, and the expression produces no value. Measured
+	// across every kind the name can be — an associative array, an indexed
+	// array, a plain scalar, an integer, `PATH` — which is what says the
+	// question is whether the name exists rather than whether it is an array.
+	//
+	// The pair is what `$(( m[$w] ))` with an empty `$w` runs into, because
+	// the parameters go in before the expression is parsed: undeclared is 0
+	// and declared is the refusal, and this shell was giving `bad math
+	// expression` to both (#1745).
+	s.EmptyArithSubscript = interp.EmptyArithSubscriptIsInvalid
 	// `a[2]=(p q)` puts the words *where the subscript points* and the array
 	// grows by one: `a=(x y); a[1]=(p q)` reads back `p q y`. Measured
 	// 2026-09-07 against zsh 5.9.2, over the shapes that could have told a
@@ -1354,7 +1372,8 @@ func Diagnostics() interp.Diagnostics {
 		UnsetFunctionNotFound: "no such hash table element: %[1]s",
 		// The array alone, and a sentence about the assignment rather than
 		// about the subscript.
-		BadArraySubscript: "%[1]s: assignment to invalid subscript range",
+		BadArraySubscript:   "%[1]s: assignment to invalid subscript range",
+		ArithEmptySubscript: "invalid subscript",
 		// The two ways a subscripted array literal has no span to land in.
 		// Worded apart from each other here, and both without the subscript:
 		// what is reported is the name's kind rather than the number.

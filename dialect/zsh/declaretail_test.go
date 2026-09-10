@@ -383,6 +383,21 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // were: a produced table without the attribute would take an assignment into
 // a stored table that then stands in front of the view.
 //
+// `ARGC` is the first *scalar special of the shell itself* in the listing
+// (#1682), and the one place the two forms below disagree with zsh. Measured
+// 2026-09-10 against zsh 5.9.2 with `-f`: bare `readonly` there writes
+// `ARGC=0` among a dozen more of its own — `!`, `#`, `$`, `*`, `-`, `?`, `@`,
+// `HISTCMD`, `LINENO`, `PPID`, `TTYIDLE`, `ZSH_EVAL_CONTEXT`, `ZSH_SUBSHELL`,
+// `status` and `zsh_eval_context` — so the bare form here agrees on the one
+// name it has and is still missing the other fourteen. `readonly -p` there
+// writes `typeset -r R=2` alone: its `-p` skips the shell's own specials, and
+// `typeset -p ARGC` prints nothing at all while `typeset -p EPOCHSECONDS`
+// beside it prints `typeset -ir EPOCHSECONDS`. That distinction — a special
+// the shell was born with against a parameter a module brought — is not one
+// this engine draws, and drawing it is the same missing seam as the fourteen
+// absent names rather than anything about `ARGC`. Recorded here, not pinned
+// elsewhere.
+//
 // The eleventh is `$parameters` (#1599), which joins for exactly the reasons
 // `builtins` did: zsh answers `parameters[x]=y` with `read-only variable:
 // parameters`, and a produced table without the attribute would take an
@@ -391,12 +406,13 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
 		`export V='a b'; readonly R=2; export; readonly; export -p; readonly -p`)
-	want := "V='a b'\nEPOCHREALTIME\nEPOCHSECONDS\nR=2\n" +
+	want := "V='a b'\nARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
 		"errnos\nkeymaps\nlanginfo\nparameters\nsysparams\ntermcap\nterminfo\n" +
 		"widgets\nzsh_scheduled_events\n" +
 		"export V='a b'\n" +
-		"typeset -r EPOCHREALTIME\ntypeset -r EPOCHSECONDS\ntypeset -r R=2\n" +
+		"typeset -r ARGC=0\ntypeset -r EPOCHREALTIME\ntypeset -r EPOCHSECONDS\n" +
+		"typeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
 		"typeset -ar dis_patchars\ntypeset -ar dis_reswords\ntypeset -ar epochtime\n" +
 		"typeset -ar errnos\ntypeset -ar keymaps\ntypeset -Ar langinfo\n" +

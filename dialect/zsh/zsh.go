@@ -1941,6 +1941,9 @@ func Apply(r *interp.Runner) {
 	r.SetPromptStyle(PromptStyle())
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
+	// `$ARGC`, this shell's name for `$#` — see argc.go for what was
+	// measured and for the startup that could not run without it.
+	registerARGC(r)
 	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {
 		// Whole seconds unless the parameter carries the float attribute,
 		// which is how a script asks this one to count in fractions:

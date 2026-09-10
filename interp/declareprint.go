@@ -200,6 +200,33 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		d.value, d.hasValue = v, true
 		return d, true
 	}
+	// A produced *scalar*, on the same terms as the produced array above and
+	// asked after the stored value for the same reason. The two branches are
+	// one rule read twice, and the scalar half was the one still missing: a
+	// dialect that marks a produced scalar readonly put the name into the
+	// listing through the attribute and then had nothing to print beside it,
+	// so `$ARGC` — which is `$#` and was three at the time — listed as
+	// `readonly ARGC=''`. An empty value is not a smaller answer than the
+	// real one, it is a different and false one, and a script reading the
+	// listing back would set the name to nothing.
+	//
+	// Guarded by `attributed` exactly as the array is, which is also what
+	// keeps a producer with a side effect out of a listing: `RANDOM` carries
+	// no attribute, so no listing reaches it and no listing draws a number
+	// from it that the next read would not repeat.
+	//
+	// The guard has a cost and it is on record rather than overlooked. A
+	// listing that *names* an unattributed producer finds nothing either, so
+	// `typeset -p SECONDS` is `no such variable` here where zsh writes
+	// `typeset -i10 SECONDS=0` — and zsh draws a fresh number for
+	// `typeset -p RANDOM`, so the rule above is ours and not its. Lifting the
+	// guard is a word and does not finish the job: the `-i10` is an integer
+	// attribute and a base that a produced parameter has no way to carry yet.
+	// The two together are #1687.
+	if produce, ok := r.Dynamic[name]; ok && attributed {
+		d.value, d.hasValue = produce(r), true
+		return d, true
+	}
 	if v, ok := r.inheritedValue(name); ok {
 		// Born in the environment and never assigned to, so the value is
 		// still the one that came in. Whether it is exported was settled

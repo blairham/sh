@@ -240,6 +240,7 @@ func Semantics() interp.Semantics {
 	// is why a negative count is only reachable after the marker.
 	s.ShiftOptionWords = interp.ShiftOptionWordsAny
 	s.ShiftDoubleDashEndsOptions = interp.Yes
+	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.Yes
 	// Job specs by command text, a second match taken rather than refused.

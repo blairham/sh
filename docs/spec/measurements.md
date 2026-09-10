@@ -2518,6 +2518,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shift/a-leading-dash-that-is-not-a-number` | **2>** `<shell>: 1: shift: Illegal number: -x` *(status 2)* | `st=2` **2>** `<shell>: line 1: shift: -x: numeric argument required` | **2>** `<shell>: line 1: shift: -x: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: shift: -x: numeric argument required` *(status 1)* | **2>** `<shell>: shift: -x: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `st=1` **2>** `<shell>:shift:1: bad option: -x` |
 | `shift/a-count-that-is-an-expression` | **2>** `<shell>: 1: shift: Illegal number: 1+1` *(status 2)* | `[a b c] st=2` **2>** `<shell>: line 1: shift: 1+1: numeric argument required` | **2>** `<shell>: line 1: shift: 1+1: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: shift: 1+1: numeric argument required` *(status 1)* | `[c] st=0` | `[c] st=0` |
 | `shift/a-count-that-is-a-name` | **2>** `<shell>: 1: shift: Illegal number: nosuchname` *(status 2)* | `[a b c] st=2` **2>** `<shell>: line 1: shift: nosuchname: numeric argument required` | **2>** `<shell>: line 1: shift: nosuchname: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: shift: nosuchname: numeric argument required` *(status 1)* | `[a b c] st=0` | `[a b c] st=0` |
+| `shift/an-array-name-as-the-operand` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[1 2 3] st=2` **2>** `<shell>: line 1: shift: a: numeric argument required` | **2>** `<shell>: line 1: shift: a: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: shift: a: numeric argument required` *(status 1)* | **2>** `<shell>: shift: a: bad number` *(status 1)* | `[2 3] st=0` |
+| `shift/a-count-and-an-array-name` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: shift: too many arguments` *(status 1)* | **2>** `<shell>: line 1: shift: too many arguments` *(status 1)* | **2>** `<shell>: line 0: shift: too many arguments` *(status 1)* | **2>** `<shell>: shift: 2: bad number` *(status 1)* | `[3 4] st=0` |
+| `shift/an-operand-leaves-the-positionals` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x y z] [1 2 3] st=2` **2>** `<shell>: line 1: shift: a: numeric argument required` | **2>** `<shell>: line 1: shift: a: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: shift: a: numeric argument required` *(status 1)* | `[y z] [1 2 3] st=0` | `[x y z] [2 3] st=0` |
+| `shift/a-scalar-first-word-is-a-count` | **2>** `<shell>: 1: shift: Illegal number: s` *(status 2)* | `[x y z] st=2` **2>** `<shell>: line 1: shift: s: numeric argument required` | **2>** `<shell>: line 1: shift: s: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: shift: s: numeric argument required` *(status 1)* | `[y z] st=0` | `[y z] st=0` |
 | `wait/a-leading-dash` | `st=2` **2>** `<shell>: 1: wait: Illegal option -x` | `st=2` **2>** `<shell>: line 1: wait: -x: invalid option~wait: usage: wait [-fn] [-p var] [id ...]` | `st=2` **2>** `<shell>: line 1: wait: -x: invalid option~wait: usage: wait [-fn] [-p var] [id ...]` | `st=2` **2>** `<shell>: line 0: wait: -x: invalid option~wait: usage: wait [n]` | `st=2` **2>** `<shell>: wait: -x: unknown option~Usage: wait [ options ] [job ...]` | `st=127` **2>** `<shell>:wait:1: job not found: -x` |
 | `wait/dash-dash-ends-the-options` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `wait/an-operand-that-is-neither` | `st=2` **2>** `<shell>: 1: wait: Illegal number: nosuchjob` | `st=1` **2>** `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec` | `st=1` **2>** `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec` | `st=1` **2>** `<shell>: line 0: wait: `nosuchjob': not a pid or valid job spec` | `st=1` **2>** `<shell>: wait: nosuchjob: Arguments must be %job, process ids, or job pool names` | `st=127` **2>** `<shell>:wait:1: job not found: nosuchjob` |
@@ -3514,6 +3518,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shift/a-count-that-is-a-name` — the same reading with an unset name, which is zero in an expression — so the two that evaluate shift nothing and succeed where the other two refuse it
   ```sh
   set -- a b c; shift nosuchname; echo "[$*] st=$?"
+  ```
+- `shift/an-array-name-as-the-operand` — zsh's synopsis is `shift [ n ] [ name ... ]` and takes the word as an array to shift; the bashes want a numeric argument, ksh93 calls it a bad number, and dash has no array syntax to write the assignment with at all
+  ```sh
+  a=(1 2 3); shift a; echo "[${a[@]}] st=$?"
+  ```
+- `shift/a-count-and-an-array-name` — the count stays optional in front of the names, so only zsh reads both words; the bashes call a second word too many arguments and ksh93 refuses the count it just accepted alone
+  ```sh
+  a=(1 2 3 4); shift 2 a; echo "[${a[@]}] st=$?"
+  ```
+- `shift/an-operand-leaves-the-positionals` — naming an array is instead of shifting the positional parameters, not as well as — the tell that the two readings of the operand do not run together. ksh93 is the contrast: it evaluates the name, reaches the array's first element, and shifts the positionals by that
+  ```sh
+  set -- x y z; a=(1 2 3); shift a; echo "[$*] [${a[@]}] st=$?"
+  ```
+- `shift/a-scalar-first-word-is-a-count` — the first word is ambiguous and zsh settles it by type: a scalar is a count and shifts the positionals, where an array of the same name would have been shifted itself
+  ```sh
+  set -- x y z; s=1; shift s; echo "[$*] st=$?"
   ```
 - `wait/a-leading-dash` — three of the four read it as an option and refuse it in the words their bad options already use; zsh has none and answers with the job it could not find. And none of them ends the script over it, which is the tell that `wait` is not a special builtin however much its neighbors are
   ```sh

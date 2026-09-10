@@ -263,6 +263,7 @@ func Semantics() interp.Semantics {
 	// numbers this shell calls illegal, which is the one wording it has here.
 	s.ShiftOptionWords = interp.ShiftOptionWordsNone
 	s.ShiftDoubleDashEndsOptions = interp.No
+	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.No
 	s.WaitReadsOptions = interp.Yes
 	// Only numbers, `%%`, `%+` and `%-` resolve here: a `%name` is a job

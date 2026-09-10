@@ -1480,10 +1480,49 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 			return r.status
 		}
 	}
+	// zsh's operands are the names of arrays to shift, with the count still
+	// optional in front of them. A word that *names an array* is a name; any
+	// other word is a count. See Semantics.ShiftNamesAreArrays.
+	var names []string
 	if len(args) > 0 {
-		operand = args[0]
-		if st, done := r.shiftCount(args[0], marked, &n); done {
-			return st
+		// The two readings part company in only two places: a first word
+		// that names an array, which is a name to zsh and a count to
+		// everyone else, and words behind the count, which zsh takes as
+		// names and the others ignore. Everywhere else the answer cannot
+		// change what happens, so asking there would refuse a program the
+		// core can already run.
+		named := false
+		if r.shiftNamed(args[0]) {
+			switch {
+			case r.ask(r.sem().ShiftNamesAreArrays, "`shift` taking array names as operands"):
+				named = true
+			case r.unspecified:
+				return r.status
+			}
+		}
+		if named {
+			// The first word is already a name, so there is no count word to
+			// read and the default of one stands.
+			names = args
+		} else {
+			operand = args[0]
+			if st, done := r.shiftCount(args[0], marked, &n); done {
+				return st
+			}
+			// Words behind a count that reads: names to zsh, ignored
+			// everywhere else, and the difference shows even when none of
+			// them is an array — the positional parameters are left alone
+			// whenever any name is given. Asked only once the count itself
+			// stands, because a count that does not read ends the builtin
+			// before the rest of the line can matter.
+			if len(args) > 1 {
+				switch {
+				case r.ask(r.sem().ShiftNamesAreArrays, "`shift` taking array names as operands"):
+					names = args[1:]
+				case r.unspecified:
+					return r.status
+				}
+			}
 		}
 	}
 	if n < 0 {
@@ -1493,11 +1532,58 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 		// there, which shiftCount has already said.
 		return r.shiftOutOfRange(r.diag().ShiftNegativeCount, n, operand)
 	}
+	if len(names) > 0 {
+		// Named arrays replace the positional parameters outright rather
+		// than shifting them too: measured, `set -- P Q; a=(1 2 3); shift a`
+		// leaves `$@` as `P Q`.
+		return r.shiftArrays(names, n, operand)
+	}
 	if n > len(r.Params) {
 		return r.shiftOutOfRange(r.diag().ShiftTooMany, n, operand)
 	}
 	r.Params = r.Params[n:]
 	return 0
+}
+
+// shiftNamed reports whether a word names an array, which is what makes it an
+// operand of `shift` rather than a count.
+//
+// Strictly an array: arrayElems answers a scalar as a one-element array and
+// would make `shift v` on `v=hello` a name, where zsh reads it as a count of
+// `hello` — which is zero, and leaves both `v` and `$@` alone.
+func (r *Runner) shiftNamed(word string) bool {
+	if r.assocDeclared(word) {
+		// An association has no order to shift off the front of, and zsh
+		// leaves one alone at status 0. Reading it as a count reaches the
+		// same place — arithmetic on the name is zero — by the path the
+		// other non-arrays take.
+		return false
+	}
+	_, ok := r.arrayElemsOfTheName(word)
+	return ok
+}
+
+// shiftArrays is the named form: each name's array loses its first n
+// elements.
+//
+// A name that is not an array is left alone and not complained about, and a
+// count past the end of one array does not stop the others — so the status is
+// carried rather than returned. That is only sound where past-the-end is
+// survivable, which ShiftNamesAreArrays says it may only be answered in.
+func (r *Runner) shiftArrays(names []string, n int, operand string) int {
+	status := 0
+	for _, name := range names {
+		elems, ok := r.arrayElemsOfTheName(name)
+		if !ok || r.assocDeclared(name) {
+			continue
+		}
+		if n > len(elems) {
+			status = r.shiftOutOfRange(r.diag().ShiftTooMany, n, operand)
+			continue
+		}
+		r.setArray(name, elems[n:])
+	}
+	return status
 }
 
 // shiftOutOfRange reports a count outside `0..$#`, in whichever direction.

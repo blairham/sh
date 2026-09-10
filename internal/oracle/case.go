@@ -11505,6 +11505,26 @@ echo after`,
 		Why:     "the same reading with an unset name, which is zero in an expression — so the two that evaluate shift nothing and succeed where the other two refuse it",
 	},
 	{
+		ID: "shift/an-array-name-as-the-operand", Category: "builtins",
+		Snippet: `a=(1 2 3); shift a; echo "[${a[@]}] st=$?"`,
+		Why:     "zsh's synopsis is `shift [ n ] [ name ... ]` and takes the word as an array to shift; the bashes want a numeric argument, ksh93 calls it a bad number, and dash has no array syntax to write the assignment with at all",
+	},
+	{
+		ID: "shift/a-count-and-an-array-name", Category: "builtins",
+		Snippet: `a=(1 2 3 4); shift 2 a; echo "[${a[@]}] st=$?"`,
+		Why:     "the count stays optional in front of the names, so only zsh reads both words; the bashes call a second word too many arguments and ksh93 refuses the count it just accepted alone",
+	},
+	{
+		ID: "shift/an-operand-leaves-the-positionals", Category: "builtins",
+		Snippet: `set -- x y z; a=(1 2 3); shift a; echo "[$*] [${a[@]}] st=$?"`,
+		Why:     "naming an array is instead of shifting the positional parameters, not as well as — the tell that the two readings of the operand do not run together. ksh93 is the contrast: it evaluates the name, reaches the array's first element, and shifts the positionals by that",
+	},
+	{
+		ID: "shift/a-scalar-first-word-is-a-count", Category: "builtins",
+		Snippet: `set -- x y z; s=1; shift s; echo "[$*] st=$?"`,
+		Why:     "the first word is ambiguous and zsh settles it by type: a scalar is a count and shifts the positionals, where an array of the same name would have been shifted itself",
+	},
+	{
 		ID: "wait/a-leading-dash", Category: "builtins",
 		Snippet: `wait -x; echo "st=$?"`,
 		Why:     "three of the four read it as an option and refuse it in the words their bad options already use; zsh has none and answers with the job it could not find. And none of them ends the script over it, which is the tell that `wait` is not a special builtin however much its neighbors are",

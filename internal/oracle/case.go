@@ -12029,6 +12029,22 @@ echo "st=$? alive"`,
 		Why: "the long spelling by the same route, and bash alone shapes it differently from its own letter: dash, ksh93 and zsh word both the same way here, while bash hands this one to the builtin and prints `<shell>: line 0: <shell>: …` — its own name standing where `set` would",
 	},
 	{
+		ID: "opt/skipping-the-startup-files-is-an-option-state", Category: "shell options",
+		Snippet: `setopt; [[ -o rcs ]]; echo "cond=$?"`, Args: []string{"-f", "-c", ArgSnippet},
+		Why: "zsh alone has an option for whether it read its startup files, and the invocation is what sets it: `-f` is the escape hatch and `rcs` is the name that reports it, so a bare `setopt` — the list of deviations from zsh's own defaults — has a `norcs` line here that the row below has not. Ours held the name at a constant `on`, so a shell told to skip its files reported having read them (#1864). The other five spend `-f` on globbing and have neither the name nor the builtin, which is what the row records of them",
+	},
+	{
+		ID: "opt/reading-the-startup-files-is-the-other-state", Category: "shell options",
+		Snippet: `setopt; [[ -o rcs ]]; echo "cond=$?"`,
+		Why:     "the control for the row above, and the half that says the first is about the invocation rather than about the name existing: the same text under a plain `-c` answers `cond=0` and its listing is a line shorter. Without it a shell that answered `norcs` unconditionally would look correct",
+	},
+	{
+		ID: "opt/the-startup-file-option-still-moves-after-the-invocation-set-it", Category: "shell options",
+		Snippet: `setopt rcs; echo "s=$?"; [[ -o rcs ]]; echo "cond=$?"; setopt`,
+		Args:    []string{"-f", "-c", ArgSnippet},
+		Why:     "the invocation decides the base and a running script moves it on top, which is what makes this an option rather than a report — `setopt rcs` in a `-f` shell is 0, the condition follows, and the `norcs` line leaves the listing again. It is the same shape `login` has and is why the name is recorded *over* the invocation rather than fixed to it either way",
+	},
+	{
 		ID: "opt/turning-off-a-name-a-shell-does-not-implement", Category: "shell options",
 		Snippet: `set +o posix; echo "st=$?"; set +o history; echo "st=$?"`,
 		Why:     "the thirteenth line of Homebrew's own brew script is `set +o posix`, and it is the shape this implementation's accept-off/refuse-on policy exists for: turning off what a shell was never doing is a request that has been granted, where turning it *on* would be a promise. Recorded across the panel because the two names split it — bash has both, and the others have neither",

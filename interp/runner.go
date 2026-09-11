@@ -467,6 +467,25 @@ type Runner struct {
 	// first-hand there (#1034).
 	LoginShell bool
 
+	// StartupFilesSuppressed says the invocation asked this shell to read
+	// none of its startup files — the escape hatch a person reaches for when
+	// the file that breaks the shell is the one it reads to start.
+	//
+	// The front end's to set, for the reason LoginShell above is: which
+	// options an argument vector carried is an invocation fact, and a
+	// library Runner reached through Run never saw one. `driver` decides it
+	// from Semantics.StartupFileOptions.SuppressAll — zsh's `-f` and
+	// `--no-rcs` — and hands it over here.
+	//
+	// It is what the invocation *asked for* rather than a tally of the files
+	// that were read, which is measured: `zsh -c cmd` reads `.zshenv` and
+	// still answers `rcs` on, and `zsh -f -c cmd` reads nothing and answers
+	// it off. Nothing in this package reads it; the one shell whose option
+	// namespace publishes the fact is zsh, whose `rcs` is the name for it,
+	// and which startup files are actually read is `driver`'s own question
+	// with the fact first-hand there (#1864).
+	StartupFilesSuppressed bool
+
 	// Dynamic holds parameters whose value is produced when they are read,
 	// rather than stored: `LINENO` is wherever execution has reached, and
 	// `RANDOM` is a different number every time. A dialect fills in the ones

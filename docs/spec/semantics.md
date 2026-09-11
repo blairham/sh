@@ -3368,6 +3368,37 @@ login` in a shell that is not one is 0 and reports `login` afterwards, and
 -s login_shell` is accepted and never moves. So it is recorded over a base
 state the front end supplied rather than over a constant (#1727).
 
+**`rcs` reads the invocation too**, and it is the other one of that
+kind. It says whether this shell reads its startup files, and zsh
+initializes it from the argument vector: `-f` and `--no-rcs` turn it off.
+Measured on zsh 5.9.2, 2026-09-11 with an empty home directory —
+
+| asked | zsh 5.9.2 |
+| --- | --- |
+| `zsh -f -c setopt` | `nohashdirs`, `norcs` |
+| `zsh -c setopt` | `nohashdirs` |
+| `zsh -f -c '[[ -o rcs ]]; echo $?'` | `1` |
+| `zsh --no-rcs -c '[[ -o rcs ]]; echo $?'` | `1` |
+| `zsh -c '[[ -o rcs ]]; echo $?'` | `0` |
+| `zsh -f -c 'setopt rcs; [[ -o rcs ]]; echo $?'` | `0` |
+
+— so it is the same shape `login` has: the invocation decides the base and a
+running script moves it on top, `setopt rcs` in a `-f` shell being 0 and its
+listing losing the `norcs` line again. Ours held a constant `on`, so a `-f`
+shell reported the files it had just been told to skip and the listing was a
+line short exactly where zsh's is a line long. The base is
+`Runner.StartupFilesSuppressed`, the invocation fact the front end carries in
+beside `LoginShell`, and the option is still recorded: nothing re-reads it to
+decide whether a *later* startup file is read, which is `driver`'s question
+with the argument vector first-hand (#1864).
+
+The invocation's own options are applied *after* that base is set, which is
+the order that makes `zsh -f -o rcs` answer `rcs` on — measured, and the
+option moving off a base rather than the base landing on top of the option.
+zsh applies the two in argv order and so answers off for `zsh -o rcs -f`;
+ours reads `-f` off the vector rather than as a position in it, so it answers
+on for both. The measured row is the first spelling.
+
 **The listings.** Every option has one printed spelling — the one that is
 off by default, so `noclobber` for an option that defaults on. A bare
 `setopt` prints the spellings that are on and a bare `unsetopt` prints the

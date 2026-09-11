@@ -5,10 +5,12 @@ package zsh_test
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/repl"
 )
 
 // Eleven names this table wired immovable that real zsh moves in both
@@ -174,4 +176,168 @@ func TestTheLoginOptionStillMoves(t *testing.T) {
 	if want := "s=0\ncond=1\n"; !strings.HasSuffix(out.String(), want) || code != 0 {
 		t.Errorf("out %q status %d, want it to end %q", out.String(), code, want)
 	}
+}
+
+// `rcs` is the option that says whether this shell reads its startup files,
+// and zsh initializes it from the invocation: `-f` and `--no-rcs` turn it
+// off. Ours held a constant `on`, so a `-f` shell reported the files it had
+// just been told to skip, and the one deviation zsh's own listing shows there
+// was missing (#1864).
+//
+// Measured on zsh 5.9.2, 2026-09-11, with an empty home directory:
+//
+//	zsh -f -c setopt                        nohashdirs, norcs
+//	zsh -c setopt                           nohashdirs
+//	zsh -f -c '[[ -o rcs ]]; echo $?'       1
+//	zsh --no-rcs -c '[[ -o rcs ]]; echo $?' 1
+//	zsh -c '[[ -o rcs ]]; echo $?'          0
+//
+// The whole listing is compared rather than one grepped line, because a bare
+// `setopt` is the list of *deviations* from zsh's defaults and the bug was a
+// missing line in it: a test that grepped for `norcs` would pass just as well
+// on a listing that had grown a line nobody asked for.
+func TestTheRcsOptionReadsTheInvocation(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		argv []string
+		want string
+	}{
+		{"a shell told to skip them says so", []string{"-f"}, "nohashdirs\nnorcs\ncond=1\n"},
+		{"and under the long spelling", []string{"--no-rcs"}, "nohashdirs\nnorcs\ncond=1\n"},
+		{"a shell that read them says that", nil, "nohashdirs\ncond=0\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			argv := append([]string{"zsh"}, tc.argv...)
+			argv = append(argv, "-c", `setopt; [[ -o rcs ]]; echo "cond=$?"`)
+			var out, errs bytes.Buffer
+			code := driver.MainArgs(zshWriting(&out, &errs), argv)
+			if out.String() != tc.want || errs.String() != "" || code != 0 {
+				t.Errorf("out %q / %q status %d, want %q and nothing said",
+					out.String(), errs.String(), code, tc.want)
+			}
+		})
+	}
+}
+
+// TestTheRcsOptionStillMovesOnTopOfTheInvocation: the half that makes it an
+// option rather than a report, and the reason it is `recordedOver` the
+// invocation rather than a constant either way. Measured in the same run:
+// `zsh -f -c 'setopt rcs; setopt'` answers `nohashdirs` alone, the `norcs`
+// line gone, and `zsh -c 'unsetopt rcs; setopt'` gains one.
+func TestTheRcsOptionStillMovesOnTopOfTheInvocation(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		argv []string
+		src  string
+		want string
+	}{
+		{
+			"a -f shell can turn it back on",
+			[]string{"-f"},
+			`setopt rcs; echo "s=$?"; [[ -o rcs ]]; echo "cond=$?"; setopt`,
+			"s=0\ncond=0\nnohashdirs\n",
+		},
+		{
+			"and off again",
+			[]string{"-f"},
+			`setopt rcs; unsetopt rcs; echo "s=$?"; [[ -o rcs ]]; echo "cond=$?"; setopt`,
+			"s=0\ncond=1\nnohashdirs\nnorcs\n",
+		},
+		{
+			"an ordinary shell can turn it off", nil,
+			`unsetopt rcs; echo "s=$?"; [[ -o rcs ]]; echo "cond=$?"; setopt`,
+			"s=0\ncond=1\nnohashdirs\nnorcs\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			argv := append([]string{"zsh"}, tc.argv...)
+			argv = append(argv, "-c", tc.src)
+			var out, errs bytes.Buffer
+			code := driver.MainArgs(zshWriting(&out, &errs), argv)
+			if out.String() != tc.want || errs.String() != "" || code != 0 {
+				t.Errorf("out %q / %q status %d, want %q and nothing said",
+					out.String(), errs.String(), code, tc.want)
+			}
+		})
+	}
+}
+
+// TestTheRcsOptionReachesTheOtherTwoListings: `setopt` is not the only
+// capture surface the name appears on, and all three read one state. Measured
+// under `-f`: `set -o` writes `norcs                 on` and `set +o` writes
+// `set -o norcs`, where a shell that read its files writes the off spellings
+// of both.
+func TestTheRcsOptionReachesTheOtherTwoListings(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		argv []string
+		want string
+	}{
+		{"skipped", []string{"-f"}, "norcs                 on\nset -o norcs\n"},
+		{"read", nil, "norcs                 off\nset +o norcs\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			argv := append([]string{"zsh"}, tc.argv...)
+			argv = append(argv, "-c", `set -o | grep '^norcs'; set +o | grep 'norcs$'`)
+			var out, errs bytes.Buffer
+			code := driver.MainArgs(zshWriting(&out, &errs), argv)
+			if out.String() != tc.want || errs.String() != "" || code != 0 {
+				t.Errorf("out %q / %q status %d, want %q and nothing said",
+					out.String(), errs.String(), code, tc.want)
+			}
+		})
+	}
+}
+
+// TestTheRcsOptionReadsTheInvocationAtAPrompt: the prompt route carries the
+// fact too, and it is a separate line of code that does it — the route never
+// reaches the place the script routes read the invocation, which is why the
+// three facts beside it are stated twice as well.
+//
+// The prompt is replaced with a known string so the assertion can be exact
+// bytes on both streams: what is under test is the option, and zsh's own
+// default prompt would put this machine's hostname in the expected output.
+func TestTheRcsOptionReadsTheInvocationAtAPrompt(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		argv []string
+		want string
+	}{
+		{"told to skip them", []string{"zsh", "-f", "-i"}, "cond=1\n"},
+		{"having read them", []string{"zsh", "-i"}, "cond=0\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			t.Setenv("ZDOTDIR", t.TempDir())
+			var out, errs bytes.Buffer
+			sh := zshWriting(&out, &errs)
+			sh.PromptStyle = repl.PromptStyle{Default: "P% "}
+			sh.Stdin = zshPipeWith(t, "[[ -o rcs ]]; echo \"cond=$?\"\n")
+			code := driver.MainArgs(sh, tc.argv)
+			// One prompt for the line that was typed and one for the
+			// end-of-file that followed it.
+			if out.String() != tc.want || errs.String() != "P% P% " || code != 0 {
+				t.Errorf("out %q / %q status %d, want %q and two prompts",
+					out.String(), errs.String(), code, tc.want)
+			}
+		})
+	}
+}
+
+// zshPipeWith is a pipe holding what a person would have typed.
+func zshPipeWith(t *testing.T, s string) *os.File {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		_, _ = w.WriteString(s)
+		_ = w.Close()
+	}()
+	t.Cleanup(func() { _ = r.Close() })
+	return r
 }

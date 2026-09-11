@@ -22,8 +22,14 @@ import (
 // be runnable. This runs it, which is the only claim the cost rows depend on.
 func TestTrueCommandActuallyRuns(t *testing.T) {
 	prog := TrueCommand()
+	// Not a skip. "Found nothing" is precisely the state the old code was in
+	// on every Mac in the world, and a test that skips on it would have gone
+	// green through the entire life of the bug — which is what the first
+	// draft of this test did when the wrong path was put back to check it.
+	// Every machine that can run this suite has a true(1); if the lookup
+	// cannot find it, the lookup is what is broken.
 	if prog == "" {
-		t.Skip("no true(1) on this machine; the cost rows skip too, rather than timing a failure")
+		t.Fatal("TrueCommand found no true(1): the cost rows have no program to time, and would report a failed lookup as the cost of running a command")
 	}
 	if err := exec.Command(prog).Run(); err != nil {
 		t.Fatalf("%s: the program the cost rows time does not run: %v", prog, err)
@@ -39,7 +45,7 @@ func TestTrueCommandActuallyRuns(t *testing.T) {
 func TestTrueCommandIsAbsolute(t *testing.T) {
 	prog := TrueCommand()
 	if prog == "" {
-		t.Skip("no true(1) on this machine")
+		t.Fatal("TrueCommand found no true(1)")
 	}
 	if prog[0] != '/' {
 		t.Fatalf("TrueCommand returned %q, which a shell would resolve for itself", prog)

@@ -688,11 +688,19 @@ func (r *Runner) expandBEscapes(s string) (string, bool) {
 			// rather than the builtin, which is the same "this pass and no
 			// further" the format site gets; no dialect in the panel asks
 			// for it at this site.
+			//
+			// A locale with no room for the code point is the same reader's
+			// answer at both sites, and it ends the builtin rather than the
+			// argument: measured, `printf '%b' 'a\u00e9Z'` under `LC_ALL=C`
+			// writes `61` and abandons the script.
 			text, n, end := r.unicodeEscapeText(r.bUnicodeEscape(), s[i:])
 			b.WriteString(text)
 			i += n
 			if end == printfPassTruncated {
 				return b.String(), false
+			}
+			if end == printfPassStopped {
+				return b.String(), true
 			}
 		case '0', '1', '2', '3', '4', '5', '6', '7':
 			// `\0` introduces up to three octal digits rather than being the
@@ -879,10 +887,24 @@ func (r *Runner) unicodeEscapeText(p PrintfUnicodeEscapePolicy, s string) (strin
 			`printf: missing unicode digit for \%s`, string(s[1])))
 		return escape, 2, printfPassRan
 	}
-	// A code point written in UTF-8, and the original UTF-8 at that: a
-	// surrogate and a value past the last code point are encoded rather than
-	// refused, which is measured and not assumed.
-	return EncodeCodePoint(n), 2 + used, printfPassRan
+	// The locale is consulted before anything is written, which is the same
+	// question `echo` asks and the same reader: the character, the escape
+	// written back, or a refusal — see [Runner.CodePointEscapeText]. A code
+	// point the encoding has room for is written in UTF-8, and the original
+	// UTF-8 at that: a surrogate and a value past the last code point are
+	// encoded rather than refused, which is measured and not assumed.
+	text, refused := r.CodePointEscapeText(n)
+	if refused {
+		// The complaint, what came before the escape, and nothing after it —
+		// in this pass or in any later one, since the format is reused until
+		// the operands run out and a refusal ends the builtin rather than
+		// the pass. Measured 2026-09-11 under `LC_ALL=C`: `printf 'a\u00e9Z\n'`
+		// writes `61` alone, without the newline the format ends with, and
+		// the next command does not run.
+		r.RefuseCodePoint()
+		return "", 2 + used, printfPassStopped
+	}
+	return text, 2 + used, printfPassRan
 }
 
 // printfWriter is the shell's output stream, held back or written through

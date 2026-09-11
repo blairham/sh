@@ -53,12 +53,19 @@ import (
 // grammar's: the parser refuses any letter outside the set as an error in the
 // flags, at the letter, so a decoder sees only letters it knows.
 //
+// The decoder is handed the runner, because the escape set is not a pure
+// function of the text: a `\u` escape naming a code point the locale's
+// encoding cannot hold is written back, refused, or written regardless,
+// depending on the dialect *and* on the runner's own locale variables — see
+// Runner.CodePointEscapeText. A decoder that could not reach one wrote the
+// character in every locale there is (#2021).
+//
 // Nil is the runner nobody told, and there `(g)` is refused by name. That is
 // deliberate, and it is the sharper case of the same rule `(p)` follows: a
 // `(g)` read as a no-op is *right* for every value that has no backslash in
 // it, so it would survive the first thing anyone tried it on and answer at
 // status 0 wherever it mattered.
-func (r *Runner) SetExpansionEscapes(decode func(text, opts string) string) {
+func (r *Runner) SetExpansionEscapes(decode func(r *Runner, text, opts string) string) {
 	r.expansionEscapes = decode
 }
 
@@ -91,7 +98,7 @@ func escapeFlagApplies(e *syntax.ParamExpr) bool {
 // the order of the rules says it, and this loop is only the rule 13 half.
 func (r *Runner) escapeFlagged(e *syntax.ParamExpr, words []string) []string {
 	for i, w := range words {
-		words[i] = r.expansionEscapes(w, e.EscapeOpts)
+		words[i] = r.expansionEscapes(r, w, e.EscapeOpts)
 	}
 	return words
 }

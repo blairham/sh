@@ -132,6 +132,11 @@ func (r *Runner) CodePointEscapeText(n int) (string, bool) {
 		return unicodeEscapeSpelling(n), false
 	case OutsideLocaleEscapeRefused:
 		return "", true
+	case OutsideLocaleEscapeEncoded:
+		// The locale was consulted and the answer is that it does not
+		// matter, which is a different thing from never asking: the axis is
+		// reached, answered, and the character written.
+		return EncodeCodePoint(n), false
 	}
 	// Unanswered, and outsideLocaleEscape has already said so and stopped the
 	// script. Nothing more is written.
@@ -149,6 +154,28 @@ func (r *Runner) CodePointEscapeText(n int) (string, bool) {
 // Exported for the same reason [Runner.CodePointEscapeText] is: `print` is a
 // dialect's builtin and refuses in the same words.
 func (r *Runner) RefuseCodePoint() {
+	r.refuseCodePoint(0)
+}
+
+// RefuseCodePointExpanding is [Runner.RefuseCodePoint] for a refusal raised
+// while a **word** is expanded rather than while a builtin writes, which is
+// the same complaint at a different status.
+//
+// Measured 2026-09-11 on zsh 5.9.2 under `LC_ALL=C`: `x=$'a\u00e9Z'` and
+// `${(g::)v}` both leave the script at status **1** where `echo`, `print` and
+// `printf` leave it at 0, and `(exit 3); x=$'a\u00e9Z'` is 1 as well — so it
+// is one rather than whatever was already there, exactly as the builtin
+// sites' zero is. The command never runs in either case: the word it was part
+// of was never finished.
+//
+// Exported for the same reason the other two are: a dialect's own reader —
+// `print`'s, and the `(g)` and `(p)` expansion flags' — refuses in the same
+// words, and the flags refuse at the expansion site.
+func (r *Runner) RefuseCodePointExpanding() {
+	r.refuseCodePoint(1)
+}
+
+func (r *Runner) refuseCodePoint(status int) {
 	// Located as the *shell* and not as the builtin, which is measured and is
 	// the tell that this is a fact about reading a word rather than about
 	// `echo`: `zsh:1: character not in range`, with the same prefix from
@@ -158,6 +185,6 @@ func (r *Runner) RefuseCodePoint() {
 	// builtin makes and wrong for this one.
 	r.errf("%s\n", r.diag().Report(r.name(), r.line,
 		Wording(r.diag().CodePointOutsideTheLocale, "character not in range")))
-	r.status = 0
+	r.status = status
 	r.ctl = controlExit
 }

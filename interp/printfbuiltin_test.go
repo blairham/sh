@@ -317,6 +317,10 @@ func TestPrintfUnicodeEscapeIsAskedPerSite(t *testing.T) {
 // as the *original* UTF-8, so a surrogate and a value past the last code point
 // are encoded rather than replaced. Asserted as bytes, because a replacement
 // character is three bytes too.
+//
+// In a UTF-8 locale, which is where the *encoder* is the whole of the
+// question: every value here is above ASCII, so what a locale with no room
+// for one does is the other axis's and is asserted in localeescape_test.go.
 func TestPrintfUnicodeEscapeEncodesWhatUnicodeLaterRefused(t *testing.T) {
 	sem := printfSem()
 	sem.PrintfUnicodeEscape = PrintfUnicodeEscapeCodePoint
@@ -326,7 +330,10 @@ func TestPrintfUnicodeEscapeEncodesWhatUnicodeLaterRefused(t *testing.T) {
 		{"the five-byte form", `printf '[\U00200000]'`, "[\xf8\x88\x80\x80\x80]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			out, st := run(t, tc.src, func(r *Runner) {
+				r.Semantics = &sem
+				r.Vars = map[string]string{"LC_ALL": "en_US.UTF-8"}
+			})
 			if out != tc.want || st != 0 {
 				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
 			}

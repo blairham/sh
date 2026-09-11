@@ -722,6 +722,26 @@ var Corpus = []Case{
 			"escape in `echo` at all",
 	},
 	{
+		ID: "printf/a-unicode-escape-outside-the-locale-in-a-format", Category: "builtins",
+		Snippet: `printf 'a\u00e9Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the same question `echo/a-unicode-escape-outside-the-locale` asks, at the site where the panel gives **three** answers rather than two: one leaves the escape standing normalized, one reports `character not in range` and writes what came before it, and ksh93 writes the character whatever the locale says. The third is what makes this a policy with three constants — and it is reachable here and at `$'...'` and nowhere else, since that shell reads no `\\u` in `echo`, in `print` or in a `%b`. Read as bytes for the reason the `echo` row is: every wrong answer here looks like text (#2021)",
+	},
+	{
+		ID: "printf/a-unicode-escape-outside-the-locale-in-a-b-argument", Category: "builtins",
+		Snippet: `printf '%b' 'a\u00e9Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the other `printf` site, and the pair with the row above is what says the *site* decides which shells reach the question at all: ksh93 reads no `\\u` in a `%b`, so it writes the ten characters as they stand here and the character there, while the two that read the escape at both sites answer the same at both. A site-by-site reading is the only way to get that pair right (#2021)",
+	},
+	{
+		ID: "dollarsingle/a-unicode-escape-outside-the-locale", Category: "quoting",
+		Snippet: `printf '%s' $'a\u00e9Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the one site of the five in the **core**: every shell but dash has `$'...'`, and the three that read the escape in it give the three different answers. That is why the axis has a third constant rather than a bool — and why a core script with `$'\\u00e9'` in it under a non-UTF-8 locale is an unanswered axis rather than a value. dash has no `$'...'` at all and writes the dollar sign as a character (#2021)",
+	},
+	{
+		ID: "print/a-unicode-escape-outside-the-locale", Category: "builtins",
+		Snippet: `print -- 'a\u00e9Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the builtin two of the six have, and the row that says a shell answers the *same* at every site it reads the escape at: this one refuses here exactly as it refuses in `echo`, and ksh93 — which writes the character in a `printf` format — reads no `\\u` here at all and leaves the ten characters standing. The two facts are separate axes and this is the row that keeps them apart (#2021)",
+	},
+	{
 		ID: "echo/a-hexadecimal-escape-with-no-digits", Category: "builtins",
 		Snippet: `echo -e 'a\xZ:a\uZ' | od -An -tx1 | tr -s " "`,
 		Why:     "one question for `\\x`, `\\u` and `\\U` together: a run with no digit after it is a NUL in one shell and the two characters as written everywhere else. Read as bytes because a NUL is not a character a table can show, and it is the same split the two `printf` sites record as part of their hex policy",

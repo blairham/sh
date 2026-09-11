@@ -662,6 +662,15 @@ func Semantics() interp.Semantics {
 	// And no `\u` at all in a `%b`, the same split this shell's `\x` makes:
 	// `printf '%b' 'a\u0041Z'` is the ten characters as written.
 	s.PrintfBUnicodeEscape = interp.PrintfUnicodeEscapeAbsent
+	// A code point the locale's encoding cannot hold is written all the
+	// same: this shell never consults a locale for the escape, which is a
+	// third answer beside writing the escape back and refusing it. Measured
+	// 2026-09-11 under `LC_ALL=C`, bytes read with `od`: `printf 'a\u00e9Z'`
+	// and `$'a\u00e9Z'` are `61 c3 a9 5a` there and in a UTF-8 locale alike,
+	// where bash leaves `a\u00E9Z` standing and zsh refuses both. It is
+	// reachable at those two sites only, since this shell reads no `\u` in
+	// `echo`, in `print` or in a `%b` (#2021).
+	s.UnicodeEscapeOutsideTheLocale = interp.OutsideLocaleEscapeEncoded
 	// `\E` is the escape character and `\e` is two characters — the opposite
 	// of zsh, which is why one axis could not answer for both letters.
 	s.PrintfBEscEscape = interp.No

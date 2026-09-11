@@ -27,7 +27,7 @@ import (
 // back to the unconditional branch would be invisible if both wrote the same
 // thing.
 func withTestExpansionEscapes(r *interp.Runner) {
-	r.SetExpansionEscapes(func(text, opts string) string {
+	r.SetExpansionEscapes(func(_ *interp.Runner, text, opts string) string {
 		var b strings.Builder
 		for i := 0; i < len(text); i++ {
 			if text[i] != '\\' || i+1 == len(text) {

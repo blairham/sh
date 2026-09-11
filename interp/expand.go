@@ -2792,9 +2792,19 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 	// `${s//?/X}` on a three-character string is `XXX` and not `XXXXXXXXX`.
 	stops := unitStops(value, o)
 
+	// How much subject this pattern could possibly consume. Every loop below
+	// walks spans and asks the matcher about each one, and a span outside
+	// these bounds is one the pattern cannot fill however the subject reads —
+	// so the question is skipped rather than asked. See patternspan.go for
+	// why the bound is allowed to be too wide and never too narrow.
+	lo, hi, bounded := patternSpanBytes(pattern, o)
+
 	switch e.Anchor {
 	case '#':
 		for k := len(stops) - 1; k >= 0; k-- {
+			if !spanCouldMatch(stops[k], lo, hi, bounded) {
+				continue
+			}
 			if ok, m := matchPatternIn(pattern, value[:stops[k]], value, 0, o); ok {
 				return with(m) + value[stops[k]:]
 			}
@@ -2802,6 +2812,9 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 		return value
 	case '%':
 		for _, i := range stops {
+			if !spanCouldMatch(len(value)-i, lo, hi, bounded) {
+				continue
+			}
 			if ok, m := matchPatternIn(pattern, value[i:], value, i, o); ok {
 				return value[:i] + with(m)
 			}
@@ -2816,7 +2829,20 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 		// everywhere else rather than matching empty and looping.
 		end := -1
 		var rep matchReport
-		for m := len(stops) - 1; m >= k; m-- {
+		// The longest span first, but starting from the longest the pattern
+		// could *fill* rather than from the end of the subject. For a
+		// pattern of four ordinary characters that is one span instead of
+		// one per remaining unit, which is the whole of #1398.
+		top := len(stops) - 1
+		if bounded {
+			top = sort.SearchInts(stops, i+hi+1) - 1
+		}
+		for m := top; m >= k; m-- {
+			if bounded && stops[m]-i < lo {
+				// Shorter than the pattern's shortest, and every span left
+				// is shorter still.
+				break
+			}
 			// Every span tried is a piece of value and is matched as one,
 			// so a `(#s)` matches only the span starting at 0 and a `(#e)`
 			// only the one ending at the last unit. Measured:

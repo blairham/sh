@@ -56,6 +56,18 @@ func Dialect() syntax.Dialect {
 	// quotes. A name out of an *expansion* is refused here as everywhere,
 	// which is why this is the quoting half alone (#1076).
 	d.ForNameMayBeQuoted = true
+	// And the same removal in front of a function definition's parentheses:
+	// `'q'() { echo q; }` defines and calls `q` here, where this parser
+	// refused the line at the `(`. The quoting is the whole of it and the
+	// name is read *expanded* — `a\ b() { :; }` is `a b:
+	// invalid function name`, naming the two words and not the backslash, so
+	// the check the definition then meets is the one it already had. Measured
+	// 2026-09-10: zsh and this shell take the quoted name where the three
+	// bash columns refuse the word as written and dash refuses to parse it,
+	// which is a two-against-four split and not the one-against-five a name
+	// holding a space gives. See syntax.Dialect.FunctionNameIsAnyWord for the
+	// six columns (#1561).
+	d.FunctionNameIsAnyWord = true
 	// And a word that is not a name at all parses, the complaint coming when
 	// the loop is reached — so `ksh -n` accepts a script this used to refuse.
 	// interp.Semantics.ForNameWhenTheLoopRuns is what happens then (#1110).

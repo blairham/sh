@@ -111,7 +111,7 @@ func runPromotedNegative(t *testing.T, promoted Answer, src string) (string, int
 	t.Helper()
 	return runGrammar(t, src, nil, func(r *Runner) {
 		sem := CoreSemantics()
-		// The two neighbours these rows walk past, answered so that the axis
+		// The two neighbors these rows walk past, answered so that the axis
 		// under test is the only one that can decide anything: a subscript on
 		// a string is an element rather than a character, and a subscript
 		// past the first element is refused rather than placed in front of

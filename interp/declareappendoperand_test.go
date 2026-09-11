@@ -167,7 +167,7 @@ func TestAnUnansweredAppendOperandAxisIsRefused(t *testing.T) {
 	}
 }
 
-// withAppendOperand answers the axis under test, and the neighbours these
+// withAppendOperand answers the axis under test, and the neighbors these
 // rows walk past: a local declared by the word rather than by the keyword, a
 // scalar appended to an array joining its first element rather than becoming
 // one, a bad name reported rather than ending the script, and the `-g` letter

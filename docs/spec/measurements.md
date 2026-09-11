@@ -12948,6 +12948,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `eval/nothing-to-run-reports-success` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `eval/text-sees-the-callers-status` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
 | `dot/text-sees-the-callers-status` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `eval/runs-what-it-read-before-a-failure` | `[x]` | `[x]` | `[x]` | `[x]` | `[]` | `[]` |
+| `dot/runs-what-it-read-before-a-failure` | `[y]` | `[y]` | `[y]` | `[y]` | `[]` | `[y]` |
 | `eval/is-transparent-to-return` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` |
 | `eval/is-transparent-to-break` | `done` | `done` | `done` | `done` | `done` | `done` |
 | `eval/unparseable-text-diverges` | **2>** `<shell>: 1: eval: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `REACHED st=2` **2>** `<shell>: eval: line 2: syntax error: unexpected end of file from `if' command on line 1` | **2>** `<shell>: eval: line 2: syntax error: unexpected end of file from `if' command on line 1` *(status 2)* | `REACHED st=1` **2>** `<shell>: eval: line 1: syntax error: unexpected end of file` | `REACHED st=3` **2>** `<shell>: eval: syntax error at line 1: `if' unmatched` | `REACHED st=1` **2>** `(eval):1: parse error near `if'` |
@@ -13013,6 +13015,15 @@ grades it and nothing drift-checks it either, for the same reason.
 - `dot/text-sees-the-callers-status` — the same question from a file, and it is a second row rather than a duplicate: `.` and `eval` disagree about `return`, about what a failure inside them costs and about what a diagnostic calls the text, so agreeing here is a measurement and not an inference
   ```sh
   echo 'echo st=$?' > p.sh; false; . ./p.sh
+  ```
+- `eval/runs-what-it-read-before-a-failure` — whether the text is read through before any of it runs, or a command at a time with each run as it is read. Only a *failure* can tell the two apart, and only by what happened before it — so this counts a side effect rather than reading a transcript, which the complaint would otherwise dominate. bash 5.3, bash 3.2, bash-as-sh and dash have already run the first line when they complain about the second; zsh and ksh93 have not. The parentheses are there because a parse failure inside a special builtin is fatal in dash, which would otherwise take the line that reports the count with it; the redirection keeps six wordings of the same complaint out of a row that is about neither
+  ```sh
+  ( eval "printf x >> f
+  if; then" ) 2>/dev/null; printf "[%s]" "$(cat f 2>/dev/null)"; echo
+  ```
+- `dot/runs-what-it-read-before-a-failure` — the same question of a file, and it is the row that says the two cannot share one answer: zsh reads a file a command at a time and reads `eval`'s text through first, so it prints `[y]` here and `[]` above. ksh93 is the only column that reads both through. It matters more here than for `eval` — a file that sets six names and has a typo on the last line leaves six names set in five of the six columns and none in the sixth
+  ```sh
+  printf "printf y >> g\nif; then\n" > s.sh; ( . ./s.sh ) 2>/dev/null; printf "[%s]" "$(cat g 2>/dev/null)"; echo
   ```
 - `eval/is-transparent-to-return` — eval is not a scope: `return` inside it returns from the function around it, which is the opposite of what a sourced file does
   ```sh

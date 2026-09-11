@@ -6210,7 +6210,7 @@ const (
 // wrong one for a runtime.
 func PosixSemantics() Semantics {
 	return Semantics{
-		SplitParamExpansion:      Yes,
+		SplitParamExpansion: Yes,
 		// 2.11 has the shell read its input and execute commands as it goes,
 		// and 2.14's `eval` "shall be read and executed by the shell" in the
 		// same way. So text that will not parse further stops the reading
@@ -6219,7 +6219,7 @@ func PosixSemantics() Semantics {
 		// and ksh93 are the departures.
 		EvalRunsWhatItParsed:        Yes,
 		SourcedFileRunsWhatItParsed: Yes,
-		SplitCommandSubstitution: Yes,
+		SplitCommandSubstitution:    Yes,
 		// 2.7.2 puts noclobber on `>` and says nothing about `>>`, so
 		// appending still creates. Four of the panel comply; zsh departs.
 		NoclobberBlocksAppendCreate: No,

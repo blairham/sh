@@ -35,7 +35,7 @@ func TestFunctionCallIsALoopControlBoundary(t *testing.T) {
 		src, want string
 	}{
 		// A boundary, so the body's `break` has no loop to see: the word is
-		// the misuse the neighbouring axis answers, and the loop runs on.
+		// the misuse the neighboring axis answers, and the loop runs on.
 		{Yes, breakThroughACall, "body body after"},
 		{No, breakThroughACall, "after"},
 		// The count is clamped at the boundary rather than refused: there is
@@ -118,7 +118,7 @@ func TestABoundaryIsAskedAboutOnlyWhereItDecides(t *testing.T) {
 // axes under test, which each case sets for itself.
 func boundarySemantics() Semantics {
 	sem := PosixSemantics()
-	// A `break` that ends up with no loop at all is the neighbouring
+	// A `break` that ends up with no loop at all is the neighboring
 	// question. Silent and survivable here, so that what the rows show is
 	// where the word reached and not how the misuse is reported.
 	sem.LoopControlOutsideALoopIsFatal = No

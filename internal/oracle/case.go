@@ -9155,7 +9155,12 @@ echo unreachable`,
 	{
 		ID: "cond/terminal-test-closed-descriptors", Category: "conditions",
 		Snippet: `[[ -t 0 ]]; echo "t0=$?"; [[ -t 1 ]]; echo "t1=$?"; [[ -t 99 ]]; echo "t99=$?"`,
-		Why:     "-t asks whether a descriptor is a terminal, and under the harness none is: stdin is /dev/null and stdout a pipe, so every answer is a quiet false — which is also the honest permanent answer for a runner whose streams are io.Writers",
+		Why:     "-t asks whether a descriptor is a terminal, and under the harness none is: stdin is /dev/null and stdout a pipe, so every answer is a quiet false. It reads the descriptors the *run* was handed, which is why the row below redirects each one to something it can name — a shell that answered a fixed false, as this one did until #1967, passes this row and fails a session at a terminal",
+	},
+	{
+		ID: "cond/terminal-test-redirected-descriptors", Category: "conditions",
+		Snippet: `[[ -t 0 ]] </dev/null; echo "nul=$?"; [[ -t 1 ]] >/dev/null; echo "out=$?"; exec 3</dev/null; [[ -t 3 ]]; echo "fd3=$?"; echo x | { [[ -t 0 ]]; echo "pipe=$?"; }`,
+		Why:     "the same operator asked about descriptors the snippet put there itself rather than whatever the run was started with, so the row means the same thing under the harness and in a session at a terminal — measured both ways, byte-identical. The null device, a descriptor the shell opened with `exec`, and a pipe: four false answers, unanimous in every column that has `[[ ]]`",
 	},
 	{
 		ID: "cond/terminal-test-non-number-diverges", Category: "conditions",
@@ -9500,6 +9505,16 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		ID: "test/terminal-test-non-number-diverges", Category: "test",
 		Snippet: `test -t x; echo "st=$?"; test -t 99; echo "closed=$?"`,
 		Why:     "the TerminalTestRequiresANumber axis: bash and dash refuse the operand with their integer wordings at 2, ksh93 and zsh answer a plain false at 1 — while a numeric descriptor that is simply not a terminal is a quiet 1 everywhere",
+	},
+	{
+		ID: "test/terminal-test-redirected-descriptors", Category: "test",
+		Snippet: `[ -t 0 ] </dev/null; echo "nul=$?"; test -t 1 >/dev/null; echo "out=$?"; exec 3</dev/null; [ -t 3 ]; echo "fd3=$?"; [ -t 9 ]; echo "none=$?"`,
+		Why:     "what `[[ -t ]]`'s row asks, in the two spellings dash also has: the builtin reads the *shell's* descriptor table, so a number `exec` opened is as answerable as one of the named three and a number nothing is open at is a quiet false. Each descriptor is redirected by the snippet, so the row records the same bytes under the harness and at a terminal",
+	},
+	{
+		ID: "test/bare-terminal-test-is-descriptor-one", Category: "test",
+		Snippet: `[ -t ] >/dev/null; echo "bare=$?"; test -t >/dev/null; echo "tbare=$?"; [ ! -t ] >/dev/null; echo "not=$?"; [ -f ] >/dev/null; echo "f=$?"`,
+		Why:     "the BareTerminalTestIsDescriptorOne axis. With one argument POSIX gives `test` the string rule, and `-t` is a non-empty string: dash, bash, bash-as-sh and bash 3.2 answer 0, where ksh93 and zsh read it as `-t 1` and answer about the descriptor. Descriptor 1 is redirected to the null device so the split is a fact about the reading rather than about the run; `[ -f ]` is beside it because it is 0 in all six, which says the exception is the one word and not a general rule about an operator with no operand",
 	},
 
 	// --- times: the last special builtin, and the most divergent for its size

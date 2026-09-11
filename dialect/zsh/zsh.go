@@ -1028,6 +1028,10 @@ func Semantics() interp.Semantics {
 	// false rather than an integer complaint.
 	s.MissingFileIsOlder = interp.No
 	s.TerminalTestRequiresANumber = interp.No
+	// And a lone `-t` is `-t 1` rather than a non-empty string, the one
+	// reading this shell shares with ksh93: `[ -t ] >/dev/null` is 1 here
+	// and 0 in dash and bash.
+	s.BareTerminalTestIsDescriptorOne = interp.Yes
 	s.PipefailOption = interp.Yes
 	// A substituted element keeps the status its death produced, 128 plus
 	// the signal, the same as anywhere else.

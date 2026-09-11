@@ -6,13 +6,10 @@ package interp
 import (
 	"context"
 	"fmt"
-	"io"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 
-	"github.com/blairham/sh/internal/tty"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -168,42 +165,6 @@ func (r *Runner) selectEOF() error {
 
 // stdinIsTerminal reports whether the shell's input is a terminal.
 func (r *Runner) stdinIsTerminal() bool { return inputIsTerminal(r.Stdin) }
-
-// inputIsTerminal reports whether a stream a builtin is about to read is a
-// terminal — `select`'s prompt asks about the shell's input, `read -p`'s
-// about whatever -u resolved to.
-//
-// The kernel is asked, through internal/tty, and that is the whole of it. It
-// used to be a character-device test with a hand-rolled exception for the null
-// device, because the exact answer lived in `repl` and `repl` imports this
-// package. #525 is what the approximation cost: every character device that is
-// neither a terminal nor `/dev/null` read as a terminal — `/dev/zero`,
-// `/dev/random`, a serial port, a printer.
-//
-// Measured 2026-09-06 against bash 5.3.15, bash 3.2.57 and bash-as-sh, all
-// three identical: `read -p 'PROMPT-42 ' v < /dev/random` reads a line, exits
-// 0 and prints **no prompt**, where this shell printed one. `/dev/random` is
-// the case that says the question is about terminals rather than about the
-// null device — the read succeeds there, so there is every reason to have
-// prompted, and no shell in the panel does.
-//
-// The null-device exception is gone rather than moved. The ioctl answers
-// ENOTTY there without being told the path, so the `os.Stat(os.DevNull)` that
-// used to be justified here — a fixed path, outside the boundary, which a
-// `-deny /dev/null` policy could have turned into a terminal — is not needed
-// by anything any more.
-//
-// Still a question a Runner may ask: it is about a descriptor the Runner was
-// *handed*, not about the process. An embedded Runner may have been given a
-// pipe while the program around it sits at a terminal, and this answers about
-// the shell's input and not the program's.
-func inputIsTerminal(in io.Reader) bool {
-	f, ok := in.(*os.File)
-	if !ok {
-		return false
-	}
-	return tty.IsTerminal(f)
-}
 
 // selectMenu lays the items out the way the dialect does.
 //

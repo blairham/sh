@@ -129,6 +129,9 @@ func TestSemantics(t *testing.T) {
 		// plain false.
 		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.No},
 		{"TerminalTestRequiresANumber", s.TerminalTestRequiresANumber, interp.No},
+		// And a lone `-t` is `-t 1` rather than a non-empty string, the one
+		// reading this shell shares with ksh93.
+		{"BareTerminalTestIsDescriptorOne", s.BareTerminalTestIsDescriptorOne, interp.Yes},
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.No},
 		{"TestAndArithmeticUpdatePipelineStatus", s.TestAndArithmeticUpdatePipelineStatus, interp.No},
 		{"UnsetEndsTheProducedPipelineStatus", s.UnsetEndsTheProducedPipelineStatus, interp.Yes},

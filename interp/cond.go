@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -125,17 +124,16 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 	case "-z":
 		return s == "", nil
 	case "-t":
-		// A terminal test on a descriptor this shell may not even own.
-		// Never true here: the streams are io.Writers, which is the honest
-		// answer for a library rather than a guess about the process's
-		// descriptors — the same answer `test -t` gives. An operand that is
-		// not a number is a question of its own first.
-		if _, err := strconv.Atoi(strings.TrimSpace(s)); err != nil &&
+		// Whether this shell's descriptor is a terminal — the same question
+		// `test -t` asks and the same answer, through the same helper. An
+		// operand that is not a number is a question of its own first.
+		on, isNumber := r.terminalTest(s)
+		if !isNumber &&
 			r.ask(r.sem().TerminalTestRequiresANumber, "`[[ -t x ]]` refusing a non-number") {
 			return false, arithError{msg: Wording(r.diag().TestIntegerExpected,
 				"%[2]s: %[1]s: integer expected", s, "[[")}
 		}
-		return false, nil
+		return on, nil
 	case "-v":
 		// Whether a parameter is set, which is a question about the
 		// parameter and not about its value: a name holding the empty

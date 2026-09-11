@@ -1545,8 +1545,10 @@ const funcNamePunctuation = "!#%+,-./:@]^"
 // The test the name check needs: `_p_${w}` flattens to `_p_w`, a perfectly
 // good name for a different function, so "is the literal a name" cannot see
 // the difference and answered yes.
-func tokenHoldsAnExpansion(t Token) bool {
-	for _, s := range t.Spans {
+func tokenHoldsAnExpansion(t Token) bool { return spansHoldAnExpansion(t.Spans) }
+
+func spansHoldAnExpansion(spans []Span) bool {
+	for _, s := range spans {
 		if s.Kind != Literal {
 			return true
 		}
@@ -1585,7 +1587,11 @@ func (p *Parser) keywordFuncName(t Token) bool {
 // Per span rather than over [Token.Literal], because quoting is what decides
 // whether a character is a pattern and Literal has already dropped it.
 func holdsBarePatternCharacter(t Token) bool {
-	for _, s := range t.Spans {
+	return spansHoldBarePatternCharacter(t.Spans)
+}
+
+func spansHoldBarePatternCharacter(spans []Span) bool {
+	for _, s := range spans {
 		if s.Kind != Literal || s.Quoting != Unquoted {
 			continue
 		}
@@ -1652,8 +1658,13 @@ func (p *Parser) parseSimple() Command {
 				c.Redirs = append(c.Redirs, r)
 			}
 		case p.at(TokWord):
-			// A function definition announces itself only at the paren.
-			if !seenArg && len(c.Assigns) == 0 && p.looksLikeFuncDef() {
+			// A function definition announces itself only at the paren —
+			// which is why the words before it are read as arguments first
+			// and turned into names here, where the dialect gives one body
+			// several. An assignment ends that reading and is measured to:
+			// `x=1 a b () { … }` is a refusal in the shell that has the
+			// list, so the guard is the same one the first word takes.
+			if len(c.Assigns) == 0 && !seenArg && p.looksLikeFuncDef() {
 				return p.parseFuncPosix()
 			}
 			if !seenArg && p.atReservedPrecommand() {
@@ -1711,6 +1722,24 @@ func (p *Parser) parseSimple() Command {
 				p.aliasNextWord = false
 				p.expandAlias(map[string]bool{})
 				continue
+			}
+			// A word list in front of `()` is a definition's name list where
+			// the dialect gives one body several names — `clipcopy
+			// clippaste() { … }`, and `echo hi () { … }`, which is why this
+			// stands in the argument loop rather than in looksLikeFuncDef:
+			// nothing about the first word announces it.
+			//
+			// *After* the declaration readings on purpose. `typeset -aU e1=()`
+			// is an array declaration and not a definition of `typeset`,
+			// `-aU` and `e1=`, and the utility is what decides that: measured
+			// 2026-09-10, `a e1=() { echo X; }` defines `a` and `e1=` in the
+			// shell that has the list, where the same word after `typeset -a`
+			// is the array and the `()` after *it* is a parse error.
+			if len(c.Assigns) == 0 && seenArg && p.dialect.FunctionMultipleNames &&
+				p.argsCanBeFuncNames(c.Args) &&
+				p.canBeFuncName(p.tok.Spans, p.tok.Literal()) &&
+				p.lex.peekIsFuncParens() {
+				return p.parseFuncPosixNames(c)
 			}
 			seenArg = true
 			// The token *after* this word stands where an argument may, and
@@ -1957,6 +1986,16 @@ func (p *Parser) parseFuncPosix() Command {
 	} else {
 		p.next()
 	}
+	return p.parseFuncParensAndBody(fn)
+}
+
+// parseFuncParensAndBody reads `() compound` with the name or names already
+// on the declaration and the parser standing at the `(`.
+//
+// Split out because the names reach it three ways — one word, a word list,
+// and a word list with a redirection between it and the parentheses — and
+// everything after the `(` is the same production in all three.
+func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
 	p.next() // (
 	if !p.at(TokRightParen) {
 		p.failUnexpectedOperand(")")
@@ -2014,6 +2053,100 @@ func (p *Parser) parseFuncPosix() Command {
 		}
 	}
 	return fn
+}
+
+// parseFuncPosixNames is parseFuncPosix where the words already read are the
+// definition's earlier names — `clipcopy clippaste() { … }`, and `a b () { …
+// }` with a blank in front of the parentheses.
+//
+// The words arrive as a simple command's arguments because that is what they
+// are until the parentheses appear, so the declaration is read by the
+// ordinary path and the arguments are folded onto the front of its name list
+// afterwards. Each is read the way a name after the keyword is read, which is
+// what keeps the two spellings from drifting: a word holding an expansion
+// stays a word, and a name is its literal text everywhere else.
+//
+// A redirection written *between* the names and the parentheses is a
+// definition there too — `a b >out () { echo "$0"; }` sends both calls to the
+// file — and is not read here: the parentheses then follow the redirection's
+// target rather than a name, and the redirection is inside the header text a
+// formatter copies, so writing the body after it would emit the redirection
+// twice. See #1838; the refusal is the visible answer in the meantime.
+func (p *Parser) parseFuncPosixNames(c *SimpleCmd) Command {
+	cmd := p.parseFuncPosix()
+	fn, ok := cmd.(*FuncDecl)
+	if !ok || p.err != nil {
+		return cmd
+	}
+	last := FuncName{Name: fn.Name, Word: fn.NameWord}
+	names := make([]FuncName, 0, len(c.Args)+len(fn.AlsoNamed))
+	for _, w := range c.Args[1:] {
+		names = append(names, p.funcNameFromWord(w))
+	}
+	first := p.funcNameFromWord(c.Args[0])
+	fn.Name, fn.NameWord = first.Name, first.Word
+	fn.AlsoNamed = append(names, append(fn.AlsoNamed, last)...)
+	fn.Start = c.Start
+	return fn
+}
+
+// funcNameFromWord reads a word already parsed as one name of a definition.
+//
+// The same split [FuncDecl.NameWord] records: a word the shell would expand
+// is kept whole, because its literal text names a different function, and
+// everything else is its text. Which of the two applies is the dialect's
+// answer and not this word's.
+func (p *Parser) funcNameFromWord(w *Word) FuncName {
+	n := FuncName{Name: w.Literal()}
+	if p.dialect.FunctionNameExpands && spansHoldAnExpansion(w.Spans) {
+		n.Word = w
+	}
+	return n
+}
+
+// canBeFuncName reports whether a word standing in a definition's name list
+// after the first may be one of its names — the tests looksLikeFuncDef makes
+// of the word in front of the parentheses, minus the one that is not about
+// names at all.
+//
+// One production, so one rule: a bare pattern character is matched against the
+// filesystem and names nothing, and a name that is not text until the shell
+// runs is kept only where the dialect expands one. What is *not* asked here is
+// whether the word is an assignment — that reading belongs to the first word
+// of a command and nowhere else, so measured 2026-09-10 on zsh 5.9.2,
+// `a c=d () { :; }` defines `a` and `c=d` where `c=d () { :; }` alone is an
+// assignment of an empty array. `a*b c() { :; }` is `no matches found: a*b`
+// there and `a "b c" () { :; }` defines both names.
+func (p *Parser) canBeFuncName(spans []Span, literal string) bool {
+	if spansHoldBarePatternCharacter(spans) {
+		return false
+	}
+	if spansHoldAnExpansion(spans) {
+		return p.dialect.FunctionNameExpands
+	}
+	if p.dialect.FunctionNameIsAnyWord {
+		return true
+	}
+	return isFuncName(literal, p.dialect.FunctionNamePunctuation)
+}
+
+// wordCanBeFuncName is canBeFuncName asked of a word already parsed.
+func (p *Parser) wordCanBeFuncName(w *Word) bool {
+	return p.canBeFuncName(w.Spans, w.Literal())
+}
+
+// argsCanBeFuncNames is wordCanBeFuncName over every word already read, which
+// is what says an argument list standing in front of `()` is a name list.
+func (p *Parser) argsCanBeFuncNames(args []*Word) bool {
+	if len(args) == 0 {
+		return false
+	}
+	for _, w := range args {
+		if !p.wordCanBeFuncName(w) {
+			return false
+		}
+	}
+	return true
 }
 
 // failRedirectAt records a redirection operator the grammar did not want,
@@ -2157,10 +2290,29 @@ func (p *Parser) parseFuncKeyword() Command {
 			p.next()
 		}
 	}
+	// Where the body is optional a separator may stand in front of it, and
+	// the position the names ended at is kept: it is where an absent body is
+	// recorded as being. See [Dialect.FunctionKeywordBodyIsOptional].
+	afterNames := p.tok.Pos
 	p.skipNewlines()
+	if p.dialect.FunctionKeywordBodyIsOptional {
+		for p.err == nil && p.at(TokSemi) {
+			p.next()
+			p.skipNewlines()
+		}
+	}
 	body := p.tok
 	p.funcBody = true
 	if fn.Body = p.parseCommand(); fn.Body == nil {
+		if p.dialect.FunctionKeywordBodyIsOptional && p.err == nil {
+			// No body at all, which is a declaration rather than a failure:
+			// each name is defined with an empty one. An empty group is how
+			// that is said, so nothing downstream has a nil body to read as
+			// a refusal — and it is what the shell itself reports, printing
+			// `a () { }` for a name declared this way.
+			fn.Body = &Group{Start: afterNames, Stop: afterNames}
+			return fn
+		}
 		p.failUnexpectedAt(body, "", false)
 	}
 	return fn

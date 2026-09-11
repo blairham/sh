@@ -60,6 +60,20 @@ func Dialect() syntax.Dialect {
 	// all of those, so the grammar that has to *read* every case is the one
 	// that takes the construct, as above.
 	d.FunctionMultipleNames = true
+	// `function a b` with no body, and the `;` that may stand between a name
+	// list and the body it does have. One of the six declares each name with
+	// an empty body and the other five call the line a syntax error, and the
+	// corpus records both — so the grammar that has to *read* every case is
+	// the one that takes the construct, as above.
+	//
+	// EmptyCompoundBody does **not** come with it, which bounds what a case
+	// may be written as: a declaration with no body prints back as `{ }` and
+	// this grammar cannot read that, so a bodyless declaration belongs inside
+	// an `eval` string where the printer never reaches it. The three cases
+	// recording `{ }`, `( )` and an empty loop body as refusals are why the
+	// flag stays off — one of the six takes them and the corpus keeps the
+	// refusal, which is the one place this dialect is not the widest reading.
+	d.FunctionKeywordBodyIsOptional = true
 	// `'a b'() { … }` — the POSIX form's name read as any word, which one of
 	// the six defines and four refuse where the definition runs rather than
 	// while reading it. Only dash refuses to parse it, so the grammar that

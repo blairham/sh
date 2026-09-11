@@ -67,7 +67,15 @@ import (
 // declares one function each way in one snippet: ksh93's `typeset +f` writes
 // `f()` for the parenthesised spelling and the bare `g` for the keyword one,
 // so the two forms have to stand side by side for the row to say anything.
-const keywordFunctionsInTheCorpus = 25
+//
+// Twenty-six since #1686, whose case for the `;` between a name list and its
+// body is a keyword definition written without braces — the one shape where
+// the printer has to put a *newline* in front of the body, because on one
+// line its words read back as more names. The bodyless case beside it is
+// written inside an `eval` and is not counted here, which is deliberate:
+// printed bare it would swallow the statement after it, and the grammar this
+// test reads with has no empty brace group to print it as instead.
+const keywordFunctionsInTheCorpus = 26
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 	// The arrangement a formatter asks for, alongside the zero value that a

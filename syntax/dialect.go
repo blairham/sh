@@ -811,13 +811,11 @@ type Dialect struct {
 	// `then` there, because `if` and `true` were read as two more names and
 	// the `;` ended a definition with no body at all.
 	//
-	// That last reading is the one this parser does not have. A name list
-	// with no body is an *autoload declaration* there — `function af1` puts
-	// a stub in the table and calling it reads the file off `fpath`, at
-	// status 0 — and it is refused here as a definition whose body never
-	// began; see #1686. What it replaces is a worse answer rather than a
-	// better one: without the list, `function a b` read `b` as the body and
-	// defined `a` alone, silently, at status 0.
+	// That last reading is [Dialect.FunctionKeywordBodyIsOptional], which
+	// says what a name list with no body after it declares. What the list
+	// replaces is a worse answer rather than a better one: without it,
+	// `function a b` read `b` as the body and defined `a` alone, silently,
+	// at status 0.
 	//
 	// Each name is read by the rule the first one is read by, so
 	// [Dialect.FunctionKeywordNameIsAnyWord] and
@@ -827,12 +825,57 @@ type Dialect struct {
 	// on the definition is shared too, `function a b { echo "$0"; } > out`
 	// sending both calls to the file.
 	//
-	// The parenthesis spelling takes a name list too — `clipcopy clippaste()
-	// { … }` defines both there, and so does `echo hi () { … }`, which makes
-	// *any* word list followed by `()` a definition. That is a wider grammar
-	// change than this flag, it appears nowhere in the scripts on this
-	// machine, and it is not read here; see #1685.
+	// **The parenthesis spelling takes a name list too**, and this flag is
+	// read there as well — `clipcopy clippaste() { … }` defines both, and so
+	// does `echo hi () { … }`, which makes *any* word list followed by `()` a
+	// definition rather than only a word the grammar already liked. Measured
+	// 2026-09-10, all three at status 0 in zsh 5.9.2 and a syntax error at
+	// the `(` in the other five. Two shapes bound it, measured with them:
+	//
+	//	x=1 a b () { … }    `parse error near `()`` — an assignment ends it
+	//	a b ()              `parse error near `()`` — the body is not optional
+	//	                    in this spelling, unlike the keyword one above
+	//	a b >out () { … }   defines both, and the redirection is the body's
+	//
+	// So the names are read where a command's *arguments* are read, and the
+	// two things that are not names — an assignment before them, and a
+	// missing body after them — are refusals rather than readings (#1685).
+	// The third row is a definition there and is **not** read here: the
+	// parentheses follow the redirection's target rather than a name, and the
+	// redirection sits inside the header text a formatter copies from the
+	// source, so the body would write it a second time. See #1838.
 	FunctionMultipleNames bool
+
+	// FunctionKeywordBodyIsOptional lets a `function` keyword's name list be
+	// followed by a separator, and lets it end with no body at all. Each name
+	// is then defined with an **empty** body, which is what the shell reports
+	// for it — measured 2026-09-10 on zsh 5.9.2, `eval "function a b"` leaves
+	// `typeset +f` listing `a` and `b`, `functions a` printing `a () { }`,
+	// and a call to either printing nothing at status 0.
+	//
+	// It is not an autoload stub, which #1686 recorded it as and which the
+	// same run disproves: `fpath=(dir); autoload af1; functions af1` prints
+	// `# undefined` and `builtin autoload -X`, and a call to it reads the
+	// file, where `fpath=(dir); eval "function af1"; af1` prints nothing.
+	// The transcript that suggested otherwise was `function af1; af1`, and
+	// the `af1` after the `;` is the *body* rather than a call — which is
+	// the other half of this flag.
+	//
+	// **The separator half is why the two are one flag.** A `;` between the
+	// names and the body is taken there — `function a; echo B` defines `a`
+	// with body `echo B`, so `echo B` never runs where it stands — and
+	// without reading it, a bodyless declaration would swallow the separator
+	// and run the next command instead of binding it. Newlines already stand
+	// there in every dialect, and the `;` joins them. The body is absent
+	// exactly when no command follows: `function a b` at the end of the
+	// input, before a `}`, a `fi` or a `done`, before `&&` and before a `|`.
+	//
+	// Measured alongside it, and **not** modeled: with a body that is not a
+	// brace group, that shell reads the whole and-or list as the body —
+	// `function a; echo X && echo Y` prints `X` then `Y` from a call, where
+	// `function a { echo X; } && echo Y` prints `Y` then `X`. The body here
+	// is one command either way; see #1832.
+	FunctionKeywordBodyIsOptional bool
 
 	// TimeKeyword makes `time` a reserved word at the start of a pipeline,
 	// timing the whole pipeline — `time true | wc -l` measures both elements

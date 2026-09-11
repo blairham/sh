@@ -350,6 +350,15 @@ func (p *printer) braceGroup(list []*Stmt) {
 		p.str("\n" + p.pad() + "}")
 		return
 	}
+	if len(list) == 0 {
+		// An empty body has no statement to terminate, and terminating
+		// nothing wrote `{ ; }` — which does not parse in any dialect. The
+		// grammars that reach here are the one that takes an empty brace
+		// group and the one whose bodyless `function a b` declares an empty
+		// body; both read `{ }` back as what they printed.
+		p.str("{ }")
+		return
+	}
 	p.str("{ ")
 	p.stmts(list)
 	p.terminate()
@@ -530,7 +539,19 @@ func (p *printer) command(c Command) {
 			}
 		}
 		if x.Keyword {
-			p.str(" ")
+			// A newline where the body does not open with a `{`, because the
+			// name list is greedy: written on one line, `function a if true;
+			// then :; fi` reads `if` and `true` back as two more *names* and
+			// `function a echo B` reads both words as names, so the program
+			// that came back defined functions nobody wrote and ran nothing.
+			// A newline ends the list in every dialect that has one, which is
+			// what makes this the separator to use rather than the `;` only
+			// one grammar reads there.
+			if _, braced := x.Body.(*Group); braced {
+				p.str(" ")
+			} else {
+				p.str("\n" + p.pad())
+			}
 		} else {
 			p.str("() ")
 		}

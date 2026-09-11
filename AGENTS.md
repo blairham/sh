@@ -567,11 +567,20 @@ so was only as wide as the set it walked.
 
 It exits nonzero when it finds something, which it is expected to. It is
 **not** in `make check` and must not be — thousands of processes against
-three thousand rows — and `docs/spec/semantics.md` has the three-way triage
+three thousand rows — and `docs/spec/semantics.md` has the four-way triage
 its output needs: an unpinned axis is a missing row, an axis the corpus
-cannot reach, **or a disagreement that is not there**, and only re-measuring
-the panel tells you which. `ARGS='-only <Field>'` sweeps one axis while
-triaging it.
+cannot reach, **a disagreement that is not there**, or an axis whose *type*
+is too narrow for the panel — and only re-measuring the shells tells you
+which. `ARGS='-only <Field>'` sweeps one axis while triaging it.
+
+`ARGS=-presets` is the cheap half and takes about a second: it starts no
+shell at all and asks the four dialect vectors what they hold, which finds
+the one shape the flip test structurally cannot — an axis whose two values
+both reach code, so a flip fails something, while one of them stands for a
+reading no shell has (#2029). It reports the axes every dialect answers
+alike and the legal values no dialect holds. Both are lists to re-measure,
+not verdicts: a preset is not the whole of a dialect, and zsh's `localtraps`
+reaches an answer no preset holds.
 
 `make startup` times process start to a first prompt, and the `-c` path a
 script's every subshell pays, against the real shells on the same machine in

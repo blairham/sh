@@ -12731,7 +12731,7 @@ it; a boundary guard that read only the packages holding a `Boundary`
 while every dialect escaped it. A guarantee that is *checked* rather than
 *enumerated* is only ever as wide as the set it walks.
 
-### Three things an unpinned axis can be
+### Four things an unpinned axis can be
 
 The list the sweep produces is not a list of missing tests. It is a list
 of axes whose status is *unknown*, and triage separates three cases that
@@ -12747,12 +12747,40 @@ need opposite fixes:
    the axis is not an unpinned measurement but a **false** one, and
    pinning it with a row would carve the false fact into the golden
    record. Delete it, with the measurement.
+4. **The type cannot express the panel.** The disagreement is real and the
+   axis is real, but one of its legal values stands for a reading no shell
+   has — an `Answer` where the panel splits three ways, and the spare
+   value quietly became a fiction. Widen it to a policy with the measured
+   values, as `CompoundBodyDecidesThePipelineStatusRecord` was widened.
+   Never pin the fictional value with a row.
 
 **The discriminator between 1 and 3 is to re-measure the panel, and it is
 not optional.** An axis nothing exercises is precisely where a mistaken
 measurement survives: nothing has ever contradicted it. Landing rows for
 the whole list without re-measuring pins whichever of the two each one is,
 and leaves nobody able to say which was done.
+
+### The fourth one is invisible to the flip test
+
+An axis whose type is too narrow looks **pinned**, not vacuous. Both of its
+values reach different code, so flipping between them fails a row, the
+sweep calls it healthy and moves on — while half of it is still a claim
+about a shell that does not exist.
+
+What sees it is asking the presets rather than the corpus, and that costs
+no processes at all. `make axis-sweep ARGS=-presets` reports two lists in
+about a second:
+
+- **axes every dialect answers the same way** — an axis exists to record a
+  disagreement, and these record none; and
+- **axes with a legal value no dialect holds** — a reading nothing in the
+  panel exhibits, marked when no axis of that type holds it anywhere.
+
+Neither is a verdict, and the second in particular has a trap: a preset is
+not the whole of a dialect. `FunctionLocalTraps` is answered alike by all
+four presets and its other value is held by none of them, and it is
+nonetheless real — zsh reaches it through the `localtraps` option at run
+time. Both lists are things to re-measure, exactly like the unpinned list.
 
 ### A flip to `Unspecified` asks a different question
 

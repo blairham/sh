@@ -12,21 +12,22 @@ import (
 // runtimeDeps is every module outside this one that the shipped binary
 // links, and the whole list.
 //
-// It was empty until #2045. That is worth saying plainly, because "this
-// module has no runtime dependencies at all" was written in
-// internal/policy/alias.go as an argument — it is why a platform alias is a
-// compile-time table and not a lookup — and an argument resting on a
-// property nothing checks is an argument that quietly stops being true.
+// It is empty, and that is the point. "This module has no runtime
+// dependencies at all" is written in internal/policy/alias.go as an argument
+// — it is why a platform alias is a compile-time table and not a lookup —
+// and an argument resting on a property nothing checks is an argument that
+// quietly stops being true.
 //
-// `golang.org/x/text` is here because a sandbox deny had to cover the two
-// ways of writing one character and the standard library will not compose
-// one. The reasoning is in internal/policy/fold.go. The point of the list is
-// that the next entry costs somebody a deliberate edit to this line and a
-// sentence saying why, which is the price a dependency should cost a
-// substrate.
-var runtimeDeps = []string{
-	"golang.org/x/text",
-}
+// It was briefly not empty. #2045 needed Unicode decomposition data to close
+// a sandbox escape, took `golang.org/x/text/unicode/norm` to get it, and the
+// table came back into the repository a day later as internal/unorm — the
+// same answer internal/eastasian had already reached for East Asian Width.
+// The list is kept rather than deleted because a guard that exists only
+// while it has something to hold is a guard that will be missing next time.
+//
+// An entry here costs a deliberate edit and a sentence saying why, which is
+// the price a dependency should cost a substrate.
+var runtimeDeps = []string{}
 
 // TestTheDependencySurfaceIsPinned fails when the shipped binary starts
 // linking something new.

@@ -6,7 +6,7 @@ package policy
 import (
 	"strings"
 
-	"golang.org/x/text/unicode/norm"
+	"github.com/blairham/sh/internal/unorm"
 )
 
 // A deny also covers the other spellings a filesystem answers to (#2044).
@@ -62,37 +62,41 @@ import (
 // second (#2045). It is the identical bug: one object, a class of names,
 // and a rule that knew one member of it.
 //
-// Closing it is what put `golang.org/x/text/unicode/norm` in this module's
-// go.mod, and that was a deliberate spend rather than an oversight. Nothing
-// in the standard library composes or decomposes a character — `unicode`
-// classifies a combining mark but will not join it to the letter in front of
-// it — so no table-free comparison gets the two spellings to meet, and the
-// alternatives were worse: reading the directory to learn the stored name
-// fails on a `0111` traversable-but-unreadable directory, which
-// `internal/opened`'s traverseFlags exists to keep working, and would fall
-// back to the written name in exactly the place a policy most wants to be
-// right about; `F_GETPATH` was already measured and rejected under
-// concurrent rename (#1114).
+// Nothing in the standard library composes or decomposes a character —
+// `unicode` classifies a combining mark but will not join it to the letter in
+// front of it — so the comparison needs Unicode data that has to come from
+// somewhere. It comes from internal/unorm, whose tables this repository
+// generates, for the reason internal/eastasian generates a width table
+// instead of importing one. That package states the argument and carries
+// Unicode's own conformance file as the proof.
 //
-// TestTheDependencySurfaceIsPinned records what that spend bought and fails
-// on anything further, so the next addition is a decision somebody makes
-// rather than one that arrives.
+// The alternatives to a fold were worse and are recorded in #2045: reading
+// the directory to learn the stored name fails on a `0111`
+// traversable-but-unreadable directory, which `internal/opened`'s
+// traverseFlags exists to keep working, and would fall back to the written
+// name in exactly the place a policy most wants to be right about;
+// `F_GETPATH` was already measured and rejected under concurrent rename
+// (#1114).
 func foldMatch(pattern, name string) bool {
 	return match(foldPath(pattern), foldPath(name))
 }
 
 // foldPath is the form two names of one file share.
 //
-// Composed first so that the case mapping sees whole characters, lowered,
-// and composed again because lowering can take a character apart —
-// `İ` (U+0130) lowers to `i` followed by a combining dot — and a form that
-// was canonical on the way in has to be canonical on the way out or two
-// inputs that should meet would not.
+// Decomposed first so that the case mapping sees one character per mark,
+// lowered, and decomposed again because lowering can take a character apart —
+// `İ` (U+0130) lowers to `i` followed by a combining dot — and a form that was
+// canonical on the way in has to be canonical on the way out, or two inputs
+// that should meet would not.
 //
-// NFC rather than NFD because it is the shorter of the two and the choice is
-// free: the only requirement is that both spellings land on the same one.
-// Separators are ASCII and no normalization moves them, so the path keeps
+// NFD rather than NFC because canonical equivalence *is* equality of NFD:
+// composing afterwards would be work whose result is thrown away, and it is
+// the half of a normalizer that needs the composition table and the
+// exclusions list. Nothing here shows the folded form to anybody — it is a
+// key, compared and discarded.
+//
+// Separators are ASCII and no canonical mapping moves them, so the path keeps
 // its components and match() still sees the shape it expects.
 func foldPath(s string) string {
-	return norm.NFC.String(strings.ToLower(norm.NFC.String(s)))
+	return unorm.NFD(strings.ToLower(unorm.NFD(s)))
 }

@@ -314,7 +314,7 @@ func BenchmarkSpawn(b *testing.B) {
 // report replaces the benchmark's own ns/op with the time the operation took.
 //
 // Necessary because several loop bodies here contain setup the timer should
-// not see: a connection dialled so that a handshake can be timed without it, a
+// not see: a connection dialed so that a handshake can be timed without it, a
 // rotation that falls due mid-loop. Timing the region by hand and reporting the
 // mean is how those stay out of the number.
 func report(b *testing.B, total time.Duration, n int) {

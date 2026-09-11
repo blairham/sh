@@ -57,6 +57,16 @@ type Job struct {
 	// keeps the field's one write on the near side of closing ready. See
 	// settlePID.
 	pidOnce sync.Once
+	// ownGroup says the process is the leader of a process group of its own,
+	// which is what makes it signalable *as a group*. False where the job
+	// runs in the shell's own group — a background job started with the
+	// monitor off, which is what every shell in the panel does (#1738) — and
+	// then a signal aimed at the group would be aimed at the shell.
+	//
+	// Written inside pidOnce with the PID, for the reason the PID is written
+	// there: the two are one fact about one process, and a reader that saw
+	// the pid without knowing which kind of target it is would have to guess.
+	ownGroup bool
 }
 
 // settlePID records the process this job is answered by, and does it once.
@@ -85,6 +95,20 @@ type Job struct {
 func (j *Job) settlePID(pid int) {
 	j.pidOnce.Do(func() {
 		j.PID = pid
+		close(j.ready)
+	})
+}
+
+// settleStartedPID is settlePID for a process this shell has just started,
+// which is the one caller that knows whether it was given a group of its own.
+//
+// One write of both fields, inside the same Once: whether the pid names a
+// group or a process is as much a fact about it as the number, and a reader
+// that had the one without the other would have to guess which signal to
+// send. See Job.ownGroup.
+func (j *Job) settleStartedPID(pid int, ownGroup bool) {
+	j.pidOnce.Do(func() {
+		j.PID, j.ownGroup = pid, ownGroup
 		close(j.ready)
 	})
 }
@@ -477,6 +501,14 @@ func (r *Runner) announceJob(job *Job) {
 	if !r.ask(r.sem().AnnouncesBackgroundJob, "a background job being announced") {
 		return
 	}
+	if !r.monitor &&
+		!r.ask(r.sem().AnnouncesBackgroundJobWithoutTheMonitor,
+			"a background job being announced with the monitor off") {
+		// The monitor is off and this dialect stops announcing with it. Two
+		// of the panel carry on and two go quiet, which is why it is asked
+		// rather than assumed either way — see the axis (#1738).
+		return
+	}
 	r.errf("%s\n", Wording(r.diag().JobStarted, "[%[1]d] %[2]d", len(r.jobs), job.PID))
 }
 
@@ -492,6 +524,14 @@ func (r *Runner) announceJob(job *Job) {
 // once. Reporting it and then listing it again would be saying it twice.
 func (r *Runner) FinishedJobNotices() []string {
 	if !r.JobControl {
+		return nil
+	}
+	if !r.monitor {
+		// Shared ground rather than an axis: measured 2026-09-10 on a
+		// pseudo-terminal with the monitor off, no shell in the panel says
+		// anything when a background job finishes — not even the two that
+		// still announce its *start*. dash's late report of one with an empty
+		// command is its own oddity, measured and not reproduced (#1738).
 		return nil
 	}
 	// Before the notices are built rather than after: a job `bg` let go of
@@ -796,7 +836,12 @@ func (r *Runner) addStoppedJob(pid int, argv []string, sig syscall.Signal) {
 	// Through settlePID rather than as a field, so that the field's one write
 	// is the one the channel publishes. A job stopped in the foreground has
 	// its process from the start; there is nothing left to settle later.
-	job.settlePID(pid)
+	//
+	// With a group of its own, which is what a foreground command this shell
+	// was watching always has: the group is how it came to be stopped at all
+	// — see setProcessGroup's caller, where the foreground half does not ask
+	// about the monitor.
+	job.settleStartedPID(pid, true)
 	r.jobs = append(r.jobs, job)
 	r.setLastJob(job)
 	r.announceStopped(job)

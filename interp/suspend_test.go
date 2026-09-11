@@ -57,7 +57,16 @@ func jobSessionShaped(t *testing.T, f *fakeJobs, src string, jobControl bool, sh
 		// the shell is a session. What an interrupt does to the line is asked
 		// of the second.
 		Name: "testsh", JobControl: jobControl, Interactive: jobControl,
+		// And a terminal, which is what a prompt has and what the monitor is
+		// granted on the strength of. Both job notices ride on the monitor —
+		// with it off the start notice is an axis and the finish notice is
+		// silence in every column (#1738) — so a session built without one
+		// would be a shape no route produces.
+		Terminal: jobControl,
 	})
+	if jobControl {
+		r.SetInteractiveMonitor()
+	}
 	r.WaitForCommand = func(int) (Wait, error) { return f.next(), nil }
 	r.SignalGroup = func(int, syscall.Signal) error { return nil }
 	r.Foreground = func(pgid int) error {

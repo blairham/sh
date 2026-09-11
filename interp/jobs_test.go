@@ -44,32 +44,67 @@ func TestDollarBangIsAnswerableImmediately(t *testing.T) {
 	}
 }
 
-func TestBackgroundJobIsItsOwnProcessGroup(t *testing.T) {
+func TestABackgroundJobLeadsItsOwnGroupOnlyUnderTheMonitor(t *testing.T) {
 	// docs/design.md committed to real process groups before any code
 	// existed, on the grounds that a shell whose jobs are goroutines cannot
 	// deliver a signal to a job or hand it the terminal. This is that
-	// commitment, checked against the kernel rather than against the code.
+	// commitment, checked against the kernel rather than against the code —
+	// and #1738 is the other half of it: the promise is the *monitor's*, so
+	// with the monitor off the job runs in the shell's own group, which is
+	// what every shell in the panel does.
 	if !HasProcessGroups {
 		t.Skip("process groups are not available on this platform")
 	}
-	// The one shape that cannot use run(): the question is about a process,
-	// and run() does not come back until there is no process left to ask.
-	got, _ := runLeavingJobsRunning(t, `/bin/sleep 1 & printf "%s" "$!"`, nil)
-	pid, err := strconv.Atoi(strings.TrimSpace(got))
-	if err != nil || pid <= 0 {
-		t.Fatalf(`$! = %q, want a pid`, got)
-	}
-
-	pgid, err := syscall.Getpgid(pid)
-	if err != nil {
-		t.Skipf("the job already exited: %v", err)
-	}
-	if pgid != pid {
-		t.Errorf("job pgid = %d, want %d — it should lead its own group", pgid, pid)
-	}
 	ours, err := syscall.Getpgid(syscall.Getpid())
-	if err == nil && pgid == ours {
-		t.Errorf("the job shares this process's group (%d), so it is not a job", ours)
+	if err != nil {
+		t.Skipf("this process has no group to compare against: %v", err)
+	}
+	for _, tc := range []struct {
+		name    string
+		src     string
+		ownsOne bool
+	}{
+		{
+			// The monitor, turned on the way a script turns it on. The
+			// terminal is what the dialect may require of `set -m`, and this
+			// runner is told it has one so the request is granted rather than
+			// refused over an axis this test is not about.
+			name: "with the monitor on", src: `set -m; /bin/sleep 1 & printf "%s" "$!"`, ownsOne: true,
+		},
+		{
+			// And off, which is every route that is not a prompt. Measured
+			// 2026-09-11 by having the job ask the kernel for its own group:
+			// bash 5.3.15, dash, ksh93 and zsh 5.9.2 all answer the shell's.
+			name: "with the monitor off", src: `/bin/sleep 1 & printf "%s" "$!"`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The one shape that cannot use run(): the question is about a
+			// process, and run() does not come back until there is no process
+			// left to ask.
+			got, _ := runLeavingJobsRunning(t, tc.src, func(r *Runner) { r.Terminal = true })
+			pid, err := strconv.Atoi(strings.TrimSpace(got))
+			if err != nil || pid <= 0 {
+				t.Fatalf(`$! = %q, want a pid`, got)
+			}
+			pgid, err := syscall.Getpgid(pid)
+			if err != nil {
+				t.Skipf("the job already exited: %v", err)
+			}
+			if tc.ownsOne {
+				if pgid != pid {
+					t.Errorf("job pgid = %d, want %d — it should lead its own group", pgid, pid)
+				}
+				if pgid == ours {
+					t.Errorf("the job shares this process's group (%d), so it is not a job", ours)
+				}
+				return
+			}
+			if pgid != ours {
+				t.Errorf("job pgid = %d, want this process's %d — the monitor is off, so there is no group to promise",
+					pgid, ours)
+			}
+		})
 	}
 }
 

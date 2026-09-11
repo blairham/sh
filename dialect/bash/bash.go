@@ -802,6 +802,11 @@ func Semantics() interp.Semantics {
 	// the only shell in the panel with the letter.
 	s.ExportTakesTheAttributeOff = interp.Yes
 	s.AnnouncesBackgroundJob = interp.Yes
+	// And it keeps announcing with the monitor off, which is measured
+	// 2026-09-10 on a pseudo-terminal: `set +m` then a background job still
+	// prints `[1] <pid>` here where zsh goes quiet. The other end of the job
+	// is silent in every column (#1738).
+	s.AnnouncesBackgroundJobWithoutTheMonitor = interp.Yes
 	// bash 5.3 leaves the monitor off under `-i script.sh` with no terminal,
 	// and says so twice — `cannot set terminal process group` and `no job
 	// control in this shell`. It grants an explicit `set -m` there all the

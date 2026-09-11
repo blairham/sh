@@ -50,7 +50,14 @@ func runnerWithAFinishedJob(t *testing.T) *interp.Runner {
 	sem := interp.PosixSemantics()
 	sem.AnnouncesBackgroundJob = interp.No
 	sem.JobsShowBackgroundCommand = interp.Yes
-	r := &interp.Runner{Semantics: &sem, JobControl: true, Stdout: &strings.Builder{}, Stderr: &strings.Builder{}}
+	// A terminal and the monitor with it, which is what a prompt has: both
+	// job notices ride on the monitor, and with it off the finish notice is
+	// silence in every column (#1738).
+	r := &interp.Runner{
+		Semantics: &sem, JobControl: true, Terminal: true,
+		Stdout: &strings.Builder{}, Stderr: &strings.Builder{},
+	}
+	r.SetInteractiveMonitor()
 	f, perr := syntax.Parse("true &", syntax.Core())
 	if perr != nil {
 		t.Fatal(perr)

@@ -413,6 +413,9 @@ func TestADeniedSignalToAJobNeverReachesTheHook(t *testing.T) {
 			sem := PosixSemantics()
 			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Stdout: &out, Stderr: &errs, Gate: tc.gate,
+				// So the `set -m` above is granted rather than refused over
+				// an axis this test is not about.
+				Terminal: true,
 				SignalGroup: func(int, syscall.Signal) error {
 					mu.Lock()
 					defer mu.Unlock()
@@ -420,7 +423,11 @@ func TestADeniedSignalToAJobNeverReachesTheHook(t *testing.T) {
 					return nil
 				},
 			})
-			f, err := syntax.Parse("/bin/sleep 30 &\nkill -TERM %1", syntax.Core())
+			// Under the monitor, which is what makes the job a *group* and so
+			// the hook's to reach: with the monitor off it has no group of
+			// its own and `kill %1` reaches the process instead (#1738),
+			// which is a different route and is covered in gatereach_test.go.
+			f, err := syntax.Parse("set -m\n/bin/sleep 30 &\nkill -TERM %1", syntax.Core())
 			if err != nil {
 				t.Fatal(err)
 			}

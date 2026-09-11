@@ -3095,11 +3095,27 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	// again: `basename --bad` complains as `basename` in every shell in the
 	// panel and complained as `/usr/bin/basename` here.
 	cmd.Args[0] = argv[0]
-	if r.bg != nil || r.WaitForCommand != nil {
+	if (r.bg != nil && r.monitor) || (r.bg == nil && r.WaitForCommand != nil) {
 		// A process group of its own, which is what makes signaling and
 		// terminal ownership answerable at all — for a foreground command as
 		// much as a background one, once there is something able to notice it
 		// stopped.
+		//
+		// A background job gets one **only while the monitor is on**, which is
+		// what every shell in the panel does and what this did not (#1738).
+		// Measured 2026-09-11 with the monitor off — the default on any route
+		// that is not a prompt — by having the job ask the kernel for its own
+		// group: bash 5.3.15, dash, ksh93 and zsh 5.9.2 all answer the
+		// *shell's* group, and this answered a group of its own. A job in a
+		// group of its own is a job the shell can signal as a group, hand the
+		// terminal to and stop; promising that with the monitor off promises
+		// something the option says is not happening.
+		//
+		// The foreground half is unchanged and deliberately so: it is not a
+		// promise about job control but the only way a shell that is watching
+		// a command can stop or interrupt it, and it is asked of
+		// WaitForCommand — which is the front end saying there is something
+		// able to notice.
 		setProcessGroup(cmd)
 	}
 	cmd.Dir = r.Dir
@@ -3134,7 +3150,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// while this goroutine blocks on the process. Once, and settlePID says
 		// why: a job that starts a second external command reaches this again,
 		// by which time the shell has already read the field.
-		r.bg.settlePID(cmd.Process.Pid)
+		r.bg.settleStartedPID(cmd.Process.Pid, r.monitor)
 		err := cmd.Wait()
 		r.status = r.exitStatus(err)
 		r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})

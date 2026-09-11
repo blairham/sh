@@ -790,6 +790,9 @@ func Semantics() interp.Semantics {
 	// line under it, and the script ends there.
 	s.ExportTakesTheAttributeOff = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
+	// And with the monitor off as well, as bash does — measured 2026-09-10,
+	// `[1]\t<pid>` with `set +m` in force (#1738).
+	s.AnnouncesBackgroundJobWithoutTheMonitor = interp.Yes
 	// The panel's dissenter, and the only cell of the interactive table that
 	// was measured and not reproduced: `monitor on` and `imBE` under
 	// `-i script.sh` with no terminal anywhere, announcing its background

@@ -197,6 +197,11 @@ func TestFinishedJobsAreReportedBeforeThePrompt(t *testing.T) {
 	sem.AnnouncesBackgroundJob = interp.No
 	sem.JobsShowBackgroundCommand = interp.Yes
 	r.Semantics = &sem
+	// And a monitor, which is what a prompt runs: the finish notice rides on
+	// it, and with it off no shell in the panel says anything about a job
+	// that ended (#1738).
+	r.Terminal = true
+	r.SetInteractiveMonitor()
 	s := Shell{Runner: r, In: in, Out: &out, Err: &errs}
 	if _, err := s.Run(t.Context()); err != nil {
 		t.Fatal(err)
@@ -225,6 +230,11 @@ func TestNoNoticeInTheMiddleOfAConstruct(t *testing.T) {
 	sem.AnnouncesBackgroundJob = interp.No
 	sem.JobsShowBackgroundCommand = interp.Yes
 	r.Semantics = &sem
+	// And a monitor, which is what a prompt runs: the finish notice rides on
+	// it, and with it off no shell in the panel says anything about a job
+	// that ended (#1738).
+	r.Terminal = true
+	r.SetInteractiveMonitor()
 	s := Shell{Runner: r, In: in, Out: &out, Err: &errs}
 	if _, err := s.Run(t.Context()); err != nil {
 		t.Fatal(err)

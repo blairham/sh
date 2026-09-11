@@ -154,7 +154,12 @@ func (r *Runner) reevalFlagged(e *syntax.ParamExpr, words []string, quoted bool)
 // matches only when `GLOB_SUBST` makes the *result* of the whole expansion a
 // pattern, which is the enclosing expansion's question and not this one's.
 func (r *Runner) reevalText(text string) ([]string, bool) {
-	spans := r.parseSpans(syntax.HeredocSpans(text, r.dialect()))
+	// Text that ran out inside an expansion is refused rather than read as
+	// the expansion the lexer had to invent to hand it back; see rawSpans.
+	spans, ok := r.rawSpans(text)
+	if !ok {
+		return nil, false
+	}
 	for i := range spans {
 		if spans[i].Kind != syntax.Literal {
 			spans[i].Quoting = syntax.Unquoted

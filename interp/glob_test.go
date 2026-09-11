@@ -162,35 +162,45 @@ func TestASubstitutedWordInsideAnUnmatchedPositionIsNotMatched(t *testing.T) {
 // `LANG=C` and not under `LANG=en_US.UTF-8` (#1500).
 func TestASubstitutedWordKeepsItsQuotingAndIsMatchedWithTheWordAroundIt(t *testing.T) {
 	dir := globDir(t)
-	for _, tc := range []struct{ name, src, want string }{
-		{"a quoted operand is text", `unset u; printf "[%s]" ${u:-"a.[a-c]"}`, `[a.[a-c]]`},
-		{"and `+` is the same rule", `u=set; printf "[%s]" ${u:+"a.[a-c]"}`, `[a.[a-c]]`},
-		{"and so is the colonless spelling", `unset u; printf "[%s]" ${u-"a.[a-c]"}`, `[a.[a-c]]`},
-		{"a single-quoted operand too", `unset u; printf "[%s]" ${u:-'a.[a-c]'}`, `[a.[a-c]]`},
+	// BareBraceNestsInExpansion for the two braced rows, and only for them:
+	// without it the expansion closes at the first `}` and the operand is
+	// never a group at all, which is a different reading of the text rather
+	// than a different answer about quoting. See #1587 — the flag is off in
+	// the core, so the row has to ask for the grammar it measures.
+	braces := func(d *syntax.Dialect) { d.BareBraceNestsInExpansion = true }
+	for _, tc := range []struct {
+		name, src, want string
+		enable          func(*syntax.Dialect)
+	}{
+		{"a quoted operand is text", `unset u; printf "[%s]" ${u:-"a.[a-c]"}`, `[a.[a-c]]`, nil},
+		{"and `+` is the same rule", `u=set; printf "[%s]" ${u:+"a.[a-c]"}`, `[a.[a-c]]`, nil},
+		{"and so is the colonless spelling", `unset u; printf "[%s]" ${u-"a.[a-c]"}`, `[a.[a-c]]`, nil},
+		{"a single-quoted operand too", `unset u; printf "[%s]" ${u:-'a.[a-c]'}`, `[a.[a-c]]`, nil},
 		// The unquoted operand still matches, and it matches as part of the
 		// word it sits in rather than on its own.
-		{"an unquoted operand is a pattern", `unset u; printf "[%s]" ${u:-a.[a-c]}`, `[a.b]`},
-		{"matched with the word around it", `unset u; printf "[%s]" a.${u:-[a-c]}`, `[a.b]`},
-		{"and the text around it counts", `unset u; printf "[%s]" q.${u:-[a-c]}`, `[q.[a-c]]`},
+		{"an unquoted operand is a pattern", `unset u; printf "[%s]" ${u:-a.[a-c]}`, `[a.b]`, nil},
+		{"matched with the word around it", `unset u; printf "[%s]" a.${u:-[a-c]}`, `[a.b]`, nil},
+		{"and the text around it counts", `unset u; printf "[%s]" q.${u:-[a-c]}`, `[q.[a-c]]`, nil},
 		// Half quoted and half not is the discriminating shape: one field,
 		// with a live metacharacter beside a marked one.
-		{"quoting is per span, not per operand", `unset u; printf "[%s]" ${u:-"a."[a-c]}`, `[a.b]`},
-		{"the other way round", `unset u; printf "[%s]" ${u:-a."[a-c]"}`, `[a.[a-c]]`},
+		{"quoting is per span, not per operand", `unset u; printf "[%s]" ${u:-"a."[a-c]}`, `[a.b]`, nil},
+		{"the other way round", `unset u; printf "[%s]" ${u:-a."[a-c]"}`, `[a.[a-c]]`, nil},
 		// The braces are the operand's own stage and they run before the
 		// match, so a braced operand keeps its quoting through both. It is
 		// the row that says the brace branch and the plain one answer the
 		// same question — a fix applied to one of them and not the other
 		// would pass every row above (zsh 5.9.2 gives the same two fields).
-		{"a braced operand keeps its quoting", `unset u; printf "[%s]" ${u:-{a,q}."[a-c]"}`, `[a.[a-c]][q.[a-c]]`},
-		{"and an unquoted one still matches", `unset u; printf "[%s]" ${u:-{a,q}.[a-c]}`, `[a.b][q.[a-c]]`},
+		{"a braced operand keeps its quoting", `unset u; printf "[%s]" ${u:-{a,q}."[a-c]"}`, `[a.[a-c]][q.[a-c]]`, braces},
+		{"and an unquoted one still matches", `unset u; printf "[%s]" ${u:-{a,q}.[a-c]}`, `[a.b][q.[a-c]]`, braces},
 		// A backslash in the operand is text and stays in the text, which
 		// is #1222's rule reaching this path: dropping the marks dropped
 		// it with them, so `v=${u:-"a\b"}` assigned `ab` where all six
 		// assign three characters (measured 2026-09-08).
-		{"a backslash in the operand survives", `unset u; v=${u:-"a\b"}; printf "[%s]" "$v"`, `[a\b]`},
+		{"a backslash in the operand survives", `unset u; v=${u:-"a\b"}; printf "[%s]" "$v"`, `[a\b]`, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := runIn(t, dir, tc.src); got != tc.want {
+			got, _ := runGrammar(t, tc.src, tc.enable, func(r *Runner) { r.Dir = dir })
+			if got != tc.want {
 				t.Errorf("%s = %s, want %s", tc.src, got, tc.want)
 			}
 		})

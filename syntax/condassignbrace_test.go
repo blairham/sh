@@ -80,22 +80,84 @@ func TestABareBraceInAQuotedExpansionDoesNotNest(t *testing.T) {
 	}
 }
 
-// Unquoted, the same brace *does* have to balance, because there it is a
-// brace-expansion group and the group is what says how far the operand
-// reaches.
+// Unquoted, whether the same brace has to balance is a dialect question —
+// #1587, the other half of #1586.
 //
-// The quoting is the whole of the difference and it is measured:
-// `printf "[%s]" ${u:-{a,q}.z}` is `[a.z][q.z]` in zsh — two fields, so the
-// operand ran to `.z` — against the single field `[{a,q.z}]` for the same line
-// in quotes. Without this row the fix for #1586 reads as "a bare brace never
-// nests", which is a rule this shell measurably does not have.
-func TestABareBraceOutsideQuotesStillBalances(t *testing.T) {
-	// Unquoted and unbalanced: the operand is still looking for its `}`.
-	if _, err := Parse(`echo ${u:-{a,q}`, Core()); err == nil {
-		t.Error("Parse of an unbalanced unquoted group succeeded, want a failure")
+// The panel splits two against three, so the flag carries it rather than the
+// scanner. Measured 2026-09-10 with `unset u; printf "[%s]" ${u:-{a,q}.z}`:
+// zsh 5.9.2 and ksh93 answer `[a.z][q.z]`, two fields, so the operand ran to
+// `.z` and the group was then expanded; bash 5.3.15, bash 3.2.57 and dash
+// answer the single field `[{a,q.z}]`, the operand stopping at the first `}`
+// and `.z}` arriving as literal text.
+//
+// Both halves are here because either alone reads as a rule this shell does
+// not have: with the flag on and no off row it is "a bare brace always
+// balances", and with it off and no on row it is "a bare brace never nests".
+func TestBareBraceNestingInAnUnquotedExpansionFollowsTheFlag(t *testing.T) {
+	on, off := Core(), Core()
+	on.BareBraceNestsInExpansion = true
+
+	// With the flag, the operand is still looking for its `}` and the input
+	// runs out; without it the expansion closed at the first one and the
+	// `.z` that follows is the rest of an ordinary word.
+	if _, err := Parse(`echo ${u:-{a,q}`, on); err == nil {
+		t.Error("Parse of an unbalanced group with the flag succeeded, want a failure")
 	}
-	// Unquoted and balanced: the group closes and then the expansion does.
-	if _, err := Parse(`echo ${u:-{a,q}.z}`, Core()); err != nil {
-		t.Errorf("Parse of the balanced unquoted group = %v, want it to parse", err)
+	if _, err := Parse(`echo ${u:-{a,q}`, off); err != nil {
+		t.Errorf("Parse of the same text without the flag = %v, want it to parse", err)
 	}
+	if _, err := Parse(`echo ${u:-{a,q}.z}`, on); err != nil {
+		t.Errorf("Parse of the balanced group with the flag = %v, want it to parse", err)
+	}
+
+	// Where the expansion *ends* is the whole of the difference, and the
+	// spans say so without running anything: one word either way, and one
+	// span with the flag against two without it.
+	for _, tc := range []struct {
+		d     Dialect
+		spans int
+		value string
+	}{
+		{on, 1, "u:-{a,q}.z"},
+		{off, 2, "u:-{a,q"},
+	} {
+		w := firstArgument(t, `echo ${u:-{a,q}.z}`, tc.d)
+		if len(w.Spans) != tc.spans {
+			t.Fatalf("BareBraceNestsInExpansion=%v: %d spans, want %d", tc.d.BareBraceNestsInExpansion, len(w.Spans), tc.spans)
+		}
+		if got := w.Spans[0].Value; got != tc.value {
+			t.Errorf("BareBraceNestsInExpansion=%v: expansion is %q, want %q", tc.d.BareBraceNestsInExpansion, got, tc.value)
+		}
+	}
+}
+
+// In double quotes the flag is not consulted at all: every column in the
+// panel stops at the first `}` there, which is what #1586 settled.
+func TestBareBraceNestingIsNotConsultedInsideQuotes(t *testing.T) {
+	on := Core()
+	on.BareBraceNestsInExpansion = true
+	for _, d := range []Dialect{Core(), on} {
+		w := firstArgument(t, `echo "${a/x/{y}"`, d)
+		if len(w.Spans) != 1 || w.Spans[0].Value != "a/x/{y" {
+			t.Errorf("BareBraceNestsInExpansion=%v: %+v, want the one span `a/x/{y`", d.BareBraceNestsInExpansion, w.Spans)
+		}
+	}
+}
+
+// firstArgument parses one command and hands back the word after its name.
+func firstArgument(t *testing.T, src string, d Dialect) *Word {
+	t.Helper()
+	f, err := Parse(src, d)
+	if err != nil {
+		t.Fatalf("Parse(%q) = %v", src, err)
+	}
+	pipe, ok := f.Stmts[0].Expr.(*Pipeline)
+	if !ok {
+		t.Fatalf("Parse(%q) did not give a pipeline", src)
+	}
+	c, ok := pipe.Cmds[0].(*SimpleCmd)
+	if !ok || len(c.Args) < 2 {
+		t.Fatalf("Parse(%q) did not give a command with an argument", src)
+	}
+	return c.Args[1]
 }

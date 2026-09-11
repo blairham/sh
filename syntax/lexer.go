@@ -85,6 +85,19 @@ type Lexer struct {
 	// Exactly the shape inPattern has, for exactly the same reason.
 	inArgument bool
 
+	// inRawBody is set while the text being read is a *body* rather than a
+	// word: a here-document's, or a value being read again by the flag that
+	// re-evaluates one. Both go through heredocSpans, which marks every span
+	// double-quoted so that nothing it produces is field-split — and that
+	// mark is what an unmatched-construct diagnostic would otherwise blame,
+	// reporting `unmatched "` about a text with no quote character in it.
+	//
+	// A body's quoting is a fact about splitting and not about a character
+	// somebody wrote, which is why this is a second bool rather than a third
+	// Quoting value: every other reader of the mark wants it to keep saying
+	// double-quoted.
+	inRawBody bool
+
 	// inOperand is set while the tokens being read are an expansion's
 	// operand — the pattern of `${v#pat}`, the word of `${v:-word}`, the
 	// replacement of `${v/pat/repl}` — rather than a command.
@@ -1678,12 +1691,25 @@ const heredocEscapes = "$`\\"
 //
 // A quoted delimiter is not this. That body is literal throughout and never
 // reaches here.
-func HeredocSpans(body string, d Dialect) []Span {
+//
+// The error is the text running out *inside* one of those constructs — an
+// unterminated `${`, `$(` or backquote — and it is returned rather than
+// swallowed because the spans alone cannot say it happened: a `${` with no
+// closing brace hands back a parameter-expansion span whose value is whatever
+// followed, which reads as an ordinary expansion nobody wrote. A caller that
+// drops it answers `x` for `x${` where every shell in the panel refuses the
+// text (#1653).
+//
+// Spans are still returned alongside it, as much of the body as was read, so
+// a caller that has a use for a partial reading is not forced to re-lex.
+func HeredocSpans(body string, d Dialect) ([]Span, error) {
 	l := NewLexer(body, d)
-	return l.heredocSpans()
+	spans := l.heredocSpans()
+	return spans, l.Err()
 }
 
 func (l *Lexer) heredocSpans() []Span {
+	l.inRawBody = true
 	var out []Span
 	var b strings.Builder
 	litPos := l.pos()
@@ -2324,11 +2350,19 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	for depth > 0 {
 		if l.eof() {
 			l.ranOut("${")
-			if q == DoubleQuoted {
+			if q == DoubleQuoted && !l.inRawBody {
 				// The `${` began inside a double quote, and three of the
 				// panel blame the quote for the whole thing — the fourth
 				// blames the quote character itself, which its wording of
 				// this same failure carries.
+				//
+				// A body is the exception and it is not a quoting question:
+				// heredocSpans marks its spans double-quoted so that nothing
+				// it produces is split, and there is no quote character in
+				// the text to blame. The panel words this one against the
+				// brace — bash `unexpected EOF while looking for matching
+				// }`, zsh `bad substitution` — rather than against a quote
+				// nobody wrote (#1653).
 				l.failUnmatched(open, "\"", "\"", "unterminated parameter expansion")
 			} else {
 				l.failUnmatched(open, "${", "}", "unterminated parameter expansion")
@@ -2383,12 +2417,11 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			}
 		case '{':
 			// A bare `{` inside a *double-quoted* expansion is an ordinary
-			// character and closes nothing, so the brace that opens a level
-			// there is only ever the one a `$` brought with it. Unquoted it
-			// is a brace-expansion group and has to balance, because the
-			// group is what says how far the operand reaches.
+			// character and closes nothing in any of the six, so the brace
+			// that opens a level there is only ever the one a `$` brought
+			// with it.
 			//
-			// The quoting is the whole of the difference and it is measured.
+			// Quoting is half of the difference and it is measured.
 			// `printf "[%s]" ${u:-{a,q}.z}` is `[a.z][q.z]` in zsh 5.9.2 —
 			// two fields, so the operand ran to `.z` and the group was
 			// expanded — and the same line in quotes is the single field
@@ -2400,15 +2433,18 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			// the second `}` as literal text and closing late puts it inside
 			// the replacement — so it cannot tell the two readings apart.
 			//
-			// bash nests neither way: the unquoted line is `[{a,q.z}]` there
-			// too. That column is left as it was rather than corrected here,
-			// because it is a separate divergence this change did not
-			// introduce and does not need (#1587).
+			// Unquoted the panel splits, so the second half is a dialect
+			// question rather than a rule: zsh and ksh93 balance the group
+			// and bash, bash 3.2 and dash stop at the first `}` there too,
+			// which is BareBraceNestsInExpansion. Off in the core, because
+			// the wider reading swallows text the other three leave in the
+			// word.
 			//
 			// The command form keeps its own rule. Its body is a program and
 			// its braces are that program's, so a `{ … }` block written in
-			// one has to balance for the same reason its quotes do.
-			if brace || q != DoubleQuoted {
+			// one has to balance for the same reason its quotes do — which
+			// is why the flag is not consulted for it.
+			if brace || (q != DoubleQuoted && l.dialect.BareBraceNestsInExpansion) {
 				depth++
 			}
 			l.advance()

@@ -548,7 +548,12 @@ func TestHeredocSpansTreatQuotesAsOrdinary(t *testing.T) {
 		// A `$` with nothing a name can start with is just a dollar.
 		{`$ end`, `$ end`},
 	} {
-		if got := literal(HeredocSpans(tc.body, Core())); got != tc.want {
+		spans, err := HeredocSpans(tc.body, Core())
+		if err != nil {
+			t.Errorf("HeredocSpans(%q) = %v, want a clean read", tc.body, err)
+			continue
+		}
+		if got := literal(spans); got != tc.want {
 			t.Errorf("%q gave %q, want %q", tc.body, got, tc.want)
 		}
 	}

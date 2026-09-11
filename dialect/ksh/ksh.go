@@ -67,6 +67,13 @@ func Dialect() syntax.Dialect {
 	// replacement, the case changes and a colon with a space after it stay
 	// arithmetic errors, and `${v:2}` is still an offset.
 	d.ParamColonBeforeTrimIsIgnored = true
+	// A bare `{` inside an unquoted `${…}` opens a nesting level here, the
+	// same as in zsh and unlike the three bash-family columns. Measured
+	// 2026-09-10 with `unset u; printf "[%s]" ${u:-{a,q}.z}`: this shell
+	// answers `[a.z][q.z]`, so the operand ran to `.z` and the group was
+	// then expanded, where bash 5.3, bash 3.2 and dash answer the single
+	// field `[{a,q.z}]`.
+	d.BareBraceNestsInExpansion = true
 	// A function body that is not compound may carry no redirection here:
 	// `f() echo hi` runs and `f() >out`, `f() echo hi >out` and `f() x=1
 	// >out` are all a syntax error at the operator. A braced body is not

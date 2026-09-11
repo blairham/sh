@@ -40,7 +40,12 @@ import (
 // helperMode is the environment entry that tells the child which of the three
 // jobs it is. Empty in the test process, which is how the entry point below
 // knows it is not the helper.
-const helperMode = "SH_MODULE_HELPER"
+//
+// SH_TEST_-prefixed because that prefix is the module's re-execution channel:
+// this suite assembles the environment it runs in from an allowlist
+// (internal/testenv), so a marker outside the channel is scrubbed on the way
+// into the child and the helper silently becomes a skipped test instead.
+const helperMode = "SH_TEST_MODULE_HELPER"
 
 // helperExcluded is the status the lock-probing child exits with when it could
 // not take the lock. Not 1: a Go test binary exits 1 when a test fails, and a
@@ -64,7 +69,7 @@ func TestModuleHelperProcess(t *testing.T) {
 	if mode == "" {
 		t.Skip("not the helper process")
 	}
-	milliseconds, err := strconv.Atoi(os.Getenv("SH_MODULE_HELPER_MS"))
+	milliseconds, err := strconv.Atoi(os.Getenv("SH_TEST_MODULE_HELPER_MS"))
 	if err != nil {
 		milliseconds = 1000
 	}
@@ -73,7 +78,7 @@ func TestModuleHelperProcess(t *testing.T) {
 		fmt.Print("x")
 		os.Exit(0)
 	}
-	path := os.Getenv("SH_MODULE_HELPER_PATH")
+	path := os.Getenv("SH_TEST_MODULE_HELPER_PATH")
 	f, err := os.OpenFile(path, os.O_WRONLY, 0o600)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "helper: %v\n", err)
@@ -113,7 +118,7 @@ func helperScripts(t *testing.T) string {
 		"lockprobe": "probe", "lockhold": "hold", "delaywrite": "delay",
 	} {
 		script := "#!/bin/sh\n" +
-			"SH_MODULE_HELPER_PATH=\"$1\" SH_MODULE_HELPER_MS=\"$2\" " + helperMode + "=" + mode +
+			"SH_TEST_MODULE_HELPER_PATH=\"$1\" SH_TEST_MODULE_HELPER_MS=\"$2\" " + helperMode + "=" + mode +
 			" exec " + strconv.Quote(self) + " -test.run='^TestModuleHelperProcess$'\n"
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o700); err != nil {
 			t.Fatal(err)

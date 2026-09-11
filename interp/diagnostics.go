@@ -2875,6 +2875,62 @@ type Diagnostics struct {
 	// file, the way ScriptLocation is Location for one. ksh93 names line 1
 	// in a file and not under `-c`, in both of its styles.
 	ScriptBuiltinLocation LocationStyle
+
+	// PromptLocation is Location for a line typed at a prompt, where three
+	// of the four panel shells name **no line at all**.
+	//
+	// Measured 2026-09-11, `printf 'echo one\nif; then\n'` into each shell
+	// under `-i`, the shell's own path normalized:
+	//
+	//	bash 5.3.15  bash: syntax error near unexpected token `;'
+	//	ksh93u+      ksh: syntax error: `;' unexpected
+	//	zsh 5.9.2    zsh: parse error near `\n'
+	//	dash         dash: 2: Syntax error: ";" unexpected
+	//
+	// Each of the first three writes a line for the same failure in a script
+	// and in `-c`, so this is the route's answer and not the dialect's whole
+	// answer. dash keeps its line and counts the **session** rather than the
+	// construct — the second line typed is 2 — which is state a front end
+	// would have to keep and is not modeled; see #2022.
+	//
+	// Zero means "the same as Location". The prompt borrowed the general
+	// answer before this existed, so every dialect wrote a line no shell
+	// writes there (#1892).
+	PromptLocation LocationStyle
+	// PromptBuiltinLocation is BuiltinLocation for the same route, for the
+	// dialect that names the place two ways in one session. Zero means "the
+	// same as BuiltinLocation".
+	PromptBuiltinLocation LocationStyle
+
+	// The wordings below replace their unprefixed namesakes for a line typed
+	// at a prompt. Empty — the common answer, and every field for three of
+	// the four dialects — leaves the wording alone.
+	//
+	// They exist for one shell and one rule: ksh93 writes the line **inside**
+	// its sentence rather than in the location, so a route that names no line
+	// cannot be expressed by the location alone. Measured 2026-09-11 at its
+	// prompt, every sentence it writes about a parse failure is its script
+	// sentence with ` at line N` taken out:
+	//
+	//	if; then          syntax error: `;' unexpected
+	//	if true; then     syntax error: `then' unmatched
+	//	x='never closed   syntax error: `'' unmatched
+	//	v=$(echo hi       syntax error: `(' unmatched
+	//	echo one &&       syntax error: `end of file' unexpected
+	//	echo ${x@         syntax error: `newline' unexpected
+	//
+	// A pair per sentence rather than a rule that edits one: a format string
+	// this package rewrote would be a wording no dialect wrote, and the
+	// dialect that needs these builds both halves of each pair from one call
+	// so the two cannot drift.
+	PromptSyntaxUnexpected        string
+	PromptUnterminated            string
+	PromptUnterminatedNoConstruct string
+	PromptUnmatchedQuote          string
+	PromptUnmatchedCmdSubst       string
+	PromptUnmatchedArithSubst     string
+	PromptUnmatchedProcSubst      string
+	PromptBadSubstitution         string
 }
 
 // LocationStyle is one shell's way of saying where a diagnostic happened.
@@ -3323,6 +3379,45 @@ func (d Diagnostics) ForStdin() Diagnostics {
 	}
 	if d.StdinBuiltinLocation != LocationNone {
 		d.BuiltinLocation = d.StdinBuiltinLocation
+	}
+	return d
+}
+
+// ForPrompt returns the diagnostics a line typed at a prompt should use.
+//
+// The third route, beside ForScript and ForStdin, and it is a route in exactly
+// the same sense: what changes is where the input came from and not which
+// shell is reading it. The prompt had no answer of its own, so it borrowed the
+// general one and wrote a line number no shell in the panel writes there
+// (#1892).
+//
+// Two things change, and the second is why this is not only a location. Three
+// of the four dialects write no line at a prompt, which PromptLocation says;
+// the one that writes the line inside its own sentence needs the sentence
+// replaced, which the Prompt wordings say.
+func (d Diagnostics) ForPrompt() Diagnostics {
+	if d.PromptLocation != LocationNone {
+		d.Location = d.PromptLocation
+	}
+	if d.PromptBuiltinLocation != LocationNone {
+		d.BuiltinLocation = d.PromptBuiltinLocation
+	}
+	for _, w := range []struct {
+		at     *string
+		prompt string
+	}{
+		{&d.SyntaxUnexpected, d.PromptSyntaxUnexpected},
+		{&d.Unterminated, d.PromptUnterminated},
+		{&d.UnterminatedNoConstruct, d.PromptUnterminatedNoConstruct},
+		{&d.UnmatchedQuote, d.PromptUnmatchedQuote},
+		{&d.UnmatchedCmdSubst, d.PromptUnmatchedCmdSubst},
+		{&d.UnmatchedArithSubst, d.PromptUnmatchedArithSubst},
+		{&d.UnmatchedProcSubst, d.PromptUnmatchedProcSubst},
+		{&d.BadSubstitution, d.PromptBadSubstitution},
+	} {
+		if w.prompt != "" {
+			*w.at = w.prompt
+		}
 	}
 	return d
 }

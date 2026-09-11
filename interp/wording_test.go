@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/syntax"
 )
 
 func TestWordingFallsBackToTheSubstrate(t *testing.T) {
@@ -64,5 +66,35 @@ func TestScriptDiagnosticsCanNameTheirFirstLine(t *testing.T) {
 	same := Diagnostics{Location: LocationLineWord}
 	if same.Report("s", 2, "m") != same.ForScript().Report("s", 2, "m") {
 		t.Error("an unset ScriptLocation should not change between -c and a script")
+	}
+}
+
+// TestPromptDiagnosticsAreTheirOwnRoute: a line typed at a prompt is a third
+// route beside a script file and standard input, and it moves two things.
+//
+// The location, which is how three of the four panel dialects say "no line
+// here"; and the wordings, for the one that writes the line **inside** its
+// sentence, where no location could take it out. An unset field leaves the
+// general answer alone, which is what every dialect without a prompt answer
+// of its own gets.
+func TestPromptDiagnosticsAreTheirOwnRoute(t *testing.T) {
+	d := Diagnostics{
+		Location:               LocationLineWord,
+		PromptLocation:         LocationNameOnly,
+		SyntaxUnexpected:       "wrong at line %[3]d: %[1]s",
+		PromptSyntaxUnexpected: "wrong: %[1]s",
+	}
+	err := &syntax.Error{Kind: syntax.ErrUnexpected, Token: ";", Pos: syntax.Pos{Line: 2}}
+	if got, want := d.ParseDiagnostic("s", "", err, ""), "s: line 2: wrong at line 2: ;\n"; got != want {
+		t.Errorf("in a script: %q, want %q", got, want)
+	}
+	if got, want := d.ForPrompt().ParseDiagnostic("s", "", err, ""), "s: wrong: ;\n"; got != want {
+		t.Errorf("at a prompt: %q, want %q", got, want)
+	}
+	// Unset is unchanged, and it is unchanged one field at a time: a dialect
+	// with a prompt location and no prompt wording keeps its wording.
+	half := Diagnostics{Location: LocationLineWord, SyntaxUnexpected: "wrong at line %[3]d: %[1]s"}
+	if got, want := half.ForPrompt().ParseDiagnostic("s", "", err, ""), "s: line 2: wrong at line 2: ;\n"; got != want {
+		t.Errorf("with no prompt answer: %q, want %q", got, want)
 	}
 }

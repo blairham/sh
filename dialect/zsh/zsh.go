@@ -1841,7 +1841,12 @@ func Diagnostics() interp.Diagnostics {
 		ScriptNotFoundStatus:    127,
 		ScriptNotReadableStatus: 127,
 		Location:                interp.LocationTightLine,
-		BadSubstitution:         "bad substitution",
+		// And no line at a prompt, which is the same answer this shell gives
+		// a program on standard input: measured 2026-09-11 under `-i`,
+		// `if; then` then end of input is `zsh: parse error near `\n'` where
+		// a script file is `s.sh:3: parse error near `\n'`.
+		PromptLocation:  interp.LocationNameOnly,
+		BadSubstitution: "bad substitution",
 		// The position is 1-based and counts from the `$`: `${(Y)x}` errors
 		// at 4, and a group that runs out of text errors just past the end.
 		ExpansionFlagsError: "error in flags near position %[1]d in '%[2]s'",

@@ -88,6 +88,18 @@ type Shell struct {
 	// exact moment it did not (#1299).
 	ParseFailureStatus func(err error) int
 
+	// Remark renders something the parser had to say about input it accepted
+	// anyway — the whole line, ready to write, or empty for nothing to say.
+	//
+	// Nil says nothing, which is what a caller without a dialect gets and
+	// what three of the four dialects say about everything. The one remark
+	// there is belongs to the end of the input: a here-document whose
+	// delimiter never arrived is accepted and run by every shell in the
+	// panel, and bash warns about it — at a prompt as well as in a script,
+	// measured. The script routes have said it since there were remarks; the
+	// prompt had no way to (#1892).
+	Remark func(rk syntax.Remark) string
+
 	// AskAgainAfterARefusedToken keeps the continuation prompt for a construct
 	// the parser has *refused*, rather than refusing it where it stands.
 	//
@@ -1032,10 +1044,34 @@ func (s Shell) endOfInput(pending *strings.Builder) ([]*syntax.File, string, err
 		p.Aliases = s.Runner.ExpandingAlias
 	}
 	stmts, err := collect(p)
+	// Before the failure and whether or not there is one, which is the order
+	// the script route already writes them in and is measured: a here
+	// document with neither its delimiter nor its enclosing `}` produces both,
+	// the warning first.
+	s.sayRemarks(p.Remarks())
 	if err != nil {
 		return nil, "", err
 	}
 	return stmts, strings.TrimSuffix(text, "\n"), nil
+}
+
+// sayRemarks writes what the parser had to say about input it accepted anyway.
+//
+// Only from the end of the input, which is the only place a prompt can reach
+// one: the single remark the panel has is a here-document delimited by the end
+// of the input, and while a session is still running there is always another
+// line, so the parser is waiting for the delimiter rather than remarking on
+// its absence. A call beside accept would be a line no test could tell from a
+// line that was never there.
+func (s Shell) sayRemarks(rs []syntax.Remark) {
+	if s.Remark == nil {
+		return
+	}
+	for _, rk := range rs {
+		if line := s.Remark(rk); line != "" {
+			s.errf("%s", line)
+		}
+	}
 }
 
 // endsWithContinuation reports whether the text ends with a backslash joining

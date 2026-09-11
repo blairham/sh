@@ -22,10 +22,13 @@ func TestTheSweepHookIsNotInAShippedBuild(t *testing.T) {
 	t.Setenv("SH_AXIS_MUTATION", "SplitParamExpansion=2")
 	want := CoreSemantics()
 	want.SplitParamExpansion = Yes
+	// testrunner:bare — the subject is what sem() returns, which reads no
+	// file and starts nothing; a scratch directory would be furniture.
 	r := &Runner{Semantics: &want}
 	if got := r.sem().SplitParamExpansion; got != Yes {
 		t.Fatalf("an environment variable moved an axis in an ordinary build: SplitParamExpansion is %v", got)
 	}
+	// testrunner:bare — same, for the runner that has no vector at all.
 	if got := (&Runner{}).sem().SplitParamExpansion; got != CoreSemantics().SplitParamExpansion {
 		t.Fatalf("an environment variable moved the default vector: SplitParamExpansion is %v", got)
 	}

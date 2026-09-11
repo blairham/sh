@@ -34,7 +34,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/fs"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -241,19 +242,31 @@ func sourceFiles() (map[string]*ast.File, error) {
 	if parsedFiles != nil || parseErr != nil {
 		return parsedFiles, parseErr
 	}
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, sourceDir, func(fi fs.FileInfo) bool {
-		return !strings.HasSuffix(fi.Name(), "_test.go")
-	}, parser.ParseComments)
+	// One file at a time rather than parser.ParseDir, which is deprecated
+	// for a reason that would bite here: it does not read build tags, so it
+	// groups files into packages by guesswork. Everything this needs is in
+	// one package's ordinary source, and the alternative it points at —
+	// golang.org/x/tools/go/packages — would make a build-tool dependency
+	// direct for a constant scan.
+	entries, err := os.ReadDir(sourceDir)
 	if err != nil {
 		parseErr = fmt.Errorf("reading %s: %w", sourceDir, err)
 		return nil, parseErr
 	}
+	fset := token.NewFileSet()
 	files := map[string]*ast.File{}
-	for _, pkg := range pkgs {
-		for name, f := range pkg.Files {
-			files[name] = f
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
 		}
+		path := filepath.Join(sourceDir, name)
+		f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if err != nil {
+			parseErr = fmt.Errorf("reading %s: %w", path, err)
+			return nil, parseErr
+		}
+		files[path] = f
 	}
 	if len(files) == 0 {
 		parseErr = fmt.Errorf("no Go files under %s", sourceDir)

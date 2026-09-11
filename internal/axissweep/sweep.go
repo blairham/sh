@@ -165,7 +165,7 @@ func (o *Options) logf(format string, args ...any) {
 	if o.Log == nil {
 		return
 	}
-	fmt.Fprintf(o.Log, format, args...)
+	_, _ = fmt.Fprintf(o.Log, format, args...)
 }
 
 // Run sweeps every axis.

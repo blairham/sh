@@ -216,3 +216,39 @@ func TestASubscriptAfterANestedInnerIsRead(t *testing.T) {
 		t.Errorf("Index = %q, want 2", got)
 	}
 }
+
+// The inner expansion is read in the quoting the outer was written in.
+//
+// Whether a bare `{` opens a level inside `${…}` is BareBraceNestsInExpansion
+// *and* the quoting: the flag is only consulted outside double quotes, because
+// the panel agrees that a quoted `{` is an ordinary character. The nested
+// spelling was reached through a lexer built with no quoting at all, so the
+// quoted half was read as if the word stood bare and the inner expansion ran
+// past the `}` that closes it.
+//
+// The word is what says so: read correctly, `"${${:-${w::=a{b}c}}+}"` is an
+// expansion and then the two characters `+}`, because the brace before them
+// closed the outer one. Read as if unquoted, the whole of it is one expansion
+// and nothing is left over.
+func TestANestedExpansionTakesTheOuterQuoting(t *testing.T) {
+	d := nestingDialect()
+	d.BareBraceNestsInExpansion = true
+
+	const src = `echo "${${:-${w::=a{b}c}}+}"`
+	f, err := Parse(src, d)
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	sc := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+	spans := sc.Args[1].Spans
+	if len(spans) != 2 {
+		t.Fatalf("%q: %d spans, want an expansion and the text after it: %+v", src, len(spans), spans)
+	}
+	if spans[0].Kind != ParamExp {
+		t.Errorf("%q: first span is %v, want the expansion", src, spans[0].Kind)
+	}
+	if spans[1].Kind != Literal || spans[1].Value != "+}" {
+		t.Errorf("%q: text after the expansion is %v %q, want the literal %q",
+			src, spans[1].Kind, spans[1].Value, "+}")
+	}
+}

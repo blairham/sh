@@ -57,6 +57,19 @@ func TestABareSubscriptIsPartOfTheExpansion(t *testing.T) {
 		{"a negative subscript", "echo $a[-1]", "a[-1]", ""},
 		{"a subscript holding an expansion", "echo $a[$i]", "a[$i]", ""},
 		{"a nested subscript", "echo $a[$b[1]]", "a[$b[1]]", ""},
+		// A substitution's own `(` is a word end everywhere else, so meeting
+		// one here used to give the subscript up and leave the brackets as
+		// text beside the *whole* array. Both spellings, because the
+		// arithmetic one is the two characters `$(` as well (#2048).
+		{"a subscript holding an arithmetic substitution", "echo $a[$((i))]", "a[$((i))]", ""},
+		{"a subscript holding a command substitution", "echo $a[$(echo 1)]", "a[$(echo 1)]", ""},
+		{"a subscript holding a backquoted substitution", "echo $a[`echo 1`]", "a[`echo 1`]", ""},
+		// A substitution suspends the word-end test and not the bracket
+		// count: the blank in `echo 3` no longer ends the word, and a `[`
+		// written inside still has to be closed. Measured on zsh 5.9.2 —
+		// `x=$a[$(echo 2; : [ ])]` is the second element.
+		{"a balanced bracket inside the substitution", "echo $a[$(echo 2; : [ ])]", "a[$(echo 2; : [ ])]", ""},
+		{"text after a subscript holding a substitution", "echo $a[$(echo 1)]x", "a[$(echo 1)]", "x"},
 		{"text after the subscript", "echo $a[1]x", "a[1]", "x"},
 		{"only the first subscript", "echo $a[1][2]", "a[1]", "[2]"},
 		{"the whole positional list", "echo $@[1]", "@[1]", ""},

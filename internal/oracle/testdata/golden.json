@@ -12126,6 +12126,50 @@
         "TimedOut": false
       }
     },
+    "autoload/a-file-that-defines-the-name-it-is-called": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: autoload: command not found~\u003cshell\u003e: line 1: kfn: command not found~\u003cshell\u003e: line 1: kfn: command not found~\u003cshell\u003e: line 1: pfn: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: autoload: command not found~\u003cshell\u003e: line 1: kfn: command not found~\u003cshell\u003e: line 1: kfn: command not found~\u003cshell\u003e: line 1: pfn: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: autoload: command not found~\u003cshell\u003e: kfn: command not found~\u003cshell\u003e: kfn: command not found~\u003cshell\u003e: pfn: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: typeset: -U: unknown option~\u003cshell\u003e: typeset: -z: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "K [a b]~st=0~K [c]~P [d]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "autoload/a-letter-the-builtin-does-not-have": {
       "bash": {
         "Stdout": "st=127",
@@ -42971,6 +43015,50 @@
         "TimedOut": false
       }
     },
+    "echo/a-hexadecimal-escape-with-no-digits": {
+      "bash": {
+        "Stdout": " 61 5c 78 5a 3a 61 5c 75 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " 61 5c 78 5a 3a 61 5c 75 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " 61 5c 78 5a 3a 61 5c 75 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " 2d 65 20 61 5c 78 5a 3a 61 5c 75 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " 61 5c 78 5a 3a 61 5c 75 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " 61 00 5a 3a 61 00 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "echo/backslash-c-stops-the-output": {
       "bash": {
         "Stdout": "p\\cq~done",
@@ -43185,6 +43273,50 @@
       },
       "zsh": {
         "Stdout": " 61 1b 5a 3a 61 5c 45 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "echo/the-unicode-escapes": {
+      "bash": {
+        "Stdout": " 61 41 5a 3a 61 41 5a 3a 61 41 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " 61 41 5a 3a 61 41 5a 3a 61 41 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " 61 5c 75 30 30 34 31 5a 3a 61 5c 55 30 30 30 30~ 30 30 34 31 5a 3a 61 5c 75 34 31 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " 2d 65 20 61 5c 75 30 30 34 31 5a 3a 61 5c 55 30~ 30 30 30 30 30 34 31 5a 3a 61 5c 75 34 31 5a 0a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " 61 5c 75 30 30 34 31 5a 3a 61 5c 55 30 30 30 30~ 30 30 34 31 5a 3a 61 5c 75 34 31 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " 61 41 5a 3a 61 41 5a 3a 61 41 5a 0a ",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -123530,6 +123662,50 @@
       "zsh": {
         "Stdout": "st=0~[user:f] [] 0",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/a-deselected-feature-is-not-callable": {
+      "bash": {
+        "Stdout": "off=127~on=127~back=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zparseopts: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zparseopts: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "off=127~on=127~back=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zparseopts: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zparseopts: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "off=127~on=127~back=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zparseopts: command not found~\u003cshell\u003e: zstyle: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zparseopts: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "off=127~on=127~back=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zparseopts: not found~\u003cshell\u003e: 1: zstyle: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zparseopts: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "off=127~on=127~back=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zparseopts: not found~\u003cshell\u003e: zstyle: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zparseopts: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "off=127~on=1~back=1",
+        "Stderr": "\u003cshell\u003e:1: command not found: zparseopts~\u003cshell\u003e:zparseopts:1: no default array defined: a:",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

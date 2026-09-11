@@ -2870,6 +2870,81 @@ which use `$(( $# ))` or `$(( $2-2 ))`. Five of the seven parse failures
 `make wild` reported on this machine were this one cause. It was not on the
 list before the sweep existed; it was found by pointing the sweep at /usr/bin.
 
+## `\u` and `\U` in an `echo` argument
+
+Two shells read them and four do not. Measured 2026-09-10 with the bytes
+read back through `od`:
+
+    echo 'a\u0041Z'      zsh  aAZ        the rest  a\u0041Z
+    echo -e 'a\u0041Z'   bash 5.3  aAZ   bash 3.2, that binary as sh,
+                                          dash, ksh93  a\u0041Z
+
+The two letters never split the panel, so they are one axis —
+`Semantics.EchoExpandsUnicodeEscapes` — where `\e` and `\E` had to be two.
+At most four hex digits after `\u` and eight after `\U`, fewer accepted, and
+the value is a **code point written in UTF-8** rather than a byte: `\u00e9`
+is two bytes and `\u20ac` is three.
+
+It is the *original* UTF-8 and not the range it was later narrowed to, which
+is measured rather than assumed. A surrogate and a value past the last code
+point are encoded rather than replaced — `\ud800` is `ed a0 80` and
+`\U110000` is `f4 90 80 80` — and the five- and six-byte forms are reachable,
+`\U200000` being five bytes and `\U4000000` six. Both shells agree on every
+one of those. `interp.EncodeCodePoint` is the one encoder, exported because
+`print` reads the same escapes and must not grow a second.
+
+Above ASCII the two shells answer the **locale** rather than themselves, and
+this shell does not: in `LC_ALL=C`, zsh refuses `\u00e9` as `character not in
+range` and bash leaves the escape standing, where both write `c3 a9` in a
+UTF-8 locale and so do we. Recorded as #1851 rather than fixed — how much of a
+locale this shell has is a larger question than the escape — and it is why the
+corpus row keeps to ASCII code points.
+
+### A hexadecimal escape with no digits
+
+The second axis, and one question for `\x`, `\u` and `\U` together:
+
+    echo 'a\xZ'   zsh  a<0x00>Z     bash 5.3 -e  a\xZ
+    echo 'a\uZ'   zsh  a<0x00>Z     bash 5.3 -e  a\uZ
+
+`Semantics.EchoEmptyHexDigitRunIsNul`, asked only where such an escape
+actually runs out of digits. It is the same split `PrintfHexEscapePolicy`
+records at the two `printf` sites, where it is one of the three details that
+made a policy out of a bool.
+
+## A function file that defines the function it is named after
+
+A file on `$fpath` may hold the function's **body**, or it may hold a
+`name() { … }` definition of the name it is called. Both run.
+
+Measured on zsh 5.9.2, 2026-09-10, with two files in one directory:
+
+    fns/pfn   print "PLAIN ran [$*]"        pfn a b   PLAIN ran [a b]
+    fns/kfn   kfn() { print "K [$*]" }      kfn a b   K [a b]
+
+The shape is decided at **load** time rather than at call time, which is what
+`autoload +X kfn; functions kfn` settles: the function is listed with the
+*inner* body before anything has called it. So the definition is unwrapped
+where the file is read, and the first call runs the real body with the
+arguments it was made with — no second call and no re-entry.
+
+It is the **whole file** that has to be the definition, and three files
+settle which reading that is:
+
+    helper() { … }; tw2() { … }   defines its own name, and is *not* called
+    { grp() { … } }               a definition inside a group, not called
+    # comment                     a comment above it does not count against
+    cmt() { … }                   it, and it *is* called
+
+so it is neither "the load defined this name" nor "the last command was a
+definition". A trailing `;` makes no difference either way.
+
+This is the shape #1580 described: a function loaded this way used to be a
+no-op that reported success, and the caller above it read the silence as a
+result. Nothing was missing afterwards, because the file's text had become
+the body and running it *was* the definition — so the second call worked and
+`functions` looked right, which is what made it silent.
+
 ## What a failed `(( ))` leaves behind
 
 The sentence and the status are two questions, and only the second one
@@ -4390,10 +4465,23 @@ What was built, all through the extension seam — registered builtins in each
   truthful answer. Only the features switched **on** by that command are
   judged; a module already loaded whole keeps the rest under the plain rule.
 
-  What it does not do is take a feature *away* — zsh removes a deselected
-  builtin from its table outright, and here those builtins are the dialect's,
-  registered before any script runs, so a selection is recorded and reported
-  rather than enforced.
+  **And it takes a feature away.** A builtin the selection leaves off is
+  removed from the table, which is measured rather than inferred from the
+  listing: `zmodload zsh/zutil; zmodload -F zsh/zutil -b:zparseopts` leaves
+  `zparseopts` at `command not found` and 127, with the three features left on
+  still answering, and either `+b:zparseopts` or a plain `zmodload zsh/zutil`
+  puts it back. `whence` and `type` do not find it while it is off, `disable`
+  lists nothing, and `enable zparseopts` is `no such hash table element` — so
+  it is not `enable -n` under another name, and `SetBuiltinEnabled` would have
+  been the wrong seam (#1635). `interp.Runner.SetBuiltinWithdrawn` is the
+  right one: the builtin is kept and the *lookup* fails, which is what lets
+  the selection move in both directions without a second table of feature
+  names to functions. The feature name is the builtin name, so there is
+  nothing to keep in step.
+
+  The parameter half is not enforced. A deselected `p:functions` reads as
+  **empty** in that shell rather than refusing — `${#functions}` is 0 — which
+  is a different seam from the absent-parameter one, and is #1841.
 
   Refused by name: `-a` with `-b`/`-c`/`-f`/`-p` (autoloaded builtins,
   conditions, functions and parameters), `-A` and `-R` (module aliases), `-d`

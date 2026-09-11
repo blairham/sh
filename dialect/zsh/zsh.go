@@ -2267,6 +2267,7 @@ func Apply(r *interp.Runner) {
 	// See setopt.go and emulate.go.
 	registerSetopt(r)
 	registerZcompile(r)
+	registerCompctl(r)
 	registerLocalOptions(r)
 	// `**/` crosses directory levels here with no option asked for, and
 	// there is no `setopt` name that turns it off — which is why this is a

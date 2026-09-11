@@ -138,7 +138,7 @@ var exempt = map[string]string{
 		"is what decides the trailing slash. No content is read and no name is disclosed that " +
 		"the allowed ReadDir did not already return. It is a probe, and Boundary has no probe " +
 		"seam to route it through the way interp's AllowProbe routes a dialect's; that " +
-		"asymmetry is #1826 rather than this line.",
+		"asymmetry is #1824 rather than this line.",
 	"repl.trim": "the history file's rewrite, on the path the append already passed the gate " +
 		"on, through a temporary in the same directory. The shell's own scaffolding, which " +
 		"ActionOpen's rule places outside the boundary.",

@@ -45699,6 +45699,138 @@
         "TimedOut": false
       }
     },
+    "editing-mode/a-script-is-in-neither-mode": {
+      "bash": {
+        "Stdout": "emacs=1~vi=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "emacs=1~vi=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "emacs=1~vi=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "emacs=127~vi=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "emacs=1~vi=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "emacs=1~vi=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "editing-mode/no-mode-is-in-the-startup-shellopts": {
+      "bash": {
+        "Stdout": "emacs=out~vi=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "emacs=out~vi=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "emacs=out~vi=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "emacs=out~vi=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "emacs=out~vi=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "emacs=out~vi=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "editing-mode/no-mode-is-on-in-the-startup-listing": {
+      "bash": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "editing-mode/the-two-names-are-one-state-with-three-values": {
       "bash": {
         "Stdout": "vi st=0~ st=0~emacs st=0~ st=0~vi st=0",

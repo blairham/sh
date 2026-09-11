@@ -15064,6 +15064,32 @@ echo "read=[$l]"`,
 			"line and 1. A shell giving both the same status would let a script mistake a typo for a missing keymap",
 	},
 	{
+		ID: "editing-mode/a-script-is-in-neither-mode", Category: "builtins",
+		Snippet: `[[ -o emacs ]]; echo "emacs=$?"; [[ -o vi ]]; echo "vi=$?"`,
+		Why: "no editing mode is selected in a shell with no line to edit: every shell with the operator answers 1 to " +
+			"both, and dash has no `[[` to answer with. A keymap is what the mode is *for* — which map a binding " +
+			"builtin acts on without being told — so a script claiming one is claiming something it has no keys for. " +
+			"Ours reported emacs selected, because the mode's zero value was emacs rather than none (#1858)",
+	},
+	{
+		ID: "editing-mode/no-mode-is-on-in-the-startup-listing", Category: "builtins",
+		Snippet: `set -o | grep -cE "^(emacs|vi)[[:space:]]+on$"`,
+		Why: "the same fact through the listing, which is the route with no dialect operator in it: all six columns " +
+			"count 0, at status 1 because the count found nothing. It is the unanimous row the case above cannot " +
+			"reach in dash, and the shell whose `set -o` is its own 185-name listing counts 0 for a reason of its " +
+			"own — it writes no `on` column at all",
+	},
+	{
+		ID: "editing-mode/no-mode-is-in-the-startup-shellopts", Category: "builtins",
+		Snippet: `case :$SHELLOPTS: in (*:emacs:*) echo emacs=in ;; (*) echo emacs=out ;; esac; ` +
+			`case :$SHELLOPTS: in (*:vi:*) echo vi=in ;; (*) echo vi=out ;; esac`,
+		Why: "and through the variable, which is the route a script actually reads — the same one the case below " +
+			"uses to watch the state move. Unanimous: neither name is there at startup, including in the three " +
+			"shells that do not populate the variable at all, for which `out` is the answer by absence. Ours wrote " +
+			"`emacs` into it, so a script branching on `$SHELLOPTS` took the wrong arm before anything had asked for " +
+			"a mode",
+	},
+	{
 		ID: "editing-mode/the-two-names-are-one-state-with-three-values", Category: "builtins",
 		Snippet: `mode() { case :$SHELLOPTS: in *:vi:*) printf vi;; esac; ` +
 			`case :$SHELLOPTS: in *:emacs:*) printf emacs;; esac; echo " st=$1"; }` + "\n" +

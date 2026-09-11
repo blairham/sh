@@ -85,22 +85,21 @@ var commonSetOptions = map[string]setOption{
 	"nolog":     {},
 
 	// The two editing modes, and they are one state under two names — see
-	// Runner.editingMode and EditingMode. `emacs` starts on, because the
-	// line editor really does read ^A, ^E and ^B, which is what that name
-	// means; asking for `vi` selects the other keymap, which is as much as
-	// this editor can promise and exactly what the zsh dialect's `bindkey
-	// -v` already promises.
+	// Runner.editingMode and EditingMode. Neither starts selected, because a
+	// shell with no line to edit has no keymap to be in; asking for `vi`
+	// selects the other keymap, which is as much as this editor can promise
+	// and exactly what the zsh dialect's `bindkey -v` already promises.
 	//
 	// Turning either *off* leaves neither on rather than swapping to the
 	// other, measured in bash 5.3 and ksh93 both: `set -o vi; set +o vi`
 	// reports `emacs off` and `vi off`.
 	"vi": {
 		apply: func(r *Runner, on bool) { r.setEditingMode(EditingModeVi, on) },
-		get:   func(r *Runner) bool { return r.editingMode == EditingModeVi },
+		get:   func(r *Runner) bool { return r.EditingMode() == EditingModeVi },
 	},
 	"emacs": {
 		apply: func(r *Runner, on bool) { r.setEditingMode(EditingModeEmacs, on) },
-		get:   func(r *Runner) bool { return r.editingMode == EditingModeEmacs },
+		get:   func(r *Runner) bool { return r.EditingMode() == EditingModeEmacs },
 	},
 }
 
@@ -113,10 +112,23 @@ var commonSetOptions = map[string]setOption{
 // spells it.
 type EditingMode int
 
-// The three states, and the zero value is the one every shell in the panel
-// starts an interactive session in.
+// The three states a script can ask for, and a fourth the zero value holds:
+// no mode chosen yet, which is not the same as one turned off.
 const (
-	EditingModeEmacs EditingMode = iota
+	// editingModeUnchosen is the zero value, and it is unexported because it
+	// is not a state a script can select or observe directly: what it reads
+	// as depends on whether this shell is interactive, which is a question
+	// no `set` operand asks. A shell that has had a mode chosen — either way
+	// round, including off — never reads it again.
+	//
+	// Separate from EditingModeNone because the two answer differently in
+	// exactly one shell and exactly one place. Measured on bash 5.3.15,
+	// 2026-09-11: `bash -i -c 'set -o'` reports `emacs on` and
+	// `bash -i -c 'set +o emacs; set -o'` reports `emacs off`, so "never
+	// chosen" and "chosen off" are both observable in the same shell.
+	editingModeUnchosen EditingMode = iota
+
+	EditingModeEmacs
 	EditingModeVi
 
 	// EditingModeNone is what turning the selected mode off leaves behind,
@@ -127,7 +139,26 @@ const (
 
 // EditingMode reports which editing mode is selected, for a dialect deciding
 // which keymap its binding builtin acts on.
-func (r *Runner) EditingMode() EditingMode { return r.editingMode }
+//
+// Nothing is selected until a script selects one or the shell becomes a shell
+// with a line to edit, which is the whole of Semantics.InteractiveSelectsEmacs
+// — one shell in the panel reads `emacs on` the moment it is interactive and
+// the other three never select a mode on their own. Measured 2026-09-11, at a
+// terminal as well as without one: this shell reported `emacs on` in a script,
+// which is a keymap claimed by a shell that has no line to edit (#1858).
+//
+// The axis is read rather than asked, as the invocation's own facts are:
+// reporting an option is not the place to refuse a script over a disagreement,
+// and a dialect that answers nothing gets the majority's no.
+func (r *Runner) EditingMode() EditingMode {
+	if r.editingMode != editingModeUnchosen {
+		return r.editingMode
+	}
+	if r.Interactive && r.sem().InteractiveSelectsEmacs == Yes {
+		return EditingModeEmacs
+	}
+	return EditingModeNone
+}
 
 // setEditingMode is the write half of the two option names.
 //
@@ -135,11 +166,16 @@ func (r *Runner) EditingMode() EditingMode { return r.editingMode }
 // which is the measurement and not a shortcut — see the table entries. Asking
 // to turn off a mode that is not the selected one moves nothing, because the
 // request has already been granted.
+//
+// The read is EditingMode rather than the field, so that `set +o emacs` in a
+// shell that has chosen nothing and *would* read emacs writes the refusal
+// down: measured on bash 5.3.15, `bash -i -c 'set +o emacs; set -o'` reports
+// both names off, and `bash -i -c 'set +o vi; set -o'` leaves emacs on.
 func (r *Runner) setEditingMode(mode EditingMode, on bool) {
 	switch {
 	case on:
 		r.editingMode = mode
-	case r.editingMode == mode:
+	case r.EditingMode() == mode:
 		r.editingMode = EditingModeNone
 	}
 }

@@ -203,6 +203,11 @@ func Semantics() interp.Semantics {
 	s.StdinOptionNamesTheOperands = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
+	// The one shell in the panel that selects an editing mode for itself.
+	// Measured 2026-09-11 on 5.3.15 and on the 3.2 macOS ships, and under an
+	// `argv[0]` of `sh` as well: `set -o` reports `emacs off` in a script and
+	// `emacs on` under `-i`, with or without a terminal.
+	s.InteractiveSelectsEmacs = interp.Yes
 	// `set +B` stops `{a,b}` expanding and `set -B` puts it back — measured
 	// 2026-09-11 on bash 5.3.15, both directions, and the letter leaves `$-`
 	// while it is off. So it is not one-way the way `noexec` is (#1856).

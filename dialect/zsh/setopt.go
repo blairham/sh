@@ -260,7 +260,13 @@ var zshOptions = []zshOption{
 	recorded("cshnullglob", false),
 	recorded("debugbeforecmd", true),
 	recorded("dvorak", false),
-	setOptBacked("emacs", true, "emacs", false),
+	// Default off, which is real zsh's: measured 2026-09-11 at a terminal,
+	// `[[ -o emacs ]]` answers 1 in an interactive session that has not
+	// selected a mode, and a bare `setopt` says nothing about the name. It
+	// was recorded as on here, which was one of four entries holding *this*
+	// shell's state where zsh's differed — and the only one of the four the
+	// state behind it could be corrected for (#1858).
+	setOptBacked("emacs", false, "emacs", false),
 	recorded("equals", true),
 	setOptBacked("errexit", false, "errexit", false),
 	recorded("errreturn", false),

@@ -78,6 +78,9 @@ func Semantics() interp.Semantics {
 	s.UnsplitAtListJoinsOnIFS = interp.Yes
 	s.CommandNotFoundStatusIsNotFound = interp.Yes
 	s.SetFTurnsOffGlobbing = interp.Yes
+	// Neither editing mode is ever selected on its own here — measured
+	// 2026-09-11, `set -o` reports both off in a script and under `-i`.
+	s.InteractiveSelectsEmacs = interp.No
 	// This shell has no braces to expand and no `-B` either, so the letter
 	// is refused as the invalid option it is rather than asked about.
 	s.SetBTurnsOffBraceExpansion = interp.No

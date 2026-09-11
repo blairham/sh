@@ -202,6 +202,57 @@ func TestANestedInnerRunsOnce(t *testing.T) {
 	}
 }
 
+// TestANestedInnerRunsOnceUnderEveryConditional is #1404.
+//
+// The trim above is quiet because a trim has nothing to ask before it runs.
+// A conditional does: it asks `testFires` whether its test fires, which asks
+// `paramSource`, which expands the inner to answer — and the value was then
+// expanded again for the substitution. `${${$(cmd):-d}}` ran its command
+// twice where zsh 5.9.2 runs it once.
+//
+// **The count is the assertion and the value is not.** The value was right
+// through all of it — `[abc]` before the fix and after it, and `[abc]` when
+// the command ran three times, which is what #1391 reduced from. A row
+// comparing only the result passes with the bug standing, so every row here
+// writes a mark from inside the substitution and reads the file back.
+//
+// It matters because this is a construct a startup file writes: `${${(M)…:-…}}`
+// around a `$(…)` is ordinary in a plugin manager, and a `git` or a `date` in
+// there is a duplicated call.
+func TestANestedInnerRunsOnceUnderEveryConditional(t *testing.T) {
+	const mark = `$(printf x >>marks; echo abc)`
+	for _, tc := range []struct{ name, src, want string }{
+		// The reproduction, and the shape the issue was filed on.
+		{"a default that does not fire", `"${${` + mark + `:-d}}"`, "[abc]n=x"},
+		// The other three conditionals. `:+` and `:=` were already right and
+		// are here so the rows read as "every conditional" rather than as
+		// the one that was wrong — a later change to the shared path has to
+		// keep all four.
+		{"an alternate that fires", `"${${` + mark + `:+q}}"`, "[q]n=x"},
+		{"an assignment", `"${${` + mark + `:=w}}"`, "[abc]n=x"},
+		{"a report that does not fire", `"${${` + mark + `:?e}}"`, "[abc]n=x"},
+		// A default that *does* fire: the inner still has to run once, to
+		// answer whether it fired at all.
+		{"a default that fires", `"${${$(printf x >>marks; echo ""):-d}}"`, "[d]n=x"},
+		// Unquoted, which takes the field path rather than the joined one.
+		{"unquoted", `${${` + mark + `:-d}}`, "[abc]n=x"},
+		// An inner that comes to a *list*, where the list path answers and
+		// the conditional asks ahead of it.
+		{"an inner that is a list", `"${${(f)$(printf x >>marks; printf 'a\nb\n')}:-d}"`, "[a b]n=x"},
+		// The control: the trim that was already right, so a regression that
+		// broke the hold for everything would not read as this issue's.
+		{"the trim beside them", `"${${` + mark + `#a}}"`, "[bc]n=x"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `printf "[%s]" ` + tc.src + `; printf "n=%s" "$(cat marks)"`
+			out, st := runGrammar(t, src, nesting, nil)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
 // The value the outer operator sees is the inner's, not the outer name's —
 // there is no outer name. A runner that fell back to an empty name would give
 // the same answer for `${${v}}` and `${${w}}`, which this tells apart.

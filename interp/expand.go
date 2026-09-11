@@ -2078,13 +2078,13 @@ func (r *Runner) listBase(e *syntax.ParamExpr) ([]string, bool) {
 		return nil, false
 	}
 	if e.Inner != nil {
-		words, set, isList := r.nestedWords(e)
+		words, _, isList := r.nestedWords(e)
 		if !isList {
 			// Not a list, so the scalar path answers it — and that path
-			// expands the inner too. The fields are handed over rather than
-			// recomputed: `${${v}#a}` with a command substitution inside
-			// runs it once, and asking twice ran it twice. See holdNested.
-			r.holdNested(e, words, set)
+			// expands the inner too. nestedWords has already put the fields
+			// back in the hold for it: `${${v}#a}` with a command
+			// substitution inside runs it once, and asking twice ran it
+			// twice. See holdNested.
 			return nil, false
 		}
 		return words, true
@@ -3990,11 +3990,26 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 // `${${u}:-d}` substitutes and `${${v}:-d}` on an empty value does too — the
 // colon's own rule, unchanged.
 func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set, isList bool) {
-	if words, set, ok := r.takeNested(e); ok {
-		// Already expanded for this span, by the list path that then found
-		// this was not a list. Only a *non*-list is ever held, so the third
-		// answer is settled.
-		return words, set, false
+	// Whatever this call comes to is held for the next reader of the same
+	// node in the same span, whether it was expanded here or taken from the
+	// hold. There is more than one reader — a conditional asks `testFires`
+	// whether its test fires, the list path asks `listBase` whether the
+	// inner is a list, and the scalar path asks for the value behind both —
+	// and each of them wants what the inner came to rather than a fresh run
+	// of it.
+	//
+	// **Putting it back is the half #1404 was missing**, and it is why this
+	// is registered ahead of the read rather than behind it: the hold was
+	// filled by the list path alone and emptied by whoever read it first, so
+	// the *third* reader found nothing and expanded the inner again.
+	// `${${$(cmd):-d}}` ran its command twice for that reason, and a run is
+	// not recoverable from the value.
+	defer func() { r.holdNested(e, words, set, isList) }()
+	if words, set, isList, ok := r.takeNested(e); ok {
+		// Already expanded for this span. Every answer is handed over,
+		// list-ness included: the question is about the inner's shape, and
+		// asking it again would mean expanding the inner again.
+		return words, set, isList
 	}
 	if e.Inner == nil || len(e.Inner.Spans) == 0 {
 		return []string{""}, false, false
@@ -4075,28 +4090,38 @@ func (r *Runner) nestedInnerIsAList(e *syntax.ParamExpr, words []string) bool {
 // Keyed on the node, so a hold left by one expansion cannot be read by
 // another, and cleared both when it is read and at the top of every expandAt.
 type nestedHold struct {
-	node  *syntax.ParamExpr
-	words []string
-	set   bool
-	held  bool
+	node   *syntax.ParamExpr
+	words  []string
+	set    bool
+	isList bool
+	held   bool
 }
 
-// holdNested keeps a nested expansion's fields for the scalar path that is
-// about to ask for them again.
-func (r *Runner) holdNested(e *syntax.ParamExpr, words []string, set bool) {
-	r.nestedHeld = nestedHold{node: e, words: words, set: set, held: true}
+// holdNested keeps a nested expansion's fields for the next reader of the
+// same node in the same span.
+//
+// Every expansion of an inner leaves one, which is the half #1404 was
+// missing. The hold was filled only by the list path, so the *earlier* reader
+// — a conditional asking `testFires` whether its test fires — expanded the
+// inner, threw the fields away and left the list path to run it again.
+// `${${$(cmd):-d}}` ran its command twice for that reason, and a run is not
+// recoverable from the value: a command substitution writes files, moves a
+// counter and takes time.
+func (r *Runner) holdNested(e *syntax.ParamExpr, words []string, set, isList bool) {
+	r.nestedHeld = nestedHold{node: e, words: words, set: set, isList: isList, held: true}
 }
 
 // takeNested is the held fields for this node, once. Reading empties the
-// hold: the handoff is from one half of a span to the other, and a second
-// reader would be a different expansion.
-func (r *Runner) takeNested(e *syntax.ParamExpr) ([]string, bool, bool) {
+// hold: the handoff is between readers of one span, and each of them asks
+// once, so a hold read twice with nothing put back would be a different
+// expansion. Every reader goes through nestedWords, which fills it again.
+func (r *Runner) takeNested(e *syntax.ParamExpr) ([]string, bool, bool, bool) {
 	if !r.nestedHeld.held || r.nestedHeld.node != e {
-		return nil, false, false
+		return nil, false, false, false
 	}
-	words, set := r.nestedHeld.words, r.nestedHeld.set
+	h := r.nestedHeld
 	r.nestedHeld = nestedHold{}
-	return words, set, true
+	return h.words, h.set, h.isList, true
 }
 
 // expandingQuoting is how *this* expansion was written, where it stands in a

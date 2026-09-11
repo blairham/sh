@@ -49,8 +49,12 @@ SHELLS := sh bash zsh ksh dash
 # finds them: `build/zsh` derives its prefix as the checkout root, so
 # `share/sh/functions` is on `$fpath` for a binary that was never installed,
 # and `make check` exercises the files that would ship rather than a copy.
+#
+# The list is the directory rather than a list beside it, so a file added here
+# is installed and packaged without anybody remembering to say so twice. The
+# archive in .goreleaser.yaml takes the same directory as a glob.
 FUNCSRC := share/sh/functions
-FUNCS := add-zsh-hook colors is-at-least regexp-replace
+FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
 .PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate install uninstall
 

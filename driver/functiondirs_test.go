@@ -6,6 +6,8 @@ package driver_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"sort"
 	"strings"
 	"testing"
 
@@ -237,5 +239,47 @@ func TestADialectWithNoFunctionSearchGetsNoDefault(t *testing.T) {
 	}
 	if out != "set=no\n" {
 		t.Errorf("a dialect with no function search = %q, want %q", out, "set=no\n")
+	}
+}
+
+// The derivation above names a directory; this is the one test that the
+// **payload** is in it.
+//
+// #1250 gave the search a default and #1968 gave it something to find, and
+// they are two halves of one feature that can each be right while the pair is
+// useless: two directories that hold nothing is the same startup failure as no
+// directories at all. So the files in the checkout are compared against what
+// the derivation would name for the checkout, which is also what an
+// uninstalled build sees — `build/zsh` derives its prefix as the repository
+// root, so `share/sh/functions` is on a locally built shell's own `$fpath`
+// and the suites grade the files that ship rather than a copy.
+//
+// It fails if the files move, if the derivation moves, or if either is
+// renamed — which is the whole set of ways the two can come apart. The names
+// are checked too: a directory that exists and is empty would satisfy a path
+// comparison and satisfy nothing else.
+func TestTheShippedFunctionsSitWhereTheSearchLooks(t *testing.T) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("no caller information: cannot find the repository root")
+	}
+	root := filepath.Dir(filepath.Dir(thisFile))
+	dirs := driver.FunctionSearchDirsForTest(root)
+	if len(dirs) != 2 {
+		t.Fatalf("dirs = %v, want two", dirs)
+	}
+	shipped := dirs[1]
+	entries, err := os.ReadDir(shipped)
+	if err != nil {
+		t.Fatalf("the search names %s and nothing is there: %v", shipped, err)
+	}
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	sort.Strings(names)
+	want := []string{"add-zsh-hook", "colors", "is-at-least", "regexp-replace"}
+	if strings.Join(names, " ") != strings.Join(want, " ") {
+		t.Errorf("%s holds %v, want %v", shipped, names, want)
 	}
 }

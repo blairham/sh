@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -149,4 +150,64 @@ func prompt(t *testing.T, typed string, argv ...string) (out, errs string, code 
 	sh.Stdin = r
 	code = driver.MainArgs(sh, argv)
 	return o.String(), e.String(), code
+}
+
+// The fourth route into the function search, and the one that matters: a real
+// startup file, read by the real front end, autoloading the names this shell
+// ships and calling them.
+//
+// The other three — a bare call, "autoload -Uz" then a call, a call from
+// inside another function — are graded in dialect/zsh against the library.
+// This one cannot be: what a startup file is, and when it is read, is the
+// front end's to know, and a payload that works under "-c" and not at startup
+// is exactly the shape #1968 is about. The names here are the four a real
+// ~/.zshrc reaches before it has done anything of its own.
+func TestTheShippedFunctionsAreReachableFromAStartupFile(t *testing.T) {
+	home := scratchHome(t)
+	t.Setenv("FPATH", shippedFunctionDir(t))
+	writeHomeFile(t, home, ".zshrc", strings.Join([]string{
+		"autoload -Uz is-at-least add-zsh-hook colors regexp-replace",
+		`is-at-least 5.0 5.9 && echo "rc: is-at-least ok"`,
+		"hookfn() { : }",
+		`add-zsh-hook precmd hookfn && echo "rc: add-zsh-hook ok ${precmd_functions[*]}"`,
+		`colors && echo "rc: colors ok ${#fg}"`,
+		`v=abc; regexp-replace v b X && echo "rc: regexp-replace ok $v"`,
+	}, "\n")+"\n")
+
+	out, errs, code := prompt(t, "", "zsh", "-i")
+	if code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs)
+	}
+	for _, want := range []string{
+		"rc: is-at-least ok",
+		"rc: add-zsh-hook ok hookfn",
+		"rc: colors ok 11",
+		"rc: regexp-replace ok aXc",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("out = %q (stderr %q), want %q", out, errs, want)
+		}
+	}
+	// And nothing complained on the way. "function definition file not found"
+	// is what a startup file got for every one of these names before the
+	// files existed, and it is the whole of what this is here to notice.
+	if strings.Contains(errs, "definition file not found") {
+		t.Errorf("stderr = %q, want no unresolved autoload", errs)
+	}
+}
+
+// shippedFunctionDir is where the function files this shell installs live in
+// the checkout, found from this file's own path so the answer does not depend
+// on where "go test" was started.
+func shippedFunctionDir(t *testing.T) string {
+	t.Helper()
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("no caller information: cannot find the shipped function files")
+	}
+	dir := filepath.Join(filepath.Dir(thisFile), "..", "..", "share", "sh", "functions")
+	if _, err := os.Stat(filepath.Join(dir, "is-at-least")); err != nil {
+		t.Fatalf("shipped function directory %s: %v", dir, err)
+	}
+	return dir
 }

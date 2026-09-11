@@ -166,3 +166,135 @@ func TestTheRefusalIsDeferredToTheExpansion(t *testing.T) {
 		t.Errorf("parse: %v, want the node to be built and marked rather than refused", err)
 	}
 }
+
+// lengthOpListRun is lengthOpRun on the other side of the array axes: a bare
+// name that *is* its elements, subscripts counting from one and a comma read
+// as a range. That is the grammar the rows below belong to — the pairing of a
+// length with an operator exists in one shell, and it is the one that reads an
+// array this way.
+func lengthOpListRun(t *testing.T, src string) (string, int) {
+	t.Helper()
+	return runGrammar(t, src, func(d *syntax.Dialect) {
+		d.ParamLengthTakesAnOperator = true
+		d.ParamSubstitution = true
+		d.ParamElementSelection = true
+	}, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.ArrayScalarIsTheWholeArray = Yes
+		sem.ArrayNameWithoutSubscriptIsTheList = Yes
+		sem.ArrayLengthWithoutSubscriptIsCount = Yes
+		sem.WholeSubscriptOnAScalarMeasuresIt = Yes
+		sem.ArrayBaseIsZero = No
+		sem.SubscriptCommaIsARange = Yes
+		sem.SplitParamExpansion = No
+		r.Semantics = &sem
+	})
+}
+
+// The length over an operator counts what the operator *left*, where what it
+// left is a list.
+//
+// The measurement is uniform — apply, then measure — and the half that was
+// missing is which measurement: this took the width of the joined value for
+// every list, so `${#a:#one}` on a three-element array was 13, the length of
+// `one two three`, rather than the 2 elements the filter leaves. A plausible
+// number at status 0, and the wrong one for `(( ${#list:#$x} ))`, which is how
+// a script asks whether a name is in a list (#1651).
+//
+// Named for the axes rather than for a shell. Measured on zsh 5.9.2, the only
+// shell that builds this node; the corpus row is
+// `param/length-over-an-operator-counts-what-it-left`.
+func TestTheLengthOverAnOperatorCountsWhatItLeft(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`a=(one two three); echo ${#a:#one}`, "2"},
+		{`a=(one two three); echo ${#a:#*}`, "0"},
+		{`a=(one two three); echo ${#a#o}`, "3"},
+		{`a=(one two three); echo ${#a%%e}`, "3"},
+		{`a=(one two three); echo ${#a//e/E}`, "3"},
+		{`a=(one two three); echo ${#a:-zz}`, "3"},
+		{`a=(one two three); echo ${#a[@]:#one}`, "2"},
+		{`a=(one two three); echo ${#a[*]:#one}`, "2"},
+		{`a=(one two three); echo ${#a[1,3]:#one}`, "2"},
+		{`a=(one two three); b=(two four); echo ${#a:|b}`, "2"},
+		{`a=(o two); echo ${#a#o}`, "2"},
+		{`set -- p q r; echo ${#@:#q}`, "2"},
+		// An element the trim emptied is still an element. The command-line
+		// reading drops it, which would answer 2.
+		{`set -- p q r; echo ${#@#p}`, "3"},
+
+		// The other half of the rule: what the operator left is one string,
+		// so the length is its width. Beside the rows above rather than in a
+		// test of their own, because they are the readings those must not
+		// give.
+		{`a=(one two three); echo ${#a[1]#o}`, "2"},
+		{`s="one two three"; echo ${#s:#one}`, "13"},
+		{`a=(one two three); unset u; echo ${#u:-$a}`, "13"},
+		{`a=(one two three); s=""; echo ${#s:-$a}`, "13"},
+
+		// The controls, which were already right: no operator at all, and a
+		// scalar under one.
+		{`a=(one two three); echo ${#a}`, "3"},
+		{`v=abc; echo ${#v#a}`, "2"},
+	} {
+		if out, st := lengthOpListRun(t, c.src); strings.TrimSpace(out) != c.want || st != 0 {
+			t.Errorf("%s = %q status %d, want %q at 0", c.src, strings.TrimSpace(out), st, c.want)
+		}
+	}
+}
+
+// `${#s[@]}` on a name holding one string: one dialect measures the string,
+// the others count a list of one.
+//
+// The three-character row is what says which reading it is. An empty scalar
+// answering 0 on its own would only say "no elements"; `a b` answering 3 says
+// the whole-array subscript reached the *value*. This is how a script asks
+// "did I get anything?" after a parse, and 1 for a name that never became an
+// array is a count agreeing with the wrong answer (#1553).
+//
+// Both answers are asserted, which is what makes it an axis rather than a
+// fix: the rows are the same script under the two readings.
+func TestAWholeSubscriptOnAScalarMeasuresTheValueOrCountsOne(t *testing.T) {
+	for _, c := range []struct {
+		src           string
+		measures, one string
+	}{
+		{`a=""; echo ${#a[@]}`, "0", "1"},
+		{`a=""; echo ${#a[*]}`, "0", "1"},
+		{`b=x; echo ${#b[@]}`, "1", "1"},
+		{`h="a b"; echo ${#h[@]}`, "3", "1"},
+		// A scalar with an operator on it asks the same question, because
+		// the count and the width are the same pair either way.
+		{`h="a b"; echo ${#h[@]:#zz}`, "3", "1"},
+
+		// The rows that ask nobody: an array is a list under both readings,
+		// and an unset name is nothing under both.
+		{`a=(xx yy); echo ${#a[@]}`, "2", "2"},
+		{`unset a; echo ${#a[@]}`, "0", "0"},
+		{`h="a b"; echo ${#h}`, "3", "3"},
+	} {
+		for _, side := range []struct {
+			name   string
+			answer Answer
+			want   string
+		}{
+			{"measuring the value", Yes, c.measures},
+			{"counting a list of one", No, c.one},
+		} {
+			run := func(r *Runner) {
+				sem := CoreSemantics()
+				sem.ArrayScalarIsTheWholeArray = No
+				sem.ArrayBaseIsZero = Yes
+				sem.WholeSubscriptOnAScalarMeasuresIt = side.answer
+				r.Semantics = &sem
+			}
+			out, st := runGrammar(t, c.src, func(d *syntax.Dialect) {
+				d.ParamLengthTakesAnOperator = true
+				d.ParamElementSelection = true
+			}, run)
+			if strings.TrimSpace(out) != side.want || st != 0 {
+				t.Errorf("%s with %s = %q status %d, want %q at 0",
+					c.src, side.name, strings.TrimSpace(out), st, side.want)
+			}
+		}
+	}
+}

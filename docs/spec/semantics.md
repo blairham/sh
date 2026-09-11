@@ -8748,6 +8748,35 @@ Makes `${#a}` of an array the number of elements, which is zsh's
 reading; bash and ksh93 measure the element the bare name yields. Asked
 only where the two answers differ.
 
+**`WholeSubscriptOnAScalarMeasuresIt`** — bash no · dash no · ksh93 no · zsh yes
+
+Makes `${#s[@]}` on a name holding one string the **width of that
+string** rather than the count of a list of one. Measured 2026-09-10:
+
+    ${#a[@]} on      a=""   b=x   h="a b"
+    bash 5.3.15      1      1     1
+    bash as `sh`     1      1     1
+    bash 3.2.57      1      1     1
+    ksh93            1      1     1
+    dash             bad substitution
+    zsh 5.9.2        0      1     3
+
+The three-character row is what says which reading it is. An empty
+scalar answering 0 on its own would only say "no elements"; `a b`
+answering 3 says a whole-array subscript on a scalar reaches the
+*value*. One answer against one, so it is a disagreement and not a
+majority.
+
+Asked of the **length alone**, which is where the two readings differ.
+Everything else about a scalar's `[@]` is unanimous — `set -- "${h[@]}"`
+leaves one parameter holding `a b` in every column — so the fields ask
+nobody.
+
+It is how a script asks "did I get anything?" after a parse:
+`local -a opts; zparseopts …; (( ${#opts[@]} ))` reads 1 for a name that
+never became an array, which is a count agreeing with the wrong answer
+(#1553).
+
 **`ArrayNameWithoutSubscriptIsTheList`** — bash no · dash unspecified · ksh93 no · zsh yes
 
 Makes an unquoted bare array name the array itself — one field per

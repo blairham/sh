@@ -229,3 +229,132 @@ func trailingRunSeparates(w string, literal []bool, ifs string, ifsSet bool) boo
 	}
 	return found
 }
+
+// operatorResultCount is the element count of what an operator on a *list*
+// left, and whether the expansion is that shape at all.
+//
+// `${#…}` over an operator measures what the operator leaves, and which
+// measurement that is follows the shape of what it left: the element count
+// where the operand was a list, the width of the text where it was one
+// string. Measured on zsh 5.9.2 — the only shell that builds this node, the
+// other four calling the pairing a bad substitution — with
+// `a=(one two three)`, `b=(two four)`, `s="one two three"` and
+// `typeset -A m=(k1 v1 k2 v2)`:
+//
+//	${#a}           3   the control: no operator, already right
+//	${#a:#one}      2   the filter drops one element
+//	${#a:#*}        0   one that drops every element is zero, not one
+//	${#a:/one/X}    3   the replacement keeps them all
+//	${#a[@]:/one/X} 3   and so does the subscripted spelling
+//	${#a[*]:#one}   2
+//	${#a[1,3]:#one} 2
+//	${#a:|b}        2   the difference of two lists
+//	${#a#o}         3   a per-element trim is still three elements
+//	${#a%%e}        3
+//	${#a//e/E}      3
+//	${#a:-zz}       3   the test did not fire, so this is the array
+//	${#m:#v1}       1   an association counts what the filter left of its
+//	${#m#v}         2   values, and a trim leaves all of them
+//	${#@:#q}        2   the positional parameters are a list like any other
+//
+// against 13 for every array row but the first — the width of
+// `one two three`, which is the value joined rather than the list the
+// operator left. A plausible number at status 0, and the wrong one for
+// `(( ${#list:#$x} ))`, which is how a script asks whether a name is in a
+// list.
+//
+// The rows that stay a width are the other half of the rule and are asserted
+// beside these:
+//
+//	${#a[1]#o}      2   a subscript naming one element is one string
+//	${#s:#one}     13   and so is a scalar, however the operator reshapes it
+//	unset u; ${#u:-$a}  13
+//	s=""; ${#s:-$a}     13
+//
+// The last two are why the *name* decides and not what the expansion came
+// to: a substituted word holding a whole array is still measured as text, so
+// a predicate reading the word's fields would have counted 3 where the shell
+// says 13.
+func (r *Runner) operatorResultCount(e *syntax.ParamExpr) (int, bool) {
+	if e.Inner != nil || e.Bad || e.Indirect || e.Prefix != 0 {
+		// A nested inner is measured a level down, by the branch beside this
+		// one; the other three are not this construct at all.
+		return 0, false
+	}
+	listed := *e
+	switch {
+	case e.Index != nil:
+		// The same pair of questions the plain length asks of the same
+		// subscript, and asked through the same two predicates: a subscript
+		// naming one element is one string, and so is a whole-array
+		// subscript on a name that holds one. Measured, `h="a b"` makes
+		// `${#h[@]:#a}` 3 — the width of the value the filter left — where
+		// counting the one field it came to answers 1.
+		if !r.subscriptYieldsAList(e) || r.wholeSubscriptMeasuresAScalar(e) {
+			return 0, false
+		}
+	case e.Name == "@" || e.Name == "*":
+		// The positional parameters, which expandAtList reaches through a
+		// rewrite of its own.
+	case r.nameIsAList(e.Name):
+		// A bare array or association name standing for its elements. The
+		// list path declines a bare name where nothing splits, so the
+		// subscript that says "the elements" is written on here — the same
+		// rewrite bareArrayAsList makes for a word on a command line, and
+		// the same axis, asked because it is the same question and not a new
+		// one.
+		if !r.ask(r.sem().ArrayNameWithoutSubscriptIsTheList,
+			"a bare array name being its elements") {
+			return 0, false
+		}
+		listed.Index = &syntax.Word{Spans: []syntax.Span{{Kind: syntax.Literal, Value: "@"}}}
+	default:
+		return 0, false
+	}
+	// splitNever and unquoted: the elements are being *counted* rather than
+	// placed in a command line, so neither the IFS split nor the quoted join
+	// has anything to say about how many the operator left. Measured, the
+	// count is the same written either way — `"${#a:#one}"` and `${#a:#one}`
+	// are both 2 — which is the rule the plain length already follows, the
+	// length being taken ahead of the join. And an element holding a space
+	// is one element either way: `c=("x y" z); ${#c:#q}` is 2.
+	//
+	// expandingNestedInner for the same reason a nested inner sets it: an
+	// element the operator emptied is a *value* here and not a word the
+	// command line is about to lose. Measured, `set -- p q r; ${#@#p}` is 3
+	// — the trim leaves an empty first parameter and it still counts — where
+	// the command-line reading drops it and answers 2.
+	defer r.countingElements()()
+	fields, ok := r.expandAtList(syntax.Span{Kind: syntax.ParamExp, Param: &listed}, splitNever, false)
+	if !ok {
+		return 0, false
+	}
+	return len(fields), true
+}
+
+// countingElements says the fields about to be produced are being counted
+// rather than placed in a command line, and restores what the caller had.
+//
+// The same flag a nested inner sets, and for the same reason — see
+// Runner.expandingNestedInner.
+func (r *Runner) countingElements() func() {
+	prev := r.expandingNestedInner
+	r.expandingNestedInner = true
+	return func() { r.expandingNestedInner = prev }
+}
+
+// wholeSubscriptMeasuresAScalar reports whether `${#s[@]}` on a name holding
+// one string measures that string rather than counting a list of one.
+//
+// Asked only of a name that is *set and not a list*, which is the whole of
+// where the two readings differ. An unset name is no elements and an empty
+// value under either reading — `${#nosuch[@]}` is 0 in every column — so
+// asking there would demand a dialect for a question with one answer. See
+// Semantics.WholeSubscriptOnAScalarMeasuresIt for the panel.
+func (r *Runner) wholeSubscriptMeasuresAScalar(e *syntax.ParamExpr) bool {
+	if !r.wholeArrayIndex(e) || r.nameIsAList(e.Name) || r.subscriptNameIsAbsent(e) {
+		return false
+	}
+	return r.ask(r.sem().WholeSubscriptOnAScalarMeasuresIt,
+		"`${#s[@]}` on a scalar measuring the value it holds")
+}

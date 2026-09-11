@@ -758,6 +758,11 @@ func Semantics() interp.Semantics {
 	// ${#a} of an array counts elements, and a function's $LINENO counts
 	// from the function.
 	s.ArrayLengthWithoutSubscriptIsCount = interp.Yes
+	// `${#s[@]}` on a scalar is the width of the value, so an empty one is
+	// 0 and `a b` is 3 — where every other shell in the panel reads the name
+	// as a list of one and answers 1 for both. Not moved by `ksharrays`,
+	// measured: the three rows are 0, 1 and 3 under the option as well.
+	s.WholeSubscriptOnAScalarMeasuresIt = interp.Yes
 	s.FcEmptyHistoryIsAnError = interp.Yes
 	s.JobControlAbsenceIsReportedFirst = interp.Yes
 	// A stopped job holds the exit back: the shell says so and stays,

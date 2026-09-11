@@ -3601,6 +3601,54 @@ type Semantics struct {
 	// there and the answer is "not found"; zsh has options and refuses it.
 	AliasHasPrintOption Answer
 
+	// GlobalAliases gives this dialect the second kind of alias: `alias -g
+	// name=value` defines one, and a word naming one is expanded *wherever
+	// it stands* rather than only where a command word does — in an
+	// argument, a `for` list, a `case` pattern, a redirection target, a
+	// heredoc delimiter, a `[[ ]]` word. The value is spliced as tokens like
+	// any other alias body, so `alias -g UP="| tr a-z A-Z"` puts a pipeline
+	// in the middle of a line.
+	//
+	// zsh alone, measured: bash calls `-g` an invalid option, ksh93 an
+	// unknown one, and dash reads no options at all and looks for an alias
+	// called `-g`. It shares a table with the regular kind there — `alias -g`
+	// over a regular name replaces it — and the plain listing shows both,
+	// which is why the two are one field rather than one table each.
+	//
+	// The letter is the visible half; the expansion is the feature. A
+	// dialect answering Yes and expanding nothing would list an alias it
+	// never uses, which is the shape #2081 was filed against in reverse.
+	//
+	// `make axis-sweep` pins this in three of the four dialects and cannot
+	// in dash, which is a fact about dash rather than a gap: `alias` there
+	// reads no options at all — AliasParsesOptions is No — so the accepted
+	// set is never consulted, and no shell in the panel has an `unalias -g`
+	// for it to be consulted from either. The answer has no reachable
+	// consequence in that dialect, which is the third of the four triages
+	// docs/spec/semantics.md lists. SuffixAliases is pinned in all four,
+	// because `unalias -s` reads the axis whatever `alias` does with its
+	// operands.
+	GlobalAliases Answer
+
+	// SuffixAliases gives this dialect the third kind, which is a second
+	// *namespace*: `alias -s ext=value` keys on a command word's extension,
+	// and a command word `text.ext` — text non-empty, ext the run after the
+	// last dot — is replaced by the text `value text.ext`. So `alias -s
+	// txt=cat` makes `./x.txt` into `cat ./x.txt`.
+	//
+	// zsh alone, measured, and it is a parse-time substitution there rather
+	// than a fallback for a command that was not found: it beats an
+	// executable of that name on PATH and a function of that name, and loses
+	// to a regular alias of that name, which is exactly the order a
+	// substitution done while reading the line produces. A value holding a
+	// pipeline splices one in.
+	//
+	// The namespace is the half a single flag could not say: the two sets
+	// are never listed together, `unalias -a` empties the other table and
+	// leaves this one, and `unalias -s` is the only way to remove one —
+	// which is also why this field is read by `unalias` as well.
+	SuffixAliases Answer
+
 	// AliasReportsNotFound says something when `alias` is given a name the
 	// table does not hold. True in bash, dash and ksh93; zsh reports 1 and
 	// prints nothing.

@@ -91,6 +91,10 @@ func loneDashRun2(t *testing.T, src string, option Answer) (string, int) {
 	// A second axis this reaches, and not the one under test: whether the
 	// builtin says anything about an alias it does not have.
 	sem.UnaliasReportsNotFound = Yes
+	// And a third, which decides whether `unalias` has an `-s` at all. No,
+	// because the lone dash is the question here and three of the four
+	// answer that way.
+	sem.SuffixAliases = No
 	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh"})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {

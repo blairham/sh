@@ -278,6 +278,10 @@ func Semantics() interp.Semantics {
 	// dash parses no options for `alias`, so `-p` is a name there.
 	s.AliasParsesOptions = interp.No
 	s.AliasHasPrintOption = interp.No
+	// It reads no options at all, so `-g` and `-s` are names it cannot
+	// find rather than kinds it has.
+	s.GlobalAliases = interp.No
+	s.SuffixAliases = interp.No
 	s.AliasReportsNotFound = interp.Yes
 	s.UnaliasReportsNotFound = interp.Yes
 	s.AliasNotFoundStatusCounts = interp.No

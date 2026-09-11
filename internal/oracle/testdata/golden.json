@@ -158,6 +158,182 @@
         "TimedOut": false
       }
     },
+    "alias/a-global-alias-expands-in-an-argument": {
+      "bash": {
+        "Stdout": "hi UP",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "hi UP",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "hi UP",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "hi UP",
+        "Stderr": "alias: -g not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "alias: -g: unknown option~Usage: alias [-ptx] [name[=value]...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "HI",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-global-alias-expands-in-command-position-too": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 2: f: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 2: f: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 2: f: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "f~st=0",
+        "Stderr": "alias: -g not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "alias: -g: unknown option~Usage: alias [-ptx] [name[=value]...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "f~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-global-alias-expands-once-per-word": {
+      "bash": {
+        "Stdout": "[S][S]~[A]",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 3: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 4: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[S][S]~[A]",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 3: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 4: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[S][S]~[A]",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 3: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 4: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[S][S]~[A]",
+        "Stderr": "alias: -g not found~alias: -g not found~alias: -g not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "alias: -g: unknown option~Usage: alias [-ptx] [name[=value]...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[x][x]~[A]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-global-alias-is-not-expanded-quoted": {
+      "bash": {
+        "Stdout": "[G][G][G][x G y]~assign=G",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[G][G][G][x G y]~assign=G",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[G][G][G][x G y]~assign=G",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[G][G][G][x G y]~assign=G",
+        "Stderr": "alias: -g not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "alias: -g: unknown option~Usage: alias [-ptx] [name[=value]...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[hello][G][G][x G y]~assign=G",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/a-name-the-table-does-not-hold": {
       "bash": {
         "Stdout": "st=1",
@@ -196,6 +372,50 @@
       },
       "zsh": {
         "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-regular-alias-beats-a-suffix-alias": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 3: p.sh: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ALIAS~st=0",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: line 1: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 3: p.sh: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "ALIAS~st=0",
+        "Stderr": "alias: -s not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "alias: -s: unknown option~Usage: alias [-ptx] [name[=value]...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ALIAS~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -329,6 +549,94 @@
       "zsh": {
         "Stdout": "st=127",
         "Stderr": "\u003cscript\u003e:2: command not found: a",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-suffix-alias-beats-the-command-of-that-name": {
+      "bash": {
+        "Stdout": "RAN~st=0",
+        "Stderr": "\u003cscript\u003e: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "RAN~st=0",
+        "Stderr": "\u003cscript\u003e: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "RAN~st=0",
+        "Stderr": "\u003cscript\u003e: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "RAN~st=0",
+        "Stderr": "alias: -s not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "alias: -s: unknown option~Usage: alias [-ptx] [name[=value]...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "SUFFIX p.sh~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-suffix-alias-runs-a-file-by-its-extension": {
+      "bash": {
+        "Stdout": "st=126",
+        "Stderr": "\u003cscript\u003e: line 2: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 3: ./x.txt: Permission denied",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=126",
+        "Stderr": "\u003cscript\u003e: line 2: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 3: ./x.txt: Permission denied",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=126",
+        "Stderr": "\u003cscript\u003e: line 2: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cscript\u003e: line 3: ./x.txt: Permission denied",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=126",
+        "Stderr": "alias: -s not found~\u003cscript\u003e: 3: ./x.txt: Permission denied",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "alias: -s: unknown option~Usage: alias [-ptx] [name[=value]...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "hello~st=0",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -598,6 +906,50 @@
         "TimedOut": false
       }
     },
+    "alias/both-kinds-at-once-is-refused": {
+      "bash": {
+        "Stdout": "st=2~st=2",
+        "Stderr": "\u003cshell\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 1: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~st=2",
+        "Stderr": "\u003cshell\u003e: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 1: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2~st=2",
+        "Stderr": "\u003cshell\u003e: line 0: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 0: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "alias: -g not found~alias: -s not found~alias: -s not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "alias: -g: unknown option~alias: -s: unknown option~Usage: alias [-ptx] [name[=value]...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~st=0",
+        "Stderr": "\u003cshell\u003e:alias:1: illegal combination of options",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/defines-and-lists-one": {
       "bash": {
         "Stdout": "alias a='echo x'",
@@ -682,6 +1034,50 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:2: command not found: a",
         "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/neither-kind-is-accepted-where-the-shell-has-not-got-it": {
+      "bash": {
+        "Stdout": "ag=2~as=2~us=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ag=2~as=2~us=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ag=2~as=2~us=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "ag=1~as=1~us=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "ag=2~as=2~us=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ag=0~as=0~us=1",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -774,6 +1170,50 @@
         "TimedOut": false
       }
     },
+    "alias/the-letters-alias-still-has-not-got": {
+      "bash": {
+        "Stdout": "L=2~r=2~m=2",
+        "Stderr": "\u003cshell\u003e: line 1: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 1: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 1: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "L=2~r=2~m=2",
+        "Stderr": "\u003cshell\u003e: line 1: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 1: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 1: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "L=2~r=2~m=2",
+        "Stderr": "\u003cshell\u003e: line 0: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 0: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 0: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "L=1~r=1~m=1",
+        "Stderr": "alias: -L not found~alias: -r not found~alias: -m not found~alias: z* not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "alias: -L: unknown option~Usage: alias [-ptx] [name[=value]...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "L=0~r=0~m=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/the-status-may-count-what-was-missing": {
       "bash": {
         "Stdout": "st=1",
@@ -818,6 +1258,50 @@
         "TimedOut": false
       }
     },
+    "alias/the-two-kinds-are-two-namespaces": {
+      "bash": {
+        "Stdout": "--plain--~alias r='y'~--g--~--s--",
+        "Stderr": "\u003cshell\u003e: line 4: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 5: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "--plain--~r='y'~--g--~--s--",
+        "Stderr": "\u003cshell\u003e: line 4: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 5: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "--plain--~alias r='y'~--g--~--s--",
+        "Stderr": "\u003cshell\u003e: line 3: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--plain--~t='z'~r='y'~G='x'~--g--~--s--",
+        "Stderr": "alias: -g not found~alias: -s not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "--plain--~G=x~r=y~--g--~G=x~--s--~t=z",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/two-newlines-shift-by-two": {
       "bash": {
         "Stdout": "LINENO=5",
@@ -856,6 +1340,50 @@
       },
       "zsh": {
         "Stdout": "one~two~three~LINENO=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/unalias-a-leaves-the-suffix-aliases": {
+      "bash": {
+        "Stdout": "st=0~--plain--~--s--",
+        "Stderr": "\u003cshell\u003e: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~--plain--~--s--",
+        "Stderr": "\u003cshell\u003e: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~--plain--~--s--",
+        "Stderr": "\u003cshell\u003e: line 3: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0~--plain--~--s--",
+        "Stderr": "alias: -s not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~--plain--~--s--~t=z",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

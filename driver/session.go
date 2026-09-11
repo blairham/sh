@@ -114,6 +114,8 @@ func (s *Session) run(ctx context.Context, src string) int {
 	// once, in NewSession — not per input, which would undo a `shopt -u
 	// expand_aliases` the session ran earlier.
 	pr.aliases = s.r.ExpandingAlias
+	pr.globalAliases = s.r.ExpandingGlobalAlias
+	pr.suffixAliases = s.r.ExpandingSuffixAlias
 	status, how := s.sh.executeLines(ctx, s.r, pr, in)
 	if how != endingRanOut {
 		// A parse failure or a refusal has a status of its own, and neither

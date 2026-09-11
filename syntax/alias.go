@@ -36,23 +36,47 @@ import "strings"
 // changed by the `alias` builtin while the script runs, and is therefore the
 // caller's to keep. A nil Aliases expands nothing, which is what a shell that
 // does not expand them in this context supplies.
+//
+// The same type answers for all three kinds. [Parser.GlobalAliases] is asked
+// about every word rather than only a command word, and
+// [Parser.SuffixAliases] is asked about a command word's *extension* rather
+// than about the whole word — so the argument is a suffix there, and nothing
+// else about the seam changes.
 type Aliases func(name string) (value string, ok bool)
 
-// expandAlias replaces the current token when it names an alias, and keeps
-// doing so while the replacement names another.
+// expandCommandWord is alias expansion where a command word stands: the table
+// first, and then the suffix kind, which is keyed on the word's extension.
 //
-// done is the names already used in this command, and is how the recursion
-// stops: an alias is never expanded twice in one command, so `alias
-// echo='echo x'` gives `x hi` rather than looping, and `a` → `b x` → `a y x`
-// leaves the inner `a` as an ordinary word that is then not found. Both
-// measured, and unanimous.
-func (p *Parser) expandAlias(done map[string]bool) {
-	for p.aliasable() {
+// The order is the measured one and it falls out of doing both while reading
+// the line: `alias p.sh='echo ALIAS'` beside `alias -s sh='echo SUFFIX'` runs
+// the regular alias, and a suffix alias beats an executable of that name on
+// PATH and a function of that name — neither of which exists yet when the
+// line is read.
+func (p *Parser) expandCommandWord(done map[string]bool) {
+	p.expandAlias(done, p.Aliases)
+	p.expandSuffixAlias(done)
+}
+
+// expandAlias replaces the current token when look says it names an alias,
+// and keeps doing so while the replacement names another.
+//
+// done is the names already used, and is how the recursion stops: an alias is
+// never expanded twice in one chain, so `alias echo='echo x'` gives `x hi`
+// rather than looping, and `a` → `b x` → `a y x` leaves the inner `a` as an
+// ordinary word that is then not found. Both measured, and unanimous.
+//
+// look is a parameter rather than always [Parser.Aliases] because the global
+// kind is the same substitution asked at a different place: one loop, one
+// splice, and the caller says which table and which set of spent names. A
+// second copy of it for globals is exactly the duplication that has bitten
+// this parser before.
+func (p *Parser) expandAlias(done map[string]bool, look Aliases) {
+	for p.aliasable(look) {
 		name := p.tok.Text
 		if done[name] {
 			return
 		}
-		value, ok := p.Aliases(name)
+		value, ok := look(name)
 		if !ok {
 			return
 		}
@@ -61,7 +85,94 @@ func (p *Parser) expandAlias(done map[string]bool) {
 	}
 }
 
-// aliasable reports whether the current token could name an alias.
+// expandGlobalAlias replaces the current token when it names a *global*
+// alias — one expanded wherever a word stands rather than only where a
+// command word does.
+//
+// Called from [Parser.next], which is what "wherever a word stands" means
+// here: an argument, a `for` list, a `case` pattern, a redirection target, a
+// heredoc delimiter, a word inside `[[ ]]`. All measured against the shell
+// that has them, along with the negative half — a quoted word is not one, and
+// an assignment `v=G` is a single word whose text is not the alias name, so
+// neither expands.
+//
+// The set of spent names belongs to the *chain*, and fresh says whether this
+// token begins one. A token straight from the lexer does; a token still being
+// handed out from a splice does not, and carries the names its own expansion
+// spent. Both halves are measured:
+//
+//   - `alias -g S=x` used twice in one command expands twice, where a regular
+//     alias used twice in one command expands once — so the set cannot be the
+//     command's;
+//   - `alias -g f='echo f'` run as a command prints `f` rather than
+//     recurring, and the inner `f` arrives from the splice — so the set
+//     cannot be the token's either.
+func (p *Parser) expandGlobalAlias(fresh bool) {
+	if p.GlobalAliases == nil {
+		return
+	}
+	if fresh {
+		p.globalDone = clearedSet(p.globalDone)
+	}
+	if !p.aliasable(p.GlobalAliases) {
+		return
+	}
+	// Asked before anything is allocated, so a word naming no global alias —
+	// which is nearly every word — costs one lookup and nothing else. next is
+	// on the keystroke path.
+	if _, ok := p.GlobalAliases(p.tok.Text); !ok {
+		return
+	}
+	if p.globalDone == nil {
+		p.globalDone = map[string]bool{}
+	}
+	p.expandAlias(p.globalDone, p.GlobalAliases)
+}
+
+// clearedSet empties a set without throwing its storage away, and takes a nil
+// one as already empty.
+func clearedSet(m map[string]bool) map[string]bool {
+	clear(m)
+	return m
+}
+
+// expandSuffixAlias replaces a command word of the form `text.name` with the
+// text `value text.name`, where `name` names a suffix alias.
+//
+// Measured: text must be non-empty — `.zsh` is not one, `a/.txt` is — the
+// extension is the run after the *last* dot, and the word is appended to the
+// value rather than consumed, so `alias -s txt=cat` turns `./x.txt` into `cat
+// ./x.txt`. The value is spliced as text like any other alias body, so one
+// holding a pipeline puts the filename after the pipeline's last command.
+//
+// A trailing space in the value is not special here, which comes free: the
+// text spliced ends in the word.
+//
+// The word goes into done so the splice cannot find itself. Without it a
+// value that leaves the same word standing in command position — an empty
+// one does — matches the same suffix forever.
+func (p *Parser) expandSuffixAlias(done map[string]bool) {
+	if !p.aliasable(p.SuffixAliases) {
+		return
+	}
+	word := p.tok.Text
+	if done[word] {
+		return
+	}
+	dot := strings.LastIndexByte(word, '.')
+	if dot <= 0 {
+		return
+	}
+	value, ok := p.SuffixAliases(word[dot+1:])
+	if !ok {
+		return
+	}
+	done[word] = true
+	p.spliceAlias(value + " " + word)
+}
+
+// aliasable reports whether the current token could name an alias that look
+// answers for.
 //
 // Unquoted words only: `"a"` is a command name and not an alias, unanimously.
 // A quoted word is not the same word, which is the rule that lets a script
@@ -69,12 +180,11 @@ func (p *Parser) expandAlias(done map[string]bool) {
 // token's source text, quotes and all, so a table holding `"a"` would match a
 // quoted `"a"` without this — which is how the check is tested.
 //
-// The kind check is belt and braces: both callers are positions where a word
-// is the only thing that can be, so no operator ever reaches here. It says
-// what may be expanded rather than relying on where this happens to be
-// called from.
-func (p *Parser) aliasable() bool {
-	return p.Aliases != nil && p.tok.Kind == TokWord && !p.tok.IsQuoted() && p.tok.Text != ""
+// The kind check is belt and braces where a command word stands, and load
+// bearing where a global alias is looked for: that one is asked of every
+// token the lexer hands over, so an operator really does reach here.
+func (p *Parser) aliasable(look Aliases) bool {
+	return look != nil && p.tok.Kind == TokWord && !p.tok.IsQuoted() && p.tok.Text != ""
 }
 
 // spliceAlias lexes an alias value and puts its tokens in front of the input,

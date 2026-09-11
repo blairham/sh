@@ -117,13 +117,43 @@ func (r *Runner) RemoveFunction(name string) bool {
 	return true
 }
 
-// AliasTable is every alias defined now, as a copy.
+// AliasTable is every *regular* alias defined now, as a copy.
 //
 // A copy for the reason GetAssoc's is: a caller reading the table, changing it
 // and writing it back must not move the shell's state halfway through.
+//
+// Regular only, because the parameter this answers is: the shell with three
+// kinds keeps three parameters, and `$aliases` there holds neither the
+// global ones nor the suffix ones — measured, `alias -g G=x; alias r=y;
+// alias -s t=z` leaves `${(k)aliases}` naming `r` alone. The other two are
+// [Runner.GlobalAliasTable] and [Runner.SuffixAliasTable].
 func (r *Runner) AliasTable() map[string]string {
 	out := make(map[string]string, len(r.aliases))
 	for k, v := range r.aliases {
+		if v.global {
+			continue
+		}
+		out[k] = v.value
+	}
+	return out
+}
+
+// GlobalAliasTable is every global alias, and SuffixAliasTable every suffix
+// alias, on the same terms.
+func (r *Runner) GlobalAliasTable() map[string]string {
+	out := map[string]string{}
+	for k, v := range r.aliases {
+		if v.global {
+			out[k] = v.value
+		}
+	}
+	return out
+}
+
+// SuffixAliasTable is the second namespace, keyed on the extension.
+func (r *Runner) SuffixAliasTable() map[string]string {
+	out := make(map[string]string, len(r.suffixAliases))
+	for k, v := range r.suffixAliases {
 		out[k] = v
 	}
 	return out
@@ -134,20 +164,39 @@ func (r *Runner) AliasTable() map[string]string {
 // The same table `alias` and `unalias` keep, because a shell with two alias
 // tables is two shells. Whether a *word* then expands as one is the parser's
 // question and not this one — see [Runner.LookupAlias].
+//
+// The regular kind, to pair with AliasTable: the parameter these answer for
+// writes a regular alias, and a name already holding a global one is
+// replaced by a regular one rather than keeping the letter it was defined
+// with.
 func (r *Runner) SetAlias(name, value string) {
-	if r.aliases == nil {
-		r.aliases = map[string]string{}
-	}
-	r.aliases[name] = value
+	r.defineAlias(name, value, aliasEitherKind)
 }
 
 // RemoveAlias undefines one, and reports whether there was one.
 func (r *Runner) RemoveAlias(name string) bool {
-	if _, ok := r.aliases[name]; !ok {
-		return false
-	}
-	delete(r.aliases, name)
-	return true
+	return r.removeAlias(name, aliasEitherKind)
+}
+
+// SetGlobalAlias and SetSuffixAlias are the pair for the other two kinds, for
+// the parameters that present them — `$galiases` and `$saliases`. A global
+// alias shares the table the regular ones are in, so this *replaces* a
+// regular alias of the same name, exactly as `alias -g` does.
+func (r *Runner) SetGlobalAlias(name, value string) {
+	r.defineAlias(name, value, aliasGlobalKind)
+}
+
+// SetSuffixAlias writes the second namespace, keyed on the extension.
+func (r *Runner) SetSuffixAlias(suffix, value string) {
+	r.defineAlias(suffix, value, aliasSuffixKind)
+}
+
+// RemoveSuffixAlias undefines one, and reports whether there was one. There
+// is no global counterpart because there is no separate table to take it out
+// of: RemoveAlias is the removal for both kinds, which is what `unalias`
+// having no `-g` says.
+func (r *Runner) RemoveSuffixAlias(suffix string) bool {
+	return r.removeAlias(suffix, aliasSuffixKind)
 }
 
 // CommandsOnPath is every name PATH would resolve, to the path it resolves to.

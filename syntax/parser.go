@@ -25,6 +25,14 @@ type Parser struct {
 	// nothing.
 	Aliases Aliases
 
+	// GlobalAliases answers for the kind expanded wherever a word stands
+	// rather than only where a command word does, and SuffixAliases for the
+	// kind keyed on a command word's extension. Both are the caller's
+	// tables, both are nil in a dialect without the kind, and one dialect in
+	// the panel has either — see interp.Semantics.GlobalAliases.
+	GlobalAliases Aliases
+	SuffixAliases Aliases
+
 	// pending are tokens an alias expansion put in front of the lexer, and
 	// aliasNextWord says the last expansion ended in a space, so the word
 	// after it is eligible in turn.
@@ -47,6 +55,13 @@ type Parser struct {
 	// `alias al='y=1 al'` expands forever. Measured: that alias is
 	// `al: not found` in ksh93 and zsh alike, so the inner name is spent.
 	aliasDone map[string]bool
+	// globalDone is the same set for one word's *global* expansion, which is
+	// per word rather than per command. Kept on the parser and cleared
+	// rather than allocated each time, because it is reached from next.
+	globalDone map[string]bool
+	// aliasPrimed records that the first token has been offered to the
+	// global-alias hook. See primeAliases.
+	aliasPrimed bool
 
 	err        error
 	incomplete bool
@@ -212,12 +227,23 @@ func (p *Parser) next() {
 		// An alias expansion is still being handed out. Nothing else about
 		// the input has moved, so the lexer is not touched.
 		p.tok, p.pending = p.pending[0], p.pending[1:]
+		// A global alias inside an alias body is expanded in turn — measured
+		// `alias -g B=x; alias -g H='a B'` gives `a x` — so the tokens being
+		// handed out are asked as well as the ones being read. Not a fresh
+		// chain: these tokens are the expansion's, and the names it has
+		// already spent are spent for them.
+		p.expandGlobalAlias(false)
 		return
 	}
 	p.tok = p.lex.Next()
 	if p.err == nil && p.lex.Err() != nil {
 		p.err = p.lex.Err()
 	}
+	// A global alias is expanded wherever a word stands, so the question is
+	// asked of every token rather than at the handful of places a command
+	// word is read. A token read here begins a chain of its own. See
+	// expandGlobalAlias.
+	p.expandGlobalAlias(true)
 	if p.lex.Incomplete() {
 		// The lexer ran out inside a quote or an expansion. The parser may
 		// never fail over it — a word that never finished is still a word —
@@ -225,6 +251,28 @@ func (p *Parser) next() {
 		// it are still on the stack. Taken once, like every other.
 		p.ranOut()
 	}
+}
+
+// primeAliases offers the *first* token of the input to the global-alias
+// hook, which could not have seen it when it was read.
+//
+// [newParserOn] reads that token in the constructor, deliberately — a caller
+// with something to say to the lexer has to say it before anything is lexed —
+// and the three alias hooks are plain fields the caller sets afterwards. Every
+// later token passes through [Parser.next] with the tables in hand; this one
+// is the exception, and without this a global alias written as the first word
+// of a parse is the one word that never expands. Command position is not
+// affected, because the table there is read when the command is parsed rather
+// than when its word was lexed.
+//
+// Once, because a second pass over a token already expanded would spend its
+// names again: `alias -g S='S x'` would come out `S x x`.
+func (p *Parser) primeAliases() {
+	if p.aliasPrimed {
+		return
+	}
+	p.aliasPrimed = true
+	p.expandGlobalAlias(true)
 }
 
 func (p *Parser) at(k Kind) bool { return p.tok.Kind == k }
@@ -575,6 +623,7 @@ func (p *Parser) Parse() *File {
 // The second result is false at the end of the input, and when parsing has
 // already failed.
 func (p *Parser) NextLine() (*File, bool) {
+	p.primeAliases()
 	p.skipNewlines()
 	if p.at(TokEOF) || p.err != nil {
 		return nil, false
@@ -1058,10 +1107,10 @@ func (p *Parser) parseCommand() Command {
 	// Before the keyword dispatch below, because an alias may hold one:
 	// `alias iff='if true; then'` has to produce the `if` the grammar reads.
 	// The set is fresh per command, so `e yes; e two` expands `e` twice.
-	if p.Aliases != nil {
+	if p.Aliases != nil || p.SuffixAliases != nil {
 		p.aliasNextWord = false
 		p.aliasDone = map[string]bool{}
-		p.expandAlias(p.aliasDone)
+		p.expandCommandWord(p.aliasDone)
 	}
 	switch {
 	case p.at(TokEOF), p.at(TokNewline), p.atStopWord():
@@ -1706,9 +1755,9 @@ func (p *Parser) parseSimple() Command {
 				// dispatching here and this is the next one, so the call has
 				// to be made again — leaving it out made the alias an
 				// ordinary command name and `command not found` the answer.
-				if p.Aliases != nil {
+				if p.Aliases != nil || p.SuffixAliases != nil {
 					p.aliasNextWord = false
-					p.expandAlias(map[string]bool{})
+					p.expandCommandWord(map[string]bool{})
 				}
 				// And only a simple command may follow. A reserved word has
 				// nowhere to go after it — `nocorrect if true; then echo hi;
@@ -1739,9 +1788,10 @@ func (p *Parser) parseSimple() Command {
 			// trailing-space branch below carries. The set is
 			// parseCommand's, so a name already spent in this command is not
 			// expanded again.
-			if len(c.Assigns) > 0 && !seenArg && p.aliasSpliced == 0 && p.Aliases != nil {
+			if len(c.Assigns) > 0 && !seenArg && p.aliasSpliced == 0 &&
+				(p.Aliases != nil || p.SuffixAliases != nil) {
 				p.aliasNextWord = false
-				p.expandAlias(p.aliasDone)
+				p.expandCommandWord(p.aliasDone)
 				if h, ok := p.isAssign(p.tok); ok {
 					// The value put an assignment where the command word was
 					// — `alias al='x=1 echo'` — and it is a prefix like the
@@ -1775,6 +1825,9 @@ func (p *Parser) parseSimple() Command {
 				return c
 			}
 			if p.aliasNextWord && p.aliasSpliced == 0 && p.Aliases != nil {
+				// Still the table and not the suffix kind: this is the word
+				// *after* a value ending in a blank, which is an argument
+				// rather than a command word.
 				// The expansion before this one ended in a space, so this
 				// word is eligible too — the rule behind `alias sudo='sudo '`.
 				// Only once the expansion's own tokens are spent: the space
@@ -1782,7 +1835,7 @@ func (p *Parser) parseSimple() Command {
 				// own second word. Cleared first so a value that does not end
 				// in a space stops the chain here.
 				p.aliasNextWord = false
-				p.expandAlias(map[string]bool{})
+				p.expandAlias(map[string]bool{}, p.Aliases)
 				continue
 			}
 			// A word list in front of `()` is a definition's name list where

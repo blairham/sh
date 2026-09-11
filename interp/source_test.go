@@ -67,6 +67,12 @@ func permissive() Semantics {
 	// the shell still running to answer, so the permissive answer here is
 	// the one that carries on; redirfatal_test.go asks the axis itself.
 	s.RedirectErrorOnSpecialBuiltinFatal = No
+	// The two kinds of alias one dialect has. No, because it is the answer
+	// three of the four give and because it is the one that changes nothing
+	// about a builtin's letters — a test not about the kinds should see the
+	// plain `alias` and the plain `unalias`.
+	s.GlobalAliases = No
+	s.SuffixAliases = No
 	return s
 }
 

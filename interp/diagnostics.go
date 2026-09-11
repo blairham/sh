@@ -562,6 +562,13 @@ type Diagnostics struct {
 	// either way, so silence here is a wording rather than a behavior.
 	WaitNotOurChild string
 
+	// AliasIllegalOptionCombination is `alias -g -s`, which asks for both
+	// kinds at once. They are two namespaces, so no call can be about both:
+	// measured `illegal combination of options` at status 1, whether the
+	// call would have defined or listed. Only the dialect with both letters
+	// reaches it.
+	AliasIllegalOptionCombination string
+
 	// UnimplementedOptionLetters are, per builtin, the option letters this
 	// dialect has and this shell does not.
 	//

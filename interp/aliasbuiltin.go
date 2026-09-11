@@ -9,17 +9,50 @@ import (
 	"strings"
 )
 
-// `alias` and `unalias` keep the table a shell substitutes from.
+// `alias` and `unalias` keep the tables a shell substitutes from.
 //
-// This is the table and the two builtins. *Expansion* — replacing the word
+// This is the tables and the two builtins. *Expansion* — replacing the word
 // when a line is parsed — is the other half and is deliberately separate: it
 // happens in the parser rather than here, needs an input stack to splice text
-// in, and is the one component on the keystroke path and under the fuzzer. A
-// table that nothing reads yet is still worth having, because `alias` in a
-// startup file stops being an error and the two builtins are measurable on
-// their own.
+// in, and is the one component on the keystroke path and under the fuzzer.
 //
 // Nothing here expands anything, and no test claims it does.
+//
+// There are three kinds of alias and two namespaces, which is one dialect's
+// shape and is measured rather than assumed:
+//
+//   - a *regular* alias is expanded where a command word stands;
+//   - a *global* alias is expanded wherever a word stands, and shares the
+//     table with the regular ones — `alias -g dup=…` replaces a regular
+//     `dup`, and one listing shows both;
+//   - a *suffix* alias is keyed on a command word's extension rather than on
+//     the whole word, and lives in a table of its own. `unalias -a` empties
+//     the first table and leaves this one, which is what says they are two.
+
+// aliasDef is one entry of the shared table: what the name stands for, and
+// whether it is global.
+//
+// A struct rather than a second map keyed by name, because two maps are two
+// places for a removal to reach one of — and `alias -g` over a regular name
+// is a *replacement* in the shell this models, which two maps would have to
+// keep in step by hand.
+type aliasDef struct {
+	value  string
+	global bool
+}
+
+// aliasKind is which aliases a definition, a lookup or a listing is about.
+type aliasKind uint8
+
+const (
+	// aliasEitherKind is the plain builtin: it defines a regular alias, and
+	// lists the regular and the global ones together.
+	aliasEitherKind aliasKind = iota
+	// aliasGlobalKind is `-g`.
+	aliasGlobalKind
+	// aliasSuffixKind is `-s`, the second namespace.
+	aliasSuffixKind
+)
 
 func init() {
 	builtins["alias"] = biAlias
@@ -35,22 +68,41 @@ func init() {
 //
 // A shell that should not expand simply does not pass it, which is how the
 // panel's 2v2 split is expressed — see syntax.Dialect.ExpandAliases.
+//
+// Global aliases are in here too, because a global alias in command position
+// expands there as well: `alias -g f='echo f'` run as a command prints `f`,
+// measured.
 func (r *Runner) LookupAlias(name string) (string, bool) {
-	v, ok := r.aliases[name]
+	a, ok := r.aliases[name]
+	return a.value, ok
+}
+
+// LookupGlobalAlias answers only for the global kind, for the parser's other
+// hook — the one it asks about *every* word rather than only a command word.
+func (r *Runner) LookupGlobalAlias(name string) (string, bool) {
+	a, ok := r.aliases[name]
+	if !ok || !a.global {
+		return "", false
+	}
+	return a.value, true
+}
+
+// LookupSuffixAlias answers for the second namespace, keyed on the extension
+// of a command word rather than on the whole word.
+func (r *Runner) LookupSuffixAlias(suffix string) (string, bool) {
+	v, ok := r.suffixAliases[suffix]
 	return v, ok
 }
 
 func biAlias(r *Runner, _ context.Context, args []string) int {
 	print := false
+	kind := aliasEitherKind
 	// Two questions, because dash answers the first differently from the
 	// other three: it reads no options for `alias` at all, so `alias -p` is a
 	// *name* there and the answer is "-p not found". zsh does read options
 	// and simply has no `-p`, which is a refusal rather than a lookup.
 	if r.ask(r.sem().AliasParsesOptions, "`alias` reading options at all") {
-		known := ""
-		if r.ask(r.sem().AliasHasPrintOption, "`alias -p`") {
-			known = "p"
-		}
+		known := r.aliasOptionLetters()
 		if r.unspecified {
 			return 2
 		}
@@ -58,18 +110,27 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 		if code != 0 {
 			return code
 		}
+		if strings.ContainsRune(opts, 'g') && strings.ContainsRune(opts, 's') {
+			// The two kinds are two namespaces, so one word cannot ask for
+			// both: measured `illegal combination of options`, status 1,
+			// whether the call defines or lists.
+			r.diagf("%s\n", Wording(r.diag().AliasIllegalOptionCombination,
+				"alias: illegal combination of options"))
+			return 1
+		}
+		switch {
+		case strings.ContainsRune(opts, 'g'):
+			kind = aliasGlobalKind
+		case strings.ContainsRune(opts, 's'):
+			kind = aliasSuffixKind
+		}
 		args, print = rest, strings.ContainsRune(opts, 'p')
 	} else if r.unspecified {
 		return 2
 	}
 	if len(args) == 0 {
-		names := make([]string, 0, len(r.aliases))
-		for name := range r.aliases {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			r.printf("%s\n", r.aliasLine(name, print))
+		for _, name := range r.aliasNames(kind) {
+			r.printf("%s\n", r.aliasLine(name, kind, print))
 		}
 		return 0
 	}
@@ -77,18 +138,22 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 	for _, a := range args {
 		name, value, isDefinition := strings.Cut(a, "=")
 		if isDefinition {
-			if r.aliases == nil {
-				r.aliases = map[string]string{}
-			}
-			r.aliases[name] = value
+			r.defineAlias(name, value, kind)
 			continue
 		}
-		if _, ok := r.aliases[name]; !ok {
+		found, listed := r.lookupForListing(name, kind)
+		if !found {
 			r.aliasNotFound("alias", name)
 			missing++
 			continue
 		}
-		r.printf("%s\n", r.aliasLine(name, print))
+		// Found, and printed only where it is of the kind asked for: `alias
+		// -g` naming a *regular* alias reports success and says nothing,
+		// measured. The tables are what "found" is about and the letter is a
+		// filter on the listing.
+		if listed {
+			r.printf("%s\n", r.aliasLine(name, kind, print))
+		}
 	}
 	if missing == 0 {
 		return 0
@@ -103,10 +168,98 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 	return 1
 }
 
+// aliasOptionLetters is the set `alias` takes in this dialect, which is the
+// paired half of Diagnostics.UnimplementedOptionLetters: a letter is either
+// here or there, and one that is in neither reads as "no shell has this"
+// rather than "this shell has not got it yet" (#2081).
+func (r *Runner) aliasOptionLetters() string {
+	known := ""
+	if r.ask(r.sem().AliasHasPrintOption, "`alias -p`") {
+		known += "p"
+	}
+	if r.ask(r.sem().GlobalAliases, "global aliases, `alias -g`") {
+		known += "g"
+	}
+	if r.ask(r.sem().SuffixAliases, "suffix aliases, `alias -s`") {
+		known += "s"
+	}
+	return known
+}
+
+// defineAlias writes one entry of whichever table the kind names.
+func (r *Runner) defineAlias(name, value string, kind aliasKind) {
+	if kind == aliasSuffixKind {
+		if r.suffixAliases == nil {
+			r.suffixAliases = map[string]string{}
+		}
+		r.suffixAliases[name] = value
+		return
+	}
+	if r.aliases == nil {
+		r.aliases = map[string]aliasDef{}
+	}
+	r.aliases[name] = aliasDef{value: value, global: kind == aliasGlobalKind}
+}
+
+// lookupForListing answers the two questions a named operand asks: whether
+// the tables hold it at all, which is what the status is about, and whether
+// it is of the kind the letter asked for, which is what the listing is about.
+func (r *Runner) lookupForListing(name string, kind aliasKind) (found, listed bool) {
+	if kind == aliasSuffixKind {
+		_, ok := r.suffixAliases[name]
+		return ok, ok
+	}
+	a, ok := r.aliases[name]
+	if !ok {
+		return false, false
+	}
+	return true, kind == aliasEitherKind || a.global
+}
+
+// aliasNames is what a listing walks, in order.
+func (r *Runner) aliasNames(kind aliasKind) []string {
+	var names []string
+	if kind == aliasSuffixKind {
+		names = make([]string, 0, len(r.suffixAliases))
+		for name := range r.suffixAliases {
+			names = append(names, name)
+		}
+	} else {
+		names = make([]string, 0, len(r.aliases))
+		for name, a := range r.aliases {
+			if kind == aliasGlobalKind && !a.global {
+				continue
+			}
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
 func biUnalias(r *Runner, _ context.Context, args []string) int {
-	args, opts, code := r.builtinOptions("unalias", args, "a")
+	known := "a"
+	// The same letter `alias` takes, for the same reason: a suffix alias is
+	// not reachable from the plain form. `unalias txt` with a suffix alias
+	// called `txt` is "no such hash table element" and leaves it defined,
+	// measured — so without the letter there is no way to remove one.
+	//
+	// There is no `-g` here and that is not an oversight: `unalias -g` is a
+	// bad option in the shell that has global aliases, because they share
+	// the table the plain form already empties.
+	if r.ask(r.sem().SuffixAliases, "suffix aliases, `unalias -s`") {
+		known += "s"
+	}
+	if r.unspecified {
+		return 2
+	}
+	args, opts, code := r.builtinOptions("unalias", args, known)
 	if code != 0 {
 		return code
+	}
+	kind := aliasEitherKind
+	if strings.ContainsRune(opts, 's') {
+		kind = aliasSuffixKind
 	}
 	if strings.ContainsRune(opts, 'a') {
 		// zsh takes `-a` to mean the whole table and nothing else, so a name
@@ -117,7 +270,13 @@ func biUnalias(r *Runner, _ context.Context, args []string) int {
 				"unalias: -a: too many arguments"))
 			return 1
 		}
-		r.aliases = nil
+		// One namespace each: `unalias -a` leaves the suffix aliases
+		// standing and `unalias -s -a` leaves the others, measured.
+		if kind == aliasSuffixKind {
+			r.suffixAliases = nil
+		} else {
+			r.aliases = nil
+		}
 		return 0
 	}
 	if len(args) == 0 {
@@ -125,13 +284,28 @@ func biUnalias(r *Runner, _ context.Context, args []string) int {
 	}
 	status := 0
 	for _, name := range args {
-		if _, ok := r.aliases[name]; !ok {
+		if !r.removeAlias(name, kind) {
 			status = r.aliasNotFound("unalias", name)
-			continue
 		}
-		delete(r.aliases, name)
 	}
 	return status
+}
+
+// removeAlias takes one name out of whichever table the kind names, and
+// reports whether it was there.
+func (r *Runner) removeAlias(name string, kind aliasKind) bool {
+	if kind == aliasSuffixKind {
+		if _, ok := r.suffixAliases[name]; !ok {
+			return false
+		}
+		delete(r.suffixAliases, name)
+		return true
+	}
+	if _, ok := r.aliases[name]; !ok {
+		return false
+	}
+	delete(r.aliases, name)
+	return true
 }
 
 // aliasNotFound reports a name the table does not hold, for whichever of the
@@ -182,14 +356,20 @@ func (r *Runner) unaliasWithNothingToRemove() int {
 }
 
 // aliasLine spells one entry the way `alias` lists it.
-func (r *Runner) aliasLine(name string, forcePrefix bool) string {
+func (r *Runner) aliasLine(name string, kind aliasKind, forcePrefix bool) string {
 	prefix := r.diag().AliasListPrefix
 	if forcePrefix {
 		// `-p` prints the prefix even in the dialect whose plain listing has
 		// none, which is what makes the option worth having there.
 		prefix = "alias "
 	}
-	return prefix + name + "=" + r.quoteListedValue(r.sem().AliasQuoting, "`alias`", r.aliases[name])
+	value := ""
+	if kind == aliasSuffixKind {
+		value = r.suffixAliases[name]
+	} else {
+		value = r.aliases[name].value
+	}
+	return prefix + name + "=" + r.quoteListedValue(r.sem().AliasQuoting, "`alias`", value)
 }
 
 // ExpandingAlias is the parser's hook: what a name stands for when this shell
@@ -212,6 +392,25 @@ func (r *Runner) ExpandingAlias(name string) (string, bool) {
 		return "", false
 	}
 	return r.LookupAlias(name)
+}
+
+// ExpandingGlobalAlias and ExpandingSuffixAlias are the same hook for the
+// other two kinds, and they carry the same switch: the shell that has them
+// expands no alias of any kind under `-c`, measured, so all three go quiet
+// together rather than each deciding for itself.
+func (r *Runner) ExpandingGlobalAlias(name string) (string, bool) {
+	if !r.aliasExpansion {
+		return "", false
+	}
+	return r.LookupGlobalAlias(name)
+}
+
+// ExpandingSuffixAlias takes the extension rather than the whole word.
+func (r *Runner) ExpandingSuffixAlias(suffix string) (string, bool) {
+	if !r.aliasExpansion {
+		return "", false
+	}
+	return r.LookupSuffixAlias(suffix)
 }
 
 // AliasExpansion reports whether a line parsed now would have its alias words

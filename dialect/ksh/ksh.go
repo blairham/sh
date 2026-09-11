@@ -284,6 +284,10 @@ func Semantics() interp.Semantics {
 	s.SelectPromptNeedsTerminal = interp.Yes
 	s.AliasParsesOptions = interp.Yes
 	s.AliasHasPrintOption = interp.Yes
+	// Its extra letters are `-t` and `-x`, not these two: `alias -g` is
+	// `unknown option` on ksh93u+.
+	s.GlobalAliases = interp.No
+	s.SuffixAliases = interp.No
 	// It complains about `alias nope` and says nothing about `unalias nope`,
 	// which is why these are two questions.
 	s.AliasReportsNotFound = interp.Yes

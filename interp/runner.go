@@ -3550,12 +3550,8 @@ func (r *Runner) isExported(name string) bool {
 	if r.removed[name] {
 		return false
 	}
-	for k := range r.inheritedEnv {
-		if k == name {
-			return true
-		}
-	}
-	return false
+	_, born := r.bornWith(name)
+	return born
 }
 
 // inheritedEnv walks what the shell was born with, minus what `unset` took
@@ -3579,15 +3575,45 @@ func (r *Runner) inheritedEnv(yield func(name, value string) bool) {
 	}
 }
 
-// inheritedValue is the value a name was born with, if the shell was handed
-// one and `unset` has not taken it away.
-func (r *Runner) inheritedValue(name string) (string, bool) {
-	for k, v := range r.inheritedEnv {
-		if k == name {
-			return v, true
+// bornWith is one name looked up in what the shell was born with, and says
+// nothing about whether `unset` has since taken it away — that is the
+// caller's question and each of the two asks it differently.
+//
+// The whole of this is a scan that does not split. inheritedEnv is the right
+// shape for the four callers that want *every* name, and the wrong one for
+// the two that want one: walking it called strings.Cut on all 88 entries of a
+// real environment and consulted `removed` for each, then threw away
+// everything but the entry that matched. That was 30% of a function-call
+// benchmark — every variable lookup falling through the runner's own tables
+// pays it — and the work was never needed, because an entry either starts
+// with `NAME=` or cannot be the name however it splits (#2036).
+//
+// Deliberately no cached map. interp/clonetables.go records what one costs
+// here: a table shared with a clone that runs on a goroutine ends the process
+// with `fatal error: concurrent map read and map write`, which is not a Go
+// panic and which panicguard cannot catch. This needs no new state to be
+// fast.
+//
+// The first match wins, which is the answer the split walk gave for a
+// duplicated name and is what a shell handed two `X=` entries reads.
+func (r *Runner) bornWith(name string) (string, bool) {
+	for _, kv := range r.Env {
+		// The `=` has to be exactly where the name ends: `PATHX=1` must not
+		// answer for `PATH`, and an entry with no `=` at all cannot match.
+		if len(kv) > len(name) && kv[len(name)] == '=' && kv[:len(name)] == name {
+			return kv[len(name)+1:], true
 		}
 	}
 	return "", false
+}
+
+// inheritedValue is the value a name was born with, if the shell was handed
+// one and `unset` has not taken it away.
+func (r *Runner) inheritedValue(name string) (string, bool) {
+	if r.removed[name] {
+		return "", false
+	}
+	return r.bornWith(name)
 }
 
 // scope records the variables a function made local, and what they were.

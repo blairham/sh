@@ -13127,6 +13127,16 @@ exit 7`,
 		Why:     "the refusal is unanimous and the sentence is not: bash cannot overwrite an existing file, ksh93 says it already exists with the errno in brackets, dash and zsh word it as any other failed create",
 	},
 	{
+		ID: "redir/noclobber-writes-to-a-file-that-is-not-regular", Category: "redirection",
+		Snippet: `set -C; echo probe > /dev/null; echo "st=$?"`,
+		Why:     "what `set -C` protects is a *regular* file, and a character device is not one: every column writes to /dev/null with the option on, which is what keeps `2>/dev/null` — the most written redirection there is — working under it",
+	},
+	{
+		ID: "redir/noclobber-and-a-target-that-cannot-be-opened", Category: "redirection",
+		Snippet: `set -C; mkdir d; echo probe > d; echo "st=$?"`,
+		Why:     "the other side of the row above, and where the panel splits: a directory is not a regular file either, so the option has nothing to refuse and the open is attempted — bash, ksh93 and dash then report what the open said, and zsh words it as the option's own refusal",
+	},
+	{
 		ID: "redir/exec-with-a-redirection-that-cannot-be-made", Category: "redirection",
 		Snippet: `exec 3>/nope/x; echo after`,
 		Why:     "POSIX makes a redirection error on a special builtin fatal to a non-interactive shell, and the panel splits three to two over it: dash stops at 2, ksh93 and bash-as-`sh` stop at 1, and bash and zsh complain and print `after`. The bash and bash-as-`sh` rows are the same binary, which is what says the answer belongs to posix mode rather than to a shell",

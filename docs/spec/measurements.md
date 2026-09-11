@@ -9898,6 +9898,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/the-picked-descriptors-name-may-be-an-element` | **2>** `<shell>: 1: exec: {a[1]}: not found` *(status 127)* | `a1=10~written` | `a1=10~written` | **2>** `<shell>: line 0: exec: {a[1]}: not found` *(status 127)* | `a1=10~written` | **2>** `<shell>:1: no matches found: {a[1]}` *(status 1)* |
 | `redir/closing-a-descriptor-through-an-element` | **2>** `<shell>: 1: a[1]=3: not found~<shell>: 1: exec: {a[1]}: not found` *(status 127)* | `st=0~after=1` **2>** `<shell>: line 1: 3: Bad file descriptor` | `st=0~after=1` **2>** `<shell>: line 1: 3: Bad file descriptor` | **2>** `<shell>: line 0: exec: {a[1]}: not found` *(status 127)* | `st=0~after=1` **2>** `<shell>: 3: cannot open [Bad file descriptor]` | **2>** `<shell>:1: no matches found: {a[1]}` *(status 1)* |
 | `redir/noclobber-names-its-refusal` | `st=2` **2>** `<shell>: 1: cannot create f: File exists` | `st=1` **2>** `<shell>: line 1: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: line 1: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: f: file already exists [File exists]` | `st=1` **2>** `<shell>:1: file exists: f` |
+| `redir/noclobber-writes-to-a-file-that-is-not-regular` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `redir/noclobber-and-a-target-that-cannot-be-opened` | `st=2` **2>** `<shell>: 1: cannot open d: Is a directory` | `st=1` **2>** `<shell>: line 1: d: Is a directory` | `st=1` **2>** `<shell>: line 1: d: Is a directory` | `st=1` **2>** `<shell>: d: Is a directory` | `st=1` **2>** `<shell>: d: cannot create [Is a directory]` | `st=1` **2>** `<shell>:1: file exists: d` |
 | `redir/exec-with-a-redirection-that-cannot-be-made` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
 | `redir/a-failed-redirection-on-a-colon` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
 | `redir/a-failed-redirection-on-an-ordinary-command` | `after` **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: cannot create [No such file or directory]` | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
@@ -10544,6 +10546,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/noclobber-names-its-refusal` — the refusal is unanimous and the sentence is not: bash cannot overwrite an existing file, ksh93 says it already exists with the errno in brackets, dash and zsh word it as any other failed create
   ```sh
   set -C; echo a > f; echo b > f; echo "st=$?"
+  ```
+- `redir/noclobber-writes-to-a-file-that-is-not-regular` — what `set -C` protects is a *regular* file, and a character device is not one: every column writes to /dev/null with the option on, which is what keeps `2>/dev/null` — the most written redirection there is — working under it
+  ```sh
+  set -C; echo probe > /dev/null; echo "st=$?"
+  ```
+- `redir/noclobber-and-a-target-that-cannot-be-opened` — the other side of the row above, and where the panel splits: a directory is not a regular file either, so the option has nothing to refuse and the open is attempted — bash, ksh93 and dash then report what the open said, and zsh words it as the option's own refusal
+  ```sh
+  set -C; mkdir d; echo probe > d; echo "st=$?"
   ```
 - `redir/exec-with-a-redirection-that-cannot-be-made` — POSIX makes a redirection error on a special builtin fatal to a non-interactive shell, and the panel splits three to two over it: dash stops at 2, ksh93 and bash-as-`sh` stop at 1, and bash and zsh complain and print `after`. The bash and bash-as-`sh` rows are the same binary, which is what says the answer belongs to posix mode rather than to a shell
   ```sh

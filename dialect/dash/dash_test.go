@@ -610,3 +610,14 @@ func TestTheJobSpecThatNamesNothing(t *testing.T) {
 		t.Errorf("NoSuchJobStatus = %d, want %d", got, want)
 	}
 }
+
+// TestNoclobberFallbackIsAnOpen. Under `set -C` a target that is not a
+// regular file is opened rather than created, and this shell is the one whose
+// verb follows: `cannot open d` with the option on and `cannot create d` with
+// it off, for the identical redirection. Measured 2026-09-10 against dash
+// 0.5.12; see interp/noclobberopen.go for the panel.
+func TestNoclobberFallbackIsAnOpen(t *testing.T) {
+	if !dash.Diagnostics().NoclobberFallbackIsAnOpen {
+		t.Error("the noclobber fallback is worded as a create, want an open")
+	}
+}

@@ -1235,6 +1235,49 @@ The two halves are recorded together because neither is testable alone:
 where the axis says No, `>>|` and `>>` do the same thing and nothing can
 tell them apart.
 
+### Noclobber protects a regular file, and only a regular file
+
+The refusal is an exclusive create, and that is one rule wider than the
+option: `O_CREAT|O_EXCL` fails for **anything** already at the name, so a
+shell that stops there refuses `2>/dev/null` — the most written redirection
+there is.
+
+Measured 2026-09-10, `set -C; echo probe > TARGET`, across the whole panel
+in a scratch directory:
+
+| target | every column |
+| --- | --- |
+| `/dev/null`, `/dev/zero`, `/dev/stdout`, `/dev/fd/1` | written |
+| a fifo with a reader | written |
+| a symlink to `/dev/null` | written |
+| an existing regular file, or a symlink to one | refused |
+| a dangling symlink | refused |
+| a directory, a unix socket | refused |
+
+So the discriminator is the **type of the file already there** and not the
+path: `>/dev/stdout` is refused when standard output is a regular file, and
+a symlink is decided by what it reaches. A regular file is what the option
+protects; anything else is opened, and whatever the open says stands.
+
+The last three rows are refused by the open rather than by the option — a
+directory, a socket and a dangling symlink cannot be opened for writing —
+and that is where the panel splits, over the wording alone. bash, ksh93 and
+dash report what the open said, `Is a directory`; zsh reports its own
+refusal, `file exists`, for all of them. `NoclobberRefusalCoversAFailedOpen`
+is that choice, and it is also what keeps `>/dev/tty` answering `file
+exists` in a session with no controlling terminal, where the device passes
+the type test and the open then fails with ENXIO.
+
+The second open creates nothing — the file is demonstrably there — and one
+more verb follows it: dash says `cannot open d` under the option and `cannot
+create d` for the identical redirection with it off, where ksh93 says `cannot
+create` both times. `NoclobberFallbackIsAnOpen` is that, and like the field
+above it is a wording: the two shells do the same thing.
+
+The order matters and is kept: the create is still the exclusive one, so two
+shells racing for a new name cannot both believe they made it, and the type
+is read only once EEXIST has come back and there is a file to ask about.
+
 ## Wording is a third kind of answer
 
 `Diagnostics` began as one number and now carries what a shell *says*. The

@@ -1907,6 +1907,26 @@ type Diagnostics struct {
 	// verbs: %[1]s the name as written, %[2]s the errno reason. Empty
 	// where the dialect words it as any other failed create.
 	NoclobberRefusal string
+	// NoclobberRefusalCoversAFailedOpen words an open that failed for a
+	// reason of its own as the option's refusal, where the name held
+	// something that is not a regular file: a directory, a socket, a
+	// dangling symlink, a `/dev/tty` in a session with no controlling
+	// terminal. bash, ksh93 and dash report what the open said — `Is a
+	// directory` — and zsh reports `file exists` for all of them.
+	//
+	// Reached only under `set -C`, and only after the exclusive create
+	// came back EEXIST and the file turned out not to be regular: see
+	// openThroughNoclobber, which is where the panel that settled this is
+	// written down. A gate's refusal is never reworded here.
+	NoclobberRefusalCoversAFailedOpen bool
+	// NoclobberFallbackIsAnOpen words that same second open as an open
+	// rather than as a create: dash says `cannot open d: Is a directory`
+	// under `set -C` and `cannot create d: Is a directory` for the
+	// identical redirection with the option off, where ksh93 says `cannot
+	// create` both times. The two shells behave identically; only the verb
+	// moves. Reached only on the fallback, so it says nothing about any
+	// other failed open.
+	NoclobberFallbackIsAnOpen bool
 
 	// SyntaxError wraps a parse failure's own text. One verb: the text.
 	SyntaxError string

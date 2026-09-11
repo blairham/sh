@@ -278,6 +278,11 @@ func TestExpansionFlagErrors(t *testing.T) {
 
 // A flag the grammar accepts and this interpreter does not carry is refused
 // by name, because a quiet wrong answer is the one thing worse.
+//
+// `(t)` is the runner-nobody-told case rather than an unimplemented one: it
+// answers with a *word* for what a name is, the words are one shell's
+// vocabulary, and this runner has been given none — see SetParameterTypeWord,
+// and interp/typeflag_test.go for the same flag with a vocabulary supplied.
 func TestAnUnimplementedExpansionFlagIsRefusedByName(t *testing.T) {
 	out, errs, st := flagsRun(t, `x=b; echo "${(t)x}"; echo after`)
 	if !strings.Contains(errs, "the (t) expansion flag is not implemented") {

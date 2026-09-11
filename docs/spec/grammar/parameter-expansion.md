@@ -1076,6 +1076,7 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(j:sep:)` | join with sep | `a=(x y z); ${(j.,.)a}` | `x,y,z` |
 | `(@)` | keep array fields in `"…"` | `a=(x "y z" ""); "${(@)a}"` | 3 fields, empty kept |
 | `(P)` | value is a further name | `y=hello; x=y; ${(P)x}` | `hello` |
+| `(t)` | the *type* of the name | `w=(a b); ${(t)w}` | `array` |
 | `(~)` | mark the arguments of the flags behind it | `a=(? x); [[ '?' = (${(~j.|.)a}) ]]` | true |
 | `(k)` | keys of an associative array | `typeset -A m=(k1 v1); ${(k)m}` | `k1` |
 | `(v)` | with `(k)`: key and value pairs | `${(kv)m}` | `k1 v1` interleaved |
@@ -1624,6 +1625,73 @@ Details, each measured:
   way at the first character that is not a flag: `${(Ux}` errors at
   position 5.
 
+### `(t)` is what a name *is*, in place of what it holds
+
+The one read that separates "the value changed" from "the name is still an
+array", and `[[ ${(t)x} == *array* ]]` is how a function checks what it was
+handed. Measured on zsh 5.9.2, 2026-09-10:
+
+    v=abc              scalar
+    w=(a b)            array
+    typeset -A m       association
+    typeset -i n=1     integer
+    typeset -F f=1     float          `-E` is a float too
+    typeset -x e=1     scalar-export
+    typeset -xa a=(1)  array-export
+    local l=1          scalar-local
+    $PATH              scalar-tied-export-special
+    an unset name      ``             and *unset*: `${(t)u-D}` is `D`
+
+The word is the parameter's kind followed by its attributes,
+hyphen-separated, in this order — measured a pair at a time:
+
+    kind  local  left|right_blanks|right_zeros  lower|upper  readonly
+          tied  export  unique  hide  hideval  special
+
+so `typeset -xr` is `scalar-readonly-export`, `typeset -aU -r` is
+`array-readonly-unique`, `typeset -L5 -x` is `scalar-left-export`, and a
+`typeset -ir` inside a call is `integer-local-readonly`. The **container
+wins over the numeric attribute**: `typeset -ia ia; ia=(1 2)` is `array`
+and says nothing about integers.
+
+**The flag replaces the base with the word, and the rest of the group runs
+on that word.** This is the whole of its interaction with everything else,
+and it is measured rather than assumed:
+
+    ${(Ut)v}      SCALAR   the letters transform it
+    ${(t)#v}      6        the length measures it
+    ${(t)v#s}     calar    an operator applies to it
+    ${(t)v:-D}    scalar   whose test does not fire — the name is set
+    ${(t)w[1]}    a        a subscript reads its *characters*: `array[1]`
+    ${(t)w[2]}    r
+    ${(t)w[1,2]}  ar
+    ${(t)w[@]}    array
+    ${(t)+v}      1        the set test still answers about the name
+    ${(Pt)h}      array    behind a `(P)`, the name it resolved to
+    s=hello; ${(t)${s}}  hello   a nested inner is a *value*, which has no
+                                 name to describe, so the flag does nothing
+
+**The vocabulary is one shell's**, so the core holds none of it: a dialect
+supplies the wording through `interp.SetParameterTypeWord` and a runner
+nobody told refuses the letter by name — the same rule `(p)` and `(g)`
+follow, and the sharpest case of it, because a word invented here would
+answer `[[ ${(t)x} == *array* ]]` at status 0 in a shell that has no such
+vocabulary. It is the one-name spelling of the `$parameters` table, and
+deliberately the same function, so the two cannot say different things
+about one parameter.
+
+**What this shell does not carry here.** `$@`, `$0`, `$#` and a positional
+are described by zsh — `array-readonly-special`, `scalar-special`,
+`integer-readonly-special` — and are refused by name here: they are not in
+the table the facts come from, and answering empty would be the word for a
+name the shell does not *have*, so `${(t)0-D}` would have substituted `D`
+for a parameter every shell has. The `L`/`R`/`Z` padding attributes and
+`hideval` are never written, and `special` is narrower than zsh's — it is
+written for a parameter this shell *provides*, where zsh calls `HOME` and
+`IFS` special as well. Under-reporting an attribute is the failure this can
+afford; naming a kind wrongly is not, because `array*` is what a caller
+switches on.
+
 ### What `(P)` reads as the name, and what it comes to
 
 **The name is read off the front of the text the base came to, and the rest
@@ -1763,6 +1831,7 @@ on the shells without the construct), `-split-and-join` (`(s)`, `(j)`),
 array otherwise gets), `-name-indirection` (`(P)`),
 `-keys-and-values` (`(k)`, `(kv)`), `-run-after-the-operator` (the
 ordering rule and `(P)`'s exception to it),
+`param/expansion-flags-parameter-type` (`(t)`),
 `param/expansion-flags-indirection-names-the-front-of-its-base` and
 `-keeps-the-resolved-shape` (the two sections above),
 `param/expansion-flags-indirection-assigns-through-the-name`,

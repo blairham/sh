@@ -23,6 +23,8 @@ import (
 //	typeset -xrl      scalar-lower-readonly-export  case before readonly
 //	typeset -xlZ      scalar-right_zeros-lower-export
 //	typeset -T        scalar-tied / array-tied      tied first after the type
+//	local (in a call) scalar-local                  local before everything
+//	typeset -ir "     integer-local-readonly        but the type
 //	PATH              scalar-tied-export-special
 //	options           association-hide-hideval-special
 //
@@ -30,12 +32,12 @@ import (
 // value rather than a set: `typeset -ia ia; ia=(1 2)` describes as `array`
 // and says nothing about integers, and the float spelling does the same.
 //
-// Three of zsh's attributes are deliberately never written here, because this
+// Two of zsh's attributes are deliberately never written here, because this
 // shell does not record them and a word claiming one would be a measurement
-// nobody made: the `L`/`R`/`Z` padding attributes, `local`, and `hideval`.
-// The first two are simply not tracked; `hideval` always accompanies `hide`
-// in zsh's own module parameters, so writing `hide` alone is the honest half
-// rather than a guess at the pair. `special` is written for a parameter this
+// nobody made: the `L`/`R`/`Z` padding attributes, and `hideval`. The first
+// is simply not tracked; `hideval` always accompanies `hide` in zsh's own
+// module parameters, so writing `hide` alone is the honest half rather than a
+// guess at the pair. `special` is written for a parameter this
 // shell provides — one that produces its value, or one registered as absent —
 // which is narrower than zsh's, where `HOME` and `IFS` are special as well.
 // Under-reporting an attribute is the failure this can afford; naming a type
@@ -90,6 +92,7 @@ func describeParameter(a interp.ParameterAttributes) string {
 		on   bool
 		word string
 	}{
+		{a.Local, "local"},
 		{a.Tied, "tied"},
 		{a.Lower, "lower"},
 		{a.Upper, "upper"},

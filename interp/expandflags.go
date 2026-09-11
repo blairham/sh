@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULfsj@kvP%qMuoOniaQbcwWA~Zze-lr0V"
+const implementedParamFlags = "ULfsj@kvP%qMuoOniaQbcwWA~Zze-lr0Vt"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -247,6 +247,19 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		// not the same string, and indirectTarget keeps the one the write
 		// wants. See indirectName.
 		words, set, isList = r.indirectBase(indirectName(text), e.Flags)
+	}
+
+	// Rule 4b: `(t)` puts the *type* of the name in place of its value, and
+	// everything below this runs on that word — measured, `${(Ut)v}` is
+	// `SCALAR`, `${(t)#v}` is 6 and `${(t)v#s}` is `calar`. Behind the `(P)`
+	// above, which is also measured: `${(Pt)h}` with `h=arr` describes `arr`
+	// and not `h`. See typeFlagBase.
+	if strings.ContainsRune(e.Flags, 't') {
+		var tok bool
+		if words, set, tok = r.typeFlagBase(e, indirect, words, set); !tok {
+			return nil, false, false, false
+		}
+		isList = false
 	}
 
 	// The is-it-set question, asked of whatever the base and `(P)` came to:
@@ -632,6 +645,13 @@ func (r *Runner) paramFlagCarried(c rune) bool {
 	switch c {
 	case 'p':
 		return r.flagArgEscapes != nil
+	case 't':
+		// The same rule again, and the sharpest case of it: `(t)` answers
+		// with a *word* for what a name is, and the words are one shell's
+		// vocabulary. A runner nobody told has none, and any word it made up
+		// would be a `[[ ${(t)x} == *array* ]]` answered at status 0 by a
+		// shell that had never been asked. See SetParameterTypeWord.
+		return r.parameterTypeWord != nil
 	case 'g':
 		// The same rule and a sharper case of it: `(g)` reads escapes in the
 		// *value*, which is again one shell's measurement, and a `(g)` read

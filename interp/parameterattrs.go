@@ -45,7 +45,10 @@ const (
 // the runner, and a field answering false for something never recorded would
 // read as a measurement rather than as a gap.
 type ParameterAttributes struct {
-	Kind     ParameterKind
+	Kind ParameterKind
+	// Local is a name a declaration in the *current* function scope
+	// shadowed, so the cell is that call's and goes away with it.
+	Local    bool
 	Exported bool
 	Readonly bool
 	// Lower and Upper are the case attributes, which fold a value on the way
@@ -77,8 +80,13 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		return ParameterAttributes{}, false
 	}
 	a := ParameterAttributes{
-		Kind:     r.parameterKind(name),
-		Exported: r.exported[name],
+		Kind:  r.parameterKind(name),
+		Local: r.localCell(name),
+		// isExported rather than the table, because the table is a
+		// tri-state and a name the *environment* supplied is spoken for by
+		// neither entry: reading it directly reported `$PATH` as an ordinary
+		// scalar, where the shell being described calls it exported.
+		Exported: r.isExported(name),
 		Readonly: r.readonly[name],
 		Lower:    r.lowered[name],
 		Upper:    r.uppered[name],

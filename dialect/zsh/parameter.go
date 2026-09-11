@@ -132,6 +132,11 @@ func registerParameterModule(r *interp.Runner) {
 	r.MarkReadonly("parameters")
 	r.MarkHidden("parameters")
 	registerArgv(r)
+	// `${(t)name}` is the one-name spelling of the table above, and it is
+	// the same words: a script asking what it was handed and a script
+	// reading `$parameters` must not be told two different things about one
+	// parameter.
+	r.SetParameterTypeWord(describeParameter)
 	registerEmptyParameters(r)
 	registerAbsentParameters(r)
 }

@@ -7768,6 +7768,11 @@ echo "st=$?"`,
 		Why:     "(P) reads the value as a further name — zsh's spelling of the indirection bash writes ${!x}, and the reason the two shells need no shared syntax for it",
 	},
 	{
+		ID: "param/expansion-flags-parameter-type", Category: "parameter expansion",
+		Snippet: `v=abc; w=(a b); typeset -A m=(k1 v1); typeset -i n=1; typeset -x e=1; typeset -xa xa=(1); f() { local l=1; printf "[%s]" "${(t)l}"; }; printf "[%s]" "${(t)v}" "${(t)w}" "${(t)m}" "${(t)n}" "${(t)e}" "${(t)xa}"; f; printf "[%s]" "${(t)nosuch}" "${(t)nosuch-D}" "${(Ut)v}" "${(t)#v}" "${(t)w[2]}"; echo`,
+		Why:     "`(t)` is the one read that separates \"the value changed\" from \"the name is still an array\", and `[[ ${(t)x} == *array* ]]` is how a function checks what it was handed. The first six brackets are the kinds and the attributes that ride on them, each a different word so no row passes by accident. Then the two that say an *unset* name is empty **and unset** — the colon-less `-D` fires — rather than a word for a nothing, which is the plausible answer a flag that always described something would give. The last three are the rule the whole flag follows: it puts the type word in place of the value and the rest of the group runs on *that*, so `(U)` uppercases it, `${#…}` measures it at 6, and a subscript reads its characters — `array[2]` is `r`, not the second element of `w`. Only one shell has the flag; the rest refuse the group, which is the three-way split of an expansion a grammar cannot read (#1657)",
+	},
+	{
 		ID: "param/expansion-flags-keys-and-values", Category: "parameter expansion",
 		Snippet: `typeset -A m=(k1 v1); printf "<%s>" ${(k)m} ${(kv)m}; echo`,
 		Why:     "(k) yields an associative array's keys and (v) beside it interleaves key and value. Probed with a single pair on purpose: zsh yields hash order for more, which it does not promise and a golden record must not pin",

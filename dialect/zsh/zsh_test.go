@@ -161,6 +161,9 @@ func TestSemantics(t *testing.T) {
 		{"ScalarSubscriptIsACharacter", s.ScalarSubscriptIsACharacter, interp.Yes},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.Yes},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.No},
+		// A math error inside `(( ))` leaves 2 here and 1 in the rest of the
+		// panel, with the same sentence in front of it either way.
+		{"ArithCommandErrorStatusIsTwo", s.ArithCommandErrorStatusIsTwo, interp.Yes},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"DollarZeroNamesTheInnermostCall", s.DollarZeroNamesTheInnermostCall, interp.Yes},
 		// A `jobs` listing: which end it starts from, and whether a job that

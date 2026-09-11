@@ -820,6 +820,11 @@ func Semantics() interp.Semantics {
 	// never reaches `two`. Note it is `[[ ]]` alone: the same expression
 	// in `(( ))` complains and the shell goes on.
 	s.ConditionArithmeticErrorIsFatal = interp.Yes
+	// A math error inside `(( ))` leaves 2 here where the rest of the panel
+	// leaves 1, and the sentence in front of it is already the same in both:
+	// `(( 1+ )); echo $?` is 2 in zsh 5.9.2 and 1 in bash 5.3, while
+	// `let "1+"` is 1 in both. #1625.
+	s.ArithCommandErrorStatusIsTwo = interp.Yes
 	s.ShiftPastEndFatal = interp.No
 	s.ArrayBaseIsZero = interp.No
 	// And the brackets an unbraced name carries are that element's, which is

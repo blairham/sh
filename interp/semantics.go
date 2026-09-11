@@ -1396,6 +1396,31 @@ type Semantics struct {
 	// cleanly never reaches it.
 	ConditionArithmeticErrorIsFatal Answer
 
+	// ArithCommandErrorStatusIsTwo is what `(( expr ))` leaves behind when
+	// the expression could not be evaluated: 2 where this is Yes, 1 where it
+	// is No.
+	//
+	// The sentence is not the question — that is Diagnostics, and the two
+	// shells measured here already word it their own way. What differs is
+	// what the construct leaves for the next line to read. Measured
+	// 2026-09-10, `(( 1+ )); echo $?`:
+	//
+	//	zsh   	bad math expression: operand expected at end of string, 2
+	//	bash  	arithmetic syntax error: operand expected, 1
+	//
+	// It is the *construct* and not the evaluator: `let "1+"` is 1 in both,
+	// and in ksh93 too, so a status hung on the arithmetic error itself
+	// would have moved `let` with it. That is the discriminating pair, and
+	// it is why this is asked here and nowhere else.
+	//
+	// The value is a status and not a truth, so it is reached the same way
+	// through `if (( 1+ ))` — the condition is false, and the status behind
+	// it is the dialect's.
+	//
+	// Asked only on the error path. An expression that reads cleanly leaves
+	// 0 or 1 for its own value, which is unanimous and not a question.
+	ArithCommandErrorStatusIsTwo Answer
+
 	// RegexQuotingMakesLiteral treats a quoted right operand of `=~` as a
 	// literal string. True in bash alone; ksh93 and zsh keep it a regex, so
 	// quoting a regex is unportable in either direction.
@@ -5484,7 +5509,10 @@ func PosixSemantics() Semantics {
 		// rather than a reading of the text: an error is diagnosed and the
 		// shell goes on, which is what POSIX asks of every failure that is
 		// not a special builtin's.
-		ConditionArithmeticErrorIsFatal:   No,
+		ConditionArithmeticErrorIsFatal: No,
+		// The standard has no `(( ))` at all, so nothing here is POSIX's to
+		// say; 1 is what the shells that do have it say, bar one.
+		ArithCommandErrorStatusIsTwo:      No,
 		LastPipelineElementInCurrentShell: No,
 		ShiftPastEndFatal:                 Yes,
 		// The standard describes one refusal and says nothing about a

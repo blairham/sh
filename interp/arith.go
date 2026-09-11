@@ -1092,7 +1092,7 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 		tree, perr := r.arithTree(c.Parsed, c.Expr)
 		if perr != nil {
 			r.diagf("%s\n", r.diag().ParseFailure(perr))
-			r.status = r.diag().StatusForParseError(perr)
+			r.status = r.arithCmdFailed(r.diag().StatusForParseError(perr))
 			return nil
 		}
 		v, err := r.evalArith(tree)
@@ -1102,12 +1102,33 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 		}
 		if err != nil {
 			r.diagf("%v\n", err)
-			r.status = 1
+			r.status = r.arithCmdFailed(1)
 			return nil
 		}
 		r.status = boolInt(v == 0)
 		return nil
 	})
+}
+
+// arithCmdFailed is what `(( ))` leaves behind once it has said what went
+// wrong, given the status the failure would otherwise carry.
+//
+// One question for both ways an expression can fail, because the shell that
+// answers it differently answers the same for both: `(( 1+ ))`, `(( 1 2 ))`
+// and `(( 8#9 ))` never reach the evaluator and `(( 1/0 ))` and a call to a
+// math function nothing defines do, and all five are 2 in zsh 5.9.2 and 1 in
+// bash 5.3. A status split across the two branches would have been two axes
+// with one answer each and no measurement separating them.
+//
+// The dialect's answer stands in front of the general one on the parse branch
+// rather than beside it: `(( ))` is a construct whose failure has a status of
+// its own, and taking the syntax status there gave zsh 1 where it leaves 2
+// (#1625).
+func (r *Runner) arithCmdFailed(otherwise int) int {
+	if r.ask(r.sem().ArithCommandErrorStatusIsTwo, "the status a failed `(( ))` leaves") {
+		return 2
+	}
+	return otherwise
 }
 
 // wordInvalidNumber words "this is not a number" the way the dialect does.

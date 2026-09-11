@@ -276,6 +276,97 @@ substitution. It has a deadline now: a hundred milliseconds of repeating a
 transition whose race is between two system calls, after which a reader that
 is still there is one holding the pipe for its own reasons.
 
+## Process substitution to a file: `=(cmd)`
+
+The same construct with a **regular file** where the two spellings above
+have a pipe. The command runs to completion, its output lands in the
+file, and the word becomes that file's path.
+
+Grammar flag: `ProcessSubstitutionToFile`, off in the core and on for
+`zsh` alone. Measured 2026-09-11 on zsh 5.9.2 against the whole panel —
+dash, bash 5.3, that binary as `sh`, bash 3.2 and ksh93 all read the `=`
+as an ordinary character and report the `(` — so this is additive
+grammar for one dialect rather than a disagreement, and there is no
+semantics axis behind it. Measured:
+`procsub/a-file-rather-than-a-pipe`,
+`procsub/a-file-substitution-outruns-a-pipe-buffer`,
+`procsub/a-file-substitution-discards-the-bodys-status`,
+`procsub/a-file-substitution-lives-as-long-as-its-command`,
+`procsub/a-file-substitution-opens-only-at-a-word`,
+`procsub/a-file-substitution-in-a-condition`,
+`procsub/a-quoted-file-substitution-is-text`.
+
+**A file is what the construct is for.** `diff =(sort a) =(sort b)`
+seeks in both operands and an editor opens one; neither is something a
+pipe can do. It follows that the body cannot be left running beside the
+reader: there is nobody to fill the buffer for and nothing to deadlock
+against, so it runs to completion first. `wc -c < =(head -c 200000
+/dev/zero)` answers `200000`, which is well past any pipe buffer and is
+the probe that separates the two readings — a shell that handed over a
+pipe here would stop rather than answer wrong.
+
+**Where it opens is most of the grammar, and it is narrow.** Unlike
+`<(` and `>(`, which open a substitution anywhere in an unquoted word,
+`=(` opens one in exactly two positions:
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `echo =(echo hi)` | a path |
+| `echo =(echo hi)x` | that path with `x` behind it |
+| `a=(=(echo hi))` | a path, the front of an array element being the front of a word |
+| `a==(echo hi)` | a path, the front of an assignment's **value** |
+| `a[1]==(echo hi)`, `a+==(echo hi)`, `typeset a==(echo hi)` | a path |
+| `echo x=(echo hi)` | `missing end of string` |
+| `echo a=b=(echo hi)` | `missing end of string` |
+| `echo a==(echo hi)` | `missing end of string` |
+| `echo =(echo hi)=(echo ho)` | `missing end of string` |
+| `cat > a==(echo hi)` | `missing end of string` |
+| `case a=(b) in a*)` | matches: the subject is the literal `a=(b)` |
+| `echo \=(echo hi)`, `"=(echo hi)"`, `'=(echo hi)'` | the text as written |
+
+The last four rows are what a rule of "an `=` in front of a `(`" gets
+wrong, and the reason the position has to be asked about rather than the
+characters: an `=` is an ordinary character everywhere else in a word,
+and a `(` behind one already means an array literal or a pattern group.
+Taking every `=(` for a substitution is the failure #1288 recorded,
+where a pattern with an `=` in the middle of it stopped a real prompt
+theme from parsing.
+
+The two accepting positions are the front of a **word** and the front of
+an assignment's **value**, and the second is only where an assignment may
+be written at all: the same word is refused as an argument, as a
+redirection's target and as a `case` subject.
+
+**Its lifetime is the command that named it**, exactly as a pipe's is:
+`f==(echo hi); cat $f` is `No such file or directory`. So the file is
+removed by the same step that removes the pipes, at the end of the
+command, and the path a script captured out of one leads nowhere
+afterwards.
+
+**The body's status is discarded.** `cat =(false)` and `cat =(exit 7)`
+are both 0, and `echo =(nosuchcmd)` prints the body's diagnostic, prints
+a path, and still exits 0. A word expands to a path or it fails to
+expand; a command that ran and failed still wrote the file it was given.
+`=()` and `=(:)` each give a valid file of zero bytes.
+
+**What the file looks like** is the shell's business the way the pipe's
+path is. zsh writes it under `$TMPPREFIX` — default `/tmp/zsh` — and
+ignores `TMPDIR`, and the mode is `0600`, which is also why naming one
+as a command is `permission denied` at status 126 rather than running
+it. This implementation keeps the mode and puts the file in the same
+per-shell directory as its pipes, for the reason recorded under the
+pipes: a path chosen by the interpreter belongs to the Runner rather
+than to the process, and there is no panel behavior to match because no
+other shell has the construct.
+
+**In a condition it is refused, with the same sentence as the other two
+and a different status.** `[[ x == =(x) ]]` is
+`process substitution =(x) cannot be used here` at status **1**, where
+`[[ x == <(x) ]]` is the identical sentence at status **2**. Both
+abandon the rest of the input. The status is the only thing that tells
+them apart, and it is a fact about the spelling rather than about the
+shell — no second shell has the file form to disagree about it.
+
 ## `$(<file)` — the substitution that reads a file
 
 A command substitution whose **whole body is one input redirection and

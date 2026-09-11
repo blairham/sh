@@ -37,11 +37,11 @@ const (
 	//
 	// Not every file the interpreter touches is an open the gate sees. The
 	// scaffolding a process substitution stands on — the temporary directory
-	// made for its pipes, the mkfifo that creates one, the pipe itself,
-	// their removal — is deliberately outside the boundary: those paths are
-	// chosen by the interpreter, never by the script, and gating them would
-	// let a policy refuse the mechanism while believing it refused an
-	// access.
+	// made for its pipes, the mkfifo that creates one, the pipe itself, the
+	// regular file `=(cmd)` writes instead of a pipe, their removal — is
+	// deliberately outside the boundary: those paths are chosen by the
+	// interpreter, never by the script, and gating them would let a policy
+	// refuse the mechanism while believing it refused an access.
 	//
 	// The pipe was on the wrong side of that sentence until #941, and the
 	// rule's own words are what put it right: a script writes `<(cmd)` and

@@ -1284,6 +1284,8 @@ func (p *printer) span(s Span) {
 		p.str("<(" + s.Value + ")")
 	case ProcSubstOut:
 		p.str(">(" + s.Value + ")")
+	case ProcSubstFile:
+		p.str("=(" + s.Value + ")")
 	default:
 		p.literal(s)
 	}

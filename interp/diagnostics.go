@@ -2972,10 +2972,10 @@ func (d Diagnostics) ParseFailureLine(err error) int {
 		return 0
 	}
 	if se.Kind == syntax.ErrUnmatched {
-		// The three openers that hold a program, together: the dialect that
-		// puts an unmatched `$(` at the line after the input's last puts
-		// `<(` and `>(` there too, which is measured rather than assumed.
-		if se.Token == "$(" || se.Token == "<(" || se.Token == ">(" {
+		// The openers that hold a program, together: the dialect that puts
+		// an unmatched `$(` at the line after the input's last puts `<(`,
+		// `>(` and `=(` there too, which is measured rather than assumed.
+		if se.Token == "$(" || se.Token == "<(" || se.Token == ">(" || se.Token == "=(" {
 			if d.CmdSubstUnmatchedAtEnd && se.EndLine > 0 {
 				return se.EndLine
 			}
@@ -3134,7 +3134,15 @@ func (d Diagnostics) ParseFailure(err error) string {
 			}
 		case "$(":
 			form = d.UnmatchedCmdSubst
-		case "<(", ">(":
+		case "<(", ">(", "=(":
+			// All three spellings of the construct, and the third is here
+			// because leaving it out is silent: an opener with no case of
+			// its own falls through to UnmatchedQuote, so `cat =(echo hi`
+			// reported `unmatched =(` — a sentence about a quote, for a
+			// script with no quote in it — where the other two spellings
+			// give the dialect's own `parse error near \`=(echo hi'`. Found
+			// by comparing the three against zsh 5.9.2 rather than by a
+			// test, which is why there is now a test.
 			form = d.UnmatchedProcSubst
 			if form == "" {
 				form = d.UnmatchedCmdSubst

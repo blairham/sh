@@ -3410,6 +3410,46 @@ echo "st=$?"`,
 		Why:     "the construct is unquoted-only: inside double quotes the same ten characters are text, unanimously and dash included. It is the completeness half of `procsub/reads-a-command-as-a-file` — that case says the lexer reads the form, this one says where it stops looking, and a lexer that also read it inside quotes would pass the first and fail here",
 	},
 	{
+		ID: "procsub/a-file-rather-than-a-pipe", Category: "redirection",
+		Snippet: `[ -f =(echo hi) ] && echo regular; [ -p =(echo hi) ] || echo notafifo; cat =(echo hi)`,
+		Why:     "`=(cmd)` is process substitution with a *regular file* where the other two spellings have a pipe, and only one shell in the panel has it — the other five read the `=` as an ordinary character and refuse the `(` that follows it. The path is different every run, so what the row compares is what the file *is*: the first two tests are the discriminator against a fifo, and `cat` is what says the output actually landed there. It is the reason the construct exists at all, because a path a reader can seek in is what `diff` and an editor need and a pipe cannot be",
+	},
+	{
+		ID: "procsub/a-file-substitution-outruns-a-pipe-buffer", Category: "redirection",
+		Snippet: `cat =(yes hello | head -c 200000) | wc -c | tr -d " "`,
+		Why:     "the property the file form has and the pipe form does not: the body runs to completion before the path is handed over, so there is no buffer to fill and nobody to wait for. Two hundred thousand bytes is far past any pipe buffer, so a shell that ran the body on a goroutine and handed over a fifo would not answer wrong here — it would stop",
+	},
+	{
+		ID: "procsub/a-file-substitution-discards-the-bodys-status", Category: "redirection",
+		Snippet: `cat =(false); echo "st=$?"; cat =(exit 7); echo "st=$?"; [ -f =(nosuchcmd-zz) ] && echo still`,
+		Why:     "the status is the outer command's and never the body's, and the last clause is the sharp half: a body that could not run at all still leaves a file and the word still expands, so the diagnostic and the status belong to different commands. A shell that let the body's failure reach the expansion would answer `st=7` on the second and print nothing on the third",
+	},
+	{
+		ID: "procsub/a-file-substitution-lives-as-long-as-its-command", Category: "redirection",
+		Snippet: `f==(echo hi); [ -e "$f" ] && echo there || echo gone; case $f in /*) echo absolute;; *) echo relative;; esac`,
+		Why:     "the file is removed at the end of the command that named it, exactly as the pipes are — so a name captured out of one leads nowhere afterwards. Written as an assignment because that is also the second position the construct opens in: the front of a value, which is the one place that is not the front of a word",
+	},
+	{
+		ID: "procsub/a-file-substitution-opens-only-at-a-word", Category: "redirection", SyntaxError: true,
+		Snippet: `echo x=(echo hi); echo after`,
+		Why:     "where it does *not* open, which is every position but two. Mid-word the `=` is an ordinary character and the `(` behind it has nowhere to go: the one shell with the construct says `missing end of string` and the other five report the parenthesis, so the line is refused everywhere and only the wording differs. It is the row that keeps the rule from being \"an equals sign in front of a parenthesis\", which would take a pattern with an `=` in it for a substitution — the failure #1288 recorded",
+	},
+	{
+		ID: "procsub/a-file-substitution-in-a-condition", Category: "redirection",
+		Snippet: `[[ x == =(x) ]] && echo hit || echo miss; echo after`,
+		Why:     "a condition is not a place a substitution may stand, even at the front of a word where one would otherwise open: the shell with the construct names it and abandons the rest of the input, so neither `miss` nor `after` is printed. Its status is 1 where the same refusal for `<(x)` is 2, which is the only thing that distinguishes the two — the sentence is identical",
+	},
+	{
+		ID: "procsub/an-unterminated-file-substitution", Category: "redirection", SyntaxError: true,
+		Snippet: `cat =(echo hi`,
+		Why:     "the input running out inside one, which every column refuses and none of them refuses in the same words. It is here because the *shape* of getting it wrong is silent: an opener with no wording of its own falls through to the sentence for an unmatched quote, and this reported `unmatched =(` — a complaint about a quote, for a line with none — while `<(` and `$(` beside it were already right. A second construct reaching a shared table through a case nobody added is the defect this repository has now hit five times",
+	},
+	{
+		ID: "procsub/a-quoted-file-substitution-is-text", Category: "redirection",
+		Snippet: `printf "[%s]\n" "=(echo hi)"`,
+		Why:     "the completeness half of `procsub/a-file-rather-than-a-pipe`, and it parses everywhere because the quotes take the `=` out of the grammar's hands: the same ten characters are text in all six columns. A lexer that read the form inside quotes would pass the case above and fail this one",
+	},
+	{
 		ID: "read/interrupted-by-a-trapped-signal", Category: "builtins",
 		Snippet: `mkfifo p; exec 3<>p; trap "echo T" INT; (sleep 0.3; kill -INT $$; sleep 0.5; echo late >p) & read -r l <&3; echo "st=$? l=[$l]"; wait`,
 		Why:     "a `read` waiting on a pipe when a trapped signal arrives, which is where the prior reading of `$?` after an interrupt — 130, measured against bash — turns out to be one of four answers. bash 5.3, bash 3.2 and zsh run the handler and *resume* the read, so the line that arrives afterwards is read and the status is 0; the same bash 5.3 called `sh` abandons it at 130; dash abandons it at 1; ksh93 answers 258. The late write is what makes the case terminate at all rather than recording three timeouts, and it is what makes the resuming shells observably different from a shell that merely returned 0",

@@ -25,29 +25,51 @@ import "testing"
 // `(#b)` flag rows — parse, and those are in the corpus precisely because the
 // reference shells reject them, so widening to admit this row would have
 // falsified theirs. A test can set the one flag it means; corpusDialect cannot.
+// **And with `=(cmd)` in the grammar too**, which is the combination the one
+// shell that has either actually runs. `=(` opens a temp-file process
+// substitution there (#1878), and a rule for it written as "an `=` in front
+// of a `(`" would take every row below for one — so both flags are set on the
+// second pass and every assertion is made twice. Without that pass this test
+// would pass on a grammar no shell has.
 func TestAParenAfterEqualsIsAGroupInAConditionAndALiteralOutsideOne(t *testing.T) {
-	d := Core()
-	d.PatternAlternation = true
+	for _, withFileSubst := range []bool{false, true} {
+		d := Core()
+		d.PatternAlternation = true
+		d.ProcessSubstitutionToFile = withFileSubst
 
-	// The condition: the group is a group, alternation and all.
-	for _, src := range []string{
-		`[[ a=b == a=(b) ]]`,
-		`[[ a=b == a=(b|c) ]]`,
-		`[[ $x == pre[$' \t']#=([^z]#)post ]]`,
-	} {
-		if _, err := Parse(src, d); err != nil {
-			t.Errorf("Parse(%q) = %v, want it to parse", src, err)
+		// The condition: the group is a group, alternation and all.
+		for _, src := range []string{
+			`[[ a=b == a=(b) ]]`,
+			`[[ a=b == a=(b|c) ]]`,
+			`[[ $x == pre[$' \t']#=([^z]#)post ]]`,
+			// The p10k line itself, as it is written in
+			// `internal/p10k.zsh`: the `=` is the twelfth character of the
+			// word, so the `(` behind it is the pattern's capture group and
+			// not a substitution.
+			`[[ $'\n'$cfg$'\n' == (#b)*$'\n'prompt[$' \t']#=([^$'\n']#)$'\n'* ]]`,
+		} {
+			if _, err := Parse(src, d); err != nil {
+				t.Errorf("ProcessSubstitutionToFile=%v: Parse(%q) = %v, want it to parse",
+					withFileSubst, src, err)
+			}
 		}
-	}
 
-	// The assignment, which is the case the guard was written for: still an
-	// array literal, and still two elements rather than one pattern word.
-	f, err := Parse(`a=(b c)`, d)
-	if err != nil {
-		t.Fatalf("Parse of the array literal = %v", err)
-	}
-	if got := len(f.Stmts); got != 1 {
-		t.Fatalf("array literal parsed to %d statements, want 1", got)
+		// The assignment, which is the case the guard was written for: still
+		// an array literal, and still two elements rather than one pattern
+		// word.
+		f, err := Parse(`a=(b c)`, d)
+		if err != nil {
+			t.Fatalf("ProcessSubstitutionToFile=%v: Parse of the array literal = %v", withFileSubst, err)
+		}
+		if got := len(f.Stmts); got != 1 {
+			t.Fatalf("ProcessSubstitutionToFile=%v: array literal parsed to %d statements, want 1",
+				withFileSubst, got)
+		}
+		a := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd).Assigns[0]
+		if !a.IsArray || len(a.Elems) != 2 {
+			t.Errorf("ProcessSubstitutionToFile=%v: `a=(b c)` is array=%v with %d elements, want an array of 2",
+				withFileSubst, a.IsArray, len(a.Elems))
+		}
 	}
 }
 

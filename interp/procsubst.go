@@ -43,14 +43,38 @@ import (
 //
 // A FIFO has none of that. It is a real path any process can open, inherits
 // nothing, and leaks nothing — at the cost of a file to make and remove.
+//
+// # The third spelling, which is a file
+//
+// `=(cmd)` is the same construct with a *regular file* where the other two
+// have a pipe, and everything that differs follows from that one change. The
+// command runs to completion first, because there is no reader to deadlock
+// against and nothing to overlap with: measured 2026-09-11 on zsh 5.9.2,
+// `wc -c < =(head -c 200000 /dev/zero)` answers 200000 where the same
+// through a pipe would fill it. What the word names is then seekable and
+// reopenable, which is the whole reason to have it — `diff =(a) =(b)` seeks,
+// `vi =(cmd)` opens — and is why a pipe will not do.
+//
+// The body's status is discarded: `cat =(false)` and `cat =(exit 7)` are
+// both 0 there, and `=(nosuchcmd)` prints the diagnostic and still hands over
+// the path of an empty file. So is `=()` itself, which is a valid file of
+// zero bytes.
+//
+// The lifetime is the pipe's lifetime exactly — removeProcSubs, at the end
+// of the command that named it. `f==(echo hi); cat $f` is `No such file or
+// directory` there, so the file is recorded in the same list the pipes are
+// and needs no second mechanism.
 
-// procSub runs the inner command and returns the path naming its pipe.
+// procSub runs the inner command and returns the path the word becomes: a
+// pipe for `<(cmd)` and `>(cmd)`, a file already holding the output for
+// `=(cmd)`.
 func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) (string, bool) {
-	f, perr := syntax.Parse(src, r.dialect())
-	if perr != nil {
-		r.diagf("%s\n", r.diag().ParseFailure(perr))
-		r.expandErr = true
+	f, ok := r.substBody(src)
+	if !ok {
 		return "", false
+	}
+	if kind == syntax.ProcSubstFile {
+		return r.procSubToFile(ctx, f)
 	}
 	path, err := r.newFifo()
 	if err != nil {
@@ -66,67 +90,7 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 	// this path can happen consult.
 	action := r.act(Action{Kind: ActionOpen, Path: path, Write: kind != syntax.ProcSubstOut})
 
-	sub := r.clone()
-	sub.inheritJobs(jobBoundarySubstitution)
-	// **A substitution's body never takes the terminal.** The shell hands the
-	// terminal to a command it is *waiting for*, so that ^C and ^Z reach the
-	// command rather than the shell — see runWatched. A substitution's body
-	// is not one: it runs beside the command that named it, on a goroutine,
-	// and the shell carries on. Leaving the hook in place made it one anyway,
-	// and the body then held the terminal for as long as its command lived.
-	//
-	// What that cost was a session. `exec {fd}< <(sleep 60)` in a startup
-	// file put `sleep`'s process group in front, and the shell's own group
-	// was a background one from that moment: a shell reading its terminal
-	// from a background group is sent SIGTTIN, which a shell ignores, and an
-	// ignored SIGTTIN turns the read into EIO. So the first read after the
-	// prompt failed with `read /dev/stdin: input/output error` and the
-	// session ended — measured through a pseudo-terminal with the shell in a
-	// session of its own, where real zsh 5.9.2 answers every line typed. It
-	// reproduces with the substitution alone; nothing else in the startup
-	// file is needed, which is why #1759 saw it from a watcher that never
-	// fired. A body whose command is quick — `<(echo hi)` — hid it, because
-	// the terminal came back before the prompt was read.
-	//
-	// nil rather than a flag on the clone, because the hook *is* the
-	// question: a Runner with nowhere to send the terminal is a Runner that
-	// does not send it, which is already what a script and a pipeline get.
-	// A background job reaches the same place by a different road — `r.bg`
-	// takes it down a branch that never asks — and a coprocess with it.
-	sub.Foreground = nil
-	// The one boundary no shell's `trap` sees across: even the dialect that
-	// keeps the parent's listing everywhere else lists nothing in
-	// `<(trap)` — measured, `cat <(trap)` prints nothing in all three
-	// shells that have the construct.
-	sub.trapsModified()
-	// A substitution runs beside the command that names it, so it shares the
-	// caller's streams the way a background job does — and needs the same
-	// guard for the same reason: an io.Writer carries no promise of being
-	// safe to write from two places, and the shell is what created the
-	// concurrency.
-	//
-	// Both sides, which is background()'s rule and is here for the reason it
-	// gives: a lock one party takes and the other does not excludes nothing,
-	// and the shell that named the substitution is the other party. It left
-	// the shell writing raw — and a *child* of the shell too, because os/exec
-	// copies into a writer that is not a file on a goroutine of its own, with
-	// no share of this lock. `cat <(cmd)` raced on exactly that, and
-	// bytes.Buffer grows before it reads, so a child that writes nothing at
-	// all raced as well. That was #735.
-	//
-	// It costs nothing to wrap what is already a pipe: lockWriter leaves an
-	// *os.File alone, so a shell whose streams are files hands its children
-	// the descriptors, and one whose streams are not was giving them pipes
-	// either way.
-	//
-	// Both *streams*, not only the shared one, and that is the same argument
-	// again: an embedder may hand one writer to Stdout and Stderr both, so
-	// the substitution's diagnostic and the outer command's output are the
-	// same object. Guarding only stderr left `cat <(cmd)` racing on the
-	// stdout the shell had not wrapped — one mutex covers both streams for
-	// exactly this reason; see lockedWriter.
-	sub.Stderr = r.lockedStderr()
-	r.Stderr, r.Stdout = sub.Stderr, r.lockedStdout()
+	sub := r.substRunner()
 	if kind == syntax.ProcSubstOut {
 		sub.Stdout = r.Stdout
 	}
@@ -232,6 +196,171 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 	return path, true
 }
 
+// substBody parses a substitution's inner source.
+//
+// One reader for all three spellings, because the body is a program in each
+// of them and a parse failure is reported the same way: the word produces
+// nothing and the expansion is in error.
+func (r *Runner) substBody(src string) (*syntax.File, bool) {
+	f, perr := syntax.Parse(src, r.dialect())
+	if perr != nil {
+		r.diagf("%s\n", r.diag().ParseFailure(perr))
+		r.expandErr = true
+		return nil, false
+	}
+	return f, true
+}
+
+// substRunner is the shell a substitution's body runs in, prepared the same
+// way for every spelling of the construct.
+//
+// **One helper rather than one per spelling**, and that is the whole reason
+// it exists: each line below was a bug once, and a second copy of this
+// preparation is a second place for the next fix to miss. The terminal hook
+// is the sharpest of them — #1830 is three weeks old — and a file-writing
+// body that had been given its own clone would have taken the terminal again
+// with nothing to say so.
+func (r *Runner) substRunner() *Runner {
+	sub := r.clone()
+	sub.inheritJobs(jobBoundarySubstitution)
+	// **A substitution's body never takes the terminal.** The shell hands the
+	// terminal to a command it is *waiting for*, so that ^C and ^Z reach the
+	// command rather than the shell — see runWatched. A substitution's body
+	// is not one: it runs beside the command that named it, on a goroutine,
+	// and the shell carries on. Leaving the hook in place made it one anyway,
+	// and the body then held the terminal for as long as its command lived.
+	//
+	// What that cost was a session. `exec {fd}< <(sleep 60)` in a startup
+	// file put `sleep`'s process group in front, and the shell's own group
+	// was a background one from that moment: a shell reading its terminal
+	// from a background group is sent SIGTTIN, which a shell ignores, and an
+	// ignored SIGTTIN turns the read into EIO. So the first read after the
+	// prompt failed with `read /dev/stdin: input/output error` and the
+	// session ended — measured through a pseudo-terminal with the shell in a
+	// session of its own, where real zsh 5.9.2 answers every line typed. It
+	// reproduces with the substitution alone; nothing else in the startup
+	// file is needed, which is why #1759 saw it from a watcher that never
+	// fired. A body whose command is quick — `<(echo hi)` — hid it, because
+	// the terminal came back before the prompt was read.
+	//
+	// nil rather than a flag on the clone, because the hook *is* the
+	// question: a Runner with nowhere to send the terminal is a Runner that
+	// does not send it, which is already what a script and a pipeline get.
+	// A background job reaches the same place by a different road — `r.bg`
+	// takes it down a branch that never asks — and a coprocess with it.
+	sub.Foreground = nil
+	// The one boundary no shell's `trap` sees across: even the dialect that
+	// keeps the parent's listing everywhere else lists nothing in
+	// `<(trap)` — measured, `cat <(trap)` prints nothing in all three
+	// shells that have the construct.
+	sub.trapsModified()
+	// A substitution runs beside the command that names it, so it shares the
+	// caller's streams the way a background job does — and needs the same
+	// guard for the same reason: an io.Writer carries no promise of being
+	// safe to write from two places, and the shell is what created the
+	// concurrency.
+	//
+	// Both sides, which is background()'s rule and is here for the reason it
+	// gives: a lock one party takes and the other does not excludes nothing,
+	// and the shell that named the substitution is the other party. It left
+	// the shell writing raw — and a *child* of the shell too, because os/exec
+	// copies into a writer that is not a file on a goroutine of its own, with
+	// no share of this lock. `cat <(cmd)` raced on exactly that, and
+	// bytes.Buffer grows before it reads, so a child that writes nothing at
+	// all raced as well. That was #735.
+	//
+	// It costs nothing to wrap what is already a pipe: lockWriter leaves an
+	// *os.File alone, so a shell whose streams are files hands its children
+	// the descriptors, and one whose streams are not was giving them pipes
+	// either way.
+	//
+	// Both *streams*, not only the shared one, and that is the same argument
+	// again: an embedder may hand one writer to Stdout and Stderr both, so
+	// the substitution's diagnostic and the outer command's output are the
+	// same object. Guarding only stderr left `cat <(cmd)` racing on the
+	// stdout the shell had not wrapped — one mutex covers both streams for
+	// exactly this reason; see lockedWriter.
+	//
+	// The file spelling shares the guard although it runs the body to
+	// completion and races with nobody: what it costs is a wrapper the
+	// *os.File case does not even take, and a stream rule that held for two
+	// of three spellings would be read as an accident by whoever arrives
+	// next.
+	sub.Stderr = r.lockedStderr()
+	r.Stderr, r.Stdout = sub.Stderr, r.lockedStdout()
+	return sub
+}
+
+// procSubToFile runs the body to completion with its output in a regular
+// file, and returns that file's path.
+//
+// No goroutine and no waiting on anybody, which is the difference the
+// construct exists for: the reader opens a finished file rather than one end
+// of a pipe, so it may seek in it, reopen it, and read it more than once. The
+// deadlock the pipe forms cannot arise — measured 2026-09-11, `wc -c < =(head
+// -c 200000 /dev/zero)` is 200000 in zsh 5.9.2 — because nothing is waiting
+// for the shell while the shell waits for the body.
+//
+// The body's status is dropped on the floor, which is measured rather than an
+// omission: `cat =(false)`, `cat =(exit 7)` and `echo =(nosuchcmd-xyz)` are
+// all status 0 there, the last one after printing its diagnostic. A word
+// expands to a path or it fails to expand at all, and a command that ran and
+// failed still wrote the file it was given.
+func (r *Runner) procSubToFile(ctx context.Context, body *syntax.File) (string, bool) {
+	path, f, err := r.newSubstFile()
+	if err != nil {
+		r.diagf("%v\n", err)
+		r.expandErr = true
+		return "", false
+	}
+	// Recorded before anything is written to it, so that the file is removed
+	// at the end of the command however the body ends — and so that ownPipe
+	// recognizes the path while the command that named it runs. It is the
+	// interpreter's own scaffolding on the same argument the pipe is; see
+	// ownPipe.
+	r.procSubs = append(r.procSubs, procSubPipe{path: path})
+	action := r.act(Action{Kind: ActionOpen, Path: path, Write: true})
+
+	sub := r.substRunner()
+	sub.Stdout = f
+	sub.emit(ctx, Event{Kind: EventAccess, Action: action})
+	if _, err := sub.Run(ctx, body); err != nil {
+		sub.diagf("%v\n", err)
+	}
+	// Closed before the path is handed over rather than left to the command
+	// that named it: what makes this spelling usable is that the file is
+	// *finished*, and a reader that opened it while the shell still held a
+	// write end could see a short one.
+	_ = f.Close()
+	return path, true
+}
+
+// newSubstFile makes the regular file a `=(cmd)` writes into.
+//
+// In the directory the pipes go in, numbered from the same counter and for
+// the same reasons — one directory per shell tree, removed by CleanUp,
+// distinct names needed only within it. Sharing it is what keeps the file on
+// the same side of the boundary the pipe is on: a script writes `=(cmd)` and
+// can no more write this path than it can write a pipe's.
+//
+// 0600 and O_EXCL. The mode is measured — `ls -l =(echo hi)` reports
+// `-rw-------` in zsh 5.9.2, which is also why naming one as a command is
+// `permission denied` there rather than running it — and the exclusion is
+// what makes a name this shell has not used before an error instead of a
+// silent overwrite.
+func (r *Runner) newSubstFile() (string, *os.File, error) {
+	dir, err := r.procSubDir()
+	if err != nil {
+		return "", nil, err
+	}
+	path := filepath.Join(dir, "file"+strconv.FormatUint(r.procSubHomeBox().seq.Add(1), 10))
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", nil, err
+	}
+	return path, f, nil
+}
+
 // procSubDirPrefix names the directory a shell puts its substitution pipes in.
 //
 // A constant rather than a literal at the one place that makes the directory,
@@ -241,8 +370,8 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 // leave the guard quietly finding nothing. See internal/childguard.
 const procSubDirPrefix = "sh-procsub"
 
-// ownPipe reports whether path names one of the pipes this shell made for a
-// process substitution in the command it is running.
+// ownPipe reports whether path names one of the pipes — or one of the files —
+// this shell made for a process substitution in the command it is running.
 //
 // It is the recognition #941 asked for, and the rule it enforces is
 // ActionOpen's own, quoted here because the pipe is the one thing the rule
@@ -261,7 +390,14 @@ const procSubDirPrefix = "sh-procsub"
 // `<(cmd)` itself, and there is nothing in the policy file that says so — an
 // operator reads `default deny write` and gets a shell whose process
 // substitutions have stopped working, with a diagnostic naming a path they
-// have never seen. Measured: that is 6 of the 1426 corpus cases under the
+// have never seen.
+//
+// `=(cmd)`'s file is the same class and is in the same set. It is made in the
+// same directory, numbered by the same counter, removed by the same
+// removeProcSubs at the end of the command that named it — so every sentence
+// above is true of it word for word, and the only thing that differs is
+// whether the path leads to a pipe or to a finished file. Two sets would have
+// been two answers to one question. Measured: that is 6 of the 1426 corpus cases under the
 // containment posture, and every case in `make conformance-gated` that
 // differed in more than the wording of a diagnostic.
 //
@@ -398,12 +534,20 @@ func (r *Runner) procSubHomeBox() *procSubDirs {
 //
 // No shell in the panel exposes this: measured on darwin, bash, zsh and
 // ksh93 all expand `<(cmd)` to a /dev/fd path and none of them consults
-// TMPDIR for it, while zsh's `=(cmd)` — the nearest construct that does
-// write a file — reads TMPPREFIX and ignores TMPDIR too. So there is no
-// behavior to match here and no axis to add. The named pipe is ours, forced
-// by Go's close-on-exec (see the file comment), and where it lives is
-// therefore our decision rather than a compatibility question. What settles
-// it is the library rule: the answer belongs to the Runner.
+// TMPDIR for it, while zsh's `=(cmd)` — the one construct that does write a
+// file — reads TMPPREFIX and ignores TMPDIR too. So there is no behavior to
+// match here and no axis to add. The named pipe is ours, forced by Go's
+// close-on-exec (see the file comment), and where it lives is therefore our
+// decision rather than a compatibility question. What settles it is the
+// library rule: the answer belongs to the Runner.
+//
+// That reading survived implementing `=(cmd)` rather than being overtaken by
+// it. TMPPREFIX is a *process* variable a shell reads once at startup and
+// this package may not read one at all, and a Runner an embedder gave a
+// TMPDIR to is already saying where its scratch goes — so the file joins the
+// pipes under r.tempHome() and the spelling of the path stays ours. What is
+// matched is what a script can observe about the file: that it is regular,
+// that it is 0600, and that it is gone when the command that named it ends.
 //
 // A relative TMPDIR is resolved against r.Dir rather than left for the
 // operating system to resolve, because the directory the *process* happens
@@ -422,15 +566,20 @@ func (r *Runner) tempHome() string {
 	return dir
 }
 
-// procSubPipe is one substitution's named pipe: the path a command was given,
-// and — for `>(cmd)` only — the descriptor holding that pipe open until the
-// command is done with it. See openFifoReadEnd.
+// procSubPipe is one substitution's path: the name a command was given, and —
+// for `>(cmd)` only — the descriptor holding that pipe open until the command
+// is done with it. See openFifoReadEnd.
+//
+// `=(cmd)`'s regular file is one of these too, with no descriptor to hold: it
+// is finished before the path is handed over, and what the two forms share is
+// the only thing this type is for — a path that the command which named it
+// owns, and that goes away with it.
 type procSubPipe struct {
 	path string
 	hold *os.File
 }
 
-// takeProcSubs hands over the pipes a command's substitutions made, and
+// takeProcSubs hands over the paths a command's substitutions made, and
 // forgets them.
 //
 // Taken rather than read, because they belong to one command: the next one has
@@ -443,6 +592,10 @@ func (r *Runner) takeProcSubs() []procSubPipe {
 }
 
 // removeProcSubs takes away what a command's substitutions left behind.
+//
+// It is also the whole of `=(cmd)`'s lifetime, and measured to be: `f==(echo
+// hi); cat $f` is `No such file or directory` in zsh 5.9.2, so the file lives
+// exactly as long as the pipe does and needs no mechanism of its own.
 //
 // The pipe is removed as soon as the command that named it is done. Whatever
 // is still reading or writing it holds an open file and does not care that the

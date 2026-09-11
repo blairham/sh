@@ -144,6 +144,10 @@ func corpusGrammar() syntax.Dialect {
 	// where the substitution *is* the subject — and the core reads `<` as a
 	// redirection and the parenthesis as a subshell after it.
 	d.ProcessSubstitution = true
+	// And `=(cmd)`, the temp-file spelling. Six cases are written with it —
+	// the ones about the file the construct makes — and without the flag the
+	// core reads the `=` as an ordinary character and stops at the `(`.
+	d.ProcessSubstitutionToFile = true
 	d.ParamIndirection = true
 	d.ParamTransformations = true
 	d.PipeBothStreams = true

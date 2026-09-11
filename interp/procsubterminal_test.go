@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/blairham/sh/syntax"
+
 	. "github.com/blairham/sh/interp"
 )
 
@@ -84,6 +86,46 @@ func TestASubstitutionsBodyNeverTakesTheTerminal(t *testing.T) {
 		t.Errorf("the terminal was handed to %v — a substitution's body runs beside "+
 			"the shell, so a shell that gives it the terminal is reading its own "+
 			"terminal from a background process group", handed)
+	}
+}
+
+// The same rule for the spelling that writes a file, and the reason it is a
+// second test rather than a second row: `=(cmd)` runs its body to completion
+// while the shell waits, which is the one shape that *looks* like a command
+// the shell is waiting for. It is not one — the shell is expanding a word,
+// not running the body as the foreground job — so the hook must stay
+// untouched here too.
+//
+// It is also the guard on the fold. Both spellings prepare their body's shell
+// in Runner.substRunner, and this is what fails if a later change gives one of
+// them a clone of its own: the preparation that was missed first, last time,
+// was exactly this line (#1830).
+func TestAFileSubstitutionsBodyNeverTakesTheTerminal(t *testing.T) {
+	var mu sync.Mutex
+	var handed []int
+	out, st := runBoundedScript(t, "read line < =(/bin/echo hi)\nprintf %s \"$line\"",
+		func(d *syntax.Dialect) { d.ProcessSubstitutionToFile = true },
+		func(r *Runner) {
+			r.WaitForCommand = waitForTestCommand
+			r.Foreground = func(pgid int) error {
+				mu.Lock()
+				defer mu.Unlock()
+				handed = append(handed, pgid)
+				return nil
+			}
+		})
+	if st != 0 {
+		t.Errorf("status %d, want 0", st)
+	}
+	if out != "hi" {
+		t.Fatalf("out = %q, want %q — the substitution's body did not run, so "+
+			"nothing here is evidence about what it did with the terminal", out, "hi")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(handed) != 0 {
+		t.Errorf("the terminal was handed to %v — a substitution's body is not the "+
+			"command the shell is waiting for, whichever spelling names it", handed)
 	}
 }
 

@@ -127,5 +127,10 @@ func Dialect() syntax.Dialect {
 	// arithmetic and fail on the parenthesis; the corpus records both, so the
 	// grammar that has to *read* every case is the one that takes it.
 	d.ArraySubscriptFlags = true
+	// `=(cmd)` — the temp-file spelling of process substitution. One of the
+	// six writes a file and the other five refuse the `(`; the corpus
+	// records both, so the grammar that has to *read* every case is the one
+	// that takes the construct, as above.
+	d.ProcessSubstitutionToFile = true
 	return d
 }

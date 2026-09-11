@@ -97846,6 +97846,270 @@
         "TimedOut": false
       }
     },
+    "procsub/a-file-rather-than-a-pipe": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `[ -f =(echo hi) ] \u0026\u0026 echo regular; [ -p =(echo hi) ] || echo notafifo; cat =(echo hi)'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `[ -f =(echo hi) ] \u0026\u0026 echo regular; [ -p =(echo hi) ] || echo notafifo; cat =(echo hi)'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 0: `[ -f =(echo hi) ] \u0026\u0026 echo regular; [ -p =(echo hi) ] || echo notafifo; cat =(echo hi)'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "regular~notafifo~hi",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "procsub/a-file-substitution-discards-the-bodys-status": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `cat =(false); echo \"st=$?\"; cat =(exit 7); echo \"st=$?\"; [ -f =(nosuchcmd-zz) ] \u0026\u0026 echo still'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `cat =(false); echo \"st=$?\"; cat =(exit 7); echo \"st=$?\"; [ -f =(nosuchcmd-zz) ] \u0026\u0026 echo still'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 0: `cat =(false); echo \"st=$?\"; cat =(exit 7); echo \"st=$?\"; [ -f =(nosuchcmd-zz) ] \u0026\u0026 echo still'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~st=0~still",
+        "Stderr": "\u003cshell\u003e:1: command not found: nosuchcmd-zz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "procsub/a-file-substitution-in-a-condition": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error in conditional expression: unexpected token `('~\u003cshell\u003e: -c: line 1: syntax error near `=(x'~\u003cshell\u003e: -c: line 1: `[[ x == =(x) ]] \u0026\u0026 echo hit || echo miss; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error in conditional expression: unexpected token `('~\u003cshell\u003e: -c: line 1: syntax error near `=(x'~\u003cshell\u003e: -c: line 1: `[[ x == =(x) ]] \u0026\u0026 echo hit || echo miss; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error in conditional expression: unexpected token `('~\u003cshell\u003e: -c: line 0: syntax error near `=(x'~\u003cshell\u003e: -c: line 0: `[[ x == =(x) ]] \u0026\u0026 echo hit || echo miss; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: process substitution =(x) cannot be used here",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "procsub/a-file-substitution-lives-as-long-as-its-command": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `f==(echo hi); [ -e \"$f\" ] \u0026\u0026 echo there || echo gone; case $f in /*) echo absolute;; *) echo relative;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `f==(echo hi); [ -e \"$f\" ] \u0026\u0026 echo there || echo gone; case $f in /*) echo absolute;; *) echo relative;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "gone~relative",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "gone~relative",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "gone~absolute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "procsub/a-file-substitution-opens-only-at-a-word": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `echo x=(echo hi); echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `echo x=(echo hi); echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 0: `echo x=(echo hi); echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: missing end of string",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "procsub/a-file-substitution-outruns-a-pipe-buffer": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `cat =(yes hello | head -c 200000) | wc -c | tr -d \" \"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `cat =(yes hello | head -c 200000) | wc -c | tr -d \" \"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 0: `cat =(yes hello | head -c 200000) | wc -c | tr -d \" \"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "200000",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "procsub/a-hash-mid-word-in-the-body": {
       "bash": {
         "Stdout": "a#b~after",
@@ -97884,6 +98148,50 @@
       },
       "zsh": {
         "Stdout": "a#b~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "procsub/a-quoted-file-substitution-is-text": {
+      "bash": {
+        "Stdout": "[=(echo hi)]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[=(echo hi)]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[=(echo hi)]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[=(echo hi)]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[=(echo hi)]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[=(echo hi)]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -98018,6 +98326,50 @@
         "Stdout": "[]~[:]",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "procsub/an-unterminated-file-substitution": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `cat =(echo hi'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `cat =(echo hi'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 0: `cat =(echo hi'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `=(echo hi'",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

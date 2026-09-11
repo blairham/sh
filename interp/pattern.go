@@ -171,7 +171,7 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 			return "", false
 		}
 		return r.expansionPattern(v, s.Quoting, r.sem().GlobExpansionResults)
-	case syntax.ProcSubstIn, syntax.ProcSubstOut:
+	case syntax.ProcSubstIn, syntax.ProcSubstOut, syntax.ProcSubstFile:
 		// Performed, like any other substitution in a word, and the *path*
 		// is the pattern.
 		//

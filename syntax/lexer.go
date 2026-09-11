@@ -85,6 +85,26 @@ type Lexer struct {
 	// Exactly the shape inPattern has, for exactly the same reason.
 	inArgument bool
 
+	// noAssignment is set while the token being read stands where no
+	// *assignment* may be written, in the two positions the flags above do
+	// not already cover: a `case` subject and a redirection's target. Both
+	// are read where a command would otherwise begin, so the zero value —
+	// an assignment may stand here — is right everywhere else.
+	//
+	// One dialect asks: `=(cmd)` opens its temp-file substitution at the
+	// front of a word and at the front of an assignment's *value*, and
+	// nowhere else. Measured 2026-09-11 on zsh 5.9.2, where `a==(echo hi)`
+	// assigns a path while `case a==(echo hi) in *)` matches with no
+	// command run and no file made, and `> a==(echo hi) cat` is `missing
+	// end of string`. See startsProcSubstFile.
+	//
+	// Both examples carry **two** `=`, and that is the whole reason the flag
+	// is needed: `case a=(b) in` and `> a=(b) cat` are decided by the array
+	// literal guard in opensPatternGroup long before this, so asking them
+	// pins nothing. Found by mutation — a test written with one `=` stayed
+	// green with this flag removed.
+	noAssignment bool
+
 	// inRawBody is set while the text being read is a *body* rather than a
 	// word: a here-document's, or a value being read again by the flag that
 	// re-evaluates one. Both go through heredocSpans, which marks every span
@@ -522,6 +542,62 @@ func (l *Lexer) startsProcSubst() bool {
 	}
 	c := l.peek()
 	return (c == '<' || c == '>') && l.peekAt(1) == '('
+}
+
+// startsProcSubstFile reports whether the cursor is on the `=(` that opens
+// the temp-file form of process substitution, in a dialect that has one.
+//
+// **Where it stands is most of the rule.** `<(` and `>(` open a substitution
+// wherever they appear in an unquoted word; `=(` opens one only at the front
+// of a word, because an `=` is an ordinary character everywhere else and a
+// `(` behind one already means something — an array literal, or a pattern
+// group. Measured 2026-09-11 on zsh 5.9.2: `echo =(echo hi)x` appends the
+// `x` to the path it writes, and `echo x=(echo hi)`, `echo a=b=(echo hi)`
+// and `echo =(echo hi)=(echo hi)` are all `missing end of string`.
+//
+// The front of an assignment's *value* is the second place and the only one,
+// which is what atAssignValue answers. Specified in
+// docs/spec/grammar/substitutions.md.
+func (l *Lexer) startsProcSubstFile() bool {
+	if !l.dialect.ProcessSubstitutionToFile {
+		return false
+	}
+	if l.peek() != '=' || l.peekAt(1) != '(' {
+		return false
+	}
+	return l.off == l.wordStart.Offset || l.atAssignValue()
+}
+
+// atAssignValue reports whether the cursor stands where an assignment's value
+// begins: the word so far is a name, an optional subscript and an optional
+// `+`, ending at the `=` just consumed, and an assignment may be written
+// here at all.
+//
+// Both halves are measured and neither alone is the rule. `a==(echo hi)`
+// assigns a path in zsh 5.9.2 and `echo a==(echo hi)` — the same word one
+// position later, where it is an argument rather than an assignment — is
+// `missing end of string`; so is `> a==(echo hi) cat`, while
+// `case a==(echo hi) in *)` matches with nothing run. The name half is what
+// keeps `echo a=b=(echo hi)` a refusal: `a=b` is not a name, so the second
+// `=` is not a value's front.
+func (l *Lexer) atAssignValue() bool {
+	if l.inArgument || l.inCondition || l.inOperand || l.inCaseArm ||
+		l.inCaseParenList || l.inRawBody || l.noAssignment {
+		return false
+	}
+	head := l.src[l.wordStart.Offset:l.off]
+	head, ok := strings.CutSuffix(head, "=")
+	if !ok {
+		return false
+	}
+	head = strings.TrimSuffix(head, "+")
+	if i := strings.IndexByte(head, '['); i >= 0 {
+		if !strings.HasSuffix(head, "]") {
+			return false
+		}
+		head = head[:i]
+	}
+	return isName(head)
 }
 
 // startsNumericRange reports whether the cursor is on a numeric range
@@ -1530,6 +1606,18 @@ func (l *Lexer) scanWord(start Pos) Token {
 			flush()
 			spans = append(spans, l.scanGroupSpans()...)
 
+		case l.startsProcSubstFile():
+			// The temp-file spelling, which is one dialect's. It is here
+			// rather than beside the other two in `Next` because an `=` is
+			// not an operator: a word may already have been started by the
+			// scanner below and reach its `=` mid-word, and the position is
+			// the whole question. See startsProcSubstFile.
+			//
+			// Unquoted only, for the reason the case below gives: what it
+			// produces is a path, and a quoted path is still a path.
+			flush()
+			spans = append(spans, l.scanParens(ProcSubstFile, Unquoted))
+
 		case l.startsProcSubst():
 			// Unquoted only, and that is not an omission: `"<(echo hi)"` is
 			// its own ten characters of text in every shell in the panel,
@@ -2350,7 +2438,8 @@ func procSubstKind(c byte) SpanKind {
 // rather than assumed: bash remarks on `<(cat <<EOF` … `EOF)` exactly as it
 // does on `$(cat <<EOF` … `EOF)`.
 func holdsCommands(k SpanKind) bool {
-	return k == CommandSubst || k == ProcSubstIn || k == ProcSubstOut
+	return k == CommandSubst || k == ProcSubstIn || k == ProcSubstOut ||
+		k == ProcSubstFile
 }
 
 func closers(k SpanKind) int {
@@ -3205,6 +3294,8 @@ func openingOf(kind SpanKind) string {
 		return "<("
 	case ProcSubstOut:
 		return ">("
+	case ProcSubstFile:
+		return "=("
 	}
 	return kind.String()
 }
@@ -3221,7 +3312,7 @@ func openingOf(kind SpanKind) string {
 // for it.
 func closingOf(kind SpanKind) string {
 	switch kind {
-	case ArithSubst, CommandSubst, ProcSubstIn, ProcSubstOut:
+	case ArithSubst, CommandSubst, ProcSubstIn, ProcSubstOut, ProcSubstFile:
 		return ")"
 	}
 	return kind.String()

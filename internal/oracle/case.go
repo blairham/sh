@@ -3833,6 +3833,16 @@ echo "st=$?"`,
 		Why:     "how far a `break` reaches through a *call*, which is the widest split in this family: bash 3.2 and zsh let it out of the function and end the loop, dash, ksh93 and bash-as-sh ignore it and run the loop twice, and bash 5.3 reports it twice and runs the loop twice. Recorded rather than answered — ours leaves the loop, which is two of the six",
 	},
 	{
+		ID: "loop-control/break-two-from-a-function-called-from-a-loop", Category: "builtins",
+		Snippet: `f(){ for j in 1; do break 2; done; echo infunc; }; for i in 1 2; do f; echo body; done; echo after`,
+		Why:     "the same boundary asked with a *count*, which is what says the answer is a reach and not a refusal. There is a loop inside the body here, so the `break` is never misused in any column and nothing is reported anywhere; what divides them is whether the second loop it asks for is the caller's. bash 5.3, ksh93 and dash stop at the body's own loop and print `infunc`, and bash 3.2 and zsh reach past the call and end the outer one — the same split as the bare `break` in the row above, which is what says one field answers both. A fix that refused to cross a boundary instead of stopping at it would print the complaint here, where no shell prints anything",
+	},
+	{
+		ID: "loop-control/break-two-inside-a-subshell-inside-a-loop", Category: "builtins",
+		Snippet: `for i in 1 2; do ( for j in 1; do break 2; done; echo insub ); echo body; done; echo after`,
+		Why:     "and the subshell boundary asked the same way. bash 5.3 and bash-as-sh stop at the loop inside the parentheses and go on to `insub`; the other four carry the count into the subshell's own copy of the outer loop, which ends the subshell and prints nothing more of it. The pair with the row above is the evidence that the call and the parentheses are two questions: dash and ksh93 stop at the boundary there and cross it here",
+	},
+	{
 		ID: "assignment/arithmetic-that-will-not-parse", Category: "expansion",
 		Snippet: `x=$(( } )); echo "after st=$?"`,
 		Why:     "an assignment whose right-hand side could not be expanded. The diagnostic was right and the status was not: ours reported the arithmetic out loud and left 0, so `x=$((…)) || handle` never fired and `set -e` never tripped. No column prints `after` — the rest of the line goes with the failure everywhere — and the status is 1 in bash, bash 3.2 and zsh, 2 in dash, 3 in ksh93 — which refuses the `)` at parse time rather than the `}` at evaluation — and 127 in bash called as `sh`, which is that shell's fatal-expansion status for the route (#1191)",

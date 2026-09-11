@@ -856,6 +856,31 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			elems = r.positionalSliceElems(e, elems)
 			elems = sliceElems(elems, r.numOf(e.Arg, e, e.Arg2), e, r)
 		}
+		if zipsElements(e.Op) {
+			// Its own branch beside the four below rather than one of them:
+			// those choose which elements survive and this produces a list
+			// longer than either input, so reshapeScalar's string answer has
+			// nowhere to put the second field. Quoted, the left operand is
+			// one word before the zip sees it — which is why `"${a:^b}"` on
+			// `(1 2 3)` and `(x y z)` is the two fields `1 2 3` and `x`, and
+			// why that falls out of the rule rather than needing one.
+			if s.Quoting != syntax.Unquoted {
+				elems = []string{strings.Join(elems, ifsFirst(r.ifs()))}
+				elems = r.zipElements(e, elems)
+				if len(elems) == 0 {
+					// The same guarantee the element filter below
+					// records, and the only probe that can see it is a
+					// field *count*: `a=(1 2 3); b=(); "${a:^b}"` is one
+					// empty field where the unquoted spelling is none.
+					// `printf '[%s]'` prints `[]` for no arguments at
+					// all, so it answers both the same and reported this
+					// as already correct.
+					elems = []string{""}
+				}
+			} else {
+				elems = r.zipElements(e, elems)
+			}
+		}
 		if reshapesElements(e.Op) {
 			// Which elements there are, rather than what each one
 			// becomes — so this is here beside the slice and not with
@@ -2120,7 +2145,8 @@ func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
 // `${a[0]}` is one element and still comes from this path.
 func (r *Runner) listShapedOp(e *syntax.ParamExpr) bool {
 	return e.Op == syntax.ParamSubstring || e.Op == syntax.ParamTransform ||
-		reshapesElements(e.Op) || elementOp(e.Op) || r.yieldsTheArray(e)
+		reshapesElements(e.Op) || zipsElements(e.Op) || elementOp(e.Op) ||
+		r.yieldsTheArray(e)
 }
 
 // listBase is the values an expansion stands for where it stands for several
@@ -2322,6 +2348,15 @@ func (r *Runner) bareArrayAsList(e *syntax.ParamExpr, s syntax.Span, sp splitPol
 	// bare name both halves is what stops the two from drifting.
 	sub := "@"
 	switch {
+	case zipsElements(e.Op):
+		// The elements either way, because the zip's own answer is a list
+		// whatever the quoting: `"${a:^b}"` is two fields. What quoting
+		// decides is that the *left* operand arrives as one word, and the
+		// zip does that itself — taking `[*]` here would join the result
+		// instead, which is the wrong end (#2112).
+		if s.Quoting != syntax.Unquoted && r.sem().ArrayScalarIsTheWholeArray != Yes {
+			return nil, false
+		}
 	case s.Quoting == syntax.Unquoted:
 		// In a context that splits, and under an operator the array branch
 		// answers with the elements. Both measured; see the note above.
@@ -2368,6 +2403,21 @@ func (r *Runner) bareArrayAsList(e *syntax.ParamExpr, s syntax.Span, sp splitPol
 	// scalar path below has only the empty string to say it with.
 	n, isArray := r.arrayElementCount(e.Name)
 	switch {
+	case zipsElements(e.Op):
+		// A zip takes whatever the name holds, including nothing and
+		// including a scalar: measured, `s=one; b=(x y); ${s:^b}` is
+		// `one x`, so a scalar is the one-element list it already is, and
+		// an empty array is no elements unquoted and one empty word quoted.
+		// Neither reading is available from the scalar path, which has one
+		// string to answer with.
+		//
+		// A name holding *nothing at all* is the exception and is the
+		// scalar path's: measured, `a=(); "${a:^b}"` is the two fields ``
+		// and `x` where `unset a; "${a:^b}"` is no field. Set-and-empty is
+		// one empty word; never-set is not a word.
+		if _, held := r.arrayElems(e.Name); !held {
+			return nil, false
+		}
 	case n == 0:
 		if !isArray || !rcExpandOn(s) {
 			return nil, false
@@ -2404,7 +2454,12 @@ func (r *Runner) bareArrayAsList(e *syntax.ParamExpr, s syntax.Span, sp splitPol
 // coincide for the same reason. Every other operator maps a value to a value
 // and gives the same answer whichever way the single element was reached.
 func opReadsTheList(op syntax.ParamOp) bool {
-	return op == syntax.ParamSubstring
+	// The zip joins with the slice rather than with the other operators: a
+	// quoted `"${a:^b}"` is still two fields, so the scalar path's one string
+	// cannot answer it. What quoting decides here is only that the *left*
+	// operand arrives as one word, which is why `"${a:^b}"` on `(1 2 3)` and
+	// `(x y z)` is `1 2 3` and `x` (#2112).
+	return op == syntax.ParamSubstring || zipsElements(op)
 }
 
 func wholeArraySubscript(idx string) bool { return idx == "@" || idx == "*" }

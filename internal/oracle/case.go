@@ -5456,6 +5456,21 @@ echo "st=$?"`,
 		Why:     "the sharpest row in the family, because two shells accept the same six characters and mean different things by them: zsh matches the pattern against the *whole* value and substitutes nothing when it hits, while ksh93 ignores the colon entirely and gives exactly what `${v#hel*}` gives — `lo`. bash refuses it as arithmetic. So `:#` is not `#` with a colon in front, and a dialect that treated it as one would silently answer ksh93's question in zsh's grammar",
 	},
 	{
+		ID: "expansion/array-zip", Category: "expansion",
+		Snippet: `a=(1 2); b=(A B); printf "[%s]" ${a:^b}; echo`,
+		Why:     "`:^` interleaves a parameter with the array its operand *names*, which is one shell's alone: to the three bash builds and ksh93 the characters after the colon are an offset and `^b` is arithmetic they refuse, and dash cannot read the array literal. It is `FG=( ${codes:^fg} )` in Oh My Zsh's spectrum library, and the refusal was the last error line of an interactive start on a real configuration here (#2112)",
+	},
+	{
+		ID: "expansion/array-zip-stops-at-the-shorter-and-cycling-does-not", Category: "expansion",
+		Snippet: `a=(1 2); b=(x y z w); printf "[%s]" ${a:^b}; echo; printf "[%s]" ${a:^^b}; echo`,
+		Why:     "the pair that separates the two spellings, and the reason the longer one has to be tried first when parsing: `:^` stops the moment either list runs out, where `:^^` carries the shorter one round again and keeps pairing until the longer is spent. A grammar that read the second caret as part of the operand would answer the first line twice and lose half the fields with no diagnostic",
+	},
+	{
+		ID: "expansion/array-zip-quoted-joins-the-left-and-stays-a-list", Category: "expansion",
+		Snippet: `a=(1 2 3); b=(x y z); set -- "${a:^b}"; printf "n=%d" "$#"; printf "<%s>" "$@"; echo`,
+		Why:     "quoting picks the *operand's* shape and not the result's: the left side is joined to one word before the zip sees it, so the answer is the two fields `1 2 3` and `x` rather than one word or six. The count is printed as well as the fields because `printf` runs its format once even with nothing to fill it, so `[]` comes out both from an empty list and from a single empty field — the probe that cannot tell those apart reported this as already correct while one field was missing",
+	},
+	{
 		ID: "expansion/a-bare-array-name-unquoted", Category: "expansion",
 		Snippet: `a=(one two); printf "[%s]" $a; echo`,
 		Why:     "the headline of the family: an array named without a subscript is the *elements* in zsh — one field each, exactly what `${a[@]}` gives — where bash and ksh93 read the bare name as `${a[0]}` and hand over one field. One shell against two, and it is silent in the direction that hurts: the joined reading answers at status 0 with a plausible string, so nothing says the loop that follows will run once instead of twice",

@@ -312,6 +312,7 @@ func Dialect() syntax.Dialect {
 	// on a real startup, and no prompt (#1438).
 	d.PositionalAssignment = true
 	d.ParamElementSelection = true
+	d.ParamArrayZip = true
 	// `${a:/pat/repl}`, the same family's fourth operator: the elements the
 	// pattern matches whole become the replacement. `compaudit` and
 	// `compdump` both build their file list with `${^~fpath:/.}`, which is

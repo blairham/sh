@@ -1204,6 +1204,11 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 			return sliceElems(words, r.numOf(e.Arg, e, e.Arg2), e, r), true, true, false
 		}
 		words[0] = r.substringRange(words[0], e)
+	case syntax.ParamZip, syntax.ParamZipCycle:
+		// A list either way: the zip produces one, and a scalar is the
+		// one-element list it already is — `s=one; b=(x y); ${s:^b}` is
+		// `one x`, measured.
+		return r.zipElements(e, words), true, true, false
 	case syntax.ParamExclude, syntax.ParamSetDifference, syntax.ParamSetIntersection,
 		syntax.ParamElementReplace:
 		if isList {

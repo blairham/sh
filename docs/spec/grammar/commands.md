@@ -1935,9 +1935,37 @@ bash alone requires the compound command; the other three take a simple
 command as a one-command body and run it (measured:
 `cmd/function-body-simple-command`). The core is the wider form, since
 three of the four accept it, and the strictness is a grammar flag:
-`FuncBodyMustBeCompound` (off in the core, on for `bash`). The flag is
-about the POSIX form only; the keyword form's shapes are the table
-above.
+`FuncBodyMustBeCompound` (off in the core, on for `bash`).
+
+**The `function` keyword's body is held to the same rule where the
+dialect has both, and ksh93 wants something narrower still.** Measured
+2026-09-11 over a file holding `function a`, the body, and a call:
+
+    body                          bash 5.3 / 3.2 / as-sh   ksh93              zsh
+    echo B                        at `echo', status 2      at `echo', st 3    B
+    (( 1 ))                       runs                     at `((', st 3      runs
+    ( echo B )                    runs                     at `(', st 3       runs
+    for i in 1; do echo B; done   runs                     at `for', st 3     runs
+    { echo B; }                   runs                     runs               runs
+
+So there are two answers and not one. bash wants **a compound command**,
+which is `FuncBodyMustBeCompound` again — the same flag, now read in the
+keyword production as well. ksh93 wants **a brace group specifically**,
+which is a second flag, `FunctionKeywordBodyMustBeBraceGroup`, on for
+`ksh` alone. The two cannot be one flag because the same shell is
+*wider* than bash at the parenthesized form: `f() echo hi` runs in ksh93
+and is a syntax error in bash, so a single rule would have to be wrong
+about one of the two spellings.
+
+Corpus: `cmd/function-keyword-body-simple-command`,
+`cmd/function-keyword-body-arithmetic-command` and
+`cmd/function-keyword-body-subshell`, the last two being what tells the
+two refusals apart. They are written inside an `eval` for the reason
+`cmd/function-keyword-with-no-body-at-all` gives.
+
+Until #1833 the flag was read in the parenthesized production and
+nowhere else, so both bash and ksh **defined** these bodies at status 0 —
+a wrong acceptance, which nothing reports.
 
 **ksh93 has a third answer, and it is not a weaker version of bash's.**
 It takes the simple command and refuses a *redirection* in it, wherever

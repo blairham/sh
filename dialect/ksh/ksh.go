@@ -97,6 +97,14 @@ func Dialect() syntax.Dialect {
 	// >out` are all a syntax error at the operator. A braced body is not
 	// this rule — `f() { :; } >out` is accepted.
 	d.FuncBodyTakesNoRedirection = true
+	// The `function` keyword's body is a brace group here and nothing else.
+	// Measured 2026-09-11 over a file holding `function a`, the body and a
+	// call: `echo B` is ``syntax error at line 2: `echo' unexpected``,
+	// `(( 1 ))` is the same sentence at `((`, `( echo B )` at `(` and a `for`
+	// loop at `for`, all at status 3, where `{ echo B; }` runs. The
+	// parenthesized form is the rule above and is *wider* than this one, so
+	// the two spellings need two flags.
+	d.FunctionKeywordBodyMustBeBraceGroup = true
 	// `$"..."`, the locale-translatable string: with no catalog it is a
 	// plain double-quoted string with the `$` stripped. Not core, because
 	// dash and zsh keep the `$` as a literal.

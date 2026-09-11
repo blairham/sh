@@ -240,6 +240,10 @@ there refuses the open. It is the same action to a consumer: same
 `actionId`, so the consultation and the record are one access with a
 name that resolved elsewhere.
 
+Two flags do their work *during* the open, before any check on a
+descriptor can run, so both are held back — and they are held back
+differently, because only one of them can be deferred.
+
 `O_TRUNC` is held back past that check and applied afterwards, on
 regular files only. That guard is measured rather than cautious: on
 Linux `open("/dev/null", O_WRONLY|O_TRUNC)` succeeds while `ftruncate`
@@ -247,6 +251,25 @@ on the same descriptor answers `EINVAL`, as it does on a FIFO, so
 splitting the flag off without the guard would break `> /dev/null`.
 Darwin accepts both, which is why one machine is not enough to justify
 it.
+
+`O_CREAT` cannot be deferred, because there is no descriptor until it
+has already happened. So the question is asked *inside* the walk: the
+final component is first opened without it, and only where that answers
+`ENOENT` — the open would create — is the gate consulted, on the name
+the walk assembled, before an `openat` that carries `O_CREAT|O_EXCL` and
+is relative to the parent descriptor the walk has held since that
+directory was checked. Resolving the name, asking, and then opening
+would be the time-of-check-to-time-of-use gap this walk exists to close:
+the parent could mean somewhere else by the time the creation happened.
+
+That one was missing for two releases and is why the pair is written
+down here rather than left to the code. `> link` aimed out of a
+policy's reach reported a refusal **and left an empty file at the end of
+the link** — the boundary saying no and meaning mostly. An existing file
+was never emptied, because the flag that destroys was the one that had
+been thought about; the flag that creates had not. `make sandbox` grades
+it as `write/through-symlink`, and graded against the commit before the
+fix it reports the escape on all four dialects.
 
 **The refusal names the link and not where it went.** A diagnostic that
 reported the target would hand the script the one fact the rule exists

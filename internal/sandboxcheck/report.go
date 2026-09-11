@@ -6,6 +6,7 @@ package sandboxcheck
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -31,10 +32,21 @@ func (r Report) Text(verbose bool) string {
 	}
 	sort.Strings(order)
 
-	fmt.Fprintf(w, "  %-26s %-10s %-10s %-10s %-10s\n", "route", "posix", "bash", "zsh", "ksh")
-	fmt.Fprintf(w, "  %s\n", strings.Repeat("─", 70))
+	// The name column is measured rather than fixed. It was 26, which every
+	// route fitted until one did not, and the row that overflowed pushed its
+	// verdicts out of line with the column heading them — a table that is
+	// wrong about which shell said what is worse than a wide one.
+	nameCol := len("route")
 	for _, name := range order {
-		fmt.Fprintf(w, "  %-26s", name)
+		if len(name) > nameCol {
+			nameCol = len(name)
+		}
+	}
+	row := "  %-" + strconv.Itoa(nameCol) + "s"
+	fmt.Fprintf(w, row+" %-10s %-10s %-10s %-10s\n", "route", "posix", "bash", "zsh", "ksh")
+	fmt.Fprintf(w, "  %s\n", strings.Repeat("─", nameCol+4*11))
+	for _, name := range order {
+		fmt.Fprintf(w, row, name)
 		for _, d := range AllDialects {
 			res, ok := byRoute[name][d]
 			if !ok {

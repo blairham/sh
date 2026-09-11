@@ -60,6 +60,17 @@ import (
 type Reached struct {
 	File *os.File
 	Name string
+	// Asked reports that the caller's check has already been made on Name,
+	// before the file at it was created.
+	//
+	// It is the half of the held-back O_CREAT the caller has to know about.
+	// A creation cannot be checked after the fact the way an ordinary open
+	// can — the file exists by then, which is the damage — so the walk asks
+	// on the way past, and this says it did. A caller that asked again would
+	// consult its gate twice for one open and write two audit records for
+	// it, which is the duplication Elsewhere already goes out of its way to
+	// avoid for a path somebody spelled carelessly.
+	Asked bool
 }
 
 // walkOpen opens path by resolving it a component at a time, and reports the
@@ -76,7 +87,7 @@ type Reached struct {
 // os.OpenFile would have produced, because a script is shown these and a
 // diagnostic that changed shape under a policy would tell it a policy was
 // there.
-func walkOpen(path string, flags int, perm fs.FileMode) (Reached, error) {
+func walkOpen(path string, flags int, perm fs.FileMode, ask func(string) error) (Reached, error) {
 	w := &walk{}
 	defer w.close()
 	fail := func(err error) (Reached, error) {
@@ -156,13 +167,32 @@ func walkOpen(path string, flags int, perm fs.FileMode) (Reached, error) {
 				flagsHere = (flagsHere &^ syscall.O_CREAT) | syscall.O_DIRECTORY
 			}
 		}
-		fd, openErr := openat(w.top(), comp, flagsHere|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, uint32(perm.Perm()))
+		var (
+			fd      int
+			openErr error
+			asked   bool
+		)
+		if last && ask != nil && flagsHere&syscall.O_CREAT != 0 {
+			fd, asked, openErr = w.createChecked(comp, flagsHere, perm, ask)
+		} else {
+			fd, openErr = openat(w.top(), comp, flagsHere|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, uint32(perm.Perm()))
+		}
 		if openErr == nil {
 			if !last {
 				w.push(fd, comp)
 				continue
 			}
-			return w.reached(fd, comp, path), nil
+			r := w.reached(fd, comp, path)
+			r.Asked = asked
+			return r, nil
+		}
+		if refused, ok := refusalOf(openErr); ok {
+			// The check refused the creation and nothing was created. Its
+			// own error is returned as it was given rather than wrapped in
+			// the *fs.PathError a failed open produces, because the caller
+			// matches on that error to tell a refusal from an errno — and
+			// because there is no open here to have failed.
+			return Reached{}, refused
 		}
 		if last && flags&syscall.O_NOFOLLOW != 0 {
 			// The caller said not to follow one. The kernel's own answer for
@@ -276,14 +306,25 @@ func (w *walk) name() string {
 	return "/" + strings.Join(w.names, "/")
 }
 
-// reached is the answer for a final component that opened.
-func (w *walk) reached(fd int, comp, requested string) Reached {
+// wouldReach is the path a final component resolves to, whether or not it is
+// there yet.
+//
+// Split from reached because a creation has to be named *before* it happens:
+// the check that decides it is asked about this name while the file is still
+// not on the filesystem, and the same assembly has to produce the same answer
+// a moment later when the descriptor exists. One function, so the name a
+// creation was allowed under and the name it is reported under cannot drift.
+func (w *walk) wouldReach(comp string) string {
 	name := w.name()
 	if name == "/" {
-		name += comp
-	} else {
-		name += "/" + comp
+		return name + comp
 	}
+	return name + "/" + comp
+}
+
+// reached is the answer for a final component that opened.
+func (w *walk) reached(fd int, comp, requested string) Reached {
+	name := w.wouldReach(comp)
 	// os.NewFile rather than a hand-built File, and deliberately without
 	// putting the descriptor into non-blocking mode first. os.OpenFile does
 	// that for the kinds its platform can poll and arranges for Fd() to undo
@@ -292,6 +333,104 @@ func (w *walk) reached(fd int, comp, requested string) Reached {
 	// descriptors to children. Left blocking, a child inherits exactly what it
 	// inherits today.
 	return Reached{File: os.NewFile(uintptr(fd), requested), Name: name}
+}
+
+// createChecked opens a final component that the caller's flags allow to be
+// created, asking before the creation rather than after it.
+//
+// This is O_CREAT's half of what Verified does for O_TRUNC, and the argument
+// is the one already written there: a flag that acts *as part of* the open has
+// done its work before any check on the descriptor can run, so an open that is
+// then refused has already done the thing the refusal was for. O_TRUNC empties
+// a file; O_CREAT makes one. Both were the damage, and only one of them was
+// held back — `> link` pointing outside a policy's reach reported a refusal
+// and left an empty file there, which is the boundary saying no and meaning
+// mostly.
+//
+// The two cannot be held back the same way, and that asymmetry is the whole
+// shape of this function. Truncation can be deferred because the descriptor is
+// in hand and ftruncate is a second call; creation cannot, because there is no
+// descriptor until it happens. So the question is asked in the one place where
+// asking it is not a race: here, between the walk and the openat, with a
+// descriptor on the parent directory that has been held since that directory
+// was checked. Resolving the name, asking, and then opening would be the
+// classic time-of-check-to-time-of-use gap this package opens by rejecting —
+// the parent could mean somewhere else by the time the creation happened, and
+// the check and the creation would be about two different directories. Here
+// the openat is relative to that pinned descriptor, so the file is made at the
+// path that was allowed or it is not made at all.
+//
+// The sequence is three steps and each one is load-bearing:
+//
+//   - Open what is already there, with O_CREAT off. If that succeeds the file
+//     existed, nothing was created, and the ordinary check on the descriptor
+//     is the one that decides it — so an open of an existing file is exactly
+//     the call it always was, and costs no extra consultation.
+//
+//   - If the answer is ENOENT, this open would create. Ask, naming the path
+//     the walk assembled rather than the one the caller wrote, which is the
+//     point of the walk. A refusal returns before the openat.
+//
+//   - Create with O_EXCL, so that a file which appeared in between is not
+//     silently opened as though this had made it.
+//
+// Any other errno is handed back untouched: a symbolic link answers ELOOP or
+// ENOTDIR here and the caller's loop still has to follow it, and a real
+// failure is the answer it always was. In both cases nothing has been created,
+// which is the only property this function owes its caller.
+func (w *walk) createChecked(comp string, flags int, perm fs.FileMode, ask func(string) error) (fd int, asked bool, err error) {
+	// The file as it already is. O_EXCL comes off with O_CREAT because the
+	// two are one flag — "fail if it exists" is a condition on the creating —
+	// and a probe that kept it would refuse the very case it is probing for.
+	probe := (flags &^ (syscall.O_CREAT | syscall.O_EXCL)) | syscall.O_NOFOLLOW | syscall.O_CLOEXEC
+	fd, err = openat(w.top(), comp, probe, 0)
+	if err == nil {
+		if flags&syscall.O_EXCL != 0 {
+			// The caller asked for the creation to be the whole point. It
+			// exists, so this is EEXIST, which is what the kernel would have
+			// answered the open the caller actually wrote.
+			_ = syscall.Close(fd)
+			return -1, false, syscall.EEXIST
+		}
+		return fd, false, nil
+	}
+	if err != syscall.ENOENT {
+		return -1, false, err
+	}
+	if refusal := ask(w.wouldReach(comp)); refusal != nil {
+		return -1, false, refused{refusal}
+	}
+	fd, err = openat(w.top(), comp, flags|syscall.O_EXCL|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, uint32(perm.Perm()))
+	if err == syscall.EEXIST && flags&syscall.O_EXCL == 0 {
+		// Something else created it between the probe and this call. The
+		// creation that was allowed did not happen, so what is here now is a
+		// file that was already there — the case the descriptor check decides,
+		// reached exactly as it would have been without the race. asked stays
+		// false so that check is made.
+		fd, err = openat(w.top(), comp, probe, 0)
+		return fd, false, err
+	}
+	return fd, err == nil, err
+}
+
+// refused carries a check's own refusal out through the walk, which otherwise
+// deals only in errnos.
+//
+// A wrapper rather than a sentinel because the caller's error is the thing
+// that has to survive: interp and the front end both match on their own
+// refusal value, and a walk that replaced it with one of its own would leave
+// them reporting a refusal as an unexplained failed open.
+type refused struct{ error }
+
+func (r refused) Unwrap() error { return r.error }
+
+// refusalOf reports whether an error is a check's refusal, and unwraps it.
+func refusalOf(err error) (error, bool) {
+	var r refused
+	if errors.As(err, &r) {
+		return r.error, true
+	}
+	return nil, false
 }
 
 // readlink reports whether a component that would not open is a symbolic link,

@@ -116,6 +116,22 @@ type Fixture struct {
 	Victim string
 	// VictimDir is a directory in Root, likewise.
 	VictimDir string
+	// Link is a symbolic link *inside* the workspace whose target is Root.
+	//
+	// It is the one fixture entry that is a way in rather than a thing to
+	// reach, and it is here because a rule matches a name while an open
+	// reaches an object. Every other route names somewhere it may not go, so
+	// the policy can refuse it by reading the name; a route through this one
+	// names somewhere it *may* go and arrives outside anyway, which is the
+	// only shape that tests the resolution rather than the glob.
+	//
+	// It is placed by the fixture rather than made by the script on purpose.
+	// A script can make one — `zf_ln -s` is in the workspace and allowed
+	// there — but then the row would be graded on whether that builtin
+	// exists, and the escape is the core's, reachable from a workspace that
+	// simply has a link in it. Which is the ordinary case: an agent is given
+	// a directory, and a directory somebody uses has links in it.
+	Link string
 	// Sock is a path in Root for the route that binds a unix socket, kept
 	// deliberately short: sun_path is 104 bytes on Darwin and 108 on Linux,
 	// counting the whole absolute path, so a fixture named as plainly as
@@ -294,6 +310,10 @@ func newFixture(root string, n int) (Fixture, error) {
 		return f, err
 	}
 	if err := os.WriteFile(f.Victim, []byte("victim\n"), 0o600); err != nil {
+		return f, err
+	}
+	f.Link = filepath.Join(f.Ws, "out")
+	if err := os.Symlink(f.Root, f.Link); err != nil {
 		return f, err
 	}
 	return f, nil

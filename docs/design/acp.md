@@ -184,6 +184,33 @@ written against the word `exit` would leave `exec` and a signal doing the
 same thing, and a bare `exit` at the end of a pasted script is the way
 this is actually reached rather than the exotic way.
 
+### Job control in a session: the signals, not the terminal
+
+A session has no terminal and no foreground, so `fg`, `bg` and `^Z` have
+no meaning in one, and the hook that hands a process group the terminal
+is not installed. What a session **does** have is the rest of it: a job
+table, `jobs`, `wait`, and every signal a script writes — including the
+ones aimed at a job by `%` spec.
+
+The line between the two is the same line `driver.Shell.KeepProcess`
+draws, once it is drawn in the right place. `KeepProcess` says *this
+process* must survive the script: no `exec` replacing the program that is
+serving the connection, no fatal signal ending it, no umask or resource
+limit changed underneath every other session on it. A process group that
+a **job** leads is none of those things — it is a group this shell made,
+holding children this shell started — so signaling one is a shell's
+ordinary business and is installed on every route.
+
+It was not, and that was a seam defect rather than a job-control one:
+with the monitor on, `cmd & kill %1` signaled the job under `-c` and
+answered `No such process` in a session, for a job `jobs` had listed one
+line earlier. The same script behaving differently by route is exactly
+what the shared `driver` exists to prevent (#1814). With the monitor off
+the two routes already agreed, because a background job then shares the
+shell's own group and a `%` spec is signaled as a process (#1738) — which
+is why the graded row turns the monitor on, and why the bug survived the
+route comparison that found the rest.
+
 ### The three streams
 
 An ACP agent may not write to standard output anything that is not a

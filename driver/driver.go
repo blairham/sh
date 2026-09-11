@@ -1234,6 +1234,30 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 			r.Dir = wd
 		}
 	}
+	// A job this shell started is this shell's to signal, whatever else the
+	// front end is — which is why this stands outside the block below rather
+	// than in it.
+	//
+	// The block is about *this process*: not being replaced by `exec`, not
+	// dying of a signal a script raised, not having its umask or its limits
+	// changed under a program that is more than a shell. A process group a
+	// job leads is none of those. It is a group this shell made, holding
+	// children this shell started, and reaching it cannot reach the front end
+	// — a job that shares this shell's group is not `ownGroup` and is
+	// signaled as a process instead.
+	//
+	// Gating it here made the same script behave differently by route: with
+	// the monitor on, `cmd & kill %1` signaled the job under `-c` and
+	// answered `No such process` in an ACP session, for a job `jobs` had just
+	// listed. That is a front-end difference of exactly the kind this package
+	// exists to prevent (#1814).
+	//
+	// Foreground stays below, and the asymmetry is the answer to the wider
+	// question: handing over the *terminal* is reaching outside this shell at
+	// a front end that may have no terminal at all, where signaling a group
+	// is not. So a session has no `fg`, no `bg` and no ^Z — they have no
+	// meaning without one — and still has the signals a script writes.
+	r.SignalGroup = signalGroup
 	if !sh.KeepProcess {
 		// This is a shell, so `exec` may really replace it. interp will not
 		// reach for syscall.Exec itself — it is a library, and a Runner
@@ -1257,9 +1281,6 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// And it asks after the ones nothing is waiting for — what `bg` let
 		// go of — which is reaping just as much and so belongs here too.
 		r.PollCommand = pollCommand
-		// And it may resume one it stopped, which is a signal leaving this
-		// process and so the binary's to send.
-		r.SignalGroup = signalGroup
 		// And it hands the terminal to whatever it is running, which is what
 		// makes ^C and ^Z reach the command rather than the shell.
 		r.Foreground = foreground

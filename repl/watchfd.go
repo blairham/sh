@@ -385,6 +385,14 @@ func (w *lazyStream) Write(p []byte) (int, error) {
 	return w.w.Write(p)
 }
 
+// Unwrap is the stream underneath, so that this wrapper does not hide what it
+// is over — [interp.WriterUnder], and the reason is #2069. A background job
+// started inside a handler asks the shell's stream whether it is already
+// guarded, and the answer is about the chain: without this the question stops
+// here, a second guard goes on over the first, and the next write takes one
+// mutex twice on one goroutine.
+func (w *lazyStream) Unwrap() io.Writer { return w.w }
+
 // watchedDescriptors is which descriptors the shell wants waited on, asked
 // fresh, or nil where the front end has none to offer.
 //

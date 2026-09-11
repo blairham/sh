@@ -8530,6 +8530,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shopt/globstar-includes-the-starting-directory` | `**/a*` | `ax cx/dx/ax` | `ax cx/dx/ax` | `**/a*` | `**/a*` | `ax cx/dx/ax` |
 | `shopt/globstar-with-nothing-behind-it` | `ax cx` | `ax cx cx/dx cx/dx/ax` | `ax cx cx/dx cx/dx/ax` | `ax cx` | `ax cx` | `ax cx` |
 | `shopt/nocasematch-folds-case` | `exact` | `hit` | `hit` | `hit` | `exact` | `exact` |
+| `shopt/nocasematch-folds-a-substitution` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[AXC]` | `[AXC]` | `[ABC]` | `[ABC]` | `[ABC]` |
+| `shopt/nocasematch-leaves-a-trim-exact` | `[ABC]` | `[ABC]` | `[ABC]` | `[ABC]` | `[ABC]` | `[ABC]` |
 | `shopt/query-answers-by-status` | `q=127~q=127` | `q=1~q=0` | `q=1~q=0` | `q=1~q=0` | `q=127~q=127` | `q=127~q=127` |
 | `shopt/expand-aliases-is-a-live-switch` | `hit~hit~st=0` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~hit~st=0` | `hit~hit~st=0` |
 | `shopt/expand-aliases-is-off-until-it-is-asked-for` | `hit~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `hit~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `hit~st=0` | `hit~st=0` |
@@ -8753,6 +8755,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shopt/nocasematch-folds-case` — the option folds `case` and `[[ ]]` matching in bash and nothing else has it: the other three keep matching exact because the command that would have changed it was never theirs
   ```sh
   shopt -s nocasematch 2>/dev/null; case A in a) echo hit;; *) echo exact;; esac
+  ```
+- `shopt/nocasematch-folds-a-substitution` — the fold reaches the substitution operators of parameter expansion, which the row above cannot say: `case` and `${v//…}` are different surfaces and the option does not reach them all. This one and the trim beside it are the pair that separates them — a shell folding everything under `${ }` and a shell folding none of it each satisfy one of the two and fail the other (#1969). It is also where bash 5.3 and bash 3.2 part company, the older one leaving the substitution exact, so this shell's bash follows the version its dialect is measured against rather than the name; dash has no such operator at all
+  ```sh
+  shopt -s nocasematch 2>/dev/null; v=ABC; echo "[${v//b/X}]"
+  ```
+- `shopt/nocasematch-leaves-a-trim-exact` — the other half: a trim in the same `${ }` stays exact with the option on, in the one shell that has the option and in the ones that do not. It is the measurement the comment on this implementation's fold was written from, and on its own it says nothing about the substitution next door — which is how the fold came to be documented as reaching no parameter expansion at all
+  ```sh
+  shopt -s nocasematch 2>/dev/null; v=ABC; echo "[${v#a}]"
   ```
 - `shopt/query-answers-by-status` — -q answers by status alone — 1 while the option is off and 0 once -s has set it; the shells without the builtin answer 127 twice, which records what a probing script would see there
   ```sh

@@ -100,24 +100,85 @@ func TestGlobFoldsCaseReachesOnlyPathnameExpansion(t *testing.T) {
 	}
 }
 
-func TestMatchFoldsCaseReachesOnlyCaseAndConditions(t *testing.T) {
+// The option folds `case`, `[[ ]]` and the **substitution** operators of
+// parameter expansion — and not the trims beside them, not the case-change
+// operator, and not pathname expansion.
+//
+// The seam is inside parameter expansion rather than around it, which is the
+// part this test exists to hold: `${x#a}` and `${x//a/…}` are neighbours in
+// the same `${ }` and answer differently, so a row using only the first says
+// nothing about the second. The comment on MatchFoldsCase claimed the whole
+// of parameter expansion was exempt on exactly that evidence, and was half
+// wrong for two releases (#1969).
+func TestMatchFoldsCaseReachesCaseConditionsAndSubstitutions(t *testing.T) {
 	dir := fileDir(t, "Apple")
 	for _, tc := range []struct {
+		name string
 		src  string
 		want string
 	}{
-		{`case A in a) echo hit;; *) echo exact;; esac`, "hit"},
-		{`[[ ABC == a* ]] && echo hit || echo exact`, "hit"},
-		{`[[ A != a ]] && echo differ || echo same`, "same"},
-		// Not parameter expansion, which is measured: `ABC` keeps its A.
-		{`x=ABC; echo ${x#a}`, "ABC"},
+		{"a case pattern", `case A in a) echo hit;; *) echo exact;; esac`, "hit"},
+		{"a condition", `[[ ABC == a* ]] && echo hit || echo exact`, "hit"},
+		{"an inequality", `[[ A != a ]] && echo differ || echo same`, "same"},
+
+		{"a global substitution", `x=ABC; echo ${x//b/X}`, "AXC"},
+		{"a single substitution", `x=ABC; echo ${x/b/X}`, "AXC"},
+		{"a prefix-anchored substitution", `x=ABC; echo ${x/#a/Y}`, "YBC"},
+		{"a suffix-anchored substitution", `x=ABC; echo ${x/%c/Z}`, "ABZ"},
+		{"a deleting substitution", `x=ABC; echo ${x//b}`, "AC"},
+		// Symmetric, and the whole matcher rather than a prefix test: what
+		// folds is the comparison inside the pattern, so a bracket and a `?`
+		// fold with the plain letter.
+		{"a lower-case subject and an upper-case pattern", `x=abc; echo ${x//B/X}`, "aXc"},
+		{"a bracket in the pattern", `x=abc; echo ${x//[B]/X}`, "aXc"},
+		{"a wildcard beside the folded letter", `x=abc; echo ${x//b?/X}`, "aX"},
+
+		// The trims are the neighbours that stay exact, which is measured
+		// and is what makes this a seam rather than a blanket rule.
+		{"not a prefix trim", `x=ABC; echo ${x#a}`, "ABC"},
+		{"not a suffix trim", `x=ABC; echo ${x%c}`, "ABC"},
+		// The case-change operator stays exact too, and is measured beside
+		// these in dialect/bash — the core grammar has no `${x^^pat}`.
 		// And not pathname expansion, which has a fold of its own.
-		{`echo a*`, "a*"},
+		{"not pathname expansion", `echo a*`, "a*"},
 	} {
-		out, _ := run(t, tc.src, withOption(MatchFoldsCase, true, inDir(dir)))
-		if got := strings.TrimSpace(out); got != tc.want {
-			t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, withOption(MatchFoldsCase, true, inDir(dir)))
+			if got := strings.TrimSpace(out); got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// With the option off every one of the folded rows above is exact again, so
+// the rows are evidence about the option rather than about the operator.
+//
+// Written out rather than inferred: a substitution that had simply started
+// folding unconditionally would pass every row above.
+func TestTheSubstitutionOperatorsAreExactWithoutTheOption(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`x=ABC; echo ${x//b/X}`, "ABC"},
+		{`x=ABC; echo ${x/b/X}`, "ABC"},
+		{`x=ABC; echo ${x/#a/Y}`, "ABC"},
+		{`x=ABC; echo ${x/%c/Z}`, "ABC"},
+		{`x=abc; echo ${x//B/X}`, "abc"},
+	} {
+		if out, _ := run(t, tc.src, nil); strings.TrimSpace(out) != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, strings.TrimSpace(out), tc.want)
 		}
+	}
+}
+
+// The fold decides what the pattern matches and not what the replacement
+// stands for: an `&` is still the text the subject actually held, case and
+// all. Measured on bash 5.3.15, `v=ABC; shopt -s nocasematch;
+// ${v//b/<&>}` is `A<B>C` — the upper-case B, matched by a lower-case
+// pattern.
+func TestTheFoldDoesNotReachWhatAnAmpersandStandsFor(t *testing.T) {
+	setup := withOption(MatchFoldsCase, true, readingTheAmpersand)
+	if out, _ := run(t, `x=ABC; echo ${x//b/<&>}`, setup); strings.TrimSpace(out) != "A<B>C" {
+		t.Errorf("${x//b/<&>} = %q, want A<B>C — the subject's own case", strings.TrimSpace(out))
 	}
 }
 

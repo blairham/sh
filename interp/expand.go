@@ -2796,7 +2796,7 @@ func (r *Runner) matchedWith(value, pattern string, op syntax.ParamOp) string {
 // count, and cost four times the run time of a substitution over a long
 // value for the trouble.
 func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string {
-	o := r.patternOpts(pattern, value)
+	o := r.replacementPatternOpts(pattern, value)
 	// One spelling of "read the replacement", used by both branches. It is
 	// `replacementOf` and not `joinWord` because a replacement is **text**
 	// and not a pattern (#1337), and having the two branches read it two
@@ -2813,6 +2813,40 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 		r.publishMatch(m)
 		return r.replacementFor(repl)(matched)
 	})
+}
+
+// replacementPatternOpts is patternOpts for the pattern of a **span
+// replacement** — `${v/pat/rep}`, its global and anchored spellings, and the
+// deleting form with no replacement.
+//
+// One field differs, the case fold, and the split is measured rather than
+// reasoned: 2026-09-11 on bash 5.3.15 with `v=ABC`, after `shopt -s
+// nocasematch`,
+//
+//	${v//b/X}   AXC      ${v#a}    ABC
+//	${v/#a/Y}   YBC      ${v%c}    ABC
+//	${v/%c/Z}   ABZ      ${v^^b}   ABC
+//
+// So it is not "parameter expansion is exempt from the fold". The trims and
+// the case-change operator really are exempt and the substitution is not, and
+// a probe that used `${x#a}` alone could not tell the two apart — which is
+// what the comment on MatchFoldsCase was written from (#1969).
+//
+// Symmetric, and the whole matcher rather than a prefix test: with the option
+// on, `v=abc; ${v//B/X}` is `aXc`, and so are `${v//[B]/X}` and `${v//b?/X}`,
+// so what folds is the comparison inside the pattern and not the pattern's
+// text. `nocaseglob` reaches none of this — measured, `shopt -s nocaseglob`
+// leaves `${v//b/X}` at `ABC` — which is why the fold read here is the
+// matching option and not the globbing one.
+//
+// It is not an axis. Only one shell in the panel has an option that turns
+// MatchFoldsCase on at all, so no second dialect can disagree about where its
+// answer reaches; a Semantics field here would have exactly one shell able to
+// answer it.
+func (r *Runner) replacementPatternOpts(pattern string, subjects ...string) patternOpts {
+	o := r.patternOpts(pattern, subjects...)
+	o.fold = r.MatchOption(MatchFoldsCase)
+	return o
 }
 
 // reportsAMatch is whether a pattern fills `$MATCH` or `$match` when it

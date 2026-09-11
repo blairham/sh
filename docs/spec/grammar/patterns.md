@@ -1173,9 +1173,40 @@ nothing beside it:
 | `nullglob` | a pattern matching no file expands to **nothing**: `echo zz*zz` prints an empty line, and a command whose every word vanishes runs nothing with status 0 |
 | `dotglob` | metacharacters match a leading period; `.` and `..` are still never produced |
 | `nocaseglob` | pathname expansion folds case — `a*` finds `Apple` — and `case`/`[[ ]]` stay exact |
-| `nocasematch` | `case` and `[[ ]]` fold case — `case A in a)` matches — and pathname expansion and `${x#pat}` stay exact |
+| `nocasematch` | `case`, `[[ ]]` and the **substitution** operators of parameter expansion fold case — `case A in a)` matches and `v=ABC; ${v//b/X}` is `AXC` — while pathname expansion, the trims `${x#pat}` and `${x%pat}`, and the case-change operator `${x^^pat}` stay exact |
 | `globstar` | `**` standing alone as a component matches zero or more directory levels: `**/f` finds `f`, `d/f` and `d/e/f`; a trailing `d/**` lists `d/` itself and then everything beneath it; hidden entries are neither listed nor descended into without `dotglob`; a symbolic link is listed and never followed; `a**` and a quoted `**` are ordinary patterns |
 | `extglob` | the quantified groups above are read **everywhere**, and read at parse time |
+
+The seam `nocasematch` draws is *inside* `${ }` rather than around it,
+and it is easy to miss for the reason it was missed here: `${x#a}` is the
+first parameter expansion anybody reaches for, it stays exact, and it
+says nothing at all about the substitution next door. Measured 2026-09-11
+on bash 5.3.15 with `v=ABC` and the option on —
+
+| written | answer |
+| --- | --- |
+| `${v//b/X}` | `AXC` |
+| `${v/b/X}` | `AXC` |
+| `${v/#a/Y}` | `YBC` |
+| `${v/%c/Z}` | `ABZ` |
+| `${v#a}` | `ABC` |
+| `${v%c}` | `ABC` |
+| `${v^^b}` | `ABC` |
+
+— so a probe that used only a trim cannot tell "parameter expansion is
+exempt" from "the trims are exempt", and those are different rules.
+
+Three details of the fold, each measured rather than assumed. It is
+**symmetric and inside the matcher**: with `v=abc`, `${v//B/X}`,
+`${v//[B]/X}` and `${v//b?/X}` are all `aXc`/`aX`, so what folds is the
+comparison and not the pattern's text. It does **not** decide what an
+`&` in the replacement stands for: `${v//b/<&>}` on `ABC` is `A<B>C`,
+the subject's own upper-case B. And `nocaseglob` reaches none of it —
+with that option on instead, `${v//b/X}` leaves `ABC` alone.
+
+bash 3.2 does not fold the substitution, which is where the panel's two
+bash columns part company; this shell follows the version its bash
+dialect is measured against.
 
 ### `**` is two questions, and the panel splits on the second
 

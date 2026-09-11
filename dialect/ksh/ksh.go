@@ -541,6 +541,9 @@ func Semantics() interp.Semantics {
 	// The integer attribute has a reader of its own, and it is not the
 	// arithmetic one: `$((010))` is 8 here and `typeset -i d=010` is 10.
 	s.IntegerAssignmentReadsALeadingZeroAsDecimal = interp.Yes
+	// And a value read *out of a name* inside an expression is the same
+	// second reader: `k=010; $((k))` is 10 where `$((010))` is 8.
+	s.ArithStoredValueReadsALeadingZeroAsDecimal = interp.Yes
 	s.IndirectionYieldsName = interp.Yes
 	s.BraceExpansion = interp.Yes
 	// The one shell that strips a range endpoint's zeros — `{01..3}` is

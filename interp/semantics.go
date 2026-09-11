@@ -668,6 +668,41 @@ type Semantics struct {
 	// zero-padded date field or counter comes out eight where the shell
 	// says ten, with nothing said about it.
 	IntegerAssignmentReadsALeadingZeroAsDecimal Answer
+	// ArithStoredValueReadsALeadingZeroAsDecimal reads `010` out of a
+	// *variable* as ten inside an expression, in a shell whose lexer still
+	// reads the identical literal as eight.
+	//
+	// The other half of the split IntegerAssignmentReadsALeadingZeroAsDecimal
+	// records, at the other reader. That one is the assignment to an integer
+	// name; this one is `$(( k ))`, with no attribute anywhere in it.
+	//
+	// Measured 2026-09-11, `k=010; echo "$((k)) $((010))"`:
+	//
+	//	                    a name holding 010   the literal 010
+	//	dash                        8                   8
+	//	bash 5.3.15, bash 3.2       8                   8
+	//	ksh93u+                    10                   8
+	//	zsh 5.9.2                  10                  10
+	//
+	// ksh93 is the only column whose two answers differ: its arithmetic lexer
+	// reads a leading zero as octal, and a value dereferenced into the
+	// expression does not go through that lexer. zsh's two agree because
+	// nothing there makes a leading zero octal at all, and the rest because
+	// both readers are octal — which is why this is asked only where
+	// ArithLeadingZeroIsOctal is Yes, and never of zsh.
+	//
+	// It is the *leading numeral* of the value and not the whole of it, which
+	// is what tells this apart from a value read as a number: `k=010+1` is 11
+	// on the shell that splits, where the same literal is 9, so the ten is
+	// read decimal and the rest of the expression stays octal. See
+	// Runner.decimalLeadingNumeral for the measured edges — a sign, leading
+	// space, and an `0x` prefix each leave the value alone.
+	//
+	// Silent and arithmetically wrong: a zero-padded field read out of a
+	// variable — a month, a padded counter — comes out short with nothing
+	// said, and under the octal reading `09` is an invalid digit as well as
+	// a wrong number.
+	ArithStoredValueReadsALeadingZeroAsDecimal Answer
 	// IndirectionYieldsName makes `${!x}` the *name* rather than the value it
 	// names: with `x=y`, ksh93 gives `x` and bash gives the value of `y`.
 	//
@@ -6601,6 +6636,10 @@ func PosixSemantics() Semantics {
 		JobsPidsOnlyOption:      Yes,
 		LengthOfSpecialIsCount:  Yes,
 		ArithLeadingZeroIsOctal: Yes,
+		// One reader: the value a name holds goes through the same octal
+		// rule the literal does, so `k=010; $((k))` is eight. ksh93 is the
+		// one shell whose two readers part.
+		ArithStoredValueReadsALeadingZeroAsDecimal: No,
 		// dash is the panel's POSIX-faithful member and the only one
 		// exiting 2, so the POSIX preset follows it. The standard itself
 		// requires only "greater than zero", which decides nothing.

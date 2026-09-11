@@ -77,6 +77,49 @@ no parser consequence is an axis.
 field could not carry both: `08` is an error in dash and bash, decimal
 8 in ksh93, and unreachable in zsh, where nothing made the zero octal.
 
+### A leading zero the *lexer* never sees
+
+Everything above is about a literal written into the expression. A value
+read out of a **variable** is a second reader, and one shell's two answers
+differ. Measured 2026-09-11 with `-c`:
+
+| `k=010` | `$((k))` | `$((010))` |
+| --- | --- | --- |
+| dash | 8 | 8 |
+| bash 5.3.15, bash 3.2 | 8 | 8 |
+| ksh93u+ | **10** | 8 |
+| zsh 5.9.2 | 10 | 10 |
+
+ksh93 is the only column whose two answers differ. Its arithmetic lexer
+reads `010` as octal and a value dereferenced into the expression does not
+go through that lexer; zsh's two agree because nothing there makes a
+leading zero octal at all, and the rest because both readers are octal.
+
+It is the value's **leading numeral** and not the whole of it:
+
+| value | ksh93u+ | the same text as a literal |
+| --- | --- | --- |
+| `010` | 10 | 8 |
+| `0010` | 10 | 8 |
+| `09` | 9 | 9 |
+| `010+1` | **11** | 9 |
+| `1+010` | 9 | 9 |
+| `010#5` | 5 | error |
+| `-010` | -8 | -8 |
+| `" 010"` | 8 | 8 |
+| `0x10` | 16 | 16 |
+
+So the numeral has to *begin* the value, with no sign and nothing in front
+of it, and the rest of the expression stays octal.
+
+Semantics axis: `ArithStoredValueReadsALeadingZeroAsDecimal` — ksh93 yes,
+dash and bash no, asked only where `ArithLeadingZeroIsOctal` is yes so zsh
+is never asked. It is the other half of the split
+`IntegerAssignmentReadsALeadingZeroAsDecimal` records at the integer
+attribute's assignment (#1270); the two are separate axes because a single
+answer routed through the evaluator would move `$((010))` with them, and
+that is 8 in the shell that splits.
+
 ## Operators
 
 Precedence follows C, highest first. Measured spot-checks are unanimous:
@@ -382,6 +425,43 @@ The sixth row is the other side of the same distinction. With nothing to
 look up, ksh93 reports an `arithmetic syntax error` — the same reason it
 gives for an expression it cannot parse — rather than a parameter that is
 not set.
+
+### The value is re-read as an *expression*, not as a name
+
+The chase is not a lookup with a name-shaped value as its input. The value
+is parsed again as an expression, and a name is simply the expression that
+is one operand. Measured 2026-09-11, `-c`:
+
+| | bash 5.3 | ksh93 | zsh 5.9 | dash |
+| --- | --- | --- | --- | --- |
+| `v=1+1; $(( v * 3 ))` | 6 | 6 | 6 | `Illegal number: 1+1` |
+| `a=(1+1); $(( a[0] * 3 ))` | 6 | 6 | 0 — `a[1]` is 6 | no arrays |
+| `i=1; v=i++; $(( v ))` | 1, and `i` is 2 | same | same | `Illegal number: i++` |
+| `v=q=5; $(( v ))` | 5, and `q` is 5 | same | same | `Illegal number: q=5` |
+| `v="3 4"; $(( v ))` | `3 4: arithmetic syntax error in expression` | `3 4: arithmetic syntax error` | ``operator expected at `4' `` | `Illegal number: 3 4` |
+| `v=1/0; $(( v ))` | `1/0: division by 0` | `1/0: divide by zero` | `division by zero` | `Illegal number: 1/0` |
+| `q=5; v='$q'; $(( v ))` | `$q: ... operand expected` | `$q: arithmetic syntax error` | error | `Illegal number: $q` |
+
+Four facts, in order:
+
+- The operators in the value run, side effects and all, so this is an
+  evaluation and not a conversion.
+- The fifth and sixth rows say what fails: the re-read expression, worded
+  the way a written one is, and blaming the **value** rather than the name
+  it came out of.
+- The last row says the value is *not expanded* on the way in. It went
+  through expansion when it was assigned and does not go through it again,
+  so a surviving `$` is an ordinary character in an expression and refused
+  as an operand.
+- It is the same split as the chase, so it is the same axis —
+  `ArithNameValueRecurses`, yes in bash, ksh93 and zsh, no in dash, which
+  refuses the value as a number in one sentence.
+
+The bound applies here rather than to the chase alone: reading a value as
+an expression puts the whole evaluator inside the value, so `x=x` has to
+stop on a count. All three shells that re-read stop it and say so — bash
+`expression recursion level exceeded`, ksh93 `recursion too deep`, zsh
+`math recursion limit exceeded`.
 
 **Why this is written down rather than merged into the row above.** The
 interpreter modeled the chase alone and stood ksh93's `parameter not set`

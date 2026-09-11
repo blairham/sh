@@ -171,7 +171,7 @@ func (r *Runner) evalNumNode(e syntax.ArithExpr) (arithNum, error) {
 		return r.parseArithNum(x.Text)
 
 	case *syntax.ArithVar:
-		return r.arithValueOf(x.Name, 0)
+		return r.arithValueOf(x.Name)
 
 	case *syntax.ArithIndex:
 		return r.arithElement(x)
@@ -388,7 +388,7 @@ func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 // an array — and a value that is no literal is re-read as a name where the
 // dialect does that.
 func (r *Runner) arithElemValue(v string) (arithNum, error) {
-	return r.arithNumOfStored(v, 0)
+	return r.arithNumOfStored(v)
 }
 
 // arithNameIsSet reports whether the name a subscript follows exists at all,
@@ -492,7 +492,7 @@ func arithPlaceOf(e syntax.ArithExpr) (arithPlace, bool) {
 // readPlace is the value a target currently holds.
 func (r *Runner) readPlace(p arithPlace) (arithNum, error) {
 	if !p.subscripted {
-		return r.arithValueOf(p.name, 0)
+		return r.arithValueOf(p.name)
 	}
 	return r.arithElement(&syntax.ArithIndex{Name: p.name, Index: p.index, Sub: p.sub, Empty: p.empty})
 }
@@ -972,13 +972,13 @@ func boolInt(b bool) int {
 // choice made here but the ArithNameValueRecurses ask below.
 //
 // The depth bound is not decoration: `x=x` would otherwise recur forever.
-func (r *Runner) arithValueOf(name string, depth int) (arithNum, error) {
-	if depth > 32 {
+func (r *Runner) arithValueOf(name string) (arithNum, error) {
+	if r.arithValueDepth > 32 {
 		return intNum(0), arithError{msg: "expression nested too deeply: " + name}
 	}
 	value, ok := r.getVar(name)
 	if !ok {
-		if depth > 0 && r.ask(r.sem().ArithRecursedNameMustBeSet, "an unset name reached through a value") {
+		if r.arithValueDepth > 0 && r.ask(r.sem().ArithRecursedNameMustBeSet, "an unset name reached through a value") {
 			// One dialect reads a name arrived at through another name's
 			// value as a *parameter reference* rather than as text that
 			// might be a number, so an unset one is the same refusal its
@@ -992,7 +992,7 @@ func (r *Runner) arithValueOf(name string, depth int) (arithNum, error) {
 		}
 		return intNum(0), nil
 	}
-	return r.arithNumOfStored(value, depth)
+	return r.arithNumOfStored(value)
 }
 
 // arithNumOfStored reads a value a variable was holding as a number.
@@ -1003,19 +1003,134 @@ func (r *Runner) arithValueOf(name string, depth int) (arithNum, error) {
 // answer 5, and an element holding a word that is no name at all refused with
 // a different sentence from the identical scalar. One operand rule, asked
 // once — the storage it came out of is not what decides how it reads.
-func (r *Runner) arithNumOfStored(value string, depth int) (arithNum, error) {
+func (r *Runner) arithNumOfStored(value string) (arithNum, error) {
 	if strings.TrimSpace(value) == "" {
 		return intNum(0), nil
 	}
+	value = r.decimalLeadingNumeral(value)
 	if n, err := r.parseArithNum(strings.TrimSpace(value)); err == nil {
 		return n, nil
 	}
-	if isNameLike(value) && r.ask(r.sem().ArithNameValueRecurses, "re-evaluating a name-shaped value") {
-		return r.arithValueOf(strings.TrimSpace(value), depth+1)
-	}
-	// Not a number and not a name: an error rather than a silent zero.
+	return r.arithValueAsExpression(value)
+}
+
+// arithValueAsExpression reads a stored value that is no numeral by parsing it
+// again as an expression, where the dialect does that.
+//
+// `v=1+1; $(( v * 3 ))` is 6 in bash, ksh93 and zsh, and dash alone refuses
+// it — the same split ArithNameValueRecurses already records, which is why
+// this asks that axis rather than a second one beside it. A name-shaped value
+// is the case the axis was written for and is not a case at all here: `x=y`
+// parses as the expression `y`, so the ordinary walk looks `y` up and the
+// recursion, the unset-name question and the depth bound are all the ones a
+// name written in the expression itself gets. Reading a name and reading an
+// expression were two helpers with one rule between them, and the one that
+// only knew names refused `1+1`.
+//
+// The value is parsed as it stands, without expansion: a `$` in it is an
+// ordinary character, which is why `q=5; v='$q'` is a syntax error and not 5
+// in all three shells that re-read at all.
+func (r *Runner) arithValueAsExpression(value string) (arithNum, error) {
 	text := strings.TrimSpace(value)
-	return intNum(0), arithError{msg: r.wordInvalidNumber(text), token: text, complete: true}
+	p := syntax.NewParser("", r.dialect())
+	tree := p.ParseArithFor(value, syntax.Pos{})
+	err := p.Err()
+	if err == nil && tree == nil {
+		// No tree and no complaint means the text holds an expansion, which
+		// the parser leaves for its caller to substitute first. A stored
+		// value has already been through that once and does not go through
+		// it again, so what is left is a `$` standing in an expression as an
+		// ordinary character — an operand failure, which is what the shells
+		// that re-read at all report for it.
+		err = &syntax.Error{Kind: syntax.ErrArithOperand, Expr: text, Token: text}
+	}
+	if err != nil {
+		if r.sem().ArithNameValueRecurses == Yes {
+			// The value became an expression and that expression would not
+			// parse, which is the failure a written one earns, worded the
+			// same way and blaming the value rather than the name it came
+			// out of: `v="3 4"; $(( v ))` names `3 4`.
+			return intNum(0), arithError{msg: r.subscriptFailure(text, err), complete: true}
+		}
+		// Nowhere for it to be an expression, so it is simply not a number.
+		// No ask: every dialect refuses this text and only the sentence
+		// differs, so a question here would be one asked where the panel
+		// agrees.
+		return intNum(0), arithError{msg: r.wordInvalidNumber(text), token: text, complete: true}
+	}
+	if !r.ask(r.sem().ArithNameValueRecurses, "re-reading a stored value as an expression") {
+		return intNum(0), arithError{msg: r.wordInvalidNumber(text), token: text, complete: true}
+	}
+	r.arithValueDepth++
+	defer func() { r.arithValueDepth-- }()
+	n, err := r.evalNum(tree)
+	if err != nil {
+		// The complaint names the *value*, because that is the expression
+		// that failed: `v=1/0; $(( v ))` is `1/0: division by 0` and not
+		// `v: division by 0`, measured on bash 5.3.15 and ksh93u+ alike.
+		// Already-complete failures are handed back as they stand, which is
+		// what arithFailure does with them.
+		return intNum(0), arithError{msg: r.arithFailure(text, err), complete: true}
+	}
+	return n, nil
+}
+
+// decimalLeadingNumeral answers the leading numeral of a stored value in
+// decimal where the dialect reads one that way — see
+// Semantics.ArithStoredValueReadsALeadingZeroAsDecimal — by handing back the
+// value with that numeral rewritten. Everything else is returned unchanged.
+//
+// A rewrite rather than a number, because the value may be a whole expression
+// and only its first numeral is read this way: measured 2026-09-11 on ksh93u+,
+// `k=010+1` is 11 where the identical literal `$((010+1))` is 9.
+//
+// Asked only where the two readings can differ: the value has to *begin* with
+// a zero in front of another digit, with nothing before it.
+//
+//	k=010     10   the digits, in decimal
+//	k=0010    10   however many zeros
+//	k=09       9   an invalid octal digit is just a digit
+//	k=010+1   11   the leading numeral only; `k=1+010` is 9
+//	k=010#5    5   the numeral is the base, and in decimal
+//	k=-010    -8   a sign is not part of it, so nothing is rewritten
+//	k=" 010"   8   nor is anything in front of it
+//	k=0x10    16   a prefix both readings agree about
+func (r *Runner) decimalLeadingNumeral(value string) string {
+	if r.sem().ArithLeadingZeroIsOctal != Yes {
+		// Nothing made the zero octal, so the two readings already agree and
+		// there is no choice to put to the dialect.
+		return value
+	}
+	n := leadingZeroPaddedRun(value)
+	if n == 0 {
+		return value
+	}
+	if !r.ask(r.sem().ArithStoredValueReadsALeadingZeroAsDecimal,
+		"a zero-padded number read out of a variable") {
+		return value
+	}
+	digits := strings.TrimLeft(value[:n], "0")
+	if digits == "" {
+		digits = "0"
+	}
+	return digits + value[n:]
+}
+
+// leadingZeroPaddedRun is how long the value's leading run of decimal digits
+// is, when that run starts with a zero standing in front of another digit —
+// the one shape the two readings answer differently. Zero means no such run.
+func leadingZeroPaddedRun(value string) int {
+	if len(value) < 2 || value[0] != '0' {
+		return 0
+	}
+	n := 0
+	for n < len(value) && value[n] >= '0' && value[n] <= '9' {
+		n++
+	}
+	if n < 2 {
+		return 0
+	}
+	return n
 }
 
 // parseArithNum reads a literal, which may be a float where the dialect has

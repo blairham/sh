@@ -108,6 +108,17 @@ func NewParserAt(src string, d Dialect, first int) *Parser {
 		// and a line set afterwards would leave that one token behind.
 		lex.line = first
 	}
+	return newParserOn(lex, d)
+}
+
+// newParserOn wraps a lexer the caller has already set up.
+//
+// It exists because the first token is read here, before anything outside can
+// reach the lexer: a caller with something to say to it — [ShellWords], which
+// has to install its recorder and stop here-document bodies being read — has
+// to say it before that, or the very first token is lexed under the wrong
+// settings and never recorded.
+func newParserOn(lex *Lexer, d Dialect) *Parser {
 	p := &Parser{lex: lex, dialect: d}
 	p.next()
 	return p

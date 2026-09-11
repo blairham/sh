@@ -2097,13 +2097,12 @@ element with no shell words in it contributes none — `a=('' x)` under
 anywhere is one empty field: `a=()` under the same spelling is 1, where
 `"${(@)a}"` on that array is 0.
 
-**The split is `syntax.Lexer` and nothing else.** "Split like the shell
-would" already has an answer in this tree, and a second scanner beside it
-would agree on `a b` and part company over `a"b c"d`, `$(f x)`, `a#b` and
-every other place a word boundary is not a blank. `syntax.ShellWords` walks
-the token stream and keeps the source each token covers — the source rather
-than `Token.Text`, because `TokArithCmd` carries the expression with its
-parentheses already stripped.
+**The split is this tree's own reader and nothing else.** "Split like the
+shell would" already has an answer here, and a second scanner beside it would
+agree on `a b` and part company over `a"b c"d`, `$(f x)`, `a#b` and every
+other place a word boundary is not a blank. `syntax.ShellWords` keeps the
+source each token covers — the source rather than `Token.Text`, because
+`TokArithCmd` carries the expression with its parentheses already stripped.
 
 One boundary is spelled back rather than reported: a **one-digit** file
 descriptor joins the redirection operator it was written against, so
@@ -2114,17 +2113,52 @@ so a spaced digit never reaches it, and a dialect without multi-digit
 descriptors reads `22` as an ordinary word. The width test is carrying the
 named descriptor and a multi-digit one wherever a dialect has them.
 
-**One measured divergence remains.** A `(` that *starts* a token belongs to
-the word when it stands where an argument may — `a (b c) d` is three words
-in zsh and six here — and command position is the whole of the difference:
-`(b c) d` and `a; (b c) d` split the parenthesis off in that shell too. The
-lexer already has the flag for it, `inArgument`, and the *parser* is what
-sets it, because deciding it needs to know that `a="x"` is an assignment
-and that `then` is a keyword — neither of which a token stream says. A
-state machine here would answer `a (b c) d` and `a="x" (b c)` right and
-wrong respectively, trading one wrong answer for another, so the question
-is left where the knowledge is rather than copied. Filed as #1514 rather
-than hidden; nothing in the flag's own surface reaches it.
+**The reader is the `syntax.Parser`, not the lexer alone**, and that is
+forced by one construct. A `(` that *starts* a token belongs to the word
+where an argument may stand — `a (b c) d` is three words and not six — and
+command position is the whole of the difference: `(b c) d` and `a; (b c) d`
+split the parenthesis off. `Lexer.inArgument` is the flag, and `parseSimple`
+is what sets it, because deciding it needs to know that `a="x"` is an
+assignment and that `then` is a keyword, neither of which a token stream
+says.
+
+A state machine inside the splitter is the alternative and it was measured
+rather than dismissed. It answers `a="x" (b c)` and `if a; then (b c)` right
+only by restating the assignment table and the reserved-word table, and even
+then it has three more of the parser's rules left to restate — measured on
+zsh 5.9.2, `repeat 2 (b c)`, `coproc (b c)` and `foreach x (a b)` all split
+the parenthesis off, while `(a) (b)` does not. Each one is a rule that
+already lives in one place.
+
+So the splitter builds a Parser, records the tokens the lexer hands it and
+**throws the tree and any error away**. Discarding both is what keeps it a
+split of a *value*: text that ends inside a quote is not a failure here, and
+text that is not a program at all still comes back as the words it was
+written as. Where the parser stops early the rest is lexed plainly and
+appended — past the point the grammar lost track there is no position to
+know, and the shell with the flag is no more definite there either.
+
+One thing the parser has to be stopped from doing: a `<<` must not claim the
+lines after it. A body is input, and a splitter reading a value may not
+consume it — measured, `a <<EOF`, a body line and the delimiter come back as
+six separate words — so `Lexer.noHeredocBodies` drops the queue rather than
+the parser being taught about it.
+
+**Four rows still differ, and all four are that shell's splitter reporting
+argument position where its own grammar has a command.** Measured 2026-09-11
+on zsh 5.9.2:
+
+| value | zsh 5.9.2 | here |
+| --- | --- | --- |
+| `(a) (b)` | `(` `a` `)` `(b)` | `(` `a` `)` `(` `b` `)` |
+| `function f { (b c) }` | `function` `f` `{` `(b c)` `}` | … `{` `(` `b` `c` `)` `}` |
+| `foreach x (a b) (c d)` | `foreach` `x` `(` `a` `b` `)` `(c d)` | … `(` `c` `d` `)` |
+| `case x in (a) echo hi;; esac` | `case` `x` `in` `(a)` … | `case` `x` `in` `(` `a` `)` … |
+
+A second subshell after the first is a command in that shell as much as the
+first one was, and a `case` arm's own parenthesis is not a pattern group; the
+splitter says otherwise in both. Following it would mean copying an
+inconsistency rather than a rule (#1514).
 
 ### `(g:opts:)` — read the value's backslash escapes
 

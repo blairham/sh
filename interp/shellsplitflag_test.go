@@ -3,7 +3,11 @@
 
 package interp_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // `${(Z:opts:)v}` splits a value the way the shell splits a command line.
 //
@@ -246,6 +250,47 @@ func TestTheShellSplitFlagRefusesAnUnknownOptionLetter(t *testing.T) {
 			}
 			if st == 0 {
 				t.Errorf("status 0, want the option letter refused")
+			}
+		})
+	}
+}
+
+// A `(` that starts a token belongs to the word where an *argument* may
+// stand, reached through the flag rather than through the splitter directly.
+//
+// The grammar is stated here because the construct needs it: a bare group in
+// a word is `GlobQualifiers` plus `PatternAlternation`, and the flag's own
+// shell has both. Without them the parenthesis is an operator for a reason
+// that has nothing to do with position, and every row below would pass for
+// the wrong one.
+//
+// Quoted with `@` so that the fields survive and nothing re-reads them: a
+// field of `(b c)` handed back unquoted is a pattern with a glob qualifier in
+// it, and the runner then refuses `unknown file attribute: b` — which is the
+// result being *used* rather than the split being wrong.
+//
+// Both halves, because either alone reads as a rule about parentheses rather
+// than about where they stand. The last two are the rows a splitter walking
+// the token stream cannot answer — `a="x"` has to be known to be an
+// assignment and `then` to be a keyword — which is why this one drives the
+// parser (#1514). Measured on zsh 5.9.2.
+func TestTheShellSplitFlagAsksTheParserWhereAnArgumentMayStand(t *testing.T) {
+	grammar := func(d *syntax.Dialect) {
+		selectingWithFlags(d)
+		d.GlobQualifiers = true
+		d.PatternAlternation = true
+	}
+	for _, tc := range []struct{ name, src, want string }{
+		{"a group where an argument may stand", `v='a (b c) d'; printf "[%s]" "${(@Z+n+)v}"; echo`, "[a][(b c)][d]\n"},
+		{"and an operator where a command may begin", `v='(b c) d'; printf "[%s]" "${(@Z+n+)v}"; echo`, "[(][b][c][)][d]\n"},
+		{"a redirection does not end the command", `v='a >f (b c)'; printf "[%s]" "${(@Z+n+)v}"; echo`, "[a][>][f][(b c)]\n"},
+		{"an assignment does not name a command", `v='a="x" (b c)'; printf "[%s]" "${(@Z+n+)v}"; echo`, `[a="x"][(][b][c][)]` + "\n"},
+		{"and a keyword does not either", `v='if a; then (b c); fi'; printf "[%s]" "${(@Z+n+)v}"; echo`, "[if][a][;][then][(][b][c][)][;][fi]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runGrammar(t, tc.src, grammar, nil)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
 			}
 		})
 	}

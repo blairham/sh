@@ -98,6 +98,23 @@ type Lexer struct {
 	// double-quoted.
 	inRawBody bool
 
+	// recorded, when non-nil, collects every token Next hands back. It is
+	// how [ShellWords] gets the *parser's* reading of a text without a tree:
+	// the parser is the only thing that knows a token stands where an
+	// argument may, and the token it produced there is already the answer.
+	recorded *[]Token
+
+	// noHeredocBodies stops a `<<` from claiming the lines after it.
+	//
+	// One caller, and it is the same one: [ShellWords] reads a **value**
+	// rather than a program, so a `<<` in it is an operator with a word
+	// behind it and the lines that follow are more of the same text. That is
+	// measured on the shell whose flag it serves — `a <<EOF`, a body line and
+	// the delimiter come back as six separate words — and it is the one place
+	// where driving the parser would otherwise read input a splitter must
+	// leave alone.
+	noHeredocBodies bool
+
 	// inOperand is set while the tokens being read are an expansion's
 	// operand — the pattern of `${v#pat}`, the word of `${v:-word}`, the
 	// replacement of `${v/pat/repl}` — rather than a command.
@@ -183,6 +200,9 @@ type Lexer struct {
 // was *written*, which only the raw token still knows: `\EOF` produces the
 // same spans as `EOF`, and both make the body literal.
 func (l *Lexer) queueHeredoc(r *Redirect, quoted bool) {
+	if l.noHeredocBodies {
+		return
+	}
 	l.pending = append(l.pending, r)
 	l.pendingQuoted = append(l.pendingQuoted, quoted)
 }
@@ -359,6 +379,14 @@ func isBlank(c byte) bool { return c == ' ' || c == '\t' }
 
 // Next returns the next token. At the end of input it returns TokEOF forever.
 func (l *Lexer) Next() Token {
+	t := l.next()
+	if l.recorded != nil {
+		*l.recorded = append(*l.recorded, t)
+	}
+	return t
+}
+
+func (l *Lexer) next() Token {
 	l.skipBlanksAndComments()
 	start := l.pos()
 

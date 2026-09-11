@@ -2903,12 +2903,42 @@ echo "reached-after st=$?"`,
 	{
 		ID: "xtrace/ps4-draws-the-user-escape", Category: "shell options",
 		Snippet: `exec 3>&2 2>trace; PS4='<\u>'; set -x; :; set +x; exec 2>&3; grep -qF "<$(id -un)>" trace && echo names-the-login-name || echo differs`,
-		Why:     "`PS4` goes through the prompt language, which makes the trace prefix the only route to a prompt escape that needs no terminal — every other one has to be typed at a session. Written as a comparison against `id -un` rather than as a name, so the record is a fact about the escape and not about the machine that made it: a row holding a login name passes on one laptop and rots everywhere else. bash draws the password database's answer in both its versions and under `sh`, so the escape survives the argv[0] that costs it process substitution; dash and ksh93 have no user escape, zsh reads `%` there instead, and the three of them draw the two characters or drop the backslash. The redirection is what keeps the drawn name out of the record while still letting the shell see it. This shell answers `differs` for a reason that is not #1446 and is not fixed by it — it does not read `PS4` at all (#1454), and `-dialect bash` has no prompt language to read it with (#1455)",
+		Why:     "`PS4` goes through the prompt language, which makes the trace prefix the only route to a prompt escape that needs no terminal — every other one has to be typed at a session. Written as a comparison against `id -un` rather than as a name, so the record is a fact about the escape and not about the machine that made it: a row holding a login name passes on one laptop and rots everywhere else. bash draws the password database's answer in both its versions and under `sh`, so the escape survives the argv[0] that costs it process substitution; dash and ksh93 have no user escape, zsh reads `%` there instead, and the three of them draw the two characters or drop the backslash. The redirection is what keeps the drawn name out of the record while still letting the shell see it. This shell answered `differs` for a reason that was not #1446 and was not fixed by it — it did not read `PS4` at all. #1454 gave the trace prefix the parameter and the dialect's prompt language together, which is what this row wanted: `-dialect bash` now draws the login name here",
 	},
 	{
 		ID: "xtrace/ps4-user-escape-is-not-a-variable", Category: "shell options",
 		Snippet: `USER=impostor; LOGNAME=impostor; exec 3>&2 2>trace; PS4='<\u>'; set -x; :; set +x; exec 2>&3; grep -qF "<$(id -un)>" trace && echo names-the-login-name || echo differs; echo "[$USER]"`,
 		Why:     "the half that decides how `\\u` may be implemented, and the bash-side companion to `param/prompt-percent-user-is-not-a-variable`: it is a fact about the *process*, so assigning `USER` or `LOGNAME` does not move it — nor does injecting them before the shell starts, measured separately. Reading either name would make `env USER=someone-else bash` draw the wrong person at the moment somebody had just said which account they meant. The variable is echoed back in the same run, so the row also says the assignment really happened and the escape simply did not consult it",
+	},
+	{
+		ID: "xtrace/ps4-decides-the-prefix", Category: "shell options",
+		Snippet: `PS4="XX "; set -x; :`,
+		Why:     "the trace prefix is a parameter and not a constant, unanimously: every shell in the panel draws what `PS4` holds. We drew the built-in `+ ` whatever it held (#1454), which is the quiet kind of wrong — a trace that looks like a trace and is not the one the script asked for, so a log parser keyed on a prefix somebody set reads nothing at all",
+	},
+	{
+		ID: "xtrace/ps4-empty-draws-no-prefix", Category: "shell options",
+		Snippet: `PS4=; set -x; :`,
+		Why:     "the other end of the same parameter, and the row that says the prefix really is the value rather than a default with the value appended: an empty `PS4` draws the command with nothing in front of it in all six columns",
+	},
+	{
+		ID: "xtrace/ps4-is-expanded-at-every-trace", Category: "shell options",
+		Snippet: "PS4='+$LINENO '; set -x; :\n:",
+		Why:     "the value is expanded each time it is drawn rather than when it is assigned, which is what makes a line number in it useful — and it is where the panel divides: three shells expand it always and zsh does not unless prompt substitution is on, so zsh draws the parameter's text. Single-quoted on purpose; written with double quotes the assignment expands once and every column agrees, which would record nothing",
+	},
+	{
+		ID: "xtrace/ps4-percent-escape-draws-the-user", Category: "shell options",
+		Snippet: `exec 3>&2 2>trace; PS4='<%n>'; set -x; :; set +x; exec 2>&3; grep -qF "<$(id -un)>" trace && echo names-the-login-name || echo differs`,
+		Why:     "the other prompt language in the same place: zsh reads `%` escapes in `PS4` where bash reads backslashes, so this row is `xtrace/ps4-draws-the-user-escape` with the columns swapped. The pair is what says the prefix goes through *this dialect's* prompt language rather than through one language the substrate picked — either row alone passes for a shell that learned one table",
+	},
+	{
+		ID: "xtrace/ps4-first-character-repeats-at-indirection", Category: "shell options",
+		Snippet: `PS4="XY "; set -x; eval :`,
+		Why:     "bash repeats the prefix's *first character* once per level of text being read again — an `eval`, a sourced file, a command substitution — where the other three draw the same prefix at every depth. `XY` rather than the default `+ ` is what says it is the first character and not the plus sign, and `eval` rather than a function call is what says it counts indirection rather than the stack: a call and a subshell add nothing in every column",
+	},
+	{
+		ID: "xtrace/ps4-unset-is-not-the-default-again", Category: "shell options",
+		Snippet: `unset PS4; set -x; :`,
+		Why:     "unsetting the parameter is not the same as never having touched it: three shells then draw no prefix at all, because the default was a *value* they assigned before the script ran, and ksh93 draws `+ ` again, because there it is a special parameter that comes back. Recorded rather than modeled — this shell has no seeded `PS4` to unset, so it falls back to its dialect's prefix and answers as ksh93 does in every dialect (#1454)",
 	},
 	{
 		ID: "xtrace/assignments-per-line-diverges", Category: "shell options",

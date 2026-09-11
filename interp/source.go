@@ -139,6 +139,11 @@ func (s sourced) route() syntax.ProgramRoutes {
 // . empty.sh` both end at 0 in every shell in the panel, so an empty script
 // *clears* a failure rather than preserving it.
 func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
+	// Text being read again, which is one level of indirection: `eval` and a
+	// sourced file both arrive here, and one dialect's trace prefix counts
+	// them. See Runner.tracePrefixDepth.
+	r.indirection++
+	defer func() { r.indirection-- }()
 	p := syntax.NewParser(src, r.dialect().On(s.route()))
 	f := p.Parse()
 	if err := p.Err(); err != nil {

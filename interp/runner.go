@@ -1589,6 +1589,16 @@ type Runner struct {
 	// a registration was made is still what an implementation that evaluates
 	// nothing hands back.
 	lastArith arithNum
+	// indirection counts how many levels of *text being read again* this
+	// runner is inside — an `eval`, a sourced file, a command substitution.
+	// One dialect repeats its trace prefix's first character once per level
+	// and the rest do nothing with it; see Runner.tracePrefixDepth and
+	// Diagnostics.TracePrefixRepeatsAtIndirection.
+	//
+	// Not r.depth, which counts function calls: measured, a function call and
+	// a subshell add no level and the three above each add one, so they are
+	// different questions about different things.
+	indirection int
 	// depth bounds function recursion, because a shell script can recurse
 	// and a stack overflow is not a diagnostic anyone can act on.
 	depth int

@@ -79,6 +79,10 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 	sub := r.clone()
 	sub.inheritJobs(jobBoundarySubstitution)
 	sub.inCommandSubst = true
+	// And the third level of indirection, beside `eval` and a sourced file:
+	// measured, `set -x; echo $(:)` traces the body at `++ ` in the one
+	// dialect that counts them. See Runner.tracePrefixDepth.
+	sub.indirection = r.indirection + 1
 	// Where the body sits in the script, so that what it reports is reported
 	// where a reader can find it. The span's own line is the body's first,
 	// because a span starts at its opening delimiter — and it accumulates,

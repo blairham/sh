@@ -174,7 +174,23 @@ func (r *Runner) traceLine(line string, d Diagnostics) {
 }
 
 // tracePrefix renders what comes before the command.
+//
+// `PS4` decides it wherever the shell has one, which is every shell in the
+// panel — measured 2026-09-11, `PS4="XX "; set -x; :` traces `XX :` in bash
+// 5.3.15, bash 3.2.57, dash, ksh93 and zsh alike, whether the parameter was
+// assigned in the shell or inherited from the environment. This drew the
+// built-in `+ ` in every case until #1454.
+//
+// Unset is the dialect's own prefix rather than nothing, which is what the
+// shells start with: the parameter holds `+ ` before any script runs in three
+// of them and a name-and-line form in the fourth. What a script's own
+// `unset PS4` does — three draw nothing at all and ksh93 keeps `+ ` — needs
+// that default to be a *parameter* this shell seeds as well, and is measured
+// and deliberately not modeled; see docs/spec/invocation.md.
 func (r *Runner) tracePrefix() string {
+	if v, ok := r.getVar("PS4"); ok {
+		return r.tracePrefixDepth(r.renderTracePrefix(v))
+	}
 	if r.diag().TraceStyle == TraceNameLine {
 		// Inside a function zsh names the function and reports line 0
 		// rather than the line the call was on.
@@ -183,7 +199,102 @@ func (r *Runner) tracePrefix() string {
 		}
 		return "+" + r.name() + ":" + itoa(r.line) + "> "
 	}
-	return "+ "
+	return r.tracePrefixDepth("+ ")
+}
+
+// renderTracePrefix turns the value of `PS4` into the text to write, the same
+// way this dialect turns a prompt parameter's value into a prompt.
+//
+// **It is the prompt language**, and that is measured rather than assumed:
+// with `PS4='<\u>'` bash 5.3.15 and bash 3.2.57 both trace `<bhamilton>`,
+// ksh93 drops the backslash and traces `<u>`, dash has no table and traces
+// `<\u>` unchanged, and zsh reads its own `%` escapes there instead —
+// `PS4='%n '` traces the user name in zsh and the two characters everywhere
+// else. Those are exactly each dialect's PromptStyle, so this asks the value
+// the prompt drawer asks rather than growing a second table — #1090's rule,
+// one reader further down.
+//
+// It is the only route to a prompt escape that needs no terminal, which is
+// what makes it worth having beyond the trace itself: the corpus can reach
+// it, where every other escape this shell draws is pinned only by a test
+// that builds a session.
+//
+// The expansion is the same question again. Three shells expand `PS4` at
+// every trace — `PS4='+$LINENO '` follows the line — and zsh does not unless
+// a script has turned its prompt-substitution option on, which is precisely
+// what PromptStyle.Expand answers and why that is a function rather than a
+// bool.
+//
+// So this is the prompt drawer's render minus its history pass: whether a `!`
+// in a trace prefix becomes the history number is not measured yet, and
+// drawing one would be inventing it.
+func (r *Runner) renderTracePrefix(v string) string {
+	if v == "" {
+		return ""
+	}
+	st := r.promptStyle
+	expand := func() {
+		if st.Expand != nil && st.Expand(r) {
+			v = r.Expand(v)
+		}
+	}
+	escapes := func() {
+		if out, _, ok := ExpandPromptStyle(st, v, r.tracePromptField, r.promptQuantity); ok {
+			v = out
+		}
+	}
+	if st.ExpandBeforeEscapes {
+		expand()
+		escapes()
+	} else {
+		escapes()
+		expand()
+	}
+	return v
+}
+
+// tracePromptField is the trace's resolver: the Runner's own answers, and the
+// *drawer's* policy for a code it has none for.
+//
+// A prompt has to draw something and so does a trace prefix, where a script's
+// `${(%)…}` refuses an escape it cannot answer by name. Refusing here would
+// put a diagnostic about the decoration in the middle of the trace, so this
+// falls through to whatever this dialect does with an escape that is in no
+// table — which is measured and is three different things: bash keeps both
+// characters, ksh93 drops the backslash and draws `u` for `\u`, and zsh drops
+// the pair. See PromptStyle.Unknown, and repl's promptField, which is the
+// same fallthrough one reader over.
+func (r *Runner) tracePromptField(f PromptField, arg string, braced bool) (string, bool) {
+	if v, ok := r.promptField(f, arg, braced); ok {
+		return v, true
+	}
+	switch r.promptStyle.Unknown {
+	case DropEscape:
+		return arg, true
+	case DropBoth:
+		return "", true
+	default:
+		return string(r.promptStyle.Escape) + arg, true
+	}
+}
+
+// tracePrefixDepth repeats the prefix's first character once per level of
+// indirection, where the dialect does that.
+//
+// bash alone, and measured 2026-09-11: `set -x; eval :` traces `+ eval :` and
+// then `++ :`, a second `eval` inside that reaches `+++ :`, and a sourced file
+// and a command substitution each count as one level the same way. A function
+// call and a subshell do not — `f(){ :; }; f` and `(:)` stay at one `+` — so
+// what counts is *text being read again* rather than the depth of the stack.
+//
+// The first character of the prefix and not the whole of it: with `PS4='XY '`
+// bash traces `XY eval :` and then `XXY :`.
+func (r *Runner) tracePrefixDepth(prefix string) string {
+	if r.indirection == 0 || prefix == "" || !r.diag().TracePrefixRepeatsAtIndirection {
+		return prefix
+	}
+	first := []rune(prefix)[0]
+	return strings.Repeat(string(first), r.indirection) + prefix
 }
 
 // traceQuote renders one expanded word the way the dialect would.

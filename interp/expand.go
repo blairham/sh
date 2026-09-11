@@ -1317,7 +1317,7 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 		v := r.commandSubst(r.ctx, s)
 		return r.expansionResult(v, unquoted, r.sem().GlobExpansionResults,
 			sp.answer(r.sem().SplitCommandSubstitution), "splitting an unquoted command substitution")
-	case syntax.ProcSubstIn, syntax.ProcSubstOut:
+	case syntax.ProcSubstIn, syntax.ProcSubstOut, syntax.ProcSubstFile:
 		// A path, and a path is never split or globbed however it was
 		// written: what came back is a name this shell just made, not text
 		// from somewhere that might contain a separator.

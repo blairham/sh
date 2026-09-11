@@ -2190,6 +2190,32 @@ type Dialect struct {
 	// docs/spec/shell-matrix.md.
 	ProcessSubstitution bool
 
+	// ProcessSubstitutionToFile is `=(cmd)`: the same construct with a
+	// regular file where the other two spellings have a pipe.
+	//
+	// Additive and to one dialect. Measured 2026-09-11: `echo =(echo hi)`
+	// writes a path in zsh 5.9.2 and the other five columns refuse the `(`,
+	// so there is nothing for a semantics axis to switch between — the
+	// construct is either in the grammar or it is not.
+	//
+	// **Position is the grammar, and it is narrow.** The `=` has to begin a
+	// word: `echo =(echo hi)x` appends the `x` to the path, and `echo
+	// x=(echo hi)`, `echo a=b=(echo hi)`, `echo \=(echo hi)` and `echo
+	// =(echo hi)=(echo hi)` are all `missing end of string` there. Quoting
+	// takes it away like any other operator — `"=(echo hi)"` is its own ten
+	// characters — and the one position that is not the front of a word is
+	// the front of an assignment's *value*: `a==(echo hi)` assigns the path,
+	// and so do `a[1]==(…)`, `a+==(…)` and `typeset a==(…)`, while the same
+	// word written as an argument is the refusal above. An array literal's
+	// element needs no rule of its own, `a=(=(echo hi))` being the front of
+	// a word again.
+	//
+	// The flag is the lexer's: whether `=(` opens a substitution decides
+	// where the word ends, and that is settled before any parser sees a
+	// token. See Lexer.startsProcSubstFile, and
+	// docs/spec/grammar/substitutions.md for the measurements.
+	ProcessSubstitutionToFile bool
+
 	// ReadFileSubstitution makes `$(<file)` the file's contents.
 	//
 	// A command substitution whose whole body is one input redirection and

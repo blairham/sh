@@ -324,7 +324,8 @@ func (r *Runner) condProcSubAllowed(w *syntax.Word) error {
 		return nil
 	}
 	for _, s := range w.Spans {
-		if s.Kind != syntax.ProcSubstIn && s.Kind != syntax.ProcSubstOut {
+		if s.Kind != syntax.ProcSubstIn && s.Kind != syntax.ProcSubstOut &&
+			s.Kind != syntax.ProcSubstFile {
 			continue
 		}
 		answer := r.sem().ProcessSubstitutionInCondition
@@ -345,17 +346,41 @@ func (r *Runner) condProcSubAllowed(w *syntax.Word) error {
 		// gives nor the status this dialect gives an ordinary fatal error,
 		// so it is written here rather than routed through either.
 		r.ctl = controlExit
-		return condStatus{code: 2}
+		return condStatus{code: condProcSubRefusal(s.Kind)}
 	}
 	return nil
+}
+
+// condProcSubRefusal is the status a refused process substitution leaves
+// behind in a condition.
+//
+// Two answers for one refusal, which is measured rather than a slip.
+// 2026-09-11 on zsh 5.9.2, the only shell that reaches this wording:
+//
+//	[[ a == <(echo hi) ]]   process substitution <(echo hi) cannot be used here, status 2
+//	[[ a == =(echo hi) ]]   process substitution =(echo hi) cannot be used here, status 1
+//
+// Same sentence, same abandoned input — `echo after` runs in neither — and a
+// different status. It is a fact about the spelling rather than about the
+// shell, since no second shell has the file form to disagree about, which is
+// why it is written here beside the wording instead of becoming an axis
+// nobody could answer twice.
+func condProcSubRefusal(kind syntax.SpanKind) int {
+	if kind == syntax.ProcSubstFile {
+		return 1
+	}
+	return 2
 }
 
 // procSubSource is a process substitution as it was written. The span keeps
 // its inside and its direction, and a diagnostic names the whole of it.
 func procSubSource(s syntax.Span) string {
 	open := "<("
-	if s.Kind == syntax.ProcSubstOut {
+	switch s.Kind {
+	case syntax.ProcSubstOut:
 		open = ">("
+	case syntax.ProcSubstFile:
+		open = "=("
 	}
 	return open + s.Value + ")"
 }

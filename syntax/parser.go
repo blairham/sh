@@ -1283,7 +1283,18 @@ func (p *Parser) parseRedirect() *Redirect {
 		return nil
 	}
 	r.Op, r.OpPos = p.tok.Kind, p.tok.Pos
+	// A target is read where a command would otherwise begin, and no
+	// assignment may be written there: `> a==(echo hi) cat` is `missing end
+	// of string` in the dialect where the same word at command position
+	// assigns a path. Written with the redirection *first*, because that is
+	// the only one this reaches — a target after a word is already in
+	// argument position. Set before the `p.next()` that reads the target,
+	// because that is the token the flag has to reach; see
+	// Lexer.noAssignment.
+	savedNoAssign := p.lex.noAssignment
+	p.lex.noAssignment = true
 	p.next()
+	p.lex.noAssignment = savedNoAssign
 	if p.tok.Kind != TokWord {
 		// The token that is there, not the one that is missing. `cat <(x)` in
 		// a dialect without process substitution is `"(" unexpected` in dash,
@@ -3322,7 +3333,15 @@ func (p *Parser) parseSelect() Command {
 func (p *Parser) parseCase() Command {
 	c := &CaseClause{Start: p.tok.Pos}
 	defer p.opens("case")()
+	// The subject stands at what is otherwise command position and is not an
+	// assignment: measured, `case a==(echo hi) in *)` matches with no
+	// command run and no file made, in the dialect where a bare
+	// `a==(echo hi)` assigns a path. Told to the
+	// lexer before the `p.next()` that reads it, for the reason inCaseArm is
+	// below. See Lexer.noAssignment.
+	p.lex.noAssignment = true
 	p.next()
+	p.lex.noAssignment = false
 	if c.Word = p.word(); c.Word == nil {
 		p.fail("expected a word after `case`")
 		return c

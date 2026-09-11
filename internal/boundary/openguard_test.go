@@ -178,9 +178,13 @@ var exempt = map[string]string{
 	"interp.nudgeFifoEOF":    "the same pipe again, opened to give a waiting reader end-of-file.",
 	"interp.mkfifo":          "the named pipe this shell makes for a substitution, in its own directory.",
 	"interp.procSub":         "the same pipe, removed when the substitution that made it is done.",
-	"interp.procSubDir":      "the directory this shell makes for its own pipes, under r.tempHome().",
-	"interp.removeProcSubs":  "the same pipes, removed with the command that named them.",
-	"interp.CleanUp":         "the same directory, removed when this shell stops being one (#1284).",
+	"interp.newSubstFile": "the regular file `=(cmd)` writes instead of a pipe, made in the " +
+		"same directory as the pipes, numbered by the same counter and removed by the same " +
+		"removeProcSubs. The script named the command, never the path — see Runner.ownPipe, " +
+		"which holds the argument for both spellings.",
+	"interp.procSubDir":     "the directory this shell makes for its own pipes, under r.tempHome().",
+	"interp.removeProcSubs": "the same pipes, removed with the command that named them.",
+	"interp.CleanUp":        "the same directory, removed when this shell stops being one (#1284).",
 
 	// dialect/zsh. filesgate.go is the module's gate — every call in it is
 	// behind the consultation above it — and the rest are the mutating system

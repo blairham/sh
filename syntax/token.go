@@ -186,6 +186,19 @@ const (
 	// handles the other by changing a flag.
 	ProcSubstIn
 	ProcSubstOut
+	// ProcSubstFile is `=(...)`: the same construct with a *file* where the
+	// other two have a pipe. Value is the inner source, unparsed, as for the
+	// other two.
+	//
+	// A third kind rather than a flag on the first, for the reason there are
+	// two already: nothing that handles one handles another by changing a
+	// field. `<(cmd)` hands over a path that is read *while* cmd writes, and
+	// the shell carries on; `=(cmd)` runs cmd to completion, puts its output
+	// in a regular file, and hands over that path — so the word is seekable
+	// and reopenable, which is the whole reason the construct exists where a
+	// pipe will not do. One dialect has it; see
+	// Dialect.ProcessSubstitutionToFile.
+	ProcSubstFile
 )
 
 func (k SpanKind) String() string {
@@ -196,7 +209,7 @@ func (k SpanKind) String() string {
 		return "arithmetic substitution"
 	case ParamExp:
 		return "parameter expansion"
-	case ProcSubstIn, ProcSubstOut:
+	case ProcSubstIn, ProcSubstOut, ProcSubstFile:
 		return "process substitution"
 	}
 	return "literal"

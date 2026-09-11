@@ -186,6 +186,14 @@ func Dialect() syntax.Dialect {
 	// 3.2, bash-as-sh and ksh93, and dash — which has no `[[ ]]` — tries to
 	// open a file called `-`.
 	d.NumericRangePattern = true
+	// `=(cmd)` runs cmd to completion, writes its output into a regular file
+	// and expands to that file's path — process substitution with a file
+	// where the other two spellings have a pipe, which is what makes `diff
+	// =(a) =(b)` seek and `vi =(cmd)` open. Measured 2026-09-11 on zsh
+	// 5.9.2: `echo =(echo hi)` writes a path under `$TMPPREFIX` and the
+	// other five columns refuse the `(`. See
+	// syntax.Dialect.ProcessSubstitutionToFile for where it may stand.
+	d.ProcessSubstitutionToFile = true
 	// `[[ -v name ]]`, which asks whether a parameter is set. Measured on zsh
 	// 5.9.2, which reads more kinds of name through it than the other two that
 	// have it; see interp.Semantics.ParameterIsSetSeesSpecials.

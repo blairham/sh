@@ -1138,6 +1138,7 @@ func Diagnostics() interp.Diagnostics {
 		ScriptNotReadableStatus:     126,
 		Location:                    interp.LocationLineWordAfterFirst,
 		TraceQuoting:                interp.QuoteDollar,
+		TraceArrayLiteral:           interp.TraceArraySpaced,
 		ScriptLocation:              interp.LocationLineWord,
 		BuiltinLocation:             interp.LocationBracketLineAfterFirst,
 		ScriptBuiltinLocation:       interp.LocationBracketLine,

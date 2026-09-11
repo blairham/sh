@@ -127891,6 +127891,182 @@
         "TimedOut": false
       }
     },
+    "xtrace/append-assignment-keeps-its-operator": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ x=1~+ x+=b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ x=1~+ x+=b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ x=1~+ x+=b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ x=1~+ x+=b~\u003cshell\u003e: 1: x+=b: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ x=1~+ x+=b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e x=1 ~+\u003cshell\u003e:1\u003e x+=b ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/array-literal-elements-diverge": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ x='p q'~+ a=(\"$x\" r)",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ x='p q'~+ a=(\"$x\" r)",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ x='p q'~+ a=(\"$x\" r)",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ x='p q'~+ a=( 'p q' r )",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e x='p q' ~+\u003cshell\u003e:1\u003e a=( 'p q' r ) ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/array-literal-is-rebuilt-from-its-elements": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ a=(1 2 3)",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ a=(1 2 3)",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ a=(1 2 3)",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ a=( 1 2 3 )",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e a=( 1 2 3 ) ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/array-literal-spelling-diverges": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ a=(1 2)",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ a=(1 2)",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ a=(1 2)",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ a=( 1 2 )",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e a=( 1 2 ) ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "xtrace/assignment-traces-the-value-stored": {
       "bash": {
         "Stdout": "",
@@ -128111,6 +128287,94 @@
         "TimedOut": false
       }
     },
+    "xtrace/element-assignment-keeps-its-subscript": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ a=(x y)~+ a[1]=z",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ a=(x y)~+ a[1]=z",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ a=(x y)~+ a[1]=z",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ a=( x y )~+ a[1]=z",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e a=( x y ) ~+\u003cshell\u003e:1\u003e a[1]=z ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/element-subscript-spelling-diverges": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ i=2~+ a[$i]=v",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ i=2~+ a[$i]=v",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ i=2~+ a[$i]=v",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ i=2~+ a[2]=v~\u003cshell\u003e: 1: a[2]=v: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ i=2~+ a[2]=v",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e i=2 ~+\u003cshell\u003e:1\u003e a[$i]=v ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "xtrace/embedded-quote-diverges": {
       "bash": {
         "Stdout": "it's",
@@ -128150,6 +128414,50 @@
       "zsh": {
         "Stdout": "it's",
         "Stderr": "+\u003cshell\u003e:1\u003e x='it'\\''s' ~+\u003cshell\u003e:1\u003e echo 'it'\\''s'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/empty-array-literal-diverges": {
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "+ b=()~+ echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "+ b=()~+ echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "+ b=()~+ echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after",
+        "Stderr": "+ echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after",
+        "Stderr": "+\u003cshell\u003e:1\u003e b=( ) ~+\u003cshell\u003e:1\u003e echo after",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

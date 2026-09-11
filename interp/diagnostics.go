@@ -2754,6 +2754,10 @@ type Diagnostics struct {
 	// `case $v in` once, zsh prints `case v (pattern)` once per pattern it
 	// tries, and the corpus records the difference rather than claiming it.
 	TraceForHeader TraceForHeader
+	// TraceArrayLiteral is how the parenthesized list of `a=(1 2)` is
+	// rendered. Zero is TraceArrayTight, which is bash's answer and the
+	// substrate's own; ksh93 and zsh write a space inside each parenthesis.
+	TraceArrayLiteral TraceArrayLiteral
 	// TracePrefixRepeatsAtIndirection repeats the trace prefix's first
 	// character once per level of indirection — an `eval`, a sourced file or
 	// a command substitution the traced command is inside.

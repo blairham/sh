@@ -127,3 +127,37 @@ func dashShell() driver.Shell {
 		PromptStyle: dash.PromptStyle(),
 	}
 }
+
+// Every dialect that has arrays traces an assignment's own spelling, and they
+// disagree about one thing only: whether the parenthesized list has a space
+// inside each parenthesis — #1937, where all three collapsed to `name=value`.
+//
+// One table across the dialects for the reason the PS4 one is: the fault was a
+// trace built from the name and one scalar value, and no test of one dialect
+// can tell that apart from a dialect that merely spells it differently.
+func TestEveryDialectTracesAnAssignmentsOwnSpelling(t *testing.T) {
+	for _, d := range []struct {
+		name  string
+		shell func() driver.Shell
+		// literal is what `a=(1 2)` traces, without the prefix.
+		literal string
+	}{
+		{name: "bash", shell: bashShell, literal: "a=(1 2)"},
+		{name: "ksh", shell: kshShell, literal: "a=( 1 2 )"},
+		{name: "zsh", shell: zshShell, literal: "a=( 1 2 )"},
+	} {
+		t.Run(d.name, func(t *testing.T) {
+			if got := traced(t, d.shell(), `set -x; a=(1 2)`); !strings.Contains(got, d.literal) {
+				t.Errorf("array literal traced %q, want %q in it", got, d.literal)
+			}
+			// The subscript and the operator are unanimous, and both were
+			// dropped.
+			for _, want := range []string{"a[1]=z", "x+=b"} {
+				got := traced(t, d.shell(), `set -x; a=(x y); a[1]=z; x=1; x+=b`)
+				if !strings.Contains(got, want) {
+					t.Errorf("traced %q, want %q in it", got, want)
+				}
+			}
+		})
+	}
+}

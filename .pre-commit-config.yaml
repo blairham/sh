@@ -2,8 +2,17 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # These two rewrite in place, so they are the hooks that can still
+      # change a file between `make check` and the commit object — the window
+      # #1267 is about. The generated record is held out of both: it has to be
+      # byte-for-byte what `make oracle` wrote, and a hook tidying it would
+      # desync it from the corpus that generated it. Measured, neither hook
+      # changes either file today; the exclusion makes that a property rather
+      # than a coincidence of how the generator happens to format.
       - id: trailing-whitespace
+        exclude: ^(internal/oracle/testdata/golden\.json|docs/spec/measurements\.md)$
       - id: end-of-file-fixer
+        exclude: ^(internal/oracle/testdata/golden\.json|docs/spec/measurements\.md)$
       - id: check-yaml
       - id: check-added-large-files
       - id: detect-private-key
@@ -25,8 +34,13 @@ repos:
   # AGENTS.md already said so -- "it runs in CI, not pre-commit -- it's too slow
   # for every commit" -- and this file disagreed with it.
   #
-  # The formatters it used to apply are covered: gofumpt and goimports both run
-  # through go-fumpt-repo above.
+  # **The formatters it used to apply are not covered here, and this file said
+  # they were.** `golangci-lint-fmt` applied gofumpt and goimports, the change
+  # that removed it said they would go on running "through go-fumpt-repo
+  # above", and no such hook has ever been in this file. So since #1495 there
+  # has been no formatter on the commit path at all — `make fmt` (which
+  # `make check` runs first) and the Lint job are what keep the tree formatted,
+  # which is why nothing has drifted. #1903 is the hook itself.
   #
   # CI runs it instead, in the Lint job, diffing from the merge base. That is
   # also the only place it can say anything useful: `--new-from-rev HEAD` on a

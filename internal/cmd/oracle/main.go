@@ -113,10 +113,18 @@ func run(check bool, goldenPath, docPath string) error {
 		default:
 			return fmt.Errorf("reading %s to carry racing rows forward: %w", goldenPath, err)
 		}
+		// Pinned before anything is counted or confirmed: a racing row's
+		// cells are carried forward here, so asking what changed before
+		// this would report every coin that landed the other way.
+		got.KeepRacingRows(prev, oracle.Corpus)
+		held, dropped, err := got.Confirm(context.Background(), prev, oracle.Corpus, oracle.Execute)
+		if err != nil {
+			return err
+		}
 		if err := got.Record(prev, oracle.Corpus, docPath, goldenPath); err != nil {
 			return err
 		}
-		fmt.Printf("wrote %s and %s\n", docPath, goldenPath)
+		fmt.Printf("wrote %s and %s\n\n%s", docPath, goldenPath, oracle.CellChangeReport(held, dropped))
 		return nil
 	}
 
@@ -134,7 +142,22 @@ func run(check bool, goldenPath, docPath string) error {
 		os.Exit(exitDrift)
 	}
 
-	drifts := got.Compare(want)
+	drifts, unrepeated, err := oracle.ConfirmDrift(context.Background(), got.Compare(want), oracle.Corpus, oracle.Execute)
+	if err != nil {
+		return err
+	}
+	if len(unrepeated) > 0 {
+		// Said before the verdict rather than after it, because it changes
+		// how the verdict should be read: these are the rows that would
+		// have sent somebody to look at a shell that never moved.
+		fmt.Fprintf(os.Stderr, "%d case(s) differed on the first run and not on the second, so they are\n"+
+			"not reported as drift — a measurement that will not repeat is the machine\n"+
+			"and not the shell:\n\n", len(unrepeated))
+		for _, d := range unrepeated {
+			fmt.Fprintln(os.Stderr, "  "+d.String())
+		}
+		fmt.Fprintln(os.Stderr)
+	}
 	if len(drifts) == 0 {
 		fmt.Println("no drift: the panel behaves as recorded.")
 		if stale {

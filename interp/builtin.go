@@ -73,40 +73,48 @@ func init() {
 // ordinary control flow and modeling it as a failure would make every caller
 // check for something that is not one.
 func biBreak(r *Runner, _ context.Context, args []string) int {
-	if st, ok := r.loopControlMisused("break"); ok {
+	reach, st, done := r.loopControlReach("break", loopDepth(args))
+	if done {
 		return st
 	}
-	r.ctl, r.ctlDepth = controlBreak, loopDepth(args)
+	r.ctl, r.ctlDepth = controlBreak, reach
 	return 0
 }
 
 func biContinue(r *Runner, _ context.Context, args []string) int {
-	if st, ok := r.loopControlMisused("continue"); ok {
+	reach, st, done := r.loopControlReach("continue", loopDepth(args))
+	if done {
 		return st
 	}
-	r.ctl, r.ctlDepth = controlContinue, loopDepth(args)
+	r.ctl, r.ctlDepth = controlContinue, reach
 	return 0
 }
 
-// loopControlMisused answers a `break` or `continue` with no loop around it,
-// reporting whether the builtin is finished here.
+// loopControlReach is how many loops a `break` or `continue` can see, plus
+// what the builtin reports when the answer is none.
 //
 // The count is the dynamic one — how many loops execution is inside right now
 // — and not a lexical question about where the word was written. That is
 // measured rather than convenient: a function whose body is a bare `break`,
-// called from a loop, leaves the loop in bash 3.2 and in zsh, and a `break`
-// inside a subshell that is inside a loop leaves the subshell in every shell
-// in the panel. Both are `r.loopDepth` being nonzero, the second because a
-// cloned Runner carries the count with it.
+// called from a loop, leaves the loop in bash 3.2 and in zsh.
+//
+// What it cannot always see is the loops on the far side of a *boundary*, and
+// the panel splits three ways over where the boundaries are — see
+// Runner.loopControlFloor. The floor is subtracted rather than checked,
+// because `break 2` from inside a boundary with one loop in it stops at that
+// loop in every column that has a boundary there at all: measured, `f(){ for
+// j in 1; do break 2; done; echo infunc; }` called from a loop prints
+// `infunc` in bash 5.3, ksh93 and dash and does not in bash 3.2 or zsh, which
+// is the same split as the bare `break`.
 //
 // Ours used to set the control value whatever the count was, and nothing
 // consumed it, so it unwound past the top and the rest of the *script*
 // vanished — silently, at status 0. Two things were wrong and they are
 // separable: nothing was reported, and a line that five of the six panel
 // columns finish was given up (#1236).
-func (r *Runner) loopControlMisused(name string) (int, bool) {
-	if r.loopDepth > 0 {
-		return 0, false
+func (r *Runner) loopControlReach(name string, want int) (int, int, bool) {
+	if reach := min(want, r.loopDepth-r.loopControlFloor(want)); reach > 0 {
+		return reach, 0, false
 	}
 	if msg := Wording(r.diag().LoopControlOutsideALoop, "", name); msg != "" {
 		r.diagf("%s\n", msg)
@@ -116,10 +124,57 @@ func (r *Runner) loopControlMisused(name string) (int, bool) {
 		// runs and the status is the builtin's own success. That is dash,
 		// ksh93, bash and bash called as `sh` alike — they differ over the
 		// message and agree about everything else.
-		return 0, true
+		return 0, 0, true
 	}
 	r.fatalQuiet()
-	return r.status, true
+	return 0, r.status, true
+}
+
+// loopControlFloor is the loop depth a `break` cannot reach past: the
+// innermost boundary between the word and the loops it is counting.
+//
+// Two boundaries, and they are two axes because the panel does not group
+// them. Measured 2026-09-11 on `f(){ break; }; for i in 1 2; do f; echo body;
+// done` and on `for i in 1 2; do ( break; echo insub ); echo body; done`:
+//
+//	bash 5.3   	both are boundaries — and it says so, twice
+//	dash, ksh93	the call is, the subshell is not
+//	bash 3.2   	neither is
+//	zsh        	neither is
+//
+// So a single field would have had to give bash 5.3's subshell answer to
+// dash, or dash's to bash 5.3. The complaint is not a third thing: a boundary
+// leaves the `break` with no loop at all, which is #1236's question, already
+// answered by Diagnostics.LoopControlOutsideALoop — bash writes a sentence
+// there and dash and ksh93 write nothing, which is exactly what the two rows
+// show.
+//
+// Each axis is asked only where its answer decides something: a boundary with
+// enough loops inside it to satisfy the count changes nothing, because the
+// word never has to look past it. That is what keeps `for i in 1 2; do ( for j
+// in 1; do break; done ); done` from asking either — and it is the count and
+// not the mere presence of a loop, since `break 2` from inside one loop in a
+// function does have to look past the call.
+//
+// The command substitution and the pipeline element are deliberately not
+// here. They are subshells too, and bash 5.3 — the one column that makes `(
+// )` a boundary — does not make either of them one: `for i in 1 2; do x=$(
+// break ); done` and `do break | cat; done` draw no complaint from it, where
+// the parenthesized form draws one per pass.
+func (r *Runner) loopControlFloor(want int) int {
+	floor := 0
+	if r.callLoopFloor > 0 && r.loopDepth-r.callLoopFloor < want &&
+		r.ask(r.sem().FunctionCallIsALoopControlBoundary,
+			"whether a `break` inside a function reaches a loop outside it") {
+		floor = r.callLoopFloor
+	}
+	if r.subshellLoopFloor > 0 && r.loopDepth-r.subshellLoopFloor < want &&
+		r.subshellLoopFloor > floor &&
+		r.ask(r.sem().SubshellIsALoopControlBoundary,
+			"whether a `break` inside a subshell reaches the loop outside it") {
+		floor = r.subshellLoopFloor
+	}
+	return floor
 }
 
 func biReturn(r *Runner, _ context.Context, args []string) int {

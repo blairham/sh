@@ -98,6 +98,12 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 	// are not here yet.
 	return r.withRedirs(ctx, c.Redirs, func() error {
 		sub := r.clone()
+		// How far a `break` inside the parentheses can reach is the
+		// subshell's question, asked at the `break` — see
+		// Runner.loopControlFloor. Recorded here and not in clone() because
+		// this is the boundary the panel splits over: a command substitution
+		// and a pipeline element are subshells too and neither is one.
+		sub.subshellLoopFloor = sub.loopDepth
 		sub.inheritJobs(jobBoundaryCompound)
 		err := sub.runList(ctx, c.List)
 		// The status and what produced it travel together: a subshell whose
@@ -711,6 +717,11 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	}
 	saved, savedIn, savedLine := r.Params, r.inFunc, r.funcLine
 	r.Params, r.inFunc = args, fn.Name
+	// Where the loops were when the call was made, for the dialects that do
+	// not let a `break` in the body reach them — see Runner.loopControlFloor.
+	savedFloor := r.callLoopFloor
+	r.callLoopFloor = r.loopDepth
+	defer func() { r.callLoopFloor = savedFloor }()
 	// A function the dialect's prelude defined is the shell speaking rather
 	// than the script, so what it reports is named after it and located where
 	// it was called. The outermost such call owns both: a prelude helper it

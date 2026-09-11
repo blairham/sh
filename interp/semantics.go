@@ -1778,16 +1778,63 @@ type Semantics struct {
 	// is then the dialect's own for a fatal error, which is 1 there.
 	//
 	// The question is only about the misuse. A `break` with a loop around it
-	// is ordinary control flow in every shell in the panel, and a `break`
-	// inside a *subshell* that is inside a loop leaves that subshell in all
-	// of them, which is why the count this is asked against is the dynamic
-	// one a cloned Runner carries with it.
+	// is ordinary control flow in every shell in the panel, and the count it
+	// is asked against is the dynamic one a cloned Runner carries with it —
+	// which of those loops the word can actually see is the pair of axes
+	// below.
 	//
 	// Separate from the wording, because the two questions cut the panel
 	// differently: bash reports and carries on, zsh reports and stops, and
 	// dash says nothing and carries on. One field could not express the
 	// first of those three — see Diagnostics.LoopControlOutsideALoop.
 	LoopControlOutsideALoopIsFatal Answer
+
+	// FunctionCallIsALoopControlBoundary stops a `break` or `continue` in a
+	// function body from reaching the loops the *caller* is inside.
+	//
+	// Measured 2026-09-11, `f(){ break; }; for i in 1 2; do f; echo body;
+	// done; echo after`:
+	//
+	//	bash 3.2, zsh                  	`after` — the loop ended
+	//	dash, ksh93, bash called as sh 	`body body after` — it did not
+	//	bash 5.3                       	`body body after`, and the
+	//	                               	complaint twice
+	//
+	// bash 5.3's complaint is not a third answer: a boundary leaves the word
+	// with no loop at all, which is the misuse above, and the two rows differ
+	// over saying so exactly as Diagnostics.LoopControlOutsideALoop does.
+	// bash 3.2 is the same family answering the opposite way, which is what
+	// says this is a decision and not a consequence of something else.
+	//
+	// The reach is a count and not a flag: `break 2` from a body with one
+	// loop in it stops at that loop wherever this is Yes, and reaches the
+	// caller's wherever it is No.
+	//
+	// Asked only where the answer decides something — a `break` that can see
+	// a loop inside the call never reaches this.
+	FunctionCallIsALoopControlBoundary Answer
+
+	// SubshellIsALoopControlBoundary is the same question for `( )`, and it
+	// is a second field because the panel does not group the two.
+	//
+	// Measured 2026-09-11, `for i in 1 2; do ( break; echo insub ); echo
+	// body; done; echo after`:
+	//
+	//	bash 3.2, dash, ksh93, zsh	`body body after` — the subshell was
+	//	                          	left, quietly
+	//	bash 5.3, bash as sh      	`insub body insub body after`
+	//
+	// So bash 5.3 makes both boundaries and dash and ksh93 make only the
+	// call one; a single field would have to give one group the other's
+	// answer. Note bash called as `sh` parts from bash 5.3 on the *call* and
+	// agrees with it here, which is a second reason the two cannot share.
+	//
+	// The parentheses and nothing else. A command substitution and a
+	// pipeline element are subshells too, and the column that makes `( )` a
+	// boundary makes neither of them one: `for i in 1 2; do x=$( break );
+	// done` and `do break | cat; done` draw no complaint from bash 5.3 where
+	// the parenthesized form draws one per pass.
+	SubshellIsALoopControlBoundary Answer
 
 	// ReturnOutsideAFunctionIsRefused reports a `return` that has nothing to
 	// return from and carries on, instead of ending the script with the

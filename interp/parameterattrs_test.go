@@ -134,3 +134,61 @@ func kindWord(k ParameterKind) string {
 		return "scalar"
 	}
 }
+
+// ParameterIsNamed is the per-name half of ParameterNames, and the two have
+// to agree for every name or a dialect's `${parameters[x]}` answers about a
+// different shell from its `${(k)parameters}`.
+//
+// The union is over seven tables, so the failure to guard against is a
+// helper that forgot one. **Each name is put into exactly one table, by
+// hand**, and that is the whole design of this test: the obvious version —
+// SetVar, SetArray, SetAssoc and ask about the result — cannot see a missing
+// branch at all, because storeArray keeps a scalar view of every array, so
+// the Vars check answers for a name the Arrays check was supposed to. It
+// passed against a build with `r.Arrays` deleted from the union.
+func TestTheTwoReadingsOfParameterNamesAgree(t *testing.T) {
+	var r *Runner
+	runGrammar(t, `:`, nil, func(rr *Runner) {
+		r = rr
+		rr.Env = append(rr.Env, "ONLYENV=fromenv")
+		rr.SetAbsentParameter("refuser", "not implemented yet")
+	})
+	// Straight into one table each, past the setters, so that no name is
+	// reachable through a second branch.
+	r.Vars["onlyscalar"] = "1"
+	r.Arrays = map[string]Array{"onlyarray": {0: "x"}}
+	r.AssocArrays = map[string]AssocArray{"onlyassoc": {"k": "v"}}
+	r.Dynamic = map[string]func(*Runner) string{"onlymade": func(*Runner) string { return "" }}
+	r.DynamicArrays = map[string]func(*Runner) []string{"onlymadearray": func(*Runner) []string { return nil }}
+	r.DynamicAssocs = map[string]func(*Runner) AssocArray{"onlymadeassoc": func(*Runner) AssocArray { return nil }}
+
+	names := r.ParameterNames()
+	// Every table is represented, or the loop below proves nothing about the
+	// branch that table stands for.
+	for _, want := range []string{
+		"onlyscalar", "onlyarray", "onlyassoc", "ONLYENV",
+		"onlymade", "onlymadearray", "onlymadeassoc",
+	} {
+		if !slices.Contains(names, want) {
+			t.Fatalf("%q is not in ParameterNames — this test cannot check its branch", want)
+		}
+	}
+	for _, name := range names {
+		if !r.ParameterIsNamed(name) {
+			t.Errorf("ParameterIsNamed(%q) = false, but the name is in the list", name)
+		}
+	}
+	// And the other direction, over the shapes that could answer yes
+	// wrongly. An *absent* parameter is the one that matters: it has
+	// attributes and is deliberately not a name the listing yields, so a
+	// predicate that asked ParameterAttributes instead would report a
+	// parameter `${(k)parameters}` says is not there.
+	for _, name := range []string{"refuser", "nosuchvar", ""} {
+		if r.ParameterIsNamed(name) {
+			t.Errorf("ParameterIsNamed(%q) = true, but it is not in the list", name)
+		}
+		if slices.Contains(names, name) {
+			t.Errorf("%q is in the list, which this test assumed it was not", name)
+		}
+	}
+}

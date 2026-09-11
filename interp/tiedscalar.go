@@ -104,14 +104,19 @@ func (r *Runner) mirrorScalarToArray(name, value string) {
 
 // mirrorArrayToScalar is the other half: the elements joined with the
 // separator become the scalar.
-func (r *Runner) mirrorArrayToScalar(name string, elems []string) {
+// The array rather than its elements, so that the read happens *after* the
+// guard and not before the call. Almost no array is tied, and reading one to
+// hand it to a function that returns without looking was, measured, an
+// eighth of what a real startup spent under storeArray — a sorted walk of
+// every element, on every write to every array in the shell.
+func (r *Runner) mirrorArrayToScalar(name string, a Array) {
 	t, ok := r.tied[name]
 	if !ok || t.array != name || r.mirroring || r.tieDetached(t) {
 		return
 	}
 	r.mirroring = true
 	defer func() { r.mirroring = false }()
-	r.setVar(t.scalar, strings.Join(elems, t.sep))
+	r.setVar(t.scalar, strings.Join(r.readArray(a), t.sep))
 }
 
 // defaultTieSeparator is what joins and splits where the declaration named

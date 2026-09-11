@@ -47,14 +47,54 @@ func (a Array) subscripts() []int {
 	return out
 }
 
+// bounds is the lowest and highest subscript assigned, and whether there are
+// any.
+//
+// A scan rather than the two ends of subscripts(), which is the same answer
+// for a great deal more work: sorting a store to read one number off the end
+// of it was measured at a third of what a real startup spent in this file,
+// and every caller of the two below wants a number and not an order.
+func (a Array) bounds() (lo, hi int, any bool) {
+	for k := range a {
+		if !any || k < lo {
+			lo = k
+		}
+		if !any || k > hi {
+			hi = k
+		}
+		any = true
+	}
+	return lo, hi, any
+}
+
 // extent is the range a dense reading walks: the base up to the highest
 // subscript assigned.
 func (a Array) extent(base int) (from, to int) {
-	subs := a.subscripts()
-	if len(subs) == 0 {
+	_, hi, any := a.bounds()
+	if !any {
 		return base, base - 1
 	}
-	return base, subs[len(subs)-1]
+	return base, hi
+}
+
+// denseElems is the elements of an array whose subscripts are 0 to n-1 with
+// none missing, which is the shape nearly every array in a shell has.
+//
+// Worth telling apart because that shape needs no sort and no second pass:
+// n distinct subscripts, none below zero and none above n-1, can only be
+// exactly 0 to n-1, so the position each element goes to is the subscript
+// itself. Anything else — a gap, a negative subscript — says no here and
+// goes the long way, where the order has to be worked out.
+func (a Array) denseElems() ([]string, bool) {
+	lo, hi, any := a.bounds()
+	if any && (lo != 0 || hi != len(a)-1) {
+		return nil, false
+	}
+	out := make([]string, len(a))
+	for k, v := range a {
+		out[k] = v
+	}
+	return out, true
 }
 
 // pastTheEnd is the position one past the highest subscript assigned — where
@@ -116,15 +156,15 @@ func (r *Runner) storeArray(name string, a Array) {
 	// is what *replaces* an array now — see scalarOverCompound. Without the
 	// form this write would ask that question of the array it is the view of,
 	// and the answer that keeps the array would send it back through here.
-	if subs := a.subscripts(); len(subs) > 0 {
-		r.setVarAs(name, a[subs[0]], assignedAsTheCompoundView)
+	if lo, _, any := a.bounds(); any {
+		r.setVarAs(name, a[lo], assignedAsTheCompoundView)
 	} else {
 		r.setVarAs(name, "", assignedAsTheCompoundView)
 	}
 	// And the tied scalar, if this array is half of a tie — the *other*
 	// name, which the line above is not: that one keeps `$a` answering for
 	// `a` itself. See tiedscalar.go.
-	r.mirrorArrayToScalar(name, r.readArray(a))
+	r.mirrorArrayToScalar(name, a)
 }
 
 // uniqueElems is what `typeset -U` leaves of an array: the first occurrence
@@ -1231,6 +1271,13 @@ func (r *Runner) arrayElems(name string) ([]string, bool) {
 
 // readArray is the elements a dialect sees.
 func (r *Runner) readArray(a Array) []string {
+	// Asked first because it is the answer nearly every time, and because
+	// the two questions below — which subscripts, in what order, and is
+	// anything missing between them — are both already settled for an array
+	// that has no gaps and starts at zero. See denseElems.
+	if elems, dense := a.denseElems(); dense {
+		return elems
+	}
 	subs := a.subscripts()
 	// Asked only where the two readings differ, which is when something is
 	// missing between the base and the highest subscript. A contiguous array

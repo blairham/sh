@@ -1054,6 +1054,39 @@ func (r *Runner) GetAssoc(name string) (map[string]string, bool) {
 	return out, true
 }
 
+// AssocElement is one element of a stored associative array, and whether
+// there is one.
+//
+// The keyed half of GetAssoc, which copies the whole table — the wrong unit
+// for a membership test or a single lookup. A dialect keeping a set of names
+// in one paid a copy of the whole set to ask about a single name, and on a
+// real startup that was a third of what the shell spent reading its rc file.
+func (r *Runner) AssocElement(name, key string) (string, bool) {
+	a, ok := r.AssocArrays[name]
+	if !ok || r.removed[name] {
+		return "", false
+	}
+	v, ok := a[key]
+	return v, ok
+}
+
+// SetAssocElement puts one element into a stored associative array, creating
+// the table if the name has none.
+//
+// The writing half, and the same saving again: SetAssoc rebuilds the table
+// from a map the caller has just copied out of it, so adding one name to a
+// set of A costs O(A) and filling the set costs O(A squared). Measured on a
+// real startup, `autoload` marking fifteen hundred names that way was a
+// fifth of the whole rc file.
+//
+// The write goes where a script's own `m[k]=v` goes, so a produced
+// association's writer is honored rather than shadowed — which is the one
+// way this differs from calling SetAssoc with one more key in the map.
+func (r *Runner) SetAssocElement(name, key, value string) {
+	r.markAssoc(name)
+	r.setAssocElem(name, key, value)
+}
+
 // ArithValue is the value of an arithmetic expression, for a builtin holding
 // an expression it did not parse.
 //

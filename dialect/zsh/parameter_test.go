@@ -848,3 +848,62 @@ done`)
 		t.Errorf("key against table = %q (status %d), want %q", out, st, want)
 	}
 }
+
+// The same agreement, for the three views that got a keyed reading after
+// `$functions` did. Each is a shape where the key and the table are computed
+// by different code — an index into the option tables, a PATH search, a
+// parameter's attributes — so each can drift on its own.
+//
+// The names are chosen to cover what the keyed route has to get right rather
+// than what is convenient: a compat spelling of an option, a command that is
+// not on PATH and one whose name has a slash in it (which the table can have
+// no key for however well it resolves), and a parameter of every container
+// kind beside one the shell refuses by name.
+func TestTheKeyAndTheTableAgreeAboutOptionsCommandsAndParameters(t *testing.T) {
+	// The command PATH resolves has to be one this test made: the session
+	// runs with no PATH and no external commands, which is what keeps it a
+	// test about the shell.
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "zzbin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "zzcmd"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	out, st := runZshPrelude(t, dir, `typeset -A myassoc; myassoc[k]=v
+myarr=(a b); myscalar=x; integer myint=3
+PATH=`+bin+`
+for p in options:extendedglob options:braceexpand options:nosuchopt \
+         commands:zzcmd commands:zznosuchcommand commands:/bin/sh \
+         parameters:myscalar parameters:myarr parameters:myassoc parameters:myint \
+         parameters:options parameters:reswords parameters:zznosuchparam; do
+  name=${p%%:*}; key=${p#*:}
+  eval "keyval=\${${name}[\$key]-UNSET}"
+  table=UNSET
+  eval "for k in \"\${(@k)${name}}\"; do [[ \$k = \$key ]] && table=\${${name}[\$k]}; done"
+  # The path a command resolves to is this test's temporary directory, so
+  # the row shows the file's name; the comparison above is on the whole of
+  # both answers.
+  show=$keyval
+  [[ $name = commands && $keyval != UNSET ]] && show=${keyval:t}
+  if [[ $keyval = $table ]]; then print -r -- "$p agree [$show]"
+  else print -r -- "$p DIFFER key=[$keyval] table=[$table]"; fi
+done`)
+	want := "options:extendedglob agree [off]\n" +
+		"options:braceexpand agree [on]\n" +
+		"options:nosuchopt agree [UNSET]\n" +
+		"commands:zzcmd agree [zzcmd]\n" +
+		"commands:zznosuchcommand agree [UNSET]\n" +
+		"commands:/bin/sh agree [UNSET]\n" +
+		"parameters:myscalar agree [scalar]\n" +
+		"parameters:myarr agree [array]\n" +
+		"parameters:myassoc agree [association]\n" +
+		"parameters:myint agree [integer]\n" +
+		"parameters:options agree [association-special]\n" +
+		"parameters:reswords agree [UNSET]\n" +
+		"parameters:zznosuchparam agree [UNSET]\n"
+	if out != want || st != 0 {
+		t.Errorf("key against table = %q (status %d), want %q", out, st, want)
+	}
+}

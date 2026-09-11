@@ -711,11 +711,7 @@ func autoloadListing(r *interp.Runner) int {
 // so this only keeps the *set* of names for the listing to filter by — a
 // function whose body happens to look like a stub was still not autoloaded.
 func autoloadRecord(r *interp.Runner, name string) {
-	names, _ := r.GetArray(autoloadStore)
-	if !containsWord(names, name) {
-		names = append(names, name)
-	}
-	r.SetArray(autoloadStore, names)
+	r.SetAssocElement(autoloadStore, name, "")
 }
 
 // autoloadPending reports whether a name is one this builtin marked and
@@ -726,8 +722,7 @@ func autoloadRecord(r *interp.Runner, name string) {
 // alone would say yes for a function somebody wrote by hand around a `-X`,
 // which is a spelling real plugin loaders write (see autoloadRunResolved).
 func autoloadPending(r *interp.Runner, name string) bool {
-	names, _ := r.GetArray(autoloadStore)
-	if !containsWord(names, name) {
+	if _, marked := r.AssocElement(autoloadStore, name); !marked {
 		return false
 	}
 	body, ok := r.FunctionBodyText(name)
@@ -741,6 +736,14 @@ func autoloadPending(r *interp.Runner, name string) bool {
 // autoloadStore is the set of names this builtin has marked, in the Runner's
 // own table under a name no script can reach — the way `zstyle` and
 // `zmodload` keep theirs, which is also what gives a subshell its own copy.
+//
+// Keyed, and a set is what it is: the values are empty and the key is the
+// whole of the record. It was an indexed array, which made both halves of
+// the set linear — a scan to ask whether a name was in it, and a rebuild to
+// put one there — so a `compinit` marking fifteen hundred completions was
+// quadratic twice over. Measured on a real startup that was 0.34s, a third
+// of the time spent reading the rc file, and the sweep it forced through
+// every subscript was most of what this shell did in interp/array.go.
 const autoloadStore = ".zsh.autoload"
 
 // autoloadPathStore maps a name declared with `-r` or `-R` to the file that

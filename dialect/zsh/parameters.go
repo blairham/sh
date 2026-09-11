@@ -51,6 +51,25 @@ func zshParametersView(r *interp.Runner) interp.AssocArray {
 	return out
 }
 
+// zshParameterValue is `${parameters[PATH]}`: the one key, without naming
+// and sorting every parameter in the shell to reach it.
+//
+// Both halves of the view's condition, in the same order: a name it yields,
+// and attributes for it. The first is not redundant — [interp.Runner.ParameterAttributes]
+// answers for an *absent* parameter, one registered to refuse by name, and
+// the listing has no key for one. Dropping it would make `${parameters[x]}`
+// report a parameter that `${(k)parameters}` says is not there.
+func zshParameterValue(r *interp.Runner, name string) (string, bool) {
+	if !r.ParameterIsNamed(name) {
+		return "", false
+	}
+	a, ok := r.ParameterAttributes(name)
+	if !ok {
+		return "", false
+	}
+	return describeParameter(a), true
+}
+
 // describeParameter is one parameter's word, and it is the whole of what a
 // caller reads this table for.
 func describeParameter(a interp.ParameterAttributes) string {

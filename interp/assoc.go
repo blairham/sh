@@ -70,7 +70,7 @@ func (r *Runner) assocDeclared(name string) bool {
 func (r *Runner) markAssoc(name string) {
 	if _, produced := r.DynamicAssocs[name]; produced {
 		// A produced association already has the attribute — assocDeclared
-		// asks assocFor — and giving it a stored table would put an empty one
+		// answers from this very table — and giving it a stored table would put an empty one
 		// in front of the producer, which is the shadowing setAssocElem
 		// guards against by another route. `typeset -A functions` is the line
 		// that reaches here.

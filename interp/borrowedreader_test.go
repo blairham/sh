@@ -104,10 +104,14 @@ func TestTheReaderIsAskedAboutOnlyWhereItDecides(t *testing.T) {
 			t.Errorf("%q said %q, want the reader question asked of text with a newline in it", src, out)
 		}
 	}
-	for _, src := range []string{"eval 'echo one; echo two'", "eval 'echo one'"} {
+	// A one-line file is a one-line text: the newline it ends with starts no
+	// later line, and counting it made every `. inc.sh` of an ordinary
+	// one-line file ask a question it could not answer.
+	oneLine := write(t, dir, "one.sh", "echo one\n")
+	for _, src := range []string{"eval 'echo one; echo two'", "eval 'echo one'", ". " + oneLine} {
 		out, _ := sourceRun(t, dir, src, sem, Diagnostics{})
 		if strings.Contains(out, "disagree") {
-			t.Errorf("%q said %q, want no question asked of text with no newline", src, out)
+			t.Errorf("%q said %q, want no question asked of text with no later line", src, out)
 		}
 	}
 }

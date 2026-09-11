@@ -116,9 +116,14 @@ func TestADefinitionInsideBorrowedTextFollowsTheReader(t *testing.T) {
 
 // **A substitution is read through first whatever the reader says**, which is
 // measured: nothing in the panel lets an alias defined on a substitution's
-// first line reach its second. Written against both answers, because a
-// substitution that had picked the reader up from somewhere would pass one of
-// them by accident.
+// first line reach its second.
+//
+// A guard rather than a discriminator, and worth saying so: `subst.go` parses
+// with `Parse` and has no reader question in it, so no small change to it
+// fails this today — the mutation that would is a substitution rebuilt around
+// the run-as-you-read loop `runSourced` has. It is here because that loop is
+// the obvious thing to reach for the next time a substitution needs to see
+// something its own first line did, and the panel says it must not.
 func TestASubstitutionIsAlwaysReadThrough(t *testing.T) {
 	for _, byLine := range []Answer{Yes, No} {
 		dir := t.TempDir()

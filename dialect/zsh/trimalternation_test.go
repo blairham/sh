@@ -12,7 +12,7 @@ import (
 // takes: the one written first, which is its alone in the panel.
 //
 // Measured 2026-09-11 on zsh 5.9.2, each row a `-c` of its own with `x=abc`.
-// The neighbours are here because they are what say it is a search order
+// The neighbors are here because they are what say it is a search order
 // rather than a second length rule — the first arm matching as much as it
 // can, and a later arm taken where the rest of the pattern needs it.
 func TestALongestPrefixTrimTakesTheArmWrittenFirst(t *testing.T) {

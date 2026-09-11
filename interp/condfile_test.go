@@ -216,10 +216,13 @@ func TestMissingFileIsOlderIsAnAxis(t *testing.T) {
 	}
 }
 
-// TestTerminalTestIsNeverATerminalHere — the runner's streams are io.Writers,
-// so `-t` on any descriptor is false: the honest answer for a library, and
-// the same one the panel gives a shell whose streams are pipes.
-func TestTerminalTestIsNeverATerminalHere(t *testing.T) {
+// TestTerminalTestIsFalseForStreamsThatAreNotFiles — a Runner an embedder
+// built holds buffers, which are not descriptors the kernel has heard of, so
+// `-t` on any of them is false. The same answer the panel gives a shell whose
+// streams are pipes, and the answer this shell gave *every* descriptor until
+// #1967 — see interp/terminaltest_test.go for the half that says the fixed
+// false is gone.
+func TestTerminalTestIsFalseForStreamsThatAreNotFiles(t *testing.T) {
 	dir := t.TempDir()
 	for _, src := range []string{`[[ -t 0 ]]`, `[[ -t 1 ]]`, `[[ -t 99 ]]`, `test -t 0`, `test -t 99`} {
 		out, st := fileCondRun(t, dir, src, nil)

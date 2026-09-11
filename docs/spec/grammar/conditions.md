@@ -291,12 +291,53 @@ Corpus: `cond/empty-operand-is-not-a-path`,
 `test/empty-operand-is-not-a-path`,
 `test/empty-operand-however-it-became-empty`.
 
-`-t` is unanimous on every descriptor the harness can offer: stdin on
-`/dev/null`, stdout into a pipe, and a descriptor that was never open
-are all a quiet false. A runner whose streams are io.Writers gives that
-answer always — the honest one for a library, and the same one the
-panel gives a shell whose streams are pipes. The operand diverges when
-it is not a number at all:
+`-t` asks whether **this shell's** descriptor is a terminal. The number
+is the shell's own and not the process's — `exec 3< file` puts a file
+at 3 and `-t 3` answers about it — and the three standard ones are
+whatever the front end handed in, so a shell binary answers about the
+terminal it was started at and a runner an embedder built answers about
+the streams it was given. Measured on a pseudo-terminal, all six panel
+columns: `[ -t 0 ]`, `test -t 0`, `[ -t 1 ]`, `[ -t 2 ]` and
+`[[ -t 0 ]]` are all **true**.
+
+It is false for everything that is not one, unanimously: the null
+device, a regular file, a pipe, a descriptor nothing is open at, and a
+negative number. Those answers are the same at a terminal as on a pipe,
+which is why the corpus rows redirect each descriptor rather than
+reading whatever the run was handed.
+
+This answered a **fixed false** until #1967, in all three spellings.
+That is the correct answer for a stream that is not an open file, and
+it was being given to every descriptor — so `[[ -t 1 ]]` in a startup
+file took the non-terminal arm in a real session, which is the branch a
+rc uses to decide whether to draw color, load a prompt theme or install
+completions.
+
+With **no operand at all** the panel splits. POSIX gives `test` with
+one argument to the string rule, and `-t` is a non-empty string:
+
+| probe, descriptor 1 redirected away from any terminal | dash | bash | bash-as-`sh` | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `[ -t ]` | 0 | 0 | 0 | 0 | **1** | **1** |
+| `test -t` | 0 | 0 | 0 | 0 | **1** | **1** |
+| `[ ! -t ]` | 1 | 1 | 1 | 1 | **0** | **0** |
+| `[ -f ]` | 0 | 0 | 0 | 0 | 0 | 0 |
+
+ksh93 and zsh read the lone `-t` as `-t 1`; the other four keep the
+string rule. At a pseudo-terminal with nothing redirected all six
+answer 0, which is what says the two are answering about descriptor 1
+rather than refusing the word. `-t` is alone in this — `[ -f ]` is
+beside it in the table because it is true in all six, so the exception
+is the one word and not a general rule about an operator with no
+operand. `[[ -t ]]` asks nothing: every shell in the panel that has the
+construct refuses it as a syntax error.
+
+Semantics axis: `BareTerminalTestIsDescriptorOne` (ksh93 and zsh yes,
+dash and the three bashes no; the core's preset is no, POSIX having
+given the one-argument form to the string rule with no exception in
+it).
+
+The operand diverges when it is not a number at all:
 
 | probe | bash | bash 3.2 | ksh93 | zsh |
 | --- | --- | --- | --- | --- |
@@ -309,6 +350,13 @@ through `test`, refuses too with its `Illegal number` wording.
 
 Semantics axis: `TerminalTestRequiresANumber` (bash and dash yes, ksh93
 and zsh no; unanswered in the core), asked only for such an operand.
+
+Corpus: `cond/terminal-test-closed-descriptors`,
+`cond/terminal-test-redirected-descriptors`,
+`cond/terminal-test-non-number-diverges`,
+`test/terminal-test-redirected-descriptors`,
+`test/terminal-test-non-number-diverges`,
+`test/bare-terminal-test-is-descriptor-one`.
 
 ## `-o`: the option test
 

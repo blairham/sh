@@ -114,6 +114,8 @@ func TestSemantics(t *testing.T) {
 		// both files must exist, and `-t x` is the Illegal number complaint.
 		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.No},
 		{"TerminalTestRequiresANumber", s.TerminalTestRequiresANumber, interp.Yes},
+		// And a lone `-t` keeps the one-argument string rule.
+		{"BareTerminalTestIsDescriptorOne", s.BareTerminalTestIsDescriptorOne, interp.No},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
 		// dash has no `typeset` or `declare` either, so there is no attribute
 		// to add to a standing value and the axis does not arise.

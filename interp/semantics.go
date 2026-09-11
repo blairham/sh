@@ -4749,6 +4749,29 @@ type Semantics struct {
 	// absent.
 	TerminalTestRequiresANumber Answer
 
+	// BareTerminalTestIsDescriptorOne reads a lone `-t` — `[ -t ]` and
+	// `test -t`, where the one-argument rule would make it a non-empty
+	// string and so unconditionally true — as `-t 1` instead. ksh93 and zsh;
+	// dash, bash 5.3, bash-as-sh and bash 3.2 keep the string rule.
+	//
+	// Measured 2026-09-10 with `[ -t ] >/dev/null`, which pins the answer to
+	// a descriptor that is certainly not a terminal rather than to whatever
+	// the run was handed: 0 in dash, bash, bash-as-sh and bash 3.2, and 1 in
+	// ksh93 and zsh. The same line on a pseudo-terminal with no redirection
+	// is 0 in all six, which is what says the two shells are answering about
+	// descriptor 1 and not refusing the word.
+	//
+	// `-t` alone among the unary operators: `[ -f ]`, `[ -n ]`, `[ -z ]` and
+	// `[ -e ]` are true in all six columns, so this is not a general "an
+	// operator with no operand is an operator" rule and is not written as
+	// one. The negated two-word form follows it — `[ ! -t ] >/dev/null` is 1
+	// in the four and 0 in the two — because that is the same one-argument
+	// rule with a `!` in front.
+	//
+	// Nothing is asked for `[[ -t ]]`: every shell in the panel that has the
+	// construct refuses it as a syntax error.
+	BareTerminalTestIsDescriptorOne Answer
+
 	// ReadRequiresAVariableName refuses a bare `read`: dash's "arg count"
 	// at 2, where the other three read into REPLY.
 	ReadRequiresAVariableName Answer
@@ -6971,7 +6994,10 @@ func PosixSemantics() Semantics {
 		MissingFileIsOlder: No,
 		// POSIX gives -t a file descriptor, and dash refuses anything that
 		// is not a number.
-		TerminalTestRequiresANumber:      Yes,
+		TerminalTestRequiresANumber: Yes,
+		// POSIX gives the one-argument form of `test` to the string rule
+		// with no exception in it, which is dash's reading and bash's.
+		BareTerminalTestIsDescriptorOne:  No,
 		FcEmptyHistoryIsAnError:          No,
 		JobControlAbsenceIsReportedFirst: No,
 		// POSIX has `( )` run "in a subshell environment" and describes that

@@ -12999,6 +12999,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cond/empty-operand-is-not-the-working-directory` | `empty=127~dot=127~wempty=127~wdot=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `empty=1~dot=0~wempty=1~wdot=0` | `empty=1~dot=0~wempty=1~wdot=0` | `empty=1~dot=0~wempty=1~wdot=0` | `empty=1~dot=0~wempty=1~wdot=0` | `empty=1~dot=0~wempty=1~wdot=0` |
 | `cond/empty-operand-in-the-file-comparisons` | `ee=127~fe=127~nt=127~ot=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `ee=1~fe=1~nt=1~ot=1` | `ee=1~fe=1~nt=1~ot=1` | `ee=1~fe=1~nt=1~ot=1` | `ee=1~fe=1~nt=1~ot=1` | `ee=1~fe=1~nt=1~ot=1` |
 | `cond/terminal-test-closed-descriptors` | `t0=127~t1=127~t99=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` |
+| `cond/terminal-test-redirected-descriptors` | `nul=127~out=127~fd3=127~pipe=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `nul=1~out=1~fd3=1~pipe=1` | `nul=1~out=1~fd3=1~pipe=1` | `nul=1~out=1~fd3=1~pipe=1` | `nul=1~out=1~fd3=1~pipe=1` | `nul=1~out=1~fd3=1~pipe=1` |
 | `cond/terminal-test-non-number-diverges` | `st=127` **2>** `<shell>: 1: [[: not found` | `st=2` **2>** `<shell>: line 1: [[: x: integer expected` | `st=2` **2>** `<shell>: line 1: [[: x: integer expected` | `st=1` | `st=1` | `st=1` |
 | `cond/option-test-reads-a-set-option` | **2>** `<shell>: 1: [[: not found` *(status 127)* | `on=0~off=1` | `on=0~off=1` | `on=0~off=1` | `on=0~off=1` | `on=0~off=1` |
 | `cond/option-test-operand-is-an-ordinary-word` | `var=127~quoted=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `var=0~quoted=0` | `var=0~quoted=0` | `var=0~quoted=0` | `var=0~quoted=0` | `var=0~quoted=0` |
@@ -13132,9 +13133,13 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   touch f; [[ "" -ef "" ]]; echo "ee=$?"; [[ f -ef "" ]]; echo "fe=$?"; [[ "" -nt f ]]; echo "nt=$?"; [[ f -ot "" ]]; echo "ot=$?"
   ```
-- `cond/terminal-test-closed-descriptors` — -t asks whether a descriptor is a terminal, and under the harness none is: stdin is /dev/null and stdout a pipe, so every answer is a quiet false — which is also the honest permanent answer for a runner whose streams are io.Writers
+- `cond/terminal-test-closed-descriptors` — -t asks whether a descriptor is a terminal, and under the harness none is: stdin is /dev/null and stdout a pipe, so every answer is a quiet false. It reads the descriptors the *run* was handed, which is why the row below redirects each one to something it can name — a shell that answered a fixed false, as this one did until #1967, passes this row and fails a session at a terminal
   ```sh
   [[ -t 0 ]]; echo "t0=$?"; [[ -t 1 ]]; echo "t1=$?"; [[ -t 99 ]]; echo "t99=$?"
+  ```
+- `cond/terminal-test-redirected-descriptors` — the same operator asked about descriptors the snippet put there itself rather than whatever the run was started with, so the row means the same thing under the harness and in a session at a terminal — measured both ways, byte-identical. The null device, a descriptor the shell opened with `exec`, and a pipe: four false answers, unanimous in every column that has `[[ ]]`
+  ```sh
+  [[ -t 0 ]] </dev/null; echo "nul=$?"; [[ -t 1 ]] >/dev/null; echo "out=$?"; exec 3</dev/null; [[ -t 3 ]]; echo "fd3=$?"; echo x | { [[ -t 0 ]]; echo "pipe=$?"; }
   ```
 - `cond/terminal-test-non-number-diverges` — a -t operand that is not a number: bash names an integer at status 2 where ksh93 and zsh answer a plain false at 1 — and bash 3.2 answers 1 too, so the complaint is younger than the operator. The TerminalTestRequiresANumber axis
   ```sh
@@ -13467,6 +13472,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `test/empty-operand-is-not-a-path` | `d=1~e=1~x=1~f=1` | `d=1~e=1~x=1~f=1` | `d=1~e=1~x=1~f=1` | `d=1~e=1~x=1~f=1` | `d=1~e=1~x=1~f=1` | `d=1~e=1~x=1~f=1` |
 | `test/empty-operand-however-it-became-empty` | `unset=1~empty=1~sub=1~lit=1` | `unset=1~empty=1~sub=1~lit=1` | `unset=1~empty=1~sub=1~lit=1` | `unset=1~empty=1~sub=1~lit=1` | `unset=1~empty=1~sub=1~lit=1` | `unset=1~empty=1~sub=1~lit=1` |
 | `test/terminal-test-non-number-diverges` | `st=2~closed=1` **2>** `<shell>: 1: test: Illegal number: x` | `st=2~closed=1` **2>** `<shell>: line 1: test: x: integer expected` | `st=2~closed=1` **2>** `<shell>: line 1: test: x: integer expected` | `st=1~closed=1` | `st=1~closed=1` | `st=1~closed=1` |
+| `test/terminal-test-redirected-descriptors` | `nul=1~out=1~fd3=1~none=1` | `nul=1~out=1~fd3=1~none=1` | `nul=1~out=1~fd3=1~none=1` | `nul=1~out=1~fd3=1~none=1` | `nul=1~out=1~fd3=1~none=1` | `nul=1~out=1~fd3=1~none=1` |
+| `test/bare-terminal-test-is-descriptor-one` | `bare=0~tbare=0~not=1~f=0` | `bare=0~tbare=0~not=1~f=0` | `bare=0~tbare=0~not=1~f=0` | `bare=0~tbare=0~not=1~f=0` | `bare=1~tbare=1~not=0~f=0` | `bare=1~tbare=1~not=0~f=0` |
 
 - `test/argument-count-decides` — POSIX defines `test` by argument count before grammar, which is why `test -f` alone is *true*: one argument is a string, and `-f` is a non-empty one. Two arguments make the same word an operator
   ```sh
@@ -13539,6 +13546,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `test/terminal-test-non-number-diverges` — the TerminalTestRequiresANumber axis: bash and dash refuse the operand with their integer wordings at 2, ksh93 and zsh answer a plain false at 1 — while a numeric descriptor that is simply not a terminal is a quiet 1 everywhere
   ```sh
   test -t x; echo "st=$?"; test -t 99; echo "closed=$?"
+  ```
+- `test/terminal-test-redirected-descriptors` — what `[[ -t ]]`'s row asks, in the two spellings dash also has: the builtin reads the *shell's* descriptor table, so a number `exec` opened is as answerable as one of the named three and a number nothing is open at is a quiet false. Each descriptor is redirected by the snippet, so the row records the same bytes under the harness and at a terminal
+  ```sh
+  [ -t 0 ] </dev/null; echo "nul=$?"; test -t 1 >/dev/null; echo "out=$?"; exec 3</dev/null; [ -t 3 ]; echo "fd3=$?"; [ -t 9 ]; echo "none=$?"
+  ```
+- `test/bare-terminal-test-is-descriptor-one` — the BareTerminalTestIsDescriptorOne axis. With one argument POSIX gives `test` the string rule, and `-t` is a non-empty string: dash, bash, bash-as-sh and bash 3.2 answer 0, where ksh93 and zsh read it as `-t 1` and answer about the descriptor. Descriptor 1 is redirected to the null device so the split is a fact about the reading rather than about the run; `[ -f ]` is beside it because it is 0 in all six, which says the exception is the one word and not a general rule about an operator with no operand
+  ```sh
+  [ -t ] >/dev/null; echo "bare=$?"; test -t >/dev/null; echo "tbare=$?"; [ ! -t ] >/dev/null; echo "not=$?"; [ -f ] >/dev/null; echo "f=$?"
   ```
 
 ## times

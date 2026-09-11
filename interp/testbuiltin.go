@@ -164,6 +164,16 @@ func (e *testError) format(d Diagnostics) string {
 	return d.TestUnaryExpected
 }
 
+// bareTerminalTest is whether a lone `-t` is `-t 1` rather than a non-empty
+// string. Two shells read it that way and four do not — see
+// Semantics.BareTerminalTestIsDescriptorOne, where the measurement is.
+//
+// Asked only for the word `-t`, so no other operator's one-argument reading
+// can be moved by the axis and no expression without a `-t` in it pays for it.
+func (r *Runner) bareTerminalTest() bool {
+	return r.ask(r.sem().BareTerminalTestIsDescriptorOne, "`[ -t ]` meaning `[ -t 1 ]`")
+}
+
 // testExpr evaluates an expression the way POSIX specifies it: by argument
 // count first, and only then by grammar.
 //
@@ -183,9 +193,19 @@ func (r *Runner) testExpr(args []string) (bool, error) {
 		// No expression is false rather than an error.
 		return false, nil
 	case 1:
+		if args[0] == "-t" && r.bareTerminalTest() {
+			return r.unaryTest("-t", "1")
+		}
 		return args[0] != "", nil
 	case 2:
 		if args[0] == "!" {
+			if args[1] == "-t" && r.bareTerminalTest() {
+				// The same one-argument rule with a `!` in front of it, so
+				// the exception has to be the same one or the negation
+				// answers a different question than the word it negates.
+				on, err := r.unaryTest("-t", "1")
+				return !on, err
+			}
 			return args[1] == "", nil
 		}
 		return r.unaryTest(args[0], args[1])
@@ -380,15 +400,15 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 		}
 		return r.parameterIsSet(operand)
 	case "-t":
-		// A terminal test on a descriptor this shell may not even own. Never
-		// true here: the streams are io.Writers, which is the honest answer
-		// for a library rather than a guess about the process's descriptors.
-		// An operand that is not a number is a question of its own first.
-		if _, err := strconv.Atoi(strings.TrimSpace(operand)); err != nil &&
+		// Whether this shell's descriptor is a terminal, asked of the shell's
+		// own table — see descriptorIsTerminal. An operand that is not a
+		// number is a question of its own first.
+		on, isNumber := r.terminalTest(operand)
+		if !isNumber &&
 			r.ask(r.sem().TerminalTestRequiresANumber, "`test -t x` refusing a non-number") {
 			return false, &testError{kind: errIntegerExpected, operand: operand, decided: true}
 		}
-		return false, nil
+		return on, nil
 	}
 	if !isTestUnary(op) {
 		return false, &testError{kind: errUnaryExpected, operand: op}

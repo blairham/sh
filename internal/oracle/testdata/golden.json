@@ -28495,6 +28495,50 @@
         "TimedOut": false
       }
     },
+    "cond/terminal-test-redirected-descriptors": {
+      "bash": {
+        "Stdout": "nul=1~out=1~fd3=1~pipe=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "nul=1~out=1~fd3=1~pipe=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "nul=1~out=1~fd3=1~pipe=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "nul=127~out=127~fd3=127~pipe=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "nul=1~out=1~fd3=1~pipe=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "nul=1~out=1~fd3=1~pipe=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cond/the-arithmetic-command-survives-the-condition": {
       "bash": {
         "Stdout": "x=1",
@@ -121015,6 +121059,50 @@
         "TimedOut": false
       }
     },
+    "test/bare-terminal-test-is-descriptor-one": {
+      "bash": {
+        "Stdout": "bare=0~tbare=0~not=1~f=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "bare=0~tbare=0~not=1~f=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "bare=0~tbare=0~not=1~f=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "bare=0~tbare=0~not=1~f=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "bare=1~tbare=1~not=0~f=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "bare=1~tbare=1~not=0~f=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "test/bracket-double-equal": {
       "bash": {
         "Stdout": "st=0",
@@ -121581,6 +121669,50 @@
       },
       "zsh": {
         "Stdout": "st=1~closed=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "test/terminal-test-redirected-descriptors": {
+      "bash": {
+        "Stdout": "nul=1~out=1~fd3=1~none=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "nul=1~out=1~fd3=1~none=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "nul=1~out=1~fd3=1~none=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "nul=1~out=1~fd3=1~none=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "nul=1~out=1~fd3=1~none=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "nul=1~out=1~fd3=1~none=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

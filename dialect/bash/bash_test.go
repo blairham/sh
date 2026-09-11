@@ -106,6 +106,9 @@ func TestSemantics(t *testing.T) {
 		// operand that is not a number draws the integer complaint.
 		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.Yes},
 		{"TerminalTestRequiresANumber", s.TerminalTestRequiresANumber, interp.Yes},
+		// And a lone `-t` keeps the one-argument string rule, so `[ -t ]` is
+		// true whatever descriptor 1 is.
+		{"BareTerminalTestIsDescriptorOne", s.BareTerminalTestIsDescriptorOne, interp.No},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.Yes},
 		// And one reader for both, where ksh93 has two.
 		{"IntegerAssignmentReadsALeadingZeroAsDecimal", s.IntegerAssignmentReadsALeadingZeroAsDecimal, interp.No},

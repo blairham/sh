@@ -68,6 +68,9 @@ func TestSemantics(t *testing.T) {
 		// zsh on a non-numeric -t operand.
 		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.Yes},
 		{"TerminalTestRequiresANumber", s.TerminalTestRequiresANumber, interp.No},
+		// And a lone `-t` is `-t 1` rather than a non-empty string, the one
+		// reading this shell shares with zsh.
+		{"BareTerminalTestIsDescriptorOne", s.BareTerminalTestIsDescriptorOne, interp.Yes},
 		// ksh93 has no name for the pipeline status, so neither axis
 		// arises; the scalar view of an array does.
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.Unspecified},

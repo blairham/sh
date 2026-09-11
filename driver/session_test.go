@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/blairham/sh/driver"
@@ -309,7 +310,12 @@ func TestAGrammarChangeInOneInputReachesTheNext(t *testing.T) {
 // question at the place the two routes really differ.
 func TestASessionCanSignalAJobItStarted(t *testing.T) {
 	t.Parallel()
-	var out, errs strings.Builder
+	// Guarded writers rather than the helper's plain builders, because this
+	// is the one test here that leaves a *background job* running while it
+	// reads: the job writes on a goroutine of its own, which is the case
+	// cmd/sh installs its own guarded streams for. A plain builder is a data
+	// race the moment the two meet, and the race detector says so.
+	var out, errs lockedWriter
 	sh := driver.Shell{Name: "sh", Dir: t.TempDir(), Stdout: &out, Stderr: &errs, KeepProcess: true}
 	// The axis the script turns on, answered here because a session has no
 	// terminal and the panel disagrees about what `set -m` does then: the
@@ -334,4 +340,23 @@ func TestASessionCanSignalAJobItStarted(t *testing.T) {
 	if got := errs.String(); strings.Contains(got, "No such process") {
 		t.Errorf("stderr = %q: a job this shell had just started was reported missing", got)
 	}
+}
+
+// lockedWriter is a writer two goroutines may use, which is what a shell with
+// a background job in it needs.
+type lockedWriter struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (w *lockedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.Write(p)
+}
+
+func (w *lockedWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.String()
 }

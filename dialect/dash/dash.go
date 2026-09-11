@@ -43,6 +43,9 @@ func Dialect() syntax.Dialect {
 // Semantics is what dash means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	// `export a+=2` is `a+: bad variable name` here, so the append operator
+	// is not an operand this shell's declarations take.
+	s.DeclarationTakesAnAppendOperand = interp.No
 	// An unquoted list is its elements taken one at a time, never their
 	// join — the reading POSIX describes, and the one an empty element
 	// disappears under: `IFS=:; set -- x "" y` is two fields here and three

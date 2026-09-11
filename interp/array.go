@@ -288,7 +288,10 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 		r.spliceScalarElem(name, idx, sub, value, false)
 		return
 	}
-	a := r.arrayForWrite(name)
+	a := r.elementsOfName(name, idx)
+	if r.unspecified {
+		return
+	}
 	pos, ok := r.elemPos(a, idx)
 	if !ok {
 		if idx < 0 && r.ask(r.sem().NegativeSubscriptPastTheStartInserts,
@@ -305,6 +308,53 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 	}
 	a[pos] = value
 	r.storeArray(name, a)
+}
+
+// elementsOfName is the array an element write starts from: the one the name
+// holds, or the one the scalar it holds becomes.
+//
+// A subscript on the left of `=` turns a name holding a string into an array,
+// and the string it was holding is the first element of it. That was dropped —
+// `a=abc; a[1]=x` left `([1]="x")`, the right shape at status 0 with the
+// script's own value gone out of it (#1570).
+//
+// The rule and the helper are the ones `a+=(x)` already followed. The two
+// differ only in what made the name an array — the operator there and the
+// subscript here — so #1502 fixed one half of this and left the other, which
+// is why they are one function now rather than two statements of the same
+// thing. The dialect where a subscript on a string names a *character* never
+// arrives: subscriptSplicesCharacters answers ahead of both callers, and on
+// that side there is no array to promote into.
+//
+// *That* the value is kept is core — every shell in the panel with arrays
+// keeps it. **When** it is kept is not, and the only spelling that can tell
+// is a subscript that counts back from the end: `a=abc; a[-1]=x` writes the
+// element the promotion just made in bash 5.3 and is `subscript out of range`
+// in ksh93, which resolves the subscript against the elements the name has
+// and finds none. Hence the axis, asked at that one shape.
+func (r *Runner) elementsOfName(name string, idx int) Array {
+	if _, stored := r.Arrays[name]; stored {
+		return r.arrayForWrite(name)
+	}
+	if _, produced := r.DynamicArrays[name]; produced {
+		// A produced array is an array: its elements are what the write
+		// starts from, and there is no scalar underneath it to promote.
+		return r.arrayForWrite(name)
+	}
+	a, _ := r.appendedOverAScalar(name)
+	if len(a) == 0 || idx >= 0 {
+		return a
+	}
+	// A negative subscript counts back from the end, so it is the one
+	// spelling whose answer depends on whether the promotion has happened
+	// yet — and the panel splits on exactly that and nowhere else. Asked
+	// here rather than at either caller, and only where there is a scalar to
+	// promote and a subscript that counts back over it.
+	if !r.ask(r.sem().NegativeSubscriptCountsOverAPromotedScalar,
+		"a negative subscript counting back over a scalar a write is promoting") {
+		return Array{}
+	}
+	return a
 }
 
 // insertAtTheFront puts value before every element there is, moving the rest
@@ -345,13 +395,22 @@ func (r *Runner) appendArrayElem(name string, idx int, sub, value string) {
 		r.spliceScalarElem(name, idx, sub, value, true)
 		return
 	}
-	if pos, ok := r.elemPos(r.Arrays[name], idx); ok {
+	a := r.elementsOfName(name, idx)
+	if r.unspecified {
+		return
+	}
+	if pos, ok := r.elemPos(a, idx); ok {
 		// Joined through appendedValue rather than with `+`, because the
 		// name's attribute decides which of the two joins this is:
 		// `typeset -ia a=(1 2); a[1]+=5` is `7` in bash and ksh93, not `25`.
 		// An element the array does not have yet has nothing to join, and
 		// setArrayElem's own fold evaluates the value on its way in.
-		v, ok := r.appendedValue(name, r.Arrays[name][pos], value)
+		//
+		// Read through elementsOfName so that a scalar being promoted is
+		// something to join to: `a=abc; a[0]+=x` is `abcx`, and reading the
+		// store directly made it `x` — the promotion happened below, after
+		// the join had already decided there was nothing there (#1570).
+		v, ok := r.appendedValue(name, a[pos], value)
 		if !ok {
 			return
 		}

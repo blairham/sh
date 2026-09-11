@@ -1339,6 +1339,21 @@ var Corpus = []Case{
 		Why:     "`$MATCH` is live in the replacement, which makes the replacement text something that has to be expanded **again for each element** rather than once for the operator -- the same rule `${x//(#m)pat/repl}` follows, and the reason a single expansion up front is not merely an optimization here. It needs `extendedglob` for the `(#m)` to be a flag group at all, and the option is set with its failure discarded so the five columns without it reach the expansion and record their own refusal rather than stopping on an unknown builtin. `_p9k_must_init:22` is this shape over `$parameters`",
 	},
 	{
+		ID: "core/an-element-written-over-a-scalar-keeps-it", Category: "parameters",
+		Snippet: `a=abc; a[1]=x; echo "[${a[*]}] n=${#a[@]} [${a[0]}][${a[1]}]"`,
+		Why:     "the same rule as the array-literal append below, one layer along: there the *operator* turns a name holding a scalar into an array and here the *subscript* does, and the value the name was holding is the first element of the array it becomes. Unanimous among the shells that promote at all; zsh is not a fourth answer, because a numeric subscript on a plain string names one of its characters there and there is no array to promote into. This implementation dropped the value and left one element at subscript 1 -- the right shape, at status 0, with the script's own value gone out of it (#1570). The two subscripts say where the kept value landed rather than only that something was kept, and the count is what a row printing the joined elements alone would not catch",
+	},
+	{
+		ID: "core/an-element-appended-over-a-scalar-joins-it", Category: "parameters",
+		Snippet: `a=abc; a[0]+=x; echo "[${a[*]}] n=${#a[@]}"; b=abc; b[1]+=x; echo "[${b[*]}] n=${#b[@]}"`,
+		Why:     "the append spelling of the same write, which reads the promotion as well as making it: the base has something to join to and a later subscript does not. It is the row that separates a fix at the store from a fix at the write, since `a[0]+=x` joining nothing answers `x` -- a plausible value at status 0 -- while `a[1]+=x` looks right either way. The shell whose subscript names a character answers both by splicing, which is the other side of ScalarSubscriptIsACharacter and not a disagreement about the join",
+	},
+	{
+		ID: "core/an-element-written-over-a-scalar-counting-back", Category: "semantics axes",
+		Snippet: `a=abc; a[-1]=x; echo "st=$? [${a[*]}] n=${#a[@]}"`,
+		Why:     "*when* the promotion happens relative to reading the subscript, which is the one spelling that can tell and the reason NegativeSubscriptCountsOverAPromotedScalar is an axis rather than a rule. bash promotes and then counts back over the element it just made; ksh93 counts back first, over an array with nothing in it, and refuses. bash 3.2 has no negative subscript on the left of `=` at all -- `a=(p q); a[-1]=x` is the same complaint there -- so its column is the absence of the spelling and not a third answer. The status is printed because the two answers differ in whether anything was written as well as in what",
+	},
+	{
 		ID: "core/appending-an-array-literal-to-a-scalar", Category: "parameters",
 		Snippet: `a=1; a+=(2); echo "[${a[*]}] n=${#a[@]} [${a[0]}][${a[1]}]"`,
 		Why:     "an array-literal append over a name holding a *scalar* keeps that value as the first element rather than starting a fresh array from the words. Unanimous across all five shells with arrays, so it is the core being wrong rather than an axis, and the failure was silent: status 0 and a plausible one-element array where the script's own value had been. The two subscripts are what say *where* the kept value landed, and they are the array base rather than a second rule -- `[1][2]` where the first element is 0 and `[][1]` where it is 1, which is the same answer written twice. A row printing only the joined elements would pass with the value placed anywhere at all",
@@ -4043,6 +4058,21 @@ echo "st=$?"`,
 		ID: "array/appending-to-an-element-inherits-the-base", Category: "expansion",
 		Snippet: `a=(x y); a[1]+=Q; printf "[%s]" "${a[@]}"; echo`,
 		Why:     "the base axis reaches the append: the same numeral names the second element in two shells and the first in the third, exactly as a plain `a[1]=Q` does. Appending is therefore not a form with a subscript rule of its own, which is the claim worth pinning before anything special-cases it",
+	},
+	{
+		ID: "array/a-declaration-with-an-append-operand", Category: "semantics axes",
+		Snippet: `a=1; typeset a+=2; echo "st=$? [$a]"`,
+		Why:     "a declaration builtin's `name+=value` operand, which one shell reads as the append operator and three refuse as the name `a+`. So it is Semantics.DeclarationTakesAnAppendOperand. This implementation refused it in every dialect, and the refusal it gave was not the one any of the three give either: they all name `a+` -- the text in front of the `=` -- where two of them otherwise quote a bad operand back whole, which is the tell that they read the `+=` as an operator and then refuse what it left (#1503). The status is beside the value because the refusing columns differ from the taking one in both",
+	},
+	{
+		ID: "array/a-declaration-append-operand-folds-the-attribute", Category: "expansion",
+		Snippet: `typeset -i a=1; typeset a+=2; echo "st=$? [$a]"`,
+		Why:     "the join is the name's own and not a string concatenation: the shell that takes the operand answers 3 where the untouched reading answers 12, which is the same fold the bare `a+=2` statement performs. It is here as well as the plain row because an implementation that took the operand and then stored the text would pass that one and fail this, and because 12 is a plausible answer nothing else would report",
+	},
+	{
+		ID: "array/a-declaration-append-operand-without-a-value", Category: "expansion",
+		Snippet: `a=1; typeset a+; echo "st=$? [$a]"`,
+		Why:     "the boundary of the operand above: a `+` with no `=` after it is not the operator, and every shell in the panel refuses it as a name -- the one that takes `a+=2` included. It is the row that keeps the axis off the common path, since a reading that took the `+` as an operator wherever it appeared would declare a name here and report success",
 	},
 	{
 		ID: "array/appending-a-scalar-to-an-array", Category: "expansion",

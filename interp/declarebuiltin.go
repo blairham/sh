@@ -525,7 +525,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	status := code
 
 	for _, a := range args {
-		name, value, hasValue := strings.Cut(a, "=")
+		name, value, hasValue, appends := declarationOperand(a)
 		// The letters this operand is declared under, which are the line's
 		// plus whatever the *name* makes of them: the export letter asks for
 		// `-g` too in one dialect, and that is a question about this name's
@@ -627,6 +627,23 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			return r.status
 		}
 		switch {
+		case hasValue && appends:
+			// `declare a+=2` joins what the name is holding, through
+			// whatever its attributes make of the join — see
+			// declarationAppend. The axis that says this operand is read at
+			// all was answered in builtinNames.
+			if !r.declarationAppend(name, value, df.global, fresh) {
+				return r.status
+			}
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			if !df.global {
+				r.declarationAssignmentExport(name, df.export)
+				if r.unspecified {
+					return r.status
+				}
+			}
 		case hasValue && df.global:
 			r.setGlobalVar(name, value)
 			if r.unspecified || r.ctl == controlExit {

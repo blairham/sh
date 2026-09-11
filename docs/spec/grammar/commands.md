@@ -597,6 +597,36 @@ implementation deleted the array and answered the single string `1x`
 under bash's reading and `1 2x` under zsh's — the scalar *view* of the
 whole array with the value stuck on the end — at status 0 (#1571).
 
+**An element written over a name holding a scalar keeps the scalar too,
+and this is the same rule one layer along.** There the *operator* made
+the name an array; here the *subscript* does. Measured 2026-09-08, panel
+and machine as `../oracle.md`:
+
+| probe | bash 5 | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `a=abc; a[1]=x` | `([0]="abc" [1]="x")` | same | `(abc x)` | `a=xbc` |
+| `a=abc; a[2]=x` | `([0]="abc" [2]="x")` | same | `([0]=abc [2]=x)` | `a=axc` |
+| `a=abc; a[0]=x` | `([0]="x")` | same | `(x)` | refused |
+| `a=abc; a[0]+=x` | `([0]="abcx")` | same | `(abcx)` | refused |
+| `a=abc; a[1]+=x` | `([0]="abc" [1]="x")` | same | `(abc x)` | `a=axbc` |
+| `a=; a[1]=x` | `([0]="" [1]="x")` | same | `('' x)` | `a=x` |
+| `unset a; a[1]=x` | `([1]="x")` | same | `([1]=x)` | `( x )` |
+
+Unanimous among the shells that promote at all, on the same two
+boundaries the operator's form draws: an empty scalar is a value and is
+kept, an unset name has nothing to keep. zsh is not a fourth answer — a
+numeric subscript on a plain string names one of its *characters* there,
+so there is no array to promote into (`ScalarSubscriptIsACharacter`).
+This implementation dropped the value in the other three: `a=abc;
+a[1]=x` left one element at subscript 1 — the right shape at status 0
+with the script's own value gone out of it (#1570).
+
+*When* the value is kept is a narrower question with two answers, and a
+subscript counting back from the end is the only spelling that can tell:
+see `NegativeSubscriptCountsOverAPromotedScalar` in `../semantics.md`.
+The whole-array spelling is the control here as it is above: `a=abc;
+a=(x)` is one element in every column.
+
 ### A subscript inside the literal
 
 An element may name where it goes: `a=([2]=c [1]=b)` is two elements, at

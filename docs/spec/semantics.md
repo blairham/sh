@@ -8834,6 +8834,61 @@ off the end leave the same four. `../spec/grammar/patterns.md` has the
 range, the star and the character classes, each of which needed a
 measurement of its own.
 
+**`DeclarationTakesAnAppendOperand`** — bash yes · dash no · ksh93 no · zsh no
+
+A declaration builtin's `name+=value` operand is the append operator
+rather than a name with a `+` on the end of it:
+
+    declare a=1; declare a+=2   bash        → 12
+                                ksh93       → typeset: a+: invalid variable name
+                                zsh         → not valid in this context: a+
+                                dash        → export: a+: bad variable name
+
+Measured 2026-09-09 under `declare`, `export`, `readonly` and `local`
+alike; bash 3.2 and bash-as-`sh` answer `12` with bash 5.3. So it is one
+shell's operand and not a core one.
+
+The three that refuse it all name **`a+`** — the text in front of the
+`=` — and not the whole operand, which is what two of them do for
+`typeset 1x=v`. That is the tell that they read the `+=` as an operator
+too, and then refuse the name it leaves behind.
+
+The value joins through the name's own attributes, which is the same join
+the bare `a+=2` statement performs rather than a second rule:
+`declare -i a=1; declare a+=2` is 3, `arr=(p q); declare arr+=x` is
+`px q`, and a declared table joins its `0` key. It joins **the cell the
+declaration writes**, so a declaration that takes a fresh scope has
+nothing to join to — `a=1; f(){ local a+=2; }` leaves `2` in the local
+and `1` in the caller, where `export a+=2` and `declare -g a+=2` take no
+scope and leave `12`.
+
+Asked only where an operand's name ends in `+` and a value follows it. A
+`+` with no `=` is not this spelling — `declare a+` is refused as a name
+in every column, the one that takes the operator included.
+
+**`NegativeSubscriptCountsOverAPromotedScalar`** — bash yes · dash unspecified · ksh93 no · zsh unspecified
+
+An element write over a name holding a string keeps the string as the
+first element — core, and unanimous in every shell in the panel that has
+arrays: `a=abc; a[1]=x` leaves `abc` beside the `x`. *When* the promotion
+happens relative to reading the subscript is not unanimous, and the only
+spelling that can tell is one counting back from the end:
+
+    a=abc; a[-1]=x      bash        → declare -a a=([0]="x")
+                        ksh93       → a: subscript out of range
+
+bash promotes and counts back over the one element it just made; ksh93
+counts back first, over an array with nothing in it, and refuses. bash
+3.2 gives the same complaint for `a=(p q); a[-1]=x`, so it has no
+negative subscripts at all rather than a third answer here.
+
+Asked only where there is a scalar to promote and the subscript is
+negative. A non-negative subscript lands at the number it names under
+either reading, and an unset name has nothing to promote — `unset a;
+a[-1]=x` is refused in both columns. The shell where a subscript on a
+string names a *character* never reaches the question: there is no array
+to promote into on that side, which is `ScalarSubscriptIsACharacter`.
+
 **`NegativeSubscriptPastTheStartInserts`** — bash no · dash unspecified · ksh93 no · zsh yes
 
 Places a new element in front of every other when a negative subscript

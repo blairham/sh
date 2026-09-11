@@ -155,6 +155,30 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 	}
 	for i, a := range args {
 		name, _, _ := strings.Cut(a, "=")
+		if base, appends := appendOperand(a); appends && builtin != "unset" {
+			// `declare a+=2` carries the append operator, which one shell
+			// takes as an operand and the others refuse. Asked here because
+			// this is where an operand becomes a name, and only for the one
+			// shape that splits them — a `+` with no `=` after it is not
+			// this spelling and is refused as a name everywhere.
+			//
+			// The refusal names `a+` and not the whole operand, which is
+			// what the shells that refuse it say: two of them otherwise
+			// quote a bad operand back in full, and for this one they do
+			// not. So the name and the operand are the same text here.
+			if r.ask(r.sem().DeclarationTakesAnAppendOperand,
+				"a declaration taking a `name+=value` operand") {
+				name = base
+			} else if r.unspecified {
+				return nil, 2, false
+			} else {
+				status = r.badBuiltinName(builtin, name, name, fatal)
+				if r.ctl == controlExit {
+					return r.namesAfterARefusal(builtin, rest, args[i+1:], takes), status, true
+				}
+				continue
+			}
+		}
 		// A subscript on something that is not a name is not a subscripted
 		// operand at all: measured, `typeset 1x[0]=v` is a bad name in every
 		// column that has the word, and bash quotes the *whole* operand back
@@ -223,6 +247,16 @@ func (r *Runner) namesAfterARefusal(builtin string, kept, remaining []string, ta
 	}
 	for _, a := range remaining {
 		name, _, _ := strings.Cut(a, "=")
+		if base, appends := appendOperand(a); appends && builtin != "unset" {
+			// The same reading the first pass gave this shape. The axis was
+			// answered there — it is the same dialect — so this asks
+			// nothing and only has to agree about which operands are names.
+			if r.sem().DeclarationTakesAnAppendOperand == Yes {
+				name = base
+			} else {
+				continue
+			}
+		}
 		if base, _, subscripted := r.subscriptOperand(name); subscripted && isPlainName(base) {
 			if r.takesASubscript(builtin) {
 				kept = append(kept, a)

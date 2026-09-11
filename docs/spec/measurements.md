@@ -5274,6 +5274,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/a-hash-before-a-quote-in-a-pattern-operand` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[Q][Q][Q][Q][a ]` | `[Q][Q][Q][Q][a ]` | `[Q][Q][Q][Q][a ]` | `[Q][Q][Q][Q][a ]` | `[Q][Q][Q][Q][a ]` |
 | `core/a-braced-expansion-in-a-quoted-operand` | `[abz][X{039}z][a}bz][qz]` | `[abz][X{039}z][a}bz][qz]` | `[abz][X{039}z][a}bz][qz]` | `[abz][X{039}z][a}bz][qz]` | `[abz][X{039}z][a}bz][qz]` | `[abz][X{039}z][a}bz][qz]` |
 | `core/a-braced-expansion-in-a-quoted-operand-in-a-body` | `[X{039}z]~after` | `[X{039}z]~after` | `[X{039}z]~after` | `[X{039}z]~after` | `[X{039}z]~after` | `[X{039}z]~after` |
+| `core/a-bare-brace-in-a-nested-quoted-operand` | `[a{bcz"}]~after` | `[a{bcz"}]~after` | `[a{bcz"}]~after` | `[a{bcz"}]~after` | `after` **2>** `<shell>: line 2: syntax error at line 5: `{' unmatched` | `[a{bcz"}]~after` |
 | `core/quotes-in-a-quoted-replacement-operand` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[xZy][x$vy][x$vy]` | `[xZy][x$vy][x$vy]` | `[xZy][x'VAL'y][x$vy]` | `[xZy][x$vy][x$vy]` | `[xZy][x'VAL'y][x$vy]` |
 | `core/the-characters-a-replacement-operand-parts-on` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[x'q'y][x\qy][x~y][x"q"y][xp~qy]` | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[x'q'y][x\qy][x~y][xqy][xp~qy]` |
 | `core/which-backslashes-a-replacement-operand-parts-on` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[x$vy][x\y][x"y][x}y][x{y][xqy]` | `[x$vy][x\y][x"y][x}y][x{y][xqy]` | `[x$vy][x\y][x"y][x\}y][x\{y][x\qy]` | `[x$vy][x\y][x"y][x}y][x{y][xqy]` | `[x$vy][x\y][x"y][x}y][x\{y][x\qy]` |
@@ -5392,6 +5393,14 @@ grades it and nothing drift-checks it either, for the same reason.
   unset u w
   cat <<EOF
   [${u:-"${w:-"X{039}"}z"}]
+  EOF
+  echo after
+  ```
+- `core/a-bare-brace-in-a-nested-quoted-operand` — which quoting the nested expansion is read in, asked where the answer shows. A `"` run inside an operand is still a run once the reader is inside it, so the nested `${ }` there is double-quoted content and a bare `{` opens no level: `${w:-a{b}` ends at the first `}` and the rest belongs to the enclosing expansion again. Five columns write `[a{bcz"}]` and run on. Read as if the nested expansion stood bare the `{` opens a level, it runs past the `}` that closes it, and the line is refused — which is what ksh93 does here, the panel member that balances a bare brace hardest, and no dialect answers for it. This is the row that grades the *quoting* handed to the step-over rather than the step-over itself; with the flag off, as it is in the core, both readings agree (#2092)
+  ```sh
+  unset u w
+  cat <<EOF
+  [${u:-"${w:-a{b}c"}z"}]
   EOF
   echo after
   ```

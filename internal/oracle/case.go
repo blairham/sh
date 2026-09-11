@@ -1338,6 +1338,11 @@ var Corpus = []Case{
 		Why:     "the same shape through a here-document body, which is the route that said nothing. A body has no enclosing word for the leftover quote to unbalance, so the misreading raised no diagnostic and exited 0 — it wrote `[X{039\"}z\"}]` where all six columns write `[X{039}z]`. `after` on the output is what separates this from the refusals: the line runs in every column, and a fix graded on exit status would pass both before and after (#2092). It is also the route a `${(%%)…}` prompt takes, which is how powerlevel10k's directory segment came to draw `\"}` and `}+}`",
 	},
 	{
+		ID: "core/a-bare-brace-in-a-nested-quoted-operand", Category: "quoting",
+		Snippet: "unset u w\ncat <<EOF\n[${u:-\"${w:-a{b}c\"}z\"}]\nEOF\necho after",
+		Why:     "which quoting the nested expansion is read in, asked where the answer shows. A `\"` run inside an operand is still a run once the reader is inside it, so the nested `${ }` there is double-quoted content and a bare `{` opens no level: `${w:-a{b}` ends at the first `}` and the rest belongs to the enclosing expansion again. Five columns write `[a{bcz\"}]` and run on. Read as if the nested expansion stood bare the `{` opens a level, it runs past the `}` that closes it, and the line is refused — which is what ksh93 does here, the panel member that balances a bare brace hardest, and no dialect answers for it. This is the row that grades the *quoting* handed to the step-over rather than the step-over itself; with the flag off, as it is in the core, both readings agree (#2092)",
+	},
+	{
 		ID: "core/quotes-in-a-quoted-replacement-operand", Category: "quoting",
 		Snippet: `s=xay; v=VAL; printf '[%s]' "${s/'a'/Z}" "${s/a/'$v'}" ${s/a/'$v'}; echo`,
 		Why:     "the third reading of a quote in a `${ }` operand, and the one the panel divides on: a *pattern* operand's quotes quote and are removed everywhere, and a **replacement** operand's do in bash 5.3, that build as `sh` and ksh93 while bash 3.2 and zsh keep them as characters. Unquoted all five agree again, which is what says the disagreement is about the quoted context and not about the operator. dash has no operator and refuses the line. Answered by Semantics.ReplacementOperandTakesTheEnclosingQuoting (#1209); the first and third fields are the guards a fix routed through the word operand's rule would break",

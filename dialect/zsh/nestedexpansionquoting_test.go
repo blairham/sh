@@ -117,9 +117,13 @@ func TestABracedExpansionInAQuotedRunKeepsItsOwnQuotes(t *testing.T) {
 			want: "[aX{1}b] [aX{1}b]\n",
 		},
 		{
-			// And with nothing unbalanced in the nested expansion at all,
-			// so the row is about the quote rather than about the brace.
-			name: "the same with nothing unbalanced inside",
+			// The control, and it is one by measurement rather than by
+			// intention: with nothing unbalanced in the nested expansion the
+			// misread quotes fall back into place, so this row answered
+			// correctly before the fix and answers correctly after. It is
+			// here to say what the rows around it are *not* about — the
+			// quote alone is not enough, the braces have to be moved by it.
+			name: "nothing unbalanced inside, which always worked",
 			src:  `unset v; print -r -- "[${v::="A${:-"B"}C"}]" "[$v]"`,
 			want: "[ABC] [ABC]\n",
 		},

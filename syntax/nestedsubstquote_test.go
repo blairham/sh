@@ -469,21 +469,62 @@ func TestABracedExpansionInsideAQuotedRunBringsItsOwnQuoting(t *testing.T) {
 // shell in the panel writes `[X{039}z]`. That is the row a fix graded on exit
 // status would pass in both directions.
 func TestABracedExpansionInsideAQuotedRunInARawBody(t *testing.T) {
-	const body = `[${u:-"${w:-"X{039}"}z"}]`
-	spans, err := HeredocSpans(body, Core())
-	if err != nil {
-		t.Fatalf("%s: %v", body, err)
-	}
-	want := []struct {
-		kind  SpanKind
-		value string
-	}{{Literal, `[`}, {ParamExp, `u:-"${w:-"X{039}"}z"`}, {Literal, `]`}}
-	if len(spans) != len(want) {
-		t.Fatalf("%s: %d spans, want %d: %v", body, len(spans), len(want), spans)
-	}
-	for i, w := range want {
-		if spans[i].Kind != w.kind || spans[i].Value != w.value {
-			t.Errorf("span %d is %v %q, want %v %q", i, spans[i].Kind, spans[i].Value, w.kind, w.value)
+	// The flag is on for both rows, because it is what the second one is
+	// about: a bare `{` opens a level in the dialects that have it, and only
+	// there can a step-over that forgets the quoting be told from one that
+	// keeps it. The core has it off, so the core reads both rows the same
+	// whichever way the nested expansion is stepped over.
+	nests := Core()
+	nests.BareBraceNestsInExpansion = true
+	for _, c := range []struct {
+		body  string
+		spans []struct {
+			kind  SpanKind
+			value string
+		}
+	}{
+		{
+			body: `[${u:-"${w:-"X{039}"}z"}]`,
+			spans: []struct {
+				kind  SpanKind
+				value string
+			}{{Literal, `[`}, {ParamExp, `u:-"${w:-"X{039}"}z"`}, {Literal, `]`}},
+		},
+		{
+			// The run is still a run once the step-over is inside it, which
+			// is what says the nested expansion is read *in double quotes*
+			// rather than as a word standing on its own: a bare `{` opens no
+			// level there, so `${w:-a{b}` ends at the first `}` and what
+			// follows is the enclosing expansion's again. Read as bare, the
+			// `{` would open one, the nested expansion would run past the
+			// `}` that closes it, and the line would be refused as `closing
+			// brace expected`.
+			//
+			// Measured 2026-09-11 in a here-document body under `env -i`:
+			// zsh 5.9.2, bash 5.3.15, that build as `sh`, bash 3.2.57 and
+			// dash all write `[a{bcz"}]`. ksh93 refuses the line, which is
+			// its own divergence — it is the panel member that balances a
+			// bare brace hardest — and no dialect here answers for it.
+			body: `[${u:-"${w:-a{b}c"}z"}]`,
+			spans: []struct {
+				kind  SpanKind
+				value string
+			}{{Literal, `[`}, {ParamExp, `u:-"${w:-a{b}c"`}, {Literal, `z"}]`}},
+		},
+	} {
+		spans, err := HeredocSpans(c.body, nests)
+		if err != nil {
+			t.Errorf("%s: %v", c.body, err)
+			continue
+		}
+		if len(spans) != len(c.spans) {
+			t.Errorf("%s: %d spans, want %d: %v", c.body, len(spans), len(c.spans), spans)
+			continue
+		}
+		for i, w := range c.spans {
+			if spans[i].Kind != w.kind || spans[i].Value != w.value {
+				t.Errorf("%s: span %d is %v %q, want %v %q", c.body, i, spans[i].Kind, spans[i].Value, w.kind, w.value)
+			}
 		}
 	}
 }

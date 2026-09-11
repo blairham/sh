@@ -245,6 +245,18 @@ word to unbalance, so the same misreading writes the wrong text and exits
 `}+}` and `}}}+}` tails of the expansions closed early, with the leading
 path components gone (#2092).
 
+The run is still a run once the reader is inside it, so the nested
+expansion is double-quoted **content**: a bare `{` in it opens no level,
+by the rule above. In a here-document body, where a leftover quote
+unbalances nothing,
+
+    [${u:-"${w:-a{b}c"}z"}]
+
+is `[a{bcz"}]` in zsh 5.9.2, bash 5.3.15, that build as `sh`, bash 3.2.57
+and dash, the nested `${w:-a{b}` having ended at the first `}`. ksh93
+refuses the line — it is the panel member that balances a bare brace
+hardest — and no dialect here answers for it.
+
 What the step-over does **not** decide is what quoting means once it is
 inside: a single quote in a double-quoted operand is still an ordinary
 character by the rule above, so `"${x:-"${y:-'"'}"}"` is still refused

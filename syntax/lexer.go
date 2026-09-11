@@ -2802,8 +2802,17 @@ func (l *Lexer) skipQuoted(quote byte, escapes bool) {
 			// a `}` inside quotes closes nothing, that `$(` ends at its own
 			// parenthesis, and which dialects let a bare `{` nest. A second
 			// counter beside it would be a second answer to one question.
-			// DoubleQuoted because that is what this run is: a bare `{`
-			// inside one nests in no dialect.
+			// DoubleQuoted because that is what this run is, and it is the
+			// half that is measured rather than assumed: a bare `{` inside
+			// one opens no level, so in a here-document body
+			// `[${u:-"${w:-a{b}c"}z"}]` is `[a{bcz"}]` in zsh 5.9.2, bash
+			// 5.3.15, that build as `sh`, bash 3.2.57 and dash alike. Passing
+			// the run's quoting on is what keeps that true — read as if the
+			// nested expansion stood bare, the `{` opens a level, the
+			// expansion runs past the `}` that closes it and the line is
+			// refused. With BareBraceNestsInExpansion off, as it is in the
+			// core, the two readings agree, which is why the row that grades
+			// this one carries the flag.
 			l.scanBraces(DoubleQuoted)
 			continue
 		}

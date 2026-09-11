@@ -1204,6 +1204,42 @@ var Corpus = []Case{
 		Snippet: `[ -n "${RANDOM-}" ] || { echo none; exit; }; RANDOM=5; a=$RANDOM; b=$RANDOM; [ "$a" = 5 ] && echo stored || echo produced`,
 		Why:     "assigning a produced parameter is a message to whatever produces it rather than a replacement for it: the next read is a new number and not the 5",
 	},
+	{
+		ID: "special/the-window-size-with-no-window", Category: "parameters",
+		Snippet: `printf "[%s][%s]\n" "${COLUMNS-UNSET}" "${LINES-UNSET}"`,
+		Why:     "whether the shell *has* the terminal's size as a parameter at all, asked where there is no terminal — which is the only place the corpus can ask it, and is exactly why the answer here is worth pinning. One column says `[0][0]` and the other five say `[UNSET][UNSET]`: in zsh the pair is the shell's own, so it is nought rather than absent, and everywhere else `COLUMNS` is a variable something assigns and nothing has. bash is the near miss that makes the row necessary — it assigns both, but only when it is interactive and only with `checkwinsize`, so `-c` shows nothing of it and a reading that gave them to the core would be answering for five columns that do not (#2107)",
+	},
+	{
+		ID: "special/the-window-size-is-an-integer-parameter", Category: "parameters",
+		Snippet: `COLUMNS="3+4"; LINES=abc; printf "[%s][%s]\n" "$COLUMNS" "$LINES"`,
+		Why:     "the *type* of the pair, asked through what an assignment does to it rather than through a flag only one shell has. zsh writes `[7][0]` — an expression is evaluated and text that is no expression is nought, which is what every integer name there does — and the five columns holding an ordinary variable write the characters back, `[3+4][abc]`. It is the half of the type that a script can feel: powerlevel10k assigns `1024` and reads the number back, and a shell storing `$((COLUMNS))` of a string would have been a column wide",
+	},
+	{
+		ID: "zsh/the-window-size-type-word", Category: "parameters",
+		Snippet: `printf "[%s][%s]\n" "${(t)COLUMNS}" "${(t)LINES}"`,
+		Why:     "the same claim said in the shell's own vocabulary: `integer-special` and not `scalar`, which is what separates a parameter the shell provides from a variable a front end assigns once a prompt. Only one column has the flag and the rest refuse the group, the three-way split of an expansion a grammar cannot read — and the refusal is the recorded half for them, since a shell without the parameter has no word for it either (#2107)",
+	},
+	{
+		ID: "zsh/the-window-size-describes-itself-with-its-base", Category: "parameters",
+		Snippet: `typeset -i x=5; typeset -p COLUMNS x`,
+		Why:     "how the parameter writes *itself* down, which is a second fact about the integer attribute and not the same one `${(t)}` reads: zsh answers `typeset -i10 COLUMNS=0` and, on the very next line of the same shell, `typeset -i x=5` for a name a script declared — so the base is written for the one the shell provides and not for the one a script made. The `x` beside it is the control: a row with `COLUMNS` alone could be passed by writing `-i10` for every integer name, and that spelling is wrong for every integer name a script declares. The other five columns have no such parameter and refuse it, each in its own words (#2107)",
+	},
+	{
+		ID: "zsh/unset-takes-the-window-size-away-but-not-its-type", Category: "parameters",
+		Snippet: `unset COLUMNS; printf "[%s]" "${COLUMNS-UNSET}" "${(t)COLUMNS}"; COLUMNS="3+4"; printf "[%s][%s]\n" "$COLUMNS" "${(t)COLUMNS}"`,
+		Why:     "`unset` on a parameter the shell provides, which is two answers and not one: the name is **gone** — `UNSET` through the colon-less test, and an empty type word — and yet an assignment afterwards brings back the parameter *and its integer attribute*, so `3+4` is 7 and the word is `integer-special` again. The attributes of a name the shell is are not a script's to lose, and an implementation that cleared them with the value stored the three characters as a scalar at status 0 with nothing said (#2107)",
+	},
+	{
+		ID: "special/an-inherited-window-size-with-no-window", Category: "parameters",
+		Snippet: `printf "[%s][%s]\n" "${COLUMNS-UNSET}" "${LINES-UNSET}"`,
+		Env:     []string{"COLUMNS=55"},
+		Why:     "the same shell with one of the pair *in its environment*, which is what a script run from a terminal inherits. Every column reports the 55 it was handed, and `LINES` beside it is what parts them: `[55][0]` where the pair is the shell's own and `[55][UNSET]` where `COLUMNS` is simply an environment variable with nothing beside it. The row exists because the inherited value has to be **kept** rather than overwritten by the nought a shell with no window would otherwise report, and only the second field can show that the nought is a value at all",
+	},
+	{
+		ID: "special/a-local-window-size-goes-away-with-the-call", Category: "parameters",
+		Snippet: `f() { local COLUMNS=1024; printf "[%s]" "$COLUMNS"; }; f; printf "[%s]\n" "${COLUMNS-UNSET}"`,
+		Why:     "a declaration of the pair inside a function, which is the shape a prompt theme measures itself in — powerlevel10k writes `local -i COLUMNS=1024`, renders the prompt against that width and lets the call return. The call has to give the name back: zsh reads `[1024][0]` and the shells holding an ordinary variable `[1024][UNSET]`, and both say the same thing about the *call*. This implementation shadowed the stored table alone, which is not where a provided parameter's assignment lives, so the 1024 outlived the function and every prompt afterwards was drawn 1024 columns wide (#2107)",
+	},
 
 	// --- the core language, as documented ---------------------------------
 	{

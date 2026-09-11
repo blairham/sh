@@ -1275,7 +1275,59 @@ var Corpus = []Case{
 	{
 		ID: "core/the-characters-a-replacement-operand-parts-on", Category: "quoting",
 		Snippet: `s=xay; printf '[%s]' "${s/a/'q'}" "${s/a/\q}" "${s/a/~}" "${s/a/"q"}" "${s/a/p~q}"; echo`,
-		Why:     "which characters the two readings of a replacement operand actually part on, which is what decides where the axis may be asked. The first three divide the panel — a single quote, a backslash, and a tilde at the front — and the last two do not: a double quote is removed under both readings that this shell's axis models and a tilde that is not at the front expands under neither. bash 3.2 is the exception on the double quote and keeps it as a character, which is a further divergence inside the keeping group rather than a third reading of the axis, and it has no dialect here to answer for it. A rule reached on the last two would be refusing where the whole panel agrees, and one that missed the first three would be picking a reading in silence",
+		Why:     "which characters the two readings of a replacement operand actually part on, which is what decides where the axis may be asked. The first three divide the panel — a single quote, a backslash, and a tilde at the front — and the last two do not: a double quote is removed under both readings that this shell's axis models and a tilde that is not at the front expands under neither. bash 3.2 is the exception on the double quote and keeps it as a character, which is a further divergence inside the keeping group rather than a third reading of the axis, and it has no dialect here to answer for it. A rule reached on the last two would be refusing where the whole panel agrees, and one that missed the first three would be picking a reading in silence. The backslash field is the coarse form of the question: which character follows it decides the answer, and core/which-backslashes-a-replacement-operand-parts-on asks it one at a time (#1966)",
+	},
+	{
+		ID: "core/which-backslashes-a-replacement-operand-parts-on", Category: "quoting",
+		Snippet: `s=xay; v=V; printf '[%s]' "${s/a/\$v}" "${s/a/\\}" "${s/a/\"}" "${s/a/\}}" "${s/a/\{}" "${s/a/\q}"; echo`,
+		Why: "the backslash of the row above, asked a character at a time, " +
+			"because it does not part the two readings on its own: a dollar, a " +
+			"backslash, a double quote and — since #1966 — a closing brace are " +
+			"escaped under *both* readings and are unanimous here, while an " +
+			"opening brace and an ordinary letter are removed by bash 5.3, that " +
+			"build as `sh` and ksh93 and kept by zsh. So the question the axis " +
+			"may be asked is the character *after* the backslash, and a rule " +
+			"reached on the first four refuses where the whole panel agrees — " +
+			"which is what the core did to `\\}`, by name, until this. bash 3.2 " +
+			"keeps the backslash on the brace as well and has no dialect here",
+	},
+	{
+		ID: "core/backslash-before-a-brace-in-a-quoted-operand", Category: "quoting",
+		Snippet: `unset u; printf '[%s]' "${u-A\}B}" "${u-A\{B}" "${u-A\qB}" "A\}B" ${u-A\}B}; echo`,
+		Why: "a backslash before the `}` that would close a `${ }` escapes it " +
+			"and is removed, which five of the six answer with `A}B`; bash 3.2 " +
+			"keeps it and is the outlier. The other four fields are what say the " +
+			"rule is the *closing brace inside a quoted operand* and not " +
+			"backslashes generally: an opening brace keeps its backslash, so does " +
+			"an ordinary letter, so does the same `\\}` written outside an " +
+			"expansion — all three unanimous — and the unquoted spelling comes to " +
+			"`A}B` by the ordinary word rule, which is the reading the quoted one " +
+			"had been missing (#1966)",
+	},
+	{
+		ID: "core/backslash-before-a-brace-in-a-replacement-operand", Category: "quoting",
+		Snippet: `v=x; w='a}b'; printf '[%s]' "${v/x/A\}B}" "${v//x/A\}B}" "${w/a\}b/Z}" "${w%\}b}"; echo`,
+		Why: "the same escape in the operands of a substitution, which is where " +
+			"it reached this shell: the replacement half of both `/` and `//` " +
+			"comes to `A}B`, and the pattern half takes the freed `}` as a " +
+			"literal to match, so the third field is `Z` and the fourth trims. " +
+			"dash has neither operator and refuses the line; bash 3.2 keeps the " +
+			"backslash in the two replacements and agrees on the two patterns, " +
+			"which places its divergence in the replacement reading rather than " +
+			"in the escape. This is the construct powerlevel10k builds a " +
+			"`${(e)}` pattern out of, and a kept backslash makes that text " +
+			"unparseable (#1966)",
+	},
+	{
+		ID: "core/backslash-before-a-brace-inside-nested-quotes", Category: "quoting",
+		Snippet: `unset u; printf '[%s]' "${u-"A\}B"}" "${u-A'\}'B}"; echo`,
+		Why: "where the escape stops, and the one corner of it the panel splits " +
+			"on: inside a double-quoted run written *within* the operand, zsh " +
+			"answers `A\\}B` and the other five answer `A}B`, so the brace is " +
+			"escapable there for everyone but zsh. Single quotes are not a run " +
+			"at all in a quoted operand, so the second field is `A'}'B` in five " +
+			"and `A'\\}'B` only in bash 3.2. Recorded as the measurement behind " +
+			"the split; ours gives zsh's answer in every dialect (#1971)",
 	},
 	{
 		ID: "param/bare-brace-in-an-unquoted-operand", Category: "expansion",

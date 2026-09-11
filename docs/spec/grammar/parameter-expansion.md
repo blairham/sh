@@ -129,6 +129,42 @@ removed: with `s=xay`, `"${s#'x'}"` trims the `x` and is `ay`, and
 the enclosing quoting, and `#`, `##`, `%`, `%%`, `/`, the case operators
 and a subscript that do not.
 
+A **backslash** in the same position escapes one character double quotes
+do not: the `}` that would close the expansion. It escapes it *and is
+removed*, which is the half that matters — the brace has to survive as a
+character of the result, and the backslash must not survive with it.
+
+Measured 2026-09-10 with `u` unset:
+
+| probe | result | panel |
+| --- | --- | --- |
+| `"${u-A\}B}"` | `A}B` | five of six; bash 3.2 answers `A\}B` |
+| `"${u-A\{B}"` | `A\{B` | unanimous — an *opening* brace keeps it |
+| `"${u-A\qB}"` | `A\qB` | unanimous — so does an ordinary character |
+| `"A\}B"` | `A\}B` | unanimous — and so does the same text with no expansion around it |
+| `${u-A\}B}` unquoted | `A}B` | unanimous, by the ordinary word rule |
+
+So the set a backslash escapes inside a quoted operand is the
+double-quote set — `$`, a backtick, `"`, itself — **plus `}`**, and the
+last three rows are what say it is that brace and not braces, not
+backslashes at large, and not double quotes generally. bash 3.2 is the
+lone holdout on the first row and has no dialect here to answer for it.
+
+It reaches both operands of a substitution, and the freed brace is a
+literal on either side: `"${v/x/A\}B}"` and `"${v//x/A\}B}"` are `A}B`,
+and with `w='a}b'`, `"${w/a\}b/Z}"` matches and is `Z`.
+
+Where it *stops* is a `"` written inside the operand, which opens a run
+of its own — and that is the one corner of this the panel splits on.
+`"${u-"A\}B"}"` is `A\}B` in zsh and `A}B` in the other five, so the
+brace is escapable inside a nested run for everyone but zsh. Not modeled
+yet; see #1971.
+
+The rule matters because text is built this way and read back. The
+`${(e)}` pattern powerlevel10k assembles is a run of `${NAME-<sep>\}`
+entries, and a kept backslash makes the assembled text refuse to parse —
+`closing brace expected` — so the prompt never installs (#1966, #1927).
+
 A here-document body is the same context reached by the other road: it
 expands as a double-quoted string does, so `${u:-'$v'}` in one is `'VAL'`
 in all six.

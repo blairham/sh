@@ -1797,6 +1797,30 @@ const dquoteEscapes = "$`\"\\"
 // quote there is an ordinary character with nothing to escape.
 const heredocEscapes = "$`\\"
 
+// operandEscapes is dquoteEscapes plus the closing brace, and it is the set
+// that applies inside the operand of a `${ }` that stands in double quotes.
+//
+// The brace is the whole of the difference, and it is the brace and not
+// braces: a backslash before `}` escapes it and is removed, while one before
+// `{` is two characters of the result, and so is one before an ordinary
+// character. Measured 2026-09-10 with `u` unset:
+//
+//	"${u-A\}B}"     A}B     the backslash is consumed
+//	"${u-A\{B}"     A\{B    an opening brace keeps it
+//	"${u-A\qB}"     A\qB    so does an ordinary character
+//	"A\}B"          A\}B    and so does the same text outside an expansion
+//
+// The first row is dash, bash 5.3, that build as `sh`, ksh93u+ and zsh 5.9.2
+// alike — only bash 3.2 answers `A\}B`, which is recorded in the corpus and
+// not modeled, since no dialect here targets that build. The other three are
+// unanimous across all six.
+//
+// It is the *enclosing* quotes that make this reading apply at all: written
+// without them the operand is an ordinary word, where a backslash already
+// escapes anything. So this set is what closes the gap between the two
+// readings of `${u-A\}B}` rather than a rule of its own.
+const operandEscapes = dquoteEscapes + "}"
+
 // HeredocSpans splits an unquoted here-document body into spans.
 //
 // A body is not a word and not a double-quoted string, though it is much
@@ -1910,6 +1934,13 @@ func (l *Lexer) scanDouble() []Span {
 func (l *Lexer) scanDoubleBody(open Pos, closing bool) []Span {
 	var out []Span
 	var b strings.Builder
+	// Without a closing quote to find, this text is a `${ }` operand — the one
+	// place a backslash also escapes the brace that would end the expansion.
+	// See operandEscapes.
+	escapes := dquoteEscapes
+	if !closing {
+		escapes = operandEscapes
+	}
 	litPos := l.pos()
 	flush := func() {
 		if b.Len() > 0 {
@@ -1984,7 +2015,7 @@ func (l *Lexer) scanDoubleBody(open Pos, closing bool) []Span {
 		case c == '\\' && l.peekAt(1) == '\n':
 			l.advance()
 			l.advance()
-		case c == '\\' && strings.IndexByte(dquoteEscapes, l.peekAt(1)) >= 0:
+		case c == '\\' && strings.IndexByte(escapes, l.peekAt(1)) >= 0:
 			l.advance()
 			if b.Len() == 0 {
 				litPos = l.pos()

@@ -1044,7 +1044,10 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
-		TypeKeyword: "%[1]s is a keyword",
+		// A math complaint raised by a builtin names it, as bash's does:
+		// `let '1+'` is `ksh: let: 1+: more tokens expected`.
+		ArithErrorNamesTheBuiltin: true,
+		TypeKeyword:               "%[1]s is a keyword",
 		// ksh93's `type` is `whence -v`, and the message says so.
 		TypeExternal:            "%[1]s is a tracked alias for %[2]s",
 		TypeFunction:            "%[1]s is a function",

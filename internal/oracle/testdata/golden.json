@@ -66606,6 +66606,138 @@
         "TimedOut": false
       }
     },
+    "let/a-math-complaint-names-the-builtin-or-does-not": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: let: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: let: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: let: 1+: syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: let: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: let: 1+: more tokens expected",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operand expected at end of string",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "let/an-illegal-character-is-not-any-math-failure": {
+      "bash": {
+        "Stdout": "ranout=1~leftover=1~divzero=1",
+        "Stderr": "\u003cshell\u003e: line 1: let: 1+: arithmetic syntax error: operand expected (error token is \"+\")~\u003cshell\u003e: line 1: let: 5 5: arithmetic syntax error in expression (error token is \"5\")~\u003cshell\u003e: line 1: let: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ranout=1~leftover=1~divzero=1",
+        "Stderr": "\u003cshell\u003e: line 1: let: 1+: arithmetic syntax error: operand expected (error token is \"+\")~\u003cshell\u003e: line 1: let: 5 5: arithmetic syntax error in expression (error token is \"5\")~\u003cshell\u003e: line 1: let: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ranout=1~leftover=1~divzero=1",
+        "Stderr": "\u003cshell\u003e: let: 1+: syntax error: operand expected (error token is \"+\")~\u003cshell\u003e: let: 5 5: syntax error in expression (error token is \"5\")~\u003cshell\u003e: let: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "ranout=127~leftover=127~divzero=127",
+        "Stderr": "\u003cshell\u003e: 1: let: not found~\u003cshell\u003e: 1: let: not found~\u003cshell\u003e: 1: let: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "ranout=1~leftover=1~divzero=1",
+        "Stderr": "\u003cshell\u003e: let: 1+: more tokens expected~\u003cshell\u003e: let: 5 5: arithmetic syntax error~\u003cshell\u003e: let: 1/0: divide by zero",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ranout=1~leftover=1~divzero=1",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operand expected at end of string~\u003cshell\u003e:1: bad math expression: operator expected at `5'~\u003cshell\u003e:1: division by zero",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "let/an-illegal-character-keeps-the-value-before-it": {
+      "bash": {
+        "Stdout": "one=1~zero=1~sum=1~alone=1",
+        "Stderr": "\u003cshell\u003e: line 1: let: 1 @: arithmetic syntax error: invalid arithmetic operator (error token is \"@\")~\u003cshell\u003e: line 1: let: 0 @: arithmetic syntax error: invalid arithmetic operator (error token is \"@\")~\u003cshell\u003e: line 1: let: 1+2 @: arithmetic syntax error: invalid arithmetic operator (error token is \"@\")~\u003cshell\u003e: line 1: let: @: arithmetic syntax error: operand expected (error token is \"@\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one=1~zero=1~sum=1~alone=1",
+        "Stderr": "\u003cshell\u003e: line 1: let: 1 @: arithmetic syntax error: invalid arithmetic operator (error token is \"@\")~\u003cshell\u003e: line 1: let: 0 @: arithmetic syntax error: invalid arithmetic operator (error token is \"@\")~\u003cshell\u003e: line 1: let: 1+2 @: arithmetic syntax error: invalid arithmetic operator (error token is \"@\")~\u003cshell\u003e: line 1: let: @: arithmetic syntax error: operand expected (error token is \"@\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one=1~zero=1~sum=1~alone=1",
+        "Stderr": "\u003cshell\u003e: let: 1 @: syntax error: invalid arithmetic operator (error token is \"@\")~\u003cshell\u003e: let: 0 @: syntax error: invalid arithmetic operator (error token is \"@\")~\u003cshell\u003e: let: 1+2 @: syntax error: invalid arithmetic operator (error token is \"@\")~\u003cshell\u003e: let: @: syntax error: operand expected (error token is \"@\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one=127~zero=127~sum=127~alone=127",
+        "Stderr": "\u003cshell\u003e: 1: let: not found~\u003cshell\u003e: 1: let: not found~\u003cshell\u003e: 1: let: not found~\u003cshell\u003e: 1: let: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one=1~zero=1~sum=1~alone=1",
+        "Stderr": "\u003cshell\u003e: let: 1 @: arithmetic syntax error~\u003cshell\u003e: let: 0 @: arithmetic syntax error~\u003cshell\u003e: let: 1+2 @: arithmetic syntax error~\u003cshell\u003e: let: @: arithmetic syntax error",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one=0~zero=1~sum=0~alone=1",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: illegal character: @~\u003cshell\u003e:1: bad math expression: illegal character: @~\u003cshell\u003e:1: bad math expression: illegal character: @~\u003cshell\u003e:1: bad math expression: illegal character: @",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "let/evaluates-and-assigns": {
       "bash": {
         "Stdout": "5",

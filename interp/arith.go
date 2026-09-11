@@ -1275,15 +1275,27 @@ func (r *Runner) wordInvalidNumber(text string) string {
 // uses and the only order that makes `$(( $x$y ))` with x=`1+` and y=`2`
 // come to 3.
 func (r *Runner) arithTree(tree syntax.ArithExpr, text string) (syntax.ArithExpr, error) {
+	out, _, err := r.arithTreeOver(tree, text)
+	return out, err
+}
+
+// arithTreeOver is arithTree with the text the parser was actually handed, for
+// the one caller that has to look at where in it the failure was.
+//
+// The expansion happens once, here, and the text is handed back rather than
+// recomputed: expanding it a second time to find an offset would run a command
+// substitution on the right-hand side twice, which is the mistake #1915 was.
+func (r *Runner) arithTreeOver(tree syntax.ArithExpr, text string) (syntax.ArithExpr, string, error) {
 	if tree != nil {
-		return tree, nil
+		return tree, text, nil
 	}
+	expanded := r.expandArithText(text)
 	p := syntax.NewParser("", r.dialect())
-	out := p.ParseArithFor(r.expandArithText(text), syntax.Pos{})
+	out := p.ParseArithFor(expanded, syntax.Pos{})
 	if err := p.Err(); err != nil {
-		return nil, err
+		return nil, expanded, err
 	}
-	return out, nil
+	return out, expanded, nil
 }
 
 // expandArithText substitutes into an arithmetic expression before it is read.

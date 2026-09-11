@@ -998,6 +998,9 @@ func Semantics() interp.Semantics {
 // Diagnostics is how bash 5 reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// A math complaint raised by a builtin names it: `let '1+'` is
+		// `bash: line 1: let: 1+: arithmetic syntax error: …`.
+		ArithErrorNamesTheBuiltin: true,
 		// The three loops POSIX has, spelled with this shell's own quoting.
 		// It says this and carries on, which is the axis beside it.
 		LoopControlOutsideALoop: "%[1]s: only meaningful in a `for', `while', or `until' loop",

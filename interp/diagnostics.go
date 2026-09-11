@@ -631,6 +631,30 @@ type Diagnostics struct {
 	// this is a set rather than following NamesBuiltinInLocation.
 	SubscriptRefusalNamesBuiltin map[string]bool
 
+	// ArithErrorNamesTheBuiltin puts the name of the builtin that raised an
+	// arithmetic complaint in front of the sentence.
+	//
+	// Measured 2026-09-11, `let '1+'`:
+	//
+	//	bash 5.3	bash: line 1: let: 1+: arithmetic syntax error: …
+	//	ksh93   	ksh: let: 1+: more tokens expected
+	//	zsh     	zsh:1: bad math expression: operand expected …
+	//
+	// False is not "the shell has no name for it": zsh names a builtin in the
+	// *location* as a rule — `zsh:cd:1:` — and does not here, nor for `let
+	// '1/0'`. It is the same distinction NamesBuiltinInLocation's own comment
+	// draws and this is what draws it for one more message: a math failure is
+	// the shell's rather than the builtin's there, the way a division by zero
+	// and an unset parameter already are. The same shell's `let` with no
+	// operand *is* the builtin's and writes `zsh:let:1: not enough
+	// arguments`, which is the control saying this is about the message and
+	// not about `let`.
+	//
+	// Only the complaint is affected. What `let` reports is
+	// Semantics.LetKeepsTheValueBeforeAnIllegalByte's, and the two were
+	// measured apart.
+	ArithErrorNamesTheBuiltin bool
+
 	// ReadonlyElementRefusal, IntegerElementRefusal and LocalElementRefusal
 	// are what a declaration says about a subscripted operand whose element
 	// cannot carry what the declaration is asking the *variable* to be. Two

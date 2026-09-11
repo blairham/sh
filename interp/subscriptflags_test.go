@@ -411,22 +411,22 @@ func TestASubscriptSearchOverATargetThisDoesNotCarryIsRefused(t *testing.T) {
 		{
 			"a letter this dialect does not carry",
 			`b=(x y); trap 'printf "[%s]" "${b[*]}"' EXIT; b[(w)x]=Q`,
-			"", "[x y]",
+			"(w) subscript flag is not implemented", "[x y]",
 		},
 		{
 			"a backward search that found nothing",
 			`b=(x y); trap 'printf "[%s]" "${b[*]}"' EXIT; b[(R)nomatch]=Q`,
-			"where nothing matched", "[x y]",
+			"not implemented where nothing matched", "[x y]",
 		},
 		{
 			"an association assigned through one",
 			`typeset -A h; h[k1]=v1; trap 'printf "[%s]" "${h[k1]}"' EXIT; h[(r)v1]=Q`,
-			"for an associative array", "[v1]",
+			"not implemented for an associative array", "[v1]",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, status := runSub(t, tc.src)
-			if !strings.Contains(out, "subscript flag is not implemented "+tc.why) {
+			if !strings.Contains(out, tc.why) {
 				t.Errorf("output %q does not refuse %s", out, tc.why)
 			}
 			if !strings.Contains(out, tc.kept) {

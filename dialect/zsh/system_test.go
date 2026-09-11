@@ -41,48 +41,31 @@ func TestSysParamsReportsTheProcessThisShellIsIn(t *testing.T) {
 	}
 }
 
-// TestProcSubstPidIsEmptyRatherThanZero is the one deliberate deviation in
-// this file, and the two assertions below are the two halves of why.
+// TestProcSubstPidRefusesRatherThanReadingAsNone is the one key that is
+// refused, and the reason is sharper than incompleteness.
 //
-// A process substitution here runs on a goroutine of the shell's own
-// process, so there is no process to report and none ever will be. Real
-// zsh answers 0, which means "none yet" there and is the answer that must
-// not be copied: a plugin writes `kill -- -$sysparams[procsubstpid]`, and
-// `kill -- -0` signals the shell's own process group.
-//
-// The key is therefore present — so the read is not fatal to the line that
-// asked, which is what a refusal was — and empty, so the guard callers put
-// in front of the dangerous line skips it. The second half is the one that
-// matters in the wild and is asserted as a whole line below, because a
-// test on the value alone passes for a shell that ends the script.
-func TestProcSubstPidIsEmptyRatherThanZero(t *testing.T) {
+// A process substitution here runs on a goroutine of the shell's own process,
+// so there is no process to report. The value that means "none yet" is 0, and
+// a real plugin's build script writes `kill -- -$sysparams[procsubstpid]` —
+// where `kill -- -0` is a signal to the shell's own process group. So the
+// plausible answer is the dangerous one, and the key says so at the expansion
+// that asked.
+func TestProcSubstPidRefusesRatherThanReadingAsNone(t *testing.T) {
 	got := sysParam(t, `print -r -- "[$sysparams[procsubstpid]]"`)
-	if want := "[]\n"; got != want {
+	want := "zsh:1: sysparams[procsubstpid]: " +
+		"no process substitution runs in a process of its own here\n"
+	if got != want {
 		t.Errorf("output = %q, want %q", got, want)
 	}
 }
 
-// And the shape a caller actually writes: the guard reads it as nothing to
-// signal, and the line after it still runs. Against the refusal this
-// replaces, the `print` never happened; against an answer of 0, the `kill`
-// branch is taken and it is the shell's own process group.
-func TestTheGuardInFrontOfTheKillSkipsAnEmptyProcSubstPid(t *testing.T) {
-	got := sysParam(t, `pid=$sysparams[procsubstpid]
-[[ -n $pid ]] && print -r -- "WOULD KILL -$pid"
-print -r -- "carried on"`)
-	if want := "carried on\n"; got != want {
-		t.Errorf("output = %q, want %q", got, want)
-	}
-}
-
-// TestTheSetTestOnSysParamsIsAnswered: the key is one the table has, so the
-// set test is 1 and `-` does not reach its default. Both differ from the
-// refusal this replaced, where the key was absent to every route but the
-// guard.
+// TestTheSetTestOnSysParamsIsAnswered: the guard in front of the read is
+// answered rather than refused, which is [interp.Runner.SetAbsentElements]'s
+// exemption and the reason a well-written script is not stopped.
 func TestTheSetTestOnSysParamsIsAnswered(t *testing.T) {
 	got := sysParam(t, `print -r -- "${+sysparams[pid]}${+sysparams[procsubstpid]}`+
 		` [${sysparams[procsubstpid]-none}]"`)
-	if want := "11 []\n"; got != want {
+	if want := "10 [none]\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
 	}
 }

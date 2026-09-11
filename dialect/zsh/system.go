@@ -35,55 +35,36 @@ import (
 // wanting the process they are running in — and the other two are
 // `procsubstpid`, which is refused here. See below.
 //
-// # `procsubstpid` is empty, because there is no process and 0 is a lie
+// # `procsubstpid` refuses, and answering 0 would have been dangerous
+//
+// **This refusal was replaced by an empty answer in #1820 and put back by
+// #1821, and the reason it came back is the whole of what to know before
+// trying again.** Answering it is right and is not sufficient on its own:
+// the refusal is fatal to the line, so it was killing `_p9k_worker_start`
+// before the theme could arm its `zle -F` handler — but with the key
+// answered, the worker starts, reaches `gitstatus_start`, and *that* fails
+// on #1532 (`sysread` into a subscripted parameter) after a hard-coded five
+// second timeout. Measured: a session went from 0.42s with two diagnostics
+// to 8.0s with a `gitstatus failed to initialize` banner, which is worse on
+// both counts. #1532 lands first; this follows it.
 //
 // Three keys, measured: `pid`, `ppid`, and `procsubstpid`, which is the
-// process id of the most recent process substitution and is 0 in a real zsh
-// that has started none.
+// process id of the most recent process substitution and is 0 in a shell that
+// has started none.
 //
-// **This shell starts none, ever.** A `<(cmd)` here runs on a goroutine of
-// the shell's own process — see interp/procsubst.go — so there is no such
-// process and no id for one, and that is a property of the shell rather
-// than of the moment it is asked. Four answers were possible and three of
-// them are worse:
+// **This shell starts none.** A `<(cmd)` here runs on a goroutine of the
+// shell's own process — see interp/procsubst.go — so there is no such process
+// and no id for one. Answering the 0 that means "none yet" was the obvious
+// thing and is the one answer that must not be given: a real plugin's build
+// script writes
 //
-//   - **0**, which is what real zsh says for "none yet", is the one answer
-//     that must not be given. A real plugin's build script writes
-//     `kill -- -$sysparams[procsubstpid]`, and `kill -- -0` is a signal to
-//     the shell's *own* process group. The plausible answer is the
-//     catastrophic one.
-//   - **This process's pid** is the same catastrophe spelled differently.
-//   - **Refusing by name** was what this did, through
-//     [interp.Runner.SetAbsentElements], and it is honest but it is not
-//     free: a refused expansion is *fatal to the line and status 1*, so it
-//     does not merely fail to answer the caller, it takes down whatever the
-//     caller was in the middle of. Measured on this machine's own startup,
-//     the prompt theme's worker reads this key one line after opening its
-//     response descriptor, so the refusal ended `_p9k_worker_start` before
-//     it could arm the `zle -F` handler on the next line — and the theme's
-//     `always` block then tried to *remove* that handler, which is where
-//     the second diagnostic of every session came from:
+//	kill -- -$sysparams[procsubstpid]
 //
-//         _p9k_worker_start:32: sysparams[procsubstpid]: no process substitution …
-//         _p9k_worker_stop:zle:4: No handler installed for fd 11
-//
-//     Two messages, one cause, and the async worker dead in a shell that
-//     could have run it.
-//
-// So the key **exists and is empty**, which is the only one of the four
-// that is both true and safe. It is true because there is no pid; it is
-// safe because the guard every caller in the wild puts in front of the
-// dangerous line — p10k's is `[[ -n $_p9k__worker_pid ]] && kill -- -$_p9k__worker_pid`
-// — reads an empty value as "nothing to signal" and skips it, where 0 sails
-// straight through. And it carries *more* than 0 does: a caller can tell
-// "no process" from "process 0", which real zsh's spelling cannot.
-//
-// This is a deliberate deviation and the only one in this file. Real zsh
-// answers `0` here and this shell answers ``; `${+sysparams[procsubstpid]}`
-// is 1 in both. It is recorded rather than hidden because the alternative
-// was a shell that prints two errors per prompt and runs no async segments
-// — measured, the empty answer is what lets the worker start, arm its
-// handler and receive (see #1760, and #1532 for the wall behind this one).
+// and `kill -- -0` is a signal to the shell's *own* process group. So the key
+// refuses by name, at the expansion that asks, through
+// [interp.Runner.SetAbsentElements] — the same mechanism `$terminfo` uses for
+// a capability it has no value for, and the same reason: a caller cannot tell
+// an honest 0 from an invented one.
 //
 // `pid` is answered and is this process's, which is true rather than
 // approximate — and it is worth saying what it is *not*. In zsh, `$sysparams[pid]`
@@ -126,6 +107,10 @@ func registerSystemModule(r *interp.Runner) {
 	// back.
 	r.MarkReadonly("sysparams")
 	r.MarkHidden("sysparams")
+	// And the key this shell has no process to report on, refusing by name
+	// rather than reading as the 0 that means "none yet". See the note above
+	// on why that particular 0 is the one that must not be invented.
+	r.SetAbsentElements("sysparams", "no process substitution runs in a process of its own here")
 	r.SetDynamicArray("errnos", errnosView)
 	r.MarkReadonly("errnos")
 	r.MarkHidden("errnos")
@@ -149,10 +134,6 @@ func sysparamsView(*interp.Runner) interp.AssocArray {
 	return interp.AssocArray{
 		"pid":  strconv.Itoa(os.Getpid()),
 		"ppid": strconv.Itoa(os.Getppid()),
-		// Present and empty. See the note above: there is no process, 0 is
-		// the answer that gets a caller's own process group killed, and a
-		// refusal takes down the line that asked.
-		"procsubstpid": "",
 	}
 }
 

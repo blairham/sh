@@ -733,6 +733,13 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 		return nil
 	}
 	saved, savedIn, savedLine := r.Params, r.inFunc, r.funcLine
+	// Entered before the location moves into the body, because the frame
+	// records where the call was made *and what it was made inside* — see
+	// pushFrame, and Runner.LocatedAtTheCall for what reads it back. A push
+	// after the two assignments below would record the callee as its own
+	// caller.
+	r.pushFrame(Frame{File: r.funcFiles[fn.Name], Name: name})
+	defer r.popFrame()
 	r.Params, r.inFunc = args, fn.Name
 	// Where the loops were when the call was made, for the dialects that do
 	// not let a `break` in the body reach them — see Runner.loopControlFloor.
@@ -751,8 +758,6 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// Where the function was written, so a dialect that numbers a message
 	// from the function rather than from the file can subtract it.
 	r.funcLine = fn.Pos().Line
-	r.pushFrame(Frame{File: r.funcFiles[fn.Name], Name: name})
-	defer r.popFrame()
 	// This call's own serial, because the RETURN trap fires for the one
 	// function whose body set it and for nobody else — not a caller, and
 	// not a sibling entered after it returned.

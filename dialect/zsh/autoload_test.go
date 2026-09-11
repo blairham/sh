@@ -49,13 +49,17 @@ typeset -f myfunc`)
 // A name whose file is not on `$fpath` fails **at the call**, not at the
 // declaration — which is the whole shape of the builtin and the thing a
 // resolve-now implementation would get wrong while passing every other line.
+//
+// And the failure is located at the call as well as timed by it: line 4 is
+// where `nosuchfn` is written, and the stub that did the looking is not a
+// frame anybody can open (#1994).
 func TestAutoloadFailsAtTheCallAndNotAtTheDeclaration(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `fpath=()
 autoload -Uz nosuchfn
 print -r -- "decl st=$?"
 nosuchfn 2>&1
 print -r -- "call st=$?"`)
-	want := "decl st=0\nnosuchfn:1: nosuchfn: function definition file not found\ncall st=1\n"
+	want := "decl st=0\nzsh:4: nosuchfn: function definition file not found\ncall st=1\n"
 	if out != want || st != 0 {
 		t.Errorf("a missing file = %q (status %d), want %q", out, st, want)
 	}
@@ -768,5 +772,102 @@ print -r -- "st=$?"`)
 	want := "rf () {\n\t# undefined\n\tbuiltin autoload -XUz " + fns + "\n}\nrf ran\nst=0\n"
 	if out != want || st != 0 {
 		t.Errorf("a fixed relative path = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A missing function file is reported **where the call was made**, and never
+// inside the stub the declaration left behind (#1994).
+//
+// The stub is one line the shell wrote and no script ever saw, so a location
+// inside it is a name and a line that point at nothing anybody can open: a
+// real startup file produced eight of these, every one of them `is-at-least:1:`
+// or `add-zsh-hook:1:`. Measured against zsh 5.9.2 on 2026-09-11 with the name
+// declared and no file for it.
+//
+// Depth is the whole of the test, because the two candidate locations are the
+// same string at the top of a one-line probe. The control is `command not
+// found` written in the same places: that was already byte-identical, so these
+// locations existed and this route was not reaching them.
+func TestAMissingFunctionFileIsLocatedAtTheCall(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("inside a function, the line within it", func(t *testing.T) {
+		out, st := runZsh(t, dir, `fpath=()
+autoload -Uz zzmissing
+o() {
+  print -r -- inO
+  zzmissing
+}
+o 2>&1
+print -r -- "st=$?"`)
+		want := "inO\no:2: zzmissing: function definition file not found\nst=1\n"
+		if out != want || st != 0 {
+			t.Errorf("from a function = %q (status %d), want %q", out, st, want)
+		}
+	})
+
+	t.Run("the innermost function and not the outermost", func(t *testing.T) {
+		out, st := runZsh(t, dir, `fpath=()
+autoload -Uz zzmissing
+p() {
+  zzmissing
+}
+o() {
+  p
+}
+o 2>&1
+print -r -- "st=$?"`)
+		want := "p:1: zzmissing: function definition file not found\nst=1\n"
+		if out != want || st != 0 {
+			t.Errorf("from a nested call = %q (status %d), want %q", out, st, want)
+		}
+	})
+
+	t.Run("a sourced file names the file and not the caller", func(t *testing.T) {
+		inc := filepath.Join(dir, "inc.zsh")
+		if err := os.WriteFile(inc, []byte("print -r -- inInc\nzzmissing\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		out, st := runZsh(t, dir, `fpath=()
+autoload -Uz zzmissing
+print -r -- top
+source `+inc+` 2>&1
+print -r -- "st=$?"`)
+		want := "top\ninInc\n" + inc + ":2: zzmissing: function definition file not found\nst=1\n"
+		if out != want || st != 0 {
+			t.Errorf("from a sourced file = %q (status %d), want %q", out, st, want)
+		}
+	})
+
+	t.Run("a declaration is located where it stands", func(t *testing.T) {
+		// `-R` reports at the *declaration*, which is not a call and keeps
+		// the location it is written on: line 2, not line 4.
+		out, st := runZsh(t, dir, `fpath=()
+autoload -RUz zzmissing 2>&1
+print -r -- "st=$?"
+print -r -- tail`)
+		want := "zsh:2: zzmissing: function definition file not found\nst=1\ntail\n"
+		if out != want || st != 0 {
+			t.Errorf("a -R declaration = %q (status %d), want %q", out, st, want)
+		}
+	})
+}
+
+// At the top level of a **script file** the same failure names the function
+// rather than the script, and still counts the caller's line (#1994).
+//
+// That row is `$0` and not a rule about stubs: this dialect's `$0` is the call
+// the shell is inside, the shell is inside the stub, and the top level of a
+// script is the one place a location falls back to `$0`. Measured, and pinned
+// by the third probe — `unsetopt function_argzero` turns the row into the
+// script's own path, which no reading about stubs would predict.
+func TestAMissingFunctionFileAtTheTopOfAScriptNamesTheFunction(t *testing.T) {
+	out := runZshScriptFile(t, `print -r -- before
+autoload -Uz zzmissing
+zzmissing
+print -r -- "st=$?"`, "/tmp/rc.zsh")
+	want := "before\nzzmissing:3: zzmissing: function definition file not found\nst=1\n"
+	if out != want {
+		t.Errorf("from the top of a script = %q, want %q", out, want)
 	}
 }

@@ -48,6 +48,16 @@ type Frame struct {
 	// Line is the line this frame was entered from, in the frame below it.
 	Line int
 
+	// outerFunc and outerFuncLine are the function the frame was entered
+	// from and the line that function was written on — the pair
+	// locationPrefix counts a message's line against, as it stood one frame
+	// down. They are Line's companions and are filled in beside it: Line
+	// alone says where the call was made and not what it was made *inside*,
+	// and a diagnostic located at the call needs both. See
+	// [Runner.LocatedAtTheCall].
+	outerFunc     string
+	outerFuncLine int
+
 	// Startup marks a frame the *shell* entered rather than a script: a
 	// run-commands file, the login profile, `$ENV`, `$BASH_ENV`.
 	//
@@ -104,8 +114,15 @@ func (r *Runner) InCall() bool { return len(r.frames) > 0 }
 func (r *Runner) SetScriptFile(path string) { r.scriptFile = path }
 
 // pushFrame enters a function or a sourced file.
+//
+// It reads where the shell is *now* for the frame's Line and for the
+// enclosing function it records, so every route in gets the same answer from
+// one place. That is why a function call pushes its frame before it moves the
+// location into the body: the two facts are about the caller, and a push made
+// after the move would record the callee's.
 func (r *Runner) pushFrame(f Frame) {
 	f.Line = r.line
+	f.outerFunc, f.outerFuncLine = r.inFunc, r.funcLine
 	r.frameSerial++
 	f.serial = r.frameSerial
 	if f.File == "" {
@@ -159,6 +176,78 @@ func (r *Runner) innermostCall() (string, bool) {
 func (r *Runner) currentFile() string {
 	if len(r.frames) > 0 {
 		return r.frames[len(r.frames)-1].File
+	}
+	return r.scriptFile
+}
+
+// LocatedAtTheCall reports something the shell did *for* a call rather than
+// something the call did, and locates it where the call was made.
+//
+// A shell writes such a message when it fails to produce the thing a name
+// stands for — a function body it had to fetch before the call could run.
+// The work happens inside a frame the script never wrote, so the ordinary
+// location names a place nobody can open: a generated stub is one line long
+// and named after the function, which is how eight lines of a real startup
+// came out as `is-at-least:1:` and `add-zsh-hook:1:` (#1994).
+//
+// One mechanism rather than a second diagnostic helper: it wraps whichever
+// of [Runner.Diagnosef] and [Runner.DiagnoseAsTheShellf] the message already
+// used, so the voice and the location stay separate questions and a dialect
+// cannot pick one and forget the other.
+//
+// What steps out is the *location* and not the shell. The line, and the
+// function a line is counted within, come from the frame below; `$0` does
+// not move, because the shell is still inside the call — see locationFile
+// for the one row of the measurement where that shows.
+//
+// At the top level, where there is no call to step out of, it is the report
+// on its own.
+func (r *Runner) LocatedAtTheCall(report func()) {
+	n := len(r.frames) - r.outsideCall
+	if n <= 0 {
+		report()
+		return
+	}
+	f := r.frames[n-1]
+	savedFunc, savedFuncLine, savedLine := r.inFunc, r.funcLine, r.line
+	r.inFunc, r.funcLine, r.line = f.outerFunc, f.outerFuncLine, f.Line
+	r.outsideCall++
+	defer func() {
+		r.outsideCall--
+		r.inFunc, r.funcLine, r.line = savedFunc, savedFuncLine, savedLine
+	}()
+	report()
+}
+
+// locationFile is the file a diagnostic names: currentFile, except that it
+// steps out of whatever [Runner.LocatedAtTheCall] stepped out of.
+//
+// The last clause is the whole of the difference and it is measured. Stepping
+// out of the only call there was leaves the top level of a script, where the
+// name a diagnostic carries is a *file* — and in the dialect that names one
+// here at all, the file it names is `$0`, which is still the call's: the
+// shell has not left it, only the location has. So a function file missing at
+// the top level of a script names the *function* and the caller's line
+// together, where the same failure one frame deeper names the caller, and
+// where turning that dialect's `$0` rule off names the script. All three were
+// measured on zsh 5.9.2, and the third is what ties the row to `$0` rather
+// than to the stub.
+//
+// Only where there is a script. Under `-c` and on standard input the top
+// level has no file, the dialect answers with its own fixed name instead, and
+// the same failure there is `zsh:3:` and `zsh:` — measured, and the reason
+// the scriptFile test is part of the condition rather than of the fallback.
+//
+// The answer is compared rather than asked: [Runner.ask] writes a diagnostic
+// for an axis nobody answered, and this runs while one is being written.
+func (r *Runner) locationFile() string {
+	if n := len(r.frames) - r.outsideCall; n > 0 {
+		return r.frames[n-1].File
+	}
+	if r.outsideCall > 0 && r.scriptFile != "" && r.sem().DollarZeroNamesTheInnermostCall == Yes {
+		if in, ok := r.innermostCall(); ok {
+			return in
+		}
 	}
 	return r.scriptFile
 }

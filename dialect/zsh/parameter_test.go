@@ -473,6 +473,45 @@ print -r -- "unreached"`)
 	}
 }
 
+// **`$aliases`, `$galiases` and `$saliases` are three sets, not one table
+// read three ways.** Measured on zsh 5.9.2: `alias -g G=x; alias r=y; alias
+// -s t=z` leaves `${(k)aliases}` naming `r` alone.
+//
+// A test of its own rather than a line in the listing tests, because these
+// are the *parameter* surface and nothing else grades it: the builtin's
+// listings could be perfectly split while `$aliases` handed a script every
+// kind at once, which is what #2081's first pass did (the alarm above caught
+// the letters, not this).
+func TestTheThreeAliasParametersAreThreeSets(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `unalias -a
+alias -g G=x; alias r=y; alias -s t=z
+print -r -- "aliases=${(k)aliases}"
+print -r -- "galiases=${(k)galiases}"
+print -r -- "saliases=${(k)saliases}"`)
+	want := "aliases=r\ngaliases=G\nsaliases=t\n"
+	if out != want || st != 0 {
+		t.Errorf("the three parameters = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// **And each writes the kind it reads.** `galiases[G]=…` is `alias -g G=…`
+// and `saliases[t]=…` is `alias -s t=…`, which is what makes them the
+// parameter form of the builtin rather than three views of one map.
+func TestWritingTheAliasParametersDefinesThatKind(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `unalias -a
+galiases[G]=x
+saliases[t]=z
+print -r -- "--plain--"; alias
+print -r -- "--g--"; alias -g
+print -r -- "--s--"; alias -s
+unset "galiases[G]"
+print -r -- "after=${#galiases}"`)
+	want := "--plain--\nG=x\n--g--\nG=x\n--s--\nt=z\nafter=0\n"
+	if out != want || st != 0 {
+		t.Errorf("writing through the parameters = %q (status %d), want %q", out, st, want)
+	}
+}
+
 // emptyModuleParams is the eight of `zsh/parameter` that are empty here and
 // right to be. Spelled out rather than read from the package, because a test
 // that asked the implementation which parameters it thought were empty would

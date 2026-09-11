@@ -9862,6 +9862,49 @@ and never an expression, nor on a name that is not set, where
 `ArithSubscriptSkippedWhenNameUnset` answers first. The same split holds
 with the subscript standing as an assignment target.
 
+**`ArithWholeArraySubscriptIsTheSlice`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+Reads a `*` or `@` subscript inside an arithmetic expression as the
+**slice** the same subscript takes in an expansion — the elements joined
+on the first character of IFS — rather than as an ordinary subscript.
+
+Measured 2026-09-11, `-c`:
+
+    typeset -A m; m[k]=9; $(( m[*] ))     bash 0 · ksh93 0 · zsh 9
+    typeset -A m; m[k]=9; $(( m[@] ))     bash 0 · ksh93 0 · zsh 9
+    typeset -A m; m[k]=9; "${m[*]}"       9 in all three
+    a=(3); $(( a[*] + 1 ))                bash 1 · ksh93 error · zsh 4
+
+The third row is what makes this an axis rather than a defect on one
+side: the *expansion* route agrees everywhere, so the two routes part
+inside one shell rather than between two. bash and ksh93 read the
+brackets as arithmetic, fail to make a subscript of `*`, and answer zero;
+zsh expands the slice first.
+
+The joined text is then read **as an expression** and not as a numeral,
+which is the same reading an element's value gets: `a=(1+1);
+$(( a[*] * 3 ))` is 6 there, exactly as `$(( a[1] * 3 ))` is. So a slice
+of more than one element is usually a *failure* rather than a number —
+`a=(3 4 5); $(( a[*] ))` is ``operator expected at `4 5''`` — and that is
+the answer rather than a defect in it. An empty array joins to nothing
+and is zero; a name that is not set never reaches the brackets at all,
+which `ArithSubscriptSkippedWhenNameUnset` answers first.
+
+`@` joins on IFS here exactly as `*` does — `a=(3 4); IFS=:` gives both
+spellings `3:4` to read — so this is not the unquoted-`@` question, which
+is about field splitting and has none to be about inside an expression.
+
+Asked **before** the association is consulted, because the key `*` is
+precisely what the other answer makes of the same text: a table read
+first would answer the key and the two readings would collapse into one.
+That is the ordering a subscript that is not a number already follows,
+with this question inserted at its front.
+
+The two columns that answer no *report* the subscript on an indexed name
+— `a[*]: bad array subscript` in bash, a syntax error in ksh93 — and are
+silent on an associative one. That is a diagnostic of its own (#1978)
+rather than this axis, which is about the value.
+
 **`ArithSubscriptSkippedWhenNameUnset`** — bash no · dash no · ksh93 no · zsh yes
 
 Looks the name up before it reads the brackets, and answers zero for a

@@ -771,6 +771,10 @@ func Semantics() interp.Semantics {
 	// naming the quoting run — where the arithmetic site reports and carries
 	// on with zero. Identical in 3.2.57 and under argv[0] of `sh` (#1763).
 	s.EmptyParamSubscriptIsAnError = interp.Yes
+	// The brackets of an arithmetic subscript hold an expression, and `*` is
+	// not one: measured 2026-09-11 on 5.3.15, `typeset -A m; m[k]=9;
+	// $(( m[*] ))` is 0, where the expansion `"${m[*]}"` is 9.
+	s.ArithWholeArraySubscriptIsTheSlice = interp.No
 	// Whitespace between the brackets is not that text and is not answered
 	// by it: measured 2026-09-10 in 5.3.15 and in 3.2.57, `a=(1 2 3); echo
 	// $(( a[ ] ))` is `1` with a clean stream — the blank expression is

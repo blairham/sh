@@ -1262,6 +1262,10 @@ func Semantics() interp.Semantics {
 	// arithmetic site is a silent zero on a name nothing declared. The
 	// expansion is refused and the input ends (#1763).
 	s.EmptyParamSubscriptIsAnError = interp.Yes
+	// A `*` or `@` subscript inside an expression is the slice, joined and
+	// then read as an expression: measured 2026-09-11 on 5.9.2, `typeset -A
+	// m; m[k]=9; $(( m[*] ))` is 9 and `a=(1+1); $(( a[*] * 3 ))` is 6.
+	s.ArithWholeArraySubscriptIsTheSlice = interp.Yes
 	// Whitespace between the brackets is refused too, and by a different
 	// part of the shell: measured 2026-09-10, `a=(1 2 3); echo $(( a[ ] ))`
 	// is `bad math expression: operand expected at end of string` — the

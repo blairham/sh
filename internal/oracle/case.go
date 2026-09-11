@@ -16716,4 +16716,34 @@ echo "read=[$l]"`,
 		Snippet: `a=(x y z); printf Q | read "a[2]"; typeset -p a 2>/dev/null || declare -p a`,
 		Why:     "the same store reached from a builtin, and the half that is nobody's dialect: every column with arrays fills the element, so a shell that resolved the operand as a whole name and never looked at the brackets is alone. It created a parameter *called* `a[2]` and left the array alone -- nothing assigned, nothing said, status 0. Recorded on an array rather than on a string so that the row is about the operand and not about the splice",
 	},
+	{
+		ID: "param/an-ampersand-in-a-replacement", Category: "expansion",
+		Snippet: `v=abc; printf "[%s]" "${v/b/[&]}" "${v//b/[&]}" "${v/b/[\&]}"; echo`,
+		Why:     "whether an unescaped `&` in a pattern substitution's replacement is the text the pattern matched. bash 5.3 and that build as `sh` read it -- `a[b]c` for the first two -- and nothing else in the panel does, so it is a run-time option (`shopt patsub_replacement`, on with nothing said there) rather than an axis. The third field is the escape half, and it divides the four columns that do not read the `&` as well: bash 3.2 and zsh keep the backslash and ksh93 removes it, which is why a fix that only added the reading would still owe that column an answer. bash 3.2 has neither the behavior nor the option name. dash has no operator and refuses the line (#1862)",
+	},
+	{
+		ID: "param/the-replacement-ampersand-is-the-span-the-pattern-took", Category: "expansion",
+		Snippet: `v=aXbXc; w=abcabc; printf "[%s]" "${v/X*X/<&>}" "${w//[ab]/<&>}" "${w/#a/<&>}" "${w/%c/<&>}"; echo`,
+		Why:     "what the `&` stands for, on the four shapes a literal pattern cannot tell apart. A wildcard pattern gives `a<XbX>c`, so it is the span the match *took* and not the pattern text -- which is all a history modifier's `&` can ever be, since that one replaces a literal substring. A global substitution reads the replacement once per match rather than once, and the anchored forms read it too. Every other column writes the ampersand through unchanged, so the row is a single difference in four places",
+	},
+	{
+		ID: "param/quoting-a-replacement-ampersand", Category: "expansion",
+		Snippet: `v=abc; r="&"; a=${v/b/"&"}; b=${v/b/$r}; c=${v/b/"$r"}; printf "[%s]" "$a" "$b" "$c"; echo`,
+		Why:     "which `&` is read, in the shell that reads any of them: quoting turns it off character by character, the same channel that decides whether a `*` in the *pattern* half is a pattern. The three fields are one written between quotes, one arriving from an unquoted expansion and the same expansion quoted, and only the middle one is read -- `abc` against `a&c` twice. A fix that read the finished replacement text answers the first and third wrongly while passing every row above, which is why they are recorded here rather than left to the reading rows",
+	},
+	{
+		ID: "param/a-backslash-in-an-expanded-replacement", Category: "expansion",
+		Snippet: `v=abc; p='[\&]'; q='[\\&]'; r='[\a]'; printf "[%s]" "${v/b/$p}" "${v/b/$q}" "${v/b/$r}"; echo`,
+		Why:     "the escape rule the ampersand reading brings with it, over text an expansion carried rather than text that was written down -- a written backslash is gone to ordinary quote removal before the replacement is ever read, so only this route can ask. In the column that reads the `&`, a backslash escapes an `&` and another backslash and stands as itself in front of anything else: `[&]`, `[\\b]`, `[\\a]`. The order is observable in the second field, where resolving the escapes before the ampersands would answer `[\\&]`. It is a different rule from the history modifier's, where a backslash stands for whatever byte follows it, which is why the two share one pass with the rule handed in",
+	},
+	{
+		ID: "shopt/patsub-replacement-reports-on", Category: "shell options",
+		Snippet: `shopt -p patsub_replacement 2>/dev/null; echo s=$?`,
+		Why:     "the reissuable line for the option that gates the ampersand reading, and its status. bash 5.3 writes `shopt -s patsub_replacement` at 0 because the option is on with nothing said; bash 3.2 has no such name and answers 1 with its complaint suppressed, and the three shells without the builtin answer 127. It is a capture surface -- a harness snapshots a shell with `shopt -p` and sources the result back -- so a shell reporting the wrong state here re-applies it to every later command (#1712, #1862)",
+	},
+	{
+		ID: "shopt/turning-the-replacement-ampersand-off", Category: "shell options",
+		Snippet: `v=abc; r='[\&]'; shopt -u patsub_replacement 2>/dev/null; printf "[%s]" "${v/b/[&]}" "${v/b/$r}"; echo`,
+		Why:     "the other state of the option, which is what makes it an option rather than a dialect's fixed answer. With the reading off every column agrees on `a[&]c` for the first field, so the row is not discriminating between shells and is not meant to be -- it is the guard that says the switch is honored, and a shell that read the ampersand unconditionally is the only thing it can fail. The second field is the escape half moving with it: the backslash an expansion brought is kept here where the reading on would have taken it",
+	},
 }

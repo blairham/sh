@@ -1593,6 +1593,13 @@ func Apply(r *interp.Runner) {
 	// directory holding `ax`, `bx` and `cx/dx/ax` lists every level here and
 	// answers `ax bx cx` in zsh (#1339).
 	r.SetMatchOption(interp.StarStarAloneCrossesDirectories, true)
+	// An `&` in a `${v/pat/rep}` replacement is the text the pattern
+	// matched, which is this shell alone in the panel — bash 3.2, ksh93 and
+	// zsh all answer `a[&]c` for `v=abc; ${v/b/[&]}` where this one answers
+	// `a[b]c`. It is on with nothing said and `shopt -u patsub_replacement`
+	// turns it off, so the default belongs here and the name belongs in
+	// shopt.go (#1862).
+	r.SetMatchOption(interp.ReplacementAmpersandIsTheMatch, true)
 	// `declare` is `typeset` under a second name rather than a second
 	// implementation. ksh93 has only the older name and dash has neither, so
 	// which names exist is a dialect's answer and not an axis.

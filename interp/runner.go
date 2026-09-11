@@ -1510,7 +1510,13 @@ type Runner struct {
 	// matchOptions is the run-time pattern behaviors a dialect's builtin has
 	// switched on, one bit per MatchOption. A plain value so a subshell's
 	// clone carries the state and its changes stay its own.
-	matchOptions uint8
+	//
+	// Its width is matchOptionBits, which is checked where the options are
+	// declared: it was a uint8 holding exactly eight of them, so the ninth
+	// shifted off the end and read as off however it was set. Nothing failed
+	// — the dialect turned it on, `shopt -p` reported it off, and the
+	// behavior behind it never ran (#1862).
+	matchOptions matchOptionSet
 
 	// pipefail is `set -o pipefail`: a pipeline reports its last *failing*
 	// element instead of its last one. Not every dialect has the option, so

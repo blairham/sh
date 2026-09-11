@@ -30,6 +30,14 @@ var shoptModes = map[string]interp.MatchOption{
 	"nocasematch": interp.MatchFoldsCase,
 	"globstar":    interp.StarStarCrossesDirectories,
 	"extglob":     interp.QuantifiedGroupsEverywhere,
+	// The one name in this table that is **on** with nothing said, which is
+	// why Configure sets it and the rest do not: an `&` in a
+	// `${v/pat/rep}` replacement is the text the pattern matched here, and
+	// `shopt -u patsub_replacement` is what turns that back off. It sat in
+	// shoptStates reporting off until the reading existed to gate — #1712
+	// left it there deliberately rather than flip a flag over behavior
+	// nothing provided, and this is the other half of that (#1862).
+	"patsub_replacement": interp.ReplacementAmpersandIsTheMatch,
 }
 
 // shoptSwitches are the names wired to a switch the core holds rather than to
@@ -376,7 +384,6 @@ var shoptStates = map[string]bool{
 	"localvar_unset":       false,
 	"mailwarn":             false,
 	"noexpand_translation": false,
-	"patsub_replacement":   false,
 	"progcomp_alias":       false,
 	"promptvars":           true,
 	"shift_verbose":        false,

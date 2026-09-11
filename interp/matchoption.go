@@ -17,6 +17,19 @@ package interp
 // in the panel can empty an unmatched pattern, under different names.
 type MatchOption int
 
+// matchOptionSet is the type Runner.matchOptions stores the switched-on
+// options in, one bit each, and matchOptionBits is its width.
+//
+// Named rather than written inline at the field, because the width is a
+// function of how many options there are and nothing said so: the set was a
+// uint8 and the list had grown to exactly eight, so the next option's bit
+// shifted off the end and the option read as off in every state — a dialect
+// turning it on, `shopt -p` reporting it off, and the behavior behind it
+// never running (#1862).
+type matchOptionSet = uint16
+
+const matchOptionBits = 16
+
 const (
 	// UnmatchedPatternIsEmpty expands a pattern that matches no file to
 	// nothing at all, rather than leaving the pattern in place.
@@ -105,6 +118,33 @@ const (
 	// lists regular files with the bare reading turned off.
 	TrailingGroupIsPartOfThePattern
 
+	// ReplacementAmpersandIsTheMatch reads an unescaped `&` in a pattern
+	// substitution's replacement as the text the pattern just matched, so
+	// `${v/b/[&]}` on `abc` is `a[b]c` rather than `a[&]c`, and a global
+	// `${v//pat/rep}` writes each match into its own copy of the
+	// replacement.
+	//
+	// Only the *unquoted* `&` is read, which is the same channel quoting
+	// uses everywhere else in this package: `"&"`, `'&'`, `$'&'` and `\&`
+	// are all one ordinary character, and so is an `&` arriving from a
+	// quoted expansion. Measured on bash 5.3.15, 2026-09-11, with `v=abc`
+	// and `r='&'`: `${v/b/$r}` is `abc` and `${v/b/"$r"}` is `a&c`.
+	//
+	// It is an option rather than an axis because the shell that has it
+	// switches it while it runs — bash 5.3's `shopt patsub_replacement`,
+	// which is on with nothing said. Nothing else in the panel reads the
+	// `&` at all: bash 3.2, ksh93 and zsh answer `a[&]c`, and bash 3.2 does
+	// not have the option name either.
+	//
+	// Its escape half is the reason this changes what a backslash means and
+	// not only what an `&` means. With the reading on, a `\&` that arrives
+	// from an expansion loses its backslash and leaves a literal `&`, and a
+	// `\\` leaves one backslash; a backslash before anything else stays —
+	// `r='[\a]'` is `[\a]` with the option on as well as off. So the
+	// replacement's backslashes are resolved in the same pass that reads
+	// the ampersands, and only there.
+	ReplacementAmpersandIsTheMatch
+
 	// QuantifiedGroupsEverywhere reads `@(a|b)` and the other quantified
 	// groups in every pattern, not only where the dialect's grammar already
 	// has them. This one reaches the parser: whether `(` belongs to a group
@@ -113,7 +153,17 @@ const (
 	// `eval`, a sourced file, and the front end's next line — follows. See
 	// syntax.Parser.SetDialect for the front end's half.
 	QuantifiedGroupsEverywhere
+
+	// lastMatchOption is the guard's subject and never a behavior. It has to
+	// stay last.
+	lastMatchOption
 )
+
+// Every MatchOption must have a bit in matchOptionSet. Where one does not the
+// shift is taken modulo the width and the option lands on another option's
+// bit, which is silent in the direction that matters — see matchOptionSet.
+// This fails to compile instead.
+const _ = uint(matchOptionBits - lastMatchOption)
 
 // SetMatchOption switches one of the behaviors on or off.
 //
@@ -130,10 +180,10 @@ func (r *Runner) SetMatchOption(o MatchOption, on bool) {
 		return
 	}
 	if on {
-		r.matchOptions |= 1 << uint(o)
+		r.matchOptions |= matchOptionSet(1) << uint(o)
 		return
 	}
-	r.matchOptions &^= 1 << uint(o)
+	r.matchOptions &^= matchOptionSet(1) << uint(o)
 }
 
 // MatchOption reports whether one of the behaviors is on, so the builtin that
@@ -142,5 +192,5 @@ func (r *Runner) MatchOption(o MatchOption) bool {
 	if o == QuantifiedGroupsEverywhere {
 		return r.dialect().ExtendedPattern
 	}
-	return r.matchOptions&(1<<uint(o)) != 0
+	return r.matchOptions&(matchOptionSet(1)<<uint(o)) != 0
 }

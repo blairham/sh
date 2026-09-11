@@ -830,3 +830,85 @@ func TestTheReadOnlyLineIsLiftedWhenTheCompletionWidgetReturns(t *testing.T) {
 		t.Errorf("after the call: %q, want %q", res, want)
 	}
 }
+
+// `zle .accept-line` inside a widget asks the editor to commit the line, and
+// the request is carried back on the line the widget leaves.
+//
+// The dotted spelling names the **built-in** widget explicitly, past whatever
+// a plugin has rebound the bare name to. That is how a wrapper reaches the
+// thing it wrapped, and it is not a corner: zsh-users' zsh-autosuggestions
+// writes exactly
+//
+//	_zsh_autosuggest_orig_accept-line() { zle .accept-line }
+//
+// and rebinds every widget, `accept-line` included, to a wrapper that calls
+// it. Without this the editor reads keys, draws them, and commits nothing —
+// `exit` included, since that is committed by the same widget, so the session
+// cannot even be left (#2082).
+func TestAWidgetCanAcceptTheLine(t *testing.T) {
+	r, out := zleRunner(t, "w(){ zle .accept-line }; zle -N w")
+	line, ok, said := runWidget(t, r, out, "w", repl.Line{Buffer: "echo hi", Cursor: 7})
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	if said != "" {
+		t.Errorf("it said %q, want nothing", said)
+	}
+	if !line.Accept {
+		t.Error("the line came back without the accept, so the editor would not commit it")
+	}
+	if line.Buffer != "echo hi" {
+		t.Errorf("buffer = %q, want it left alone", line.Buffer)
+	}
+}
+
+// The undotted spelling asks the same thing where nothing has rebound the
+// name — which is what a widget calling `zle accept-line` means in a shell
+// with no plugins loaded.
+func TestTheUndottedAcceptAsksTheSameThing(t *testing.T) {
+	r, out := zleRunner(t, "w(){ zle accept-line }; zle -N w")
+	line, ok, _ := runWidget(t, r, out, "w", repl.Line{Buffer: "x", Cursor: 1})
+	if !ok || !line.Accept {
+		t.Errorf("ok=%v accept=%v, want the line accepted", ok, line.Accept)
+	}
+}
+
+// A widget may rewrite the line and accept it in one call, which is what a
+// wrapper that adds something before committing does.
+func TestAWidgetMayRewriteAndAccept(t *testing.T) {
+	r, out := zleRunner(t, "w(){ BUFFER='rewritten'; zle .accept-line }; zle -N w")
+	line, ok, _ := runWidget(t, r, out, "w", repl.Line{Buffer: "typed", Cursor: 5})
+	if !ok || !line.Accept || line.Buffer != "rewritten" {
+		t.Errorf("line = %+v ok=%v, want %q accepted", line, ok, "rewritten")
+	}
+}
+
+// The request belongs to the keystroke that made it. A second widget that
+// does not ask must not inherit the first one's accept.
+func TestAnAcceptDoesNotSurviveIntoTheNextWidget(t *testing.T) {
+	r, out := zleRunner(t, "a(){ zle .accept-line }; b(){ :; }; zle -N a; zle -N b")
+	if line, _, _ := runWidget(t, r, out, "a", repl.Line{Buffer: "one", Cursor: 3}); !line.Accept {
+		t.Fatal("the first widget did not accept")
+	}
+	if line, _, _ := runWidget(t, r, out, "b", repl.Line{Buffer: "two", Cursor: 3}); line.Accept {
+		t.Error("the second widget inherited the accept, so every later keystroke would commit")
+	}
+}
+
+// The other built-in actions are still refused out loud, which is the claim
+// zle.go makes about them: reaching back into the editor mid-keystroke is not
+// something this shell does, and an accept is the one that can be honoured
+// *after* the widget returns rather than during it.
+func TestAnotherBuiltinWidgetIsStillRefused(t *testing.T) {
+	r, out := zleRunner(t, "w(){ zle .end-of-line }; zle -N w")
+	line, ok, said := runWidget(t, r, out, "w", repl.Line{Buffer: "x", Cursor: 1})
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	if line.Accept {
+		t.Error("a refused action asked for the line to be committed")
+	}
+	if !strings.Contains(said, "not implemented yet") {
+		t.Errorf("it said %q, want it to say the action is not implemented", said)
+	}
+}

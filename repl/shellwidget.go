@@ -51,33 +51,49 @@ type Line struct {
 
 	// Cursor is how many characters of Buffer are before the cursor.
 	Cursor int
+
+	// Accept says the widget asked for the line to be committed, which is
+	// what `zle accept-line` inside a widget means. It is a *request* carried
+	// back rather than something the widget did, because an accept is the
+	// editor's to perform: the widget goes on running after it — zsh's own
+	// `zle accept-line` returns and the rest of the function still runs — and
+	// the line is committed when the widget is finished with it.
+	//
+	// A plugin that wraps `accept-line` cannot work without this. zsh-users'
+	// zsh-autosuggestions rebinds every widget to a wrapper and reaches the
+	// original by calling `zle .accept-line`, so a shell that drops that call
+	// has an editor which reads keys, draws them, and never runs anything —
+	// `exit` included, since that is committed by the same widget (#2082).
+	Accept bool
 }
 
-// runShellWidget runs one of the shell's own actions over the line, and draws
-// whatever it left behind.
+// runShellWidget runs one of the shell's own actions over the line, draws
+// whatever it left behind, and reports whether the widget asked for the line
+// to be committed — see Line.Accept.
 //
 // The redraw is unconditional, for the reason runWidget's are conditional: an
 // action here is opaque, so there is no way to tell one that moved the cursor
 // from one that rewrote the line from one that did neither — and an action
 // that *printed* has moved the screen out from under the prompt whatever it
 // did to the line. Drawing again is right for all three.
-func (e *editor) runShellWidget(name string, prompt drawnPrompt) {
+func (e *editor) runShellWidget(name string, prompt drawnPrompt) bool {
 	if e.runFunc == nil {
 		// A session whose front end offered no way to run one. The key is
 		// still claimed — see matchBinding — so it does nothing, which is
 		// what a binding to an action this shell cannot perform means.
-		return
+		return false
 	}
 	out, ok := e.runFunc(name, Line{Buffer: string(e.line), Cursor: e.pos})
 	if !ok {
 		// The shell declined to run it: no such action, or one whose
 		// definition has gone. It has said so itself if it had anything to
 		// say, and the line is left exactly as it was.
-		return
+		return false
 	}
 	e.line = []rune(out.Buffer)
 	e.pos = min(max(out.Cursor, 0), len(e.line))
 	e.redraw(prompt)
+	return out.Accept
 }
 
 // shellWidgets is how a session runs an action the shell owns, with the ctx

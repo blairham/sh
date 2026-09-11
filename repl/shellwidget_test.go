@@ -223,3 +223,56 @@ func TestASessionWithNothingScheduledAsksNothing(t *testing.T) {
 	s.RunScheduled = nil
 	s.runElapsed(t.Context()) // must not panic on a nil field
 }
+
+// A widget can ask for the line to be committed, which is what `zle
+// accept-line` inside one means. The key it is bound to then ends the line as
+// a typed Return does — no Return is sent below, and `\a` is the only key
+// after the text.
+//
+// A plugin that wraps `accept-line` cannot work without this: zsh-users'
+// zsh-autosuggestions rebinds every widget to a wrapper and reaches the
+// original with `zle .accept-line`, so a shell that drops the request has an
+// editor which reads keys, draws them and runs nothing — `exit` included,
+// since that is committed by the same widget (#2082).
+func TestAWidgetCanAskForTheLineToBeCommitted(t *testing.T) {
+	got := typedThroughShell(t, func(in Line) (Line, bool) {
+		return Line{Buffer: in.Buffer, Cursor: in.Cursor, Accept: true}, true
+	}, "hello\a")
+	if got != "hello" {
+		t.Errorf("the line came back %q, want %q — the widget asked for it to be accepted", got, "hello")
+	}
+}
+
+// What the widget left is what gets committed, not what was typed: a wrapper
+// may rewrite the line and accept it in the same breath.
+func TestACommittedLineIsTheOneTheWidgetLeft(t *testing.T) {
+	got := typedThroughShell(t, func(Line) (Line, bool) {
+		return Line{Buffer: "rewritten", Cursor: 9, Accept: true}, true
+	}, "typed\a")
+	if got != "rewritten" {
+		t.Errorf("the line came back %q, want %q", got, "rewritten")
+	}
+}
+
+// And the control, which is what says the request is the thing being read
+// rather than the call: a widget that does not ask for it leaves the editor
+// reading, so the Return after it is what ends the line.
+func TestAWidgetThatDoesNotAskDoesNotCommit(t *testing.T) {
+	got := typedThroughShell(t, func(in Line) (Line, bool) {
+		return Line{Buffer: in.Buffer + "-more", Cursor: in.Cursor}, true
+	}, "hello\a\n")
+	if got != "hello-more" {
+		t.Errorf("the line came back %q, want %q — the widget ran and the Return ended it", got, "hello-more")
+	}
+}
+
+// A widget the shell declined to run cannot accept, which is the same
+// "nothing happened" a key bound to a missing action gets.
+func TestADeclinedWidgetDoesNotCommit(t *testing.T) {
+	got := typedThroughShell(t, func(Line) (Line, bool) {
+		return Line{Buffer: "ignored", Cursor: 7, Accept: true}, false
+	}, "kept\a\n")
+	if got != "kept" {
+		t.Errorf("the line came back %q, want %q — a declined widget leaves the line alone", got, "kept")
+	}
+}

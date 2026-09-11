@@ -7853,6 +7853,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/a-chased-name-that-is-empty` | **2>** `<shell>: 1: Illegal number: y` *(status 2)* | `1~after` | `1~after` | `1~after` | `1~after` | `1~after` |
 | `arith/a-chased-name-two-deep` | **2>** `<shell>: 1: Illegal number: y` *(status 2)* | `8~st=0` | `8~st=0` | `8~st=0` | `8~st=0` | `8~st=0` |
 | `arith/a-value-that-is-no-name-at-all` | **2>** `<shell>: 1: Illegal number: 1abc` *(status 2)* | **2>** `<shell>: line 1: 1abc: value too great for base (error token is "1abc")` *(status 1)* | **2>** `<shell>: line 1: 1abc: value too great for base (error token is "1abc")` *(status 127)* | **2>** `<shell>: 1abc: value too great for base (error token is "1abc")` *(status 1)* | **2>** `<shell>: 1abc: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `abc'` *(status 1)* |
+| `arith/a-value-that-is-an-expression` | **2>** `<shell>: 1: Illegal number: 1+1` *(status 2)* | `6~st=0` | `6~st=0` | `6~st=0` | `6~st=0` | `6~st=0` |
+| `arith/a-value-whose-expression-will-not-parse` | **2>** `<shell>: 1: Illegal number: 3 4` *(status 2)* | **2>** `<shell>: line 1: 3 4: arithmetic syntax error in expression (error token is "4")` *(status 1)* | **2>** `<shell>: line 1: 3 4: arithmetic syntax error in expression (error token is "4")` *(status 127)* | **2>** `<shell>: 3 4: syntax error in expression (error token is "4")` *(status 1)* | **2>** `<shell>: 3 4: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `4'` *(status 1)* |
+| `arith/a-failure-inside-a-value` | **2>** `<shell>: 1: Illegal number: 1/0` *(status 2)* | **2>** `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | **2>** `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 127)* | **2>** `<shell>: 1/0: division by 0 (error token is "0")` *(status 1)* | **2>** `<shell>: 1/0: divide by zero` *(status 1)* | **2>** `<shell>:1: division by zero` *(status 1)* |
+| `arith/a-zero-padded-value-against-the-same-literal` | `8 8` | `8 8` | `8 8` | `8 8` | `10 8` | `10 10` |
+| `arith/a-zero-padded-value-with-more-expression-after-it` | **2>** `<shell>: 1: Illegal number: 010+1` *(status 2)* | `9 9 9` | `9 9 9` | `9 9 9` | `11 9 9` | `11 11 11` |
 | `arith/an-operand-the-expression-ran-out-of` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "1+"` *(status 2)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 127)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `arith/an-operand-the-expression-found` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "%"` *(status 2)* | **2>** `<shell>: line 1: %: arithmetic syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: line 1: %: arithmetic syntax error: operand expected (error token is "%")` *(status 127)* | **2>** `<shell>: %: syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: %: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at `%'` *(status 1)* |
 | `arith/an-operand-found-after-an-operator` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "1+&2"` *(status 2)* | **2>** `<shell>: line 1: 1+&2: arithmetic syntax error: operand expected (error token is "&2")` *(status 1)* | **2>** `<shell>: line 1: 1+&2: arithmetic syntax error: operand expected (error token is "&2")` *(status 127)* | **2>** `<shell>: 1+&2: syntax error: operand expected (error token is "&2")` *(status 1)* | **2>** `<shell>: 1+&2: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at `&2'` *(status 1)* |
@@ -8041,6 +8046,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `arith/a-value-that-is-no-name-at-all` — a value no chase can start on, which is the other side of the row above: with nothing to look up, ksh93 calls it an arithmetic syntax error rather than a parameter that is not set. We said `parameter not set` here — the sentence a chased name earns — because the preset stood that wording in for a lookup it was not doing
   ```sh
   x=1abc; echo $((x+1)); echo after
+  ```
+- `arith/a-value-that-is-an-expression` — a stored value that is not a numeral at all is parsed *again as an expression*, which is what the chase above really is: bash, ksh93 and zsh multiply 2 by 3 and answer 6, dash calls 1+1 an illegal number. Ours read a value shaped like a name and refused everything else, so the everyday `n=2*1024` configuration value failed in every dialect (#1977) — and a row that only ever stores a name cannot tell a lookup from a re-read
+  ```sh
+  v=1+1; echo $((v * 3)); echo "st=$?"
+  ```
+- `arith/a-value-whose-expression-will-not-parse` — the failure on the row above is the *re-read expression* failing, not the value being rejected as a number, and each shell words it the way it words a written expression — `3 4` blamed by name in all three, with dash's illegal number beside it. It is also the row that says which text a complaint quotes back: the value, never the variable it came out of
+  ```sh
+  v="3 4"; echo $((v)); echo "st=$?"
+  ```
+- `arith/a-failure-inside-a-value` — an expression that parses and will not evaluate, reached through a value: the complaint names `1/0` and not `v` wherever it names anything, which is the same rule as the row above at the other kind of failure
+  ```sh
+  v=1/0; echo $((v)); echo "st=$?"
+  ```
+- `arith/a-zero-padded-value-against-the-same-literal` — one shell has two readers for a leading zero and only its lexer is octal: ksh93 answers 10 for the value and 8 for the identical literal written out, where bash and dash are 8 twice and zsh 10 twice. The pair is the whole row — an answer taken from the value alone moves the literal with it, which is the fix #1270 deliberately did not make at the evaluator (#1866). Silent and short by two in the shape a script writes: a zero-padded date field read out of a variable
+  ```sh
+  k=010; echo "$((k)) $((010))"
+  ```
+- `arith/a-zero-padded-value-with-more-expression-after-it` — how far the decimal reading reaches: on the shell that splits it is the value's *leading* numeral only, so `010+1` is 11 where `1+010` and the written literal are both 9. Without the second and third fields a rule that read every numeral in a value decimally would pass
+  ```sh
+  k=010+1; j=1+010; echo "$((k)) $((j)) $((010+1))"
   ```
 - `arith/an-operand-the-expression-ran-out-of` — an operand was wanted and the text ended, which two of the panel word apart from an operand that was wanted and found: ksh93 says more tokens expected and zsh names the end of the string. The pair with `arith/an-operand-the-expression-found` is the whole of it — either row alone passes under one wording for both, which is what let the end-of-input sentence stand for every operand failure in two dialects
   ```sh

@@ -1630,6 +1630,18 @@ type Runner struct {
 	// a registration was made is still what an implementation that evaluates
 	// nothing hands back.
 	lastArith arithNum
+	// arithValueDepth counts how far inside a *stored value being read again
+	// as an expression* this runner is: `x=y; y=5; $((x+1))` is one level in
+	// while `y` is being looked up, and zero again once it has been.
+	//
+	// A field rather than an argument because the re-read goes back through
+	// the whole evaluator — a value is an expression and not just a name, so
+	// every operand in it is reached through the ordinary walk, which carries
+	// no depth of its own. Two callers need it: the bound that stops `x=x`
+	// from recurring forever, and Semantics.ArithRecursedNameMustBeSet, which
+	// asks whether a name was reached through a value or written in the
+	// expression itself.
+	arithValueDepth int
 	// indirection counts how many levels of *text being read again* this
 	// runner is inside — an `eval`, a sourced file, a command substitution.
 	// One dialect repeats its trace prefix's first character once per level

@@ -340,6 +340,14 @@ func Main(sh Shell) int {
 // argv includes argv[0]. An argv with nothing in it is treated as bare, since
 // a shell that cannot name itself still has to produce diagnostics.
 func MainArgs(sh Shell, argv []string) int {
+	if heldProcessGroup(argv) {
+		// Not a shell at all this time: a placeholder leading a process group
+		// for the shell that started it. Read before anything else — before
+		// the defaults, before the startup files, before a single line is
+		// parsed — because the whole contract is that it does nothing. See
+		// procanchor.go.
+		return holdProcessGroup()
+	}
 	sh = sh.withDefaults(argv)
 	in, err := sh.input(argv)
 	if err != nil {
@@ -1303,6 +1311,14 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// interp takes the answer; only a binary that is the shell goes
 		// looking for it.
 		r.InheritedFiles = inheritedFiles()
+		// And it may start a copy of itself to lead a process group, which is
+		// what gives a process substitution's body the one thing a goroutine
+		// cannot have: a group of its own, that a script may signal without
+		// reaching this shell. Here for the reason the rest of this block is
+		// here — finding this program on disk is reading a fact about the
+		// process, and a Runner embedded in another program would be starting
+		// copies of *that* program. See procanchor.go and interp's.
+		r.ProcessAnchor = processAnchor()
 		// And it dies of a fatal signal that arrives from *outside*, which
 		// dieBySignal alone does not cover: that puts the disposition back
 		// before a raise this shell makes itself, and a signal from another

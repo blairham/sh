@@ -98,7 +98,7 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 	// The end this shell keeps is counted rather than closed on the body's
 	// return, and the count starts at one for the body itself. What else can
 	// join it, and why the body is not always the last, is in substEnd.
-	keep := &substEnd{held: 1}
+	keep := &substEnd{held: 1, anchor: newProcAnchor(r.ProcessAnchor)}
 	if kind != syntax.ProcSubstOut {
 		// Only the writing end delivers an end-of-file by closing, so only
 		// that direction has a nudge to repeat. See nudgeFifoEOF.
@@ -758,6 +758,10 @@ type substEnd struct {
 	mu   sync.Mutex
 	held int
 	file *os.File
+	// anchor is the process group this body leads, if it ever asked for one.
+	// It is here rather than beside it because the group's lifetime is the
+	// same lifetime this count already reconstructs — see procanchor.go.
+	anchor *procAnchor
 	// nudge names the pipe where closing this end is what delivers the
 	// end-of-file — `<(cmd)`, where the shell is the writer. Empty for
 	// `>(cmd)`, whose reader has a placeholder instead. See openFifoReadEnd.
@@ -795,9 +799,18 @@ func (e *substEnd) letGo() {
 	e.mu.Lock()
 	e.held--
 	last := e.held == 0
-	f, nudge := e.file, e.nudge
+	f, nudge, a := e.file, e.nudge, e.anchor
 	e.mu.Unlock()
-	if !last || f == nil {
+	if !last {
+		return
+	}
+	// The process group goes with the descriptor, because it is the same
+	// lifetime — see procanchor.go. Before the descriptor's own early return
+	// and not after it: a direction that never opened one still has a group
+	// to let go, since `echo <(true)` names a path nothing opens and a body
+	// may have asked which process it was all the same.
+	a.stop()
+	if f == nil {
 		return
 	}
 	_ = f.Close()

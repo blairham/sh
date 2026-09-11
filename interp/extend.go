@@ -5,11 +5,14 @@ package interp
 
 import (
 	"context"
+	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"sort"
 	"strconv"
 	"sync"
+	"syscall"
 
 	"github.com/blairham/sh/syntax"
 
@@ -1153,4 +1156,46 @@ func (r *Runner) VerifyOpened(ctx context.Context, a *Action, f *os.File) bool {
 	}
 	r.emit(ctx, Event{Kind: EventAccess, Action: *a})
 	return true
+}
+
+// ReadFileGated reads a file a dialect's builtin was asked for, through the
+// gate, the verification and the sink the interpreter's own reads use.
+//
+// It is the whole-file half of AllowOpen and VerifyOpened, and it exists for
+// the same reason they do: `autoload` read a function's file with a bare
+// os.ReadFile, so a script could point `$fpath` at a directory the policy
+// refused and *run* whatever shell code was there — with nothing consulted and
+// nothing recorded (#1812). That is `eval` on a file the policy named, which
+// is the one thing docs/design/sandboxing.md claims a gate here can stop.
+//
+// A refusal comes back as "not there" rather than as a diagnostic of its own,
+// and that is the information-hiding rule the rest of the sandbox follows: a
+// name autoload may not read is a name that is not on `$fpath`, which is
+// already the answer for a file the *kernel* withholds. A refusal that
+// identified itself would be an oracle for what the policy hides.
+//
+// The context is the runner's own, as the probes in fsgate.go take theirs, and
+// for the same reason: the callers are search and resolution paths several
+// frames below any builtin that was handed one.
+func (r *Runner) ReadFileGated(path string) ([]byte, error) {
+	notThere := func() ([]byte, error) {
+		return nil, &fs.PathError{Op: "open", Path: path, Err: syscall.ENOENT}
+	}
+	action := r.act(Action{Kind: ActionOpen, Path: path})
+	if r.openQuietlyDenied(action) {
+		return notThere()
+	}
+	b, err := r.readFileGated(r.ctx, &action, path)
+	if errors.Is(err, errRefused) {
+		// The name was allowed and the object it reached was not — a link out
+		// of an allowed directory. Hidden the same way, and nothing said about
+		// where the link went.
+		return notThere()
+	}
+	if err != nil {
+		r.emit(r.ctx, Event{Kind: EventError, Action: action, Err: err})
+		return nil, err
+	}
+	r.emit(r.ctx, Event{Kind: EventAccess, Action: action})
+	return b, nil
 }

@@ -751,3 +751,73 @@ func TestZsystemFlockIsInsideTheBoundary(t *testing.T) {
 		t.Errorf("err = %q, want the refusal reported", got.errs)
 	}
 }
+
+// autoload is the second escape of the #1805 class and the worse one, because
+// it does not read a file — it *runs* it (#1812).
+//
+// A script points `$fpath` at a directory the policy refuses and calls a name
+// in it, and the shell reads the file and executes what it finds. That is
+// `eval` on a file the policy named, which is the one thing
+// docs/design/sandboxing.md claims a gate here can stop.
+//
+// The control is in the same script on purpose: a redirection to the very file
+// autoload then runs, so the run cannot be passing for want of a policy.
+func TestAutoloadCannotRunAFileThePolicyRefuses(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	secret := filepath.Join(dir, "secret")
+	if err := os.MkdirAll(secret, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fn := filepath.Join(secret, "fn")
+	if err := os.WriteFile(fn, []byte("echo AUTOLOAD_EXECUTED_SECRET\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := writePolicy(t, "default deny")
+	got := sandboxed(t, "zsh", "-policy", p, "-c",
+		"read x < "+fn+" 2>/dev/null || echo redirection-refused\nfpath=("+secret+")\nautoload -Uz fn\nfn\n")
+	if !strings.Contains(got.out, "redirection-refused") {
+		t.Fatalf("out = %q: the control did not refuse, so this test proves nothing", got.out)
+	}
+	if strings.Contains(got.out, "AUTOLOAD_EXECUTED_SECRET") {
+		t.Errorf("out = %q: autoload ran a file the policy refuses to let a redirection read.\n"+
+			"A function file is a file the *script* named, through $fpath, so it is an "+
+			"access inside the boundary and not the shell's own scaffolding.", got.out)
+	}
+}
+
+// And the refusal hides, rather than announcing itself. A name autoload may
+// not read is a name that is not on $fpath — already the answer for a file the
+// kernel withholds — because a refusal that identified itself would be an
+// oracle for what the policy hides.
+func TestARefusedAutoloadReadsAsANameThatIsNotThere(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "fn"), []byte("echo ran\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := writePolicy(t, "default deny")
+	got := sandboxed(t, "zsh", "-policy", p, "-c", "fpath=("+dir+")\nautoload -Uz fn\nfn\n")
+	if strings.Contains(got.errs, "refused") {
+		t.Errorf("err = %q, want the refusal to read as a missing definition file rather "+
+			"than name the policy", got.errs)
+	}
+	if !strings.Contains(got.errs, "not found") {
+		t.Errorf("err = %q, want autoload's own answer for a name it cannot read", got.errs)
+	}
+}
+
+// The other half, without which both tests above pass for an autoload that
+// simply does not work.
+func TestAnAllowedAutoloadStillRuns(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "fn"), []byte("echo ALLOWED_FN_RAN\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := writePolicy(t, "default deny", "allow read "+dir+"/**", "allow stat "+dir+"/**")
+	got := sandboxed(t, "zsh", "-policy", p, "-c", "fpath=("+dir+")\nautoload -Uz fn\nfn\n")
+	if !strings.Contains(got.out, "ALLOWED_FN_RAN") {
+		t.Errorf("out = %q errs = %q, want an allowed autoload to run", got.out, got.errs)
+	}
+}

@@ -319,3 +319,20 @@ func (r *Runner) wordIsAList(w *syntax.Word) bool {
 	}
 	return false
 }
+
+// nestedLengthReference is the name `${#${(P)h}}` measures, and whether this
+// expansion is that shape at all.
+//
+// The subscript path asks the same question of the same span
+// (nestedParamReference); this is the reading where nothing follows the
+// inner, so the length is the *parameter's* and not the text's. A subscript
+// or a chain after the inner is a different construct and keeps its own
+// answer — `${#${(P)h}[@]}` is the count of what the subscript named — so
+// both are refused here rather than folded in.
+func (r *Runner) nestedLengthReference(e *syntax.ParamExpr) (string, bool) {
+	if e.Index != nil || len(e.Leading) > 0 ||
+		e.Inner == nil || len(e.Inner.Spans) == 0 {
+		return "", false
+	}
+	return r.nestedParamReference(e.Inner.Spans[0])
+}

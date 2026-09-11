@@ -1485,6 +1485,76 @@ Details, each measured:
   way at the first character that is not a flag: `${(Ux}` errors at
   position 5.
 
+### What `(P)` reads as the name, and what it comes to
+
+**The name is read off the front of the text the base came to, and the rest
+is dropped.** A base holding more than one word is not a name with a space
+in it — no such parameter can exist — so the words behind the first play no
+part. Measured on zsh 5.9.2, 2026-09-10, with `x=(p q)`, `y=(r s)`,
+`z=(t u)` and `set -- aa bb cc`:
+
+    n=(x y z);  ${(P)n}      →  p q    a list resolves its first element
+    s="x y";    ${(P)s}      →  p q    and a *scalar* of two words the same,
+                                       which is what says this is the front
+                                       of the text and not the first of a list
+    v="x-y";    ${(P)v}      →  p q    any character a name cannot hold ends it
+    v="x=y";    ${(P)v}      →  p q
+    v="_u-z";   ${(P)v}      →  UU     `_` starts a name
+    v=" x";     ${(P)v}      →  ``     so a leading space is *no* name
+    e=("" x);   ${(P)e}      →  ``     and neither is an empty first element
+    v="x[1] j"; ${(P)v}      →  p      a subscript is part of the name
+    v="2x";     ${(P)v}      →  bb     a digit run is a positional parameter
+    v="12x";    ${(P)v}      →  ``     and `$12` is nothing with three of them
+    v="#x";     ${(P)v}      →  3      a one-character special name is that
+    v="@x";     ${(P)v}      →  aa bb cc
+
+**A subscript that names a list is not part of the resolution.** The split
+is on the subscript's *shape* and not on what it selected:
+
+    ${(P)n[@]}     →  p q    a whole-array subscript changes nothing
+    ${(P)n[*]}     →  p q
+    ${(P)n[1,2]}   →  p q    nor does a range — not one starting past the
+    ${(P)n[2,3]}   →  p q    first element, naming a single one, or
+    ${(P)n[3,3]}   →  p q    naming none at all
+    ${(P)n[5,6]}   →  p q
+    ${(P)n[2]}     →  r s    while an index naming one element *is* the name
+    ${(P)n[-1]}    →  t u
+    ${(P)n[4]}     →  ``     and one naming nothing is no name
+
+**What it comes to keeps the shape of the parameter it landed on**, and the
+base's `[@]` does not travel with it. With `arr=(x y z)`, `na=arr`,
+`typeset -A tab=(k1 v1 k2 v2)`, `nt=tab` and `typeset -A one=(a arr)`:
+
+    ${#${(P)na}}         →  3    the element count, not 5
+    ${#${(P)nt}}         →  2    an association counts its pairs
+    ${#${(vP)nt}}        →  2
+    ${#${(kP)nt}}        →  2
+    ${#${(P)one[a]}}     →  3    reached through a subscripted base
+    ARR=(q r); h=arr; ${#${(UP)h}}  →  2   the letters rename, so this
+                                           measures `ARR`
+    "${(P)one[@]}"       →  one field, `x y z`
+    "${(@P)one[@]}"      →  three fields — the *letter* still keeps them
+
+The controls, which say this is about `(P)` and not about the length prefix
+or about `[@]`: `${#${arr}}` is 5 and `${#${(k)tab}}` is 5 — a nested
+expansion that is a *value* is measured as text — while `${#${(@)arr}}` and
+`${#arr}` are 3.
+
+The first two are one defect: joining the words and looking the join up
+found nothing, so every base of more than one element substituted empty at
+status 0, and a one-element base — the shape every test had — hid it. The
+third is the same split the subscript path already makes (see "A subscript
+on the result — and on the name a `(P)` names"): a `(P)` inner is a
+parameter reference and every other inner is a value, so `${#${(P)h}}` is
+`${#arr}` and not the width of the text its fields join to. See #1639,
+#1638 and #1543.
+
+**Not carried here:** a resolved text whose subscript this shell cannot take
+apart — `x[@]` naming a whole array, a subscript over a scalar read as a
+character, a subscript flag read as a search — falls through to the
+plain-name lookup, which finds nothing. See the paragraph at the end of the
+next section.
+
 ### `(P)` beside an operator that assigns
 
 `(P)` moves the whole expansion one step along, and that includes the
@@ -1554,6 +1624,8 @@ on the shells without the construct), `-split-and-join` (`(s)`, `(j)`),
 array otherwise gets), `-name-indirection` (`(P)`),
 `-keys-and-values` (`(k)`, `(kv)`), `-run-after-the-operator` (the
 ordering rule and `(P)`'s exception to it),
+`param/expansion-flags-indirection-names-the-front-of-its-base` and
+`-keeps-the-resolved-shape` (the two sections above),
 `param/expansion-flags-indirection-assigns-through-the-name`,
 `-assigns-to-an-element` and `-refuses-what-it-resolved-to` (the three
 above), and `param/prompt-percent-names-the-script` (`(%)`).

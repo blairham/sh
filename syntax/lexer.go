@@ -2770,6 +2770,36 @@ func (l *Lexer) skipQuoted(quote byte, escapes bool) {
 		if escapes && l.skipSubstitution() {
 			continue
 		}
+		if escapes && c == '$' && l.peekAt(1) == '{' {
+			// A `${…}` written inside this run brings its own quoting too,
+			// so the `"` in `"${y:-"Z"}"` belongs to that expansion and is
+			// not the one that ends this run. Skipping the run character by
+			// character reads it as the closing quote, which leaves the
+			// braces on either side of it counted by the *wrong* scanner:
+			// the nested `${` is consumed inside the quote and uncounted,
+			// and its `}` then lands outside and closes the enclosing
+			// expansion. Measured 2026-09-11, unanimous across the six-shell
+			// panel — `unset u w; printf '[%s]' "${u:-"${w:-"X{039}"}x"}"`
+			// is `[X{039}x]` in zsh 5.9.2, bash 5.3.15, bash-as-sh, bash
+			// 3.2.57, dash and ksh93, where this shell ended the expansion
+			// at the `}` of `X{039}` and left `"}x"}` as literal text.
+			//
+			// This is the same sentence as the `$( )` case just above, one
+			// construct over, and it was left out of it: powerlevel10k's
+			// directory segment is `${P9K_CONTENT::="…${:-"%B%F{039}"}…"}`
+			// and the prompt drew the `"}`, `}+}` and `}}}+}` tails of the
+			// expansions this closed early (#2092).
+			//
+			// scanBraces rather than a brace counter here, because it is
+			// already the answer to "where does a `${` end" — it knows that
+			// a `}` inside quotes closes nothing, that `$(` ends at its own
+			// parenthesis, and which dialects let a bare `{` nest. A second
+			// counter beside it would be a second answer to one question.
+			// DoubleQuoted because that is what this run is: a bare `{`
+			// inside one nests in no dialect.
+			l.scanBraces(DoubleQuoted)
+			continue
+		}
 		l.advance()
 	}
 	// The input ran out inside this quote, and saying so is the whole of

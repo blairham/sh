@@ -452,12 +452,29 @@ func (c *Client) readFile(ctx context.Context, params json.RawMessage) (any, err
 	// this one is chosen, live, by a party outside the process.
 	b, err := c.Boundary.ReadFile(ctx, req.Path)
 	if errors.Is(err, boundary.ErrRefused) {
-		// Refused the way a denied open is refused everywhere else: as a
-		// path that is not there. A policy hiding a file and a file that
-		// does not exist are indistinguishable to whoever asked, which is
-		// the rule the interpreter's own probes set — and a name that
-		// resolved into a hidden place is answered the same way, so an agent
-		// cannot map one by asking to be refused.
+		// Answered as a path that is not there, so that a policy hiding a
+		// file and a file that does not exist are indistinguishable to
+		// whoever asked — and a name that *resolved* into a hidden place is
+		// answered the same way, so an agent cannot map a hidden directory
+		// one symlink at a time by asking to be refused.
+		//
+		// Two things this is not, both of which the comment here used to
+		// claim or imply (#1798):
+		//
+		// It is **not** what the rest of the shell does. A denied open on
+		// every other route says so — `open: refused: <path>`, and `.` says
+		// `Refused`. This handler is the one place that answers absence, and
+		// it is a deliberate difference rather than the house style.
+		//
+		// And it holds only while this client withholds `terminal/*`.
+		// Measured: with terminals served and `-deny read:<path>` set, an
+		// agent that is told "no such file" here asks us to run `cat <path>`
+		// and is handed the contents — the child does its own opening, and
+		// an allowed exec is outside the boundary once it has started. So
+		// this protects a `Files: true, Terminals: false` client, which is a
+		// real configuration, and protects nothing at all in the one
+		// `-acp-connect` builds. Do not read it as a guarantee that a denied
+		// file stays unread.
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: no such file or directory", req.Path)
 	}
 	if err != nil {
@@ -519,6 +536,17 @@ func (c *Client) writeFile(ctx context.Context, params json.RawMessage) (any, er
 	err := c.Boundary.WriteFile(ctx,
 		boundary.File{Path: req.Path, Perm: 0o600}, []byte(req.Content))
 	if errors.Is(err, boundary.ErrRefused) {
+		// Said plainly, where a refused *read* says the path is not there,
+		// and the difference is deliberate rather than an oversight (#1798).
+		//
+		// What the read hides is whether a file **exists**, which is a fact
+		// about the disk that the agent would not otherwise have. A refused
+		// write reveals only that a rule stands here, which is a fact about
+		// the policy — and one the agent is about to learn anyway, because a
+		// write it is not allowed to do has to fail somehow. Answering "no
+		// such file" to a write would also be a strange thing to say about a
+		// path that is supposed not to exist yet: not existing is the normal
+		// case for a file being created, so it would read as success.
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: permission denied", req.Path)
 	}
 	if err != nil {

@@ -2326,6 +2326,36 @@ echo "reached-after st=$?"`,
 		Why:     "the site matters and not only the shell: ksh93 reads \\x41 in a format and leaves it as written in a %b argument, which expands the set echo expands. bash and zsh have it in both and dash in neither, so ksh93 alone separates the two tables",
 	},
 	{
+		ID: "printf/unicode-escape-in-a-format", Category: "printf",
+		Snippet: `printf 'a\u0041Z' | od -An -tx1 | tr -s " "`,
+		Why:     "\\uHHHH is an escape in a format for bash 5.3, ksh93 and zsh, where bash 3.2, that binary as sh, and dash have none and write the ten characters as they stand — a smaller set than the five that have \\x, so the two escapes are not one question",
+	},
+	{
+		ID: "printf/unicode-escape-long-spelling-in-a-format", Category: "printf",
+		Snippet: `printf 'a\U00000041Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the eight-digit spelling, which groups the panel exactly as the four-digit one does: a shell that has one has the other, and the letter decides only how many digits may follow",
+	},
+	{
+		ID: "printf/unicode-escape-takes-a-shorter-run", Category: "printf",
+		Snippet: `printf 'a\u41Z:a\u00410' | od -An -tx1 | tr -s " "`,
+		Why:     "how wide the digit run is, and the one question \\x splits on that this escape does not: all three that have it accept fewer than four digits and stop at four, so \\u41Z is aAZ and \\u00410 is an A followed by a zero",
+	},
+	{
+		ID: "printf/unicode-escape-with-no-digits", Category: "printf",
+		Snippet: `printf 'a\uZ' | od -An -tx1 | tr -s " "`,
+		Why:     "an empty digit run, where the three that have the escape part three ways: bash leaves it standing and warns without failing, zsh reads the run as a zero and writes a NUL, and ksh93 drops the rest of the format — a fourth reading no \\x anywhere in the panel has",
+	},
+	{
+		ID: "printf/unicode-escape-truncation-ends-the-pass", Category: "printf",
+		Snippet: `printf '[%s]\uZ' x y | od -An -tx1 | tr -s " "`,
+		Why:     "what ksh93 drops is the rest of that pass over the format and not the builtin: the operands go on being consumed, so this is [x][y] there, where a \\c that stops writes [x] and ends. Two operands are what tells the two apart and one cannot",
+	},
+	{
+		ID: "printf/unicode-escape-is-not-a-b-escape", Category: "printf",
+		Snippet: `printf '%b' 'a\u0041Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the site matters and not only the shell, and it is ksh93 that separates them again: it reads \\u0041 in a format and writes the ten characters as they stand in a %b, exactly as it does for \\x, so bash 5.3 and zsh alone have the escape at this site",
+	},
+	{
 		ID: "printf/an-octal-in-a-b-escape-is-not-the-formats", Category: "printf",
 		Snippet: `printf '%b' 'a\0101Z' | od -An -tx1 | tr -s " "; printf 'a\0101Z' | od -An -tx1 | tr -s " "`,
 		Why:     "the two escape tables in one line, and unanimous in both halves: a %b reads \\0 and up to three octal digits after it, so \\0101 is an A, where a format reads up to three digits with the zero optional, so the same text is a backspace and a 1. Reading a %b the format's way gives neither answer",

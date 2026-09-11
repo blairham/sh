@@ -71,11 +71,11 @@ func biPrintf(r *Runner, _ context.Context, args []string) int {
 	// The format is reused until the arguments run out, and once with none at
 	// all. Unanimous, and the reason this is a loop rather than one pass.
 	for pass := 0; ; pass++ {
-		used, code, stop := r.printfOnce(format, operands)
+		used, code, end := r.printfOnce(format, operands)
 		if code != 0 {
 			status = code
 		}
-		if stop {
+		if end == printfPassStopped {
 			break
 		}
 		if used >= len(operands) {
@@ -156,9 +156,32 @@ func (r *Runner) printfBadOption(opt string) int {
 	return orDefault(d.PrintfUsageStatus, 2)
 }
 
+// printfPassEnd says how one pass over the format ended, which is three
+// things and not two.
+//
+// A `\c` that stops ends the *builtin* — zsh's `printf '[%s]\cZ' x y` is
+// `[x]` — where ksh93's digitless `\u` ends only the pass, and the loop over
+// the operands runs again: `printf '[%s]\uZ' x y` is `[x][y]`. Collapsing the
+// two into one bool would have made the second of those `[x]`, which is no
+// shell's answer.
+type printfPassEnd int
+
+const (
+	// printfPassRan read the format through to its end.
+	printfPassRan printfPassEnd = iota
+	// printfPassTruncated dropped the rest of this pass. The operands that
+	// are left are formatted by another one.
+	printfPassTruncated
+	// printfPassStopped ends the builtin, whether because a `\c` said so or
+	// because something was refused.
+	printfPassStopped
+)
+
 // printfOnce runs the format through once, returning how many operands it
-// consumed, the status of any complaint, and whether output stopped early.
-func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
+// consumed, the status of any complaint, and how the pass ended — which is
+// printfPassEnd's three and not a bool, because one shell drops the rest of a
+// pass without ending the builtin.
+func (r *Runner) printfOnce(format string, operands []string) (int, int, printfPassEnd) {
 	used, status := 0, 0
 	// Written as it is produced rather than collected and written at the end:
 	// a shell that complains half way through has already printed the half
@@ -189,11 +212,11 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 		c := format[i]
 		switch {
 		case c == '\\':
-			text, n, stop := r.expandPrintfEscape(format[i:])
+			text, n, end := r.expandPrintfEscape(format[i:])
 			b.WriteString(text)
 			i += n
-			if stop {
-				return used, status, true
+			if end != printfPassRan {
+				return used, status, end
 			}
 		case c != '%':
 			b.writeByte(c)
@@ -201,7 +224,7 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 		default:
 			spec, verb, timeFmt, n, code := r.scanPrintfSpec(format[i:])
 			if code != 0 {
-				return used, code, true
+				return used, code, printfPassStopped
 			}
 			i += n
 			if verb == '%' {
@@ -210,7 +233,7 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 			}
 			if verb == 0 {
 				if spec != "" {
-					return used, r.printfBadVerb(format[:i], badVerbName(format, i)), true
+					return used, r.printfBadVerb(format[:i], badVerbName(format, i)), printfPassStopped
 				}
 				// An empty prefix is a format that ran out before it
 				// reached a conversion character — `%`, `%5`, `%ll` at the
@@ -219,12 +242,12 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 				// whole unfinished conversion, prefix and all, and succeeds.
 				if r.ask(r.sem().PrintfUnfinishedConversionIsAPercent, "a format that ends inside a conversion") {
 					b.writeByte('%')
-					return used, 0, true
+					return used, 0, printfPassStopped
 				}
 				if r.unspecified {
-					return used, r.status, true
+					return used, r.status, printfPassStopped
 				}
-				return used, r.printfMissingVerb(format[:i]), true
+				return used, r.printfMissingVerb(format[:i]), printfPassStopped
 			}
 			text, code, stop := r.printfVerb(spec, verb, timeFmt, next)
 			if code != 0 {
@@ -232,11 +255,11 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 			}
 			b.WriteString(text)
 			if stop {
-				return used, status, true
+				return used, status, printfPassStopped
 			}
 		}
 	}
-	return used, status, false
+	return used, status, printfPassRan
 }
 
 // printfVerb formats one conversion.
@@ -615,6 +638,7 @@ func (r *Runner) printfReport(kind printfErrorKind, operand string) int {
 //	\e                        PrintfBEscEscape
 //	\E                        PrintfBCapitalEscEscape
 //	\xHH                      PrintfBHexEscape
+//	\uHHHH \UHHHHHHHH       PrintfBUnicodeEscape
 //	anything else             the backslash and the character, unanimous
 //
 // It reports the text and whether a `\c` ended things.
@@ -658,6 +682,18 @@ func (r *Runner) expandBEscapes(s string) (string, bool) {
 			text, n := r.hexEscapeText(r.bHexEscape(), s[i:])
 			b.WriteString(text)
 			i += n
+		case 'u', 'U':
+			// The format's reader, at the other site and with the other
+			// axis. A truncating answer ends the argument's text here
+			// rather than the builtin, which is the same "this pass and no
+			// further" the format site gets; no dialect in the panel asks
+			// for it at this site.
+			text, n, end := r.unicodeEscapeText(r.bUnicodeEscape(), s[i:])
+			b.WriteString(text)
+			i += n
+			if end == printfPassTruncated {
+				return b.String(), false
+			}
 		case '0', '1', '2', '3', '4', '5', '6', '7':
 			// `\0` introduces up to three octal digits rather than being the
 			// first of them, which is what makes `\0101` an `A` and `\01011`
@@ -691,24 +727,30 @@ func (r *Runner) expandBEscapes(s string) (string, bool) {
 // shape #765 measured and #798 finished: the two share the XSI eight and
 // nothing else, and reading either one with the other's reader produces
 // answers no shell in the panel gives.
-func (r *Runner) expandPrintfEscape(s string) (string, int, bool) {
+func (r *Runner) expandPrintfEscape(s string) (string, int, printfPassEnd) {
 	if len(s) < 2 {
-		return `\`, len(s), false
+		return `\`, len(s), printfPassRan
 	}
 	if e, ok := xsiEscape(s[1]); ok {
-		return string([]byte{e}), 2, false
+		return string([]byte{e}), 2, printfPassRan
 	}
 	switch c := s[1]; c {
 	case 'x':
 		text, n := r.hexEscapeText(r.hexEscape(), s)
-		return text, n, false
+		return text, n, printfPassRan
+	case 'u', 'U':
+		// One reader for both spellings and for both sites, because there is
+		// one Unicode escape and not four: the letter says how many digits
+		// it may take and nothing else.
+		text, n, end := r.unicodeEscapeText(r.unicodeEscape(), s)
+		return text, n, end
 	case 'c':
 		// Three answers, and the middle one is why this is not a bool: ksh93
 		// reads `\cX` as control-X, which *looks* like truncation next to
 		// zsh's stopping until the bytes are read.
 		switch r.backslashC() {
 		case PrintfBackslashCStops:
-			return "", 2, true
+			return "", 2, printfPassStopped
 		case PrintfBackslashCControl:
 			// The same escape `$'…'` decodes, read the same way: the
 			// dialect whose printf reads `\cX` as a control character is
@@ -721,11 +763,11 @@ func (r *Runner) expandPrintfEscape(s string) (string, int, bool) {
 				// `\c` with nothing after it is a NUL. printf writes it
 				// rather than ending there, because a format is a counted
 				// string and not a C one.
-				return "\x00", 2, false
+				return "\x00", 2, printfPassRan
 			}
-			return string([]byte{controlByte(DollarSingleControlToggled, x)}), next, false
+			return string([]byte{controlByte(DollarSingleControlToggled, x)}), next, printfPassRan
 		}
-		return `\c`, 2, false
+		return `\c`, 2, printfPassRan
 	case '0', '1', '2', '3', '4', '5', '6', '7':
 		// An octal escape, up to three digits after an optional leading zero.
 		digits := 0
@@ -740,9 +782,9 @@ func (r *Runner) expandPrintfEscape(s string) (string, int, bool) {
 		// A byte, not a code point. `string(rune(0300))` is the two bytes
 		// UTF-8 spells U+00C0 with, and a format is a byte string: `\300`
 		// is 0xc0 alone in every shell in the panel.
-		return string([]byte{byte(n)}), 1 + digits, false
+		return string([]byte{byte(n)}), 1 + digits, printfPassRan
 	}
-	return `\` + string(s[1]), 2, false
+	return `\` + string(s[1]), 2, printfPassRan
 }
 
 // hexEscapeText decodes the `\x` at the front of s under one of the four
@@ -791,6 +833,56 @@ func (r *Runner) hexEscapeText(p PrintfHexEscapePolicy, s string) (string, int) 
 		return "", 2 + used
 	}
 	return string(rune(n)), 2 + used
+}
+
+// unicodeEscapeText decodes the `\u` or `\U` at the front of s under one of the
+// four readings, and is where both sites that have the escape meet: a format
+// asks PrintfUnicodeEscape for its policy and a `%b` argument asks
+// PrintfBUnicodeEscape, and ksh93 answers the two differently.
+//
+// One reader and one encoder, deliberately. The digits are scanned with the
+// reader `$'…'` and the hexadecimal escape already use, and the value is
+// written by EncodeCodePoint, which `echo` uses for the same escape — a
+// second copy of either is how `\c1` came to mean two things (#556) and how
+// `print` came to write a replacement character where the shell it follows
+// writes the encoding (#1840).
+//
+// The letter decides only how many digits may follow: four after `\u` and
+// eight after `\U`, with a shorter run accepted and ended by the first
+// character that is not a digit.
+func (r *Runner) unicodeEscapeText(p PrintfUnicodeEscapePolicy, s string) (string, int, printfPassEnd) {
+	escape := s[:2]
+	if p == PrintfUnicodeEscapeAbsent || r.unspecified {
+		return escape, 2, printfPassRan
+	}
+	width := 4
+	if s[1] == 'U' {
+		width = 8
+	}
+	n, used := scanBase(s[2:], 16, width)
+	if used == 0 {
+		switch p {
+		case PrintfUnicodeEscapeCodePointOrNul:
+			// An empty digit run is a zero, and neither site ends at a NUL,
+			// so the byte is written rather than stopping anything.
+			return "\x00", 2, printfPassRan
+		case PrintfUnicodeEscapeCodePointOrTruncate:
+			// The rest of this pass over the format goes unwritten — and the
+			// pass only, so the operands that are left get another one.
+			return "", 2, printfPassTruncated
+		}
+		// The escape stands, with a warning that does not change the status:
+		// `printf 'a\u'; echo $?` writes the complaint, the two characters,
+		// and a zero. The letter is a verb so that one wording covers both.
+		d := r.diag()
+		r.diagf("%s\n", Wording(d.PrintfMissingUnicodeDigit,
+			`printf: missing unicode digit for \%s`, string(s[1])))
+		return escape, 2, printfPassRan
+	}
+	// A code point written in UTF-8, and the original UTF-8 at that: a
+	// surrogate and a value past the last code point are encoded rather than
+	// refused, which is measured and not assumed.
+	return EncodeCodePoint(n), 2 + used, printfPassRan
 }
 
 // printfWriter is the shell's output stream, held back or written through

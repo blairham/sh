@@ -22,6 +22,8 @@ func printfSem() Semantics {
 	s.PrintfUnfinishedConversionIsAPercent = No
 	s.PrintfHexEscape = PrintfHexEscapeAbsent
 	s.PrintfBHexEscape = PrintfHexEscapeAbsent
+	s.PrintfUnicodeEscape = PrintfUnicodeEscapeAbsent
+	s.PrintfBUnicodeEscape = PrintfUnicodeEscapeAbsent
 	s.PrintfBEscEscape = No
 	s.PrintfBCapitalEscEscape = No
 	s.PrintfBOctalWithoutZero = No
@@ -142,6 +144,194 @@ func TestPrintfHexEscapeIsAskedPerSite(t *testing.T) {
 			t.Errorf("got %q status %d, want %q and 2", out, st, want)
 		}
 	})
+}
+
+// `\u` and `\U` in a format are four readings too, and they are not the four
+// `\x` has: the three shells that have the escape agree on how wide the digit
+// run is and split on what an *empty* run means, where one of the three ends
+// the pass rather than substituting or leaving the text.
+func TestPrintfUnicodeEscapeIsFourReadings(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		policy PrintfUnicodeEscapePolicy
+		src    string
+		want   string
+	}{
+		{"absent leaves the escape as written", PrintfUnicodeEscapeAbsent, `printf 'a\u0041Z'`, `a\u0041Z`},
+		{"absent leaves the long spelling too", PrintfUnicodeEscapeAbsent, `printf 'a\U00000041Z'`, `a\U00000041Z`},
+		{"four digits after the short spelling", PrintfUnicodeEscapeCodePoint, `printf 'a\u0041Z'`, "aAZ"},
+		{"eight after the long one", PrintfUnicodeEscapeCodePoint, `printf 'a\U00000041Z'`, "aAZ"},
+		{"a shorter run is enough", PrintfUnicodeEscapeCodePoint, `printf 'a\u41Z'`, "aAZ"},
+		{"the short spelling stops at four", PrintfUnicodeEscapeCodePoint, `printf 'a\u00410'`, "aA0"},
+		{"the long spelling stops at eight", PrintfUnicodeEscapeCodePoint, `printf 'a\U000000410'`, "aA0"},
+		{"the run ends at the first character that is not a digit", PrintfUnicodeEscapeCodePoint, `printf '[\u41Z]'`, "[AZ]"},
+		{"an empty run leaves the escape standing", PrintfUnicodeEscapeCodePoint, `printf 'a\uZ'`, "sh: printf: missing unicode digit for \\u\na\\uZ"},
+		{"an empty run is a zero", PrintfUnicodeEscapeCodePointOrNul, `printf 'a\uZ'`, "a\x00Z"},
+		{"an empty run ends the pass", PrintfUnicodeEscapeCodePointOrTruncate, `printf 'a\uZ'`, "a"},
+		{"a value is a code point and not a byte", PrintfUnicodeEscapeCodePoint, `printf '[\u0041]'`, "[A]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfUnicodeEscape = tc.policy
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The truncating reading ends the *pass* and not the builtin, which is what
+// separates it from a `\c` that stops: the operands that are left go through
+// the format again, so `printf '[%s]\uZ' x y` is `[x][y]` and not `[x]`.
+//
+// Written with two operands on purpose. One operand cannot tell the two apart,
+// which is the whole reason printfPassEnd has three values.
+func TestPrintfUnicodeTruncationEndsThePassAndNotTheBuiltin(t *testing.T) {
+	t.Run("the loop over the operands goes on", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfUnicodeEscape = PrintfUnicodeEscapeCodePointOrTruncate
+		out, st := run(t, `printf '[%s]\uZ' x y`, func(r *Runner) { r.Semantics = &sem })
+		if out != "[x][y]" || st != 0 {
+			t.Errorf("got %q status %d, want %q and 0", out, st, "[x][y]")
+		}
+	})
+	t.Run("a stopping backslash-c does end it", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfBackslashC = PrintfBackslashCStops
+		out, st := run(t, `printf '[%s]\cZ' x y`, func(r *Runner) { r.Semantics = &sem })
+		if out != "[x]" || st != 0 {
+			t.Errorf("got %q status %d, want %q and 0", out, st, "[x]")
+		}
+	})
+	t.Run("a pass that consumes nothing writes nothing and ends", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfUnicodeEscape = PrintfUnicodeEscapeCodePointOrTruncate
+		out, st := run(t, `printf '\uZ[%s]' x y`, func(r *Runner) { r.Semantics = &sem })
+		if out != "" || st != 0 {
+			t.Errorf("got %q status %d, want the empty string and 0", out, st)
+		}
+	})
+}
+
+// The reading that leaves the escape standing says so on standard error, and
+// still reports success. The letter is a verb, so one wording covers both
+// spellings rather than the two drifting apart.
+func TestPrintfUnicodeEscapeWithNoDigitsWarnsWithoutFailing(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the short spelling", `printf 'a\uZ'`, "sh: printf: no digit for \\u\na\\uZ"},
+		{"the long one", `printf 'a\UZ'`, "sh: printf: no digit for \\U\na\\UZ"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfUnicodeEscape = PrintfUnicodeEscapeCodePoint
+			diag := Diagnostics{PrintfMissingUnicodeDigit: `printf: no digit for \%s`}
+			out, st := run(t, tc.src, func(r *Runner) {
+				r.Semantics = &sem
+				r.Diagnostics = &diag
+			})
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The axis is asked only where a `\u` or a `\U` is actually there.
+func TestPrintfUnicodeEscapeIsAskedOnlyWhenOneIsThere(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfUnicodeEscape = PrintfUnicodeEscapeUnspecified
+
+	out, st := run(t, `printf '[%d]' 42`, func(r *Runner) { r.Semantics = &sem })
+	if out != "[42]" || st != 0 {
+		t.Errorf("a format with no unicode escape: got %q status %d, want [42] and 0", out, st)
+	}
+	out, st = run(t, `printf 'a\u0041Z'`, func(r *Runner) { r.Semantics = &sem })
+	if st != 2 || !strings.Contains(out, "no dialect was chosen") {
+		t.Errorf("a format with one: got %q status %d, want a refusal and 2", out, st)
+	}
+}
+
+// Two sites and two axes, exactly as `\x` has them, and ksh93 is again what
+// makes the distinction real: it reads `\u0041` in a format and writes the ten
+// characters as they stand in a `%b`.
+func TestPrintfUnicodeEscapeIsAskedPerSite(t *testing.T) {
+	t.Run("a %b argument does not ask the format's axis", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfUnicodeEscape = PrintfUnicodeEscapeUnspecified
+		sem.PrintfBUnicodeEscape = PrintfUnicodeEscapeCodePoint
+		out, st := run(t, `printf '%b' 'a\u0041Z'`, func(r *Runner) { r.Semantics = &sem })
+		if out != "aAZ" || st != 0 {
+			t.Errorf("got %q status %d, want %q and 0", out, st, "aAZ")
+		}
+	})
+	t.Run("a format does not ask the %b axis", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfUnicodeEscape = PrintfUnicodeEscapeCodePoint
+		sem.PrintfBUnicodeEscape = PrintfUnicodeEscapeUnspecified
+		out, st := run(t, `printf 'a\u0041Z'`, func(r *Runner) { r.Semantics = &sem })
+		if out != "aAZ" || st != 0 {
+			t.Errorf("got %q status %d, want %q and 0", out, st, "aAZ")
+		}
+	})
+	t.Run("ksh93's split: a format has the escape and a %b does not", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfUnicodeEscape = PrintfUnicodeEscapeCodePointOrTruncate
+		sem.PrintfBUnicodeEscape = PrintfUnicodeEscapeAbsent
+		out, st := run(t, `printf 'a\u0041Z'; printf '%b' 'a\u0041Z'`, func(r *Runner) { r.Semantics = &sem })
+		if out != `aAZa\u0041Z` || st != 0 {
+			t.Errorf("got %q status %d, want %q and 0", out, st, `aAZa\u0041Z`)
+		}
+	})
+	t.Run("a %b with no unicode escape asks nothing", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfBUnicodeEscape = PrintfUnicodeEscapeUnspecified
+		out, st := run(t, `printf '%b' 'a\tZ'`, func(r *Runner) { r.Semantics = &sem })
+		if out != "a\tZ" || st != 0 {
+			t.Errorf("got %q status %d, want a tab between the letters and 0", out, st)
+		}
+	})
+	t.Run("a %b with one and no answer is refused", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfBUnicodeEscape = PrintfUnicodeEscapeUnspecified
+		out, st := run(t, `printf '%b' 'a\u0041Z'`, func(r *Runner) { r.Semantics = &sem })
+		want := "sh: printf: \\u in a %b argument: the shells disagree here and no dialect was chosen\na\\u0041Z"
+		if out != want || st != 2 {
+			t.Errorf("got %q status %d, want %q and 2", out, st, want)
+		}
+	})
+	t.Run("a truncating answer at the %b site ends the argument and not the builtin", func(t *testing.T) {
+		// No dialect in the panel asks for this, so it is pinned here rather
+		// than in a corpus row: the argument's text ends at the escape and
+		// the format runs on to what follows the conversion.
+		sem := printfSem()
+		sem.PrintfBUnicodeEscape = PrintfUnicodeEscapeCodePointOrTruncate
+		out, st := run(t, `printf '[%b]!' 'a\uZb'`, func(r *Runner) { r.Semantics = &sem })
+		if out != "[a]!" || st != 0 {
+			t.Errorf("got %q status %d, want %q and 0", out, st, "[a]!")
+		}
+	})
+}
+
+// One encoder, shared with `echo`'s `\u` and with `print`: the value is written
+// as the *original* UTF-8, so a surrogate and a value past the last code point
+// are encoded rather than replaced. Asserted as bytes, because a replacement
+// character is three bytes too.
+func TestPrintfUnicodeEscapeEncodesWhatUnicodeLaterRefused(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfUnicodeEscape = PrintfUnicodeEscapeCodePoint
+	for _, tc := range []struct{ name, src, want string }{
+		{"a surrogate", `printf '[\ud800]'`, "[\xed\xa0\x80]"},
+		{"past the last code point", `printf '[\U00110000]'`, "[\xf4\x90\x80\x80]"},
+		{"the five-byte form", `printf '[\U00200000]'`, "[\xf8\x88\x80\x80\x80]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
 }
 
 // A format is a byte string. Every route from the format to the output writes

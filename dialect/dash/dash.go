@@ -217,6 +217,10 @@ func Semantics() interp.Semantics {
 	s.PrintfHexEscape = interp.PrintfHexEscapeAbsent
 	// Nor in a `%b` argument, and neither spelling of the escape character.
 	s.PrintfBHexEscape = interp.PrintfHexEscapeAbsent
+	// No `\u` or `\U` at either site: `printf 'a\u0041Z'` is the ten
+	// characters as written, as it is for this shell's `\x`.
+	s.PrintfUnicodeEscape = interp.PrintfUnicodeEscapeAbsent
+	s.PrintfBUnicodeEscape = interp.PrintfUnicodeEscapeAbsent
 	s.PrintfBEscEscape = interp.No
 	s.PrintfBCapitalEscEscape = interp.No
 	// The octal needs no `\0` here, which is the one thing this shell and

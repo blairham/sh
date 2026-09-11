@@ -593,6 +593,14 @@ func Semantics() interp.Semantics {
 	// the reason the two sites are two axes: `printf '%b' 'a\x41Z'` is the
 	// six characters as written where the same escape in a format is an `A`.
 	s.PrintfBHexEscape = interp.PrintfHexEscapeAbsent
+	// `\u` and `\U` in a format, and an empty digit run ends that pass over
+	// it — this shell alone, and the reading no `\x` anywhere in the panel
+	// has: `printf '[%s]\uZ' x y` is `[x][y]`, so the pass ends and the loop
+	// over the operands does not.
+	s.PrintfUnicodeEscape = interp.PrintfUnicodeEscapeCodePointOrTruncate
+	// And no `\u` at all in a `%b`, the same split this shell's `\x` makes:
+	// `printf '%b' 'a\u0041Z'` is the ten characters as written.
+	s.PrintfBUnicodeEscape = interp.PrintfUnicodeEscapeAbsent
 	// `\E` is the escape character and `\e` is two characters — the opposite
 	// of zsh, which is why one axis could not answer for both letters.
 	s.PrintfBEscEscape = interp.No

@@ -400,6 +400,17 @@ type Diagnostics struct {
 	// still reports success. The dialects that read an empty digit run as a
 	// zero write the NUL and say nothing.
 	PrintfMissingHexDigit string
+	// PrintfMissingUnicodeDigit is a `\u` or a `\U` with no hexadecimal digit
+	// after it. One verb: the escape letter as written, so one wording covers
+	// both spellings.
+	//
+	// Only the dialect that leaves the escape standing says anything, and it
+	// is the same warning-without-failure PrintfMissingHexDigit is: bash
+	// writes `printf: missing unicode digit for \u`, writes the two
+	// characters, and still reports success. The dialect that reads an empty
+	// run as a zero writes the NUL and the one that ends the pass ends it,
+	// and neither says a word.
+	PrintfMissingUnicodeDigit string
 	// PrintfUsage is `printf` with no format at all. No verbs.
 	// PrintfBadOption is a leading `-` word this dialect does not know. One
 	// verb: the word as written.

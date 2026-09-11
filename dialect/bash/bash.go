@@ -565,6 +565,14 @@ func Semantics() interp.Semantics {
 	// A `%b` argument reads the same `\x` a format does here, and both of
 	// the escape-character spellings: `\e` and `\E` are both 0x1b.
 	s.PrintfBHexEscape = interp.PrintfHexEscapeByte
+	// `\u0041` is an `A` and `\U00000041` is the same `A`, at both sites:
+	// four digits after the one and eight after the other, fewer accepted,
+	// and the value written as UTF-8. A `\u` with no digit after it stands
+	// as written, with a warning on standard error and a status that is
+	// still zero — the same shape this shell's `\x` has. bash 3.2 has none
+	// of it, which is why the two bash columns of the corpus differ here.
+	s.PrintfUnicodeEscape = interp.PrintfUnicodeEscapeCodePoint
+	s.PrintfBUnicodeEscape = interp.PrintfUnicodeEscapeCodePoint
 	s.PrintfBEscEscape = interp.Yes
 	s.PrintfBCapitalEscEscape = interp.Yes
 	// `printf '%b' 'a\101Z'` is `aAZ`: the octal needs no `\0` to introduce
@@ -1220,6 +1228,7 @@ func Diagnostics() interp.Diagnostics {
 		PrintfBadVerb:               "printf: `%[1]s': invalid format character",
 		PrintfMissingVerb:           "printf: `%[1]s': missing format character",
 		PrintfMissingHexDigit:       `printf: missing hex digit for \x`,
+		PrintfMissingUnicodeDigit:   `printf: missing unicode digit for \%s`,
 		PrintfBadOption:             "printf: %[1]s: invalid option",
 		TrapBarePrintNeedsCondition: "trap: -P requires at least one signal name",
 		PrintfBadOptionShowsUsage:   true,

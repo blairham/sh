@@ -1885,6 +1885,89 @@ zsh have it at both sites and dash at neither, so ksh93 alone shows that
 the site matters — and `PrintfHexEscape` is put to a format and never to a
 `%b` argument. The next section is the rest of that table.
 
+### `\u` and `\U` in a format
+
+Measured with `/opt/homebrew/bin/bash` 5.3.15 (as `bash` and as `sh`),
+`/bin/bash` 3.2.57, `/bin/ksh` 93u+ 2012-08-01,
+`/opt/homebrew/bin/zsh` 5.9.2 and `/bin/dash`, reading bytes with
+`od -An -tx1` from a script file (macOS, 2026-09-05 and re-measured
+2026-09-10). bash 3.2, that binary as `sh`, and dash write every escape
+below as it stands, so they are left out of the lines that follow:
+
+    printf 'a\u0041Z'       bash 61 41 5a   ksh93 61 41 5a   zsh 61 41 5a
+    printf 'a\U00000041Z'    bash 61 41 5a   ksh93 61 41 5a   zsh 61 41 5a
+    printf 'a\u41Z'         bash 61 41 5a   ksh93 61 41 5a   zsh 61 41 5a
+    printf 'a\u00410'       bash 61 41 30   ksh93 61 41 30   zsh 61 41 30
+    printf 'a\uZ'           bash 61 5c 75 5a and `printf: missing unicode
+                                              digit for \u`, status 0
+                             zsh 61 00 5a
+                             ksh93 61
+    printf '[%s]\uZ' x y    bash 5b 78 5d 5c 75 5a 5b 79 5d 5c 75 5a
+                             zsh 5b 78 5d 00 5a 5b 79 5d 00 5a
+                             ksh93 5b 78 5d 5b 79 5d
+
+`PrintfUnicodeEscape` is four readings, arrived at from the same three
+questions `PrintfHexEscape` asks and splitting in different places:
+
+- **Whether the escape is there.** Three of the six have it and three do
+  not, which is a *smaller* set than the five that have `\x`: bash 3.2 and
+  that binary under an argv[0] of `sh` write `a\u0041Z` as its ten
+  characters, where they read `\x41` as an `A`. The two escapes are
+  therefore not one question, and bash's two columns of the corpus differ
+  here as they do for `%(fmt)T`.
+- **How wide the digit run is.** This is the question `\x` splits on and
+  this one does not: all three that have the escape take up to four digits
+  after `\u` and up to eight after `\U`, accept fewer, and end the run at
+  the first character that is not a hexadecimal digit. The letter decides
+  the width and nothing else — `\u41Z` is `aAZ` and `\u00410` is an `A`
+  followed by a zero, in all three.
+- **What an empty digit run means.** The three part three ways, and one of
+  the three is a reading no `\x` anywhere in the panel has. bash leaves the
+  escape standing and writes `printf: missing unicode digit for \u` on
+  standard error with a status that is still 0 — the warning-rather-than-
+  failure shape its `\x` has. zsh reads the empty run as a zero and writes a
+  NUL. **ksh93 drops the rest of that pass over the format.**
+
+That last reading is why this is its own enumeration rather than
+`PrintfHexEscapePolicy` under a second name, and the detail that makes it
+an axis worth stating carefully is **what** is dropped. It is the pass and
+not the builtin: the loop over the operands runs again, so
+`printf '[%s]\uZ' x y` is `[x][y]` in ksh93, where a `\c` that *stops* —
+zsh's `PrintfBackslashCStops` — writes `[x]` and ends. One operand cannot
+tell the two apart, which is why the corpus row carries two. A pass that
+is truncated before it reaches a conversion consumes nothing, and `printf`
+ends rather than looping forever: `printf '\uZ[%s]' x y` writes nothing
+at all there.
+
+The value is a **code point written in UTF-8** and not a byte, and it is
+the *original* UTF-8 rather than the range Unicode later kept: a surrogate
+and a value past U+10FFFF are encoded rather than refused — `\ud800` is
+`ed a0 80` and `\U00110000` is `f4 90 80 80`, with the five- and six-byte
+forms reachable. bash 5.3 and zsh agree on every one. One encoder says all
+of it, `interp.EncodeCodePoint`, which `echo`'s `\u` and `print`'s already
+use; a second copy is how `print` came to write a replacement character
+where the shell it follows writes the encoding (#1840).
+
+**Above ASCII the panel is answering the locale and not the escape**, so
+nothing above it is pinned. Under `LC_ALL=C` — which is what the corpus
+harness runs in — bash writes `\u00E9` back with its digits upper-cased,
+zsh truncates its output at the escape, and ksh93 writes the UTF-8
+regardless; under `en_US.UTF-8` all three write `c3 a9`. A row that agreed
+there would be agreeing for the wrong reason, because this shell is
+locale-blind. Every corpus row for this escape is therefore **ASCII**, the
+rule `echo`'s own `\u` row already follows, and the locale question is
+#1851's rather than this axis's.
+
+The escape is a question about the **format**. A `%b` argument asks the
+same four readings at its own site, through `PrintfBUnicodeEscape`, and
+ksh93 answers the two differently once again: it reads `\u0041` in a
+format and leaves the ten characters as written in
+`printf '%b' 'a\u0041Z'`. bash 5.3 and zsh have the escape at both sites
+and the other three at neither, so the two axes are exactly the shape `\x`
+established. No dialect in the panel answers the `%b` site with the
+truncating reading; where it is set there, the *argument's* text ends at
+the escape and the builtin runs on.
+
 ### The escapes a `%b` argument expands
 
 `%b` and a format are two escape tables, not one table read twice, and
@@ -1947,6 +2030,10 @@ The rest of the table splits, and each split falls in a different place:
   give the same pair of answers at both sites, and the two sites are still
   asked separately.
 - **`\x`.** `PrintfBHexEscape`, the section above.
+- **`\u` and `\U`.** `PrintfBUnicodeEscape`, the section above.
+  bash 5.3 and zsh read them here, and the other four write the characters
+  as they stand — ksh93 among them, which has the escape in a format, so
+  this site groups the panel differently from that one.
 - **`\c` asks nothing.** All six end the output there, where the same two
   characters in a *format* are literal in bash and dash, control-X in ksh93
   and a full stop in zsh (`PrintfBackslashC`). The one entry where the

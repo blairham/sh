@@ -1939,29 +1939,47 @@ func (r *Runner) assignAlways(e *syntax.ParamExpr, subscript bool) string {
 // `${name:=word}` asked it on neither, so `${(U):=abc}` answered `ABC` at
 // status 0 where the shell refuses.
 //
-// The unconditional operator asks it of every name. The conditional one asks
-// it only of the *empty* name — the one the nameless expansion newly reaches
-// (#1529), and the one every shell that can write it refuses the same way.
-// Its other refusals are not one answer: measured 2026-09-08 with `set --`,
-// `${@:=abc}` is `$@: cannot assign in this way` in the three bashes, `@: bad
-// variable name` at status 2 in dash, `${@:=abc}: bad substitution` in ksh93
-// and `not an identifier: @` in zsh, and `${1:=abc}` is refused by five and
-// *assigns* in zsh. Four wordings, two statuses and a positional axis — #1541
-// rather than guessed at here.
+// **Both operators now ask it of every name**, which is #1541. The
+// conditional one used to ask only about the *empty* name (#1529) and called
+// setVar on whatever else it was given, so `set --; printf "<%s>" ${@:=abc}`
+// substituted `abc` at status 0 in every dialect where all six columns refuse
+// fatally — the failure shape this codebase minds most, a plausible value
+// where the shell stopped, and a later read of the parameter finds nothing
+// behind the word that was substituted.
 //
-// **A surviving mutant lives on that line, deliberately.** Widening the
-// conditional operator to the same rule as the unconditional one — dropping
-// the `op !=` half so both ask about every name — passes the whole suite.
-// Nothing kills it because nothing may: the wide rule is *closer* to zsh,
-// which would say `not an identifier: @`, and *further* from bash, dash and
-// ksh93, which each refuse in their own words at their own status. Either
-// answer is wrong somewhere, and a test pinning this narrow one would be a
-// test asserting a bug. The question is #1541's to settle with the four
-// wordings in hand; until then the line is the one that changes nothing
-// outside the name #1529 introduced.
+// Two things had to exist before it could be widened, and now do:
+//
+//   - Four wordings, since `${name:=word}` is in every dialect where
+//     `${name::=word}` is in one. See Diagnostics.AssignThroughExpansionBadName.
+//   - A positional axis. zsh assigns `${1:=abc}` and the other five refuse it,
+//     which is not a wording swap — see
+//     Semantics.AssignThroughExpansionMayNameAPositional. The unconditional
+//     operator does not ask it: `${1::=new}` assigns in the one shell that can
+//     write it, so there is no second answer to hold.
+//
+// dash's status is not a third thing. It exits 2 where the others exit 1,
+// which is Semantics.FatalErrorStatusIsOne — the axis this failure already
+// goes through, since it is fatalExpansion's.
+//
+// It is a run-time check and it fires only when the operator does:
+// `set -- p; ${@:=abc}` is `p` at status 0 in all six and never reaches here,
+// and `if false; then echo ${@:=abc}; fi` is silent in all six.
 func (r *Runner) assignableTarget(op syntax.ParamOp, name string) bool {
-	if op != syntax.ParamAssignAlways && name != "" {
-		return true
+	if op != syntax.ParamAssignAlways && isPositional(name) &&
+		!r.ask(r.sem().AssignThroughExpansionMayNameAPositional,
+			"`${1:=word}` assigning to a positional parameter") {
+		if r.unspecified {
+			// An axis no dialect answered, already reported where it was
+			// asked. A refusal on top of it would be a second complaint
+			// about one line, and the dialect's wording is the thing a run
+			// with no dialect has not got.
+			return false
+		}
+		// The one name the two operators part company over, and the one the
+		// panel parts company over. Refused in the dialect's own words,
+		// through the same door as every other unassignable name: what makes
+		// a parameter unassignable does not change how the shell says so.
+		return r.refuseAssignableName(name)
 	}
 	return r.assignableParamName(name)
 }
@@ -1970,8 +1988,40 @@ func (r *Runner) assignableParamName(name string) bool {
 	if isNameLike(name) || isPositional(name) {
 		return true
 	}
-	r.fatalExpansion("%s\n", Wording(r.diag().AssignThroughExpansionBadName,
-		"not an identifier: %[1]s", name))
+	return r.refuseAssignableName(name)
+}
+
+// refuseAssignableName ends the script over a parameter an assignment written
+// inside an expansion cannot land on, and reports it the dialect's way.
+//
+// The second verb is the whole *word* the expansion stands in, which is
+// ksh93's subject and nobody else's: measured, `x${@:=abc}y`, `"${@:=abc}"`
+// and `a"${@}"b"${@:=abc}"c` are each blamed entire there. The name is the
+// fallback for a refusal reached from something that is not a word — a `case`
+// subject read another way, a caller of its own — where there is no word to
+// print.
+//
+// Read here rather than through badSubstitutionSubject, which answers the
+// same shape of question for a different sentence. The two coincide for
+// ksh93 today; tying them together would make a change to either route a
+// change to both, which is the reason this wording has a field of its own.
+func (r *Runner) refuseAssignableName(name string) bool {
+	written := name
+	if w := syntax.PrintWord(r.expandingWord); w != "" {
+		written = w
+	}
+	r.diagf("%s\n", Wording(r.diag().AssignThroughExpansionBadName,
+		"not an identifier: %[1]s", name, written))
+	// A word that could not be read rather than an expansion that failed,
+	// which is the same line reportBadSubstitution draws and is measured on
+	// the two routes that tell them apart. bash gives up the *line* and
+	// carries on — `printf "<%s>" ${@:=abc}` on line 2 of a script still
+	// prints `after` from line 3, at status 0 — and a failed expansion under
+	// `-c` there exits 127 where this exits 1. Both come out right by
+	// leaving the decision to failedExpansion, which reads
+	// Semantics.FailedExpansionAbandonsTheLine; fatalExpansion ended the
+	// shell in every dialect and took the 127 with it.
+	r.expandErr = true
 	return false
 }
 

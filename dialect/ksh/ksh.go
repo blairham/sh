@@ -182,6 +182,10 @@ func Semantics() interp.Semantics {
 	// join: `IFS=:; set -- "x:" y; printf "[%s]" $@` is `[x][y]` here and
 	// `[x][][y]` in bash, which joins to `x::y` first.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// `${1:=abc}` is `${1:=abc}: bad substitution` — the whole expansion
+	// refused, exactly as `${@:=abc}` is, so the positional is not a name
+	// an assignment through an expansion may reach (#1541).
+	s.AssignThroughExpansionMayNameAPositional = interp.No
 	// An associative array's subscript is a quoting context here, as it is
 	// in bash: `m["k"]=W` stores under `k`.
 	s.SubscriptIsAQuotingContext = interp.Yes
@@ -1118,11 +1122,18 @@ func Diagnostics() interp.Diagnostics {
 		// "[${x@QQ}]"` is refused as `"[${x@QQ}]": bad substitution` and
 		// `echo pre${x@QQ}post` as `pre${x@QQ}post: bad substitution`, so
 		// what is named is the source of the word rather than the `${…}`.
-		BadSubstitutionAtRun:   "%[1]s: bad substitution",
-		BadSubstitutionNames:   interp.NamesTheWholeWord,
-		FunctionNameInvalid:    "%[1]s: invalid function name",
-		FunctionNameDiscipline: "%[1]s: invalid discipline function",
-		SyntaxUnexpected:       "syntax error at line %[3]d: `%[1]s' unexpected",
+		BadSubstitutionAtRun: "%[1]s: bad substitution",
+		// This shell names neither the parameter nor the operator: the whole
+		// word is blamed, `${@:=abc}: bad substitution`. Measured on the
+		// shapes that separate a word from an expansion — `x${@:=abc}y`,
+		// `"${@:=abc}"` and `a"${@}"b"${@:=abc}"c` are each named entire,
+		// which is the same subject BadSubstitutionNames records for the
+		// sentence beside it (#1541).
+		AssignThroughExpansionBadName: "%[2]s: bad substitution",
+		BadSubstitutionNames:          interp.NamesTheWholeWord,
+		FunctionNameInvalid:           "%[1]s: invalid function name",
+		FunctionNameDiscipline:        "%[1]s: invalid discipline function",
+		SyntaxUnexpected:              "syntax error at line %[3]d: `%[1]s' unexpected",
 		// A parse failure by every other measure, and 1 rather than this
 		// dialect's syntax-error status.
 		ForNameStatus: 1,

@@ -787,6 +787,11 @@ func Semantics() interp.Semantics {
 	s.ReadNoFieldsIsOneEmptyElement = interp.Yes
 	s.GlobExpansionResults = interp.No
 	s.GlobNoMatchIsError = interp.Yes
+	// The one column that assigns: `set --; printf "<%s>" ${1:=abc}` is
+	// `abc` at status 0 here and `$1` is `abc` afterwards, where the other
+	// five refuse it fatally. `@` and `*` are refused here too — `not an
+	// identifier` — so it is the positional alone that parts (#1541).
+	s.AssignThroughExpansionMayNameAPositional = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No
 	// hash counts only what PATH holds: a builtin or a function is "no
 	// such command" to it.

@@ -93,6 +93,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"EchoInterpretsEscapes", s.EchoInterpretsEscapes, interp.Yes},
 		{"RegexQuotingMakesLiteral", s.RegexQuotingMakesLiteral, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
+		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.No},
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.Yes},
 		{"LocalInheritsTheExportAttribute", s.LocalInheritsTheExportAttribute, interp.No},
@@ -348,5 +349,35 @@ func TestAnArrayLetterOverAScalarDiscardsTheValue(t *testing.T) {
 				t.Errorf("got %q at %d, want %q at 0", out, st, want)
 			}
 		})
+	}
+}
+
+// TestAnAssignmentThroughAnExpansionNamesAPositionalAndNotAList is #1541.
+//
+// The one column in the panel that *assigns* through the conditional
+// operator: measured 2026-09-11 on 5.9.2, `set --; printf "<%s>" ${1:=abc}`
+// is `abc` at status 0 and leaves `$1` holding it, where the other five
+// refuse. `@` and `*` are refused here too, which is what makes it the
+// positional alone rather than the whole family.
+//
+// The assertion on the assigning row is on `$1` afterwards: substituting the
+// word and storing nothing looks identical on the line itself, and that is
+// the wrong answer #1541 is about.
+func TestAnAssignmentThroughAnExpansionNamesAPositionalAndNotAList(t *testing.T) {
+	out, st := answersRun(t, `set --; printf "<%s>" ${1:=abc}; printf "|one=%s" "$1"`)
+	if out != "<abc>|one=abc" || st != 0 {
+		t.Errorf("the positional = %q (status %d), want it stored at 0", out, st)
+	}
+	for _, tc := range []struct{ src, want string }{
+		{`set --; printf "<%s>" ${@:=abc}`, "not an identifier: @"},
+		{`set --; printf "<%s>" ${*:=abc}`, "not an identifier: *"},
+	} {
+		out, st := answersRun(t, tc.src+"\necho AFTER")
+		if !strings.Contains(out, tc.want) {
+			t.Errorf("%s = %q, want %q in it", tc.src, out, tc.want)
+		}
+		if strings.Contains(out, "AFTER") || st != 1 {
+			t.Errorf("%s = %q (status %d), want the shell ended at 1", tc.src, out, st)
+		}
 	}
 }

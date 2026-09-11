@@ -51,6 +51,10 @@ func Semantics() interp.Semantics {
 	// disappears under: `IFS=:; set -- x "" y` is two fields here and three
 	// in bash.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// `${1:=abc}` is `1: bad variable name` and ends the script at 2 — a
+	// positional is no more assignable through an expansion here than `@`
+	// is (#1541).
+	s.AssignThroughExpansionMayNameAPositional = interp.No
 	// The one shell in the panel that expands a here-document body in the
 	// shell rather than in the process the redirection is for, so what the
 	// body writes is still there afterwards: `unset u; cat <<END` with a
@@ -571,6 +575,12 @@ func Diagnostics() interp.Diagnostics {
 		UnmatchedArithSubst: "Syntax error: Missing '))'",
 		SyntaxError:         "Syntax error: %s",
 		BadSubstitution:     "Bad substitution",
+		// The bare name and the shell's own sentence for a name nothing may
+		// be assigned to: `${@:=w}` with no parameters is `@: bad variable
+		// name`, and `${1:=w}` is `1: bad variable name`. It exits 2 where
+		// the others exit 1, which FatalErrorStatusIsOne already answers
+		// (#1541).
+		AssignThroughExpansionBadName: "%[1]s: bad variable name",
 		// The builtin in front, which its plain form does not have.
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
 		// And `local`, the third and last declaration this shell has:

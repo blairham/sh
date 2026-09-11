@@ -2603,7 +2603,25 @@ type Diagnostics struct {
 	UnboundPositional string
 	// AssignThroughExpansionBadName is an assignment written inside an
 	// expansion whose parameter cannot be assigned to at all — `${#::=w}`,
-	// where `#` is not a name. One verb: the name, without its `$`.
+	// where `#` is not a name, and `${@:=w}`, which every shell in the panel
+	// refuses. Two verbs: the name without its `$`, and the expansion as it
+	// was written, quoting run and all.
+	//
+	// Four wordings, measured 2026-09-11 with `set --`:
+	//
+	//	bash 5.3 / as-sh / 3.2   $@: cannot assign in this way
+	//	dash                     @: bad variable name
+	//	ksh93                    ${@:=abc}: bad substitution
+	//	zsh 5.9.2                not an identifier: @
+	//
+	// bash writes the sigil back and dash does not; ksh93 names neither and
+	// blames the whole expansion, which is the second verb's only reader —
+	// and it names the *quoting run* rather than the braces alone, so
+	// `x${@:=abc}y` and `"${@:=abc}"` are blamed whole.
+	//
+	// The status is not here. dash exits 2 where the other three exit 1, and
+	// that is Semantics.FatalErrorStatusIsOne, which this failure already
+	// goes through — a second number would be the same axis written twice.
 	//
 	// Its own field rather than a reuse of a builtin's bad-name wording
 	// because the two are worded differently by the shell that has the
@@ -2612,6 +2630,11 @@ type Diagnostics struct {
 	// that names no builtin to hide. The sentences coincide today and the
 	// routes do not, and one field for both would tie a future change on
 	// either route to the other.
+	//
+	// zsh's is the fallback because it is the one shell whose grammar has
+	// `${name::=word}`, the operator that reaches this question on every
+	// name. The conditional `${name:=word}` beside it is in every dialect,
+	// which is why the other three are filled in (#1541).
 	AssignThroughExpansionBadName string
 	// BadPattern is a pattern the dialect rejects. One verb: the pattern.
 	BadPattern string

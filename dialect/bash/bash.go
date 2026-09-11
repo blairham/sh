@@ -484,6 +484,10 @@ func Semantics() interp.Semantics {
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	s.ReadonlyReassignmentFatal = interp.No
+	// `${1:=abc}` is refused rather than assigned: `$1: cannot assign in
+	// this way`, in 5.3.15, in the same binary under argv[0] of `sh` and in
+	// 3.2.57 alike. Only zsh assigns (#1541).
+	s.AssignThroughExpansionMayNameAPositional = interp.No
 	// A failed expansion gives up the line here and the shell carries on at
 	// the next one, which is this shell alone among the four. Measured over
 	// both routes and both separators — see the axis for the 2x2 — on a bad
@@ -1054,8 +1058,13 @@ func Diagnostics() interp.Diagnostics {
 		Location:                interp.LocationLineWord,
 		NotFound:                "%s: command not found",
 		UnboundVariable:         "%s: unbound variable",
-		UnboundPositional:       "$%s: unbound variable",
-		NumericArgument:         "%[1]s: %[2]s: numeric argument required",
+		// The sigil written back, which no other column does: `${@:=w}`
+		// with no parameters is `$@: cannot assign in this way`, and
+		// `${1:=w}` names `$1`. Identical in 3.2.57 and in the same binary
+		// under argv[0] of `sh` (#1541).
+		AssignThroughExpansionBadName: "$%[1]s: cannot assign in this way",
+		UnboundPositional:             "$%s: unbound variable",
+		NumericArgument:               "%[1]s: %[2]s: numeric argument required",
 		// A subscript before the first element, named as it was written:
 		// `a[x-2]`, not the -1 it evaluated to. Identical in bash 3.2.
 		BadArraySubscript:             "%[1]s[%[2]s]: bad array subscript",

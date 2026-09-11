@@ -734,3 +734,39 @@ builtin nosuchbuiltin`)
 		t.Errorf("`builtin NAME`'s locations = %q, want %q", out, want)
 	}
 }
+
+// `-r` records the directory it *resolved to*, so a relative `$fpath` entry
+// stays fixed after the shell moves.
+//
+// The second route into a function file, and the one a fix to the first does
+// not reach: autoloadFile hands ReadFileGated the written path and reads it
+// there and then, where `-r` writes the path down and reads it again later.
+// Measured 2026-09-11 on zsh 5.9.2 with `fns/rf` under the shell's directory:
+//
+//	cd D/w; fpath=(fns); autoload -rUz rf; cd /; rf
+//	zsh    builtin autoload -XUz D/w/fns   in the stub, and the call runs
+//	ours   builtin autoload -XUz fns       and the call is not found
+//
+// Both halves are asserted, because the stub is the *reason* and the call
+// after the move is the consequence: an implementation that recorded an
+// absolute path and looked it up relatively again would pass the first.
+func TestAFixedPathIsRecordedAbsoluteSoItSurvivesACd(t *testing.T) {
+	dir := t.TempDir()
+	fns := filepath.Join(dir, "fns")
+	if err := os.MkdirAll(fns, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fns, "rf"), []byte(`print -r -- "rf ran"`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runZsh(t, dir, `fpath=(fns)
+autoload -rUz rf
+functions rf
+cd /
+rf
+print -r -- "st=$?"`)
+	want := "rf () {\n\t# undefined\n\tbuiltin autoload -XUz " + fns + "\n}\nrf ran\nst=0\n"
+	if out != want || st != 0 {
+		t.Errorf("a fixed relative path = %q (status %d), want %q", out, st, want)
+	}
+}

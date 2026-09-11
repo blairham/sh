@@ -14323,6 +14323,11 @@ echo "read=[$l]"`,
 		Why:     "`bad option: -Q` and 1 — the same wording `zmodload` and `bindkey` use and not `zstyle`'s `invalid option`. `-Q` is one of the forty letters zsh's autoload does not have, against the twelve it does",
 	},
 	{
+		ID: "autoload/a-fixed-path-from-a-relative-entry", Category: "builtins",
+		Snippet: `mkdir -p d/fns; printf "%s\n" 'echo "rfn ran"' > d/fns/rfn; cd d; fpath=(fns); autoload -rUz rfn; cd ..; rfn; echo "st=$?"`,
+		Why:     "the second route into a function file, and the one a fix to the first does not reach: `-r` resolves on `$fpath` at the *declaration* and records what it found, so the `cd` between the two is what the row is for. A relative entry recorded as written is a fixed path that is not fixed, and this shell wrote `fns` into the stub where zsh writes the directory it resolved to. The row prints no path, only whether the call still runs, because the path is where the case was recorded",
+	},
+	{
 		ID: "autoload/a-relative-fpath-entry", Category: "builtins",
 		Snippet: `mkdir -p d/fns; printf "%s\n" 'echo "rfn ran"' > d/fns/rfn; cd d; fpath=(fns); autoload -Uz rfn; rfn; echo "st=$?"`,
 		Why:     "an entry on the function search path may be relative, and it is resolved against the directory the *shell* is in. The `cd` is the whole row: it moves the shell and not the process, so a search that reached for the process's directory looks in the one the shell started in and answers `function definition file not found` for a file that is there. This shell did exactly that — the whole-file read a dialect's builtin goes through resolved a bare name with os.ReadFile, which is the PATH rule broken in a second place (#1968)",

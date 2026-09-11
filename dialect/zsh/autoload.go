@@ -740,6 +740,24 @@ func autoloadFixedPath(r *interp.Runner, name string) (string, bool) {
 // autoloadSearch is autoloadFile's search without the read: the path the
 // name resolves to on `$fpath`, by the same rule that the first *readable*
 // entry wins.
+//
+// **What it returns is resolved against the shell's directory**, which
+// autoloadFile's own search deliberately does not need: that one hands the
+// written path to ReadFileGated and reads it there and then, where this one is
+// *recorded* and read again later, after the shell may have moved. A relative
+// `$fpath` entry kept as written is a fixed path that is not fixed — measured
+// 2026-09-11 on zsh 5.9.2 with `fns/rf` under the shell's directory:
+//
+//	cd D/w; fpath=(fns); autoload -rUz rf; cd /; rf
+//	zsh    builtin autoload -XUz D/w/fns   in the stub, and the call runs
+//	ours   builtin autoload -XUz fns       and the call is not found
+//
+// That is the second route into a function file, and it is the one #1704 and
+// #1854 both name: the fix the other route carries has to be here too, or it
+// works in the spelling that was tested and fails in the one a real startup
+// takes. Through shellPath rather than a join written out again, which is the
+// same rule every other builtin in this dialect resolves a script's relative
+// name by (#1968).
 func autoloadSearch(r *interp.Runner, name string) (string, bool) {
 	if strings.ContainsRune(name, filepath.Separator) {
 		// A name that says where it is resolves to itself, and is still a
@@ -748,7 +766,7 @@ func autoloadSearch(r *interp.Runner, name string) (string, bool) {
 		if _, err := r.ReadFileGated(name); err != nil {
 			return "", false
 		}
-		return name, true
+		return shellPath(r, name), true
 	}
 	dirs, _ := r.GetArray("fpath")
 	for _, dir := range dirs {
@@ -762,7 +780,7 @@ func autoloadSearch(r *interp.Runner, name string) (string, bool) {
 		if _, err := r.ReadFileGated(path); err != nil {
 			continue
 		}
-		return path, true
+		return shellPath(r, path), true
 	}
 	return "", false
 }

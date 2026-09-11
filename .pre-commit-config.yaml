@@ -52,7 +52,7 @@ repos:
     hooks:
       - id: gitleaks
   - repo: https://github.com/blairham/pre-commit-hooks
-    rev: v0.3.0
+    rev: v0.4.0
     hooks:
       - id: check-license-headers
         args: [--license, Apache-2.0]
@@ -64,3 +64,20 @@ repos:
       # style, and scans only while a merge is in progress — so it cannot see a
       # marker that was already committed, which is the only kind still here.
       - id: check-conflict-markers
+      # Known vulnerabilities in code this module actually calls, from Go's
+      # own database. It runs here and not on every commit because the answer
+      # can only change when the module graph does — the hook's own default is
+      # to watch go.mod and go.sum, and that is left as it is.
+      #
+      # It is worth saying what this does not cover, so nobody reads a green
+      # commit as more than it is: an advisory published while nobody is
+      # committing is invisible to a commit hook, and belongs to CI on a
+      # schedule. This catches the case a person can act on — a dependency
+      # arriving or moving — at the moment they are choosing it.
+      #
+      # It is quiet enough to sit here because it is symbol-aware. Measured on
+      # a module pinned to a vulnerable x/text, it reported 29 findings across
+      # imported packages and required modules and failed on the one the code
+      # reached. A manifest scanner would have failed that commit 29 times,
+      # and a hook that cries wolf is a hook that gets disabled.
+      - id: go-vulncheck

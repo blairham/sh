@@ -46,6 +46,35 @@ const (
 	TraceForAssign
 )
 
+// TraceArrayLiteral is how `set -x` renders the parenthesized list of
+// `a=(1 2)`.
+//
+// Measured 2026-09-11 with `set -x; a=(1 2)`:
+//
+//	bash 5.3.15, bash 3.2.57	a=(1 2)
+//	ksh93, zsh 5.9.2        	a=( 1 2 )
+//	dash                    	no array syntax
+//
+// It is the words and not the source text, which is what makes one rule
+// rather than a slice of the script: `a=(1    2` with `3)` on the next line
+// traces `a=(1 2 3)` in bash and `a=( 1 2 3 )` in the other two, so every
+// shell that has the construct rebuilds the list from the elements and only
+// the spacing inside the parentheses is in dispute.
+//
+// Decoration, so it is on Diagnostics rather than on Semantics for the
+// reason TraceStyle and TraceQuoting are: it decides what is *written* and
+// not what happens.
+type TraceArrayLiteral int
+
+const (
+	// TraceArrayTight writes the list with nothing between the parentheses
+	// and the elements: bash, and the substrate's own.
+	TraceArrayTight TraceArrayLiteral = iota
+	// TraceArraySpaced writes a space inside each parenthesis: ksh93 and
+	// zsh, which trace `a=( 1 2 )` and an empty literal as `a=( )`.
+	TraceArraySpaced
+)
+
 // TraceQuoting is how a shell renders a word that needs quoting.
 type TraceQuoting int
 
@@ -101,9 +130,75 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string) {
 	d := r.diag()
 	words := make([]string, len(assigns))
 	for i, a := range assigns {
-		words[i] = a.Name + "=" + traceQuote(values[i], d.TraceQuoting)
+		words[i] = traceAssign(a, values[i], d)
 	}
 	r.traceLine(strings.Join(words, " "), d)
+}
+
+// traceAssign spells one assignment: the target as the script wrote it, and
+// then the value.
+//
+// The *target* comes from the tree and the *value* from the expansion, which
+// is the split every shell that has these constructs makes. An element write
+// keeps its subscript, an append keeps its `+=`, and an array literal keeps
+// its elements — `a=(1 2)`, `a[0]=z` and `x+=b` traced as `a=”`, `a=z` and
+// `x=b` while this was built from the name and one scalar, which is three
+// different wrong answers to "what did the script do" and no diagnostic
+// (#1937).
+//
+// Unexpanded is a fact about the subscript and not a shortcut. Measured
+// 2026-09-11 with `i=2; a[$i]=hello`: bash 5.3.15, bash 3.2.57 and zsh 5.9.2
+// all trace `a[$i]=hello`, where ksh93 traces `a[2]=hello` — so two of the
+// three print what was typed, and printing what it came to is one shell's
+// answer rather than the rule. ksh93's reading is recorded in the corpus and
+// deliberately not modeled: evaluating the subscript here would evaluate it a
+// second time, with `a[$((i++))]=v` incrementing twice, which is exactly the
+// double run #1915 fixed for a scalar's value. Tracked as #1959.
+func traceAssign(a *syntax.Assign, value string, d Diagnostics) string {
+	var b strings.Builder
+	b.WriteString(a.Name)
+	if a.Index != nil {
+		b.WriteString("[")
+		b.WriteString(syntax.PrintWord(a.Index))
+		b.WriteString("]")
+	}
+	if a.Append {
+		b.WriteString("+")
+	}
+	b.WriteString("=")
+	if a.IsArray {
+		b.WriteString(traceArrayLiteral(a.Elems, d.TraceArrayLiteral))
+		return b.String()
+	}
+	b.WriteString(traceQuote(value, d.TraceQuoting))
+	return b.String()
+}
+
+// traceArrayLiteral renders `(1 2)` from the elements as they were written.
+//
+// From the words rather than from the value stored, because the trace stands
+// in front of the assignment: bash traces `a=($(echo x))` and *then* runs the
+// substitution, measured 2026-09-11, so the list it prints cannot be the one
+// the name came to hold.
+//
+// ksh93 and zsh do print the expanded elements — `x='p q'; a=("$x" r)` traces
+// `a=( 'p q' r )` in both — and that half is recorded in the corpus and not
+// modeled here, for the reason traceAssign gives about the subscript:
+// expanding the elements to print them would expand them twice. Tracked as
+// #1959.
+func traceArrayLiteral(elems []*syntax.Word, style TraceArrayLiteral) string {
+	words := make([]string, len(elems))
+	for i, w := range elems {
+		words[i] = syntax.PrintWord(w)
+	}
+	joined := strings.Join(words, " ")
+	if style != TraceArraySpaced {
+		return "(" + joined + ")"
+	}
+	if joined == "" {
+		return "( )"
+	}
+	return "( " + joined + " )"
 }
 
 // traceLine writes one trace line.

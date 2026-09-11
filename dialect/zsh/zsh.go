@@ -1906,9 +1906,10 @@ func Diagnostics() interp.Diagnostics {
 			{Prefix: "-u: processes                       ", Res: interp.ResourceProcesses, Scale: 1},
 			{Prefix: "-n: file descriptors                ", Res: interp.ResourceOpenFiles, Scale: 1},
 		},
-		TraceQuoting:   interp.QuoteShell,
-		TraceStyle:     interp.TraceNameLine,
-		TraceForHeader: interp.TraceForAssign,
+		TraceQuoting:      interp.QuoteShell,
+		TraceStyle:        interp.TraceNameLine,
+		TraceForHeader:    interp.TraceForAssign,
+		TraceArrayLiteral: interp.TraceArraySpaced,
 		// zsh names the last token it read and nothing else.
 		EvalNaming:       interp.SourceReplacesShell,
 		SourceFileNaming: interp.SourceReplacesShell,

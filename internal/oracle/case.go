@@ -2981,6 +2981,42 @@ echo "reached-after st=$?"`,
 		Why:     "the other half of expanding once: each assignment lands before the next is expanded, so every shell traces `y=1` and none of them traces an empty `y`. It says the trace is built from the values the run actually stored, which is what a reader of a trace is relying on — expanding the whole list up front to print it reported `y=''` and stored 1",
 	},
 	{
+		ID: "xtrace/array-literal-spelling-diverges", Category: "shell options",
+		Snippet: `set -x; a=(1 2)`,
+		Why:     "bash writes the list with nothing inside the parentheses and ksh93 and zsh write a space inside each — the one thing the three disagree about once the elements are printed at all, and Diagnostics.TraceArrayLiteral. This traced `a=''` in every dialect until #1937: the elements never reached the trace, so the line read as an assignment that had cleared the name",
+	},
+	{
+		ID: "xtrace/array-literal-is-rebuilt-from-its-elements", Category: "shell options",
+		Snippet: `set -x; a=(1    2
+3)`,
+		Why: "unanimous, and what makes the row above a rule rather than a slice of the script: every shell that has the construct rebuilds the list from the element words, one space apart and on one line, rather than reprinting what was typed. A `for` header is the other way round in bash — it is reprinted verbatim — so the two could not share an implementation",
+	},
+	{
+		ID: "xtrace/array-literal-elements-diverge", Category: "shell options",
+		Snippet: `set -x; x="p q"; a=("$x" r)`,
+		Why:     "the deeper half of the same split: bash prints the element words as written, quotes and all, where ksh93 and zsh print what they expanded to. It follows from *when* each traces — bash writes the line before the expansion and the other two after it, which `set -x; a=($(echo x))` shows by the order of the two lines. Recorded and not modeled: expanding the elements to print them would expand them twice, with both sets of side effects, which is the double run #1915 fixed for a scalar's value (#1959)",
+	},
+	{
+		ID: "xtrace/empty-array-literal-diverges", Category: "shell options",
+		Snippet: `set -x; b=(); echo after`,
+		Why:     "ksh93 traces nothing at all for an empty literal — not `b=()` and not `b=( )` — where bash and zsh each trace it in their own spelling. A third answer on the same construct, recorded rather than modeled (#1959)",
+	},
+	{
+		ID: "xtrace/element-assignment-keeps-its-subscript", Category: "shell options",
+		Snippet: `set -x; a=(x y); a[1]=z`,
+		Why:     "unanimous: an element write traces with its subscript. It dropped it and traced `a=z`, which is indistinguishable from an assignment that replaced the whole name — the specific wrong answer somebody debugging an array would act on (#1937)",
+	},
+	{
+		ID: "xtrace/element-subscript-spelling-diverges", Category: "shell options",
+		Snippet: `set -x; i=2; a[$i]=v`,
+		Why:     "two against one on which subscript is printed: bash and zsh print what was written and ksh93 prints what it came to. The majority reading is what this shell does, and it is also the only one that costs nothing — evaluating the subscript to print it would evaluate it twice, so `a[$((i++))]=v` would increment twice (#1959)",
+	},
+	{
+		ID: "xtrace/append-assignment-keeps-its-operator", Category: "shell options",
+		Snippet: `set -x; x=1; x+=b`,
+		Why:     "unanimous: an append traces as `x+=b` and not as `x=b`. Dropping the operator made the line wrong whichever way it was read — as a replacement by `b`, which is not what happened, or as an append whose value is the result, which `b` is not (#1937)",
+	},
+	{
 		ID: "xtrace/disabling-set-diverges", Category: "shell options",
 		Snippet: `set -x; set +x; echo done`,
 		Why:     "ksh93 applies the change before printing the command that makes it, so the command that stops tracing leaves no trace of itself",

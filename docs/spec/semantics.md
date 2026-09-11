@@ -634,26 +634,40 @@ successful `exec`, not as a rule but because the trap died with the process
 — so standing in a child means clearing it by hand or printing a handler
 nothing else prints.
 
-## One option, six divergences
+## One option, nine divergences
 
 `set -x` produced more disagreement than any other single feature
 measured, and all of it is decoration. The structure is unanimous — every
 simple command to stderr, expanded, before it runs, and compound commands
-not traced — and then the four shells differ on the prefix, on whether an
-expanded field with a space in it is quoted, on which quoting a embedded
-quote gets, on whether `a=1 b=2` is one line or two, on whether `set +x`
-prints itself, and on whether a `for` header is printed at all.
+not traced — and then the four shells differ on the prefix, on whether
+that prefix repeats at each level of indirection, on whether an expanded
+field with a space in it is quoted, on which quoting an embedded quote
+gets, on whether `a=1 b=2` is one line or two, on whether `set +x` prints
+itself, on whether a `for` header is printed at all, on whether an array
+literal has a space inside each parenthesis, and on whether that literal's
+elements are the words the script wrote or what they expanded to.
 
-Four are implemented. Two are recorded and deliberately not: bash and zsh
-print a compound command's header once per iteration, and ksh93 prints
-pipeline elements last-first, which follows from its running the last one
-in the current shell. Both are visible only in a debugging aid, and
-reproducing them costs more than the fidelity is worth — which is a
-judgement, and is written here so it can be revisited rather than
-rediscovered.
+Seven are implemented. The rest are recorded and deliberately not: bash
+and zsh print a compound command's header once per iteration, ksh93 prints
+pipeline elements last-first — which follows from its running the last one
+in the current shell — and ksh93 prints the *expanded* elements and the
+*evaluated* subscript of an assignment where bash and zsh print what was
+typed. That last one has a cost rather than only a judgement behind it:
+expanding an element list to print it would expand it twice, side effects
+and all, which is the double run `Runner.assignValue` exists to prevent.
+The others are visible only in a debugging aid, and reproducing them costs
+more than the fidelity is worth — which is a judgement, and is written here
+so it can be revisited rather than rediscovered.
+
+What the trace *is* built from was itself a divergence hiding as a bug. It
+was the name and one scalar value, so `a=(1 2)` traced `a=''`, `a[0]=z`
+traced `a=z` and `x+=b` traced `x=b` — a construct reported as a different
+construct, silently and at status 0. The target comes from the tree and the
+value from the expansion, which is the split every shell that has these
+constructs makes.
 
 The count matters more than any one of them. An option nobody would call
-contentious carries six divergences, which is the strongest evidence yet
+contentious carries nine divergences, which is the strongest evidence yet
 for the claim this document opens with: dialect is not a ladder, and the
 disagreements are not where anyone expects them.
 

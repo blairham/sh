@@ -239,3 +239,69 @@ func TestXtraceForHeaderIsUnexpanded(t *testing.T) {
 		t.Errorf("got %q, want the quotes kept", got)
 	}
 }
+
+// TestTraceOfAnAssignmentKeepsItsOwnSpelling: the target comes from the tree
+// and the value from the expansion, so an element write keeps its subscript,
+// an append keeps its operator and an array literal keeps its elements.
+//
+// The unanimous half of #1937 — every shell that has these constructs agrees
+// on all three — where the trace used to be built from the name and one
+// scalar value and answered `a=”`, `a=z` and `x=b`.
+func TestTraceOfAnAssignmentKeepsItsOwnSpelling(t *testing.T) {
+	sem := permissive()
+	for _, c := range []struct{ src, want string }{
+		// The elements, rather than the empty string a nil value renders to.
+		{`set -x; a=(1 2)`, "+ a=(1 2)\n"},
+		// An empty literal is not a bare `name=`, and does not print as one.
+		{`set -x; b=()`, "+ b=()\n"},
+		// The subscript, so an element write cannot be read as one that
+		// replaced the whole name.
+		{`set -x; a=(x y); a[1]=z`, "+ a=(x y)\n+ a[1]=z\n"},
+		// The operator, so an append cannot be read as a replacement.
+		{`set -x; x=1; x+=b`, "+ x=1\n+ x+=b\n"},
+		{`set -x; a=(1); a+=(2)`, "+ a=(1)\n+ a+=(2)\n"},
+	} {
+		if got := traceOf(t, c.src, sem, Diagnostics{}); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.src, got, c.want)
+		}
+	}
+}
+
+// TestTraceOfASubscriptIsWhatWasWritten: the subscript is printed unexpanded,
+// which is what keeps the trace from evaluating it a second time — `a[$((i++))]=v`
+// increments once, and the trace says what the script said.
+func TestTraceOfASubscriptIsWhatWasWritten(t *testing.T) {
+	sem := permissive()
+	got := traceOf(t, `set -x; i=2; a[$i]=v; echo $i`, sem, Diagnostics{})
+	if want := "+ i=2\n+ a[$i]=v\n+ echo 2\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	got = traceOf(t, `set -x; i=0; a[$((i++))]=v; echo $i`, sem, Diagnostics{})
+	if want := "+ i=0\n+ a[$((i++))]=v\n+ echo 1\n"; got != want {
+		t.Errorf("side effect: got %q, want %q", got, want)
+	}
+}
+
+// TestTraceArrayLiteralSpacingIsADialectAnswer names the TraceArrayLiteral
+// values rather than the shells that picked them; the presets' picks are
+// asserted in dialect/.
+func TestTraceArrayLiteralSpacingIsADialectAnswer(t *testing.T) {
+	sem := permissive()
+	for _, c := range []struct {
+		style      TraceArrayLiteral
+		full, none string
+	}{
+		{TraceArrayTight, "+ a=(1 2)\n", "+ a=()\n"},
+		{TraceArraySpaced, "+ a=( 1 2 )\n", "+ a=( )\n"},
+	} {
+		diag := Diagnostics{TraceArrayLiteral: c.style}
+		if got := traceOf(t, `set -x; a=(1 2)`, sem, diag); got != c.full {
+			t.Errorf("%v: got %q, want %q", c.style, got, c.full)
+		}
+		// An empty list has one pair of parentheses either way, so the
+		// spaced answer cannot double its space.
+		if got := traceOf(t, `set -x; a=()`, sem, diag); got != c.none {
+			t.Errorf("%v: empty: got %q, want %q", c.style, got, c.none)
+		}
+	}
+}

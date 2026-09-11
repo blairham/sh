@@ -1327,7 +1327,7 @@ var Corpus = []Case{
 			"escapable there for everyone but zsh. Single quotes are not a run " +
 			"at all in a quoted operand, so the second field is `A'}'B` in five " +
 			"and `A'\\}'B` only in bash 3.2. Recorded as the measurement behind " +
-			"the split; ours gives zsh's answer in every dialect (#1971)",
+			"the split; ours gives zsh's answer in every dialect (#2001)",
 	},
 	{
 		ID: "param/bare-brace-in-an-unquoted-operand", Category: "expansion",

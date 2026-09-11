@@ -158,7 +158,7 @@ Where it *stops* is a `"` written inside the operand, which opens a run
 of its own — and that is the one corner of this the panel splits on.
 `"${u-"A\}B"}"` is `A\}B` in zsh and `A}B` in the other five, so the
 brace is escapable inside a nested run for everyone but zsh. Not modeled
-yet; see #1971.
+yet; see #2001.
 
 The rule matters because text is built this way and read back. The
 `${(e)}` pattern powerlevel10k assembles is a run of `${NAME-<sep>\}`

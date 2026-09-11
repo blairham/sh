@@ -5845,7 +5845,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   v=x; w='a}b'; printf '[%s]' "${v/x/A\}B}" "${v//x/A\}B}" "${w/a\}b/Z}" "${w%\}b}"; echo
   ```
-- `core/backslash-before-a-brace-inside-nested-quotes` — where the escape stops, and the one corner of it the panel splits on: inside a double-quoted run written *within* the operand, zsh answers `A\}B` and the other five answer `A}B`, so the brace is escapable there for everyone but zsh. Single quotes are not a run at all in a quoted operand, so the second field is `A'}'B` in five and `A'\}'B` only in bash 3.2. Recorded as the measurement behind the split; ours gives zsh's answer in every dialect (#1971)
+- `core/backslash-before-a-brace-inside-nested-quotes` — where the escape stops, and the one corner of it the panel splits on: inside a double-quoted run written *within* the operand, zsh answers `A\}B` and the other five answer `A}B`, so the brace is escapable there for everyone but zsh. Single quotes are not a run at all in a quoted operand, so the second field is `A'}'B` in five and `A'\}'B` only in bash 3.2. Recorded as the measurement behind the split; ours gives zsh's answer in every dialect (#2001)
   ```sh
   unset u; printf '[%s]' "${u-"A\}B"}" "${u-A'\}'B}"; echo
   ```

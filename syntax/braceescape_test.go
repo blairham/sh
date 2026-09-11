@@ -50,7 +50,7 @@ func TestABackslashEscapesTheBraceThatWouldCloseAQuotedOperand(t *testing.T) {
 
 // A `"` written inside the operand opens a run of its own, and the brace is
 // not escapable in one. That is zsh's answer and the other five shells escape
-// it there too, which is a split with no axis for it yet (#1971) — this row
+// it there too, which is a split with no axis for it yet (#2001) — this row
 // pins what the parser does today rather than endorsing it.
 func TestTheBraceIsNotEscapableInsideANestedQuotedRun(t *testing.T) {
 	const src = `printf "%s" "${u-"A\}B"}"`

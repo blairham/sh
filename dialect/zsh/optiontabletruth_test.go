@@ -28,7 +28,7 @@ import (
 // swept. `emacs` and `vi` are the substrate's own editing mode, which really
 // moves, so they became `set -o` backed. The other nine are states this shell
 // holds and does not leave: they became **recorded** — recognized, remembered,
-// reported and acted on by nothing — which is the kind the table's other 141
+// reported and acted on by nothing — which is the kind the table's other 140
 // names already use, and the kind the three-way split had no room for.
 
 // zshOptionMove runs one name in both directions and answers what it said.

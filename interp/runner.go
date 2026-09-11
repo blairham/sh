@@ -2261,7 +2261,7 @@ func (r *Runner) runExitTrap(ctx context.Context) {
 // when the trap is set and refuses one that will not parse.
 func (r *Runner) runTrapBody(ctx context.Context, body string) {
 	defer r.enterTrapBody()()
-	p := syntax.NewParser(body, r.dialect())
+	p := r.ParseWithAliases(body, r.dialect())
 	if r.ask(r.sem().TrapBodyRunsWhatParsed, "a trap body running the part of it that parsed") {
 		r.runTrapBodyByLine(ctx, p, body)
 		return

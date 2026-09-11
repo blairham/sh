@@ -164,6 +164,17 @@ func (s sourced) readerAxis() string {
 	return "whether a sourced file runs the commands it has read before a later line fails to parse"
 }
 
+// hasALaterLine reports whether src has a newline with anything but blanks
+// after it — which is what makes the reader's answer decidable.
+//
+// A line changes how a *later* line parses and never how its own does, so
+// one-line text reads the same whichever way it is read. The trailing
+// newline every file ends with is not a later line, and treating it as one
+// made `. inc.sh` ask the question of a one-line file.
+func hasALaterLine(src string) bool {
+	return strings.ContainsRune(strings.TrimRight(src, " \t\r\n"), '\n')
+}
+
 // nextBorrowedLine hands back the next group of statements to run: the whole
 // text at once where it was parsed through first, and one logical line at a
 // time where it is read as it is run.
@@ -233,21 +244,41 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		defer func() { r.borrowedFiles-- }()
 	}
 	d := r.dialect().On(s.route())
-	p := syntax.NewParser(src, d)
-	whole := p.Parse()
-	if err := p.Err(); err != nil {
-		// Text that will not parse all the way through, which is the only
-		// case where it matters whether the shell read it through first or a
-		// command at a time — parsing has no effect of its own, so text that
-		// parses runs the same either way and the question is not asked of
-		// it. See sourced.runsWhatItParsed.
-		if !r.ask(s.runsWhatItParsed(r.sem()), s.readerAxis()) {
+	// With this shell's alias tables, because borrowed text is text this
+	// shell reads: `alias t=echo` before an `eval "t hi"` or a `. f.sh` that
+	// uses `t` prints `hi` in every shell of the panel that expands aliases
+	// at all, and printed `command not found` here (#2096).
+	p := r.ParseWithAliases(src, d)
+	var whole *syntax.File
+	// Read a line at a time where the dialect reads as it runs, rather than
+	// only after a whole-text parse has failed.
+	//
+	// That used to be the fallback and the note beside it said parsing has
+	// no effect of its own, so text that parses runs the same either way.
+	// **That is false wherever a line can change how the next one parses**,
+	// and an alias is the plain case: `alias a='echo hit'` on one line and
+	// `a` on the next prints `hit` from a sourced file in dash and zsh and
+	// does not in ksh93 — which is exactly how the three answer
+	// sourced.runsWhatItParsed, so it is that axis rather than a new one.
+	// A `setopt` or a `shopt` that moves the grammar is the same shape.
+	//
+	// So the question is now asked of text that parses as well as of text
+	// that does not — but only where it can decide anything. A line can
+	// change how a *later* line parses and not how its own does, so text
+	// with no newline in it reads the same either way and is not asked:
+	// `eval "echo hi"` still runs in a runner that has chosen no dialect.
+	byLine := false
+	if hasALaterLine(src) {
+		byLine = r.ask(s.runsWhatItParsed(r.sem()), s.readerAxis())
+		if r.unspecified {
+			return 2
+		}
+	}
+	if !byLine {
+		whole = p.Parse()
+		if err := p.Err(); err != nil {
 			return r.borrowedTextFailed(err, s, src)
 		}
-		// Read again, a line at a time, running each as it is read, so that
-		// the failure is met where a reader would meet it: with everything
-		// before it already done.
-		p, whole = syntax.NewParser(src, d), nil
 	}
 	// Whatever a borrowed script reports is the *script's*, not this
 	// builtin's. Measured: an unset parameter inside a sourced file is

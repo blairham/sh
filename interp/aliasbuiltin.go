@@ -7,6 +7,8 @@ import (
 	"context"
 	"sort"
 	"strings"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // `alias` and `unalias` keep the tables a shell substitutes from.
@@ -411,6 +413,38 @@ func (r *Runner) ExpandingSuffixAlias(suffix string) (string, bool) {
 		return "", false
 	}
 	return r.LookupSuffixAlias(suffix)
+}
+
+// ParseWithAliases builds a parser for text this shell is about to read, with
+// all three alias tables already on it.
+//
+// One place, because there are six of them: `eval`, a sourced file, a command
+// substitution, a backquoted one, a trap body being run and a trap action
+// being checked. Each was a `syntax.NewParser` that assigned nothing, so an
+// alias that worked at the top of a script stopped working one level down —
+// and a fix applied to one of them would have left the other five (#2096).
+//
+// The dialect is a parameter because the callers do not agree on it: borrowed
+// text is read as the *route it arrived by*, and `eval`'s text is a command
+// string where a sourced file is a file.
+func (r *Runner) ParseWithAliases(src string, d syntax.Dialect) *syntax.Parser {
+	p := syntax.NewParser(src, d)
+	r.ExpandAliasesIn(p)
+	return p
+}
+
+// ExpandAliasesIn hands a parser the three tables, for a caller that built one
+// itself.
+//
+// Through the three Expanding* methods rather than the tables directly, so
+// that a shell whose option is off — `shopt -u expand_aliases`, `unsetopt
+// aliases` — expands nothing here either. Measured: both of those turn
+// expansion off inside a sourced file and inside `eval` as well as at the top
+// level, so the option is what gates borrowed text.
+func (r *Runner) ExpandAliasesIn(p *syntax.Parser) {
+	p.Aliases = r.ExpandingAlias
+	p.GlobalAliases = r.ExpandingGlobalAlias
+	p.SuffixAliases = r.ExpandingSuffixAlias
 }
 
 // AliasExpansion reports whether a line parsed now would have its alias words

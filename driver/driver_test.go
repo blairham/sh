@@ -33,6 +33,11 @@ import (
 func shell() driver.Shell {
 	sh := driver.Shell{Name: "testsh", Dialect: syntax.Core()}
 	sh.Semantics.ExecOpenedFdReachesACommand = interp.Yes
+	// How a sourced file of more than one line is read. Answered here
+	// rather than per test because it is reached by every `.` of a real
+	// file now that a line can change how the next one parses — see
+	// interp's runSourced and #2096. Yes is what four of the six do.
+	sh.Semantics.SourcedFileRunsWhatItParsed = interp.Yes
 	return sh
 }
 

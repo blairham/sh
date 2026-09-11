@@ -115,7 +115,7 @@ func (r *Runner) descriptorIsTerminal(fd int) bool {
 // The answer is false there either way — the shells that stay silent about it
 // say false at 1 — so a caller that declines to complain can use it as it is.
 //
-// The surrounding space is trimmed because four of the six panel columns do:
+// The surrounding space is trimmed because five of the six panel columns do:
 // `[ -t ' 1 ' ]` on a pseudo-terminal is true in dash, bash 5.3, bash-as-sh,
 // bash 3.2 and zsh 5.9.2, and false in ksh93 alone.
 func (r *Runner) terminalTest(operand string) (answer, isNumber bool) {

@@ -4612,6 +4612,16 @@ type Semantics struct {
 	// shell a person cannot repair from.
 	StartupFileOptions StartupFileOptions
 
+	// VersionOption is how this shell answers an invocation option asking it
+	// to name its version — `--version`. The zero value is a shell with no
+	// such option, which is one of the four.
+	//
+	// It is an invocation input like StartupFileOptions above, read by the
+	// front end rather than by the interpreter, and it is here for the same
+	// reason: the spelling is the dialect's, and a front end with an opinion
+	// about it would have to hold every dialect's at once.
+	VersionOption VersionOption
+
 	// FunctionSearchVariable names the scalar this shell searches for
 	// *function definition files* — the parameter an `autoload`d name is
 	// looked up on. Empty means the shell has no such search, which is three
@@ -5682,6 +5692,53 @@ type StartupFileOptions struct {
 	// does `bash --rcfile f -l -i`, where a login shell was not going to read
 	// an interactive file at all.
 	NameInteractive string
+}
+
+// VersionOption is what a shell does when its invocation asks for a version.
+//
+// Measured 2026-09-11 with `env -i <shell> --version`:
+//
+//	                  writes                                       on      exit
+//	bash 5.3.15       GNU bash, version 5.3.15(1)-release (…)      stdout  0
+//	bash 3.2.57       GNU bash, version 3.2.57(1)-release (…)      stdout  0
+//	zsh 5.9.2         zsh 5.9.2 (…)                                stdout  0
+//	ksh93u+           "  version         sh (AT&T Research) …"     stderr  2
+//	dash              /bin/dash: 0: Illegal option --              stderr  2
+//
+// Three facts, and none of them follows from the others: whether the shell
+// knows the option at all, which stream the answer goes to, and what it exits.
+// ksh93 is the reason all three are fields — it answers with its version and
+// still exits a failure, because the option reaches its generic option reader
+// rather than a case of its own.
+//
+// A dialect that names no spelling refuses the word the way any unknown long
+// option is refused, which is what dash does.
+//
+// Measured too: the answer *ends* the invocation. `--version -c 'echo hi'`
+// prints the version and does not run the command in bash, zsh and ksh93
+// alike, and a second `--version` changes nothing.
+type VersionOption struct {
+	// Spellings names the option, whitespace-separated and written exactly
+	// as a command line writes it — `--version`. Empty means the shell has
+	// no such option.
+	//
+	// A string rather than a slice for the reason StartupFileOptions' fields
+	// are strings: a slice reached from Semantics makes the whole vector
+	// uncomparable, and an option spelling has no whitespace to lose.
+	Spellings string
+
+	// Text is the line the shell writes, without its newline. It is the
+	// dialect's own — the version *this* shell implements, not the one a
+	// panel member on this machine reports.
+	Text string
+
+	// ToStandardError writes the answer on standard error rather than
+	// standard output, which one shell in the panel does.
+	ToStandardError bool
+
+	// Status is what the shell exits after answering. Zero for the three
+	// that treat the option as a request; ksh93 exits 2.
+	Status int
 }
 
 // NameOperands is what a builtin takes where it wants a name.

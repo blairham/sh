@@ -119,6 +119,10 @@ func Semantics() interp.Semantics {
 	// also measured — a startup file that breaks it is escaped by moving
 	// the file.
 	s.StartupFileOptions = interp.StartupFileOptions{Login: "-l"}
+	// And no version option, which is left as the zero value deliberately:
+	// measured 2026-09-11, `dash --version` is `Illegal option --` at status
+	// 2, the same refusal every long option but `--login`'s absence gets.
+	// This shell is the panel's only one that will not name its version.
 	s.CommandStringShowsCInDollarDash = interp.No
 	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No

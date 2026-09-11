@@ -218,6 +218,14 @@ func Semantics() interp.Semantics {
 	// this shell has none, so a startup file that breaks it is escaped by
 	// moving the file, which is measured and is what it does.
 	s.StartupFileOptions = interp.StartupFileOptions{Login: "-l --login"}
+	// The panel's odd one out: this shell names its version on standard
+	// error and exits 2 for having been asked. Measured 2026-09-11.
+	s.VersionOption = interp.VersionOption{
+		Spellings:       "--version",
+		Text:            versionLine,
+		ToStandardError: true,
+		Status:          2,
+	}
 	// `ksh -c 'echo $-'` reports `chsB` — both route letters, where bash
 	// shows `c` alone and dash and zsh show neither. Read down its rows and
 	// ksh93's rule for `s` is "no script file was named" where the other

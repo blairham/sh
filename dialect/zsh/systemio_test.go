@@ -609,6 +609,49 @@ print -r -- "unreached=$?"`, "zsh:2: read-only variable: buf\n"},
 	})
 }
 
+// `sysopen -u` resolves its destination through the same store, which is what
+// makes the two builtins agree about one operand rather than each having a
+// rule. It reached the brackets by a walk of its own until #1532: a subscript
+// that would not evaluate was **silence at status 0** where the shell says so
+// and stops, and a bad *shape* gave the store's complaint where the shell
+// calls the operand a bad name and runs on. Measured on zsh 5.9.2.
+//
+// The descriptor number is not asserted — the two shells pick different ones —
+// so the string row counts characters instead: one character replaced by a
+// two-digit number is a string of four, and an array would be neither.
+func TestSysopenPutsTheDescriptorThroughTheSameStore(t *testing.T) {
+	systemDeadline(t, "sysopen destinations", func() {
+		out, st, errs := runZshSplit(t, t.TempDir(), `s=abc
+sysopen -u 's[2]' -r /dev/null
+print -r -- "scalar=$? len=${#s}"
+typeset -A h
+sysopen -u 'h[k]' -r /dev/null
+print -r -- "assoc=$? set=${+h[k]}"
+sysopen -u 'g[]' -r /dev/null
+print -r -- "shape=$?"`)
+		want := "scalar=0 len=4\nassoc=0 set=1\nshape=1\n"
+		if out != want || st != 0 {
+			t.Errorf("sysopen destinations = %q (status %d), want %q", out, st, want)
+		}
+		if w := "zsh:sysopen:7: not an identifier: g[]\n"; errs != w {
+			t.Errorf("refusal = %q, want %q", errs, w)
+		}
+	})
+	// And a subscript the store will not evaluate ends the script, where it
+	// used to be nothing at all — the silent half of a wrong answer, since the
+	// next command read a descriptor the shell never put anywhere.
+	systemDeadline(t, "sysopen bad subscript", func() {
+		out, st, errs := runZshSplit(t, t.TempDir(), `sysopen -u 'g[1+]' -r /dev/null
+print -r -- "unreached=$?"`)
+		if out != "" || st != 1 {
+			t.Errorf("sysopen 'g[1+]' = %q (status %d), want the script given up at 1", out, st)
+		}
+		if w := "zsh:1: bad math expression: operand expected at end of string\n"; errs != w {
+			t.Errorf("refusal = %q, want %q", errs, w)
+		}
+	})
+}
+
 // readBackForTest is a file a case wrote, read back as a string.
 func readBackForTest(t *testing.T, path string) string {
 	t.Helper()

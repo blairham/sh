@@ -628,3 +628,86 @@ func TestAskingWhetherANameIsAnAssociationProducesNothing(t *testing.T) {
 		t.Errorf("the element written = %q, want %q", got, want)
 	}
 }
+
+// One element of a *stored* association, read and written without the whole
+// table passing through the caller's hands. The keyed counterpart of
+// SetAssoc and GetAssoc, which copy — and the copying is the point: a
+// dialect keeping a set of names in an association asked about one name per
+// lookup and added one name per write, so both halves were linear in the set
+// and filling it was quadratic.
+func TestOneElementOfAStoredAssociationIsReadAndWrittenOnItsOwn(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	r.Register("mark", func(rr *Runner, _ context.Context, args []string) int {
+		rr.SetAssocElement(args[0], args[1], args[2])
+		return 0
+	})
+	r.Register("ask", func(rr *Runner, _ context.Context, args []string) int {
+		v, ok := rr.AssocElement(args[0], args[1])
+		if !ok {
+			_, _ = rr.Out().Write([]byte("[absent]"))
+			return 0
+		}
+		_, _ = rr.Out().Write([]byte("[" + v + "]"))
+		return 0
+	})
+	// The name does not exist until the first write, which is the case a
+	// "read the table, add to it, write it back" helper gets for free and a
+	// keyed write has to do itself.
+	runSeam(t, r, `ask set a
+mark set a one
+mark set b two
+ask set a
+ask set b
+ask set c
+ask nosuchname a`)
+	if got, want := out.String(), "[absent][one][two][absent][absent]"; got != want {
+		t.Errorf("keyed reads and writes = %q, want %q", got, want)
+	}
+	// And what was written is one association, visible as one — not a
+	// private table beside the name.
+	runSeam(t, r, `printf '[%s]' "${set[a]}" "${set[b]}"`)
+	if got, want := out.String(), "[absent][one][two][absent][absent][one][two]"; got != want {
+		t.Errorf("the same name read as a shell parameter = %q, want %q", got, want)
+	}
+}
+
+// A sparse array reads exactly as it did before the dense shortcut was put
+// in front of readArray, under *both* answers to the axis that decides what
+// a gap is. The shortcut claims only subscripts 0 to n-1 with none missing,
+// and the two readings of anything else are what it must not quietly
+// replace: one yields the assigned elements, the other walks the whole
+// extent and pads the gap with empties.
+func TestASparseArrayReadsTheSameUnderTheDenseShortcut(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		sparse Answer
+		want   string
+	}{
+		{"assigned only", Yes, "[x][y][z][q]"},
+		{"the whole extent", No, "[x][y][z][][][][][q]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errs strings.Builder
+			dg := Diagnostics{Location: LocationTightLine, BuiltinLocation: LocationTightLine}
+			sem := Semantics{FatalErrorStatusIsOne: Yes, ArraysAreSparse: tc.sparse, ArrayBaseIsZero: Yes}
+			r := newTestRunner(t, &Runner{
+				Stdout: &out, Stderr: &errs, Diagnostics: &dg, Semantics: &sem, Name: "testsh",
+			})
+			runSeam(t, r, "a=(x y z)\na[7]=q\nprintf '[%s]' \"${a[@]}\"")
+			if out.String() != tc.want {
+				t.Errorf("a gap at 3..6 = %q, want %q (stderr %q)", out.String(), tc.want, errs.String())
+			}
+		})
+	}
+}
+
+// And a dense one is unchanged, which is the case the shortcut does claim.
+func TestADenseArrayReadsTheSameUnderTheDenseShortcut(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	runSeam(t, r, "a=(x y z)\nprintf '[%s]' \"${a[@]}\"")
+	if got, want := out.String(), "[x][y][z]"; got != want {
+		t.Errorf("a dense array = %q, want %q", got, want)
+	}
+}

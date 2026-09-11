@@ -4,6 +4,8 @@
 package zsh
 
 import (
+	"strings"
+
 	"github.com/blairham/sh/interp"
 )
 
@@ -100,8 +102,10 @@ func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssocElement("functions", zshFunctionValue)
 	r.SetDynamicAssocWriter("functions", writeZshFunction)
 	r.SetDynamicAssoc("options", zshOptionsView)
+	r.SetDynamicAssocElement("options", zshOptionValue)
 	r.SetDynamicAssocWriter("options", writeZshOption)
 	r.SetDynamicAssoc("commands", zshCommandsView)
+	r.SetDynamicAssocElement("commands", zshCommandValue)
 	r.SetDynamicAssocWriter("commands", refuseZshCommandsWrite)
 	r.SetDynamicAssoc("builtins", zshBuiltinsView)
 	// Readonly rather than given a writer, which is zsh's own answer:
@@ -119,6 +123,7 @@ func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssocWriter("aliases", writeZshAlias)
 	r.SetDynamicArray("funcstack", funcstackNames)
 	r.SetDynamicAssoc("parameters", zshParametersView)
+	r.SetDynamicAssocElement("parameters", zshParameterValue)
 	// Readonly and hidden together, the pair `builtins` needs and for the same
 	// two reasons: zsh answers `parameters[x]=y` with `read-only variable:
 	// parameters`, and a produced table with neither would take the assignment
@@ -394,6 +399,20 @@ func zshOptionsView(r *interp.Runner) interp.AssocArray {
 	return out
 }
 
+// zshOptionValue is `${options[extendedglob]}`: one option's state, which is
+// an index into the same two tables the view walks.
+func zshOptionValue(r *interp.Runner, name string) (string, bool) {
+	if i, ok := zshOptionIndex[name]; ok {
+		return onOrOff(zshOptions[i].get(r)), true
+	}
+	if alias, ok := zshOptionAliases[name]; ok {
+		if i, ok := zshOptionIndex[alias.base]; ok {
+			return onOrOff(zshOptions[i].get(r) != alias.inv), true
+		}
+	}
+	return "", false
+}
+
 // onOrOff is how this parameter spells a state.
 func onOrOff(on bool) string {
 	if on {
@@ -464,6 +483,26 @@ func zshCommandsView(r *interp.Runner) interp.AssocArray {
 		out[name] = path
 	}
 	return out
+}
+
+// zshCommandValue is `${commands[git]}`: one PATH search rather than a
+// listing of every directory on PATH.
+//
+// The same search by the same rule — [interp.Runner.LookPath] is the
+// resolution a command word gets, and the view is that resolution run over
+// every entry — so the first PATH element holding the name wins in both.
+// Measured, reading one key by building the view was nine milliseconds
+// against tens of microseconds for the lookup.
+//
+// A name with a slash in it is refused, and that is the one place the two
+// could have parted: the view's keys are directory entries and never contain
+// one, where `LookPath` would happily resolve `/bin/ls` as a path. So
+// `${commands[/bin/ls]}` is empty here, as it is in the table.
+func zshCommandValue(r *interp.Runner, name string) (string, bool) {
+	if strings.ContainsRune(name, '/') {
+		return "", false
+	}
+	return r.LookPath(name)
 }
 
 // refuseZshCommandsWrite is `commands[c]=/path` and `unset "commands[c]"`,

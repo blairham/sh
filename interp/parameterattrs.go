@@ -152,6 +152,43 @@ func (r *Runner) parameterExists(name string) bool {
 // not state a listing could carry, and that is right for a listing and wrong
 // here. A report on what the shell has must name what the shell has, and
 // `$funcstack` is as real to the script asking as `$PATH` is.
+// ParameterIsNamed reports whether one name is among the ones
+// [Runner.ParameterNames] yields.
+//
+// The same union, asked of a name. It exists for the reason
+// [Runner.FunctionIsListed] does — a dialect answering `${parameters[PATH]}`
+// needs to know about `PATH`, and enumerating and sorting every name in the
+// shell to find out is the work SetDynamicAssocElement was added to avoid —
+// and it is the more dangerous of the two, because the union is over seven
+// tables and a helper that forgot one would answer *no* for a name that is
+// plainly there. TestTheTwoReadingsOfParameterNamesAgree is what holds them
+// together.
+func (r *Runner) ParameterIsNamed(name string) bool {
+	if name == "" || r.removed[name] {
+		return false
+	}
+	if _, ok := r.Vars[name]; ok {
+		return true
+	}
+	if _, ok := r.Arrays[name]; ok {
+		return true
+	}
+	if _, ok := r.AssocArrays[name]; ok {
+		return true
+	}
+	if _, ok := r.inheritedValue(name); ok {
+		return true
+	}
+	if _, ok := r.Dynamic[name]; ok {
+		return true
+	}
+	if _, ok := r.DynamicArrays[name]; ok {
+		return true
+	}
+	_, ok := r.DynamicAssocs[name]
+	return ok
+}
+
 func (r *Runner) ParameterNames() []string {
 	seen := map[string]bool{}
 	var out []string

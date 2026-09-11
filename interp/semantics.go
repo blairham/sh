@@ -5754,6 +5754,48 @@ type Semantics struct {
 	// parameters go in before the expression is read. See
 	// EmptyArithSubscriptPolicy.
 	EmptyArithSubscript EmptyArithSubscriptPolicy
+	// EmptyParamSubscriptIsAnError refuses `${a[]}` — a subscript written
+	// with nothing at all between the brackets — where a *parameter
+	// expansion* reads it. The same text one level over from
+	// EmptyArithSubscript, and a different answer.
+	//
+	// Measured 2026-09-11, `-c`, with `a=(5 6 7)` so no other axis answers
+	// first:
+	//
+	//	bash 5.3 / as-sh / 3.2   `[${a[]}]: bad substitution`, and the shell ends
+	//	dash                     `Bad substitution`, and the shell ends
+	//	ksh93u+                  `5` — the element the empty expression names
+	//	zsh 5.9.2                `invalid subscript`, and the shell ends
+	//
+	// Five columns refuse and one reads it, which is what makes this an axis
+	// and not a diagnostic: ksh93 takes the brackets as holding an expression
+	// that happens to be empty, so `${a[]}` is element zero, `${s[]}` on a
+	// scalar is the scalar, and `${m[]}` is the value under the empty key.
+	// That is the same reading EmptyArithSubscriptIsTheEmptyExpression
+	// records for the same shell one construct over.
+	//
+	// **It is the *written* brackets and not an empty subscript that arrived
+	// through one.** `w=; ${m[$w]}` is `[]` at status 0 in zsh, because the
+	// subscript text is `$w` and the expansion happens inside the subscript
+	// rather than before it — which is the opposite of the arithmetic case,
+	// where the parameters go in first and `m[$w]` really does become `m[]`.
+	// So the question is asked of the node and answered before anything is
+	// expanded.
+	//
+	// The operator makes no difference in any column: `${#a[]}`, `${a[]-d}`,
+	// `${a[]:-d}`, `${a[]/x/y}` and `${a[]%x}` all answer as the bare shape
+	// does, which is why this is asked where the subscript is read rather
+	// than once per operator.
+	//
+	// dash is in the table for completeness and does not answer it: no
+	// subscript reaches a parameter expansion there at all — `${a[0]}` is
+	// `Bad substitution` too — so the grammar has already refused before this
+	// could be asked.
+	//
+	// The wording is Diagnostics.EmptyParamSubscript, which is empty for
+	// every column whose sentence is its ordinary bad-substitution one.
+	EmptyParamSubscriptIsAnError Answer
+
 	// BlankArithSubscriptIsTheEmptyExpression reads a subscript holding
 	// whitespace and nothing else — `$(( a[ ] ))` — as the blank expression,
 	// which is zero, so the operand is the *element that subscript names*

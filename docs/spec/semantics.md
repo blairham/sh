@@ -9490,6 +9490,56 @@ expression parser's: `invalid subscript`, with no `bad math expression`
 in front of it and no name after it, where an expression that will not
 parse in the same position carries that prefix.
 
+**`EmptyParamSubscriptIsAnError`** — bash yes · dash unspecified · ksh93 no · zsh yes
+
+Refuses `${a[]}` — the same brackets one construct over, where a
+*parameter expansion* reads them instead of an expression. Five of the
+six columns refuse and each ends the input; one reads it.
+
+Measured 2026-09-11, on a script file so that the column which gives up
+only the *line* can be told from the ones that give up the shell:
+
+    s=hi
+    echo "[${s[]}]"
+    a=(5 6 7)
+    echo "[${a[]}]"
+    echo after
+
+    bash 5.3, as sh, 3.2   [${s[]}]: bad substitution   …then `after`, status 0
+    dash                   Bad substitution             (nothing after)
+    ksh93                  [hi]  [5]  after             status 0
+    zsh 5.9.2              invalid subscript            (nothing after)
+
+ksh93 reads it by the rule it reads the arithmetic one with: the
+brackets hold an expression that happens to be empty, which is zero, so
+`${a[]}` is the first element and `${s[]}` on a scalar is the scalar.
+That scalar row is what says the answer is the **element** and not the
+number — a policy worded as "zero" would have given `0` where the shell
+gives `hi`.
+
+**The question is asked of the written brackets and answered before
+anything is expanded**, which is the opposite of the arithmetic site. A
+subscript that *arrived* empty is a different construct: `w=; ${m[$w]}`
+is `[]` at status 0 in the shell that refuses `${m[]}`, because the
+subscript text is `$w` and the expansion happens inside the subscript
+rather than before it. `${m[""]}` is a third thing again — an empty
+*key*, written as two characters, which the associative columns look
+up.
+
+The wording is `Diagnostics.EmptyParamSubscript`, and it is empty for
+four of the five refusing columns: their sentence is the ordinary
+bad-substitution one, subject and all. zsh alone has its own, and it is
+the same `invalid subscript` its arithmetic site uses — but a field of
+its own, because bash's two sites do *not* coincide. There the
+arithmetic one names the subscript and carries on with zero, and this
+one refuses the expansion.
+
+The operator makes no difference in any column — `${#a[]}`, `${a[]-d}`,
+`${a[]:-d}`, `${a[]/x/y}` and `${a[]%x}` all answer as the bare shape
+does — so the question is asked where the subscript is read rather than
+once per operator. dash is in the table for completeness and answers
+nothing: no subscript reaches a parameter expansion there at all.
+
 **`BlankArithSubscriptIsTheEmptyExpression`** — bash yes · dash unspecified · ksh93 yes · zsh no
 
 Reads brackets holding whitespace and nothing else — `$(( a[ ] ))` — as

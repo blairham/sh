@@ -102,6 +102,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"TrailingSeparatorEndsAField", s.TrailingSeparatorEndsAField, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.No},
+		{"EmptyParamSubscriptIsAnError", s.EmptyParamSubscriptIsAnError, interp.Yes},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.No},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},
@@ -315,5 +316,45 @@ func TestAnAssignmentThroughAnExpansionCannotNameAListOrAPositional(t *testing.T
 	out, st := answersRun(t, `set -- p; printf "<%s>" ${@:=abc}`)
 	if out != "<p>" || st != 0 {
 		t.Errorf("a parameter that is there = %q (status %d), want <p> at 0", out, st)
+	}
+}
+
+// TestAnEmptyParameterSubscriptIsRefused is #1763.
+//
+// `${a[]}` is `[${a[]}]: bad substitution` here — the quoting run named, the
+// expansion refused — where this engine expanded it to element zero at status
+// 0 in every dialect. Measured 2026-09-11 on 5.3.15, and identical in 3.2.57
+// and under argv[0] of `sh`.
+//
+// The scalar row is the one that mattered most: `${s[]}` came back with the
+// whole of `s`, which is a plausible value where the shell had stopped.
+func TestAnEmptyParameterSubscriptIsRefused(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`a=(5 6 7); echo "[${a[]}]"`, "[${a[]}]: bad substitution"},
+		{`s=hi; echo "[${s[]}]"`, "[${s[]}]: bad substitution"},
+		{`echo "[${nodecl[]}]"`, "[${nodecl[]}]: bad substitution"},
+		{`a=(5 6 7); echo "[${#a[]}]"`, "[${#a[]}]: bad substitution"},
+		{`a=(5 6 7); echo "[${a[]:-d}]"`, "[${a[]:-d}]: bad substitution"},
+	} {
+		out, st := answersRun(t, tc.src+"\necho AFTER")
+		if !strings.Contains(out, tc.want) {
+			t.Errorf("%s = %q, want %q in it", tc.src, out, tc.want)
+		}
+		// The *line* is given up and the shell is not, which is this column
+		// alone: measured on a script file, `echo after` on the next line
+		// still runs and the shell exits 0. Under `-c` with semicolons the
+		// whole list goes instead, which is the same rule read the other way.
+		if !strings.Contains(out, "AFTER") || st != 0 {
+			t.Errorf("%s = %q (status %d), want the next line to run at 0", tc.src, out, st)
+		}
+	}
+	// A subscript that *arrived* empty is not this, and the control says the
+	// question is asked of the written brackets: `${a[$w]}` with `$w` empty
+	// is element zero at 0 here, exactly as `${a[ ]}` is.
+	for _, src := range []string{`a=(5 6 7); w=; echo "[${a[$w]}]"`, `a=(5 6 7); echo "[${a[ ]}]"`} {
+		out, st := answersRun(t, src)
+		if strings.TrimSpace(out) != "[5]" || st != 0 {
+			t.Errorf("%s = %q (status %d), want [5] at 0", src, out, st)
+		}
 	}
 }

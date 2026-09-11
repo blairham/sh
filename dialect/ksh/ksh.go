@@ -741,6 +741,11 @@ func Semantics() interp.Semantics {
 	// first element. The stream stays clean and the status stays 0, which is
 	// the only one of the three answers the panel gives that says nothing.
 	s.EmptyArithSubscript = interp.EmptyArithSubscriptIsTheEmptyExpression
+	// The one column that reads it at the parameter site too, and by the same
+	// rule: the brackets hold an expression that happens to be empty, so
+	// `a=(5 6 7); ${a[]}` is `5`, `s=hi; ${s[]}` is `hi` and `${m[]}` is the
+	// value under the empty key (#1763).
+	s.EmptyParamSubscriptIsAnError = interp.No
 	// And so is whitespace between them, which is the same reading one text
 	// further along: measured 2026-09-10, `a=(1 2 3); echo $(( a[ ] ))` is
 	// `1` and `(( a[ ] = 9 ))` writes element zero. The two texts coincide

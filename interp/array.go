@@ -1407,6 +1407,12 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if e.Index == nil {
 		return nil, false
 	}
+	if r.refusesEmptyParamSubscript(e) {
+		// Refused, and every reading below is about a subscript there is
+		// none of. Handled rather than absent, so no caller falls through to
+		// the plain name.
+		return nil, true
+	}
 	if len(e.Leading) > 0 {
 		// A chain reads what the subscript before it named rather than what
 		// the name holds, so none of the name's readings below apply: an
@@ -2166,4 +2172,71 @@ func (r *Runner) arrayForWrite(name string) Array {
 		return a
 	}
 	return Array{}
+}
+
+// refusesEmptyParamSubscript is `${a[]}` — brackets written with nothing at
+// all between them — where the dialect refuses it, and reports whether it
+// did.
+//
+// Five of the six columns refuse and each ends the input; ksh93 reads the
+// brackets as an expression that happens to be empty, which is element zero,
+// and that is what this engine already did in every dialect. So the wrong
+// answer was the quiet kind: `${s[]}` on a scalar came back with the scalar
+// at status 0 where the shell had stopped (#1763).
+//
+// **Asked of the node and before anything is expanded**, because a subscript
+// that *arrived* empty is not this: `w=; ${m[$w]}` is `[]` at status 0 in the
+// shell that refuses `${m[]}`, the subscript text being `$w` rather than
+// nothing. That is the opposite of the arithmetic site, where the parameters
+// go in before the expression is read and an empty `$w` really does produce
+// `m[]` — see Semantics.EmptyArithSubscript, which is the same text one
+// construct over with a different answer.
+//
+// Only the plain shape. A flag group selects rather than indexes and a chain
+// reads what the link before it named, and neither construct exists in a
+// column that refuses this, so neither has a measured answer to give.
+func (r *Runner) refusesEmptyParamSubscript(e *syntax.ParamExpr) bool {
+	if e.IndexFlags != nil || len(e.Leading) > 0 || !writtenEmptySubscript(e.Index) {
+		return false
+	}
+	if !r.ask(r.sem().EmptyParamSubscriptIsAnError,
+		"`${a[]}`, a subscript written with nothing in it") {
+		// Either the dialect reads it — ksh93, where the empty expression is
+		// element zero — or no dialect was chosen and ask has said so. The
+		// second is not a value this can invent, so the expansion is still
+		// handled and produces nothing.
+		return r.unspecified
+	}
+	if w := r.diag().EmptyParamSubscript; w != "" {
+		// A sentence of the dialect's own, which is zsh alone: the subscript
+		// machinery's complaint, with no name in it and no bad-substitution
+		// wording around it.
+		r.diagf("%s\n", w)
+		r.expandErr = true
+		return true
+	}
+	// Everyone else gives their ordinary bad-substitution sentence, subject
+	// and all — which is why this goes through the one place that words it
+	// rather than spelling it again here.
+	r.reportBadSubstitution(e)
+	return true
+}
+
+// writtenEmptySubscript reports whether the brackets hold nothing at all,
+// asked of the word as it was *written*.
+//
+// A word with no spans is the whole of it, and that is a fact about the
+// parser worth stating because two near neighbors are not this:
+//
+//   - `${m[""]}` is a *key*, written as two characters, and it looks up the
+//     empty one — measured on zsh 5.9.2, `typeset -A m; m[""]=4; ${m[""]}`
+//     is `4` where `${m[]}` beside it is `invalid subscript`. It comes to one
+//     span holding an empty literal, so a test on the literal's *text* would
+//     have swallowed it.
+//   - `${a[$w]}` and `${a[ ]}` come to a span each as well, whatever they
+//     expand to. Whether an empty `$w` or a blank means anything is somebody
+//     else's axis — see Semantics.BlankArithSubscriptIsTheEmptyExpression —
+//     and not this one.
+func writtenEmptySubscript(w *syntax.Word) bool {
+	return w == nil || len(w.Spans) == 0
 }

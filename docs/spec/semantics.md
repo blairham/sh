@@ -8960,10 +8960,61 @@ that share the first answer do not share this one — and it is reachable
 only after the first has been answered, so a dialect where a bare name is
 the whole table never asks it. zsh reaches it only under `ksharrays`.
 
-"First" is whatever order `${m[@]}` yields, which is a separate question:
-this shell sorts a table by key where zsh keeps insertion order, so the
-two agree on a table of one and on any table written in sorted order.
-That divergence is `${m[@]}`'s and predates the axis.
+"First" is whatever order `${m[@]}` yields, which is a separate question
+and is answered below. The axis says which end of the order to read; it
+does not say what the order is.
+
+### KeyedTableOrder: the order a table lists in is nobody's to promise
+
+The axis above was recorded as "zsh keeps insertion order and this shell
+sorts by key". **Insertion order is not what any shell in the panel
+does.** Measured 2026-09-11 — every table built by assigning three keys,
+then listed:
+
+| built as | bash 5.3.15 | ksh93u+ | zsh 5.9.2 | here |
+| --- | --- | --- | --- | --- |
+| `m[z]=1; m[a]=2; m[m]=3` | `z m a` | `a m z` | `z m a` | `a m z` |
+| `m[a]=2; m[m]=3; m[z]=1` | `z m a` | `a m z` | `z m a` | `a m z` |
+| `m[m]=3; m[z]=1; m[a]=2` | `z m a` | `a m z` | `z m a` | `a m z` |
+| `m[B]=1; m[a]=2; m[1]=3; m[_x]=4` | — | `1 B _x a` | `_x a 1 B` | `1 B _x a` |
+
+Three findings, and the first is the one that matters:
+
+- **The order does not depend on the order of insertion.** All three
+  spellings of the same table list identically in every column, so no
+  shell here is recording the order the keys arrived in. Unsetting a key
+  and assigning it again does not move it either: `unset "m[z]"; m[z]=9`
+  leaves `z` exactly where it was in zsh.
+- **bash and zsh list in the order their hash puts the keys in.** It is
+  deterministic for a given set of keys — the same table lists the same
+  way on every run — and it is neither sorted nor historical. Insertion
+  order shows only *between keys that collide*: `one two three four` and
+  `four three two one` list as `one four two three` and `one two four
+  three` in zsh, which is the one place the arrival order survives.
+- **ksh93 sorts by key**, in byte order, and that is exactly what this
+  shell does. The fourth row is the discriminator: `1 B _x a` is the ASCII
+  sort, and no hash produces it by accident.
+
+So "insertion order" was a reading of two probes whose insertion order and
+hash order coincided. A probe over a table whose keys are already in
+sorted order cannot tell any of these three apart, and a probe built by
+assigning keys in one order cannot tell insertion order from a hash.
+
+**What this implementation promises, and what it does not.** The order is
+by key, in byte order: deterministic, independent of how the table was
+built, and stable when a key is removed and put back. That is ksh93's
+answer exactly and it is the only one of the three that can be written
+down as a behavioral fact — a hash order is a property of a hash function
+and a table size, which are implementation and not behavior, and this
+repository does not read another shell's implementation. Reproducing it
+would also be pinning an accident: a script that depends on it is already
+broken across the two shells that have one, which do not agree with each
+other.
+
+The consequence for the axis above is stated rather than hidden: under
+`ksharrays`, `$m` on a keyed table is our first key's value where zsh
+gives its first hashed key's value, and the two coincide only when the
+orders do.
 
 **`SubscriptCommaIsARange`** — bash no · dash no · ksh93 no · zsh yes
 

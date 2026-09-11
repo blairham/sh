@@ -223,6 +223,17 @@ var exempt = map[string]string{
 		"`-o nonblock` needs a flag os.OpenFile cannot carry and has to be taken off again (#1805).",
 	"dialect/zsh.systemLockOpen": "the open behind `zsystem flock`, between the same AllowOpen " +
 		"and VerifyOpened pair (#1805).",
+	// The smoke suite is in scope because it holds a Boundary to read a block
+	// store back — and it is the one package here that is not the shell. The
+	// rest of this list explains a path the shell reaches; these two explain
+	// why an instrument is being asked at all.
+	"internal/smoke.home": "the scratch home the suite builds for one session: an rc file, a " +
+		"few files to complete against, and the directories the autocd and cdspell rows move " +
+		"into. Every path is one the suite composed under a temporary root it was given, and no " +
+		"script has run yet — there is nothing for a policy to be about. It is in scope only " +
+		"because reading a block store needs a Boundary value.",
+	"internal/smoke.Run": "the temporary root the whole run is given, made once before any " +
+		"shell starts. The same argument as home, one level up.",
 }
 
 // TestEveryCommandPackageOpenGoesThroughTheBoundaryOrSaysWhyNot.

@@ -79,6 +79,24 @@ var reachCases = []struct {
 	{`\#\#x`, []string{"##x", "#x", "x"}},
 	// `(#i)` folds and consumes nothing, but carries a `#`.
 	{"(#i)(AB|c)d", []string{"abd", "ABD", "cd", "d"}},
+	// The other end of the same bound, and the shape #1398 was about: a
+	// group with nothing after it, where the only split worth trying is the
+	// one that leaves the empty pattern nothing. A floor reading the *rest*
+	// too generously would refuse a match; one reading it too tightly would
+	// skip the split that wins.
+	{"(a|ab)", []string{"a", "ab", "abc", "", "b"}},
+	{"(ab|c)x", []string{"abx", "cx", "abxx", "ab", "x"}},
+	{"(a##|b)", []string{"aaa", "b", "", "aab", "ba"}},
+	// And where the group *repeats*, which is the floor's precondition:
+	// what follows one repetition is the group as well as the rest, so
+	// there is no floor to take. `+(a)b` against `aab` is the row that
+	// caught a floor applied there.
+	{"+(a)b", []string{"ab", "aab", "aaab", "b", "aa"}},
+	{"*(a)b", []string{"b", "ab", "aaab", "a"}},
+	{"(a|b)##c", []string{"abc", "aabbc", "c", "ab"}},
+	// A bracket and a group side by side, which is what the prepared tables
+	// for the two closers are read against.
+	{"[ab](c|d)[ef]", []string{"ace", "bdf", "acf", "ac", "xce"}},
 }
 
 // TestTheReachBoundChangesNoAnswer runs every case with the search stopping
@@ -118,6 +136,42 @@ func TestTheReachBoundChangesNoAnswer(t *testing.T) {
 	}
 }
 
+// TestPreparingThePatternChangesNoAnswer runs every case above with the
+// prepared tables on and off and requires the two to agree, on the match and
+// on what a `(#b)` reported.
+//
+// The tables are #1398's cheap half: where a group closes, where a bracket
+// closes, how far an item reaches and what a group's arms are, read once for
+// the whole pattern instead of rediscovered by a scan at every position. Each
+// is consulted through a lookup that falls back to the scan it replaces, so a
+// table that is wrong about a *truncation* — a group body or an arm, which is
+// not a suffix of the pattern — must show up here rather than as a
+// substitution that silently stops matching.
+func TestPreparingThePatternChangesNoAnswer(t *testing.T) {
+	was := patternPrepares
+	t.Cleanup(func() { patternPrepares = was })
+	for _, c := range reachCases {
+		for _, subject := range c.subjects {
+			patternPrepares = false
+			o := reachTestOpts(c.pattern)
+			wantOK, wantReport := matchPatternIn(c.pattern, subject, subject, 0, o)
+
+			patternPrepares = true
+			o = reachTestOpts(c.pattern)
+			gotOK, gotReport := matchPatternIn(c.pattern, subject, subject, 0, o)
+
+			if gotOK != wantOK {
+				t.Errorf("%q against %q = %v prepared, %v unprepared", c.pattern, subject, gotOK, wantOK)
+				continue
+			}
+			if gotReport.whole != wantReport.whole || !slices.Equal(gotReport.groups, wantReport.groups) {
+				t.Errorf("%q against %q reported %+v prepared, %+v unprepared",
+					c.pattern, subject, gotReport, wantReport)
+			}
+		}
+	}
+}
+
 // TestPatternReach pins what each shape's own text says about how far it can
 // go, because the bound is only sound while this is right and the test above
 // would pass a reach that is merely *too large*.
@@ -146,7 +200,7 @@ func TestPatternReach(t *testing.T) {
 		{"(#i)ab", unboundedReach},
 	} {
 		o := reachTestOpts(c.pattern)
-		if got := patternReach(c.pattern, &o); got != c.want {
+		if got := patternReach(c.pattern, -1, &o); got != c.want {
 			t.Errorf("patternReach(%q) = %d, want %d", c.pattern, got, c.want)
 		}
 	}

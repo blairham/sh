@@ -180,7 +180,7 @@ func TestTheMemoIsInvisibleAtEveryThreshold(t *testing.T) {
 			gotOK, gotReport := matchPatternIn(pattern, subject, subject, 0, on)
 
 			pairs++
-			if len(on.where.dead) > 0 {
+			if on.where.dead.count > 0 || on.where.dead.zero {
 				engaged++
 			}
 			if gotOK != wantOK {
@@ -318,7 +318,7 @@ func TestTheWideMemoAnswersLikeThePackedOne(t *testing.T) {
 			if !packed.where.packable {
 				t.Errorf("%q vs %q was not packable, so the packed path was not the one compared", pattern, subject)
 			}
-			if len(forced.where.dead) != 0 {
+			if forced.where.dead.count != 0 || forced.where.dead.zero {
 				t.Errorf("%q vs %q wrote a packed entry with packing forced off", pattern, subject)
 			}
 			if len(forced.where.deadWide) > 0 {

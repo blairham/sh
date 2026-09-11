@@ -517,9 +517,18 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 	// about the pattern and the subject, so it survives a trial and is
 	// dropped only when one of those changes — see matchWhere.
 	if !w.ready || w.pattern != pattern || w.subject != subject {
+		newPattern := !w.ready || w.pattern != pattern
 		w.ready, w.pattern, w.subject = true, pattern, subject
-		w.asked, w.dead, w.deadWide = 0, nil, nil
+		w.asked, w.deadWide = 0, nil
+		w.dead.reset()
 		w.packable = len(pattern) < packBase && len(subject) < packBase
+		if newPattern {
+			// Only when the *pattern* moved. Pathname expansion matches one
+			// pattern against every name in a directory, so the subject
+			// changes far more often than the pattern does, and none of
+			// what prepare works out is about the subject.
+			w.prepare(pattern)
+		}
 	}
 	if !matchHere(pattern, piece, 0, base, o) {
 		return false, matchReport{}
@@ -648,13 +657,13 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 			}
 			// A closure repeats the one item in front of it, so the item is
 			// read here rather than by the branches below.
-			if item, rest, ok := splitClosableItem(p, &o); ok {
+			if item, rest, ok := splitClosableItem(p, pp, &o); ok {
 				if lo, hi, after, isClosure := closureBounds(rest, &o); isClosure {
 					return matchRepeat(item, pp, lo, hi, after, pp+len(p)-len(after), s, at, o)
 				}
 			}
 		}
-		if body, quant, rest, ok := splitGroup(p, &o); ok {
+		if body, quant, rest, ok := splitGroup(p, pp, &o); ok {
 			return matchGroup(body, pp, quant, rest, pp+len(p)-len(rest), s, at, o)
 		}
 		if lo, hi, rest, ok := splitNumericRange(p, &o); ok {
@@ -869,14 +878,29 @@ const unboundedReach = -1
 // reached it on one of 524,629 characters, which is around forty minutes at a
 // hundred per cent of a core. The shell installs handlers for the signals a
 // shell handles, so SIGTERM did not end it either; it had to be killed.
-func patternReach(p string, o *patternOpts) int {
+// Remembered by where the item stands, because a closure asks this of the
+// same item at every level of its recursion and at every position it is tried
+// from: `[^\}]##` asks it once per repetition and the answer is a fact about
+// six bytes of pattern text that cannot move. pp is -1 for a caller that does
+// not know where its piece begins, which reads the scan directly.
+func patternReach(p string, pp int, o *patternOpts) int {
+	if n, ok := o.where.reachOf(pp, len(p)); ok {
+		return n
+	}
+	n := patternReachScan(p, pp, o)
+	o.where.rememberReach(pp, len(p), n)
+	return n
+}
+
+// patternReachScan is patternReach without the memo — the scan itself.
+func patternReachScan(p string, pp int, o *patternOpts) int {
 	for i := 0; i < len(p); {
 		switch c := p[i]; {
 		case c == '\\' && i+1 < len(p) && o.escapeReaches(p[i+1]):
 			i += 2
 			continue
 		case c == '[':
-			if end, found := bracketEnd(p, i); found {
+			if end, found := bracketEndAt(o, p, i, pp); found {
 				i = end + 1
 				continue
 			}
@@ -903,13 +927,45 @@ func patternReach(p string, o *patternOpts) int {
 // hope it. Nothing outside a test writes it.
 var patternReachBounds = true
 
+// splitFloor is the *smallest* split of s that leaves the rest of the pattern
+// a piece it could still fill — the other end of the same bound splitCeiling
+// gives, asked of what follows a group rather than of the group itself.
+//
+// The case it exists for is the commonest one there is: a group with nothing
+// after it. `rest` is then the empty pattern, whose reach is zero, so the only
+// split worth trying is the one that leaves nothing — and the loop was trying
+// every split of the subject and asking the group about each, when all but the
+// last of them hand the empty pattern a non-empty piece it cannot match. On
+// the prompt-theme substitution of #1398 that is 82 arm attempts per trial
+// where one was possible.
+//
+// A floor that is too *low* costs the attempts it failed to skip and changes
+// no answer; one too high would skip a split that could have matched. So the
+// conversion from a reach in units to a bound in bytes rounds the only way it
+// can be wrong safely: a unit is at most four bytes where the subject is read
+// as characters, so four times the reach is a length no bounded rest can
+// exceed.
+func splitFloor(p, s string, pp int, o *patternOpts) int {
+	if !patternReachBounds {
+		return 0
+	}
+	n := patternReach(p, pp, o)
+	if n == unboundedReach {
+		return 0
+	}
+	if o.chars {
+		n *= utf8.UTFMax
+	}
+	return max(0, len(s)-n)
+}
+
 // splitCeiling is the largest split of s, in bytes, that the pattern p could
 // still match — the end of s where p's reach is not bounded.
-func splitCeiling(p, s string, o *patternOpts) int {
+func splitCeiling(p, s string, pp int, o *patternOpts) int {
 	if !patternReachBounds {
 		return len(s)
 	}
-	n := patternReach(p, o)
+	n := patternReach(p, pp, o)
 	if n == unboundedReach {
 		return len(s)
 	}
@@ -927,7 +983,12 @@ func splitCeiling(p, s string, o *patternOpts) int {
 //
 // quant is the character in front of it, or 0 for a bare group, which the
 // dialect with bare groups treats as "exactly one" — the same as `@`.
-func splitGroup(p string, o *patternOpts) (body string, quant byte, rest string, ok bool) {
+func splitGroup(p string, pp int, o *patternOpts) (body string, quant byte, rest string, ok bool) {
+	if w := o.where; w != nil && w.ready && w.noParen {
+		// No `(` anywhere in the pattern, so nothing here opens a group and
+		// the quantifier test below cannot fire either.
+		return "", 0, "", false
+	}
 	i := 0
 	if o.quantified && len(p) > 1 && p[1] == '(' {
 		switch p[0] {
@@ -950,7 +1011,7 @@ func splitGroup(p string, o *patternOpts) (body string, quant byte, rest string,
 			return "", 0, "", false
 		}
 	}
-	end, found := closingParen(p[i:])
+	end, found := closingParenAt(o, p[i:], pp+i)
 	if !found {
 		return "", 0, "", false
 	}
@@ -1017,12 +1078,12 @@ func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, 
 	if quant != 0 {
 		bp = gp + 2
 	}
-	arms, armAt := alternativesAt(body, bp)
+	arms, armAt := o.where.armsOf(body, bp)
 	// `!(…)` is the odd one: it matches any text the arms do *not*, so it is
 	// answered by asking the ordinary question and inverting it rather than
 	// by trying the arms one at a time.
 	if quant == '!' {
-		for i := 0; i <= len(s); i++ {
+		for i := splitFloor(rest, s, rp, &o); i <= len(s); i++ {
 			mark := o.where.caps.mark()
 			if !matchesAnyArm(arms, armAt, s[:i], at, o) && matchHere(rest, s[i:], rp, at+i, o) {
 				return true
@@ -1031,6 +1092,7 @@ func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, 
 		}
 		return false
 	}
+	repeat := quant == '*' || quant == '+'
 	if quant == '?' || quant == '*' {
 		// Zero repetitions is allowed, so the rest may start here.
 		mark := o.where.caps.mark()
@@ -1039,7 +1101,6 @@ func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, 
 		}
 		o.where.caps.rollback(mark)
 	}
-	repeat := quant == '*' || quant == '+'
 	// Arm-major, and the longest split of each arm first. Which combination
 	// wins decides nothing about *whether* the pattern matches and
 	// everything about what a `(#b)` reports, and both halves are measured
@@ -1063,12 +1124,29 @@ func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, 
 	// invariant the whole file relies on: anything here that can *write* a
 	// capture also unwinds it when its own attempt fails, which is what
 	// lets a failed matchHere be treated as having written nothing.
+	// The smallest split that still leaves `rest` a piece it could fill,
+	// asked once for the whole loop below rather than per arm: it is a fact
+	// about what follows the group and not about the group. See splitFloor.
+	//
+	// **Not for a repeating group**, and that is the whole of its
+	// precondition: where `*` or `+` lets the group go round again, what
+	// follows one repetition is the group *and* the rest, so a split that
+	// leaves `rest` more than it can fill is exactly the split another
+	// repetition eats the difference out of. `+(a)b` against `aab` is the
+	// row that says so — bounding it left one `a` for `b` to match and the
+	// pattern stopped matching.
+	floor := 0
+	if !repeat {
+		floor = splitFloor(rest, s, rp, &o)
+	}
 	for k, a := range arms {
-		// Every split down from the furthest this arm could possibly reach.
-		// Starting at len(s) instead asks about splits no arm can take, and
-		// the memo makes each of those cheap rather than free — which is
-		// what made a trim over a long value quadratic. See patternReach.
-		for i := splitCeiling(a, s, &o); i >= 0; i-- {
+		// Every split down from the furthest this arm could possibly reach,
+		// and no further down than the rest of the pattern can still reach
+		// back. Starting at len(s) instead asks about splits no arm can
+		// take, and the memo makes each of those cheap rather than free —
+		// which is what made a trim over a long value quadratic. See
+		// patternReach.
+		for i := splitCeiling(a, s, armAt[k], &o); i >= floor; i-- {
 			mark := o.where.caps.mark()
 			if !matchHere(a, s[:i], armAt[k], at, o) {
 				o.where.caps.rollback(mark)

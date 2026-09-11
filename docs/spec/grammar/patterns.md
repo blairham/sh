@@ -1596,6 +1596,94 @@ searches `$fpath` has a directory to search in: `vcs_info` sweeps it with
 `$dir/VCS_INFO_get_data_*~*(~|.zwc)(N)`, and refusing that by name put
 eighteen lines on the standard error of one interactive startup (#1719).
 
+## What matching costs, and what is left
+
+This is a backtracking matcher, and the shapes a prompt theme writes —
+nested alternation over closures, with bracket expressions inside the arms
+— are what make a backtracking matcher expensive. The costs are recorded
+here because two of them have been taken out and the third has not, and
+the third is a design question rather than an oversight.
+
+The instrument is `BenchmarkReplaceExtendedGlob` in `interp`: one
+`${msg//pat/X}` over a real theme's pattern against the 82-byte message it
+is applied to, with no shell around it. The reference is real zsh 5.9.2
+doing the same substitution, timed by running it 5000 times from a script
+and subtracting the startup the same script measures at zero iterations —
+**12.4 µs** per substitution on this machine.
+
+The two figures below are interleaved runs of the same benchmark on the
+same machine minutes apart, which is the only way to compare them: this
+machine runs several graders at once and a figure taken alone is a figure
+about the load.
+
+| | per substitution | matchHere calls |
+| --- | --- | --- |
+| before #1396 | 8 s | — |
+| after #1396, before #1398 | 5.2 ms | 159,540 |
+| after #1398 | 0.66 ms | 43,269 |
+| real zsh 5.9.2 | 0.0124 ms | — |
+
+`make startup`'s rich-rc case is the same work seen from the outside —
+forty sourced plugins and this substitution, timed from process start to a
+prompt — and it moves with it: `ours-zsh` **31.5 ms to 9.9 ms** against
+real `zsh` at 8.4 ms in the same run. That case was written so this number
+would be visible rather than inferred, and it now stands at 1.2x real zsh
+where it was 3.6x.
+
+**The blowup was #1396's and the constant factor was #1398's.** Three
+things came out, in this order and each measured on its own:
+
+1. **The pattern's structure is read once.** Where a group closes, where a
+   bracket closes, how far an item reaches, and what a group's arms are
+   were all rediscovered by a scan at every position of every trial —
+   `splitExclusion` walked the remaining pattern looking for a `~` that
+   most patterns do not contain at all. `matchWhere.prepare` works them out
+   once for the whole pattern. Every lookup falls back to the scan it
+   replaces, because a group body or an arm is a *truncation* of the
+   pattern rather than a suffix of it and a closer past the end of the
+   piece is not a closer.
+2. **A group's split is floored by what follows it.** `matchGroup` tried
+   every split of the subject and asked the arms about each, including all
+   the splits that hand what follows the group more text than it could
+   possibly consume. The commonest case is a group with *nothing* after
+   it, where exactly one split is possible and 82 were being tried. It
+   does not apply where the group repeats: what follows one repetition of
+   a `*` or `+` group is the group as well as the rest, which `+(a)b`
+   against `aab` is the row for.
+3. **The memo is a flat table rather than a map.** #1396's memo of dead
+   ends is what removed the blowup, and the map then became the cost
+   rather than the questions it answers — near half the samples in
+   hashing, probing and rehashing a table that reaches a hundred thousand
+   entries in one substitution. The keys are already one integer each and
+   a dead end carries no value, so linear probing over a flat slice does
+   the whole job.
+
+Each is switchable from a test — `patternPrepares`, `patternReachBounds`,
+`memoThreshold` — so "this changed no answer" is a comparison against the
+code rather than a claim about it.
+
+**What is left is about 50x, and it is the number of questions rather than
+their cost.** 43,269 calls to `matchHere` for an 82-byte subject is the
+remaining gap; zsh cannot be doing more than a few thousand steps in
+12 µs. Two multipliers are in it and neither is a constant factor:
+
+- **The substitution enumerates spans.** `${v//pat/X}` wants the longest
+  match at each position and finds it by trying every span from the
+  longest down, which is 285 whole match attempts for this subject where
+  an extent-reporting matcher would make one pass per position. The
+  comment on #1398 sets out why that change is not free: first success is
+  not longest match, so the exploration order or the early exit has to
+  give, and a "faster" matcher that stops finding the same matches is not
+  faster.
+- **The search re-derives which construct stands at a position.** Reading
+  the pattern's *extents* once is what has been done; reading it into a
+  compiled form — a node per construct, matched against directly — is what
+  has not, and it is what removes the per-step branch chain rather than
+  making it cheaper.
+
+Both want their own design note and their own differential run against the
+panel, which is why they are not in the change that wrote this section.
+
 ## What this does not cover
 
 Collating symbols and equivalence classes (`[[.a.]]`, `[[=a=]]`), which

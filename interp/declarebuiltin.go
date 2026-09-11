@@ -526,12 +526,25 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
+		// The letters this operand is declared under, which are the line's
+		// plus whatever the *name* makes of them: the export letter asks for
+		// `-g` too in one dialect, and that is a question about this name's
+		// scope rather than about the line. A copy per operand, because the
+		// answer differs between two names on one line — `typeset -x a b`
+		// where the function has already made `a` local.
+		df := f
+		if !df.global && r.exportLetterDeclaresAGlobal(name, df) {
+			df.global = true
+		}
+		if r.unspecified {
+			return r.status
+		}
 		if base, sub, subscripted := r.subscriptOperand(name); subscripted && hasValue {
 			// The operand names an element, so the attributes and the scope
 			// are about `a` and the value is about `a[1]`. Splitting at the
 			// `=` and handing `a[1]` to the variable store made the whole
 			// line a no-op at status 0 — see declareelement.go.
-			r.declareElement(base, sub, value, f, true)
+			r.declareElement(base, sub, value, df, true)
 			if r.unspecified || r.ctl == controlExit {
 				return r.status
 			}
@@ -573,7 +586,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// still brought no name into being, which is the whole of a
 		// `typeset -gA a b c` setup line (#989).
 		fresh := false
-		if !f.global {
+		if !df.global {
 			fresh = r.shadowTypeset(name)
 		}
 		// Attributes after the shadow, and ahead of the value: `-i` changes
@@ -585,9 +598,9 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// name's attributes off, so these are the local's own and the caller
 		// gets its own back on return. Applied before it, they were saved as
 		// the outer name's and outlived the call (#1673).
-		r.applyAttributes(name, f)
-		if !f.global {
-			r.localExportAttribute(name, f.export)
+		r.applyAttributes(name, df)
+		if !df.global {
+			r.localExportAttribute(name, df.export)
 			if r.unspecified {
 				// See biLocal: an unanswered axis refuses the declaration
 				// rather than making it one way and saying so.
@@ -597,9 +610,9 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		}
 		// After the shadow, which is what lets the scope put back the outer
 		// name's attribute rather than the one this line just gave it.
-		r.setHideInScope(name, f)
-		r.markDeclaredCompound(name, fresh, f)
-		if f.readonly && f.readonlyOff {
+		r.setHideInScope(name, df)
+		r.markDeclaredCompound(name, fresh, df)
+		if df.readonly && df.readonlyOff {
 			if code := r.removeReadonly(name, hasValue); code != 0 {
 				return code
 			}
@@ -607,8 +620,14 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				return r.status
 			}
 		}
+		if hasValue && r.inconsistentTypeRefused(name, fresh) {
+			return r.status
+		}
+		if r.unspecified {
+			return r.status
+		}
 		switch {
-		case hasValue && f.global:
+		case hasValue && df.global:
 			r.setGlobalVar(name, value)
 			if r.unspecified || r.ctl == controlExit {
 				return r.status
@@ -619,11 +638,20 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				// See biExport: the failure's status is the one that stands.
 				return r.status
 			}
-			r.declarationAssignmentExport(name, f.export)
+			r.declarationAssignmentExport(name, df.export)
 			if r.unspecified {
 				return r.status
 			}
 		default:
+			if r.valuelessDeclarationLists(name, f, fresh) {
+				// Said back and nothing more: the value is unchanged, which
+				// is why this does not return — the branch below still runs
+				// and still decides nothing here.
+				r.listStandingDeclaration(name)
+			}
+			if r.unspecified {
+				return r.status
+			}
 			// `-g` never takes a shadow, so the cell it declares into is
 			// never a fresh one — which is exactly the reading that leaves a
 			// standing value alone and brings only an absent name into
@@ -636,9 +664,9 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// reaches the operands after it, and
 			// TestAnUnansweredInheritedTypeAxisRefusesTheNamesAfterItToo
 			// pins that rather than the guard that appeared to do it.
-			r.declareEmpty(name, fresh, f.export || f.readonly)
+			r.declareEmpty(name, fresh, df.export || df.readonly)
 		}
-		if f.readonly && !f.readonlyOff {
+		if df.readonly && !df.readonlyOff {
 			r.markReadonly(name)
 		}
 	}
@@ -812,6 +840,78 @@ func (r *Runner) localCell(name string) bool {
 	}
 	_, saved := r.scopes[len(r.scopes)-1].saved[name]
 	return saved
+}
+
+// inconsistentTypeRefused reports whether a declaration's plain word is
+// refused for landing on a cell that is really holding an array or a keyed
+// table, having said so and ended the script — see
+// Semantics.ScalarOverACompoundIsAnInconsistentType.
+//
+// `fresh` is the shadow's answer and is what separates the two shapes that
+// look alike: a declaration inside a function writes a cell it has just made,
+// which holds nothing whatever the caller left, so `f(){ local b=q; }` over a
+// caller's array is taken in every column. What is refused is a declaration
+// reaching a cell that is *really* compound, which is what the top level and
+// `-g` have in common.
+//
+// One gate for `typeset`, `local`, `readonly` and `export` alike, because the
+// shell that refuses refuses all four in the same words with its own name in
+// the location.
+func (r *Runner) inconsistentTypeRefused(name string, fresh bool) bool {
+	if fresh || !r.compoundCell(name) {
+		return false
+	}
+	if !r.ask(r.sem().ScalarOverACompoundIsAnInconsistentType,
+		"a plain word declared over a name holding an array") {
+		return false
+	}
+	r.fatal("%s\n", Wording(r.diag().InconsistentType,
+		"%s: inconsistent type for assignment", name))
+	return true
+}
+
+// compoundCell reports whether the name is really holding an array or a keyed
+// table right now — not merely carrying the attribute, and not a name a
+// declaration has hidden.
+func (r *Runner) compoundCell(name string) bool {
+	if r.removed[name] {
+		return false
+	}
+	if _, ok := r.Arrays[name]; ok {
+		return true
+	}
+	_, ok := r.AssocArrays[name]
+	return ok
+}
+
+// exportLetterDeclaresAGlobal reports whether the `x` letter on this
+// declaration also asks for `-g` — see
+// Semantics.ExportLetterDeclaresAGlobal.
+//
+// Asked at the narrowest point the two shells part company, which is three
+// conditions deep and each of them was measured:
+//
+//   - Inside a function. At the top level a declaration reaches the global
+//     cell under either answer, so there is nothing to choose between.
+//   - Where the letter was written. `typeset -i v=1` and the bare word take
+//     the scope every shell gives them.
+//   - Where the name is not *already* local to this scope. The shell that
+//     answers yes exempts one it has been told about: `f(){ local m=1;
+//     typeset -x m; }` leaves the caller's m alone there, so the letter says
+//     where a declaration lands and not what it does to a name already here.
+//
+// `local` never comes through here, which is the fourth condition and is
+// structural rather than a test: biLocal has its own loop, and the shell that
+// answers yes exempts that word by name.
+func (r *Runner) exportLetterDeclaresAGlobal(name string, f declareFlags) bool {
+	if !f.export || len(r.scopes) == 0 {
+		return false
+	}
+	if r.localCell(name) {
+		return false
+	}
+	return r.ask(r.sem().ExportLetterDeclaresAGlobal,
+		"the export letter on a declaration reaching past the function")
 }
 
 // applyAttributes records what a name has been declared to be.
@@ -2076,7 +2176,6 @@ func (r *Runner) shadowedExport(name string, exported bool) {
 // is what brings the outer value back.
 func (r *Runner) hideVar(name string) {
 	delete(r.Vars, name)
-	delete(r.Arrays, name)
 	if r.removed == nil {
 		r.removed = map[string]bool{}
 	}

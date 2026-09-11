@@ -2082,6 +2082,20 @@ type Diagnostics struct {
 	// this builtin is where they part.
 	BadNameRefusalHidesTheBuiltin map[string]bool
 
+	// InconsistentType is what a declaration says when the plain word it was
+	// given is assigned over a name whose cell is really holding an array or
+	// a keyed table. One verb: the name.
+	//
+	// The builtin is named in the *location* rather than in the sentence,
+	// which is where the one dialect with the refusal puts it:
+	// `zsh:typeset:1: b: inconsistent type for assignment`, and
+	// `f:readonly: b: …` from inside a function.
+	//
+	// Empty means the dialect does not refuse the line at all, which is what
+	// ScalarOverACompoundIsAnInconsistentType answers — the wording exists
+	// only for the dialect that says yes.
+	InconsistentType string
+
 	// ReadonlyVariableInDeclaration replaces it when the assignment was made
 	// through a declaration utility. Two verbs: the name and the builtin.
 	//

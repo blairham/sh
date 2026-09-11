@@ -334,6 +334,14 @@ func Semantics() interp.Semantics {
 	// frozen name is `typeset: x: is read only` and ends the script.
 	s.ReadonlyAttributeCanBeRemoved = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	// A keyword-defined function's `typeset -x` is local like any other
+	// declaration; the POSIX-style function that leaks it has no scope to
+	// leak out of, which TypesetLocalNeedsKeywordFunction already answers.
+	s.ExportLetterDeclaresAGlobal = interp.No
+	// A valueless `typeset` of a standing name is silent here.
+	s.ValuelessDeclarationOfAHeldNameListsIt = interp.No
+	// And a plain word over a name holding an array is taken.
+	s.ScalarOverACompoundIsAnInconsistentType = interp.No
 	// But an attribute added to a name that already holds a value re-reads
 	// that value at once: `FOO=bar; typeset -i FOO` stores 0 over the text,
 	// and `d=MiXeD; typeset -u d` stores MIXED. bash waits for the next

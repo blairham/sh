@@ -83,6 +83,12 @@ func TestSemantics(t *testing.T) {
 		// axis does not arise here and is left unanswered.
 		{"SelectAssumesUnboundedWidth", s.SelectAssumesUnboundedWidth, interp.Unspecified},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
+		{"ExportLetterDeclaresAGlobal", s.ExportLetterDeclaresAGlobal, interp.No},
+		{"ValuelessDeclarationOfAHeldNameListsIt", s.ValuelessDeclarationOfAHeldNameListsIt, interp.No},
+		{"ScalarOverACompoundIsAnInconsistentType", s.ScalarOverACompoundIsAnInconsistentType, interp.No},
+		// `readonly` has no kind letter at all here, so the question never
+		// arises and nothing answers it.
+		{"ReadonlyRecordsTheCompoundAttribute", s.ReadonlyRecordsTheCompoundAttribute, interp.Unspecified},
 		// And the opposite answer to the one beside it, which is the pair
 		// that says the two are separate questions: an attribute re-reads
 		// the value it finds here — `FOO=bar; typeset -i FOO` is 0 — while a

@@ -2067,6 +2067,123 @@ type Semantics struct {
 	// `${u-UNSET}` is empty there and UNSET in bash and ksh93 — the name
 	// exists in all three, but only zsh considers it set.
 	DeclaredNameWithoutValueIsEmpty Answer
+	// ExportLetterDeclaresAGlobal makes the `x` letter on a declaration ask
+	// for `-g` as well, so `typeset -x v=1` written inside a function
+	// declares no local and the name outlives the call.
+	//
+	// Measured 2026-09-10, `-f` / `--norc --noprofile`:
+	//
+	//	f(){ typeset -x lxx=1; }; f; echo "[$lxx]"
+	//
+	//	zsh 5.9.2    [1]   the name is global and exported
+	//	bash 5.3.15  []    an ordinary local
+	//
+	// `local -x` is the control and both shells agree on it — `[]` — so the
+	// question is about the letter under the *other* words and not about
+	// `-x` in general. The same holds for `declare`, and for the words that
+	// carry an attribute in their own name: `readonly -x`, `integer -x` and
+	// `float -x` all reach past the function in the shell that answers yes.
+	//
+	// The exemption is measured too: a name this scope has *already* made
+	// local stays local, so `f(){ local m=1; typeset -x m; }` leaves the
+	// caller's m alone. So the letter decides where a declaration lands
+	// rather than what it does to a name that is already here.
+	//
+	// Asked only inside a function, only under a word that is not `local`,
+	// and only where the name is not already local — outside that shape the
+	// two answers do the same thing.
+	//
+	// Silent: a script that exports a working name inside a function leaves
+	// it behind in one shell and not in the other, and nothing is said
+	// either way.
+	ExportLetterDeclaresAGlobal Answer
+	// ValuelessDeclarationOfAHeldNameListsIt writes the name back when a
+	// declaration names it, assigns nothing, and carries no letters at all —
+	// provided the name already holds something in the cell being declared.
+	//
+	// Measured 2026-09-10, `-f` / `--norc --noprofile`:
+	//
+	//	a=(x y); typeset a; s=str; typeset s; unset u; typeset u; echo done
+	//
+	//	zsh 5.9.2    a=( x y ) · s=str · done
+	//	bash 5.3.15  done
+	//
+	// Three facts in the one line, and each is a limit on the rule rather
+	// than a special case. A name holding **nothing** prints nothing, which
+	// is why this is not "a declaration with one operand lists". The value
+	// is unchanged either way, so the listing is all that happens. And the
+	// spelling is the bare assignment — `a=( x y )`, not `typeset -a a=…` —
+	// which is BareDeclarationListing's row and not `-p`'s.
+	//
+	// A **letter** suppresses it: `n=5; typeset -i n` and `typeset -g s` are
+	// both silent in the shell that lists, which is what makes the rule "no
+	// options at all" and also why `readonly`, `export`, `integer` and
+	// `float` never do it — each of those words is an attribute already.
+	// `local` does, on a name its own scope has already declared:
+	// `f(){ local s=1; local s; }` writes `s=1` there.
+	//
+	// Inside a function a declaration that takes a *fresh* cell finds
+	// nothing standing in it, so nothing is listed — which is the answer
+	// that keeps a shell from narrating every `local` in every function.
+	//
+	// We are the quiet one where this is answered wrongly, so a script whose
+	// output matches today diverges the moment it is run under the shell
+	// that speaks.
+	ValuelessDeclarationOfAHeldNameListsIt Answer
+	// ScalarOverACompoundIsAnInconsistentType refuses a declaration that
+	// assigns a plain word to a name whose cell is really holding an array
+	// or a keyed table, and ends the script over it.
+	//
+	// Measured 2026-09-10, `-f` / `--norc --noprofile`:
+	//
+	//	b=(x y); typeset b=q; echo "st=$? [${b[*]}]"; echo tail
+	//
+	//	zsh 5.9.2    typeset: b: inconsistent type for assignment, status 1,
+	//	             and the script ends
+	//	bash 5.3.15  st=0 [q] · tail
+	//
+	// It is the **declaration** that refuses and not the store: `b=(x y);
+	// b=q` is taken in both shells and leaves a scalar, which is
+	// ScalarAssignedOverACompoundReplacesTheName's question and a different
+	// one. Nor is it the fresh cell — `f(){ local b=q; }` over a caller's
+	// array is taken in the shell that refuses, because the cell that
+	// declaration writes is new and holds nothing. What is refused is a
+	// declaration reaching a cell that is *really* compound, which is what
+	// the top level and `-g` have in common.
+	//
+	// The refusal has a direction, and that asymmetry is the measurement
+	// that pins it: the mirror image is **taken**. `b=1; typeset -a b` is a
+	// silent empty array in the same shell, so a name is not simply frozen
+	// in its kind.
+	//
+	// `readonly b=q` and `export b=q` refuse it in the same words with their
+	// own name in the sentence, so the rule belongs to the declaration
+	// utilities rather than to one word.
+	//
+	// Silent where it is answered wrongly, and worse than a wrong value: the
+	// script that should have stopped carries on, so everything downstream
+	// of the line runs here and never runs there.
+	ScalarOverACompoundIsAnInconsistentType Answer
+	// ReadonlyRecordsTheCompoundAttribute makes `readonly -a` and
+	// `readonly -A` declare an array and a table the way `typeset -a` and
+	// `typeset -A` do, rather than freezing a name and saying nothing about
+	// its kind.
+	//
+	// Measured 2026-09-10:
+	//
+	//	f() { readonly -a a; typeset -p a; }; f
+	//
+	//	zsh 5.9.2    typeset -ar a=(  )
+	//	bash 5.3.15  declare -r a
+	//
+	// The keyed half moves with it — `typeset -Ar m=( )` against
+	// `declare -r m` — so it is one question and not two. ksh93 has no such
+	// letter on the word at all and refuses the option, so the panel that
+	// answers this is two shells and they disagree.
+	//
+	// Only the listing observes it in the shell that says no: a frozen name
+	// cannot then be assigned an array to tell the two apart.
+	ReadonlyRecordsTheCompoundAttribute Answer
 	// AttributeRereadsTheValueItFinds makes an attribute a declaration adds
 	// re-read the value the name already holds, on the spot, rather than
 	// waiting for the next assignment. `typeset -i FOO` on a `FOO=bar`

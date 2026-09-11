@@ -160,11 +160,33 @@ func TestAValuelessDeclarationOfANewNameIsStillEmpty(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `typeset -x fresh
 echo "fresh=[${fresh-UNSET}]"
 outer=5
-function f { typeset -x outer; echo "in=[${outer-UNSET}]"; }
+function f { local -x outer; echo "in=[${outer-UNSET}]"; }
 f
 echo "after=[$outer]"`)
 	want := "fresh=[]\nin=[]\nafter=[5]\n"
 	if out != want || st != 0 {
 		t.Errorf("a valueless declaration = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And the word matters where the letter is `-x`, which is the one letter that
+// decides *where* a declaration lands here: under `typeset` it asks for `-g`
+// as well, so the line below declares no local at all and the caller's 5 is
+// what the body reads. `local -x` above is the control and is the same line
+// with the same letter under the word that is exempt.
+//
+// Measured 2026-09-10 on zsh 5.9.2 with `-f`. See
+// interp.Semantics.ExportLetterDeclaresAGlobal (#1698).
+func TestTheExportLetterUnderTypesetDeclaresAGlobal(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `outer=5
+function f { typeset -x outer; echo "in=[${outer-UNSET}]"; }
+f
+echo "after=[$outer]"
+function g { typeset -x lxx=1; }
+g
+echo "left=[${lxx-UNSET}]"`)
+	want := "in=[5]\nafter=[5]\nleft=[1]\n"
+	if out != want || st != 0 {
+		t.Errorf("the export letter = %q (status %d), want %q", out, st, want)
 	}
 }

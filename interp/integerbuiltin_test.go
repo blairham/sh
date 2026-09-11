@@ -31,6 +31,10 @@ func integerRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics) 
 	sem := permissive()
 	sem.DeclaredNameWithoutValueIsEmpty = No
 	sem.ValuelessDeclarationHidesTheOuterValue = Yes
+	// See vector_test.go.
+	sem.ExportLetterDeclaresAGlobal = No
+	sem.ValuelessDeclarationOfAHeldNameListsIt = No
+	sem.ScalarOverACompoundIsAnInconsistentType = No
 	sem.DeclareOptions = "aAgHilpruUx"
 	sem.IntegerOptions = "gHilprux"
 	sem.IntegerAttributeTakesABase = Yes

@@ -160,6 +160,61 @@ func (r *Runner) attributeWordDeclaration(d declaration, isLocal bool) string {
 	return head + d.name + "=" + r.listedDeclarationValue(d)
 }
 
+// listStandingDeclaration writes one name back as a bare assignment, which is
+// what a declaration with no letters and no value does to a name that is
+// already holding something — see
+// Semantics.ValuelessDeclarationOfAHeldNameListsIt.
+//
+// The bare-assignment spelling and not `-p`'s: `a=( x y )` for an array and
+// `s=str` for a scalar, with no command word and no attribute in front of it.
+// That is BareLocalListsEveryParameter's row with the attribute words left
+// off, and it is deliberately the same value renderer, so a kind added to one
+// listing cannot be spelled differently by the other.
+func (r *Runner) listStandingDeclaration(name string) {
+	d, ok := r.declarationOf(name)
+	if !ok {
+		return
+	}
+	if d.hidden {
+		// The attributes speak and the value does not, which is what `-H`
+		// does to every other listing this engine writes.
+		r.printf("%s\n", d.name)
+		return
+	}
+	r.printf("%s=%s\n", d.name, r.listedDeclarationValue(d))
+}
+
+// valuelessDeclarationLists reports whether this operand is one the dialect
+// writes back, and is asked at the three conditions together because each of
+// them is measured and none follows from the others:
+//
+//   - the line carried **no letters at all**. `typeset -i n` over a standing
+//     `n` is silent in the shell that lists, and so is `typeset -g s` — which
+//     is also why `readonly`, `export`, `integer` and `float` never do it:
+//     each of those words is an attribute already.
+//   - the cell is not a **fresh** one. A declaration inside a function that
+//     shadows the caller's name finds nothing standing in it, which is what
+//     keeps a shell from narrating every `local` in every function; a second
+//     declaration of a name this scope already made local does list.
+//   - the name **holds** something. `unset u; typeset u` prints nothing,
+//     which is the control that says this is not "one operand means list".
+func (r *Runner) valuelessDeclarationLists(name string, f declareFlags, fresh bool) bool {
+	if f != (declareFlags{}) || fresh || !r.declaredNameHolds(name) {
+		return false
+	}
+	if r.freezing[name] {
+		// The operand *is* an assignment — `typeset b=(p q)` — whose value
+		// the command machinery lands after the builtin returns, so the
+		// builtin sees a bare name and the name is still holding whatever it
+		// held before. Listing it here wrote the old value out in front of a
+		// declaration that assigns, which no shell does. See the freezing
+		// field.
+		return false
+	}
+	return r.ask(r.sem().ValuelessDeclarationOfAHeldNameListsIt,
+		"a valueless declaration writing back a name that already holds something")
+}
+
 // innermostLocalNames is the set of names the running function made local,
 // which is the one attribute this listing carries that a declaration does not.
 // AtFunctionReturn asks for f to be run when the innermost function call

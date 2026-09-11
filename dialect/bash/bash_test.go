@@ -88,6 +88,11 @@ func TestSemantics(t *testing.T) {
 		{"SelectEofEndsPromptLine", s.SelectEofEndsPromptLine, interp.No},
 		{"SelectAssumesUnboundedWidth", s.SelectAssumesUnboundedWidth, interp.No},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
+		// And the four this shell answers the quiet way.
+		{"ExportLetterDeclaresAGlobal", s.ExportLetterDeclaresAGlobal, interp.No},
+		{"ValuelessDeclarationOfAHeldNameListsIt", s.ValuelessDeclarationOfAHeldNameListsIt, interp.No},
+		{"ScalarOverACompoundIsAnInconsistentType", s.ScalarOverACompoundIsAnInconsistentType, interp.No},
+		{"ReadonlyRecordsTheCompoundAttribute", s.ReadonlyRecordsTheCompoundAttribute, interp.No},
 		// An attribute waits for the next assignment here rather than
 		// re-reading what the name already holds: `FOO=bar; typeset -i FOO`
 		// still reads `bar`, and `d=MiXeD; typeset -u d` still reads MiXeD.

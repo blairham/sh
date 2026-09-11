@@ -36,6 +36,10 @@ func readonlyElementSemantics() Semantics {
 		// answer — the dialect every expectation here was measured in.
 		s.DeclaredNameWithoutValueIsEmpty = No
 		s.TypesetLocalNeedsKeywordFunction = No
+		// And what `readonly -a` records about the kind, which is a third
+		// question these tests are not about — bash's answer again, and the
+		// one the expectations here were measured in.
+		s.ReadonlyRecordsTheCompoundAttribute = No
 		return s
 	}
 }

@@ -433,8 +433,51 @@ func (r *Runner) ResolveName(name string) (NameKind, string) {
 // caller that gets false has been handed something that is not a function,
 // and saying so is its business — this does not write a word.
 func (r *Runner) DefineFunction(name, body string) bool {
-	f, err := syntax.Parse(name+"() {\n"+body+"\n}", r.dialect())
-	if err != nil || len(f.Stmts) != 1 {
+	return r.defineFromText(name, body, nil)
+}
+
+// DefineFunctionExpandingAliases is DefineFunction with the alias table
+// offered to the parse, so a word the table holds is replaced while the body
+// is read.
+//
+// **The caller has already decided**, and this expands from the table without
+// asking anything else. That is deliberate: the switch [Runner.ExpandingAlias]
+// consults is the *route the program arrived by*, and text read here is not
+// that route — it is a file of its own. Measured 2026-09-11 on zsh 5.9.2 with
+// `env -i` and `-f`, a function file holding the one word `myalias`, and
+// `alias myalias='print -r -- X'`:
+//
+//	zsh -c 'alias …; autoload af; af'   X
+//	zsh -c 'alias hi=…; hi'             command not found: hi
+//
+// The same invocation expands the word in the file and not the word in its own
+// command string, so a route answer cannot be borrowed for this. What the
+// dialect asks instead is its own option — `unsetopt aliases` leaves the file
+// unexpanded on both routes — and whatever letter the declaration carried.
+//
+// Two methods rather than a bool on one, because a bool at a call site says
+// nothing about which way round it runs, and the letter that reaches this one
+// runs the opposite way from its own name: zsh's `-U` *suppresses* expansion.
+func (r *Runner) DefineFunctionExpandingAliases(name, body string) bool {
+	return r.defineFromText(name, body, r.LookupAlias)
+}
+
+// defineFromText is the whole of both of these and of
+// [Runner.DefineFunctionFromText] beside them.
+//
+// One function because three ways of reading a body out of text is three
+// places for the next fix to reach two of — and that is not hypothetical: the
+// two that existed differed only in the spelling of the wrapper they built,
+// `name() {` against `name () {`, which is the same definition to this grammar
+// and was never a difference anybody chose. The alias fix (#1993) had to land
+// in both.
+//
+// aliases is the parser's hook, and nil expands nothing.
+func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool {
+	p := syntax.NewParser(name+"() {\n"+body+"\n}\n", r.dialect())
+	p.Aliases = aliases
+	f := p.Parse()
+	if p.Err() != nil || len(f.Stmts) != 1 {
 		return false
 	}
 	pipe, ok := f.Stmts[0].Expr.(*syntax.Pipeline)

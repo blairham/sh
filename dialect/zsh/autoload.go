@@ -125,13 +125,35 @@ func registerAutoload(r *interp.Runner) {
 
 // autoloadOpts is what the letters asked for.
 type autoloadOpts struct {
-	// keepAliases is `-U` and zshParse is `-z`. Neither changes what this
-	// shell does — an autoloaded file is parsed with this grammar and no
-	// alias is expanded in it either way — but both are *recorded*, because
-	// the stub a declaration writes is the letters it was given and a script
-	// reads them back. See autoloadStubPrefix.
+	// keepAliases is `-U`: the letter that **suppresses** alias expansion
+	// while the function file is read, so a word the table would have
+	// replaced survives into the body as it was written. Measured 2026-09-11
+	// on zsh 5.9.2 from a script file, with `alias myalias='print -r -- X'`
+	// and a file for `af` holding the one word `myalias`:
+	//
+	//	autoload -Uz af    af:1: command not found: myalias
+	//	autoload -z  af    X
+	//	autoload     af    X
+	//
+	// The route matters as well as the letter — see
+	// syntax.Dialect.ExpandAliases, which is `RouteFromScriptFile |
+	// RouteOnStandardInput` here, so under `-c` nothing expands either way.
+	// The runner answers both halves at once through
+	// interp.Runner.ExpandingAlias, which is what a file read *without* the
+	// letter is parsed with.
+	//
+	// It is read where the file is read rather than where the declaration is
+	// written, because those are two different moments: the letters are
+	// recorded in the stub and come back through this builtin when the call
+	// resolves it, so the alias table consulted is the one live at the call.
+	// Measured — `unalias myalias` between the declaration and the call
+	// leaves `command not found: myalias`.
 	keepAliases bool
-	zshParse    bool
+	// zshParse is `-z`, which does not change what this shell does — every
+	// autoloaded file is parsed with this grammar — but is *recorded*,
+	// because the stub a declaration writes is the letters it was given and a
+	// script reads them back. See autoloadStubPrefix.
+	zshParse bool
 	// now is `-X` or `+X`: resolve at once instead of at the call.
 	now bool
 	// plus records which sign `X` was written with, because they name
@@ -390,7 +412,7 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 		// a pending stub any more. See autoloadRunResolved for what the
 		// answer decides.
 		stub := autoloadPending(r, name)
-		if code := autoloadResolveIn(r, name, names); code != 0 {
+		if code := autoloadResolveIn(r, name, names, opts.keepAliases); code != 0 {
 			return code
 		}
 		return autoloadRunResolved(r, ctx, name, stub)
@@ -417,7 +439,7 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 			status = 1
 			continue
 		}
-		if code := autoloadResolve(r, name); code != 0 {
+		if code := autoloadResolve(r, name, opts.keepAliases); code != 0 {
 			status = code
 		}
 	}
@@ -552,15 +574,15 @@ func autoloadEnclosingFunction(r *interp.Runner) (string, bool) {
 // the first that exists, because a directory on `$fpath` that cannot be read
 // is a search that goes on rather than a failure, which is what makes a
 // stale entry harmless.
-func autoloadResolve(r *interp.Runner, name string) int {
-	return autoloadResolveIn(r, name, nil)
+func autoloadResolve(r *interp.Runner, name string, keepAliases bool) int {
+	return autoloadResolveIn(r, name, nil, keepAliases)
 }
 
 // autoloadResolveIn is that with the directory a `-X` was given, where it was
 // given one: the operand replaces the search rather than joining it, so a
 // name that is not in that one directory is not found however much of
 // `$fpath` would have had it.
-func autoloadResolveIn(r *interp.Runner, name string, dirs []string) int {
+func autoloadResolveIn(r *interp.Runner, name string, dirs []string, keepAliases bool) int {
 	if len(dirs) == 1 {
 		body, err := r.ReadFileGated(filepath.Join(dirs[0], name))
 		if err != nil {
@@ -571,7 +593,7 @@ func autoloadResolveIn(r *interp.Runner, name string, dirs []string) int {
 		if inner, lone := autoloadLoneDefinition(name, text); lone {
 			text = inner
 		}
-		if !r.DefineFunction(name, text) {
+		if !zshDefineFromText(r, name, text, keepAliases) {
 			r.DiagnoseAsTheShellf("%s: bad function definition\n", name)
 			return 1
 		}
@@ -590,7 +612,7 @@ func autoloadResolveIn(r *interp.Runner, name string, dirs []string) int {
 	if inner, lone := autoloadLoneDefinition(name, body); lone {
 		body = inner
 	}
-	if !r.DefineFunction(name, body) {
+	if !zshDefineFromText(r, name, body, keepAliases) {
 		// The file is not something this shell can read as a body. Its own
 		// complaint rather than "not found", because the file *was* found
 		// and saying otherwise would send somebody looking for it.
@@ -598,6 +620,37 @@ func autoloadResolveIn(r *interp.Runner, name string, dirs []string) int {
 		return 1
 	}
 	return 0
+}
+
+// zshDefineFromText makes text a function body the way this shell reads one,
+// which is with aliases expanded unless something said otherwise.
+//
+// Two things can say otherwise, and both are measured on zsh 5.9.2 on
+// 2026-09-11 with `alias myalias='print -r -- X'` and a file holding the one
+// word `myalias`:
+//
+//	autoload -Uz af; af          command not found: myalias
+//	autoload af; af              X
+//	unsetopt aliases; autoload af; af    command not found: myalias
+//
+// The `-U` letter is the caller's to pass; the option is asked here, because
+// every route into a function body asks it the same way.
+//
+// What is **not** asked is the route the program arrived by. Under `env -i
+// zsh -f -c 'alias myalias=…; autoload af; af'` the word in the file expands,
+// where the same invocation leaves an alias in its own command string alone —
+// so this is the `aliases` option and not syntax.Dialect.ExpandAliases. See
+// the `aliases` entry in setopt.go, which records the same distinction from
+// the other side.
+//
+// Both ways into a function file come here, and so does `functions[f]=body`:
+// this file's recurring defect is a second route that omits what the first
+// one carries (#1993).
+func zshDefineFromText(r *interp.Runner, name, body string, keepAliases bool) bool {
+	if keepAliases || recordedDeviates(r, "aliases") {
+		return r.DefineFunction(name, body)
+	}
+	return r.DefineFunctionExpandingAliases(name, body)
 }
 
 // autoloadLoneDefinition reports a function file that holds **nothing but a

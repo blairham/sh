@@ -14519,6 +14519,16 @@ echo "read=[$l]"`,
 		Why:     "what a name that has not been called yet *is*, said back: `# undefined` and then `builtin autoload -X` carrying the letters the declaration was given — `-XUz` for `autoload -Uz` and a bare `-X` for `autoload` alone. It is the same builtin with the same meaning, acting on the function it is running inside, so the listing is the thing rather than a description of it; a shell that wrote a re-exec of its own there — `builtin autoload +X sfn && sfn \"$@\"` — behaved correctly and read as something no zsh ever wrote, and a completion dump that groups its stubs by that text then matched none of them (#1697). `# undefined` is not a comment in the body: a function written by hand with that line first lists without it, because a listing is printed from a tree and a tree holds no comments",
 	},
 	{
+		ID: "autoload/a-function-file-expands-aliases", Category: "builtins",
+		Snippet: `mkdir -p fp; printf "%s\n" myalias > fp/afn; alias myalias="echo EXPANDED"; fpath=(fp); autoload afn; afn; echo "st=$?"`,
+		Why:     "the file is read with the alias table in hand, so a word the table holds is replaced while the body is parsed: zsh prints `EXPANDED` at 0. The row is written under `-c`, where an alias in the *command string* is not expanded in that shell — which is what says this follows the shell's `aliases` option rather than the route the program arrived by. bash has no `autoload` and ksh93 reads it as `typeset -fu`",
+	},
+	{
+		ID: "autoload/a-function-file-with-minus-u-does-not", Category: "builtins",
+		Snippet: `mkdir -p fp; printf "%s\n" myalias > fp/afn; alias myalias="echo EXPANDED"; fpath=(fp); autoload -Uz afn; afn; echo "st=$?"`,
+		Why:     "the discriminating half, and the letter's whole meaning: `-U` **suppresses** the expansion, so the word survives into the body as written and the call is `afn:1: command not found: myalias` at 127. Every declaration a real startup writes is `-Uz`, which is why this shell could behave as though the letter were always given and nothing noticed (#1993)",
+	},
+	{
 		ID: "autoload/a-stub-reads-back-as-a-value", Category: "builtins",
 		Snippet: `mkdir -p fp; printf "%s\n" 'echo hi' > fp/sfn; fpath=(fp); autoload -Uz sfn; echo "[${functions[sfn]}]"; sfn; echo "[${functions[sfn]}]"`,
 		Why:     "the same stub through the association, which is a *third* text: `builtin autoload -XU` — unindented, without `# undefined`, and without the `z` the listing carries — where an ordinary function's value is its body tab-indented. So the two surfaces are measured separately rather than one derived from the other, and the second half of the row is the same name after one call, whose value is the body the file gave it",

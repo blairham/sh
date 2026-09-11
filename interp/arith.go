@@ -242,7 +242,7 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	if a, ok := r.assocFor(x.Name); ok {
 		return r.arithElemValue(a[x.Sub])
 	}
-	idx, err := r.evalNum(x.Index)
+	idx, err := r.arithSubscriptIndex(x)
 	if err != nil {
 		return intNum(0), err
 	}
@@ -260,6 +260,48 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 		return intNum(0), nil
 	}
 	return r.arithElemValue(v)
+}
+
+// arithSubscriptIndex is the number a subscript counts from, on a name that is
+// not an association.
+//
+// Where the parser built a tree that tree is used. Where it did not, the
+// brackets held a text it could not read as an expression — which is not a
+// parse failure, because the identical text on an associative name is a key
+// and the parser cannot see which kind of name it followed. So the reading is
+// finished here, at the one point where that is known: read it as an
+// expression, and refuse it as one if it will not.
+//
+// The refusal is worded from the subscript's own text, which makes it the same
+// complaint `$(( .accept-line ))` earns. That is what the parser wrote from
+// the same text before this moved, and it is what the panel writes: a shell
+// says about `a[b c]` exactly what it says about `b c`.
+//
+// The text is read as it stands, without a second round of expansion. It is
+// already the result of one — an arithmetic expansion substitutes into the
+// whole expression before reading any of it — so a `$` still in it is a
+// literal `$` and not the start of anything.
+func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
+	if x.Index != nil || x.Empty {
+		return r.evalNum(x.Index)
+	}
+	p := syntax.NewParser("", r.dialect())
+	tree := p.ParseArithFor(x.Sub, syntax.Pos{})
+	err := p.Err()
+	if err == nil && tree == nil {
+		// Brackets holding only space. There is no expression in them and
+		// nothing was wrong with what was there either, so the parser has no
+		// complaint to hand over — the expression simply ran out, which is
+		// the failure the panel names: measured on zsh 5.9.2, `$(( a[ ] ))`
+		// against a declared array is `operand expected at end of string`,
+		// the same sentence `$(( 1+ ))` earns. Not the empty pair `a[]`,
+		// which is a different answer again and has an axis of its own.
+		err = &syntax.Error{Kind: syntax.ErrArithOperandEnd, Expr: x.Sub, Token: x.Sub}
+	}
+	if err != nil {
+		return intNum(0), arithError{msg: r.subscriptFailure(x.Sub, err), complete: true}
+	}
+	return r.evalNum(tree)
 }
 
 // arithElemValue reads an element as a number, whichever kind of array it
@@ -346,6 +388,12 @@ type arithPlace struct {
 	// alone cannot say, since a plain name has no index either. Carried so
 	// the read the operator makes reaches the same answer `$(( a[] ))` does.
 	empty bool
+	// subscripted says brackets were written at all, which neither of the two
+	// above can say on its own: `(( m[.k]++ ))` has no index and is not
+	// empty, and so does a plain name. Without it a key that is not an
+	// expression read and wrote the *bare name* — `(( m[.k] = 3 ))` would set
+	// m rather than the element, which is a wrong answer with no diagnostic.
+	subscripted bool
 }
 
 // arithPlaceOf is the target an operator can write through, and false for an
@@ -355,14 +403,17 @@ func arithPlaceOf(e syntax.ArithExpr) (arithPlace, bool) {
 	case *syntax.ArithVar:
 		return arithPlace{name: x.Name}, true
 	case *syntax.ArithIndex:
-		return arithPlace{name: x.Name, index: x.Index, sub: x.Sub, empty: x.Empty}, true
+		return arithPlace{
+			name: x.Name, index: x.Index, sub: x.Sub, empty: x.Empty,
+			subscripted: true,
+		}, true
 	}
 	return arithPlace{}, false
 }
 
 // readPlace is the value a target currently holds.
 func (r *Runner) readPlace(p arithPlace) (arithNum, error) {
-	if p.index == nil && !p.empty {
+	if !p.subscripted {
 		return r.arithValueOf(p.name, 0)
 	}
 	return r.arithElement(&syntax.ArithIndex{Name: p.name, Index: p.index, Sub: p.sub, Empty: p.empty})
@@ -391,13 +442,29 @@ func (r *Runner) writePlace(p arithPlace, v arithNum) error {
 			return err
 		}
 	}
-	if p.index == nil {
+	if !p.subscripted || p.empty {
+		// The empty pair joins the bare name here rather than below, which is
+		// where it has always been written: a dialect that read `a[]` as the
+		// empty expression and did not answer it above writes through the
+		// name. Only the two of them — a target with a subscript in it is an
+		// element, and stops being one the moment this condition widens.
 		r.setVar(p.name, text)
 		return nil
 	}
 	if r.assocDeclared(p.name) {
 		r.setAssocElem(p.name, p.sub, text)
 		return nil
+	}
+	if p.index == nil {
+		// A key that is not an expression, on a name that is not an
+		// association: the same refusal reading one earns, and refused rather
+		// than written, which is what bash 5.3 and zsh 5.9.2 both do —
+		// `(( a[.foo] = 9 ))` on an indexed array complains and leaves every
+		// element as it was.
+		_, err := r.arithSubscriptIndex(&syntax.ArithIndex{Name: p.name, Sub: p.sub})
+		if err != nil {
+			return err
+		}
 	}
 	idx, err := r.evalNum(p.index)
 	if err != nil {
@@ -526,7 +593,13 @@ func (r *Runner) addNum(n arithNum, step float64) arithNum {
 }
 
 func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
-	place := arithPlace{name: x.Name, index: x.Index, sub: x.Sub}
+	place := arithPlace{
+		name: x.Name, index: x.Index, sub: x.Sub,
+		// An assignment target with an empty subscript is refused while
+		// parsing, so brackets here are exactly a subscript that held
+		// something — an expression the parser read, or a text it could not.
+		subscripted: x.Index != nil || x.Sub != "",
+	}
 	v, err := r.evalNum(x.Value)
 	if err != nil {
 		return intNum(0), err

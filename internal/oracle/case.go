@@ -4355,6 +4355,31 @@ echo "st=$?"`,
 		Why:     "whether the subscript is evaluated at all when the name in front of it is not there. zsh answers zero without reading it and the other three divide by zero, which is the only place the axis is visible: a subscript with no error and no side effect gives the same zero under both readings. It is also what makes the empty-subscript row above a consequence rather than a special case, and the reason a probe expecting zero cannot grade the empty subscript on its own",
 	},
 	{
+		ID: "arithmetic/a-key-that-is-no-expression", Category: "expansion",
+		Snippet: `typeset -A m; m[.k]=5; echo $(( m[.k] )); echo after`,
+		Why:     "an associative subscript is a key and not an expression, so a key that would not read as one is still the element. bash 5.3 and zsh answer 5; the two that have no attribute to declare never get that far. Ours refused it while parsing, before anything could ask what kind of name the brackets followed — which is the whole difficulty, since the name need not exist yet. `after` is printed so the row records whether the input unit was abandoned rather than only that a line went to standard error (#1875)",
+	},
+	{
+		ID: "arithmetic/a-key-that-is-no-expression-and-absent", Category: "expansion",
+		Snippet: `typeset -A m; echo $(( m[.k] )); echo after`,
+		Why:     "the same key with nothing stored under it, which is the row the plugin actually runs: an absent key is zero and not a complaint, in both shells that declare the attribute. It is the half a fix could get wrong in the other direction — answering zero for every unreadable subscript would pass here and swallow the refusal the row below keeps",
+	},
+	{
+		ID: "arithmetic/a-subscript-that-is-no-expression-on-an-indexed-name", Category: "expansion",
+		Snippet: `a=(1 2 3); echo $(( a[.k] )); echo after`,
+		Why:     "the same text where the name is an indexed array, which is where the subscript really is an expression: bash 5.3 and zsh both refuse it and word it differently — an operand expected against a named error token, and a bad floating point constant — so this is two refusals and not one, and a reading that took every unreadable subscript as a key would lose both. The pair with the row above is what says the answer depends on the name's attribute rather than on the text",
+	},
+	{
+		ID: "arithmetic/a-key-that-is-no-expression-as-an-assignment-target", Category: "expansion",
+		Snippet: `typeset -A m; (( m[.k] = 3 )); echo "[${m[.k]}]"; echo after`,
+		Why:     "the write through such a key, which is not the same question as the read: with no expression to evaluate the target carries only text, and a store that decides by asking whether there is an index writes the *name* and leaves the element alone — a wrong answer with nothing printed. The element is echoed rather than the status, because that is the only thing that can tell the two stores apart",
+	},
+	{
+		ID: "arithmetic/a-key-arriving-from-a-parameter", Category: "expansion",
+		Snippet: `typeset -A m; m[.accept-line]=7; w=.accept-line; echo $(( m[$w] )); echo after`,
+		Why:     "the shape from the report, reached the way the report reaches it: the key never appears in the source, because an arithmetic expansion substitutes its parameters before it reads any of the expression. A plugin counting the editor widgets it has rebound runs exactly this, and the widget names are dot-prefixed — 69 diagnostics in one interactive session. A case written with the key spelled out could pass while this one failed, since the expansion is what puts the unreadable text there",
+	},
+	{
 		ID: "array/a-subscript-that-will-not-evaluate", Category: "expansion",
 		Snippet: `a=(x y z); echo "[${a[b c]}]"; echo after`,
 		Why:     "a subscript is an expression, so one that does not read is the failure `$((b c))` is — the identical sentence in all four, the command abandoned, and a non-zero status. It expanded to nothing at status 0 and the script carried on, which is the worst shape available: an empty string is a plausible value for a real element, so nothing downstream could tell. `after` is printed so the case records that the input unit is given up on rather than only that a line went to standard error",

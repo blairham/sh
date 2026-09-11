@@ -137,6 +137,27 @@ type Result struct {
 	Baseline map[string]int `json:"baseline"`
 }
 
+// sweepState is what one flip learns and the next one reuses.
+//
+// All of it is shared across dialects on purpose. The row that pins an axis
+// in bash is nearly always the row that pins it in zsh — the row exists
+// because the two disagree — so trying it first is the difference between
+// three more full sweeps and three cheap ones.
+type sweepState struct {
+	// pass is the rows that agreed with the reference, per target, in the
+	// order Targets gave them.
+	pass [][]oracle.Case
+	// sensitive counts how many distinct answers our own four dialects gave
+	// one row. One means no axis they disagree about reaches it.
+	sensitive map[string]int
+	// objections counts how often a row has objected to anything.
+	objections map[string]int
+	// pinnedBy is the row that objected to this axis last, by field path.
+	pinnedBy map[string]string
+	// flaky are rows whose own answer moved between two unmutated runs.
+	flaky map[string]bool
+}
+
 func (o *Options) logf(format string, args ...any) {
 	if o.Log == nil {
 		return
@@ -177,16 +198,60 @@ func Run(ctx context.Context, o Options) (*Result, error) {
 	}
 
 	res := &Result{Baseline: map[string]int{}}
-	flaky := map[string]bool{}
+	state := &sweepState{
+		flaky:      map[string]bool{},
+		objections: map[string]int{},
+		pinnedBy:   map[string]string{},
+	}
+
+	// Every dialect's baseline before any of them is swept, because the four
+	// together carry a signal none of them carries alone: a row whose answer
+	// is the same in all four dialects is a row no axis those dialects
+	// disagree about reaches, and a row whose answer differs is where the
+	// vector is doing something. Ranking by that puts the rows that can
+	// object at the front of every scan, which is most of what the sweep
+	// costs — measured, it is the difference between scanning half the
+	// corpus per flip and scanning a handful of rows.
+	graded := make([]oracle.Case, 0, len(o.Cases))
+	for _, c := range o.Cases {
+		if oracle.Graded(c) {
+			graded = append(graded, c)
+		}
+	}
+	answers := map[string][]string{}
 	for _, t := range targets {
 		ref, ok := byName[t.Against]
 		if !ok {
 			return nil, fmt.Errorf("reference shell %q is not installed, so %s cannot be graded", t.Against, t.Dialect)
 		}
-		if err := o.sweepTarget(ctx, t, ref, fields, res, flaky); err != nil {
+		start := time.Now()
+		got := o.runAll(ctx, o.column(t, ref, ""), graded)
+		var pass []oracle.Case
+		for i, c := range graded {
+			answers[c.ID] = append(answers[c.ID], got[i].Stdout+"\x00"+got[i].Stderr)
+			if ok, _ := oracle.Verdict(c, o.Golden.Results[c.ID][t.Against], got[i]); ok {
+				pass = append(pass, c)
+			}
+		}
+		state.pass = append(state.pass, pass)
+		res.Baseline[t.Dialect] = len(pass)
+		o.logf("%s: %d of %d graded rows agree with %s (%s)\n", t.Dialect, len(pass), len(graded), t.Against, time.Since(start).Round(time.Millisecond))
+	}
+	state.sensitive = map[string]int{}
+	for id, seen := range answers {
+		distinct := map[string]bool{}
+		for _, a := range seen {
+			distinct[a] = true
+		}
+		state.sensitive[id] = len(distinct)
+	}
+
+	for i, t := range targets {
+		if err := o.sweepTarget(ctx, t, byName[t.Against], fields, res, state, i); err != nil {
 			return nil, err
 		}
 	}
+	flaky := state.flaky
 	for id := range flaky {
 		res.Flaky = append(res.Flaky, id)
 	}
@@ -216,36 +281,15 @@ func (o *Options) column(t Target, ref oracle.Found, spec string) oracle.Found {
 	}
 }
 
-func (o *Options) sweepTarget(ctx context.Context, t Target, ref oracle.Found, fields []Field, res *Result, flaky map[string]bool) error {
-	graded := make([]oracle.Case, 0, len(o.Cases))
-	for _, c := range o.Cases {
-		if oracle.Graded(c) {
-			graded = append(graded, c)
-		}
-	}
-
-	// The baseline. Only a row that agreed with the reference can object to
-	// a flip — a row that already disagrees can change its answer without
-	// any score moving — so the passing set is what the sweep scans.
-	start := time.Now()
+func (o *Options) sweepTarget(ctx context.Context, t Target, ref oracle.Found, fields []Field, res *Result, state *sweepState, which int) error {
 	plain := o.column(t, ref, "")
-	pass := make([]oracle.Case, 0, len(graded))
-	results := o.runAll(ctx, plain, graded)
-	for i, c := range graded {
-		want := o.Golden.Results[c.ID][t.Against]
-		if ok, _ := oracle.Verdict(c, want, results[i]); ok {
-			pass = append(pass, c)
-		}
-	}
-	res.Baseline[t.Dialect] = len(pass)
-	o.logf("%s: %d of %d graded rows agree with %s (%s)\n", t.Dialect, len(pass), len(graded), t.Against, time.Since(start).Round(time.Millisecond))
-
+	pass := state.pass[which]
 	sem := reflect.ValueOf(t.Semantics)
-	// Rows that have objected before, most-objected first. A row rich enough
-	// to discriminate one axis tends to discriminate others, and the scan
-	// stops at the first objection, so the order is most of the cost.
-	objections := map[string]int{}
-	for _, f := range fields {
+	started := time.Now()
+	for n, f := range fields {
+		if n%25 == 0 {
+			o.logf("%s: axis %d of %d (%s elapsed)\n", t.Dialect, n, len(fields), time.Since(started).Round(time.Second))
+		}
 		cur, err := At(sem, f.Path)
 		if err != nil {
 			return err
@@ -262,7 +306,7 @@ func (o *Options) sweepTarget(ctx context.Context, t Target, ref oracle.Found, f
 			}
 			spec := axismutate.Spec{Path: f.Path, Value: v.Literal}.String()
 			flipStart := time.Now()
-			by, scanned := o.firstObjection(ctx, t, ref, spec, order(pass, f, objections))
+			by, scanned := o.firstObjection(ctx, t, ref, spec, order(pass, f, state))
 			out := Flip{
 				Field: f.Path, Type: f.Type, Dialect: t.Dialect,
 				From: held, To: v.Name, Discriminating: discriminating,
@@ -272,17 +316,19 @@ func (o *Options) sweepTarget(ctx context.Context, t Target, ref oracle.Found, f
 			if by != "" {
 				// A row whose own answer moves between two unmutated runs
 				// would object to everything. Confirm before believing it.
-				if o.stable(ctx, plain, by, graded) {
+				if o.stable(ctx, plain, by, pass) {
 					out.Outcome, out.By = Pinned, by
-					objections[by]++
+					state.objections[by]++
+					state.pinnedBy[f.Path] = by
 				} else {
-					flaky[by] = true
+					state.flaky[by] = true
 					o.logf("  %s: row %s is not stable unmutated; not counted\n", f.Path, by)
-					by, scanned = o.firstObjection(ctx, t, ref, spec, skip(order(pass, f, objections), flaky))
+					by, scanned = o.firstObjection(ctx, t, ref, spec, skip(order(pass, f, state), state.flaky))
 					out.Scanned = scanned
 					if by != "" {
 						out.Outcome, out.By = Pinned, by
-						objections[by]++
+						state.objections[by]++
+						state.pinnedBy[f.Path] = by
 					}
 				}
 			}
@@ -384,16 +430,27 @@ func unspecifiedNow(f Field, cur reflect.Value) bool {
 	return false
 }
 
-// order puts the rows most likely to object first: the ones that have
-// objected before, then the ones whose name shares words with the axis.
+// order puts the rows most likely to object first.
+//
+// Four signals, in descending strength: the row that pinned this same axis in
+// another dialect, rows that have objected to anything before, how many
+// distinct answers our own four dialects gave the row, and whether its name
+// or its snippet shares words with the axis.
 //
 // It is a speed heuristic and nothing else. Every row is still scanned before
-// a flip is called unpinned, which is the claim the instrument makes; the
-// order only decides how long a *pinned* flip takes to prove itself.
-func order(pass []oracle.Case, f Field, objections map[string]int) []oracle.Case {
+// a flip is called unpinned, which is the only claim the instrument makes;
+// the order decides how long a *pinned* flip takes to prove itself, which is
+// where nearly all of the time goes.
+func order(pass []oracle.Case, f Field, state *sweepState) []oracle.Case {
 	words := splitCamel(f.Path)
+	known := state.pinnedBy[f.Path]
 	score := func(c oracle.Case) int {
-		s := objections[c.ID] * 1000
+		s := 0
+		if c.ID == known {
+			s += 1_000_000
+		}
+		s += state.objections[c.ID] * 1000
+		s += state.sensitive[c.ID] * 100
 		id := strings.ToLower(c.ID + " " + c.Snippet)
 		for _, w := range words {
 			if len(w) > 3 && strings.Contains(id, w) {

@@ -13474,6 +13474,21 @@ exit 7`,
 		Why:     "the other side of the row above, and where the panel splits: a directory is not a regular file either, so the option has nothing to refuse and the open is attempted — bash, ksh93 and dash then report what the open said, and zsh words it as the option's own refusal",
 	},
 	{
+		ID: "redir/a-target-that-could-not-be-expanded-is-not-opened", Category: "redirection",
+		Snippet: `set -u; cat /dev/null > "$NOPE_T"; echo "st=$?"`,
+		Why:     "one mistake, one diagnostic: no column opens the empty string the failed expansion left behind, so none of them complains about a file nobody wrote. What follows it is where they split — bash, ksh93 and zsh lose the command and carry on, at the status the failure left in the process that was to run it, and dash ends the script, because the three expand a target in the process the redirection is for and dash expands it in the shell",
+	},
+	{
+		ID: "redir/a-target-that-could-not-be-expanded-on-a-builtin", Category: "redirection",
+		Snippet: `set -u; : > "$NOPE_T"; echo "st=$?"`,
+		Why:     "the other side of that line, and unanimous: a builtin is run by the shell itself, so there is no other process for the failure to stay in and every column ends the script — which is what says the split above is about the fork and not about redirection",
+	},
+	{
+		ID: "redir/a-targets-side-effect-stays-with-the-command", Category: "redirection",
+		Snippet: `unset u; cat /dev/null > "${u:=made}"; echo "u=[${u-UNSET}]"; rm -f made`,
+		Why:     "the same line drawn by a write rather than by a failure: the assignment inside the target is gone afterwards in bash, ksh93 and zsh and kept in dash, and the file is created in all of them — so the difference is where the word was expanded and not whether the redirection happened",
+	},
+	{
 		ID: "redir/exec-with-a-redirection-that-cannot-be-made", Category: "redirection",
 		Snippet: `exec 3>/nope/x; echo after`,
 		Why:     "POSIX makes a redirection error on a special builtin fatal to a non-interactive shell, and the panel splits three to two over it: dash stops at 2, ksh93 and bash-as-`sh` stop at 1, and bash and zsh complain and print `after`. The bash and bash-as-`sh` rows are the same binary, which is what says the answer belongs to posix mode rather than to a shell",

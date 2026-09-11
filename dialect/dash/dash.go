@@ -59,6 +59,14 @@ func Semantics() interp.Semantics {
 	// `set -u` on an unset name in such a body reports 2 and the script
 	// carries on — which is unanimous and so is not asked.
 	s.HeredocExpandsInTheCommandsProcess = interp.No
+	// And the same for a redirection's *target*, where this shell is alone
+	// again and where the split costs more: `cat /dev/null > "${u:=made}"`
+	// leaves `u` set here and unset in the other three, and `> "$NOPE"`
+	// under `set -u` ends the script here where the other three lose only
+	// the command. A second axis rather than the one above, because the two
+	// positions do not share an answer — a body's failed expansion costs
+	// this shell the command and not the script (#1228).
+	s.RedirectTargetExpandsInTheCommandsProcess = interp.No
 	// POSIX makes an unquoted `$@` behave as `$*` where nothing is split,
 	// and this shell complies: `IFS=-; set -- x y z; v=${@}` is `x-y-z`
 	// here and in zsh, against `x y z` in bash and ksh93. It has no arrays,

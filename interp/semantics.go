@@ -467,6 +467,29 @@ type Semantics struct {
 	// with no side effect is every other here-document and the shells agree
 	// about it, so an unanswered dialect must still be able to run one.
 	HeredocExpandsInTheCommandsProcess Answer
+
+	// RedirectTargetExpandsInTheCommandsProcess is the same claim for a
+	// redirection's *target*: `> "${u:=made}"` on a command the shell runs
+	// as a process of its own leaves `u` unset afterwards, and `> "$NOPE"`
+	// under `set -u` costs that command rather than the script.
+	//
+	// True in bash, ksh93 and zsh; dash alone keeps the write and stops the
+	// script. One answer for both consequences, because they are one fact
+	// about where the word was expanded — and a second axis rather than a
+	// widening of the body's, because dash splits the other way there: a
+	// here-document body's failed expansion costs dash the command and not
+	// the script, where a target's ends it (#1228).
+	//
+	// Asked only where the command is one the shell runs as a process of
+	// its own *and* the expansion either wrote something or failed. A target
+	// that expands to a name is every other redirection, the shells agree
+	// about it, and an unanswered dialect must still be able to open a file.
+	//
+	// What is not asked anywhere is whether the open happens: a target whose
+	// expansion failed is not opened, unanimously. Diagnosing the unset name
+	// and then reporting that `` could not be created is two complaints for
+	// one mistake, and the second names a file nobody wrote.
+	RedirectTargetExpandsInTheCommandsProcess Answer
 	// ForNameWhenTheLoopRuns is what a `for` or `select` does when it is
 	// reached and the word standing where its variable belongs is not a
 	// name. Asked only where the grammar carried the word this far —

@@ -10194,6 +10194,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/noclobber-names-its-refusal` | `st=2` **2>** `<shell>: 1: cannot create f: File exists` | `st=1` **2>** `<shell>: line 1: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: line 1: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: f: file already exists [File exists]` | `st=1` **2>** `<shell>:1: file exists: f` |
 | `redir/noclobber-writes-to-a-file-that-is-not-regular` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `redir/noclobber-and-a-target-that-cannot-be-opened` | `st=2` **2>** `<shell>: 1: cannot open d: Is a directory` | `st=1` **2>** `<shell>: line 1: d: Is a directory` | `st=1` **2>** `<shell>: line 1: d: Is a directory` | `st=1` **2>** `<shell>: d: Is a directory` | `st=1` **2>** `<shell>: d: cannot create [Is a directory]` | `st=1` **2>** `<shell>:1: file exists: d` |
+| `redir/a-target-that-could-not-be-expanded-is-not-opened` | **2>** `<shell>: 1: NOPE_T: parameter not set` *(status 2)* | `st=127` **2>** `<shell>: line 1: NOPE_T: unbound variable` | `st=127` **2>** `<shell>: line 1: NOPE_T: unbound variable` | `st=127` **2>** `<shell>: NOPE_T: unbound variable` | `st=1` **2>** `<shell>: NOPE_T: parameter not set` | `st=1` **2>** `<shell>:1: NOPE_T: parameter not set` |
+| `redir/a-target-that-could-not-be-expanded-on-a-builtin` | **2>** `<shell>: 1: NOPE_T: parameter not set` *(status 2)* | **2>** `<shell>: line 1: NOPE_T: unbound variable` *(status 127)* | **2>** `<shell>: line 1: NOPE_T: unbound variable` *(status 127)* | **2>** `<shell>: NOPE_T: unbound variable` *(status 127)* | **2>** `<shell>: NOPE_T: parameter not set` *(status 1)* | **2>** `<shell>:1: NOPE_T: parameter not set` *(status 1)* |
+| `redir/a-targets-side-effect-stays-with-the-command` | `u=[made]` | `u=[UNSET]` | `u=[UNSET]` | `u=[UNSET]` | `u=[UNSET]` | `u=[UNSET]` |
 | `redir/exec-with-a-redirection-that-cannot-be-made` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
 | `redir/a-failed-redirection-on-a-colon` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
 | `redir/a-failed-redirection-on-an-ordinary-command` | `after` **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: cannot create [No such file or directory]` | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
@@ -10848,6 +10851,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/noclobber-and-a-target-that-cannot-be-opened` — the other side of the row above, and where the panel splits: a directory is not a regular file either, so the option has nothing to refuse and the open is attempted — bash, ksh93 and dash then report what the open said, and zsh words it as the option's own refusal
   ```sh
   set -C; mkdir d; echo probe > d; echo "st=$?"
+  ```
+- `redir/a-target-that-could-not-be-expanded-is-not-opened` — one mistake, one diagnostic: no column opens the empty string the failed expansion left behind, so none of them complains about a file nobody wrote. What follows it is where they split — bash, ksh93 and zsh lose the command and carry on, at the status the failure left in the process that was to run it, and dash ends the script, because the three expand a target in the process the redirection is for and dash expands it in the shell
+  ```sh
+  set -u; cat /dev/null > "$NOPE_T"; echo "st=$?"
+  ```
+- `redir/a-target-that-could-not-be-expanded-on-a-builtin` — the other side of that line, and unanimous: a builtin is run by the shell itself, so there is no other process for the failure to stay in and every column ends the script — which is what says the split above is about the fork and not about redirection
+  ```sh
+  set -u; : > "$NOPE_T"; echo "st=$?"
+  ```
+- `redir/a-targets-side-effect-stays-with-the-command` — the same line drawn by a write rather than by a failure: the assignment inside the target is gone afterwards in bash, ksh93 and zsh and kept in dash, and the file is created in all of them — so the difference is where the word was expanded and not whether the redirection happened
+  ```sh
+  unset u; cat /dev/null > "${u:=made}"; echo "u=[${u-UNSET}]"; rm -f made
   ```
 - `redir/exec-with-a-redirection-that-cannot-be-made` — POSIX makes a redirection error on a special builtin fatal to a non-interactive shell, and the panel splits three to two over it: dash stops at 2, ksh93 and bash-as-`sh` stop at 1, and bash and zsh complain and print `after`. The bash and bash-as-`sh` rows are the same binary, which is what says the answer belongs to posix mode rather than to a shell
   ```sh

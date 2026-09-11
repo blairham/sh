@@ -203,6 +203,12 @@ func TestSemanticsAxesHaveTwoSides(t *testing.T) {
 			"after=1", "after=2",
 		},
 		{
+			"a redirection target's write reaches the shell that ran the command",
+			"unset u\ncat /dev/null > \"${u:=made}\"\nprintf 'u=%s' \"${u-UNSET}\"",
+			func(s *Semantics, a Answer) { s.RedirectTargetExpandsInTheCommandsProcess = a },
+			"u=UNSET", "u=made",
+		},
+		{
 			"quoting a regex makes it a literal",
 			`[[ abc =~ "^a.c$" ]] && echo m || echo no`,
 			func(s *Semantics, a Answer) { s.RegexQuotingMakesLiteral = a },

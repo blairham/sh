@@ -371,6 +371,7 @@ func Semantics() interp.Semantics {
 	// hash counts builtins and functions and announces its empty table.
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
+	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
 	// A loop variable that is not a name is checked when the loop runs here,
 	// and the loop fails while the script carries on: `for $n in a b` prints
 	// the complaint, the loop reports 1, and `echo "st=$?"` after it runs

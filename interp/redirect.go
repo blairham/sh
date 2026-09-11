@@ -155,13 +155,17 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// The body could not be expanded, and the process the
 				// redirection was for is where that happened — so the
 				// command is what was given up, not the shell. See
-				// heredocGiveUpTheCommand.
+				// giveUpTheCommand.
 				return closers, nil
 			}
 			continue
 		}
 
-		name, bad := r.redirectTarget(rd)
+		// The target is expanded where the command runs, which decides what
+		// becomes of a write inside it and of a failure — and, whoever runs
+		// the command, an expansion that failed is not a name and is not
+		// opened. See redirtarget.go.
+		name, bad := r.redirectTargetForItsProcess(rd)
 		if bad {
 			return closers, nil
 		}

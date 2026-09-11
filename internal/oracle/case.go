@@ -8469,6 +8469,21 @@ echo unreachable`,
 		Why:     "and the other half of the same fault: an unquoted operand is a pattern, but the pattern is the *word* it sits in. Matching the operand alone looked for a file named `[a-b]`, found none, and in the shell where that is fatal stopped the command — where all six here match `Xay` and `Xby`",
 	},
 	{
+		ID: "pat/a-substituted-word-in-a-case-arm-is-the-pattern", Category: "pattern matching",
+		Snippet: `: > vis; unset u; case vix in ${u:-v*}) echo yes;; *) echo no;; esac`,
+		Why:     "a `case` arm is never matched against the filesystem, and the operand of a `-` inside one is part of the arm rather than a word of its own: all six answer yes, matching `vix` against the pattern `v*`. The file named `vis` is there so that a shell which *did* match the operand would answer no — the listing it found is not the subject — which is the only way to tell the two readings apart. This answered no (#1955)",
+	},
+	{
+		ID: "pat/a-substituted-word-in-a-trim-is-the-pattern", Category: "pattern matching",
+		Snippet: `: > vis; unset u; x=avix; printf "[%s]" "${x%${u:-v*}}"; echo`,
+		Why:     "the same rule on the trim route, which shares the entry point: `v*` trims `vix` off the end and leaves `a` in all six. Matching the operand first replaced it with the file it found, `vis`, which trims nothing — so the answer was the whole value back, a plausible string with nothing said",
+	},
+	{
+		ID: "pat/a-substituted-word-in-a-pattern-is-not-refused-for-matching-nothing", Category: "pattern matching",
+		Snippet: `unset u; case abc in ${u:-a*}) echo yes;; *) echo no;; esac`,
+		Why:     "the loud half of the same fault, in the scratch directory where nothing is named `a*`: a pattern operand has no filesystem to miss, so all six answer yes. Sending it to one made the miss the shell's answer instead — and in the shell where an unmatched pattern is fatal that is a stopped command with a diagnostic, which is how #1955 was found: one `no matches found` on a real startup where the shell it is measured against is silent",
+	},
+	{
 		ID: "pat/an-escape-sequence-in-a-substituted-word", Category: "pattern matching",
 		Snippet: `u=; printf "%s" ${u:-"$(printf "\033[1m")"} | tr -d "\033"; echo`,
 		Why:     "the shape #1500 was found in: every ANSI color sequence opens `ESC [`, so an operand carrying one is an unterminated bracket expression the moment its quoting is lost — and zsh calls that a bad pattern rather than passing it through. The `tr` removes the escape byte so the row records the printable remainder. Sibling of pat/unterminated-bracket-from-a-value-holding-an-escape, which asks the same question of a plain variable",

@@ -5730,6 +5730,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/single-quotes-in-a-quoted-pattern-operand` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | **2>** `<shell>:1: unmatched '~<shell>:1: unmatched "` *(status 1)* |
 | `core/quotes-in-a-quoted-replacement-operand` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[xZy][x$vy][x$vy]` | `[xZy][x$vy][x$vy]` | `[xZy][x'VAL'y][x$vy]` | `[xZy][x$vy][x$vy]` | `[xZy][x'VAL'y][x$vy]` |
 | `core/the-characters-a-replacement-operand-parts-on` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[x'q'y][x\qy][x~y][x"q"y][xp~qy]` | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[x'q'y][x\qy][x~y][xqy][xp~qy]` |
+| `core/which-backslashes-a-replacement-operand-parts-on` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[x$vy][x\y][x"y][x}y][x{y][xqy]` | `[x$vy][x\y][x"y][x}y][x{y][xqy]` | `[x$vy][x\y][x"y][x\}y][x\{y][x\qy]` | `[x$vy][x\y][x"y][x}y][x{y][xqy]` | `[x$vy][x\y][x"y][x}y][x\{y][x\qy]` |
+| `core/backslash-before-a-brace-in-a-quoted-operand` | `[A}B][A\{B][A\qB][A\}B][A}B]` | `[A}B][A\{B][A\qB][A\}B][A}B]` | `[A}B][A\{B][A\qB][A\}B][A}B]` | `[A\}B][A\{B][A\qB][A\}B][A}B]` | `[A}B][A\{B][A\qB][A\}B][A}B]` | `[A}B][A\{B][A\qB][A\}B][A}B]` |
+| `core/backslash-before-a-brace-in-a-replacement-operand` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[A}B][A}B][Z][a]` | `[A}B][A}B][Z][a]` | `[A\}B][A\}B][Z][a]` | `[A}B][A}B][Z][a]` | `[A}B][A}B][Z][a]` |
+| `core/backslash-before-a-brace-inside-nested-quotes` | `[A}B][A'}'B]` | `[A}B][A'}'B]` | `[A}B][A'}'B]` | `[A}B][A'\}'B]` | `[A}B][A'}'B]` | `[A\}B][A'}'B]` |
 | `core/single-quotes-in-a-heredoc-expansion-body` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` |
 | `core/a-case-arm-inside-backquotes-inside-an-expansion` | `[y]` | `[y]` | `[y]` | `[y]` | `[y]` | `[y]` |
 
@@ -5825,9 +5829,25 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   s=xay; v=VAL; printf '[%s]' "${s/'a'/Z}" "${s/a/'$v'}" ${s/a/'$v'}; echo
   ```
-- `core/the-characters-a-replacement-operand-parts-on` — which characters the two readings of a replacement operand actually part on, which is what decides where the axis may be asked. The first three divide the panel — a single quote, a backslash, and a tilde at the front — and the last two do not: a double quote is removed under both readings that this shell's axis models and a tilde that is not at the front expands under neither. bash 3.2 is the exception on the double quote and keeps it as a character, which is a further divergence inside the keeping group rather than a third reading of the axis, and it has no dialect here to answer for it. A rule reached on the last two would be refusing where the whole panel agrees, and one that missed the first three would be picking a reading in silence
+- `core/the-characters-a-replacement-operand-parts-on` — which characters the two readings of a replacement operand actually part on, which is what decides where the axis may be asked. The first three divide the panel — a single quote, a backslash, and a tilde at the front — and the last two do not: a double quote is removed under both readings that this shell's axis models and a tilde that is not at the front expands under neither. bash 3.2 is the exception on the double quote and keeps it as a character, which is a further divergence inside the keeping group rather than a third reading of the axis, and it has no dialect here to answer for it. A rule reached on the last two would be refusing where the whole panel agrees, and one that missed the first three would be picking a reading in silence. The backslash field is the coarse form of the question: which character follows it decides the answer, and core/which-backslashes-a-replacement-operand-parts-on asks it one at a time (#1966)
   ```sh
   s=xay; printf '[%s]' "${s/a/'q'}" "${s/a/\q}" "${s/a/~}" "${s/a/"q"}" "${s/a/p~q}"; echo
+  ```
+- `core/which-backslashes-a-replacement-operand-parts-on` — the backslash of the row above, asked a character at a time, because it does not part the two readings on its own: a dollar, a backslash, a double quote and — since #1966 — a closing brace are escaped under *both* readings and are unanimous here, while an opening brace and an ordinary letter are removed by bash 5.3, that build as `sh` and ksh93 and kept by zsh. So the question the axis may be asked is the character *after* the backslash, and a rule reached on the first four refuses where the whole panel agrees — which is what the core did to `\}`, by name, until this. bash 3.2 keeps the backslash on the brace as well and has no dialect here
+  ```sh
+  s=xay; v=V; printf '[%s]' "${s/a/\$v}" "${s/a/\\}" "${s/a/\"}" "${s/a/\}}" "${s/a/\{}" "${s/a/\q}"; echo
+  ```
+- `core/backslash-before-a-brace-in-a-quoted-operand` — a backslash before the `}` that would close a `${ }` escapes it and is removed, which five of the six answer with `A}B`; bash 3.2 keeps it and is the outlier. The other four fields are what say the rule is the *closing brace inside a quoted operand* and not backslashes generally: an opening brace keeps its backslash, so does an ordinary letter, so does the same `\}` written outside an expansion — all three unanimous — and the unquoted spelling comes to `A}B` by the ordinary word rule, which is the reading the quoted one had been missing (#1966)
+  ```sh
+  unset u; printf '[%s]' "${u-A\}B}" "${u-A\{B}" "${u-A\qB}" "A\}B" ${u-A\}B}; echo
+  ```
+- `core/backslash-before-a-brace-in-a-replacement-operand` — the same escape in the operands of a substitution, which is where it reached this shell: the replacement half of both `/` and `//` comes to `A}B`, and the pattern half takes the freed `}` as a literal to match, so the third field is `Z` and the fourth trims. dash has neither operator and refuses the line; bash 3.2 keeps the backslash in the two replacements and agrees on the two patterns, which places its divergence in the replacement reading rather than in the escape. This is the construct powerlevel10k builds a `${(e)}` pattern out of, and a kept backslash makes that text unparseable (#1966)
+  ```sh
+  v=x; w='a}b'; printf '[%s]' "${v/x/A\}B}" "${v//x/A\}B}" "${w/a\}b/Z}" "${w%\}b}"; echo
+  ```
+- `core/backslash-before-a-brace-inside-nested-quotes` — where the escape stops, and the one corner of it the panel splits on: inside a double-quoted run written *within* the operand, zsh answers `A\}B` and the other five answer `A}B`, so the brace is escapable there for everyone but zsh. Single quotes are not a run at all in a quoted operand, so the second field is `A'}'B` in five and `A'\}'B` only in bash 3.2. Recorded as the measurement behind the split; ours gives zsh's answer in every dialect (#2001)
+  ```sh
+  unset u; printf '[%s]' "${u-"A\}B"}" "${u-A'\}'B}"; echo
   ```
 - `core/single-quotes-in-a-heredoc-expansion-body` — a here-document body is the same context reached by the other road: it expands like a double-quoted string, so the quotes are characters there too and the `$v` between them is substituted. Unanimous, and it is the row that says the answer is the context's rather than the double quote character's
   ```sh

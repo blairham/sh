@@ -1408,8 +1408,40 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 // character besides, which is a further difference inside the keeping group.
 // No dialect here targets that build, so it is recorded in the corpus rather
 // than modeled.
+//
+// A backslash is the one of the three that has to be looked *past*, because
+// it parts the readings only before a character the enclosing reading does
+// not escape itself. Measured 2026-09-10 with `s=xay`, bash 5.3.15, that
+// build as `sh`, ksh93u+ and zsh 5.9.2:
+//
+//	"${s/a/\$v}"   x$vy    unanimous — both readings escape a dollar
+//	"${s/a/\\}"     x\y     and a backslash
+//	"${s/a/\"}"    x"y     and a double quote
+//	"${s/a/\`}"    x`y     and a backtick
+//	"${s/a/\}}"    x}y     and, since #1966, the closing brace
+//	"${s/a/\{}"    x{y against x\{y   here they part
+//	"${s/a/\q}"    xqy against x\qy   and here
+//
+// So the question is the *next* character, and it is asked of operandEscapes
+// rather than of a second list beside it — which is what keeps this in step
+// with the escape set the enclosing reading actually applies. Asking it of
+// the backslash alone refused `"${s/a/A\}B}"` by name in the core, where all
+// five shells agree on `xA}By`.
 func replacementReadingsCanDiffer(text string) bool {
-	return strings.HasPrefix(text, "~") || strings.ContainsAny(text, `'\`)
+	if strings.HasPrefix(text, "~") || strings.ContainsRune(text, '\'') {
+		return true
+	}
+	for i := 0; i < len(text); i++ {
+		if text[i] != '\\' {
+			continue
+		}
+		// Nothing after it is not a character the two readings agree on.
+		if i+1 >= len(text) || strings.IndexByte(operandEscapes, text[i+1]) < 0 {
+			return true
+		}
+		i++
+	}
+	return false
 }
 
 // indexUnquoted finds c outside quotes and not backslash-escaped.

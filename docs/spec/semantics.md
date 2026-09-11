@@ -11711,6 +11711,29 @@ under both, and a tilde off the front expands under neither, so none of
 those reaches the axis. The parser decides whether it can arise and keeps
 both readings when it can; see `syntax.ParamExpr.Arg2Enclosed`.
 
+The **backslash** of those three has to be looked past rather than
+counted, because it parts the readings only before a character the
+enclosing reading does not escape itself. Measured 2026-09-10 with
+`s=xay` and `v=V`:
+
+| probe | bash 5.3 | bash-as-`sh` | ksh93 | zsh 5.9.2 |
+| --- | --- | --- | --- | --- |
+| `"${s/a/\$v}"` | `x$vy` | `x$vy` | `x$vy` | `x$vy` |
+| `"${s/a/\\}"` | `x\y` | `x\y` | `x\y` | `x\y` |
+| `"${s/a/\"}"` | `x"y` | `x"y` | `x"y` | `x"y` |
+| `"${s/a/\}}"` | `x}y` | `x}y` | `x}y` | `x}y` |
+| `"${s/a/\{}"` | `x{y` | `x{y` | `x{y` | **`x\{y`** |
+| `"${s/a/\q}"` | `xqy` | `xqy` | `xqy` | **`x\qy`** |
+
+The first four are unanimous and must not reach the axis: `$`, a
+backslash and `"` are escaped under both readings because both apply the
+double-quote set, and `}` joined that set when the closing brace became
+escapable in an operand (#1966). Only the last two part the panel. Asking
+the axis on the backslash alone refused `"${s/a/A\}B}"` in the core by
+name, where every column agrees on `xA}By` — the same "refusing where the
+panel agrees" this axis's narrowness exists to avoid. bash 3.2 keeps the
+backslash on all six.
+
 bash 3.2 keeps a double quote as a character too, which no other column
 does under either reading. That is a further difference inside the
 keeping group rather than a third value of this axis, and no dialect here

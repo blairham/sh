@@ -551,6 +551,10 @@ func Semantics() interp.Semantics {
 	s.ProcessSubstitutionInCondition = interp.No
 	// As zsh: `more tokens expected` and the input is abandoned.
 	s.ConditionArithmeticErrorIsFatal = interp.Yes
+	// And the parenthesized spelling is fatal too, which is the half the
+	// condition axis could not carry: zsh abandons the condition and stays
+	// for `(( ))`, so the two constructs do not group.
+	s.ArithCommandErrorIsFatal = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
 	// Leading digits and no further: `return 3abc` is 3 and `return r` is 0
 	// whatever `r` holds. Not arithmetic, which the leading zero settles —

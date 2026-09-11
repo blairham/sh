@@ -1230,10 +1230,35 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 // its own, and taking the syntax status there gave zsh 1 where it leaves 2
 // (#1625).
 func (r *Runner) arithCmdFailed(otherwise int) int {
+	if r.ask(r.sem().ArithCommandErrorIsFatal, "a `(( ))` that could not be evaluated abandoning the input") {
+		// The same shape ConditionArithmeticErrorIsFatal has, and through the
+		// same door: the status is decided below either way, and what the
+		// dialect adds is that there is no next line to read it.
+		r.abandonOverArithmetic()
+	}
 	if r.ask(r.sem().ArithCommandErrorStatusIsTwo, "the status a failed `(( ))` leaves") {
 		return 2
 	}
 	return otherwise
+}
+
+// abandonOverArithmetic gives up the input over an expression the dialect
+// calls fatal, for the two constructs that ask that question.
+//
+// An *error* rather than a request to stop, which is the half that decides how
+// far the give-up reaches. A boundary reading a file of its own catches an
+// error and carries on past it, and both constructs stop at that boundary:
+// measured 2026-09-11, ksh93's `. ./s.sh; echo after` prints `after` over a
+// file holding `(( 1+ ))` and over one holding `[[ 1+ -eq 0 ]]`, and so does
+// zsh for the second. Marked only as a stop, the give-up cost the whole
+// script in both — which is the same error one level down as the one
+// interp/source.go is named for.
+//
+// Not fatalQuiet, which is the other door: that one decides the status as
+// well, and both of these constructs have a status of their own that the
+// caller has already worked out.
+func (r *Runner) abandonOverArithmetic() {
+	r.ctl, r.abandon = controlExit, abandonError
 }
 
 // wordInvalidNumber words "this is not a number" the way the dialect does.

@@ -1723,6 +1723,43 @@ type Semantics struct {
 	// 0 or 1 for its own value, which is unanimous and not a question.
 	ArithCommandErrorStatusIsTwo Answer
 
+	// ArithCommandErrorIsFatal abandons the input when `(( expr ))` could not
+	// be evaluated, instead of leaving the status above for the next line to
+	// read. True in ksh93 alone.
+	//
+	// Measured 2026-09-10 and again 2026-09-11, `echo one; (( 1+ )); echo
+	// two`: bash 5.3, bash 3.2 and zsh all print `two` and end at 0, and
+	// ksh93 prints the complaint and nothing after it, ending at 1. So the
+	// construct is fatal there and a reporting statement everywhere else,
+	// which is a conflict rather than a wording difference — a script that
+	// tests a counter with `(( n ))` over a name it did not set runs to the
+	// end under one group and stops at that line under the other.
+	//
+	// The same question for *both* ways the expression can fail, which is
+	// what ArithCommandErrorStatusIsTwo already found: `(( 1+ ))` never
+	// reaches the evaluator and `(( 1/0 ))` does, and ksh93 abandons the
+	// input for both.
+	//
+	// It is not the same question as the construct standing as a condition:
+	// `(( 1+ )) && echo yes` and `if (( 1+ ))` are fatal there too, so this
+	// is about the expression and not about what the status is read for.
+	//
+	// Nor does it group with the word-spelled comparison. This is the other
+	// half of the question ConditionArithmeticErrorIsFatal asks about
+	// `[[ 1+ -eq 0 ]]`, and the two do not cut the panel the same way: zsh
+	// abandons the condition and stays for `(( ))`, which is why a single
+	// field could not carry both. See that one for the condition's measured
+	// answers.
+	//
+	// The reach is the ordinary one for a fatal error rather than anything of
+	// this construct's: measured, ksh93 gives up a *sourced file* alone —
+	// `. ./s.sh; echo after` still prints `after` — and a subshell alone,
+	// which is the same boundary its `[[ ]]` failure stops at.
+	//
+	// Asked only on the error path. An expression that reads cleanly never
+	// reaches it.
+	ArithCommandErrorIsFatal Answer
+
 	// RegexQuotingMakesLiteral treats a quoted right operand of `=~` as a
 	// literal string. True in bash alone; ksh93 and zsh keep it a regex, so
 	// quoting a regex is unportable in either direction.
@@ -6420,7 +6457,12 @@ func PosixSemantics() Semantics {
 		ConditionArithmeticErrorIsFatal: No,
 		// The standard has no `(( ))` at all, so nothing here is POSIX's to
 		// say; 1 is what the shells that do have it say, bar one.
-		ArithCommandErrorStatusIsTwo:      No,
+		ArithCommandErrorStatusIsTwo: No,
+		// POSIX has no `(( ))` at all — it is an extension every shell but
+		// dash carries — so there is no text to read here and the base takes
+		// the answer three of the four give: the status is left for the next
+		// line, which runs.
+		ArithCommandErrorIsFatal:          No,
 		LastPipelineElementInCurrentShell: No,
 		ShiftPastEndFatal:                 Yes,
 		// The standard describes one refusal and says nothing about a

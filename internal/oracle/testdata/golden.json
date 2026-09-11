@@ -1962,6 +1962,50 @@
         "TimedOut": false
       }
     },
+    "arith/a-fatal-math-error-gives-up-the-sourced-file-alone": {
+      "bash": {
+        "Stdout": "insrc~after",
+        "Stderr": "./s.sh: line 1: ((: 1+ : arithmetic syntax error: operand expected (error token is \"+ \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "insrc~after",
+        "Stderr": "./s.sh: line 1: ((: 1+ : arithmetic syntax error: operand expected (error token is \"+ \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "insrc~after",
+        "Stderr": "./s.sh: line 1: ((: 1+ : syntax error: operand expected (error token is \" \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "insrc~after",
+        "Stderr": "\u003cshell\u003e: 1: ./s.sh: 1+: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: .: line 1:  1+ : more tokens expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "insrc~after",
+        "Stderr": "./s.sh:1: bad math expression: operand expected at end of string",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arith/a-float-assignment-outlives-the-expression": {
       "bash": {
         "Stdout": "",
@@ -2177,6 +2221,94 @@
       "zsh": {
         "Stdout": "[7]",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-math-error-in-the-command-abandons-the-input": {
+      "bash": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 1: ((: 1+ : arithmetic syntax error: operand expected (error token is \"+ \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 1: ((: 1+ : arithmetic syntax error: operand expected (error token is \"+ \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 1: ((: 1+ : syntax error: operand expected (error token is \" \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~two st=127",
+        "Stderr": "\u003cscript\u003e: 1: 1+: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 1:  1+ : more tokens expected",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~two st=2",
+        "Stderr": "\u003cscript\u003e:1: bad math expression: operand expected at end of string",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-math-error-that-evaluates-abandons-the-input": {
+      "bash": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 1: ((: 1/0 : division by 0 (error token is \"0 \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 1: ((: 1/0 : division by 0 (error token is \"0 \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 1: ((: 1/0 : division by 0 (error token is \" \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~two st=127",
+        "Stderr": "\u003cscript\u003e: 1: 1/0: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 1:  1/0 : divide by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~two st=2",
+        "Stderr": "\u003cscript\u003e:1: division by zero",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

@@ -305,7 +305,7 @@ func (r *Runner) condArith(text string) (int, error) {
 func (r *Runner) condArithFailed(msg string) error {
 	r.diagf("%s\n", msg)
 	if r.ask(r.sem().ConditionArithmeticErrorIsFatal, "an unreadable operand of a `[[ ]]` comparison") {
-		r.ctl = controlExit
+		r.abandonOverArithmetic()
 	}
 	return condStatus{code: 1}
 }

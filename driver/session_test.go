@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/blairham/sh/driver"
@@ -290,4 +291,72 @@ func TestAGrammarChangeInOneInputReachesTheNext(t *testing.T) {
 	if got := strings.TrimSpace(out.String()); got != "hit" {
 		t.Errorf("output = %q, want hit", got)
 	}
+}
+
+// A job a session started is a job the session can signal, which is the same
+// shell the same script gets through `-c`.
+//
+// The bug was a seam rather than a signal: the hook that reaches a process
+// group was installed only for a front end that lets `exec` replace the
+// process, so a session — which must not be replaced, and says so with
+// KeepProcess — had no way to reach a group at all. With the monitor on, a
+// background job leads one, so `kill %1` answered `No such process` for a job
+// `jobs` had just listed, while the identical line under `-c` signaled it
+// (#1814).
+//
+// The monitor is turned on in the script on purpose: with it off a background
+// job shares this shell's group and `%1` is signaled as a process, which
+// works either way and would pass whatever the hook was. This asks the
+// question at the place the two routes really differ.
+func TestASessionCanSignalAJobItStarted(t *testing.T) {
+	t.Parallel()
+	// Guarded writers rather than the helper's plain builders, because this
+	// is the one test here that leaves a *background job* running while it
+	// reads: the job writes on a goroutine of its own, which is the case
+	// cmd/sh installs its own guarded streams for. A plain builder is a data
+	// race the moment the two meet, and the race detector says so.
+	var out, errs lockedWriter
+	sh := driver.Shell{Name: "sh", Dir: t.TempDir(), Stdout: &out, Stderr: &errs, KeepProcess: true}
+	// The axis the script turns on, answered here because a session has no
+	// terminal and the panel disagrees about what `set -m` does then: the
+	// core refuses it as unanswered, which would leave the job in this
+	// shell's group and the test measuring the case that works either way.
+	sh.Semantics.MonitorNeedsATerminal = interp.No
+	s, code := driver.NewSession(sh)
+	if code != 0 || s == nil {
+		t.Fatalf("NewSession: status %d", code)
+	}
+
+	// -0 delivers nothing, so what is measured is whether the target was
+	// reachable rather than what a signal did to it; the job is then ended so
+	// the test leaves nothing running.
+	status := s.Run(t.Context(), `set -m; sleep 30 & kill -0 %1; echo "probe=$?"; kill %1`)
+	if status != 0 {
+		t.Fatalf("status = %d, stderr = %q", status, errs.String())
+	}
+	if got := out.String(); !strings.Contains(got, "probe=0") {
+		t.Errorf("output = %q, want probe=0 — the job could not be named", got)
+	}
+	if got := errs.String(); strings.Contains(got, "No such process") {
+		t.Errorf("stderr = %q: a job this shell had just started was reported missing", got)
+	}
+}
+
+// lockedWriter is a writer two goroutines may use, which is what a shell with
+// a background job in it needs.
+type lockedWriter struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (w *lockedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.Write(p)
+}
+
+func (w *lockedWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.String()
 }

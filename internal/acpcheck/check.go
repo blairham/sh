@@ -469,6 +469,54 @@ func checks() []check {
 			return true, "a variable set in " + first + " was not visible in " + second
 		},
 	}, {
+		name:  "job-control-does-not-depend-on-the-route",
+		claim: "the same script gets the same shell here as through -c: a job a session started is one it can signal (#1814)",
+		run: func(t *harness) (bool, string) {
+			// The monitor is turned on in the script on purpose. With it off
+			// a background job shares the shell's own group and `%1` is
+			// signaled as a process, which works on every route and would
+			// grade a question this row is not asking. With it on the job
+			// leads a group, and reaching a group is the capability the two
+			// routes were given differently.
+			//
+			// `kill -0` delivers nothing, so what is measured is whether the
+			// job could be *named*; the job is ended after, so the row leaves
+			// nothing running. The dialect is named because a shell with no
+			// terminal refuses `set -m` as an unanswered axis in the core.
+			// The job's own streams go nowhere, so the `-c` run's pipes
+			// close when its shell does: a background child that inherited
+			// them would hold the read open for as long as it ran, and a
+			// regression here would then be reported thirty seconds late
+			// rather than at once.
+			const script = `set -m; sleep 30 >/dev/null 2>&1 & kill -0 %1; echo "probe=$?"; kill %1`
+			args := []string{"-dialect", "bash"}
+
+			cmd := exec.CommandContext(t.ctx, t.bin, append(append([]string{}, args...), "-c", script)...)
+			cmd.Dir = t.dir
+			piped, err := cmd.CombinedOutput()
+			if err != nil {
+				return false, "the -c run failed: " + err.Error()
+			}
+
+			c, s, err := t.dial(args, always(AllowOnce))
+			if err != nil {
+				return false, err.Error()
+			}
+			defer func() { _ = c.Close() }()
+			if _, err := c.Prompt(t.ctx, s, script); err != nil {
+				return false, err.Error()
+			}
+			session := c.Output("stdout") + c.Output("stderr")
+
+			if !strings.Contains(string(piped), "probe=0") {
+				return false, fmt.Sprintf("the -c route did not reach the job either: %q", string(piped))
+			}
+			if !strings.Contains(session, "probe=0") {
+				return false, fmt.Sprintf("-c reached the job and the session did not: %q", session)
+			}
+			return true, "both routes named the job and signaled it"
+		},
+	}, {
 		name:  "exited-session-refuses-the-next-prompt",
 		claim: "a session whose shell has exited says so, rather than answering end_turn (#1804)",
 		run: func(t *harness) (bool, string) {

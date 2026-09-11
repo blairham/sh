@@ -5343,21 +5343,42 @@ What was built, all through the extension seam — registered builtins in each
   surface than the corner earns.
 
   The one place this shows its own workings is `typeset -f NAME` on a name
-  that has not been called yet. zsh prints a stub of its own —
-  `builtin autoload -XUz`, where the shell re-enters the function after
-  `-X` has replaced it — and that re-entry is interpreter machinery rather
-  than anything a body can say. The stub here says the same thing in the
-  language it has: `builtin autoload +X NAME && NAME "$@"`, which resolves
-  and then calls what was resolved. It cannot recurse — `+X` either
-  replaces the definition or fails, and `&&` stops on the failure. The
-  behaviour is the same and the text is not.
+  that has not been called yet, and the stub written there is zsh's own:
+  `builtin autoload -XUz`, the same builtin called with no name, acting on
+  the function it is running inside. It was `builtin autoload +X NAME &&
+  NAME "$@"` — a re-entry written out longhand — which behaved correctly
+  and read as something no zsh ever wrote, and the thing that reads a stub
+  back is a *script* (#1697).
 
-  `-X` acts on the **innermost** function, and zsh replaces it *and
-  re-enters it*, so the loaded body runs on the same call. Here it replaces
-  and returns — the re-entry is interpreter machinery, and the stub's
-  `&& NAME "$@"` is how a body says the same thing. A hand-written `-X`
-  therefore gets the replacement without the run, which is the whole of the
-  difference.
+  `-X` acts on the **innermost** function, and what happens after the
+  replacement is the difference between the two spellings that reach it.
+
+  **A generated stub is replaced, not called through** (#1842). Calling an
+  autoloaded name opens a frame, the stub's one line runs, and the loaded
+  body then runs *in that frame* — so the first call is at the same depth as
+  every call after it. Measured on zsh 5.9.2 with one file on `$fpath`:
+
+      fpath=(fns); autoload -Uz fstk; fstk a
+        first call   n=1 stack=fstk      second call   n=1 stack=fstk
+
+  where a nested call answers `n=2 stack=fstk fstk` on the first and agrees
+  on every one after. That is a frame that is there on the cold call and gone
+  afterwards, and `$funcstack` is read by real prompt and completion code to
+  decide where it is. The same seam shows from the other side in a
+  diagnostic: zsh locates one raised in the loaded body at `fstk:1:` on both
+  calls, where the nested arrangement wrote `fstk:builtin:1:` on the first,
+  the builtin that made the call still being on the stack.
+  `interp.Runner.RunFunctionBodyInPlace` is the seam — no frame, no scope, no
+  added recursion depth, and the builtin's name out of the way so the body
+  speaks for the function.
+
+  **A hand-written `-X` still nests**, because there the stub is a function
+  the script really wrote. Measured: `${#funcstack}` counts more than one
+  inside the loaded body, the body sees the stub's locals, and the stub
+  carries on afterwards with the body's status in `$?`. The two are told
+  apart by whether the name is a stub `autoload` generated and nothing has
+  defined since — asked *before* the resolution, which takes the stub's body
+  away.
 
   Letters: zsh has `d k m r R t T U w W X z`, measured a letter at a time
   against all fifty-two, and refuses every other as `bad option`. `-U`

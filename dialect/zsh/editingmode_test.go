@@ -56,7 +56,13 @@ func TestNeitherEditingModeIsSelectedOnItsOwn(t *testing.T) {
 			var out, errs bytes.Buffer
 			args := []string{"zsh", "-c", tc.src}
 			if tc.interactive {
-				args = []string{"zsh", "-i", "-c", tc.src}
+				// `-f` with it, because an interactive shell reads startup
+				// files and the ones on the machine running the test are
+				// whoever's they are. Without it this ran the developer's
+				// own rc file and picked up its terminal-integration escape
+				// sequences, which is a test that passes on a bare runner
+				// and fails on a workstation.
+				args = []string{"zsh", "-f", "-i", "-c", tc.src}
 			}
 			if code := driver.MainArgs(zshWriting(&out, &errs), args); code != 0 {
 				t.Fatalf("status %d, stderr %q", code, errs.String())

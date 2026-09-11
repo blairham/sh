@@ -14338,6 +14338,19 @@ echo "read=[$l]"`,
 		Why:     "a `{` with no `$` in front of it does not open a level, so the expansion ends at the first `}` and what follows is ordinary text. Unanimous in the columns that have the operators — `{y` and then `p{qr}`, the second being the tell, since a shell that nested would answer `p{q}r` as one piece and leave nothing behind. Written in quotes because unquoted the panel splits — zsh and ksh93 balance the brace there and the three bash-family columns do not, which is `BareBraceNestsInExpansion` and the `param/bare-brace-*` rows (#1587). Counting every brace instead made an escaped dollar open a level nothing could close, since `\\$` is consumed as an escape pair and left its `{` to be read as a nested expansion — the double quote around the whole word was then eaten looking for the `}` that would balance it, which is why the failure read as an unterminated string (#1586)",
 	},
 	{
+		ID: "autoload/the-first-call-is-not-a-deeper-one", Category: "builtins",
+		Snippet: `mkdir -p fp; printf "%s\n" 'print "n=${#funcstack[@]} stack=${funcstack[*]}"' > fp/fstk; ` +
+			`fpath=(fp); autoload -Uz fstk; fstk a; fstk a`,
+		Why: "the *generated* stub, where the row above is a hand-written one, and the two are different constructs. " +
+			"A name declared with `autoload -Uz f` is given a body of `builtin autoload -X`, so calling it opens a " +
+			"frame and the builtin then had a resolved function to get into; zsh replaces the stub rather than " +
+			"calling through it, so both calls answer `n=1 stack=fstk`. Ours answered `n=2 stack=fstk fstk` on the " +
+			"first call and agreed on every one after — a frame that is there on the cold call and gone afterwards, " +
+			"which is the shape of a bug that reproduces only once per function per session and which `$funcstack` " +
+			"is read by real prompt and completion code to decide on. Two calls rather than one, because a single " +
+			"call cannot tell a wrong depth from a wrong parameter (#1842)",
+	},
+	{
 		ID: "autoload/the-two-signs-of-x", Category: "builtins",
 		Snippet: `autoload +X; echo "plus=$?"; autoload -X; echo "minus=$?"`,
 		Why:     "`+X` and `-X` are two commands rather than one letter with a sign: `+X` with no operands is the bare declaration's *listing* — nothing is waiting to be defined here, so it is silence and 0 — and `-X` with nothing is `bad autoload`, because it means \"the function I am running inside\" and at the top level there is nothing for it to be about. zsh ends the script there and this shell reports and runs on, which the row records",

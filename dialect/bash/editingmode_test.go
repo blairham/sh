@@ -30,13 +30,17 @@ func TestTheEditingModeIsChosenWhenTheShellBecomesInteractive(t *testing.T) {
 		emacs string
 	}{
 		{"a script chooses neither", []string{"bash", "-c", "set -o"}, "off"},
-		{"and `-i` chooses emacs", []string{"bash", "-i", "-c", "set -o"}, "on"},
+		// `--norc` with every interactive row, because an interactive shell
+		// reads startup files and the ones on the machine running the test
+		// are whoever's they are. A workstation rc file that writes anything
+		// — or, worse, one that says `set -o vi` — would decide this test.
+		{"and `-i` chooses emacs", []string{"bash", "--norc", "-i", "-c", "set -o"}, "on"},
 		// Chosen off is not never chosen, and this is the shell the two read
 		// differently in: an interactive session that turned emacs off stays
 		// off rather than falling back to the default.
-		{"turning it off in one is remembered", []string{"bash", "-i", "-c", "set +o emacs; set -o"}, "off"},
+		{"turning it off in one is remembered", []string{"bash", "--norc", "-i", "-c", "set +o emacs; set -o"}, "off"},
 		// And turning off the mode that is not selected changes nothing.
-		{"turning the other off is not", []string{"bash", "-i", "-c", "set +o vi; set -o"}, "on"},
+		{"turning the other off is not", []string{"bash", "--norc", "-i", "-c", "set +o vi; set -o"}, "on"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out, errs bytes.Buffer

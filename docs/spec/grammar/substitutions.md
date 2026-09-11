@@ -227,6 +227,35 @@ error at the `(`, and bash 5.3 as `sh` keeps the construct — so the
 version and the invocation are two variables and a claim naming only one
 of them is incomplete.
 
+### How long the pipe has to last
+
+A real shell forks for `<(cmd)` and hands the child a descriptor, so the
+writer exists from the moment the word is expanded. Here it is a named pipe
+whose writer *polls* for a reader — see `interp/procsubst.go` — and the poll's
+give-up condition is the pipe's name going away at the end of the command that
+produced it. That pairing holds for every open that **waits**: a blocking open
+parks in the kernel until the writer arrives, so the two rendezvous while the
+command is still running.
+
+It does not hold for an open that does not wait. `sysopen -r -o nonblock -u fd
+<(cmd)` returns at once and the shell keeps the descriptor for a later command,
+so the command that named the path finishes with the writer still polling —
+and the unlink was then read as "nobody opened it", losing the substituted
+command outright. Measured 2026-09-11 against zsh 5.9.2: two runs in ten
+answered end of file where zsh answered the command's output every time.
+
+So a substitution's pipe **keeps its name while one of this shell's own
+descriptors is open on it**, and goes with the shell's directory afterwards.
+Nothing else about the lifetime moves: a pipe nobody opened is still removed
+with the command that named it, which is what keeps a long session from
+filling its directory and what ends the writer's wait (#1750).
+
+The residual difference is the poll itself, and it is worth writing down
+rather than leaving to be rediscovered: a reader that reads the instant it has
+opened can see a pipe with no writer in it, which is end of file. A script
+that sleeps between the open and the read — which is what the workload this
+came from does — cannot see it.
+
 ## `$(<file)` — the substitution that reads a file
 
 A command substitution whose **whole body is one input redirection and

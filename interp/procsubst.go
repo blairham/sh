@@ -452,15 +452,58 @@ func (r *Runner) takeProcSubs() []procSubPipe {
 // And it is what ends the two waits a substitution can be in, which is why
 // this runs even when the command never touched the path. The placeholder
 // closing is the end-of-file a `>(cmd)` is waiting for; the name going away is
-// the answer a `<(cmd)`'s writer is waiting for. Neither can outlive the
-// command that named the path.
-func removeProcSubs(pipes []procSubPipe) {
+// the answer a `<(cmd)`'s writer is waiting for.
+//
+// # Except while this shell still holds a descriptor onto the pipe
+//
+// "Whatever is still reading it holds an open file" is true of a *process*
+// that was handed the path and false of the one arrangement where the shell
+// keeps the descriptor itself and reads it later: `sysopen -r -o nonblock -u
+// fd <(cmd)`, or `exec {fd}< <(cmd)`. There the open does not wait for a
+// peer, so the command that named the path finishes before the writer's poll
+// has seen the reader — and the poll's give-up condition is exactly this
+// removal, so the name going away is read as "nobody opened it" and the
+// substituted command never runs. Measured 2026-09-11 on the nonblocking
+// form: two runs in ten answered end-of-file with the command lost, where
+// zsh 5.9.2 answers the command's output every time (#1750).
+//
+// So the name stays while one of this shell's own descriptors is open on it.
+// Nothing else about the lifetime moves: the pipe still goes with the
+// directory when the shell stops being one, which is what CleanUp is for, and
+// a command whose substitution nobody opened still has its pipe taken away at
+// once. The placeholder is closed either way — a `>(cmd)` whose writing end
+// the script now holds gets its end-of-file from the script closing that,
+// which is where it belongs.
+func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 	for _, p := range pipes {
 		if p.hold != nil {
 			_ = p.hold.Close()
 		}
+		if r.holdsDescriptorOnto(p.path) {
+			continue
+		}
 		_ = os.Remove(p.path)
 	}
+}
+
+// holdsDescriptorOnto reports whether one of this shell's own descriptors is
+// still open on path.
+//
+// The table is asked rather than the filesystem, because the question is
+// about this shell and not about the machine: a *process* the shell handed
+// the path to has its own descriptor and is unaffected by the name going
+// away, which is the case the removal above was written for.
+//
+// A file's name is what it was opened by, which is this path exactly — both
+// routes that put one in the table open it from the word the substitution
+// expanded to.
+func (r *Runner) holdsDescriptorOnto(path string) bool {
+	for _, v := range r.fds {
+		if f, ok := v.(*os.File); ok && f.Name() == path {
+			return true
+		}
+	}
+	return false
 }
 
 // CleanUp removes what this shell made for itself.

@@ -2537,7 +2537,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	// wrong: `echo hi > >(tr a-z A-Z)` never reaches an exec at all, so the
 	// pipe stayed open, `tr` waited for an end-of-file that was never coming,
 	// and the substitution simply produced nothing.
-	defer func() { removeProcSubs(r.takeProcSubs()) }()
+	defer func() { r.removeProcSubs(r.takeProcSubs()) }()
 	// `=cmd` is resolved across the whole command before any of it is
 	// expanded, which is measured rather than assumed: `echo [[a == a]]`
 	// reports the `==` and never reaches the `[[a`, so zsh has finished this

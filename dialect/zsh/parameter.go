@@ -131,6 +131,7 @@ func registerParameterModule(r *interp.Runner) {
 	// note above — an attribute puts the name in the tables a listing walks.
 	r.MarkReadonly("parameters")
 	r.MarkHidden("parameters")
+	registerArgv(r)
 	registerEmptyParameters(r)
 	registerAbsentParameters(r)
 }

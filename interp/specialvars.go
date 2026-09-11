@@ -336,6 +336,28 @@ func (r *Runner) SetDynamicWriter(name string, write func(r *Runner, value strin
 	r.dynamicWriters[name] = write
 }
 
+// SetDynamicArrayWriter says what happens when a script assigns to a produced
+// array — the whole of it, one element of it, an append to it, or an `unset`
+// of it, all four arriving here as the elements the name is to hold.
+//
+// The write half of SetDynamicArray, and required rather than optional for
+// any produced array a script is allowed to assign to, for the reason
+// SetDynamicWriter gives for a scalar: the producer answers ahead of the
+// stored array, so a write with nowhere to go is accepted in silence and then
+// read back as whatever the producer says. An `unset` delivers no elements,
+// which is the same message the shell being modeled sends — measured on
+// zsh 5.9.2, `set -- a b c; unset argv` leaves `$#` at 0, exactly as
+// `argv=()` does — so the two need no way to tell each other apart.
+//
+// A produced array a script must *not* assign to is marked readonly instead,
+// which refuses with a sentence.
+func (r *Runner) SetDynamicArrayWriter(name string, write func(r *Runner, values []string)) {
+	if r.dynamicArrayWriters == nil {
+		r.dynamicArrayWriters = map[string]func(*Runner, []string){}
+	}
+	r.dynamicArrayWriters[name] = write
+}
+
 // UnsetDynamic takes a produced parameter away again, writer and all.
 //
 // The counterpart of SetDynamic for a parameter that exists only while

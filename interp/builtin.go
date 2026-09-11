@@ -1303,6 +1303,15 @@ func (r *Runner) unsetName(name string) {
 		r.exported = map[string]bool{}
 	}
 	r.exported[name] = false
+	if write, produced := r.dynamicArrayWriters[name]; produced {
+		// An `unset` of a produced array is a write of no elements, which is
+		// the same message the shell being modeled sends: measured on
+		// zsh 5.9.2, `set -- a b c; unset argv` leaves `$#` at 0, exactly as
+		// `argv=()` does. Delivered rather than recorded, because the
+		// removal below only hides a stored array and the producer would go
+		// on answering every read with what it was never told to drop.
+		write(r, nil)
+	}
 	delete(r.Arrays, name)
 	delete(r.AssocArrays, name)
 	r.clearAttributes(name)

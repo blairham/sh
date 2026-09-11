@@ -152,6 +152,9 @@ func (c *Runner) ownTables(r *Runner) {
 	c.DynamicAssocs = maps.Clone(r.DynamicAssocs)
 	c.dynamicAssocElements = maps.Clone(r.dynamicAssocElements)
 	c.dynamicAssocWriters = maps.Clone(r.dynamicAssocWriters)
+	// And the array writer travels with DynamicArrays for the same reason
+	// the table above travels with DynamicAssocs.
+	c.dynamicArrayWriters = maps.Clone(r.dynamicArrayWriters)
 	// absentElements travels with DynamicAssocs and the two tables beside
 	// it — the keyed reading and the writer — and copying some of that group
 	// and not the rest would be the split dynamicWriters describes below: a subshell owning the producer while sharing the sentence a key

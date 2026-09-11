@@ -150,6 +150,17 @@ func (r *Runner) terminalTest(operand string) (answer, isNumber bool) {
 // still the terminal must not be answered from a stale one, and a remembered
 // file that has since been closed answers zero through the ioctl rather than
 // through a branch here.
+//
+// **The remembering begins at the first read, and zsh's begins at startup**,
+// which is a narrower claim and is stated so rather than glossed. A shell that
+// redirects every stream away before it has ever asked has nothing remembered
+// and answers 0, where zsh still has the terminal it opened. Every session
+// that draws a prompt has asked — the prompt is where the width is read — so
+// the gap is a script that redirects all three of its own streams in its first
+// breath, and closing it would mean opening a terminal at startup for every
+// Runner an embedder builds, which is a process-wide reach this package does
+// not make. See TestTheTerminalIsRememberedOnceItHasBeenSeen, which asserts
+// the claim and records the limit.
 func (r *Runner) terminalSize() (rows, cols int) {
 	for _, held := range []any{r.stdin(), r.stdout(), r.stderr()} {
 		f, ok := held.(*os.File)

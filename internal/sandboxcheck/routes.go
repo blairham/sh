@@ -51,6 +51,7 @@ func (rt Route) script(f Fixture) string {
 		"{{target}}", f.Target,
 		"{{victim}}", f.Victim,
 		"{{victimdir}}", f.VictimDir,
+		"{{link}}", f.Link,
 		"{{sock}}", f.Sock,
 		"{{outside}}", f.Root,
 		"{{ws}}", f.Ws,
@@ -127,6 +128,16 @@ func coreRoutes() []Route {
 		Did:    func(f Fixture, _ Outcome) bool { return size(f.Victim) == 0 },
 		Why:    "destroying a file without writing a byte to it",
 	}, {
+		Name:   "write/through-symlink",
+		Script: `echo x > {{link}}/target`,
+		Did:    made,
+		Why:    "a name the policy allows, reaching an object it does not",
+	}, {
+		Name:   "write/truncate-through-symlink",
+		Script: `: > {{link}}/victim`,
+		Did:    func(f Fixture, _ Outcome) bool { return size(f.Victim) == 0 },
+		Why:    "the same, destroying a file rather than making one",
+	}, {
 		Name:   "read/redirect",
 		Script: `read L < {{secret}}; echo $L`,
 		Did:    leaked,
@@ -147,6 +158,11 @@ func coreRoutes() []Route {
 		Script: `exec 3< {{secret}}; read L <&3; echo $L`,
 		Did:    leaked,
 		Why:    "a descriptor opened for reading and used later",
+	}, {
+		Name:   "read/through-symlink",
+		Script: `read L < {{link}}/secret; echo $L`,
+		Did:    leaked,
+		Why:    "the read half of a name that resolves out of the workspace",
 	}, {
 		Name:   "probe/test",
 		Script: `if [ -f {{secret}} ]; then echo SEEN; fi`,
@@ -301,6 +317,18 @@ zf_chmod 777 ./sneaky`,
 		Script: `mapfile -t A < {{secret}}; echo $A`,
 		Did:    leaked,
 		Why:    "reads through a redirection, so it answers to the redirection's gate",
+	}, {
+		Name:   "builtin/fc-write",
+		Only:   zsh,
+		Script: `HISTFILE={{target}}; SAVEHIST=10; fc -W`,
+		Did:    made,
+		Why:    "-W is not accepted yet — a history file is a write to a path the script names",
+	}, {
+		Name:   "builtin/zcompile",
+		Only:   zsh,
+		Script: `echo ':' > c.zsh; zcompile {{target}} c.zsh`,
+		Did:    made,
+		Why:    "not a builtin yet — it writes a compiled file wherever it is told to",
 	}}
 }
 

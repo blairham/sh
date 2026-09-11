@@ -141,7 +141,7 @@ func TestTheWalkAgreesWithTheKernel(t *testing.T) {
 				}
 			}
 			wantName, wantNamed, wantErr := oracle(t, path, os.O_RDONLY)
-			r, gotErr := walkOpen(path, os.O_RDONLY, 0)
+			r, gotErr := walkOpen(path, os.O_RDONLY, 0, nil)
 			if r.File != nil {
 				defer func() { _ = r.File.Close() }()
 			}
@@ -204,7 +204,7 @@ func TestTheWalkAgreesWithTheKernelOnPlacesThisMachineActuallyHas(t *testing.T) 
 	crossed := 0
 	for _, path := range paths {
 		wantName, wantNamed, wantErr := oracle(t, path, os.O_RDONLY)
-		r, gotErr := walkOpen(path, os.O_RDONLY, 0)
+		r, gotErr := walkOpen(path, os.O_RDONLY, 0, nil)
 		if r.File != nil {
 			_ = r.File.Close()
 		}
@@ -260,13 +260,13 @@ func TestTheWalkRefusesWhereTheKernelRefuses(t *testing.T) {
 	if _, _, err := oracle(t, shut, os.O_RDONLY); errnoOf(err) != syscall.EACCES {
 		t.Fatalf("the kernel answered %v for an unsearchable directory, want EACCES", err)
 	}
-	if _, err := walkOpen(shut, os.O_RDONLY, 0); errnoOf(err) != syscall.EACCES {
+	if _, err := walkOpen(shut, os.O_RDONLY, 0, nil); errnoOf(err) != syscall.EACCES {
 		t.Errorf("the walk answered %v, want the EACCES the kernel gives", err)
 	}
 
 	// A caller's own O_NOFOLLOW means refuse a symbolic link, and the walk must
 	// not quietly follow one on its way to being helpful.
-	if _, err := walkOpen(filepath.Join(dir, "toshut"), os.O_RDONLY|syscall.O_NOFOLLOW, 0); errnoOf(err) != syscall.ELOOP {
+	if _, err := walkOpen(filepath.Join(dir, "toshut"), os.O_RDONLY|syscall.O_NOFOLLOW, 0, nil); errnoOf(err) != syscall.ELOOP {
 		t.Errorf("the walk answered %v for a link opened O_NOFOLLOW, want ELOOP", err)
 	}
 }
@@ -306,7 +306,7 @@ func TestAWalkThroughADirectoryItMayNotReadStillWalks(t *testing.T) {
 	if _, err := os.ReadDir(filepath.Join(dir, "thin")); err == nil {
 		t.Skip("this filesystem lets a 0111 directory be listed")
 	}
-	r, err := walkOpen(target, os.O_RDONLY, 0)
+	r, err := walkOpen(target, os.O_RDONLY, 0, nil)
 	if err != nil {
 		t.Fatalf("the walk refused a path the kernel resolves: %v", err)
 	}
@@ -352,7 +352,7 @@ func TestTheWalkRefusesTheSameChainTheKernelDoes(t *testing.T) {
 		path := filepath.Join(dir, name)
 
 		_, _, kernelErr := oracle(t, path, os.O_RDONLY)
-		r, walkErr := walkOpen(path, os.O_RDONLY, 0)
+		r, walkErr := walkOpen(path, os.O_RDONLY, 0, nil)
 		if r.File != nil {
 			_ = r.File.Close()
 		}
@@ -586,7 +586,7 @@ func TestTheWalkRefusesAPathnameTheKernelWouldNotTake(t *testing.T) {
 		// `/.` pads the length without changing what is named.
 		path := dir + strings.Repeat("/.", pad) + "/f"
 		_, _, kernelErr := oracle(t, path, os.O_RDONLY)
-		r, walkErr := walkOpen(path, os.O_RDONLY, 0)
+		r, walkErr := walkOpen(path, os.O_RDONLY, 0, nil)
 		if r.File != nil {
 			_ = r.File.Close()
 		}
@@ -641,7 +641,7 @@ func TestATrailingSlashWithOCreatRefusesWithoutCreating(t *testing.T) {
 		t.Fatalf("the kernel created something: %v", err)
 	}
 
-	r, walkErr := walkOpen(path, os.O_WRONLY|os.O_CREATE, 0o600)
+	r, walkErr := walkOpen(path, os.O_WRONLY|os.O_CREATE, 0o600, nil)
 	if r.File != nil {
 		_ = r.File.Close()
 	}
@@ -681,7 +681,7 @@ func TestTheWalkAgreesWithTheKernelOnARelativePath(t *testing.T) {
 
 	for _, rel := range []string{"sub/file", "./sub/file", "sub/../sub/file", "link", "sub", "."} {
 		wantName, wantNamed, wantErr := oracle(t, rel, os.O_RDONLY)
-		r, gotErr := walkOpen(rel, os.O_RDONLY, 0)
+		r, gotErr := walkOpen(rel, os.O_RDONLY, 0, nil)
 		if r.File != nil {
 			_ = r.File.Close()
 		}

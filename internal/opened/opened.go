@@ -189,6 +189,16 @@ func Path(f *os.File) (string, bool) {
 // doing something neither of us understands, and neither is a thing to open a
 // file on.
 func Open(path string, flags int, perm fs.FileMode) (Reached, error) {
+	return openAsking(path, flags, perm, nil)
+}
+
+// openAsking is Open with the question the walk puts before a creation.
+//
+// ask is consulted only where the open would make a file that is not there,
+// and only on the walked platforms; it is nil for a caller that is not gating,
+// which is every caller of Open itself. See walk.createChecked for why the
+// question belongs inside the walk and not around it.
+func openAsking(path string, flags int, perm fs.FileMode, ask func(string) error) (Reached, error) {
 	if !walkSupported {
 		f, err := os.OpenFile(path, flags, perm)
 		if err != nil {
@@ -196,9 +206,19 @@ func Open(path string, flags int, perm fs.FileMode) (Reached, error) {
 		}
 		return Reached{File: f}, nil
 	}
-	r, err := walkOpen(path, flags, perm)
+	r, err := walkOpen(path, flags, perm, ask)
 	if err == nil || !errors.Is(err, errFollowedALink) {
 		return r, err
+	}
+	// The fallback does not create. It is here for the one thing a userspace
+	// walk cannot follow — a magic link, whose target is not a path — and a
+	// magic link is always already there, so O_CREAT has nothing to do on this
+	// route but the one thing this file now holds back everywhere else: make a
+	// file that no check was asked about. Dropping it turns the only case it
+	// could reach, a name that is simply absent, back into the walk's own
+	// ENOENT, which is the answer the caller would have had anyway.
+	if ask != nil {
+		flags &^= os.O_CREATE
 	}
 	f, plainErr := os.OpenFile(path, flags, perm)
 	if plainErr != nil {
@@ -251,8 +271,23 @@ func Elsewhere(r Reached, requested string) (string, bool) {
 	return r.Name, true
 }
 
-// Verified opens a file the way a gate needs it opened: with the truncation
-// held back until check has passed on the descriptor.
+// Verified opens a file the way a gate needs it opened: with both of the
+// flags that act *during* an open held back until check has passed.
+//
+// There are two of them and they are held back differently, because only one
+// of them can be. O_TRUNC empties a file that is already there, so the
+// descriptor exists before the damage has to happen and the flag can simply
+// be applied later — that is the rest of this comment. O_CREAT makes a file
+// that is not there, so there is no descriptor to check first and no later to
+// defer it to; the decision has to be made inside the walk, on the parent
+// descriptor the creation will be relative to, which is what
+// walk.createChecked does and argues for. Asked says it happened, and is why
+// a creation is not consulted about twice.
+//
+// Both were the same omission and only one of them was found first: a refused
+// `> link` reported a refusal and left an empty file at the end of the link,
+// for two releases, because the flag nobody had held back was the one that
+// makes rather than the one that destroys.
 //
 // The truncation is the reason this is a function rather than two lines at
 // each call site. O_TRUNC is the one flag that destroys before anything can be
@@ -281,13 +316,21 @@ func Elsewhere(r Reached, requested string) (string, bool) {
 // what it would have been: `> some-running-binary` reports text-file-busy
 // either way.
 func Verified(path string, flags int, perm fs.FileMode, check func(Reached) error) (*os.File, error) {
-	r, err := Open(path, flags&^os.O_TRUNC, perm)
+	r, err := openAsking(path, flags&^os.O_TRUNC, perm, func(name string) error {
+		// The same check, asked about a path that has no descriptor yet
+		// because the file it names is about to be made. Both callers answer
+		// from the name — that is what a rule matches — and the one that
+		// needed a descriptor was the arrangement this package replaced.
+		return check(Reached{Name: name})
+	})
 	if err != nil {
 		return nil, err
 	}
-	if err := check(r); err != nil {
-		_ = r.File.Close()
-		return nil, err
+	if !r.Asked {
+		if err := check(r); err != nil {
+			_ = r.File.Close()
+			return nil, err
+		}
 	}
 	if flags&os.O_TRUNC != 0 {
 		if err := emptyRegular(r.File); err != nil {

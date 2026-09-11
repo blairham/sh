@@ -313,6 +313,22 @@ type Semantics struct {
 	//
 	// Asked only where an `echo` argument actually carries one.
 	EchoExpandsUnicodeEscapes Answer
+	// UnicodeEscapeOutsideTheLocale is what becomes of a `\u` or `\U` escape
+	// naming a code point the locale's encoding cannot hold — see
+	// OutsideLocaleEscapePolicy, and interp/localeescape.go for the
+	// measurements and for what "cannot hold" is read off.
+	//
+	// One axis for every site that reads the escape — `echo`, `print`, a
+	// `printf` format, a `%b` argument, `$'...'` — because the two shells that
+	// have the escape answer the same at all five, measured one site at a
+	// time. It is a question *after* the escape has been read, so it is
+	// separate from EchoExpandsUnicodeEscapes above and from the printf
+	// policies: a dialect without the escape never reaches it.
+	//
+	// Asked only where such an escape actually names a code point the locale
+	// refuses, so an ASCII one needs no answer from anybody and neither does
+	// any escape at all in a UTF-8 locale.
+	UnicodeEscapeOutsideTheLocale OutsideLocaleEscapePolicy
 	// EchoEmptyHexDigitRunIsNul reads a hexadecimal escape with no digit
 	// after it as a zero rather than leaving it as written: `echo '\xZ'`,
 	// `echo '\uZ'` and `echo '\x'` are a NUL byte followed by what was
@@ -8382,6 +8398,59 @@ func (r *Runner) fatalPattern(pattern string, status int) {
 	r.diagf("%s\n", Wording(r.diag().BadPattern, "bad pattern: %s", pattern))
 	r.status = status
 	r.ctl = controlExit
+}
+
+// OutsideLocaleEscapePolicy is what a `\u` or `\U` escape does when the code
+// point it names cannot be represented in the locale's encoding.
+//
+// Two answers and not a bool, for the reason ReadonlyElementPolicy is not one:
+// neither answer is the negation of the other, and a field named for one of
+// them would read as `false` meaning the other by accident.
+//
+// The escape's reading is not in question here — see
+// Semantics.EchoExpandsUnicodeEscapes and the printf policies for that. This
+// is only what happens to a value the locale has no room for, and the shells
+// that have the escape split on it. interp/localeescape.go holds the
+// measurements.
+type OutsideLocaleEscapePolicy uint8
+
+const (
+	// OutsideLocaleEscapeUnspecified is no answer, and is refused like any
+	// other.
+	OutsideLocaleEscapeUnspecified OutsideLocaleEscapePolicy = iota
+	// OutsideLocaleEscapeWritten leaves the escape standing, normalized to
+	// four or eight upper-case digits — `\ue9` and `\U000000e9` both stand as
+	// `\u00E9` — and the command carries on: bash 5.3.
+	OutsideLocaleEscapeWritten
+	// OutsideLocaleEscapeRefused reports `character not in range`, writes
+	// what came before the escape and nothing after it, and abandons the
+	// script with status **0**: zsh. Measured, and the pair that says so is
+	// `(exit 3); echo '...'`, which also exits 0 — so it is zero rather than
+	// whatever was already there.
+	OutsideLocaleEscapeRefused
+)
+
+func (p OutsideLocaleEscapePolicy) String() string {
+	switch p {
+	case OutsideLocaleEscapeWritten:
+		return "the escape stands as written"
+	case OutsideLocaleEscapeRefused:
+		return "refused, and the script is abandoned"
+	}
+	return "unspecified"
+}
+
+// outsideLocaleEscape resolves the axis, and only for an escape that actually
+// names a code point this locale cannot hold.
+func (r *Runner) outsideLocaleEscape() OutsideLocaleEscapePolicy {
+	p := r.sem().UnicodeEscapeOutsideTheLocale
+	if p == OutsideLocaleEscapeUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered(`a \u escape outside the locale`)))
+		r.status = 2
+		r.ctl = controlExit
+	}
+	return p
 }
 
 // ShiftOptionWordPolicy is which leading-`-` words `shift` reads as options.

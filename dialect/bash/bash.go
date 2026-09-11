@@ -333,6 +333,10 @@ func Semantics() interp.Semantics {
 	// and a run with no digit at all is left as written with a complaint —
 	// the leaving is what the second axis records here.
 	s.EchoExpandsUnicodeEscapes = interp.Yes
+	// A code point the locale cannot hold leaves the escape standing,
+	// normalized to four or eight upper-case digits, and the command carries
+	// on. Measured 2026-09-11 under `LC_ALL=C` (#1851).
+	s.UnicodeEscapeOutsideTheLocale = interp.OutsideLocaleEscapeWritten
 	s.EchoEmptyHexDigitRunIsNul = interp.No
 	// Both spellings of the escape character, which is this shell alone in
 	// the panel: ksh93 has only `\E` and zsh only `\e`.

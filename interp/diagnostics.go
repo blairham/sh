@@ -2732,6 +2732,16 @@ type Diagnostics struct {
 	AssignThroughExpansionBadName string
 	// BadPattern is a pattern the dialect rejects. One verb: the pattern.
 	BadPattern string
+	// CodePointOutsideTheLocale is a `\u` escape naming a code point the
+	// locale's encoding cannot hold, in the dialect that refuses one. No
+	// verbs: the shell that says this names neither the escape nor the
+	// value, measured — `zsh:1: character not in range` and nothing else,
+	// once per command however many such escapes the word holds.
+	//
+	// Read only where Semantics.UnicodeEscapeOutsideTheLocale is
+	// OutsideLocaleEscapeRefused, so a dialect that writes the escape back
+	// needs no wording.
+	CodePointOutsideTheLocale string
 	// CannotOpen is a redirection that could not be opened for reading. Two
 	// verbs, positional because the shells order them differently: %[1]s is
 	// the name as written and %[2]s the reason.

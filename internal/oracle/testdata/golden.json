@@ -46755,6 +46755,50 @@
         "TimedOut": false
       }
     },
+    "echo/a-unicode-escape-outside-the-locale": {
+      "bash": {
+        "Stdout": " 61 5c 75 30 30 45 39 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " 61 5c 75 30 30 45 39 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " 61 5c 75 30 30 65 39 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " 2d 65 20 61 5c 75 30 30 65 39 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " 61 5c 75 30 30 65 39 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " 61 0a ",
+        "Stderr": "\u003cshell\u003e:1: character not in range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "echo/backslash-c-stops-the-output": {
       "bash": {
         "Stdout": "p\\cq~done",

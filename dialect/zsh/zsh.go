@@ -907,6 +907,11 @@ func Semantics() interp.Semantics {
 	// followed by whatever was there: `\xZ`, `\uZ` and a bare `\x` are all
 	// `00` and then the rest, where bash leaves the two characters standing.
 	s.EchoExpandsUnicodeEscapes = interp.Yes
+	// And a code point the locale cannot hold is refused rather than written
+	// back: this shell reports `character not in range`, writes what came
+	// before the escape, and abandons the script with the status it already
+	// had. Measured 2026-09-11 under `LC_ALL=C` (#1851).
+	s.UnicodeEscapeOutsideTheLocale = interp.OutsideLocaleEscapeRefused
 	s.EchoEmptyHexDigitRunIsNul = interp.Yes
 	// `\e` is the escape character here and `\E` is two characters — the
 	// opposite of ksh93.
@@ -1840,6 +1845,10 @@ func Diagnostics() interp.Diagnostics {
 		// at 4, and a group that runs out of text errors just past the end.
 		ExpansionFlagsError: "error in flags near position %[1]d in '%[2]s'",
 		BadPattern:          "bad pattern: %s",
+		// No verbs: this shell names neither the escape nor the value it
+		// refused. Measured 2026-09-11 under `LC_ALL=C`, the whole line is
+		// `zsh:1: character not in range` (#1851).
+		CodePointOutsideTheLocale: "character not in range",
 		// An element a declaration will not create, in the three ways this
 		// shell will not create one — measured 2026-09-07. The base and the
 		// subscript are the verbs, so what is quoted back is `a[1]` and not

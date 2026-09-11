@@ -323,7 +323,7 @@ func (o *Options) sweepTarget(ctx context.Context, t Target, ref oracle.Found, f
 				} else {
 					state.flaky[by] = true
 					o.logf("  %s: row %s is not stable unmutated; not counted\n", f.Path, by)
-					by, scanned = o.firstObjection(ctx, t, ref, spec, skip(order(pass, f, state), state.flaky))
+					by, scanned = o.firstObjection(ctx, t, ref, spec, order(pass, f, state))
 					out.Scanned = scanned
 					if by != "" {
 						out.Outcome, out.By = Pinned, by
@@ -459,19 +459,18 @@ func order(pass []oracle.Case, f Field, state *sweepState) []oracle.Case {
 		}
 		return s
 	}
-	out := make([]oracle.Case, len(pass))
-	copy(out, pass)
-	sort.SliceStable(out, func(i, j int) bool { return score(out[i]) > score(out[j]) })
-	return out
-}
-
-func skip(cases []oracle.Case, bad map[string]bool) []oracle.Case {
-	out := cases[:0:0]
-	for _, c := range cases {
-		if !bad[c.ID] {
+	out := make([]oracle.Case, 0, len(pass))
+	for _, c := range pass {
+		// A row already caught answering differently on two unmutated runs
+		// is dropped for the rest of the sweep rather than only for the flip
+		// that caught it: it would object to everything, and the order puts
+		// what objected before at the front, so one such row left in would
+		// pin the whole struct.
+		if !state.flaky[c.ID] {
 			out = append(out, c)
 		}
 	}
+	sort.SliceStable(out, func(i, j int) bool { return score(out[i]) > score(out[j]) })
 	return out
 }
 

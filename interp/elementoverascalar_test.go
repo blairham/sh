@@ -119,6 +119,10 @@ func runPromotedNegative(t *testing.T, promoted Answer, src string) (string, int
 		sem.ScalarSubscriptIsACharacter = No
 		sem.NegativeSubscriptPastTheStartInserts = No
 		sem.ArrayBaseIsZero = Yes
+		// And the length of a whole-array subscript on a name still holding a
+		// scalar, which the unanswered rows reach because nothing was
+		// promoted there.
+		sem.WholeSubscriptOnAScalarMeasuresIt = No
 		sem.NegativeSubscriptCountsOverAPromotedScalar = promoted
 		r.Semantics = &sem
 	})

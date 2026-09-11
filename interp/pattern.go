@@ -147,6 +147,14 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 		// word, since a `case` arm and a condition read the same spans. See
 		// baresubscript.go.
 		s, tail := r.unreadBareSubscript(s)
+		// A `-` or `+` word that is what the expansion came to is part of
+		// the *pattern* being built, not a value pasted into it. See
+		// substitutedWordPattern.
+		if tail == nil {
+			if text, ok := r.substitutedWordPattern(s); ok {
+				return text, true
+			}
+		}
 		// The `${~spec}` flag reaches here too, and that is measured rather
 		// than assumed: `p='a*'; [[ abc == ${~p} ]]` is true in the shell
 		// that has the construct where `${p}` alone is false, and
@@ -201,6 +209,59 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 	}
 	// Unquoted literal text is a pattern; quoted literal text is not.
 	return s.Value, s.Quoting == syntax.Unquoted
+}
+
+// substitutedWordPattern renders the word a `-` or `+` substituted as part of
+// the pattern being built, and reports whether this expansion is one of those.
+//
+// **The word is source text, so it is a pattern, and it never reaches the
+// filesystem.** Both halves of that were wrong, and both came from sending the
+// word through the ordinary word pipeline — which matches against the
+// filesystem and then hands back a value, the one shape a pattern operand can
+// never be. Measured 2026-09-10 across bash 5.3.15, bash 3.2.57 and zsh 5.9.2:
+//
+//	r=a; [[ abc == ${r:+a*} ]]          matches in all three; this said no
+//	r=a; case abc in ${r:+a*}) ;;       matches in all three; this said no
+//	r=a; x=abc; printf '%s' ${x%${r:+b*}}   is `a` in all three; this said `abc`
+//
+// The listing is what the matcher was being handed: `a*` had already been
+// replaced by the names it found, and those names were then escaped as a
+// value. Where nothing matched it was worse than a wrong answer — in the
+// dialect where an unmatched pattern is fatal the whole command stopped, which
+// is how this was found, as one `no matches found: |shim-list` on a real
+// startup where the shell it is measured against is silent (#1955).
+//
+// The word going back through patternOf rather than being escaped wholesale is
+// what keeps the two provenances apart inside it: `${r:+"a*"}` is four
+// ordinary characters and `${r:+$v}` with `v='a*'` is the same question
+// GlobExpansionResults already answers for any other value — zsh reads it as
+// text, bash as a pattern — measured in the same run.
+//
+// It answers false when the expansion is not a `-` or a `+`, or when the
+// *parameter* is what it came to, both of which leave the caller on the
+// ordinary path. The test for which it came to is testFires, the same one
+// expandParam and substitutedWordFields apply, so the three cannot drift.
+func (r *Runner) substitutedWordPattern(s syntax.Span) (string, bool) {
+	e := s.Param
+	if e == nil || e.Arg == nil || e.Length || e.Indirect {
+		return "", false
+	}
+	if e.Op != syntax.ParamDefault && e.Op != syntax.ParamAlternate {
+		return "", false
+	}
+	fires := r.testFires(e)
+	if (e.Op == syntax.ParamDefault && !fires) ||
+		(e.Op == syntax.ParamAlternate && fires) {
+		return "", false
+	}
+	if s.Quoting != syntax.Unquoted {
+		// Quoted, so the word substitutes as text and nothing in it is a
+		// pattern — `[[ abc == "${r:+a*}" ]]` is false in all three. Still
+		// not matched against the filesystem: it is the same word, read
+		// under different quoting.
+		return escapePatternMeta(r.substitutedWordText(e.Arg)), true
+	}
+	return r.patternOf(e.Arg), true
 }
 
 // expansionPattern applies the one axis that decides what the *result* of an

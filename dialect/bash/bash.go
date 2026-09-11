@@ -1426,6 +1426,20 @@ func Apply(r *interp.Runner) {
 	// per *character typed*.
 	r.SetPromptUserFunc(interp.LoginName)
 	r.SetPromptHostFunc(interp.MachineName)
+	// And the table those two resolvers answer *for*, which is the half that
+	// was missing: a runner told who the user is and which machine this is,
+	// and never told that `\u` and `\h` are the letters that ask, draws the
+	// letters as text. #1455.
+	//
+	// Installed here rather than only in the front end so that the escape
+	// language travels with the dialect. `driver.Shell.PromptStyle` hands the
+	// same value to the same runner on the way to the prompt drawer, and the
+	// two agree because they are the same function's result — but an embedder
+	// who applies this dialect to a Runner of their own never builds a Shell,
+	// and before this they got a bash with no prompt language at all. zsh's
+	// Apply had installed its table since #1090 and the other three had not,
+	// which is the asymmetry #1455 reports.
+	r.SetPromptStyle(PromptStyle())
 	// $LINES and $COLUMNS follow the window, which this shell does by
 	// default: `shopt checkwinsize` in bash 5.3.15 is `on`, and a session
 	// there reports `COLUMNS=80 LINES=24` at its first prompt with nothing in

@@ -1407,6 +1407,17 @@ func Diagnostics() interp.Diagnostics {
 // not, which makes the name a dialect's answer. It is the same function under
 // a second name rather than a second implementation.
 func Apply(r *interp.Runner) {
+	// The prompt-escape table, so the escape language travels with the
+	// dialect rather than only with the front end. ksh93's is a language of
+	// one rule — the backslash goes and the letter stands — and a `!` that is
+	// the history number, and a runner that was never told either of those
+	// draws both as text. #1455.
+	//
+	// `driver.Shell.PromptStyle` hands the same value to the same runner on
+	// the way to the prompt drawer; the two agree because they are the same
+	// function's result. An embedder who applies this dialect to a Runner of
+	// their own never builds a Shell, and is the caller this is for.
+	r.SetPromptStyle(PromptStyle())
 	// The `set -o` names beyond the ones every shell has.
 	r.AddSetOptions(
 		"braceexpand",

@@ -4408,6 +4408,27 @@ type Semantics struct {
 	// `opt/set-t-stops-after-one-command`.
 	SetHasTheTLetter Answer
 
+	// ImmovableOptionsSetAtInvocation lets the command line that started the
+	// shell move an option a *running script* may not — a route split inside
+	// one shell rather than a disagreement between two, which is why it is
+	// asked where the route is known instead of where the option is.
+	//
+	// One of the panel has it. Measured on zsh 5.9.2, 2026-09-10: `zsh -t
+	// plain.sh` runs the first line of a three-line script and stops, and
+	// `-o singlecommand` and the borrowed `-o onecmd` do the same, while
+	// `set -t`, `setopt singlecommand` and `unsetopt singlecommand` inside
+	// that script are all `can't change option` at 1 and fatal. So the five
+	// names that shell calls fixed are not five states it cannot reach; they
+	// are five a script may not change.
+	//
+	// It governs the refusal and not the applying: a dialect that answers
+	// `Yes` still has to say what each such name *would* move, which for the
+	// letter is the substrate's `onecmd` and for a name is the dialect's own
+	// table (see the zsh dialect's singleCommandOption). A name with nothing
+	// to apply is refused at the invocation exactly as it is refused in a
+	// script.
+	ImmovableOptionsSetAtInvocation Answer
+
 	// OneCommandStopsACommandString extends `set -t` to `-c`, and it is the
 	// one route the two shells that have the option disagree about.
 	// Measured: a two-line command string that sets it and then echoes —

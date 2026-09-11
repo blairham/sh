@@ -67002,6 +67002,50 @@
         "TimedOut": false
       }
     },
+    "opt/setopt-moves-a-name-this-shell-holds-still": {
+      "bash": {
+        "Stdout": "on=127 off=127",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: unsetopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "on=127 off=127",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: unsetopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "on=127 off=127",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: unsetopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "on=127 off=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: unsetopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "on=127 off=127",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: unsetopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "on=0 off=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "opt/turning-off-a-name-a-shell-does-not-implement": {
       "bash": {
         "Stdout": "st=0~st=0",
@@ -107170,6 +107214,50 @@
       "zsh": {
         "Stdout": "st=1 n=2 rest=[a b]",
         "Stderr": "\u003cshell\u003e:shift:1: shift count must be \u003c= $#",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "shopt/a-snapshot-of-the-completion-flags-reads-back": {
+      "bash": {
+        "Stdout": "sourced=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "sourced=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "sourced=0",
+        "Stderr": "\u003cshell\u003e: line 0: shopt: complete_fullquote: invalid shell option name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "sourced=0",
+        "Stderr": "\u003cshell\u003e: 1: shopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "sourced=0",
+        "Stderr": "\u003cshell\u003e: shopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "sourced=0",
+        "Stderr": "\u003cshell\u003e:1: command not found: shopt",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

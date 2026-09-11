@@ -144,6 +144,17 @@ type zshOption struct {
 	// marks a fixed option: the current state can be asked for and granted,
 	// and anything else is refused.
 	set func(*interp.Runner, bool) int
+	// atInvocation moves it on the command line that started the shell, for
+	// a fixed name this shell takes there and refuses to a running script.
+	// Nil for every other name, which is what makes the route irrelevant to
+	// all of them.
+	//
+	// It hangs off the entry rather than off the builtin because both
+	// invocation routes — `-t` and `-o singlecommand`, and `-o onecmd` under
+	// the borrowed spelling — arrive here after the alias table has resolved
+	// the name, and a `case` in the letter reader could only answer one of
+	// the three.
+	atInvocation func(*interp.Runner, bool) int
 }
 
 // zshOptions is the table, in listing order (sorted by base).
@@ -194,7 +205,7 @@ var zshOptions = []zshOption{
 	recorded("autoremoveslash", true),
 	recorded("autoresume", false),
 	recorded("badpattern", true),
-	fixedOptBacked("banghist", false, "histexpand", false),
+	recorded("banghist", false),
 	recorded("bareglobqual", true),
 	recorded("bashautolist", false),
 	recorded("bashrematch", false),
@@ -209,7 +220,7 @@ var zshOptions = []zshOption{
 	recorded("cdablevars", false),
 	recorded("cdsilent", false),
 	recorded("chasedots", false),
-	fixedOptBacked("chaselinks", false, "physical", false),
+	recorded("chaselinks", false),
 	// The two names zsh checks its job table with, and they are one question
 	// asked twice: `checkjobs` is the master and `checkrunningjobs` narrows
 	// what the master looks at. Measured through a pseudo-terminal against
@@ -244,7 +255,7 @@ var zshOptions = []zshOption{
 	recorded("cshnullglob", false),
 	recorded("debugbeforecmd", true),
 	recorded("dvorak", false),
-	fixedOptBacked("emacs", true, "emacs", false),
+	setOptBacked("emacs", true, "emacs", false),
 	recorded("equals", true),
 	setOptBacked("errexit", false, "errexit", false),
 	recorded("errreturn", false),
@@ -255,8 +266,10 @@ var zshOptions = []zshOption{
 	recorded("flowcontrol", true),
 	recorded("forcefloat", false),
 	// `$0` inside a function is the function's name here, which is what the
-	// name asks for and what this shell already does.
-	fixedConstant("functionargzero", true, true),
+	// name asks for and what this shell already does — and what it goes on
+	// doing whichever way the name is written, which is why it is recorded
+	// rather than refused.
+	recorded("functionargzero", true),
 	setOptBacked("glob", true, "noglob", true),
 	recorded("globalexport", true),
 	recorded("globalrcs", true),
@@ -266,7 +279,7 @@ var zshOptions = []zshOption{
 	recorded("globstarshort", false),
 	recorded("globsubst", false),
 	setOptBacked("hashcmds", false, "hashall", false),
-	fixedConstant("hashdirs", true, false),
+	recordedOver("hashdirs", true, constantState(false)),
 	recorded("hashexecutablesonly", false),
 	recorded("hashlistall", true),
 	recorded("histallowclobber", false),
@@ -290,9 +303,9 @@ var zshOptions = []zshOption{
 	recorded("histsubstpattern", false),
 	recorded("histverify", false),
 	recorded("hup", true),
-	fixedOptBacked("ignorebraces", false, "braceexpand", true),
+	recorded("ignorebraces", false),
 	recorded("ignoreclosebraces", false),
-	fixedOptBacked("ignoreeof", false, "ignoreeof", false),
+	recorded("ignoreeof", false),
 	recorded("incappendhistory", false),
 	recorded("incappendhistorytime", false),
 	// Whether this is an interactive shell — a fact the front end brought in
@@ -304,10 +317,10 @@ var zshOptions = []zshOption{
 		base: "interactive", def: false,
 		get: func(r *interp.Runner) bool { return r.Interactive },
 	},
-	// Comments are honored wherever they are written; the set -o table says
-	// the same, but this dialect does not declare the name there, so the
-	// state is a constant rather than a read through it.
-	fixedConstant("interactivecomments", true, true),
+	// Comments are honored wherever they are written, and go on being, which
+	// is why the name is recorded rather than refused: the shell keeps doing
+	// the thing in either direction.
+	recorded("interactivecomments", true),
 	{
 		base: "ksharrays", def: false,
 		// Read off the base, which is the axis the name is about; the four
@@ -343,7 +356,19 @@ var zshOptions = []zshOption{
 		get: localTrapsOn,
 		set: setLocalTraps,
 	},
-	recorded("login", false),
+	// Whether this shell was started as a login shell. zsh puts the fact in
+	// this namespace rather than in `$-` — Semantics.LoginShowsLInDollarDash
+	// is `Yes` here for exactly that reason — so `-l` has to reach the
+	// listing, `[[ -o login ]]` and `${options[login]}` alike.
+	//
+	// It is the invocation's answer and still movable, which is measured
+	// rather than assumed: zsh 5.9.2 on 2026-09-10 takes `setopt login` in a
+	// shell that is not one at 0 and reports `login` afterwards, and takes
+	// `unsetopt login` in a login shell the same way. bash's answer for its
+	// own spelling is the opposite — `shopt -s login_shell` is accepted and
+	// never moves it — so the two shells were measured apart rather than one
+	// read off the other (#1727).
+	recordedOver("login", false, func(r *interp.Runner) bool { return r.LoginShell }),
 	recorded("longlistjobs", false),
 	recorded("magicequalsubst", false),
 	recorded("mailwarning", false),
@@ -383,7 +408,11 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	fixedConstant("notify", true, true),
+	// When a job notice is written, and this shell writes it before the next
+	// prompt rather than the moment the job changes state. Recorded because
+	// neither direction moves that: the name is remembered and reported, and
+	// the notice keeps arriving where it arrives.
+	recorded("notify", true),
 	matchBacked("nullglob", false, interp.UnmatchedPatternIsEmpty, false),
 	recorded("numericglobsort", false),
 	recorded("octalzeroes", false),
@@ -401,7 +430,7 @@ var zshOptions = []zshOption{
 	recorded("posixtraps", false),
 	recorded("printeightbit", false),
 	recorded("printexitvalue", false),
-	fixedOptBacked("privileged", false, "privileged", false),
+	recorded("privileged", false),
 	recorded("promptbang", false),
 	recorded("promptcr", true),
 	recorded("promptpercent", true),
@@ -425,7 +454,7 @@ var zshOptions = []zshOption{
 	// shell does not narrow it, which is the state, and zsh's default is the
 	// same, so the listings do not move. The prompt theme this machine loads
 	// reads the name at its third line.
-	fixedConstant("shglob", false, false),
+	recorded("shglob", false),
 	// Three of the four that refuse to move — `interactive` is the fourth,
 	// above — and all of them are about being interactive, which is the whole
 	// of what real zsh refuses in a `-c` run on a pipe. Every one is off here
@@ -444,7 +473,7 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	fixedConstant("singlecommand", false, false),
+	singleCommandOption(),
 	recorded("singlelinezle", false),
 	recorded("sourcetrace", false),
 	recorded("sunkeyboardhack", false),
@@ -454,7 +483,7 @@ var zshOptions = []zshOption{
 	recorded("typesettounset", false),
 	setOptBacked("unset", true, "nounset", true),
 	setOptBacked("verbose", false, "verbose", false),
-	fixedOptBacked("vi", false, "vi", false),
+	setOptBacked("vi", false, "vi", false),
 	recorded("warncreateglobal", false),
 	recorded("warnnestedvar", false),
 	setOptBacked("xtrace", false, "xtrace", false),
@@ -512,15 +541,6 @@ func setOptBacked(base string, def bool, opt string, inv bool) zshOption {
 		base: base, def: def,
 		get: func(r *interp.Runner) bool { on, _ := r.NamedOption(opt); return on != inv },
 		set: func(r *interp.Runner, on bool) int { return r.ApplyNamedOption(opt, on != inv) },
-	}
-}
-
-// fixedOptBacked reads its state through the same seam and refuses to move
-// it, because the substrate does not do the thing the name asks for.
-func fixedOptBacked(base string, def bool, opt string, inv bool) zshOption {
-	return zshOption{
-		base: base, def: def,
-		get: func(r *interp.Runner) bool { on, _ := r.NamedOption(opt); return on != inv },
 	}
 }
 
@@ -614,6 +634,65 @@ func recorded(base string, def bool) zshOption {
 		set: func(r *interp.Runner, on bool) int {
 			setRecordedDeviation(r, base, on != def)
 			return 0
+		},
+	}
+}
+
+// recordedOver is a recorded name whose state in a *fresh* shell here is not
+// the table's default — either because this implementation sits somewhere
+// else to begin with, or because the invocation decided it.
+//
+// The store holds deviations, so the base state has to be supplied rather
+// than assumed: `hashdirs` is off here where zsh's compiled-in default is on,
+// and `login` is whatever the front end was told. Everything else is
+// `recorded`'s bargain unchanged — remembered, reported, and acted on by
+// nothing.
+func recordedOver(base string, def bool, state func(*interp.Runner) bool) zshOption {
+	return zshOption{
+		base: base, def: def, recorded: true,
+		get: func(r *interp.Runner) bool { return state(r) != recordedDeviates(r, base) },
+		set: func(r *interp.Runner, on bool) int {
+			setRecordedDeviation(r, base, on != state(r))
+			return 0
+		},
+	}
+}
+
+// constantState is the base state of a recorded name this shell holds still.
+func constantState(state bool) func(*interp.Runner) bool {
+	return func(*interp.Runner) bool { return state }
+}
+
+// singleCommandOption is zsh's `singlecommand`, and the one name in this
+// table whose answer depends on *where the request came from*.
+//
+// Measured on zsh 5.9.2, 2026-09-10. `plain.sh` holds three `echo` lines:
+//
+//	zsh -t plain.sh                 P1 — the option is on, one line runs
+//	zsh -o singlecommand plain.sh   P1
+//	zsh -o onecmd plain.sh          P1, under the borrowed spelling
+//	zsh -t -c $'echo A\necho B'      A and B — a command string is not stopped
+//	zsh -t -c 'echo "$-"'           569Xt
+//	set -t in a script              can't change option: -t, fatal
+//	setopt singlecommand            can't change option: singlecommand
+//	unsetopt singlecommand after -t can't change option: singlecommand
+//
+// So "fixed" means *a running script may not move it* rather than "this shell
+// cannot have it on", and the invocation is the other side of that. The state
+// is the substrate's `onecmd` — the same switch `set -t` writes in the two
+// shells that let a script write it — so the two spellings are one state read
+// and written through one seam, and `$-` carries `t` because the substrate
+// puts it there.
+//
+// interp.Semantics.ImmovableOptionsSetAtInvocation is the axis that says this
+// shell has the route at all; it is asked by the core for the `-t` letter and
+// here for the two names, so a dialect that answers `No` refuses both.
+func singleCommandOption() zshOption {
+	return zshOption{
+		base: "singlecommand", def: false,
+		get: func(r *interp.Runner) bool { on, _ := r.NamedOption("onecmd"); return on },
+		atInvocation: func(r *interp.Runner, on bool) int {
+			return r.ApplyNamedOption("onecmd", on)
 		},
 	}
 }
@@ -817,6 +896,9 @@ func moveOption(r *interp.Runner, name string, on bool) (moved, known bool) {
 	if o.set != nil {
 		return o.set(r, want) == 0, true
 	}
+	if mover := invocationMover(r, o); mover != nil {
+		return mover(r, want) == 0, true
+	}
 	// Fixed: granted where it is already where it is being asked to be, and
 	// refused otherwise — the same bargain setOption strikes, with the
 	// sentence left to the caller.
@@ -836,6 +918,9 @@ func setOption(r *interp.Runner, name string, on bool) int {
 	if o.set != nil {
 		return o.set(r, want)
 	}
+	if mover := invocationMover(r, o); mover != nil {
+		return mover(r, want)
+	}
 	if o.get(r) == want {
 		// Already where it was asked to be: granted, the same bargain the
 		// substrate's own option table strikes.
@@ -843,6 +928,25 @@ func setOption(r *interp.Runner, name string, on bool) int {
 	}
 	r.Diagnosef("can't change option: %s\n", name)
 	return 1
+}
+
+// invocationMover is the applier a fixed name has for the command line that
+// started the shell, and nil everywhere else — for a name without one, for a
+// dialect whose axis says this shell has no such route, and for any request
+// that did not come from an invocation.
+//
+// Both option builtins consult it rather than only `set -o`, because the
+// front end reaches a `-o name` operand through the table and a `setopt` the
+// invocation never runs cannot reach it at all: the flag is the runner's and
+// is set for exactly the span of one invocation option.
+func invocationMover(r *interp.Runner, o zshOption) func(*interp.Runner, bool) int {
+	if o.atInvocation == nil || !r.AtInvocation() {
+		return nil
+	}
+	if r.Semantics.ImmovableOptionsSetAtInvocation != interp.Yes {
+		return nil
+	}
+	return o.atInvocation
 }
 
 // setoptBuiltin builds either half; they differ in the direction a bare base

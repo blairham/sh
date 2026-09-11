@@ -8955,6 +8955,23 @@ echo unreachable`,
 		Why:     "what an operand that is not an expression does to the rest of the input. zsh and ksh93 abandon it and bash lets the condition be false and carries on, all three at status 1 — a conflict rather than a wording difference, and the ConditionArithmeticErrorIsFatal axis. From a file, because the trailing text is the measurement and -c muddies where the shell stopped (#1616)",
 	},
 	{
+		ID: "arith/a-math-error-in-the-command-abandons-the-input", Category: "conditions",
+		Script:  true,
+		Snippet: `echo one; (( 1+ )); echo two st=$?`,
+		Why:     "the other half of the question the row above asks, and the panel does not group the two: zsh abandons the word-spelled condition and stays here, so one field could not carry both. ksh93 is the only column that gives up the input over `(( ))`, ending at 1 where bash 5.3, bash 3.2 and zsh print `two` and end at 0 — a script guarding with `(( n ))` over a name it did not set runs to the end under one group and stops at that line under the other. From a file for the same reason as the row above",
+	},
+	{
+		ID: "arith/a-math-error-that-evaluates-abandons-the-input", Category: "conditions",
+		Script:  true,
+		Snippet: `echo one; (( 1/0 )); echo two st=$?`,
+		Why:     "the same question of the other way an expression can fail — this one reaches the evaluator where `1+` never does — and the answers are the same, which is what says the fatality is the construct's and not the parser's. It is the pair ArithCommandErrorStatusIsTwo already needed for the status, asked again for the give-up, and a fix that read only one branch would leave the other running on",
+	},
+	{
+		ID: "arith/a-fatal-math-error-gives-up-the-sourced-file-alone", Category: "conditions",
+		Snippet: `printf '(( 1+ ))\necho insrc\n' > s.sh; . ./s.sh; echo after`,
+		Why:     "how far the give-up reaches in the column that has one, and it is the shell's ordinary reach for an error rather than anything of this construct's: ksh93 drops the rest of the file and the caller prints `after`. The row exists because the two are separable — marked as a request to stop rather than as an error, a give-up that should have cost one file cost the whole script, which is the same mistake one level down as the one the sourcing code is named for. The other five never abandon at all and print `insrc` as well, which is the control that says this row is about the reach and not about the fatality",
+	},
+	{
 		ID: "cond/regex-match", Category: "conditions",
 		Snippet: `[[ abc =~ ^a.c$ ]] && echo regex || echo no-regex`,
 		Why:     "the one place in the shell where the pattern language is regular expressions rather than globs",

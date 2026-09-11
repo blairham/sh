@@ -118,8 +118,19 @@ func (r *Runner) ifClause(ctx context.Context, c *syntax.IfClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
 		// The condition is a *list* judged by its last command, which is why
 		// this runs the whole thing and then looks at the status.
+		//
+		// A condition that gave up rather than answering is checked for after
+		// each one, the same way `loop` does and for the same reason: there
+		// is no answer to read, and the status it left is the construct's.
+		// Without it the `if` reported success for having taken no branch —
+		// `if (( 1+ )); then :; fi` in the dialect that abandons over a math
+		// error ended the script at 0 where ksh93 ends it at 1, so the shell
+		// stopped and then said it had succeeded.
 		if err := r.condList(ctx, c.Cond); err != nil {
 			return err
+		}
+		if r.ctl != controlNone {
+			return nil
 		}
 		if r.status == 0 {
 			return r.runList(ctx, c.Then)
@@ -127,6 +138,9 @@ func (r *Runner) ifClause(ctx context.Context, c *syntax.IfClause) error {
 		for _, e := range c.Elifs {
 			if err := r.condList(ctx, e.Cond); err != nil {
 				return err
+			}
+			if r.ctl != controlNone {
+				return nil
 			}
 			if r.status == 0 {
 				return r.runList(ctx, e.Then)

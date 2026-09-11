@@ -52,11 +52,26 @@ func systemDeadline(t *testing.T, what string, body func()) {
 // back, and the bytes compared — which is the whole of what the `|| return` on
 // that line was guarding, and what a `sysopen` registered and hollow passes at
 // the status and fails here.
+//
+// **It reads to the end rather than once**, and that is the correction to an
+// instrument rather than to a shell (#1907). `sysread` is one `read(2)`, and
+// one `read(2)` on a pipe returns whatever has arrived — so a body that writes
+// twice leaves "did both writes land before the read" to the scheduler. This
+// case asserted on a single read against a body of two writes and therefore
+// passed or failed by luck: 4 runs in 15 answered `[one]`, and it read as a
+// platform flake because the luck differs between this machine and the Linux
+// runner. Reading until end of input is the same claim made in a way that can
+// only be answered one way — 0 in 15 here and in zsh 5.9.2, byte for byte.
+//
+// The body keeps its two writes on purpose. Collapsing it to one would have
+// removed the hazard from the case along with the flake, and the hazard is the
+// thing worth pinning: a worker reading a substitution has to read to the end.
 func TestSysopenReadsAProcessSubstitutionThroughACloseOnExecDescriptor(t *testing.T) {
 	systemDeadline(t, "sysopen on a process substitution", func() {
 		out, st := runZsh(t, t.TempDir(), `sysopen -r -o cloexec -u fd <(print -n one; print -n two) || { print -r -- failed; return }
 print -r -- "open=$? usable=$(( fd > 2 ))"
-sysread -i $fd buf
+buf=
+while sysread -i $fd chunk; do buf=$buf$chunk; done
 print -r -- "read=$? buf=[$buf]"`)
 		want := "open=0 usable=1\nread=0 buf=[onetwo]\n"
 		if out != want || st != 0 {

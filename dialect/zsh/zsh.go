@@ -1353,6 +1353,12 @@ func Semantics() interp.Semantics {
 	// one line and on two both end at status 1 with nothing after the
 	// `break` running at all.
 	s.LoopControlOutsideALoopIsFatal = interp.Yes
+	// Neither is a boundary: a `break` in a function body ends the caller's
+	// loop, and one inside `( )` ends the subshell's copy of it. The shell
+	// that stops a script over a `break` with no loop at all is the one that
+	// finds a loop in both of these.
+	s.FunctionCallIsALoopControlBoundary = interp.No
+	s.SubshellIsALoopControlBoundary = interp.No
 	// A startup file is a sourced script, so a `return` in one is accepted
 	// everywhere — the split is only over what its argument does, and this
 	// shell keeps it: measured through a pty, an rc of `return 3` and one

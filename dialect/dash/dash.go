@@ -409,6 +409,13 @@ func Semantics() interp.Semantics {
 	// `echo t; break; echo after` prints both and ends at 0, with no
 	// wording to go with it.
 	s.LoopControlOutsideALoopIsFatal = interp.No
+	// A call is a boundary and a subshell is not, which is the pairing that
+	// makes these two fields rather than one: `f(){ break; }` called from a
+	// loop leaves the loop running, and `( break )` inside one leaves only
+	// the subshell. Silently in both cases — the complaint is
+	// LoopControlOutsideALoop's, and this shell writes none.
+	s.FunctionCallIsALoopControlBoundary = interp.Yes
+	s.SubshellIsALoopControlBoundary = interp.No
 	// A startup file is a sourced script, so a `return` in one is accepted
 	// everywhere — the split is only over what its argument does, and this
 	// shell keeps it: measured through a pty, an rc of `return 3` and one

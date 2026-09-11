@@ -884,6 +884,10 @@ func Semantics() interp.Semantics {
 	// 93u+ 2012-08-01, `echo t; break; echo after` prints both and ends at
 	// 0. No wording goes with it, which is dash's answer too.
 	s.LoopControlOutsideALoopIsFatal = interp.No
+	// The same pairing as dash: a call stops a `break` and the parentheses
+	// do not.
+	s.FunctionCallIsALoopControlBoundary = interp.Yes
+	s.SubshellIsALoopControlBoundary = interp.No
 	// A startup file is a sourced script, so a `return` in one is accepted
 	// everywhere — the split is only over what its argument does, and this
 	// shell keeps it: measured through a pty, an rc of `return 3` and one

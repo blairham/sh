@@ -694,6 +694,17 @@ type Runner struct {
 	// than lexical: a loop that calls a function that loops is two, because
 	// what the stop is inside is what matters.
 	loopDepth int
+	// callLoopFloor and subshellLoopFloor are the loop depths at the
+	// innermost function call and the innermost `( )`, which is how far a
+	// `break` written inside one can still see if that boundary stops it.
+	//
+	// Recorded on the way in and asked about at the `break`, because whether
+	// either is a boundary is the dialect's and the answer is only visible
+	// when the word is used — see Runner.loopControlReach. Kept apart
+	// because the panel does not group them: one column makes both a
+	// boundary and another makes neither.
+	callLoopFloor     int
+	subshellLoopFloor int
 	// ctx is the context of the current Run, so expansion can reach it. A
 	// command substitution runs commands, and threading a context through
 	// every expander signature to reach one place would be worse.

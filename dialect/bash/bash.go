@@ -884,6 +884,12 @@ func Semantics() interp.Semantics {
 	// next command on the line runs and the status stays 0. Measured with
 	// `echo t; break; echo after` — `after` prints and `$?` is 0.
 	s.LoopControlOutsideALoopIsFatal = interp.No
+	// Both boundaries, and it says so: `f(){ break; }` called from a loop and
+	// `( break )` inside one each draw the complaint once per pass and leave
+	// the loop running. bash 3.2 answers the opposite way on both, which is
+	// why neither is the core's.
+	s.FunctionCallIsALoopControlBoundary = interp.Yes
+	s.SubshellIsALoopControlBoundary = interp.Yes
 	// A startup file is a sourced script, so a `return` in one is accepted
 	// everywhere — the split is only over what its argument does. bash
 	// discards it: measured through a pty, an rc of `return 3` leaves `$?`

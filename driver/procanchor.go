@@ -56,8 +56,8 @@ const anchorArg = "--hold-process-group"
 // because the pipe is a pipe: nothing is ever written to it, and a write that
 // somehow happened must not turn a placeholder into something that has read
 // half a line and is waiting for the rest.
-func holdProcessGroup() int {
-	_, _ = io.Copy(io.Discard, os.Stdin)
+func holdProcessGroup(in io.Reader) int {
+	_, _ = io.Copy(io.Discard, in)
 	return 0
 }
 

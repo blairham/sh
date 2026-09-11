@@ -36,6 +36,7 @@ var sharedTables = map[string]string{
 var sharedStacks = map[string]string{
 	"Env":            "the environment the shell was started with, never appended to after setup",
 	"InheritedFiles": "the files the embedder handed in, never appended to at all",
+	"ProcessAnchor":  "the placeholder command the front end handed in, never appended to at all",
 	"trapSnapshot":   "only ever replaced wholesale or set to nil, and inheritTraps rebuilds a subshell's traps from scratch",
 	"pipeStatus":     "rebuilt with append([]int(nil), …) on every pipeline, so a write never lands in an array anyone else holds",
 }
@@ -57,6 +58,7 @@ func seedStacks(r *Runner) {
 	r.procSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
 	r.frames = append(make([]Frame, 0, 4), Frame{})
 	r.InheritedFiles = append(make([]*os.File, 0, 4), nil)
+	r.ProcessAnchor = append(make([]string, 0, 4), "seed")
 	r.redirFds = append(make([]int, 0, 4), 0)
 	r.jobs = append(make([]*Job, 0, 4), nil)
 	r.scopes = append(make([]*scope, 0, 4), &scope{

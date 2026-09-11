@@ -340,15 +340,22 @@ func Main(sh Shell) int {
 // argv includes argv[0]. An argv with nothing in it is treated as bare, since
 // a shell that cannot name itself still has to produce diagnostics.
 func MainArgs(sh Shell, argv []string) int {
+	sh = sh.withDefaults(argv)
 	if heldProcessGroup(argv) {
 		// Not a shell at all this time: a placeholder leading a process group
-		// for the shell that started it. Read before anything else — before
-		// the defaults, before the startup files, before a single line is
-		// parsed — because the whole contract is that it does nothing. See
+		// for the shell that started it. Read before any route is chosen —
+		// before a startup file, before a line is parsed, before `$0` exists
+		// — because the whole contract is that it does nothing. See
 		// procanchor.go.
-		return holdProcessGroup()
+		//
+		// After withDefaults and not before it, so that the stream it reads
+		// is the *Shell's* rather than the process's. That is the rule the
+		// rest of this package keeps and it is not ceremony here either: a
+		// placeholder that reached past its Shell for os.Stdin would be
+		// unusable by anything embedding this front end, and its own test
+		// would silently read the test binary's input.
+		return holdProcessGroup(sh.Stdin)
 	}
-	sh = sh.withDefaults(argv)
 	in, err := sh.input(argv)
 	if err != nil {
 		var se *scriptError

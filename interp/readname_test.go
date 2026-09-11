@@ -22,6 +22,7 @@ func arraySemantics(s *Semantics) {
 	s.NegativeSubscriptPastTheStartInserts = No
 	s.IndirectionYieldsName = No
 	s.ArithNameValueRecurses = Yes
+	s.ArithRecursedNameMustBeSet = No
 }
 
 // readRun is optRun with `read`'s own fatality turned off, so a test that is

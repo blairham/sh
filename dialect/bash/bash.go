@@ -372,6 +372,10 @@ func Semantics() interp.Semantics {
 	// moves the loop's, which is the bash-as-`sh` column.
 	s.FunctionNameWhenTheDefinitionRuns = interp.FuncNameFailsTheDefinition
 	s.ArithNameValueRecurses = interp.Yes
+	// And an unset name found that way is a zero like any other unset name:
+	// `x=abc; $((x+1))` is 1 and the script runs on. Measured 2026-09-11 —
+	// ksh93 is the panel's holdout, where it is a fatal `parameter not set`.
+	s.ArithRecursedNameMustBeSet = interp.No
 	// bash has no floats, so `2**-1` has no integer answer and stops the
 	// expression; the two shells with floats answer 0.5 instead.
 	s.ArithNegativeExponentIsError = interp.Yes

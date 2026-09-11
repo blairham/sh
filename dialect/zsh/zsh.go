@@ -858,6 +858,10 @@ func Semantics() interp.Semantics {
 	s.SetArrayBadNameLeavesZeroFromCommandString = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
+	// And an unset name found that way is a zero like any other unset name:
+	// `x=abc; $((x+1))` is 1 and the script runs on. Measured 2026-09-11 —
+	// ksh93 is the panel's holdout, where it is a fatal `parameter not set`.
+	s.ArithRecursedNameMustBeSet = interp.No
 	s.BraceExpansion = interp.Yes
 	// Pads like bash — `{01..3}` is `01 02 03` — but a negative step
 	// reverses the walk the endpoints chose: `{3..1..-1}` is `1 2 3` and

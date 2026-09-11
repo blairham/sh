@@ -152,6 +152,7 @@ func TestArithmeticAxesAreAsked(t *testing.T) {
 	// axis says Yes and an error where it says No.
 	recurses := permissive()
 	recurses.ArithNameValueRecurses = Yes
+	recurses.ArithRecursedNameMustBeSet = No
 	if got, _ := run(t, `x=abc; echo $((x+1))`, withSem(recurses)); got != "1\n" {
 		t.Errorf("Yes: got %q, want %q", got, "1\n")
 	}

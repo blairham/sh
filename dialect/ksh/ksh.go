@@ -348,7 +348,18 @@ func Semantics() interp.Semantics {
 	// rather than dash's and bash's integer complaint.
 	s.MissingFileIsOlder = interp.Yes
 	s.TerminalTestRequiresANumber = interp.No
+	// A name-shaped value is looked up in turn here as it is in bash and
+	// zsh — `y=5; x=y; $((x+1))` is 6, and `y=z; z=7; x=y` is 8 — measured
+	// 2026-09-11 against 93u+ 2012-08-01. The axis comment in interp said
+	// this shell errored instead, which was a mistake about *this* field
+	// rather than about the preset; see #1629 and the next line, which is
+	// the difference it was describing.
 	s.ArithNameValueRecurses = interp.Yes
+	// And an unset name reached that way is a refusal rather than a zero:
+	// `x=abc; $((x+1))` is `abc: parameter not set` at status 1 and the
+	// script stops, with nounset off. A name written in the expression
+	// itself is still zero — `$((nosuch+1))` is 1 here as everywhere.
+	s.ArithRecursedNameMustBeSet = interp.Yes
 	// This shell has no `local`, and it answers all the same: `typeset` in a
 	// *keyword*-defined function is a local here — see
 	// TypesetLocalNeedsKeywordFunction — and the shadow it declares over a
@@ -1125,10 +1136,18 @@ func Diagnostics() interp.Diagnostics {
 		// brackets rather than after a colon.
 		DotCannotOpen:          ".: %[1]s: cannot open [%[2]s]",
 		DotNoOperandUnprefixed: true,
-		// A value that is not a number is a parameter name in ksh93, so the
-		// failure is that the name is unset rather than that the text is not
-		// a number.
-		InvalidNumber: "%[1]s: parameter not set",
+		// The reason this shell gives for text that is not a number, and it
+		// is the same one it gives for an expression it cannot parse:
+		// measured 2026-09-11, `x=1abc; $((x+1))` and `x="1 2"; $((x+1))`
+		// are both `arithmetic syntax error`.
+		//
+		// It said `parameter not set` until #1629, which is the sentence a
+		// *name-shaped* value earns — and it earns it by being looked up and
+		// found unset, not by failing to be a number. Now that the lookup
+		// really happens (Semantics.ArithRecursedNameMustBeSet) the stand-in
+		// is not merely unnecessary: it was answering the wrong sentence for
+		// every value that is no name at all.
+		InvalidNumber: "%[1]s: arithmetic syntax error",
 		// No name in front of it and no `.:` either: ksh93 prints a usage
 		// line bare, the same way it prints `kill`'s.
 		DotNoOperand:       "Usage: . [ options ] name [arg ...]",

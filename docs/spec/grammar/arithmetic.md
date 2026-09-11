@@ -283,11 +283,53 @@ A variable whose value is not a number splits three ways:
 | dash | error: `Illegal number: abc` |
 | bash | **1** — the value is re-evaluated as an expression, `abc` is unset, so 0 |
 | zsh | **1** — same |
-| ksh93 | error: `abc: parameter not set` |
+| ksh93 | error: `abc: parameter not set`, status 1, script abandoned |
 
 Three answers again, and two of them are quiet. Recorded here rather than
 in `semantics.md`'s table for the reason given there: the table's shape is
 binary and this is not.
+
+### The chase, and its last step, are two questions
+
+The table above reads as though ksh93 refuses to re-evaluate a name-shaped
+value. **It does not.** Measured 2026-09-11 against 93u+ 2012-08-01:
+
+| | bash 5.3 | bash 3.2 | zsh 5.9 | ksh93 | dash |
+| --- | --- | --- | --- | --- | --- |
+| `y=5; x=y; $((x+1))` | 6 | 6 | 6 | **6** | `Illegal number: y` |
+| `z=7; y=z; x=y; $((x+1))` | 8 | 8 | 8 | **8** | `Illegal number: y` |
+| `$((nosuch+1))` | 1 | 1 | 1 | 1 | 1 |
+| `y=; x=y; $((x+1))` | 1 | 1 | 1 | 1 | 1 |
+| `x=abc; $((x+1))` | 1 | 1 | 1 | **error** | `Illegal number: abc` |
+| `x=1abc; $((x+1))` | error | error | error | `1abc: arithmetic syntax error` | `Illegal number: 1abc` |
+
+So there are two axes and not one:
+
+- **`ArithNameValueRecurses`** — whether the value is looked up at all.
+  Yes in bash, zsh *and ksh93*; dash alone says no, and it says no as far
+  as the values lead.
+- **`ArithRecursedNameMustBeSet`** — what an unset name *at the end of the
+  chase* means. A zero in bash and zsh, a refusal in ksh93. Asked below the
+  top only: a name written into the expression itself is a zero in every
+  column, which the third row is there to say.
+
+The fourth row is the discriminator between the two readings of ksh93's
+refusal. A set-but-empty value is 1 there as everywhere, so what that shell
+refuses is an **unset name**, not a value it could not read as a number —
+and the refusal is its `set -u` sentence word for word, with nounset off,
+fatal in the same way: `||` does not catch it and a subshell dies alone.
+
+The sixth row is the other side of the same distinction. With nothing to
+look up, ksh93 reports an `arithmetic syntax error` — the same reason it
+gives for an expression it cannot parse — rather than a parameter that is
+not set.
+
+**Why this is written down rather than merged into the row above.** The
+interpreter modeled the chase alone and stood ksh93's `parameter not set`
+in as the wording for *any* unreadable value (#1629), which answered the
+last row wrongly and the fifth row wrongly in the other direction — a
+plausible `1` where the real shell stops the script. A probe that only ever
+tries `x=abc` cannot tell the two apart.
 
 ## What this does not cover
 

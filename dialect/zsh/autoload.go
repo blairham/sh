@@ -6,7 +6,6 @@ package zsh
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -523,7 +522,7 @@ func autoloadResolve(r *interp.Runner, name string) int {
 // `$fpath` would have had it.
 func autoloadResolveIn(r *interp.Runner, name string, dirs []string) int {
 	if len(dirs) == 1 {
-		body, err := os.ReadFile(filepath.Join(dirs[0], name))
+		body, err := r.ReadFileGated(filepath.Join(dirs[0], name))
 		if err != nil {
 			r.DiagnoseAsTheShellf("%s: function definition file not found\n", name)
 			return 1
@@ -560,13 +559,13 @@ func autoloadFile(r *interp.Runner, name string) (string, bool) {
 		// `-r` or `-R` already chose, and the choice holds: no fresh search
 		// behind it, so a fixed file that has gone is not found rather than
 		// found somewhere else. Measured — see autoloadFixPath.
-		text, err := os.ReadFile(path)
+		text, err := r.ReadFileGated(path)
 		return string(text), err == nil
 	}
 	if strings.ContainsRune(name, filepath.Separator) {
 		// A name with a directory in it is looked for where it says and
 		// nowhere else, which is what `autoload /path/to/fn` means.
-		text, err := os.ReadFile(name)
+		text, err := r.ReadFileGated(name)
 		return string(text), err == nil
 	}
 	dirs, _ := r.GetArray("fpath")
@@ -574,7 +573,7 @@ func autoloadFile(r *interp.Runner, name string) (string, bool) {
 		if dir == "" {
 			dir = "."
 		}
-		text, err := os.ReadFile(filepath.Join(dir, name))
+		text, err := r.ReadFileGated(filepath.Join(dir, name))
 		if err != nil {
 			continue
 		}
@@ -664,7 +663,7 @@ func autoloadSearch(r *interp.Runner, name string) (string, bool) {
 		// A name that says where it is resolves to itself, and is still a
 		// resolution that can fail: `-R` on an unreadable path is the same
 		// complaint as `-R` on a name that is nowhere on `$fpath`.
-		if _, err := os.ReadFile(name); err != nil {
+		if _, err := r.ReadFileGated(name); err != nil {
 			return "", false
 		}
 		return name, true
@@ -678,7 +677,7 @@ func autoloadSearch(r *interp.Runner, name string) (string, bool) {
 		// Read rather than stat, so that "readable" here means what it means
 		// in autoloadFile — an entry this shell could not open is one the
 		// search goes past rather than one it stops on.
-		if _, err := os.ReadFile(path); err != nil {
+		if _, err := r.ReadFileGated(path); err != nil {
 			continue
 		}
 		return path, true

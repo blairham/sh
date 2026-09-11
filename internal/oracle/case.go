@@ -5538,6 +5538,11 @@ echo "st=$?"`,
 		Why:     "the row that makes this more than a lookup: `(i)` missing answers one past the last element and `(r)` missing does too, so both write where an append writes. The semantics need nothing new for it — the group names an index, and the index after the last is the one an append uses — which is why the count is printed with the elements",
 	},
 	{
+		ID: "subscript/a-flag-group-on-the-left-over-a-string", Category: "expansion",
+		Snippet: `s=hello; s[(r)l]=Q; printf '[%s]' "$s"; s=hello; s[(I)l]=Q; printf '[%s]' "$s"; s=hello; s[(i)zz]=Q; printf '[%s]' "$s"; s=hello; s[(r)l]+=Q; printf '[%s]' "$s"; echo`,
+		Why:     "the same group on the left of `=` where the name holds a **string**, which is where two rules have to meet without either being restated: the search names a position exactly as it does over an array, and the column that reads a subscript on a string as a character is the one that writes a character there. So the first two are `${s[(i)l]}` and `${s[(I)l]}`'s positions spliced rather than elements written, the third is a forward miss landing one past the last character and appending, and the fourth joins the character back where it was. An implementation handing the index to an array store answers two spaces and a `Q` to the first, at status 0 and with nothing said (#1532) -- which is what this shell did while the character write was missing, and is why the row prints `$s` rather than a count",
+	},
+	{
 		ID: "subscript/a-flag-group-through-the-assigning-operator", Category: "expansion",
 		Snippet: `b=(x "" z); printf '[%s]' "${b[(r)]:=V}" "${b[@]}"; echo`,
 		Why:     "the same group reached from the third direction: the search finds the empty element, `:=` writes there because it is empty, and the value it wrote is what the expansion comes to. The reading has to be the same on all three sides or the same subscript names two different elements depending on which one wrote it",
@@ -13842,6 +13847,11 @@ echo "read=[$l]"`,
 		ID: "system/every-byte-written-and-a-silent-refusal", Category: "builtins",
 		Snippet: `zmodload zsh/system; sysopen -w -o creat,trunc -u fd f; syswrite -c n -o $fd $'a\nb\n'; echo "wrote=$? n=$n"; exec {fd}>&-; echo "file=[$(cat f)]"; syswrite -o 99 gone; echo "refused=$?"; syswrite; echo "none=$?"; syswrite a b; echo "two=$?"`,
 		Why:     "the bytes reach the file and are counted, and a descriptor that refuses is a status with **nothing said** — which is what lets `while syswrite $'\\x05'; do …; done` end quietly when the far side goes instead of printing once per turn. The two usage refusals do speak, so the silence is about the write and not about the builtin",
+	},
+	{
+		ID: "system/a-subscripted-destination-for-one-read", Category: "builtins",
+		Snippet: `zmodload zsh/system; printf onetwo > f; sysopen -r -u fd f; buf=; sysread -s 3 -i $fd 'buf[$#buf+1]'; sysread -s 3 -i $fd 'buf[$#buf+1]'; echo "appended=[$buf]"; typeset -A h; sysopen -r -u g f; sysread -s 3 -i $g 'h[k]'; echo "keyed=[${h[k]}]"; sysread -i $g 'bad name'; echo "name=$?"; sysread -i $g 'buf[]'; echo "shape=$?"`,
+		Why:     "the destination shape a prompt theme's worker reads its responses with, twice over so that the *append* is what is shown rather than a single write: `buf[$#buf+1]` splices each read on to the end of the string, which is how a script appends to one in the column that reads a subscript on a string as a character. The keyed destination is the same operand resolved a second way, and the two refusals are the half that stays -- a name that is not one, and a subscript shape that is not one -- so the row cannot pass by taking every operand or by taking none. A shell that resolved the brackets with a plain assignment of the whole word creates a parameter *called* `buf[3]`, leaves `buf` empty and says nothing (#1532)",
 	},
 	{
 		ID: "system/where-the-descriptor-number-is-put", Category: "builtins",

@@ -1139,25 +1139,16 @@ func (r *Runner) fdVarValue(ref string) (string, bool) {
 // setFdVar gives the name the number the shell picked, which is the other
 // half of the same rule: `exec {a[2]}>f` opens the file and leaves the
 // descriptor in that element.
+//
+// storeThroughOperand and not a resolution of its own, because "put this
+// value where that name points" has to mean one thing wherever it is
+// spelled: a declared table takes the subscript as a key, a pair takes the
+// span, and a single subscript reaches setArrayElem — which is where a name
+// holding a *string* has the value spliced into its characters rather than
+// becoming an array. A second walk of the brackets here is how one of the
+// two would come to answer `{buf[$#buf+1]}` differently from `buf[$#buf+1]`.
 func (r *Runner) setFdVar(ref, value string) {
-	base, sub, ok := r.subscriptOperand(ref)
-	if !ok {
-		r.setVar(ref, value)
-		return
-	}
-	if r.assocDeclared(base) {
-		r.setAssocElem(base, sub, value)
-		return
-	}
-	idx, err := r.subscriptValue(sub)
-	if err != nil {
-		// The same silence a bad subscript gets from the reading half. The
-		// redirection itself has already happened, and the number it chose
-		// has nowhere to go — which is the shape of the case the dialect
-		// answers with FdVariableBadCloseIsAnError on the way in.
-		return
-	}
-	r.setArrayElem(base, idx, sub, value)
+	r.storeThroughOperand(ref, value)
 }
 
 // redirWrote records that the redirections being applied have just written a

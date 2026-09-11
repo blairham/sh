@@ -537,15 +537,69 @@ func sysDescriptorNumber(text string) (int, bool) {
 // sysAssignable reports whether a name is one this shell could assign to:
 // an identifier, or an identifier with a subscript after it.
 //
-// The subscripted form is here because `sysopen -u 'h[k]'` works in zsh and
-// because [interp.Runner.SetDescriptorVariable] resolves it — the same route
-// `exec {h[k]}<file` takes. See sysreadName for why `sysread` treats the two
-// halves of this differently from `sysopen`.
+// The subscripted form is here because `sysopen -u 'h[k]'` and `sysread
+// 'buf[$#buf+1]'` both work in zsh and because
+// [interp.Runner.StoreThroughOperand] resolves either — the same route
+// `exec {h[k]}<file` takes.
+//
+// What the brackets hold is not read here; it is an expression, and an
+// expression that will not evaluate is a complaint of its own rather than a
+// bad *name*. Only the shape is checked, and it is measured rather than
+// assumed — every one of these is `not an identifier` in zsh, at status 1,
+// with the parameter left alone:
+//
+//	buf[]        nothing between the brackets
+//	buf[(]       an opening parenthesis the subscript never closes
+//	buf[)]       and a closing one it never opened
+//	buf[[]       the same, one bracket in
+//	buf[a]b]     a closing bracket that is not the last character
+//	buf[1][2]    which is what a second subscript looks like from here
+//	buf[\]       an escaped bracket, so the subscript never ends
+//
+// while `buf[x[1]]`, `buf[(a)]`, `buf[a[b]c]` and `buf[ ]` are all names this
+// shell will take and then complain about — `invalid subscript range`, `bad
+// math expression` — which is the line the scan below draws. Taking the shape
+// on trust was not harmless: `sysopen -u 'h[]'` gave the store's
+// `assignment to invalid subscript range` and gave up the script, where the
+// shell calls it a bad name and runs the next command.
 func sysAssignable(name string) bool {
-	if base, _, found := strings.Cut(name, "["); found {
-		return strings.HasSuffix(name, "]") && isIdentifier(base)
+	open := strings.IndexByte(name, '[')
+	if open < 0 {
+		return isIdentifier(name)
 	}
-	return isIdentifier(name)
+	if !isIdentifier(name[:open]) {
+		return false
+	}
+	sub, closed := sysSubscriptEnd(name[open+1:])
+	return closed && sub != "" && len(sub)+1 == len(name)-open-1
+}
+
+// sysSubscriptEnd walks the text after a name's `[` to the bracket that
+// closes it, reporting what came before it and whether it was found at all.
+//
+// Brackets and parentheses nest, and a backslash takes the character after it
+// however special that character is — so `buf[x[1]]` ends at the second `]`
+// and `buf[\]` ends nowhere. A bracket or parenthesis that closes one never
+// opened ends the walk unclosed, which is how `buf[a)b]` is refused.
+func sysSubscriptEnd(text string) (sub string, closed bool) {
+	depth := 0
+	for i := 0; i < len(text); i++ {
+		switch text[i] {
+		case '\\':
+			i++
+		case '[', '(':
+			depth++
+		case ')':
+			if depth--; depth < 0 {
+				return "", false
+			}
+		case ']':
+			if depth--; depth < 0 {
+				return text[:i], true
+			}
+		}
+	}
+	return "", false
 }
 
 // sysErrnoText is the system's own sentence for a failure, without the

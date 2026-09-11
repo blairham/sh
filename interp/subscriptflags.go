@@ -605,17 +605,24 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 	}
 	elems, scalar, held := r.subscriptTarget(e)
 	if scalar && held {
-		// A search over a plain string names a *character* position, which
-		// the read side answers — see searchScalar — and this side still
-		// refuses, because the subscript it would hand on is not answered
-		// either: `s=hello; s[3]=Q` is `heQlo` in the shell with the
-		// construct and two spaces and a `Q` here — the string read as an
-		// array of one, with a third element written past it and the whole
-		// joined. Returning the index the search
-		// found would turn a refusal by name into that value, which is the
-		// one outcome worse than the refusal (#1532).
-		r.refuseSubscriptFlag(e, string(search), " for a scalar")
-		return 0, false
+		// A search over a plain string names a *character* position, and it
+		// is the same position the read side answers — see searchScalar. It
+		// used to be refused here, because the index it names was not
+		// answered on this side either: `s=hello; s[3]=Q` left two spaces
+		// and a `Q`, the string read as the array of one it otherwise is
+		// with a third element written past it and the whole joined, so
+		// handing the index on would have turned a refusal by name into that
+		// value. The write answers a subscript on a string now (#1746), so
+		// the index is handed on and the same store splices it in (#1532):
+		// measured on zsh 5.9.2, `s=hello; s[(r)l]=Q` is `heQlo` and
+		// `s[(I)l]=Q` is `helQo`, which is `${s[(r)l]}`'s position and
+		// `${s[(I)l]}`'s.
+		//
+		// Whether the write then reaches a character or an element is
+		// setArrayElem's to decide, exactly as it is for `s[3]=Q` — this
+		// side only says *which* subscript, which is what the read side says
+		// too.
+		return r.scalarSearchIndex(g, search, r.units(elems[0]), elems[0]), true
 	}
 	at, found := r.searchElements(g, search, elems)
 	base := r.arrayBase()

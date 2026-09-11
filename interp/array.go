@@ -877,6 +877,14 @@ func (r *Runner) spliceElementSpan(name, text string, elems []string, from, to i
 // and `read m[k]` arrive as a single word rather than as a parsed assignment,
 // and the word has to be split and read before anything can be stored.
 //
+// Every caller that has a name and a value and no parsed assignment comes
+// here: `read`, a registered builtin through [Runner.StoreThroughOperand] —
+// which is how `sysread 'buf[$#buf+1]'` appends to a string — and the
+// descriptor a redirection leaves behind, through setFdVar. Three callers
+// and one walk of the brackets, because a second walk is how one of them
+// would come to answer `buf[$#buf+1]` differently from the assignment
+// `buf[$#buf+1]=x`.
+//
 // It is the assignment statement's own dispatch, reached from the other side
 // and deliberately not restated: a declared table takes the text as a key, a
 // pair takes the span, and a single subscript reaches setArrayElem — which is
@@ -951,13 +959,12 @@ func (r *Runner) storeThroughOperand(name, value string) {
 // does that. Measured — `typeset -A h; h=(k v); h[a,b]=x` stores under the
 // three characters `a,b` and leaves `k` alone.
 //
-// A plain string does not either, and that one is a gap rather than a rule.
-// The range reading of a string is a span of *characters* there — measured,
-// `s=hello; s[2,3]=x` is `hxlo` and `s[2,4]=QQ` is `hQQo` — but no character
-// write exists to splice into: `s[2]=x` alone already answers ` x`, having
-// turned the string into an array, so a range would be the same missing
-// construct wearing a pair. Left to the single subscript and filed apart,
-// rather than half-guessed at from here.
+// A plain string does not either, and that is the point of asking: the range
+// reading of a string is a span of *characters* — measured, `s=hello;
+// s[2,3]=x` is `hxlo` and `s[2,4]=QQ` is `hQQo` — so the answer here is no
+// and the caller's next question, subscriptSplicesCharacters, is what sends
+// it to spliceCharacterSpan. The two together are one boundary asked from
+// both sides, and neither is a default.
 func (r *Runner) spanReplacesElements(name string) bool {
 	if _, isArray := r.Arrays[name]; isArray {
 		return true

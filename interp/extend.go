@@ -749,8 +749,16 @@ func (r *Runner) KeepDescriptorFromChildren(fd int) {
 // they resolve the name the same way: a plain identifier, an array element, an
 // association key. A builtin doing its own [Runner.SetVar] would answer the
 // first and quietly invent a variable literally named `h[k]` for the third.
+//
+// [Runner.StoreThroughOperand] and not setFdVar, because this is the
+// *builtin* side of the pair: measured, `sysopen -u 'h[1+]' -r f` is `bad
+// math expression` and ends the script, where a redirection that has already
+// opened its file has nowhere to put the number and says nothing. A
+// subscripted `-u` reaches a string's characters through it too — measured,
+// `s=abc; sysopen -u 's[2]' -r f` leaves the descriptor number spliced into
+// `s` — which is the store's rule and not this call's.
 func (r *Runner) SetDescriptorVariable(ref string, fd int) {
-	r.setFdVar(ref, strconv.Itoa(fd))
+	r.StoreThroughOperand(ref, strconv.Itoa(fd))
 }
 
 // NamedOption reads one `set -o` name's current state, for a registered

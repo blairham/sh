@@ -4490,10 +4490,17 @@ What was built, all through the extension seam — registered builtins in each
   input. A theme's receive loop reads on for the 4 and gives its worker up for
   anything else, so collapsing any two of those stops the worker on its first
   idle turn. `-o` **diverts rather than duplicates**: the bytes go to the
-  descriptor and the parameter is left unset. A subscripted destination refuses
-  by name — zsh splices characters into the string a scalar holds and this
-  shell's assignment path would make it an array (#1746), and a `buf` that
-  looks assigned is the one answer that must not be given.
+  descriptor and the parameter is left unset. A **subscripted** destination is
+  filled the way an assignment fills it — `sysread 'buf[$#buf+1]'` appends to
+  the string `buf` holds, `'h[k]'` writes the key, `'a[2]'` the element and
+  `'span[2,3]'` the span — and `-c`'s count takes a subscript of its own. It
+  was refused by name while this shell's assignment path turned a scalar into
+  an array (#1746); the path splices now and the name goes through (#1828).
+  The refusals that stay are the *shape* of the name — `buf[]`, `buf[(]`,
+  `buf[a)b]`, `buf[1][2]` and `buf[\]` are each `not an identifier` at 1 with
+  the parameter untouched — while a subscript that will not evaluate, a frozen
+  name and a subscript below the first character end the script with the
+  **shell's** wording and no `sysread:` in the location.
 
   `syswrite` writes every byte or reports why it could not, and a descriptor
   that refuses is a status with **nothing said**, which is what lets `while

@@ -3410,26 +3410,64 @@ the same way — with `b=(x "" z)` the search finds the empty element and
 the operator writes `V` there. All three sides have to agree or the same
 subscript names two different elements depending on which one wrote it.
 
-Four shapes are refused by name rather than written to a plausible wrong
+### A search on the left over a name holding a string
+
+The same group over a **scalar** names a character position, and the
+assignment writes there. The semantics still need nothing new: the search
+answers a subscript exactly as it does over an array, and
+`ScalarSubscriptIsACharacter` — which already decided that `${s[2]}` is a
+character — is what says what that subscript reaches. Measured 2026-09-10
+on zsh 5.9.2 with `s=hello`, each write paired with the read that names
+the same position:
+
+| probe | result |
+| --- | --- |
+| `s[(r)l]=Q` | `heQlo`, and `${s[(i)l]}` is 3 |
+| `s[(i)l]=Q` | `heQlo` — the two letters name one position |
+| `s[(I)l]=Q` | `helQo`, and `${s[(I)l]}` is 4 |
+| `s[(R)l]=Q` | `helQo` |
+| `s[(r)l]=QQ` | `heQQlo` — a span of one, not a position overwritten |
+| `s[(r)l]=` | `helo` |
+| `s[(r)l]+=Q` | `helQlo` — the character joined, back where it was |
+| `s[(i)zz]=Q` | `helloQ` — a forward miss is one past the last, so it appends |
+| `s[(r)zz]=Q` | `helloQ` — and so is the other forward letter's |
+| `s[(n:2:i)l]=Q` | `helQo` — the rest of the group reads as it does on the right |
+| `s=hello world; s[(r)wor]=Q` | `hello Qorld` — the operand matches a substring |
+
+A name holding *nothing* is not a string and is not searched: `s[(r)l]=Q`
+on an unset name leaves a one-element array, which is the boundary
+`spliceScalarElem` draws from the numeric side.
+
+This side refused the whole of it until the character write existed
+(#1532): the index was honest and the store it would have reached was
+not, so `s[(r)b]=Z` on `abc` would have left ` Z` — a plausible wrong
+string at status 0.
+
+Three shapes are refused rather than written to a plausible wrong
 element, and each is one the shell declines or answers some other way:
 
 - a **table**: `m[(r)v]=Z` is `attempt to set slice of associative array`
   there. The letters mean something else over keys, and the read side
   refuses them for the same reason.
-- a **scalar**: `s=abc; s[(r)b]=Z` is `aZc` there — the search names a
-  character position and the assignment replaces the character. The read
-  side answers the search now; this side still refuses, because the
-  subscript it would hand on is not answered: `s=hello; s[3]=Q` is
-  `heQlo` there and two spaces and a `Q` here, the string read as the
-  array of one it otherwise is with a third element written past it
-  (#1532). Returning the index the search found would turn a refusal by
-  name into that value.
 - `(R)` **missing**: `assignment to invalid subscript range` there.
 - `(I)` **missing**: puts the value at the *front* there — `b[(I)nomatch]=W`
   on `(x y z)` gives `W x y z` with four elements — which is neither the
   index one before the first, which is what a read answers, nor anything a
   write can name. Note that this and the row above are not the same
   answer as each other, which is why neither is guessed at.
+
+Over a **string** the last two are one answer and it is the store's, not
+a refusal by name: both letters miss to the position before the first
+character, which is the subscript `s[0]=Q` is refused for, so
+`assignment to invalid subscript range` is what comes out. That is what
+zsh says about `s=hello; s[(R)zz]=Q` too. Its `(I)` missing is not
+reproduced: `s=hello; s[(I)zz]=Q` there is `hellQhello`, and
+`s=abcdefgh; s[(I)zz]=Q` is `abcdefgQabcdefgh` — the string without its
+last character, the value, and then the whole string — which is no rule,
+and the same index written any other way is refused in that shell. An
+empty string parts the same way: `${e[(i)x]}` and `${e[(I)x]}` are both 0
+there, and 0 is refused for `e[(r)x]=Q` and written for `e[(i)x]=Q`,
+which is the same inconsistency from the other side.
 
 An **empty** group is `bad pattern` there and a parse error here — the
 lexer takes `()` for a function definition rather than a group, so the

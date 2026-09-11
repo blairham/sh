@@ -43,6 +43,27 @@ func lhsRun(t *testing.T, src string) (string, int) {
 	})
 }
 
+// lhsRunScalar is lhsRun with the one axis a search over a *string* turns on:
+// whether a subscript on a name holding one reaches a character or an
+// element. Both answers are run for every row, so a row that could not tell
+// them apart fails as a duplicate rather than passing twice.
+func lhsRunScalar(t *testing.T, character interp.Answer, src string) (string, int) {
+	t.Helper()
+	return runGrammar(t, src, lhsGrammar, func(r *interp.Runner) {
+		sem := interp.CoreSemantics()
+		sem.ArrayBaseIsZero = interp.No
+		sem.ArrayScalarIsTheWholeArray = interp.Yes
+		sem.SplitParamExpansion = interp.No
+		sem.GlobExpansionResults = interp.No
+		sem.ScalarSubscriptIsACharacter = character
+		// Only the element column reaches it, and it has to be answered or
+		// the gap a search past the end leaves has no reading: the splicing
+		// column pads nothing, which is half of what these rows show.
+		sem.ArraysAreSparse = interp.No
+		r.Semantics = &sem
+	})
+}
+
 func TestASubscriptFlagGroupOnTheLeftOfAnAssignment(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -175,9 +196,6 @@ func TestAFlagGroupReachesTheAssigningOperator(t *testing.T) {
 //
 //   - a search over a table means something else, and the shell says
 //     `attempt to set slice of associative array`;
-//   - a search over a plain string names a character position there and the
-//     assignment replaces the character, which is a construct of its own and
-//     is refused on the read side too;
 //   - `(R)` and `(I)` missing are not the same answer as each other in the
 //     shell — the first is `assignment to invalid subscript range` and the
 //     second puts the value at the front — and neither is the index one
@@ -186,7 +204,6 @@ func TestAFlagGroupReachesTheAssigningOperator(t *testing.T) {
 func TestAnUnwritableFlagGroupIsRefusedByName(t *testing.T) {
 	for _, tc := range []struct{ name, src, mentions string }{
 		{"a search over a table", `typeset -A m; m[k]=v; m[(r)v]=Z; printf "[%s]" "${m[k]}"`, "associative array"},
-		{"a search over a scalar", `s=abc; s[(r)b]=Z; printf "[%s]" "$s"`, "scalar"},
 		{"a reverse search that matched nothing", `b=(x y z); b[(R)nomatch]=Q; printf "%d" "${#b[@]}"`, "nothing matched"},
 		{"a reverse index search that matched nothing", `b=(x y z); b[(I)nomatch]=W; printf "%d" "${#b[@]}"`, "nothing matched"},
 	} {
@@ -199,6 +216,72 @@ func TestAnUnwritableFlagGroupIsRefusedByName(t *testing.T) {
 				t.Errorf("got %q, want the refusal to say the flag is not carried", out)
 			}
 		})
+	}
+}
+
+// A search on the left of `=` over a name holding a **string** names the same
+// position the read side names, and the store decides what that position is.
+//
+// Two axes meet here and neither is asked twice: the search answers a
+// *subscript*, exactly as it does over an array, and
+// ScalarSubscriptIsACharacter is what says whether a subscript on a string
+// reaches a character or an element. So the same line writes a character in
+// one column and builds an array in the other, and this side of the
+// assignment contains no third answer of its own.
+//
+// It was refused by name until the character write existed: the index was
+// honest and the store it would have reached was not, so `s[(r)b]=Z` on `abc`
+// would have left ` Z` — a plausible wrong string at status 0 (#1532).
+func TestASearchOnTheLeftOverAStringNamesTheSameThingTheReadDoes(t *testing.T) {
+	// The element column's answers are the shape the bug left behind, which
+	// is why they are asserted rather than merely differing: the string is
+	// gone, an element sits at the index the search found, and joining the
+	// elements with a space is what makes it look like a string again.
+	for _, tc := range []struct{ name, write, character, element string }{
+		{"a found match", `s[(r)l]=Q`, `[heQlo]`, `[  Q]`},
+		{"and the index spelling of the same one", `s[(i)l]=Q`, `[heQlo]`, `[  Q]`},
+		{"a reverse search, which is a different position", `s[(I)l]=Q`, `[helQo]`, `[   Q]`},
+		// A forward search that matched nothing names one past the last unit,
+		// which is an append on either reading — so what parts here is the
+		// padding and not the index.
+		{"a forward search that matched nothing", `s[(i)zz]=Q`, `[helloQ]`, `[     Q]`},
+		{"joined rather than replaced", `s[(r)l]+=Q`, `[helQlo]`, `[  Q]`},
+		// The value is not one unit wide, and the span it replaces is not
+		// either: a reading that overwrote a position would answer `[heQlo]`
+		// to the first of these.
+		{"a value wider than what it replaces", `s[(r)l]=QQ`, `[heQQlo]`, `[  QQ]`},
+		{"and one narrower", `s[(r)l]=`, `[helo]`, `[  ]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `s=hello; ` + tc.write + `; printf "[%s]" "$s"`
+			out, st := lhsRunScalar(t, interp.Yes, src)
+			if out != tc.character || st != 0 {
+				t.Errorf("character: got %q (status %d), want %q at 0", out, st, tc.character)
+			}
+			out, st = lhsRunScalar(t, interp.No, src)
+			if out != tc.element || st != 0 {
+				t.Errorf("element: got %q (status %d), want %q at 0", out, st, tc.element)
+			}
+			if tc.character == tc.element {
+				t.Errorf("%s reads the same under both answers, so it shows nothing", tc.write)
+			}
+		})
+	}
+}
+
+// A backward search that matched nothing names the position before the first
+// unit, which no write can use — the refusal above, reached over a string.
+// The character store says so in its own words rather than by name, because
+// the subscript it was handed is the one `s[0]=Q` is refused for.
+func TestABackwardSearchThatMatchedNothingOverAStringIsRefused(t *testing.T) {
+	for _, src := range []string{
+		`s=hello; s[(R)zz]=Q; printf "[%s]" "$s"`,
+		`s=hello; s[(I)zz]=Q; printf "[%s]" "$s"`,
+	} {
+		out, st := lhsRunScalar(t, interp.Yes, src)
+		if !strings.Contains(out, "bad array subscript") || strings.Contains(out, "[hello]") || st == 0 {
+			t.Errorf("%s = %q (status %d), want the subscript refused and the line given up", src, out, st)
+		}
 	}
 }
 

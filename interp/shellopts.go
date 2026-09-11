@@ -67,11 +67,17 @@ func (r *Runner) SetShellOptions(name string) {
 // `case ":$SHELLOPTS:" in *:xtrace:*)` is the question this variable answers.
 //
 // The names are this shell's own state and not a claim about anyone else's.
-// Two of the defaults differ from the shell that has the variable, and both
-// differences are already recorded in setoptions.go: `hashall` is off here
-// because nothing is hashed, and `emacs` is on because the line editor really
-// does read those keys. Reporting either one the other way round to match a
-// listing would be the lie this file exists to avoid.
+// One default differs from the shell that has the variable, and it is already
+// recorded in setoptions.go: `hashall` is off here because nothing is hashed.
+// Reporting it the other way round to match a listing would be the lie this
+// file exists to avoid.
+//
+// `emacs` was the second until #1858, and it was the wrong kind of honesty:
+// the editor does read those keys, but a *script* has no line to edit, and no
+// shell in the panel reports a keymap selected until it is interactive — the
+// one that ever selects one on its own being bash. So the name is out of this
+// value in a script now, and in it under `-i` in that dialect, which is what
+// the real shell writes.
 func (r *Runner) shellOptions() string {
 	names := r.listedOptionNames()
 	on := make([]string, 0, len(names))

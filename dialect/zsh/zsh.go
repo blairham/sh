@@ -430,6 +430,12 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.No
+	// Neither editing mode is selected on its own. Measured 2026-09-11 in a
+	// session at a real terminal: `[[ -o emacs ]]` and `[[ -o vi ]]` both
+	// answer 1 there, which is why this shell's own default for `emacs` is
+	// off and its listing says nothing about the name until a script moves
+	// one.
+	s.InteractiveSelectsEmacs = interp.No
 	// And `-B` is not brace expansion here either: measured 2026-09-11,
 	// `set -B` turns the terminal bell off and leaves `{a,b}` expanding,
 	// while `set +o braceexpand` — the borrowed spelling of `ignorebraces`

@@ -3698,24 +3698,34 @@ are none left to need it.
 
 **A known inaccuracy, inherited rather than introduced.** The table records
 zsh's default for each name, which is what the listings compare against.
-Four entries hold this shell's own state there instead — `banghist`,
-`emacs`, `hashcmds` and `interactivecomments` are all measured the other way
-round in real zsh — which silences four deviations the listing exists to
-show. #1739 moved three of the four between kinds and left the defaults
+Three entries hold this shell's own state there instead — `banghist`,
+`hashcmds` and `interactivecomments` are all measured the other way
+round in real zsh — which silences three deviations the listing exists to
+show. #1739 moved three of them between kinds and left the defaults
 exactly where it found them, because the kind and the default are different
 questions: what a name *does* when asked to move is this section, and what
 its listing compares against is this paragraph. Correcting them would make the bare `unsetopt` listing byte-identical
-to zsh's 184 lines and would move the same four lines of divergence onto the
+to zsh's 184 lines and would move the same lines of divergence onto the
 bare `setopt` listing, because the underlying fact is that this shell's
-state genuinely differs from zsh's for those four. It is a trade rather than
+state genuinely differs from zsh's for those three. It is a trade rather than
 a fix, and it is left where it was found.
+
+**`emacs` was the fourth and is not any more** (#1858). It is the one of
+the four whose default was wrong only because the *state* behind it was:
+this shell held the emacs keymap selected from the moment a Runner existed,
+so recording zsh's default of off would have shown a deviation on every
+listing. Measured on zsh 5.9.2 at a real terminal, `[[ -o emacs ]]` answers
+1 in an interactive session that has selected nothing — so nothing is
+selected here either until something selects it, the recorded default is off
+like zsh's, and the name is silent in every listing until a script moves it.
+The spurious `noemacs` row a script got for writing `setopt vi` goes with it.
 
 It is visible in three listings now rather than one, because `set -o` and
 `set +o` write from the same table (#1080) and the printed spelling is
-derived from the recorded default: those two write `banghist`, `noemacs`,
-`hashcmds` and `nointeractivecomments` where zsh writes `nobanghist`,
-`emacs`, `nohashcmds` and `interactivecomments`. Four rows of 185; the other
-181 are byte-identical to zsh 5.9.2's, in the same order.
+derived from the recorded default: those two write `banghist`, `hashcmds`
+and `nointeractivecomments` where zsh writes `nobanghist`, `nohashcmds` and
+`interactivecomments`. Three rows of 185; the other 182 are byte-identical
+to zsh 5.9.2's, in the same order.
 
 Two names are one-way. `noexec` ignores being turned back off in all four
 shells — and with it on, the command that would do so never runs anyway.
@@ -5370,12 +5380,16 @@ than missing:
   else, because this editor has no command mode — the same documented
   partial as zsh's `vicmd`.
 
-  One divergence it inherits rather than introduces: a **non-interactive**
-  bash reports both `vi` and `emacs` off, where this shell reports `emacs`
-  on in every route. That answer predates this work and is deliberate — see
-  `interp/shellopts.go`, where reporting `emacs` off to match a listing
-  while the editor really does read `^A`, `^E` and `^B` is named as the lie
-  the file exists to avoid.
+  **Nothing is selected until something selects it** (#1858). A
+  non-interactive bash reports both `vi` and `emacs` off, and so does this
+  shell now; under `-i` bash reports `emacs on` and so does this one, which
+  is `InteractiveSelectsEmacs` and the only dialect answering yes to it.
+  Reporting `emacs` on in a script had been deliberate — the editor really
+  does read `^A`, `^E` and `^B` — but it was the wrong kind of honesty: a
+  script has no line to edit, and what the mode selects is a keymap. The
+  zero value is a fourth state, "not chosen yet", because "chosen off" reads
+  differently in exactly one place: `bash -i -c 'set +o emacs; set -o'`
+  reports `emacs off` where `bash -i -c 'set -o'` reports it on.
 
 - zsh's own `print`: zsh has one — shared ksh ancestry — with its own flags
   and wording (`bad file number: 9` where ksh93 brackets the errno). Its
@@ -8726,6 +8740,30 @@ and what bash, dash and ksh93 report. False in zsh, which reports the
 capital: `-F` is the short option that means noglob there, `-f` being
 about startup files — the same split SetFTurnsOffGlobbing records, seen
 from the reading side.
+
+**`InteractiveSelectsEmacs`** — bash yes · dash no · ksh93 no · zsh no
+
+Turns the `emacs` editing mode on when the shell becomes interactive, and
+leaves both mode names off otherwise. bash alone. Measured 2026-09-11,
+without a terminal and at one:
+
+| asked | bash 5.3.15 | ksh93 | zsh 5.9.2 | dash |
+| --- | --- | --- | --- | --- |
+| `set -o` in a script | `emacs off`, `vi off` | both off | both off | both off |
+| `set -o` under `-i` | **`emacs on`** | both off | both off | both off |
+| an interactive session at a real terminal | `emacs on` | both off | `[[ -o emacs ]]` answers 1 | both off |
+
+Two things follow. The trigger is **interactivity and not a tty** — bash
+with no terminal but `-i` reports `emacs on` — so this is a question about
+*when* a mode is chosen rather than about which. And the zero value has to
+be a fourth state, "not chosen yet", because "chosen off" reads differently
+in exactly this shell: `bash -i -c 'set +o emacs; set -o'` reports `emacs
+off` where `bash -i -c 'set -o'` reports it on. bash 3.2 and bash invoked
+as `sh` agree with 5.3 throughout.
+
+Read rather than `ask`ed, as `DefaultOptionLetters` is: reporting an option
+is not the place to refuse a script over a disagreement, and a dialect that
+answers nothing gets the majority's no.
 
 **`SetFTurnsOffGlobbing`** — bash yes · dash yes · ksh93 yes · zsh no
 

@@ -1444,6 +1444,26 @@ type Semantics struct {
 	// part of it that is measured and not modeled.
 	SubshellJobTable SubshellJobTable
 
+	// InteractiveSelectsEmacs turns the `emacs` editing mode on when the
+	// shell becomes interactive, and leaves both mode names off otherwise.
+	// True in bash alone. Measured 2026-09-11, both without a terminal and
+	// at one: `bash -c 'set -o'` reports `emacs off` and `vi off`,
+	// `bash -i -c 'set -o'` reports `emacs on`, and bash 3.2 and bash
+	// invoked as `sh` agree. dash, ksh93 and zsh select neither at any point
+	// — ksh93 reports `emacs off` and `vi off` in an interactive session at
+	// a real terminal, and zsh answers 1 to both `[[ -o emacs ]]` and
+	// `[[ -o vi ]]` there.
+	//
+	// So the trigger is interactivity rather than a terminal, which is what
+	// makes it a question about *when a mode is chosen* rather than about
+	// which mode. A script that selects one is unaffected either way: this
+	// only says what an unasked shell reads.
+	//
+	// Read rather than `ask`ed, as DefaultOptionLetters is: reporting an
+	// option is not the place to refuse a script over a disagreement, and a
+	// dialect that answers nothing gets the majority's no.
+	InteractiveSelectsEmacs Answer
+
 	// SetFTurnsOffGlobbing makes `set -f` the short spelling of `set -o
 	// noglob`. True in bash, dash and ksh93. zsh spells that option the long
 	// way only: there `-f` is about startup files and leaves globbing alone,

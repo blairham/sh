@@ -817,11 +817,14 @@ func TestAliasExpansionAndPosixModeAreIndependent(t *testing.T) {
 // bool would not do: `set -o vi` turns `emacs` off in the same breath, and
 // `set +o vi` afterwards leaves *both* off rather than putting `emacs` back.
 // Turning one on is the only way back to a mode being selected.
+//
+// A shell with no line to edit has no mode selected either, which is the row
+// that changed in #1858 — a keymap is not something a script is in.
 func TestTheTwoEditingModesAreOneStateWithThreeValues(t *testing.T) {
 	// The listing is what a script reads the state through, and both names
 	// are in it, so one script line can show both answers at once.
 	for _, tc := range []struct{ name, src, want string }{
-		{"a fresh shell is in emacs mode", "", "emacs on\nvi off"},
+		{"a script is in neither mode", "", "emacs off\nvi off"},
 		{"vi turns emacs off", "set -o vi\n", "emacs off\nvi on"},
 		{"emacs turns vi off", "set -o vi\nset -o emacs\n", "emacs on\nvi off"},
 		{"turning vi off leaves neither", "set -o vi\nset +o vi\n", "emacs off\nvi off"},

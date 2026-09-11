@@ -196,6 +196,10 @@ func Semantics() interp.Semantics {
 	s.UnsplitAtListJoinsOnIFS = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
+	// Neither editing mode is selected on its own, interactive or not.
+	// Measured 2026-09-11 in a session at a real terminal: `set -o` reports
+	// `emacs off` and `vi off` there, with `viraw on` beside them.
+	s.InteractiveSelectsEmacs = interp.No
 	// And `-B` is this shell's `braceexpand` too — measured 2026-09-11,
 	// `set +B; echo {a,b}` writes `{a,b}` and `$-` loses the letter (#1856).
 	s.SetBTurnsOffBraceExpansion = interp.Yes

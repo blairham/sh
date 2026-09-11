@@ -109,9 +109,9 @@ func rangeSegmentIsAModifier(w *syntax.Word) bool {
 // turns it into four things none of which is one. Measured — every byte
 // serves as a delimiter, `/ | # , :` alike.
 func modifierSegments(first, rest *syntax.Word) []string {
-	text := first.Literal()
+	text := modifierText(first)
 	if rest != nil {
-		text += ":" + rest.Literal()
+		text += ":" + modifierText(rest)
 	}
 	var segs []string
 	for {
@@ -122,6 +122,38 @@ func modifierSegments(first, rest *syntax.Word) []string {
 		}
 		text = remainder
 	}
+}
+
+// modifierText is a modifier list as it was *written*, with the protection a
+// backslash gives put back.
+//
+// A modifier reads its own text rather than a value, and it is the only
+// operand of a `${ }` that does. Every other one is a value by the time
+// anything looks at it, so a word joined by Literal — its spans' text with
+// their delimiters taken off — is exactly right there and loses the one byte
+// that matters here: `${x:s/\//:/}` arrives as `s///`, an empty pattern,
+// which is `:s`'s spelling for "the previous substitution" and so reports
+// there has not been one (#1198).
+//
+// The backslash is not gone from the tree, only from the joined text: the
+// lexer records the protected character as a span of its own, so writing the
+// backslash back in front of it is a reconstruction rather than a guess. What
+// the escape then *means* is the modifier's, which is why this puts the byte
+// back rather than deciding anything: a `\` before the delimiter keeps the
+// field open, a `\&` in a replacement is a literal ampersand, and neither
+// question can be asked once the byte is missing.
+func modifierText(w *syntax.Word) string {
+	if w == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, s := range w.Spans {
+		if s.Kind == syntax.Literal && s.Quoting == syntax.BackslashQuoted {
+			b.WriteByte('\\')
+		}
+		b.WriteString(s.Value)
+	}
+	return b.String()
 }
 
 // scanOneModifier reads one modifier off the front of text, answering it, what

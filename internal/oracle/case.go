@@ -4316,6 +4316,11 @@ echo "st=$?"`,
 		Why:     "`:s` replaces a **literal** substring, not a pattern — measured: `${x:s/?/Z/}` on `abc` answers `abc`, and the `?` is replaced only where the value really holds one. The other three read `s/X/-/` as arithmetic and refuse it, which is why the status is the second line",
 	},
 	{
+		ID: "param/a-substring-modifier-reads-its-own-backslashes", Category: "parameter expansion",
+		Snippet: `x=a/b/c; echo "[${x:s/\//:/}]"; y=aXbXc; echo "[${y:s/X/[\&]/}][${y:s/X/[\\&]/}]"; echo "st=$?"`,
+		Why:     "a modifier reads its own text rather than a value, and it is the only operand of a `${ }` that does — so the backslash has to survive as far as the modifier. The escaped delimiter is what holds the first field open; the two ampersand fields are the pair that says the escapes and the matched text are answered in one pass, since `\\&` is the character and `\\\\&` is a backslash followed by the match. The escape was removed before the modifier saw anything here: the first field arrived empty, which is this modifier's spelling for the previous substitution, and reported there had not been one (#1198). The other three read the whole range as arithmetic and refuse it, which is why the status is the last line",
+	},
+	{
 		ID: "param/a-substring-modifier-after-an-offset-and-a-length", Category: "parameter expansion",
 		Snippet: `x=/tmp/Dir/File.Txt.gz; t=0; echo "[${x:1:5:t}]"; echo "st=$?"`,
 		Why:     "a modifier after **both** an offset and a length, which is a third shape rather than a variation of either: the tail of the five characters from offset one. The parser splits a range once, so `5:t` arrives whole — it reached the evaluator as an expression here and was an arithmetic failure over a range the shell with modifiers reads without complaint",

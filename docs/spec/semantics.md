@@ -6926,12 +6926,39 @@ after it is the other shape and names nothing. `${x:s}` is neither: a
 substitution with no body is a bad substitution, like any other
 malformed `${ }`.
 
-**Still recorded rather than reproduced.** A backslash escaping the
-delimiter inside a substitution — `${x:s/\//:/}` — does not reach the
-modifier here, because this shell's lexer removes the escape while
-reading `${ }` where that one keeps it. Quoted or unquoted alike, so it
-is not a double-quote rule. A different delimiter is the workaround and
-is what a script would ordinarily write (`${x:s|/|:|}` agrees).
+**A backslash protects the byte after it, and the escapes are the
+modifier's own.** Measured 2026-09-09 on zsh 5.9.2, quoted and unquoted
+alike:
+
+| written | value | answer |
+| --- | --- | --- |
+| `${x:s/\//:/}` | `a/b/c` | `a:b/c` — the escaped delimiter does not end the field |
+| `${x:s/\./:/}` | `a.b` | `a:b` — the backslash goes, whatever it stood before |
+| `${x:s/\\a/:/}` | `a\ab` | `a:b` — `\\` is one literal backslash |
+| `${x:s/X/[\&]/}` | `aXbXc` | `a[&]bXc` — `\&` is a literal ampersand |
+| `${x:s/X/[\\&]/}` | `aXbXc` | `a[\X]bXc` — a backslash, then the match |
+
+The last two are why the replacement keeps its escapes until it is used:
+an `&` is the matched text and `\&` is the character, so resolving the
+escapes before answering the ampersands would turn the fifth row into the
+fourth. The pattern half has no such question and is resolved as soon as
+its field is found.
+
+A modifier reads its own text rather than a value, which is what makes
+this the modifier's question at all. The escape used to be gone before
+the modifier saw anything — a lexer removes it while reading `${ }`, and
+the joined text of a word is its spans with their delimiters taken off —
+so `${x:s/\//:/}` arrived as `s///`, an empty pattern, and reported that
+there was no previous substitution (#1198). The byte was never lost from
+the tree, only from the joined text: a protected character is a span of
+its own, so the backslash is written back in front of it.
+
+**Quotes inside `${ }` are still not reproduced.** That shell reads the
+brace's text raw, so a quote there is an ordinary character:
+`${x:s/'.'/:/}` replaces a three-character `'.'` and leaves a plain `.`
+alone. This one's lexer removes the quotes, so the same modifier replaces
+the `.`. A backslash is enough to write any of these, and is what a
+script would ordinarily use.
 
 ### What "operand expected" means — two failures, not one
 

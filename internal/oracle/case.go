@@ -12779,6 +12779,32 @@ echo after`,
 			"implemented, being a shape no script writes (#1350)",
 	},
 	{
+		ID: "glob/an-empty-component-is-a-separator", Category: "expansion",
+		Snippet: `mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" cx//*; echo; printf "[%s]" cx///*; echo`,
+		Why: "two adjacent slashes leave an empty component, and all six " +
+			"columns write it back: `cx//*` is `[cx//ax][cx//dx]` and three " +
+			"slashes come back as three. This walk dropped it and answered " +
+			"`cx/ax` — the last spelling a pattern carries that it still " +
+			"normalized away, after #1350 put the trailing run back and #1480 " +
+			"stopped the walk cleaning a `.` component (#1511). The wrong " +
+			"answer names the same file, so only a row comparing the two " +
+			"spellings can see it",
+	},
+	{
+		ID: "glob/an-empty-component-behind-a-matched-one", Category: "semantics axes",
+		Snippet: `mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" *//ax; echo`,
+		Why: "the same empty component with a *pattern* in front of it instead " +
+			"of a literal, which is where bash parts company: dash, ksh93 and " +
+			"zsh answer `[cx//ax][sym//ax]` and bash 5.3, bash-as-sh and bash " +
+			"3.2 collapse the run to `[cx/ax][sym/ax]`. So bash keeps the " +
+			"literal text ahead of the first pattern component — it answers " +
+			"`cx//ax` for `cx//*` with everyone else — and rebuilds what it " +
+			"walked. That is the mid-pattern half of the split #1350 recorded " +
+			"at the end of the word, and it is resolved the same way: the run " +
+			"is reproduced in every dialect here, bash's collapse recorded and " +
+			"not implemented",
+	},
+	{
 		ID: "glob/a-leading-dot-component", Category: "expansion",
 		Script:  true,
 		Snippet: "mkdir -p g/cx/dx && cd g && : > ax && mkdir ax_dir && : > cx/ax && : > cx/dx/ax && printf \"[%s]\" ./* && echo && printf \"[%s]\" ./cx/* && echo",

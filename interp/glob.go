@@ -460,10 +460,44 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	var selfDirs map[string]bool
 	crossed := false
 
+	// An empty component — two adjacent slashes — is a separator the pattern
+	// wrote and every column writes back: `cx//*` is `cx//ax` in all six, and
+	// `cx///*` is `cx///ax`. It used to be dropped, so the match came back
+	// with one slash where the pattern had two (#1511).
+	//
+	// It is **held** rather than applied, and that is what keeps the trailing
+	// run out of it. The slashes a pattern ends with are already written back
+	// by `trail`, and the empty component the trailing slash leaves is also
+	// what puts the real last component under `i < len(parts)-1` and keeps
+	// only directories — so applying every empty component where it stands
+	// would put a second slash on the end of `*/`. Flushing only when a
+	// *real* component follows makes the distinction without a second test:
+	// nothing follows a trailing run, so nothing flushes it.
+	//
+	// n held components mean n+1 slashes between the two real ones, and the
+	// join supplies one of them — except against a directory already ending
+	// in a separator, the root, where it supplies none.
+	held := 0
+	flush := func() {
+		if held == 0 {
+			return
+		}
+		for j, dir := range dirs {
+			n := held
+			if !strings.HasSuffix(dir, "/") {
+				n++
+			}
+			dirs[j] = dir + strings.Repeat("/", n)
+		}
+		held = 0
+	}
+
 	for i, part := range parts {
 		if part == "" {
+			held++
 			continue
 		}
+		flush()
 		var next []string
 		// The two questions a `**` component raises, and they are separate:
 		// whether it crosses levels at all, and whether it still does with

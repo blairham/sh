@@ -306,17 +306,21 @@ func TestTheReadingMarkOutlastsTheLineThatIsStillRunning(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The mark the test used to wait on, taken first so that this one is the
-	// one with every chance of having waited. It has not: the redraw of the
-	// typed line is already in the buffer.
-	waitFor(t, out, "$ ", "a prompt, which is not the mark")
-	if drawn := time.Since(start); drawn >= runs {
-		t.Errorf("a prompt took %v to arrive, so this no longer separates the two marks", drawn)
-	}
-
 	waitUntilReading(t, out, control)
 	if waited := time.Since(start); waited < runs {
 		t.Errorf("the shell was reading again after %v, before the line it was running could have finished at %v", waited, runs)
+	}
+
+	// And the prompt could not have said so: by the time the shell was
+	// reading again it had been written more than once, so the wait that was
+	// here before had already been answered — by a draw, not by this moment.
+	// Counted off the bytes rather than sought, because seeking would move
+	// the cursor and a second wait for the prompt does find the right one.
+	// That is exactly why this was hard to see: the hole only opens where
+	// the prompt is waited for once.
+	drawn, _, _ := strings.Cut(out.String(), "\x1b[H\x1b[2J")
+	if n := strings.Count(drawn, "$ "); n < 2 {
+		t.Errorf("the prompt was written %d time(s) before the shell was reading again, so this no longer holds the two marks apart", n)
 	}
 
 	if _, err := control.WriteString("\x04"); err != nil {

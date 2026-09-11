@@ -659,6 +659,68 @@ arithmetic reading measures the three-character element it landed on —
 and a **width** where it named one value, so `${#s[2,4]}` on `hello` is
 3.
 
+**A whole-array subscript on a name that holds one string is that
+string**, which is the one row of this where the panel splits. Measured
+2026-09-10:
+
+    ${#a[@]} on      a=""   b=x   h="a b"
+    bash 5.3.15      1      1     1
+    bash as `sh`     1      1     1
+    bash 3.2.57      1      1     1
+    ksh93            1      1     1
+    dash             bad substitution
+    zsh 5.9.2        0      1     3
+
+The three-character row is what fixes the reading: an empty scalar
+answering 0 on its own would only say "no elements", and `a b` answering
+3 says the subscript reached the *value*. `${a+S}` says the name is set
+in both columns, so this is about how a scalar is seen as a list rather
+than about whether it exists. It is the `WholeSubscriptOnAScalarMeasuresIt`
+axis, asked of the **length alone** — everything else is unanimous, and
+`set -- "${h[@]}"` leaves one parameter holding `a b` in every column.
+
+### `${#…}` over an operator counts what the operator left
+
+The length is taken over what the operator leaves, and which measurement
+it is follows the shape of what was left: a **count** where the operand
+was a list and a **width** where it was one string. Only zsh builds this
+node — the other four call the pairing a bad substitution — and measured
+there on 2026-09-10 with `a=(one two three)`, `b=(two four)`,
+`s="one two three"` and `typeset -A m=(k1 v1 k2 v2)`:
+
+    ${#a}            3    the control: no operator
+    ${#a:#one}       2    the filter drops one element
+    ${#a:#*}         0    one that drops every element is zero, not one
+    ${#a:/one/X}     3    the replacement keeps them all
+    ${#a[@]:/one/X}  3    and so does the subscripted spelling
+    ${#a[*]:#one}    2
+    ${#a[1,3]:#one}  2
+    ${#a:|b}         2    the difference of two lists
+    ${#a#o}          3    a per-element trim is still three elements
+    ${#a%%e}         3
+    ${#a//e/E}       3
+    ${#a:-zz}        3    the test did not fire, so this is the array
+    ${#m:#v1}        1    an association counts what the filter left of
+    ${#m#v}          2    its values, and a trim leaves all of them
+    ${#@:#q}         2    the positional parameters are a list like any
+    ${#@#p}          3    other — and an element the trim emptied still
+                          counts, where a command line would drop it
+
+against 13 for every array row but the first, which is the width of
+`one two three`: the value joined rather than the list the operator
+left.
+
+The rows that stay a width are the other half of the rule:
+
+    ${#a[1]#o}        2    a subscript naming one element is one string
+    ${#s:#one}       13    and so is a scalar
+    unset u; ${#u:-$a}   13
+    s=""; ${#s:-$a}      13
+
+The last two are why the **name** decides and not what the expansion came
+to: a substituted word holding a whole array is still measured as text.
+See #1651.
+
 One measured curiosity is recorded and not reproduced: `"${@[0]}"` is
 *zero* fields in zsh where `"${@[9]}"`, `"${a[0]}"` and `"${*[0]}"` are
 all one empty field. It is the only subscript that behaves that way and

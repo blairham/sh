@@ -1644,6 +1644,12 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	if e.Length && e.Op != syntax.ParamNone {
 		inner := *e
 		inner.Length = false
+		if n, counted := r.operatorResultCount(&inner); counted {
+			if r.unspecified {
+				return ""
+			}
+			return itoa(n)
+		}
 		n := r.stringLength(r.expandParam(&inner))
 		if r.unspecified {
 			// The same guard the plain length keeps: an unanswered axis
@@ -1727,7 +1733,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 				// elements and the same one `[0]` does when it names
 				// characters: measured, `${#a[1,2]}` on `(aa bb cc)` is 2
 				// and `${#s[2,4]}` on `hello` is 3.
-				if r.subscriptYieldsAList(e) {
+				if r.subscriptYieldsAList(e) && !r.wholeSubscriptMeasuresAScalar(e) {
 					return itoa(len(elems))
 				}
 				return itoa(r.stringLength(strings.Join(elems, "")))

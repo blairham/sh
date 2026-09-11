@@ -7724,6 +7724,16 @@ echo "st=$?"`,
 		Why:     "the element being absent is what the test is about, so an out-of-range subscript has to be distinguishable from one holding a value — and an element holding the empty string is set, which is the case `:-` and `-` disagree about",
 	},
 	{
+		ID: "param/length-over-an-operator-counts-what-it-left", Category: "parameter expansion",
+		Snippet: `a=(one two three); typeset -A m=(k1 v1); set -- p q r; printf "[%s]" "${#a:#one}" "${#a#o}" "${#a[@]:/one/X}" "${#a[1]#o}" "${#m#v}" "${#@#p}"; echo`,
+		Why:     "`${#…}` over an operator measures what the operator *leaves*, and which measurement it is follows the shape of what was left: a count where the operand was a list and a width where it was one string. Six brackets because each separates a reading the others cannot — a filter that drops an element, a trim that keeps them all, the subscripted spelling of the same array, a subscript naming *one* element (the control that must stay a width, 2 and not 1), an association counting what is left of its values, and the positional parameters, whose first is emptied by the trim and still counts where a command line would have dropped the field. Measuring the joined value instead answered 13 for the array rows — a plausible number at status 0, and the wrong one for `(( ${#list:#$x} ))`, which is how a script asks whether a name is in a list (#1651). Only one shell builds this node; the rest call the pairing a bad substitution, which is the three-way split of an expansion a grammar cannot read",
+	},
+	{
+		ID: "param/whole-subscript-on-a-scalar", Category: "parameter expansion",
+		Snippet: `e=""; b=x; h="a b"; printf "[%s]" "${#e[@]}" "${#b[@]}" "${#h[@]}" "${#h}" "${e+S}"; echo`,
+		Why:     "`${#s[@]}` on a name holding one string: zsh measures the string, every other shell with the construct counts a list of one, and dash refuses it. The three-character value is what fixes the reading — an empty scalar answering 0 alone would only say \"no elements\", and `a b` answering 3 says the whole-array subscript reached the *value*. `${#h}` beside it is the control that says the width is not new, and `${e+S}` says the name is set in every column, so the split is about how a scalar is seen as a list and not about whether it exists. It is how a script asks \"did I get anything?\" after a parse: `(( ${#opts[@]} ))` reads 1 for a name that never became an array, a count agreeing with the wrong answer (#1553)",
+	},
+	{
 		ID: "param/array-slice", Category: "parameter expansion",
 		Snippet: `a=(p q r s); printf "[%s]" "${a[@]:1}" "${a[@]:1:2}" "${a[@]: -2}"`,
 		Why:     "a slice of the list rather than a substring of its elements joined together. Unanimous in the three that have arrays, including that the offset counts from 0 in zsh, whose *subscripts* count from 1 — so the slice does not inherit the base axis that `${a[1]}` does",

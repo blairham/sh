@@ -864,6 +864,20 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	for name, was := range sc.savedAttrs {
 		r.restoreAttributes(name, was)
 	}
+	// And what a produced parameter was last assigned, which goes both ways
+	// for the reason the frozen attribute does: the outer name answers from
+	// whatever message it had left for its producer, and one this call left
+	// goes away with the call. See scope.savedAssigned.
+	for name, spoken := range sc.assignedSpoken {
+		if spoken {
+			if r.assigned == nil {
+				r.assigned = map[string]string{}
+			}
+			r.assigned[name] = sc.savedAssigned[name]
+		} else {
+			delete(r.assigned, name)
+		}
+	}
 	// And the export attribute, where the dialect took it off for the local:
 	// the outer name goes back to whatever the shell had recorded about it,
 	// including having recorded nothing.

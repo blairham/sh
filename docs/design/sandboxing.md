@@ -538,6 +538,57 @@ other than Darwin and Linux have no walk: `openat` and `readlinkat` are
 not exported portably, and reaching them by number on a platform nobody
 is measuring is exactly the guess this page does not make.
 
+### A deny covers the other spellings, because the volume does
+
+The paragraph above scopes out "an object with a second name a rule
+allows", and for a hard link somebody made that scope is right: both
+names are real, somebody created the second one, and a rule about names
+cannot say otherwise.
+
+One kind of second name is not like that, and it cost a real escape
+(#2044). A case-insensitive volume gives **every** file a second name,
+and a third, without anybody making one. On macOS's default volumes —
+and on Windows, and on a case-insensitive mount anywhere — `/proj/.env`
+and `/proj/.ENV` are one file. So the shape an agent sandbox is actually
+given,
+
+    allow read  /proj/**
+    deny  read  /proj/.env
+
+handed the credential to `read -r x < /proj/.ENV` and then let the file
+be overwritten through the same door. The respelling missed the deny and
+landed on the allow beside it. Under a bare `default deny` it would have
+been refused, which is why the sweep did not see it for so long: every
+route it had aimed *outside* an allowed workspace, and this only bites
+where a deny is carved out of an allow.
+
+**A deny therefore matches with case folded, and an allow does not.**
+Evaluation is deny-overrides, and that asymmetry is the whole argument.
+Widening a deny can only refuse more, which is the fail-closed direction.
+Widening an allow would *grant* `/srv/DATA` to a policy that wrote
+`/srv/data`, and on a case-sensitive volume those are two different
+files — so the allow side stays exact and nothing is ever permitted by
+this that was not permitted before.
+
+The price is over-refusal on a case-sensitive volume: `deny read
+/p/.env` also refuses a genuinely distinct `/p/.ENV`. That is stated
+rather than hidden. It is a refusal the script can see, it is the safe
+direction of a boundary, and a policy is the one file where preferring it
+is right.
+
+It is **not** conditional on the platform, though the alias table beside
+it is. Case-insensitivity belongs to a *volume*: a case-sensitive APFS
+volume is a supported macOS arrangement and a case-insensitive mount
+under Linux is an ordinary one, so a rule that read one way per operating
+system would be wrong on both — and would make one policy file mean two
+things with nothing in the file to say so.
+
+`make sandbox` grades this directly, under `spelling/`. On a
+case-sensitive volume those rows report **inert** rather than contained,
+because the ungated run cannot reach the second name either: the
+instrument declines to credit the gate with stopping what the filesystem
+was never going to do.
+
 ### The shell's own scaffolding is recorded, never refused
 
 A process substitution runs a command with one end of a pipe and expands
@@ -1325,6 +1376,14 @@ not knowable from here.
   gains a selector when that exists, not before. A format that accepted
   `allow net` today would be accepting a rule nothing consults, which is
   the exact failure mode `docs/design.md` warns about.
+- **Composition, as opposed to case.** Two spellings that differ by
+  Unicode composition rather than by case — a name stored `café` and
+  reached as `café` — are one file on the same volumes that
+  conflate case, and a deny naming the first does not cover the second.
+  The fold above does not reach it: deciding that those are the same
+  character needs decomposition data, and `cmd/sh` has no non-stdlib
+  runtime dependency at all. It is a live escape, it is #2045 with three
+  costed ways out, and it is named here rather than half-closed.
 - **Resource limits.** `umask` and the resource limits are already hooks
   that a binary fills in, and `docs/design.md` explains why they are
   outside the boundary: they name no path and perform no access.

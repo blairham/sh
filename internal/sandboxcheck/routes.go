@@ -55,6 +55,9 @@ func (rt Route) script(f Fixture) string {
 		"{{sock}}", f.Sock,
 		"{{outside}}", f.Root,
 		"{{ws}}", f.Ws,
+		"{{carved}}", f.Carved,
+		"{{carvedupper}}", f.CarvedUpper,
+		"{{carveddirupper}}", f.CarvedDirUpper,
 	)
 	return rep.Replace(rt.Script)
 }
@@ -87,7 +90,7 @@ func Routes() []Route {
 // built for, and they are here because a fix elsewhere that broke one of them
 // should be loud.
 func coreRoutes() []Route {
-	return []Route{{
+	return append([]Route{{
 		Name:   "write/redirect",
 		Script: `echo x > {{target}}`,
 		Did:    made,
@@ -183,7 +186,76 @@ func coreRoutes() []Route {
 		Script: `kill -0 $$ && echo SIGNALED`,
 		Did:    func(_ Fixture, o Outcome) bool { return o.Says("SIGNALED") },
 		Why:    "the one action with no path, which no path rule can refuse",
+	}}, spellingRoutes()...)
+}
+
+// spellingRoutes are the same file under the other names its volume answers
+// to — #2044.
+//
+// These are the only routes here that aim *inside* the workspace, and they
+// are the reason Fixture.Carved exists. A rule matches a name; a filesystem
+// may hold one object under a whole class of names, and on macOS's default
+// volumes — and on Windows, and on a case-insensitive mount anywhere —
+// `.env` and `.ENV` are one file. A deny covering one spelling covered the
+// object only by luck, and the measured consequence was a policy of exactly
+// the shape below handing over a live credential and then overwriting it.
+//
+// # Why these grade INERT on a case-sensitive volume, and why that is right
+//
+// The ungated run has to reach the file for the row to mean anything. Where
+// the volume is case-sensitive there is no second name — `SECRET.TXT` is not
+// there at all — so the ungated read finds nothing, and verdictOf calls that
+// inert rather than contained. That is the instrument declining to credit a
+// gate with stopping something the filesystem was never going to do, which is
+// the rule the whole table is shaped around, and it means one sweep reads
+// honestly on both platforms without either being told which it is.
+//
+// # What is deliberately not here
+//
+// The composition half — a name stored `caf\u00e9` and reached as
+// `cafe\u0301`. It is a live escape, it is #2045, and a route for it would
+// turn `make sandbox` red on `main` while the sweep gates CI. It is filed
+// rather than staged.
+func spellingRoutes() []Route {
+	return []Route{{
+		Name:   "spelling/read-upper-leaf",
+		Script: `read -r x < {{carvedupper}} && echo "$x"`,
+		Did:    leaked,
+		Why:    "the denied file under a respelled leaf, which is the same file",
+	}, {
+		Name:   "spelling/read-upper-dir",
+		Script: `read -r x < {{carveddirupper}} && echo "$x"`,
+		Did:    leaked,
+		Why:    "a respelled *directory* component, because a rule is about a path",
+	}, {
+		Name:   "spelling/write-upper-leaf",
+		Script: `echo overwritten > {{carvedupper}}`,
+		Did:    overwritten,
+		Why:    "the damaging half: a denied file rewritten through its other name",
+	}, {
+		Name:   "spelling/truncate-upper-leaf",
+		Script: `: > {{carvedupper}}`,
+		Did:    overwritten,
+		Why:    "O_TRUNC empties as part of the open, so a late refusal is too late",
 	}}
+}
+
+// overwritten reports that the carved-out file no longer holds what the
+// fixture put in it, which is how a write route against it says it worked.
+//
+// Read back from the file rather than from the script's output, because a
+// write route that was refused can still exit zero — the redirection fails,
+// the builtin never runs, and a verdict taken from the exit status would
+// call that containment. The filesystem is the only witness that cannot be
+// talked out of it.
+func overwritten(f Fixture, _ Outcome) bool {
+	b, err := os.ReadFile(f.Carved)
+	if err != nil {
+		// Unreadable is not "unchanged": a route that removed or replaced
+		// the file got past the gate just as surely as one that rewrote it.
+		return true
+	}
+	return !strings.Contains(string(b), SecretMark)
 }
 
 // moduleRoutes are the builtins that reach the filesystem past the language.

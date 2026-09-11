@@ -5,6 +5,7 @@ package interp_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"syscall"
@@ -51,7 +52,22 @@ func nonblockingOpener(t *testing.T) func(*Runner) {
 			// look is at a name that has been taken away, which it reads as
 			// "nobody opened it" — so the substituted command never runs.
 			time.Sleep(20 * time.Millisecond)
-			fd, err := syscall.Open(args[0], syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
+			// Retried on EINTR, which is the whole difference between the
+			// raw syscall and os.OpenFile: Go preempts goroutines with a
+			// signal, so any raw syscall in a Go program can come back
+			// interrupted, and a loaded runner is when it does. The
+			// interrupted open made `main` red on macOS and exercised
+			// nothing this case is about (#1909). os.OpenFile is not the
+			// fix here — the flag has to be on at open time and off
+			// afterwards, which is the whole of what this helper is for.
+			var fd int
+			var err error
+			for {
+				fd, err = syscall.Open(args[0], syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
+				if !errors.Is(err, syscall.EINTR) {
+					break
+				}
+			}
 			if err != nil {
 				t.Errorf("nbopen %s: %v", args[0], err)
 				return 1

@@ -2324,6 +2324,16 @@ func (r *Runner) shadow(name string) (fresh bool) {
 		}
 		sc.savedAttrs[name] = r.captureAttributes(name)
 		r.dropNameAttributes(name)
+		// And what a produced parameter was last assigned, which is a store
+		// of its own: a declaration that shadowed Vars alone left the message
+		// to the producer standing, so the local's value went on being read
+		// after the call had returned. See scope.savedAssigned.
+		if sc.assignedSpoken == nil {
+			sc.savedAssigned = map[string]string{}
+			sc.assignedSpoken = map[string]bool{}
+		}
+		sc.savedAssigned[name], sc.assignedSpoken[name] = r.assigned[name]
+		delete(r.assigned, name)
 	}
 	// Arrays live in a table of their own, so a name has to be saved from
 	// both. Saving only the scalar left `f() { local a; a=(x y); }` writing a

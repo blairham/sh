@@ -984,6 +984,21 @@ type Runner struct {
 	// question three of the six columns do not ask. Each dialect turns it on
 	// in Apply where its shell does.
 	tracksWindowSize bool
+	// windowTerminal is the terminal this shell found, remembered so that a
+	// read after the script has redirected itself still has one to ask. See
+	// Runner.terminalSize, where the measurement that says to remember it is.
+	windowTerminal *os.File
+	// windowRows and windowCols are how big that terminal was when $LINES and
+	// $COLUMNS last answered, and windowSettled says the pair has been read at
+	// least once. Together they are the memory the rule needs: a window that
+	// *changed* supersedes what a script assigned, and "changed" cannot be
+	// asked without a number to compare against. See windowSizeValue.
+	windowRows, windowCols int
+	windowSettled          bool
+	// providesWindowSize says this shell has $COLUMNS and $LINES as
+	// parameters of its own rather than as variables something assigns. See
+	// ProvideWindowSize, and Runner.TracksWindowSize for the other reading.
+	providesWindowSize bool
 	// autoCd is permission to read a bare directory name as a `cd`. bash
 	// spells it `autocd` and zsh spells it `autocd` too — the same name in
 	// two option namespaces, which is exactly why the behavior cannot live in
@@ -3727,6 +3742,21 @@ type scope struct {
 	// call. Absent means this scope never shadowed the name; a zero value
 	// means it shadowed one that carried nothing. See localattributes.go.
 	savedAttrs map[string]nameAttributes
+	// savedAssigned is what a *produced* parameter was last assigned when the
+	// declaration displaced it, and assignedSpoken is whether it had been
+	// assigned at all — the same tri-state savedExported keeps, and for the
+	// same reason: "nothing was ever assigned" is a state, and a single map
+	// could not tell it from "assigned the empty string".
+	//
+	// A produced parameter's assignment does not live in Vars, so shadowing
+	// Vars alone shadowed nothing. `f() { local -i SECONDS=1024; }; f` left
+	// SECONDS reading 1024 for the rest of the session, where zsh 5.9.2 has
+	// it counting from the call again — and powerlevel10k measures its prompt
+	// inside exactly that shape, `local -i COLUMNS=1024`, so the width it
+	// forced for the measurement escaped into the session and every prompt
+	// afterwards was drawn 1024 columns wide (#2107).
+	savedAssigned  map[string]string
+	assignedSpoken map[string]bool
 	// savedExported and exportedSpoken are the export attribute a shadowed
 	// name had, for the dialects where a local does not inherit it. Taking
 	// the attribute off is a change to the runner's record and has to be put

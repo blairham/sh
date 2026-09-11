@@ -48,20 +48,38 @@ func TestAutoCdMovesTheShellInSilence(t *testing.T) {
 	}
 }
 
-// This shell keeps $LINES and $COLUMNS abreast of the window with no option
-// name for it at all, so the assertion is on the state a fresh runner starts
-// in — there is nothing a script could run to turn it on or off.
+// This shell keeps $LINES and $COLUMNS as parameters of its own, which is a
+// stronger claim than bash's `checkwinsize` and is asserted as behavior rather
+// than as a bit.
 //
-// Measured 2026-09-08 through a pseudo-terminal against zsh 5.9.2 started
-// `-f`: `COLUMNS=80 LINES=24` at the first prompt on an 80x24 terminal, and
-// `132`/`40` at the next prompt after a resize.
-func TestThisShellTracksTheWindowSizeWithNoNameForIt(t *testing.T) {
-	r := preset.Runner(dialecttest.Base{Dir: t.TempDir()})
-	if !r.TracksWindowSize() {
-		t.Error("a fresh zsh does not track the window size, but real zsh assigns both variables unasked")
+// The bit is what this test used to read, and a bit cannot tell the two
+// readings apart. bash has the pair only when it is *interactive* and leaves
+// both unset otherwise; here they are the shell's own — present under plain
+// `-c` with no prompt anywhere, `0` rather than unset where there is no
+// terminal to ask, and typed. Measured 2026-09-11 against zsh 5.9.2, each line
+// under `-f -c` on a pipe:
+//
+//	${COLUMNS-UNSET}   0                 and `UNSET` in the other five columns
+//	${(t)COLUMNS}      integer-special
+//	COLUMNS="3+4"      7                 an expression, because of the type
+//
+// The terminal half — the numbers a real window gives, and a window that
+// changes under a running script — needs a pseudo-terminal and is measured in
+// interp, where the parameter is produced. See TestWindowSizeFollowsTheTerminal.
+func TestThisShellHasTheWindowSizeAsParametersOfItsOwn(t *testing.T) {
+	out, st, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir()},
+		`print -r -- "[${COLUMNS-UNSET}][${LINES-UNSET}][${(t)COLUMNS}][${(t)LINES}]"; `+
+			`COLUMNS="3+4"; print -r -- "[$COLUMNS]"`)
+	if err != nil {
+		t.Fatal(err)
 	}
-	// And no name in the option namespace reaches it, which is what makes the
-	// default the whole of the answer.
+	const want = "[0][0][integer-special][integer-special]\n[7]\n"
+	if out != want || st != 0 {
+		t.Errorf("out %q status %d, want %q status 0 — a shell with no window still has both names", out, st, want)
+	}
+	// And no name in the option namespace reaches it, which is what makes
+	// this the whole of the answer: there is nothing a script could set.
+	r := preset.Runner(dialecttest.Base{Dir: t.TempDir()})
 	for _, name := range []string{"checkwinsize", "check_window_size"} {
 		if _, known := r.DialectOption(name); known {
 			t.Errorf("%s is a name in this shell's namespace; real zsh has none for this", name)

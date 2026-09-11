@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -176,17 +177,73 @@ func Cases() []Case {
 // disappearing.
 func RunProgram(s Subject, program string) (time.Duration, string, error) {
 	argv := append(append([]string{}, s.CommandArgs...), program)
-	cmd := exec.Command(s.Path, argv...)
-	cmd.Env = bareEnv(s.Env)
 	var out, errOut bytes.Buffer
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, &out, &errOut
-	start := time.Now()
-	err := cmd.Run()
-	took := time.Since(start)
+	var took time.Duration
+	err := retryingTextFileBusy(func() error {
+		out.Reset()
+		errOut.Reset()
+		cmd := exec.Command(s.Path, argv...)
+		cmd.Env = bareEnv(s.Env)
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, &out, &errOut
+		start := time.Now()
+		err := cmd.Run()
+		took = time.Since(start)
+		return err
+	})
 	if err != nil {
 		return took, out.String(), fmt.Errorf("%w (stderr %q)", err, strings.TrimSpace(errOut.String()))
 	}
 	return took, out.String(), nil
+}
+
+// How long an exec refused with ETXTBSY is waited out before the refusal is
+// taken at its word.
+//
+// The window it is waiting for is one child's fork to its exec, which is
+// microseconds of work on a machine with room and milliseconds on one without,
+// so the pause is the generous end of that and the bound is short enough that
+// a real refusal is a failure rather than a hang. A second of patience against
+// a gate run that is minutes long.
+const (
+	textFileBusyAttempts = 8
+	textFileBusyPause    = 125 * time.Millisecond
+)
+
+// retryingTextFileBusy runs the command again while the kernel refuses to exec
+// its file because something still has it open for writing.
+//
+// This package writes an executable and hands its path to something that execs
+// it — slowWrapper does — and `os.WriteFile` closes its own descriptor before
+// it returns, so the race is not with itself. It is golang/go#22315: Go opens
+// files `O_CLOEXEC`, so a child forked anywhere else in the process loses the
+// descriptor *at its exec*, but it holds it, open for writing, for the whole
+// window between its fork and that exec. This package forks constantly, by
+// design and in parallel, so the window is open all the time and an exec of
+// the same file inside it is ETXTBSY. It failed `main` that way, and the merge
+// queue's runs are the ones under the most concurrent load.
+//
+// Bounded, and the error is returned rather than swallowed: a refusal that
+// survives every attempt is a real one and has to fail the gate, because a
+// subject that will not run is the fastest subject in any table — the failure
+// this package exists to refuse, and which it has already been caught making
+// three times (docs/design/startup.md).
+//
+// Retrying here rather than in the caller because the fault is in the exec and
+// not in what any one caller is doing with it: every timed run in this package
+// starts a process from a path, and the one that hit this is not the only one
+// that could. Nothing about a time is spoiled by it — an attempt that never
+// ran the program contributes no sample, and the clock is started again for
+// the attempt that does.
+//
+// Linux enforces the rule; macOS was measured not to, which is why only the
+// ubuntu job ever saw the failure and why the tests for this skip elsewhere.
+func retryingTextFileBusy(run func() error) error {
+	err := run()
+	for attempt := 1; attempt < textFileBusyAttempts && errors.Is(err, syscall.ETXTBSY); attempt++ {
+		time.Sleep(textFileBusyPause)
+		err = run()
+	}
+	return err
 }
 
 // Result is what one subject measured on one case.

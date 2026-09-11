@@ -217,10 +217,11 @@ default present 99.0 1
 //
 //	typeset -a precmd_functions=( f1 )
 //
-// where zsh writes "typeset -g -a precmd_functions=( f1 )". Our "typeset -p"
-// does not write the -g for a global, which is a gap in the builtin and is
-// filed as such; asserting our own spelling here keeps the row exact rather
-// than approximate.
+// where zsh writes "typeset -g -a precmd_functions=( f1 )". zsh adds the -g
+// when the listing is made from inside a function, so that what it writes
+// would recreate a global rather than declare a local shadowing it; ours
+// never does, which is #2041. Asserting our own spelling here keeps the row
+// exact rather than approximate, and the row will say so when #2041 lands.
 //
 // The rest is the function, and the sharp corners are: a name already in the
 // array is not added twice, -d removes by exact name where -D takes a
@@ -316,7 +317,7 @@ all-hooks ok
 // gray/grey pair that maps one way only, the "fg-" and "bg-" spellings, the
 // reverse direction from code back to name, and the fourteen attributes are
 // each a thing a loop can get right for seven entries and wrong for the
-// eighth.
+// eighth. All 231 lines came back identical to zsh 5.9.2.
 //
 // Two rows are not about the values. "typeset -p fg" writes the name and not
 // eleven escape sequences, which is the hiding attribute; and "color[zzz]=9"

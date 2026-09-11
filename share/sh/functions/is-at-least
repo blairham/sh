@@ -28,7 +28,7 @@
 # release spelling from 2.6-17 to 6.0, with the `-beta3`, `-zefram1` and
 # `-dev-1` suffixes that appear in the wild — answer identically here and in
 # zsh 5.9.2.  A segment that mixes digits and letters (`1a`, `x2`) is where
-# the two part company, and the shell being copied is not self-consistent
+# the two part company, and the shell being measured is not self-consistent
 # there: measured, `abc` is at once no greater than `0` and greater than `1a`,
 # which is not an ordering to reproduce.
 

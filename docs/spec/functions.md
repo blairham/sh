@@ -29,6 +29,11 @@ list forbids:
 Where the two disagree the binary wins, and each such case is called out
 below, because a script in the wild was written against the binary.
 
+Nothing here is a transcription. Each function is written from the
+description of what it does plus a table of inputs and answers, and the
+tables are in this file so that the next person can check the implementation
+against the *behaviour* rather than against anyone's code.
+
 Measured against **zsh 5.9.2** (Homebrew) on macOS, 2026-09-11, every probe
 under `env -i HOME=… zsh -f`, so no startup file is speaking.
 
@@ -98,8 +103,10 @@ array. Measured:
 
 Three divergences, all of them the *shell* rather than the function:
 
-* `-L` writes `typeset -a` where zsh writes `typeset -g -a`, because that
-  is what this shell's `typeset -p` writes for a global array.
+* `-L` writes `typeset -a` where zsh writes `typeset -g -a`. zsh adds the
+  `-g` when the listing is made from *inside a function*, so that what it
+  writes would recreate a global rather than declare a local; ours never
+  does. **#2041.**
 * the line number in `bad option` is the line `getopts` stands on in *this*
   file, which is not the line it stands on in theirs.
 * `-L` with no hook lists in the order the hooks are named above. zsh lists
@@ -148,7 +155,7 @@ One difference remains, and it is this shell's rather than this file's:
 `${(t)fg}` answers `association-hide` here where zsh answers
 `association-hideval`. `dialect/zsh/parameters.go` records why `hideval` is
 not written — and now has a measurement that says `typeset -H` should write
-it and `hide` belongs to `-h`.
+it and `hide` belongs to `-h`. **#2042.**
 
 ## `regexp-replace var regexp replace`
 
@@ -198,7 +205,44 @@ One divergence: an **empty** regular expression. zsh's engine refuses it
 `regexp` compiles it and matches the empty string everywhere, so
 `regexp-replace v '' Y` over `abc` is `YaYbYc` and 0 here. That is the
 regular-expression engine rather than this function, and it is the same
-answer `[[ x =~ '' ]]` gives.
+answer `[[ x =~ '' ]]` gives. **#2043.**
+
+## What the four are worth, measured against a real startup file
+
+This machine's own `~/.zshrc` — Powerlevel10k, `zi` with turbo-mode
+plugins, `zsh-syntax-highlighting` — driven through the shell twice, with
+`FPATH` taken out of the environment so the default search is what answers.
+The binaries are installed trees, one built from `main` and one from this
+change, so both find whatever their own `share/sh/functions` holds.
+
+**The whole file, with its deferred hooks fired** — `zsh -i -c 'source
+~/.zshrc; for f in $precmd_functions; do $f; done'`, which is the route that
+reaches everything, because `zi`'s turbo mode defers half the plugin loads
+to `precmd`:
+
+| complaint | before | after |
+| --- | ---: | ---: |
+| `add-zsh-hook: function definition file not found` | 5 | 0 |
+| `is-at-least: …` | 4 | 0 |
+| `colors: …` | 2 | 0 |
+| `compinit: …` | 2 | 2 |
+| `vcs_info: …` | 1 | 1 |
+| **total** | **14** | **3** |
+| `zsh-syntax-highlighting: failed loading add-zsh-hook.` | 2 | 0 |
+
+**A real interactive session on a pseudo-terminal**, same rc: 10 before, 1
+after — `add-zsh-hook` 6, `is-at-least` 2, `colors` 1, `compinit` 1, and
+the syntax-highlighting failure, down to the single `compinit`. The counts
+are lower than the run above and the reason is **#2046**: with this rc, an
+interactive session loses its terminal 0.3 seconds in, at the
+instant-prompt block, so it never reaches the rest of the file. That is a
+defect of its own, it is on `main` as well, and it is the reason a pty
+acceptance run cannot yet be the whole measurement.
+
+Every probe behind the tables above was re-run against zsh 5.9.2 through
+the same file on `FPATH`: `is-at-least`, `colors`, `regexp-replace`, the
+alias row and the `=~` capture parameters come back **byte-identical**, and
+`add-zsh-hook` differs on the one `typeset -g` line of #2041.
 
 ## What is not shipped, and why
 
@@ -208,6 +252,10 @@ magnitude larger than the four above put together, and it exists to drive
 a completion system this shell does not have yet. A real startup file that
 calls it still gets `compinit: function definition file not found`, and
 that is an honest gap rather than a silent one.
+
+`vcs_info` is the same answer for the same reason, and it turned up in the
+measurement rather than in the issue: it is a VCS status subsystem with a
+style system under it, not a function. One call in this machine's rc.
 
 ## Loading, and aliases
 

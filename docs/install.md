@@ -97,8 +97,14 @@ They are written here from the published description of what each one
 does and from what the installed shell answers when asked — never from
 anybody's function files. `docs/spec/functions.md` records the run.
 
-**`compinit` is not among them**, so a startup file that calls it still
-gets a complaint. That is a real gap and not a silent one.
+**`compinit` is not among them**, and neither is `vcs_info`, so a startup
+file that calls either still gets a complaint. Both are subsystems rather
+than functions — a completion system and a VCS status system — and both are
+real gaps rather than silent ones.
+
+On this machine's own `~/.zshrc`, with its plugin manager and prompt theme,
+these four take the startup from **14 complaints to 3**, and the three left
+are those two names. `docs/spec/functions.md` has the run.
 
 ### Pointing it at your own zsh's functions instead
 

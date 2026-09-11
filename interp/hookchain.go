@@ -116,7 +116,18 @@ func (r *Runner) FireChain(items []string, run func(item string)) {
 		r.SetExitStatus(status)
 		run(item)
 		if r.Exited() {
-			return
+			// Something unwound past the item. Which of the two it was
+			// decides whether the *chain* is over or the *session* is, and
+			// only an interactive shell draws that line at all — see
+			// giveUpTheHook. Caught here and not at the sites, so that the
+			// status this loop is keeping straight is put back: measured,
+			// `(exit 7)` then a prompt hook that fails then `echo $?` says
+			// 7 in zsh 5.9.2, so a caught error leaves the chain's saved
+			// status behind exactly as an ordinary chain does.
+			if !r.giveUpTheHook() {
+				return
+			}
+			break
 		}
 	}
 	r.SetExitStatus(status)

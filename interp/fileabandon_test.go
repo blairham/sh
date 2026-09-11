@@ -574,3 +574,68 @@ func TestACaughtErrorDoesNotMakeALaterExitSurvivable(t *testing.T) {
 		t.Errorf("status = %d, want 7", st)
 	}
 }
+
+// TestAHookChainCatchesAnErrorOnlyAtAPrompt is the fourth site of the same
+// boundary, and the one thing that gates it.
+//
+// A hook fires between two things a person typed, so an error inside one has
+// no line of its own to cost and used to end the shell. At a prompt it costs
+// the chain: the item that failed stops there, nothing after it runs, and the
+// session is still open. In a script the same hook ends the shell — measured,
+// `zsh script.zsh` whose `chpwd` raises a bad substitution stops at the `cd`
+// and exits 1.
+//
+// Run through FireChain rather than through a front end, because Interactive
+// is the whole of the difference and this is where it is read.
+func TestAHookChainCatchesAnErrorOnlyAtAPrompt(t *testing.T) {
+	for _, c := range []struct {
+		name        string
+		interactive bool
+		wantOut     string
+		wantExited  bool
+		wantStatus  int
+	}{
+		{"at a prompt", true, "one\ntwo\n", false, 7},
+		{"in a script", false, "one\ntwo\n", true, 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := abandonSemantics(No, No)
+			dg := abandonDiagnostics()
+			var buf bytes.Buffer
+			r := newTestRunner(t, &Runner{
+				Semantics: &sem, Diagnostics: &dg,
+				Stdout: &buf, Stderr: &buf,
+				Interactive: c.interactive,
+			})
+			for name, body := range map[string]string{
+				"one":   "echo one",
+				"two":   "echo two; echo ${NOPE?gone}; echo unreachable",
+				"three": "echo three",
+			} {
+				if !r.DefineFunctionFromText(name, body) {
+					t.Fatalf("defining %s", name)
+				}
+			}
+			r.SetExitStatus(7)
+
+			r.FireChain([]string{"one", "two", "three"}, func(item string) {
+				if _, err := r.CallFunction(context.Background(), item); err != nil {
+					t.Fatalf("calling %s: %v", item, err)
+				}
+			})
+
+			if got := buf.String(); !strings.HasPrefix(got, c.wantOut) {
+				t.Errorf("the chain printed %q, want it to start %q", got, c.wantOut)
+			}
+			if strings.Contains(buf.String(), "unreachable") || strings.Contains(buf.String(), "three") {
+				t.Errorf("the chain printed %q, want nothing after the failing item", buf.String())
+			}
+			if r.Exited() != c.wantExited {
+				t.Errorf("Exited() = %v, want %v", r.Exited(), c.wantExited)
+			}
+			if r.ExitStatus() != c.wantStatus {
+				t.Errorf("status = %d, want %d", r.ExitStatus(), c.wantStatus)
+			}
+		})
+	}
+}

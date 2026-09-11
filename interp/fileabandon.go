@@ -116,3 +116,37 @@ func (r *Runner) GiveUpTheLine() bool {
 	r.takeFileError()
 	return true
 }
+
+// giveUpTheHook is the same boundary around a *hook chain*, and it is the
+// fourth site of the mechanism above: `.` and `eval` are the first, a startup
+// file the second, a typed line the third.
+//
+// A hook is not text the shell was given. `precmd`, `preexec`, `chpwd` and
+// bash's `PROMPT_COMMAND` fire between two things a person typed, so an error
+// inside one has no line of its own to cost — which is why the shell ended for
+// it. Measured through a pseudo-terminal on 2026-09-10, zsh 5.9.2, one
+// keystroke at a time, with a `precmd` that raises each fatal expansion in
+// turn — a bad substitution, `${x?word}`, an unset name under `NO_UNSET`, a
+// division by zero — every one printed `precmd: …`, drew the prompt and
+// answered the next line. The rest of the chain did **not** run: with
+// `precmd_functions=(p1 p2 p3)` and `p2` failing, `p3` was never called. So
+// what an error costs is the chain, and nothing more. bash 5.3.15 answers a
+// failing `PROMPT_COMMAND` the same way, which is why the catch is in
+// FireChain and not in one of the two callers.
+//
+// The half that keeps this from making a session nobody can leave is the one
+// GiveUpTheLine has: a request to *stop* is not caught. `exit 7` in a `precmd`
+// ends the session with 7 and draws no prompt, and so does errexit firing
+// inside one, both measured the same way.
+//
+// **Only at a prompt**, which is the whole of what the Interactive check is
+// for and is measured on the other side: `zsh script.zsh` whose `chpwd` raises
+// a bad substitution stops at the `cd` and exits 1, and the line after the
+// `cd` does not run. A hook is a boundary because a session is, not because a
+// hook is.
+func (r *Runner) giveUpTheHook() bool {
+	if !r.Interactive {
+		return false
+	}
+	return r.GiveUpTheLine()
+}

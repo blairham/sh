@@ -142,7 +142,6 @@ func TestBindRefusesByNameRatherThanAcceptingSilently(t *testing.T) {
 	}{
 		{"a readline variable", "bind -v", "bind: -v is not implemented yet", 2},
 		{"reading an inputrc", "bind -f /dev/null", "bind: -f is not implemented yet", 2},
-		{"a key running a command", `bind -x '"\C-z": echo hi'`, "bind: -x is not implemented yet", 2},
 		{
 			// A keymap bash really has: readline reaches it through a prefix
 			// and this editor reads a sequence whole, so a binding there

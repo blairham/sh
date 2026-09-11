@@ -65,24 +65,18 @@ import (
 //     are refused as not implemented. There is no readline here to hold a
 //     variable, so printing `bind-tty-special-chars is set to `on'` would be
 //     reporting a setting nothing reads.
-//   - **`-x` and `-X`** — running a shell command from a key — are refused as
-//     not implemented. The capability landed with `zle -N` on the other side
-//     of the tree (#1376): repl.Binding.Function carries the name of an action
-//     the shell performs and driver.Shell.RunWidget is where the dialect is
-//     asked to run it, and that seam takes a name it does not look inside, so
-//     the command text bash binds could ride it. What is missing is *this*
-//     shell's half and not the machinery — what `READLINE_LINE` and
-//     `READLINE_POINT` are while the command runs, and what happens to the
-//     line when it changes them, are answers nobody has measured yet. Refused
-//     by name until they are, rather than guessed at, and filed on its own so
-//     that this file does not become a second copy of a seam that already
-//     exists.
 //   - **`-m emacs-meta` and `-m emacs-ctlx`** are refused as not implemented
 //     rather than as invalid, because bash really has them: they are
 //     readline's *prefix* keymaps, and this editor reads a key sequence whole
 //     rather than through a prefix map (see repl/escape.go), so a binding
 //     recorded in one could never fire. That is the same refusal `bindkey -p`
 //     makes on the other side, for the same reason.
+//
+// **`-x` and `-X` are built**, and the file beside this one holds them:
+// bindx.go is what running a shell command from a key *means* here, measured
+// through a pseudo-terminal against bash 5.3.15. This file is still only the
+// naming half — which key runs what — and the two kinds of target share one
+// slot per key, which is measured rather than assumed.
 //
 // What `-m vi-command` gets is acceptance, not refusal, and the distinction
 // matters: it is a keymap this shell plainly has and `set -o vi` selects
@@ -95,6 +89,30 @@ import (
 // under a name no script can reach — the way `shopt` keeps its own state, and
 // what gives a subshell its own copy.
 const bindStore = ".bash.bind"
+
+// bindRecord is how many slots of the store one binding takes: the keymap, the
+// key sequence, what it is bound to, and which *kind* of thing that is.
+//
+// The fourth slot is what `bind -x` needed. The first three could tell a
+// function from a macro by looking — a macro is stored under the quotes the
+// listing prints it in, and no readline function name has any — and a shell
+// command can be spelled either way, so what a target *is* has to be recorded
+// rather than inferred. Inferring it would have made `bind -x '"\C-t": f'` and
+// `bind '"\C-t": f'` the same binding, which they are not: one runs a command
+// and the other names an editor action, and only the second is listed by
+// `bind -p`.
+const bindRecord = 4
+
+// bindKindCommand marks a target that is shell command text, put on the key by
+// `bind -x`. The empty kind is a function name or a macro.
+const bindKindCommand = "x"
+
+// bindEntry is what one key is bound to: the target, and whether the target is
+// a shell command rather than the name of an editor action or a macro's text.
+type bindEntry struct {
+	target  string
+	command bool
+}
 
 // bindKeymaps are the keymaps this shell has, mapped to the one this
 // implementation keeps a table for.
@@ -260,11 +278,19 @@ func registerBind(r *interp.Runner) {
 // listing says so plainly by showing the text back — see bindMacro.
 func KeyBindings(r *interp.Runner) map[string]repl.Binding {
 	out := map[string]repl.Binding{}
-	for seq, name := range readBindings(r, currentKeymap(r)) {
-		if def, standard := defaultBindings[seq]; standard && def == name {
+	for seq, bound := range readBindings(r, currentKeymap(r)) {
+		if bound.command {
+			// A key `bind -x` put a shell command on. The command text rides
+			// Function, which repl does not look inside — see
+			// repl/shellwidget.go, and RunWidget in bindx.go for this shell's
+			// half of the round trip.
+			out[seq] = repl.Binding{Function: bound.target}
 			continue
 		}
-		out[seq] = repl.Binding{Widget: bindFunctions[name]}
+		if def, standard := defaultBindings[seq]; standard && def == bound.target {
+			continue
+		}
+		out[seq] = repl.Binding{Widget: bindFunctions[bound.target]}
 	}
 	return out
 }
@@ -272,37 +298,47 @@ func KeyBindings(r *interp.Runner) map[string]repl.Binding {
 // readBindings is one keymap's table: the defaults with whatever was changed
 // laid over them. A key removed with `-r` is absent rather than present and
 // empty, which is what `bind -p` leaves out and what `-q` reports as unbound.
-func readBindings(r *interp.Runner, keymap string) map[string]string {
-	out := map[string]string{}
+func readBindings(r *interp.Runner, keymap string) map[string]bindEntry {
+	out := map[string]bindEntry{}
 	for seq, name := range defaultBindings {
-		out[seq] = name
+		out[seq] = bindEntry{target: name}
 	}
 	flat, _ := r.GetArray(bindStore)
-	for i := 0; i+3 <= len(flat); i += 3 {
+	for i := 0; i+bindRecord <= len(flat); i += bindRecord {
 		if flat[i] != keymap {
 			continue
 		}
-		if flat[i+2] == "" {
-			delete(out, flat[i+1])
+		seq, target, kind := flat[i+1], flat[i+2], flat[i+3]
+		if target == "" && kind == "" {
+			delete(out, seq)
 			continue
 		}
-		out[flat[i+1]] = flat[i+2]
+		out[seq] = bindEntry{target: target, command: kind == bindKindCommand}
 	}
 	return out
 }
 
 // changeBinding records one change against a keymap, replacing any earlier one
-// for the same sequence. An empty name is a removal.
-func changeBinding(r *interp.Runner, keymap, seq, name string) {
+// for the same sequence. The zero entry is a removal.
+//
+// One slot per key, which is measured rather than assumed: `bind -x` on a key
+// and then an ordinary `bind` on the same key leaves `bind -X` empty and
+// `bind -p` showing the function, so the two kinds of binding share a slot
+// rather than living in tables of their own.
+func changeBinding(r *interp.Runner, keymap, seq string, bound bindEntry) {
+	kind := ""
+	if bound.command {
+		kind = bindKindCommand
+	}
 	flat, _ := r.GetArray(bindStore)
-	for i := 0; i+3 <= len(flat); i += 3 {
+	for i := 0; i+bindRecord <= len(flat); i += bindRecord {
 		if flat[i] == keymap && flat[i+1] == seq {
-			flat[i+2] = name
+			flat[i+2], flat[i+3] = bound.target, kind
 			r.SetArray(bindStore, flat)
 			return
 		}
 	}
-	r.SetArray(bindStore, append(flat, keymap, seq, name))
+	r.SetArray(bindStore, append(flat, keymap, seq, bound.target, kind))
 }
 
 // currentKeymap is the keymap `bind` acts on without `-m`, which is the
@@ -327,12 +363,18 @@ const bindUsage = "bind: usage: bind [-lpsvPSVX] [-m keymap] [-f filename] [-q n
 	"[-r keyseq] [-x keyseq:shell-command] [keyseq:readline-function or readline-command]"
 
 // bindLetters are the option letters this builtin answers to.
-const bindLetters = "lpPqrsSum"
+const bindLetters = "lpPqrsSumxX"
 
 // bindUnimplemented are the letters bash has that this shell does not, refused
 // as missing rather than as unknown — the same split `whence` makes, so a
 // script can tell a gap from a typo.
-const bindUnimplemented = "vVfxX"
+//
+// `-x` and `-X` were here until #1428 and are not any more: the seam they
+// needed had already landed with `zle -N` on the other side of the tree, and
+// what was missing was this shell's half — which of its parameters the line
+// arrives in, what changing them does, and what a listing looks like. All of
+// that is measured now; see bindx.go and bindListCommands.
+const bindUnimplemented = "vVf"
 
 // bindOpts is what the letters asked for.
 type bindOpts struct {
@@ -340,6 +382,8 @@ type bindOpts struct {
 	print    bool   // -p: list bindings as `bind` would take them back
 	describe bool   // -P: list bindings as prose
 	macros   bool   // -s, -S: the bindings that type text
+	command  bool   // -x: the operand binds a shell command rather than a function
+	commands bool   // -X: list the bindings that run a shell command
 	query    string // -q: which keys run this function
 	unbind   string // -u: take this function off every key
 	remove   string // -r: take this key sequence off
@@ -372,10 +416,16 @@ func bindBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	case opts.unbind != "":
 		return bindUnbindFunction(r, keymap, opts.unbind)
 	case opts.remove != "":
-		changeBinding(r, keymap, decodeBindSequence(opts.remove), "")
+		// Measured, `-r` takes a key off whatever it was bound to, `-x`
+		// commands included: `bind -r "\C-t"` after a `bind -x` on that key
+		// leaves `bind -X` printing nothing, at status 0.
+		changeBinding(r, keymap, decodeBindSequence(opts.remove), bindEntry{})
 		return 0
 	case opts.macros:
 		bindListMacros(r, keymap)
+		return 0
+	case opts.commands:
+		bindListCommands(r, keymap)
 		return 0
 	case opts.print || opts.describe:
 		bindListBindings(r, keymap, opts.describe)
@@ -385,10 +435,48 @@ func bindBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	// nothing and reports success, measured — it is not the listing that `-p`
 	// is.
 	for _, word := range rest {
-		if code := bindOne(r, keymap, word); code != 0 {
+		if code := bindOperand(r, keymap, word, opts.command); code != 0 {
 			return code
 		}
 	}
+	return 0
+}
+
+// bindOperand makes one binding, of whichever kind the options asked for.
+func bindOperand(r *interp.Runner, keymap, word string, command bool) int {
+	if command {
+		return bindCommand(r, keymap, word)
+	}
+	return bindOne(r, keymap, word)
+}
+
+// bindCommand is `-x`: a key that runs a shell command.
+//
+// **Only the quoted form is accepted, and that is measured rather than a
+// simplification.** `bind -x '"\C-t": f'` binds the key; `bind -x "\C-t:f"`
+// is `bind: \C-t:f: first non-whitespace character is not `"'` at status 1 —
+// so the key-name form `bind` itself takes is not a form `-x` takes. The
+// reason is visible in what the right-hand side *is*: a readline function name
+// is one word and a shell command is arbitrary text, colons and all, so
+// without the quotes there would be nothing to tell the key from the command.
+//
+// The command text is stored as it stands — not parsed, not looked up, and not
+// judged. There is nothing to judge: `bind -X` prints back exactly what was
+// given, and a command that does not work says so when the key is pressed, at
+// the place a person can see it. That is the opposite of the rule for a
+// *function* name, which is checked and dropped when unknown, and both halves
+// are measured.
+func bindCommand(r *interp.Runner, keymap, word string) int {
+	spelled, command, ok := splitBinding(word)
+	if !ok || !strings.HasPrefix(spelled, "\"") {
+		r.Diagnosef("bind: %s: first non-whitespace character is not `\"'\n", word)
+		return 1
+	}
+	seq, ok := decodeBindTarget(spelled)
+	if !ok {
+		return 0
+	}
+	changeBinding(r, keymap, seq, bindEntry{target: command, command: true})
 	return 0
 }
 
@@ -446,6 +534,10 @@ func setBindLetter(opts *bindOpts, letter byte) {
 		opts.describe = true
 	case 's', 'S':
 		opts.macros = true
+	case 'x':
+		opts.command = true
+	case 'X':
+		opts.commands = true
 	}
 }
 
@@ -537,14 +629,41 @@ func bindListBindings(r *interp.Runner, keymap string, describe bool) {
 func bindListMacros(r *interp.Runner, keymap string) {
 	table := readBindings(r, keymap)
 	seqs := make([]string, 0, len(table))
-	for seq, name := range table {
-		if isBindMacro(name) {
+	for seq, bound := range table {
+		if !bound.command && isBindMacro(bound.target) {
 			seqs = append(seqs, seq)
 		}
 	}
 	sort.Strings(seqs)
 	for _, seq := range seqs {
-		_, _ = fmt.Fprintf(r.Out(), "\"%s\": %s\n", encodeBindSequence(seq), table[seq])
+		_, _ = fmt.Fprintf(r.Out(), "\"%s\": %s\n", encodeBindSequence(seq), table[seq].target)
+	}
+}
+
+// bindListCommands is `-X`: only the keys `bind -x` put a shell command on,
+// sorted by the bytes the key sends, and nothing at all where none were made.
+//
+// Measured against bash 5.3.15 through a pseudo-terminal, and the shape is not
+// the one every other listing here uses: there is **no colon** between the key
+// and what it runs, and the command is quoted where `bind -p` leaves a
+// function name bare.
+//
+//	"\C-n" "echo hi there; pwd"
+//	"\C-t" "names"
+//
+// So a `-X` line is not a word `bind -x` would take back, which `-p`'s lines
+// are for `bind`. That is bash's answer and not a slip here.
+func bindListCommands(r *interp.Runner, keymap string) {
+	table := readBindings(r, keymap)
+	seqs := make([]string, 0, len(table))
+	for seq, bound := range table {
+		if bound.command {
+			seqs = append(seqs, seq)
+		}
+	}
+	sort.Strings(seqs)
+	for _, seq := range seqs {
+		_, _ = fmt.Fprintf(r.Out(), "\"%s\" \"%s\"\n", encodeBindSequence(seq), table[seq].target)
 	}
 }
 
@@ -576,7 +695,7 @@ func bindUnbindFunction(r *interp.Runner, keymap, name string) int {
 		return 1
 	}
 	for _, seq := range keysByFunction(r, keymap)[name] {
-		changeBinding(r, keymap, seq, "")
+		changeBinding(r, keymap, seq, bindEntry{})
 	}
 	return 0
 }
@@ -599,7 +718,7 @@ func bindOne(r *interp.Runner, keymap, word string) int {
 		return 0
 	}
 	if text, quoted := unquoteMacro(target); quoted {
-		changeBinding(r, keymap, seq, bindMacro(text))
+		changeBinding(r, keymap, seq, bindEntry{target: bindMacro(text)})
 		return 0
 	}
 	if _, known := bindFunctions[target]; !known {
@@ -607,7 +726,7 @@ func bindOne(r *interp.Runner, keymap, word string) int {
 		// key goes on doing what it did. Measured; see the file comment.
 		return 0
 	}
-	changeBinding(r, keymap, seq, target)
+	changeBinding(r, keymap, seq, bindEntry{target: target})
 	return 0
 }
 
@@ -745,15 +864,20 @@ func unquoteMacro(target string) (string, bool) {
 }
 
 // keysByFunction inverts one keymap: for each function name, the keys it is
-// on, in the order the bytes sort. Macros are left out, since they name no
-// function.
+// on, in the order the bytes sort. Macros and `-x` commands are left out,
+// since neither names a function.
 func keysByFunction(r *interp.Runner, keymap string) map[string][]string {
 	out := map[string][]string{}
-	for seq, name := range readBindings(r, keymap) {
-		if isBindMacro(name) {
+	for seq, bound := range readBindings(r, keymap) {
+		if bound.command || isBindMacro(bound.target) {
+			// A shell command is left out for the reason a macro is: it names
+			// no function, so `-p`, `-P`, `-q` and `-u` have nothing to say
+			// about it. Measured — `bind -p` has no row for a key `-x` bound,
+			// and `bind -q` answers `unknown function name` at 1 for the
+			// command's text.
 			continue
 		}
-		out[name] = append(out[name], seq)
+		out[bound.target] = append(out[bound.target], seq)
 	}
 	for name := range out {
 		sort.Strings(out[name])

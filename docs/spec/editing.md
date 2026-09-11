@@ -349,8 +349,39 @@ is no way to tell which.
 What each shell calls this is that shell's. `zle -N` defines one in zsh and the
 line arrives in `$BUFFER` with the cursor in `$CURSOR`; `dialect/zsh/zle.go`
 holds all of it, along with the measurement of what a widget can read and write
-and what the four line parameters do to each other. bash's `bind -x` is the
-same capability under a different name and is not built — #1352.
+and what the four line parameters do to each other.
+
+bash's `bind -x` is the same capability under a different name, and what rides
+the seam there is the *command text* rather than a function's name, because
+that is what bash binds: `bind -x '"\C-t": some command'`. `dialect/bash/bindx.go`
+holds the measurement, taken through a pseudo-terminal against bash 5.3.15.
+The line arrives in `$READLINE_LINE` with the cursor in `$READLINE_POINT`,
+**counted in characters** — a five-character six-byte line reads 5 — and either
+parameter alone is enough to change what the editor draws. The command runs in
+the current shell, so what it changes stays changed; its status goes in and
+does not come out, so `$?` at the next prompt is what the last *command* left
+and not what the key returned; and all of its parameters are gone again by the
+next prompt, which `${READLINE_LINE-UNSET}` is what tests for.
+
+Three standing differences from bash, recorded rather than filled in with a
+value that would be a lie:
+
+- **`$READLINE_MARK`** is bash's position of the mark, and this editor has no
+  mark. Any number here would be one invented rather than measured.
+- **`$READLINE_ARGUMENT`** is bash's numeric argument, which bash leaves
+  *unset* when no argument was typed. This editor has no numeric argument at
+  all, so it is always in the state bash produces itself for a plain keypress.
+- **bash exports all of them**, so an external program bound to a key reads
+  them out of its environment. Here they are produced parameters, which is what
+  makes them vanish again at the end of the call; a shell function reads them
+  exactly as bash's are read, and an external program does not see them.
+
+The command runs while the **editor** holds the terminal and not the shell:
+`stty -a` from a bound command reports `-icanon -echo` in bash, where the same
+`stty` as an ordinary command reports `icanon echo`. That is true here by
+construction rather than by arrangement — this editor holds the terminal the
+same way for the length of the call — and it is why anything that prints from a
+key is printing into a raw-mode terminal.
 
 **A completion widget** — zsh's `zle -C name completer function` — is the same
 round trip with one thing taken away. It is how that shell's completion system

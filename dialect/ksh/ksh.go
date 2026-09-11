@@ -480,6 +480,7 @@ func Semantics() interp.Semantics {
 	// both lines first (#1170).
 	s.SetReportsEveryBadOption = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
+	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
 	s.ArithInvalidOctalDigitIsError = interp.No
 	// The integer attribute has a reader of its own, and it is not the
 	// arithmetic one: `$((010))` is 8 here and `typeset -i d=010` is 10.

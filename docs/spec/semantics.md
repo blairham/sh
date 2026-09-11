@@ -1067,6 +1067,42 @@ status, so the behavioral score counts them as agreeing and every other
 view calls it wording. A shell that writes to the wrong file is not a
 wording difference.
 
+## Where a redirection is expanded, and what that costs
+
+A redirection on a command the shell runs as a process of its own is set up
+**in that process**, and two things a script can see follow from it. Both are
+one axis per position, and the positions are two: a here-document's *body* is
+`HeredocExpandsInTheCommandsProcess`, and a redirection's *target* is
+`RedirectTargetExpandsInTheCommandsProcess`.
+
+Measured over a script file with `env -i PATH=/usr/bin:/bin`, against bash
+5.3.15, ksh93u+, zsh 5.9.2 and dash. For a target:
+
+| | bash | ksh93 | zsh | dash |
+| --- | --- | --- | --- | --- |
+| `unset u; cat /dev/null > "${u:=made}"` — `u` after | unset | unset | unset | **made** |
+| `set -u; cat /dev/null > "$NOPE"` — script after | alive, 1 | alive, 1 | alive, 1 | **stops, 2** |
+| the same two on `: > …`, `exec 3> …`, a function, a group | kept, stops | kept, stops | kept, stops | kept, stops |
+
+The third row is the line: everything the shell runs itself keeps the write
+and dies of the failure in **every** column, because there is no other
+process for either to land in. So the axis is asked only where the command is
+one the shell runs as a process of its own, and only when the expansion
+actually wrote something or failed — every other redirection is quiet and
+unanimous, and an unanswered dialect must still be able to open a file.
+
+One answer covers both consequences because they are one fact about where the
+word was expanded. It is a **second** axis rather than a widening of the
+body's, and that is measured rather than tidy: for a *body* dash is the
+outlier one way — the write escapes — while its failure half still costs only
+the command; for a *target* dash is the outlier the other way and ends the
+script. One field cannot say both.
+
+What no shell does, and what this got wrong, is open a target whose expansion
+failed. The empty string the failure left behind was opened, so one mistake
+produced two diagnostics and the second named a file nobody wrote. That much
+is core, and it holds whoever runs the command (#1228).
+
 ## A command that is only redirections
 
 A command with no command word, no assignment prefix and at least one

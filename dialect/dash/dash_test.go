@@ -621,3 +621,15 @@ func TestNoclobberFallbackIsAnOpen(t *testing.T) {
 		t.Error("the noclobber fallback is worded as a create, want an open")
 	}
 }
+
+// TestARedirectionTargetIsExpandedInTheShell. This shell expands a
+// redirection's target where it stands rather than in the process the
+// redirection is for, and is alone in the panel: `cat /dev/null >
+// "${u:=made}"` leaves `u` set here and unset in the other three, and `>
+// "$NOPE"` under `set -u` ends the script here where the other three lose
+// only the command. Measured 2026-09-10; see interp/redirtarget.go.
+func TestARedirectionTargetIsExpandedInTheShell(t *testing.T) {
+	if got, want := dash.Semantics().RedirectTargetExpandsInTheCommandsProcess, interp.No; got != want {
+		t.Errorf("RedirectTargetExpandsInTheCommandsProcess = %v, want %v", got, want)
+	}
+}

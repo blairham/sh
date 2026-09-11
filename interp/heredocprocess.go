@@ -56,7 +56,7 @@ import (
 //     diagnostic, `cat` never runs, the status is the dialect's fatal one,
 //     and the next command in the script does. Here the body's value was
 //     handed to `cat` anyway and then the whole script was abandoned — one
-//     wrong answer on top of the other. See heredocGiveUpTheCommand.
+//     wrong answer on top of the other. See giveUpTheCommand.
 
 // expansionTables is the state an expansion can write, held so a body
 // expanded on another process's behalf can be undone.
@@ -190,13 +190,14 @@ func (r *Runner) confineToTheProcess(expand func() string) string {
 			return body
 		}
 	}
-	r.heredocGiveUpTheCommand()
+	r.giveUpTheCommand()
 	return body
 }
 
-// heredocGiveUpTheCommand is the abandonment boundary for a here-document
-// body that could not be expanded: the unit given up is the *command*,
-// because the error happened in a process that is not this shell.
+// giveUpTheCommand is the abandonment boundary for a redirection that could
+// not be expanded — a here-document body, or the target of a redirection:
+// the unit given up is the *command*, because the error happened in a
+// process that is not this shell.
 //
 // The fourth site of the mechanism `.`, `eval`, a startup file and an
 // interactive prompt already use — pendingFileError and takeFileError — and
@@ -209,7 +210,7 @@ func (r *Runner) confineToTheProcess(expand func() string) string {
 // `cat <<END` with `$(exit 3)` in its body is a substitution's own exit and
 // has never reached here, and a request to stop that did would be a request
 // to stop.
-func (r *Runner) heredocGiveUpTheCommand() {
+func (r *Runner) giveUpTheCommand() {
 	if r.expandErr && r.ctl == controlNone {
 		// A failure that reported itself and set no control flow — a bad
 		// substitution in the dialects that word it that way. It still has

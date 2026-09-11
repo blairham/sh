@@ -857,6 +857,7 @@ func Semantics() interp.Semantics {
 	// neighboring refusal too, and they all leave 1 — see the axis.
 	s.SetArrayBadNameLeavesZeroFromCommandString = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
+	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
 	// And an unset name found that way is a zero like any other unset name:
 	// `x=abc; $((x+1))` is 1 and the script runs on. Measured 2026-09-11 —

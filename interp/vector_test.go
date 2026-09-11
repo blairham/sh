@@ -102,6 +102,10 @@ func testSemantics() Semantics {
 	// process, so what it writes does not come back. bash's answer, and
 	// ksh93's and zsh's; dash alone says otherwise.
 	s.HeredocExpandsInTheCommandsProcess = Yes
+	// And the same for a redirection's target. bash's answer again, with
+	// dash alone on the other side; the suite that is *about* it sets both
+	// — see redirtarget_test.go.
+	s.RedirectTargetExpandsInTheCommandsProcess = Yes
 	s.TrapQuoting = ListingQuoteAlwaysEscaped
 
 	// `read` — the option letters decide which of its axes are even

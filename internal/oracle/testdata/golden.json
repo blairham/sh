@@ -101586,6 +101586,94 @@
         "TimedOut": false
       }
     },
+    "redir/a-target-that-could-not-be-expanded-is-not-opened": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: NOPE_T: unbound variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: NOPE_T: unbound variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: NOPE_T: unbound variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: NOPE_T: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: NOPE_T: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:1: NOPE_T: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/a-target-that-could-not-be-expanded-on-a-builtin": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: NOPE_T: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: NOPE_T: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: NOPE_T: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: NOPE_T: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: NOPE_T: parameter not set",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: NOPE_T: parameter not set",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "redir/a-target-that-expands-to-nothing": {
       "bash": {
         "Stdout": "st=1",
@@ -101668,6 +101756,50 @@
       },
       "zsh": {
         "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/a-targets-side-effect-stays-with-the-command": {
+      "bash": {
+        "Stdout": "u=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "u=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "u=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "u=[made]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "u=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "u=[UNSET]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

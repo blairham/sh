@@ -808,6 +808,10 @@ type Runner struct {
 	// dialect counts a message's line from instead of from the top of the
 	// file.
 	funcLine int
+	// outsideCall is how many innermost frames the location has stepped out
+	// of, which is nonzero only while [Runner.LocatedAtTheCall] runs. A count
+	// rather than a flag because a nested use must put back what it found.
+	outsideCall int
 	// sourceDepth is how many sourced files are running, which is the other
 	// place a `return` has something to return from. A count rather than a
 	// flag because a sourced file may source another.
@@ -1891,7 +1895,10 @@ func (r *Runner) locationPrefix() string {
 			// and under `-c` or standard input there is no file at all — the
 			// stack answers the shell's own name for both, so neither route
 			// changes here.
-			if f := r.currentFile(); f != "" {
+			//
+			// locationFile rather than currentFile: a message located at the
+			// call it came from is one frame further out than the shell is.
+			if f := r.locationFile(); f != "" {
 				name = f
 			}
 		}

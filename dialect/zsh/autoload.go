@@ -412,7 +412,7 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 		// a pending stub any more. See autoloadRunResolved for what the
 		// answer decides.
 		stub := autoloadPending(r, name)
-		if code := autoloadResolveIn(r, name, names, opts.keepAliases); code != 0 {
+		if code := autoloadResolveIn(r, name, names, opts.keepAliases, stub); code != 0 {
 			return code
 		}
 		return autoloadRunResolved(r, ctx, name, stub)
@@ -567,6 +567,50 @@ func autoloadEnclosingFunction(r *interp.Runner) (string, bool) {
 	return "", false
 }
 
+// autoloadFileNotFound is the one place this shell says a declared name has
+// no file, and the one place that decides where it says it.
+//
+// The wording is the function's own rather than the builtin's: measured, it
+// never carries `autoload` in the location — `nosuchfn:10: nosuchfn: function
+// definition file not found` from inside the stub and `<file>:14: myfunc2: …`
+// from the top level. It is about the function, and the location says so.
+//
+// `forCall` is the whole of #1994. A declaration says this where it stands; a
+// **call** says it at the call, because the frame the resolution runs in is a
+// stub the shell wrote and the script never saw. Located inside it, the
+// message is `is-at-least:1:` — a name and a line that point at nothing
+// anybody can open, eight times over on a real startup. Measured on zsh 5.9.2
+// on 2026-09-11, with `zzmissing` declared and no file for it:
+//
+//	top level of a script, line 3       zzmissing:3:
+//	top level of `-c`, line 3           zsh:3:
+//	line 2 of a function `o`            o:2:
+//	standard input                      zsh:
+//	line 2 of a file sourced at 3       /tmp/fp/inc:2:
+//	line 1 of `p`, called from `o`      p:1:
+//
+// Four of those are exactly where `command not found` lands in the same
+// places, which is the control: the locations already existed and this route
+// was not reaching them. The first is the odd one, and it is `$0` rather than
+// a rule about stubs — `unsetopt function_argzero` turns it into the script's
+// own path and line. interp.Runner.LocatedAtTheCall carries both halves.
+//
+// Only the generated stub asks for it. A hand-written `builtin autoload -X`
+// inside a function of the script's own is not a frame the script cannot see,
+// and `+X NAME` is not a call at all — both are already byte-identical where
+// they stand, so both come through here with forCall false.
+func autoloadFileNotFound(r *interp.Runner, name string, forCall bool) int {
+	report := func() {
+		r.DiagnoseAsTheShellf("%s: function definition file not found\n", name)
+	}
+	if forCall {
+		r.LocatedAtTheCall(report)
+	} else {
+		report()
+	}
+	return 1
+}
+
 // autoloadResolve finds a name's file on `$fpath` and makes its contents the
 // name's body.
 //
@@ -575,19 +619,18 @@ func autoloadEnclosingFunction(r *interp.Runner) (string, bool) {
 // is a search that goes on rather than a failure, which is what makes a
 // stale entry harmless.
 func autoloadResolve(r *interp.Runner, name string, keepAliases bool) int {
-	return autoloadResolveIn(r, name, nil, keepAliases)
+	return autoloadResolveIn(r, name, nil, keepAliases, false)
 }
 
 // autoloadResolveIn is that with the directory a `-X` was given, where it was
 // given one: the operand replaces the search rather than joining it, so a
 // name that is not in that one directory is not found however much of
 // `$fpath` would have had it.
-func autoloadResolveIn(r *interp.Runner, name string, dirs []string, keepAliases bool) int {
+func autoloadResolveIn(r *interp.Runner, name string, dirs []string, keepAliases, forCall bool) int {
 	if len(dirs) == 1 {
 		body, err := r.ReadFileGated(filepath.Join(dirs[0], name))
 		if err != nil {
-			r.DiagnoseAsTheShellf("%s: function definition file not found\n", name)
-			return 1
+			return autoloadFileNotFound(r, name, forCall)
 		}
 		text := string(body)
 		if inner, lone := autoloadLoneDefinition(name, text); lone {
@@ -601,13 +644,7 @@ func autoloadResolveIn(r *interp.Runner, name string, dirs []string, keepAliases
 	}
 	body, ok := autoloadFile(r, name)
 	if !ok {
-		// Not the builtin speaking: measured, this message never carries
-		// `autoload` in the location — `nosuchfn:10: nosuchfn: function
-		// definition file not found` from inside the stub and
-		// `<file>:14: myfunc2: …` from the top level. It is about the
-		// function, and the location says so.
-		r.DiagnoseAsTheShellf("%s: function definition file not found\n", name)
-		return 1
+		return autoloadFileNotFound(r, name, forCall)
 	}
 	if inner, lone := autoloadLoneDefinition(name, body); lone {
 		body = inner
@@ -787,10 +824,10 @@ func autoloadFixPath(r *interp.Runner, name string, strict bool) (int, string) {
 	path, ok := autoloadSearch(r, name)
 	if !ok {
 		if strict {
-			// The function's own complaint, not the builtin's, which is what
-			// autoloadResolve says it for the same words at the call.
-			r.DiagnoseAsTheShellf("%s: function definition file not found\n", name)
-			return 1, ""
+			// The same complaint autoloadResolveIn makes at the call, said
+			// through the same helper — a declaration is not a call, so this
+			// one is located where it stands.
+			return autoloadFileNotFound(r, name, false), ""
 		}
 		return 0, ""
 	}

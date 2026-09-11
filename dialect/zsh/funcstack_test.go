@@ -153,6 +153,12 @@ func TestFuncstackNamesASourcedFileByThePathItWasFoundAt(t *testing.T) {
 // which is the only way to put the frame this parameter must *not* report on
 // the stack. See dialect/bash's runWithScriptFile, which is the same thing
 // for the dialect that does report it.
+//
+// The route is set as well as the file, because the front end sets both and
+// they answer different questions: the frame is what the stack reports, and
+// the route is what decides whether a diagnostic names a file at all. A
+// script file with the route left unspecified is a shell that says `zsh:`
+// where the real one says the path (#1994).
 func runZshScriptFile(t *testing.T, src, file string) string {
 	t.Helper()
 	f, err := syntax.Parse(src, zsh.Dialect())
@@ -164,7 +170,7 @@ func runZshScriptFile(t *testing.T, src, file string) string {
 	r := &interp.Runner{
 		Semantics: &sem, Diagnostics: &dg,
 		Stdout: &out, Stderr: &out,
-		Name: "zsh", Dialect: &dl,
+		Name: file, Dialect: &dl, Route: interp.RouteScriptFile,
 	}
 	zsh.Apply(r)
 	r.SetScriptFile(file)

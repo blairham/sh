@@ -14524,6 +14524,29 @@ echo "read=[$l]"`,
 		Why:     "and where it fails: the declaration is 0 with an empty `fpath` and the *call* is `zznone: function definition file not found` at 1. Two statuses in one row, because a shell that resolved at the declaration would report the failure in the wrong place and a script's `autoload || return` would fire when nothing was wrong yet",
 	},
 	{
+		ID: "autoload/a-missing-file-is-located-at-the-call", Category: "builtins",
+		Snippet: `fpath=()
+autoload -Uz zznone
+o() {
+  echo inO
+  zznone
+}
+o
+echo "st=$?"
+zznone
+echo "top=$?"`,
+		Why: "where the failure is reported, which is a different question from when. The resolution runs inside a stub the shell wrote and the script never saw, so a shell locating it there answers `zznone:1:` — a name and a line pointing at nothing anybody can open, and eight of them on one real startup. The call is what a person can look at: `o:2:` from inside the function and the top-level line from outside it, which is exactly where `command not found` lands in the same two places. Two calls in one row because the second is the control: a shell that simply named the caller's file for both would still be wrong about the first (#1994)",
+	},
+	{
+		ID: "autoload/a-missing-file-from-a-script-names-the-function", Category: "builtins",
+		Snippet: `fpath=()
+autoload -Uz zznone
+zznone
+echo "st=$?"`,
+		Script: true,
+		Why:    "the same failure at the top level of a *script*, where one column names the function and the caller's line together — `zznone:3:` — rather than the script it is reading. Its own row because the route is the whole of the difference: the identical text under `-c` names the shell, and this is the shell's `$0` showing through a location, `$0` there being the call it is inside. A row a `-c` corpus cannot ask, and the one an exact implementation gets wrong by reasoning about stubs instead of measuring (#1994)",
+	},
+	{
 		ID: "autoload/an-existing-function-is-left-alone", Category: "builtins",
 		Snippet: `mkdir -p fp; printf "%s\n" 'echo "from the file"' > fp/cfn; fpath=(fp); cfn() { echo "the body it had"; }; autoload -Uz cfn; echo "decl=$?"; cfn; echo "call=$?"; autoload; echo "listing ends"`,
 		Why:     "a name that is already a function is not marked: the declaration is 0, the body survives, and the name is absent from the bare listing afterwards — with a file for it on `$fpath`, so this is not the file simply being missing. A real startup file declares a name it may already have, and a shell that wrote its stub over the definition turned a working function into `function definition file not found` at the *next* call. Three observables in one row because they are three ways to be wrong, and a shell that kept the record while keeping the body would pass the first two",

@@ -188,3 +188,46 @@ func TestTheAxesAreValuesNotForks(t *testing.T) {
 		})
 	}
 }
+
+// TestReadFileGatedResolvesAgainstTheRunnersDirectory is the PATH rule applied
+// to the seam a dialect's builtin reads whole files through.
+//
+// A Runner carries its own Dir so that two of them in one program do not fight
+// over a single process-wide cwd, and os.ReadFile on a bare relative name
+// quietly opts out of that: it resolves against the *process*, which no Runner
+// owns. `.` and every redirection already go through the runner's own
+// resolution and this did not, so a dialect whose function search path may
+// hold a relative entry could not read one (#1968).
+//
+// The test turns on the two directories differing: the runner is put in a
+// scratch directory holding the file, while the process stays where `go test`
+// started it, where no such name exists. An implementation that reads the
+// process's cwd finds nothing here and passes wherever the two happen to
+// agree.
+func TestReadFileGatedResolvesAgainstTheRunnersDirectory(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(dir+"/relnote", []byte("contents\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	r := newTestRunner(t, &interp.Runner{Stdout: &out, Stderr: &out, Dir: dir})
+	r.Register("readrel", func(r *interp.Runner, _ context.Context, args []string) int {
+		b, err := r.ReadFileGated(args[0])
+		if err != nil {
+			r.Diagnosef("readrel: %v\n", err)
+			return 1
+		}
+		_, _ = r.Out().Write(b)
+		return 0
+	})
+	f, err := syntax.Parse(`readrel relnote`, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "contents\n" {
+		t.Errorf("got %q, want %q", out.String(), "contents\n")
+	}
+}

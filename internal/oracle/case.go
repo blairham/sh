@@ -14395,6 +14395,26 @@ echo "read=[$l]"`,
 		Snippet: `autoload -Q zz; echo "st=$?"`,
 		Why:     "`bad option: -Q` and 1 — the same wording `zmodload` and `bindkey` use and not `zstyle`'s `invalid option`. `-Q` is one of the forty letters zsh's autoload does not have, against the twelve it does",
 	},
+	{
+		ID: "autoload/a-fixed-path-from-a-relative-entry", Category: "builtins",
+		Snippet: `mkdir -p d/fns; printf "%s\n" 'echo "rfn ran"' > d/fns/rfn; cd d; fpath=(fns); autoload -rUz rfn; cd ..; rfn; echo "st=$?"`,
+		Why:     "the second route into a function file, and the one a fix to the first does not reach: `-r` resolves on `$fpath` at the *declaration* and records what it found, so the `cd` between the two is what the row is for. A relative entry recorded as written is a fixed path that is not fixed, and this shell wrote `fns` into the stub where zsh writes the directory it resolved to. The row prints no path, only whether the call still runs, because the path is where the case was recorded",
+	},
+	{
+		ID: "autoload/a-relative-fpath-entry", Category: "builtins",
+		Snippet: `mkdir -p d/fns; printf "%s\n" 'echo "rfn ran"' > d/fns/rfn; cd d; fpath=(fns); autoload -Uz rfn; rfn; echo "st=$?"`,
+		Why:     "an entry on the function search path may be relative, and it is resolved against the directory the *shell* is in. The `cd` is the whole row: it moves the shell and not the process, so a search that reached for the process's directory looks in the one the shell started in and answers `function definition file not found` for a file that is there. This shell did exactly that — the whole-file read a dialect's builtin goes through resolved a bare name with os.ReadFile, which is the PATH rule broken in a second place (#1968)",
+	},
+	{
+		ID: "builtin/the-location-names-the-builtin-that-ran", Category: "builtins",
+		Snippet: `builtin cd /nope/nope; echo "cd=$?"; builtin shift 5; echo "shift=$?"; builtin zznotabuiltin; echo "bad=$?"`,
+		Why:     "which name a complaint carries when a builtin was reached *through* `builtin`: the one that ran, not the word that reached it. `zsh:cd:1:` and `zsh:shift:1:` in the one column that names a builtin in the location, where this shell said `zsh:builtin:1:` for both — and it is on that shell's own autoload path rather than a corner, because every stub a declaration writes is `builtin autoload -X`, so every complaint from a resolution came out named after `builtin` (#1968). The third command is the control: a name that is not a builtin has no builtin speaking, so the location stays plain — `zsh:1: no such builtin` — which is the case a fix that simply always named the operand would break",
+	},
+	{
+		ID: "autoload/a-loaded-body-reports-as-itself", Category: "builtins",
+		Snippet: "mkdir -p fp\nprintf \"%s\\n\" \"echo one\" \"zznocmd\" > fp/efn\nfpath=(fp)\nautoload -Uz efn\nefn\necho \"a=$?\"\npfn() {\n  echo one\n  zznocmd\n}\npfn\necho \"p=$?\"",
+		Why:     "a complaint raised by a body `autoload` has just read belongs to the function, not to the builtin that read it: `efn:2: command not found: zznocmd`, which is the line the ordinary function beside it gets. The pair is the claim — this shell wrote `efn:builtin:2:` for the first and the correct `pfn:2:` for the second, so a row with only one of them cannot tell a fix from a shell that had stopped naming builtins anywhere. Written over several lines because the location counts from the line the function was written on, and a one-line body is offset zero and prints no number at all",
+	},
 	// `zmodload` — the module loader, which is the first line of a real
 	// plugin manager that actually stops the file. This shell cannot load a
 	// compiled module and never will, so what is recorded is the shape of

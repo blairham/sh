@@ -234,18 +234,25 @@ func TestAnExpansionsOperandHasNoComment(t *testing.T) {
 // operand is a command line again, and a `#` there opens a comment as it does
 // anywhere else.
 //
-// The assertion is the substitution's **body**, and a `)` inside the comment
-// is what makes it discriminating: the raw scan that finds the closing paren
-// counts parentheses, so a comment it did not honor would close the
-// substitution early and hand back a shorter body. That is the shape a
-// coarser fix takes — switching the sub-lexer's CommentMode to
-// CommentsOrdinaryText suspends the comment for this scan too, and this row is
-// the one that says so.
+// The panel is unanimous on that, the other way round from the rule above:
+// `u=; printf '[%s]' "${u:-$(echo hi # there)}"` is a parse failure on zsh
+// 5.9.2, bash 5.3.15, bash 3.2.57 and dash alike, the `#` having swallowed the
+// closing paren.
 //
-// The panel is unanimous the other way here, which is why it is not folded
-// into the rule above: `u=; printf '[%s]' "${u:-$(echo hi # there)}"` is a
-// parse failure on zsh 5.9.2, bash 5.3.15, bash 3.2.57 and dash alike, the
-// `#` having swallowed the closing paren.
+// The assertion is the substitution's **body**, with a `)` inside the comment,
+// because a scan that did not honor the comment would find that `)` and hand
+// back a body two lines short.
+//
+// What it does *not* distinguish is worth recording, so the next reader does
+// not go looking for the row that would. The coarse spelling of the fix above
+// — setting the operand sub-lexer's CommentMode to CommentsOrdinaryText rather
+// than asking inOperand — survives this row and the whole suite, because the
+// comment here is honored by the **enclosing** `${…}` scan while it is looking
+// for the closing brace, on the outer lexer, and the operand's own lexer never
+// sees the `#` at all. It is an equivalent mutant in the present code rather
+// than a gap; the reason to ask inOperand anyway is that the two are answers to
+// different questions, and CommentMode's own documentation says it exists for
+// ShellWords and is never used by a parse.
 func TestASubstitutionInsideAnOperandStillHasComments(t *testing.T) {
 	d := syntax.Core()
 	d.ParamSubstitution = true

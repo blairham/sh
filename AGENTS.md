@@ -230,21 +230,33 @@ what a binary meant to be liftable into its own repository must not need.
 
 ## Make targets
 
-`build`, `test`, `fmt`, `vet`, `lint`, `tidy`, `clean`, `check`,
-`install`, `uninstall`.
+`build`, `test`, `fmt`, `vet`, `tidy`, `clean`, `check`, `install`,
+`uninstall`.
 
-`check` runs `fmt vet test corpus-guard oracle-check`. **That is an
-agent's gate. Run `make check`, and nothing else.**
+`check` runs `fmt vet test corpus-guard oracle-check`. **That is your
+gate — the only one.**
 
-**Never run `golangci-lint` yourself** — not `make lint`, not `go tool
-golangci-lint run`, not wrapped in a script, not "just once to check". It
-is deliberately not a pre-commit hook here: it type-checks the whole
-module, measured at ~3GB resident and 300% CPU per run, and several agents
-each starting their own is what has repeatedly driven this machine to load
-20+ and starved the real work. It runs in CI, in the `Lint` job, against
-the merge base — that is where you read its output, and fixing what CI
-reports is the whole workflow. `make lint` stays as a target a human may
-run deliberately; it is not a gate an agent runs.
+**There is no `lint` target, and you must never run `golangci-lint`
+yourself.** Not `go tool golangci-lint run`, not wrapped in a script, not
+"just once to check before I commit". In this repository it is **not** a
+pre-commit hook — `.pre-commit-config.yaml` records the measurement that
+took it out — so it runs in exactly one place: the **`Lint` job in CI**,
+against the merge base. A run you start by hand tells you nothing the pull
+request would not tell you minutes later.
+
+The target was deleted rather than documented-as-discouraged because
+discouragement did not work: the sentence it replaced said "when in doubt
+run `make check` *and* `make lint`", and three agents briefed off this file
+did exactly that at once. golangci-lint defaults its concurrency to
+`NumCPU` and takes gigabytes of RSS per run, so several agents each
+starting their own is what has repeatedly driven this 18-core machine past
+load 20 and starved the work it was running. **Agent count was never the
+lever; the per-agent footprint was.** If lint is too heavy, lower
+`run.concurrency` in `.golangci.yml` — do not run fewer agents, and never
+run lint locally to get it over with early.
+
+**When CI's `Lint` job reports a failure, fix it and push again.** That is
+the only lint output anybody should be reading.
 
 The report targets are `conformance`, `conformance-gated`,
 `conformance-dialects`, `wild`, `wild-run`, `wild-run-contained`, `smoke`,
@@ -290,15 +302,19 @@ client, and a checkout says `0.0.0-dev`.
 - **Formatter**: gofumpt, pinned in `go.mod`'s `tool` block, run as
   `go tool gofumpt`.
 - **Linter**: golangci-lint v2, also `go tool`-pinned, config in
-  `.golangci.yml` — the same file in every Go repository here. It sets
-  `run.allow-parallel-runners`, because several worktrees of this module
-  lint at once and the default is a file lock in `$TMPDIR` that makes the
-  second one *refuse* — and refuse through the pre-commit hook, which
-  fails a commit for a reason unrelated to the commit. The lock is not in
-  the cache directory, so a per-worktree `GOLANGCI_LINT_CACHE` does not
-  move it; the cache is deliberately left shared, since its keys and the
-  positions it stores are module-relative and a warm shared cache lints
-  this repository in under a second against 37 seconds for a cold one.
+  `.golangci.yml` — the same file in every Go repository here. **It is
+  invoked by CI's `Lint` job and by nothing else** — not by a pre-commit
+  hook in this repository, and never by you; see *Make targets* above for
+  why there is no `lint` target and why you must not start one. Two settings in that file matter. `run.concurrency`
+  bounds the footprint, and is the dial to turn if lint is too heavy.
+  `run.allow-parallel-runners` clears the `$TMPDIR` file lock that
+  otherwise makes the second concurrent run *refuse* — which used to fail
+  a commit for a reason unrelated to the commit, since several worktrees
+  of this module commit at once. The lock is not in the cache directory,
+  so a per-worktree `GOLANGCI_LINT_CACHE` does not move it; the cache is
+  deliberately left shared, since its keys and the positions it stores are
+  module-relative and a warm shared cache lints this repository in under a
+  second against 37 seconds for a cold one.
 - **Linters follow dependencies.** The shared config is the base. When a
   repository adopts a technology, the linter that understands it is added
   **in the same change as the dependency**, not later and not by someone

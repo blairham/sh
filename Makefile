@@ -36,7 +36,7 @@ PREFIX ?= /usr/local
 SHELLDIR ?= $(PREFIX)/libexec/sh
 SHELLS := sh bash zsh ksh dash
 
-.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects wild wild-run wild-run-contained fmt-wild smoke acp acp-wire startup perfgate install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects wild wild-run wild-run-contained fmt-wild smoke acp acp-wire startup perfgate install uninstall
 
 all: build
 
@@ -82,8 +82,11 @@ fmt:
 vet:
 	go vet ./...
 
-lint:
-	go tool golangci-lint run
+# There is deliberately no `lint` target. golangci-lint runs in CI's `Lint`
+# job and nowhere else — it is not a pre-commit hook here, see
+# .pre-commit-config.yaml for the measurement that took it out, and AGENTS.md
+# for the rule. A hand-started run is a second copy of work that is already
+# happening, and several of them at once is what starves this machine.
 
 tidy:
 	go mod tidy

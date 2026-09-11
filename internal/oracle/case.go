@@ -7592,7 +7592,7 @@ echo "st=$?"`,
 	{
 		ID: "param/prompt-percent-result-is-not-a-pattern", Category: "parameter expansion",
 		Snippet: `printf "[%s]" ${(%):-ab(N)} ${(U):-ab(N)}; echo`,
-		Why:     "nothing inside a prompt-escape expansion is a pattern, and the row is written beside a flag that also rewrites its result so the difference cannot be read as \"substitution results are not globbed\": `(%)` keeps the parentheses and `(U)` has them read as a glob qualifier list and generated away. It is why a real startup carried *two* diagnostics rather than one — `%$y(l.1.0)` named a file attribute before the escape it belonged to was ever reached (#1695)",
+		Why:     "nothing inside a prompt-escape expansion is a pattern, and the row is written beside a flag that also rewrites its result so the difference cannot be read as \"substitution results are not globbed\": `(%)` keeps the parentheses and `(U)` has them read as a glob qualifier list and generated away. It is why a real startup carried *two* diagnostics rather than one — `%$y(l.1.0)` was read as a qualifier list before the escape it belonged to was ever reached (#1695)",
 	},
 	{
 		ID: "param/prompt-percent-user-is-not-a-variable", Category: "parameter expansion",
@@ -11364,6 +11364,11 @@ printf "[%s]" .@(hid); echo`,
 		ID: "pat/a-qualifier-list-reads-the-owner", Category: "pattern matching", SyntaxError: true,
 		Snippet: `mkdir -p uq; : > uq/f1; cd uq; me=$(id -u); printf "[%s]" *(u$me); echo; printf "[%s]" *(U); echo; printf "[%s]" *(u:no-such-user-here:); echo after`,
 		Why:     "`u` is ownership, and the uid is taken from `id -u` rather than written down so the row means the same thing for a laptop, a runner and a container running as root — `u0` would be every file in the third and none in the first. `U` is the same question with the effective user filled in and needs no argument at all. The third probe is the other half of the argument's grammar: a delimited argument is a *name* and never a number, so a name nobody has is `unknown username` and fatal, and `after` is not reached (#1671)",
+	},
+	{
+		ID: "pat/a-qualifier-list-reads-the-link-count", Category: "pattern matching", SyntaxError: true,
+		Snippet: `mkdir -p nq/dir2/sub nq/dir1; : > nq/f1; ln nq/f1 nq/f1b; : > nq/g1; cd nq; printf "[%s]" *(l1); echo; printf "[%s]" *(l+1); echo; printf "[%s]" *(l-3); echo; printf "[%s]" *(lx); echo after`,
+		Why:     "`l` is a file's link count and the first qualifier here whose argument is a *number* — the shape `L`, `a`, `m` and `c` share. zsh answers `[g1]`, `[dir1][dir2][f1][f1b]` and `[dir1][f1][f1b][g1]` to the three comparisons, so `+` is more and `-` is fewer and neither takes the number itself. The fourth probe is the one way to write it wrong: `number expected`, which is a different sentence from `unknown file attribute` and says the letter was recognized and its argument was not — and it is fatal, so `after` is not reached. This shell answered `unknown file attribute: l` to all four, the letter being in neither the accepted table nor the refused-by-name one (#1700). The other five columns have no qualifier language at all and refuse `*(` while parsing, which is what SyntaxError records. The counts are built rather than written down: a hard link gives `f1` and `f1b` two names each, and a subdirectory gives `dir2` a third link where `dir1` has two",
 	},
 	{
 		ID: "pat/a-qualifier-list-may-follow-a-link", Category: "pattern matching", SyntaxError: true,

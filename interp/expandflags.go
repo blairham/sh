@@ -147,10 +147,13 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		// Around the whole pipeline rather than around the result, because
 		// the word a `:-` substitutes is expanded *as a word* and globs on
 		// its own, before anything below could mark it. That is what put
-		// `unknown file attribute: l` beside the escape's own diagnostic in
-		// #1695: `%$y(l.1.0)` is a qualifier list to a reader that globs it,
-		// and the escape being unimplemented was only what left the text
-		// there to be read.
+		// a second diagnostic beside the escape's own in #1695:
+		// `%$y(l.1.0)` is a qualifier list to a reader that globs it, and
+		// the escape being unimplemented was only what left the text there
+		// to be read. The sentence it produced was `unknown file attribute:
+		// l` then and is `number expected` now — the letter is the link
+		// count since #1700 — which changes nothing here: the reading is
+		// wrong either way, and this is what stops it.
 		//
 		// Switched off through the same field `set -f` uses, because it is
 		// the same question asked from a different place — see

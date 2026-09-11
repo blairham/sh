@@ -6,6 +6,7 @@ package interp
 import (
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"os/user"
 	"strconv"
@@ -402,6 +403,90 @@ func delimitedArgument(s string) (string, int, bool) {
 		return "", 0, false
 	}
 	return s[1 : 1+end], end + 2, true
+}
+
+// A numeric qualifier's argument: a number, and which way the file's own
+// number has to stand against it.
+//
+// Measured on zsh 5.9.2, 2026-09-11, against a directory holding `dir1/` (2
+// links), `dir2/` with one subdirectory (3), `f1` hard-linked to `f1b` (2
+// each), `g1` (1) and a symbolic link `lnk` (1):
+//
+//	*(l1)      g1 lnk       exactly one
+//	*(l2)      dir1 f1 f1b  exactly two
+//	*(l+1)     dir1 dir2 f1 f1b     more than one
+//	*(l-3)     everything but dir2  fewer than three
+//	*(l0)      no matches found     nothing has none
+//	*(l+0)     everything           and everything has some
+//
+// **`+` is more and `-` is fewer, and neither includes the number itself**:
+// `l-1` matches nothing where `l1` matches two names, so the comparison is
+// strict on both sides.
+//
+// **The digits end the argument and the next character is a qualifier
+// again**: `*(l1x)` is the one-link name that is executable by its owner,
+// `lnk`, rather than a complaint about the `x`. `*(l1.5)` is
+// `unknown file attribute: 5`, which is the same rule seen through a
+// character that claims nothing.
+//
+// **A number too large to hold is not a failure**: `l99999999999999999999`
+// is `no matches found` and `l-99999999999999999999` lists everything, so it
+// behaves as a number no file can reach rather than as bad input. Only an
+// argument with no digits at all is refused, and the sentence is
+// `number expected` — `l`, `l+`, `l-`, `lx` and `l 1` alike.
+type globCount struct {
+	n uint64
+	// cmp is `+` for more, `-` for fewer, and `=` for the plain number,
+	// which is what a written argument with no operator means.
+	cmp byte
+}
+
+// holds compares a file's own number against the argument.
+func (c globCount) holds(v uint64) bool {
+	switch c.cmp {
+	case '+':
+		return v > c.n
+	case '-':
+		return v < c.n
+	}
+	return v == c.n
+}
+
+// parseGlobCount reads one numeric argument off the front of a list and
+// reports how many bytes it took.
+func parseGlobCount(s string) (globCount, int, string) {
+	c := globCount{cmp: '='}
+	i := 0
+	if i < len(s) && (s[i] == '+' || s[i] == '-') {
+		c.cmp = s[i]
+		i++
+	}
+	start := i
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i == start {
+		return globCount{}, 0, "number expected"
+	}
+	n, err := strconv.ParseUint(s[start:i], 10, 64)
+	if err != nil {
+		// Wider than the type, which is measured to be a number no file can
+		// carry rather than an error: the largest one there is compares the
+		// same way for every file, matching none of them under `=` and `+`
+		// and all of them under `-`.
+		n = math.MaxUint64
+	}
+	c.n = n
+	return c, i, ""
+}
+
+// fileLinks is the number of names a file has, behind a stat.
+func fileLinks(info fs.FileInfo) (uint64, bool) {
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, false
+	}
+	return uint64(st.Nlink), true
 }
 
 // fileOwner is the uid or gid behind a stat.

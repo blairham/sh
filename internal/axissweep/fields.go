@@ -40,6 +40,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Field is one axis: a dotted path into the struct and the type it holds.
@@ -233,15 +234,22 @@ var sourceDir = "interp"
 // which only a test needs.
 func SetSourceDir(dir string) { sourceDir = dir }
 
+// The three scans below are each done once and shared. They are behind a
+// sync.Once rather than a nil check because the callers are tests that run in
+// parallel, and a lazily filled package-level map is a data race however
+// obviously idempotent the work is.
 var (
+	parseOnce   sync.Once
 	parsedFiles map[string]*ast.File
 	parseErr    error
 )
 
 func sourceFiles() (map[string]*ast.File, error) {
-	if parsedFiles != nil || parseErr != nil {
-		return parsedFiles, parseErr
-	}
+	parseOnce.Do(readSource)
+	return parsedFiles, parseErr
+}
+
+func readSource() {
 	// One file at a time rather than parser.ParseDir, which is deprecated
 	// for a reason that would bite here: it does not read build tags, so it
 	// groups files into packages by guesswork. Everything this needs is in
@@ -251,7 +259,7 @@ func sourceFiles() (map[string]*ast.File, error) {
 	entries, err := os.ReadDir(sourceDir)
 	if err != nil {
 		parseErr = fmt.Errorf("reading %s: %w", sourceDir, err)
-		return nil, parseErr
+		return
 	}
 	fset := token.NewFileSet()
 	files := map[string]*ast.File{}
@@ -264,19 +272,22 @@ func sourceFiles() (map[string]*ast.File, error) {
 		f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if err != nil {
 			parseErr = fmt.Errorf("reading %s: %w", path, err)
-			return nil, parseErr
+			return
 		}
 		files[path] = f
 	}
 	if len(files) == 0 {
 		parseErr = fmt.Errorf("no Go files under %s", sourceDir)
-		return nil, parseErr
+		return
 	}
 	parsedFiles = files
-	return files, nil
 }
 
-var constCache map[string][]Value
+var (
+	constOnce  sync.Once
+	constCache map[string][]Value
+	constErr   error
+)
 
 // typeConstants collects, per named type, the constants the source declares
 // of it.
@@ -286,12 +297,15 @@ var constCache map[string][]Value
 // scan has to carry it too. The zero value of each type is marked, because
 // every answer type here declares one and means the same thing by it.
 func typeConstants() (map[string][]Value, error) {
-	if constCache != nil {
-		return constCache, nil
-	}
+	constOnce.Do(readConstants)
+	return constCache, constErr
+}
+
+func readConstants() {
 	files, err := sourceFiles()
 	if err != nil {
-		return nil, err
+		constErr = err
+		return
 	}
 	out := map[string][]Value{}
 	names := make([]string, 0, len(files))
@@ -341,19 +355,25 @@ func typeConstants() (map[string][]Value, error) {
 		}
 	}
 	constCache = out
-	return out, nil
 }
 
-var docCache map[string]string
+var (
+	docOnce  sync.Once
+	docCache map[string]string
+	docErr   error
+)
 
 // fieldDocs is each field's leading comment, trimmed to its first sentence.
 func fieldDocs() (map[string]string, error) {
-	if docCache != nil {
-		return docCache, nil
-	}
+	docOnce.Do(readDocs)
+	return docCache, docErr
+}
+
+func readDocs() {
 	files, err := sourceFiles()
 	if err != nil {
-		return nil, err
+		docErr = err
+		return
 	}
 	out := map[string]string{}
 	for _, f := range files {
@@ -386,7 +406,6 @@ func fieldDocs() (map[string]string, error) {
 		})
 	}
 	docCache = out
-	return out, nil
 }
 
 func firstSentence(s string) string {

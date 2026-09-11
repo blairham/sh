@@ -56,10 +56,28 @@ func Dialect() syntax.Dialect {
 	// quotes. A name out of an *expansion* is refused here as everywhere,
 	// which is why this is the quoting half alone (#1076).
 	d.ForNameMayBeQuoted = true
+	// And the same removal in front of a function definition's parentheses:
+	// `'q'() { echo q; }` defines and calls `q` here, where this parser
+	// refused the line at the `(`. The quoting is the whole of it and the
+	// name is read *expanded* — `a\ b() { :; }` is `a b:
+	// invalid function name`, naming the two words and not the backslash, so
+	// the check the definition then meets is the one it already had. Measured
+	// 2026-09-10: zsh and this shell take the quoted name where the three
+	// bash columns refuse the word as written and dash refuses to parse it,
+	// which is a two-against-four split and not the one-against-five a name
+	// holding a space gives. See syntax.Dialect.FunctionNameIsAnyWord for the
+	// six columns (#1561).
+	d.FunctionNameIsAnyWord = true
 	// And a word that is not a name at all parses, the complaint coming when
 	// the loop is reached — so `ksh -n` accepts a script this used to refuse.
 	// interp.Semantics.ForNameWhenTheLoopRuns is what happens then (#1110).
 	d.ForNameCheckedWhenTheLoopRuns = true
+	// The same stage for a function definition's name: `function _p_${w} { …
+	// }` parses and the complaint — `_p_${w}: invalid function name`, naming
+	// the word as it was written — comes when the definition is reached, and
+	// stops the script. interp.Semantics.FunctionNameWhenTheDefinitionRuns is
+	// what happens then (#1296).
+	d.FunctionNameCheckedWhenTheDefinitionRuns = true
 	// A colon written before a trim is ignored here: `${v:#hel*}` is
 	// `${v#hel*}` and comes to `lo`, where zsh reads the same six characters
 	// as an element exclusion and bash refuses them as arithmetic. All four
@@ -417,6 +435,11 @@ func Semantics() interp.Semantics {
 	// with stdin closed, `select $n in a b` stops the script exactly as
 	// `for $n in a b` does, so the loop keyword is not an axis (#1110).
 	s.ForNameWhenTheLoopRuns = interp.ForNameEndsTheScript
+	// And a definition's name ends the script too, at 1 — without the
+	// redirection exception the loop has, which is measured rather than
+	// assumed: `function _p_${w} { :; } > mf; echo after` stops here where
+	// the same shape on a `for` clause carries on.
+	s.FunctionNameWhenTheDefinitionRuns = interp.FuncNameEndsTheScript
 	// The one shell in the panel that reports *every* option word `set`
 	// cannot use before it gives up, with a single usage block after them
 	// all. The other four stop at the first, which three of them do because

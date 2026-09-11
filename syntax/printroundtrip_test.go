@@ -75,7 +75,16 @@ import (
 // written inside an `eval` and is not counted here, which is deliberate:
 // printed bare it would swallow the statement after it, and the grammar this
 // test reads with has no empty brace group to print it as instead.
-const keywordFunctionsInTheCorpus = 26
+//
+// Twenty-eight since #1296, whose two cases are keyword definitions whose
+// name holds an *expansion*. They join the count rather than being added to
+// it: both were already in the corpus and both were syntax errors to this
+// grammar, which now carries such a name to the definition the way the two
+// shells that complain about it do. They are the only rows here whose name is
+// [syntax.FuncDecl.RefusedName] — source text, printed back as it stood,
+// because quoting it would hand back a program those shells refuse for a
+// different reason or accept.
+const keywordFunctionsInTheCorpus = 28
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 	// The arrangement a formatter asks for, alongside the zero value that a

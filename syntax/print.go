@@ -520,7 +520,12 @@ func (p *printer) command(c Command) {
 		// The name as *written* where it was written with an expansion:
 		// printing its literal text would name a different function, which
 		// is the same loss the parser used to take (see FuncDecl.NameWord).
-		if x.NameWord != nil {
+		// A name the dialect will refuse is source text already and goes
+		// back as it came — quoting it would hand back a program the shell
+		// refuses for a different reason, or accepts.
+		if x.RefusedName != "" {
+			p.str(x.RefusedName)
+		} else if x.NameWord != nil {
 			p.word(x.NameWord)
 		} else {
 			p.str(printedFuncName(x.Name))

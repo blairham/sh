@@ -68,6 +68,13 @@ func Dialect() syntax.Dialect {
 	// And having committed, the body must be compound: `f() echo hi` is a
 	// syntax error here and a one-command function in the other three.
 	d.FuncBodyMustBeCompound = true
+	// A `function` keyword whose name is not a name parses, the complaint
+	// coming when the definition is reached — so `bash -n` accepts a script
+	// this used to refuse, and `function _p_${w} { … }` names the word it
+	// disliked instead of saying only that a name was expected.
+	// interp.Semantics.FunctionNameWhenTheDefinitionRuns is what happens
+	// then (#1296).
+	d.FunctionNameCheckedWhenTheDefinitionRuns = true
 	// And inside `[[ ]]`, which is the only place bash reads them.
 	d.ExtendedPatternInCondition = true
 	// `[[ -v name ]]`, which asks whether a parameter is set. Not core: bash
@@ -347,6 +354,12 @@ func Semantics() interp.Semantics {
 	// is the whole of the bash-as-`sh` column and is a mode rather than a
 	// build: bash 3.2 and 5.3 agree under their own names.
 	s.ForNameWhenTheLoopRuns = interp.ForNameFailsTheLoop
+	// And the same shape for a function definition's name: the definition
+	// fails, reports 1 and the script carries on — `function _p_${w} { :; };
+	// echo st=$?; echo after` prints the complaint, `st=1` and `after`, and
+	// exits 0. POSIX mode moves it to the syntax-error status exactly as it
+	// moves the loop's, which is the bash-as-`sh` column.
+	s.FunctionNameWhenTheDefinitionRuns = interp.FuncNameFailsTheDefinition
 	s.ArithNameValueRecurses = interp.Yes
 	// bash has no floats, so `2**-1` has no integer answer and stops the
 	// expression; the two shells with floats answer 0.5 instead.
@@ -1048,7 +1061,14 @@ func Diagnostics() interp.Diagnostics {
 		// dialect's syntax-error status.
 		ForNameStatus: 1,
 		ForName:       "`%[1]s': not a valid identifier",
-		Unterminated:  "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
+		// The same sentence for a function definition's name, which is
+		// measured rather than borrowed: `` `_p_${w}': not a valid
+		// identifier `` is what bash writes there, word for word. This
+		// dialect never reaches the *expanded*-name route the field also
+		// serves — PunctuatedFunctionNameIsRefused is No here, `f-g()` being
+		// a perfectly good definition — so there is one wording to keep.
+		FunctionNameInvalid: "`%[1]s': not a valid identifier",
+		Unterminated:        "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
 		// With nothing open to name — `f()` with no body — the sentence
 		// stops after the diagnosis rather than naming an empty construct.
 		UnterminatedNoConstruct: "syntax error: unexpected end of file",

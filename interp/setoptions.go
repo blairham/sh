@@ -265,12 +265,19 @@ func (r *Runner) SetPosixMode(on bool) {
 	}
 	redir, unsetRO := r.posixSaved, r.posixSavedUnsetReadonly
 	forName := r.posixSavedForName
+	funcName := r.posixSavedFuncName
 	if on {
 		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
 		r.posixSavedUnsetReadonly = r.sem().UnsetReadonlyFatal
 		r.posixSavedForName = r.sem().ForNameWhenTheLoopRuns
+		r.posixSavedFuncName = r.sem().FunctionNameWhenTheDefinitionRuns
 		redir, unsetRO = Yes, Yes
 		forName = ForNameEndsTheScriptAsASyntaxError
+		funcName = FuncNameEndsTheScriptAsASyntaxError
+		if r.posixSavedFuncName == FuncNameRunUnspecified {
+			// The same silence the loop's axis keeps, for the same reason.
+			funcName = FuncNameRunUnspecified
+		}
 		if r.posixSavedForName == ForNameRunUnspecified {
 			// A dialect that never answered keeps its silence: the mode
 			// moves an answer and does not invent one, so a script that
@@ -301,6 +308,15 @@ func (r *Runner) SetPosixMode(on bool) {
 		// puts the dialect's own answer back rather than the standard's
 		// opposite (#1110).
 		s.ForNameWhenTheLoopRuns = forName
+		// And the fourth, which is the same three-valued question asked of a
+		// function definition's name: bash reports it and carries on under
+		// its own name and stops at the syntax-error status under `sh`, and
+		// `set -o posix` moves it exactly as the name does. Measured
+		// alongside the loop's, and saved the same way — the two axes do not
+		// have to agree, and ksh93 is why: it stops on both at 1, so a mode
+		// that asserted the standard's answer on the way out would hand it
+		// bash's (#1296).
+		s.FunctionNameWhenTheDefinitionRuns = funcName
 	})
 	r.posixMode = on
 	// The standard has aliases expand in a script, so the mode turns the

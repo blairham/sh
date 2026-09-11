@@ -476,6 +476,16 @@ type Semantics struct {
 	// ForNameRunForm (#1110).
 	ForNameWhenTheLoopRuns ForNameRunForm
 
+	// FunctionNameWhenTheDefinitionRuns is what a `function` definition does
+	// when it is reached and the word standing where its name belongs is not
+	// a name. Asked only where the grammar carried the word this far —
+	// syntax.Dialect.FunctionNameCheckedWhenTheDefinitionRuns — which is bash
+	// and ksh93; zsh reads such a name as a word and defines what it comes
+	// to, and dash has no keyword to reach the question with. Three answers
+	// among those two, and POSIX mode is the third; see FuncNameRunForm
+	// (#1296).
+	FunctionNameWhenTheDefinitionRuns FuncNameRunForm
+
 	// FatalErrorStatusIsOne is the status a fatal shell error carries.
 	// True in bash, ksh93 and zsh; dash alone exits 2.
 	//

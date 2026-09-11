@@ -687,6 +687,17 @@ type FuncDecl struct {
 	// and a plausible one. Flattening it was silent — status 0, a function
 	// defined, and the one the script asked for missing.
 	NameWord *Word
+	// RefusedName is the word standing where a name belonged when it was not
+	// one, in the dialects that check it where the definition runs — see
+	// [Dialect.FunctionNameCheckedWhenTheDefinitionRuns]. It is the source
+	// text, quotes and expansion and all, because that is what the complaint
+	// quotes: `function _p_${w}` refuses `_p_${w}` and not `_p_w`.
+	//
+	// Set instead of Name rather than beside it, exactly as
+	// [ForClause.RefusedName] is: there is no name to bind, so a declaration
+	// carrying one would be a declaration the interpreter could define. Empty
+	// is the ordinary case and the only one in four of the six dialects.
+	RefusedName string
 	// AlsoNamed holds the second and later names of a definition that gave
 	// several — `function clipcopy clippaste { … }` — and is empty for the
 	// one-name definition every dialect has. See

@@ -425,12 +425,23 @@ tree. See the note under *Why not re-run on `main`* below.
 linters `.golangci.yml` enables, so the lint job already runs it over the
 same code.
 
-`main` is protected. All of these must pass before a merge, and branches
-must be **up to date** with `main` first:
+`main` is protected, and these three must pass before a merge:
 
     Build and test (ubuntu-latest)
     Build and test (macos-latest)
     Pre-commit
+
+**A branch does not have to be up to date with `main` first.**
+`required_status_checks.strict` is **`false`** — read off the API on
+2026-09-11, after this document had asserted the opposite for long enough
+that an agent rebased onto a `main` moving every few minutes to satisfy a
+rule that was not there. So a `BLOCKED` pull request is waiting on a
+**check**, never on a rebase. Rebase when you want the newer tree, not to
+be allowed to merge.
+
+`Lint` and `Oracle (report only)` run on every pull request but are **not**
+required contexts. Read them anyway: `Lint` is where golangci-lint lives,
+and it catches real defects a green build does not.
 
 Merges are **squash only** — linear history is enforced, and the merge and
 rebase buttons are turned off so the UI cannot offer what protection would
@@ -456,10 +467,15 @@ pending forever, not as passed**, so a paths-filtered required check makes
 a docs-only pull request permanently unmergeable. The jobs always run and
 report; only the expensive steps are skipped.
 
-**Checks run on pull requests, not on pushes to `main`.** Because a branch
-has to be up to date before merging, a squash merge lands the tree that
-was already tested, so re-running deterministic checks afterwards tests
-nothing new.
+**Checks run on pull requests, not on pushes to `main`.** The argument for
+that was: a branch has to be up to date before merging, so a squash lands
+the tree that was already tested and re-running deterministic checks
+afterwards tests nothing new.
+
+**That premise is false.** `strict` is `false`, so a branch may merge from
+behind. A pull request is tested against its **merge base**, and the squash
+produces a tree that may never have been tested in that combination at all.
+Which makes the gap below a real one rather than an accepted trade.
 
 **The exception that argument allows is currently missing.** Determinism
 is the whole case above, and races are not deterministic: a test can pass

@@ -113,7 +113,7 @@ dirs() {
 	fi
 }
 __dirs_rotate() {
-	local __spec=$1 __i __new
+	local __spec=$1 __i __new __opts=$2
 	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
 	case $__spec in
 	+*) __i=${__spec#+} ;;
@@ -132,42 +132,65 @@ __dirs_rotate() {
 	done
 	__new=$1
 	shift
-	cd "$__new" || return 1
+	cd ${__opts:+"$__opts"} "$__new" || return 1
 	DIRSTACK=("$@")
 }
+__dirs_cdopts() {
+	# The letters of a leading option word that cd reads, or nothing when
+	# the word is not one of those. A bundle is kept whole and an unknown
+	# letter refuses the whole word, so a single letter this engine does
+	# not carry cannot turn -qs into a half-read bundle.
+	local __d=$1 __c __o=
+	case $__d in
+	-?*) __d=${__d#-} ;;
+	*) return 1 ;;
+	esac
+	while [ -n "$__d" ]; do
+		__c=${__d%${__d#?}}
+		case $__c in
+		[LPq]) __o=$__o$__c ;;
+		*) return 1 ;;
+		esac
+		__d=${__d#?}
+	done
+	__DIRS_OPTS=$__DIRS_OPTS$__o
+	return 0
+}
 pushd() {
-	local __old=$PWD __spec=
+	local __old=$PWD __spec= __DIRS_OPTS=
 	while [ $# -gt 0 ]; do
 		case $1 in
 		+[0-9]*|-[0-9]*) __spec=$1; shift ;;
 		--) shift; break ;;
+		-?*) __dirs_cdopts "$1" || break; shift ;;
 		*) break ;;
 		esac
 	done
 	if [ -n "$__spec" ]; then
-		__dirs_rotate "$__spec"
+		__dirs_rotate "$__spec" ${__DIRS_OPTS:+-$__DIRS_OPTS}
 		return $?
 	fi
 	if [ $# -eq 0 ]; then
 		if [ ${#DIRSTACK[@]} -eq 0 ]; then
 			# Nothing to exchange with, so this shell goes home and pushes
 			# where it was — where bash refuses and stays put.
-			cd "$HOME" || return 1
+			cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$HOME" || return 1
 			DIRSTACK=("$__old")
 			return 0
 		fi
-		cd "${DIRSTACK[1]}" || return 1
+		cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "${DIRSTACK[1]}" || return 1
 		DIRSTACK[1]=$__old
 		return 0
 	fi
-	cd "$1" || return 1
+	cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$1" || return 1
 	DIRSTACK=("$__old" ${DIRSTACK[@]+"${DIRSTACK[@]}"})
 }
 popd() {
-	local __spec= __i __k __len
+	local __spec= __i __k __len __DIRS_OPTS=
 	while [ $# -gt 0 ]; do
 		case $1 in
 		+[0-9]*|-[0-9]*) __spec=$1; shift ;;
+		-?*) __dirs_cdopts "$1" || break; shift ;;
 		*) break ;;
 		esac
 	done
@@ -190,7 +213,7 @@ popd() {
 	if [ "$__i" -eq 0 ]; then
 		# The entry you are standing in: the shell moves to the next one
 		# down, which is what a bare popd does.
-		cd "${DIRSTACK[1]}" || return 1
+		cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "${DIRSTACK[1]}" || return 1
 		DIRSTACK=("${DIRSTACK[@]:1}")
 		return 0
 	fi

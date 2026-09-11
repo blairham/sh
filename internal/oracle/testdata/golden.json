@@ -41431,6 +41431,50 @@
         "TimedOut": false
       }
     },
+    "dirstack/the-quiet-letter": {
+      "bash": {
+        "Stdout": "st=2 in=elsewhere~back=2 same=yes",
+        "Stderr": "\u003cshell\u003e: line 1: pushd: -q: invalid number~pushd: usage: pushd [-n] [+N | -N | dir]~\u003cshell\u003e: line 1: popd: -q: invalid number~popd: usage: popd [-n] [+N | -N]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2 in=elsewhere~back=2 same=yes",
+        "Stderr": "\u003cshell\u003e: line 1: pushd: -q: invalid number~pushd: usage: pushd [-n] [+N | -N | dir]~\u003cshell\u003e: line 1: popd: -q: invalid number~popd: usage: popd [-n] [+N | -N]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 in=elsewhere~back=1 same=yes",
+        "Stderr": "\u003cshell\u003e: line 0: pushd: -q: invalid number~pushd: usage: pushd [dir | +N | -N] [-n]~\u003cshell\u003e: line 0: popd: -q: invalid number~popd: usage: popd [+N | -N] [-n]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127 in=elsewhere~back=127 same=yes",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: popd: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127 in=elsewhere~back=127 same=yes",
+        "Stderr": "\u003cshell\u003e: pushd: not found~\u003cshell\u003e: popd: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 in=sub~back=0 same=yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "dirstack/unset-a-function-that-shadowed-a-builtin": {
       "bash": {
         "Stdout": "u=0~/tmp /~st=0",
@@ -89794,6 +89838,50 @@
         "TimedOut": false
       }
     },
+    "print/a-dash-before-a-digit-is-an-operand": {
+      "bash": {
+        "Stdout": " st=127",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " st=127",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " st=127",
+        "Stderr": "\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " st=127",
+        "Stderr": "\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " st=2",
+        "Stderr": "\u003cshell\u003e: print: -1: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -1: unknown option~\u003cshell\u003e: print: -2: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -1: unknown option~\u003cshell\u003e: print: -2: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -1: unknown option~\u003cshell\u003e: print: -x: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -1: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "-1~-12~-1 -2~-1x~ st=1",
+        "Stderr": "\u003cshell\u003e:print:1: bad option: -1",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "print/a-direct-color-prompt-escape": {
       "bash": {
         "Stdout": "st=0",
@@ -112253,6 +112341,50 @@
       },
       "zsh": {
         "Stdout": "held=0~named=0 high=1~again=0~released=0~twice=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/a-read-only-descriptor-will-not-take-a-write": {
+      "bash": {
+        "Stdout": "wrote=127~file=[abcdef]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "wrote=127~file=[abcdef]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "wrote=127~file=[abcdef]",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "wrote=127~file=[abcdef]",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: sysopen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "wrote=1~file=[abcdef]",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "wrote=1~file=[abcdef]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

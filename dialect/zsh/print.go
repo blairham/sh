@@ -5,10 +5,12 @@ package zsh
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/blairham/sh/interp"
 )
@@ -54,7 +56,9 @@ import (
 //     separates and terminates with NULs.
 //   - `-u fd` aims the output at a descriptor, the number attached or the next
 //     word. A word that is no number is `number expected after -u: q`; a
-//     number nothing writable is open at is `bad file number: 9`; both 1.
+//     number nothing is open at is `bad file number: 9`; a number open for
+//     reading is `bad mode on fd 3`, which is the refusal the write itself
+//     reports — see printWriteFailed. All three are 1.
 //   - `-m` takes the first operand as a pattern and prints only the operands
 //     matching it; with no operand at all it is `no pattern specified`, 1.
 //   - `-o` sorts the operands, `-O` sorts them in reverse and `-i` folds case
@@ -72,7 +76,9 @@ import (
 //     answers, in the same words.
 //   - `-f format` hands the whole command to printf — format reused over the
 //     operands, no terminator added.
-//   - `--` and a lone `-` both end the options.
+//   - `--` and a lone `-` both end the options, and so does a dash with a
+//     digit straight after it — `print -1` prints `-1`. See
+//     printNumberOperand.
 //
 // An unknown letter is `bad option: -q` at 1, with nothing printed.
 //
@@ -80,7 +86,9 @@ import (
 // 3` in zsh — a number that names neither the descriptor asked about nor
 // anything else in the command — and is `bad file number: 0` here, because
 // repeating a wording that is wrong about its own subject would be the worse
-// of the two. And `print -m '['` is `bad pattern: [` at 1 there; the core's
+// of the two. The *sentence* is this shell's own and is written where it is
+// true: a descriptor really open for reading gets it, with its own number in
+// it. And `print -m '['` is `bad pattern: [` at 1 there; the core's
 // matcher treats an unterminated bracket as this dialect's fatal pattern,
 // which abandons the script, so the pattern is checked here first and refused
 // with the measured wording and status.
@@ -178,7 +186,42 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if !ok {
 		return 1
 	}
-	_, _ = io.WriteString(out, text)
+	if _, err := io.WriteString(out, text); err != nil {
+		return printWriteFailed(r, opts.fd, err)
+	}
+	return 0
+}
+
+// printWriteFailed says what a write that did not happen was refused for.
+//
+// The one refusal measured, and the one this exists for, is a descriptor open
+// for reading: zsh 5.9.2, 2026-09-10, with `zmodload zsh/system`, a file of
+// text, `sysopen -u ro f` — which opens read-only with no direction letter —
+// and `print -u $ro -- nope`:
+//
+//	zsh:print:1: bad mode on fd 3    st=1
+//
+// Before this the write went to a descriptor that could not take it, the error
+// was discarded, and the answer was 0 with nothing written (#1751). A script
+// writing to the wrong one of two descriptors it holds was told nothing at
+// all, and the bytes went nowhere.
+//
+// The mode is read from the refusal rather than asked for in advance, because
+// a descriptor's mode is not a thing this shell's table records: what it holds
+// is a stream, and only the write can say whether the file behind it will take
+// one. EBADF on a descriptor the table *does* hold is that answer — the number
+// is open here and the file will not be written — and it is what this shell's
+// sentence is about. `bad file number` is the other complaint and is already
+// answered above, where the number names nothing at all.
+//
+// Any other error is left as it was: what this shell says for a write that
+// fails for some other reason is unmeasured, and inventing a second sentence
+// under the first one's wording would be a guess wearing a measurement.
+func printWriteFailed(r *interp.Runner, fd int, err error) int {
+	if errors.Is(err, syscall.EBADF) {
+		r.Diagnosef("bad mode on fd %d\n", fd)
+		return 1
+	}
 	return 0
 }
 
@@ -306,7 +349,7 @@ func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest
 	rest = args
 	for len(rest) > 0 {
 		word := rest[0]
-		if !strings.HasPrefix(word, "-") || word == "-" {
+		if !strings.HasPrefix(word, "-") || word == "-" || printNumberOperand(word) {
 			break
 		}
 		if opts.echoMode {
@@ -357,6 +400,31 @@ func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest
 		rest = rest[1:]
 	}
 	return rest, -1
+}
+
+// printNumberOperand reports a word that looks like an option and is not one:
+// a dash with a **digit** straight after it, which this shell's `print` reads
+// as the first operand and not as a bundle of letters.
+//
+// It is the first character after the dash that decides, and nothing else.
+// Measured 2026-09-10 on zsh 5.9.2 with no startup files, where `print -1`,
+// `print -12`, `print -1x`, `print -0` and `print -1.5` each print themselves
+// and `print -r -1` prints `-1` — so the word is not a *number*, it merely
+// starts with a digit, and a letter word before it is still an option word.
+// The rule is one-sided: a digit that is not first is an option letter in that
+// shell as it is here, and `print -n1` is `bad option: -1` in both.
+//
+// A `+` leads an operand too, and needs no test — the loop only ever looks at
+// a word beginning with a dash.
+//
+// The word *ends* the options rather than being passed over, which is what
+// `print -1 -r` measures: both words print, so the second is an operand and
+// was never read as a letter.
+//
+// Without this, anything printing a negative number without `--` in front of
+// it drew a complaint about an option nobody wrote (#1652).
+func printNumberOperand(word string) bool {
+	return len(word) > 1 && word[1] >= '0' && word[1] <= '9'
 }
 
 // printOptionArgument reads the argument of `-f` or `-u`: attached to the

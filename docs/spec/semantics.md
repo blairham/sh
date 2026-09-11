@@ -2870,6 +2870,30 @@ which use `$(( $# ))` or `$(( $2-2 ))`. Five of the seven parse failures
 `make wild` reported on this machine were this one cause. It was not on the
 list before the sweep existed; it was found by pointing the sweep at /usr/bin.
 
+## What a failed `(( ))` leaves behind
+
+The sentence and the status are two questions, and only the second one
+splits the panel here. Measured 2026-09-10:
+
+    (( 1+ ))      zsh   bad math expression: operand expected at end of string, 2
+                  bash  arithmetic syntax error: operand expected, 1
+    let "1+"      both  the same reason in each shell's words, 1
+
+zsh leaves **2** where the rest leave 1, and it does so for every way the
+expression can fail — an unreadable one, a division by zero, a call to a
+math function nothing defines — while the same text through `let` is 1 in
+zsh, bash and ksh93 alike. That pair is what places the question: it is
+the *construct* and not the evaluator, so `Semantics.ArithCommandErrorStatusIsTwo`
+is asked at `(( ))`'s error path and nowhere else. A shell that hung the
+status on the arithmetic failure itself would have moved `let` with it.
+
+It is a status and not a truth, so `if (( 1+ ))` reaches it the same way:
+the condition is false and the status behind it is the dialect's.
+
+ksh93 is not in the split because it does not stay to answer — a math
+error there abandons the input, which is a separate divergence from this
+one and is not implemented here.
+
 ## Two spellings of an option, and only one of them is portable
 
 `set -o noglob` means the same thing in all four shells. `set -f` is its short
@@ -4457,6 +4481,18 @@ What was built, all through the extension seam — registered builtins in each
   reports is a real entry in this shell's table, so `print -u $fd` reaches it
   here, where zsh keeps its lock descriptors to itself and answers `bad file
   number`.
+
+  **A descriptor opened for reading will not take a write, and says so.**
+  `sysopen -u ro f` with no direction letter opens read-only, and
+  `print -u $ro x` there is `bad mode on fd 3` at 1 in zsh 5.9.2 — a
+  different complaint from `bad file number`, which is what a number
+  nothing is open at draws. The mode is read from the refusal rather than
+  asked for in advance: this shell's table holds a *stream*, and only the
+  write can say whether the file behind it will take one, so an EBADF on a
+  number the table does hold is that answer (#1751). It completes the pair
+  the direction letters are for — the read-only one cannot be written and
+  the write-only one cannot be read — of which only the second half could
+  be asserted before.
 
   `sysseek` is one lseek: `-u` the descriptor and 0 the default, `-w start`,
   `current` or `end` (whole words, case-insensitive, not abbreviated), and an
@@ -6185,6 +6221,21 @@ their own prelude, so those are written twice rather than switched on:
 dash and ksh93 have no `pushd`, `popd` or `dirs` at all — three names
 that resolve to nothing and exit 127. Recorded as absence rather than as
 a divergence, which is what the corpus rows show in those two columns.
+
+**The quiet letter is `cd`'s and is handed on rather than answered
+here** (#1789). zsh's `pushd -q`, `popd -q` and `pushd -q +N` move
+without running the directory-change hook, which is exactly what `cd -q`
+already does — so the option loop reads the letters `cd` reads (`-L`,
+`-P`, `-q`, bundled or apart) and passes them through, and nothing about
+the suppression lives in the prelude. Measured on zsh 5.9.2, 2026-09-10,
+with a `chpwd` defined: the plain forms print the hook's marker and the
+`-q` forms do not, and all of them move. It matters because the letter
+was previously read as the *directory*: the operand was dropped, the
+shell went to `$HOME`, and the stack entry went with it at status 0.
+
+A word this loop does not recognize still ends the options and becomes
+the operand, which is why a letter the core's `cd` has not got — zsh's
+`-s` (#1569) — is left alone rather than half-read out of a bundle.
 
 Deliberately out of scope, and refused by name rather than read as a
 directory called `-n`: **`pushd -n` and `popd -n`**, which do the stack

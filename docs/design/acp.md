@@ -163,6 +163,27 @@ is in flight is refused with `-32602`: the runner is a single shell, and
 interleaving two programs in it would give neither the variables it
 wrote. `driver.Session` says the same thing in its own words.
 
+**A session whose shell has exited is over, and says so.** `exit` in a
+prompt ends the shell exactly as it ends a script, and so does `exec`,
+and so does a fatal signal. What is left is not a shell: it has run its
+EXIT trap, and an input handed to it now runs nothing at all. Every
+prompt after that is refused with `-32602` naming the status the shell
+exited with, which is the one thing a client cannot find out any other
+way.
+
+Answering `end_turn` instead is the bug this replaced (#1803). It is the
+reply for a turn that ran and finished, so a client had no way to tell it
+from a command that printed nothing — and went on having no way for every
+prompt after, which is how a person watches their commands quietly stop
+having effects with no diagnostic anywhere. Measured before the fix: a
+session sent a bare `exit` answered `end_turn` to three more prompts and
+did not create the file the last of them asked for.
+
+The condition is asked of the **shell**, not of the input: a guard
+written against the word `exit` would leave `exec` and a signal doing the
+same thing, and a bare `exit` at the end of a pasted script is the way
+this is actually reached rather than the exotic way.
+
 ### The three streams
 
 An ACP agent may not write to standard output anything that is not a

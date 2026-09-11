@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -654,5 +655,72 @@ func TestAnActionTheInnerGateAllowsIsStillAskedAbout(t *testing.T) {
 	}
 	if got := c.text(acp.StreamStdout); !strings.Contains(got, "tripwire") {
 		t.Errorf("stdout = %q, want the allowed command to have run", got)
+	}
+}
+
+// A session whose shell has exited answers an error rather than end_turn.
+//
+// #1803. `end_turn` is the reply for a turn that ran and finished, so a client
+// given it for a prompt that ran *nothing* cannot tell the two apart — and goes
+// on not being able to tell for every prompt after, which is how a person
+// watches their commands quietly stop having effects.
+//
+// The cases are the ways a shell stops being one, not the spellings of `exit`:
+// a bare `exit`, `exit` with a status, and `exec`, which reaches the same place
+// by replacing the shell with something else.
+func TestASessionWhoseShellExitedRefusesTheNextPrompt(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		src  string
+		want int
+	}{
+		{"a bare exit", "exit", 0},
+		{"exit with a status", "exit 3", 3},
+		{"exec, which ends it another way", "exec /bin/echo replaced", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c, id, _ := connect(t, nil)
+
+			// The turn that ends the shell is a turn that ran: it reports
+			// normally, and only what comes *after* it is refused.
+			if got := prompt(t, c, id, tc.src); got != acp.StopEndTurn {
+				t.Errorf("the exiting turn reported %q, want %q", got, acp.StopEndTurn)
+			}
+
+			var resp acp.PromptResponse
+			err := c.conn.Call(t.Context(), acp.MethodPrompt, acp.PromptRequest{
+				SessionID: id, Prompt: []acp.ContentBlock{acp.TextBlock("echo after")},
+			}, &resp)
+			if err == nil {
+				t.Fatalf("a prompt to an ended session answered %q, want an error", resp.StopReason)
+			}
+			if !strings.Contains(err.Error(), "has ended") {
+				t.Errorf("error = %v, want one that says the session has ended", err)
+			}
+			// The status the shell exited with is the one thing a client
+			// cannot find out any other way, so the refusal carries it.
+			if !strings.Contains(err.Error(), fmt.Sprintf("status %d", tc.want)) {
+				t.Errorf("error = %v, want it to name exit status %d", err, tc.want)
+			}
+		})
+	}
+}
+
+// And a session is not ended by a command that merely failed. The status is
+// the script's business; whether the shell is still there is the session's.
+func TestAFailingCommandDoesNotEndTheSession(t *testing.T) {
+	t.Parallel()
+	c, id, _ := connect(t, nil)
+
+	if got := prompt(t, c, id, "false"); got != acp.StopEndTurn {
+		t.Errorf("stopReason = %q", got)
+	}
+	if got := prompt(t, c, id, "echo still-here"); got != acp.StopEndTurn {
+		t.Errorf("a session was ended by a failing command, not by exiting: %q", got)
+	}
+	if got := c.text(acp.StreamStdout); !strings.Contains(got, "still-here") {
+		t.Errorf("stdout = %q, want the next turn to have run", got)
 	}
 }

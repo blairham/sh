@@ -105,13 +105,16 @@ import (
 // is whatever those things turn out to be — which cannot be known until
 // it is answered once.
 //
-// `pid` is answered and is this process's, which is true rather than
-// approximate — and it is worth saying what it is *not*. In zsh, `$sysparams[pid]`
-// differs from `$$` inside a subshell, because a subshell there is a fork and
-// `$$` keeps the parent's number; that difference is the reason the key
-// exists. Here a subshell is a cloned Runner in one process, so the two agree
-// everywhere. Nothing is being rounded off: the key reports the process this
-// shell is in, and this shell is in one process.
+// `pid` is this process's at the top level, and empty inside a subshell —
+// which is the same deviation as `procsubstpid` and arrived at the same way.
+// In zsh, `$sysparams[pid]` differs from `$$` inside a subshell, because a
+// subshell there is a fork and `$$` keeps the parent's number; that difference
+// is the reason the key exists, and a body reads the key to learn the one
+// thing `$$` will not tell it. Here a subshell is a cloned Runner in one
+// process, so answering it made the two agree — and a body that believes it
+// has a process of its own believes it leads a process group of its own, so
+// this machine's prompt theme tore itself down with `kill -- -$sysparams[pid]`
+// and killed the interactive shell (#2046). See subshellPid.
 //
 // # `$errnos` is an indexed array and the platform's
 //
@@ -165,15 +168,88 @@ func registerSystemModule(r *interp.Runner) {
 // it matters everywhere else in this dialect and for one more: `os.Getpid` is
 // cheap, and a shell that cached it would be handing out a stale number to
 // anything that had re-execed itself.
-func sysparamsView(*interp.Runner) interp.AssocArray {
+//
+// And it is produced *for the runner that read it*, which is the whole of
+// [subshellPid] below.
+func sysparamsView(r *interp.Runner) interp.AssocArray {
 	return interp.AssocArray{
-		"pid":  strconv.Itoa(os.Getpid()),
+		"pid":  subshellPid(r),
 		"ppid": strconv.Itoa(os.Getppid()),
 		// Present and empty. See the note above: there is no process, 0 is
 		// the answer that gets a caller's own process group killed, and a
 		// refusal takes down the line that asked.
 		"procsubstpid": "",
 	}
+}
+
+// subshellPid is `$sysparams[pid]`: this process, and empty inside a body a
+// real shell would have forked.
+//
+// The doc comment above says the shell reports the process it is in and that
+// nothing is rounded off. That was true of the number and false of the claim
+// the number carries, and the difference killed this shell (#2046).
+//
+// Measured, zsh 5.9.2 against this shell, one script, the same five contexts:
+//
+//	              zsh 5.9.2        here, before
+//	top level     54123            54074
+//	( … )         54127            54074
+//	$( … )        54128            54074
+//	<( … )        54129            54074
+//	{ … } &       54132            54074
+//
+// `$$` is the shell's number in every row of both columns — *that difference*
+// is why the key exists. A body reads this key to learn the one thing `$$`
+// will not tell it: which process it is itself. Here the honest answer to
+// that question is that it has not got one.
+//
+// # What answering the shell's number does
+//
+// It is the catastrophe the note on `procsubstpid` above describes, arrived at
+// through the neighboring key. A forked body leads its own process group, so
+// a teardown writes `kill -- -$sysparams[pid]` meaning "me and the children I
+// started". Read here, that is the interactive shell's own process group.
+//
+// Driving this machine's `~/.zshrc` through a pseudo-terminal, three call
+// sites in two plugins do exactly this, and each of them ran:
+//
+//	kill<_p9k_worker_start                 the async prompt worker's watchdog
+//	kill<gitstatus_stop_p9k_               the git daemon's teardown
+//	kill<_gitstatus_daemon_p9k_            the git daemon's own `always` block
+//
+// The shell took its own SIGTERM about a third of a second in, having reached
+// the first prompt and nothing after it, and every line typed at the terminal
+// afterwards went to a process that was gone.
+//
+// # Why empty, out of the four answers
+//
+// The same four as for `procsubstpid`, and they come out the same way. This
+// process's number is the measured catastrophe above. 0 is that catastrophe
+// spelled differently — `kill -- -0` is the caller's own process group too. A
+// number of this shell's own invention names a process group belonging to
+// somebody else on the machine, which is worse than either, because it is
+// wrong somewhere nobody is looking. A refusal is fatal to the line that
+// asked, which is what `procsubstpid` was and is why it stopped being that.
+//
+// Empty is the one that is both true — there is no such process — and safe:
+// `kill -- -` is not a pid and signals nothing, and the guard the wild puts in
+// front of the dangerous line reads it as nothing to signal. It costs the
+// bodies that wanted a unique number for a temporary file, which is a name
+// collision rather than a dead shell, and it is the trade this file already
+// made once one key along.
+//
+// # `ppid` is not the same question
+//
+// It is left reporting this process's parent, which is what it reports
+// everywhere. `pid` is read as an identity — *me, and not the shell* — and
+// that reading is what has no answer here; `ppid` is read as a number and is
+// the same number wherever it is asked. Nothing in the installed plugin tree
+// reads it at all, and nothing aims a signal at it.
+func subshellPid(r *interp.Runner) string {
+	if r != nil && r.InSubshell() {
+		return ""
+	}
+	return strconv.Itoa(os.Getpid())
 }
 
 // errnosView is `$errnos`: the platform's error names, indexed by number.

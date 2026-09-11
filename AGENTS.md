@@ -370,7 +370,8 @@ cannot.
 hygiene, secrets, license headers, `go mod tidy`, the toolchain-pin
 invariant, and the conflict-marker scan. golangci-lint is **not** among
 them, on purpose; the measurement that took it out is recorded in
-`.pre-commit-config.yaml`.
+`.pre-commit-config.yaml`. Seconds, not minutes, and it is the only
+feedback that arrives before the code leaves the machine.
 
 **Neither is a formatter, and this file used to say otherwise.** The hooks
 that applied gofumpt and goimports went with golangci-lint in #1495, on the
@@ -378,8 +379,6 @@ understanding that `go-fumpt-repo` would carry them — and that hook has
 never been in this repository's config. `make fmt` runs first in `make
 check` and the `Lint` job checks formatting on a pull request, which is why
 nothing has drifted; #1903 is whether the hook should be there as well.
-Seconds, not minutes, and it is the only feedback that arrives before the
-code leaves the machine.
 
 **On a pull request.** The gate, in two tiers.
 

@@ -3850,7 +3850,7 @@ func (r *Runner) diag() Diagnostics {
 	if r.Diagnostics != nil {
 		d = *r.Diagnostics
 	}
-	if r.AtPrompt && r.borrowedFiles == 0 {
+	if r.AtPrompt && r.borrowedFiles == 0 && !r.inFunctionReadFromAFile() {
 		// A line typed at a prompt is located the prompt's way — see
 		// Runner.AtPrompt and Diagnostics.ForPrompt. Applied here rather
 		// than once by the front end because it must *stop* applying inside
@@ -3865,9 +3865,35 @@ func (r *Runner) diag() Diagnostics {
 		// handed to `eval` is the other way and needs no exception — bash
 		// 5.3.15 answers `bash: cd: …` for `eval "cd /nope"` at a prompt,
 		// with no line, exactly as for the line itself (#2024).
+		//
+		// A function *defined* in a file is the same fact reached one step
+		// later, and it needs a question of its own because the file is no
+		// longer open by the time the call happens: borrowedFiles has already
+		// gone back to zero, so only where the body came from can say.
+		// Measured on zsh 5.9.2 with `myfunc` defined in a sourced `lib.zsh`
+		// and called at a prompt: `myfunc:setopt:1: can't change option:
+		// monitor`, keeping both the name and the line, exactly as the same
+		// script reports it non-interactively. A function *typed* at the
+		// prompt is the other answer — `myfunc:setopt:` with no line — which
+		// is what makes this a question about the body's origin rather than
+		// about being inside a function at all (#2052).
 		d = d.ForPrompt()
 	}
 	return d
+}
+
+// inFunctionReadFromAFile reports whether the body running now was read from
+// a file, which a function remembers from where it was defined.
+//
+// Empty for a function defined at a prompt, by `-c`, or on standard input:
+// Runner.funcFiles stores currentFile at the definition, and currentFile
+// falls back to the script file, which those three routes have not got. That
+// emptiness is the whole distinction, which is why it is read here rather
+// than off the call stack — pushFrame substitutes the shell's own name for an
+// empty file, which is right for a frame and would answer yes to everything
+// here.
+func (r *Runner) inFunctionReadFromAFile() bool {
+	return r.inFunc != "" && r.funcFiles[r.inFunc] != ""
 }
 
 // RedirectLine is which line a failed redirect is reported at.

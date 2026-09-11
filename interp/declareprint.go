@@ -434,7 +434,7 @@ func (r *Runner) plainAssignmentDeclaration(d declaration) string {
 //
 // The dialect is asked, which it was not while the only callers were one
 // shell's. Measured 2026-09-10 from `typeset -a` and `typeset -i` with no
-// names: zsh writes `g=( '' '' x )` and `h=255` for a based name, where
+// names: zsh writes `g=( ” ” x )` and `h=255` for a based name, where
 // ksh93 writes `g=([3]=x)` and `h=16#ff` — each of them the value half of
 // that shell's own `-p`, which is what this claims to be.
 func (r *Runner) listedDeclarationValue(d declaration) string {

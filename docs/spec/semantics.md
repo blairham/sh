@@ -2317,6 +2317,71 @@ its hash table's. We print keys sorted, the same choice `${m[@]}` reading
 already made, so a listing is deterministic; a corpus case must therefore
 not depend on the panel's key order — use one key, or sort downstream.
 
+## A declaration letter with no names is a filtered listing
+
+Measured 2026-09-10, macOS arm64: bash 5.3.15 (`--norc --noprofile -c`,
+also as `sh` and as the 3.2.57 build), ksh93u+ 2012-08-01, zsh 5.9.2
+(`-f`), all with a scrubbed environment, over one table:
+
+    qa=1; export qb=2; typeset -i qc=3; typeset -a qd=(p)
+    typeset -ai qe=(4); typeset -xi qf=6; typeset -r qg=7
+
+`typeset -x` with no operands is not a declaration of nothing: it is the
+**filtered listing**, the names carrying the attribute with their values.
+The plus sign of the same letter is the same selection with the values
+left off — `typeset +x` writes `qb`, `typeset -x` writes `qb=2` — so the
+sign picks between two listings rather than between a request and its
+undo.
+
+**The row is the bare `export` row and not the `-p` row.** bash writes its
+own `-p` text, ksh93 and zsh drop the command word:
+
+    line          bash                          ksh93          zsh
+    typeset -x    declare -x qb="2"             qb=2           qb=2
+    typeset -i    declare -i qc="3"             qc=3           qc=3
+    typeset -a    declare -a qd=([0]="p")       qd=(p)         qd=( p )
+
+which is `Semantics.BareDeclarationListing` exactly — the same field the
+bare `export` and `readonly` already answer, since where the bare form
+differs from `-p` it differs for both builtins and for this listing too.
+A compound keeps each shell's own `-p` spelling of the value: bash's
+subscripts and double quotes, ksh93's `(p q)`, zsh's padded `( p q )`.
+
+A name that is **typed and holds nothing** is a row: `local -a qz` then
+`typeset -a` writes `declare -a qz` in bash — `declare -a qz='()'` in the
+3.2 build — and `qz=(  )` in zsh, which declares such a name empty rather
+than leaving it unset. ksh93 has no `local` to ask with.
+
+**Two letters together is the disagreement, and there are three answers.**
+One letter reads the same everywhere, so a single-letter row is no
+evidence at all about the combination:
+
+    line          bash                  ksh93                zsh
+    typeset -xi   qb and qc             qf alone             qb, qc and qf
+    typeset -ir   qc, qe, qf and qg     nothing              qc, qf and qg
+    typeset -ax   nothing               invalid variable     qb, qd and qf
+    typeset -ai   qe alone              invalid variable     the integers
+    typeset -aA   nothing               invalid variable     the tables
+
+- **zsh joins** every letter, kind letters included: a name carrying any
+  one of the attributes is in.
+- **ksh93 intersects** every letter: a name must carry all of them, and
+  its kind letters never reach the question — `typeset -ax` is refused
+  outright as an invalid variable name.
+- **bash** is neither: the *kind* letters `-a` and `-A` narrow and the
+  rest join. A name must be every kind that was written and carry any one
+  of the remaining attributes, so `-ai` is the array that is also an
+  integer while `-ir` is every integer and every read-only name. Letter
+  order decides nothing: `-xa` and `-ax` agree.
+
+That is `Semantics.DeclarationListingFilter`, asked only where two letters
+were written. zsh's own kind letters are mutually exclusive — it refuses
+`typeset -ai x=(1 2)` as an inconsistent type — and two of them together
+select one rather than both, by a precedence of its own (`-ai` and `-ia`
+alike write the integers). That is a fact about a type system this tree
+does not share, where an array *can* be an integer array, and it is
+deliberately not modeled.
+
 ## The widest presentation difference in the panel
 
 `select` prints a menu, and no two shells draw it the same way. The same

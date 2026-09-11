@@ -317,6 +317,14 @@ type session struct {
 	stop   context.CancelFunc
 	inTurn bool
 
+	// Whether the shell this session is has finished, and the status it
+	// finished with. A shell that has exited is not a shell any more: it has
+	// run its EXIT trap, and an input handed to it now runs nothing at all.
+	// Recorded when it happens rather than asked for later, because the
+	// status is the exiting turn's and there is nowhere else to keep it.
+	ended     bool
+	endStatus int
+
 	// report is where an update goes. Nil is the connection, which is what a
 	// session on a real one has; a test that is about the mapping rather than
 	// about the wire fills it in and reads the values.
@@ -336,6 +344,18 @@ func (s *session) run(ctx context.Context, src string) (any, error) {
 		// delay.
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "session %s is already running a turn", s.id)
 	}
+	if s.ended {
+		s.mu.Unlock()
+		cancel()
+		// A prompt to a shell that is not there. Answering StopEndTurn would
+		// be the reply for a turn that ran and finished, so a client could
+		// not tell this from a command that printed nothing — and it would
+		// go on not being able to tell for every prompt after, which is how
+		// a person watches their commands quietly stop having effects. An
+		// error is the one answer that cannot be mistaken for work.
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams,
+			"session %s has ended: its shell exited with status %d", s.id, s.endStatus)
+	}
 	s.inTurn, s.stop = true, cancel
 	s.mu.Unlock()
 
@@ -350,7 +370,17 @@ func (s *session) run(ctx context.Context, src string) (any, error) {
 		s.errs.Flush()
 	}()
 
-	s.shell.Run(ctx, src)
+	status := s.shell.Run(ctx, src)
+	// Asked of the shell rather than of the input: `exit` is only the most
+	// obvious way to reach this, `exec` is another, and a fatal signal is a
+	// third. A guard written against the *word* would cover the case it was
+	// written from and leave the ones people meet — measured, a bare `exit`
+	// is what an editor pasting the end of a script sends (#1803).
+	if s.shell.Exited() {
+		s.mu.Lock()
+		s.ended, s.endStatus = true, status
+		s.mu.Unlock()
+	}
 	if ctx.Err() != nil {
 		return PromptResponse{StopReason: StopCancelled}, nil
 	}

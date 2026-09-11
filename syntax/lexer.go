@@ -157,6 +157,31 @@ type Lexer struct {
 	// so only the unquoted routes reach here. Every pattern operand is one
 	// of those whatever it is written inside, which is how the same fault
 	// reached `${v#((#s)a)}` as `bad pattern: #s)a` (#1408).
+	//
+	// It suspends the **comment** for exactly the same reason, and that is
+	// the same fault a second time: a comment is a thing a command line has,
+	// and an operand is not one. Measured 2026-09-11 on zsh 5.9.2, bash
+	// 5.3.15, bash 3.2.57 and dash, from a script file under `env -i`:
+	//
+	//	u=; printf '[%s]' "${u:-a#b}"    [a#b] in all four
+	//	u=; printf '[%s]' "${u:-#b}"     [#b]  in all four
+	//
+	// so a `#` where a word could begin inside an operand is a character of
+	// that word and never opens a comment. This lexer skipped one — the
+	// operand's text from the `#` to its end — and Parser.wordFrom then put
+	// the skipped run back as a *raw* literal span, which is the silent half:
+	// the text reappeared, and the quoting inside it did not. So
+	// `${v/(#b)\X/Q}` reached the matcher as the five characters `(#b)\X`
+	// with a live backslash where the pattern is `(#b)X`, and every glob flag
+	// group in a substitution — `(#b)`, `(#m)`, `(#i)` — stopped matching as
+	// soon as anything behind it was quoted or escaped (#2074).
+	//
+	// A `$( )`, `<( )` or `${ ;}` *inside* an operand is unaffected, because
+	// its body is a command line again: those are raw scans that ask
+	// commentsExist rather than coming through here, and the panel is
+	// unanimous the other way on them —
+	// `printf '[%s]' "${u:-$(echo hi # there)}"` is a parse failure in all
+	// four, the `#` having swallowed the closing paren.
 	inOperand bool
 
 	// inCaseParenList is set while the token being read stands inside a
@@ -653,7 +678,10 @@ func (l *Lexer) skipBlanksAndComments() {
 		case c == '#':
 			// Only where a word could begin, which is the case here: mid-word
 			// this function is not running. `echo a#b` prints a#b.
-			if l.comments != CommentsSkipped {
+			//
+			// An operand has no comments at all, whatever the mode says: see
+			// inOperand, where the measurement is.
+			if l.comments != CommentsSkipped || l.inOperand {
 				// The `#` is the caller's to deal with: either it opens no
 				// comment at all and starts an ordinary word, or Next
 				// hands the comment back as a token. Either way nothing is

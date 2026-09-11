@@ -25,12 +25,17 @@ func TestAnOperandKeepsWhatIsBetweenItsWords(t *testing.T) {
 		// was kept rather than rebuilt from the tokens.
 		{"a run of them", `${u:-a   b}`, []string{"a", "   ", "b"}},
 		{"a tab", "${u:-a\tb}", []string{"a", "\t", "b"}},
-		// A `#` inside an operand starts no comment, so what follows is
-		// text. It arrives as one span rather than two because the lexer
-		// *did* read it as a comment and stepped over the rest — which is
-		// exactly the text this puts back, and why putting it back by offset
-		// is worth more than reconstructing a separator would be.
-		{"a hash", `${u:-a #b}`, []string{"a", " #b"}},
+		// A `#` inside an operand starts no comment, so what follows is a
+		// word like any other and the blank in front of it is the gap
+		// between two of them.
+		//
+		// It used to arrive as the single span `" #b"`, because the lexer
+		// *did* read it as a comment and stepped over the rest and this
+		// offset repair put the skipped run back. The text was right and
+		// nothing inside it was: a span put back this way is raw, so the
+		// quoting of anything behind the `#` was gone. See
+		// TestAnExpansionsOperandHasNoComment (#2074).
+		{"a hash", `${u:-a #b}`, []string{"a", " ", "#b"}},
 		{"leading and trailing", `${u:- a }`, []string{" ", "a", " "}},
 		{"nothing between", `${u:-ab}`, []string{"ab"}},
 	} {

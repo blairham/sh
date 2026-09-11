@@ -1318,6 +1318,16 @@ var Corpus = []Case{
 		Why:     "the guard that keeps the rule off the operand it does not govern: a *pattern* operand's quotes quote and are removed, so the first trims the `x` and the unbalanced substitution in the second is no substitution at all. Five shells answer both; zsh refuses the second, which is its own divergence and not this one",
 	},
 	{
+		ID: "core/a-hash-in-an-expansion-operand", Category: "quoting",
+		Snippet: `unset u; x=${u:-a #'b'}; y=${u:-a #\b}; printf '[%s]' "${u:-a#b}" "${u:-#b}" "$x" "$y"; echo`,
+		Why:     "an operand is not a command position, so a `#` in one is a character of the word it stands in and never opens a comment — the same sentence the `((` suspension is written from. The last two fields are the ones that say so: this shell read the `#` as a comment, skipped the rest of the operand, and put the skipped run back as *raw* text, so the characters came back and the quoting inside them did not. The first two are the control, and they answered correctly throughout, which is what made it silent (#2074)",
+	},
+	{
+		ID: "core/a-hash-before-a-quote-in-a-pattern-operand", Category: "quoting",
+		Snippet: `v='a #b'; w='a #*'; printf '[%s]' "${v/a #b/Q}" "${v/a #'b'/Q}" "${v/a #\b/Q}" "${w/a #'*'/Q}" "${v%#'b'}"; echo`,
+		Why:     "the same loss where it changes what *matches* rather than what a word is. The first field is the control and always answered `Q`; the next three are the quoted spellings of the same pattern, which reached the matcher as their own quote marks and backslashes and matched nothing; the last is a trim, so the fault is the operand's and not the replacement operator's. The fourth field is the other direction — a quoted `*` is a star and must not match `a #b`'s letter — so a fix that merely deleted the quotes answers it wrongly. Where a dialect has `(#…)` glob flags the `#` lands in this position by itself, which is how every flag group in a substitution stopped matching (#2074)",
+	},
+	{
 		ID: "core/quotes-in-a-quoted-replacement-operand", Category: "quoting",
 		Snippet: `s=xay; v=VAL; printf '[%s]' "${s/'a'/Z}" "${s/a/'$v'}" ${s/a/'$v'}; echo`,
 		Why:     "the third reading of a quote in a `${ }` operand, and the one the panel divides on: a *pattern* operand's quotes quote and are removed everywhere, and a **replacement** operand's do in bash 5.3, that build as `sh` and ksh93 while bash 3.2 and zsh keep them as characters. Unquoted all five agree again, which is what says the disagreement is about the quoted context and not about the operator. dash has no operator and refuses the line. Answered by Semantics.ReplacementOperandTakesTheEnclosingQuoting (#1209); the first and third fields are the guards a fix routed through the word operand's rule would break",

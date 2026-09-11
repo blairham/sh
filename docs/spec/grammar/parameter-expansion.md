@@ -81,6 +81,40 @@ double-quoted content, which has no command position in it at all. A
 pattern operand is read as an unquoted word however it is written, so
 `"${v#((a))}"` is affected where `"${u:-((a))}"` is not.
 
+### Nor is a `#` in one a comment
+
+The same sentence again, and the second thing an operand does not have: a
+comment is a thing a command line has. A `#` in an operand is a character
+of the word it stands in, wherever in the operand it stands. Measured
+2026-09-11 from a script file under `env -i`, **unanimous** across zsh
+5.9.2, bash 5.3.15, bash 3.2.57 and dash:
+
+| probe | result |
+| --- | --- |
+| `u=; printf '[%s]' "${u:-a#b}"` | `[a#b]` |
+| `u=; printf '[%s]' "${u:-#b}"` | `[#b]` |
+| `v='a #b'; r=${v/a #'b'/Q}` | `Q` in the four with the operator |
+
+The third row is the one that matters, and it matters because of the
+*repair* rather than the skip. This implementation read the `#` as opening
+a comment and consumed the rest of the operand; the parser then put the
+consumed run back as raw text, so the characters reappeared and the
+quoting inside them did not. Rows with nothing quoted behind the `#`
+answered correctly throughout, which is what made it silent.
+
+Where a dialect has `(#…)` glob flags the `#` lands in that position by
+itself, because the flag group's `(` ends the word in front of it. So
+every glob flag group in a substitution stopped matching as soon as
+anything behind it was quoted or escaped — `${v/(#b)(*)'X'/Q}` asked for a
+pattern holding two literal quote marks and `${v/(#b)(*)\X/Q}` for one
+holding a live backslash. Neither matches, and `(#i)` and `(#m)` were just
+as dead, so it was never about backreferences (#2074).
+
+A `$( )`, `<( )` or `${ ;}` **inside** an operand is unaffected: its body
+is a command line again, and the panel is unanimous the other way on it —
+`u=; printf '[%s]' "${u:-$(echo hi # there)}"` is a parse failure in all
+four, the `#` having swallowed the closing parenthesis.
+
 ### And it is a word in the quoting the expansion stands in
 
 A `${ }` written inside double quotes has a body that is double-quoted

@@ -349,6 +349,14 @@ type patternOpts struct {
 	// reads it as an extended pattern.
 	group      bool
 	quantified bool
+	// topGroup reads a `|` standing outside every group and bracket as an
+	// alternation of the whole pattern, which one dialect does and only for
+	// a bar that arrived live — see matchTopLevel. Separate from group for
+	// the reason group and quantified are separate: the dialect that has
+	// bare groups is not the only one that could have this, and the written
+	// spelling is a parse error in every shell measured, so nothing but a
+	// value can put one here.
+	topGroup bool
 	// bad is set when the pattern is one the dialect rejects outright. It is
 	// a field rather than a return value because matchHere recurses, and
 	// threading a second result through every branch obscured the matching.
@@ -530,11 +538,100 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 			w.prepare(pattern)
 		}
 	}
-	if !matchHere(pattern, piece, 0, base, o) {
+	if !matchTopLevel(pattern, piece, base, o) {
 		return false, matchReport{}
 	}
 	span := capSpan{begin: base, end: base + len(piece), set: true}
 	return true, w.caps.report(subject, span, w.plan.whole)
+}
+
+// matchTopLevel matches a whole pattern, splitting it on a `|` that stands
+// outside every group and bracket where the dialect reads one as an
+// alternation.
+//
+// One shell in the panel does, and only for a `|` that arrived *live* — from
+// an expansion marked with `${~name}`, from a value under `globsubst`, or from
+// a group the rest of the word supplied. The written spelling is a parse error
+// there and here alike, which is what makes this reachable from a value and
+// nowhere else: `[[ a = a|b ]]` is `parse error near '|'` in zsh 5.9.2.
+//
+// Measured on zsh 5.9.2, 2026-09-08 and again 2026-09-11, each probe in a
+// script of its own under `env -i`, with `L='a|b'`:
+//
+//	[[ a = ${~L} ]]                  matches
+//	case a in ${~L}) …               takes the arm
+//	setopt globsubst; [[ a = $L ]]   matches
+//	print -l -- ${~L}                lists the files `a` and `b`
+//	[[ 'a|b' = ${~L} ]]              does *not* match
+//
+// The last row is the one that says this is a split rather than an extra
+// character: the text the value holds stops matching itself.
+//
+// A quoted bar is untouched, because a quoted character reaches the matcher
+// escaped and this walks past an escape — which is the same rule that keeps
+// `[[ a = 'a|b' ]]` a literal comparison in the shell that splits live ones.
+//
+// Inside a bracket a bar is an ordinary member: measured, `L='[a|b]'` matches
+// `a` and matches `|`, so the split skips a bracket expression the way it
+// skips a group. An empty arm is allowed and matches the empty string, so
+// `L='a|'` matches `a` and matches nothing at all.
+func matchTopLevel(pattern, piece string, base int, o patternOpts) bool {
+	if !o.topGroup {
+		return matchHere(pattern, piece, 0, base, o)
+	}
+	arms, armAt := topAlternatives(pattern)
+	if len(arms) == 1 {
+		return matchHere(pattern, piece, 0, base, o)
+	}
+	for i, arm := range arms {
+		// The captures of a failed arm are unwound before the next is tried,
+		// which is the invariant matchGroup already keeps for the arms of a
+		// written group: a trial that fails must leave `$match` as it was.
+		mark := o.where.caps.mark()
+		if matchHere(arm, piece, armAt[i], base, o) {
+			return true
+		}
+		o.where.caps.rollback(mark)
+	}
+	return false
+}
+
+// topAlternatives splits a pattern on the `|` at its top level, with each
+// arm's offset in the pattern — which is what a group inside an arm needs in
+// order to know its own number.
+//
+// Its own walker rather than alternativesAt, which splits a *group's* body and
+// counts only parentheses. A top-level bar has a bracket expression to stay
+// out of as well, and `[a|b]` is measured to be a bracket holding three
+// members rather than two arms — bracketEnd is the same scan the matcher's
+// own bracket reader uses, so the two cannot disagree about where one ends.
+func topAlternatives(pattern string) (arms []string, offsets []int) {
+	depth, start := 0, 0
+	for i := 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '\\':
+			i++
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case '[':
+			// Past the whole bracket expression, class names included:
+			// measured, `L='[a|b]'` matches `a` and matches `|`, so a bar
+			// between two members is not a split. An unterminated `[` is not
+			// a bracket expression and its text is ordinary, which is what
+			// the second answer says.
+			if end, ok := bracketEnd(pattern, i); ok {
+				i = end
+			}
+		case '|':
+			if depth == 0 {
+				arms, offsets = append(arms, pattern[start:i]), append(offsets, start)
+				start = i + 1
+			}
+		}
+	}
+	return append(arms, pattern[start:]), append(offsets, start)
 }
 
 // matchHere matches p against the whole of s, where p begins at offset pp of
@@ -1574,6 +1671,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		bracket:      BracketLiteral,
 		chars:        r.patternCountsCharacters(append([]string{pattern}, subjects...)...),
 		group:        r.dialect().PatternAlternation,
+		topGroup:     r.dialect().PatternTopLevelAlternation,
 		quantified:   r.readsQuantifiedGroups(false),
 		numericRange: r.dialect().NumericRangePattern,
 		escapes:      r.sem().PatternEscapeReaches,

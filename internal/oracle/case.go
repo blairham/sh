@@ -7032,6 +7032,21 @@ echo "st=$?"`,
 		Why:     "and the axis the value then meets, which is not a second question: whether the metacharacters in an expansion's result are live is what GlobExpansionResults already answers everywhere else, so a group asks it in the same place rather than deciding for itself. The shell with bare groups says no by default and yes behind the `${~ }` flag, and the third arm proves the first was literal rather than merely unmatched — `a|b` matches itself. The alternation the flag lets through is exactly the one `.zi-ice` builds its ice list from (#1331)",
 	},
 	{
+		ID: "pat/a-live-bar-outside-a-group-is-an-alternation", Category: "pattern matching",
+		Snippet: `L='a|b'; case a in ${~L}) echo alt;; *) echo lit;; esac; case 'a|b' in ${~L}) echo whole;; *) echo split;; esac; case b in ${~L}) echo second;; *) echo no;; esac`,
+		Why:     "the same alternation one level out, and the half #1331 left behind: a `|` that arrived from a value is an alternation at the *top* of a pattern in the shell that has bare groups, not only inside `( … )`. The second arm is the discriminating one — under the character reading the value matches its own text and answers `whole`, and under the split reading it cannot, which is what this shell answered before #1497. The written spelling is a parse error in every column, so a value is the only way to say it",
+	},
+	{
+		ID: "pat/a-live-bar-outside-a-group-generates-one-word-per-arm", Category: "pattern matching",
+		Snippet: `touch alta altb altc; L='alta|altb'; print -l -- ${~L}`,
+		Why:     "the same bar against the filesystem, where each arm generates its own word. It is the row that says a top-level bar makes a field a *pattern* by itself rather than only changing how one is matched — a field holding nothing but a bar and two names never reached the filesystem here, so the word stood and the two files were never named (#1497)",
+	},
+	{
+		ID: "pat/a-live-bar-inside-a-bracket-is-a-member", Category: "pattern matching",
+		Snippet: `L='[a|b]'; case a in ${~L}) echo member;; *) echo no;; esac; case '|' in ${~L}) echo bar;; *) echo no;; esac`,
+		Why:     "the boundary of the split above: inside a bracket expression the bar is an ordinary member, so `[a|b]` matches `a` and matches `|` in the shell that splits a top-level one. A split that counted only parentheses answers `no` to the second arm, which is the mistake this row exists to catch",
+	},
+	{
 		ID: "pat/a-backreference-group-holds-an-expansions-value", Category: "pattern matching", SyntaxError: true,
 		Snippet: `setopt extendedglob; L='lucid|wait'; b='wait!0'; [[ $b == (#b)(--|)(${~L})(*) ]] && print -r -- "[${match[1]}][${match[2]}][${match[3]}]" || echo no`,
 		Why:     "the construct itself, with the groups numbered: a backreference group whose alternation arrived from a variable, which is what a plugin manager's ice parser is and what it fills its table from. The match is asserted as *text* rather than as a status, because a row that asks only whether something matched passes whichever alternative won — `[][wait][!0]` says the empty prefix, the ice name and the remainder each landed in the group that was written for it (#1331)",

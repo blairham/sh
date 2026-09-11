@@ -43,7 +43,15 @@ func TestThePipelineStatusRecordsEveryElement(t *testing.T) {
 		{"inside a function", `f() { false | true; echo "${P[@]}"; }; f`, "1 0"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, _ := run(t, tc.src, named("P", nil))
+			// The compound row needs the third axis answered: *whether* a
+			// compound writes the record at all is
+			// CompoundBodyDecidesThePipelineStatusRecord's question, and both
+			// of its answers are covered in TestACompoundFollowsItsBodyOrNot.
+			// No is the reading these rows are about — the clause writes for
+			// having run.
+			out, _ := run(t, tc.src, named("P", func(s *Semantics) {
+				s.CompoundBodyDecidesThePipelineStatusRecord = No
+			}))
 			if strings.TrimSpace(out) != tc.want {
 				t.Errorf("got %q, want %q", strings.TrimSpace(out), tc.want)
 			}
@@ -172,6 +180,11 @@ func TestReadingTheRecordTwiceInOneChain(t *testing.T) {
 	} {
 		out, _ := runGrammar(t, src, enableTestAndArith, named("P", func(s *Semantics) {
 			s.TestAndArithmeticUpdatePipelineStatus = tc.a
+			// The `if` around the chain is a compound, so the third axis is
+			// reached; it is not this test's subject and the answer does not
+			// move either row, since the record is read inside the clause
+			// rather than after it.
+			s.CompoundBodyDecidesThePipelineStatusRecord = No
 		}))
 		if got := strings.TrimSpace(out); got != tc.want {
 			t.Errorf("%v: got %q, want %q", tc.a, got, tc.want)
@@ -213,7 +226,9 @@ func TestNegationAndRedirectionAlwaysWriteTheRecord(t *testing.T) {
 	}
 }
 
-// A compound command writes the record, and neither axis is asked about one.
+// A compound command writes the record, and neither of the two axes about a
+// command's *shape* is asked about one. Whether it writes at all is a third
+// axis, answered here as it was assumed before it existed.
 //
 // The `(( … ))` in the body is what makes this discriminating. Write `:`
 // there instead and the body's own write leaves the same single 0 the clause
@@ -225,6 +240,7 @@ func TestACompoundCommandWritesTheRecord(t *testing.T) {
 	for _, a := range []Answer{Yes, No} {
 		out, _ := runGrammar(t, src, enableTestAndArith, named("P", func(s *Semantics) {
 			s.TestAndArithmeticUpdatePipelineStatus = a
+			s.CompoundBodyDecidesThePipelineStatusRecord = No
 		}))
 		if got := strings.TrimSpace(out); got != "0" {
 			t.Errorf("%v: got %q, want the clause's own status alone", a, got)
@@ -368,6 +384,111 @@ func TestTheAxisMovesTheRecordAndNotTheStatus(t *testing.T) {
 		}
 		if got := strings.TrimSpace(out); got != want {
 			t.Errorf("%v: got %q, want %q", a, got, want)
+		}
+	}
+}
+
+// CompoundBodyDecidesThePipelineStatusRecord, both answers — #1931.
+//
+// The rule is about the **parse** rather than about what ran, and the first
+// two rows are what say so: neither body runs, the condition being false both
+// times, and the only difference between them is the text inside `then`. An
+// unexecuted `:` is enough.
+//
+// Every `want` under Yes is the answer measured from zsh 5.9.2 on 2026-09-11;
+// under No the compound writes for having run, which is a single element every
+// time.
+func TestACompoundFollowsItsBodyOrNot(t *testing.T) {
+	for _, c := range []struct{ src, follows string }{
+		// The pair the issue is written around.
+		{`if [[ a = b ]]; then :; fi`, "0"},
+		{`if [[ a = b ]]; then [[ b = b ]]; fi`, "1 0"},
+		// A condition is body too, and an `elif` and an `else` are as well.
+		{`if :; then [[ b = b ]]; fi`, "0"},
+		{`if [[ a = b ]]; then [[ b = b ]]; else :; fi`, "0"},
+		{`if [[ a = b ]]; then [[ b = b ]]; elif :; then [[ c = c ]]; fi`, "0"},
+		// A brace group, where the record is left alone for a body holding
+		// only the three constructs that make no job.
+		{`{ :; }`, "0"},
+		{`{ [[ a = a ]]; }`, "1 0"},
+		{`{ x=1; }`, "1 0"},
+		{`{ (( 1 )); }`, "1 0"},
+		{`{ [[ a = a ]]; :; }`, "0"},
+		// An empty body counts as nothing rather than as something: the
+		// empty `case` arm below is that row, `{ }` needing a grammar flag
+		// this test does not turn on.
+		// Nesting, in both directions.
+		{`{ { :; } }`, "0"},
+		{`{ { [[ a = a ]]; } }`, "1 0"},
+		{`{ if false; then :; fi; }`, "0"},
+		{`{ if false; then [[ a = a ]]; fi; }`, "0"},
+		{`{ for i in 1; do [[ a = a ]]; done; }`, "1 0"},
+		// Every loop, and the `while` pair is the one that says a condition
+		// counts: the same body answers differently for the command in front
+		// of `do`.
+		{`while false; do [[ a = a ]]; done`, "0"},
+		{`while [[ a = b ]]; do [[ a = a ]]; done`, "1 0"},
+		{`until [[ a = a ]]; do [[ a = a ]]; done`, "1 0"},
+		{`for i in 1; do :; done`, "0"},
+		{`for i in 1; do [[ a = a ]]; done`, "1 0"},
+		{`for i in ; do :; done`, "0"},
+		{`for ((i=0;i<1;i++)); do [[ a = a ]]; done`, "1 0"},
+		// A `case`, including the arm that holds nothing at all.
+		{`case a in b) :;; esac`, "0"},
+		{`case a in b) [[ a = a ]];; esac`, "1 0"},
+		{`case a in b) ;; esac`, "1 0"},
+		// A subshell answers for itself whatever it holds: it is a job.
+		{`( [[ a = a ]] )`, "0"},
+		{`( : )`, "0"},
+		// And so do the other three shapes that make a job, reached from
+		// inside a body that would otherwise not count.
+		{`{ ( [[ a = a ]] ); }`, "0"},
+		{`{ [[ a = a ]] & }`, "0"},
+		{`{ [[ a = a ]] | [[ b = b ]]; }`, "0"},
+		// A failing test under a `!` rather than a matching one, so the
+		// group's own status is 0 under both answers and the row is about
+		// *whether* it wrote rather than what it wrote.
+		{`{ ! [[ a = b ]]; }`, "0"},
+		// A redirection makes the job wherever it is written, which is the
+		// rule the other two axes follow.
+		{`{ [[ a = a ]]; } >/dev/null`, "0"},
+		{`{ [[ a = a ]] >/dev/null; }`, "0"},
+		{`{ { [[ a = a ]]; } >/dev/null; }`, "0"},
+		// An and-or list is read through, and a definition is not read into.
+		{`{ [[ a = a ]] && [[ b = b ]]; }`, "1 0"},
+		{`{ [[ a = a ]] && :; }`, "0"},
+		{`{ f() { :; }; }`, "1 0"},
+		{`{ f() { :; }; [[ a = a ]]; }`, "1 0"},
+	} {
+		for _, tc := range []struct {
+			a    Answer
+			want string
+		}{{Yes, c.follows}, {No, "0"}} {
+			out, _ := runGrammar(t, "false | true; "+c.src+`; echo "${P[@]}"`, enableTestAndArith,
+				named("P", func(s *Semantics) {
+					s.TestAndArithmeticUpdatePipelineStatus = No
+					s.AssignmentUpdatesPipelineStatus = No
+					s.NegatedTestRecordsThePostNegationStatus = No
+					s.CompoundBodyDecidesThePipelineStatusRecord = tc.a
+				}))
+			if got := strings.TrimSpace(out); got != tc.want {
+				t.Errorf("%v: `false | true; %s` gave %q, want %q", tc.a, c.src, got, tc.want)
+			}
+		}
+	}
+}
+
+// A function *definition* leaves the record alone, and no dialect is asked:
+// both shells that keep a record answer the same way. Measured 2026-09-11,
+// `false | true; f() { :; }` is `1 0` in bash 5.3.15 and zsh 5.9.2 alike.
+func TestAFunctionDefinitionLeavesTheRecordAlone(t *testing.T) {
+	for _, a := range []Answer{Yes, No, Unspecified} {
+		out, _ := run(t, `false | true; f() { :; }; echo "${P[@]}"`,
+			named("P", func(s *Semantics) {
+				s.CompoundBodyDecidesThePipelineStatusRecord = a
+			}))
+		if got := strings.TrimSpace(out); got != "1 0" {
+			t.Errorf("%v: got %q, want the pipeline's elements with no dialect needed", a, got)
 		}
 	}
 }

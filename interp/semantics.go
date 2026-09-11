@@ -3899,6 +3899,54 @@ type Semantics struct {
 	// and a script branching on `${PIPESTATUS[0]}` after a negated test reads
 	// the opposite of what the shell it was written for reports (#1513).
 	NegatedTestRecordsThePostNegationStatus Answer
+	// CompoundBodyDecidesThePipelineStatusRecord asks the *body* whether a
+	// compound command writes the pipeline-status record, rather than letting
+	// the compound write it for having run.
+	//
+	// It is a question about the **parse** and not about what ran, which is
+	// what makes it worth an axis of its own. Measured 2026-09-11, zsh 5.9.2,
+	// each line after `false | true` so a replaced record is visible:
+	//
+	//	false | true; if [[ a = b ]]; then :; fi              0
+	//	false | true; if [[ a = b ]]; then [[ b = b ]]; fi    1 0
+	//
+	// Neither body runs — the condition is false both times — and the only
+	// difference is the text inside `then`. An **unexecuted** `:` is enough
+	// to make the compound count as a command.
+	//
+	// So the rule composes: a compound counts where its body holds anything
+	// that would count on its own, by the two axes above, and nothing else.
+	//
+	//	{ :; }                       0      { [[ a = a ]]; }        1 0
+	//	{ [[ a = a ]]; :; }          0      { x=1; }                1 0
+	//	{ { :; } }                   0      { { [[ a = a ]]; } }    1 0
+	//	while false; do [[ a=a ]]; done  0  while [[ a = b ]]; do [[ a=a ]]; done  1 0
+	//
+	// The `while` pair is the one that says the condition is body too, and
+	// the nested pair is the recursion. Four shapes answer for themselves
+	// whatever they hold, and each is measured:
+	//
+	//	( [[ a = a ]] )       0     a subshell is a job however it ends
+	//	{ coproc cat; }       0     and so is a coprocess
+	//	{ [[ a = a ]] & }     0     and so is anything backgrounded
+	//	{ time [[ a=a ]]; }   0     and the timed pipeline reports
+	//	{ f() { :; }; }       1 0   a *definition* runs nothing
+	//	select … do :; done   0     counts with a body that would not
+	//
+	// A redirection on the compound writes the record whatever the body says
+	// — `{ [[ a = a ]]; } >/dev/null` and `if … fi >/dev/null` are both one
+	// element — which is the same rule the two axes above follow, and for the
+	// same reason: the redirection is what makes the job.
+	//
+	// bash answers no, and its own rule is a third thing rather than this
+	// one's opposite: it records what the last pipeline *inside* the compound
+	// left, so `if false; then :; fi` holds 1 there — the condition's status
+	// — and `case a in b) :;; esac` leaves the record alone because nothing
+	// ran. See #2016; answering no keeps what this shell already did.
+	//
+	// Silent when it is wrong: a plausible one-element record where the
+	// pipeline's elements should still be there (#1931).
+	CompoundBodyDecidesThePipelineStatusRecord Answer
 	// UnsetEndsTheProducedPipelineStatus makes `unset` permanent. zsh says
 	// yes and the name never fills again; in bash the producer outlives it.
 	// It is the opposite of what a produced *scalar* does, where unset ends

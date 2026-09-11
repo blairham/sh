@@ -58,16 +58,52 @@ import (
 // The zero value draws the value as it stands. That is what a caller without a
 // dialect gets, and it is the substrate's own answer rather than a borrowed
 // one: told nothing about how to transform the text, it does not transform it.
+// PromptExpandsAlways is [PromptStyle.Expand] for a shell that expands a
+// prompt unconditionally, which is three of the four in the panel.
+func PromptExpandsAlways(*Runner) bool { return true }
+
 type PromptStyle struct {
-	// Expand runs the value through parameter and command expansion each time
-	// the prompt is drawn, so `PS1='$PWD> '` follows the directory and
-	// `PS1='$(date +%H:%M) '` follows the clock.
+	// Expand says whether the value goes through parameter and command
+	// expansion each time the prompt is drawn, so `PS1='$PWD> '` follows the
+	// directory and `PS1='$(date +%H:%M) '` follows the clock.
 	//
-	// Three of the four do this always. zsh does not, unless asked with
-	// `setopt PROMPT_SUBST` — which is why this is a field and not a
-	// constant, and why it will eventually have to be settable while the
-	// shell is running rather than only when it starts.
-	Expand bool
+	// **Asked at every draw rather than read once**, and that is the whole
+	// reason it is a function. Three of the four shells expand always, and
+	// the fourth lets a *running script* change the answer: `setopt
+	// PROMPT_SUBST` turns it on and `unsetopt` turns it back off, so a value
+	// settled when the shell started is the wrong answer for every prompt
+	// after the one that moved it.
+	//
+	// It cost a whole prompt theme to leave as a constant. A theme's entire
+	// `PROMPT` is `${…}` that only means anything expanded, it sets the
+	// option in its own setup, and this shell — answering no, forever, from
+	// a value read at startup — drew the raw text of the parameter at every
+	// prompt, with nothing reported.
+	//
+	// nil is never, which is the zero value and what a caller with no
+	// dialect gets. [PromptExpandsAlways] is the other constant answer.
+	Expand func(*Runner) bool
+
+	// ExpandBeforeEscapes runs the expansion *first* and lets the escape
+	// table read what it produced, instead of expanding what the table
+	// already rewrote.
+	//
+	// A real disagreement rather than an ordering nobody thought about, and
+	// both halves are measured. In bash, with `C='\u'` and
+	// `PS1='A${C}B\u C '`, the prompt draws `A\uBbhamilton C` — the `\u`
+	// that came out of the parameter is **not** decoded, so the escapes are
+	// read before the expansion runs. In zsh, with `C='%F{red}'` and
+	// `PROMPT='A${C}B%F{blue}C '` under `setopt prompt_subst`, both colors
+	// arrive — so there the expansion runs first and the table reads its
+	// result. The vendor manual says the same in as many words: zsh's
+	// prompt string "is first subjected to parameter expansion".
+	//
+	// It is the difference between a prompt theme working and not. A theme
+	// builds its whole prompt out of parameters whose values are `%F{…}`
+	// and `%K{…}`; with the table run first there is nothing in the string
+	// for it to find, and the escapes arrive afterwards as text nobody will
+	// read again — which is exactly what this shell drew.
+	ExpandBeforeEscapes bool
 
 	// Escape introduces a code in the prompt: a backslash in bash and ksh93,
 	// a percent sign in zsh, and nothing at all in dash. Zero means the

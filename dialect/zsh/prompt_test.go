@@ -10,14 +10,27 @@ import (
 	"github.com/blairham/sh/repl"
 )
 
-// // Measured: with PS1='<$LOGNAME>@ ' exported, real zsh draws <$LOGNAME>@ —
-// the four characters as they stand. It wants `setopt PROMPT_SUBST` before it
-// will expand a prompt, which is why this is the one dialect here that says
-// no.
+// Measured: with PS1='<$LOGNAME>@ ' exported, real zsh draws <$LOGNAME>@ —
+// the characters as they stand. It wants `setopt PROMPT_SUBST` before it
+// will expand a prompt, which is why this is the one dialect here whose
+// answer is a question rather than a constant.
 
 func TestPromptStyle(t *testing.T) {
-	if got := zsh.PromptStyle().Expand; got != false {
-		t.Errorf("Expand = %v, want %v", got, false)
+	expand := zsh.PromptStyle().Expand
+	if expand == nil {
+		t.Fatal("Expand is nil, so `setopt prompt_subst` could never turn it on")
+	}
+	// A fresh shell has the option off, so the answer is no until a script
+	// says otherwise — which promptsubst_test.go is where it is asserted,
+	// because moving it needs a runner with the dialect applied.
+	if expand(nil) {
+		t.Error("Expand(nil) is yes; a shell with no `setopt prompt_subst` must not expand")
+	}
+	// And the order: this shell expands first and reads the escapes out of
+	// what that produced. Measured against bash, which is the other way
+	// round — see interp.PromptStyle.ExpandBeforeEscapes.
+	if !zsh.PromptStyle().ExpandBeforeEscapes {
+		t.Error("ExpandBeforeEscapes is false; a prompt theme's color escapes arrive from a parameter")
 	}
 }
 

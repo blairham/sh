@@ -13,8 +13,8 @@ import (
 // and with PS1='<$((1+1))>@ ' it draws <2>@.
 
 func TestPromptStyle(t *testing.T) {
-	if got := dash.PromptStyle().Expand; got != true {
-		t.Errorf("Expand = %v, want %v", got, true)
+	if expand := dash.PromptStyle().Expand; expand == nil || !expand(nil) {
+		t.Error("Expand does not expand, and this shell expands a prompt always")
 	}
 }
 

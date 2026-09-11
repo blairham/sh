@@ -29,7 +29,7 @@ import (
 // disagrees about this, and the disagreement is why the field exists.
 func PromptStyle() interp.PromptStyle {
 	return interp.PromptStyle{
-		Expand: true,
+		Expand: interp.PromptExpandsAlways,
 		// Measured, one code per prompt, through a pty, against bash 5.3.15
 		// and bash 3.2.57. The two agree on the whole language: every
 		// difference between them was the value of the moment — the clock, the

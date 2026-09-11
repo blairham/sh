@@ -21,6 +21,10 @@ func Dialect() syntax.Dialect {
 	// what made the failure `no matches found`, which points a
 	// person at globbing rather than at arithmetic (#900).
 	d.DollarBracketArith = true
+	// `exec {1}>&-` closes the descriptor a *positional parameter* holds,
+	// which is how a prompt theme's scheduler closes the one it was handed.
+	// zsh alone — see the flag for what bash and ksh93 answer instead.
+	d.FdVariablePositional = true
 	// zsh does not expand under `-c` even with the option set.
 	// Measured 2026-09-05: `zsh -c 'alias hi=...; hi'` does not expand and
 	// the same two lines in a file, or on standard input, do. The route is
@@ -2212,6 +2216,9 @@ func Apply(r *interp.Runner) {
 	// reach and which never move — see nullcommand.go in this package.
 	registerNullCommandParameters(r)
 	tieTheBuiltInPairs(r)
+	// And the four scalar pairs that are one parameter under two names —
+	// see promptnames.go, and the theme that could not draw without them.
+	registerPromptNames(r)
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
 	}

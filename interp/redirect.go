@@ -1117,6 +1117,12 @@ func childOut(v io.Writer) io.Writer {
 // declared associative name takes it as a key and any other takes it as an
 // expression, which is what makes `{a[i+1]}` mean what `${a[i+1]}` means.
 func (r *Runner) fdVarValue(ref string) (string, bool) {
+	if n, ok := positionalFdVar(ref); ok {
+		if n < 1 || n > len(r.Params) {
+			return "", false
+		}
+		return r.Params[n-1], true
+	}
 	base, sub, ok := r.subscriptOperand(ref)
 	if !ok {
 		return r.getVar(ref)
@@ -1148,7 +1154,41 @@ func (r *Runner) fdVarValue(ref string) (string, bool) {
 // becoming an array. A second walk of the brackets here is how one of the
 // two would come to answer `{buf[$#buf+1]}` differently from `buf[$#buf+1]`.
 func (r *Runner) setFdVar(ref, value string) {
+	if n, ok := positionalFdVar(ref); ok {
+		// A positional parameter receives the number, which is how a
+		// function that was handed a descriptor hands back the one the
+		// shell picked. Out of range writes nothing: there is no position
+		// to widen the list to that a later `shift` would keep straight.
+		if n >= 1 && n <= len(r.Params) {
+			r.Params[n-1] = value
+		}
+		return
+	}
 	r.storeThroughOperand(ref, value)
+}
+
+// positionalFdVar reads a `{name}` that names a positional parameter.
+//
+// All digits or nothing, which is measured: `{01}` and `{99}` name
+// positions in the one shell that takes them, and `{1a}` and `{1_}` are
+// refused there as `not an identifier`. `{0}` is a position like any other
+// to this reader — `$0` is not in Params, so it simply has no descriptor,
+// which is the same answer a name nobody set gets.
+//
+// The lexer admits a digit-leading name only where the dialect says so —
+// see syntax.Dialect.FdVariablePositional — so a shell without the feature
+// never reaches here with one.
+func positionalFdVar(ref string) (int, bool) {
+	if ref == "" {
+		return 0, false
+	}
+	for i := range len(ref) {
+		if ref[i] < '0' || ref[i] > '9' {
+			return 0, false
+		}
+	}
+	n, ok := atoi(ref)
+	return n, ok
 }
 
 // redirWrote records that the redirections being applied have just written a

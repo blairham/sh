@@ -6437,12 +6437,12 @@ func PosixSemantics() Semantics {
 		ConditionArithmeticErrorIsFatal: No,
 		// The standard has no `(( ))` at all, so nothing here is POSIX's to
 		// say; 1 is what the shells that do have it say, bar one.
-		ArithCommandErrorStatusIsTwo:      No,
+		ArithCommandErrorStatusIsTwo: No,
 		// POSIX has no `(( ))` at all — it is an extension every shell but
 		// dash carries — so there is no text to read here and the base takes
 		// the answer three of the four give: the status is left for the next
 		// line, which runs.
-		ArithCommandErrorIsFatal: No,
+		ArithCommandErrorIsFatal:          No,
 		LastPipelineElementInCurrentShell: No,
 		ShiftPastEndFatal:                 Yes,
 		// The standard describes one refusal and says nothing about a

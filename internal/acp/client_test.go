@@ -782,13 +782,13 @@ func TestElicitationIsClaimedOnlyWhenItCanBeServed(t *testing.T) {
 }
 
 // The two refusals differ on purpose, and this pins the difference so that the
-// next person to notice it corrects the reasoning rather than the behaviour.
+// next person to notice it corrects the reasoning rather than the behavior.
 //
 // A refused read answers absence: it hides whether the file *exists*, which is
 // a fact about the disk. A refused write says permission denied: it reveals
 // only that a rule stands there, which is a fact about the policy and one the
 // agent learns anyway from the failure. Making them match in either direction
-// is a change of behaviour and wants an argument, not a tidy-up (#1798).
+// is a change of behavior and wants an argument, not a tidy-up (#1798).
 func TestAReadHidesAndAWriteDoesNot(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

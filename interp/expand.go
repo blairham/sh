@@ -3902,7 +3902,29 @@ func (r *Runner) expandDollarSingle(s string) string {
 					return b.String()
 				}
 			} else {
-				b.WriteRune(rune(n))
+				// The same reader every other site that has this escape
+				// uses, locale and all: the character, the escape written
+				// back, or a refusal — see Runner.CodePointEscapeText. It
+				// is also the core's one encoder, which WriteRune was not:
+				// a surrogate and a value past the last code point are the
+				// encoding itself in every shell that has the escape, and
+				// a rune conversion makes both a replacement character.
+				//
+				// This is the one site of the five in the **core**, and it
+				// is where the axis's third answer comes from: a shell with
+				// `$'…'` and no `\u` anywhere else writes the character
+				// whatever the locale says (#2021).
+				text, refused := r.CodePointEscapeText(n)
+				if refused {
+					// A word that was never finished, so the command it
+					// belonged to never runs. Measured 2026-09-11 under
+					// `LC_ALL=C`: `x=$'a\u00e9Z'; echo AFTER` writes the
+					// complaint, nothing else, and leaves status 1 — where
+					// the same refusal inside a builtin leaves 0.
+					r.RefuseCodePointExpanding()
+					return b.String()
+				}
+				b.WriteString(text)
 			}
 			i += 2 + used
 		case c >= '0' && c <= '7':

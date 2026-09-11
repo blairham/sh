@@ -2642,6 +2642,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `echo/the-two-spellings-of-the-escape-character` | ` 2d 65 20 61 5c 65 5a 3a 61 5c 45 5a 0a ` | ` 61 1b 5a 3a 61 1b 5a 0a ` | ` 61 1b 5a 3a 61 1b 5a 0a ` | ` 61 5c 65 5a 3a 61 5c 45 5a 0a ` | ` 61 5c 65 5a 3a 61 1b 5a 0a ` | ` 61 1b 5a 3a 61 5c 45 5a 0a ` |
 | `echo/the-unicode-escapes` | ` 2d 65 20 61 5c 75 30 30 34 31 5a 3a 61 5c 55 30~ 30 30 30 30 30 34 31 5a 3a 61 5c 75 34 31 5a 0a` | ` 61 41 5a 3a 61 41 5a 3a 61 41 5a 0a ` | ` 61 41 5a 3a 61 41 5a 3a 61 41 5a 0a ` | ` 61 5c 75 30 30 34 31 5a 3a 61 5c 55 30 30 30 30~ 30 30 34 31 5a 3a 61 5c 75 34 31 5a 0a ` | ` 61 5c 75 30 30 34 31 5a 3a 61 5c 55 30 30 30 30~ 30 30 34 31 5a 3a 61 5c 75 34 31 5a 0a ` | ` 61 41 5a 3a 61 41 5a 3a 61 41 5a 0a ` |
 | `echo/a-unicode-escape-outside-the-locale` | ` 2d 65 20 61 5c 75 30 30 65 39 5a 0a ` | ` 61 5c 75 30 30 45 39 5a 0a ` | ` 61 5c 75 30 30 45 39 5a 0a ` | ` 61 5c 75 30 30 65 39 5a 0a ` | ` 61 5c 75 30 30 65 39 5a 0a ` | ` 61 0a ` **2>** `<shell>:1: character not in range` |
+| `printf/a-unicode-escape-outside-the-locale-in-a-format` | ` 61 5c 75 30 30 65 39 5a ` | ` 61 5c 75 30 30 45 39 5a ` | ` 61 5c 75 30 30 45 39 5a ` | ` 61 5c 75 30 30 65 39 5a ` | ` 61 c3 a9 5a ` | ` 61 ` **2>** `<shell>:1: character not in range` |
+| `printf/a-unicode-escape-outside-the-locale-in-a-b-argument` | ` 61 5c 75 30 30 65 39 5a ` | ` 61 5c 75 30 30 45 39 5a ` | ` 61 5c 75 30 30 45 39 5a ` | ` 61 5c 75 30 30 65 39 5a ` | ` 61 5c 75 30 30 65 39 5a ` | ` 61 ` **2>** `<shell>:1: character not in range` |
+| `print/a-unicode-escape-outside-the-locale` | **2>** `<shell>: 1: print: not found` | **2>** `<shell>: line 1: print: command not found` | **2>** `<shell>: line 1: print: command not found` | **2>** `<shell>: print: command not found` | ` 61 5c 75 30 30 65 39 5a 0a ` | ` 61 0a ` **2>** `<shell>:1: character not in range` |
 | `echo/a-hexadecimal-escape-with-no-digits` | ` 2d 65 20 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 00 5a 3a 61 00 5a 0a ` |
 | `echo/the-order-of-e-and-capital-e` | `-e -E m	n` | `m\tn` | `m\tn` | `m\tn` | `-E m	n` | `m	n` |
 | `readonly/reassignment-by-a-declaration` | **2>** `<shell>: 1: export: x: is read only` *(status 2)* | `after` **2>** `<shell>: line 1: x: readonly variable` | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | `after` **2>** `<shell>: x: readonly variable` | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* |
@@ -3156,6 +3159,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `echo/a-unicode-escape-outside-the-locale` — the question *after* the escape has been read: what a shell does with a code point the locale's encoding cannot hold. The row above keeps to ASCII so that it is about the escape; this one is deliberately above it, and the two shells that have the escape give different answers — one leaves it standing with its digits normalized to four upper-case ones, the other reports `character not in range`, writes what came before it and abandons the script. Pinned rather than excluded as a locale-dependent case, for the reason `glob/matches-are-in-order` is: this harness fixes `LC_ALL=C`, so the answer is reproducible, and the C locale is the one this shell now models (#1851). The other four write the characters as they stand, having no such escape in `echo` at all
   ```sh
   echo -e 'a\u00e9Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-unicode-escape-outside-the-locale-in-a-format` — the same question `echo/a-unicode-escape-outside-the-locale` asks, at the site where the panel gives **three** answers rather than two: one leaves the escape standing normalized, one reports `character not in range` and writes what came before it, and ksh93 writes the character whatever the locale says. The third is what makes this a policy with three constants — and it is reachable here and at `$'...'` and nowhere else, since that shell reads no `\u` in `echo`, in `print` or in a `%b`. Read as bytes for the reason the `echo` row is: every wrong answer here looks like text (#2021)
+  ```sh
+  printf 'a\u00e9Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-unicode-escape-outside-the-locale-in-a-b-argument` — the other `printf` site, and the pair with the row above is what says the *site* decides which shells reach the question at all: ksh93 reads no `\u` in a `%b`, so it writes the ten characters as they stand here and the character there, while the two that read the escape at both sites answer the same at both. A site-by-site reading is the only way to get that pair right (#2021)
+  ```sh
+  printf '%b' 'a\u00e9Z' | od -An -tx1 | tr -s " "
+  ```
+- `print/a-unicode-escape-outside-the-locale` — the builtin two of the six have, and the row that says a shell answers the *same* at every site it reads the escape at: this one refuses here exactly as it refuses in `echo`, and ksh93 — which writes the character in a `printf` format — reads no `\u` here at all and leaves the ten characters standing. The two facts are separate axes and this is the row that keeps them apart (#2021)
+  ```sh
+  print -- 'a\u00e9Z' | od -An -tx1 | tr -s " "
   ```
 - `echo/a-hexadecimal-escape-with-no-digits` — one question for `\x`, `\u` and `\U` together: a run with no digit after it is a NUL in one shell and the two characters as written everywhere else. Read as bytes because a NUL is not a character a table can show, and it is the same split the two `printf` sites record as part of their hex policy
   ```sh
@@ -5206,6 +5221,169 @@ grades it and nothing drift-checks it either, for the same reason.
   f() { caller x; echo "st=$?"; }; f
   ```
 
+## quoting
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `dollarsingle/a-unicode-escape-outside-the-locale` | ` 24 61 5c 75 30 30 65 39 5a ` | ` 61 5c 75 30 30 45 39 5a ` | ` 61 5c 75 30 30 45 39 5a ` | ` 61 5c 75 30 30 65 39 5a ` | ` 61 c3 a9 5a ` | **2>** `<shell>:1: character not in range` |
+| `core/dollar-single-expands-escapes` | ` [ $ a \ t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` |
+| `core/dollar-single-control-character` | ` [ $ \ c A \ c z ] ` | ` [ 001 032 ] ` | ` [ 001 032 ] ` | ` [ 001 032 ] ` | ` [ 001 032 ] ` | ` [ c A c z ] ` |
+| `core/dollar-single-control-arithmetic` | ` [ $ \ c 1 \ c ? \ c [ ] ` | ` [ 021 177 033 ] ` | ` [ 021 177 033 ] ` | ` [ 021 037 033 ] ` | ` [ q 177 033 ] ` | ` [ c 1 c ? c [ ] ` |
+| `core/dollar-single-nul-truncates` | ` [ $ a \ 0 b ] [ 5 ] ` | ` [ a ] [ 1 ] ` | ` [ a ] [ 1 ] ` | ` [ a ] [ 1 ] ` | ` [ a ] [ 1 ] ` | ` [ a \0 b ] [ 3 ] ` |
+| `core/dollar-single-nul-ends-the-span-only` | ` [ $ a \ 0 b c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a \0 b c c c ] ` |
+| `core/dollar-single-esc-escape` | ` [ $ \ e [ m \ E ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` |
+| `core/dollar-single-hex-escape` | ` [ $ \ x 4 1 \ x 4 a \ x 9 ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` |
+| `core/dollar-single-octal-escape` | ` [ $ \ 1 0 1 \ 0 1 0 1 \ 1 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` |
+| `core/dollar-single-unicode-escape` | ` [ $ \ u 4 1 \ u 0 0 4 1 \ U 0 0~ 0 0 0 0 5 8 ] ` | ` [ A A X ] ` | ` [ A A X ] ` | ` [ \ u 4 1 \ u 0 0 4 1 \ U 0 0 0~ 0 0 0 5 8 ] ` | ` [ A A X ] ` | ` [ A A X ] ` |
+| `core/dollar-single-unknown-escape` | ` [ $ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ q 8 ] ` | ` [ q 8 ] ` |
+| `core/dollar-single-caret-and-meta` | ` [ $ \ C - A ] [ $ \ C A ] [ $ \~ C - 1 ] [ $ \ C - ? ] [ $ \ M -~ x ] [ $ \ M - \ C - ? ] [ $ \ c~ A ] ` | ` [ \ C - A ] [ \ C A ] [ \ C - 1~ ] [ \ C - ? ] [ \ M - x ] [ \ M~ - \ C - ? ] [ 001 ] ` | ` [ \ C - A ] [ \ C A ] [ \ C - 1~ ] [ \ C - ? ] [ \ M - x ] [ \ M~ - \ C - ? ] [ 001 ] ` | ` [ \ C - A ] [ \ C A ] [ \ C - 1~ ] [ \ C - ? ] [ \ M - x ] [ \ M~ - \ C - ? ] [ 001 ] ` | ` [ m A ] [ 001 ] [ m 1 ] [ m ? ] [~ 033 x ] [ 033 m ? ] [ 001 ] ` | ` [ 001 ] [ 001 ] [ 021 ] [ 177 ] [ 370 ] [~ 377 ] [ c A ] ` |
+| `core/dollar-single-caret-and-meta-compose` | ` [ $ \ C - \ M - x ] [ $ \ M - \~ C - x ] [ $ \ M - \ t ] [ $ \ C~ - \ x 7 f ] [ $ \ C - \ M - ? ]~ [ $ x \ C ] ` | ` [ \ C - \ M - x ] [ \ M - \ C -~ x ] [ \ M - \t ] [ \ C - 177 ] [ \~ C - \ M - ? ] [ x \ C ] ` | ` [ \ C - \ M - x ] [ \ M - \ C -~ x ] [ \ M - \t ] [ \ C - 177 ] [ \~ C - \ M - ? ] [ x \ C ] ` | ` [ \ C - \ M - x ] [ \ M - \ C -~ x ] [ \ M - \t ] [ \ C - 177 ] [ \~ C - \ M - ? ] [ x \ C ] ` | ` [ m 033 x ] [ 033 m x ] [ 033 \t ] [ m~ 177 ] [ m 033 ? ] [ x ] ` | ` [ 230 ] [ 230 ] [ 211 ] [ 037 ] [ 237 ] [~ x ] ` |
+| `core/a-substitution-inside-an-expansion-brings-its-own-quoting` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` |
+| `core/a-swallowed-quote-changes-the-program-rather-than-refusing-it` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` |
+| `core/what-a-nested-substitution-holds-is-not-a-delimiter` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` |
+| `core/the-older-substitution-spelling-brings-its-own-quoting-too` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` |
+| `core/single-quotes-in-a-quoted-expansion-body` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` |
+| `core/a-substitution-inside-those-quotes-is-performed` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` |
+| `core/an-unbalanced-substitution-inside-those-quotes` | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: command substitution: line 2: unexpected EOF while looking for matching `''` *(status 1)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `''` *(status 2)* | **2>** `<shell>: bad substitution: no closing `)' in 'a$(b'` *(status 1)* | **2>** `<shell>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<shell>:1: unmatched '~<shell>:1: unmatched "` *(status 1)* |
+| `core/single-quotes-in-an-unquoted-expansion-body` | `[$v]` | `[$v]` | `[$v]` | `[$v]` | `[$v]` | `[$v]` |
+| `core/double-quotes-in-a-quoted-expansion-body` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` |
+| `core/single-quotes-in-a-quoted-pattern-operand` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | **2>** `<shell>:1: unmatched '~<shell>:1: unmatched "` *(status 1)* |
+| `core/quotes-in-a-quoted-replacement-operand` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[xZy][x$vy][x$vy]` | `[xZy][x$vy][x$vy]` | `[xZy][x'VAL'y][x$vy]` | `[xZy][x$vy][x$vy]` | `[xZy][x'VAL'y][x$vy]` |
+| `core/the-characters-a-replacement-operand-parts-on` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[x'q'y][x\qy][x~y][x"q"y][xp~qy]` | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[x'q'y][x\qy][x~y][xqy][xp~qy]` |
+| `core/which-backslashes-a-replacement-operand-parts-on` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[x$vy][x\y][x"y][x}y][x{y][xqy]` | `[x$vy][x\y][x"y][x}y][x{y][xqy]` | `[x$vy][x\y][x"y][x\}y][x\{y][x\qy]` | `[x$vy][x\y][x"y][x}y][x{y][xqy]` | `[x$vy][x\y][x"y][x}y][x\{y][x\qy]` |
+| `core/backslash-before-a-brace-in-a-quoted-operand` | `[A}B][A\{B][A\qB][A\}B][A}B]` | `[A}B][A\{B][A\qB][A\}B][A}B]` | `[A}B][A\{B][A\qB][A\}B][A}B]` | `[A\}B][A\{B][A\qB][A\}B][A}B]` | `[A}B][A\{B][A\qB][A\}B][A}B]` | `[A}B][A\{B][A\qB][A\}B][A}B]` |
+| `core/backslash-before-a-brace-in-a-replacement-operand` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[A}B][A}B][Z][a]` | `[A}B][A}B][Z][a]` | `[A\}B][A\}B][Z][a]` | `[A}B][A}B][Z][a]` | `[A}B][A}B][Z][a]` |
+| `core/backslash-before-a-brace-inside-nested-quotes` | `[A}B][A'}'B]` | `[A}B][A'}'B]` | `[A}B][A'}'B]` | `[A}B][A'\}'B]` | `[A}B][A'}'B]` | `[A\}B][A'}'B]` |
+| `core/single-quotes-in-a-heredoc-expansion-body` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` |
+| `core/a-case-arm-inside-backquotes-inside-an-expansion` | `[y]` | `[y]` | `[y]` | `[y]` | `[y]` | `[y]` |
+
+- `dollarsingle/a-unicode-escape-outside-the-locale` — the one site of the five in the **core**: every shell but dash has `$'...'`, and the three that read the escape in it give the three different answers. That is why the axis has a third constant rather than a bool — and why a core script with `$'\u00e9'` in it under a non-UTF-8 locale is an unanswered axis rather than a value. dash has no `$'...'` at all and writes the dollar sign as a character (#2021)
+  ```sh
+  printf '%s' $'a\u00e9Z' | od -An -tx1 | tr -s " "
+  ```
+- `core/dollar-single-expands-escapes` — read as bytes, because the failure mode was a literal backslash-t that looks almost right in a terminal — the quoting was recorded and nothing decoded it
+  ```sh
+  printf '[%s]' $'a\tb' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-control-character` — the escape that reached the output as a backslash, a c and a letter: bash and ksh93 decode it, zsh is the one shell with $'…' and no \c in it, and dash has no $'…' at all — four columns and three different answers to one snippet
+  ```sh
+  printf '[%s]' $'\cA\cz' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-control-arithmetic` — where the two decoding rules part: both uppercase and then agree over @ through _, so a case built only from letters cannot tell masking the low five bits from toggling bit 6 — `\c1` is 0x11 in bash and `q` in ksh93, and `\c?` is where bash 3.2 differs from bash 5.3
+  ```sh
+  printf '[%s]' $'\c1\c?\c[' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-nul-truncates` — a decoded NUL ends the text where a shell holds words as C strings and is an ordinary byte where it counts them — the length is recorded beside the bytes because a truncated word and a word with a NUL in it print the same way anywhere the NUL is invisible
+  ```sh
+  x=$'a\0b'; printf '[%s][%s]' "$x" "${#x}" | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-nul-ends-the-span-only` — what the NUL truncates is the quoted span and not the word: the characters after the closing quote were never inside it, so `accc` rather than `a` — the distinction a case built from a bare $'…' cannot make
+  ```sh
+  printf '[%s]' $'a\0b'ccc | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-esc-escape` — both spellings of the escape character, which POSIX has for neither and every shell with $'…' decodes — the escape that makes a color sequence writable without a literal control character in the source
+  ```sh
+  printf '[%s]' $'\e[m\E' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-hex-escape` — one and two hex digits both, because the length is not fixed and a reader that demands two would silently take the `\x9` of `\x9Z` as 0x9Z
+  ```sh
+  printf '[%s]' $'\x41\x4a\x9' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-octal-escape` — the octal forms, and the reason they are one rule rather than two: `\0101` is not four digits after a zero but three from the zero onward, so it is a backspace and then a `1`
+  ```sh
+  printf '[%s]' $'\101\0101\1' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-unicode-escape` — the code-point escapes, both widths and fewer digits than either allows — and the one place in this table where bash 3.2 keeps the text as written instead, which is what makes the pair a dated answer rather than a disputed one; the code points stay inside ASCII because what a shell does with a wider one depends on the locale and this record is made under LC_ALL=C
+  ```sh
+  printf '[%s]' $'\u41\u0041\U00000058' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-unknown-escape` — a backslash before a character no escape claims: bash keeps both, ksh93 and zsh drop the backslash — the axis `\c` falls to in the one shell that has no `\c`
+  ```sh
+  printf '[%s]' $'\q\8' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-caret-and-meta` — `\C-X` for a control character and `\M-X` for the same byte with the high bit set: one shell of the panel has both, one has neither and keeps the characters as written, and the third reads `\C` without a dash as a control escape of its own — so `\C-A` there is control-minus and then an `A`, off by a byte from the first reading and silent about it. `\cA` is on the same line because the two vocabularies are complementary: the shell with the caret spelling has no `\c`, and the shells with `\c` have no caret. The dash is optional and a digit is masked rather than uppercased, which is what separates this reading from `\c`'s
+  ```sh
+  printf '[%s]' $'\C-A' $'\CA' $'\C-1' $'\C-?' $'\M-x' $'\M-\C-?' $'\cA' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-caret-and-meta-compose` — the corners of the two prefixes, which decide whether a reading is arithmetic or a lookup. The mask keeps the high bit it finds, so the two compose to the same byte in either written order; the argument may be a further escape; the delete byte reached through `\x7f` is masked while a written `?` is not, so the special case is on the character and not on its value; a meta bit takes it back out of that case; and a prefix with nothing after it produces no byte at all rather than the characters it was written with
+  ```sh
+  printf '[%s]' $'\C-\M-x' $'\M-\C-x' $'\M-\t' $'\C-\x7f' $'\C-\M-?' $'x\C' | od -An -c | tr -s " "
+  ```
+- `core/a-substitution-inside-an-expansion-brings-its-own-quoting` — the quote that ends a double-quoted run is not the next `"` in the text: a `$( )` written inside one holds a *program*, so the single quotes in it quote that `"` and the run continues past it. Every shell in the panel prints the word; a scanner that reads the run as text takes the inner `"` as the closer, is left on the second `'`, and swallows the rest of the file — which is what all four dialects did, each in its own wording, until #1140. This is the shape `~/.zi/bin/lib/zsh/install.zsh` stops at on line 1389, written with `[^"]` inside a `grep` pattern
+  ```sh
+  printf '[%s]\n' "${x:-"$( echo 'a"b' )"}"
+  ```
+- `core/a-swallowed-quote-changes-the-program-rather-than-refusing-it` — the same defect with a second expansion after it, and the reason this row is not a duplicate of the one above: two of them put the stray quotes back in balance, so nothing is ever unterminated and the misreading is *silent*. The output was `[a"b} c'd]` — one field where there are two, a literal `}` that belongs to the grammar, and no diagnostic anywhere. A shell that only refused this shape would pass a corpus written from the refusal. The second expansion is the mirror of the first, a `'` inside double quotes, so neither quote character is the special one
+  ```sh
+  printf '[%s]' "${x:-"$( echo 'a"b' )"}" "${y:-"$( echo "c'd" )"}"; echo
+  ```
+- `core/what-a-nested-substitution-holds-is-not-a-delimiter` — the two neighbors the fix has to reach as well: the arithmetic spelling, which nests a `$( )` of its own, and a single-quoted `)` that closes nothing. Both are unanimous. They are here because the counting scanner got the `)` and the `}` right already when they stood at the body's own level — `${x:-"$( echo ')' )"}` parsed on either side of the change — so a case built only from those two characters measures nothing, and only the `"` inside the substitution tells the two readings apart
+  ```sh
+  printf '[%s]' "${x:-"$(( 1 + $( printf %s '"' | wc -c ) ))"}" "${y:-"$( echo 'a")b' )"}"; echo
+  ```
+- `core/the-older-substitution-spelling-brings-its-own-quoting-too` — the backquoted spelling of the same rule, and it is here as a measurement rather than as a symmetry: ksh93 refuses a single quote inside backquotes inside a double quote when the word stands on its own — `a="`echo 'e"f'`"` is a syntax error there — and accepts it inside a `${ }` body, so all six agree on this row and only on this row. A fix written for `$( )` alone leaves the older spelling refused in all four dialects while the un-nested one is accepted, which is one construct answered two ways
+  ```sh
+  printf '[%s]\n' "${x:-"`echo 'e"f'`"}"
+  ```
+- `core/single-quotes-in-a-quoted-expansion-body` — a `${ }` body written inside double quotes is double-quoted *content*, so a single quote in it is an ordinary character rather than a quote: all six shells keep the two quote characters and substitute the `$v` between them. The empty pair is the guard on the same fact — `''` is two characters here where a quoting reading makes it nothing
+  ```sh
+  v=VAL; printf '[%s]' "${u:-'$v'}" "${w:-''}"; echo
+  ```
+- `core/a-substitution-inside-those-quotes-is-performed` — the row that says the substitution inside those quotes is *recognized and run* rather than merely scanned past for the delimiter, which is the question the two readings could not otherwise be told apart on. Both spellings of a command substitution, and all six shells run both
+  ```sh
+  printf '[%s]' "${u:-'$(echo hi)'}" "${w:-'`echo bq`'}"; echo
+  ```
+- `core/an-unbalanced-substitution-inside-those-quotes` — the same fact reaching the parse, and unanimous as a refusal: with the `'` an ordinary character there is nothing to close the `$(`, so every shell in the panel fails the line. They part company only on the wording and the status, which makes this a diagnostics row as well as a grammar one
+  ```sh
+  printf '[%s]' "${x:-'a$(b'}"; echo
+  ```
+- `core/single-quotes-in-an-unquoted-expansion-body` — the contrast that says the rule belongs to the enclosing context and not to the body: unquoted, the same characters are an ordinary single-quoted run in all six — the quotes removed and the `$v` never substituted. Without this row a fix could take the quotes literally everywhere and still pass the quoted one
+  ```sh
+  v=VAL; printf '[%s]' ${u:-'$v'}; echo
+  ```
+- `core/double-quotes-in-a-quoted-expansion-body` — the other quote character in the same position, and it does *not* follow the same rule: an unescaped one there opens a run of its own and is removed, so `"$v"` comes to `VAL` where `'$v'` comes to `'VAL'`. The two quote characters part company inside a quoted body, and a reading that made both literal answers this row wrongly
+  ```sh
+  v=VAL; printf '[%s]' "${u:-"$v"}" "${w:-x"y"z}"; echo
+  ```
+- `core/single-quotes-in-a-quoted-pattern-operand` — the guard that keeps the rule off the operand it does not govern: a *pattern* operand's quotes quote and are removed, so the first trims the `x` and the unbalanced substitution in the second is no substitution at all. Five shells answer both; zsh refuses the second, which is its own divergence and not this one
+  ```sh
+  s=xay; printf '[%s]' "${s#'x'}" "${s#'a$(b'}"; echo
+  ```
+- `core/quotes-in-a-quoted-replacement-operand` — the third reading of a quote in a `${ }` operand, and the one the panel divides on: a *pattern* operand's quotes quote and are removed everywhere, and a **replacement** operand's do in bash 5.3, that build as `sh` and ksh93 while bash 3.2 and zsh keep them as characters. Unquoted all five agree again, which is what says the disagreement is about the quoted context and not about the operator. dash has no operator and refuses the line. Answered by Semantics.ReplacementOperandTakesTheEnclosingQuoting (#1209); the first and third fields are the guards a fix routed through the word operand's rule would break
+  ```sh
+  s=xay; v=VAL; printf '[%s]' "${s/'a'/Z}" "${s/a/'$v'}" ${s/a/'$v'}; echo
+  ```
+- `core/the-characters-a-replacement-operand-parts-on` — which characters the two readings of a replacement operand actually part on, which is what decides where the axis may be asked. The first three divide the panel — a single quote, a backslash, and a tilde at the front — and the last two do not: a double quote is removed under both readings that this shell's axis models and a tilde that is not at the front expands under neither. bash 3.2 is the exception on the double quote and keeps it as a character, which is a further divergence inside the keeping group rather than a third reading of the axis, and it has no dialect here to answer for it. A rule reached on the last two would be refusing where the whole panel agrees, and one that missed the first three would be picking a reading in silence. The backslash field is the coarse form of the question: which character follows it decides the answer, and core/which-backslashes-a-replacement-operand-parts-on asks it one at a time (#1966)
+  ```sh
+  s=xay; printf '[%s]' "${s/a/'q'}" "${s/a/\q}" "${s/a/~}" "${s/a/"q"}" "${s/a/p~q}"; echo
+  ```
+- `core/which-backslashes-a-replacement-operand-parts-on` — the backslash of the row above, asked a character at a time, because it does not part the two readings on its own: a dollar, a backslash, a double quote and — since #1966 — a closing brace are escaped under *both* readings and are unanimous here, while an opening brace and an ordinary letter are removed by bash 5.3, that build as `sh` and ksh93 and kept by zsh. So the question the axis may be asked is the character *after* the backslash, and a rule reached on the first four refuses where the whole panel agrees — which is what the core did to `\}`, by name, until this. bash 3.2 keeps the backslash on the brace as well and has no dialect here
+  ```sh
+  s=xay; v=V; printf '[%s]' "${s/a/\$v}" "${s/a/\\}" "${s/a/\"}" "${s/a/\}}" "${s/a/\{}" "${s/a/\q}"; echo
+  ```
+- `core/backslash-before-a-brace-in-a-quoted-operand` — a backslash before the `}` that would close a `${ }` escapes it and is removed, which five of the six answer with `A}B`; bash 3.2 keeps it and is the outlier. The other four fields are what say the rule is the *closing brace inside a quoted operand* and not backslashes generally: an opening brace keeps its backslash, so does an ordinary letter, so does the same `\}` written outside an expansion — all three unanimous — and the unquoted spelling comes to `A}B` by the ordinary word rule, which is the reading the quoted one had been missing (#1966)
+  ```sh
+  unset u; printf '[%s]' "${u-A\}B}" "${u-A\{B}" "${u-A\qB}" "A\}B" ${u-A\}B}; echo
+  ```
+- `core/backslash-before-a-brace-in-a-replacement-operand` — the same escape in the operands of a substitution, which is where it reached this shell: the replacement half of both `/` and `//` comes to `A}B`, and the pattern half takes the freed `}` as a literal to match, so the third field is `Z` and the fourth trims. dash has neither operator and refuses the line; bash 3.2 keeps the backslash in the two replacements and agrees on the two patterns, which places its divergence in the replacement reading rather than in the escape. This is the construct powerlevel10k builds a `${(e)}` pattern out of, and a kept backslash makes that text unparseable (#1966)
+  ```sh
+  v=x; w='a}b'; printf '[%s]' "${v/x/A\}B}" "${v//x/A\}B}" "${w/a\}b/Z}" "${w%\}b}"; echo
+  ```
+- `core/backslash-before-a-brace-inside-nested-quotes` — where the escape stops, and the one corner of it the panel splits on: inside a double-quoted run written *within* the operand, zsh answers `A\}B` and the other five answer `A}B`, so the brace is escapable there for everyone but zsh. Single quotes are not a run at all in a quoted operand, so the second field is `A'}'B` in five and `A'\}'B` only in bash 3.2. Recorded as the measurement behind the split; ours gives zsh's answer in every dialect (#2001)
+  ```sh
+  unset u; printf '[%s]' "${u-"A\}B"}" "${u-A'\}'B}"; echo
+  ```
+- `core/single-quotes-in-a-heredoc-expansion-body` — a here-document body is the same context reached by the other road: it expands like a double-quoted string, so the quotes are characters there too and the `$v` between them is substituted. Unanimous, and it is the row that says the answer is the context's rather than the double quote character's
+  ```sh
+  v=VAL; cat <<EOF
+  [${u:-'$v'}]
+  EOF
+  ```
+- `core/a-case-arm-inside-backquotes-inside-an-expansion` — the `)` of a case arm closes nothing, which `$( )` learned on its own — and one level further in, inside backquotes, the counting scan is the only thing that can be reached. Unanimous across the panel. It is the row that says the older spelling holds a program too rather than a run of text with a delimiter somewhere in it: a scan that reads across the backquotes takes the arm's `)` as the substitution's, ends it in the middle of the `case`, and leaves the expansion with no `}`
+  ```sh
+  printf '[%s]\n' "${x:-"$( echo `case a in a) echo y;; esac` )"}"
+  ```
+
 ## parameters
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
@@ -5730,164 +5908,6 @@ grades it and nothing drift-checks it either, for the same reason.
 - `token/clobber-override` — >| overrides noclobber with the same meaning everywhere, unlike &>
   ```sh
   set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"
-  ```
-
-## quoting
-
-| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- | --- |
-| `core/dollar-single-expands-escapes` | ` [ $ a \ t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` |
-| `core/dollar-single-control-character` | ` [ $ \ c A \ c z ] ` | ` [ 001 032 ] ` | ` [ 001 032 ] ` | ` [ 001 032 ] ` | ` [ 001 032 ] ` | ` [ c A c z ] ` |
-| `core/dollar-single-control-arithmetic` | ` [ $ \ c 1 \ c ? \ c [ ] ` | ` [ 021 177 033 ] ` | ` [ 021 177 033 ] ` | ` [ 021 037 033 ] ` | ` [ q 177 033 ] ` | ` [ c 1 c ? c [ ] ` |
-| `core/dollar-single-nul-truncates` | ` [ $ a \ 0 b ] [ 5 ] ` | ` [ a ] [ 1 ] ` | ` [ a ] [ 1 ] ` | ` [ a ] [ 1 ] ` | ` [ a ] [ 1 ] ` | ` [ a \0 b ] [ 3 ] ` |
-| `core/dollar-single-nul-ends-the-span-only` | ` [ $ a \ 0 b c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a \0 b c c c ] ` |
-| `core/dollar-single-esc-escape` | ` [ $ \ e [ m \ E ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` |
-| `core/dollar-single-hex-escape` | ` [ $ \ x 4 1 \ x 4 a \ x 9 ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` |
-| `core/dollar-single-octal-escape` | ` [ $ \ 1 0 1 \ 0 1 0 1 \ 1 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` |
-| `core/dollar-single-unicode-escape` | ` [ $ \ u 4 1 \ u 0 0 4 1 \ U 0 0~ 0 0 0 0 5 8 ] ` | ` [ A A X ] ` | ` [ A A X ] ` | ` [ \ u 4 1 \ u 0 0 4 1 \ U 0 0 0~ 0 0 0 5 8 ] ` | ` [ A A X ] ` | ` [ A A X ] ` |
-| `core/dollar-single-unknown-escape` | ` [ $ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ q 8 ] ` | ` [ q 8 ] ` |
-| `core/dollar-single-caret-and-meta` | ` [ $ \ C - A ] [ $ \ C A ] [ $ \~ C - 1 ] [ $ \ C - ? ] [ $ \ M -~ x ] [ $ \ M - \ C - ? ] [ $ \ c~ A ] ` | ` [ \ C - A ] [ \ C A ] [ \ C - 1~ ] [ \ C - ? ] [ \ M - x ] [ \ M~ - \ C - ? ] [ 001 ] ` | ` [ \ C - A ] [ \ C A ] [ \ C - 1~ ] [ \ C - ? ] [ \ M - x ] [ \ M~ - \ C - ? ] [ 001 ] ` | ` [ \ C - A ] [ \ C A ] [ \ C - 1~ ] [ \ C - ? ] [ \ M - x ] [ \ M~ - \ C - ? ] [ 001 ] ` | ` [ m A ] [ 001 ] [ m 1 ] [ m ? ] [~ 033 x ] [ 033 m ? ] [ 001 ] ` | ` [ 001 ] [ 001 ] [ 021 ] [ 177 ] [ 370 ] [~ 377 ] [ c A ] ` |
-| `core/dollar-single-caret-and-meta-compose` | ` [ $ \ C - \ M - x ] [ $ \ M - \~ C - x ] [ $ \ M - \ t ] [ $ \ C~ - \ x 7 f ] [ $ \ C - \ M - ? ]~ [ $ x \ C ] ` | ` [ \ C - \ M - x ] [ \ M - \ C -~ x ] [ \ M - \t ] [ \ C - 177 ] [ \~ C - \ M - ? ] [ x \ C ] ` | ` [ \ C - \ M - x ] [ \ M - \ C -~ x ] [ \ M - \t ] [ \ C - 177 ] [ \~ C - \ M - ? ] [ x \ C ] ` | ` [ \ C - \ M - x ] [ \ M - \ C -~ x ] [ \ M - \t ] [ \ C - 177 ] [ \~ C - \ M - ? ] [ x \ C ] ` | ` [ m 033 x ] [ 033 m x ] [ 033 \t ] [ m~ 177 ] [ m 033 ? ] [ x ] ` | ` [ 230 ] [ 230 ] [ 211 ] [ 037 ] [ 237 ] [~ x ] ` |
-| `core/a-substitution-inside-an-expansion-brings-its-own-quoting` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` |
-| `core/a-swallowed-quote-changes-the-program-rather-than-refusing-it` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` |
-| `core/what-a-nested-substitution-holds-is-not-a-delimiter` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` |
-| `core/the-older-substitution-spelling-brings-its-own-quoting-too` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` |
-| `core/single-quotes-in-a-quoted-expansion-body` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` |
-| `core/a-substitution-inside-those-quotes-is-performed` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` |
-| `core/an-unbalanced-substitution-inside-those-quotes` | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: command substitution: line 2: unexpected EOF while looking for matching `''` *(status 1)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `''` *(status 2)* | **2>** `<shell>: bad substitution: no closing `)' in 'a$(b'` *(status 1)* | **2>** `<shell>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<shell>:1: unmatched '~<shell>:1: unmatched "` *(status 1)* |
-| `core/single-quotes-in-an-unquoted-expansion-body` | `[$v]` | `[$v]` | `[$v]` | `[$v]` | `[$v]` | `[$v]` |
-| `core/double-quotes-in-a-quoted-expansion-body` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` |
-| `core/single-quotes-in-a-quoted-pattern-operand` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | **2>** `<shell>:1: unmatched '~<shell>:1: unmatched "` *(status 1)* |
-| `core/quotes-in-a-quoted-replacement-operand` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[xZy][x$vy][x$vy]` | `[xZy][x$vy][x$vy]` | `[xZy][x'VAL'y][x$vy]` | `[xZy][x$vy][x$vy]` | `[xZy][x'VAL'y][x$vy]` |
-| `core/the-characters-a-replacement-operand-parts-on` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[x'q'y][x\qy][x~y][x"q"y][xp~qy]` | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[x'q'y][x\qy][x~y][xqy][xp~qy]` |
-| `core/which-backslashes-a-replacement-operand-parts-on` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[x$vy][x\y][x"y][x}y][x{y][xqy]` | `[x$vy][x\y][x"y][x}y][x{y][xqy]` | `[x$vy][x\y][x"y][x\}y][x\{y][x\qy]` | `[x$vy][x\y][x"y][x}y][x{y][xqy]` | `[x$vy][x\y][x"y][x}y][x\{y][x\qy]` |
-| `core/backslash-before-a-brace-in-a-quoted-operand` | `[A}B][A\{B][A\qB][A\}B][A}B]` | `[A}B][A\{B][A\qB][A\}B][A}B]` | `[A}B][A\{B][A\qB][A\}B][A}B]` | `[A\}B][A\{B][A\qB][A\}B][A}B]` | `[A}B][A\{B][A\qB][A\}B][A}B]` | `[A}B][A\{B][A\qB][A\}B][A}B]` |
-| `core/backslash-before-a-brace-in-a-replacement-operand` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[A}B][A}B][Z][a]` | `[A}B][A}B][Z][a]` | `[A\}B][A\}B][Z][a]` | `[A}B][A}B][Z][a]` | `[A}B][A}B][Z][a]` |
-| `core/backslash-before-a-brace-inside-nested-quotes` | `[A}B][A'}'B]` | `[A}B][A'}'B]` | `[A}B][A'}'B]` | `[A}B][A'\}'B]` | `[A}B][A'}'B]` | `[A\}B][A'}'B]` |
-| `core/single-quotes-in-a-heredoc-expansion-body` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` |
-| `core/a-case-arm-inside-backquotes-inside-an-expansion` | `[y]` | `[y]` | `[y]` | `[y]` | `[y]` | `[y]` |
-
-- `core/dollar-single-expands-escapes` — read as bytes, because the failure mode was a literal backslash-t that looks almost right in a terminal — the quoting was recorded and nothing decoded it
-  ```sh
-  printf '[%s]' $'a\tb' | od -An -c | tr -s " "
-  ```
-- `core/dollar-single-control-character` — the escape that reached the output as a backslash, a c and a letter: bash and ksh93 decode it, zsh is the one shell with $'…' and no \c in it, and dash has no $'…' at all — four columns and three different answers to one snippet
-  ```sh
-  printf '[%s]' $'\cA\cz' | od -An -c | tr -s " "
-  ```
-- `core/dollar-single-control-arithmetic` — where the two decoding rules part: both uppercase and then agree over @ through _, so a case built only from letters cannot tell masking the low five bits from toggling bit 6 — `\c1` is 0x11 in bash and `q` in ksh93, and `\c?` is where bash 3.2 differs from bash 5.3
-  ```sh
-  printf '[%s]' $'\c1\c?\c[' | od -An -c | tr -s " "
-  ```
-- `core/dollar-single-nul-truncates` — a decoded NUL ends the text where a shell holds words as C strings and is an ordinary byte where it counts them — the length is recorded beside the bytes because a truncated word and a word with a NUL in it print the same way anywhere the NUL is invisible
-  ```sh
-  x=$'a\0b'; printf '[%s][%s]' "$x" "${#x}" | od -An -c | tr -s " "
-  ```
-- `core/dollar-single-nul-ends-the-span-only` — what the NUL truncates is the quoted span and not the word: the characters after the closing quote were never inside it, so `accc` rather than `a` — the distinction a case built from a bare $'…' cannot make
-  ```sh
-  printf '[%s]' $'a\0b'ccc | od -An -c | tr -s " "
-  ```
-- `core/dollar-single-esc-escape` — both spellings of the escape character, which POSIX has for neither and every shell with $'…' decodes — the escape that makes a color sequence writable without a literal control character in the source
-  ```sh
-  printf '[%s]' $'\e[m\E' | od -An -c | tr -s " "
-  ```
-- `core/dollar-single-hex-escape` — one and two hex digits both, because the length is not fixed and a reader that demands two would silently take the `\x9` of `\x9Z` as 0x9Z
-  ```sh
-  printf '[%s]' $'\x41\x4a\x9' | od -An -c | tr -s " "
-  ```
-- `core/dollar-single-octal-escape` — the octal forms, and the reason they are one rule rather than two: `\0101` is not four digits after a zero but three from the zero onward, so it is a backspace and then a `1`
-  ```sh
-  printf '[%s]' $'\101\0101\1' | od -An -c | tr -s " "
-  ```
-- `core/dollar-single-unicode-escape` — the code-point escapes, both widths and fewer digits than either allows — and the one place in this table where bash 3.2 keeps the text as written instead, which is what makes the pair a dated answer rather than a disputed one; the code points stay inside ASCII because what a shell does with a wider one depends on the locale and this record is made under LC_ALL=C
-  ```sh
-  printf '[%s]' $'\u41\u0041\U00000058' | od -An -c | tr -s " "
-  ```
-- `core/dollar-single-unknown-escape` — a backslash before a character no escape claims: bash keeps both, ksh93 and zsh drop the backslash — the axis `\c` falls to in the one shell that has no `\c`
-  ```sh
-  printf '[%s]' $'\q\8' | od -An -c | tr -s " "
-  ```
-- `core/dollar-single-caret-and-meta` — `\C-X` for a control character and `\M-X` for the same byte with the high bit set: one shell of the panel has both, one has neither and keeps the characters as written, and the third reads `\C` without a dash as a control escape of its own — so `\C-A` there is control-minus and then an `A`, off by a byte from the first reading and silent about it. `\cA` is on the same line because the two vocabularies are complementary: the shell with the caret spelling has no `\c`, and the shells with `\c` have no caret. The dash is optional and a digit is masked rather than uppercased, which is what separates this reading from `\c`'s
-  ```sh
-  printf '[%s]' $'\C-A' $'\CA' $'\C-1' $'\C-?' $'\M-x' $'\M-\C-?' $'\cA' | od -An -c | tr -s " "
-  ```
-- `core/dollar-single-caret-and-meta-compose` — the corners of the two prefixes, which decide whether a reading is arithmetic or a lookup. The mask keeps the high bit it finds, so the two compose to the same byte in either written order; the argument may be a further escape; the delete byte reached through `\x7f` is masked while a written `?` is not, so the special case is on the character and not on its value; a meta bit takes it back out of that case; and a prefix with nothing after it produces no byte at all rather than the characters it was written with
-  ```sh
-  printf '[%s]' $'\C-\M-x' $'\M-\C-x' $'\M-\t' $'\C-\x7f' $'\C-\M-?' $'x\C' | od -An -c | tr -s " "
-  ```
-- `core/a-substitution-inside-an-expansion-brings-its-own-quoting` — the quote that ends a double-quoted run is not the next `"` in the text: a `$( )` written inside one holds a *program*, so the single quotes in it quote that `"` and the run continues past it. Every shell in the panel prints the word; a scanner that reads the run as text takes the inner `"` as the closer, is left on the second `'`, and swallows the rest of the file — which is what all four dialects did, each in its own wording, until #1140. This is the shape `~/.zi/bin/lib/zsh/install.zsh` stops at on line 1389, written with `[^"]` inside a `grep` pattern
-  ```sh
-  printf '[%s]\n' "${x:-"$( echo 'a"b' )"}"
-  ```
-- `core/a-swallowed-quote-changes-the-program-rather-than-refusing-it` — the same defect with a second expansion after it, and the reason this row is not a duplicate of the one above: two of them put the stray quotes back in balance, so nothing is ever unterminated and the misreading is *silent*. The output was `[a"b} c'd]` — one field where there are two, a literal `}` that belongs to the grammar, and no diagnostic anywhere. A shell that only refused this shape would pass a corpus written from the refusal. The second expansion is the mirror of the first, a `'` inside double quotes, so neither quote character is the special one
-  ```sh
-  printf '[%s]' "${x:-"$( echo 'a"b' )"}" "${y:-"$( echo "c'd" )"}"; echo
-  ```
-- `core/what-a-nested-substitution-holds-is-not-a-delimiter` — the two neighbors the fix has to reach as well: the arithmetic spelling, which nests a `$( )` of its own, and a single-quoted `)` that closes nothing. Both are unanimous. They are here because the counting scanner got the `)` and the `}` right already when they stood at the body's own level — `${x:-"$( echo ')' )"}` parsed on either side of the change — so a case built only from those two characters measures nothing, and only the `"` inside the substitution tells the two readings apart
-  ```sh
-  printf '[%s]' "${x:-"$(( 1 + $( printf %s '"' | wc -c ) ))"}" "${y:-"$( echo 'a")b' )"}"; echo
-  ```
-- `core/the-older-substitution-spelling-brings-its-own-quoting-too` — the backquoted spelling of the same rule, and it is here as a measurement rather than as a symmetry: ksh93 refuses a single quote inside backquotes inside a double quote when the word stands on its own — `a="`echo 'e"f'`"` is a syntax error there — and accepts it inside a `${ }` body, so all six agree on this row and only on this row. A fix written for `$( )` alone leaves the older spelling refused in all four dialects while the un-nested one is accepted, which is one construct answered two ways
-  ```sh
-  printf '[%s]\n' "${x:-"`echo 'e"f'`"}"
-  ```
-- `core/single-quotes-in-a-quoted-expansion-body` — a `${ }` body written inside double quotes is double-quoted *content*, so a single quote in it is an ordinary character rather than a quote: all six shells keep the two quote characters and substitute the `$v` between them. The empty pair is the guard on the same fact — `''` is two characters here where a quoting reading makes it nothing
-  ```sh
-  v=VAL; printf '[%s]' "${u:-'$v'}" "${w:-''}"; echo
-  ```
-- `core/a-substitution-inside-those-quotes-is-performed` — the row that says the substitution inside those quotes is *recognized and run* rather than merely scanned past for the delimiter, which is the question the two readings could not otherwise be told apart on. Both spellings of a command substitution, and all six shells run both
-  ```sh
-  printf '[%s]' "${u:-'$(echo hi)'}" "${w:-'`echo bq`'}"; echo
-  ```
-- `core/an-unbalanced-substitution-inside-those-quotes` — the same fact reaching the parse, and unanimous as a refusal: with the `'` an ordinary character there is nothing to close the `$(`, so every shell in the panel fails the line. They part company only on the wording and the status, which makes this a diagnostics row as well as a grammar one
-  ```sh
-  printf '[%s]' "${x:-'a$(b'}"; echo
-  ```
-- `core/single-quotes-in-an-unquoted-expansion-body` — the contrast that says the rule belongs to the enclosing context and not to the body: unquoted, the same characters are an ordinary single-quoted run in all six — the quotes removed and the `$v` never substituted. Without this row a fix could take the quotes literally everywhere and still pass the quoted one
-  ```sh
-  v=VAL; printf '[%s]' ${u:-'$v'}; echo
-  ```
-- `core/double-quotes-in-a-quoted-expansion-body` — the other quote character in the same position, and it does *not* follow the same rule: an unescaped one there opens a run of its own and is removed, so `"$v"` comes to `VAL` where `'$v'` comes to `'VAL'`. The two quote characters part company inside a quoted body, and a reading that made both literal answers this row wrongly
-  ```sh
-  v=VAL; printf '[%s]' "${u:-"$v"}" "${w:-x"y"z}"; echo
-  ```
-- `core/single-quotes-in-a-quoted-pattern-operand` — the guard that keeps the rule off the operand it does not govern: a *pattern* operand's quotes quote and are removed, so the first trims the `x` and the unbalanced substitution in the second is no substitution at all. Five shells answer both; zsh refuses the second, which is its own divergence and not this one
-  ```sh
-  s=xay; printf '[%s]' "${s#'x'}" "${s#'a$(b'}"; echo
-  ```
-- `core/quotes-in-a-quoted-replacement-operand` — the third reading of a quote in a `${ }` operand, and the one the panel divides on: a *pattern* operand's quotes quote and are removed everywhere, and a **replacement** operand's do in bash 5.3, that build as `sh` and ksh93 while bash 3.2 and zsh keep them as characters. Unquoted all five agree again, which is what says the disagreement is about the quoted context and not about the operator. dash has no operator and refuses the line. Answered by Semantics.ReplacementOperandTakesTheEnclosingQuoting (#1209); the first and third fields are the guards a fix routed through the word operand's rule would break
-  ```sh
-  s=xay; v=VAL; printf '[%s]' "${s/'a'/Z}" "${s/a/'$v'}" ${s/a/'$v'}; echo
-  ```
-- `core/the-characters-a-replacement-operand-parts-on` — which characters the two readings of a replacement operand actually part on, which is what decides where the axis may be asked. The first three divide the panel — a single quote, a backslash, and a tilde at the front — and the last two do not: a double quote is removed under both readings that this shell's axis models and a tilde that is not at the front expands under neither. bash 3.2 is the exception on the double quote and keeps it as a character, which is a further divergence inside the keeping group rather than a third reading of the axis, and it has no dialect here to answer for it. A rule reached on the last two would be refusing where the whole panel agrees, and one that missed the first three would be picking a reading in silence. The backslash field is the coarse form of the question: which character follows it decides the answer, and core/which-backslashes-a-replacement-operand-parts-on asks it one at a time (#1966)
-  ```sh
-  s=xay; printf '[%s]' "${s/a/'q'}" "${s/a/\q}" "${s/a/~}" "${s/a/"q"}" "${s/a/p~q}"; echo
-  ```
-- `core/which-backslashes-a-replacement-operand-parts-on` — the backslash of the row above, asked a character at a time, because it does not part the two readings on its own: a dollar, a backslash, a double quote and — since #1966 — a closing brace are escaped under *both* readings and are unanimous here, while an opening brace and an ordinary letter are removed by bash 5.3, that build as `sh` and ksh93 and kept by zsh. So the question the axis may be asked is the character *after* the backslash, and a rule reached on the first four refuses where the whole panel agrees — which is what the core did to `\}`, by name, until this. bash 3.2 keeps the backslash on the brace as well and has no dialect here
-  ```sh
-  s=xay; v=V; printf '[%s]' "${s/a/\$v}" "${s/a/\\}" "${s/a/\"}" "${s/a/\}}" "${s/a/\{}" "${s/a/\q}"; echo
-  ```
-- `core/backslash-before-a-brace-in-a-quoted-operand` — a backslash before the `}` that would close a `${ }` escapes it and is removed, which five of the six answer with `A}B`; bash 3.2 keeps it and is the outlier. The other four fields are what say the rule is the *closing brace inside a quoted operand* and not backslashes generally: an opening brace keeps its backslash, so does an ordinary letter, so does the same `\}` written outside an expansion — all three unanimous — and the unquoted spelling comes to `A}B` by the ordinary word rule, which is the reading the quoted one had been missing (#1966)
-  ```sh
-  unset u; printf '[%s]' "${u-A\}B}" "${u-A\{B}" "${u-A\qB}" "A\}B" ${u-A\}B}; echo
-  ```
-- `core/backslash-before-a-brace-in-a-replacement-operand` — the same escape in the operands of a substitution, which is where it reached this shell: the replacement half of both `/` and `//` comes to `A}B`, and the pattern half takes the freed `}` as a literal to match, so the third field is `Z` and the fourth trims. dash has neither operator and refuses the line; bash 3.2 keeps the backslash in the two replacements and agrees on the two patterns, which places its divergence in the replacement reading rather than in the escape. This is the construct powerlevel10k builds a `${(e)}` pattern out of, and a kept backslash makes that text unparseable (#1966)
-  ```sh
-  v=x; w='a}b'; printf '[%s]' "${v/x/A\}B}" "${v//x/A\}B}" "${w/a\}b/Z}" "${w%\}b}"; echo
-  ```
-- `core/backslash-before-a-brace-inside-nested-quotes` — where the escape stops, and the one corner of it the panel splits on: inside a double-quoted run written *within* the operand, zsh answers `A\}B` and the other five answer `A}B`, so the brace is escapable there for everyone but zsh. Single quotes are not a run at all in a quoted operand, so the second field is `A'}'B` in five and `A'\}'B` only in bash 3.2. Recorded as the measurement behind the split; ours gives zsh's answer in every dialect (#2001)
-  ```sh
-  unset u; printf '[%s]' "${u-"A\}B"}" "${u-A'\}'B}"; echo
-  ```
-- `core/single-quotes-in-a-heredoc-expansion-body` — a here-document body is the same context reached by the other road: it expands like a double-quoted string, so the quotes are characters there too and the `$v` between them is substituted. Unanimous, and it is the row that says the answer is the context's rather than the double quote character's
-  ```sh
-  v=VAL; cat <<EOF
-  [${u:-'$v'}]
-  EOF
-  ```
-- `core/a-case-arm-inside-backquotes-inside-an-expansion` — the `)` of a case arm closes nothing, which `$( )` learned on its own — and one level further in, inside backquotes, the counting scan is the only thing that can be reached. Unanimous across the panel. It is the row that says the older spelling holds a program too rather than a run of text with a delimiter somewhere in it: a scan that reads across the backquotes takes the arm's `)` as the substitution's, ends it in the middle of the `case`, and leaves the expansion with no `}`
-  ```sh
-  printf '[%s]\n' "${x:-"$( echo `case a in a) echo y;; esac` )"}"
   ```
 
 ## command language

@@ -32,7 +32,7 @@ func escapingFlags(d *syntax.Dialect) {
 // arrive as `$s`, which is what says the name substitution happens *before*
 // the decoding rather than after.
 func withTestEscapes(r *interp.Runner) {
-	r.SetFlagArgumentEscapes(func(s string) string {
+	r.SetFlagArgumentEscapes(func(_ *interp.Runner, s string) string {
 		var b strings.Builder
 		for i := 0; i < len(s); i++ {
 			if s[i] != '\\' || i+1 == len(s) {

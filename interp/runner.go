@@ -1216,7 +1216,7 @@ type Runner struct {
 	// a no-op — a `(p)` that quietly did nothing would join on the two
 	// characters and answer at status 0. Installed through
 	// SetFlagArgumentEscapes; see interp/expandflags.go.
-	flagArgEscapes func(string) string
+	flagArgEscapes func(r *Runner, text string) string
 	// expansionEscapes reads the escapes in a *value* the way the `(g)`
 	// expansion flag asks for, with the flag's option letters saying which
 	// parts of the set are live — `${(g::)v}` reading them one way and
@@ -1230,7 +1230,7 @@ type Runner struct {
 	// unchanged either way, so a no-op would pass the first thing anyone
 	// tried and answer the rest at status 0. Installed through
 	// SetExpansionEscapes; see interp/escapeflag.go.
-	expansionEscapes func(text, opts string) string
+	expansionEscapes func(r *Runner, text, opts string) string
 	// parameterTypeWord words what a name *is* — `${(t)v}`'s answer — the
 	// way this shell says it. A function the dialect supplies for the reason
 	// flagArgEscapes is one: the vocabulary is a shell's and this package

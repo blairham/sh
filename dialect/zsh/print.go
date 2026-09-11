@@ -182,12 +182,25 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		r.Diagnosef("bad file number: %d\n", opts.fd)
 		return 1
 	}
-	text, ok := printText(r, opts, rest)
+	text, ok, refused := printText(r, opts, rest)
 	if !ok {
 		return 1
 	}
+	if refused {
+		// Reported once, here, however many escapes the operands held — and
+		// before the text, which is the order the two streams come out in:
+		// the shell that refuses has read the word before `print` writes
+		// anything. The status is the builtin sites' zero rather than the
+		// expansion sites' one, and the script is abandoned either way.
+		r.RefuseCodePoint()
+	}
 	if _, err := io.WriteString(out, text); err != nil {
 		return printWriteFailed(r, opts.fd, err)
+	}
+	if refused {
+		// The status the refusal left, which is the zero measured at
+		// every builtin site rather than a failure this builtin decided.
+		return r.ExitStatus()
 	}
 	return 0
 }
@@ -245,29 +258,38 @@ func printWriteFailed(r *interp.Runner, fd int, err error) int {
 // already been written. Nothing is printed in that case — a `print` that
 // wrote the operands it managed and then complained would leave a script
 // holding a line it could not tell apart from a whole one.
-func printText(r *interp.Runner, opts printOptions, words []string) (string, bool) {
+func printText(r *interp.Runner, opts printOptions, words []string) (text string, ok, refused bool) {
 	var b strings.Builder
 	for i, w := range words {
 		if i > 0 {
 			b.WriteString(opts.separator())
 		}
-		expanded, stopped := w, false
+		expanded, stopped, no := w, false, false
 		if !opts.raw {
-			expanded, stopped = expandPrintEscapes(w)
+			expanded, stopped, no = expandPrintEscapes(r, w)
+		}
+		if no {
+			// The text before the escape, with the terminator this `print`
+			// would have written: measured 2026-09-11 under `LC_ALL=C`,
+			// `print -- 'a\u00e9Z'` leaves `61 0a` and abandons the script.
+			// The refusal itself is the caller's to report, once.
+			b.WriteString(expanded)
+			b.WriteString(opts.terminator())
+			return b.String(), true, true
 		}
 		if opts.prompt {
 			var ok bool
 			if expanded, ok = r.PromptExpand(expanded); !ok {
-				return "", false
+				return "", false, false
 			}
 		}
 		b.WriteString(expanded)
 		if stopped {
-			return b.String(), true
+			return b.String(), true, false
 		}
 	}
 	b.WriteString(opts.terminator())
-	return b.String(), true
+	return b.String(), true, false
 }
 
 // printMatching is `-m`: the first operand is a pattern and the rest are kept
@@ -530,17 +552,28 @@ func printFormatted(r *interp.Runner, ctx context.Context, opts printOptions, re
 // Everything else is the same measurement, so this is the one decoder told
 // which of the two it is rather than a second copy of it: `\101` is `A` in
 // both, `\q` is `q` in both, and a trailing backslash is a backslash in both.
-func expandFlagArgumentEscapes(s string) string {
-	out, _ := expandEscapes(s, escapeReading{bareOctal: true, printEscapes: true})
+func expandFlagArgumentEscapes(r *interp.Runner, s string) string {
+	out, _, refused := expandEscapes(s, escapeReading{
+		bareOctal: true, printEscapes: true, codePoint: r.CodePointEscapeText,
+	})
+	if refused {
+		// The refusal happens while a *word* is being expanded, so it is the
+		// expansion site's status rather than a builtin's: measured
+		// 2026-09-11 under `LC_ALL=C`, `a=(x y); print -- ${(pj:A\u00e9B:)a}`
+		// writes `character not in range`, nothing on standard output, and
+		// leaves 1 (#2021).
+		r.RefuseCodePointExpanding()
+	}
 	return out
 }
 
 // expandPrintEscapes is the measured escape set, applied to one operand. The
 // second result reports a `\c`, which ends the whole command's output where it
 // stands.
-func expandPrintEscapes(s string) (string, bool) {
+func expandPrintEscapes(r *interp.Runner, s string) (text string, truncated, refused bool) {
 	return expandEscapes(s, escapeReading{
 		cTruncates: true, bareOctal: true, printEscapes: true,
+		codePoint: r.CodePointEscapeText,
 	})
 }
 
@@ -579,13 +612,33 @@ func expandPrintEscapes(s string) (string, bool) {
 // otherwise get from `print`: it never truncates here, so under `e` it is an
 // escape this shell does not know and loses its backslash, exactly as `\q`
 // does, and in the other three readings it is two characters of text.
-func expandExpansionFlagEscapes(s, opts string) string {
-	out, _ := expandEscapes(s, escapeReading{
+func expandExpansionFlagEscapes(r *interp.Runner, s, opts string) string {
+	out, _, refused := expandEscapes(s, escapeReading{
 		bareOctal:    strings.ContainsRune(opts, 'o'),
 		printEscapes: strings.ContainsRune(opts, 'e'),
 		caret:        strings.ContainsRune(opts, 'c'),
+		codePoint:    r.CodePointEscapeText,
 	})
+	if refused {
+		// Measured with the same word `(p)` is measured with, and the same
+		// status: `v='a\u00e9Z'; printf '%s' ${(g::)v}` under `LC_ALL=C` is
+		// `character not in range` and 1, with nothing written.
+		r.RefuseCodePointExpanding()
+	}
 	return out
+}
+
+// codePointText is one `\u` escape's text, through the reader the runner
+// supplied. The second result is the refusal.
+//
+// nil is the decoder called with no runner behind it, which is only a test of
+// the escape *set*: there the character is written, which is what every
+// reading did before a locale was consulted anywhere.
+func codePointText(how escapeReading, n int) (string, bool) {
+	if how.codePoint == nil {
+		return interp.EncodeCodePoint(n), false
+	}
+	return how.codePoint(n)
 }
 
 // escapeReading is which of the set's parts one reader has live.
@@ -611,12 +664,22 @@ type escapeReading struct {
 	// caret says whether `^X` is a control character, which only the `(g)`
 	// flag's `c` option turns on.
 	caret bool
+	// codePoint turns one `\u` or `\U` escape's value into text, with the
+	// locale consulted — interp.Runner.CodePointEscapeText. A closure rather
+	// than a flag, because the answer is the dialect's *and* the runner's
+	// variables, where expandEscapes is a pure function of its arguments.
+	//
+	// Every reading of this set has it, since all three read the escape;
+	// nil is only the tests that call the decoder with no runner behind it,
+	// and there the character is written the way it was before the locale
+	// was consulted anywhere (#2021).
+	codePoint func(int) (string, bool)
 }
 
 // expandEscapes is the escape set with the places it is read more than one way
 // made parameters. See escapeReading, and expandExpansionFlagEscapes for the
 // measurement behind each.
-func expandEscapes(s string, how escapeReading) (string, bool) {
+func expandEscapes(s string, how escapeReading) (text string, truncated, refused bool) {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] == '^' && how.caret && i+1 < len(s) {
@@ -646,7 +709,7 @@ func expandEscapes(s string, how escapeReading) (string, bool) {
 			b.WriteByte('\b')
 		case 'c':
 			if how.cTruncates {
-				return b.String(), true
+				return b.String(), true, false
 			}
 			// Not an escape here, so it falls to whichever rule the reading
 			// has for one it does not know.
@@ -708,13 +771,22 @@ func expandEscapes(s string, how escapeReading) (string, bool) {
 				n = n*16 + printHexValue(s[j])
 				j++
 			}
-			// The core's encoder rather than a rune, because the values this
+			// The core's reader rather than a rune, because the values this
 			// shell writes are not all runes: a surrogate and anything past
 			// the last code point were a replacement character here and are
 			// the encoding itself there — `\ud800` is `ed a0 80` and
 			// `\U110000` is `f4 90 80 80` in zsh 5.9.2, measured, where
-			// Go's rune type refuses both (#1840).
-			b.WriteString(interp.EncodeCodePoint(n))
+			// Go's rune type refuses both (#1840) — and because the locale
+			// decides whether the character can be written at all, which is
+			// the same question `echo` asks through the same reader (#2021).
+			text, no := codePointText(how, n)
+			if no {
+				// The text before the escape still stands; what the caller
+				// does with it is the caller's, since `print` writes it and
+				// an expansion flag's word never reaches a command.
+				return b.String(), false, true
+			}
+			b.WriteString(text)
 			i = j - 1
 		case 'M', 'C':
 			if !how.printEscapes {
@@ -743,7 +815,7 @@ func expandEscapes(s string, how escapeReading) (string, bool) {
 			writeUnknownEscape(&b, c, how)
 		}
 	}
-	return b.String(), false
+	return b.String(), false, false
 }
 
 // writeUnknownEscape is what becomes of a backslash this reading cannot use:

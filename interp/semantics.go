@@ -319,11 +319,21 @@ type Semantics struct {
 	// measurements and for what "cannot hold" is read off.
 	//
 	// One axis for every site that reads the escape — `echo`, `print`, a
-	// `printf` format, a `%b` argument, `$'...'` — because the two shells that
-	// have the escape answer the same at all five, measured one site at a
-	// time. It is a question *after* the escape has been read, so it is
-	// separate from EchoExpandsUnicodeEscapes above and from the printf
-	// policies: a dialect without the escape never reaches it.
+	// `printf` format, a `%b` argument, `$'...'`, and the `(g)` and `(p)`
+	// expansion flags — because each shell answers the same at every site it
+	// reads the escape at, measured one site at a time. It is a question
+	// *after* the escape has been read, so it is separate from
+	// EchoExpandsUnicodeEscapes above and from the printf policies: a dialect
+	// that does not read the escape at a site never reaches it there, which is
+	// why ksh93's answer is reachable at two sites and not at five.
+	//
+	// `$'...'` is a **core** construct, and the axis is three-valued because
+	// of it: ksh93 has no `\u` in `echo`, in `print` or in a `%b`, and writes
+	// the character regardless of the locale in the two places it does read
+	// one. So a core script with `$'\u00e9'` in it under a non-UTF-8 locale
+	// is an unanswered axis rather than a value — which is the core refusing
+	// what the panel disagrees about, in the one place that disagreement
+	// reaches the common denominator (#2021).
 	//
 	// Asked only where such an escape actually names a code point the locale
 	// refuses, so an ASCII one needs no answer from anybody and neither does
@@ -8491,9 +8501,11 @@ func (r *Runner) fatalPattern(pattern string, status int) {
 // OutsideLocaleEscapePolicy is what a `\u` or `\U` escape does when the code
 // point it names cannot be represented in the locale's encoding.
 //
-// Two answers and not a bool, for the reason ReadonlyElementPolicy is not one:
-// neither answer is the negation of the other, and a field named for one of
-// them would read as `false` meaning the other by accident.
+// Three answers and not a bool, for the reason ReadonlyElementPolicy is not
+// one: no answer is the negation of another, and a field named for one of
+// them would read as `false` meaning another by accident. The third is
+// ksh93's, which never consults a locale at all, and it is reachable only at
+// the two sites ksh93 reads the escape at — a `printf` format and `$'…'`.
 //
 // The escape's reading is not in question here — see
 // Semantics.EchoExpandsUnicodeEscapes and the printf policies for that. This
@@ -8516,6 +8528,13 @@ const (
 	// `(exit 3); echo '...'`, which also exits 0 — so it is zero rather than
 	// whatever was already there.
 	OutsideLocaleEscapeRefused
+	// OutsideLocaleEscapeEncoded writes the character whatever the locale
+	// says, which is to say it never consults one: ksh93. Measured 2026-09-11
+	// under `LC_ALL=C`, `printf 'a\u00e9Z'` and `$'a\u00e9Z'` both giving
+	// `61 c3 a9 5a` there and in a UTF-8 locale alike — the answer this shell
+	// gave everywhere before the axis existed, and the third answer that
+	// makes this a policy with two shells to tell apart rather than one.
+	OutsideLocaleEscapeEncoded
 )
 
 func (p OutsideLocaleEscapePolicy) String() string {
@@ -8524,6 +8543,8 @@ func (p OutsideLocaleEscapePolicy) String() string {
 		return "the escape stands as written"
 	case OutsideLocaleEscapeRefused:
 		return "refused, and the script is abandoned"
+	case OutsideLocaleEscapeEncoded:
+		return "the character is written, the locale unread"
 	}
 	return "unspecified"
 }

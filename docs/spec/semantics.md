@@ -3409,15 +3409,37 @@ assignment is enough with no export. That this shell has a locale at all
 was decided once, for every operator, in *Locale, decided as a policy*
 below; nothing here invents it.
 
-**What happens when it has none** is the dialect's, and the two shells
-that have the escape split on it —
-`Semantics.UnicodeEscapeOutsideTheLocale`. Measured 2026-09-11 under
-`LC_ALL=C`, bytes read with `od`:
+**What happens when it has none** is the dialect's, and the panel gives
+**three** answers — `Semantics.UnicodeEscapeOutsideTheLocale`. Measured
+2026-09-11 under `LC_ALL=C`, bytes read with `od`:
 
 | | `echo 'a\u00e9Z'` | then `echo AFTER` | status |
 | --- | --- | --- | --- |
 | bash 5.3 `-e` | `a\u00E9Z` | runs | 0 |
 | zsh 5.9.2 | `character not in range` on stderr, `a` and a newline on stdout | does **not** run | 0 |
+| ksh93u+ | the character, `61 c3 a9 5a` | runs | 0 |
+
+The third answer is a shell that never consults a locale for the escape at
+all, and it is reachable at two sites rather than at all of them: ksh93 has
+no `\u` in `echo`, in `print` or in a `%b` argument, so it is **`$'…'` and
+a `printf` format** that need the third constant. `$'…'` is a *core*
+construct, which is what makes the three-valued answer reach the common
+denominator: a core script holding `$'\u00e9'` under a non-UTF-8 locale is
+an unanswered axis rather than a value, in the one place this disagreement
+is not a dialect's alone (#2021).
+
+**Every site that reads the escape asks**, and each shell answers the same
+at every site it reads it at — measured one site at a time rather than
+assumed from `echo`. The sites are `echo`, `print`, a `printf` format, a
+`%b` argument, `$'…'`, and the `(g)` and `(p)` expansion flags.
+
+The **status** a refusal leaves differs by where the reading happened, and
+that is a fact about the site rather than another axis: a builtin's refusal
+leaves **0** — `echo`, `print`, both `printf` sites — and one raised while a
+*word* is expanded leaves **1**, since the word it was part of never
+finished and the command never ran. Measured on zsh 5.9.2: `x=$'a\u00e9Z'`
+exits 1, `(exit 3); x=$'a\u00e9Z'` exits 1 as well, and `${(g::)v}` and
+`${(pj:…:)a}` do the same.
 
 Three details of each are pinned because each is a way to get the answer
 wrong while looking right.
@@ -3433,9 +3455,10 @@ zsh's refusal is located as the **shell** and not as `echo` —
 and from a `$'…'` in an assignment that never reached a command — which is
 the tell that this is a fact about reading a word. It reports **once**
 however many such escapes the word holds, the text stops at the first of
-them, and the status is **0**, so a script cannot see it in `$?`: `(exit
-3); echo 'a\u00e9Z'` also exits 0, which is what separates "zero" from
-"whatever it already was". A subshell absorbs the abandonment the way it
+them, and at a builtin the status is **0**, so a script cannot see it in
+`$?`: `(exit 3); echo 'a\u00e9Z'` also exits 0, which is what separates
+"zero" from "whatever it already was" — and the expansion sites' 1 is one
+for the same reason. A subshell absorbs the abandonment the way it
 absorbs any other, so `( echo 'a\u00e9Z' ); echo AFTER` reaches AFTER.
 
 The axis is asked **only** where an escape actually names a code point the

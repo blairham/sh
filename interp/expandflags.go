@@ -630,10 +630,16 @@ func (r *Runner) flagJoinSep(e *syntax.ParamExpr) string {
 // `print`'s output and is an ordinary unknown escape in a flag argument, so
 // `${(pj:A\cB:)a}` joins on `AcB`.
 //
+// The decoder is handed the runner for the reason SetExpansionEscapes's is:
+// what a `\u` escape naming a code point the locale has no room for comes to
+// is the dialect's answer read against the runner's own locale variables, and
+// a decoder with no runner behind it wrote the character in every locale
+// there is (#2021).
+//
 // Nil is the runner nobody told, and there `(p)` is refused by name. That is
 // deliberate: a `(p)` read as a no-op joins on a backslash and an `n` at
 // status 0, which is the plausible-answer failure this codebase minds most.
-func (r *Runner) SetFlagArgumentEscapes(decode func(string) string) {
+func (r *Runner) SetFlagArgumentEscapes(decode func(r *Runner, text string) string) {
 	r.flagArgEscapes = decode
 }
 
@@ -709,7 +715,7 @@ func (r *Runner) flagArgument(e *syntax.ParamExpr, flag rune, raw string) string
 			return v
 		}
 	}
-	return r.flagArgEscapes(raw)
+	return r.flagArgEscapes(r, raw)
 }
 
 // precededByPrintFlag reports whether a `p` was written before this flag in

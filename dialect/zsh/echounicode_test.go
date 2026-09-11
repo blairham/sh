@@ -46,8 +46,12 @@ func TestEchoReadsTheUnicodeEscapes(t *testing.T) {
 // was what came out of this site until the encoder was shared (#1840).
 func TestPrintEncodesTheSameCodePoints(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
-		{`print 'a\ud800'`, "a\xed\xa0\x80\n"},
-		{`print 'a\U110000'`, "a\xf4\x90\x80\x80\n"},
+		// In a UTF-8 locale, where the encoding is the whole of the
+		// question: what `print` does with a code point the locale has no
+		// room for is localeescape_test.go's, and the answer there is a
+		// refusal rather than a value (#2021).
+		{`LC_ALL=en_US.UTF-8; print 'a\ud800'`, "a\xed\xa0\x80\n"},
+		{`LC_ALL=en_US.UTF-8; print 'a\U110000'`, "a\xf4\x90\x80\x80\n"},
 		{`print 'a\u0041'`, "aA\n"},
 	} {
 		if out, st := runZsh(t, t.TempDir(), tc.src); out != tc.want || st != 0 {

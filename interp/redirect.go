@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"maps"
 	"os"
+	"reflect"
 	"strings"
 	"syscall"
 
@@ -231,7 +232,14 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 					}
 					if held, ok := r.fds[n]; ok {
 						delete(r.fds, n)
-						if c, ok := held.(io.Closer); ok {
+						// Only when this was the last name for it. A
+						// duplicate is a second name for one open file, so
+						// ending the file because one name went would take
+						// the others with it — and the sharpest case is the
+						// one a prompt does on every start: `exec {s}>&1`
+						// then `exec {s}>&-` left the shell with no stdout
+						// at all (#2127).
+						if c, ok := held.(io.Closer); ok && !r.fdAliased(held) {
 							_ = c.Close()
 						}
 					}
@@ -1379,4 +1387,37 @@ func (r *Runner) refuseDupTarget(rd *syntax.Redirect, target string) {
 	// DuplicationTargetErrorOnABuiltinIsFatal. The command is not known here,
 	// so the fact travels to where it is.
 	r.badDupTarget = true
+}
+
+// fdAliased reports whether anything else this shell still holds open refers
+// to the same descriptor — another entry in the table, or one of the three
+// named streams.
+//
+// It is asked before a close and never before a write, because sharing is
+// only interesting at the end of a descriptor's life: two names for one file
+// read and write identically, and differ solely in what closing one of them
+// means. The scan is over a table that holds a handful of entries in the
+// worst case, which is why the count is recomputed rather than carried —
+// a stored count is another thing to get wrong in every path that moves a
+// descriptor, and there are several.
+//
+// Comparability is checked rather than assumed: `==` on two interface values
+// panics when the dynamic type is not comparable, and a descriptor here may
+// hold any writer an embedder supplied. An uncomparable one is reported as
+// unaliased, which keeps the old behavior for it rather than inventing a new
+// one — this is a question about identity, and a type that cannot answer it
+// has not said "no".
+func (r *Runner) fdAliased(held any) bool {
+	if held == nil {
+		return false
+	}
+	if t := reflect.TypeOf(held); t == nil || !t.Comparable() {
+		return false
+	}
+	for _, v := range r.fds {
+		if v == held {
+			return true
+		}
+	}
+	return any(r.Stdin) == held || any(r.Stdout) == held || any(r.Stderr) == held
 }

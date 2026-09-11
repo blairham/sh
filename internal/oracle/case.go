@@ -9764,6 +9764,11 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the MissingFileIsOlder axis on the builtin's surface, where dash joins in: bash and ksh93 answer true, dash and zsh want both files to exist — the same split each shell shows in its `[[ ]]`, so it is one axis and not two",
 	},
 	{
+		ID: "redirect/closing-a-duplicate-leaves-the-original-open", Category: "redirection",
+		Snippet: `exec 9>&1; exec 9>&-; echo alive; exec 8>&1; echo via-8 >&8; exec 8>&-; echo still-alive`,
+		Why:     "a duplicate is a second *name* for one open file, so closing the name ends the name and not the file — every shell in the panel goes on writing to standard output afterwards, and the two rounds say it is not a one-shot. The numeric spelling is the one every shell has; the `{name}` family that only some of them parse follows the same rule, and is where this was wrong here: `exec {s}>&1; exec {s}>&-` closed the file standard output was still using and left the shell with nothing to write to, silently and at status 0 (#2127). Which is worth a row rather than only a unit test, because the unit tests of this package point standard output at a string builder — not something that can be closed — so the defect was invisible to every one of them",
+	},
+	{
 		ID: "redirect/an-empty-target-is-not-the-working-directory", Category: "redirection",
 		Snippet: `printf secret > in-there; cat < ""; echo "r=$?"; echo hi > ""; echo "w=$?"`,
 		Why:     "an empty target names no file, and the same rule the file tests need: joining it onto the working directory opens the *directory*, so the read succeeds and the complaint arrives from the command as `Is a directory` rather than from the shell. Every shell in the panel refuses to open the name — with four wordings and two statuses, so the case pins the wording too",

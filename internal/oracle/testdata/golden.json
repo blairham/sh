@@ -110782,6 +110782,50 @@
         "TimedOut": false
       }
     },
+    "redirect/closing-a-duplicate-leaves-the-original-open": {
+      "bash": {
+        "Stdout": "alive~via-8~still-alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "alive~via-8~still-alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "alive~via-8~still-alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "alive~via-8~still-alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "alive~via-8~still-alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "alive~via-8~still-alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "return/a-bare-name-after-a-failed-command": {
       "bash": {
         "Stdout": "st=2",

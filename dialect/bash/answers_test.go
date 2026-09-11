@@ -102,6 +102,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"TrailingSeparatorEndsAField", s.TrailingSeparatorEndsAField, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.No},
+		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.No},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.Yes},
@@ -283,5 +284,36 @@ func TestAnArrayLetterOverAScalarPromotesTheValue(t *testing.T) {
 				t.Errorf("got %q at %d, want %q and a count of 1 at 0", out, st, tc.list)
 			}
 		})
+	}
+}
+
+// TestAnAssignmentThroughAnExpansionCannotNameAListOrAPositional is #1541.
+//
+// Measured 2026-09-11 on 5.3.15, on the same binary under argv[0] of `sh` and
+// on 3.2.57, all three alike. The sigil is written back — `$@` and `$1`,
+// where dash names the bare letter — and the positional is refused with the
+// list rather than assigned.
+//
+// The line is given up and the shell is not: this is the one column that
+// abandons a failed word and carries on, so the row after it still runs.
+func TestAnAssignmentThroughAnExpansionCannotNameAListOrAPositional(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`set --; printf "<%s>" ${@:=abc}`, "$@: cannot assign in this way"},
+		{`set --; printf "<%s>" ${*:=abc}`, "$*: cannot assign in this way"},
+		{`set --; printf "<%s>" ${1:=abc}`, "$1: cannot assign in this way"},
+	} {
+		out, st := answersRun(t, tc.src+"\necho AFTER")
+		if !strings.Contains(out, tc.want) {
+			t.Errorf("%s = %q, want %q in it", tc.src, out, tc.want)
+		}
+		if !strings.Contains(out, "AFTER") || st != 0 {
+			t.Errorf("%s = %q (status %d), want the next line to run at 0", tc.src, out, st)
+		}
+	}
+	// The control, unanimous across the panel: the operator does not fire on
+	// a parameter that is there, so nothing is refused.
+	out, st := answersRun(t, `set -- p; printf "<%s>" ${@:=abc}`)
+	if out != "<p>" || st != 0 {
+		t.Errorf("a parameter that is there = %q (status %d), want <p> at 0", out, st)
 	}
 }

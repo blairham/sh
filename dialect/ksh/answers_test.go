@@ -99,6 +99,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"TrailingSeparatorEndsAField", s.TrailingSeparatorEndsAField, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
+		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.No},
@@ -266,5 +267,33 @@ func TestTheTwoArrayLettersOverAScalarAnswerDifferently(t *testing.T) {
 				t.Errorf("got %q at %d, want %q and a count of 1 at 0", out, st, tc.list)
 			}
 		})
+	}
+}
+
+// TestAnAssignmentThroughAnExpansionCannotNameAListOrAPositional is #1541.
+//
+// Measured 2026-09-11. This shell names neither the parameter nor the
+// operator: the whole *word* is blamed, which is what the rows with text and
+// quotes around the expansion are for — `x${@:=abc}y` and `"${@:=abc}"` are
+// each reported entire.
+func TestAnAssignmentThroughAnExpansionCannotNameAListOrAPositional(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`set --; printf "<%s>" ${@:=abc}`, "${@:=abc}: bad substitution"},
+		{`set --; printf "<%s>" ${*:=abc}`, "${*:=abc}: bad substitution"},
+		{`set --; printf "<%s>" ${1:=abc}`, "${1:=abc}: bad substitution"},
+		{`set --; printf "<%s>" x${@:=abc}y`, "x${@:=abc}y: bad substitution"},
+		{`set --; printf "<%s>" "${@:=abc}"`, `"${@:=abc}": bad substitution`},
+	} {
+		out, st := answersRun(t, tc.src+"\necho AFTER")
+		if !strings.Contains(out, tc.want) {
+			t.Errorf("%s = %q, want %q in it", tc.src, out, tc.want)
+		}
+		if strings.Contains(out, "AFTER") || st != 1 {
+			t.Errorf("%s = %q (status %d), want the shell ended at 1", tc.src, out, st)
+		}
+	}
+	out, st := answersRun(t, `set -- p; printf "<%s>" ${@:=abc}`)
+	if out != "<p>" || st != 0 {
+		t.Errorf("a parameter that is there = %q (status %d), want <p> at 0", out, st)
 	}
 }

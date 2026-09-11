@@ -89,6 +89,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"TrailingSeparatorEndsAField", s.TrailingSeparatorEndsAField, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
+		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.Yes},
 		{"DuplicationTargetErrorOnABuiltinIsFatal", s.DuplicationTargetErrorOnABuiltinIsFatal, interp.No},
@@ -270,5 +271,31 @@ func TestALengthIsBytesInEveryLocale(t *testing.T) {
 		if out != "[6][9]" || st != 0 {
 			t.Errorf("under %s: out %q status %d, want %q at 0", locale, out, st, "[6][9]")
 		}
+	}
+}
+
+// TestAnAssignmentThroughAnExpansionCannotNameAListOrAPositional is #1541.
+//
+// Measured 2026-09-11. The bare name without a sigil, this shell's own
+// `bad variable name` sentence, and the one status in the panel that is not
+// 1 — 2, which FatalErrorStatusIsOne already answers rather than a number of
+// this refusal's own.
+func TestAnAssignmentThroughAnExpansionCannotNameAListOrAPositional(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`set --; printf "<%s>" ${@:=abc}`, "@: bad variable name"},
+		{`set --; printf "<%s>" ${*:=abc}`, "*: bad variable name"},
+		{`set --; printf "<%s>" ${1:=abc}`, "1: bad variable name"},
+	} {
+		out, st := answersRun(t, tc.src+"\necho AFTER")
+		if !strings.Contains(out, tc.want) {
+			t.Errorf("%s = %q, want %q in it", tc.src, out, tc.want)
+		}
+		if strings.Contains(out, "AFTER") || st != 2 {
+			t.Errorf("%s = %q (status %d), want the shell ended at 2", tc.src, out, st)
+		}
+	}
+	out, st := answersRun(t, `set -- p; printf "<%s>" ${@:=abc}`)
+	if out != "<p>" || st != 0 {
+		t.Errorf("a parameter that is there = %q (status %d), want <p> at 0", out, st)
 	}
 }

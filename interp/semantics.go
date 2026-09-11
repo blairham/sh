@@ -2115,6 +2115,32 @@ type Semantics struct {
 	// rather than picking one.
 	FailedExpansionAbandonsTheLine Answer
 
+	// AssignThroughExpansionMayNameAPositional lets `${1:=word}` assign to a
+	// positional parameter. zsh alone, and it is a real disagreement rather
+	// than a wording one — the other five refuse the expansion fatally.
+	//
+	// Measured 2026-09-11 on the six columns, after `set --` so the
+	// conditional fires:
+	//
+	//	probe          bash 5.3 / as-sh / 3.2      dash                 ksh93                        zsh 5.9.2
+	//	${@:=abc}      $@: cannot assign this way  @: bad variable name ${@:=abc}: bad substitution  not an identifier: @
+	//	${*:=abc}      the same with *             the same with *      the same                     not an identifier: *
+	//	${1:=abc}      $1: cannot assign this way  1: bad variable name ${1:=abc}: bad substitution  assigns, `abc`, status 0
+	//
+	// So `@` and `*` are refused unanimously and are not this axis; only the
+	// positional splits, and it splits five to one. `${2:=abc}` and
+	// `${10:=abc}` answer with their own row, so it is the *shape* of the
+	// name and not the number.
+	//
+	// Yes in zsh, No everywhere else, and the core leaves it unanswered: a
+	// shell that has chosen nothing is told which dialect it needs rather
+	// than being given one shell's reading of an operator every dialect has.
+	//
+	// It is a run-time question and is asked only when the operator fires:
+	// `set -- p; ${@:=abc}` is `p` at status 0 in all six, and
+	// `if false; then echo ${@:=abc}; fi` is silent in all six.
+	AssignThroughExpansionMayNameAPositional Answer
+
 	// ReadonlyReassignmentFatal ends the script when a readonly variable is
 	// assigned. True everywhere but bash, measured with a plain assignment in
 	// a script file — adding a redirect makes it a command and reverses the

@@ -12971,6 +12971,23 @@ echo after`,
 		Why:     "two different rules about a period, and this says they stay apart. A `.` *component* names a directory; a leading period in a *name* is hidden from a pattern that does not write one — so `./*` leaves `.hid` out in all six even though the pattern begins with a period, and `./.h*` finds it",
 	},
 	{
+		ID: "axis/assign-through-an-expansion-onto-a-list", Category: "semantics axes",
+		Script:  true,
+		Snippet: "set --\nprintf \"<%s>\" ${@:=abc}\nprintf \"<%s>\" ${*:=abc}\necho after",
+		Why:     "an assignment written inside an expansion, onto a parameter no assignment can name. All six refuse it and every one of them in different words: `$@: cannot assign in this way` in bash 5.3, in the same binary under argv[0] of `sh` and in bash 3.2, `@: bad variable name` at status 2 in dash, `${@:=abc}: bad substitution` naming the whole word in ksh93, and `not an identifier: @` in zsh. Four wordings and two statuses, which is why closing this needed a Diagnostics field filled in for three dialects rather than one sentence. This shell substituted `abc` at status 0 in every dialect — a plausible value where the shell stopped, and a later read of the parameter finds nothing behind the word (#1541). Written to a script file because bash gives up the *line* here and carries on, which a `-c` line joined by semicolons cannot show",
+	},
+	{
+		ID: "axis/assign-through-an-expansion-onto-a-positional", Category: "semantics axes",
+		Script:  true,
+		Snippet: "set --\nprintf \"<%s>\" ${1:=abc}\nprintf \"|one=%s\" \"$1\"\necho\necho after",
+		Why:     "the same operator onto `$1`, which is where the panel parts: zsh *assigns*, answering `abc` at status 0 and leaving `$1` holding it, where the other five refuse in the same words they refuse `${@:=abc}` with. So it is a semantics axis and not a wording swap, and it is asked at the disagreement — the unconditional `${1::=new}` beside it assigns in the one shell that can write it, so that operator has no second answer to hold. `$1` is printed as well as the substitution because substituting the word and storing nothing is indistinguishable on the line itself, which is exactly the wrong answer this records",
+	},
+	{
+		ID: "axis/assign-through-an-expansion-fires-with-the-operator", Category: "semantics axes",
+		Snippet: "set -- p; printf \"<%s>\" ${@:=abc}; echo; set --; if false; then echo ${@:=abc}; fi; echo after",
+		Why:     "the control the two rows above are read against, and unanimous: the check is the *operator's* and not the text's. A parameter that is there answers `<p>` at status 0 in all six, and an expansion inside a branch that does not run is silent in all six — so a refusal written into the grammar, or into the reading of the word, would break both of these where every column is quiet",
+	},
+	{
 		ID: "axis/export-a-subscripted-operand", Category: "semantics axes",
 		Script:  true,
 		Snippet: "export 'a[0]'\necho \"st=$?\"\necho after",

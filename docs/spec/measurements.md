@@ -1969,6 +1969,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/a-plus-word-beside-the-readonly-letter-removes-nothing` | `d=127~st=0 x=[2]~end` **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found` | `d=0~st=1 x=[1]~end` **2>** `<script>: line 4: x: readonly variable` | `d=0` **2>** `<script>: line 4: x: readonly variable` *(status 1)* | `d=0~st=1 x=[1]~end` **2>** `<script>: line 4: x: readonly variable` | `d=0` **2>** `<script>: line 4: x: is read only` *(status 1)* | `d=0` **2>** `<script>:4: read-only variable: x` *(status 1)* |
 | `glob/a-trailing-slash-run-is-reproduced-except-in-bash` | `[ax_dir//][cx//][sym//]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir//][cx//][sym//]` | `[ax_dir//][cx//][sym//]` |
 | `glob/an-empty-component-behind-a-matched-one` | `[cx//ax][sym//ax]` | `[cx/ax][sym/ax]` | `[cx/ax][sym/ax]` | `[cx/ax][sym/ax]` | `[cx//ax][sym//ax]` | `[cx//ax][sym//ax]` |
+| `axis/assign-through-an-expansion-onto-a-list` | **2>** `<script>: 2: @: bad variable name` *(status 2)* | `after` **2>** `<script>: line 2: $@: cannot assign in this way~<script>: line 3: $*: cannot assign in this way` | `after` **2>** `<script>: line 2: $@: cannot assign in this way~<script>: line 3: $*: cannot assign in this way` | `after` **2>** `<script>: line 2: $@: cannot assign in this way~<script>: line 3: $*: cannot assign in this way` | **2>** `<script>: line 2: ${@:=abc}: bad substitution` *(status 1)* | **2>** `<script>:2: not an identifier: @` *(status 1)* |
+| `axis/assign-through-an-expansion-onto-a-positional` | **2>** `<script>: 2: 1: bad variable name` *(status 2)* | `\|one=~after` **2>** `<script>: line 2: $1: cannot assign in this way` | `\|one=~after` **2>** `<script>: line 2: $1: cannot assign in this way` | `\|one=~after` **2>** `<script>: line 2: $1: cannot assign in this way` | **2>** `<script>: line 2: ${1:=abc}: bad substitution` *(status 1)* | `<abc>\|one=abc~after` |
+| `axis/assign-through-an-expansion-fires-with-the-operator` | `<p>~after` | `<p>~after` | `<p>~after` | `<p>~after` | `<p>~after` | `<p>~after` |
 | `axis/export-a-subscripted-operand` | **2>** `<script>: 1: export: a[0]: bad variable name` *(status 2)* | `st=1~after` **2>** `<script>: line 1: export: `a[0]': not a valid identifier` | **2>** `<script>: line 1: export: `a[0]': not a valid identifier` *(status 1)* | `st=1~after` **2>** `<script>: line 1: export: `a[0]': not a valid identifier` | `st=0~after` | **2>** `<script>:1: a: assignment to invalid subscript range` *(status 1)* |
 | `axis/readonly-a-subscripted-operand` | **2>** `<script>: 1: readonly: a[0]: bad variable name` *(status 2)* | `st=1~after` **2>** `<script>: line 1: readonly: `a[0]': not a valid identifier` | **2>** `<script>: line 1: readonly: `a[0]': not a valid identifier` *(status 1)* | `st=1~after` **2>** `<script>: line 1: readonly: `a[0]': not a valid identifier` | `st=0~after` | **2>** `<script>:readonly:1: a[0]: can't create readonly array elements` *(status 1)* |
 | `axis/unset-a-subscripted-operand` | **2>** `<shell>: 1: unset: a[0]: bad variable name` *(status 2)* | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` |
@@ -2415,6 +2418,25 @@ grades it and nothing drift-checks it either, for the same reason.
 - `glob/an-empty-component-behind-a-matched-one` — the same empty component with a *pattern* in front of it instead of a literal, which is where bash parts company: dash, ksh93 and zsh answer `[cx//ax][sym//ax]` and bash 5.3, bash-as-sh and bash 3.2 collapse the run to `[cx/ax][sym/ax]`. So bash keeps the literal text ahead of the first pattern component — it answers `cx//ax` for `cx//*` with everyone else — and rebuilds what it walked. That is the mid-pattern half of the split #1350 recorded at the end of the word, and it is resolved the same way: the run is reproduced in every dialect here, bash's collapse recorded and not implemented
   ```sh
   mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" *//ax; echo
+  ```
+- `axis/assign-through-an-expansion-onto-a-list` — an assignment written inside an expansion, onto a parameter no assignment can name. All six refuse it and every one of them in different words: `$@: cannot assign in this way` in bash 5.3, in the same binary under argv[0] of `sh` and in bash 3.2, `@: bad variable name` at status 2 in dash, `${@:=abc}: bad substitution` naming the whole word in ksh93, and `not an identifier: @` in zsh. Four wordings and two statuses, which is why closing this needed a Diagnostics field filled in for three dialects rather than one sentence. This shell substituted `abc` at status 0 in every dialect — a plausible value where the shell stopped, and a later read of the parameter finds nothing behind the word (#1541). Written to a script file because bash gives up the *line* here and carries on, which a `-c` line joined by semicolons cannot show
+  ```sh
+  set --
+  printf "<%s>" ${@:=abc}
+  printf "<%s>" ${*:=abc}
+  echo after
+  ```
+- `axis/assign-through-an-expansion-onto-a-positional` — the same operator onto `$1`, which is where the panel parts: zsh *assigns*, answering `abc` at status 0 and leaving `$1` holding it, where the other five refuse in the same words they refuse `${@:=abc}` with. So it is a semantics axis and not a wording swap, and it is asked at the disagreement — the unconditional `${1::=new}` beside it assigns in the one shell that can write it, so that operator has no second answer to hold. `$1` is printed as well as the substitution because substituting the word and storing nothing is indistinguishable on the line itself, which is exactly the wrong answer this records
+  ```sh
+  set --
+  printf "<%s>" ${1:=abc}
+  printf "|one=%s" "$1"
+  echo
+  echo after
+  ```
+- `axis/assign-through-an-expansion-fires-with-the-operator` — the control the two rows above are read against, and unanimous: the check is the *operator's* and not the text's. A parameter that is there answers `<p>` at status 0 in all six, and an expansion inside a branch that does not run is silent in all six — so a refusal written into the grammar, or into the reading of the word, would break both of these where every column is quiet
+  ```sh
+  set -- p; printf "<%s>" ${@:=abc}; echo; set --; if false; then echo ${@:=abc}; fi; echo after
   ```
 - `axis/export-a-subscripted-operand` — ksh93 takes it, bash and dash refuse it in the words they give any bad name, and zsh has a complaint of its own about the subscript — naming the base rather than the operand, and without naming the builtin in the location where its other messages do
   ```sh

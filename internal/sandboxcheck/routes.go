@@ -58,6 +58,7 @@ func (rt Route) script(f Fixture) string {
 		"{{carved}}", f.Carved,
 		"{{carvedupper}}", f.CarvedUpper,
 		"{{carveddirupper}}", f.CarvedDirUpper,
+		"{{carvedaccentnfd}}", f.CarvedAccentNFD,
 	)
 	return rep.Replace(rt.Script)
 }
@@ -233,6 +234,16 @@ func spellingRoutes() []Route {
 		Did:    overwritten,
 		Why:    "the damaging half: a denied file rewritten through its other name",
 	}, {
+		Name:   "spelling/read-nfd-dir",
+		Script: `read -r x < {{carvedaccentnfd}} && echo "$x"`,
+		Did:    leaked,
+		Why:    "the denied directory written the other way — one name, two byte strings",
+	}, {
+		Name:   "spelling/write-nfd-dir",
+		Script: `echo overwritten > {{carvedaccentnfd}}`,
+		Did:    accentOverwritten,
+		Why:    "and the write half, which is the one that does damage",
+	}, {
 		Name:   "spelling/truncate-upper-leaf",
 		Script: `: > {{carvedupper}}`,
 		Did:    overwritten,
@@ -248,8 +259,16 @@ func spellingRoutes() []Route {
 // the builtin never runs, and a verdict taken from the exit status would
 // call that containment. The filesystem is the only witness that cannot be
 // talked out of it.
+func accentOverwritten(f Fixture, _ Outcome) bool {
+	return changed(f.CarvedAccent)
+}
+
 func overwritten(f Fixture, _ Outcome) bool {
-	b, err := os.ReadFile(f.Carved)
+	return changed(f.Carved)
+}
+
+func changed(path string) bool {
+	b, err := os.ReadFile(path)
 	if err != nil {
 		// Unreadable is not "unchanged": a route that removed or replaced
 		// the file got past the gate just as surely as one that rewrote it.

@@ -589,6 +589,40 @@ because the ungated run cannot reach the second name either: the
 instrument declines to credit the gate with stopping what the filesystem
 was never going to do.
 
+#### Composition, on the same terms
+
+The same volumes conflate the two ways of writing one character. A
+directory stored with a precomposed `\u00e9` is reached by the spelling
+that writes `e` followed by a combining acute, and a deny naming the
+first did not cover the second (#2045). It is the identical bug with a
+different alphabet, so it gets the identical answer: the fold
+canonicalises composition as well as case, and only on a deny.
+
+This is the one place the substrate spends a dependency, and it is
+recorded rather than absorbed. `golang.org/x/text/unicode/norm` is now a
+direct requirement of this module, and it is the only thing outside the
+standard library that the shipped binary links. Nothing in the standard
+library composes or decomposes a character — `unicode` will classify a
+combining mark but will not join it to the letter in front of it — so
+there is no table-free comparison that gets the two spellings to meet.
+
+The two alternatives were weighed and both cost more:
+
+- **Reading the parent directory** to learn the spelling it stores is the
+  most complete answer and needs no tables, but the walk holds
+  `O_SEARCH`/`O_PATH` descriptors precisely so that a `0111`
+  traversable-but-unreadable directory still walks. A readdir there would
+  have to fall back to the name as written — silently, in exactly the
+  directory a policy most wants to be right about.
+- **`F_GETPATH`** was already measured and rejected for resolution
+  (#1114): a descriptor pins an object and not a name, and the answer
+  moved at about a third of attempts under a concurrent rename.
+
+`internal/depsurface` pins what that spend bought. It fails if the
+shipped binary starts linking anything this page has not argued for,
+which turns "no runtime dependencies at all" from a sentence in a
+comment into a property something checks.
+
 ### The shell's own scaffolding is recorded, never refused
 
 A process substitution runs a command with one end of a pipe and expands
@@ -1376,14 +1410,6 @@ not knowable from here.
   gains a selector when that exists, not before. A format that accepted
   `allow net` today would be accepting a rule nothing consults, which is
   the exact failure mode `docs/design.md` warns about.
-- **Composition, as opposed to case.** Two spellings that differ by
-  Unicode composition rather than by case — a name stored `café` and
-  reached as `café` — are one file on the same volumes that
-  conflate case, and a deny naming the first does not cover the second.
-  The fold above does not reach it: deciding that those are the same
-  character needs decomposition data, and `cmd/sh` has no non-stdlib
-  runtime dependency at all. It is a live escape, it is #2045 with three
-  costed ways out, and it is named here rather than half-closed.
 - **Resource limits.** `umask` and the resource limits are already hooks
   that a binary fills in, and `docs/design.md` explains why they are
   outside the boundary: they name no path and perform no access.

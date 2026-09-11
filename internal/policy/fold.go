@@ -3,7 +3,11 @@
 
 package policy
 
-import "strings"
+import (
+	"strings"
+
+	"golang.org/x/text/unicode/norm"
+)
 
 // A deny also covers the other spellings a filesystem answers to (#2044).
 //
@@ -50,13 +54,45 @@ import "strings"
 // would make one policy file mean two things with nothing in the file to say
 // so — which is the argument `alias_other.go` already makes.
 //
-// # What this does not reach
+// # Composition, as well as case
 //
-// Two spellings that differ by Unicode *composition* rather than by case:
-// a name stored `café` and reached as `café`. Simple case folding does not
-// relate them and nothing in the standard library composes or decomposes a
-// character. That is #2045, it is a live escape, and it is recorded there
-// rather than half-closed here.
+// The same volumes conflate the two ways of writing one character. A
+// directory stored `café` — `é` as U+00E9 — is reached by `café` written
+// `e` + U+0301, and for a while a deny naming the first did not cover the
+// second (#2045). It is the identical bug: one object, a class of names,
+// and a rule that knew one member of it.
+//
+// Closing it is what put `golang.org/x/text/unicode/norm` in this module's
+// go.mod, and that was a deliberate spend rather than an oversight. Nothing
+// in the standard library composes or decomposes a character — `unicode`
+// classifies a combining mark but will not join it to the letter in front of
+// it — so no table-free comparison gets the two spellings to meet, and the
+// alternatives were worse: reading the directory to learn the stored name
+// fails on a `0111` traversable-but-unreadable directory, which
+// `internal/opened`'s traverseFlags exists to keep working, and would fall
+// back to the written name in exactly the place a policy most wants to be
+// right about; `F_GETPATH` was already measured and rejected under
+// concurrent rename (#1114).
+//
+// TestTheDependencySurfaceIsPinned records what that spend bought and fails
+// on anything further, so the next addition is a decision somebody makes
+// rather than one that arrives.
 func foldMatch(pattern, name string) bool {
-	return match(strings.ToLower(pattern), strings.ToLower(name))
+	return match(foldPath(pattern), foldPath(name))
+}
+
+// foldPath is the form two names of one file share.
+//
+// Composed first so that the case mapping sees whole characters, lowered,
+// and composed again because lowering can take a character apart —
+// `İ` (U+0130) lowers to `i` followed by a combining dot — and a form that
+// was canonical on the way in has to be canonical on the way out or two
+// inputs that should meet would not.
+//
+// NFC rather than NFD because it is the shorter of the two and the choice is
+// free: the only requirement is that both spellings land on the same one.
+// Separators are ASCII and no normalization moves them, so the path keeps
+// its components and match() still sees the shape it expects.
+func foldPath(s string) string {
+	return norm.NFC.String(strings.ToLower(norm.NFC.String(s)))
 }

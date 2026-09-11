@@ -98,3 +98,53 @@ func TestTheFoldIsNotADefaultAllow(t *testing.T) {
 	want(t, p, interp.Deny, open("/srv/secret/k", false), open("/srv/SECRET/k", false),
 		open("/elsewhere/x", false))
 }
+
+// The two spellings of one character, written as escapes so that an editor,
+// a terminal or a copy-paste cannot quietly normalize the test into passing
+// against a matcher that does nothing. They look identical when rendered,
+// which is the whole difficulty.
+const (
+	nfcCafe = "caf\u00e9"  // é as one character
+	nfdCafe = "cafe\u0301" // e followed by a combining acute
+)
+
+// TestADenyCoversBothSpellingsOfACharacter is #2045, the composition sibling
+// of #2044: the same volumes that conflate case conflate these too, so one
+// file answers to both names and a rule naming one covered the object only
+// by luck.
+func TestADenyCoversBothSpellingsOfACharacter(t *testing.T) {
+	t.Parallel()
+	if nfcCafe == nfdCafe {
+		t.Fatal("the two spellings are byte-equal; the fixture normalized and the test would assert nothing")
+	}
+	// Written NFC, reached NFD.
+	p := parse(t, "version 1\nallow read /w/**\ndeny read /w/"+nfcCafe+"/**\n")
+	want(t, p, interp.Deny, open("/w/"+nfcCafe+"/data", false), open("/w/"+nfdCafe+"/data", false))
+	want(t, p, interp.Allow, open("/w/elsewhere/data", false))
+
+	// And written NFD, reached NFC — a rule is not more correct for having
+	// been typed on a Mac.
+	q := parse(t, "version 1\nallow read /w/**\ndeny read /w/"+nfdCafe+"/**\n")
+	want(t, q, interp.Deny, open("/w/"+nfcCafe+"/data", false), open("/w/"+nfdCafe+"/data", false))
+}
+
+// TestCompositionAndCaseFoldTogether, because a real name has both and a
+// fold that applied one before the other could drop the second.
+func TestCompositionAndCaseFoldTogether(t *testing.T) {
+	t.Parallel()
+	p := parse(t, "version 1\nallow read /w/**\ndeny read /w/"+nfcCafe+"/**\n")
+	want(t, p, interp.Deny,
+		open("/w/CAF\u00c9/data", false),  // NFC, upper
+		open("/w/CAFE\u0301/data", false), // NFD, upper
+	)
+}
+
+// TestAnAllowIsNotFoldedForCompositionEither — the same asymmetry #2044
+// argued for case. Widening an allow would grant a file nobody named, and on
+// a normalization-sensitive filesystem the two spellings are two files.
+func TestAnAllowIsNotFoldedForCompositionEither(t *testing.T) {
+	t.Parallel()
+	p := parse(t, "version 1\nallow read /w/"+nfcCafe+"/**\n")
+	want(t, p, interp.Allow, open("/w/"+nfcCafe+"/data", false))
+	want(t, p, interp.Deny, open("/w/"+nfdCafe+"/data", false))
+}

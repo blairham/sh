@@ -192,6 +192,9 @@ var exempt = map[string]string{
 	"dialect/zsh.fileMayModifyTarget": "the link chain chmod and chown follow, walked one hop " +
 		"at a time with AllowModify asked about every hop before the Lstat and Readlink that " +
 		"find the next one.",
+	"dialect/zsh.fileWriteWhole": "filesgate.go's gated whole-file write, which asks AllowModify " +
+		"about the name first. The removal in front of the write is what lets a " +
+		"second `zcompile` replace a product the first one made read-only.",
 	"dialect/zsh.fileLstat": "filesgate.go's gated Lstat: AllowProbe first, and a refusal reads as a path that is not there.",
 	"dialect/zsh.fileStat":  "filesgate.go's gated Stat, behind the same AllowProbe.",
 	"dialect/zsh.fileReadDir": "filesgate.go's gated listing, behind AllowList — the action a " +

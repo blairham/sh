@@ -1611,6 +1611,48 @@ func (r *Runner) subscriptNameIsAbsent(e *syntax.ParamExpr) bool {
 	return !ok
 }
 
+// wholeSubscriptOnAScalar reports whether `[@]` or `[*]` was written on a name
+// that is set and holds one string rather than a list.
+//
+// It is the shape both readings of that spelling turn on, and it is one
+// function because the two readings kept drifting apart while it was two: the
+// length grew the scalar reading in #1553 and the slice was still counting a
+// list of one a day later (#1850). What differs between them is only *which*
+// axis is then asked, so the shape is answered here and the question is asked
+// at each site.
+//
+// A name that is absent or holds a list is outside it. An unset name is
+// nothing under either reading, and a real array is a list in every column, so
+// neither has two readings to choose between.
+func (r *Runner) wholeSubscriptOnAScalar(e *syntax.ParamExpr) bool {
+	return r.wholeArrayIndex(e) && !r.nameIsAList(e.Name) && !r.subscriptNameIsAbsent(e)
+}
+
+// wholeSubscriptSlicesAScalar reports whether `${s[@]:off:len}` on a name
+// holding one string slices that string's characters rather than a list whose
+// only element is the whole value.
+//
+// Declining sends the node down the scalar path, which is the point: the
+// offsets then count exactly what they count for `${s:off:len}`, so the
+// negative offset, the negative length and the locale's idea of a character
+// all arrive already answered instead of being written out a second time
+// beside the list slice. See Semantics.WholeSubscriptOnAScalarSlicesIt for
+// the panel.
+//
+// The length is not this question — `${#s[@]}` splits the panel a different
+// way and has an axis of its own — and an indirection is not either, since
+// `${!s[@]}` yields subscripts before any offset is read.
+func (r *Runner) wholeSubscriptSlicesAScalar(e *syntax.ParamExpr) bool {
+	if e.Op != syntax.ParamSubstring || e.Length || e.Indirect {
+		return false
+	}
+	if !r.wholeSubscriptOnAScalar(e) {
+		return false
+	}
+	return r.ask(r.sem().WholeSubscriptOnAScalarSlicesIt,
+		"`${s[@]:off:len}` on a scalar slicing the value it holds")
+}
+
 // splitSubscriptPair splits a subscript at its first top-level comma, whatever
 // follows it.
 //

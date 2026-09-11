@@ -9544,15 +9544,56 @@ answering 3 says a whole-array subscript on a scalar reaches the
 *value*. One answer against one, so it is a disagreement and not a
 majority.
 
-Asked of the **length alone**, which is where the two readings differ.
-Everything else about a scalar's `[@]` is unanimous — `set -- "${h[@]}"`
-leaves one parameter holding `a b` in every column — so the fields ask
-nobody.
+Asked of the **length alone**, because the length is where *this* split
+falls. The plain value is unanimous — `set -- "${h[@]}"` leaves one
+parameter holding `a b` in every column — so the fields ask nobody. The
+**slice** is not unanimous and is not this question either; it is the
+axis below. This paragraph used to say everything but the length agreed,
+which is what let the slice keep the count's reading for a day (#1850).
 
 It is how a script asks "did I get anything?" after a parse:
 `local -a opts; zparseopts …; (( ${#opts[@]} ))` reads 1 for a name that
 never became an array, which is a count agreeing with the wrong answer
 (#1553).
+
+**`WholeSubscriptOnAScalarSlicesIt`** — bash yes · dash unspecified · ksh93 no · zsh yes
+
+Makes `${s[@]:off:len}` on a name holding one string a slice of **that
+string's characters** rather than of a list whose only element is the
+whole value. Measured 2026-09-11, on `h="a b"` and `h=abcdef`:
+
+    on h           ${h[@]:0:1}  ${h[*]:0:1}  ${h[@]:1}  ${h[@]:2:3}
+    bash 5.3.15    a            a            ` b`       cde
+    bash as `sh`   a            a            ` b`       cde
+    bash 3.2.57    a            a            ` b`       cde
+    ksh93          a b          a b          (no field) (empty)
+    dash           bad substitution
+    zsh 5.9.2      a            a            ` b`       cde
+
+A **different split from the length above**, and that is the whole
+reason it is a second field rather than a second reading of the first:
+bash counts a list of one for `${#h[@]}` and slices the characters here,
+so no single answer about "what a whole subscript on a scalar reaches"
+fits both rows. ksh93 keeps the list reading for the slice and the count
+reading for the length; zsh takes the value for both.
+
+The offsets index the value exactly as `${h:off:len}` does — `${h:0:1}`
+is `a` in every column, which is the control saying the character
+reading is not new — and the negative offset, the negative length and
+the locale's idea of a character are the substring's own questions,
+already answered, rather than anything the list slice re-decides.
+
+Asked of the **slice alone**, and only of a name that is set and holds
+one string: an unset name is empty under both readings and a real array
+is a list in every column, so neither has two readings to choose
+between. The one-element array is the control that separates the two —
+`a=("a b"); "${a[@]:0:1}"` is the whole element in every column,
+including the ones that cut a scalar.
+
+Its silence is why it is an axis and not a default. `${line[@]:0:1}`
+reads as the first character to whoever wrote it and comes back as the
+whole line under the list reading, and `${h[@]:1}` — drop the first
+character — comes back as nothing at all, both at status 0 (#1850).
 
 **`ArrayNameWithoutSubscriptIsTheList`** — bash no · dash unspecified · ksh93 no · zsh yes
 

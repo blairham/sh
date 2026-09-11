@@ -82,6 +82,13 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"SubscriptCommaIsARange", s.SubscriptCommaIsARange, interp.No},
 		{"SubscriptIsAQuotingContext", s.SubscriptIsAQuotingContext, interp.Yes},
 		{"ScalarSubscriptIsACharacter", s.ScalarSubscriptIsACharacter, interp.No},
+		// Alone in the panel on the slice, and on the same side as bash on
+		// the length: `${h[@]:0:1}` is the whole value here and one
+		// character everywhere else, while `${#h[@]}` is 1 here, 1 in both
+		// bashes and 3 only in zsh. Two axes because no one answer gives
+		// both of those partitions.
+		{"WholeSubscriptOnAScalarMeasuresIt", s.WholeSubscriptOnAScalarMeasuresIt, interp.No},
+		{"WholeSubscriptOnAScalarSlicesIt", s.WholeSubscriptOnAScalarSlicesIt, interp.No},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.Yes},
 		{"DuplicationTargetErrorOnABuiltinIsFatal", s.DuplicationTargetErrorOnABuiltinIsFatal, interp.No},

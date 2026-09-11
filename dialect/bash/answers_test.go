@@ -82,6 +82,13 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"SubscriptCommaIsARange", s.SubscriptCommaIsARange, interp.No},
 		{"SubscriptIsAQuotingContext", s.SubscriptIsAQuotingContext, interp.Yes},
 		{"ScalarSubscriptIsACharacter", s.ScalarSubscriptIsACharacter, interp.No},
+		// The two halves of a whole subscript on a scalar, answered
+		// differently by this shell: the length counts a list of one, as
+		// ksh93 does, and the slice cuts the value, as zsh does. Neither
+		// axis can stand in for the other, and this preset is where that
+		// shows.
+		{"WholeSubscriptOnAScalarMeasuresIt", s.WholeSubscriptOnAScalarMeasuresIt, interp.No},
+		{"WholeSubscriptOnAScalarSlicesIt", s.WholeSubscriptOnAScalarSlicesIt, interp.Yes},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.No},
 		{"DuplicationTargetErrorOnABuiltinIsFatal", s.DuplicationTargetErrorOnABuiltinIsFatal, interp.No},

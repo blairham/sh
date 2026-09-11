@@ -347,12 +347,14 @@ func (r *Runner) countingElements() func() {
 // one string measures that string rather than counting a list of one.
 //
 // Asked only of a name that is *set and not a list*, which is the whole of
-// where the two readings differ. An unset name is no elements and an empty
-// value under either reading — `${#nosuch[@]}` is 0 in every column — so
-// asking there would demand a dialect for a question with one answer. See
-// Semantics.WholeSubscriptOnAScalarMeasuresIt for the panel.
+// where the two readings differ — wholeSubscriptOnAScalar is that shape, and
+// it is shared with the slice rather than spelled out twice. An unset name is
+// no elements and an empty value under either reading — `${#nosuch[@]}` is 0
+// in every column — so asking there would demand a dialect for a question
+// with one answer. See Semantics.WholeSubscriptOnAScalarMeasuresIt for the
+// panel.
 func (r *Runner) wholeSubscriptMeasuresAScalar(e *syntax.ParamExpr) bool {
-	if !r.wholeArrayIndex(e) || r.nameIsAList(e.Name) || r.subscriptNameIsAbsent(e) {
+	if !r.wholeSubscriptOnAScalar(e) {
 		return false
 	}
 	return r.ask(r.sem().WholeSubscriptOnAScalarMeasuresIt,

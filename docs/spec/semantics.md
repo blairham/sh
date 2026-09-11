@@ -349,7 +349,7 @@ expands the value or opens a redirection, so `x=$((1/0)) cmd` and
 the file everywhere else. Ours is on the everywhere-else side, on every
 dispatch route alike now, and the three `roprefix/` rows that measure it
 are the recorded divergence. That ordering is one axis of its own and has
-not been asked.
+not been asked: #1943.
 
 Corpus: the twenty `roprefix/` rows, one per command kind and one per
 variable the construct turned out to depend on — including the control,

@@ -150,6 +150,17 @@ type zshOption struct {
 	// marks a fixed option: the current state can be asked for and granted,
 	// and anything else is refused.
 	set func(*interp.Runner, bool) int
+	// immovable reports that this name cannot be moved in *this* shell,
+	// whatever set says — so the request is granted where it asks for the
+	// state the option already has and refused otherwise, which is the
+	// bargain a nil set strikes. Nil for every name whose movability does
+	// not depend on the shell.
+	//
+	// It is a function and not a second bool because the names that need it
+	// are movable in one kind of shell and fixed in another: `zle` is freely
+	// movable at an interactive prompt and refused to a `-c` script, and one
+	// entry has to say both.
+	immovable func(*interp.Runner) bool
 	// atInvocation moves it on the command line that started the shell, for
 	// a fixed name this shell takes there and refuses to a running script.
 	// Nil for every other name, which is what makes the route irrelevant to
@@ -583,7 +594,41 @@ var zshOptions = []zshOption{
 	recorded("warncreateglobal", false),
 	recorded("warnnestedvar", false),
 	setOptBacked("xtrace", false, "xtrace", false),
-	fixedConstant("zle", false, false),
+	zleOption(),
+}
+
+// zleOption is zsh's `zle`: whether the shell has its line editor.
+//
+// It follows **interactive** and not the terminal, which is the measurement
+// that matters and is not what the manual's wording suggests: `zsh -i -c …`
+// with no terminal anywhere reports it *on*, and `zsh -c …` on a pseudo-
+// terminal reports it *off*. Both real builds on this machine agree — 5.9 and
+// 5.9.2 — so what the name is about is the kind of shell, not the fds.
+//
+// So it is the shape `monitor` has and not the shape `shinstdin` has: on by
+// default at an interactive prompt and freely movable there, off and refused
+// to a script. Measured in an interactive zsh, where `setopt zle` and
+// `unsetopt zle` are both granted at 0 and the option really moves; and in a
+// `-c` shell, where `setopt zle` is `can't change option: zle` at 1 — which
+// is the half this table already had, and the half that made the whole name a
+// constant.
+//
+// That constant was the entire reason powerlevel10k's instant prompt never
+// fired here. Its cached prompt is guarded by
+// `[[ -t 0 && -t 1 && -t 2 && -o interactive && -o zle && -o no_xtrace ]]`,
+// every clause of which we answered as real zsh does except this one, so the
+// file returned at its first line and a real configuration took 400ms to a
+// prompt where real zsh takes 33ms — not because anything was slow, but
+// because real zsh was printing a prompt it had already rendered (#2121).
+//
+// The state lives in the recorded store over a base of "is this shell
+// interactive", so a subshell keeps its own answer exactly as an axis-backed
+// option does. It is not `recorded`: something reads this one.
+func zleOption() zshOption {
+	o := recordedOver("zle", false, func(r *interp.Runner) bool { return r.Interactive })
+	o.recorded = false
+	o.immovable = func(r *interp.Runner) bool { return !r.Interactive }
+	return o
 }
 
 // zshOptionAlias is one of the compat spellings: a second name for an option
@@ -991,6 +1036,9 @@ func moveOption(r *interp.Runner, name string, on bool) (moved, known bool) {
 		return false, false
 	}
 	want := on != inverted
+	if o.immovable != nil && o.immovable(r) {
+		return o.get(r) == want, true
+	}
 	if o.set != nil {
 		return o.set(r, want) == 0, true
 	}
@@ -1013,6 +1061,16 @@ func setOption(r *interp.Runner, name string, on bool) int {
 		return 1
 	}
 	want := on != inverted
+	if o.immovable != nil && o.immovable(r) {
+		// Held still in this shell, so the fixed bargain below applies even
+		// though the entry has a set — asked for where it already is, it is
+		// granted, and anything else is zsh's own sentence.
+		if o.get(r) == want {
+			return 0
+		}
+		r.Diagnosef("can't change option: %s\n", name)
+		return 1
+	}
 	if o.set != nil {
 		return o.set(r, want)
 	}

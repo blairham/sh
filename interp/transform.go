@@ -33,8 +33,7 @@ func (r *Runner) transformParam(e *syntax.ParamExpr, name, value string, set boo
 	case 'E':
 		return r.expandDollarSingle(value)
 	case 'P':
-		r.refuseTransform(e)
-		return ""
+		return r.promptTransform(e, value)
 	case 'A':
 		return r.assignmentStatement(name, value, set)
 	case 'a':
@@ -69,9 +68,6 @@ func (r *Runner) transformElems(e *syntax.ParamExpr, elems []string) []string {
 			out[i] = letters
 		}
 		return out
-	case 'P':
-		r.refuseTransform(e)
-		return nil
 	}
 	out := make([]string, 0, len(elems))
 	for _, el := range elems {
@@ -80,16 +76,42 @@ func (r *Runner) transformElems(e *syntax.ParamExpr, elems []string) []string {
 	return out
 }
 
-// refuseTransform is @P, which is prompt expansion: `\u`, `\w` and the rest
-// of the prompt escapes, expanded against state the front end holds. The
-// interpreter has no prompt machinery to hand the value to, and returning the
-// value unchanged would be right only when it carries no escape — a silent
-// wrong answer for every value that does. Refused loudly instead, naming the
-// letter, until something can answer honestly.
-func (r *Runner) refuseTransform(e *syntax.ParamExpr) {
-	r.diagf("${%s@%c}: the @%c transformation is not implemented\n",
-		e.Name, e.Transform, e.Transform)
-	r.expandErr = true
+// promptTransform is @P: the value read as a prompt, which is `\u`, `\w` and
+// the rest of the escape table, and then the expansion a prompt goes through
+// each time it is drawn.
+//
+// It is the *whole* prompt transformation and not only the table, measured:
+// with `d='$(echo cmd)'`, `${d@P}` is `cmd`, so the expansion really runs; and
+// with `c='\u'` and `v='X${c}Y'`, `${v@P}` is `X\uY`, so the `\u` that came
+// out of a parameter is not decoded — which is [PromptStyle.ExpandBeforeEscapes]
+// being false for this dialect, the same order a drawn prompt uses. Both
+// passes and their order are [RenderPromptValue], which the prompt drawer and
+// `PS4` call too: this is the third reader of one rule, and writing the order
+// out a third time is how the three would drift.
+//
+// The resolver is the script's rather than a drawer's, which is the same
+// split `${(%)…}` is on the other side of — the two are one shell's spelling
+// and another's of the same question. So an escape naming a fact a Runner has
+// not got is refused by name rather than drawn as a plausible zero: `\!` is
+// the history number, `\#` is how many commands this session has run, `\l`
+// is the terminal's name, and a script has no session to ask. bash answers `1`
+// and `1` for the first two in a non-interactive shell, which is a value it
+// has because its prompt machinery is present whether or not a prompt is ever
+// drawn; the choice here is to keep one promise across both spellings rather
+// than to make `@P` the one place that invents a session fact (#1912).
+//
+// An unset name is the empty string at status 0 — measured — which falls out
+// of the empty value having no escape in it rather than being a case here.
+func (r *Runner) promptTransform(e *syntax.ParamExpr, value string) string {
+	out, code, ok := RenderPromptValue(r.promptStyle, r, value, r.promptField, r.promptQuantity)
+	if !ok {
+		// Named as the script wrote it. e.Src is the flag route's spelling
+		// and is empty here, so the construct is rebuilt from the parts the
+		// node has.
+		r.refusePromptEscape(e.Name+"@"+string(e.Transform), code)
+		return ""
+	}
+	return out
 }
 
 // quoteForInput is @Q: the value spelled so that reading it back as input

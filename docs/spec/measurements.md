@@ -9135,6 +9135,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/transform-deferred-in-a-branch-never-taken` | `ok` | `ok` | `ok` | `ok` | `ok` | `ok` |
 | `param/transform-expands-escapes` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a	b][A]` | `[a	b][A]` | **2>** `<shell>: ${x@E}: bad substitution` *(status 1)* | **2>** `<shell>: "${x@E}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/transform-prompt-escapes` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a~b\c]` | `[a~b\c]` | **2>** `<shell>: ${x@P}: bad substitution` *(status 1)* | **2>** `<shell>: "${x@P}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/transform-prompt-escapes-run-before-the-expansion` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[X\uY]` | `[X\uY]` | **2>** `<shell>: ${v@P}: bad substitution` *(status 1)* | **2>** `<shell>: "${v@P}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/transform-prompt-escapes-and-the-expansion-both-run` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[cmd][a\b]` | `[cmd][a\b]` | **2>** `<shell>: ${d@P}: bad substitution` *(status 1)* | **2>** `<shell>: "${d@P}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/transform-prompt-escapes-over-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][\][y]~[]st=0` | `[x][\][y]~[]st=0` | `[x][\\][y]` **2>** `<shell>: ${nosuch@P}: bad substitution` *(status 1)* | **2>** `<shell>: "${a[@]@P}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/transform-writes-an-assignment` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `x='a b'~declare -irx v='1'~[irx][]` | `x='a b'~declare -irx v='1'~[irx][]` | **2>** `<shell>: ${x@A}: bad substitution` *(status 1)* | **2>** `<shell>: "${x@A}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/transform-keys-and-values` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[0 "one" 1 "t w"]<0><one><1><t w>{'q'}` | `[0 "one" 1 "t w"]<0><one><1><t w>{'q'}` | `[one][t w]<one><t w>` **2>** `<shell>: ${s@K}: bad substitution` *(status 1)* | **2>** `<shell>: "${a[@]@K}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/transform-case-letters` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[abc def][ABC DEF][AbC dEf]` | `[abc def][ABC DEF][AbC dEf]` | **2>** `<shell>: ${x@L}: bad substitution` *(status 1)* | **2>** `<shell>: "${x@L}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
@@ -9669,6 +9672,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/transform-prompt-escapes` — @P runs the prompt language over the value: \n is a newline and \\ is one backslash. Probed with only the two escapes whose answer is the same on every machine — \t is the time of day and \w the directory, so a case using either would record the clock
   ```sh
   x='a\nb\\c'; printf "[%s]\n" "${x@P}"
+  ```
+- `param/transform-prompt-escapes-run-before-the-expansion` — @P is the whole prompt transformation and not only the escape table: both passes run, and in the order this shell draws a prompt. The escapes go first, so the `\u` the parameter *produced* is text and stays two characters — which is the fact `PromptStyle.ExpandBeforeEscapes` records, measured in the other direction for the shell whose prompt expands first. A machine-independent probe on purpose: the same construct with `\u` written in the value would record whoever ran it
+  ```sh
+  c='\u'; v='X${c}Y'; printf '[%s]\n' "${v@P}"
+  ```
+- `param/transform-prompt-escapes-and-the-expansion-both-run` — the other half of the pair above: the expansion really runs — a command substitution in the value is executed — and the table really runs beside it, with the doubled escape drawing one of itself. Two facts in one row because either alone would pass an implementation that did only the other
+  ```sh
+  d='$(echo cmd)'; e='a\\b'; printf '[%s][%s]\n' "${d@P}" "${e@P}"
+  ```
+- `param/transform-prompt-escapes-over-an-array` — @P distributes over a stored array like the rest of the family — three elements in, three fields out, each read as a prompt of its own — and an unset name is the empty string at status 0 rather than a complaint, since there is no escape in nothing
+  ```sh
+  a=(x '\\' y); printf '[%s]' "${a[@]@P}"; echo; printf '[%s]' "${nosuch@P}"; echo "st=$?"
   ```
 - `param/transform-writes-an-assignment` — @A writes the statement that would recreate the variable — the value @Q-quoted, and attributes turning it into a declare with its letters in front — while @a is those letters alone, empty for a name with none
   ```sh

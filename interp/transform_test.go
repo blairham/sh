@@ -248,17 +248,122 @@ func TestTransformDistributesOverAWholeArray(t *testing.T) {
 	}
 }
 
-// @P is prompt expansion, which needs machinery the interpreter does not
-// hold. The refusal is loud, names the letter, and stops the command — a
-// value with no prompt escapes would pass through unchanged, but answering
-// only that case would be a silent wrong answer for every other value.
-func TestTransformRefusesPromptExpansion(t *testing.T) {
-	out, st := runTransform(t, `x=abc; echo "hi ${x@P}"; echo after`)
-	if st == 0 {
-		t.Error("the @P refusal reported success")
+// @P is the prompt transformation: the escape table over the value, and then
+// the expansion a prompt goes through each time it is drawn, in the order the
+// style draws them. Both passes, because either one alone answers a value
+// nobody writes — a prompt is escapes *and* parameters.
+
+// promptTransformTable is a table with a backslash for its escape and the
+// escape-first order, which is the axis the rows below turn on: a code that
+// arrives through the expansion is text, not a code. The letters are three —
+// one the runner answers, one the escape itself, and one naming a session
+// fact a Runner has not got.
+func promptTransformTable() PromptStyle {
+	return PromptStyle{
+		Expand: PromptExpandsAlways,
+		Escape: '\\',
+		Codes: map[rune]PromptField{
+			'u':  FieldUser,
+			'\\': FieldEscape,
+			'!':  FieldHistoryNumber,
+		},
 	}
-	if !strings.Contains(out, "@P") {
-		t.Errorf("the refusal %q does not name the letter", out)
+}
+
+// runPromptTransform is runTransform with a prompt table installed, which is
+// what the transformation reads. A runner told no table transforms nothing,
+// which is the zero value's promise and is its own row below.
+func runPromptTransform(t *testing.T, src string, st PromptStyle) (string, int) {
+	t.Helper()
+	return runGrammar(t, src, func(d *syntax.Dialect) {
+		d.ParamTransformations = true
+	}, func(r *Runner) {
+		r.SetPromptStyle(st)
+		r.SetPromptUser("someone")
+	})
+}
+
+func TestTransformReadsTheValueAsAPrompt(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		// The table is read, wherever a code stands in the word.
+		{"a code in the table", `x='[\u]'; echo "${x@P}"`, "[someone]"},
+		{"the escape doubled is one of itself", `x='a\\b'; echo "${x@P}"`, `a\b`},
+		// The expansion really runs: a parameter and a command substitution
+		// in the value are both resolved.
+		{"a parameter in the value", `n=NAME; x='hi $n'; echo "${x@P}"`, "hi NAME"},
+		{"a command substitution in the value", `x='$(echo cmd)'; echo "${x@P}"`, "cmd"},
+		// And the order between the two passes, which is the whole axis: a
+		// code that came *out of* a parameter is text, because the table had
+		// already run when the expansion produced it.
+		{"a code the expansion produced is not a code", `c='\u'; x='X${c}Y'; echo "${x@P}"`, `X\uY`},
+		// An unset name is the empty string, and no refusal: there is no
+		// escape in nothing.
+		{"an unset name is empty", `printf "[%s]" "${nosuch@P}"; echo`, "[]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runPromptTransform(t, c.src, promptTransformTable())
+			if st != 0 {
+				t.Errorf("status %d, want 0", st)
+			}
+			if strings.TrimSpace(out) != c.want {
+				t.Errorf("said %q, want %q", strings.TrimSpace(out), c.want)
+			}
+		})
+	}
+}
+
+// The other side of the order axis, asked at the disagreement: a style that
+// expands first hands the table what the expansion produced, so the same
+// value draws the code the parameter carried.
+func TestTransformTakesTheOrderFromTheStyle(t *testing.T) {
+	st := promptTransformTable()
+	st.ExpandBeforeEscapes = true
+	out, status := runPromptTransform(t, `c='\u'; x='X${c}Y'; echo "${x@P}"`, st)
+	if status != 0 {
+		t.Errorf("status %d, want 0", status)
+	}
+	if want := "XsomeoneY"; strings.TrimSpace(out) != want {
+		t.Errorf("said %q, want %q", strings.TrimSpace(out), want)
+	}
+}
+
+// Element-wise over a stored array, like the rest of the family: three
+// elements in and three fields out, each read as a prompt of its own.
+func TestTransformReadsEachElementAsAPrompt(t *testing.T) {
+	const src = `a=(x '\u' y); printf "[%s]" "${a[@]@P}"; echo`
+	out, status := runPromptTransform(t, src, promptTransformTable())
+	if status != 0 {
+		t.Errorf("status %d, want 0", status)
+	}
+	if want := "[x][someone][y]"; strings.TrimSpace(out) != want {
+		t.Errorf("said %q, want %q", strings.TrimSpace(out), want)
+	}
+}
+
+// A style with no escape character transforms nothing, which is the zero
+// value's promise: told nothing about the language, the value stands.
+func TestTransformWithNoTableLeavesTheValue(t *testing.T) {
+	out, status := runPromptTransform(t, `x='[\u]'; echo "${x@P}"`, PromptStyle{})
+	if status != 0 {
+		t.Errorf("status %d, want 0", status)
+	}
+	if want := `[\u]`; strings.TrimSpace(out) != want {
+		t.Errorf("said %q, want %q", strings.TrimSpace(out), want)
+	}
+}
+
+// An escape naming a fact a Runner has not got is refused by name and stops
+// the command, which is the same promise `${(%)…}` makes and the reason this
+// is one resolver rather than two. The refusal spells the escape the way the
+// *dialect* does — a backslash here — so a reader is sent to the construct
+// their script really holds.
+func TestTransformRefusesAnEscapeItCannotAnswer(t *testing.T) {
+	out, st := runPromptTransform(t, `x='[\!]'; echo "hi ${x@P}"; echo after`, promptTransformTable())
+	if st == 0 {
+		t.Error("the refusal reported success")
+	}
+	if !strings.Contains(out, `${x@P}`) || !strings.Contains(out, `\!`) {
+		t.Errorf("the refusal %q names neither the construct nor the escape", out)
 	}
 	if strings.Contains(out, "hi") || strings.Contains(out, "after") {
 		t.Errorf("output %q: the command ran despite the refusal", out)

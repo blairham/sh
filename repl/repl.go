@@ -1087,22 +1087,17 @@ func (s Shell) render(value string) string {
 		return value
 	}
 	// Three passes: the dialect's table of codes, the expansion, and the
-	// character that stands for the history number. The first two run in
-	// the order the *dialect* draws them — see PromptStyle.ExpandBeforeEscapes,
-	// which is measured in both directions and is what decides whether an
-	// escape a parameter produced is one the table ever sees.
-	expand := func() {
-		if s.Style.Expand != nil && s.Style.Expand(s.Runner) {
-			value = s.Runner.Expand(value)
-		}
-	}
-	if s.Style.ExpandBeforeEscapes {
-		expand()
-		value = s.table(value)
-	} else {
-		value = s.table(value)
-		expand()
-	}
+	// character that stands for the history number. The first two are
+	// interp.RenderPromptValue, which runs them in the order the *dialect*
+	// draws them — see PromptStyle.ExpandBeforeEscapes, which is measured in
+	// both directions and is what decides whether an escape a parameter
+	// produced is one the table ever sees. The same call answers `PS4` in
+	// front of a trace line and bash's `${v@P}`, so the three readers of a
+	// prompt value cannot drift apart.
+	//
+	// The refusal this drawer never sees is dropped rather than reported: its
+	// resolvers answer every code, so ok is always true here.
+	value, _, _ = interp.RenderPromptValue(s.Style, s.Runner, value, s.promptField, s.promptQuantity)
 	return s.history(value)
 }
 

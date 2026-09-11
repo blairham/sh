@@ -198,6 +198,13 @@ var zmodloadFeatures = map[string][]string{
 	// One builtin and the whole of the module: a wait on descriptors, which
 	// is what a prompt theme's worker sleeps on. See zselect.go.
 	"zsh/zselect": {"b:zselect"},
+	// No features at all, measured: `zmodload -lF zsh/complist` on a loaded
+	// one writes nothing at status 0, where the same question about
+	// `zsh/main` is a refusal. So this entry is not zsh/main's and must not
+	// read as it — see zmodloadFeatureless. What the module actually leaves
+	// behind is two keymaps, and complist.go is the whole of what this shell
+	// does and does not claim of it.
+	moduleComplist: nil,
 	// One builtin under two names, and the second name is the reason this
 	// module is written `-F` by everything that uses it. See statmodule.go:
 	// `zstat` is implemented and `stat` is deliberately not, because a shell
@@ -233,6 +240,19 @@ var zmodloadFeatures = map[string][]string{
 		"p:patchars", "p:reswords", "p:saliases", "p:userdirs",
 		"p:usergroups",
 	},
+}
+
+// zmodloadFeatureless is the modules that do not support features at all, as
+// distinct from the ones that support them and name none.
+//
+// Measured, and the difference is a status: `zmodload -lF zsh/main` is
+// “module `zsh/main' does not support features“ at 1, where the same command
+// about a loaded `zsh/complist` writes nothing at 0. Both have an empty entry
+// in the table above, so the emptiness cannot tell them apart and this says
+// which is which. It was one case while `zsh/main` was the only module that
+// had ever reached it (#2090).
+var zmodloadFeatureless = map[string]bool{
+	zmodloadAlwaysLoaded: true,
 }
 
 // zmodloadHasFeature reports whether this shell already provides one feature.
@@ -885,11 +905,15 @@ func zmodloadSelect(r *interp.Runner, opts zmodloadOpts, module string, specs []
 			r.DiagnoseAsTheShellf("failed to load module `%s': not implemented yet\n", module)
 		}
 		return 1
-	case len(features) == 0:
+	case zmodloadFeatureless[module]:
 		// `zsh/main`, which is loaded and has nothing to select from.
 		// Measured as the shell speaking rather than the builtin, which is
 		// the other way round from the `-lF` listing's identical sentence —
 		// so the two paths keep their own locations.
+		//
+		// The test is the featureless set rather than an empty feature list,
+		// because `zsh/complist` has an empty list and is not this case:
+		// measured, `zmodload -F zsh/complist` loads it at 0.
 		r.DiagnoseAsTheShellf("module `%s' does not support features\n", module)
 		return 1
 	}
@@ -947,9 +971,11 @@ func zmodloadFeatureListing(r *interp.Runner, opts zmodloadOpts, module string, 
 	case !containsWord(zmodloadLoaded(r), module):
 		r.Diagnosef("module `%s' is not yet loaded\n", module)
 		return 1
-	case len(features) == 0:
+	case zmodloadFeatureless[module]:
 		// Loaded and with nothing to list, which is `zsh/main` and its
-		// own measured sentence rather than the one above.
+		// own measured sentence rather than the one above. A loaded
+		// `zsh/complist` is the other empty list and falls through to write
+		// no lines at status 0, which is measured.
 		r.Diagnosef("module `%s' does not support features\n", module)
 		return 1
 	}

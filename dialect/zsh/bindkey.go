@@ -59,12 +59,18 @@ const (
 	bindkeyMap   = ".zsh.keymap"
 )
 
-// keymapNames are the keymaps this shell has, in the order `bindkey -l`
-// prints them, which is alphabetical with the dot-prefixed one first.
+// keymapNames are the keymaps this shell starts with, in the order `bindkey
+// -l` prints them, which is alphabetical with the dot-prefixed one first.
 //
 // All nine are named because `bindkey -M vicmd …` in an rc file must not fail
 // for a keymap this shell plainly has; what differs is that only the two the
 // editor can be driven from carry bindings.
+//
+// **Not the whole list a command sees** — a module creates keymaps when it
+// loads, and `zmodload zsh/complist` is two lines before `bindkey -M
+// menuselect …` in a real startup file. keymapsNow is what every reader here
+// asks, and complist.go carries the argument for what such a keymap is and is
+// not.
 var keymapNames = []string{".safe", "command", "emacs", "isearch", "main", "vicmd", "viins", "viopp", "visual"}
 
 // bindkeyWidgets is this shell's name for each thing the editor does.
@@ -281,7 +287,7 @@ func bindkeyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		return code
 	}
 	if opts.list {
-		for _, name := range keymapNames {
+		for _, name := range keymapsNow(r) {
 			_, _ = fmt.Fprintf(r.Out(), "%s\n", name)
 		}
 		return 0
@@ -362,7 +368,7 @@ func bindkeyOptions(r *interp.Runner, args []string) (opts bindkeyOpts, rest []s
 					}
 					name, rest = rest[0], rest[1:]
 				}
-				if !containsWord(keymapNames, name) {
+				if !containsWord(keymapsNow(r), name) {
 					r.Diagnosef("no such keymap `%s'\n", name)
 					return opts, nil, 1
 				}

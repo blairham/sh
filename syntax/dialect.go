@@ -1402,6 +1402,44 @@ type Dialect struct {
 	// is a daily-driver blocker rather than a corner (#1529).
 	NamelessParamExpansion bool
 
+	// BareBraceNestsInExpansion makes an unquoted `{` inside `${…}` open a
+	// nesting level, so the expansion ends at the brace that *balances* it
+	// rather than at the first `}`.
+	//
+	// A grammar flag rather than a semantics axis, for the reason
+	// NestedParamExpansion is one: it decides where the word is cut. With it
+	// `${u:-{a,q}.z}` is one expansion whose operand runs to `.z`; without
+	// it the expansion stops at the first `}` and `.z}` is two more
+	// characters of the enclosing word. Those are different words, not one
+	// word two values could disagree about.
+	//
+	// The panel splits two against three. Measured 2026-09-10 with
+	// `unset u; printf "[%s]" ${u:-{a,q}.z}`:
+	//
+	//	zsh 5.9.2   [a.z][q.z]   the operand ran to `.z` and the group was
+	//	ksh93       [a.z][q.z]   then expanded — two fields
+	//	bash 5.3    [{a,q.z}]    the operand stopped at the first `}` and
+	//	bash 3.2    [{a,q.z}]    `.z}` arrived as literal text — one field
+	//	dash        [{a,q.z}]
+	//
+	// Brace *expansion* is not what separates them: `${u:-a{b}c}` has no
+	// comma in it and splits the panel exactly the same way, `a{b}c` in the
+	// two that balance and `a{bc}` in the three that do not. So the flag is
+	// about the scan and not about what the group would have produced —
+	// which is why dash, which has no brace expansion at all, still has an
+	// answer here.
+	//
+	// Off in the core, which is what the common denominator means: the wider
+	// reading takes text the other three read as belonging to the word, and
+	// a core that swallowed it would be reading a word nobody wrote.
+	//
+	// Only unquoted. In double quotes all six stop at the first `}` and the
+	// flag is not consulted — see the note in scanBraces, and #1586, which
+	// settled that half. The `${ cmd;}` command form keeps its own rule for
+	// a third reason again: its body is a program, so a `{ … }` block
+	// written in one has to balance the way the program's braces do.
+	BareBraceNestsInExpansion bool
+
 	// ParamIndirection enables `${!x}` to *parse*. bash and ksh93 accept it;
 	// dash and zsh reject it outright.
 	//

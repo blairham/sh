@@ -1253,6 +1253,36 @@ var Corpus = []Case{
 		Why:     "the third reading of a quote in a `${ }` operand, and the one the panel divides on: a *pattern* operand's quotes quote and are removed everywhere, and a **replacement** operand's do in bash 5.3, that build as `sh` and ksh93 while bash 3.2 and zsh keep them as characters. Unquoted all five agree again, which is what says the disagreement is about the quoted context and not about the operator. dash has no operator and refuses the line. Recorded rather than answered — it wants a semantics axis, and this row is what a fix routed through the word operand's rule would break",
 	},
 	{
+		ID: "param/bare-brace-in-an-unquoted-operand", Category: "expansion",
+		Snippet: `unset u; printf "[%s]" ${u:-{a,q}.z}; echo`,
+		Why: "where an unquoted expansion *ends* when a bare `{` stands in its " +
+			"operand, which the panel splits two against three: zsh and ksh93 take " +
+			"the brace as opening a level, so the operand runs to `.z` and the group " +
+			"is then expanded into the two fields `a.z` and `q.z`, while bash, that " +
+			"build as `sh`, bash 3.2 and dash end the expansion at the first `}` and " +
+			"read `.z}` as two more characters of the word, giving the one field " +
+			"`{a,q.z}`. Ours gave zsh's answer in every dialect until this was a " +
+			"`syntax.Dialect` flag (#1587)",
+	},
+	{
+		ID: "param/bare-brace-in-an-operand-with-nothing-to-expand", Category: "expansion",
+		Snippet: `unset u; printf "[%s]" ${u:-a{b}c}; echo`,
+		Why: "the same split with no comma in it, which is what says the question " +
+			"is where the scan stops and not what a brace-expansion group produces: " +
+			"the two shells that nest answer `a{b}c` and the three that do not " +
+			"answer `a{bc}`. dash carries it: it has no brace expansion at all and " +
+			"still has an answer here",
+	},
+	{
+		ID: "param/bare-brace-in-a-quoted-operand", Category: "expansion",
+		Snippet: `v=q; printf "[%s]" "${v:-a{b}c}"; echo`,
+		Why: "the control for the pair above, and the half #1586 settled: inside " +
+			"double quotes every column in the panel ends the expansion at the first " +
+			"`}`, so all six answer `qc}` — the value, then the two characters that " +
+			"were never part of it. Without this row the flag reads as a rule about " +
+			"braces rather than about unquoted ones",
+	},
+	{
 		ID: "param/a-replacement-is-literal-text", Category: "expansion",
 		Snippet: `mkdir -p g && cd g && : > axcd && : > aQcd && : > Q && ` +
 			`x=abcd; printf "[%s]" "${x//b/*}"; echo`,
@@ -1292,6 +1322,25 @@ var Corpus = []Case{
 			"so in the dialect where an unmatched pattern is fatal the whole command " +
 			"stopped with `no matches found: [Q]` — a replacement that names no file " +
 			"is not a failure anywhere in the panel",
+	},
+	{
+		ID: "heredoc/an-expansion-left-unterminated-in-a-body", Category: "expansion",
+		Snippet: "cat <<EOF\nWROTE${\nEOF\necho after",
+		Why: "a here-document body that runs out inside a `${`. All five columns " +
+			"refuse it and none of them writes the body: bash `unexpected EOF while " +
+			"looking for matching }`, bash 3.2 and zsh `bad substitution`, dash " +
+			"`Syntax error: Missing '}'`, ksh93 a syntax error. The wording is " +
+			"theirs and the marker is the measurement — `WROTE` on the output is a " +
+			"reader that swallowed the failure and handed the command the text " +
+			"instead, which is what this shell did under two of its dialects until " +
+			"`syntax.HeredocSpans` reported the fact it already knew (#1653)",
+	},
+	{
+		ID: "heredoc/an-expansion-that-closes-in-a-body", Category: "expansion",
+		Snippet: "v=VAL\ncat <<EOF\nWROTE${v}y\nEOF\necho after",
+		Why: "the control for the row above: the same body with the brace closed " +
+			"expands and is written, unanimously. Without it the refusal reads as a " +
+			"rule about braces in bodies rather than about a body that ran out",
 	},
 	{
 		ID: "core/single-quotes-in-a-heredoc-expansion-body", Category: "quoting",
@@ -13646,7 +13695,7 @@ echo "read=[$l]"`,
 	{
 		ID: "core/a-bare-brace-inside-a-quoted-expansion", Category: "parameters",
 		Snippet: `a=x; printf "[%s]" "${a/x/{y}"; printf "[%s]" "${a:-p{q}r}"; echo`,
-		Why:     "a `{` with no `$` in front of it does not open a level, so the expansion ends at the first `}` and what follows is ordinary text. Unanimous in the columns that have the operators — `{y` and then `p{qr}`, the second being the tell, since a shell that nested would answer `p{q}r` as one piece and leave nothing behind. Written in quotes because unquoted the same brace is a *brace-expansion group* and does have to balance, which is a different question and a different answer. Counting every brace instead made an escaped dollar open a level nothing could close, since `\\$` is consumed as an escape pair and left its `{` to be read as a nested expansion — the double quote around the whole word was then eaten looking for the `}` that would balance it, which is why the failure read as an unterminated string (#1586)",
+		Why:     "a `{` with no `$` in front of it does not open a level, so the expansion ends at the first `}` and what follows is ordinary text. Unanimous in the columns that have the operators — `{y` and then `p{qr}`, the second being the tell, since a shell that nested would answer `p{q}r` as one piece and leave nothing behind. Written in quotes because unquoted the panel splits — zsh and ksh93 balance the brace there and the three bash-family columns do not, which is `BareBraceNestsInExpansion` and the `param/bare-brace-*` rows (#1587). Counting every brace instead made an escaped dollar open a level nothing could close, since `\\$` is consumed as an escape pair and left its `{` to be read as a nested expansion — the double quote around the whole word was then eaten looking for the `}` that would balance it, which is why the failure read as an unterminated string (#1586)",
 	},
 	{
 		ID: "autoload/the-two-signs-of-x", Category: "builtins",

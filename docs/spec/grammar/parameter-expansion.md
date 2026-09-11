@@ -2291,10 +2291,47 @@ the `j` separator and this one does not.
 A failure inside the re-read text is a failure of the expansion — an
 expansion the dialect cannot read, and `$((1/0))` a division by zero, both
 abandon the command — which needs no code of its own, the text going through
-the same parser and the same evaluator. **One failure is not raised yet**: an
-expansion left *unterminated*, `v='x${'`, is read as an empty-name expansion
-rather than refused, because `HeredocSpans` does not notice a `${` that runs
-off the end. Filed as #1653; the fix is in the lexer rather than in the flag.
+the same parser and the same evaluator.
+
+An expansion left *unterminated* is one of them, and it was the last one to
+be: `v='x${'` used to come back as the literal `x` plus an expansion whose
+name was whatever followed, because `HeredocSpans` returned spans and no
+error. Where the dialect refuses an empty name — bash, dash — that still
+failed, loudly and for the wrong reason; where it reads `${}` as empty the
+whole thing was silently nothing. The reader now reports the fact the lexer
+already held, so every route through it refuses the text (#1653).
+
+The same reader serves a here-document body, which is where the fault was
+reachable with no flag at all. Measured 2026-09-10 on `cat <<EOF` / `x${` /
+`EOF`:
+
+| | body that runs out inside `${` |
+| --- | --- |
+| bash 5.3.15 | `unexpected EOF while looking for matching }` |
+| bash 3.2.57 | `x${: bad substitution` |
+| dash | `Syntax error: Missing '}'` |
+| ksh93 | `syntax error at line 2: 'end of file' unexpected` |
+| zsh 5.9.2 | `bad substitution` |
+
+All five refuse and none of them writes the body; the line after the
+redirection still runs, so the refusal is the command's rather than the
+shell's.
+
+**The wording is the dialect's unmatched-`${` sentence**, which is not what
+zsh says on the re-read road: there it answers `bad substitution` where the
+scan got no further than a name — `${`, `${a`, `${a[1]`, `${#a` — and
+`closing brace expected` once it reached an operator — `${a:`, `${a-`,
+`${a%`, `${a/x/y`. Ours says the second everywhere. Telling the two apart
+needs the *parser's* table of operators inside the lexer, for one shell's
+wording on one route, and that is a second copy of knowledge that already
+lives in one place. Recorded rather than chased.
+
+A body's quoting is not a quote. `heredocSpans` marks every span
+double-quoted so that nothing it produces is field-split, and the
+unmatched-`${` report used to blame that mark — `unmatched "` about a text
+with no quote character in it. `Lexer.inRawBody` is what keeps the mark
+saying "do not split" without letting it stand in for a character somebody
+wrote.
 
 **A value that names its own expansion is bounded here rather than
 followed.** `v='${(e)v}'` re-reads text asking for the same expansion again,
@@ -4366,6 +4403,10 @@ reason: `${$((6*7))[1]}`.
                            — zsh only
     NamelessParamExpansion ${:-abc} and ${}, an expansion with no
                            parameter name at all — zsh only
+    BareBraceNestsInExpansion
+                           ${u:-{a,q}.z}, where a bare `{` in an *unquoted*
+                           operand opens a level so the expansion ends at
+                           the brace that balances it — zsh and ksh93
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
 `ParamTransformations`, `ParamExpansionFlags`, `ParamTildeFlag`,
@@ -4386,6 +4427,33 @@ the other five columns refuse it, in three different wordings. So is
 `NamelessParamExpansion`, on evidence of exactly that shape — `${:-abc}`
 is `bad substitution` in the three bashes, `Bad substitution` in dash and
 `` `:' unexpected `` while reading in ksh93.
+
+`BareBraceNestsInExpansion` is the one of these the panel splits two
+against three rather than one against five, and it is false for `core` for
+the ordinary reason: the wider reading takes text the other three columns
+leave in the word. Measured 2026-09-10 with
+`unset u; printf "[%s]" ${u:-{a,q}.z}`:
+
+| | |
+| --- | --- |
+| zsh 5.9.2 | `[a.z][q.z]` |
+| ksh93 | `[a.z][q.z]` |
+| bash 5.3.15 | `[{a,q.z}]` |
+| bash 3.2.57 | `[{a,q.z}]` |
+| dash | `[{a,q.z}]` |
+
+Two fields is the operand running to `.z` and the group being expanded
+afterwards; one field is the operand stopping at the first `}` and `.z}`
+arriving as literal text. Brace *expansion* is not what separates them —
+`${u:-a{b}c}` has no comma in it and splits the panel the same way, and
+dash has no brace expansion at all and still has an answer — so the flag
+decides where the word is cut and nothing else.
+
+In double quotes the flag is not consulted: every column ends the
+expansion at the first `}` there, which is the `core/a-bare-brace-inside-a-quoted-expansion`
+row and what #1586 settled. The `${ cmd;}` command form keeps its own rule
+again, because its body is a program and a `{ … }` block written in one has
+to balance the way that program's braces do.
 
 ## What this does not cover
 

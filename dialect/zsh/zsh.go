@@ -331,6 +331,14 @@ func Dialect() syntax.Dialect {
 	// the argv of every non-zsh plugin, so the two flags arrive together on
 	// the same real line (#1529).
 	d.NamelessParamExpansion = true
+	// A bare `{` inside an unquoted `${…}` opens a nesting level here, so the
+	// expansion ends at the brace that balances it. Measured 2026-09-10 with
+	// `unset u; printf "[%s]" ${u:-{a,q}.z}`: this shell and ksh93 answer
+	// `[a.z][q.z]`, two fields, where bash 5.3, bash 3.2 and dash answer the
+	// single field `[{a,q.z}]` — the operand stopping at the first `}` and
+	// `.z}` arriving as literal text. The comma is not what does it:
+	// `${u:-a{b}c}` splits the panel the same way with no group in it at all.
+	d.BareBraceNestsInExpansion = true
 	// A parameter written without braces carries a subscript here, and `$#a`
 	// is a count rather than `$#` with a letter after it. Measured 2026-09-05
 	// on zsh 5.9.2: `a=(x y z); echo $a[1]` prints `x` and `echo $#a` prints

@@ -3335,11 +3335,15 @@ func (r *Runner) specialLength() int {
 // a word: lexing alone would drop them as token separators.
 func (r *Runner) expandRawText(text string) string {
 	var b strings.Builder
+	spans, ok := r.rawSpans(text)
+	if !ok {
+		return ""
+	}
 	// The lexer leaves an expansion's inside raw, so parseSpans fills it in —
 	// the same handoff a word goes through. splitNever: a here-document's
 	// body is one blob of input rather than fields, in every shell in the
 	// panel, so the splitting axis has nothing to ask.
-	for _, s := range r.parseSpans(syntax.HeredocSpans(text, r.dialect())) {
+	for _, s := range spans {
 		// head is false, and it is the belt to the quoting's braces: a
 		// here-document's spans are marked double-quoted — which is what
 		// stops the body being split — so `${~t}` in one is suppressed by
@@ -3353,6 +3357,31 @@ func (r *Runner) expandRawText(text string) string {
 		b.WriteString(globUnescape(out))
 	}
 	return b.String()
+}
+
+// rawSpans reads raw text back into spans, refusing text that ran out inside
+// an expansion instead of handing back a span nobody wrote.
+//
+// The refusal is the point. A `${` with no closing brace comes back from the
+// lexer as a parameter expansion whose name is whatever followed it, so a
+// caller that ignored the error answered the *rest of the text* and status 0
+// where every shell in the panel abandons the line — `x${` re-read through
+// the evaluate flag printed `x`, and a here-document body holding one printed
+// its body. Where the dialect happens to refuse an empty name that came out
+// looking correct, which is worse: two columns right by accident and the
+// third silently wrong (#1653).
+//
+// A parse failure here is an expansion failure, reported and marked the same
+// way the arithmetic reader's is, because it is the same kind of thing: text
+// that could only be read once it had been produced.
+func (r *Runner) rawSpans(text string) ([]syntax.Span, bool) {
+	spans, err := syntax.HeredocSpans(text, r.dialect())
+	if err != nil {
+		r.diagf("%s\n", r.diag().ParseFailure(err))
+		r.expandErr = true
+		return nil, false
+	}
+	return r.parseSpans(spans), true
 }
 
 // parseSpans fills in the parsed form of any expansion the lexer left raw,

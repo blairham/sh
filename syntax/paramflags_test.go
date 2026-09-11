@@ -10,10 +10,17 @@ import (
 
 // flagged parses src under a dialect with the flag group enabled and returns
 // the first parameter expansion.
+//
+// BareBraceNestsInExpansion comes with it because a flag's argument may be
+// delimited by braces — `${(g{o})v}` — and without the nesting the expansion
+// closes at the `}` of the argument, so the text is not a flag group at all.
+// The one shell in the panel with the flag group has both, so the pair is
+// what the construct is measured under; see #1587.
 func flagged(t *testing.T, src string) *ParamExpr {
 	t.Helper()
 	d := Core()
 	d.ParamExpansionFlags = true
+	d.BareBraceNestsInExpansion = true
 	return firstParam(t, src, d)
 }
 

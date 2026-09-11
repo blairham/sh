@@ -232,13 +232,24 @@ func TestTheReevalFlagProducesFields(t *testing.T) {
 // expansion the reader could not use, and a row asserting only that the word
 // "bad" appeared would pass for a refusal that named the wrong one.
 //
-// The first row is an *empty-name* expansion — the value `${` reaches the
-// reader as one — which this suite's dialect refuses and which a dialect that
-// allows it reads as empty. An expansion left unterminated is a different
-// failure and one this reader does not yet raise; see #1653.
+// The first two rows are a pair and the pair is the point. `${}` is an
+// *empty-name* expansion, which this suite's dialect refuses and a dialect
+// that allows it reads as empty; `${` is a **different** failure — the text
+// ran out before the expansion closed — and it used to reach the reader as
+// the first one, because the span the lexer handed back for it was an
+// expansion whose name was whatever followed. Where the dialect refuses an
+// empty name that looked correct, and where it does not the whole thing was
+// silently nothing (#1653).
+//
+// Whole strings, so the two wordings have to stay apart: a row asserting only
+// that something was refused would pass for either.
 func TestAFailureInTheReevaluatedTextStopsTheCommand(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
-		{"an expansion this dialect cannot read", `v='${'; printf "[%s]" "${(e)v}"; echo after`, "sh: ${}: bad substitution\n"},
+		{"an expansion left unterminated", `v='${'; printf "[%s]" "${(e)v}"; echo after`, "sh: unterminated parameter expansion\n"},
+		{"an expansion this dialect cannot read", `v='${}'; printf "[%s]" "${(e)v}"; echo after`, "sh: ${}: bad substitution\n"},
+		{"an unterminated one with text in front of it", `v='x${'; printf "[%s]" "${(e)v}"; echo after`, "sh: unterminated parameter expansion\n"},
+		{"and one that got as far as an operator", `v='${a:'; printf "[%s]" "${(e)v}"; echo after`, "sh: unterminated parameter expansion\n"},
+		{"an unterminated command substitution", `v='$(echo'; printf "[%s]" "${(e)v}"; echo after`, "sh: unterminated command substitution\n"},
 		{"an arithmetic error", `v='$((1/0))'; printf "[%s]" "${(e)v}"; echo after`, "sh: division by zero\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

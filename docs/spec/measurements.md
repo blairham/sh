@@ -282,9 +282,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expand/tilde-plus-and-minus` | `~+ ~-~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~/tmp` |
 | `expand/tilde-after-a-colon-in-an-assignment` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` |
 | `expand/tilde-into-an-expansion-diverges` | `a:~/x` | `a:~/x` | `a:~/x` | `a:~/x` | `a:~/x` | `a:H/x` |
+| `param/bare-brace-in-an-unquoted-operand` | `[{a,q.z}]` | `[{a,q.z}]` | `[{a,q.z}]` | `[{a,q.z}]` | `[a.z][q.z]` | `[a.z][q.z]` |
+| `param/bare-brace-in-an-operand-with-nothing-to-expand` | `[a{bc}]` | `[a{bc}]` | `[a{bc}]` | `[a{bc}]` | `[a{b}c]` | `[a{b}c]` |
+| `param/bare-brace-in-a-quoted-operand` | `[qc}]` | `[qc}]` | `[qc}]` | `[qc}]` | `[qc}]` | `[qc}]` |
 | `param/a-replacement-is-literal-text` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a*cd]` | `[a*cd]` | `[a*cd]` | `[a*cd]` | `[a*cd]` |
 | `param/a-replacement-is-text-and-the-result-is-a-pattern` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[aQcd][axcd]` | `[aQcd][axcd]` | `[aQcd][axcd]` | `[aQcd][axcd]` | `[a*cd]` |
 | `param/a-bracket-expression-in-a-replacement` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[aQcd]` | `[aQcd]` | `[aQcd]` | `[aQcd]` | `[a[Q]cd]` |
+| `heredoc/an-expansion-left-unterminated-in-a-body` | **2>** `<shell>: 3: Syntax error: Missing '}'` *(status 2)* | `after` **2>** `<shell>: command substitution: line 3: unexpected EOF while looking for matching `}'` | `after` **2>** `<shell>: command substitution: line 3: unexpected EOF while looking for matching `}'` | `after` **2>** `<shell>: WROTE${~: bad substitution` | `after` **2>** `<shell>: syntax error at line 2: `end of file' unexpected` | `after` **2>** `<shell>:1: bad substitution` |
+| `heredoc/an-expansion-that-closes-in-a-body` | `WROTEVALy~after` | `WROTEVALy~after` | `WROTEVALy~after` | `WROTEVALy~after` | `WROTEVALy~after` | `WROTEVALy~after` |
 | `nounset/unset-variable-from-a-command-string` | **2>** `<shell>: 2: NOPE: parameter not set` *(status 2)* | **2>** `<shell>: line 2: NOPE: unbound variable` *(status 127)* | **2>** `<shell>: line 2: NOPE: unbound variable` *(status 127)* | **2>** `<shell>: line 1: NOPE: unbound variable` *(status 127)* | **2>** `<shell>: line 2: NOPE: parameter not set` *(status 1)* | **2>** `<shell>:2: NOPE: parameter not set` *(status 1)* |
 | `param/error-operator-on-an-unset-name` | **2>** `<script>: 1: V: parameter not set` *(status 2)* | **2>** `<script>: line 1: V: parameter not set` *(status 1)* | **2>** `<script>: line 1: V: parameter not set` *(status 1)* | **2>** `<script>: line 1: V: parameter null or not set` *(status 1)* | **2>** `<script>: line 1: V: parameter not set` *(status 1)* | **2>** `<script>:1: V: parameter not set` *(status 1)* |
 | `param/error-operator-default-word` | **2>** `<script>: 1: V: parameter not set or null` *(status 2)* | **2>** `<script>: line 1: V: parameter null or not set` *(status 1)* | **2>** `<script>: line 1: V: parameter null or not set` *(status 1)* | **2>** `<script>: line 1: V: parameter null or not set` *(status 1)* | **2>** `<script>: line 1: V: parameter null` *(status 1)* | **2>** `<script>:1: V: parameter not set` *(status 1)* |
@@ -700,6 +705,18 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   u=/x; v=a:~$u; echo "$v" | sed "s|$HOME|H|g"
   ```
+- `param/bare-brace-in-an-unquoted-operand` — where an unquoted expansion *ends* when a bare `{` stands in its operand, which the panel splits two against three: zsh and ksh93 take the brace as opening a level, so the operand runs to `.z` and the group is then expanded into the two fields `a.z` and `q.z`, while bash, that build as `sh`, bash 3.2 and dash end the expansion at the first `}` and read `.z}` as two more characters of the word, giving the one field `{a,q.z}`. Ours gave zsh's answer in every dialect until this was a `syntax.Dialect` flag (#1587)
+  ```sh
+  unset u; printf "[%s]" ${u:-{a,q}.z}; echo
+  ```
+- `param/bare-brace-in-an-operand-with-nothing-to-expand` — the same split with no comma in it, which is what says the question is where the scan stops and not what a brace-expansion group produces: the two shells that nest answer `a{b}c` and the three that do not answer `a{bc}`. dash carries it: it has no brace expansion at all and still has an answer here
+  ```sh
+  unset u; printf "[%s]" ${u:-a{b}c}; echo
+  ```
+- `param/bare-brace-in-a-quoted-operand` — the control for the pair above, and the half #1586 settled: inside double quotes every column in the panel ends the expansion at the first `}`, so all six answer `qc}` — the value, then the two characters that were never part of it. Without this row the flag reads as a rule about braces rather than about unquoted ones
+  ```sh
+  v=q; printf "[%s]" "${v:-a{b}c}"; echo
+  ```
 - `param/a-replacement-is-literal-text` — the replacement is **text**, and the files are here so that a live `*` would have something to find: all five shells with the operator answer the four characters `a*cd`, and dash has no operator and refuses the line. Quoted deliberately — quoted, nothing the expansion produces is re-read as a pattern, so what prints is what the operator made and not what the surrounding field did with it. Ours substituted a directory listing into the middle of the value at status 0, which is the silent shape (#1337)
   ```sh
   mkdir -p g && cd g && : > axcd && : > aQcd && : > Q && x=abcd; printf "[%s]" "${x//b/*}"; echo
@@ -711,6 +728,21 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/a-bracket-expression-in-a-replacement` — the loud half of the same fault, and the shape it was noticed by: a bracket expression in the replacement. It lands as three characters, and the four shells that re-read an expansion's result then match the file `aQcd` with the whole word while zsh prints `a[Q]cd`. The file is named for the *result* and not for the operand, which is what the first run of this row got wrong: a directory holding only `Q` makes `a[Q]cd` match nothing, and every column then agrees for a reason that has nothing to do with the question. Ours read the operand itself as a pattern, so in the dialect where an unmatched pattern is fatal the whole command stopped with `no matches found: [Q]` — a replacement that names no file is not a failure anywhere in the panel
   ```sh
   mkdir -p g && cd g && : > aQcd && x=abcd; printf "[%s]" ${x//b/[Q]}; echo
+  ```
+- `heredoc/an-expansion-left-unterminated-in-a-body` — a here-document body that runs out inside a `${`. All five columns refuse it and none of them writes the body: bash `unexpected EOF while looking for matching }`, bash 3.2 and zsh `bad substitution`, dash `Syntax error: Missing '}'`, ksh93 a syntax error. The wording is theirs and the marker is the measurement — `WROTE` on the output is a reader that swallowed the failure and handed the command the text instead, which is what this shell did under two of its dialects until `syntax.HeredocSpans` reported the fact it already knew (#1653)
+  ```sh
+  cat <<EOF
+  WROTE${
+  EOF
+  echo after
+  ```
+- `heredoc/an-expansion-that-closes-in-a-body` — the control for the row above: the same body with the brace closed expands and is written, unanimously. Without it the refusal reads as a rule about braces in bodies rather than about a body that ran out
+  ```sh
+  v=VAL
+  cat <<EOF
+  WROTE${v}y
+  EOF
+  echo after
   ```
 - `nounset/unset-variable-from-a-command-string` — the same two lines as the case above, given as an argument instead of read from a file. Three of the panel answer the same either way; one answers 127 here and 1 there, which is a fact about how the shell was started rather than about the expansion — and only the pair can show it
   ```sh
@@ -5056,7 +5088,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   set -- one; echo "[$+1]"; echo "[$+@]"; echo "[$++v]"; echo "[$+]"
   ```
-- `core/a-bare-brace-inside-a-quoted-expansion` — a `{` with no `$` in front of it does not open a level, so the expansion ends at the first `}` and what follows is ordinary text. Unanimous in the columns that have the operators — `{y` and then `p{qr}`, the second being the tell, since a shell that nested would answer `p{q}r` as one piece and leave nothing behind. Written in quotes because unquoted the same brace is a *brace-expansion group* and does have to balance, which is a different question and a different answer. Counting every brace instead made an escaped dollar open a level nothing could close, since `\$` is consumed as an escape pair and left its `{` to be read as a nested expansion — the double quote around the whole word was then eaten looking for the `}` that would balance it, which is why the failure read as an unterminated string (#1586)
+- `core/a-bare-brace-inside-a-quoted-expansion` — a `{` with no `$` in front of it does not open a level, so the expansion ends at the first `}` and what follows is ordinary text. Unanimous in the columns that have the operators — `{y` and then `p{qr}`, the second being the tell, since a shell that nested would answer `p{q}r` as one piece and leave nothing behind. Written in quotes because unquoted the panel splits — zsh and ksh93 balance the brace there and the three bash-family columns do not, which is `BareBraceNestsInExpansion` and the `param/bare-brace-*` rows (#1587). Counting every brace instead made an escaped dollar open a level nothing could close, since `\$` is consumed as an escape pair and left its `{` to be read as a nested expansion — the double quote around the whole word was then eaten looking for the `}` that would balance it, which is why the failure read as an unterminated string (#1586)
   ```sh
   a=x; printf "[%s]" "${a/x/{y}"; printf "[%s]" "${a:-p{q}r}"; echo
   ```

@@ -37,8 +37,16 @@ func (r *Runner) ExpandParametersOnly(text string) (string, bool) {
 	if text == "" {
 		return "", true
 	}
-	spans := r.parseSpans(syntax.HeredocSpans(text, r.dialect()))
-	if !expandableSpans(spans) {
+	// Text that ran out inside an expansion is not expandable, which is the
+	// same answer this gives a substitution: a completer's job is to say
+	// nothing rather than to guess at what the unfinished text meant. No
+	// diagnostic either — a keystroke is not a line of script — so this asks
+	// the lexer itself rather than going through rawSpans.
+	spans, err := syntax.HeredocSpans(text, r.dialect())
+	if err != nil {
+		return "", false
+	}
+	if !expandableSpans(r.parseSpans(spans)) {
 		return "", false
 	}
 	return r.expandRawText(text), true

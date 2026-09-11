@@ -132,7 +132,10 @@ func TestADollarBracketIsReadWhereverASubstitutionIs(t *testing.T) {
 		t.Error("in quotes: no arithmetic span")
 	}
 
-	body := syntax.HeredocSpans("v=$[6*7]\n", d)
+	body, err := syntax.HeredocSpans("v=$[6*7]\n", d)
+	if err != nil {
+		t.Fatalf("in a here-document body: %v", err)
+	}
 	found = false
 	for _, s := range body {
 		if s.Kind == syntax.ArithSubst && s.Value == "6*7" {
@@ -144,7 +147,11 @@ func TestADollarBracketIsReadWhereverASubstitutionIs(t *testing.T) {
 	}
 	// And the flag reaches the body rather than being the word scanner's
 	// alone, so a dialect without it leaves the text there too.
-	for _, s := range syntax.HeredocSpans("v=$[6*7]\n", dollarBracket(false)) {
+	off, err := syntax.HeredocSpans("v=$[6*7]\n", dollarBracket(false))
+	if err != nil {
+		t.Fatalf("in a here-document body with the flag off: %v", err)
+	}
+	for _, s := range off {
 		if s.Kind == syntax.ArithSubst {
 			t.Error("in a here-document body: read as arithmetic with the flag off")
 		}

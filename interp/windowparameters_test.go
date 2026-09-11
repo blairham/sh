@@ -43,7 +43,10 @@ func windowShell(t *testing.T, rows, cols int) (*Runner, func(rows, cols int)) {
 		}
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { control.Close(); terminal.Close() })
+	t.Cleanup(func() {
+		_ = control.Close()
+		_ = terminal.Close()
+	})
 	resize := func(rows, cols int) {
 		t.Helper()
 		if err := pty.SetSize(terminal, rows, cols); err != nil {
@@ -168,7 +171,7 @@ func TestTheTerminalIsRememberedOnceItHasBeenSeen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer devNull.Close()
+	defer func() { _ = devNull.Close() }()
 	r.Stdin, r.Stderr = devNull, &output{}
 	if got, want := say(t, r, `echo "[$COLUMNS]"`), "[80]\n"; got != want {
 		t.Errorf("with no stream a terminal: got %q, want %q — the window is still the one this shell found", got, want)

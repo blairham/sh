@@ -105,7 +105,7 @@ func TestGlobFoldsCaseReachesOnlyPathnameExpansion(t *testing.T) {
 // operator, and not pathname expansion.
 //
 // The seam is inside parameter expansion rather than around it, which is the
-// part this test exists to hold: `${x#a}` and `${x//a/…}` are neighbours in
+// part this test exists to hold: `${x#a}` and `${x//a/…}` are neighbors in
 // the same `${ }` and answer differently, so a row using only the first says
 // nothing about the second. The comment on MatchFoldsCase claimed the whole
 // of parameter expansion was exempt on exactly that evidence, and was half
@@ -133,7 +133,7 @@ func TestMatchFoldsCaseReachesCaseConditionsAndSubstitutions(t *testing.T) {
 		{"a bracket in the pattern", `x=abc; echo ${x//[B]/X}`, "aXc"},
 		{"a wildcard beside the folded letter", `x=abc; echo ${x//b?/X}`, "aX"},
 
-		// The trims are the neighbours that stay exact, which is measured
+		// The trims are the neighbors that stay exact, which is measured
 		// and is what makes this a seam rather than a blanket rule.
 		{"not a prefix trim", `x=ABC; echo ${x#a}`, "ABC"},
 		{"not a suffix trim", `x=ABC; echo ${x%c}`, "ABC"},

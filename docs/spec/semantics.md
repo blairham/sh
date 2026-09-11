@@ -2072,14 +2072,20 @@ use; a second copy is how `print` came to write a replacement character
 where the shell it follows writes the encoding (#1840).
 
 **Above ASCII the panel is answering the locale and not the escape**, so
-nothing above it is pinned. Under `LC_ALL=C` — which is what the corpus
-harness runs in — bash writes `\u00E9` back with its digits upper-cased,
-zsh truncates its output at the escape, and ksh93 writes the UTF-8
-regardless; under `en_US.UTF-8` all three write `c3 a9`. A row that agreed
-there would be agreeing for the wrong reason, because this shell is
-locale-blind. Every corpus row for this escape is therefore **ASCII**, the
-rule `echo`'s own `\u` row already follows, and the locale question is
-#1851's rather than this axis's.
+these three rows keep to ASCII: the reading is what they are about, and
+ASCII is representable in every encoding, so it is the same in every
+locale. Under `LC_ALL=C` — which is what the corpus harness runs in —
+bash writes `\u00E9` back with its digits upper-cased, zsh truncates its
+output at the escape, and ksh93 writes the UTF-8 regardless; under
+`en_US.UTF-8` all three write `c3 a9`.
+
+That is a separate question and it now has a separate axis,
+`Semantics.UnicodeEscapeOutsideTheLocale`, with a corpus row of its own
+above ASCII — see *A code point the locale has no room for* below. At the
+`printf` sites it is **not** answered yet: ksh93 is locale-blind there and
+at `$'…'`, which makes the axis three-valued where `echo` needs only two,
+and the three-way measurement is recorded in #1851's successor rather
+than guessed at here.
 
 The escape is a question about the **format**. A `%b` argument asks the
 same four readings at its own site, through `PrintfBUnicodeEscape`, and
@@ -3358,12 +3364,69 @@ point are encoded rather than replaced — `\ud800` is `ed a0 80` and
 one of those. `interp.EncodeCodePoint` is the one encoder, exported because
 `print` reads the same escapes and must not grow a second.
 
-Above ASCII the two shells answer the **locale** rather than themselves, and
-this shell does not: in `LC_ALL=C`, zsh refuses `\u00e9` as `character not in
-range` and bash leaves the escape standing, where both write `c3 a9` in a
-UTF-8 locale and so do we. Recorded as #1851 rather than fixed — how much of a
-locale this shell has is a larger question than the escape — and it is why the
-corpus row keeps to ASCII code points.
+### A code point the locale has no room for
+
+Above ASCII the two shells answer the **locale** rather than themselves,
+and so does this one now. The reading is settled above; this is the
+question after it, and it is two questions rather than one.
+
+**Whether the locale has room** is state read off the runner's own
+variables, the way `PATH` and `IFS` are — not a second axis. `LC_ALL` over
+`LC_CTYPE` over `LANG`, the reader `${#s}` already uses, and a plain
+assignment is enough with no export. That this shell has a locale at all
+was decided once, for every operator, in *Locale, decided as a policy*
+below; nothing here invents it.
+
+**What happens when it has none** is the dialect's, and the two shells
+that have the escape split on it —
+`Semantics.UnicodeEscapeOutsideTheLocale`. Measured 2026-09-11 under
+`LC_ALL=C`, bytes read with `od`:
+
+| | `echo 'a\u00e9Z'` | then `echo AFTER` | status |
+| --- | --- | --- | --- |
+| bash 5.3 `-e` | `a\u00E9Z` | runs | 0 |
+| zsh 5.9.2 | `character not in range` on stderr, `a` and a newline on stdout | does **not** run | 0 |
+
+Three details of each are pinned because each is a way to get the answer
+wrong while looking right.
+
+The escape bash leaves standing is **normalized rather than echoed**:
+`\ue9` and `\U000000e9` both stand as `\u00E9`, so the digits are padded
+to four and upper-cased and the letter is chosen by the value rather than
+taken from the input; a value that will not fit in four digits takes
+`\U` and eight, `\U1F600` standing as `\U0001F600`.
+
+zsh's refusal is located as the **shell** and not as `echo` —
+`zsh:1: character not in range`, the same prefix from a `printf` format
+and from a `$'…'` in an assignment that never reached a command — which is
+the tell that this is a fact about reading a word. It reports **once**
+however many such escapes the word holds, the text stops at the first of
+them, and the status is **0**, so a script cannot see it in `$?`: `(exit
+3); echo 'a\u00e9Z'` also exits 0, which is what separates "zero" from
+"whatever it already was". A subshell absorbs the abandonment the way it
+absorbs any other, so `( echo 'a\u00e9Z' ); echo AFTER` reaches AFTER.
+
+The axis is asked **only** where an escape actually names a code point the
+locale refuses, so an ASCII one needs no answer from anybody — `\u007f` is
+the DEL byte in both shells under `LC_ALL=C` and `\u0080` is the first one
+outside — and neither does any escape at all in a UTF-8 locale.
+
+Two limits are stated rather than hidden.
+
+**An unset locale is left alone.** The panel disagrees about it and the
+disagreement is not this axis's: under `env -i`, bash writes `c3 a9` for
+the escape and answers 5 for `s=héllo; echo ${#s}`, while zsh refuses the
+escape and answers 6. So bash reads an unset locale as UTF-8-capable and
+zsh reads it as C. This shell answers zsh's for the length already, and
+narrowing the escape here would change an answer nobody measured for this
+operator while claiming to fix the one that was.
+
+**A single-byte encoding that is not ASCII is treated as ASCII.** bash
+transcodes there, writing `\u00e9` as the single byte `e9` under
+`en_US.ISO8859-1`, and this implementation has no charset tables. It is
+the limit `multibyteLocale` already records for the same reason — every
+non-UTF-8 encoding counts bytes — and the alternative is a table per
+charset.
 
 ### A hexadecimal escape with no digits
 
@@ -4654,9 +4717,19 @@ than assumed: bash stripped of every locale variable still uppercases
 `café` to `CAFÉ`, so unset is not C.
 
 Decided here once rather than one operator at a time, which is what issue
-#367 asked. Case conversion (`${x^^}` and family) follows it now; the
-character classes in globs, `[[ a < b ]]` and glob collation follow the
-same rule as each is brought to the measured behavior.
+#367 asked. Case conversion (`${x^^}` and family) follows it now, and so
+does a `\u` escape naming a code point the encoding has no room for — see
+*A code point the locale has no room for* above, which is the worked
+example of an operator being brought under this policy rather than
+deferred for it. The character classes in globs, `[[ a < b ]]` and glob
+collation follow the same rule as each is brought to the measured
+behavior.
+
+The reverse mistake is worth recording, since it cost this repository two
+releases of a known-and-unfixed issue: #1851 was deferred on the grounds
+that *"how much of a locale this shell has is a larger question than the
+escape"*, which had already been settled here. A policy decided in one
+place is only useful if the next operator looks for it.
 
 The corpus cannot catch this class of difference — `internal/oracle` pins
 `LC_ALL=C` for every run so the record does not depend on the developer's

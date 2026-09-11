@@ -704,7 +704,22 @@ var Corpus = []Case{
 	{
 		ID: "echo/the-unicode-escapes", Category: "builtins",
 		Snippet: `echo -e 'a\u0041Z:a\U00000041Z:a\u41Z' | od -An -tx1 | tr -s " "`,
-		Why:     "read as bytes, because the wrong answers all look like text: a code point written as one byte and the escape left standing are both printable. Two of the six have the pair and the other four write the characters as they stand, and the two that have it agree about everything — four digits after `\\u`, eight after `\\U`, and fewer accepted, which the third field is there to show. Every code point here is **ASCII** on purpose: the two shells that have the escape answer the *locale* for anything above it, and under the LC_ALL=C this harness runs in one of them refuses `\\u00e9` as `character not in range` and the other leaves the escape standing. That is a fact about the locale rather than about the escape, and this shell is locale-blind here — #1851",
+		Why:     "read as bytes, because the wrong answers all look like text: a code point written as one byte and the escape left standing are both printable. Two of the six have the pair and the other four write the characters as they stand, and the two that have it agree about everything — four digits after `\\u`, eight after `\\U`, and fewer accepted, which the third field is there to show. Every code point here is **ASCII** on purpose: the two shells that have the escape answer the *locale* for anything above it, and ASCII is representable in every encoding, so these three rows are about the escape and nothing else. The locale's own question is the row below, which is where the two part company (#1851)",
+	},
+	{
+		ID: "echo/a-unicode-escape-outside-the-locale", Category: "builtins",
+		Snippet: `echo -e 'a\u00e9Z' | od -An -tx1 | tr -s " "`,
+		Why: "the question *after* the escape has been read: what a shell does with a " +
+			"code point the locale's encoding cannot hold. The row above keeps to ASCII " +
+			"so that it is about the escape; this one is deliberately above it, and the " +
+			"two shells that have the escape give different answers — one leaves it " +
+			"standing with its digits normalized to four upper-case ones, the other " +
+			"reports `character not in range`, writes what came before it and abandons " +
+			"the script. Pinned rather than excluded as a locale-dependent case, for the " +
+			"reason `glob/matches-are-in-order` is: this harness fixes `LC_ALL=C`, so the " +
+			"answer is reproducible, and the C locale is the one this shell now models " +
+			"(#1851). The other four write the characters as they stand, having no such " +
+			"escape in `echo` at all",
 	},
 	{
 		ID: "echo/a-hexadecimal-escape-with-no-digits", Category: "builtins",

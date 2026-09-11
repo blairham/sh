@@ -2005,16 +2005,43 @@ func biEcho(r *Runner, _ context.Context, args []string) int {
 		// actually runs out of digits.
 		unicode := (strings.Contains(out, `\u`) || strings.Contains(out, `\U`)) &&
 			r.ask(r.sem().EchoExpandsUnicodeEscapes, "echo expanding \\uHHHH and \\UHHHHHHHH")
-		how := echoEscapes{hex: hex, esc: esc, capEsc: capEsc, unicode: unicode}
+		how := echoEscapes{
+			hex: hex, esc: esc, capEsc: capEsc, unicode: unicode,
+			// Handed in even where the dialect has no `\u`: the reader is
+			// only reached from the branch `unicode` guards, so a dialect
+			// without the escape never calls it, and a nil here would be a
+			// panic waiting for the first dialect that grows one.
+			codePoint: r.CodePointEscapeText,
+		}
 		if emptyHexRun(out, hex, unicode) {
 			how.emptyRunIsNul = r.ask(r.sem().EchoEmptyHexDigitRunIsNul,
 				"echo reading a hexadecimal escape with no digits")
 		}
-		var stopped bool
-		out, stopped = expandEchoEscapes(out, how)
+		var stopped, refused bool
+		out, stopped, refused = expandEchoEscapes(out, how)
 		if stopped {
 			// `\c` ends the output, newline included.
 			newline = false
+		}
+		if refused {
+			// Reported once, here, however many escapes the argument held —
+			// and *before* the output, which is the order the two streams
+			// actually come out in: the shell that refuses reads the word
+			// before `echo` writes anything.
+			//
+			// The text before the escape is still written, with the closing
+			// newline `echo` would have added. Measured: `echo "a<esc>Z"`
+			// leaves `a` and a newline, and `echo -n` the same without one.
+			r.RefuseCodePoint()
+			if newline {
+				out += "\n"
+			}
+			if out != "" {
+				if _, err := r.stdout().Write([]byte(out)); err != nil {
+					r.writeFailed = err
+				}
+			}
+			return r.status
 		}
 	}
 	if newline {
@@ -2094,6 +2121,14 @@ type echoEscapes struct {
 	capEsc        bool
 	unicode       bool
 	emptyRunIsNul bool
+	// codePoint turns one escape's value into text, with the locale
+	// consulted — see Runner.CodePointEscapeText. A closure rather than a
+	// flag because the answer is a dialect's *and* the runner's variables,
+	// and expandEchoEscapes is a pure function of its two arguments.
+	//
+	// nil where no `\u` escape can be reached, which is every dialect
+	// without the escape and every argument without one in it.
+	codePoint func(int) (string, bool)
 }
 
 // emptyHexRun reports whether the text carries a hexadecimal escape that runs
@@ -2124,8 +2159,10 @@ func emptyHexRun(s string, hex, unicode bool) bool {
 // have one each and not the other, and the two Unicode letters together,
 // because no shell measured has one without the other.
 // stopped reports a `\c`, which discards the rest of the output and the
-// closing newline with it.
-func expandEchoEscapes(s string, how echoEscapes) (expanded string, stopped bool) {
+// closing newline with it. refused reports an escape the locale has no room
+// for in a dialect that refuses one, which ends the text the same way and is
+// the caller's to report and abandon on — see Runner.RefuseCodePoint.
+func expandEchoEscapes(s string, how echoEscapes) (expanded string, stopped, refused bool) {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] != '\\' || i+1 >= len(s) {
@@ -2139,7 +2176,7 @@ func expandEchoEscapes(s string, how echoEscapes) (expanded string, stopped bool
 		}
 		switch s[i] {
 		case 'c':
-			return b.String(), true
+			return b.String(), true, false
 		case 'e', 'E':
 			admitted := how.esc
 			if s[i] == 'E' {
@@ -2192,14 +2229,21 @@ func expandEchoEscapes(s string, how echoEscapes) (expanded string, stopped bool
 				b.WriteByte(s[i])
 				break
 			}
-			b.WriteString(EncodeCodePoint(n))
+			text, no := how.codePoint(n)
+			if no {
+				// A code point the locale cannot hold, in the dialect that
+				// refuses one. What came before the escape is still written
+				// — measured — and nothing after it is.
+				return b.String(), false, true
+			}
+			b.WriteString(text)
 			i = j - 1
 		default:
 			b.WriteByte('\\')
 			b.WriteByte(s[i])
 		}
 	}
-	return b.String(), false
+	return b.String(), false, false
 }
 
 // hexRun reads up to max hexadecimal digits from i, and reports the value and

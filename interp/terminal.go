@@ -125,3 +125,42 @@ func (r *Runner) terminalTest(operand string) (answer, isNumber bool) {
 	}
 	return r.descriptorIsTerminal(fd), true
 }
+
+// terminalSize is how big the terminal this shell holds is, or zeroes where
+// there is none and where the kernel declines to say.
+//
+// The stream table and not the process's, which is the distinction
+// descriptorIsTerminal draws and for the same reason: a Runner embedded in
+// another program may have been handed a pipe while the program around it sits
+// at a terminal, and the shell's window is the shell's.
+//
+// **The terminal is remembered once it has been seen**, and that is measured
+// rather than convenient. zsh 5.9.2 keeps the terminal it found at startup and
+// answers from it however the script has since redirected itself: under a
+// pseudo-terminal 100 columns wide,
+//
+//	zsh -f -c 'v=$( { print -r -- "c=[$COLUMNS]" ; } 0</dev/null 2>/dev/null ); print -r -- "$v"'
+//
+// prints `c=[100]` with not one of the three streams a terminal at the moment
+// of the read. A reader that only ever looked at the streams it holds would
+// say 0 there, and would be wrong in silence — the shape a width is most
+// dangerous in, because every arithmetic it feeds still produces a number.
+//
+// Fresh first and remembered second, in that order: a session whose stdin is
+// still the terminal must not be answered from a stale one, and a remembered
+// file that has since been closed answers zero through the ioctl rather than
+// through a branch here.
+func (r *Runner) terminalSize() (rows, cols int) {
+	for _, held := range []any{r.stdin(), r.stdout(), r.stderr()} {
+		f, ok := held.(*os.File)
+		if !ok || !tty.IsTerminal(f) {
+			continue
+		}
+		r.windowTerminal = f
+		return tty.Size(f)
+	}
+	if r.windowTerminal != nil {
+		return tty.Size(r.windowTerminal)
+	}
+	return 0, 0
+}

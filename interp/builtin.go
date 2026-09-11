@@ -1465,6 +1465,17 @@ func (r *Runner) unsetName(name string) {
 // shell has, and the associative attribute *is* the table, so deleting the
 // table is what takes the attribute off.
 func (r *Runner) clearAttributes(name string) {
+	if r.isWindowSizeParameter(name) {
+		// Except for a name the *shell* is, whose attributes are not a
+		// script's to lose. Measured on zsh 5.9.2: `unset COLUMNS` leaves
+		// `${(t)COLUMNS}` empty, as it does for any name that is gone, and a
+		// later `COLUMNS="3+4"` is **7** at `integer-special` — so the
+		// integer letter and its base came back with the parameter rather
+		// than having been removed with it. Dropping them made the same line
+		// store the three characters `3+4` as a scalar.
+		delete(r.hideInScope, name)
+		return
+	}
 	// The list itself is shared with the shadow, which takes the same
 	// attributes off for a reason of its own — see localattributes.go.
 	r.dropNameAttributes(name)

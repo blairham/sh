@@ -2304,13 +2304,22 @@ func Apply(r *interp.Runner) {
 	// there is nothing in setopt.go for a script to turn off. Measured
 	// 2026-09-08 through a pseudo-terminal against zsh 5.9.2 started with
 	// `-f`, which reports `COLUMNS=80 LINES=24` at its first prompt and
-	// `132`/`40` at the next prompt after a resize — the same two numbers
-	// bash answers with `checkwinsize` on.
+	// `132`/`40` at the next prompt after a resize.
 	//
-	// The same core switch bash's `checkwinsize` moves. One capability with
-	// two shells' worth of naming above it is exactly the shape a second copy
-	// gets written into, so there is one: interp.Runner.TracksWindowSize.
-	r.SetTracksWindowSize(true)
+	// **Not the switch bash's `checkwinsize` moves**, which is what this line
+	// used to be and what #2107 is. That switch is permission for the front
+	// end to *assign* two variables once per prompt, and it is right for
+	// bash — measured, bash has the pair only when it is interactive and
+	// leaves both unset otherwise. This shell's are parameters of the
+	// language: present under plain `-c` with no prompt anywhere, `0` rather
+	// than unset where there is no terminal at all, `integer-special` to
+	// `${(t)}`, and following a window that changes while a script runs. A
+	// prompt theme measures itself against them — powerlevel10k saves
+	// `$COLUMNS`, forces 1024, and shortens the directory to what is left —
+	// so with the pair merely unset the arithmetic ran on an empty word and
+	// the path came out at full length. See interp.Runner.ProvideWindowSize,
+	// which holds the four answers and the rule about assignment.
+	r.ProvideWindowSize()
 	// A job still running holds the exit here, where bash needs to be asked:
 	// measured, zsh 5.9.2 started with `-f` answers `sleep 40 &` then `exit`
 	// with `you have running jobs.` and stays, and bash 5.3.15 leaves. Both

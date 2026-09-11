@@ -964,6 +964,21 @@ type Runner struct {
 	// question three of the six columns do not ask. Each dialect turns it on
 	// in Apply where its shell does.
 	tracksWindowSize bool
+	// windowTerminal is the terminal this shell found, remembered so that a
+	// read after the script has redirected itself still has one to ask. See
+	// Runner.terminalSize, where the measurement that says to remember it is.
+	windowTerminal *os.File
+	// windowRows and windowCols are how big that terminal was when $LINES and
+	// $COLUMNS last answered, and windowSettled says the pair has been read at
+	// least once. Together they are the memory the rule needs: a window that
+	// *changed* supersedes what a script assigned, and "changed" cannot be
+	// asked without a number to compare against. See windowSizeValue.
+	windowRows, windowCols int
+	windowSettled          bool
+	// providesWindowSize says this shell has $COLUMNS and $LINES as
+	// parameters of its own rather than as variables something assigns. See
+	// ProvideWindowSize, and Runner.TracksWindowSize for the other reading.
+	providesWindowSize bool
 	// autoCd is permission to read a bare directory name as a `cd`. bash
 	// spells it `autocd` and zsh spells it `autocd` too — the same name in
 	// two option namespaces, which is exactly why the behavior cannot live in

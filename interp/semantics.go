@@ -1234,6 +1234,50 @@ type Semantics struct {
 	//
 	// Asked only where a `%b` argument actually carries a `\x`.
 	PrintfBHexEscape PrintfHexEscapePolicy
+	// PrintfUnicodeEscape is how a printf format reads `\uHHHH` and
+	// `\UHHHHHHHH`, and it is four answers rather than a presence — the same
+	// shape PrintfHexEscape has, arrived at from the same three questions and
+	// splitting in a different place:
+	//
+	//	printf 'a\u0041Z'  bash 5.3, ksh93, zsh  aAZ
+	//	                    bash 3.2, dash  a\u0041Z
+	//	printf 'a\uZ'      bash 5.3  a\uZ, and `printf: missing unicode digit
+	//	                              for \u` on standard error, status 0
+	//	                    zsh       a<0x00>Z
+	//	                    ksh93     a  — the rest of the format pass is
+	//	                              dropped, and the loop over the operands
+	//	                              goes on, so `printf '[%s]\uZ' x y` is
+	//	                              `[x][y]`
+	//
+	// That fourth reading is why this is not PrintfHexEscapePolicy under
+	// another name: no `\x` anywhere in the panel drops what follows it.
+	//
+	// Four digits after `\u` and eight after `\U`, and fewer are accepted:
+	// `a\u41Z` is `aAZ` in all three that have the escape, and `a\u00410` is
+	// an `A` followed by a zero. The value is a code point written in UTF-8
+	// rather than a byte, and it is the *original* UTF-8 rather than the
+	// range Unicode later kept — see EncodeCodePoint, which is the one
+	// encoder both escape sites and `echo` share.
+	//
+	// Asked only where a `\u` or a `\U` is actually in the format. It is a
+	// question about the *format*, and never about a `%b` argument: that
+	// site has its own axis, PrintfBUnicodeEscape below.
+	PrintfUnicodeEscape PrintfUnicodeEscapePolicy
+	// PrintfBUnicodeEscape is how a `%b` argument reads `\u` and `\U`, which
+	// is a different question from the one PrintfUnicodeEscape answers, and
+	// ksh93 is again the shell that separates them:
+	//
+	//	printf '%b' 'a\u0041Z'  bash 5.3, zsh  aAZ
+	//	                         bash 3.2, dash, ksh93  as written
+	//
+	// So ksh93 reads the escape in a format and writes the characters as
+	// they stand in a `%b`, exactly as it does for `\x`. No dialect in the
+	// panel answers this site with the truncating reading; the enumeration is
+	// shared because a shell that has the escape here reads its digits the
+	// way it reads a format's.
+	//
+	// Asked only where a `%b` argument actually carries a `\u` or a `\U`.
+	PrintfBUnicodeEscape PrintfUnicodeEscapePolicy
 	// PrintfBEscEscape admits `\e` in a `%b` argument for the escape
 	// character: bash and zsh do, dash and ksh93 write the two characters.
 	//
@@ -6995,6 +7039,94 @@ func (r *Runner) bHexEscape() PrintfHexEscapePolicy {
 	if p == PrintfHexEscapeUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			r.unanswered(`printf: \x in a %b argument`)))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// PrintfUnicodeEscapePolicy is how a printf format reads `\uHHHH` and
+// `\UHHHHHHHH`.
+//
+// Four answers, and they are not PrintfHexEscapePolicy's four. The two escapes
+// ask the same three questions and the panel answers them in different places:
+//
+//   - Whether the escape exists. bash 3.2 and dash have no `\u` at all, so
+//     `printf 'a\u0041Z'` is the ten characters as written. bash 5.3 has it
+//     under either argv[0], so the panel's `bash` and `bash-as-sh` columns
+//     agree here and it is the *version* that decides rather than the name.
+//   - How wide the digit run is. Unanimous among the three that have it, and
+//     the one question `\x` splits on that this one does not: four digits
+//     after `\u` and eight after `\U`, with fewer accepted and the run ending
+//     at the first character that is not a digit.
+//   - What an empty digit run means. bash 5.3 leaves the escape standing and
+//     says so on standard error; zsh reads it as a zero and writes a NUL;
+//     ksh93 drops the rest of that pass over the format.
+//
+// The last of those is the reading no `\x` has anywhere in the panel, and it
+// is why this is its own enumeration rather than the hexadecimal one reused.
+// It is a *pass* that ends and not the builtin: the operands go on being
+// consumed, so `printf '[%s]\uZ' x y` is `[x][y]` there, where a `\c` that
+// stops — see PrintfBackslashCStops — would write `[x]` and end.
+type PrintfUnicodeEscapePolicy int
+
+const (
+	// PrintfUnicodeEscapeUnspecified is no answer, and is refused like any
+	// other.
+	PrintfUnicodeEscapeUnspecified PrintfUnicodeEscapePolicy = iota
+	// PrintfUnicodeEscapeAbsent has no `\u` or `\U` at all, so the backslash
+	// and the letter stand as written: bash 3.2 and dash.
+	PrintfUnicodeEscapeAbsent
+	// PrintfUnicodeEscapeCodePoint reads the digits and leaves an escape with
+	// no digit after it as written, with a complaint that does not change the
+	// status: bash 5.3.
+	PrintfUnicodeEscapeCodePoint
+	// PrintfUnicodeEscapeCodePointOrNul reads the same digits, and an empty
+	// digit run as a zero: zsh.
+	PrintfUnicodeEscapeCodePointOrNul
+	// PrintfUnicodeEscapeCodePointOrTruncate reads the same digits, and an
+	// empty digit run ends this pass over the format: ksh93.
+	PrintfUnicodeEscapeCodePointOrTruncate
+)
+
+func (p PrintfUnicodeEscapePolicy) String() string {
+	switch p {
+	case PrintfUnicodeEscapeAbsent:
+		return "absent"
+	case PrintfUnicodeEscapeCodePoint:
+		return "a code point, and no digits stands as written"
+	case PrintfUnicodeEscapeCodePointOrNul:
+		return "a code point, and no digits is a NUL"
+	case PrintfUnicodeEscapeCodePointOrTruncate:
+		return "a code point, and no digits ends the pass"
+	}
+	return "unspecified"
+}
+
+// unicodeEscape resolves the axis, and only for a format that has a `\u` or a
+// `\U` in it.
+func (r *Runner) unicodeEscape() PrintfUnicodeEscapePolicy {
+	p := r.sem().PrintfUnicodeEscape
+	if p == PrintfUnicodeEscapeUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered(`printf: \u`)))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// bUnicodeEscape resolves the `%b` site's reading, and only for an argument
+// that has a `\u` or a `\U` in it.
+//
+// Separate from unicodeEscape because the site is half the question: ksh93
+// reads a format's `\u0041` and writes the ten characters as they stand in a
+// `%b`.
+func (r *Runner) bUnicodeEscape() PrintfUnicodeEscapePolicy {
+	p := r.sem().PrintfBUnicodeEscape
+	if p == PrintfUnicodeEscapeUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered(`printf: \u in a %b argument`)))
 		r.status = 2
 		r.unspecified = true
 	}

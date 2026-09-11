@@ -1066,6 +1066,11 @@ func Semantics() interp.Semantics {
 	s.PrintfHexEscape = interp.PrintfHexEscapeByteOrNul
 	// A `%b` argument reads the same escape the same way, NUL and all.
 	s.PrintfBHexEscape = interp.PrintfHexEscapeByteOrNul
+	// `\u` and `\U` at both sites, and an empty digit run is a zero here
+	// too: `printf 'a\uZ'` is an `a`, a NUL and a `Z`, where bash leaves the
+	// escape standing and complains.
+	s.PrintfUnicodeEscape = interp.PrintfUnicodeEscapeCodePointOrNul
+	s.PrintfBUnicodeEscape = interp.PrintfUnicodeEscapeCodePointOrNul
 	// `\e` is the escape character and `\E` is two characters — the opposite
 	// of ksh93, which is why one axis could not answer for both letters.
 	s.PrintfBEscEscape = interp.Yes

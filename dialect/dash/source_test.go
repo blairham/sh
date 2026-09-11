@@ -415,6 +415,22 @@ func TestPrintfHasNoHexEscape(t *testing.T) {
 	}
 }
 
+// No `\u` or `\U` at either site either: the backslash and the letter stand
+// as written, which is this shell's answer for `\x` as well.
+func TestPrintfHasNoUnicodeEscape(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a\u0041Z'`, `a\u0041Z`},
+		{`printf 'a\U00000041Z'`, `a\U00000041Z`},
+		{`printf 'a\uZ'`, `a\uZ`},
+		{`printf '%b' 'a\u0041Z'`, `a\u0041Z`},
+	} {
+		if out, st := runDash(t, dir, tc.src+"\n"); out != tc.want || st != 0 {
+			t.Errorf("%s: said % x status %d, want % x and 0", tc.src, out, st, tc.want)
+		}
+	}
+}
+
 // The `%b` escape table this shell answers for. dash has no `\x` and neither
 // spelling of the escape character at either site, and it reads a bare
 // `\101` as an `A` — the one thing it and bash agree on that ksh93 and zsh

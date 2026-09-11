@@ -109,7 +109,7 @@ const systemLockStore = ".zsh.flock"
 const systemLockPollDefault = 10 * time.Millisecond
 
 // zsystemBuiltin is `zsystem <subcommand> [args]`.
-func zsystemBuiltin(r *interp.Runner, _ context.Context, args []string) int {
+func zsystemBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if len(args) == 0 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
@@ -118,7 +118,7 @@ func zsystemBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	case "supports":
 		return zsystemSupports(r, args[1:])
 	case "flock":
-		return zsystemFlock(r, args[1:])
+		return zsystemFlock(r, ctx, args[1:])
 	}
 	r.Diagnosef("unknown subcommand: %s\n", args[0])
 	return 1
@@ -163,7 +163,7 @@ type zsystemFlockOpts struct {
 
 // zsystemFlock is `zsystem flock [-r] [-t timeout] [-i interval] [-f var]
 // file` and `zsystem flock -u fd`.
-func zsystemFlock(r *interp.Runner, args []string) int {
+func zsystemFlock(r *interp.Runner, ctx context.Context, args []string) int {
 	opts, rest, code := zsystemFlockOptions(r, args)
 	if code != 0 {
 		return code
@@ -179,7 +179,7 @@ func zsystemFlock(r *interp.Runner, args []string) int {
 	if opts.unlock {
 		return zsystemUnlock(r, rest[0])
 	}
-	return zsystemLock(r, opts, rest[0])
+	return zsystemLock(r, ctx, opts, rest[0])
 }
 
 // zsystemFlockOptions reads `flock`'s option words.
@@ -286,7 +286,7 @@ func zsystemFlockSeconds(r *interp.Runner, opts *zsystemFlockOpts, letter byte, 
 
 // zsystemLock opens the file and takes the lock, and is where the three
 // statuses of a failure are decided. See the note at the top of this file.
-func zsystemLock(r *interp.Runner, opts zsystemFlockOpts, name string) int {
+func zsystemLock(r *interp.Runner, ctx context.Context, opts zsystemFlockOpts, name string) int {
 	if !systemLockSupported {
 		// A platform with no record locking. Nothing is opened and nothing is
 		// claimed, which is the answer `zsystem supports flock` has already
@@ -298,12 +298,24 @@ func zsystemLock(r *interp.Runner, opts zsystemFlockOpts, name string) int {
 	if opts.read {
 		direction, verb = "reading", true
 	}
-	f, err := systemLockOpen(shellPath(r, name), verb)
+	path := shellPath(r, name)
+	// A lock is taken by opening the file, so it is an open and goes through
+	// the gate like one (#1805). Recorded as a write unless `-r` asked for a
+	// read lock, which is the access it actually makes.
+	action, ok := r.AllowOpen(ctx, path, !verb)
+	if !ok {
+		return 1
+	}
+	f, err := systemLockOpen(path, verb)
 	if err != nil {
 		// No `flock:` on this one, measured: the sentence names the file and
 		// what it was to be opened for, which is already more than the
 		// subcommand's name would add.
 		r.Diagnosef("failed to open %s for %s: %s\n", name, direction, sysErrnoText(err))
+		return 1
+	}
+	if !r.VerifyOpened(ctx, &action, f) {
+		_ = f.Close()
 		return 1
 	}
 	held, err := systemLockTake(int(f.Fd()), opts.read, !opts.timed, opts.timeout, opts.interval)

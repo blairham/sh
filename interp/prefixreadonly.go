@@ -170,13 +170,6 @@ func (r *Runner) prefixRefusalCost(p prefixCommand) (fatal, skip bool, unanswere
 // is: it is never `export x=2`, so the declaration wording and the builtin's
 // name in the location are never this refusal's, whatever builtin happens to
 // be running the command it is prefixed to.
-//
-// A loop rather than a check on the first one, because bash and bash 3.2 name
-// *every* frozen name in the prefix: `readonly x=1 z=9; x=2 z=8 cmd` writes
-// two complaints, in the order they were written. The shells that name only
-// the first are the ones that do not run the command, and they stop at the
-// first refusal — so which of the two happens is
-// PrefixRefusalCostsTheCommand's, and the loop asks it once, after.
 func (r *Runner) refusePrefixes(assigns []*syntax.Assign, p prefixCommand, report bool) (refused, stop bool) {
 	var frozen []string
 	for _, a := range assigns {
@@ -212,8 +205,8 @@ func (r *Runner) refusePrefixes(assigns []*syntax.Assign, p prefixCommand, repor
 		// A shell that carries on names *every* frozen name in the prefix,
 		// in written order; one that gives the command up stops at the first.
 		// So the count is not an answer of its own — it follows from the cost
-		// — and `readonly x=1 z=9; x=2 z=8 cmd` writes two complaints in bash
-		// and one in ksh93 and zsh.
+		// — and `readonly x=1 z=9; x=2 z=8 /bin/echo RAN` writes two
+		// complaints in bash and one in ksh93, zsh and dash.
 		named := frozen
 		if skip {
 			named = frozen[:1]

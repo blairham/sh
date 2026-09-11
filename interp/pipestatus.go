@@ -74,7 +74,46 @@ func (r *Runner) recordSingleStatus(p *syntax.Pipeline) {
 	if !p.Negated && !r.countsForPipelineStatus(p.Cmds[0]) {
 		return
 	}
-	r.recordPipeStatus([]int{r.status})
+	r.recordPipeStatus([]int{r.singleStatusRecorded(p)})
+}
+
+// singleStatusRecorded is the status a pipeline of one writes down, which is
+// not always the one it reported.
+//
+// The pre-inversion status in general — `! false` records 1 in both shells
+// that keep a record — and the post-inversion one for the two constructs one
+// dialect writes the record *after* negating. See
+// Semantics.NegatedTestRecordsThePostNegationStatus, where the panel is
+// measured.
+//
+// Asked only where the answer could differ: a pipeline with no `!` in front
+// of it, and one whose command is anything but those two constructs, has one
+// status and not two.
+func (r *Runner) singleStatusRecorded(p *syntax.Pipeline) int {
+	if !p.Negated || !isTestOrArithmetic(p.Cmds[0]) {
+		return r.status
+	}
+	if !r.ask(r.sem().NegatedTestRecordsThePostNegationStatus,
+		"a negated `[[ … ]]` recording the status after the negation") {
+		return r.status
+	}
+	if r.status == 0 {
+		return 1
+	}
+	return 0
+}
+
+// isTestOrArithmetic reports whether this command is one of the two the axis
+// above is about. A redirection does not take it out of the pair, which is
+// measured and is the difference from countsForPipelineStatus below: the
+// record is written after the negation there whether or not the construct
+// made a job.
+func isTestOrArithmetic(c syntax.Command) bool {
+	switch c.(type) {
+	case *syntax.TestClause, *syntax.ArithCmdClause:
+		return true
+	}
+	return false
 }
 
 // countsForPipelineStatus reports whether this command writes the record.

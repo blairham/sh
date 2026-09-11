@@ -3584,6 +3584,35 @@ type Semantics struct {
 	// runs all three without making a job, and a job is what writes the
 	// record.
 	TestAndArithmeticUpdatePipelineStatus Answer
+	// NegatedTestRecordsThePostNegationStatus writes the status a `!` in
+	// front of `[[ … ]]` or `(( … ))` produced, rather than the one the
+	// construct itself reported.
+	//
+	// Measured 2026-09-11, after `false | true` so the record is visibly
+	// replaced:
+	//
+	//	                       ! [[ a = a ]]   ! [[ a = b ]]   ! false
+	//	bash 5.3.15            1               0               1
+	//	bash 3.2.57            1               0               1
+	//	zsh 5.9.2              0               1               1
+	//
+	// The first two columns are the axis and the third is why it is confined
+	// to these two constructs: an ordinary command records what *it*
+	// reported in both shells, so `!` is not a rule about negation in
+	// general. `! { [[ a = a ]]; }` and `! ( [[ a = a ]] )` record 0 in bash
+	// as well — the compound reports its own status and the `!` does not
+	// reach the record — which is what says this is about the construct and
+	// not about the shape of the line.
+	//
+	// A redirection does not move it: `! [[ a = a ]] >/dev/null` is 1 in
+	// bash, the same as without one, where a redirection *does* move the
+	// axis above. So the two are asked separately even though they name the
+	// same two constructs.
+	//
+	// Silent when it is wrong: a plausible one-element record, no diagnostic,
+	// and a script branching on `${PIPESTATUS[0]}` after a negated test reads
+	// the opposite of what the shell it was written for reports (#1513).
+	NegatedTestRecordsThePostNegationStatus Answer
 	// UnsetEndsTheProducedPipelineStatus makes `unset` permanent. zsh says
 	// yes and the name never fills again; in bash the producer outlives it.
 	// It is the opposite of what a produced *scalar* does, where unset ends

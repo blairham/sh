@@ -567,6 +567,10 @@ func Semantics() interp.Semantics {
 	s.ArrayNameWithoutSubscriptIsTheList = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.No
 	s.TestAndArithmeticUpdatePipelineStatus = interp.No
+	// And where bash writes the record after negating one of those two, this
+	// shell writes what the construct itself reported: `false | true;
+	// ! [[ a = a ]]` leaves 0 here and 1 there. Measured 2026-09-11.
+	s.NegatedTestRecordsThePostNegationStatus = interp.No
 	s.UnsetEndsTheProducedPipelineStatus = interp.Yes
 	s.SelectLayout = interp.SelectMenuColumns
 	s.SelectPromptNeedsTerminal = interp.No

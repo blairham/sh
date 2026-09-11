@@ -2555,7 +2555,42 @@ just ran and the pipeline inside it is over. `!` does not reach it either —
 after `! false | true` the record is `1 0` and `$?` is 1, so the record is
 taken before the inversion.
 
-Two things about it are axes:
+**Except for two constructs in one shell.** Measured 2026-09-11, after a
+`false | true` so the replacement is visible:
+
+|  | bash 5.3.15 | bash 3.2.57 | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `! [[ a = a ]]` | **1** | **1** | 0 |
+| `! [[ a = b ]]` | **0** | **0** | 1 |
+| `! (( 1 ))` | **1** | **1** | 0 |
+| `! false` | 1 | 1 | 1 |
+| `! true` | 0 | 0 | 0 |
+| `! x=1` | 0 | 0 | 0 |
+| `! { [[ a = a ]]; }` | 0 | 0 | — |
+| `! ( [[ a = a ]] )` | 0 | 0 | — |
+
+bash writes the record for `[[ … ]]` and `(( … ))` **after** the negation
+and for everything else before it. The first two rows are the axis and need
+both: a probe using only a matching test records 0 under one answer and 1
+under the other, and a failing one records them the other way round, so
+either alone passes for a shell that always writes the same number. Rows 4
+to 6 are what confine it to those two constructs — an ordinary command and
+an assignment record what *they* reported in both shells — and rows 7 and 8
+say it is about the construct rather than about the shape of the line: a
+compound holding the same test records its own status, with the `!` not
+reaching the record.
+
+A redirection does not move it. `! [[ a = a ]] >/dev/null` is 1 in bash, the
+same as without one, where a redirection *does* decide whether the construct
+counts as a command at all — so `NegatedTestRecordsThePostNegationStatus` is
+asked separately from the axis below even though the two name the same pair
+of constructs.
+
+Silent when it is wrong: a plausible one-element record, no diagnostic, and
+a script branching on `${PIPESTATUS[0]}` after a negated test reads the
+opposite of what the shell it was written for reports (#1513).
+
+Two more things about it are axes:
 
 - **a bare assignment counts as a command.** bash says yes, so
   `false | true; x=1` leaves one element holding 0; zsh says no and leaves

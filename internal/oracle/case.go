@@ -10989,7 +10989,32 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 	{
 		ID: "pipestatus/a-negated-test-clause-in-zsh", Category: "pipeline status",
 		Snippet: `false | true; ! [[ a = a ]]; echo "st=$? [${pipestatus[@]}]"`,
-		Why:     "`!` is the other escape hatch, and the status recorded is the one from before the inversion: `$?` is 1 where the record holds 0",
+		Why:     "`!` is the other escape hatch, and in this shell the status recorded is the one from before the inversion: `$?` is 1 where the record holds 0. bash writes the record *after* negating this construct and holds 1 — the row below, under its own name for the record (#1513)",
+	},
+	{
+		ID: "pipestatus/a-negated-test-clause", Category: "pipeline status",
+		Snippet: `false | true; ! [[ a = a ]]; echo "st=$? [${PIPESTATUS[@]}]"`,
+		Why:     "the same line under bash's name, and the two do not agree: bash records the status the negation produced where zsh records the one the construct reported. This shell held 0 in the bash dialect and should hold 1 — silent, a plausible one-element record, and the opposite of what a script branching on `${PIPESTATUS[0]}` after a negated test was written against (#1513)",
+	},
+	{
+		ID: "pipestatus/a-negated-failing-test-clause", Category: "pipeline status",
+		Snippet: `false | true; ! [[ a = b ]]; echo "st=$? [${PIPESTATUS[@]}]"`,
+		Why:     "the discriminating half of the pair: the test now fails, so the two readings swap answers — pre-negation is 1 and post-negation is 0. Either row alone passes for a shell that always writes the same number, which is why both are here",
+	},
+	{
+		ID: "pipestatus/a-negated-failing-test-clause-in-zsh", Category: "pipeline status",
+		Snippet: `false | true; ! [[ a = b ]]; echo "st=$? [${pipestatus[@]}]"`,
+		Why:     "and the same swap under the other name, where the record holds 1 for a test that failed — the reading bash does not take",
+	},
+	{
+		ID: "pipestatus/a-negated-command-records-what-it-reported", Category: "pipeline status",
+		Snippet: `false | true; ! false; echo "st=$? [${PIPESTATUS[@]}]"`,
+		Why:     "what confines the row above to `[[ … ]]` and `(( … ))`: an ordinary command under `!` records what it reported in both shells that keep a record, so `! false` holds 1 while `$?` is 0. A rule about negation in general would answer 0 here",
+	},
+	{
+		ID: "pipestatus/a-negated-compound-records-its-own-status", Category: "pipeline status",
+		Snippet: `false | true; ! { [[ a = a ]]; }; echo "st=$? [${PIPESTATUS[@]}]"`,
+		Why:     "the same test one brace deeper, and it answers the other way: a compound records its own status and the `!` does not reach the record, so this is 0 where the bare `! [[ a = a ]]` is 1 in bash. It is what says the rule is about the construct rather than about the shape of the line",
 	},
 	{
 		ID: "pipestatus/a-redirected-bare-assignment-in-zsh", Category: "pipeline status",

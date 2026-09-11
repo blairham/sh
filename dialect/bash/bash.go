@@ -237,6 +237,12 @@ func Semantics() interp.Semantics {
 	s.TransformLetterCheckedOnlyWhenValued = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.Yes
 	s.TestAndArithmeticUpdatePipelineStatus = interp.Yes
+	// And the record for one of those two is written *after* a `!` in front
+	// of it: `false | true; ! [[ a = a ]]` leaves 1 here and 0 in zsh.
+	// Measured 2026-09-11 on 5.3.15 and 3.2.57 alike. An ordinary command is
+	// not affected — `! false` records 1 in both — so this is a rule about
+	// the construct rather than about negation (#1513).
+	s.NegatedTestRecordsThePostNegationStatus = interp.Yes
 	s.UnsetEndsTheProducedPipelineStatus = interp.No
 	s.SelectLayout = interp.SelectMenuVerticalThenColumns
 	s.SelectPromptNeedsTerminal = interp.No

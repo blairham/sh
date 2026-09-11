@@ -196,6 +196,13 @@ func TestNegationAndRedirectionAlwaysWriteTheRecord(t *testing.T) {
 			out, _ := runGrammar(t, src, enableTestAndArith, named("P", func(s *Semantics) {
 				s.TestAndArithmeticUpdatePipelineStatus = a
 				s.AssignmentUpdatesPipelineStatus = a
+				// *Whether* a negated construct writes the record is this
+				// test's subject; *which* status it writes is the axis
+				// NegatedTestRecordsThePostNegationStatus answers, and both
+				// of its answers are covered in
+				// TestANegatedTestRecordsOneStatusOrTheOther. Answered here
+				// so this asks its own question rather than that one.
+				s.NegatedTestRecordsThePostNegationStatus = No
 			}))
 			// The status recorded under `!` is the one from before the
 			// inversion, so every line here leaves a single 0.
@@ -294,5 +301,73 @@ func TestNoNameAsksNoAxis(t *testing.T) {
 	}
 	if got := out.String(); got != "done\n" {
 		t.Errorf("got %q, want no dialect to be needed", got)
+	}
+}
+
+// NegatedTestRecordsThePostNegationStatus, both answers — #1513.
+//
+// The record a negated `[[ … ]]` leaves is the construct's own status under
+// one answer and the negation's result under the other, and the pair of
+// subjects is what makes the row discriminating: a probe using only a
+// *matching* test records 0 under one answer and 1 under the other, and a
+// probe using only a failing one records the two the other way round, so
+// either alone passes for a shell that always writes the same number.
+//
+// `! false` is the third row and the reason the axis names these two
+// constructs rather than negation: an ordinary command records what it
+// reported whatever the answer.
+func TestANegatedTestRecordsOneStatusOrTheOther(t *testing.T) {
+	for _, c := range []struct{ src, post, pre string }{
+		{`false | true; ! [[ a = a ]]; echo "${P[@]}"`, "1", "0"},
+		{`false | true; ! [[ a = b ]]; echo "${P[@]}"`, "0", "1"},
+		{`false | true; ! (( 1 )); echo "${P[@]}"`, "1", "0"},
+		{`false | true; ! (( 0 )); echo "${P[@]}"`, "0", "1"},
+		// A redirection makes no difference to *this* question, which is
+		// measured and is why the axis is asked before the job question:
+		// `! [[ a = a ]] >/dev/null` records the same either way.
+		{`false | true; ! [[ a = a ]] >/dev/null; echo "${P[@]}"`, "1", "0"},
+		// An ordinary command, an assignment and a compound record what they
+		// reported under both answers.
+		{`false | true; ! false; echo "${P[@]}"`, "1", "1"},
+		{`false | true; ! true; echo "${P[@]}"`, "0", "0"},
+		{`false | true; ! x=1; echo "${P[@]}"`, "0", "0"},
+		{`false | true; ! { [[ a = a ]]; }; echo "${P[@]}"`, "0", "0"},
+		{`false | true; ! ( [[ a = a ]] ); echo "${P[@]}"`, "0", "0"},
+		// And with no `!` at all the axis is not reached.
+		{`false | true; [[ a = a ]]; echo "${P[@]}"`, "0", "0"},
+	} {
+		for _, tc := range []struct {
+			a    Answer
+			want string
+		}{{Yes, c.post}, {No, c.pre}} {
+			out, _ := runGrammar(t, c.src, enableTestAndArith, named("P", func(s *Semantics) {
+				s.TestAndArithmeticUpdatePipelineStatus = Yes
+				s.AssignmentUpdatesPipelineStatus = Yes
+				s.NegatedTestRecordsThePostNegationStatus = tc.a
+			}))
+			if got := strings.TrimSpace(out); got != tc.want {
+				t.Errorf("%v: %s gave %q, want %q", tc.a, c.src, got, tc.want)
+			}
+		}
+	}
+}
+
+// `$?` is not the record, and the axis must not move it: the negation's result
+// is the status in every shell either way. A mutant that inverted the status
+// instead of the copy written down survives every row above.
+func TestTheAxisMovesTheRecordAndNotTheStatus(t *testing.T) {
+	for _, a := range []Answer{Yes, No} {
+		out, _ := runGrammar(t, `false | true; ! [[ a = a ]]; echo "st=$? ps=${P[@]}"`,
+			enableTestAndArith, named("P", func(s *Semantics) {
+				s.TestAndArithmeticUpdatePipelineStatus = Yes
+				s.NegatedTestRecordsThePostNegationStatus = a
+			}))
+		want := "st=1 ps=0"
+		if a == Yes {
+			want = "st=1 ps=1"
+		}
+		if got := strings.TrimSpace(out); got != want {
+			t.Errorf("%v: got %q, want %q", a, got, want)
+		}
 	}
 }

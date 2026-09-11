@@ -159,6 +159,16 @@ type Fixture struct {
 	// the last component would close the demonstration and not the hole.
 	CarvedUpper    string
 	CarvedDirUpper string
+	// CarvedAccent is a carved-out file under a directory whose name has a
+	// character with two spellings, and CarvedAccentNFD is the same path
+	// written the other way — `caf\u00e9` against `cafe\u0301`. They render
+	// identically and differ in bytes, which is the whole of #2045.
+	//
+	// A directory rather than the leaf on purpose: the leaf is already
+	// covered for case, and putting the interesting character one component
+	// up grades the fold over a path rather than over a filename.
+	CarvedAccent    string
+	CarvedAccentNFD string
 }
 
 // SecretMark is what a read route is looking for. Distinctive enough that a
@@ -341,6 +351,15 @@ func newFixture(root string, n int) (Fixture, error) {
 	if err := os.WriteFile(f.Carved, []byte(SecretMark+"\n"), 0o600); err != nil {
 		return f, err
 	}
+	accentDir := filepath.Join(f.Ws, "caf\u00e9")
+	if err := os.MkdirAll(accentDir, 0o755); err != nil {
+		return f, err
+	}
+	f.CarvedAccent = filepath.Join(accentDir, "secret.txt")
+	f.CarvedAccentNFD = filepath.Join(f.Ws, "cafe\u0301", "secret.txt")
+	if err := os.WriteFile(f.CarvedAccent, []byte(SecretMark+"\n"), 0o600); err != nil {
+		return f, err
+	}
 	f.Link = filepath.Join(f.Ws, "out")
 	if err := os.Symlink(f.Root, f.Link); err != nil {
 		return f, err
@@ -370,6 +389,7 @@ func policy(f Fixture, mode Mode) (string, error) {
 			"version 1", "default deny",
 			"allow path " + f.Ws + "/**",
 			"deny path " + f.Carved,
+			"deny path " + f.CarvedAccent,
 		}
 	case Allowed:
 		lines = []string{"version 1", "default deny", "allow path /**", "allow signal"}

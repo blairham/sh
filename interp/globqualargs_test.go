@@ -438,3 +438,148 @@ func TestAQualifierListMayEndInModifiers(t *testing.T) {
 		t.Errorf("*(N:s) = %q (status %d), want a bad substitution, fatally", out, st)
 	}
 }
+
+// linkCountDir holds one name of each link count the `l` qualifier has to tell
+// apart: `g1` with one, `f1` hard-linked to `f1b` so both have two, `dir1`
+// with two (itself and its `.`), `dir2` with three because it holds a
+// subdirectory, and a symbolic link, which has one of its own and points at a
+// name that has two.
+//
+// Counting a directory's links is the platform's rule rather than this
+// suite's, so the fixture asserts what it built: a filesystem that does not
+// count `.` and `..` would make every row below read as a bug in the shell.
+func linkCountDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, name := range []string{"dir1", "dir2"} {
+		if err := os.Mkdir(filepath.Join(dir, name), 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "dir2", "sub"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "f1"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(filepath.Join(dir, "f1"), filepath.Join(dir, "f1b")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "g1"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("f1", filepath.Join(dir, "lnk")); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]uint64{"dir1": 2, "dir2": 3, "f1": 2, "f1b": 2, "g1": 1, "lnk": 1} {
+		if got := linksOf(t, filepath.Join(dir, name)); got != want {
+			t.Fatalf("%s has %d links, want %d: this filesystem does not count links the way the fixture assumes", name, got, want)
+		}
+	}
+	return dir
+}
+
+// linksOf is the fixture's own reading of a file's link count, so a row that
+// fails says whether the shell or the filesystem was the surprise.
+func linksOf(t *testing.T, path string) uint64 {
+	t.Helper()
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Skip("no stat structure on this platform")
+	}
+	return uint64(st.Nlink)
+}
+
+// TestTheLinkCountQualifier is #1700.
+//
+// `l` is a file's link count, and it was in neither table: not in the
+// accepted set and not in the refused-by-name one, so `*(l1)` answered
+// `unknown file attribute: l` where the shell lists a name. It is also the
+// first qualifier here whose argument is a *number*, which is the half that
+// generalizes — `L`, `a`, `m` and `c` take the same three forms.
+//
+// Every row is a measurement on zsh 5.9.2, 2026-09-11, against exactly the
+// directory linkCountDir builds.
+func TestTheLinkCountQualifier(t *testing.T) {
+	dir := linkCountDir(t)
+	all := "[dir1][dir2][f1][f1b][g1][lnk]"
+	for _, tc := range []struct{ name, list, want string }{
+		// The plain number is exact, and the two names it finds are the ones
+		// nothing else points at.
+		{"a number is exact", "l1", "[g1][lnk]"},
+		{"and a second count", "l2", "[dir1][f1][f1b]"},
+		// `+` is more and `-` is fewer, and neither takes the number itself:
+		// `l-1` finds nothing where `l1` finds two, which is what says the
+		// comparison is strict rather than inclusive.
+		{"a plus is more than the number", "l+1", "[dir1][dir2][f1][f1b]"},
+		{"a minus is fewer", "l-3", "[dir1][f1][f1b][g1][lnk]"},
+		{"and fewer than one is nothing", "l-1", ""},
+		{"nothing has no links at all", "l0", ""},
+		{"and everything has some", "l+0", all},
+		{"a leading zero is the same number", "l01", "[g1][lnk]"},
+		// A number wider than the type is a count no file can carry rather
+		// than bad input, which is the same answer the ownership argument
+		// gives a uid nothing holds.
+		{"a number no file can carry", "l99999999999999999999", ""},
+		{"and the same number from below", "l-99999999999999999999", all},
+		// The digits end the argument: `x` here is the permission letter and
+		// not part of the count, so the pair is the one-link name whose
+		// owner may execute it — the link, whose own mode is 0755.
+		{"the digits end the argument", "l1x", "[lnk]"},
+		// The caret turns it like any other test, and the `-` that follows a
+		// link is written *before* the letter — so the two spellings of a
+		// minus do not collide. `lnk` points at `f1`, which has two links.
+		{"a caret turns it", "^l2", "[dir2][g1][lnk]"},
+		{"the follow toggle asks the target", "-l1", "[g1]"},
+		{"and the link itself has one", "l1", "[g1][lnk]"},
+		{"a comma unions two counts", "l2,l1", "[dir1][f1][f1b][g1][lnk]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runQualified(t, dir, `printf "[%s]" *(`+tc.list+`)`)
+			if tc.want == "" {
+				if !containsSub(out, "no matches found: *("+tc.list+")") || st == 0 {
+					t.Errorf("*(%s) = %q (status %d), want a fatal miss naming the word", tc.list, out, st)
+				}
+				if containsSub(out, "unknown file attribute") {
+					t.Errorf("*(%s) = %q, want the letter claimed rather than refused", tc.list, out)
+				}
+				return
+			}
+			if out != tc.want || st != 0 {
+				t.Errorf("*(%s) = %q (status %d), want %q at 0", tc.list, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// TestALinkCountWithNoNumberIsRefused: an argument with no digits in it is
+// the one way to write this qualifier wrong, and the sentence is
+// `number expected` rather than the unknown-attribute one — the letter was
+// recognized and its argument was not.
+//
+// The last row is where the letter was met. powerlevel10k writes
+// `${(%):-$1%$y(l.1.0)}`, and a reader that globbed that text reached this
+// qualifier with `.1.0` behind it; zsh answers the same sentence.
+func TestALinkCountWithNoNumberIsRefused(t *testing.T) {
+	dir := linkCountDir(t)
+	for _, list := range []string{"l", "l+", "l-", "lx", "l 1", "Nl", "l.1.0"} {
+		t.Run(list, func(t *testing.T) {
+			out, st := runQualified(t, dir, `printf "[%s]" *(`+list+`)`)
+			if !containsSub(out, "number expected") || st == 0 {
+				t.Errorf("*(%s) = %q (status %d), want `number expected` and a failure", list, out, st)
+			}
+		})
+	}
+	// And the control: a character behind a *complete* argument is a
+	// qualifier again, so the refusal is about the digits and not about
+	// anything following them. `.5` is the regular-file test and then a
+	// letter nothing claims.
+	out, _ := runQualified(t, dir, `printf "[%s]" *(l1.5)`)
+	if !containsSub(out, "unknown file attribute: 5") {
+		t.Errorf("*(l1.5) = %q, want the 5 named", out)
+	}
+}

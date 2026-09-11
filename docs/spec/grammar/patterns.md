@@ -936,6 +936,51 @@ right**, which is what `*(N-@)` says: following the two that resolve
 reaches a regular file and a directory, and following the dangling one
 reaches nothing, so it answers as the link it is.
 
+### `l` is a number, and the shape every numeric qualifier takes
+
+`l` is the file's **link count**, and its argument is a number with an
+optional comparison in front of it. Measured on zsh 5.9.2, 2026-09-11,
+against a directory holding `dir1/` (2 links), `dir2/` with one
+subdirectory (3), `f1` hard-linked to `f1b` (2 each), `g1` (1) and a
+symbolic link `lnk` (1):
+
+    *(l1)      g1 lnk                exactly one
+    *(l2)      dir1 f1 f1b           exactly two
+    *(l+1)     dir1 dir2 f1 f1b      more than one
+    *(l-3)     everything but dir2   fewer than three
+    *(l0)      no matches found      nothing has none
+    *(l+0)     everything            and everything has some
+
+**Neither comparison includes the number itself**: `l-1` matches nothing
+where `l1` matches two names.
+
+**The digits end the argument and the next character is a qualifier
+again.** `*(l1x)` is the one-link name whose owner may execute it, and
+`*(l1.5)` is `unknown file attribute: 5` — the same rule seen through a
+character nothing claims.
+
+**A number wider than the type is a count no file can carry rather than
+bad input**: `l99999999999999999999` is `no matches found` and
+`l-99999999999999999999` lists everything. That is the answer the
+ownership argument already gives a uid nothing holds.
+
+**Only an argument with no digits at all is refused, and the sentence is
+`number expected`** — `l`, `l+`, `l-`, `lx` and `l 1` alike, which is a
+different complaint from `unknown file attribute` and says the letter
+was recognized and its argument was not.
+
+**The two spellings of a minus do not collide.** The `-` that follows a
+symbolic link is written before the letter and the comparison after it,
+so `*(-l1)` asks the target and `*(l-1)` asks for fewer than one. Both
+were measured against the same fixture: `lnk` has one link of its own
+and points at a name with two, and `*(-l1)` leaves it out.
+
+Where the letter was met: powerlevel10k's `_p9k_prompt_length` writes
+`${(%):-$1%$y(l.1.0)}`, and a reader that globbed that text reached this
+qualifier. #1695 stopped that expansion being globbed at all, so a
+startup no longer arrives here — but the same text written without the
+flag still names a number in zsh, and named a file attribute here.
+
 ### A list may end in modifiers
 
 A `:` in the list ends the qualifiers and opens the same history-style
@@ -975,18 +1020,19 @@ to it adds no conditional anywhere.
 
 The type tests `.`, `/`, `@`, `p` and `%`, the nine permission letters,
 `s`, `S` and `t` for the bits outside the permission triples, `f` and its
-mode argument, `u`, `g`, `U` and `G` for ownership, the `-` that follows
-a link before testing, the `^` that turns any of them, the `,` that
-unions them, `N` and `D`, and the `:` that opens a modifier list.
+mode argument, `u`, `g`, `U` and `G` for ownership, `l` and its numeric
+argument for the link count, the `-` that follows a link before testing,
+the `^` that turns any of them, the `,` that unions them, `N` and `D`,
+and the `:` that opens a modifier list.
 
 Everything else in that language — `=` for a socket, the `%b` and `%c`
 spellings that separate the two kinds of device, `e` and `+` for a
-command's verdict, `d` for a device, `l` for a link count, `o`, `O`, `Y`
-and `[n,m]` for ordering and counting, `a`, `m` and `c` for times, `L`
-for a size, and the `(#q…)` form that needs `extended_glob` — is refused
-by name with the shell's own wording rather than answered wrong. `*(L+1)`
-here is `unknown file attribute: L`, where the shell would list the names
-above that size.
+command's verdict, `d` for a device, `o`, `O`, `Y` and `[n,m]` for
+ordering and counting, `a`, `m` and `c` for times, `L` for a size, and
+the `(#q…)` form that needs `extended_glob` — is refused by name with the
+shell's own wording rather than answered wrong. `*(L+1)` here is
+`unknown file attribute: L`, where the shell would list the names above
+that size.
 
 `S` and `%` are read and unproven in the positive direction, which is a
 fact about what a test process may create rather than about the shell:
@@ -996,7 +1042,8 @@ half that separates a read letter from an unknown one.
 
 That refusal is what let this set be enumerated exactly, and it is
 asserted rather than assumed: see
-`TestAnUnknownQualifierIsRefusedByName`,
+`TestAnUnknownQualifierIsRefusedByName`, `TestTheLinkCountQualifier`,
+`TestALinkCountWithNoNumberIsRefused`,
 `TestThePermissionQualifiersReadTheMode`,
 `TestTheModeBitQualifiers`, `TestTheAccessRightsQualifier`,
 `TestAnUnreadableModeSpecIsRefused`, `TestTheOwnershipQualifiers`,
@@ -1004,6 +1051,7 @@ asserted rather than assumed: see
 `TestAQualifierListMayEndInModifiers`. Measured:
 `pat/a-qualifier-list-reads-the-access-rights`,
 `pat/a-qualifier-list-reads-the-owner`,
+`pat/a-qualifier-list-reads-the-link-count`,
 `pat/a-qualifier-list-may-follow-a-link`,
 `pat/a-qualifier-list-may-end-in-modifiers`.
 

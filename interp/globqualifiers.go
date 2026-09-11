@@ -153,6 +153,9 @@ type globTest struct {
 	// number is not obliged to fit a uid — one that does not fit matches
 	// nothing, which is what a uid no file carries would do anyway.
 	id uint64
+	// count is `l`'s comparison: the number written and which way the
+	// file's own number has to stand against it.
+	count globCount
 }
 
 // parseGlobQualifiers reads a list. The second result is the diagnostic when
@@ -206,6 +209,18 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 			}
 			i += n
 			section = append(section, globTest{kind: 'f', negated: negate, follow: follow, mode: spec})
+		case 'l':
+			// The link count, and the first qualifier here whose argument is
+			// a *number* rather than a mode or a name. `-` and `+` in front
+			// of it are the comparison and not the follow toggle — that one
+			// is written before the letter, so `*(-l1)` follows the link and
+			// `*(l-1)` asks for fewer than one.
+			count, n, diag := parseGlobCount(list[i:])
+			if diag != "" {
+				return q, diag, false
+			}
+			i += n
+			section = append(section, globTest{kind: 'l', negated: negate, follow: follow, count: count})
 		case 'u', 'g':
 			id, n, diag := parseOwnerArgument(c, list[i:])
 			if diag != "" {
@@ -303,6 +318,9 @@ func globTestMatches(t globTest, info fs.FileInfo) bool {
 	case 'u', 'g':
 		id, ok := fileOwner(info, t.kind)
 		return ok && id == t.id
+	case 'l':
+		links, ok := fileLinks(info)
+		return ok && t.count.holds(links)
 	}
 	if bit, ok := globPermissionBits[t.kind]; ok {
 		return mode.Perm()&bit != 0

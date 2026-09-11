@@ -72,7 +72,7 @@ import (
 //     a line. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 141 of the 185
+//     typing a directory name still does not change directory. 140 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -86,13 +86,19 @@ import (
 // negation and the `(#…)` flag groups all read a pattern differently while
 // it is on, and reading it the same way either way was #1244.
 //
-// `multios`, `cshnullcmd` and `shnullcmd` are the three most recent, and they
-// left together: the first is this shell's name for
-// [interp.Semantics.RedirectsUseEveryTarget], and the other two decide what a
-// command that is only redirections runs, by pointing the null-command
-// parameters at a name no script can write (#1779). See nullcommand.go.
+// `multios`, `cshnullcmd` and `shnullcmd` left together: the first is this
+// shell's name for [interp.Semantics.RedirectsUseEveryTarget], and the other
+// two decide what a command that is only redirections runs, by pointing the
+// null-command parameters at a name no script can write (#1779). See
+// nullcommand.go.
 //
-// Nothing else about the split moved, and 141 is still most of the table.
+// `typesetsilent` is the most recent, and it is the inverse of
+// [interp.Semantics.ValuelessDeclarationOfAHeldNameListsIt]: the option on is
+// that axis answering No. It moved because powerlevel10k sets it and then
+// re-declares `local` names inside loops, so remembering-and-ignoring it wrote
+// nine lines to stdout before every prompt (#2033).
+//
+// Nothing else about the split moved, and 140 is still most of the table.
 //
 // Recording is worth doing and is not the same as implementing. A real rc
 // file opens with a dozen `setopt` lines about completion, correction and
@@ -543,7 +549,33 @@ var zshOptions = []zshOption{
 	recorded("sunkeyboardhack", false),
 	recorded("transientrprompt", false),
 	recorded("trapsasync", false),
-	recorded("typesetsilent", false),
+	{
+		// zsh's TYPESET_SILENT, and the inverse of one axis: a valueless
+		// declaration of a name its own scope already holds writes the name
+		// back, and this option is how a script asks it not to. Read off the
+		// axis rather than off a stored bit, for the reason `multios` is —
+		// `(setopt typeset_silent)` stays in the subshell.
+		//
+		// The sense is inverted: the option being *on* is the axis answering
+		// No, which is why this is not `matchBacked`'s shape with a flag.
+		// Measured on zsh 5.9.2: `f(){ local s; s=1; local s; }` writes `s=1`
+		// with the option off and nothing with it on, in both directions.
+		//
+		// powerlevel10k is what made this worth implementing rather than
+		// remembering: it sets the option in its `emulate -L zsh` intro and
+		// re-declares `local` inside loops, so a shell that ignores the name
+		// narrates nine lines before every prompt (#2033).
+		base: "typesetsilent", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.ValuelessDeclarationOfAHeldNameListsIt == interp.No
+		},
+		set: func(r *interp.Runner, on bool) int {
+			swapAxes(r, func(s *interp.Semantics) {
+				s.ValuelessDeclarationOfAHeldNameListsIt = answer(!on)
+			})
+			return 0
+		},
+	},
 	recorded("typesettounset", false),
 	setOptBacked("unset", true, "nounset", true),
 	setOptBacked("verbose", false, "verbose", false),

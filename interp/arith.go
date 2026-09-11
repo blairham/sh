@@ -234,6 +234,13 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 		// which is exactly what a nil Index and an empty Sub already mean to
 		// the two paths that follow.
 	}
+	// A `*` or `@` is the whole array rather than a subscript at all where
+	// the dialect reads the slice here, and it is asked *before* the
+	// association below: the key `*` is what the other answer makes of it,
+	// and the two would collapse into one if the table were consulted first.
+	if v, whole := r.arithWholeArraySlice(x); whole {
+		return r.arithElemValue(v)
+	}
 	// An associative name's subscript is a key and not an expression, which
 	// is the same reading `${m[k]}` takes and for the same reason: with
 	// `m[k]=7`, `m[0]=99` and `k=0`, all three shells with the attribute
@@ -260,6 +267,57 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 		return intNum(0), nil
 	}
 	return r.arithElemValue(v)
+}
+
+// arithWholeArraySlice is `$(( a[*] ))` and `$(( a[@] ))` where the dialect
+// reads the brackets as the slice `${a[*]}` takes rather than as a subscript.
+//
+// The joined text is then read the way every other element's value is read —
+// as an expression, not as a numeral — which is measured and is what makes
+// the two spellings of the same array agree: `a=(1+1); $(( a[*] * 3 ))` is 6
+// in the shell that answers yes, exactly as `$(( a[1] * 3 ))` is.
+//
+// The join is the first character of IFS, `@` and `*` alike: measured
+// 2026-09-11 on zsh 5.9.2, `a=(3 4); IFS=:; $(( a[*] ))` and `$(( a[@] ))`
+// both complain about the `:` they were handed, and `IFS=` makes the same
+// array 34. So this is not the unquoted `@` question, where the two spellings
+// part — there is no field splitting inside an expression for them to part
+// over.
+//
+// The re-read is the element route's, so it inherits that route's own gap:
+// a value holding an expression rather than a numeral is refused here where
+// every column reads it, which is #1977 and reaches `$(( v * 3 ))` on a plain
+// name as squarely as it reaches this.
+//
+// A slice of more than one element is therefore usually a *failure* rather
+// than a number, and that is the answer rather than a defect in it:
+// `a=(3 4 5); $(( a[*] ))` is `operator expected at ` + "`4 5'" + ` there.
+// An empty array joins to nothing and is zero, and a scalar is its own value.
+func (r *Runner) arithWholeArraySlice(x *syntax.ArithIndex) (string, bool) {
+	if x.Index != nil || x.Empty || !wholeArraySubscript(strings.TrimSpace(x.Sub)) {
+		return "", false
+	}
+	if !r.ask(r.sem().ArithWholeArraySubscriptIsTheSlice,
+		"`$(( a[*] ))`, a whole-array subscript inside an expression") {
+		return "", false
+	}
+	return strings.Join(r.wholeArrayElems(x.Name), ifsFirst(r.ifs())), true
+}
+
+// wholeArrayElems is every element a name holds, whichever of the three
+// shapes holds them: an association's values, an array's elements, or a
+// scalar as the one value it is.
+func (r *Runner) wholeArrayElems(name string) []string {
+	if a, ok := r.assocFor(name); ok {
+		return a.values()
+	}
+	if elems, ok := r.arrayElems(name); ok {
+		return elems
+	}
+	if v, ok := r.getVar(name); ok {
+		return []string{v}
+	}
+	return nil
 }
 
 // arithSubscriptIndex is the number a subscript counts from, on a name that is

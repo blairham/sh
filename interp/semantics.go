@@ -6134,6 +6134,54 @@ type Semantics struct {
 	// every column whose sentence is its ordinary bad-substitution one.
 	EmptyParamSubscriptIsAnError Answer
 
+	// ArithWholeArraySubscriptIsTheSlice reads a `*` or `@` subscript inside
+	// an arithmetic expression as the *slice* the same subscript takes in an
+	// expansion — the elements joined on the first character of IFS — rather
+	// than as an ordinary subscript.
+	//
+	// Measured 2026-09-11, `-c`:
+	//
+	//	probe                                    bash 5.3   ksh93u+   zsh 5.9.2
+	//	typeset -A m; m[k]=9; $(( m[*] ))        0          0         9
+	//	typeset -A m; m[k]=9; $(( m[@] ))        0          0         9
+	//	a=(3); $(( a[*] + 1 ))                   1, and `a[*]: bad array subscript`   syntax error   4
+	//	a=(3 4 5); $(( a[*] ))                   0, reported   syntax error   `operator expected at `4 5''
+	//
+	// So one column expands the slice first and the other two read the
+	// brackets as arithmetic, fail to make a subscript of `*`, and answer
+	// zero. The expansion route already agrees everywhere — `"${m[*]}"` is
+	// `9` in all three — which is what says this is a missing *reading* here
+	// rather than a missing feature.
+	//
+	// The joined text is then read as an expression, not as a numeral, which
+	// is the same reading an element's value gets: `a=(1+1); $(( a[*] * 3 ))`
+	// is 6 where `$(( a[1] * 3 ))` is 6. A slice of more than one element is
+	// therefore usually a failure rather than a number, and an empty array
+	// joins to nothing and is zero.
+	//
+	// `@` joins on IFS here exactly as `*` does — measured, `a=(3 4);
+	// IFS=:` gives both spellings `3:4` to read — so this is not the
+	// unquoted-`@` question, which is about field splitting and has none to
+	// be about inside an expression.
+	//
+	// Asked **before** the association is consulted, because the key `*` is
+	// precisely what the other answer makes of the same text: a table read
+	// first would answer the key and the two readings would collapse into
+	// one. That is the ordering #1875 established for a subscript that is
+	// not a number, with this question inserted at its front.
+	//
+	// The two columns that answer no *report* the subscript on an indexed
+	// name — `a[*]: bad array subscript` in bash, a syntax error in ksh93 —
+	// and are silent on an associative one. That is a diagnostic of its own
+	// and is #1978 rather than this axis, which is about the value.
+	//
+	// The joined text is read as an expression by the same route an
+	// element's value takes, so it inherits that route's own gap: a value
+	// that is an expression rather than a numeral is refused here where
+	// every column re-reads it (#1977). `$(( a[*] ))` over `a=(1+1)` is 6
+	// there and a refusal here for that reason and not for this one.
+	ArithWholeArraySubscriptIsTheSlice Answer
+
 	// BlankArithSubscriptIsTheEmptyExpression reads a subscript holding
 	// whitespace and nothing else — `$(( a[ ] ))` — as the blank expression,
 	// which is zero, so the operand is the *element that subscript names*

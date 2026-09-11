@@ -216,5 +216,11 @@ func environment(dir, path string, d Dialect) []string {
 		// The prompt of a shell that read no startup file. See envPromptPrefix.
 		"PS1=" + envPromptPrefix + d.CwdEscape + promptFieldSep + d.UserEscape + "]" + promptAnchor,
 		"PS2=" + continuationPrompt,
+		// Where this session records what it ran. See blocksStoreDir.
+		//
+		// HISTFILE is deliberately not set here: an empty one turns the block
+		// store off as well, and unset is not empty — it leaves the session
+		// recording, which is the state these rows are about.
+		"SH_BLOCKS_DIR=" + blocksStoreDir(dir),
 	}
 }

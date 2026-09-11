@@ -49,38 +49,70 @@ type ShellSplit struct {
 // The token stream this walks is not a program either, and must not be handed
 // to a parser: under CommentsKept a comment arrives as a word.
 //
-// **One measured divergence.** A `(` that *starts* a token belongs to the
-// word where an argument may stand — `a (b c) d` is three words in the shell
-// that has the flag and six here — and command position is the whole of the
-// difference, `(b c) d` and `a; (b c) d` splitting the parenthesis off there
-// too. The lexer has the flag for it, inArgument, and the *parser* is what
-// sets it, because deciding it needs to know that `a="x"` is an assignment
-// and that `then` is a keyword, neither of which a token stream says.
-// Answering it here would take a second copy of that knowledge, which is the
-// thing this function exists to avoid; recorded in the spec and filed as
-// #1514 rather than half-answered.
+// **Argument position is the parser's to know, so the parser is what reads
+// this.** A `(` that *starts* a token belongs to the word where an argument
+// may stand — `a (b c) d` is three words and not six — and command position
+// is the whole of the difference: `(b c) d` and `a; (b c) d` split the
+// parenthesis off. The lexer has the flag, `inArgument`, and it is set from
+// `parseSimple`, because deciding it needs to know that `a="x"` is an
+// assignment and that `then` is a keyword — neither of which a token stream
+// says.
+//
+// So this drives a Parser and keeps the tokens it caused, rather than running
+// the lexer alone and answering the question a second time. A state machine
+// here would be that second answer: it gets `a="x" (b c)` and `if a; then (b
+// c)` right only by restating the assignment and keyword rules, and then
+// still misses `repeat 2 (b c)`, `coproc (b c)` and `foreach x (a b)`, which
+// are three more of the parser's own (measured on the shell with the flag —
+// all three split the parenthesis off, and `(a) (b)` does not). That is the
+// shape #1331 and #1397 were both undoing (#1514).
+//
+// The **tree is thrown away and so is any error**, which is what keeps this a
+// split of a value rather than a parse of a program: input that ends inside a
+// quote or a substitution is not a failure here, and text that is not a
+// program at all still has to come back as the words it was written as. Where
+// the parser stops early, the rest is lexed plainly and appended — there is
+// no position to know past the point the grammar lost track, and the shell
+// with the flag is no more definite there.
+//
+// `noHeredocBodies` is the one thing the parser must be stopped from doing.
+// It would otherwise queue a `<<` and let the lexer claim the lines after it
+// as a body, which is input a splitter may not consume; see that field.
 func ShellWords(src string, d Dialect, opt ShellSplit) []string {
-	l := NewLexer(src, d)
-	l.comments = opt.Comments
+	var toks []Token
+	lex := NewLexer(src, d)
+	lex.comments = opt.Comments
+	lex.noHeredocBodies = true
+	lex.recorded = &toks
+	p := newParserOn(lex, d)
+	p.Parse()
+	// The parser holds one token of lookahead, so what it read is exactly
+	// what was recorded — including the token it stopped on. Anything after
+	// that point is text the grammar never reached.
+	rest := lex.off
+	lex.recorded = nil
+
+	if rest < len(src) {
+		tail := NewLexer(src[rest:], d)
+		tail.comments = opt.Comments
+		tail.noHeredocBodies = true
+		for {
+			t := tail.Next()
+			if t.Kind == TokEOF || t.End.Offset <= t.Pos.Offset && t.Kind != TokNewline {
+				break
+			}
+			t.Pos.Offset += rest
+			t.End.Offset += rest
+			toks = append(toks, t)
+		}
+	}
 
 	var out []string
 	lastWasOneDigitFd := false
-	for off := -1; ; {
-		t := l.Next()
+	for _, t := range toks {
 		if t.Kind == TokEOF {
-			break
+			continue
 		}
-		if l.off <= off {
-			// The lexer answers TokEOF forever once the input is exhausted,
-			// so the ordinary end is the case above. This is the other one:
-			// a token that consumed nothing would loop here for ever, and a
-			// shell that hangs on a value somebody's plugin manager handed
-			// it is worse than any wrong answer. Nothing is known to reach
-			// it; it costs one comparison and it is not a rule about the
-			// language.
-			break
-		}
-		off = l.off
 		if t.Kind == TokNewline {
 			lastWasOneDigitFd = false
 			if opt.NewlineIsBlank {
@@ -94,7 +126,7 @@ func ShellWords(src string, d Dialect, opt ShellSplit) []string {
 		// arithmetic command: TokArithCmd carries the expression with its
 		// parentheses already stripped, so `((1+2))` would come back as
 		// `1+2` — a word nobody wrote, and one that means something else.
-		w := l.src[t.Pos.Offset:t.End.Offset]
+		w := src[t.Pos.Offset:t.End.Offset]
 
 		// A one-digit file descriptor is spelled back joined to the operator
 		// it was written against. This lexer keeps them apart because the

@@ -7763,6 +7763,31 @@ echo "st=$?"`,
 		Why:     "the empty field belongs to the whole expansion rather than to any one word in it: an element with no shell words in it contributes none, so the array `('' x)` is one field and not two, while an array with nothing in it at all is one empty field — which the same array without the split flag is not. The three counts are on one line because each is defensible alone and only the set of them says which rule is running",
 	},
 	{
+		ID: "param/the-shell-split-flag-asks-where-an-argument-may-stand", Category: "parameter expansion",
+		Snippet: `v='a (b c) d'; printf "[%s]" "${(@Z+n+)v}"; w='(b c) d'; printf "<%s>" "${(@Z+n+)w}"; echo`,
+		Why: "a `(` that *starts* a token is part of the word where an argument " +
+			"may stand and an operator where a command may begin, which is one value " +
+			"read two ways and is the whole of the difference — `a (b c) d` is three " +
+			"words and `(b c) d` is five. Both halves on one line because either " +
+			"alone reads as a rule about parentheses rather than about position. " +
+			"Quoted with `@` so the fields survive and nothing re-reads them: a field " +
+			"of `(b c)` handed back unquoted is a pattern with a glob qualifier in it. " +
+			"zsh alone has the construct; the other five call the expansion a bad " +
+			"substitution or refuse it while reading. This shell split the " +
+			"parenthesis off in both, because the splitter walked the lexer alone and " +
+			"only the parser knows which position it is in (#1514)",
+	},
+	{
+		ID: "param/the-shell-split-flag-needs-the-parsers-own-rules", Category: "parameter expansion",
+		Snippet: `v='a="x" (b c)'; printf "[%s]" "${(@Z+n+)v}"; w='if a; then (b c); fi'; printf "<%s>" "${(@Z+n+)w}"; echo`,
+		Why: "the two rows a splitter walking a token stream cannot answer, and the " +
+			"reason this one drives a parser: `a=\"x\"` has to be known to be an " +
+			"assignment and `then` to be a keyword, so that neither names a command " +
+			"and the `(` after each is still where a command may begin. A state " +
+			"machine over the tokens gets the row above right and these two wrong, " +
+			"which is trading one wrong answer for another",
+	},
+	{
 		ID: "param/the-argumentless-shell-split-flag", Category: "parameter expansion",
 		Snippet: `v="a 'b c' d  e"; printf "[%s]" ${(z)v}; echo`,
 		Why:     "`(z)` is the same split as `(Z)` with no option letters, written without an argument, and this is the row that says it is the *same* one rather than a second splitter that agrees on blanks: the quotes stay on `'b c'` and the run of blanks makes no empty field. A plugin manager reaches this four times per extension hook at startup, which is why it is the spelling that matters",

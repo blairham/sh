@@ -91,7 +91,7 @@ type matchWhere struct {
 	// subject below, and dead is the ones that came back false. See
 	// memoThreshold for why the count exists at all.
 	asked int
-	dead  map[uint64]struct{}
+	dead  deadSet
 	// deadWide is the same memo for a pattern or subject too large to pack
 	// into one integer. Two maps rather than one, and the reason is
 	// measured: Go specializes a map whose key is a single 64-bit integer
@@ -111,6 +111,52 @@ type matchWhere struct {
 	// packable is whether this pattern and subject fit the packed key, asked
 	// once per match rather than per question.
 	packable bool
+	// noTilde and noParen are facts about the *whole* pattern,
+	// worked out once when it is set rather than rediscovered at every
+	// position.
+	//
+	// Every string matchHere is handed is a substring of the pattern — the
+	// same fact matchKey is built on — so a character absent from the whole
+	// is absent from every piece, and a negative answer here is a negative
+	// answer everywhere. They are only ever read to *skip* a scan, never to
+	// take a branch, so the direction that could be wrong is the one that
+	// says "not present" for a pattern that has one, which a Contains over
+	// the whole text cannot do.
+	//
+	// This is #1398's first half. The prescans matchBranch opens with —
+	// splitExclusion above all, which walked the remaining pattern looking
+	// for a `~` most patterns do not contain at all — were between a fifth
+	// and a quarter of the samples on the prompt-theme substitution, and
+	// every one of them was rediscovering the same absence at every
+	// position of every trial.
+	noTilde bool
+	noParen bool
+	// parenEnd and brackEnd are, for each byte of the pattern that opens a
+	// group or a bracket expression, where it closes — worked out once for
+	// the whole pattern instead of by a scan from every position.
+	//
+	// Absolute offsets into the pattern, and -1 where nothing closes. A
+	// lookup is only *believed* when the answer lies inside the piece being
+	// matched; a group body or an arm is a truncation of the pattern rather
+	// than a suffix of it, and a closer past the end of the piece is not a
+	// closer at all. That case falls back to the scan, which is exact, so
+	// the cache can only ever save work and never change an answer.
+	parenEnd []int32
+	brackEnd []int32
+	// reachAt and reachLen memoize patternReach, which is asked of the same
+	// item at every level of a closure's recursion — `[^\}]##` asks it once
+	// per repetition and per position, and the answer is a fact about six
+	// bytes of pattern that cannot move.
+	//
+	// Two arrays rather than a map keyed on both: the item is always the
+	// pattern from some offset for some length, so the offset indexes and
+	// the length says whether the entry is about this item. -1 in reachLen
+	// is "not asked yet", which is a length no item has.
+	reachAt  []int32
+	reachLen []int32
+	// arms is each group body's split into alternatives, by where the body
+	// starts. See armsOf.
+	arms map[int]armSplit
 	// pattern and subject are what dead's answers are *about*, and what
 	// says when they have to be thrown away.
 	//
@@ -137,6 +183,12 @@ type matchWhere struct {
 	// not an optimisation of it.
 	pattern string
 	subject string
+	// ready also says whether the prepared tables above are about the
+	// pattern now being matched. Everything that reads one asks it first,
+	// because a caller may build options and scan a pattern with them before
+	// any match has run — see scanExtendedPattern, which reads a group with
+	// no offset to give.
+	//
 	// ready distinguishes "no pattern and no subject seen yet" from "the
 	// empty pattern against the empty subject", which are the same two
 	// strings and not the same state. Without it a matchWhere's zero value
@@ -206,8 +258,7 @@ const packBase = 1 << 15
 // known reports whether this question has already been answered false.
 func (w *matchWhere) known(pp, plen, at, slen int, f caseFolding) bool {
 	if w.packable {
-		_, dead := w.dead[packKey(pp, plen, at, slen, f)]
-		return dead
+		return w.dead.has(packKey(pp, plen, at, slen, f))
 	}
 	_, dead := w.deadWide[matchKey{pp: pp, plen: plen, at: at, slen: slen, fold: f}]
 	return dead
@@ -216,16 +267,137 @@ func (w *matchWhere) known(pp, plen, at, slen int, f caseFolding) bool {
 // remember writes down that this question came back false.
 func (w *matchWhere) remember(pp, plen, at, slen int, f caseFolding) {
 	if w.packable {
-		if w.dead == nil {
-			w.dead = make(map[uint64]struct{})
-		}
-		w.dead[packKey(pp, plen, at, slen, f)] = struct{}{}
+		w.dead.add(packKey(pp, plen, at, slen, f))
 		return
 	}
 	if w.deadWide == nil {
 		w.deadWide = make(map[matchKey]struct{})
 	}
 	w.deadWide[matchKey{pp: pp, plen: plen, at: at, slen: slen, fold: f}] = struct{}{}
+}
+
+// deadSet is the memo's store: an open-addressed set of packed keys.
+//
+// A Go map was what #1383 used and it answered the question — the blowup went
+// with it — but the *map* then became the cost rather than the questions it
+// answers. On the prompt-theme substitution of #1398 it was near half the
+// samples: hashing, probing, and the rehash of a table that grows to a
+// hundred thousand entries in one substitution.
+//
+// The keys are already one uint64 each and a dead end is a *set* membership
+// with no value to carry, so almost everything a map does here is unused.
+// Linear probing over a flat slice removes the indirection, the bucket
+// metadata and the per-entry allocation, and keeps the property that matters:
+// the key is exact, so a hit is the same question and never a collision.
+//
+// Zero is the empty slot, so the one key that packs to zero — the whole
+// pattern against the whole subject at the start, unfolded — is held in a
+// field of its own rather than given a sentinel.
+//
+// The store is **reused** across matches rather than reallocated. A pattern
+// matched against every name in a directory resets once per name, and a reset
+// that has nothing to clear costs nothing.
+type deadSet struct {
+	slots []uint64
+	mask  uint64
+	count int
+	zero  bool
+}
+
+// deadSetMin is the smallest table worth allocating. The memo does not engage
+// until a trial has asked memoThreshold questions, so a table is only ever
+// built for a match that is already in the thousands.
+const deadSetMin = 1 << 12
+
+func (d *deadSet) has(k uint64) bool {
+	if k == 0 {
+		return d.zero
+	}
+	if len(d.slots) == 0 {
+		return false
+	}
+	for i := mixKey(k) & d.mask; ; i = (i + 1) & d.mask {
+		switch d.slots[i] {
+		case 0:
+			return false
+		case k:
+			return true
+		}
+	}
+}
+
+func (d *deadSet) add(k uint64) {
+	if k == 0 {
+		d.zero = true
+		return
+	}
+	// Grown at three quarters full, which keeps the probe runs short without
+	// doubling more often than a match needs.
+	if len(d.slots) == 0 {
+		d.resize(deadSetMin)
+	} else if (d.count+1)*4 > len(d.slots)*3 {
+		d.resize(len(d.slots) * 2)
+	}
+	d.insert(k)
+}
+
+func (d *deadSet) insert(k uint64) {
+	for i := mixKey(k) & d.mask; ; i = (i + 1) & d.mask {
+		switch d.slots[i] {
+		case 0:
+			d.slots[i], d.count = k, d.count+1
+			return
+		case k:
+			return
+		}
+	}
+}
+
+func (d *deadSet) resize(n int) {
+	old := d.slots
+	d.slots, d.mask, d.count = make([]uint64, n), uint64(n-1), 0
+	for _, k := range old {
+		if k != 0 {
+			d.insert(k)
+		}
+	}
+}
+
+// deadSetKeep is the largest table a reset clears rather than gives up.
+//
+// Both directions cost something and the sizes decide which. One options
+// value is reused across every name in a directory, so a reset happens once
+// per *subject*, and clearing a table that has grown to a megabyte on one
+// pathological subject would charge every later name for it. Below the cap,
+// keeping the memory is the cheaper half — a substitution resets once and
+// then fills the table again.
+const deadSetKeep = 1 << 14
+
+// reset empties the set, keeping the memory it has grown into where that is
+// the cheaper of the two. A set nothing wrote to has nothing to do at all,
+// which is the ordinary case: most patterns never reach the memo.
+func (d *deadSet) reset() {
+	d.zero = false
+	if d.count == 0 {
+		return
+	}
+	if len(d.slots) > deadSetKeep {
+		d.slots, d.mask, d.count = nil, 0, 0
+		return
+	}
+	clear(d.slots)
+	d.count = 0
+}
+
+// mixKey spreads a packed key over the table. The packing is a mixed-radix
+// number, so its low bits move with one field and its high bits with
+// another; taking the low bits of it directly would put every question about
+// one position in one run of slots.
+func mixKey(k uint64) uint64 {
+	k ^= k >> 33
+	k *= 0xff51afd7ed558ccd
+	k ^= k >> 29
+	return k
 }
 
 // packKey folds the five numbers into one, and is only ever called where
@@ -356,11 +528,11 @@ func planWalk(p string, base int, capturing, whole bool, o patternOpts, pl *capt
 			p, base = p[1:], base+1
 			continue
 		}
-		item, rest, ok := splitClosableItem(p, &o)
+		item, rest, ok := splitClosableItem(p, -1, &o)
 		if !ok {
 			break
 		}
-		if body, quant, after, isGroup := splitGroup(item, &o); isGroup && after == "" {
+		if body, quant, after, isGroup := splitGroup(item, -1, &o); isGroup && after == "" {
 			bp := base + 1
 			if quant != 0 {
 				bp = base + 2
@@ -515,4 +687,152 @@ func (r *Runner) publishMatch(m matchReport) {
 		r.setVar("MBEGIN", strconv.Itoa(b))
 		r.setVar("MEND", strconv.Itoa(e))
 	}
+}
+
+// prepare works out the facts about a pattern that no position, subject or
+// trial can change. Called when the pattern changes and not when the subject
+// does.
+//
+// This is #1398's shape: the matcher re-derived the pattern's structure at
+// every step, and half the samples on a prompt theme's substitution were
+// scans rediscovering the same answers. Reading them once is the cheap half
+// of "read the pattern once"; what it does not do is remove the re-derivation
+// of *which* construct stands at a position, which wants a compiled form and
+// a design note of its own.
+func (w *matchWhere) prepare(pattern string) {
+	if !patternPrepares {
+		// Every table below is consulted through a lookup that falls back to
+		// the scan it replaces, so leaving them empty is the matcher as it
+		// was. A test drives the same patterns both ways and requires the
+		// same answers — see TestPreparingThePatternChangesNoAnswer.
+		w.noTilde, w.noParen = false, false
+		w.parenEnd, w.brackEnd, w.reachLen = nil, nil, nil
+		clear(w.arms)
+		return
+	}
+	w.noTilde = strings.IndexByte(pattern, '~') < 0
+	w.noParen = strings.IndexByte(pattern, '(') < 0
+	w.parenEnd = grow32(w.parenEnd, len(pattern))
+	w.brackEnd = grow32(w.brackEnd, len(pattern))
+	clear(w.arms)
+	w.reachAt = grow32(w.reachAt, len(pattern)+1)
+	w.reachLen = grow32(w.reachLen, len(pattern)+1)
+	for i := range w.reachLen {
+		w.reachLen[i] = -1
+	}
+	for i := range len(pattern) {
+		w.parenEnd[i], w.brackEnd[i] = -1, -1
+		switch pattern[i] {
+		case '(':
+			if end, ok := closingParen(pattern[i:]); ok {
+				w.parenEnd[i] = int32(i + end)
+			}
+		case '[':
+			if end, ok := bracketEnd(pattern, i); ok {
+				w.brackEnd[i] = int32(end)
+			}
+		}
+	}
+}
+
+// patternPrepares turns the prepared tables off, for the reason
+// memoThreshold and patternReachBounds are vars: it lets a test run the same
+// pattern down both paths and require the same answer, which is the only
+// reference for "reading the pattern once changed nothing" that cannot drift
+// away from the code it is checking. Nothing outside a test writes it.
+var patternPrepares = true
+
+// grow32 reuses the slice when it is already long enough, so a matcher that
+// runs against one pattern and many subjects allocates these once.
+func grow32(s []int32, n int) []int32 {
+	if cap(s) >= n {
+		return s[:n]
+	}
+	return make([]int32, n)
+}
+
+// closerWithin turns a prepared absolute offset into one relative to the
+// piece, and reports false when the answer is not this piece's to give.
+func closerWithin(table []int32, pp, n int) (int, bool) {
+	if pp < 0 || pp >= len(table) {
+		return 0, false
+	}
+	end := int(table[pp])
+	if end < 0 || end >= pp+n {
+		return 0, false
+	}
+	return end - pp, true
+}
+
+// closingParenAt is closingParen with the prepared table consulted first. pp
+// is where p begins in the pattern, or -1 for a caller that does not know —
+// the one-time scans that read a pattern before any match, where the table is
+// not built yet and the answer is wanted once.
+func closingParenAt(o *patternOpts, p string, pp int) (int, bool) {
+	if o.where != nil && o.where.ready {
+		if end, ok := closerWithin(o.where.parenEnd, pp, len(p)); ok {
+			return end, true
+		}
+	}
+	return closingParen(p)
+}
+
+// bracketEndAt is bracketEnd for the bracket standing at p[i], with the
+// prepared table consulted first. The result is an offset into p, as
+// bracketEnd's is.
+func bracketEndAt(o *patternOpts, p string, i, pp int) (int, bool) {
+	if o.where != nil && o.where.ready && pp >= 0 {
+		if end, ok := closerWithin(o.where.brackEnd, pp+i, len(p)-i); ok {
+			return i + end, true
+		}
+	}
+	return bracketEnd(p, i)
+}
+
+// armsOf is alternativesAt with the arms of each group remembered by where
+// the group's body stands.
+//
+// A group is split into its arms at every position it is tried from, and the
+// split allocates two slices each time. The body is a fixed piece of the
+// pattern, so the answer is too — the length is compared as well as the
+// offset because a one-time scan reads bodies the table was not built for.
+func (w *matchWhere) armsOf(body string, bp int) ([]string, []int) {
+	if w == nil || !w.ready {
+		return alternativesAt(body, bp)
+	}
+	if !patternPrepares {
+		return alternativesAt(body, bp)
+	}
+	if a, ok := w.arms[bp]; ok && a.length == len(body) {
+		return a.arms, a.offsets
+	}
+	arms, offsets := alternativesAt(body, bp)
+	if w.arms == nil {
+		w.arms = map[int]armSplit{}
+	}
+	w.arms[bp] = armSplit{length: len(body), arms: arms, offsets: offsets}
+	return arms, offsets
+}
+
+// armSplit is one group body's arms, kept for the length of a match.
+type armSplit struct {
+	length  int
+	arms    []string
+	offsets []int
+}
+
+// reachAt is patternReach with the item's answer remembered by where it
+// stands, which is what a closure's recursion asks for over and over.
+func (w *matchWhere) reachOf(pp, n int) (int, bool) {
+	if w == nil || !w.ready || pp < 0 || pp >= len(w.reachLen) || w.reachLen[pp] != int32(n) {
+		return 0, false
+	}
+	return int(w.reachAt[pp]), true
+}
+
+func (w *matchWhere) rememberReach(pp, n, reach int) {
+	if w == nil || !w.ready || pp < 0 || pp >= len(w.reachLen) {
+		return
+	}
+	w.reachLen[pp], w.reachAt[pp] = int32(n), int32(reach)
 }

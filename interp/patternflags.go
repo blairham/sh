@@ -187,6 +187,13 @@ func splitExclusion(p string, o *patternOpts) (left string, rights []string, ok 
 	if !o.extended {
 		return "", nil, false
 	}
+	if w := o.where; w != nil && w.ready && w.noTilde {
+		// The whole pattern has no `~` in it, so this piece of it has none
+		// either and the scan below would walk every byte to learn that.
+		// See matchWhere.noTilde: this is the prescan #1398 found doing the
+		// most work for nothing.
+		return "", nil, false
+	}
 	var cuts []int
 	depth := 0
 	for i := 0; i < len(p); i++ {
@@ -323,11 +330,11 @@ func classEnd(p string, j int) (int, bool) {
 // makes the guard below dead in both callers, since each answers a `*` before
 // it asks. It is kept because it is what the sentence above says, and
 // mutation testing is what established that nothing can kill it.
-func splitClosableItem(p string, o *patternOpts) (item, rest string, ok bool) {
+func splitClosableItem(p string, pp int, o *patternOpts) (item, rest string, ok bool) {
 	if p == "" || p[0] == '*' {
 		return "", "", false
 	}
-	if _, _, after, found := splitGroup(p, o); found {
+	if _, _, after, found := splitGroup(p, pp, o); found {
 		return p[:len(p)-len(after)], after, true
 	}
 	if _, _, after, found := splitNumericRange(p, o); found {
@@ -335,7 +342,7 @@ func splitClosableItem(p string, o *patternOpts) (item, rest string, ok bool) {
 	}
 	switch p[0] {
 	case '[':
-		if end, found := bracketEnd(p, 0); found {
+		if end, found := bracketEndAt(o, p, 0, pp); found {
 			return p[:end+1], p[end+1:], true
 		}
 	case '\\':
@@ -441,7 +448,7 @@ func repeatFrom(item string, ip, k, lo, hi int, after string, ap int, s string, 
 	if hi != unboundedRepeat && k >= hi {
 		return false
 	}
-	ceiling := splitCeiling(item, s, &o)
+	ceiling := splitCeiling(item, s, ip, &o)
 	for i := 0; i < ceiling; {
 		i += o.unitWidth(s[i:])
 		mark := o.where.caps.mark()
@@ -593,11 +600,11 @@ func scanExtendedPattern(p string, o patternOpts) (patternFault, bool) {
 			p, closable = p[1:], false
 			continue
 		}
-		item, rest, ok := splitClosableItem(p, &o)
+		item, rest, ok := splitClosableItem(p, -1, &o)
 		if !ok {
 			break
 		}
-		if body, _, _, isGroup := splitGroup(item, &o); isGroup {
+		if body, _, _, isGroup := splitGroup(item, -1, &o); isGroup {
 			for _, arm := range alternatives(body) {
 				if f, found := scanExtendedPattern(arm, o); found {
 					return f, true

@@ -168,6 +168,11 @@ func TestSemantics(t *testing.T) {
 		{"SubscriptCommaIsARange", s.SubscriptCommaIsARange, interp.Yes},
 		{"SubscriptIsAQuotingContext", s.SubscriptIsAQuotingContext, interp.No},
 		{"ScalarSubscriptIsACharacter", s.ScalarSubscriptIsACharacter, interp.Yes},
+		// A whole subscript on a scalar reaches the value both ways here.
+		// That is this shell alone on the length and this shell with both
+		// bashes on the slice, which is why the two are separate fields.
+		{"WholeSubscriptOnAScalarMeasuresIt", s.WholeSubscriptOnAScalarMeasuresIt, interp.Yes},
+		{"WholeSubscriptOnAScalarSlicesIt", s.WholeSubscriptOnAScalarSlicesIt, interp.Yes},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.Yes},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.No},
 		// A math error inside `(( ))` leaves 2 here and 1 in the rest of the

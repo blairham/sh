@@ -363,6 +363,14 @@ func Semantics() interp.Semantics {
 	// 2012-08-01. The yes here gave every `f "${a[@]}"` on a name nothing
 	// had filled yet one spurious empty argument.
 	s.SubstringNegativeLengthIsEmpty = interp.Yes
+	// `${s[@]:off:len}` on a name holding one string slices a *list of one*
+	// here, alone in the panel: measured 2026-09-11 against 93u+
+	// 2012-08-01, `h="a b"; ${h[@]:0:1}` is `a b` and `${h[@]:1}` is
+	// nothing, where bash 3.2, bash 5.3 and zsh all answer with the value's
+	// characters. The length is not the same split — `${#h[@]}` is 1 here
+	// and in both bashes, and 3 only in zsh — which is why the two are
+	// separate axes.
+	s.WholeSubscriptOnAScalarSlicesIt = interp.No
 	// [ a -eq 1 ] is a plain false here, no sentence, status 1.
 	s.TestIntegerRefusalIsSilent = interp.Yes
 	// `f -nt missing` holds when f exists, and `-t x` is a plain false

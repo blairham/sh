@@ -2149,6 +2149,16 @@ func (r *Runner) listBase(e *syntax.ParamExpr) ([]string, bool) {
 	if e.Index == nil {
 		return nil, false
 	}
+	if r.wholeSubscriptSlicesAScalar(e) {
+		// `${s[@]:1}` on a name holding one string is a slice of that
+		// *string*, not of a list of one — so the scalar path answers it,
+		// and the offsets count characters there exactly as they do for
+		// `${s:1}`. Taking it here counted elements instead: an offset
+		// inside the value answered with the whole of it and an offset of 1
+		// dropped the only element and answered nothing, both at status 0
+		// (#1850).
+		return nil, false
+	}
 	switch {
 	case e.Op == syntax.ParamNone:
 	case r.listShapedOp(e) && r.subscriptYieldsAList(e):

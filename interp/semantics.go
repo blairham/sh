@@ -4900,16 +4900,50 @@ type Semantics struct {
 	// panel is one answer against one, so it is a disagreement and not a
 	// majority.
 	//
-	// Asked of the length alone, which is where the two readings differ.
-	// Everything else about a scalar's `[@]` is unanimous — `set -- "${h[@]}"`
-	// leaves one parameter holding `a b` in every column — so the fields ask
-	// nobody.
+	// Asked of the length alone, because the length is where *this* split
+	// falls. The plain value is unanimous — `set -- "${h[@]}"` leaves one
+	// parameter holding `a b` in every column — so the fields ask nobody.
+	// The slice is not unanimous and is not this question either: it splits
+	// the panel a different way and has an axis of its own, immediately
+	// below. This comment used to say everything but the length agreed,
+	// which is what let the slice keep the count's reading (#1850).
 	//
 	// It is how a script asks "did I get anything?" after a parse:
 	// `local -a opts; zparseopts …; (( ${#opts[@]} ))` reads 1 here for a
 	// name that never became an array, which is a count agreeing with the
 	// wrong answer (#1553).
 	WholeSubscriptOnAScalarMeasuresIt Answer
+
+	// WholeSubscriptOnAScalarSlicesIt makes `${s[@]:off:len}` on a name
+	// holding one string a slice of *that string's characters* rather than
+	// of a list whose only element is the whole value. Measured 2026-09-11,
+	// on `h="a b"` and `h=abcdef`:
+	//
+	//	              ${h[@]:0:1}  ${h[*]:0:1}  ${h[@]:1}  ${h[@]:2:3}
+	//	bash 5.3.15   a            a            ` b`       cde
+	//	bash as `sh`  a            a            ` b`       cde
+	//	bash 3.2.57   a            a            ` b`       cde
+	//	zsh 5.9.2     a            a            ` b`       cde
+	//	ksh93         a b          a b          (no field) (empty)
+	//	dash          bad substitution
+	//
+	// A different split from the length above, which is why it is a second
+	// question and not a second reading of the first: bash counts a list of
+	// one for `${#h[@]}` and slices the characters here, so no single answer
+	// about "what a whole subscript on a scalar reaches" fits it. The
+	// offsets index the value exactly as `${h:off:len}` does — `${h:0:1}` is
+	// `a` in every column, which is the control that says the character
+	// reading is not new — and the list reading is what ksh93 keeps.
+	//
+	// Asked of the slice alone, and only of a name that is set and holds one
+	// string: an unset name is empty under both readings, and a real array
+	// is a list in every column.
+	//
+	// Its silence is the reason it is worth an axis rather than a default.
+	// `${line[@]:0:1}` reads as the first character to anyone writing it and
+	// came back as the whole line, and `${h[@]:1}` — drop the first
+	// character — came back as nothing at all, both at status 0 (#1850).
+	WholeSubscriptOnAScalarSlicesIt Answer
 
 	// ArrayNameWithoutSubscriptIsTheList makes an unquoted bare array name
 	// the array itself — one field per element, a slice slicing the list and
@@ -6635,8 +6669,13 @@ func PosixSemantics() Semantics {
 		// An empty scalar is one empty element to every shell in the panel
 		// but the one that spells the construct as a list of its own.
 		WholeSubscriptOnAScalarMeasuresIt: No,
-		UnsetNameAtIsOneEmptyField:        No,
-		SubstringNegativeLengthIsEmpty:    No,
+		// The other way round: four of the five shells that have the
+		// construct slice the value's characters, and only ksh93 slices a
+		// list of one. POSIX has neither arrays nor substrings, so the
+		// panel is all there is to follow.
+		WholeSubscriptOnAScalarSlicesIt: Yes,
+		UnsetNameAtIsOneEmptyField:      No,
+		SubstringNegativeLengthIsEmpty:  No,
 		// The standard has no modifiers and no history syntax, so a range is
 		// the arithmetic it looks like — which is also what three of the four
 		// do with it.

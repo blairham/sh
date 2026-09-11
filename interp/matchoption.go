@@ -46,9 +46,19 @@ const (
 	GlobFoldsCase
 
 	// MatchFoldsCase makes `case` and `[[ ]]` patterns compare letters
-	// without case. It does not reach pathname expansion or the pattern
-	// operators of parameter expansion, which is measured: with it on,
-	// `case A in a)` matches and `${x#a}` still leaves `ABC` alone.
+	// without case, and the **substitution** operators of parameter
+	// expansion with them.
+	//
+	// Not pathname expansion, which has GlobFoldsCase, and not the trims or
+	// the case-change operator. All of that is measured, with it on: `case A
+	// in a)` matches, `v=ABC; ${v//b/X}` is `AXC` and `${v/#a/Y}` is `YBC`,
+	// while `${v#a}`, `${v%c}` and `${v^^b}` each leave `ABC` alone.
+	//
+	// The line about parameter expansion used to say it reached none of
+	// those operators, cited `${x#a}` as the measurement, and was half wrong
+	// for two releases: `${x#a}` cannot tell a trim from a substitution, and
+	// the two do not agree (#1969). A probe that cannot separate the
+	// hypotheses is not evidence for either.
 	MatchFoldsCase
 
 	// StarStarCrossesDirectories reads `**` standing alone as a pattern

@@ -3216,6 +3216,29 @@ echo "reached-after st=$?"`,
 			"that would have changed it was never theirs",
 	},
 	{
+		ID: "shopt/nocasematch-folds-a-substitution", Category: "shell options",
+		Snippet: `shopt -s nocasematch 2>/dev/null; v=ABC; echo "[${v//b/X}]"`,
+		Why: "the fold reaches the substitution operators of parameter expansion, " +
+			"which the row above cannot say: `case` and `${v//…}` are different " +
+			"surfaces and the option does not reach them all. This one and the trim " +
+			"beside it are the pair that separates them — a shell folding everything " +
+			"under `${ }` and a shell folding none of it each satisfy one of the two " +
+			"and fail the other (#1969). It is also where bash 5.3 and bash 3.2 part " +
+			"company, the older one leaving the substitution exact, so this shell's " +
+			"bash follows the version its dialect is measured against rather than " +
+			"the name; dash has no such operator at all",
+	},
+	{
+		ID: "shopt/nocasematch-leaves-a-trim-exact", Category: "shell options",
+		Snippet: `shopt -s nocasematch 2>/dev/null; v=ABC; echo "[${v#a}]"`,
+		Why: "the other half: a trim in the same `${ }` stays exact with the option " +
+			"on, in the one shell that has the option and in the ones that do not. " +
+			"It is the measurement the comment on this implementation's fold was " +
+			"written from, and on its own it says nothing about the substitution " +
+			"next door — which is how the fold came to be documented as reaching " +
+			"no parameter expansion at all",
+	},
+	{
 		ID: "shopt/query-answers-by-status", Category: "shell options",
 		Snippet: `shopt -q nullglob 2>/dev/null; echo q=$?; ` +
 			`shopt -s nullglob 2>/dev/null; shopt -q nullglob 2>/dev/null; echo q=$?`,

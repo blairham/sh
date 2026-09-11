@@ -505,24 +505,52 @@ print -r -- "invented=$?"`)
 	}
 }
 
-// **A subscripted destination refuses rather than assigning the wrong shape.**
-// zsh splices characters into the string a scalar already holds, this shell's
-// assignment path turns the scalar into an array, and the one answer that must
-// not be given is a `buf` that looks assigned. See sysreadName.
-func TestSysreadRefusesADestinationItCannotAssign(t *testing.T) {
+// **A subscripted destination is assigned, and the shape it takes is the
+// language's rather than this builtin's.** Four operand shapes with four
+// meanings, measured against zsh 5.9.2 and each one agreeing: a name
+// holding a string takes the subscript as a span of characters to splice,
+// an association takes it as a key, an array as an element, and a bare word
+// is a plain assignment.
+//
+// The first row is the one that matters in the wild — `buf[$#buf+1]` is how
+// a prompt theme's worker accumulates a response one `sysread` at a time —
+// and it was refused here until the assignment path underneath it spliced
+// characters instead of building an array (#1746).
+func TestSysreadAssignsThroughASubscriptedDestination(t *testing.T) {
 	systemDeadline(t, "sysread destinations", func() {
 		out, st, errs := runZshSplit(t, t.TempDir(), `buf=xy
-print -n hi | { sysread 'buf[$#buf+1]' }
-print -r -- "st=$? buf=[$buf]"
-print -n hi | { sysread 'bad name' }
-print -r -- "name=$?"`)
-		want := "st=1 buf=[xy]\nname=1\n"
+print -n Z | { sysread 'buf[$#buf+1]' }
+print -r -- "scalar=[$buf]"
+n=ab
+print -n XY | { sysread -c 'n[2]' b }
+print -r -- "count=[$n] into=[$b]"
+typeset -A h
+print -n V | { sysread 'h[k]' }
+print -r -- "assoc=[${h[k]}]"
+a=(p q)
+print -n V | { sysread 'a[2]' }
+print -r -- "elem=[${a[2]}] n=${#a}"`)
+		want := "scalar=[xyZ]\ncount=[a2] into=[XY]\nassoc=[V]\nelem=[V] n=2\n"
 		if out != want || st != 0 {
-			t.Errorf("sysread destinations = %q (status %d), want %q", out, st, want)
+			t.Errorf("sysread destinations = %q (status %d), want %q (stderr %q)", out, st, want, errs)
 		}
-		if !strings.Contains(errs, "a subscripted parameter is not implemented yet") ||
-			!strings.Contains(errs, "not an identifier: bad name") {
-			t.Errorf("refusals = %q, want each destination named", errs)
+		if errs != "" {
+			t.Errorf("stderr = %q, want nothing said", errs)
+		}
+	})
+}
+
+// A name that is not an identifier at all is still a usage error, and it is
+// the *only* refusal left on this operand.
+func TestSysreadRefusesADestinationThatIsNotAName(t *testing.T) {
+	systemDeadline(t, "sysread bad name", func() {
+		out, st, errs := runZshSplit(t, t.TempDir(), `print -n hi | { sysread 'bad name' }
+print -r -- "name=$?"`)
+		if want := "name=1\n"; out != want || st != 0 {
+			t.Errorf("sysread bad name = %q (status %d), want %q", out, st, want)
+		}
+		if !strings.Contains(errs, "not an identifier: bad name") {
+			t.Errorf("refusal = %q, want the destination named", errs)
 		}
 	})
 }

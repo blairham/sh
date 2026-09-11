@@ -312,7 +312,7 @@ func sysreadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		if name == "" {
 			continue
 		}
-		if !isIdentifier(name) {
+		if !sysAssignable(name) {
 			return sysreadName(r, name)
 		}
 	}
@@ -339,7 +339,7 @@ func sysreadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		return status
 	}
 	if counting {
-		r.SetVar(count, strconv.Itoa(len(buf)))
+		r.StoreThroughOperand(count, strconv.Itoa(len(buf)))
 	}
 	if copying {
 		// **`-o` diverts rather than duplicates.** Measured, and it is the one
@@ -351,33 +351,41 @@ func sysreadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		// holding data it had already passed on.
 		return sysreadCopy(r, out, buf)
 	}
-	r.SetVar(dest, string(buf))
+	r.StoreThroughOperand(dest, string(buf))
 	return 0
 }
 
-// sysreadName is what a destination this shell cannot assign to gets, and it
-// is two different refusals wearing one function.
+// sysreadName is what a destination this shell cannot assign to gets, which
+// is now one thing rather than two.
 //
 // A name that is not an identifier at all — `sysread 'bad name'` — is zsh's
 // own `not an identifier`, measured, and is a usage error in both shells.
 //
-// A **subscripted** name is not that. zsh takes `sysread 'buf[$#buf+1]'`,
-// which is how a prompt theme's receive loop accumulates a response, and what
-// it does with it is splice characters into the string `buf` already holds —
-// because a subscript on a scalar names a character there. This shell reads
-// `${s[2]}` that way already (see ScalarSubscriptIsACharacter) and *assigns*
-// through it as though the name were an array, so `buf=xy; buf[3]=Z` is
-// `xyZ` in zsh and an array of three elements here. That is a bug in the
-// assignment path rather than in this builtin, and the one thing this builtin
-// must not do is reach for the array route and hand a caller a `buf` that
-// looks assigned and is the wrong shape. So it refuses by the name it was
-// given, which is the same answer `zmodload -F` gives for a feature this
-// shell has not got.
+// A **subscripted** name used to be refused beside it, and that refusal is
+// gone. zsh takes `sysread 'buf[$#buf+1]'`, which is how a prompt theme's
+// receive loop accumulates a response, and what it does with it is splice
+// characters into the string `buf` already holds. This shell turned the
+// scalar into an array instead, so the builtin refused rather than hand a
+// caller a `buf` that looked assigned and was the wrong shape — the refusal
+// was about the assignment path and not about this builtin.
+//
+// That path was fixed in #1746: a subscript on a name already holding a
+// string splices characters, and [interp.Runner.StoreThroughOperand] is the
+// route `read` has always taken, so all four operand shapes now mean here
+// what they mean there. Measured against zsh 5.9.2, 2026-09-10, each one
+// agreeing:
+//
+//	buf=xy; print -n Z | sysread 'buf[$#buf+1]'    buf is xyZ
+//	n=ab; print -n XY | sysread -c 'n[2]' b        n is a2, b is XY
+//	typeset -A h; print -n V | sysread 'h[k]'      h[k] is V
+//	a=(p q); print -n V | sysread 'a[2]'           a is p V, still two
+//
+// What it unblocks is why it was worth doing rather than tidying: the
+// theme's worker reads every response one `sysread` at a time into
+// `buf[$#buf+1]`, so this was the wall behind #1760 — and `gitstatus`
+// reads its handshake the same way, which is the five-second timeout that
+// made #1820 a regression.
 func sysreadName(r *interp.Runner, name string) int {
-	if sysAssignable(name) {
-		r.Diagnosef("%s: a subscripted parameter is not implemented yet\n", name)
-		return sysreadUsage
-	}
 	r.Diagnosef("not an identifier: %s\n", name)
 	return sysreadUsage
 }

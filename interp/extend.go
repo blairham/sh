@@ -1087,6 +1087,27 @@ func (r *Runner) SetAssocElement(name, key, value string) {
 	r.setAssocElem(name, key, value)
 }
 
+// StoreThroughOperand assigns to a destination a builtin was handed **as a
+// word**, which is not the same thing as a name.
+//
+// `read v`, `read 'a[2]'`, `read 'h[k]'` and `read "buf[$#buf+1]"` are one
+// operand shape with four meanings, and which one applies is the language's
+// question rather than the builtin's: an association takes the subscript as
+// a key, an array takes it as an element, a name already holding a string
+// takes it as a span of *characters* to splice, and a bare word is a plain
+// assignment. A builtin that reached for SetVar instead got the last of
+// those for all four.
+//
+// The complaint a bad subscript makes is the store's and is located there —
+// measured, `read 'a[1/0]'` is `division by zero` and `read 'v[0]'` is
+// `v: assignment to invalid subscript range`, the same two sentences the
+// bare assignments give, with no builtin named in front of them.
+//
+// For a builtin whose operand is a destination: `read` uses it, and so does
+// one dialect's `sysread`, which had to refuse a subscripted operand by name
+// until this was reachable from outside the package.
+func (r *Runner) StoreThroughOperand(name, value string) { r.storeThroughOperand(name, value) }
+
 // ArithValue is the value of an arithmetic expression, for a builtin holding
 // an expression it did not parse.
 //

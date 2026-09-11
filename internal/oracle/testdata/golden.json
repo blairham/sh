@@ -110895,6 +110895,50 @@
         "TimedOut": false
       }
     },
+    "subscript/a-flag-group-on-the-left-over-a-string": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: (r)l: arithmetic syntax error in expression (error token is \"l\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: (r)l: arithmetic syntax error in expression (error token is \"l\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: (r)l: syntax error in expression (error token is \"l\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: (r)l: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[heQlo][helQo][helloQ][helQlo]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "subscript/a-flag-group-only-where-the-source-wrote-one": {
       "bash": {
         "Stdout": "",
@@ -112386,6 +112430,50 @@
       "zsh": {
         "Stdout": "wrote=1~file=[abcdef]",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/a-subscripted-destination-for-one-read": {
+      "bash": {
+        "Stdout": "appended=[]~keyed=[]~name=127~shape=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysread: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "appended=[]~keyed=[]~name=127~shape=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysread: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "appended=[]~keyed=[]~name=127~shape=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysread: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "appended=[]",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysread: not found~\u003cshell\u003e: 1: sysread: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysread: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "appended=[]~keyed=[]~name=127~shape=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysread: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "appended=[onetwo]~keyed=[one]~name=1~shape=1",
+        "Stderr": "\u003cshell\u003e:sysread:1: not an identifier: bad name~\u003cshell\u003e:sysread:1: not an identifier: buf[]",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

@@ -316,10 +316,32 @@ package's permission and then open something else. The shared half lives
 in `internal/opened`: the platform call, the table of links an operating
 system installs, and the held-back truncation, which is a security
 property and not a convenience. Two copies of it would drift.
-`TestEveryFrontEndOpenGoesThroughTheBoundaryOrSaysWhyNot` reads the
-source of every package that holds a `Boundary` and fails on a direct
-open that is not on a written-down exemption list, because the tenth
-call site will be written by copying one of the nine.
+`TestEveryCommandPackageOpenGoesThroughTheBoundaryOrSaysWhyNot` reads
+the source of every package that can hand a script a command and fails
+on a direct filesystem call that is not on a written-down exemption
+list, because the tenth call site will be written by copying one of the
+nine.
+
+**Its scope is derived from the tree rather than listed**, and that is
+#1808. It used to read every package that holds a `Boundary`, which is
+four packages and no dialect — so `zsh/system` opened any file a script
+named with a bare `os.OpenFile` (#1805) and `zsh/files` deleted, renamed
+and chmodded whatever it was pointed at (#1819) with no test anywhere
+objecting. Neither was a line somebody forgot; both were outside the set
+the walk enumerated. The lesson is #1416's in the same words: *a
+guarantee that is checked rather than enumerated is only as wide as the
+set it walks*, so widening the list would have been the same bug with a
+later date on it.
+
+A package is in scope now if it is under `dialect/`, if it declares a
+function shaped like `interp.Builtin` or calls `Register`, or if it
+holds a `Boundary` — three rules read off the syntax, so `dialect/fish`
+is read on the commit that creates the directory and `interp` is read
+because it declares the built-in table. The verbs are the whole family
+that names a path, `os.Remove` and `syscall.Unlink` and `os.Stat`
+included, rather than the opens alone: a probe is not an open, but that
+is an argument about what a policy should *allow* and never about which
+code has to ask.
 
 Open, by construction and not by omission:
 
@@ -582,7 +604,8 @@ returns the *entries* rather than the descriptor, which is the property
 `OpenFile` has and is the point of both: there is no way to ask this
 package's permission and then list something else. A `~name` completion
 still reads the account file directly, and that exemption is written
-down in `TestEveryFrontEndOpenGoesThroughTheBoundaryOrSaysWhyNot` with
+down in `TestEveryCommandPackageOpenGoesThroughTheBoundaryOrSaysWhyNot`
+with
 the reason — the path is fixed, and gating it would hide the prefix
 listing while leaving `~name` itself resolving through `user.Lookup`,
 which is a library call no gate is on.

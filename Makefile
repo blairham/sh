@@ -36,7 +36,7 @@ PREFIX ?= /usr/local
 SHELLDIR ?= $(PREFIX)/libexec/sh
 SHELLS := sh bash zsh ksh dash
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects wild wild-run wild-run-contained fmt-wild smoke acp acp-wire startup perfgate install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate install uninstall
 
 all: build
 
@@ -193,6 +193,9 @@ conformance-dialects: ## Grade each dialect binary against the shell it claims t
 	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-zsh -against zsh $(ARGS)
 	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-dash -against dash $(ARGS)
 	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-ksh -against ksh93 $(ARGS)
+
+acp-bench: ## Time the protocol's own costs in ns/op, against the process-per-command it replaces
+	@go test ./internal/acpcheck/ -run XXX -bench . -benchtime 50x -count 3 $(ARGS)
 
 startup: ## Time process start to a prompt, and the -c path, against the real shells
 	@go test ./internal/startupcost/ -run XXX -bench . -benchtime 40x -count 3 $(ARGS)

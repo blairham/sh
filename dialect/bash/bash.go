@@ -390,6 +390,20 @@ func Semantics() interp.Semantics {
 	// with — `typeset +r UID` draws the identical refusal.
 	s.ReadonlyAttributeCanBeRemoved = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	// The export letter says nothing about scope here: `declare -x v=1`
+	// inside a function is an ordinary local.
+	s.ExportLetterDeclaresAGlobal = interp.No
+	// And a valueless declaration of a standing name is silent.
+	s.ValuelessDeclarationOfAHeldNameListsIt = interp.No
+	// A plain word declared over a name holding an array replaces it and
+	// says nothing.
+	s.ScalarOverACompoundIsAnInconsistentType = interp.No
+	// `readonly -a a` freezes the name and records no kind: it lists as
+	// `declare -r a`, with no `a` in the cluster.
+	s.ReadonlyRecordsTheCompoundAttribute = interp.No
+	// One reader for both: `$((010))` and `typeset -i d=010` are eight
+	// alike, where ksh93 answers eight and ten.
+	s.IntegerAssignmentReadsALeadingZeroAsDecimal = interp.No
 	// An attribute added to a name that already holds a value waits for the
 	// next assignment: `FOO=bar; typeset -i FOO` still reads `bar`, and
 	// `d=MiXeD; typeset -u d` still reads `MiXeD`. ksh93 and zsh re-read on

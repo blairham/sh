@@ -83,6 +83,12 @@ func TestSemantics(t *testing.T) {
 		// axis does not arise here and is left unanswered.
 		{"SelectAssumesUnboundedWidth", s.SelectAssumesUnboundedWidth, interp.Unspecified},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
+		{"ExportLetterDeclaresAGlobal", s.ExportLetterDeclaresAGlobal, interp.No},
+		{"ValuelessDeclarationOfAHeldNameListsIt", s.ValuelessDeclarationOfAHeldNameListsIt, interp.No},
+		{"ScalarOverACompoundIsAnInconsistentType", s.ScalarOverACompoundIsAnInconsistentType, interp.No},
+		// `readonly` has no kind letter at all here, so the question never
+		// arises and nothing answers it.
+		{"ReadonlyRecordsTheCompoundAttribute", s.ReadonlyRecordsTheCompoundAttribute, interp.Unspecified},
 		// And the opposite answer to the one beside it, which is the pair
 		// that says the two are separate questions: an attribute re-reads
 		// the value it finds here — `FOO=bar; typeset -i FOO` is 0 — while a
@@ -108,6 +114,9 @@ func TestSemantics(t *testing.T) {
 		{"BraceRangeEndpointsExpanded", s.BraceRangeEndpointsExpanded, interp.Yes},
 		{"ArithInvalidOctalDigitIsError", s.ArithInvalidOctalDigitIsError, interp.No},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.Yes},
+		// Octal in the expression reader and decimal in the integer
+		// attribute's: `$((010))` is 8 and `typeset -i d=010` is 10.
+		{"IntegerAssignmentReadsALeadingZeroAsDecimal", s.IntegerAssignmentReadsALeadingZeroAsDecimal, interp.Yes},
 		{"ArithIntegerOperatorRefusesFloat", s.ArithIntegerOperatorRefusesFloat, interp.Yes},
 		{"LastPipelineElementInCurrentShell", s.LastPipelineElementInCurrentShell, interp.Yes},
 		// A `jobs` listing: which end it starts from, and whether a job that

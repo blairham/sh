@@ -9767,6 +9767,46 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the half of the base that is not the letter, and zsh alone: the base is learned from the *radix prefix* of the value assigned, and it sticks to the name — a later plain `5` under a name that learned 16 reads `16#5`, and a name that learned 8 renders 99 as `8#143`. ksh93 learns none and prints 16, 5 and 99. Two things do not teach it in any column: a leading zero, which is not a radix, and a value that arrived already evaluated — `$((0x10))` hands the assignment four decimal characters and there is no prefix left to read. The leading-zero row splits the panel for a reason of its own and not this one: `016` is 14 in the three bash columns, which read it as octal, and 16 in both shells that have a base, which do not — recorded here and answered in #1270",
 	},
 	{
+		ID: "declare/the-export-letter-and-the-scope-a-declaration-takes", Category: "declarations",
+		Snippet: "f(){ typeset -x lxx=1; }; f; echo \"x=[${lxx-UNSET}]\"\nh(){ typeset -r lrr=1; }; h; echo \"r=[${lrr-UNSET}]\"\ng(){ local -x le=1; }; g; echo \"l=[${le-UNSET}]\"",
+		Why:     "which letter decides *where* a declaration lands, and one shell answers it with `x` alone: zsh's `typeset -x` inside a function declares no local at all and the name outlives the call, where bash's is an ordinary local. The other two lines are the controls that say so — `typeset -r` under the same word is local in zsh and `local -x` is local in both, so it is neither the word nor the letter on its own but the pair. ksh93 has no `local` and its POSIX-style function has no scope to leak out of, which is why its first and second columns agree with zsh's for a reason of its own. Answered by #1698",
+	},
+	{
+		ID: "declare/a-valueless-declaration-of-a-name-that-holds-something", Category: "declarations",
+		Snippet: "a=(x y); typeset a\ns=str; typeset s\nunset u; typeset u\nn=5; typeset -i n\necho done",
+		Why:     "the one place a shell is normally silent and one of them is not: zsh writes a standing name back when a declaration names it with no letters and no value, in the bare-assignment spelling — `a=( x y )` and `s=str`, not `typeset -a a=…`. Three controls hold the rule down. The unset `u` prints nothing, so this is not `typeset` with one operand listing; the `-i` line prints nothing, so a letter suppresses it; and every value is unchanged, which is why nothing caught it. bash and ksh93 are silent throughout. Answered by #1665",
+	},
+	{
+		ID: "declare/a-scalar-declared-over-a-name-holding-an-array", Category: "declarations",
+		Snippet: "b=(x y); typeset b=q; echo \"st=$? [${b[*]}]\"\necho tail",
+		Why:     "a declaration whose plain word lands on a cell that is really holding an array: zsh calls it an inconsistent type, refuses it, and **ends the script**, so `tail` runs here and never runs there. The cost is not a wrong value but a state the shell would not have let the script reach. bash replaces the first element and says nothing, ksh93 takes it whole. Answered by #1666",
+	},
+	{
+		ID: "declare/what-the-inconsistent-type-refusal-is-not", Category: "declarations",
+		Snippet: "b=(x y); b=q; echo \"1[$b] st=$?\"\nc=(x y); f(){ local c=q; echo \"2[$c]\"; }; f; echo \"3[${c[*]}]\"\nd=1; typeset -a d; echo \"4[${d[*]}] st=$?\"\necho tail",
+		Why:     "the three lines that keep the refusal beside it from being read too widely, and every column that can run a line takes it. A **plain assignment** over the same array is taken, so it is the declaration that refuses and not the store. A **fresh local** over a caller's array is taken, so it is a declaration reaching a cell that is really compound rather than one that merely names a compound name — ksh93 is the column without `local` and reads the caller's `x` instead, which is its own answer and not a refusal. And the **mirror image** — an array letter over a standing scalar — is taken in every column, so the refusal has a direction and a name is not frozen in its kind; what the columns disagree about there is whether the scalar survives as the first element, which is `ScalarUnderAnArrayDeclaration` and a different question. Paired with `declare/a-scalar-declared-over-a-name-holding-an-array`",
+	},
+	{
+		ID: "declare/readonly-with-a-kind-letter-and-no-value", Category: "declarations",
+		Snippet: "f() { readonly -a a; typeset -p a; }; f\ng() { readonly -A m; typeset -p m; }; g",
+		Why:     "whether `readonly` is a declaration that also freezes or a freeze that says nothing about kind, and the two shells with the letter split: zsh lists `typeset -ar a=(  )` and `typeset -Ar m=( )`, bash lists `declare -r a` and `declare -r m` with no kind in the cluster. ksh93 has no such letter on the word and refuses the option, which is the third answer and the reason this is an axis rather than a fix. Only the listing can see it — a frozen name cannot then be assigned an array to tell the two apart. Answered by #1554",
+	},
+	{
+		ID: "declare/a-declared-name-that-is-unset-and-still-typed", Category: "declarations",
+		Snippet: "f(){ local -a q; typeset -p q; echo \"st=$?\"; local -i n; typeset -p n; }; f",
+		Why:     "a name that is unset **and** carries a kind, which is a state a shell has and an engine can easily fail to represent: bash 5.3 writes `declare -a q` at status 0 for a valueless `local -a`, and bash 3.2 writes the same attribute with an empty value beside it. The integer letter is the control and is right in every column — it is the *compound* letters that lose the name, because for those the attribute is the store. zsh sets a declared name empty and so has a value to print either way. Answered by #1664",
+	},
+	{
+		ID: "declare/an-integer-assignment-reads-a-leading-zero", Category: "declarations",
+		Snippet: "echo \"arith=$((010))\"\ntypeset -i d=010; echo \"decl=[$d]\"\ne=010; typeset -i e; echo \"reread=[$e]\"\ntypeset -i f; f=010; echo \"assign=[$f]\"",
+		Why:     "one shell in the panel reads the same four characters two ways: ksh93's arithmetic makes `010` eight and its *integer assignment* makes it ten, so the two are different readers there and the first column is the control that says so. bash applies octal in both and zsh in neither, which is why their columns agree with themselves for two different reasons and neither of them settles the question. The third line is a second fact riding along — bash never re-reads a standing value, so `010` is still the text it was — and the fourth says the reading belongs to the name rather than to the declaration that met it. Answered by #1270",
+	},
+	{
+		ID: "declare/what-counts-as-a-zero-padded-integer-assignment", Category: "declarations",
+		Snippet: "typeset -i a=\" 010 \"; echo \"1[$a]\"\ntypeset -i b=010+1; echo \"2[$b]\"\ntypeset -i c=-010; echo \"3[$c]\"\ntypeset -i d=0x10; echo \"4[$d]\"\ntypeset -i e=0; echo \"5[$e]\"",
+		Why:     "where the decimal reading stops, measured a shape at a time on the shell that has it: spaces around the digits and an operator among them both hand the value back to the expression reader, so `010` is eight again in ksh93 — the two rows that say this is a *number* being recognized and not a leading zero being ignored. A sign belongs to the number and `-010` is -10 there against -8 in bash. The last two are the controls whose columns must not move: a radix prefix and a single zero read the same in every shell that spells the builtin",
+	},
+	{
 		ID: "declare/an-output-base-belongs-to-the-name", Category: "declarations",
 		Snippet: "typeset -i i=5; typeset -i16 i; echo \"1[$i]\"\ntypeset -i16 h=255; typeset -i8 h; echo \"2[$h]\"\ntypeset -i16 j=255; typeset +i j; echo \"3[$j]\"; j=3; echo \"4[$j]\"",
 		Why:     "the base is a property of the name and not of the assignment that met it: a declaration that names one re-renders what the name is already holding — `16#5` from a plain 5, and `8#377` from a `16#ff` — which is a change of spelling rather than a re-read, so it meets no dialect. `+i` takes the base off with the attribute and leaves the characters that are there alone, so `3[$j]` is still `16#ff` and only the *next* assignment is plain. Both shells with the feature agree on all four",

@@ -614,6 +614,19 @@ func Semantics() interp.Semantics {
 	// specials to reach.
 	s.ReadonlyAttributeCanBeRemoved = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
+	// The export letter carries `-g` with it, so `typeset -x v=1` inside a
+	// function declares no local — `local -x` is the spelling that still
+	// does, and a name this scope has already made local stays local.
+	s.ExportLetterDeclaresAGlobal = interp.Yes
+	// A declaration with no letters and no value writes the name back, where
+	// it is holding something already: `s=str; typeset s` prints `s=str`.
+	s.ValuelessDeclarationOfAHeldNameListsIt = interp.Yes
+	// And a plain word declared over a name really holding an array is an
+	// inconsistent type rather than a replacement, fatally.
+	s.ScalarOverACompoundIsAnInconsistentType = interp.Yes
+	// `readonly -a` declares the array as well as freezing the name:
+	// `readonly -a a` lists as `typeset -ar a=(  )`.
+	s.ReadonlyRecordsTheCompoundAttribute = interp.Yes
 	// The same reading of an undeclared name reached through a subscript:
 	// a name that is not an array here reads as a scalar, so a quoted
 	// `"${a[@]}"` on one nothing declared is the one empty field `"$a"`

@@ -225,6 +225,14 @@ echo "[$a][$b][$c]"`
 			// dialect answering yes to both would report an error where
 			// this expects a number — and none does.
 			s.ArithInvalidOctalDigitIsError = No
+			// And they read the padded number through the *expression*
+			// reader, which is what makes `08` eight here rather than
+			// eight-teen-less-nothing: the shell with a second reader for
+			// an integer assignment is not the shell that re-reads a
+			// standing value this way. See
+			// IntegerAssignmentReadsALeadingZeroAsDecimal, which is that
+			// question and not this one.
+			s.IntegerAssignmentReadsALeadingZeroAsDecimal = No
 		}
 		out, errs, st := declRun(t, src, set, Diagnostics{})
 		if out != tc.want || st != 0 || errs != "" {

@@ -1443,6 +1443,16 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			continue
 		}
 		if hasValue {
+			// `export` is a declaration, so its plain word meets the same
+			// refusal `typeset`'s does where the name is really holding an
+			// array. No scope is ever taken here, so the cell is never a
+			// fresh one. See Runner.inconsistentTypeRefused.
+			if r.inconsistentTypeRefused(name, false) {
+				return r.status
+			}
+			if r.unspecified {
+				return r.status
+			}
 			r.setVarAs(name, value, assignedByDeclaration)
 			if r.ctl == controlExit {
 				// The assignment ended the script, so the builtin has
@@ -3213,6 +3223,16 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		} else {
+			if r.valuelessDeclarationLists(name, f, fresh) {
+				// The same listing under the other word, on a name this
+				// scope has already made local: `f(){ local s=1; local s; }`
+				// writes `s=1` in the shell that lists. See
+				// valuelessDeclarationLists.
+				r.listStandingDeclaration(name)
+			}
+			if r.unspecified {
+				return r.status
+			}
 			// No guard on r.unspecified here, deliberately. The one axis
 			// declareEmpty asks that this builtin could not already reach —
 			// InheritedValueSurvivesADeclaredType — needs a cell the
@@ -3248,11 +3268,32 @@ func (r *Runner) bareOrDashP(opts string, dashP DeclarationListingForm) Declarat
 	return r.sem().BareDeclarationListing
 }
 
+// readonlyRecordsTheCompound reports whether `readonly -a` and `readonly -A`
+// declare the kind as well as freezing the name — see
+// Semantics.ReadonlyRecordsTheCompoundAttribute.
+//
+// Asked only where one of the two letters was written, which is the whole of
+// the disagreement: a `readonly` with no kind letter freezes a name in every
+// column and raises no question.
+func (r *Runner) readonlyRecordsTheCompound() bool {
+	return r.ask(r.sem().ReadonlyRecordsTheCompoundAttribute,
+		"the array letter on `readonly` declaring an array")
+}
+
 // biReadonly marks variables immutable.
 func biReadonly(r *Runner, _ context.Context, args []string) int {
 	args, opts, code := r.builtinOptions("readonly", args, "paAf")
 	if code != 0 {
 		return code
+	}
+	// The kind the letters named, carried the way every other declaration
+	// loop carries it. `readonly` was a fourth loop that read `aA` and
+	// applied neither mark, so `readonly -a a` froze a name and recorded
+	// nothing about what it was (#1554).
+	f := declareFlags{
+		readonly: true,
+		array:    strings.ContainsRune(opts, 'a'),
+		assoc:    strings.ContainsRune(opts, 'A'),
 	}
 	if (strings.ContainsRune(opts, 'p') || opts == "") && len(args) == 0 {
 		// The listing: readonly names alone, in the dialect's shape. `-p` and
@@ -3288,7 +3329,25 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		}
+		if (f.array || f.assoc) && r.readonlyRecordsTheCompound() {
+			// Ahead of the assignment, the order every other declaration
+			// loop keeps: the letters say what the name is and the value
+			// then lands in it. `fresh` is false because this builtin takes
+			// no scope of its own.
+			r.markDeclaredCompound(name, false, f)
+		}
+		if r.unspecified {
+			return r.status
+		}
 		if hasValue {
+			// See biExport: a declaration's plain word over a name really
+			// holding an array is the same refusal under this word.
+			if r.inconsistentTypeRefused(name, false) {
+				return r.status
+			}
+			if r.unspecified {
+				return r.status
+			}
 			r.setVarAs(name, value, assignedByDeclaration)
 			if r.ctl == controlExit {
 				// See biExport.

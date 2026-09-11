@@ -130,6 +130,18 @@ type declaration struct {
 	// of them decodes the value: see exportSpelledDeclaration and
 	// bareAssignmentDeclaration.
 	base int
+	// unset says the name carries a compound attribute and holds nothing —
+	// the state a valueless `local -a q` leaves where a declared name
+	// without a value is *unset* rather than empty. The two facts are wanted
+	// at once and only one of them is a value: `${q-UNSET}` fires its
+	// default, and `declare -p q` still writes the attribute the
+	// declaration recorded.
+	//
+	// Only reachable where DeclaredNameWithoutValueIsEmpty is no. The
+	// dialect that sets a declared name empty has an empty array to print
+	// and never arrives here, which is why `typeset -ar a=(  )` keeps its
+	// parentheses (#1664, #1554).
+	unset bool
 	// float is `typeset -F`, the float attribute, whose letter this writes
 	// and whose *precision* it does not: measured 2026-09-07, zsh lists
 	// `typeset -F 3 x=3.14159` back as `typeset -F x=3.142` — the places are
@@ -159,8 +171,20 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	attributed := d.integer || d.float || d.readonly || d.exported || d.lower ||
 		d.upper || d.hidden || d.unique
 	if r.removed[name] {
-		// `unset` took the value away; only a surviving attribute keeps the
-		// name listable.
+		// The name holds nothing — `unset` took the value away, or a
+		// declaration hid it — but the compound attribute a declaration
+		// recorded outlives the value, and it is the store that carries it.
+		// Both facts go out together: `unset` on the declaration and the
+		// kind beside it. See declaration.unset.
+		if _, ok := r.AssocArrays[name]; ok {
+			d.isAssoc, d.unset = true, true
+			return d, true
+		}
+		if _, ok := r.Arrays[name]; ok {
+			d.isArr, d.unset = true, true
+			return d, true
+		}
+		// Only a surviving attribute keeps a name with neither listable.
 		return d, attributed
 	}
 	// The array tables answer ahead of Vars, which mirrors an array's first
@@ -421,6 +445,11 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 	}
 	head += " " + d.name
 	switch {
+	case d.unset:
+		// The letters and nothing else: the name is typed and holds no
+		// value, so there is no `=` to write. Ahead of the two compound
+		// branches because it is those the name is typed as.
+		return head
 	case d.isAssoc:
 		if len(d.assoc) == 0 {
 			// The attribute is the whole of what an empty table has to say,

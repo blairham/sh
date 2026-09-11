@@ -141,6 +141,15 @@ func TestSemantics(t *testing.T) {
 		{"SelectEofEndsPromptLine", s.SelectEofEndsPromptLine, interp.Yes},
 		{"SelectAssumesUnboundedWidth", s.SelectAssumesUnboundedWidth, interp.Yes},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.Yes},
+		// The four declaration divergences this shell is alone in: the export
+		// letter carrying `-g` under every word but `local`, a valueless
+		// declaration writing a standing name back, a plain word over a name
+		// really holding an array being fatal, and `readonly -a` declaring the
+		// array as well as freezing the name.
+		{"ExportLetterDeclaresAGlobal", s.ExportLetterDeclaresAGlobal, interp.Yes},
+		{"ValuelessDeclarationOfAHeldNameListsIt", s.ValuelessDeclarationOfAHeldNameListsIt, interp.Yes},
+		{"ScalarOverACompoundIsAnInconsistentType", s.ScalarOverACompoundIsAnInconsistentType, interp.Yes},
+		{"ReadonlyRecordsTheCompoundAttribute", s.ReadonlyRecordsTheCompoundAttribute, interp.Yes},
 		// The same answer as the axis above, and by coincidence rather than
 		// by implication: this shell got the re-read for years out of the
 		// other question being yes, and ksh93 answers the two differently.

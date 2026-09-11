@@ -32719,6 +32719,50 @@
         "TimedOut": false
       }
     },
+    "declare/a-declared-name-that-is-unset-and-still-typed": {
+      "bash": {
+        "Stdout": "declare -a q~st=0~declare -i n",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -a q~st=0~declare -i n",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -a q='()'~st=0~declare -i n=\"\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: local: -a: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: local: not found~\u003cshell\u003e: local: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -a q=(  )~st=0~typeset -i n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-float-name-holds-the-text-the-precision-writes": {
       "bash": {
         "Stdout": "1[0]~2[7]~3[1.5]~4[]~5[]~6[]",
@@ -33863,6 +33907,50 @@
         "TimedOut": false
       }
     },
+    "declare/a-scalar-declared-over-a-name-holding-an-array": {
+      "bash": {
+        "Stdout": "st=0 [q y]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 [q y]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0 [q y]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 [q y]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:typeset:1: b: inconsistent type for assignment",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-subscripted-declaration-into-a-fresh-scope": {
       "bash": {
         "Stdout": "top [x q z]~in [q]~after [x y z]",
@@ -34429,6 +34517,50 @@
       },
       "zsh": {
         "Stdout": "(none)~read=[z]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-valueless-declaration-of-a-name-that-holds-something": {
+      "bash": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a=( x y )~s=str~done",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -35529,6 +35661,50 @@
       },
       "zsh": {
         "Stdout": "[SET][0] env=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-integer-assignment-reads-a-leading-zero": {
+      "bash": {
+        "Stdout": "arith=8~decl=[8]~reread=[010]~assign=[8]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "arith=8~decl=[8]~reread=[010]~assign=[8]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "arith=8~decl=[8]~reread=[010]~assign=[8]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "arith=8~decl=[]~reread=[010]~assign=[010]",
+        "Stderr": "\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 3: typeset: not found~\u003cshell\u003e: 4: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "arith=8~decl=[10]~reread=[10]~assign=[10]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "arith=10~decl=[10]~reread=[10]~assign=[10]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -39231,6 +39407,50 @@
         "TimedOut": false
       }
     },
+    "declare/readonly-with-a-kind-letter-and-no-value": {
+      "bash": {
+        "Stdout": "declare -r a~declare -r m",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -r a~declare -r m",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: a: not found~\u003cshell\u003e: line 1: readonly: -A: invalid option~readonly: usage: readonly [-af] [name[=value] ...] or readonly -p~\u003cshell\u003e: line 1: typeset: m: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: readonly: Illegal option -a",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: readonly: -a: unknown option~Usage: readonly [-p] [name[=value]...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -ar a=(  )~typeset -Ar m=( )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/the-case-letters-do-not-outlive-the-declaration": {
       "bash": {
         "Stdout": "in=[mixed]~after=[ABC]~later=[StillMixed]",
@@ -39269,6 +39489,50 @@
       },
       "zsh": {
         "Stdout": "in=[mixed]~after=[ABC]~later=[StillMixed]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/the-export-letter-and-the-scope-a-declaration-takes": {
+      "bash": {
+        "Stdout": "x=[UNSET]~r=[UNSET]~l=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "x=[UNSET]~r=[UNSET]~l=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "x=[UNSET]~r=[UNSET]~l=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "x=[UNSET]~r=[UNSET]",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 3: local: -x: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "x=[1]~r=[1]~l=[UNSET]",
+        "Stderr": "\u003cshell\u003e: line 3: local: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "x=[1]~r=[UNSET]~l=[UNSET]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -40941,6 +41205,94 @@
       },
       "zsh": {
         "Stdout": "[]~after=[out]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/what-counts-as-a-zero-padded-integer-assignment": {
+      "bash": {
+        "Stdout": "1[8]~2[9]~3[-8]~4[16]~5[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1[8]~2[9]~3[-8]~4[16]~5[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1[8]~2[9]~3[-8]~4[16]~5[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "1[]~2[]~3[]~4[]~5[]",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 3: typeset: not found~\u003cshell\u003e: 4: typeset: not found~\u003cshell\u003e: 5: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1[8]~2[9]~3[-10]~4[16]~5[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1[10]~2[11]~3[-10]~4[16#10]~5[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/what-the-inconsistent-type-refusal-is-not": {
+      "bash": {
+        "Stdout": "1[q] st=0~2[q]~3[x y]~4[1] st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1[q] st=0~2[q]~3[x y]~4[1] st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1[q] st=0~2[q]~3[x y]~4[1] st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1[q] st=0~2[x]~3[x y]~4[1] st=0~tail",
+        "Stderr": "\u003cshell\u003e: line 2: local: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1[q] st=0~2[q]~3[x y]~4[] st=0~tail",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -19,6 +19,13 @@ func axisRun(t *testing.T, src string, set func(*Semantics)) (string, int) {
 		// The scalar reading an array's bare name yields is its own axis,
 		// answered so these tests reach the question they are about.
 		sem.ArrayScalarIsTheWholeArray = No
+		// And the four declaration divergences, answered the quiet way for
+		// the same reason — see vector_test.go. A test that is about one of
+		// them sets it in its own `set`, which runs after this.
+		sem.ExportLetterDeclaresAGlobal = No
+		sem.ValuelessDeclarationOfAHeldNameListsIt = No
+		sem.ScalarOverACompoundIsAnInconsistentType = No
+		sem.ReadonlyRecordsTheCompoundAttribute = No
 		set(&sem)
 		r.Semantics = &sem
 	})

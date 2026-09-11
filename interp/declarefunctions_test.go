@@ -58,6 +58,13 @@ func declRunWith(t *testing.T, src string, set func(*Semantics), dg Diagnostics,
 	sem.ValuelessDeclarationHidesTheOuterValue = Yes
 	sem.DeclareListing = DeclareListingClustered
 	sem.DeclareValueQuoting = ListingQuoteAlwaysDouble
+	// See vector_test.go: the four declaration divergences answered the
+	// quiet way, so a test that is not about one of them is not refused by
+	// it. The suites that are about them set their own.
+	sem.ExportLetterDeclaresAGlobal = No
+	sem.ValuelessDeclarationOfAHeldNameListsIt = No
+	sem.ScalarOverACompoundIsAnInconsistentType = No
+	sem.ReadonlyRecordsTheCompoundAttribute = No
 	if set != nil {
 		set(&sem)
 	}

@@ -30,12 +30,13 @@ import (
 // measured slots, and repl's own tests pin them; here they are just the
 // arithmetic that makes a description with three capabilities in it.
 const (
-	boolAutoMargin   = 1  // am
-	numberColors     = 13 // colors
-	numberLines      = 2  // lines
-	stringCursorUp   = 19 // cuu1
-	stringCursorBack = 14 // cub1
-	stringEraseLine  = 6  // el
+	boolAutoMargin   = 1   // am
+	numberColors     = 13  // colors
+	numberLines      = 2   // lines
+	stringCursorUp   = 19  // cuu1
+	stringCursorBack = 14  // cub1
+	stringEraseLine  = 6   // el
+	stringTopBottom  = 369 // smgtb
 )
 
 // fixtureTerm is the terminal every case here runs under.
@@ -49,6 +50,9 @@ func runZshTerminfo(t *testing.T, src string) (string, int) {
 		stringCursorUp:   "\x1b[A",
 		stringCursorBack: "\b",
 		stringEraseLine:  "\x1b[K",
+		// A string capability whose termcap code is claimed by a boolean as
+		// well, so that the two views cannot be checked by counting alone.
+		stringTopBottom: "\x1bMM",
 	}
 	nums := make([]int, numberColors+1)
 	for i := range nums {
@@ -59,7 +63,7 @@ func runZshTerminfo(t *testing.T, src string) (string, int) {
 	bools[boolAutoMargin] = 1
 	dir := terminfofixture.Database(t, terminfofixture.Description{
 		Name: fixtureTerm, Bools: bools, Nums: nums,
-		StrCount: stringCursorUp + 1, Strs: strs,
+		StrCount: stringTopBottom + 1, Strs: strs,
 		Ext: &terminfofixture.Extended{
 			Values: []string{"\x1b[2 q"}, Names: []string{"Se"},
 		},
@@ -220,6 +224,24 @@ func TestTermcapIsTheSameValuesUnderTheOtherNames(t *testing.T) {
 	}
 }
 
+// Where two capabilities claim one termcap code, `$termcap` answers with the
+// one zsh's own search reaches first.
+//
+// Three codes are claimed twice by terminfo(5)'s own table, and `MT` is the
+// case a real description can produce: the boolean `OTMT` and the string
+// `smgtb`. Measured against zsh 5.9.2 with a description carrying `smgtb`,
+// `${termcap[MT]}` is `no` — the boolean — while `${terminfo[smgtb]}` is the
+// sequence. Booleans come before strings in the search, so the view is built
+// in that order and the first writer keeps the key.
+func TestATermcapCodeClaimedTwiceAnswersWithTheBoolean(t *testing.T) {
+	out, st := runZshTerminfo(t,
+		`print -r -- "MT=[${(V)termcap[MT]}] smgtb=[${(V)terminfo[smgtb]}] OTMT=[${terminfo[OTMT]}]"`)
+	want := "MT=[no] smgtb=[^[MM] OTMT=[no]\n"
+	if out != want || st != 0 {
+		t.Errorf("the doubly-claimed code = %q (status %d), want %q", out, st, want)
+	}
+}
+
 // `${terminfo[@]}` is the whole table, and the two views hold the same number
 // of things.
 //
@@ -229,10 +251,11 @@ func TestTermcapIsTheSameValuesUnderTheOtherNames(t *testing.T) {
 // number.
 func TestTheWholeTableIsNeitherEmptyNorLopsided(t *testing.T) {
 	out, st := runZshTerminfo(t, `print -r -- "n=${#terminfo} all=${#terminfo[@]} tc=${#termcap}"`)
-	// Forty-four booleans, two numbers, three strings and one extended
+	// Forty-four booleans, two numbers, four strings and one extended
 	// string; `$termcap` is the same set minus the extended one, which has no
-	// two-letter code to be found under.
-	want := "n=50 all=50 tc=49\n"
+	// two-letter code to be found under, and minus `smgtb`, whose code `MT`
+	// the boolean `OTMT` already claimed.
+	want := "n=51 all=51 tc=49\n"
 	if out != want || st != 0 {
 		t.Errorf("the whole table = %q (status %d), want %q", out, st, want)
 	}

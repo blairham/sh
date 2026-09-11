@@ -59,6 +59,35 @@ package repl
 // have-I-got-it test satisfied, which is worse than the absence: the absence
 // at least takes the branch written for it.
 
+// # What still differs from real zsh, measured
+//
+// Swept over 250 of the 2,684 descriptions in /usr/share/terminfo, comparing
+// this reader's answers against zsh 5.9.2's `$terminfo` key by key and byte
+// by byte, 2026-09-11. Every value agreed except for three things, and all
+// three are recorded rather than emulated:
+//
+//   - **`rs2` and `is3`.** zsh answers absent for these two on descriptions
+//     that carry them — `screen`, `vt100`, `sun`, `aixterm`, `putty` and
+//     about a fifth of the database — while `infocmp` prints the value and
+//     this reader returns it. Reproduced with descriptions compiled for the
+//     purpose: `rs2` is answered when `rs1` or `rs3` is also present and not
+//     otherwise, which is a rule with no explanation behind it. Emulating it
+//     would be encoding an unexplained artifact of one machine's curses
+//     library; reporting what the description holds is the answer `infocmp`
+//     gives and the one a script asking for a reset string wants.
+//   - **`cols` and `lines`.** Where a description carries neither — `dumb`,
+//     `linux`, `cygwin`, `putty` — zsh answers 80 and 24 anyway, and answers
+//     `$COLUMNS` and `$LINES` when those are set. That is the *screen size*
+//     rather than the description, a separate thing this shell tracks
+//     elsewhere, and wiring the two together is its own change.
+//   - **Which capabilities are enumerated.** `${#terminfo}` is 220 for
+//     `xterm-256color` in zsh and 281 here, and the difference is entirely
+//     the extended section: zsh answers `${terminfo[Se]}` with the cursor
+//     sequence and `${+terminfo[Se]}` with 1 while leaving `Se` out of
+//     `${(k)terminfo}`. Listing what can be read is the consistency
+//     interp.Runner.SetDynamicAssocElement requires of a produced
+//     association, so the extended names are in both readings here.
+//
 // TerminalCapability is one capability, under both name systems.
 type TerminalCapability struct {
 	// Terminfo is the terminfo capability name — the long one.

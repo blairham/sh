@@ -210,6 +210,18 @@ func (w *Word) Literal() string {
 	if w == nil {
 		return ""
 	}
+	// The two shapes that need no work at all, and between them they are
+	// nearly every word a script contains: `cmd`, `-x`, `"$x"` and `name` are
+	// all one span, and a span's value is already the string this returns.
+	// Joining them allocated a byte slice and then a string for every one —
+	// 17.5MB of a 154MB interactive startup, all of it a copy of something
+	// the tree already held.
+	switch len(w.Spans) {
+	case 0:
+		return ""
+	case 1:
+		return w.Spans[0].Value
+	}
 	var b []byte
 	for _, s := range w.Spans {
 		b = append(b, s.Value...)

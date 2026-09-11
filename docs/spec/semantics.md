@@ -7700,6 +7700,50 @@ ksh93; dash and zsh stay where they are and report success, which is the
 quieter answer and the surprising one. The same axis answers `cd -` with
 no OLDPWD.
 
+**`CdEmptyOperandIsAnError`** — bash yes · dash no · ksh93 yes · zsh no
+
+Refuses `cd ""` instead of taking it as the directory the shell is
+already in. An empty operand is not the same thing as no operand, and it
+is not nothing either: `cd /tmp; OLDPWD=MARK; cd ""` leaves OLDPWD as
+`/tmp` in dash, bash 3.2 and zsh and fires zsh's `chpwd`, so where it is
+accepted it is a real move to the same place. bash 5.3 and the same
+binary called as `sh` say `cd: null directory`; ksh93 says `cd: bad
+directory`; both at 1 and both staying put. A fifth branch — neither
+"cannot change" nor "HOME not set".
+
+**`CdEmptyHomeIsAnError`** — bash no · dash no · ksh93 yes · zsh no
+
+Refuses `cd` with HOME set to the empty string, rather than going where
+the shell already is. A separate question from `CdWithoutHomeIsAnError`,
+which is about a HOME that is *absent*, and separate again from the axis
+above: bash answers yes to the first, no to this one and yes to the
+third, so no two of them can be one field. ksh93 refuses an empty HOME in
+the same words it refuses an empty operand with.
+
+**`CdSubstitutesTheOperands`** — bash no · dash no · ksh93 yes · zsh yes
+
+Reads `cd old new` as a rewrite of the current directory — the first
+occurrence of old in `$PWD`, in the *string* rather than the path
+component, replaced by new — instead of as too many operands. From
+`…/a/q/a/w`, `cd a Z` lands in `…/Z/q/a/w` in both shells that have the
+form. bash refuses the shape outright at status 2; dash and bash 3.2
+ignore everything after the first operand.
+
+**`CdSubstitutionPrintsTheDirectory`** — bash no · dash no · ksh93 yes ·
+zsh no
+
+Writes where a `cd old new` went, the way `cd -` writes where it went.
+Asked only on a substitution that arrived somewhere: a rewrite naming a
+directory that is not there prints nothing in either shell.
+
+**`CdRefusesExtraOperands`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Refuses operands after the first instead of ignoring them, in a dialect
+that does not read two as a substitution. Asked only where
+`CdSubstitutesTheOperands` said no, which is the point the two shells
+that have the form are no longer in the conversation — so the yes for
+ksh93 and zsh is recorded rather than reached.
+
 **`CdpathAnnouncesTheDirectory`** — bash yes · dash yes · ksh93 yes · zsh no
 
 Prints where CDPATH sent a `cd`, when the winning entry was not a plain
@@ -8058,6 +8102,28 @@ handler for killed it, rather than because it reached the end or ran
 
 prints bye in bash and ksh93 and prints nothing in dash and zsh, and all
 four report 130. A two-two split on whether dying counts as exiting.
+
+**`LoopControlOutsideALoopIsFatal`** — bash no · dash no · ksh93 no · zsh
+yes
+
+Ends the script when `break` or `continue` is run with no loop around it,
+instead of reporting it — or not — and running the next command. `echo t;
+break; echo after` prints `after` and ends at 0 in dash, ksh93, bash 5.3
+and bash called as `sh`; zsh prints neither `after` nor anything after it
+on a later *line* either, so it is the script that stops and not the
+line. The status is then the dialect's own for a fatal error, which is 1
+there.
+
+Whether anything is *said* is a separate question and cuts the panel
+differently — bash reports and carries on, zsh reports and stops, dash
+and ksh93 say nothing and carry on — so the wording is
+`Diagnostics.LoopControlOutsideALoop` rather than a second answer here.
+
+The question is only about the misuse. A `break` with a loop around it is
+ordinary control flow everywhere, and a `break` inside a *subshell* that
+is inside a loop leaves that subshell in four of the six, which is why
+the count this is asked against is the dynamic one a cloned Runner
+carries with it.
 
 **`ReturnOutsideAFunctionIsRefused`** — bash yes · dash no · ksh93 no · zsh no
 

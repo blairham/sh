@@ -152,6 +152,11 @@ var exempt = map[string]string{
 	// it is the boundary.
 	"interp.stat": "fsgate.go's own os.Stat, on both sides of the ActionStat consultation. " +
 		"This is the gate rather than a caller of it.",
+	"interp.statEntering": "fsgate.go's own os.Stat again, asked as a chdir asks it — of the " +
+		"directory's own entry rather than of the directory, which is what makes the execute " +
+		"bit decide. Behind the same ActionStat consultation as stat, and that consultation " +
+		"names the *directory*, so a rule written against the name a script used still " +
+		"matches (#1492).",
 	"interp.lstat":    "fsgate.go's own os.Lstat, behind the same ActionStat consultation as stat.",
 	"interp.readLink": "fsgate.go's own os.Readlink, behind the same ActionStat consultation as stat.",
 	"interp.readDir": "fsgate.go's own listing, behind ActionReadDir. The gated path opens the " +

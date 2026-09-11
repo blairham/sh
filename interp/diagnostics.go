@@ -327,6 +327,44 @@ type Diagnostics struct {
 	CdHomeNotSet string
 	// CdOldpwdNotSet is `cd -` with no OLDPWD. Same.
 	CdOldpwdNotSet string
+	// CdEmptyOperand is `cd ""`, and `cd` with HOME set to the empty string
+	// in the one dialect that refuses that too. No verbs.
+	//
+	// A fifth branch rather than a shade of CdCannotChange or of
+	// CdHomeNotSet: bash calls it `cd: null directory` and ksh93 `cd: bad
+	// directory`, and neither sentence names a path or mentions HOME. The
+	// three dialects that take an empty operand as somewhere say nothing, so
+	// the empty value is their whole answer.
+	CdEmptyOperand string
+	// CdTooManyOperands is `cd` given more operands than it takes: two in
+	// the dialects without the substitution form, three in the two with it.
+	// No verbs.
+	//
+	// bash and zsh both say `cd: too many arguments` and leave different
+	// statuses behind; ksh93 says nothing here and writes its usage block
+	// instead, which is the field below.
+	CdTooManyOperands string
+	// CdTooManyOperandsShowsUsage writes BuiltinUsage["cd"] under that
+	// refusal. True in ksh93, which writes the block and no sentence.
+	//
+	// Independent of the sentence rather than an alternative to it: nothing
+	// stops a dialect writing both, and the two shells that write one each
+	// write a different one.
+	CdTooManyOperandsShowsUsage bool
+	// CdTooManyOperandsStatus is what that refusal reports. Zero means
+	// CdStatus, which is what a `cd` that could not move reports. bash and
+	// ksh93 answer 2 here where their CdStatus is 1, because it is a usage
+	// error rather than a directory that would not open; zsh answers 1 and
+	// so needs nothing.
+	CdTooManyOperandsStatus int
+	// CdBadSubstitution is `cd old new` where old is not in the current
+	// directory's path. One verb: the string that was not found.
+	//
+	// Only the two dialects with the form reach it, and they word it
+	// differently enough that one of them names the operand and the other
+	// does not: ksh93 says `cd: bad substitution` and zsh `cd: string not in
+	// pwd: old`.
+	CdBadSubstitution string
 
 	// PrintfBadNumber is a numeric conversion given something that is not a
 	// number. One verb: the operand.

@@ -137,6 +137,11 @@ func TestCdQuietIsAskedBeforeTheUnknownLetterQuestion(t *testing.T) {
 	// send `-q` to the operand is this shell not having the letter.
 	sem.CdRefusesUnknownOption = No
 	sem.CdLastPathOptionWins = No
+	// And the operand-count question answered with "ignore what follows the
+	// first", so that the letter is what decides this row rather than the
+	// two operands a letter read as one leaves behind.
+	sem.CdSubstitutesTheOperands = No
+	sem.CdRefusesExtraOperands = No
 	out, errs := &strings.Builder{}, &strings.Builder{}
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "zsh", Dir: dir,

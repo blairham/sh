@@ -6753,6 +6753,16 @@ grades it and nothing drift-checks it either, for the same reason.
 | --- | --- | --- | --- | --- | --- | --- |
 | `cd/missing-directory-diverges` | `st=2` **2>** `<shell>: 1: cd: can't cd to /nope-xyz-abc` | `st=1` **2>** `<shell>: line 1: cd: /nope-xyz-abc: No such file or directory` | `st=1` **2>** `<shell>: line 1: cd: /nope-xyz-abc: No such file or directory` | `st=1` **2>** `<shell>: line 0: cd: /nope-xyz-abc: No such file or directory` | `st=1` **2>** `<shell>: cd: /nope-xyz-abc: [No such file or directory]` | `st=1` **2>** `<shell>:cd:1: no such file or directory: /nope-xyz-abc` |
 | `cd/onto-a-file-is-a-different-reason` | `st=2` **2>** `<shell>: 1: cd: can't cd to ./f` | `st=1` **2>** `<shell>: line 1: cd: ./f: Not a directory` | `st=1` **2>** `<shell>: line 1: cd: ./f: Not a directory` | `st=1` **2>** `<shell>: line 0: cd: ./f: Not a directory` | `st=1` **2>** `<shell>: cd: ./f: [Not a directory]` | `st=1` **2>** `<shell>:cd:1: not a directory: ./f` |
+| `cd/into-a-directory-with-no-execute-bit` | `st=2~/private<tmp>` **2>** `<shell>: 1: cd: can't cd to noexec` | `st=1~/private<tmp>` **2>** `<shell>: line 1: cd: noexec: Permission denied` | `st=1~/private<tmp>` **2>** `<shell>: line 1: cd: noexec: Permission denied` | `st=1~/private<tmp>` **2>** `<shell>: line 0: cd: noexec: Permission denied` | `st=1~<tmp>` **2>** `<shell>: cd: noexec: [Permission denied]` | `st=1~/private<tmp>` **2>** `<shell>:cd:1: permission denied: noexec` |
+| `cd/into-a-directory-that-may-be-read-and-not-entered` | `st=2~/private<tmp>` **2>** `<shell>: 1: cd: can't cd to r` | `st=1~/private<tmp>` **2>** `<shell>: line 1: cd: r: Permission denied` | `st=1~/private<tmp>` **2>** `<shell>: line 1: cd: r: Permission denied` | `st=1~/private<tmp>` **2>** `<shell>: line 0: cd: r: Permission denied` | `st=1~<tmp>` **2>** `<shell>: cd: r: [Permission denied]` | `st=1~/private<tmp>` **2>** `<shell>:cd:1: permission denied: r` |
+| `cd/into-a-directory-that-may-be-entered-and-not-read` | `st=0~/private<tmp>/x` | `st=0~/private<tmp>/x` | `st=0~/private<tmp>/x` | `st=0~/private<tmp>/x` | `st=0~<tmp>/x` | `st=0~/private<tmp>/x` |
+| `cd/an-empty-operand` | `st=0~/` | `st=1~/` **2>** `<shell>: line 1: cd: null directory` | `st=1~/` **2>** `<shell>: line 1: cd: null directory` | `st=0~/` | `st=1~/` **2>** `<shell>: cd: bad directory` | `st=0~/` |
+| `cd/an-empty-operand-is-a-move` | `old=/tmp` | `old=MARK` **2>** `<shell>: line 1: cd: null directory` | `old=MARK` **2>** `<shell>: line 1: cd: null directory` | `old=/tmp` | `old=MARK` **2>** `<shell>: cd: bad directory` | `old=/tmp` |
+| `cd/an-empty-home` | `st=0~/` | `st=0~/` | `st=0~/` | `st=0~/` | `st=1~/` **2>** `<shell>: cd: bad directory` | `st=0~/` |
+| `cd/two-operands` | `st=2~/private<tmp>/x/alpha` **2>** `<shell>: 1: cd: can't cd to alpha` | `st=2~/private<tmp>/x/alpha` **2>** `<shell>: line 1: cd: too many arguments` | `st=2~/private<tmp>/x/alpha` **2>** `<shell>: line 1: cd: too many arguments` | `st=1~/private<tmp>/x/alpha` **2>** `<shell>: line 0: cd: alpha: No such file or directory` | `<tmp>/x/beta~st=0~<tmp>/x/beta` | `st=0~/private<tmp>/x/beta` |
+| `cd/two-operands-where-the-first-is-not-in-the-path` | `st=2~/private<tmp>/x/alpha` **2>** `<shell>: 1: cd: can't cd to zzz` | `st=2~/private<tmp>/x/alpha` **2>** `<shell>: line 1: cd: too many arguments` | `st=2~/private<tmp>/x/alpha` **2>** `<shell>: line 1: cd: too many arguments` | `st=1~/private<tmp>/x/alpha` **2>** `<shell>: line 0: cd: zzz: No such file or directory` | `st=1~<tmp>/x/alpha` **2>** `<shell>: cd: bad substitution` | `st=1~/private<tmp>/x/alpha` **2>** `<shell>:cd:1: string not in pwd: zzz` |
+| `cd/two-operands-rewrite-the-first-occurrence` | `st=2~/private<tmp>/q/w/q/e` **2>** `<shell>: 1: cd: can't cd to w` | `st=2~/private<tmp>/q/w/q/e` **2>** `<shell>: line 1: cd: too many arguments` | `st=2~/private<tmp>/q/w/q/e` **2>** `<shell>: line 1: cd: too many arguments` | `st=1~/private<tmp>/q/w/q/e` **2>** `<shell>: line 0: cd: w: No such file or directory` | `st=1~<tmp>/q/w/q/e` **2>** `<shell>: cd: <tmp>/q/Z/q/e: [No such file or directory]` | `st=1~/private<tmp>/q/w/q/e` **2>** `<shell>:cd:1: no such file or directory: /private<tmp>/q/Z/q/e` |
+| `cd/three-operands` | `st=2~/private<tmp>/x/alpha` **2>** `<shell>: 1: cd: can't cd to alpha` | `st=2~/private<tmp>/x/alpha` **2>** `<shell>: line 1: cd: too many arguments` | `st=2~/private<tmp>/x/alpha` **2>** `<shell>: line 1: cd: too many arguments` | `st=1~/private<tmp>/x/alpha` **2>** `<shell>: line 0: cd: alpha: No such file or directory` | `st=2~<tmp>/x/alpha` **2>** `Usage: cd [-LP] [directory]~   Or: cd [ options ] old new` | `st=1~/private<tmp>/x/alpha` **2>** `<shell>:cd:1: too many arguments` |
 | `cd/no-home-diverges` | `st=0` | `st=1` **2>** `<shell>: line 1: cd: HOME not set` | `st=1` **2>** `<shell>: line 1: cd: HOME not set` | `st=1` **2>** `<shell>: line 0: cd: HOME not set` | `st=1` **2>** `<shell>: cd: bad directory` | `st=0` |
 | `cd/dash-announces-where-it-went` | `printed` | `printed` | `printed` | `printed` | `printed` | `silent` |
 | `cd/cdpath-may-announce-the-move` | `announced` | `announced` | `announced` | `announced` | `announced` | `silent` |
@@ -6767,6 +6777,46 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cd/onto-a-file-is-a-different-reason` — the case dash cannot express: three of the four say `not a directory` where they said `no such file`, and dash says the same sentence for both
   ```sh
   : > f; cd ./f; echo "st=$?"
+  ```
+- `cd/into-a-directory-with-no-execute-bit` — the whole panel refuses and we moved. `cd` decided by asking whether the path was a directory, which is a different question from the one a chdir asks — a directory the caller may not *enter* stats perfectly well. The shell then had a working directory nothing could be resolved against, so every relative path afterwards failed with a reason naming the path rather than the `cd` that should have failed. Four wordings and two statuses, and the `pwd` is the half that says whether it moved (#1492)
+  ```sh
+  mkdir noexec; chmod 000 noexec; cd noexec; echo "st=$?"; pwd; chmod 755 "$OLDPWD/noexec" 2>/dev/null; chmod 755 noexec 2>/dev/null
+  ```
+- `cd/into-a-directory-that-may-be-read-and-not-entered` — the row that says the test is the *execute* bit rather than `some permission`: the directory can be listed and not entered, and the whole panel refuses it exactly as it refuses one with no permission at all
+  ```sh
+  mkdir r; chmod 444 r; cd r; echo "st=$?"; pwd; chmod 755 "$OLDPWD/r" 2>/dev/null; chmod 755 r 2>/dev/null
+  ```
+- `cd/into-a-directory-that-may-be-entered-and-not-read` — and the other side of it, which is what a fix reaching for a directory *listing* would have got wrong: nothing in here can be listed and every shell in the panel enters it. A guard that opened the directory to decide would refuse this one and accept the one above, which is the wrong answer twice
+  ```sh
+  mkdir x; chmod 111 x; cd x; echo "st=$?"; pwd
+  ```
+- `cd/an-empty-operand` — an empty operand is not the same thing as no operand, and it is not nothing either. dash, bash 3.2 and zsh take it as the directory they are already in; bash 5.3 and the same binary called as `sh` say `cd: null directory` and ksh93 `cd: bad directory`, both at 1 and both staying put. That is a fifth branch — neither `cannot change` nor `HOME not set` — and ours read the empty string as *no* operand and went home (#1491)
+  ```sh
+  cd /; cd ""; echo "st=$?"; pwd
+  ```
+- `cd/an-empty-operand-is-a-move` — the row that says what `accepted` means for the three columns that accept it: the previous directory moves, so it is a real move to the same place rather than a no-op. A fix that returned early on an empty operand would match the row above and leave MARK here
+  ```sh
+  cd /tmp; OLDPWD=MARK; cd ""; echo "old=$OLDPWD"
+  ```
+- `cd/an-empty-home` — a HOME set to the empty string, as distinct from an absent one. Five of the six say nothing and report 0 — an empty HOME is an empty *destination*, which is somewhere — and only ksh93 refuses, in the same words it refuses an empty operand with. `biCd` read HOME and tested the value against "", so both reached the branch that says HOME is not set, and ours said `cd: HOME not set` where bash says nothing at all (#1491)
+  ```sh
+  cd /; HOME=; cd; echo "st=$?"; pwd
+  ```
+- `cd/two-operands` — three refusals and one silent acceptance, and two of the six are not refusing at all: `cd old new` is ksh93's and zsh's *substitution* form, which rewrites the current directory's path by replacing old with new — ksh93 prints where it went and zsh does not. bash 5.3 says `cd: too many arguments` at 2, dash and bash 3.2 take the first operand and ignore the rest. Ours gave the last of those to all four dialects (#1491)
+  ```sh
+  mkdir -p x/alpha x/beta; cd x/alpha; cd alpha beta; echo "st=$?"; pwd
+  ```
+- `cd/two-operands-where-the-first-is-not-in-the-path` — the substitution that cannot be made, which is the row that tells the form from a refusal: ksh93 says `cd: bad substitution` and zsh `cd: string not in pwd: zzz` — its own wording, naming neither a directory nor an operand count — while bash still says `too many arguments` and dash still tries to enter `zzz`
+  ```sh
+  mkdir -p x/alpha; cd x/alpha; cd zzz beta; echo "st=$?"; pwd
+  ```
+- `cd/two-operands-rewrite-the-first-occurrence` — which occurrence the rewrite replaces, measured rather than assumed: the first in the *string*, so the path rewritten is `…/q/Z/q/e` and not `…/q/w/q/Z`. The directory does not exist, which is the point — what the shells name in the failure is the rewritten path, and that is the only way to read the rule off the answer
+  ```sh
+  mkdir -p q/w/q/e; cd q/w/q/e; cd w Z; echo "st=$?"; pwd
+  ```
+- `cd/three-operands` — one too many for the substitution form as well, and the two shells that have it disagree about what to print: zsh says `cd: too many arguments` at 1 and ksh93 writes its usage block — both lines of it, naming the substitution form — and says nothing else, at 2. bash says the same sentence as zsh at a different status, which is why the sentence and the status are separate answers
+  ```sh
+  mkdir -p x/alpha x/beta; cd x/alpha; cd alpha beta gamma; echo "st=$?"; pwd
   ```
 - `cd/no-home-diverges` — bash and ksh93 call this an error and dash and zsh stay where they are and report success, which is the quieter answer and the surprising one
   ```sh

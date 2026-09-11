@@ -784,6 +784,19 @@ func Semantics() interp.Semantics {
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.Yes
+	// One sentence for every empty destination: `cd ""`, `HOME=; cd` and a
+	// HOME that is absent all say `cd: bad directory` at 1. The first two
+	// are these axes and the third is CdWithoutHomeIsAnError.
+	s.CdEmptyOperandIsAnError = interp.Yes
+	s.CdEmptyHomeIsAnError = interp.Yes
+	// `cd old new` rewrites the current directory's path here, and prints
+	// where it went. Measured from `…/x/alpha`: `cd alpha beta` writes
+	// `…/x/beta` on standard output and moves there.
+	s.CdSubstitutesTheOperands = interp.Yes
+	s.CdSubstitutionPrintsTheDirectory = interp.Yes
+	// Never asked, the form above having answered for two operands and
+	// refused three; recorded so that nothing is left unanswered.
+	s.CdRefusesExtraOperands = interp.Yes
 	s.CdRefusesUnknownOption = interp.Yes
 	s.CdHasQuietOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes
@@ -1123,7 +1136,17 @@ func Diagnostics() interp.Diagnostics {
 		GetoptsMissingArgument: "-%[1]s: argument expected",
 		CdCannotChange:         "cd: %[1]s: [%[2]s]",
 		// One message for both, where bash names which variable was missing.
-		CdHomeNotSet:              "cd: bad directory",
+		CdHomeNotSet: "cd: bad directory",
+		// The same sentence for an empty operand and for a HOME set to
+		// nothing, which is what makes this shell's answer one rule.
+		CdEmptyOperand: "cd: bad directory",
+		// A third operand to the substitution form writes the usage block
+		// and no sentence of its own, at the usage status.
+		CdTooManyOperandsShowsUsage: true,
+		CdTooManyOperandsStatus:     2,
+		// `cd old new` where old is not in the current directory's path.
+		// The operand is not named.
+		CdBadSubstitution:         "cd: bad substitution",
 		CdOldpwdNotSet:            "cd: bad directory",
 		PrintfBadVerb:             "printf: %[1]s: unknown format specifier",
 		PrintfBadOption:           "printf: %[1]s: unknown option",
@@ -1248,6 +1271,10 @@ func Diagnostics() interp.Diagnostics {
 			"read": "Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]\n" +
 				"            [var?prompt] [var ...]",
 			"trap": "Usage: trap [-p] [action condition ...]",
+			// Two lines: the ordinary form and the substitution form, which
+			// is this shell announcing that `cd old new` is a form rather
+			// than a mistake.
+			"cd": "Usage: cd [-LP] [directory]\n   Or: cd [ options ] old new",
 			// Two spaces before the ellipsis, as written.
 			"type": "Usage: whence [-afpqv] name  ...",
 			// Three lines, exactly as the engine wraps them.

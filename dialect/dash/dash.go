@@ -365,6 +365,15 @@ func Semantics() interp.Semantics {
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.Yes
 	s.ChildInterruptEndsTheScript = interp.No
+	// An empty operand and an empty HOME are both somewhere here: `cd ""`
+	// and `HOME=; cd` say nothing and report 0, staying put.
+	s.CdEmptyOperandIsAnError = interp.No
+	s.CdEmptyHomeIsAnError = interp.No
+	// And everything after the first operand is ignored rather than
+	// refused: `cd alpha beta` goes to alpha and says nothing.
+	s.CdSubstitutesTheOperands = interp.No
+	s.CdSubstitutionPrintsTheDirectory = interp.No
+	s.CdRefusesExtraOperands = interp.No
 	s.CdRefusesUnknownOption = interp.Yes
 	s.CdHasQuietOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes

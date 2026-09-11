@@ -1217,6 +1217,19 @@ func Semantics() interp.Semantics {
 	s.ReportsACommandKilledBySignal = interp.No
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.No
+	// An empty operand and an empty HOME are both somewhere here, as in
+	// dash: `cd ""` moves to where the shell already is, which `chpwd`
+	// sees, and `HOME=; cd` does the same.
+	s.CdEmptyOperandIsAnError = interp.No
+	s.CdEmptyHomeIsAnError = interp.No
+	// `cd old new` rewrites the current directory's path here too, and
+	// this shell moves in silence — the same split as `cd -`, where it is
+	// the only one that prints nothing.
+	s.CdSubstitutesTheOperands = interp.Yes
+	s.CdSubstitutionPrintsTheDirectory = interp.No
+	// Never asked, the form above having answered; recorded for the same
+	// reason it is in ksh.
+	s.CdRefusesExtraOperands = interp.Yes
 	s.CdRefusesUnknownOption = interp.No
 	// `cd -q` suppresses `chpwd` and `chpwd_functions` here, and nothing
 	// else: measured, both ran on a plain `cd` and neither on `cd -q`, while
@@ -1887,9 +1900,16 @@ func Diagnostics() interp.Diagnostics {
 		GetoptsBadOption:       "bad option: -%[1]s",
 		GetoptsMissingArgument: "argument expected after -%[1]s option",
 		CdCannotChange:         "%[2]s: %[1]s",
-		PrintfBadVerb:          "%[2]s: invalid directive",
-		PrintfMissingVerb:      "%[1]s: invalid directive",
-		UmaskBadMask:           "bad umask",
+		// A third operand to the substitution form, at this shell's ordinary
+		// `cd` status rather than a usage one — which is where it parts
+		// company with bash over the same sentence.
+		CdTooManyOperands: "cd: too many arguments",
+		// And `cd old new` where old is not in the current directory's path,
+		// which names the operand where ksh93's does not.
+		CdBadSubstitution: "cd: string not in pwd: %[1]s",
+		PrintfBadVerb:     "%[2]s: invalid directive",
+		PrintfMissingVerb: "%[1]s: invalid directive",
+		UmaskBadMask:      "bad umask",
 		// The builtin's name comes from the location, as everywhere in zsh.
 		UnaliasNotFound:        "no such hash table element: %[2]s",
 		UnaliasAllWithOperands: "-a: too many arguments",

@@ -49,7 +49,7 @@ const (
 // One mutation round scored 18/19 with four of them, this test being the only
 // failure for all four mutants; re-taken without it, six genuine survivors
 // appeared. On #1261 a mutant came back KILLED solely because of this test and
-// was only reclassified because the agent was sceptical.
+// was only reclassified because the agent was skeptical.
 //
 // The signal assertions are untouched and nothing here is loosened: a status
 // that is wrong in any way a signal could make it wrong still fails, and so

@@ -82,12 +82,16 @@ func (r *Runner) traceCommand(words []string) {
 	r.errf("%s%s\n", r.tracePrefix(), strings.Join(quoted, " "))
 }
 
-// traceAssignments writes the trace line for a command that is only
-// assignments.
+// traceAssignments writes one trace line for a run of assignments.
 //
 // The *value* is quoted and the name is not: every shell that quotes at all
 // writes `x='hello wor'` rather than `'x=hello wor'`, which reads as a
 // command name with a space in it.
+//
+// How many assignments a line holds is not decided here. A shell that writes
+// one line each writes it as soon as that value is known, so the split is about
+// *when* as much as about how many, and only the caller performing them knows
+// when — see Runner.assignAll.
 func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string) {
 	if !r.xtrace || len(assigns) == 0 {
 		return
@@ -98,12 +102,6 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string) {
 	words := make([]string, len(assigns))
 	for i, a := range assigns {
 		words[i] = a.Name + "=" + traceQuote(values[i], d.TraceQuoting)
-	}
-	if len(words) > 1 && r.ask(r.sem().TraceAssignmentsSeparately, "each assignment getting its own trace line") {
-		for _, w := range words {
-			r.traceLine(w, d)
-		}
-		return
 	}
 	r.traceLine(strings.Join(words, " "), d)
 }

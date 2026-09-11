@@ -83,7 +83,7 @@ func (r *Runner) assignPositional(a *syntax.Assign, n int) {
 		return
 	}
 	params := r.paramsExtendedTo(n)
-	value := r.expandAssignValue(a.Value)
+	value := r.assignValue(a)
 	if a.Append {
 		value = params[n-1] + value
 	}
@@ -104,7 +104,7 @@ func (r *Runner) assignDollarZero(a *syntax.Assign) {
 			"%[1]s: attempt to assign array value to non-array", a.Name))
 		return
 	}
-	value := r.expandAssignValue(a.Value)
+	value := r.assignValue(a)
 	if a.Append {
 		// The shell's own name, which is what `$0` reads at the top level.
 		// A function or a sourced file can be what `$0` *answers* in this

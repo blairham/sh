@@ -69,9 +69,9 @@ func TestCaseChangeAppliesItsPattern(t *testing.T) {
 }
 
 // TestCaseConversionConsultsTheLocale — the policy docs/spec/semantics.md
-// records: an explicit C or POSIX locale narrows case to ASCII, anything
-// else, unset included, is Unicode-aware. LC_ALL outranks LC_CTYPE outranks
-// LANG.
+// records: an explicit C or POSIX locale narrows case to ASCII and any other
+// value is Unicode-aware. LC_ALL outranks LC_CTYPE outranks LANG. What an
+// *unset* locale is is the next test's, because the panel splits on it.
 func TestCaseConversionConsultsTheLocale(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -81,7 +81,6 @@ func TestCaseConversionConsultsTheLocale(t *testing.T) {
 		{"explicit C is ASCII alone", map[string]string{"LC_ALL": "C"}, "CAFé"},
 		{"POSIX is the same narrowing", map[string]string{"LANG": "POSIX"}, "CAFé"},
 		{"a UTF-8 locale cases beyond it", map[string]string{"LC_ALL": "en_US.UTF-8"}, "CAFÉ"},
-		{"unset is not C", nil, "CAFÉ"},
 		{"LC_ALL outranks LANG", map[string]string{"LC_ALL": "en_US.UTF-8", "LANG": "C"}, "CAFÉ"},
 		{"LC_CTYPE outranks LANG", map[string]string{"LC_CTYPE": "C", "LANG": "en_US.UTF-8"}, "CAFé"},
 	} {
@@ -106,5 +105,74 @@ func TestCaseConversionConsultsTheLocale(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// What an *unset* locale is — nothing naming one anywhere — is the dialect's
+// answer rather than a rule this operator states, and it moves the case map
+// with it.
+//
+// Measured 2026-09-11 under `env -i`, uppercasing `café` in each shell's own
+// spelling: bash 5.3.15 gives `CAFÉ` for `${s^^}`, where ksh93u+ gives `CAFé`
+// for `typeset -u` and zsh 5.9.2 gives `CAFé` for `${(U)s}`. Semantics.
+// UnsetLocaleIsUnicodeAware (#2020), and the same answer decides a string's
+// length and a `\u` escape's room.
+func TestAnUnsetLocaleCasesByTheAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"Unicode-aware, as one of them reads it", Yes, "CAFÉ"},
+		{"the C locale, as the rest read it", No, "CAFé"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := syntax.Core()
+			d.ParamCaseChange = true
+			f, err := syntax.Parse(`x=café; echo "${x^^}"`, d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var buf bytes.Buffer
+			sem := permissive()
+			sem.UnsetLocaleIsUnicodeAware = tc.answer
+			r := newTestRunner(t, &Runner{
+				Stdout: &buf, Stderr: &buf, Semantics: &sem,
+				Vars: map[string]string{}, Env: []string{},
+			})
+			if _, rerr := r.Run(context.Background(), f); rerr != nil {
+				t.Fatal(rerr)
+			}
+			if got := strings.TrimSpace(buf.String()); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// And a value that is ASCII throughout never asks it: the two readings agree
+// below 0x80, so the core cases `abc` with no dialect chosen rather than
+// refusing an unanswered axis.
+func TestAnASCIIValueNeverAsksTheUnsetLocaleAxis(t *testing.T) {
+	d := syntax.Core()
+	d.ParamCaseChange = true
+	f, err := syntax.Parse(`x=abc; echo "${x^^}"`, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	sem := permissive()
+	// Unspecified on purpose: reaching the axis would report, so a clean
+	// answer is evidence it was never asked.
+	sem.UnsetLocaleIsUnicodeAware = Unspecified
+	r := newTestRunner(t, &Runner{
+		Stdout: &buf, Stderr: &buf, Semantics: &sem,
+		Vars: map[string]string{}, Env: []string{},
+	})
+	if _, rerr := r.Run(context.Background(), f); rerr != nil {
+		t.Fatal(rerr)
+	}
+	if got := strings.TrimSpace(buf.String()); got != "ABC" {
+		t.Errorf("got %q, want %q with no question asked", got, "ABC")
 	}
 }

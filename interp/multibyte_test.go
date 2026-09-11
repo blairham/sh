@@ -36,7 +36,10 @@ func TestALengthCountsWhatTheLocaleCallsACharacter(t *testing.T) {
 		env  []string
 		want string
 	}{
-		{"no locale at all is single-byte", nil, "[6][9]"},
+		// Nothing naming a locale is the second axis, and the preset this
+		// helper starts from answers it the way every panel member but one
+		// does: see TestAnUnsetLocaleCountsByTheAxis below.
+		{"no locale at all follows the unset-locale axis", nil, "[6][9]"},
 		{"a C locale is single-byte", []string{"LC_ALL=C"}, "[6][9]"},
 		{"a UTF-8 locale counts characters", []string{"LC_ALL=C.UTF-8"}, "[5][3]"},
 		{"and a named one does too", []string{"LC_ALL=en_US.UTF-8"}, "[5][3]"},
@@ -237,4 +240,85 @@ func TestANonAsciiValueInAUtf8LocaleNeedsAnAnswer(t *testing.T) {
 	if st != 2 {
 		t.Errorf("status %d, want 2", st)
 	}
+}
+
+// What a locale *nothing names* is — no LC_ALL, no LC_CTYPE, no LANG, which is
+// what `env -i`, a cron job and a container have — is a second axis and not a
+// rule.
+//
+// Measured 2026-09-11 under `env -i` with `s=héllo; echo ${#s}`: bash 5.3.15
+// answers 5 and ksh93u+, zsh 5.9.2, dash and bash 3.2.57 all answer 6. So the
+// panel splits, both answers are plausible numbers, and neither shell reports
+// anything — Semantics.UnsetLocaleIsUnicodeAware (#2020).
+func TestAnUnsetLocaleCountsByTheAxis(t *testing.T) {
+	const src = `s=héllo; printf "[%s]" "${#s}"`
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"Unicode-aware, as one of them reads it", Yes, "[5]"},
+		{"the C locale, as the rest read it", No, "[6]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, src, func(r *Runner) {
+				sem := *r.Semantics
+				sem.MultibyteEncodingIsHonored = Yes
+				sem.UnsetLocaleIsUnicodeAware = tc.answer
+				r.Semantics = &sem
+			})
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// And it is refused by name where it decides, rather than answered by a
+// default, which is what makes it an axis rather than this package's opinion.
+func TestAnUnsetLocaleNeedsAnAnswer(t *testing.T) {
+	out, st := run(t, `s=héllo; printf "[%s]" "${#s}"`, func(r *Runner) {
+		sem := *r.Semantics
+		sem.MultibyteEncodingIsHonored = Yes
+		sem.UnsetLocaleIsUnicodeAware = Unspecified
+		r.Semantics = &sem
+	})
+	if !strings.Contains(out, "an unset locale being Unicode-aware") {
+		t.Errorf("got %q, want the axis named", out)
+	}
+	if st != 2 {
+		t.Errorf("status %d, want 2", st)
+	}
+}
+
+// The order the two are asked in, which is the part that keeps the corpus
+// working: a named single-byte locale ends the question before either axis is
+// reached, and a dialect with no multibyte decoder ends it before the locale
+// one is. Both rows leave both axes unanswered on purpose, so a clean answer
+// is evidence that nothing was asked.
+func TestTheLocaleQuestionsAreAskedInOrder(t *testing.T) {
+	const src = `s=héllo; printf "[%s]" "${#s}"`
+	t.Run("a named single-byte locale asks neither", func(t *testing.T) {
+		out, st := run(t, src, func(r *Runner) {
+			sem := *r.Semantics
+			sem.MultibyteEncodingIsHonored = Unspecified
+			sem.UnsetLocaleIsUnicodeAware = Unspecified
+			r.Semantics = &sem
+			r.Env = append(append([]string(nil), r.Env...), "LC_ALL=C")
+		})
+		if out != "[6]" || st != 0 {
+			t.Errorf("got %q (status %d), want %q at 0 with nothing asked", out, st, "[6]")
+		}
+	})
+	t.Run("a shell without the decoder never reaches the locale", func(t *testing.T) {
+		out, st := run(t, src, func(r *Runner) {
+			sem := *r.Semantics
+			sem.MultibyteEncodingIsHonored = No
+			sem.UnsetLocaleIsUnicodeAware = Unspecified
+			r.Semantics = &sem
+		})
+		if out != "[6]" || st != 0 {
+			t.Errorf("got %q (status %d), want %q at 0 with the locale unasked", out, st, "[6]")
+		}
+	})
 }

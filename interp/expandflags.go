@@ -1213,7 +1213,7 @@ func (r *Runner) convertCase(v string, upper bool) string {
 	if !upper {
 		convert = unicode.ToLower
 	}
-	if r.localeIsC() {
+	if !isASCII(v) && r.localeIsC() {
 		wide := convert
 		convert = func(c rune) rune {
 			if c < 0x80 {

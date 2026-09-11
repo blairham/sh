@@ -4347,6 +4347,40 @@ type Semantics struct {
 	// shell that never sees a non-ASCII byte never needs an answer.
 	MultibyteEncodingIsHonored Answer
 
+	// UnsetLocaleIsUnicodeAware is what a locale *nothing names* is: the
+	// encoding the environment would have chosen, or the C locale.
+	//
+	// A second question to MultibyteEncodingIsHonored above rather than a
+	// restatement of it. That one is whether this shell decodes the locale's
+	// encoding at all; this one is which locale is in force when `LC_ALL`,
+	// `LC_CTYPE` and `LANG` are all unset — which is what `env -i`, a cron
+	// job and a container have, and where a person's terminal never is.
+	//
+	// Measured 2026-09-11 under `env -i`, with no locale variable set
+	// anywhere, on three operators that read the same state:
+	//
+	//	                          bash 5.3.15  bash 3.2.57  ksh93u+  zsh 5.9.2  dash
+	//	s=héllo; echo ${#s}       5            6            6        6          6
+	//	s=café; upper-case it     CAFÉ         n/a          CAFé     CAFé       n/a
+	//	echo -e 'a\u00e9Z'       61 c3 a9 5a  n/a          n/a      refused    n/a
+	//
+	// So one shell reads an unset locale as UTF-8-capable and the rest read
+	// it as C, and it is the *same* reading in each of them across all three
+	// operators — which is what makes this one axis rather than one per
+	// operator. The case-mapping row is spelled per shell (`${s^^}`,
+	// `typeset -u`, `${(U)s}`), and bash 3.2.57 has none of the three
+	// spellings, which is why its cell is empty rather than measured.
+	//
+	// Silent either way: a length is a plausible number and a case-mapped
+	// word is a plausible word, so a script carried from a terminal into a
+	// container changes answer with nothing reported.
+	//
+	// Asked only where the two readings differ — a value whose bytes are all
+	// ASCII, an ASCII code point, and case mapping below 0x80 are the same
+	// under both — and only after the operator's own axis has said the
+	// question can matter. See interp/multibyte.go for the order.
+	UnsetLocaleIsUnicodeAware Answer
+
 	// DeclarationTakesAnAppendOperand reads a declaration builtin's
 	// `name+=value` operand as the append operator rather than as a name
 	// with a `+` on the end of it: `declare a=1; declare a+=2` leaves `12`.
@@ -6858,7 +6892,15 @@ func PosixSemantics() Semantics {
 		// characters", and defines a character as what the locale's
 		// LC_CTYPE category says one is. So the standard's answer is yes,
 		// and it is also what every panel member but dash does.
-		MultibyteEncodingIsHonored:      Yes,
+		MultibyteEncodingIsHonored: Yes,
+		// XBD ranks the locale variables and then leaves the case where none
+		// of them is set to the implementation: what applies is the
+		// implementation-defined default locale. The default a C program
+		// starts in is the C locale, and asking for the environment's when
+		// the environment names none leaves it there — so the standard's
+		// preset reads an unset locale as C. It is also what every panel
+		// member but one does.
+		UnsetLocaleIsUnicodeAware:       No,
 		DollarZeroNamesTheInnermostCall: No,
 		// A special builtin's failure is fatal to a non-interactive shell,
 		// which the standard states outright. dash is the only member of the

@@ -3413,13 +3413,13 @@ outside — and neither does any escape at all in a UTF-8 locale.
 
 Two limits are stated rather than hidden.
 
-**An unset locale is left alone.** The panel disagrees about it and the
-disagreement is not this axis's: under `env -i`, bash writes `c3 a9` for
-the escape and answers 5 for `s=héllo; echo ${#s}`, while zsh refuses the
-escape and answers 6. So bash reads an unset locale as UTF-8-capable and
-zsh reads it as C. This shell answers zsh's for the length already, and
-narrowing the escape here would change an answer nobody measured for this
-operator while claiming to fix the one that was.
+**An unset locale is a question of its own**, and it decides whether this
+axis is reached at all rather than what it answers: under `env -i`, bash
+writes `c3 a9` for the escape and answers 5 for `s=héllo; echo ${#s}`,
+while zsh refuses the escape and answers 6. That is
+`Semantics.UnsetLocaleIsUnicodeAware` — see *Locale, decided as a policy*
+below — and with it answered, a dialect reading an unset locale as C
+reaches this axis there exactly as it does under `LC_ALL=C` (#2020).
 
 **A single-byte encoding that is not ASCII is treated as ASCII.** bash
 transcodes there, writing `\u00e9` as the single byte `e9` under
@@ -4711,10 +4711,41 @@ are visible in the corpus if a case ever asks.
 
 The shell has a locale, and locale-sensitive operations consult it — read
 the way POSIX ranks the variables, `LC_ALL` over `LC_CTYPE` over `LANG`.
-An explicit `C` or `POSIX` narrows "letter" to ASCII; any other value,
-and no value at all, is Unicode-aware. The unset half is measured rather
-than assumed: bash stripped of every locale variable still uppercases
-`café` to `CAFÉ`, so unset is not C.
+An explicit `C` or `POSIX` narrows "letter" to ASCII; any other value is
+Unicode-aware.
+
+**What no value at all means is the dialect's**, and that half was wrong
+here for a while. It was recorded as "unset is Unicode-aware" from one
+measurement — bash stripped of every locale variable still uppercases
+`café` to `CAFÉ` — and bash is the panel member that reads it that way.
+Measured 2026-09-11 under `env -i`, with no locale variable set anywhere,
+on three operators that read the same state:
+
+|  | bash 5.3.15 | bash 3.2.57 | ksh93u+ | zsh 5.9.2 | dash |
+| --- | --- | --- | --- | --- | --- |
+| `s=héllo; echo ${#s}` | 5 | 6 | 6 | 6 | 6 |
+| uppercase `café` | `CAFÉ` | *n/a* | `CAFé` | `CAFé` | *n/a* |
+| `echo -e 'a\u00e9Z'` | `61 c3 a9 5a` | *n/a* | *n/a* | refused | *n/a* |
+
+One shell reads an unset locale as UTF-8-capable and the rest read it as
+C, and each of them reads it the *same* way on every operator — which is
+what makes it one axis, `Semantics.UnsetLocaleIsUnicodeAware`, rather than
+one question per operator. The case row is spelled per shell (`${x^^}`,
+`typeset -u`, `${(U)x}`), and bash 3.2.57 has none of those spellings.
+
+The standard's preset answers **no**: XBD ranks the variables and then
+leaves the case where none of them is set to the implementation-defined
+default locale, and the default a C program starts in is the C locale —
+which is also what every panel member but one does. ksh93 and dash keep
+that answer; bash overrides it to yes; zsh states it.
+
+The axis is asked only where the two readings differ — an all-ASCII value
+is the same length either way, an ASCII code point fits in every encoding,
+and case mapping below 0x80 is the same map — and only after the
+operator's own axis has said the question can matter, so a dialect with no
+multibyte decoder never reaches it. A shell that never sees a byte above
+ASCII never needs an answer, which is what keeps the core from refusing
+`${#x}` on `abcd` (#2020).
 
 Decided here once rather than one operator at a time, which is what issue
 #367 asked. Case conversion (`${x^^}` and family) follows it now, and so

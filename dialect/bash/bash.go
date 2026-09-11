@@ -337,6 +337,13 @@ func Semantics() interp.Semantics {
 	// normalized to four or eight upper-case digits, and the command carries
 	// on. Measured 2026-09-11 under `LC_ALL=C` (#1851).
 	s.UnicodeEscapeOutsideTheLocale = interp.OutsideLocaleEscapeWritten
+	// An *unset* locale is UTF-8-capable here, which is this shell alone in
+	// the panel and is measured on three operators at once: under `env -i`,
+	// 5.3.15 answers 5 for `s=héllo; echo ${#s}`, uppercases `café` to
+	// `CAFÉ`, and writes `61 c3 a9 5a` for `echo -e 'a\u00e9Z'`. ksh93u+ and
+	// zsh 5.9.2 answer 6 and `CAFé` there, and 3.2.57 answers 6 — so this is
+	// the modern build's reading rather than the family's (#2020).
+	s.UnsetLocaleIsUnicodeAware = interp.Yes
 	s.EchoEmptyHexDigitRunIsNul = interp.No
 	// Both spellings of the escape character, which is this shell alone in
 	// the panel: ksh93 has only `\E` and zsh only `\e`.

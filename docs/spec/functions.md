@@ -32,7 +32,7 @@ below, because a script in the wild was written against the binary.
 Nothing here is a transcription. Each function is written from the
 description of what it does plus a table of inputs and answers, and the
 tables are in this file so that the next person can check the implementation
-against the *behaviour* rather than against anyone's code.
+against the *behavior* rather than against anyone's code.
 
 Measured against **zsh 5.9.2** (Homebrew) on macOS, 2026-09-11, every probe
 under `env -i HOME=… zsh -f`, so no startup file is speaking.

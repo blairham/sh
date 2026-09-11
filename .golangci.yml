@@ -50,6 +50,13 @@ linters:
       # without anyone deciding to; this decides once, and the build says so
       # rather than a reviewer having to.
       locale: US
+      # `colour` is not prose here, it is a parameter **name**: one shell's
+      # `colors` function fills `$color` and `$colour` with the same pairs, and
+      # a recorded measurement of what it fills has to spell the name the way
+      # the shell does. Correcting it would break the measurement it appears
+      # in. Only this one word, and only because a shell chose it.
+      ignore-rules:
+      - colour
     forbidigo:
       # interp/ is a library and may not touch — or consult — process-wide
       # state. A Runner is embedded in other programs, several to a process,

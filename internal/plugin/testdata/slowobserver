@@ -1,0 +1,29 @@
+#!/bin/sh
+# Takes the observer role and is slow over every record, on purpose.
+#
+# A second per record is far longer than a real plugin takes and is standing
+# in for something a test cannot arrange directly: a loaded machine, where an
+# ordinary plugin gets no processor for long enough that the host's shutdown
+# bound expires while its records are still sitting unread in the pipe. The
+# sleep makes that deterministic rather than a matter of how busy the machine
+# is.
+#
+# Each record is announced *after* the wait, so the count of lines this
+# produces is the count of records it really handled rather than the count it
+# was sent. Nothing forks in the loop except the sleep, for the reason the
+# counter fixture gives.
+exec 3>&1
+while IFS= read -r line; do
+	case $line in
+	*'"method":"observer/event"'*)
+		sleep 1
+		printf 'handled a record\n' >&2
+		continue
+		;;
+	*'"method":"initialize"'*)
+		id=${line#*\"id\":}
+		id=${id%%,*}
+		printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"slow\",\"commands\":[],\"observer\":true}}" >&3
+		;;
+	esac
+done

@@ -718,6 +718,31 @@ killing the plugin kills what the plugin started.
 Bounded deadlines exist in exactly the two places where there is nothing
 to cancel: the **handshake**, and **shutdown**.
 
+**Shutdown's bound is on silence, not on shutdown**, and the difference
+is a lost audit record. A plugin is sent every numbered record, then has
+its input closed; a cooperating one reads what is in the pipe, acts on
+it, and exits — and that exit is the proof it consumed everything.
+Measuring the bound from the moment the input was closed meant a plugin
+which had been handed work and not yet been given a processor was killed
+with the work unread: measured with an observer taking a second over each
+record, one of three was handled and two died with the plugin, and on a
+loaded machine an ordinary fixture reached the same place with no sleep
+in it at all (#1906).
+
+So the clock restarts whenever the plugin writes a byte, on either stream
+it writes — a plugin that is still producing is still working, and one
+that has gone quiet for `shutdownWait` is the hung plugin the bound was
+written for and goes as it always did. `shutdownCeiling` is the other
+end: a plugin that writes forever must not be able to decide when the
+shell leaves.
+
+And when a plugin **is** killed with records outstanding, the shell says
+so, once, on the line the relay uses. A record put on the wire and never
+read is a lost audit record, and a lost audit record nobody is told about
+is the failure the observer role exists to prevent — the same reasoning
+that makes a gap in `seq` a fact the schema can state rather than a
+silence.
+
 ### #493's rule about deadlines, and why it does not forbid this one
 
 #493 concluded that a deadline which "silently allows or refuses

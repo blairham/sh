@@ -96,6 +96,13 @@ func (s *stream) Write(p []byte) (int, error) {
 	return n, err
 }
 
+// Unwrap is the stream underneath, so that a capture does not hide what it is
+// over. The shell asks whether one of its streams is already serialized, and
+// that is a question about the whole chain rather than about whichever layer
+// is outermost — see interp's WriterUnder, where a wrapper that could not
+// answer it cost an interactive session (#2069).
+func (s *stream) Unwrap() io.Writer { return s.w }
+
 // record adds bytes to the bounded copy.
 func (c *Capture) record(p []byte) {
 	c.mu.Lock()

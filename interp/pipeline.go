@@ -143,10 +143,63 @@ func lockWriter(mu *sync.Mutex, w io.Writer) io.Writer {
 	if _, ok := w.(closedFd); ok {
 		return w
 	}
-	if l, ok := w.(*lockedWriter); ok && l.mu == mu {
-		return l
+	if guardedBy(mu, w) {
+		return w
 	}
 	return &lockedWriter{mu: mu, w: w}
+}
+
+// WriterUnder is a stream wrapper that can say what it wraps.
+//
+// A shell builds its output out of layers — a capture that keeps a copy of
+// what a command printed, a line discipline that is handed back at the first
+// byte, and the guard below — and each of them is an io.Writer around the next
+// one. The layers are the point; what they must not do is hide each other,
+// because two of the questions this package asks about a stream are questions
+// about the *chain* and not about whatever happens to be outermost.
+//
+// Implemented by anything outside this package that wraps one of the Runner's
+// streams and leaves it on the Runner. A wrapper that does not implement it is
+// not wrong, it is opaque: the chain stops being readable at that layer, and
+// whatever is underneath is invisible to the question below.
+type WriterUnder interface{ Unwrap() io.Writer }
+
+// Unwrap is the stream this guard is over, so that a later layer can see the
+// guard through whatever was put on top of it. See guardedBy.
+func (l *lockedWriter) Unwrap() io.Writer { return l.w }
+
+// guardedBy reports whether this lock is already taken somewhere down a
+// stream's chain of wrappers, so that it is not taken a second time.
+//
+// This is the question lockWriter's doc comment above says it is asking, and
+// asking it of the outermost layer alone is what it used to do. That was
+// enough for as long as a guard was always outermost, and it stopped being
+// true the moment something else wrapped a stream and left the wrapper there:
+// the editor's line discipline puts a layer over the Runner's streams for the
+// duration of a descriptor handler, and a background job started *inside* one
+// of those handlers then wrapped the layer rather than recognizing the guard
+// beneath it. One more handler and one more job stacked a second pair, and the
+// first write through the result took one mutex twice on one goroutine and
+// never came back — an interactive session that reached its first prompt,
+// deadlocked writing a diagnostic, and read nothing anybody typed (#2069).
+//
+// The answer is the chain and not the layer. A guard found anywhere under here
+// already serializes every write that reaches it, so the outer layers run
+// unserialized and the bytes are still ordered where it matters — which is the
+// same bargain lockWriter makes for an *os.File, where the kernel is the guard
+// and the layers above it are nobody's to serialize.
+func guardedBy(mu *sync.Mutex, w io.Writer) bool {
+	for w != nil {
+		if l, ok := w.(*lockedWriter); ok && l.mu == mu {
+			return true
+		}
+		u, ok := w.(WriterUnder)
+		if !ok {
+			return false
+		}
+		w = u.Unwrap()
+	}
+	return false
 }
 
 // lockedStdin is the shell's input, guarded.

@@ -239,7 +239,9 @@ not pre-commit — it is too slow for every commit. When in doubt run
 
 The report targets are `conformance`, `conformance-gated`,
 `conformance-dialects`, `wild`, `wild-run`, `wild-run-contained`, `smoke`,
-`acp` and `acp-wire`. None of them gates; each is described below.
+`acp`, `acp-wire` and `sandbox`. Each is described below. Only `sandbox`
+fails on what it finds, for the reason given there: a conformance number is
+meant to be low and climbing, and a boundary is meant to hold.
 
 ## Installing, and the name collision
 
@@ -685,6 +687,56 @@ binaries, starts real children and times them. `go test ./internal/acpcheck`
 covers the instrument's own machinery — the framing, the correlation, the
 purity detection, the median — against a scripted agent that is not a shell,
 including one that answers nothing at all.
+
+`make sandbox` tries every way a script has of reaching the filesystem —
+redirection in each of its forms, `source`, a glob, a probe, an exec, a
+signal, and every module builtin that opens or changes a file — against the
+binary that ships, and reports what the boundary stopped.
+`internal/sandboxcheck` holds it and `internal/cmd/sandboxcheck` prints the
+table.
+
+It exists because **the gate's unit tests are written by somebody who
+already knows where the boundary is**, and every escape this repository has
+had came in somewhere else: `sysopen` and `zsystem flock` opened files with
+no gate (#1805), `autoload` read and then *ran* one (#1812), and every
+mutating `zsh/files` builtin changed the filesystem with nothing consulted
+(#1819). Each was reachable because the code implementing it had no reason
+to know a gate existed, and none of them is expressible as a redirection.
+So this enumerates the *routes* rather than the rules: a way in that arrives
+without a gate is a row rather than a silence.
+
+**Every route runs three times, and that is the whole design.** The failure
+mode of a sandbox test is not a false alarm, it is a false calm — sixteen
+routes reporting "refused" from a shell that never started looks exactly
+like a sandbox that works, and that has happened here more than once. So no
+row is decided by one run:
+
+    ungated   no policy. The route must WORK, or it is measuring nothing
+              and grades inert rather than passing.
+    denied    a policy granting only the workspace. It must FAIL.
+    allowed   a policy granting the whole tree. It must WORK again, or the
+              gate is refusing what it was told to permit.
+
+A row is `contained` only when all three agree, so a shell that does nothing
+scores zero rather than perfect and a gate that refuses everything scores
+zero too. Each run gets a fresh fixture, because the ungated one succeeds by
+design and a second run against what it left would be measuring the
+leftovers.
+
+**`inert` is a ledger, not a skip.** It is a route this shell cannot take
+*yet* — `zsh/mapfile` is not implemented, bash's `history -w` still falls
+through to a refused exec — which is the state #1808 calls "safe by
+accident". Those are the rows that become escapes the day the feature lands,
+so they are printed rather than hidden, and each moves to `contained` or
+`ESCAPED` on its own when it starts working.
+
+The instrument was checked against a shell known to be broken, which is the
+only way to know a green table means anything: pointed at the commit before
+#1821 it reports the eleven escapes that change fixed, and pointed at the
+commit after it reports none. `go test ./internal/sandboxcheck` covers the
+grader's own machinery — the verdict rule, the fixture isolation, the
+placeholder substitution, and that the denied policy grants exactly one
+thing.
 
 `make corpus-guard` fails when the corpus has *lost* a case. It runs in
 `make check` and as a step of the required `Build and test (ubuntu-latest)`

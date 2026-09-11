@@ -175,6 +175,11 @@ acp-wire: ## Print a real annotated ACP session, message by message, for showing
 	@go build -o $(BINDIR)/acpcheck ./internal/cmd/acpcheck
 	@$(BINDIR)/acpcheck -bin $(BINDIR)/acp-sh -wire $(ARGS)
 
+sandbox: ## Try every way a script has of reaching the filesystem, against the shipped binary, and report what the boundary stopped
+	@mkdir -p $(BINDIR)
+	@go build -o $(BINDIR)/sandbox-sh ./cmd/sh
+	@go run ./internal/cmd/sandboxcheck -bin $(BINDIR)/sandbox-sh $(ARGS)
+
 conformance-dialects: ## Grade each dialect binary against the shell it claims to be
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/our-bash ./cmd/bash

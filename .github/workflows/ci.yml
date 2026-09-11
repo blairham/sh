@@ -223,6 +223,23 @@ jobs:
         # merge base rather than skipping.
         BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
       run: go run ./internal/cmd/corpusguard -base "$BASE"
+    # The boundary, tried from outside the process against the binary this
+    # job just built. A step of the same already-required job for the reason
+    # given above, and unlike the corpus guard it runs on **both** platforms:
+    # what the gate is asked is portable, but what the kernel does underneath
+    # it is not — the resolving walk uses O_SEARCH on Darwin and
+    # O_PATH|O_DIRECTORY on Linux, the two disagree about which errno an
+    # O_NOFOLLOW on a link gives, and the link budget is 32 against 40. A
+    # sweep on one of them says nothing about the other.
+    #
+    # It gates, where the other report targets do not. A conformance number
+    # is meant to be low and climbing, so failing on it would mean failing on
+    # unfinished work; a boundary is meant to hold, so a route that got out
+    # is a regression by definition. The sweep is 1.8s and launches the shell
+    # a few hundred times, which is cheap enough to ask on every commit.
+    - name: Does anything get out of the sandbox?
+      if: needs.changes.outputs.code == 'true'
+      run: make sandbox
 
   oracle:
     name: Oracle (report only)

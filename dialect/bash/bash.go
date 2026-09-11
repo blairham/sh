@@ -732,6 +732,11 @@ func Semantics() interp.Semantics {
 	// builds; that is an artifact of evaluating the word twice rather than a
 	// fact about the construct, and once is what this writes.
 	s.EmptyArithSubscript = interp.EmptyArithSubscriptIsReported
+	// The same text where a *parameter expansion* reads it, and a different
+	// answer: `${a[]}` is refused outright — `[${a[]}]: bad substitution`,
+	// naming the quoting run — where the arithmetic site reports and carries
+	// on with zero. Identical in 3.2.57 and under argv[0] of `sh` (#1763).
+	s.EmptyParamSubscriptIsAnError = interp.Yes
 	// Whitespace between the brackets is not that text and is not answered
 	// by it: measured 2026-09-10 in 5.3.15 and in 3.2.57, `a=(1 2 3); echo
 	// $(( a[ ] ))` is `1` with a clean stream — the blank expression is

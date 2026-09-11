@@ -13710,6 +13710,94 @@
         "TimedOut": false
       }
     },
+    "axis/an-empty-subscript-arrived-through-a-parameter": {
+      "bash": {
+        "Stdout": "[5]~[5]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[5]~[5]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[5]",
+        "Stderr": "\u003cshell\u003e: [${a[ ]}]: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[5]~[5]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: empty string",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/an-empty-subscript-in-a-parameter-expansion": {
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "\u003cscript\u003e: line 2: [${s[]}]: bad substitution~\u003cscript\u003e: line 4: [${a[]}]: bad substitution",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: [${s[]}]: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "\u003cscript\u003e: line 2: [${s[]}]: bad substitution~\u003cscript\u003e: line 4: [${a[]}]: bad substitution",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[hi]~[5]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:2: invalid subscript",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/arith-error-status": {
       "bash": {
         "Stdout": "",

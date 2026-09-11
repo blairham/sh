@@ -93,6 +93,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"EchoInterpretsEscapes", s.EchoInterpretsEscapes, interp.Yes},
 		{"RegexQuotingMakesLiteral", s.RegexQuotingMakesLiteral, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
+		{"EmptyParamSubscriptIsAnError", s.EmptyParamSubscriptIsAnError, interp.Yes},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.No},
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.Yes},
@@ -378,6 +379,34 @@ func TestAnAssignmentThroughAnExpansionNamesAPositionalAndNotAList(t *testing.T)
 		}
 		if strings.Contains(out, "AFTER") || st != 1 {
 			t.Errorf("%s = %q (status %d), want the shell ended at 1", tc.src, out, st)
+		}
+	}
+}
+
+// TestAnEmptyParameterSubscriptIsInvalid is #1763.
+//
+// `invalid subscript` — the subscript machinery's own sentence, with no name in
+// it and no bad-substitution wording around it — and the expansion is refused.
+// Measured 2026-09-11 on 5.9.2.
+//
+// It refuses **whether or not the name exists**, which is the half that makes
+// this a different question from the arithmetic site: there the same shell is a
+// silent zero on a name nothing declared and `invalid subscript` on one that
+// is set, and here it is the refusal either way.
+func TestAnEmptyParameterSubscriptIsInvalid(t *testing.T) {
+	for _, src := range []string{
+		`a=(5 6 7); echo "[${a[]}]"`,
+		`s=hi; echo "[${s[]}]"`,
+		`echo "[${nodecl[]}]"`,
+		`a=(5 6 7); echo "[${#a[]}]"`,
+		`a=(5 6 7); echo "[${a[]:-d}]"`,
+	} {
+		out, st := answersRun(t, src+"\necho AFTER")
+		if !strings.Contains(out, "invalid subscript") || strings.Contains(out, "bad substitution") {
+			t.Errorf("%s = %q, want `invalid subscript` and no substitution wording", src, out)
+		}
+		if strings.Contains(out, "AFTER") || st == 0 {
+			t.Errorf("%s = %q (status %d), want the shell ended", src, out, st)
 		}
 	}
 }

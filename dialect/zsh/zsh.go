@@ -1189,6 +1189,11 @@ func Semantics() interp.Semantics {
 	// and declared is the refusal, and this shell was giving `bad math
 	// expression` to both (#1745).
 	s.EmptyArithSubscript = interp.EmptyArithSubscriptIsInvalid
+	// And the parameter site, which is the same sentence and a stronger
+	// rule: `invalid subscript` whether or not the name exists, where the
+	// arithmetic site is a silent zero on a name nothing declared. The
+	// expansion is refused and the input ends (#1763).
+	s.EmptyParamSubscriptIsAnError = interp.Yes
 	// Whitespace between the brackets is refused too, and by a different
 	// part of the shell: measured 2026-09-10, `a=(1 2 3); echo $(( a[ ] ))`
 	// is `bad math expression: operand expected at end of string` — the
@@ -1618,6 +1623,9 @@ func Diagnostics() interp.Diagnostics {
 		// about the subscript.
 		BadArraySubscript:   "%[1]s: assignment to invalid subscript range",
 		ArithEmptySubscript: "invalid subscript",
+		// The same sentence at the parameter site, and its own field because
+		// the two coincide here and do not in bash — see the field.
+		EmptyParamSubscript: "invalid subscript",
 		// The two ways a subscripted array literal has no span to land in.
 		// Worded apart from each other here, and both without the subscript:
 		// what is reported is the name's kind rather than the number.

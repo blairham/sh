@@ -2493,6 +2493,24 @@ type Diagnostics struct {
 	// DivisionByZero is the reason itself, which dash and ksh93 spell
 	// differently. No verbs.
 	DivisionByZero string
+	// EmptyParamSubscript is what `${a[]}` says where the dialect refuses it
+	// with a sentence of its own rather than with its bad-substitution one.
+	// No verbs.
+	//
+	// Empty for four of the five refusing columns: bash 5.3, that binary as
+	// `sh`, bash 3.2 and dash all give the ordinary bad-substitution
+	// sentence, subject and all — `[${a[]}]: bad substitution` in bash,
+	// naming the quoting run, and a bare `Bad substitution` in dash. zsh
+	// alone has its own, `invalid subscript`, which is the subscript
+	// machinery's complaint and carries no name.
+	//
+	// Its own field rather than a reuse of ArithEmptySubscript, whose
+	// wording coincides in that shell and does not in bash: there the
+	// arithmetic site says `a[]: bad array subscript` and carries on, where
+	// this site refuses the expansion outright. Whether the sites agree is a
+	// fact about each dialect, and one field for both would tie a change on
+	// either to the other. See Semantics.EmptyParamSubscriptIsAnError.
+	EmptyParamSubscript string
 	// ArithEmptySubscript is the complaint about a subscript written with
 	// nothing between the brackets where an expression reads it: `$(( a[] ))`,
 	// which is what `$(( a[$w] ))` is once an empty `$w` has gone in. One

@@ -99,6 +99,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"TrailingSeparatorEndsAField", s.TrailingSeparatorEndsAField, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
+		{"EmptyParamSubscriptIsAnError", s.EmptyParamSubscriptIsAnError, interp.No},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},
@@ -295,5 +296,31 @@ func TestAnAssignmentThroughAnExpansionCannotNameAListOrAPositional(t *testing.T
 	out, st := answersRun(t, `set -- p; printf "<%s>" ${@:=abc}`)
 	if out != "<p>" || st != 0 {
 		t.Errorf("a parameter that is there = %q (status %d), want <p> at 0", out, st)
+	}
+}
+
+// TestAnEmptyParameterSubscriptIsTheEmptyExpression is #1763, and this is the
+// one column that reads it.
+//
+// The brackets hold an expression that happens to be empty, which is zero — so
+// the subscript names element zero rather than failing. Measured 2026-09-11 on
+// 93u+: an indexed array answers its first element, a scalar answers itself,
+// and a name nothing declared answers nothing at all. The other five columns
+// refuse the expansion.
+//
+// The scalar row is what separates this from "the number zero": a policy
+// worded that way would have answered `0` where this shell answers `hi`.
+func TestAnEmptyParameterSubscriptIsTheEmptyExpression(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`a=(5 6 7); echo "[${a[]}]"`, "[5]"},
+		{`s=hi; echo "[${s[]}]"`, "[hi]"},
+		{`echo "[${nodecl[]}]"`, "[]"},
+		{`a=(5 6 7); echo "[${#a[]}]"`, "[1]"},
+		{`a=(5 6 7); echo "[${a[]:-d}]"`, "[5]"},
+	} {
+		out, st := answersRun(t, tc.src)
+		if strings.TrimSpace(out) != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %s at 0", tc.src, out, st, tc.want)
+		}
 	}
 }

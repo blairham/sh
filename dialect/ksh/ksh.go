@@ -263,6 +263,11 @@ func Semantics() interp.Semantics {
 	// what is left is a plain assignment — `export` writes `V='a b'` where
 	// `export -p` writes `export V='a b'`. Measured; zsh does the same.
 	s.BareDeclarationListing = interp.DeclareListingPlainAssignment
+	// The opposite of the other two: every letter must hold. Measured
+	// 2026-09-10 — `typeset -xi` and `typeset +xi` alike write the one name
+	// that is both exported and an integer, and `typeset -ir` writes nothing
+	// where the same table gives bash ten rows.
+	s.DeclarationListingFilter = interp.DeclarationFilterEveryLetter
 	s.DeclarePrintReportsAMissingName = interp.No
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.Yes

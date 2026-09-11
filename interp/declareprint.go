@@ -312,10 +312,17 @@ func (r *Runner) declarableNames() []string {
 		}
 	}
 	for name := range seen {
-		_, isFloat := r.floatPrecision[name]
-		if r.removed[name] && !r.readonly[name] && !r.integer[name] && !isFloat &&
-			!r.exported[name] && !r.lowered[name] && !r.uppered[name] &&
-			!r.hidden[name] && !r.unique[name] {
+		// A name whose value was taken away is a row only where something of
+		// the declaration outlived it. Asked of declarationOf rather than of
+		// the attribute tables directly, which is the same question it
+		// already answers for `-p` — and asking it twice is what left the
+		// *compound* half out: a valueless `local -a q` keeps its kind and
+		// no scalar attribute, so the list this built dropped it while
+		// `declare -p q` wrote `declare -a q` from the same state (#1868).
+		if !r.removed[name] {
+			continue
+		}
+		if _, known := r.declarationOf(name); !known {
 			delete(seen, name)
 		}
 	}
@@ -394,17 +401,47 @@ func (r *Runner) commandWordDeclaration(d declaration) string {
 // plainAssignmentDeclaration is DeclareListingPlainAssignment — see the
 // constant. A name carrying an attribute and no value still lists, and lists
 // as a bare name, because there is no word left to say the attribute with.
+//
+// A *compound* lists its elements, which had gone missing: this wrote a bare
+// `ea` for an exported array where zsh writes `ea=( 1 2 )` and ksh93 writes
+// `g=([3]=x)`. Measured from a bare `export` and a bare `readonly` in both,
+// and it is the same row `typeset -a` writes there (#1868) — the two reach
+// this function by different routes and there is one row.
+//
+// The value is listedDeclarationValue's rather than declareQuoted's for the
+// same reason: a based integer lists as the decimal it stands for in one of
+// these shells and as the based text it holds in the other, and that
+// difference is already written down once.
 func (r *Runner) plainAssignmentDeclaration(d declaration) string {
-	if !d.hasValue || d.hidden {
+	if d.hidden || d.unset {
+		// Nothing to write a value from: `-H` withholds it, and a typed name
+		// whose value was taken away has none. Measured on the second —
+		// ksh93 writes a bare `u` for `typeset -a u; typeset -a`, where the
+		// shell that declares a name *empty* instead has an empty array to
+		// print and writes `u=(  )`.
 		return d.name
 	}
-	return d.name + "=" + r.declareQuoted(d.value)
+	if !d.hasValue && !d.isArr && !d.isAssoc {
+		return d.name
+	}
+	return d.name + "=" + r.listedDeclarationValue(d)
 }
 
 // listedDeclarationValue spells a declaration's value alone — no name, no
 // command word — in the shape this dialect's `declare -p` gives a compound
-// one. For a listing whose attributes are words rather than flags.
+// one. For a listing whose attributes are words rather than flags, and for
+// the one that has no room for them at all: see plainAssignmentDeclaration.
+//
+// The dialect is asked, which it was not while the only callers were one
+// shell's. Measured 2026-09-10 from `typeset -a` and `typeset -i` with no
+// names: zsh writes `g=( '' '' x )` and `h=255` for a based name, where
+// ksh93 writes `g=([3]=x)` and `h=16#ff` — each of them the value half of
+// that shell's own `-p`, which is what this claims to be.
 func (r *Runner) listedDeclarationValue(d declaration) string {
+	if r.sem().DeclareListing == DeclareListingBareAssignments {
+		value, _ := r.bareAssignmentValue(d)
+		return value
+	}
 	switch {
 	case d.isAssoc:
 		if len(d.assoc) == 0 {
@@ -606,6 +643,56 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	return head
 }
 
+// bareAssignmentValue is that form's value alone, and whether there is one.
+//
+// Its own function because the same bytes are what a listing with *no command
+// word* writes in this dialect — `g=([3]=x)` for a bare `export` and for
+// `typeset -a` — and a second spelling of them beside plainAssignmentDeclaration
+// is how the two would come to disagree about a gap or a based number.
+func (r *Runner) bareAssignmentValue(d declaration) (string, bool) {
+	switch {
+	case d.isAssoc:
+		pairs := make([]string, 0, len(d.assoc))
+		for _, k := range d.assoc.keys() {
+			// Keys quote the way values do here, `$'...'` included.
+			pairs = append(pairs, "["+r.declareQuoted(k)+"]="+r.declareQuoted(d.assoc[k]))
+		}
+		return "(" + strings.Join(pairs, " ") + ")", true
+	case d.isArr:
+		subs := d.arr.subscripts()
+		elems := make([]string, 0, len(subs))
+		for _, i := range subs {
+			// Subscripts appear only where they carry information: an array
+			// that is contiguous from zero lists its values alone.
+			//
+			// Measured aside: the real engine lists an *empty* indexed array
+			// as `typeset -C arr=()`, retyping it as a compound variable.
+			// That is a fact about its type system, not about `-p`, and it
+			// is deliberately not followed — an empty array keeps `-a` here.
+			if r.arrayHasGaps(d.arr) {
+				elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.declareQuoted(d.arr[i])))
+			} else {
+				elems = append(elems, r.declareQuoted(d.arr[i]))
+			}
+		}
+		return "(" + strings.Join(elems, " ") + ")", true
+	case d.hasValue && d.base != 0:
+		// A based number lists bare here, where an ordinary value carrying a
+		// `#` is quoted: measured, `typeset -i 16 a=16#ff` against
+		// `b='#lead'`, `c='tail#'` and `d='a#b'` from the same shell. It
+		// reads the text as the number it is rather than as a word with a
+		// comment character in it.
+		//
+		// Conditioned on the name's base, which is narrower than what that
+		// shell does — it leaves a *plain* name holding `16#ff` bare too —
+		// and is the part this change measured. The wider rule is #1271.
+		return d.value, true
+	case d.hasValue:
+		return r.declareQuoted(d.value), true
+	}
+	return "", false
+}
+
 // bareAssignmentDeclaration is DeclareListingBareAssignments — see the
 // constant.
 func (r *Runner) bareAssignmentDeclaration(d declaration) string {
@@ -647,50 +734,7 @@ func (r *Runner) bareAssignmentDeclaration(d declaration) string {
 			flags = append(flags, itoa(d.base))
 		}
 	}
-	value := ""
-	hasValue := true
-	switch {
-	case d.isAssoc:
-		pairs := make([]string, 0, len(d.assoc))
-		for _, k := range d.assoc.keys() {
-			// Keys quote the way values do here, `$'...'` included.
-			pairs = append(pairs, "["+r.declareQuoted(k)+"]="+r.declareQuoted(d.assoc[k]))
-		}
-		value = "(" + strings.Join(pairs, " ") + ")"
-	case d.isArr:
-		subs := d.arr.subscripts()
-		elems := make([]string, 0, len(subs))
-		for _, i := range subs {
-			// Subscripts appear only where they carry information: an array
-			// that is contiguous from zero lists its values alone.
-			//
-			// Measured aside: the real engine lists an *empty* indexed array
-			// as `typeset -C arr=()`, retyping it as a compound variable.
-			// That is a fact about its type system, not about `-p`, and it
-			// is deliberately not followed — an empty array keeps `-a` here.
-			if r.arrayHasGaps(d.arr) {
-				elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.declareQuoted(d.arr[i])))
-			} else {
-				elems = append(elems, r.declareQuoted(d.arr[i]))
-			}
-		}
-		value = "(" + strings.Join(elems, " ") + ")"
-	case d.hasValue && d.base != 0:
-		// A based number lists bare here, where an ordinary value carrying a
-		// `#` is quoted: measured, `typeset -i 16 a=16#ff` against
-		// `b='#lead'`, `c='tail#'` and `d='a#b'` from the same shell. It
-		// reads the text as the number it is rather than as a word with a
-		// comment character in it.
-		//
-		// Conditioned on the name's base, which is narrower than what that
-		// shell does — it leaves a *plain* name holding `16#ff` bare too —
-		// and is the part this change measured. The wider rule is #1271.
-		value = d.value
-	case d.hasValue:
-		value = r.declareQuoted(d.value)
-	default:
-		hasValue = false
-	}
+	value, hasValue := r.bareAssignmentValue(d)
 	if len(flags) == 0 {
 		// No attributes: a bare assignment, with no command word at all. A
 		// name with neither attributes nor value never reaches here — it is

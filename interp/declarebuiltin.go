@@ -1157,11 +1157,22 @@ func (r *Runner) setGlobalVar(name, value string) {
 // carries, so there is nothing for it to filter on and the letter drops out.
 // `+gx` writes what `+x` writes, which is the same fact from the other side.
 //
+// The minus sign carrying an attribute letter is the *valued* half of the
+// same ladder, measured on the same day and in the same shells:
+//
+//	typeset -x   the exported names, each with its value
+//	typeset -a   every array, each with its elements
+//	typeset -ax  what the two letters together select, which is the one
+//	             thing the panel does not agree about — see
+//	             Semantics.DeclarationListingFilter
+//
+// It writes nothing at all until #1868: the letter was read as a filter and
+// then given up on, so `declare -x`, the common way to dump an environment as
+// declarations, came back empty at status 0.
+//
 // The bool is whether this is a shape it answers at all. A line whose letters
-// ask for something else — a tie, a print, a declaration with a minus letter
-// on it — is not a listing and is left to the caller, which is also how the
-// *filtered value* listing those shells write for `typeset -x` stays
-// unanswered rather than being approximated here.
+// ask for something else — a tie, a print — is not a listing and is left to
+// the caller.
 func (r *Runner) declarationListing(f declareFlags) (int, bool) {
 	if withoutListingLetters(f) != (declareFlags{}) {
 		return 0, false
@@ -1176,14 +1187,17 @@ func (r *Runner) declarationListing(f declareFlags) (int, bool) {
 		}
 		return r.bareDeclarationListing(), true
 	}
-	keep := f.attributeFilter()
-	if keep == nil && !f.inert {
+	if !f.attributeLetterWritten() && !f.inert {
 		// Nothing was written that a name could *carry*: `-g` and `+g` say
 		// where a declaration lands rather than what a name is, so the
 		// letter drops out and the whole table is the answer, values and
 		// all. Measured on both signs, and `+gx` writing what `+x` writes
 		// is the same fact from the other side.
 		return r.bareDeclarationListing(), true
+	}
+	keep, answered := r.attributeFilter(f)
+	if !answered {
+		return r.status, true
 	}
 	if keep == nil {
 		// A letter this dialect spells and this engine records nothing for
@@ -1196,10 +1210,12 @@ func (r *Runner) declarationListing(f declareFlags) (int, bool) {
 	}
 	if f.added {
 		// Some letter that names an attribute was written with a *minus*,
-		// which is the filtered listing carrying values — `typeset -x`
-		// writing `q=2`. Not built, and left to the caller rather than
-		// approximated by the names it would have selected.
-		return 0, false
+		// which is the filtered listing carrying values — `declare -x`
+		// writing `declare -x e="1"` and `typeset -a` writing `q=( a b )`.
+		// The same names the plus form selects, written as rows instead of
+		// as bare names, so the two cannot come to disagree about which
+		// names those are (#1868).
+		return r.declarationFilteredListing(r.declarableNames(), keep), true
 	}
 	return r.declarationFilteredNameListing(r.declarableNames(), keep), true
 }

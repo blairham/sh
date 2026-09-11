@@ -36,6 +36,28 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 		r.nestedLength = false
 		defer func() { r.nestedLength = true }()
 	}
+	// Pathname expansion is the same containment asked of globbing. A word
+	// that substitutes as *text* expands with it suspended — an assignment's
+	// value, a `[[ ]]` operand, a redirection target — and that is a rule
+	// about what the word's own metacharacters mean, not about the commands
+	// inside a substitution in it. Those are ordinary commands and they glob.
+	//
+	// Measured 2026-09-11 in a directory holding `aa` and `bb`: `v=$(echo *)`
+	// leaves `aa bb` in bash 5.3.15, dash, ksh93 and zsh 5.9.2 — a unanimous
+	// panel — where this left the asterisk, at status 0 with nothing said
+	// (#1962). `n=$(( $(echo * | wc -w) ))` answered 1 against the panel's 2
+	// for the same reason, an arithmetic operand suspending it just as an
+	// assignment does.
+	//
+	// Cleared here rather than around the places that suspend it, which is
+	// the distinction #1955 turns on: `case "aa bb" in $(echo *))` globs
+	// inside the substitution and matches, in this shell and in the panel, so
+	// the flag has to keep not reaching a pattern operand's own text while
+	// stopping at the boundary of a program.
+	if r.globSuspended {
+		r.globSuspended = false
+		defer func() { r.globSuspended = true }()
+	}
 
 	p := syntax.NewParser(src, r.dialect())
 	f := p.Parse()

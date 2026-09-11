@@ -520,6 +520,21 @@ var Corpus = []Case{
 		Why:     "an unmatched pattern passes through, except in zsh where it is an error",
 	},
 	{
+		ID: "expand/an-assignments-substitution-globs", Category: "expansion",
+		Snippet: `mkdir -p gsub && cd gsub && : > aa && : > bb && v=$(echo *) && printf "[%s]" "$v"`,
+		Why:     "an assignment's value expands with pathname expansion suspended, and that is a rule about the *word* rather than about the commands inside a substitution in it: the panel is unanimous on the listing. This shell answered the asterisk, because the suspension was a flag on the runner and the substitution's own commands read it (#1962)",
+	},
+	{
+		ID: "expand/an-assignments-own-pattern-is-still-text", Category: "expansion",
+		Snippet: `mkdir -p gsubt && cd gsubt && : > aa && : > bb && n=* && printf "[%s]" "$n"`,
+		Why:     "the other half of the pair, and the half a fix that simply stopped suspending would have broken: the word's own asterisk is stored as a character in every shell in the panel. A row showing only the substitution could not tell a fix from a loosening",
+	},
+	{
+		ID: "expand/an-assignments-suspension-resumes-after-the-substitution", Category: "expansion",
+		Snippet: `mkdir -p gsubr && cd gsubr && : > aa && : > bb && v=*$(echo *)* && printf "[%s]" "$v"`,
+		Why:     "both halves in one word, so the restore is measured rather than assumed: the substitution lists and the asterisks written around it stay characters. A shell that cleared the suspension without putting it back would answer a listing three times over",
+	},
+	{
 		ID: "expand/a-value-backslash-survives-an-assignment", Category: "expansion",
 		Snippet: `v='a\b'; w=$v; u=$v$v; printf "[%s][%s][%s]" "$v" "$w" "$u"`,
 		Why:     "a backslash in a value is an ordinary character, and passing the value through a word being assembled does not consume it — unanimous. Printed directly beside the two that went through an expansion, because the direct read was right while the other two silently dropped it (#1222), and a case showing only the assignment could not say which half was at fault",

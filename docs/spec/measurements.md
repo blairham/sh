@@ -259,6 +259,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expand/glob-not-applied-when-quoted` | `[et*]` | `[et*]` | `[et*]` | `[et*]` | `[et*]` | `[et*]` |
 | `expand/glob-literal-pattern` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` |
 | `expand/glob-no-match` | `/zzz_no_such*` | `/zzz_no_such*` | `/zzz_no_such*` | `/zzz_no_such*` | `/zzz_no_such*` | **2>** `<shell>:1: no matches found: /zzz_no_such*` *(status 1)* |
+| `expand/an-assignments-substitution-globs` | `[aa bb]` | `[aa bb]` | `[aa bb]` | `[aa bb]` | `[aa bb]` | `[aa bb]` |
+| `expand/an-assignments-own-pattern-is-still-text` | `[*]` | `[*]` | `[*]` | `[*]` | `[*]` | `[*]` |
+| `expand/an-assignments-suspension-resumes-after-the-substitution` | `[*aa bb*]` | `[*aa bb*]` | `[*aa bb*]` | `[*aa bb*]` | `[*aa bb*]` | `[*aa bb*]` |
 | `expand/a-value-backslash-survives-an-assignment` | `[a\b][a\b][a\ba\b]` | `[a\b][a\b][a\ba\b]` | `[a\b][a\b][a\ba\b]` | `[a\b][a\b][a\ba\b]` | `[a\b][a\b][a\ba\b]` | `[a\b][a\b][a\ba\b]` |
 | `expand/a-value-doubled-backslash-is-not-halved` | `[a\\b][a\\b]` | `[a\\b][a\\b]` | `[a\\b][a\\b]` | `[a\\b][a\\b]` | `[a\\b][a\\b]` | `[a\\b][a\\b]` |
 | `expand/a-value-backslash-reaches-a-case-subject` | `esc` | `esc` | `esc` | `esc` | `esc` | `esc` |
@@ -631,6 +634,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expand/glob-no-match` — an unmatched pattern passes through, except in zsh where it is an error
   ```sh
   echo /zzz_no_such*
+  ```
+- `expand/an-assignments-substitution-globs` — an assignment's value expands with pathname expansion suspended, and that is a rule about the *word* rather than about the commands inside a substitution in it: the panel is unanimous on the listing. This shell answered the asterisk, because the suspension was a flag on the runner and the substitution's own commands read it (#1962)
+  ```sh
+  mkdir -p gsub && cd gsub && : > aa && : > bb && v=$(echo *) && printf "[%s]" "$v"
+  ```
+- `expand/an-assignments-own-pattern-is-still-text` — the other half of the pair, and the half a fix that simply stopped suspending would have broken: the word's own asterisk is stored as a character in every shell in the panel. A row showing only the substitution could not tell a fix from a loosening
+  ```sh
+  mkdir -p gsubt && cd gsubt && : > aa && : > bb && n=* && printf "[%s]" "$n"
+  ```
+- `expand/an-assignments-suspension-resumes-after-the-substitution` — both halves in one word, so the restore is measured rather than assumed: the substitution lists and the asterisks written around it stay characters. A shell that cleared the suspension without putting it back would answer a listing three times over
+  ```sh
+  mkdir -p gsubr && cd gsubr && : > aa && : > bb && v=*$(echo *)* && printf "[%s]" "$v"
   ```
 - `expand/a-value-backslash-survives-an-assignment` — a backslash in a value is an ordinary character, and passing the value through a word being assembled does not consume it — unanimous. Printed directly beside the two that went through an expansion, because the direct read was right while the other two silently dropped it (#1222), and a case showing only the assignment could not say which half was at fault
   ```sh

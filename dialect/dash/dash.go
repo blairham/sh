@@ -740,6 +740,13 @@ func Diagnostics() interp.Diagnostics {
 // Apply makes any adjustment that is not a vector value. dash needs none:
 // it has `local`, which is the only builtin the panel disagrees about.
 func Apply(r *interp.Runner) {
+	// The prompt table, installed for the same reason the other three
+	// dialects install theirs even though this one's has no escape language
+	// in it: what a shell does to a prompt parameter before drawing it is the
+	// dialect's answer, and "nothing but expansion" is an answer rather than
+	// an absence. A runner told it draws `\u` as `\u` because this table says
+	// so, not because nobody told it anything. #1455.
+	r.SetPromptStyle(PromptStyle())
 	// dash has no `builtin`.
 	r.Unregister("builtin")
 	// No `compgen` here; it is bash's alone.

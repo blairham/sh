@@ -29,6 +29,7 @@ package dialecttest
 import (
 	"context"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -179,4 +180,46 @@ func (p Preset) CombinedWithPrelude(t testing.TB, b Base, src string) (out strin
 	r.SourcingPrelude(false)
 	st, rerr := r.Run(context.Background(), f)
 	return buf.String(), st, rerr
+}
+
+// PromptTableInstalled fails unless a runner this preset builds answers prompt
+// escapes from the very table the dialect hands the prompt drawer.
+//
+// The table reaches a session two ways — [interp.Runner.SetPromptStyle] from
+// the dialect's Apply, and `driver.Shell.PromptStyle` from the front end — and
+// the whole point of them being one value is that they agree. For a long time
+// only zsh's Apply installed it, so the other three dialects had a prompt
+// language that existed in `PromptStyle()` and never reached a Runner unless a
+// front end happened to hand it over separately; `sh -dialect bash` drew `\u`
+// and `\h` as text where `cmd/bash` drew the user and the host (#1455).
+//
+// Here rather than written out in each dialect's suite, and that is the rule
+// this package was written for: four copies of one check is how the fifth
+// dialect gets written without it. `drawn` is passed in rather than added to
+// [Preset] so that a dialect cannot satisfy this by declaring the same missing
+// value twice.
+//
+// The comparison is the whole struct, not a spot check: a row added to one
+// copy and not the other is exactly the drift this guards, and only a whole
+// comparison cannot miss one. Expand is the single field that cannot be
+// compared by value — [reflect.DeepEqual] calls two non-nil funcs different
+// however they were built — so it is compared by identity and then removed
+// from both.
+func (p Preset) PromptTableInstalled(t testing.TB, b Base, drawn interp.PromptStyle) {
+	t.Helper()
+	got := p.Runner(b).PromptStyleValue()
+	drawnExpand := reflect.ValueOf(drawn.Expand).Pointer()
+	gotExpand := reflect.ValueOf(got.Expand).Pointer()
+	if drawn.Expand == nil {
+		t.Errorf("%s: the dialect's Expand is nil, so a prompt would never be expanded", p.Name)
+	}
+	if gotExpand != drawnExpand {
+		t.Errorf("%s: the interpreter's Expand is not the drawer's: %v against %v",
+			p.Name, gotExpand, drawnExpand)
+	}
+	got.Expand, drawn.Expand = nil, nil
+	if !reflect.DeepEqual(got, drawn) {
+		t.Errorf("%s: the interpreter's prompt table is not the drawer's:\n interp: %+v\n drawer: %+v",
+			p.Name, got, drawn)
+	}
 }

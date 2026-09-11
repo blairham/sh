@@ -6,7 +6,6 @@ package interp
 import (
 	"context"
 	"io"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -2292,34 +2291,16 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 		return code
 	}
 	physical := opts.physical
-	dir := ""
-	if len(args) > 0 {
-		dir = args[0]
+	old := r.workDir()
+	dir, dash, code, stop := r.cdDestination(args, old)
+	if stop {
+		return code
 	}
-	dash := false
-	switch dir {
-	case "":
-		dir, _ = r.getVar("HOME")
-		if dir == "" {
-			code, _ := r.cdNowhere(r.diag().CdHomeNotSet, "cd: HOME not set")
-			// With no HOME there is nowhere to go even for the dialects that
-			// do not call it an error, so this stops either way.
-			return code
-		}
-	case "-":
-		// The previous directory, which is why cd records one.
-		dash = true
-		dir, _ = r.getVar("OLDPWD")
-		if dir == "" {
-			if code, stop := r.cdNowhere(r.diag().CdOldpwdNotSet, "cd: OLDPWD not set"); stop {
-				return code
-			}
-			// Not an error here, and not nothing either: the dialects that
-			// survive this go to where they already are, which still prints
-			// for the ones that print.
-			dir = r.workDir()
-		}
-	}
+	// A rewrite of the current directory announces where it went in one of
+	// the two shells that have the form, the way `cd -` does in three of the
+	// four. Recorded here and printed after the move, because a rewrite that
+	// arrives nowhere prints nothing in either.
+	substituted := len(args) > 1 && !stop
 
 	// What the failure below names, captured before CDPATH and before the
 	// operand is joined against the working directory: every shell in the
@@ -2336,7 +2317,6 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	// rather than a second guard beside the first, because a second guard is
 	// what the spelling correction below would have had to add.
 	named := dir
-	old := r.workDir()
 	announced := false
 	if !filepath.IsAbs(dir) && !dash {
 		// CDPATH, searched for an operand that is not absolute and does not
@@ -2382,10 +2362,14 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	// Through the gate. A denied stat surfaces as the missing-directory
 	// error below, so `cd` into a path the policy hides fails the way `cd`
 	// into a path that is not there does — same sentence, same status.
-	info, err := r.stat(dir)
-	if err == nil && !info.IsDir() {
-		err = &os.PathError{Op: "cd", Path: dir, Err: syscall.ENOTDIR}
-	}
+	//
+	// The *entering* question rather than "is this a directory": a directory
+	// with no execute bit stats perfectly well and cannot be entered, and
+	// reading the stat moved us into one where the whole panel refuses. An
+	// operand that is not a directory comes back as ENOTDIR from the kernel
+	// now, which is the errno the synthesized one here spelled by hand. See
+	// enterable (#1492).
+	err := r.enterable(dir)
 	if err != nil {
 		// A misspelling is the one failure this can still recover from, and
 		// only where the shell asked for that — see cdCorrected, which
@@ -2425,6 +2409,10 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	}
 	if dash && r.ask(r.sem().CdDashPrintsTheDirectory, "`cd -` printing where it went") {
 		// Asked only for `cd -`, which is the only form any of them prints.
+		r.printf("%s\n", dir)
+	}
+	if substituted &&
+		r.ask(r.sem().CdSubstitutionPrintsTheDirectory, "`cd old new` printing where it went") {
 		r.printf("%s\n", dir)
 	}
 	// Last, after the move and after anything `cd` itself printed, which is
@@ -2484,6 +2472,146 @@ func (r *Runner) searchCdpath(operand string) (found, via string) {
 		}
 	}
 	return "", ""
+}
+
+// cdDestination works out where a `cd` was asked to go, reporting whether it
+// is finished already — refused, or asked to go nowhere.
+//
+// The operands are three questions the panel answers differently, and it
+// answered all three with one reading before: the first operand was taken and
+// the rest ignored, which is bash 3.2's and dash's answer given to all four
+// dialects (#1491).
+//
+//	cd ""          an empty *operand*, which is not the same as no operand
+//	cd a b         two operands, which two of the panel read as a rewrite of
+//	               the current directory rather than as a mistake
+//	HOME= cd       an empty HOME, which is not the same as an absent one
+func (r *Runner) cdDestination(args []string, old string) (dir string, dash bool, code int, stop bool) {
+	if len(args) > 1 {
+		if to, code, ok := r.cdSubstituted(args, old); ok {
+			return to, false, 0, false
+		} else if code != 0 {
+			return "", false, code, true
+		}
+	}
+	if len(args) == 0 {
+		dir, code, stop = r.cdHome()
+		return dir, false, code, stop
+	}
+	switch dir = args[0]; dir {
+	case "":
+		// An empty operand is somewhere rather than nowhere: three of the
+		// six take it as the directory they are already in — OLDPWD moves to
+		// where the shell was and the change hook fires, so it is a real
+		// move to the same place rather than a no-op — and joining an empty
+		// operand against the working directory below is exactly that. Two
+		// refuse it outright, which is the axis (#1491).
+		if !r.ask(r.sem().CdEmptyOperandIsAnError, "an empty operand to `cd`") {
+			return "", false, 0, r.unspecified
+		}
+		r.diagf("%s\n", Wording(r.diag().CdEmptyOperand, "cd: null directory"))
+		return "", false, orDefault(r.diag().CdStatus, 1), true
+	case "-":
+		// The previous directory, which is why cd records one.
+		dash = true
+		dir, _ = r.getVar("OLDPWD")
+		if dir == "" {
+			if code, stop := r.cdNowhere(r.diag().CdOldpwdNotSet, "cd: OLDPWD not set"); stop {
+				return "", true, code, true
+			}
+			// Not an error here, and not nothing either: the dialects that
+			// survive this go to where they already are, which still prints
+			// for the ones that print.
+			dir = old
+		}
+	}
+	return dir, dash, 0, false
+}
+
+// cdHome is `cd` with no operand at all.
+//
+// Absent and empty are two answers and were one: `biCd` read HOME and tested
+// the value against "", so a HOME set to nothing reached the branch that says
+// HOME is not set. Five of the six shells separate them — an empty HOME is an
+// empty *destination*, which is somewhere, and only an absent one is "HOME not
+// set" — and ours said `HOME not set` where bash says nothing at all.
+func (r *Runner) cdHome() (dir string, code int, stop bool) {
+	home, set := r.getVar("HOME")
+	if !set {
+		code, _ := r.cdNowhere(r.diag().CdHomeNotSet, "cd: HOME not set")
+		// With no HOME there is nowhere to go even for the dialects that
+		// do not call it an error, so this stops either way.
+		return "", code, true
+	}
+	if home != "" {
+		return home, 0, false
+	}
+	// Set to nothing. One shell refuses it, in the same words it refuses an
+	// empty operand with; the rest go where they already are, quietly, and
+	// the empty destination below joins to exactly that.
+	if !r.ask(r.sem().CdEmptyHomeIsAnError, "a HOME set to the empty string") {
+		return "", 0, r.unspecified
+	}
+	r.diagf("%s\n", Wording(r.diag().CdEmptyOperand, "cd: null directory"))
+	return "", orDefault(r.diag().CdStatus, 1), true
+}
+
+// cdSubstituted is `cd old new`, which rewrites the current directory's path
+// rather than naming a directory — the form two of the panel have.
+//
+// It reports the rewritten path, or a status and false where the form is
+// refused. A third return of (0, false) means this dialect has no second
+// operand at all and the caller should take the first.
+//
+// The first occurrence in the *string*, not the first path component: measured
+// in both shells that have it, `cd a Z` from `…/a/q/a/w` lands in `…/Z/q/a/w`.
+// What comes back is absolute, so it skips CDPATH the way any absolute operand
+// does, and a rewritten path that is not there is reported as that path rather
+// than as either operand.
+func (r *Runner) cdSubstituted(args []string, old string) (to string, code int, ok bool) {
+	if !r.ask(r.sem().CdSubstitutesTheOperands, "`cd old new` rewriting the current directory") {
+		if r.unspecified {
+			return "", r.status, false
+		}
+		// Not the form, so the operands are simply too many — or not, in the
+		// two columns that ignore everything after the first.
+		if !r.ask(r.sem().CdRefusesExtraOperands, "`cd` given more operands than it takes") {
+			if r.unspecified {
+				return "", r.status, false
+			}
+			return "", 0, false
+		}
+		return "", r.cdTooManyOperands(), false
+	}
+	if len(args) > 2 {
+		// The form takes exactly two, and both shells that have it refuse a
+		// third — in different words and with different statuses, which is
+		// what cdTooManyOperands carries.
+		return "", r.cdTooManyOperands(), false
+	}
+	i := strings.Index(old, args[0])
+	if i < 0 {
+		r.diagf("%s\n", Wording(r.diag().CdBadSubstitution, "cd: bad substitution", args[0]))
+		return "", orDefault(r.diag().CdStatus, 1), false
+	}
+	return old[:i] + args[1] + old[i+len(args[0]):], 0, true
+}
+
+// cdTooManyOperands refuses more operands than this `cd` takes.
+//
+// Two fields rather than one because the panel writes two different things:
+// bash and zsh write a sentence and no usage block, ksh93 writes its usage
+// block and no sentence. Neither implies the other, and a dialect could write
+// both.
+func (r *Runner) cdTooManyOperands() int {
+	d := r.diag()
+	if msg := Wording(d.CdTooManyOperands, ""); msg != "" {
+		r.diagf("%s\n", msg)
+	}
+	if d.CdTooManyOperandsShowsUsage {
+		r.builtinUsageLine("cd")
+	}
+	return orDefault(d.CdTooManyOperandsStatus, orDefault(d.CdStatus, 1))
 }
 
 // cdNowhere is `cd` with nothing to go to: no HOME, or no OLDPWD.

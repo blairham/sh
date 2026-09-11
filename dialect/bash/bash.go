@@ -784,6 +784,17 @@ func Semantics() interp.Semantics {
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.No
+	// `cd ""` is refused where `HOME=` is not, which is the pair no single
+	// field could express: `cd: null directory` at 1 for the operand, and
+	// nothing at all at 0 for the empty HOME.
+	s.CdEmptyOperandIsAnError = interp.Yes
+	s.CdEmptyHomeIsAnError = interp.No
+	// No substitution form here: a second operand is simply one too many,
+	// and it is refused rather than ignored. Measured, `cd a b` says `cd:
+	// too many arguments` and stays where it is.
+	s.CdSubstitutesTheOperands = interp.No
+	s.CdSubstitutionPrintsTheDirectory = interp.No
+	s.CdRefusesExtraOperands = interp.Yes
 	s.CdRefusesUnknownOption = interp.Yes
 	s.CdHasQuietOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes
@@ -1129,9 +1140,17 @@ func Diagnostics() interp.Diagnostics {
 		GetoptsMissingArgument: "option requires an argument -- %[1]s",
 		// bash names itself and no line here, where it gives a line to
 		// everything else it says.
-		GetoptsNamesNoLine:          true,
-		CdCannotChange:              "cd: %[1]s: %[2]s",
-		CdHomeNotSet:                "cd: HOME not set",
+		GetoptsNamesNoLine: true,
+		CdCannotChange:     "cd: %[1]s: %[2]s",
+		CdHomeNotSet:       "cd: HOME not set",
+		// An empty operand, which is a fifth branch and not a path that
+		// would not open: the sentence names no path at all.
+		CdEmptyOperand: "cd: null directory",
+		// A second operand is one too many here, and the refusal is a usage
+		// error rather than a directory that would not open — 2 where
+		// CdStatus is 1. No usage block goes with it.
+		CdTooManyOperands:           "cd: too many arguments",
+		CdTooManyOperandsStatus:     2,
 		CdOldpwdNotSet:              "cd: OLDPWD not set",
 		PrintfBadNumber:             "printf: %[1]s: invalid number",
 		PrintfBadVerb:               "printf: `%[1]s': invalid format character",

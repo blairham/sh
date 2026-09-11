@@ -2005,6 +2005,56 @@ echo "reached-after st=$?"`,
 		Why:     "the case dash cannot express: three of the four say `not a directory` where they said `no such file`, and dash says the same sentence for both",
 	},
 	{
+		ID: "cd/into-a-directory-with-no-execute-bit", Category: "cd",
+		Snippet: `mkdir noexec; chmod 000 noexec; cd noexec; echo "st=$?"; pwd; chmod 755 "$OLDPWD/noexec" 2>/dev/null; chmod 755 noexec 2>/dev/null`,
+		Why:     "the whole panel refuses and we moved. `cd` decided by asking whether the path was a directory, which is a different question from the one a chdir asks — a directory the caller may not *enter* stats perfectly well. The shell then had a working directory nothing could be resolved against, so every relative path afterwards failed with a reason naming the path rather than the `cd` that should have failed. Four wordings and two statuses, and the `pwd` is the half that says whether it moved (#1492)",
+	},
+	{
+		ID: "cd/into-a-directory-that-may-be-read-and-not-entered", Category: "cd",
+		Snippet: `mkdir r; chmod 444 r; cd r; echo "st=$?"; pwd; chmod 755 "$OLDPWD/r" 2>/dev/null; chmod 755 r 2>/dev/null`,
+		Why:     "the row that says the test is the *execute* bit rather than `some permission`: the directory can be listed and not entered, and the whole panel refuses it exactly as it refuses one with no permission at all",
+	},
+	{
+		ID: "cd/into-a-directory-that-may-be-entered-and-not-read", Category: "cd",
+		Snippet: `mkdir x; chmod 111 x; cd x; echo "st=$?"; pwd`,
+		Why:     "and the other side of it, which is what a fix reaching for a directory *listing* would have got wrong: nothing in here can be listed and every shell in the panel enters it. A guard that opened the directory to decide would refuse this one and accept the one above, which is the wrong answer twice",
+	},
+	{
+		ID: "cd/an-empty-operand", Category: "cd",
+		Snippet: `cd /; cd ""; echo "st=$?"; pwd`,
+		Why:     "an empty operand is not the same thing as no operand, and it is not nothing either. dash, bash 3.2 and zsh take it as the directory they are already in; bash 5.3 and the same binary called as `sh` say `cd: null directory` and ksh93 `cd: bad directory`, both at 1 and both staying put. That is a fifth branch — neither `cannot change` nor `HOME not set` — and ours read the empty string as *no* operand and went home (#1491)",
+	},
+	{
+		ID: "cd/an-empty-operand-is-a-move", Category: "cd",
+		Snippet: `cd /tmp; OLDPWD=MARK; cd ""; echo "old=$OLDPWD"`,
+		Why:     "the row that says what `accepted` means for the three columns that accept it: the previous directory moves, so it is a real move to the same place rather than a no-op. A fix that returned early on an empty operand would match the row above and leave MARK here",
+	},
+	{
+		ID: "cd/an-empty-home", Category: "cd",
+		Snippet: `cd /; HOME=; cd; echo "st=$?"; pwd`,
+		Why:     "a HOME set to the empty string, as distinct from an absent one. Five of the six say nothing and report 0 — an empty HOME is an empty *destination*, which is somewhere — and only ksh93 refuses, in the same words it refuses an empty operand with. `biCd` read HOME and tested the value against \"\", so both reached the branch that says HOME is not set, and ours said `cd: HOME not set` where bash says nothing at all (#1491)",
+	},
+	{
+		ID: "cd/two-operands", Category: "cd",
+		Snippet: `mkdir -p x/alpha x/beta; cd x/alpha; cd alpha beta; echo "st=$?"; pwd`,
+		Why:     "three refusals and one silent acceptance, and two of the six are not refusing at all: `cd old new` is ksh93's and zsh's *substitution* form, which rewrites the current directory's path by replacing old with new — ksh93 prints where it went and zsh does not. bash 5.3 says `cd: too many arguments` at 2, dash and bash 3.2 take the first operand and ignore the rest. Ours gave the last of those to all four dialects (#1491)",
+	},
+	{
+		ID: "cd/two-operands-where-the-first-is-not-in-the-path", Category: "cd",
+		Snippet: `mkdir -p x/alpha; cd x/alpha; cd zzz beta; echo "st=$?"; pwd`,
+		Why:     "the substitution that cannot be made, which is the row that tells the form from a refusal: ksh93 says `cd: bad substitution` and zsh `cd: string not in pwd: zzz` — its own wording, naming neither a directory nor an operand count — while bash still says `too many arguments` and dash still tries to enter `zzz`",
+	},
+	{
+		ID: "cd/two-operands-rewrite-the-first-occurrence", Category: "cd",
+		Snippet: `mkdir -p q/w/q/e; cd q/w/q/e; cd w Z; echo "st=$?"; pwd`,
+		Why:     "which occurrence the rewrite replaces, measured rather than assumed: the first in the *string*, so the path rewritten is `…/q/Z/q/e` and not `…/q/w/q/Z`. The directory does not exist, which is the point — what the shells name in the failure is the rewritten path, and that is the only way to read the rule off the answer",
+	},
+	{
+		ID: "cd/three-operands", Category: "cd",
+		Snippet: `mkdir -p x/alpha x/beta; cd x/alpha; cd alpha beta gamma; echo "st=$?"; pwd`,
+		Why:     "one too many for the substitution form as well, and the two shells that have it disagree about what to print: zsh says `cd: too many arguments` at 1 and ksh93 writes its usage block — both lines of it, naming the substitution form — and says nothing else, at 2. bash says the same sentence as zsh at a different status, which is why the sentence and the status are separate answers",
+	},
+	{
 		ID: "cd/no-home-diverges", Category: "cd",
 		Snippet: `unset HOME; cd; echo "st=$?"`,
 		Why:     "bash and ksh93 call this an error and dash and zsh stay where they are and report success, which is the quieter answer and the surprising one",

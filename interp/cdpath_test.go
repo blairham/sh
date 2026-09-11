@@ -113,6 +113,12 @@ func TestCdMayRefuseAnOptionItDoesNotHave(t *testing.T) {
 			sem := PosixSemantics()
 			sem.CdRefusesUnknownOption = c.refuses
 			sem.CdLastPathOptionWins = Yes
+			// A letter read as an operand leaves two of them, which is a
+			// question of its own — see cdoperands_test.go. Answered here
+			// with "ignore what follows the first", so that what this row
+			// reads is the *letter* rather than the operand count.
+			sem.CdSubstitutesTheOperands = No
+			sem.CdRefusesExtraOperands = No
 			errs := &strings.Builder{}
 			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,

@@ -1024,6 +1024,57 @@ type Semantics struct {
 	// report success, which is the quieter answer and the surprising one.
 	// The same axis answers `cd -` with no OLDPWD.
 	CdWithoutHomeIsAnError Answer
+	// CdEmptyOperandIsAnError refuses `cd ""` instead of taking it as the
+	// directory the shell is already in. True in bash and ksh93.
+	//
+	// An empty operand is not the same thing as no operand, and it is not
+	// nothing either: measured 2026-09-10, `cd /tmp; OLDPWD=MARK; cd ""`
+	// leaves OLDPWD as `/tmp` in dash, bash 3.2 and zsh, and zsh's `chpwd`
+	// fires — so it is a real move to the same place, which joining an empty
+	// operand against the working directory already is. bash 5.3 and bash
+	// called as `sh` say `cd: null directory` and ksh93 `cd: bad directory`,
+	// both at 1 and both staying put.
+	CdEmptyOperandIsAnError Answer
+
+	// CdEmptyHomeIsAnError refuses `cd` with HOME set to the empty string,
+	// rather than going where the shell already is. True in ksh93 alone.
+	//
+	// A separate question from CdWithoutHomeIsAnError, which is about a HOME
+	// that is *absent*, and separate from the axis above, which is about an
+	// operand: bash answers yes to the first, no to this one and yes to the
+	// third, so no two of them can be one field. Measured: `HOME= cd` says
+	// nothing and reports 0 in dash, both bashes and zsh, and `cd: bad
+	// directory` at 1 in ksh93 — which is the same sentence it refuses an
+	// empty operand with.
+	CdEmptyHomeIsAnError Answer
+
+	// CdSubstitutesTheOperands reads `cd old new` as a rewrite of the
+	// current directory — the first occurrence of old in `$PWD` replaced by
+	// new — rather than as too many operands. True in ksh93 and zsh.
+	//
+	// Measured from `…/x/alpha`: `cd alpha beta` lands in `…/x/beta` in both,
+	// and `cd a Z` from `…/a/q/a/w` lands in `…/Z/q/a/w`, so it is the first
+	// occurrence in the string rather than the first path component. bash
+	// refuses the shape outright and dash and bash 3.2 ignore everything
+	// after the first operand.
+	CdSubstitutesTheOperands Answer
+
+	// CdSubstitutionPrintsTheDirectory writes where a `cd old new` went, the
+	// way `cd -` writes where it went. True in ksh93; zsh moves in silence.
+	//
+	// Asked only on a substitution that arrived somewhere: a rewrite naming
+	// a directory that is not there prints nothing in either shell.
+	CdSubstitutionPrintsTheDirectory Answer
+
+	// CdRefusesExtraOperands refuses operands after the first instead of
+	// ignoring them, in a dialect that does not read two as a substitution.
+	// True in bash; false in dash and bash 3.2, which take the first and say
+	// nothing about the rest.
+	//
+	// Asked only where CdSubstitutesTheOperands said no, which is the point
+	// the two shells that have the form are no longer in the conversation.
+	CdRefusesExtraOperands Answer
+
 	// CdDashPrintsTheDirectory writes the new directory when `cd -` moves.
 	// True in bash, dash and ksh93; zsh alone is silent.
 	CdDashPrintsTheDirectory Answer

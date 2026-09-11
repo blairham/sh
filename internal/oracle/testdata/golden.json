@@ -16879,6 +16879,138 @@
         "TimedOut": false
       }
     },
+    "cd/an-empty-home": {
+      "bash": {
+        "Stdout": "st=0~/",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~/",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~/",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0~/",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~/",
+        "Stderr": "\u003cshell\u003e: cd: bad directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~/",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/an-empty-operand": {
+      "bash": {
+        "Stdout": "st=1~/",
+        "Stderr": "\u003cshell\u003e: line 1: cd: null directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~/",
+        "Stderr": "\u003cshell\u003e: line 1: cd: null directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~/",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0~/",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~/",
+        "Stderr": "\u003cshell\u003e: cd: bad directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~/",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/an-empty-operand-is-a-move": {
+      "bash": {
+        "Stdout": "old=MARK",
+        "Stderr": "\u003cshell\u003e: line 1: cd: null directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "old=MARK",
+        "Stderr": "\u003cshell\u003e: line 1: cd: null directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "old=/tmp",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "old=/tmp",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "old=MARK",
+        "Stderr": "\u003cshell\u003e: cd: bad directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "old=/tmp",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cd/cdpath-may-announce-the-move": {
       "bash": {
         "Stdout": "announced",
@@ -16962,6 +17094,138 @@
       "zsh": {
         "Stdout": "silent",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/into-a-directory-that-may-be-entered-and-not-read": {
+      "bash": {
+        "Stdout": "st=0~/private\u003ctmp\u003e/x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~/private\u003ctmp\u003e/x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~/private\u003ctmp\u003e/x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0~/private\u003ctmp\u003e/x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~\u003ctmp\u003e/x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~/private\u003ctmp\u003e/x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/into-a-directory-that-may-be-read-and-not-entered": {
+      "bash": {
+        "Stdout": "st=1~/private\u003ctmp\u003e",
+        "Stderr": "\u003cshell\u003e: line 1: cd: r: Permission denied",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~/private\u003ctmp\u003e",
+        "Stderr": "\u003cshell\u003e: line 1: cd: r: Permission denied",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~/private\u003ctmp\u003e",
+        "Stderr": "\u003cshell\u003e: line 0: cd: r: Permission denied",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~/private\u003ctmp\u003e",
+        "Stderr": "\u003cshell\u003e: 1: cd: can't cd to r",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~\u003ctmp\u003e",
+        "Stderr": "\u003cshell\u003e: cd: r: [Permission denied]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~/private\u003ctmp\u003e",
+        "Stderr": "\u003cshell\u003e:cd:1: permission denied: r",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/into-a-directory-with-no-execute-bit": {
+      "bash": {
+        "Stdout": "st=1~/private\u003ctmp\u003e",
+        "Stderr": "\u003cshell\u003e: line 1: cd: noexec: Permission denied",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~/private\u003ctmp\u003e",
+        "Stderr": "\u003cshell\u003e: line 1: cd: noexec: Permission denied",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~/private\u003ctmp\u003e",
+        "Stderr": "\u003cshell\u003e: line 0: cd: noexec: Permission denied",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~/private\u003ctmp\u003e",
+        "Stderr": "\u003cshell\u003e: 1: cd: can't cd to noexec",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~\u003ctmp\u003e",
+        "Stderr": "\u003cshell\u003e: cd: noexec: [Permission denied]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~/private\u003ctmp\u003e",
+        "Stderr": "\u003cshell\u003e:cd:1: permission denied: noexec",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -17314,6 +17578,182 @@
       "zsh": {
         "Stdout": "st=0~moved",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/three-operands": {
+      "bash": {
+        "Stdout": "st=2~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e: line 1: cd: too many arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e: line 1: cd: too many arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e: line 0: cd: alpha: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e: 1: cd: can't cd to alpha",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2~\u003ctmp\u003e/x/alpha",
+        "Stderr": "Usage: cd [-LP] [directory]~   Or: cd [ options ] old new",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e:cd:1: too many arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/two-operands": {
+      "bash": {
+        "Stdout": "st=2~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e: line 1: cd: too many arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e: line 1: cd: too many arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e: line 0: cd: alpha: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e: 1: cd: can't cd to alpha",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "\u003ctmp\u003e/x/beta~st=0~\u003ctmp\u003e/x/beta",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~/private\u003ctmp\u003e/x/beta",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/two-operands-rewrite-the-first-occurrence": {
+      "bash": {
+        "Stdout": "st=2~/private\u003ctmp\u003e/q/w/q/e",
+        "Stderr": "\u003cshell\u003e: line 1: cd: too many arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~/private\u003ctmp\u003e/q/w/q/e",
+        "Stderr": "\u003cshell\u003e: line 1: cd: too many arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~/private\u003ctmp\u003e/q/w/q/e",
+        "Stderr": "\u003cshell\u003e: line 0: cd: w: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~/private\u003ctmp\u003e/q/w/q/e",
+        "Stderr": "\u003cshell\u003e: 1: cd: can't cd to w",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~\u003ctmp\u003e/q/w/q/e",
+        "Stderr": "\u003cshell\u003e: cd: \u003ctmp\u003e/q/Z/q/e: [No such file or directory]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~/private\u003ctmp\u003e/q/w/q/e",
+        "Stderr": "\u003cshell\u003e:cd:1: no such file or directory: /private\u003ctmp\u003e/q/Z/q/e",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/two-operands-where-the-first-is-not-in-the-path": {
+      "bash": {
+        "Stdout": "st=2~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e: line 1: cd: too many arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e: line 1: cd: too many arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e: line 0: cd: zzz: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e: 1: cd: can't cd to zzz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e: cd: bad substitution",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~/private\u003ctmp\u003e/x/alpha",
+        "Stderr": "\u003cshell\u003e:cd:1: string not in pwd: zzz",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

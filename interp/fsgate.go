@@ -54,6 +54,45 @@ func (r *Runner) stat(path string) (os.FileInfo, error) {
 	return os.Stat(path)
 }
 
+// enterable asks whether a directory could be *entered*, which is the question
+// a chdir asks and a stat does not.
+//
+// A directory with no execute bit stats perfectly well and cannot be entered,
+// so `cd` reading the stat moved the runner into one the whole panel refuses —
+// leaving a working directory nothing can be resolved against, and every
+// relative path afterwards failing with a reason that names the path rather
+// than the `cd` that should have failed (#1492).
+//
+// It is a stat to the policy, and asked about the directory rather than about
+// the path below it: what a script named is the directory, and a rule written
+// against that name must still match.
+func (r *Runner) enterable(dir string) error {
+	if r.Gate == nil && r.Events == nil {
+		return statEntering(dir)
+	}
+	if r.probeDenied(r.act(Action{Kind: ActionStat, Path: dir})) {
+		return &fs.PathError{Op: "stat", Path: dir, Err: syscall.ENOENT}
+	}
+	return statEntering(dir)
+}
+
+// statEntering is the operating system half of enterable.
+//
+// Resolving a path *through* a directory needs execute permission on it, which
+// is exactly what chdir needs and exactly what a stat of the directory itself
+// does not ask for. So the question is put by naming the directory's own entry
+// rather than the directory, and the kernel answers with the errno the panel
+// prints: EACCES for a directory that may not be entered, ENOTDIR for an
+// operand that is not one, ENOENT for one that is not there.
+//
+// Not a chdir, because only the runner's own directory moves — a Runner is
+// embedded in other programs and two of them in one process must not fight
+// over one working directory. See biCd.
+func statEntering(dir string) error {
+	_, err := os.Stat(dir + string(os.PathSeparator) + ".")
+	return err
+}
+
 // lstat is os.Lstat through the gate: the same question about the link
 // itself, so it is the same action to the policy.
 func (r *Runner) lstat(path string) (os.FileInfo, error) {

@@ -11,7 +11,7 @@ import "testing"
 // It reads a quoted replacement operand as the *enclosing* quoting — it is
 // the only preset that answers Semantics.ReplacementOperandTakesTheEnclosingQuoting
 // with `yes` — so the two readings are a live difference here and the escape
-// has to hold under the one this dialect picks. The neighbouring `\q` row is
+// has to hold under the one this dialect picks. The neighboring `\q` row is
 // that axis itself, and it stays put: the brace joined the escape set and did
 // not replace it.
 //

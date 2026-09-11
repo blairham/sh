@@ -15,7 +15,7 @@ import "testing"
 //
 // Measured 2026-09-10, `u` unset, across dash, bash 5.3.15, that build as
 // `sh`, bash 3.2.57, ksh93u+ and zsh 5.9.2. Five write `A}B`; bash 3.2 keeps
-// the backslash and has no dialect here to answer for it. The neighbouring
+// the backslash and has no dialect here to answer for it. The neighboring
 // rows — an opening brace, an ordinary character, the same text outside an
 // expansion — are unanimous across all six, and they are what say the rule is
 // the closing brace in an operand rather than backslashes at large. Core, not
@@ -26,7 +26,7 @@ func TestABackslashBeforeAClosingBraceIsConsumedInAQuotedOperand(t *testing.T) {
 		{"the colon form too", `printf "[%s]" "${u:-A\}B}"`, `[A}B]`},
 		{"and with an expansion after it", `w=W; printf "[%s]" "${u-A\}${w}B}"`, `[A}WB]`},
 
-		// The neighbours that say what the rule is not.
+		// The neighbors that say what the rule is not.
 		{"an opening brace keeps its backslash", `printf "[%s]" "${u-A\{B}"`, `[A\{B]`},
 		{"so does an ordinary character", `printf "[%s]" "${u-A\qB}"`, `[A\qB]`},
 		{"and so does an ordinary double-quoted run", `printf "[%s]" "A\}B"`, `[A\}B]`},

@@ -568,6 +568,12 @@ func Diagnostics() interp.Diagnostics {
 		// A verb, and a different one for each direction.
 		CannotOpen:   "cannot open %[1]s: %[2]s",
 		CannotCreate: "cannot create %[1]s: %[2]s",
+		// Under `set -C` a target that is not a regular file is opened
+		// rather than created — the file is already there — and dash is the
+		// one shell whose verb follows: `cannot open d: Is a directory` with
+		// the option on, `cannot create d: Is a directory` with it off,
+		// measured 2026-09-10 against dash 0.5.12.
+		NoclobberFallbackIsAnOpen: true,
 		// The name twice — `dash: 1: echo: echo: I/O error` — and its own
 		// fixed reason whatever the errno was, so the format never mentions
 		// %[2]s. Measured on echo, printf, pwd and type: the doubling is the

@@ -407,7 +407,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// first act blocks would otherwise leave the shell waiting for a pid
 		// that is not coming.
 		r.settleBackgroundJobBeforeABlockingOpen(path)
-		f, err := r.openGated(ctx, &action, path, flags)
+		f, fellBack, err := r.openThroughNoclobber(ctx, &action, path, flags)
 		if errors.Is(err, errRefused) {
 			// The gate let the *name* through and refused what the name
 			// reached — a link into a denied place. Reported here rather
@@ -426,7 +426,10 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// differently: %[1]s is the name as written and %[2]s the
 			// reason. Two wordings because two of the four say "create"
 			// rather than "open" when the redirect was making the file.
-			creating := flags != os.O_RDONLY
+			// The noclobber fallback creates nothing, and one dialect
+			// words it as the open it is: see openThroughNoclobber.
+			creating := flags != os.O_RDONLY &&
+				(!fellBack || !r.diag().NoclobberFallbackIsAnOpen)
 			format, fallback := r.diag().CannotOpen, "cannot open %[1]s: %[2]s"
 			if creating {
 				format, fallback = r.diag().CannotCreate, "cannot create %[1]s: %[2]s"

@@ -517,6 +517,17 @@ func TestEveryTargetIsWritten(t *testing.T) {
 	}
 }
 
+// TestNoclobberRefusalCoversAFailedOpen. Under `noclobber` this shell says
+// `file exists` about a target it could not open for a reason of its own — a
+// directory, a socket, a dangling symlink, a `/dev/tty` in a session with no
+// controlling terminal — where the other three report the open's own reason.
+// Measured 2026-09-10 against zsh 5.9.2; see interp/noclobberopen.go.
+func TestNoclobberRefusalCoversAFailedOpen(t *testing.T) {
+	if !zsh.Diagnostics().NoclobberRefusalCoversAFailedOpen {
+		t.Error("a failed open under noclobber is reported as the open's reason, want the option's refusal")
+	}
+}
+
 // TestPrintfAnswers: zsh stops the output at `\c`, which is the answer that
 // looks like ksh93's until the bytes are read.
 func TestPrintfAnswers(t *testing.T) {

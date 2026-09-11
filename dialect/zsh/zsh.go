@@ -1611,6 +1611,13 @@ func Diagnostics() interp.Diagnostics {
 		// GreatAmpTarget sends it to the file.
 		DuplicationTargetIsNotADescriptor: "file number expected",
 		CannotCreate:                      "%[2]s: %[1]s",
+		// Under `noclobber`, a name holding something that is not a regular
+		// file is opened — `>/dev/null` writes — and where that open fails
+		// for a reason of its own zsh says `file exists` about it anyway.
+		// Measured: a directory, a socket, a dangling symlink and a
+		// `/dev/tty` with no controlling terminal all answer `file exists`
+		// here and answer with the open's own reason in the other three.
+		NoclobberRefusalCoversAFailedOpen: true,
 		// The null-command hook's own refusal, for a command that is only
 		// redirections and a `NULLCMD` with nothing in it. No verbs, and the
 		// same sentence whether the parameter was unset or emptied.

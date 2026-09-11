@@ -46,16 +46,17 @@ func TestASingleQuoteInAQuotedOperandIsAnOrdinaryCharacter(t *testing.T) {
 		{"so there is no substitution in one to leave open", `s=xay; printf "[%s]" "${s#'a$(b'}"`, `[xay]`},
 
 		// A replacement operand is the third reading, and it is the one the
-		// panel divides on rather than a consequence of this rule. Measured
-		// 2026-09-07 with `s=xay; v=VAL`: `"${s/a/'$v'}"` is `x$vy` in bash
-		// 5.3, that build as `sh` and ksh93 — the quotes quoting and removed
-		// — and `x'VAL'y` in bash 3.2 and zsh, where they are characters.
-		// dash has no operator. Pinned as the majority reading this
-		// implementation already gave, so the split is recorded rather than
-		// answered here; it wants a semantics axis of its own.
-		{"a replacement operand's quotes quote", `s=xay; v=VAL; printf "[%s]" "${s/a/'$v'}"`, `[x$vy]`},
-		{"and its pattern's do, unanimously", `s=xay; printf "[%s]" "${s/'a'/Z}"`, `[xZy]`},
-		{"unquoted, all five agree with that", `s=xay; v=VAL; printf "[%s]" ${s/a/'$v'}`, `[x$vy]`},
+		// panel divides on rather than a consequence of this rule — so it is
+		// not here. It is Semantics.ReplacementOperandTakesTheEnclosingQuoting
+		// now, and with no dialect chosen the core refuses it by name rather
+		// than answering: see replacementquoting_test.go (#1209).
+		//
+		// These two are the guards on either side of that axis, and both are
+		// unanimous: a *pattern* operand's quotes quote in every column, and
+		// unquoted the replacement is a word of its own in every column.
+		// Neither may move with the axis, so neither is given one.
+		{"a pattern operand's quotes quote", `s=xay; printf "[%s]" "${s/'a'/Z}"`, `[xZy]`},
+		{"unquoted, all five agree with the word reading", `s=xay; v=VAL; printf "[%s]" ${s/a/'$v'}`, `[x$vy]`},
 
 		// And a here-document body is the same context by the other road.
 		{"a heredoc body reads the operand alike", "v=VAL; cat <<EOF\n[${u:-'$v'}]\nEOF", "['VAL']\n"},

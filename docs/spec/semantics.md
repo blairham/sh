@@ -11014,6 +11014,41 @@ the same word, and only expansion differs. It is also silent in the `&>`
 sense — `echo {1..3}` prints something either way, and nothing reports
 that one of them is not what was meant.
 
+**`ReplacementOperandTakesTheEnclosingQuoting`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+Reads the replacement half of `${v/pat/repl}` as *content* of the quoting
+around the expansion rather than as a word of its own. With `s=xay` and
+`v=VAL`, from a script file:
+
+| probe | bash 5.3 | bash-as-`sh` | bash 3.2 | ksh93 | zsh 5.9.2 |
+| --- | --- | --- | --- | --- | --- |
+| `"${s/a/'$v'}"` | `x$vy` | `x$vy` | **`x'VAL'y`** | `x$vy` | **`x'VAL'y`** |
+| `"${s/a/\q}"` | `xqy` | `xqy` | **`x\qy`** | `xqy` | **`x\qy`** |
+| `"${s/a/~}"` | the home | the home | **`x~y`** | the home | **`x~y`** |
+| `${s/a/'$v'}` unquoted | `x$vy` | `x$vy` | `x$vy` | `x$vy` | `x$vy` |
+
+The third of three readings a quote in a `${ }` operand can take, and the
+only one the panel divides on: a **word** operand takes the enclosing
+quoting unanimously, a **pattern** operand's quotes quote, also
+unanimously, and a **replacement** operand splits. So it cannot borrow
+either of the other two answers, and neither of them may move with it.
+
+bash moved between its two builds, which is what says a field named for a
+shell could not carry this. dash has no `/` operator at all.
+
+Asked only at the disagreement. The two readings coincide unless the
+expansion is double-quoted *and* the operand holds one of the three
+characters they part on — a single quote, a backslash, or a tilde at the
+front. A double quote is removed under both readings, a glob is a glob
+under both, and a tilde off the front expands under neither, so none of
+those reaches the axis. The parser decides whether it can arise and keeps
+both readings when it can; see `syntax.ParamExpr.Arg2Enclosed`.
+
+bash 3.2 keeps a double quote as a character too, which no other column
+does under either reading. That is a further difference inside the
+keeping group rather than a third value of this axis, and no dialect here
+targets that build, so it is recorded in the corpus and not modeled.
+
 **`DollarZeroNamesTheInnermostCall`** — bash no · dash no · ksh93 no · zsh yes
 
 Makes `$0` the innermost thing the shell has been called into rather than the

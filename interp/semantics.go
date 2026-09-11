@@ -4760,6 +4760,33 @@ type Semantics struct {
 	// answer from anyone.
 	SubstringRangeReadsModifiers Answer
 
+	// ReplacementOperandTakesTheEnclosingQuoting reads the replacement half
+	// of `${v/pat/repl}` as *content* of the quoting around the expansion
+	// rather than as a word of its own. Yes in zsh and in bash 3.2, where
+	// `"${s/a/'$v'}"` on `s=xay` and `v=VAL` is `x'VAL'y` — the quotes are
+	// two characters of the result and what stands between them is still
+	// substituted; No in bash 5.3, that build as `sh` and ksh93, where the
+	// quotes quote and are removed, giving `x$vy`.
+	//
+	// The third of three readings a quote in a `${ }` operand can take, and
+	// the only one the panel divides on. A *word* operand takes the enclosing
+	// quoting unanimously — `"${u:-'$v'}"` is `'VAL'` in all six — and a
+	// *pattern* operand's quotes quote, also unanimously. So neither of those
+	// is an axis, and the replacement cannot borrow either one's answer.
+	//
+	// bash moved between its two builds, which is what says a field named for
+	// a shell could not carry it.
+	//
+	// Asked only at the disagreement: the two readings coincide unless the
+	// expansion is double-quoted *and* the operand holds one of the three
+	// characters they part on — a single quote, a backslash, or a tilde at
+	// the front. Unquoted, all five shells with the operator agree with the
+	// word reading, which is what says the disagreement belongs to the
+	// enclosing context and not to the operator. The parser decides whether
+	// it can arise at all and keeps both readings when it can; see
+	// syntax.ParamExpr.Arg2Enclosed (#1209).
+	ReplacementOperandTakesTheEnclosingQuoting Answer
+
 	// LinenoCountsFromTheFunction numbers `$LINENO` inside a function from
 	// the line the function was written on: zsh; the other three count from
 	// the file.

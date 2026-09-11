@@ -752,6 +752,14 @@ func Semantics() interp.Semantics {
 	s.ArraysAreSparse = interp.Yes
 	// An operator on `${a[*]}` trims each element before the join here.
 	s.OperatorDistributesOverStarSubscript = interp.Yes
+	// A *replacement* operand is a word of its own, so its quotes quote and
+	// are removed: measured 2026-09-07 in 5.3.15 and as `sh`, `"${s/a/'$v'}"`
+	// on `s=xay` and `v=VAL` is `x$vy`, the `$v` never substituted. 3.2.57
+	// gives `x'VAL'y`, so this moved inside the lineage and the preset is the
+	// current build. The *word* operand takes the enclosing quoting in both,
+	// unanimously with the rest of the panel, which is why that one is not an
+	// axis (#1209).
+	s.ReplacementOperandTakesTheEnclosingQuoting = interp.No
 	s.ExportCarriesFunctions = interp.Yes
 	// `export -n V` takes the attribute off and leaves V set: measured, the
 	// name keeps its value in the shell and stops reaching a child. bash is

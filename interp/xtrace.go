@@ -92,7 +92,14 @@ func (r *Runner) traceCommand(words []string) {
 // one line each writes it as soon as that value is known, so the split is about
 // *when* as much as about how many, and only the caller performing them knows
 // when — see Runner.assignAll.
-func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string) {
+//
+// The prefix is handed in for the same reason. `PS4` is a prompt and reads the
+// shell it is about to describe, so *when* it was drawn is visible: measured,
+// `PS4='+$n '; set -x; n=1` traces `+ n=1` in bash 5.3, which is the shell as
+// the line found it and not as the line left it. A line that stands for the
+// whole list cannot be written until the last value is known, and drawing the
+// prefix then would report the assignments' own work back at them.
+func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, prefix string) {
 	if !r.xtrace || len(assigns) == 0 {
 		return
 	}
@@ -103,7 +110,7 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string) {
 	for i, a := range assigns {
 		words[i] = a.Name + "=" + traceQuote(values[i], d.TraceQuoting)
 	}
-	r.traceLine(strings.Join(words, " "), d)
+	r.traceLine(strings.Join(words, " "), d, prefix)
 }
 
 // traceLine writes one trace line.
@@ -161,14 +168,14 @@ func (r *Runner) traceForIteration(header, name, value string) {
 	r.errf("%s%s\n", r.tracePrefix(), line)
 }
 
-func (r *Runner) traceLine(line string, d Diagnostics) {
+func (r *Runner) traceLine(line string, d Diagnostics, prefix string) {
 	if d.TraceStyle == TraceNameLine {
 		// zsh puts a space after an assignment-only line and nowhere else.
 		// Measured rather than reasoned about; it is decoration, and this
 		// records it rather than tidying it away.
 		line += " "
 	}
-	r.errf("%s%s\n", r.tracePrefix(), line)
+	r.errf("%s%s\n", prefix, line)
 }
 
 // tracePrefix renders what comes before the command.

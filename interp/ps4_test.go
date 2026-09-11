@@ -59,6 +59,16 @@ func TestTheTracePrefixIsTheParameter(t *testing.T) {
 			"the value is expanded at every trace",
 			"PS4='+$n '; set -x; n=1; n=2", "+ n=1\n+1 n=2\n",
 		},
+		{
+			// And drawn *before* the line it describes has done its work,
+			// which is only visible when the value the prefix reads is one
+			// the line is assigning. One line for the pair here, so there is
+			// a single moment to get wrong: a prefix drawn once the values
+			// were known reported the assignments back at themselves.
+			// Measured, bash 5.3: `PS4='+$n '; set -x; n=1` traces `+ n=1`.
+			"the prefix is drawn before the assignments it describes land",
+			"PS4='+$n '; set -x; n=1 m=2", "+ n=1 m=2\n",
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			got := tracedWith(t, c.src, Diagnostics{}, PromptStyle{Expand: PromptExpandsAlways}, "")

@@ -4342,16 +4342,24 @@ func (r *Runner) assignAll(assigns []*syntax.Assign) {
 	}
 	separately := r.ask(r.sem().TraceAssignmentsSeparately,
 		"each assignment getting its own trace line")
+	// Drawn before any of them lands. The prefix is `PS4`, which is a prompt
+	// and reads the shell it is describing, so a line written after the
+	// assignments would show the assignments' own work in front of them —
+	// `PS4='+$n '; set -x; n=1` is `+ n=1` in bash 5.3 and not `+1 n=1`.
+	// Where each assignment has a line of its own the prefix is drawn for
+	// each, which is the same rule reached one assignment at a time: bash
+	// writes `+ n=1` and then `+1 m=1` for `n=1 m=$n`.
+	prefix := r.tracePrefix()
 	values := make([]string, len(assigns))
 	for i, a := range assigns {
 		values[i] = r.expandAssignValue(a.Value)
 		if separately {
-			r.traceAssignments(assigns[i:i+1], values[i:i+1])
+			r.traceAssignments(assigns[i:i+1], values[i:i+1], r.tracePrefix())
 		}
 		r.withExpandedValue(a, values[i])
 	}
 	if !separately {
-		r.traceAssignments(assigns, values)
+		r.traceAssignments(assigns, values, prefix)
 	}
 }
 

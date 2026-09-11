@@ -153,8 +153,29 @@ func substituteLiteral(value, pattern, with string, global bool) string {
 	if global {
 		n = -1
 	}
-	return strings.Replace(value, pattern, expandAmpersand(with, pattern), n)
+	return strings.Replace(value, pattern, expandAmpersand(with, pattern, backslashProtectsAnything), n)
 }
+
+// backslashRule is what a backslash does to the byte after it in a
+// replacement, which is the one thing the two constructs that read an `&`
+// disagree about.
+type backslashRule bool
+
+const (
+	// backslashProtectsAnything is the history modifier's rule: a backslash
+	// stands for the byte after it whatever that byte is, and disappears.
+	// Measured with the modifier's own delimiter out of the way — see
+	// unescapeModifier, which resolves the *pattern* half the same way.
+	backslashProtectsAnything backslashRule = false
+
+	// backslashProtectsItself is the parameter substitution's rule: a
+	// backslash is an escape only before an `&` or another backslash, and is
+	// kept where it stands in front of anything else. Measured on bash
+	// 5.3.15, 2026-09-11, with `v=abc` and the reading on — `r='[\&]'` gives
+	// `a[&]c`, `r='[\\&]'` gives `a[\b]c`, and `r='[\a]'` gives `a[\a]c`,
+	// where the modifier's rule would have answered `a[a]c` for the last.
+	backslashProtectsItself backslashRule = true
+)
 
 // expandAmpersand puts the matched text where the replacement wrote `&`, and
 // resolves the replacement's escapes in the same pass.
@@ -164,11 +185,26 @@ func substituteLiteral(value, pattern, with string, global bool) string {
 // followed by the matched text. A pass that resolved the escapes first would
 // turn the second into `\&` and then read that as the literal, and a pass that
 // answered the ampersands first would never see the difference at all.
-func expandAmpersand(with, matched string) string {
+//
+// One function rather than two, because the `&` is the same rule in both
+// places and only the backslash differs: a second copy carrying the modifier's
+// escape rule is exactly how a fix to one of them would miss the other, which
+// is a shape this repository has paid for more than once. What the parameter
+// substitution hands in is a **real** match rather than the pattern itself —
+// the modifier replaces a literal substring, so there the two are the same
+// string and here they are not.
+func expandAmpersand(with, matched string, rule backslashRule) string {
 	var b strings.Builder
 	for i := 0; i < len(with); i++ {
 		switch {
 		case with[i] == '\\' && i+1 < len(with):
+			if rule == backslashProtectsItself &&
+				with[i+1] != '&' && with[i+1] != '\\' {
+				// Not an escape under this rule, so the backslash is text
+				// and the byte after it is read again as itself.
+				b.WriteByte(with[i])
+				continue
+			}
 			b.WriteByte(with[i+1])
 			i++
 		case with[i] == '&':

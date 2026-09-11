@@ -117,6 +117,14 @@ func (r *Runner) replaceElementScalar(e *syntax.ParamExpr, value string) string 
 // `i=0; ${(@)a:/*/$((++i))}` is `1 1 1` and `i=0; ${(@)a:/(#m)*/$((++i))}` is
 // `1 2 3`. matchPatternR publishes what it matched, so `$MATCH` is already
 // standing by the time the replacement is read.
+//
+// The ampersand rule reaches here through the same replacementFor, and the
+// match it is handed is the **whole element** — which is what this operator
+// matches, and the difference from the span replacement next door. No dialect
+// in the panel has both this operator and the option that turns the reading
+// on, so nothing measures it today; it is wired anyway, because a replacement
+// reader that knows about the `&` and a second one that does not is the shape
+// this repository keeps finding at the bottom of a bug.
 func (r *Runner) elementReplacer(e *syntax.ParamExpr) func(string) (string, bool) {
 	// A pattern, so the *word* is what the matcher needs rather than its
 	// text — the same reading `:#` takes, and the same axis that keeps
@@ -128,14 +136,14 @@ func (r *Runner) elementReplacer(e *syntax.ParamExpr) func(string) (string, bool
 			if !r.matchPatternR(pattern, el, false) {
 				return "", false
 			}
-			return r.replacementOf(repl), true
+			return r.replacementFor(repl)(el), true
 		}
 	}
-	with := r.replacementOf(repl)
+	with := r.replacementFor(repl)
 	return func(el string) (string, bool) {
 		if !r.matchPatternR(pattern, el, false) {
 			return "", false
 		}
-		return with, true
+		return with(el), true
 	}
 }

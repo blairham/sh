@@ -1230,14 +1230,17 @@ script can reach, so `(shopt -u progcomp)` stays inside the subshell.
 A fourth, `complete_fullquote`, is not recorded and that is the point of
 having the category at all: this shell really does backslash every shell
 metacharacter in a name it offers, so bash's `on` is this implementation's
-own state and it belongs with the rest of what is true. The remaining
-three of the seven are behaviors this shell genuinely does not have and
-genuinely does have: `patsub_replacement` gates `&` in a `${v/pat/rep}`
-replacement, which is unbuilt here, so reporting it on would be the worst
-kind of lie; `histappend` and `lithist` read **on** against bash's off
-because this shell's history really does append to the file and really does
-keep a multi-line entry's newlines, measured through a terminal. Those
-three are divergences reported honestly rather than defaults to copy.
+own state and it belongs with the rest of what is true. `histappend` and
+`lithist` read **on** against bash's off because this shell's history
+really does append to the file and really does keep a multi-line entry's
+newlines, measured through a terminal — divergences reported honestly
+rather than defaults to copy.
+
+The seventh, `patsub_replacement`, was the one left reporting **off**
+because the behavior it gates was unbuilt, and reporting it on would have
+been the worst kind of lie. It is built now and the name is wired to
+`interp.ReplacementAmpersandIsTheMatch` (#1862); the section below is what
+it switches.
 
 These are run-time states rather than semantics axes, which is why the
 core holds them as `interp.MatchOption` values and only the bash dialect
@@ -1246,6 +1249,56 @@ implemented: its miss aborts the rest of the current *line* and then
 carries on (measured: `shopt -s failglob` then `echo zz*zz; echo after`
 on one line prints neither, and `echo after` on the next line prints),
 which is a control-flow shape nothing else needs yet.
+
+## The ampersand in a replacement, and the option that gates it
+
+bash 5.3 reads an unescaped `&` in a pattern substitution's replacement as
+the text the pattern just matched. Measured 2026-09-11 with `v=abc`:
+
+| written | bash 5.3.15 | bash 3.2.57 | ksh93 | zsh 5.9.2 |
+| --- | --- | --- | --- | --- |
+| `${v/b/[&]}` | `a[b]c` | `a[&]c` | `a[&]c` | `a[&]c` |
+| `${v//b/[&]}` | `a[b]c` | `a[&]c` | `a[&]c` | `a[&]c` |
+| `${v/b/[\&]}` | `a[&]c` | `a[\&]c` | `a[&]c` | `a[\&]c` |
+| `shopt -p patsub_replacement` | `shopt -s …` | invalid name | — | — |
+
+So one shell in the panel, behind an option that shell turns on with
+nothing said — which is why this is a `MatchOption` and not a semantics
+axis, and why the bash dialect is the only one that sets it. dash has no
+operator at all and refuses the line.
+
+**Every match gets its own reading.** `v=abcabc; ${v//b/<&>}` is
+`a<b>ca<b>c`, `${v//[ab]/<&>}` is `<a><b>c<a><b>c`, and the `&` stands for
+what the *pattern took* rather than for the pattern: `v=aXbXc;
+${v/X*X/<&>}` is `a<XbX>c`. The anchored forms read it too —
+`v=abcabc; ${v/#a/<&>}` is `<a>bcabc` and `${v/%c/<&>}` is `abcab<c>` —
+and a pattern that matches nothing leaves the replacement unread.
+
+**Quoting is what turns the reading off, character by character**, the same
+channel that decides whether a `*` in the *pattern* half is a pattern.
+Measured with `v=abc`, in both `${ }` and `"${ }"`, all giving `a&c`:
+`${v/b/"&"}`, `${v/b/'&'}`, `${v/b/$'&'}`, `${v/b/\&}`. The enclosing
+quotes are not asked — `"${v/b/[&]}"` still answers `a[b]c` — because the
+question is how the `&` itself was written.
+
+**A replacement that arrived from an expansion is read**, and its quoting
+counts the same way. With `r='&'`: `${v/b/$r}` is `abc` and `${v/b/"$r"}`
+is `a&c`. So the reading runs after the replacement is expanded, over the
+text the expansion produced.
+
+**The escape half is a different rule from the history modifier's.** In the
+text an expansion brought, a backslash is an escape only before an `&` or
+another backslash and is kept in front of anything else — with `r='[\&]'`
+the answer is `a[&]c`, with `r='[\\&]'` it is `a[\b]c`, and with
+`r='[\a]'` it is `a[\a]c`. `${name:s/pat/rep}` resolves `\a` to `a`, which
+is why `expandAmpersand` takes the rule as an argument rather than there
+being two of it.
+
+**With `shopt -u patsub_replacement` none of that happens**: `${v/b/[&]}`
+is `a[&]c`, and a `\&` from an expansion keeps its backslash — `r='[\&]'`
+answers `a[\&]c` where with the reading on it answers `a[&]c`. A written
+`[\&]` answers `a[&]c` in both states, because that backslash is removed
+by ordinary quote removal before the replacement is ever read.
 
 ## One shell's extended pattern operators, and the option that gates them
 

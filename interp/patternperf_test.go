@@ -52,7 +52,7 @@ const (
 // zsh gives for the same substitution.
 func BenchmarkReplaceExtendedGlob(b *testing.B) {
 	e := &syntax.ParamExpr{All: true}
-	with := func(matchReport) string { return "X" }
+	with := func(matchReport, string) string { return "X" }
 	var got string
 	for b.Loop() {
 		o := benchOpts(b, benchPattern, benchSubject)

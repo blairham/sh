@@ -332,6 +332,24 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 	if w == nil {
 		return nil
 	}
+	return []string{r.wordTextNoSplit(w, nil)}
+}
+
+// wordTextNoSplit is expandWordNoSplit's one loop, with a seam for the caller
+// that needs to know which part of the finished text was quoted.
+//
+// mark, where it is not nil, is handed each span's text together with the
+// quoting that span was written in, and what it answers is what goes into the
+// word. That is the only channel quoting has left by this point: a word is a
+// sequence of spans precisely so the expander can tell the quoted parts from
+// the live ones, and joining them into a string is where that is spent.
+//
+// The glob marks are removed a span at a time rather than once at the end,
+// which is the same string: a mark is always written immediately in front of
+// the byte it marks and both come out of one span, so no mark straddles a
+// boundary. Doing it here is what lets mark see the text a script would, and
+// lets the marks it adds of its own survive to the caller.
+func (r *Runner) wordTextNoSplit(w *syntax.Word, mark func(string, syntax.Quoting) string) string {
 	r.expandTilde(w)
 	failed := r.expandErr
 	// "Without globbing" has to reach the *nested* expansions too, and it did
@@ -350,14 +368,19 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 		}
 		r.expandingSpan = i
 		head := b.Len() == 0
+		var text string
 		if parts, ok := r.expandAt(s, splitNever, head); ok {
-			b.WriteString(r.joinUnsplit(s.Param, parts))
-			continue
+			text = r.joinUnsplit(s.Param, parts)
+		} else {
+			text, _ = r.expandSpan(s, splitNever, head)
 		}
-		text, _ := r.expandSpan(s, splitNever, head)
+		text = globUnescape(text)
+		if mark != nil {
+			text = mark(text, s.Quoting)
+		}
 		b.WriteString(text)
 	}
-	return []string{globUnescape(b.String())}
+	return b.String()
 }
 
 // expandRedirectTargetViews expands a redirection's target once and returns
@@ -2765,12 +2788,14 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 	// looks at.
 	repl := r.replacementWord(e)
 	if !reportsAMatch(o) {
-		with := r.replacementOf(repl)
-		return replace(value, pattern, e, o, func(matchReport) string { return with })
+		with := r.replacementFor(repl)
+		return replace(value, pattern, e, o, func(_ matchReport, matched string) string {
+			return with(matched)
+		})
 	}
-	return replace(value, pattern, e, o, func(m matchReport) string {
+	return replace(value, pattern, e, o, func(m matchReport, matched string) string {
 		r.publishMatch(m)
-		return r.replacementOf(repl)
+		return r.replacementFor(repl)(matched)
 	})
 }
 
@@ -2859,7 +2884,12 @@ func trimEdge(value, pattern string, op syntax.ParamOp, o patternOpts) (int, mat
 // replace substitutes a matching span, once or everywhere.
 //
 // The anchored forms match only at one end, which is what `/#` and `/%` mean.
-func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with func(matchReport) string) string {
+// with is handed both the match report the pattern filled and the **text**
+// the match took, which is what an `&` in the replacement stands for. The
+// text is passed rather than read back off the report because the report
+// carries a span only where the pattern asked for one — a plain `b` fills
+// nothing — and the ampersand is read whatever the pattern was.
+func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with func(matchReport, string) string) string {
 	// Every position a match may start or end at, in order, and there is one
 	// more of them than there are units. They are unit boundaries rather than
 	// byte offsets, so a pattern is never handed half of a character —
@@ -2880,7 +2910,7 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 				continue
 			}
 			if ok, m := matchPatternIn(pattern, value[:stops[k]], value, 0, o); ok {
-				return with(m) + value[stops[k]:]
+				return with(m, value[:stops[k]]) + value[stops[k]:]
 			}
 		}
 		return value
@@ -2890,7 +2920,7 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 				continue
 			}
 			if ok, m := matchPatternIn(pattern, value[i:], value, i, o); ok {
-				return value[:i] + with(m)
+				return value[:i] + with(m, value[i:])
 			}
 		}
 		return value
@@ -2934,7 +2964,7 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 			k++
 			continue
 		}
-		b.WriteString(with(rep))
+		b.WriteString(with(rep, value[i:end]))
 		if !e.All {
 			b.WriteString(value[end:])
 			return b.String()
@@ -3163,6 +3193,67 @@ func (r *Runner) substitutedWordText(w *syntax.Word) string {
 // replacement stops globbing on its own.
 func (r *Runner) replacementOf(w *syntax.Word) string {
 	return strings.Join(r.expandWordNoSplit(w), "")
+}
+
+// replacementFor reads the replacement word and answers the function from the
+// text a match took to the text that replaces it.
+//
+// Where the ampersand is not read the answer ignores its argument, and that is
+// the whole of the difference between the two states of
+// [ReplacementAmpersandIsTheMatch]. The word is expanded here, once per call,
+// so a caller that must read the replacement again for each match calls this
+// again and one that must not does not — see replaceWith for why that
+// distinction is behavior rather than an optimization.
+func (r *Runner) replacementFor(w *syntax.Word) func(matched string) string {
+	if !r.MatchOption(ReplacementAmpersandIsTheMatch) {
+		with := r.replacementOf(w)
+		return func(string) string { return with }
+	}
+	tmpl := r.replacementTemplate(w)
+	return func(matched string) string {
+		return expandAmpersand(tmpl, matched, backslashProtectsItself)
+	}
+}
+
+// replacementTemplate is replacementOf with the quoting kept: an `&` or a
+// backslash that came from a quoted span comes back marked with a backslash,
+// which is the spelling expandAmpersand writes back out as itself.
+//
+// Quoting is what decides whether an `&` is read, exactly as it decides
+// whether a `*` is a pattern — see patternOf, which carries the same rule for
+// the other operand of the same operator. Measured on bash 5.3.15 with
+// `v=abc`: `${v/b/"&"}`, `${v/b/'&'}`, `${v/b/$'&'}` and `${v/b/\&}` are all
+// `a&c`, and with `r='&'` the unquoted `${v/b/$r}` is `abc` where the quoted
+// `${v/b/"$r"}` is `a&c`. The enclosing quotes are **not** what is asked —
+// `"${v/b/[&]}"` still reads the match — because a span carries the quoting it
+// was written in and the operand's own reading is replacementWord's question.
+func (r *Runner) replacementTemplate(w *syntax.Word) string {
+	if w == nil {
+		return ""
+	}
+	return r.wordTextNoSplit(w, func(text string, q syntax.Quoting) string {
+		if q == syntax.Unquoted {
+			return text
+		}
+		return escapeAmpersand(text)
+	})
+}
+
+// escapeAmpersand marks text that must be written out as itself: an `&` and a
+// backslash each take a backslash in front, which is what
+// backslashProtectsItself undoes.
+func escapeAmpersand(text string) string {
+	if !strings.ContainsAny(text, `\&`) {
+		return text
+	}
+	var b strings.Builder
+	for i := 0; i < len(text); i++ {
+		if text[i] == '\\' || text[i] == '&' {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(text[i])
+	}
+	return b.String()
 }
 
 // replacementWord is the replacement operand of `${v/pat/repl}`, chosen

@@ -50,15 +50,30 @@ func TestTerminalDescriptorIsATerminal(t *testing.T) {
 	// written to or read from the pseudo-terminal: `-t` is an ioctl and the
 	// question has an answer with no bytes moving in either direction, which
 	// is what keeps this test free of the waiting a pty test usually needs.
+	//
+	// Nothing is read from the pseudo-terminal either, which matters on a
+	// machine whose own terminal injects shell-integration escapes: an
+	// assertion made on bytes that came back from a terminal is an assertion
+	// about the terminal. Everything asserted here was written to a buffer.
 	const src = `[ -t 0 ] && echo B0T || echo B0F
 test -t 2 && echo T2T || echo T2F
 [ -t 1 ] && echo B1T || echo B1F
 [[ -t 0 ]] && echo BB0T || echo BB0F
-[[ -t 1 ]] && echo BB1T || echo BB1F`
+[[ -t 1 ]] && echo BB1T || echo BB1F
+echo "sub=$( [ -t 1 ] && echo T || echo F )$( [ -t 0 ] && echo T || echo F )"`
 	out, status := runGrammar(t, src, func(d *syntax.Dialect) { d.DoubleBracket = true }, func(r *Runner) {
 		r.Stdin, r.Stderr = terminal, terminal
 	})
-	const want = "B0T\nT2T\nB1F\nBB0T\nBB1F\n"
+	// The last line is the answer read *by route* rather than by descriptor,
+	// which is the shape a runner flag leaking out of one construct into
+	// another would take (#1962 is that shape, on globbing). A command
+	// substitution redirects standard output into a pipe and leaves standard
+	// input alone, so `-t 1` inside one is false while `-t 0` is still the
+	// terminal — measured on a pseudo-terminal in dash, bash 5.3.15,
+	// bash-as-sh, bash 3.2.57 and zsh 5.9.2, `sub=FT` in all five. ksh93 is
+	// the outlier at `sub=TT`, which is its substitutions not using a pipe
+	// for a builtin rather than anything about `-t`.
+	const want = "B0T\nT2T\nB1F\nBB0T\nBB1F\nsub=FT\n"
 	if out != want || status != 0 {
 		t.Errorf("got %q at %d, want %q at 0", out, status, want)
 	}

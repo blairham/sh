@@ -6947,10 +6947,10 @@ func PosixSemantics() Semantics {
 		MissingFileIsOlder: No,
 		// POSIX gives -t a file descriptor, and dash refuses anything that
 		// is not a number.
-		TerminalTestRequiresANumber:      Yes,
+		TerminalTestRequiresANumber: Yes,
 		// POSIX gives the one-argument form of `test` to the string rule
 		// with no exception in it, which is dash's reading and bash's.
-		BareTerminalTestIsDescriptorOne: No,
+		BareTerminalTestIsDescriptorOne:  No,
 		FcEmptyHistoryIsAnError:          No,
 		JobControlAbsenceIsReportedFirst: No,
 		// POSIX has `( )` run "in a subshell environment" and describes that

@@ -98,30 +98,35 @@ func TestACommandCanRewriteTheLineAndMoveThePoint(t *testing.T) {
 	}{
 		{
 			"both", `READLINE_LINE=NEWTEXT; READLINE_POINT=3`,
-			repl.Line{Buffer: "abcdef", Cursor: 6}, repl.Line{Buffer: "NEWTEXT", Cursor: 3},
+			repl.Line{Buffer: "abcdef", Cursor: 6},
+			repl.Line{Buffer: "NEWTEXT", Cursor: 3},
 		},
 		{
 			// Measured: a command that sets only READLINE_POINT redraws with
 			// the cursor moved, and typing after it inserts at the new place.
 			"the point alone", `READLINE_POINT=2`,
-			repl.Line{Buffer: "abcdef", Cursor: 6}, repl.Line{Buffer: "abcdef", Cursor: 2},
+			repl.Line{Buffer: "abcdef", Cursor: 6},
+			repl.Line{Buffer: "abcdef", Cursor: 2},
 		},
 		{
 			// Measured: setting only READLINE_LINE to something shorter puts
 			// the cursor at the end of what is left rather than off the end.
 			// That is the clamp, and it is why the clamp is on the read.
 			"the line alone, and shorter", `READLINE_LINE=ZZ`,
-			repl.Line{Buffer: "abcdef", Cursor: 6}, repl.Line{Buffer: "ZZ", Cursor: 2},
+			repl.Line{Buffer: "abcdef", Cursor: 6},
+			repl.Line{Buffer: "ZZ", Cursor: 2},
 		},
 		{
 			// Out of range is brought back rather than refused, which is what
 			// the editor does with a cursor either way — see repl.Line.
 			"a point past the end", `READLINE_POINT=999`,
-			repl.Line{Buffer: "abc", Cursor: 0}, repl.Line{Buffer: "abc", Cursor: 3},
+			repl.Line{Buffer: "abc", Cursor: 0},
+			repl.Line{Buffer: "abc", Cursor: 3},
 		},
 		{
 			"a point before the start", `READLINE_POINT=-5`,
-			repl.Line{Buffer: "abc", Cursor: 3}, repl.Line{Buffer: "abc", Cursor: 0},
+			repl.Line{Buffer: "abc", Cursor: 3},
+			repl.Line{Buffer: "abc", Cursor: 0},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

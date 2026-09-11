@@ -362,3 +362,149 @@ func TestTheSkipTracksQuotingInsideTheSubstitutionToo(t *testing.T) {
 		}
 	}
 }
+
+// The same sentence for the other construct, which was left out of it.
+//
+// A `${ }` written inside a double-quoted run brings its own quoting too. Its
+// operand is a word rather than a program, but a word is quoted just as a
+// program is, so the `"` in `"${y:-"Z"}"` belongs to that expansion and is not
+// the one that ends the run.
+//
+// Reading the run character by character does not merely mispair the quotes,
+// it moves the *braces*: the nested `${` is consumed inside the quote and
+// never counted, and its `}` then lands outside and closes the enclosing
+// expansion. So `"${u:-"${w:-"X{039}"}z"}"` ended at the `}` of `X{039}` and
+// left `"}z"}` behind as literal text — which is the `"}`, `}+}` and `}}}+}`
+// debris powerlevel10k's directory segment drew, one fragment per expansion
+// closed early (#2092).
+//
+// Measured 2026-09-11 from a script file under `env -i`, unanimous across the
+// six-shell panel — zsh 5.9.2, bash 5.3.15, that build as `sh`, bash 3.2.57,
+// dash and ksh93:
+//
+//	unset u w; printf '[%s]' "${u:-"${w:-"X{039}"}z"}"    [X{039}z]
+//	unset u w; printf '[%s]' "${u:-"${w:-"a}b"}z"}"       [a}bz]
+//
+// so it is the core's answer and not a dialect's.
+//
+// The assertions are on the tree for the reason the `$( )` half's are: a scan
+// that ends the run at the wrong quote can still balance, and a check for a
+// nil error passes it. The *quoting* of the operand's spans is asserted with
+// their text, because the text alone would not part the readings — a run
+// misread as ending early puts the same characters back as one raw literal.
+func TestABracedExpansionInsideAQuotedRunBringsItsOwnQuoting(t *testing.T) {
+	for _, c := range []struct {
+		src string
+		// body is the whole text between `${` and its `}`.
+		body string
+		// inner is the nested expansion the operand holds, and tail is the
+		// literal text after it — the half that used to fall out of the word.
+		inner, tail string
+	}{
+		// The shape powerlevel10k's directory segment is written in,
+		// reduced: a `{ }` pair inside the nested expansion's own quotes.
+		{`echo "${x:-"${y:-"X{039}"}z"}"`, `x:-"${y:-"X{039}"}z"`, `y:-"X{039}"`, `z`},
+		// A bare `}` inside them, which is the character the enclosing scan
+		// used to spend on itself.
+		{`echo "${x:-"${y:-"a}b"}z"}"`, `x:-"${y:-"a}b"}z"`, `y:-"a}b"`, `z`},
+		// Nothing unbalanced at all: the run still has to end after the
+		// nested expansion rather than inside it.
+		{`echo "${x:-"${y:-"a"}z"}"`, `x:-"${y:-"a"}z"`, `y:-"a"`, `z`},
+		// Three levels, because the theme writes them: the middle one is
+		// reached from inside a run that is itself inside a run.
+		{`echo "${x:-"${y:-"${w:-"p{q}r"}s"}t"}"`, `x:-"${y:-"${w:-"p{q}r"}s"}t"`, `y:-"${w:-"p{q}r"}s"`, `t`},
+		// The operator does not matter — the body scanner runs before any of
+		// them is read.
+		{`echo "${x-"${y:-"X{039}"}z"}"`, `x-"${y:-"X{039}"}z"`, `y:-"X{039}"`, `z`},
+		{`echo "${x%"${y:-"X{039}"}z"}"`, `x%"${y:-"X{039}"}z"`, `y:-"X{039}"`, `z`},
+	} {
+		f, err := Parse(c.src, Core())
+		if err != nil {
+			t.Errorf("%s: %v", c.src, err)
+			continue
+		}
+		sc := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+		if len(sc.Args) != 2 {
+			t.Errorf("%s: %d words, want 2 — the expansion swallowed or split", c.src, len(sc.Args))
+			continue
+		}
+		span := sc.Args[1].Spans[0]
+		if span.Kind != ParamExp {
+			t.Errorf("%s: first span is %v, want a parameter expansion", c.src, span.Kind)
+			continue
+		}
+		if span.Value != c.body {
+			t.Errorf("%s: body is %q, want %q", c.src, span.Value, c.body)
+			continue
+		}
+		operand := span.Param.Arg
+		if operand == nil || len(operand.Spans) != 2 {
+			t.Errorf("%s: operand is %v, want the nested expansion and its tail", c.src, operand)
+			continue
+		}
+		if got := operand.Spans[0]; got.Kind != ParamExp || got.Value != c.inner {
+			t.Errorf("%s: operand span 0 is %v %q, want a parameter expansion %q", c.src, got.Kind, got.Value, c.inner)
+		}
+		if got := operand.Spans[1]; got.Kind != Literal || got.Value != c.tail {
+			t.Errorf("%s: operand span 1 is %v %q, want the literal %q", c.src, got.Kind, got.Value, c.tail)
+		}
+		// The quoting is the attribute the text cannot stand in for. Both
+		// spans are written inside the run, so both carry it — and a reading
+		// that ended the run early would hand back what it had swallowed as
+		// one raw literal with none.
+		for i, got := range operand.Spans {
+			if got.Quoting != DoubleQuoted {
+				t.Errorf("%s: operand span %d quoting is %v, want double-quoted", c.src, i, got.Quoting)
+			}
+		}
+	}
+}
+
+// The route the prompt takes, and the one where the misreading said nothing.
+//
+// A here-document body is read by HeredocSpans rather than by a word scanner,
+// which is also how a `${(%%)…}` prompt reaches this code. There is no
+// enclosing word for the leftover quote to unbalance, so the mis-scan raised
+// no diagnostic at all: it wrote `[X{039"}z"}]` and exited 0, where every
+// shell in the panel writes `[X{039}z]`. That is the row a fix graded on exit
+// status would pass in both directions.
+func TestABracedExpansionInsideAQuotedRunInARawBody(t *testing.T) {
+	const body = `[${u:-"${w:-"X{039}"}z"}]`
+	spans, err := HeredocSpans(body, Core())
+	if err != nil {
+		t.Fatalf("%s: %v", body, err)
+	}
+	want := []struct {
+		kind  SpanKind
+		value string
+	}{{Literal, `[`}, {ParamExp, `u:-"${w:-"X{039}"}z"`}, {Literal, `]`}}
+	if len(spans) != len(want) {
+		t.Fatalf("%s: %d spans, want %d: %v", body, len(spans), len(want), spans)
+	}
+	for i, w := range want {
+		if spans[i].Kind != w.kind || spans[i].Value != w.value {
+			t.Errorf("span %d is %v %q, want %v %q", i, spans[i].Kind, spans[i].Value, w.kind, w.value)
+		}
+	}
+}
+
+// The neighbors this second half must not move.
+//
+// Stepping over a nested `${ }` is a way of *finding* a delimiter, so what it
+// must not do is find one that is not there: input that really does run out
+// inside one still runs out, and is still refused as unmatched rather than
+// accepted. Which delimiter is blamed is deliberately not asserted, for the
+// reason recorded on the `$( )` rows above.
+func TestANestedBracedExpansionThatNeverClosesStillRunsOut(t *testing.T) {
+	for _, src := range []string{
+		`echo "${x:-"${y`,
+		`echo "${x:-"${y:-"X{039}"`,
+		"echo \"${x:-\"${y:-\"X{039}\"\necho ok",
+	} {
+		_, err := Parse(src, Core())
+		var se *Error
+		if !errors.As(err, &se) || se.Kind != ErrUnmatched {
+			t.Errorf("%q: got %v, want an ErrUnmatched", src, err)
+		}
+	}
+}

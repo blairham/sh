@@ -1328,6 +1328,16 @@ var Corpus = []Case{
 		Why:     "the same loss where it changes what *matches* rather than what a word is. The first field is the control and always answered `Q`; the next three are the quoted spellings of the same pattern, which reached the matcher as their own quote marks and backslashes and matched nothing; the last is a trim, so the fault is the operand's and not the replacement operator's. The fourth field is the other direction — a quoted `*` is a star and must not match `a #b`'s letter — so a fix that merely deleted the quotes answers it wrongly. Where a dialect has `(#…)` glob flags the `#` lands in this position by itself, which is how every flag group in a substitution stopped matching (#2074)",
 	},
 	{
+		ID: "core/a-braced-expansion-in-a-quoted-operand", Category: "quoting",
+		Snippet: `unset u w; printf '[%s]' "${u:-"${w:-ab}z"}" "${u:-"${w:-"X{039}"}z"}" "${u:-"${w:-"a}b"}z"}" "${u:-"${w:-"$( echo q )"}z"}"; echo`,
+		Why:     "a `${ }` written inside a double-quoted run brings its own quoting, so the `\"` in `\"${w:-\"Z\"}\"` is that expansion's and not the run's closing one. The first field is the control — a nested expansion with nothing quoted in it — and it answered correctly throughout, which is what kept the fault quiet. The next two are the measurement: reading the run as text ends it at the nested expansion's quote, which leaves the nested `${` swallowed and uncounted while its `}` closes the *enclosing* expansion, so the tail falls out as literal characters. The last is the `$( )` spelling of the same nesting, which was already right, and is here so a repair cannot trade one for the other (#2092)",
+	},
+	{
+		ID: "core/a-braced-expansion-in-a-quoted-operand-in-a-body", Category: "quoting",
+		Snippet: "unset u w\ncat <<EOF\n[${u:-\"${w:-\"X{039}\"}z\"}]\nEOF\necho after",
+		Why:     "the same shape through a here-document body, which is the route that said nothing. A body has no enclosing word for the leftover quote to unbalance, so the misreading raised no diagnostic and exited 0 — it wrote `[X{039\"}z\"}]` where all six columns write `[X{039}z]`. `after` on the output is what separates this from the refusals: the line runs in every column, and a fix graded on exit status would pass both before and after (#2092). It is also the route a `${(%%)…}` prompt takes, which is how powerlevel10k's directory segment came to draw `\"}` and `}+}`",
+	},
+	{
 		ID: "core/quotes-in-a-quoted-replacement-operand", Category: "quoting",
 		Snippet: `s=xay; v=VAL; printf '[%s]' "${s/'a'/Z}" "${s/a/'$v'}" ${s/a/'$v'}; echo`,
 		Why:     "the third reading of a quote in a `${ }` operand, and the one the panel divides on: a *pattern* operand's quotes quote and are removed everywhere, and a **replacement** operand's do in bash 5.3, that build as `sh` and ksh93 while bash 3.2 and zsh keep them as characters. Unquoted all five agree again, which is what says the disagreement is about the quoted context and not about the operator. dash has no operator and refuses the line. Answered by Semantics.ReplacementOperandTakesTheEnclosingQuoting (#1209); the first and third fields are the guards a fix routed through the word operand's rule would break",

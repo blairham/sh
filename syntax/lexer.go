@@ -2748,6 +2748,13 @@ func unescapeBackquoted(s string) string {
 // steps over a nested substitution whole, exactly as scanDouble does when it
 // is building spans rather than skipping them.
 //
+// A `${ }` written inside the run is the same sentence, and it was left out
+// of it for a year: its operand is a word rather than a program, but the word
+// brings its own quoting just as the program does, so the `"` in
+// `"${y:-"Z"}"` is that expansion's and not this run's closing one (#2092).
+// The loop below has it; skipSubstitution deliberately does not, and the note
+// on it says why.
+//
 // Single quotes need none of this: nothing inside them is special, which is
 // the whole of their specification, and `escapes` is the flag that already
 // separates the two.
@@ -2849,6 +2856,14 @@ func unterminatedQuoteMsg(quote byte) string {
 // agreeing — `${x:-"${y:-'"'}"}` is accepted by bash alone and refused by the
 // other five — so it is a dialect question rather than a delimiter one, and
 // nothing here should answer it.
+//
+// Where a `${ }` *does* have to be stepped over is skipQuoted, and the
+// difference is which question is being asked: there the run has already been
+// entered and the only thing wanted is where the nested expansion ends, which
+// scanBraces answers. Here the caller is still choosing what it is looking
+// at, and the two callers want opposite things — scanBraces counts a nested
+// `${` on its own loop, with its own `brace` and its own dialect flags, and a
+// step-over here would take that decision away from it.
 func (l *Lexer) skipSubstitution() bool {
 	if l.peek() == '`' {
 		l.skipBackticks()

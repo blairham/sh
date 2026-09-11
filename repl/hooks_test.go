@@ -799,3 +799,137 @@ func TestABugInOneHookItemCostsThatItemAlone(t *testing.T) {
 		})
 	}
 }
+
+// An error a hook raised costs the chain and not the session.
+//
+// The measurement is in interp's giveUpTheHook: zsh 5.9.2 through a
+// pseudo-terminal, a `precmd` that raises each fatal expansion in turn, and in
+// every case the diagnostic, the prompt, and an answer to the next line typed.
+// Asserted on both chains because both run through interp.Runner.FireChain —
+// bash 5.3.15 answers a failing `PROMPT_COMMAND` the same way — and asserted
+// through Run rather than through fireBeforePrompt, because what was broken
+// was the session ending and only the loop can say whether it did.
+func TestAHookThatFailsCostsTheChainAndNotTheSession(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		style HookStyle
+		set   func(t *testing.T, s Shell)
+	}{
+		{"the evaluated chain", hooksLikeBash(), func(_ *testing.T, s Shell) {
+			s.Runner.SetArray("PROMPT_COMMAND",
+				[]string{"echo one", `echo two; echo ${NOPE?gone}; echo unreachable`, "echo three"})
+		}},
+		{"the function chain", hooksLikeZsh(), func(t *testing.T, s Shell) {
+			define(t, s.Runner, "one", `echo one`)
+			define(t, s.Runner, "two", `echo two; echo ${NOPE?gone}; echo unreachable`)
+			define(t, s.Runner, "three", `echo three`)
+			s.Runner.SetArray("precmd_functions", []string{"one", "two", "three"})
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var out, errs strings.Builder
+			r := newTestRunner(map[string]string{"PS1": "RDY> "})
+			r.Semantics.HookListSuffix = "_functions"
+			r.Interactive = true
+			r.Stdout, r.Stderr = &out, &out
+			s := Shell{
+				Runner: r, In: strings.NewReader("echo typed\n"),
+				Out: &out, Err: &errs, Name: "sh", Hooks: c.style,
+			}
+			c.set(t, s)
+
+			status, err := s.Run(t.Context())
+			if err != nil {
+				t.Fatalf("running: %v", err)
+			}
+
+			if status != 0 {
+				t.Errorf("the session ended with %d, want the typed line's 0", status)
+			}
+			if got := out.String(); !strings.Contains(got, "typed\n") {
+				t.Errorf("the session ran %q, want the line after the failing hook to have run", got)
+			}
+			if got := out.String(); strings.Contains(got, "unreachable") {
+				t.Errorf("the session ran %q, want the failing item to have stopped there", got)
+			}
+			if got := out.String(); strings.Contains(got, "three") {
+				t.Errorf("the session ran %q, want nothing after the failing item", got)
+			}
+			if !strings.Contains(errs.String(), "RDY> ") {
+				t.Errorf("the prompts drawn were %q, want one after the failing hook", errs.String())
+			}
+		})
+	}
+}
+
+// And the status the chain saved is put back, so a failing hook does not reach
+// the next command. Measured: `(exit 7)`, a `precmd` that fails, then `echo
+// $?` says 7 at a zsh 5.9.2 prompt.
+func TestAHookThatFailsLeavesTheStatusTheChainSaved(t *testing.T) {
+	var out, errs strings.Builder
+	r := newTestRunner(map[string]string{"PS1": "RDY> "})
+	r.Semantics.HookListSuffix = "_functions"
+	r.Interactive = true
+	r.Stdout, r.Stderr = &out, &out
+	s := Shell{
+		Runner: r, In: strings.NewReader("(exit 7)\necho status=$?\n"),
+		Out: &out, Err: &errs, Name: "sh", Hooks: hooksLikeZsh(),
+	}
+	define(t, s.Runner, "precmd", `echo ${NOPE?gone}`)
+
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatalf("running: %v", err)
+	}
+
+	if got := out.String(); !strings.Contains(got, "status=7\n") {
+		t.Errorf("the session printed %q, want status=7", got)
+	}
+}
+
+// A hook that *exits* still ends the session, which is the half that keeps
+// this from making a session nobody can leave: measured, `exit 7` in a
+// `precmd` ends a zsh 5.9.2 session with 7 and draws no prompt.
+func TestAPromptHookThatExitsStillEndsAnInteractiveSession(t *testing.T) {
+	var out, errs strings.Builder
+	r := newTestRunner(map[string]string{"PS1": "RDY> "})
+	r.Semantics.HookListSuffix = "_functions"
+	r.Interactive = true
+	r.Stdout, r.Stderr = &out, &out
+	s := Shell{
+		Runner: r, In: strings.NewReader("echo unreachable\n"),
+		Out: &out, Err: &errs, Name: "sh", Hooks: hooksLikeZsh(),
+	}
+	define(t, s.Runner, "precmd", `echo bye; exit 3`)
+
+	status, err := s.Run(t.Context())
+	if err != nil {
+		t.Fatalf("running: %v", err)
+	}
+
+	if status != 3 {
+		t.Errorf("the session ended with %d, want 3", status)
+	}
+	if got := out.String(); got != "bye\n" {
+		t.Errorf("the session ran %q, want the hook alone", got)
+	}
+}
+
+// The command hook is the same boundary: the error costs the chain, and the
+// line the hook fired for still runs. Measured, a `preexec` that fails prints
+// its diagnostic and zsh 5.9.2 runs the line anyway.
+func TestACommandHookThatFailsStillRunsTheLine(t *testing.T) {
+	s, out := hookShell(t, hooksLikeZsh())
+	s.Runner.Interactive = true
+	define(t, s.Runner, "preexec", `echo before; echo ${NOPE?gone}; echo unreachable`)
+	define(t, s.Runner, "after", `echo after`)
+
+	if s.runStmts(t.Context(), "after\n", parsed(t, "after")) {
+		t.Error("the session ended over a failing command hook")
+	}
+	if got := out.String(); !strings.Contains(got, "after\n") {
+		t.Errorf("the session ran %q, want the line to have run", got)
+	}
+	if got := out.String(); strings.Contains(got, "unreachable") {
+		t.Errorf("the session ran %q, want the failing hook to have stopped there", got)
+	}
+}

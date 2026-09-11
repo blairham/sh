@@ -25,8 +25,18 @@ permissions:
   contents: read
 
 concurrency:
-  # A superseded push is not worth finishing; only the newest commit matters.
-  group: ci-${{ github.ref }}
+  # A superseded push to a pull request is not worth finishing; only the
+  # newest commit on that branch matters, so its run replaces the one before.
+  #
+  # A push to main is the opposite case. main is not a branch anyone is
+  # iterating on: every merge is a *different* change, and the run it starts
+  # is the only verification that commit will ever get — the pull request was
+  # tested against its merge base, not against the tree the squash produced.
+  # Cancelling it discards the answer rather than a stale one. Keying main's
+  # group on the commit gives every merge a group of its own, so there is
+  # nothing to cancel it and nothing for it to queue behind; a pull request
+  # ref is already unique per pull request, so it keeps superseding itself.
+  group: ci-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
   cancel-in-progress: true
 
 jobs:

@@ -1228,14 +1228,22 @@ type Runner struct {
 	// dialect that has one. Nil in a shell whose option names are its
 	// `set -o` names and nothing more, which is where `[[ -o ]]` falls back
 	// to those. Installed through SetOptionNamespace; see extend.go.
-	optionNamespace func(name string) (on, known bool)
+	//
+	// Each of the three is handed the *running* runner, exactly as a builtin
+	// is, and for the same reason: a subshell is a cloned runner and these
+	// fields are copied into it, so one that closed over the runner it was
+	// installed on would go on reading and writing that one from inside every
+	// subshell. Measured before it did (#1855): `( setopt autocd; ... )` read
+	// the parent's options through `[[ -o ]]`, and a `set -o` inside a
+	// subshell moved the *parent's* option and left the subshell's alone.
+	optionNamespace func(r *Runner, name string) (on, known bool)
 	// optionListing and optionMover are the same namespace reached by
 	// `set -o`: the rows a listing writes, and what moving one name does.
 	// Nil in a shell whose `set -o` names are the substrate's own, which is
 	// three of the four presets. Installed together through SetOptionTable;
 	// see extend.go.
-	optionListing func() []ListedOption
-	optionMover   func(name string, on bool) (moved, known bool)
+	optionListing func(r *Runner) []ListedOption
+	optionMover   func(r *Runner, name string, on bool) (moved, known bool)
 	// aroundFunctionCalls is what a dialect saves and restores around every
 	// function call, whatever that call turns out to do. Each entry is
 	// handed the running runner as the body is entered and hands back the

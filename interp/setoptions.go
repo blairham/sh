@@ -572,7 +572,7 @@ func (r *Runner) setNamedOption(name string, on bool) bool {
 	if r.optionMover == nil {
 		return r.setOption(name, on)
 	}
-	moved, known := r.optionMover(name, on)
+	moved, known := r.optionMover(r, name, on)
 	switch {
 	case !known:
 		return r.badSetOptionName(name)
@@ -650,7 +650,7 @@ func (o setOption) state(r *Runner) bool {
 // any of them writes.
 func (r *Runner) listedOptions() []ListedOption {
 	if r.optionListing != nil {
-		return r.optionListing()
+		return r.optionListing(r)
 	}
 	names := r.listedOptionNames()
 	rows := make([]ListedOption, 0, len(names))

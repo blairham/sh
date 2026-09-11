@@ -895,7 +895,12 @@ func conditionOption(r *interp.Runner, name string) (on, known bool) {
 func registerSetopt(r *interp.Runner) {
 	r.Register("setopt", setoptBuiltin(true))
 	r.Register("unsetopt", setoptBuiltin(false))
-	r.SetOptionNamespace(func(name string) (bool, bool) { return conditionOption(r, name) })
+	// Each of the three reads the runner it is handed rather than the one
+	// this registration ran on: a subshell is a cloned runner that keeps
+	// these fields, so closing over `r` here answered every `[[ -o ]]`,
+	// listed every `set -o` row and performed every `set -o name` against
+	// the shell that spawned the subshell (#1855).
+	r.SetOptionNamespace(conditionOption)
 	// And the same namespace by its other name. zsh's `set -o` is `setopt`
 	// under a POSIX spelling rather than a table of its own — measured,
 	// `set -o autocd` then `setopt` reports `autocd`, and `setopt autocd`
@@ -905,10 +910,7 @@ func registerSetopt(r *interp.Runner) {
 	// surface recorded a zsh with 23 options, in a vocabulary that shell
 	// does not use for output, and said nothing about the 170 that decide
 	// what it does.
-	r.SetOptionTable(
-		func() []interp.ListedOption { return listedOptions(r) },
-		func(name string, on bool) (moved, known bool) { return moveOption(r, name, on) },
-	)
+	r.SetOptionTable(listedOptions, moveOption)
 }
 
 // listedOptions is the `set -o` and `set +o` listing: every option in the

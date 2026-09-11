@@ -990,6 +990,43 @@ split the same clones differently: `( … )` and `$( … )` are one boundary
 for a trap listing and two for a job table. Two names rather than one with
 two meanings.
 
+### The same corollary through a registration rather than a table
+
+A clone copies fields, and a field holding a *function* is copied with
+whatever that function closed over. So a dialect seam registered as a
+closure over the runner it was installed on keeps answering for that runner
+from inside every subshell — the boundary is not reconstructed, it is
+pointed straight through.
+
+The option seams were the case that showed it. `[[ -o name ]]`, the `set -o`
+listing and `set -o name` all reach a dialect that has an option namespace of
+its own, and all three were installed as closures over the shell the front
+end built. Measured on zsh 5.9.2:
+
+| probe | zsh 5.9.2 | ours, before |
+| --- | --- | --- |
+| `(setopt correct; [[ -o correct ]])` | true | false |
+| `(setopt shwordsplit; [[ -o shwordsplit ]])` | true | false |
+| `(unsetopt multios; [[ -o multios ]])` | false | true |
+| `(setopt nullglob; [[ -o nullglob ]])` | true | false |
+| `(set -e; [[ -o errexit ]]; echo alive)` | `alive` | nothing |
+| `(setopt autocd; set +o)` holds | `set -o autocd` | `set +o autocd` |
+| `(set -o autocd)`, then the outer shell | without it | **with it** |
+
+Every kind of option at once, which is what said the registration was the
+cause rather than any one entry's storage. Two of the rows are worse than a
+wrong report: under `set -e` a condition that answers false ends the shell it
+is in, so the subshell died on the line that asked; and the mover wrote the
+*parent's* option, so `set -o` inside a subshell both failed to apply where
+it was asked and escaped to where it was not.
+
+The rule that follows is the one a builtin already obeys: **a seam is handed
+the runner it is answering about.** `SetOptionNamespace` and `SetOptionTable`
+take `func(*Runner, …)`, and a dialect reads the runner it is given rather
+than the one it registered against. Nothing needs to re-register on a clone,
+which is the point — a clone that had to be told about each seam would lose
+one every time a seam was added.
+
 ## A prediction that measurement contradicted
 
 `set -e` was expected to produce axes. Its exemptions are where shells are

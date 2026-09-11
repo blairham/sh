@@ -913,7 +913,14 @@ func (r *Runner) PromptStyleValue() PromptStyle { return r.promptStyle }
 // complaint, so a namespace that guesses `true, false` for a name it has
 // never heard of would turn every typo into a silent no. It answers about
 // names, never about states.
-func (r *Runner) SetOptionNamespace(lookup func(name string) (on, known bool)) {
+//
+// The lookup is handed the runner to answer *about*, the way a builtin is,
+// and must read that one rather than the one it was installed on. A subshell
+// is a cloned runner that keeps this field, so a closure over the installing
+// runner answers for the shell that spawned the subshell instead of for the
+// subshell — every option kind at once, which is what said the closure was
+// the cause rather than any one entry's storage (#1855).
+func (r *Runner) SetOptionNamespace(lookup func(r *Runner, name string) (on, known bool)) {
 	r.optionNamespace = lookup
 }
 
@@ -958,7 +965,13 @@ type ListedOption struct {
 // builtin uses to move a substrate option by its substrate name, so routing
 // it here as well would have zsh's `setopt err_exit` call back into the table
 // it is being called from.
-func (r *Runner) SetOptionTable(listed func() []ListedOption, move func(name string, on bool) (moved, known bool)) {
+//
+// Both halves are handed the runner to act on, for the reason
+// [Runner.SetOptionNamespace] gives: a mover that closed over the installing
+// runner would make `( set -o autocd )` set the option on the *parent* and
+// leave the subshell without it, which is a wrong report turning into an
+// escaped write (#1855).
+func (r *Runner) SetOptionTable(listed func(r *Runner) []ListedOption, move func(r *Runner, name string, on bool) (moved, known bool)) {
 	r.optionListing, r.optionMover = listed, move
 }
 
@@ -990,7 +1003,7 @@ func (r *Runner) DialectOption(name string) (on, known bool) {
 // names otherwise.
 func (r *Runner) conditionOption(name string) (on, known bool) {
 	if r.optionNamespace != nil {
-		return r.optionNamespace(name)
+		return r.optionNamespace(r, name)
 	}
 	return r.NamedOption(name)
 }

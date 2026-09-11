@@ -67750,6 +67750,138 @@
         "TimedOut": false
       }
     },
+    "opt/a-subshells-errexit-is-readable-in-the-subshell": {
+      "bash": {
+        "Stdout": "alive~after=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "alive~after=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "alive~after=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "after=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "alive~after=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "alive~after=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/a-subshells-option-listing-is-its-own": {
+      "bash": {
+        "Stdout": "1~0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1~0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1~0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "1~0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "0~0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1~0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/a-subshells-option-test-reads-the-subshell": {
+      "bash": {
+        "Stdout": "in=0~out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=0~out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=0~out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=127~out=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=0~out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=0~out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "opt/an-expansions-result-is-not-globbed-under-noglob": {
       "bash": {
         "Stdout": "*.txt",

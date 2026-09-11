@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 	"syscall"
-
 )
 
 // trapOutcome is what reading trap's options decided: either a status to

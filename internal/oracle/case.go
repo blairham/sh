@@ -13946,7 +13946,7 @@ echo end`,
 	{
 		ID: "alias/nested-text-expands-where-the-command-string-did-not", Category: "alias",
 		Snippet: `alias t=echo; eval "t E"; v=$(t S); echo "v=$v"`,
-		Why: "the row this shell does not pass yet, kept because it is the evidence: zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases — the option is the only gate, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. `Dialect.ExpandAliases` records the symptom; #2109 is the model",
+		Why:     "the row this shell does not pass yet, kept because it is the evidence: zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases — the option is the only gate, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. `Dialect.ExpandAliases` records the symptom; #2109 is the model",
 	},
 	{
 		ID: "alias/neither-kind-is-accepted-where-the-shell-has-not-got-it", Category: "alias",

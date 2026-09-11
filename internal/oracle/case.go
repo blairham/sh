@@ -4954,6 +4954,12 @@ echo "st=$?"`,
 		Why:     "the conditional operators test what the inner expansion came to rather than whether some name is set, which is the whole reason the idiom exists: `${${0:#$ZSH_ARGZERO}:-${(%):-%N}}`, out of a plugin manager on this machine, is a default over the *result* of a pattern exclusion. An empty inner fires the colon test and a set one does not",
 	},
 	{
+		ID: "param/a-nested-inner-runs-once-under-a-conditional", Category: "parameter expansion",
+		Script:  true,
+		Snippet: "mkdir -p nio && cd nio\nprintf \"[%s]\" \"${${$(printf x >>marks; echo abc):-d}}\"\nprintf \"n=%s\\n\" \"$(cat marks)\"",
+		Why:     "the inner of a nested expansion runs **once**, which is the promise any operand makes, and a *conditional* over it broke it here: the operator asks whether its test fires, that question expanded the inner to answer, and the value was then expanded again for the substitution. zsh prints `[abc]n=x` and this shell printed `n=xx` — three times before #1391 and twice after it. The value is right in all three, so a row comparing only the substitution passes with the bug standing; the mark file is the whole instrument. It matters because a command substitution has side effects and this is a shape a startup file writes — `${${(M)…:-…}}` around a `$(…)` is ordinary in a plugin manager, where a `git` or a `date` in there is a duplicated call (#1404). The other five shells have no expansion in the name position, so the row records the grammar's absence beside its reading",
+	},
+	{
 		ID: "param/a-subscript-on-a-nested-expansions-result", Category: "parameter expansion",
 		Snippet: `a=(x y z); echo "[${${a[@]}[2]}][${${a[@]}[-1]}][${${a[@]}[(I)y]}][${${a[@]}[(r)y]}]"`,
 		Why:     "a subscript applied to what a nested expansion came to, which is the construct `add-zsh-hook` is written on: its line 84 is `(( ${${(P)hook}[(I)$fn]} == 0 ))`, and while the subscript was refused the arithmetic was left with an empty operand, the function printed its usage, and a real session exited without a prompt. Four readings in one row because they are one construct and not four — a subscript, a negative one, a search for an index and a search for an element — and none of them is new on its own: `${a[(I)y]}` on a *name* already answered 2 here. The other five shells have no expansion in the name position at all, so the row records the grammar's absence beside its readings",

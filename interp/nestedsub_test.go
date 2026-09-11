@@ -497,3 +497,18 @@ func TestANestedSubscriptNeedsTheSubscriptGrammar(t *testing.T) {
 		t.Errorf("got %q, want a bad substitution", out)
 	}
 }
+
+// TestASubscriptOnAConditionalNestingStillRunsTheInnerOnce is #1404 reached
+// through the subscript rather than through the plain shape: the conditional
+// asks whether its test fires before the subscript names anything, and that
+// question used to expand the inner a second time.
+//
+// The count is the assertion. `b` came back whether the command ran once or
+// twice, which is why the issue could stand with the value correct.
+func TestASubscriptOnAConditionalNestingStillRunsTheInnerOnce(t *testing.T) {
+	out, st := runNestedSubscript(t,
+		`printf "[%s]" "${${$(printf x >>marks; echo abc):-d}[2]}"; printf "n=%s" "$(cat marks)"`)
+	if want := "[b]n=x"; out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
+	}
+}

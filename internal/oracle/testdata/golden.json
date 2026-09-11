@@ -71314,6 +71314,50 @@
         "TimedOut": false
       }
     },
+    "param/a-nested-inner-runs-once-under-a-conditional": {
+      "bash": {
+        "Stdout": "n=",
+        "Stderr": "\u003cscript\u003e: line 2: ${${$(printf x \u003e\u003e marks; echo abc):-d}}: bad substitution~cat: marks: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: ${${$(printf x \u003e\u003e marks; echo abc):-d}}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "n=",
+        "Stderr": "\u003cscript\u003e: line 2: ${${$(printf x \u003e\u003emarks; echo abc):-d}}: bad substitution~cat: marks: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 2: `!' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[abc]n=x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/a-nested-parameter-reference-is-a-name": {
       "bash": {
         "Stdout": "",

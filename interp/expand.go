@@ -2727,14 +2727,27 @@ func toggleCase(c rune) rune {
 }
 
 func (r *Runner) trimWith(value, pattern string, op syntax.ParamOp) string {
-	out, m := trim(value, pattern, op, r.patternOpts(pattern, value))
+	out, m := trim(value, pattern, op, r.patternOpts(pattern, value), r.armOrder())
 	r.publishMatch(m)
 	return out
 }
 
+// armOrder is the axis a longest prefix trim asks when the arms of an
+// alternation take different lengths — see interp/trimarm.go — with the
+// question left in a closure so that it is asked only at the disagreement.
+func (r *Runner) armOrder() armOrder {
+	return armOrder{
+		answer: r.sem().LongestPrefixTrimTakesTheWrittenArm,
+		ask: func() bool {
+			return r.ask(r.sem().LongestPrefixTrimTakesTheWrittenArm,
+				"`${x##pat}`, where the arms of an alternation take different lengths")
+		},
+	}
+}
+
 // matchedWith is trimWith with the flag that keeps what the pattern took.
 func (r *Runner) matchedWith(value, pattern string, op syntax.ParamOp) string {
-	out, m := matched(value, pattern, op, r.patternOpts(pattern))
+	out, m := matched(value, pattern, op, r.patternOpts(pattern), r.armOrder())
 	r.publishMatch(m)
 	return out
 }
@@ -2789,8 +2802,8 @@ func (r *Runner) patternReports(pattern string) bool {
 	return reportsAMatch(r.patternOpts(pattern))
 }
 
-func trim(value, pattern string, op syntax.ParamOp, o patternOpts) (string, matchReport) {
-	i, m, ok := trimEdge(value, pattern, op, o)
+func trim(value, pattern string, op syntax.ParamOp, o patternOpts, arm armOrder) (string, matchReport) {
+	i, m, ok := trimEdge(value, pattern, op, o, arm)
 	if !ok {
 		return value, matchReport{}
 	}
@@ -2807,8 +2820,8 @@ func trim(value, pattern string, op syntax.ParamOp, o patternOpts) (string, matc
 // other side of the same split — which is why it shares trimEdge rather than
 // scanning again. Measured: `${(M)v#h*l}` on `hello` is `hel` where
 // `${v#h*l}` is `lo`, and `${(M)v#zzz}` is empty where `${v#zzz}` is `hello`.
-func matched(value, pattern string, op syntax.ParamOp, o patternOpts) (string, matchReport) {
-	i, m, ok := trimEdge(value, pattern, op, o)
+func matched(value, pattern string, op syntax.ParamOp, o patternOpts, arm armOrder) (string, matchReport) {
+	i, m, ok := trimEdge(value, pattern, op, o, arm)
 	if !ok {
 		return "", matchReport{}
 	}
@@ -2824,7 +2837,38 @@ func trimsPrefix(op syntax.ParamOp) bool {
 
 // trimEdge is where a trim's pattern stops: the split point, and whether the
 // pattern matched at all.
-func trimEdge(value, pattern string, op syntax.ParamOp, o patternOpts) (int, matchReport, bool) {
+//
+// Two readings rather than one, and only for the longest *prefix* trim, which
+// is the one place the panel disagrees about which match is taken: the length
+// reading below, and the written-arm reading in interp/trimarm.go. Both are
+// found and the axis is asked only where they land in different places, so a
+// pattern with no alternation — and one whose arms agree — never reaches an
+// unanswered dialect's refusal.
+func trimEdge(value, pattern string, op syntax.ParamOp, o patternOpts, arm armOrder) (int, matchReport, bool) {
+	i, m, ok := edgeByLength(value, pattern, op, o)
+	if !ok || op != syntax.ParamTrimPrefixLong || arm.answer == No || arm.ask == nil {
+		return i, m, ok
+	}
+	j, decided := writtenArmEdge(value, pattern, o)
+	if !decided || j == i {
+		return i, m, ok
+	}
+	if !arm.ask() {
+		return i, m, ok
+	}
+	// The edge is the written arm's and the report is the whole pattern's:
+	// matchGroup prefers a written arm on its own, so matching the pattern
+	// the script wrote against the piece this reading chose fills `$match`
+	// with the same arm the search took.
+	if armOK, armReport := matchPatternIn(pattern, value[:j], value, 0, o); armOK {
+		return j, armReport, true
+	}
+	return i, m, ok
+}
+
+// edgeByLength is trimEdge's length reading: the shortest or longest piece of
+// the value the pattern matches, whichever the operator asked for.
+func edgeByLength(value, pattern string, op syntax.ParamOp, o patternOpts) (int, matchReport, bool) {
 	prefix := trimsPrefix(op)
 	longest := op == syntax.ParamTrimPrefixLong || op == syntax.ParamTrimSuffixLong
 

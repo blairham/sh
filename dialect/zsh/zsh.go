@@ -1032,6 +1032,12 @@ func Semantics() interp.Semantics {
 	// Alone in refusing an argument to `times`; dash and bash ignore it.
 	s.TimesRejectsArguments = interp.Yes
 	s.UnterminatedBracket = interp.BracketBadPattern
+	// The arm written first, which is this shell alone in the panel:
+	// measured 2026-09-11 on 5.9.2, `x=abc`, `${x##(a|ab)}` is `bc` where
+	// `${x##(ab|a)}` is `c`. The same order decides what a `(#b)` reports,
+	// which the matcher already followed — see
+	// Semantics.LongestPrefixTrimTakesTheWrittenArm.
+	s.LongestPrefixTrimTakesTheWrittenArm = interp.Yes
 	s.ExitTrapIsFunctionLocal = interp.Yes
 	s.SignalHandlerSeesEarlierStatus = interp.Yes
 	// The operand of `exit` and of `return` is an arithmetic expression here,

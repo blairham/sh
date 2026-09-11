@@ -420,11 +420,61 @@ beside `hasUnescapedMeta` rather than counted by it — the same composition
 where the split is made: at the one entry point every surface's match goes
 through, so a condition, a `case`, a trim and a glob all take it.
 
-**One divergence is recorded and not implemented**, and it is older than
-this and not confined to a live bar: a *longest*-match trim over an
-alternation takes the longest arm here where zsh takes the first arm that
-matches. `x=abc; ${x##(a|ab)}` is `bc` there and `c` here, with the written
-group and with a live bar alike. See #1918.
+### Which arm a longest prefix trim takes
+
+`${x##pat}` is spelled "the longest match", and the panel does not agree on
+what that means once the pattern holds an alternation whose arms take
+different lengths. Measured 2026-09-11, `x=abc`, each probe a `-c` of its
+own — the spelling differs by column because the group does, and the answer
+does not:
+
+    ${x##(a|ab)}     zsh 5.9.2   bc        the arm written first
+    ${x##(ab|a)}     zsh 5.9.2   c
+    ${x##@(a|ab)}    bash 5.3    c         the longest arm
+    ${x##@(ab|a)}    bash 5.3    c
+    ${x##@(a|ab)}    bash 3.2    c
+    ${x##@(a|ab)}    ksh93u+     c
+
+The shell that takes the written arm is not taking the *shortest* one, and
+these are the rows that say so:
+
+    ${x##(a*|ab)}    zsh 5.9.2   (empty)   the arm still takes as much as it can
+    ${x##(a|ab)c}    zsh 5.9.2   (empty)   a later arm, where the rest needs it
+    ${x##(|a)}       zsh 5.9.2   abc       an empty arm is an arm
+    ${x##*(a|ab)}    zsh 5.9.2   bc        and the order survives a `*` in front
+
+So it is a search order — the arms tried left to right, the first that lets
+the whole pattern match kept, and the greediest reading taken inside it —
+rather than a second rule about length.
+
+**The other three trims ask nothing**, which is why the axis is worded for
+this one. The single `#` takes the shortest match in every column whichever
+arm came first, and both suffix trims take the longest:
+
+    ${x#(a|ab)}      zsh 5.9.2   bc
+    ${x#(ab|a)}      zsh 5.9.2   bc
+    ${x%%(|bc)}      zsh 5.9.2   a         an empty first arm does not stop it
+    ${x%(c|bc)}      zsh 5.9.2   ab
+
+`Semantics.LongestPrefixTrimTakesTheWrittenArm` is the answer, and it is
+asked **only where the two readings land in different places**: `(ab|a)` —
+the arms in decreasing length — has two readings that agree, and a pattern
+with no alternation has one. A live top-level bar is read the same way as a
+written group, measured through `${~L}`.
+
+The same order decides what a `(#b)` group reports and what the `(M)` flag
+keeps, because they are the one match seen from the other side:
+`${(M)x##(a|ab)}` is `a` where the trim leaves `bc`, and `${x##(#b)(a|ab)}`
+puts `a` in `$match[1]`. The matcher already preferred a written arm for
+what it reports; what it could not do was say so through the yes/no question
+a trim's candidate search asks it, which is why the arm order is recovered
+by resolving the alternations to one arm each and asking the ordinary
+question of each resolved pattern, in order (#1918).
+
+Two shapes are deliberately left on the length reading, because an arm
+chosen once does not speak for them: a *quantified* group, `@(a|b)` and its
+four relatives, whose arm may be taken more than once or not at all, and a
+group a closure repeats, `(a|b)#` or `(a|b)(#c2,3)`.
 
 ## Extended patterns are not core
 

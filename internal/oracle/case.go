@@ -5089,6 +5089,16 @@ echo "st=$?"`,
 		Why:     "one flag turns each of the four trims inside out: the same operator, the same match, and the *other* side of the split substituted. The operator still chooses how much — the doubled forms take the longest match here exactly as they drop the longest without the flag — so this is not a fifth and sixth operator but a second reading of the four. The last two are the rows that separate it from a no-op: a pattern that matches nothing leaves nothing, where the trim without the flag leaves the whole value, and an empty pattern takes the empty string",
 	},
 	{
+		ID: "axis/which-arm-a-longest-prefix-trim-takes", Category: "semantics axes",
+		Snippet: `x=abc; echo "[${x##(a|ab)}][${x##(ab|a)}][${x#(a|ab)}][${x##(a*|ab)}][${x##(|a)}][${x%%(|bc)}]"`,
+		Why:     "`##` is spelled `the longest match` and one shell does not search for one: it tries the arms in the order they were written and keeps the first that lets the pattern match, so the first two brackets differ from each other there and are the same everywhere else. The next three say it is a search order rather than a second length rule — the chosen arm still takes as much as it can, a later arm is taken where the rest of the pattern needs it, and an empty arm is an arm. The last is the boundary: the *suffix* trim takes the longest in every column, so an axis worded for trims in general would have moved a row the panel agrees about. The other five read the parentheses as ordinary characters and trim nothing at all, which is a fact about the grammar rather than about this axis",
+	},
+	{
+		ID: "axis/which-arm-an-extended-group-hands-a-trim", Category: "semantics axes",
+		Snippet: `shopt -s extglob 2>/dev/null; x=abc; echo "[${x##@(a|ab)}][${x##@(ab|a)}][${x#@(ab|a)}]"`,
+		Why:     "the same question in the spelling the other grammars have, which is what makes it an axis rather than one shell's curiosity: with extended patterns on, bash and ksh93 answer the first two identically — the longest arm, whichever order it was written in — where the bare-group spelling above splits them. The third is the control: the single `#` takes the shortest match in every column that reads the group at all",
+	},
+	{
 		ID: "param/the-matching-flag-inverts-the-exclusion", Category: "parameter expansion",
 		Snippet: `a=(f1 f22 f333); printf "[%s]" "${(M@)a:#f2*}"; echo; printf "[%s]" "${(@)a:#f2*}"; echo`,
 		Why:     "the same flag on the operator that chooses *elements* rather than characters, and the same inversion: keep what the pattern matched instead of dropping it. Both spellings on one row, because the pair is what says it is an inversion and not an unrelated second operator — and the `(@)` is load-bearing, since quoted without it the array joins to one string first and the whole-match rule then takes all of it or none",

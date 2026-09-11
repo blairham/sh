@@ -555,6 +555,11 @@ func Semantics() interp.Semantics {
 	s.PipefailSubstitutesTheBareSignal = interp.No
 	s.ErrexitSeesPipefailFailure = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
+	// A longest prefix trim over an alternation takes the longest arm,
+	// whichever order the arms were written in. Measured 2026-09-11 with
+	// extended patterns on, `x=abc`: `${x##@(a|ab)}` and `${x##@(ab|a)}`
+	// are both `c` in 5.3.15 and in 3.2.57.
+	s.LongestPrefixTrimTakesTheWrittenArm = interp.No
 	s.StatusArgument = interp.StatusArgNumeric
 	s.TraceAssignmentsSeparately = interp.Yes
 	// bash reports success if it signaled anything at all, where the others

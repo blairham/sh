@@ -150,10 +150,11 @@ func (c *Runner) ownTables(r *Runner) {
 	c.Dynamic = maps.Clone(r.Dynamic)
 	c.DynamicArrays = maps.Clone(r.DynamicArrays)
 	c.DynamicAssocs = maps.Clone(r.DynamicAssocs)
+	c.dynamicAssocElements = maps.Clone(r.dynamicAssocElements)
 	c.dynamicAssocWriters = maps.Clone(r.dynamicAssocWriters)
-	// absentElements travels with DynamicAssocs and its writer table, and
-	// copying two of the three would be the split dynamicWriters describes
-	// below: a subshell owning the producer while sharing the sentence a key
+	// absentElements travels with DynamicAssocs and the two tables beside
+	// it — the keyed reading and the writer — and copying some of that group
+	// and not the rest would be the split dynamicWriters describes below: a subshell owning the producer while sharing the sentence a key
 	// it cannot answer is refused with. It is also the element half of
 	// absentParams, which is copied above, and one mechanism should not have
 	// two answers about whose it is.

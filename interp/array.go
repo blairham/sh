@@ -1443,6 +1443,13 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	}
 	elems, scalar, ok := r.subscriptTarget(e)
 	if !ok {
+		// The name holds nothing, and the subscript is still read: measured
+		// 2026-09-11 on zsh 5.9.2, `w=; ${nosucharr[$w]}` is the same `bad
+		// math expression: empty string` the declared array earns, so the
+		// refusal is not something the name's absence excuses. Read here
+		// rather than above, so the text is expanded once on this path and
+		// once on the other.
+		r.refusesEmptySubscriptText(r.subscriptText(e.Subscript()))
 		return nil, true
 	}
 	return r.subscriptOver(e, subscriptSource{name: e.Name, elems: elems, scalar: scalar})
@@ -1818,7 +1825,11 @@ func (r *Runner) rangeElems(elems []string, scalar bool, lo, hi string) ([]strin
 // the readings are two different strings with no diagnostic between them,
 // which is why the answer is a dialect's rather than a default.
 func (r *Runner) scalarReadsAsCharacters(v, idx string) bool {
-	n, err := r.subscriptValue(idx)
+	// The arithmetic alone, without the empty-text question: this is asking
+	// which of two readings a subscript takes, and a subscript that will not
+	// be read at all is the reporting caller's to refuse — once, rather than
+	// once per probe that passed through here on the way.
+	n, err := r.expressionValue(idx)
 	if err != nil {
 		// Neither reading has an answer; the element path reports it.
 		return false
@@ -1950,9 +1961,29 @@ func (r *Runner) elemAt(name string, elems []string, n int) (string, bool) {
 // metacharacter in the grammar that has both.
 func (r *Runner) subscriptText(w *syntax.Word) string {
 	if w != nil && len(w.Spans) == 1 && w.Spans[0].Kind == syntax.Literal {
-		return strings.TrimSpace(w.Spans[0].Value)
+		return trimSubscript(w.Spans[0].Value)
 	}
-	return strings.TrimSpace(strings.Join(r.expandWordNoSplit(w), ""))
+	return trimSubscript(strings.Join(r.expandWordNoSplit(w), ""))
+}
+
+// trimSubscript takes the blanks off a subscript, and leaves a subscript that
+// is *nothing but* blanks alone.
+//
+// The exception is what separates two answers one shell gives in its own
+// words: `${a[$w]}` with an empty `$w` is `bad math expression: empty string`
+// there and `${a[ ]}` is `operand expected at end of string`, which is the
+// expression reader complaining about two different positions. Trimming
+// unconditionally spent that difference before anything could read it — see
+// Semantics.EmptySubscriptTextIsAMathError.
+//
+// It is also what the panel does with a blank *key*: measured 2026-09-11 on
+// bash 5.3.15, `declare -A m; m[" "]=v` and `${m[ ]}` name the same element,
+// so the blanks are the key rather than space around one.
+func trimSubscript(text string) string {
+	if strings.TrimSpace(text) == "" {
+		return text
+	}
+	return strings.TrimSpace(text)
 }
 
 // subscriptValue evaluates a subscript, which is an arithmetic expression and
@@ -1976,6 +2007,66 @@ func (r *Runner) subscriptText(w *syntax.Word) string {
 // about any bare name — `${a[k]}` with `k` unset is the first element in every
 // shell on the panel that has arrays.
 func (r *Runner) subscriptValue(text string) (int, error) {
+	if err := r.emptySubscriptText(text); err != nil {
+		return 0, err
+	}
+	return r.expressionValue(text)
+}
+
+// emptySubscriptText is a subscript whose text came out empty or blank once
+// it was expanded, where one shell in the panel will not read it as an
+// expression at all — see Semantics.EmptySubscriptTextIsAMathError for the
+// measurements and for the three neighbors this is not.
+//
+// Two sentences rather than one, because the shell that refuses gives two:
+// nothing at all is `empty string` and blanks are the expression running out,
+// which is the reader complaining about two different positions. The second
+// is built as the parse failure it is, so it is worded by the same path
+// `$(( a[ ] ))` is worded by rather than by a second copy of it.
+func (r *Runner) emptySubscriptText(text string) error {
+	if strings.TrimSpace(text) != "" {
+		return nil
+	}
+	if !r.ask(r.sem().EmptySubscriptTextIsAMathError,
+		"a subscript whose text expanded to nothing") {
+		// Either the dialect reads it — the empty expression, which is
+		// element zero — or no dialect was chosen and ask has said so. The
+		// second is not a value this can invent, so the element answers as
+		// it did.
+		return nil
+	}
+	if text == "" {
+		return arithError{
+			msg:      Wording(r.diag().EmptySubscriptTextExpanded, "a subscript that expanded to nothing"),
+			complete: true,
+		}
+	}
+	return &syntax.Error{Kind: syntax.ErrArithOperandEnd, Expr: text, Token: text}
+}
+
+// refusesEmptySubscriptText reports a subscript that expanded to nothing where
+// the dialect refuses one, and says whether it did.
+//
+// For the paths that have no element to look up afterwards and so never reach
+// subscriptIndex, which would have reported it for them.
+func (r *Runner) refusesEmptySubscriptText(text string) bool {
+	err := r.emptySubscriptText(text)
+	if err == nil {
+		return false
+	}
+	r.diagf("%s\n", r.subscriptFailure(text, err))
+	r.expandErr = true
+	return true
+}
+
+// expressionValue is subscriptValue without the empty-text question: the
+// arithmetic the two sites share.
+//
+// The substring range is what needs it. An offset that expanded to nothing is
+// zero in every column — measured, `x=abcdef; w=; ${x:$w:2}` is `ab` even in
+// the shell that refuses the same emptiness in a subscript — so the question
+// is asked where a subscript is read and not here.
+func (r *Runner) expressionValue(text string) (int, error) {
 	text = strings.TrimSpace(text)
 	if n, err := strconv.Atoi(text); err == nil {
 		return n, nil

@@ -9818,12 +9818,12 @@ gives `hi`.
 
 **The question is asked of the written brackets and answered before
 anything is expanded**, which is the opposite of the arithmetic site. A
-subscript that *arrived* empty is a different construct: `w=; ${m[$w]}`
-is `[]` at status 0 in the shell that refuses `${m[]}`, because the
-subscript text is `$w` and the expansion happens inside the subscript
-rather than before it. `${m[""]}` is a third thing again — an empty
-*key*, written as two characters, which the associative columns look
-up.
+subscript that *arrived* empty is a different construct with an answer of
+its own — see `EmptySubscriptTextIsAMathError` below, where the columns
+fall two against one rather than five against one, and where the shell
+that refuses both gives them different sentences. `${m[""]}` is a third
+thing again — an empty *key*, written as two characters, which the
+associative columns look up.
 
 The wording is `Diagnostics.EmptyParamSubscript`, and it is empty for
 four of the five refusing columns: their sentence is the ordinary
@@ -9838,6 +9838,50 @@ The operator makes no difference in any column — `${#a[]}`, `${a[]-d}`,
 does — so the question is asked where the subscript is read rather than
 once per operator. dash is in the table for completeness and answers
 nothing: no subscript reaches a parameter expansion there at all.
+
+**`EmptySubscriptTextIsAMathError`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+Refuses a subscript whose text is **empty or blank once it has been
+expanded**, where an expression reads it. `${a[$w]}` with an empty `$w`
+is the shape, and `${a[ ]}` is the blank one beside it.
+
+Measured 2026-09-11, `-c`, with `a=(5 6 7)` and `w=`:
+
+    probe       bash 5.3   ksh93u+   zsh 5.9.2
+    ${a[$w]}    5, 0       5, 0      bad math expression: empty string, and the shell ends
+    ${a[ ]}     5, 0       5, 0      bad math expression: operand expected at end of string
+
+Two columns read the empty text as the expression that is zero; one will
+not read it at all. The refusing column gives **two** sentences and not
+one — the expression reader complaining about two different positions —
+which is why the blank half is worded by `Diagnostics.ArithExpressionRanOut`,
+the sentence `$(( a[ ] ))` already earns, and only the empty half needs a
+wording of its own, `Diagnostics.EmptySubscriptTextExpanded`.
+
+It reaches every place a subscript is read as a number and not only the
+plain expansion: a scalar (`${s[$w]}`), a length (`${#a[$w]}`), a name
+nothing declared (`${nosucharr[$w]}` — the absence is no excuse there,
+unlike the arithmetic site) and an element assignment (`a[$w]=z`).
+
+Three neighbors keep their answers, and each says where the question is
+asked:
+
+- **An association's subscript is a key and never an expression**, so
+  `typeset -A m; ${m[$w]}` is the empty string at status 0 in every column
+  that has the attribute. The key path is reached before this is asked —
+  the ordering `arithElement` keeps for the same reason. bash writes
+  `m: bad array subscript` beside that empty string and answers it anyway,
+  which is #1972 and not this axis.
+- **A substring's offset is not a subscript**: `x=abcdef; ${x:$w:2}` is
+  `ab` in every column, the refusing one included. So the question is
+  asked where a subscript is evaluated rather than in the arithmetic the
+  two sites share.
+- **The blanks are the subscript**, not space around one. A subscript is
+  trimmed only when it has something in it, which is also what the panel
+  does with a blank *key*: bash's `m[" "]` and `${m[ ]}` name the same
+  element.
+
+dash has no subscript in a parameter expansion to ask about.
 
 **`BlankArithSubscriptIsTheEmptyExpression`** — bash yes · dash unspecified · ksh93 yes · zsh no
 

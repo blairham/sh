@@ -1266,6 +1266,12 @@ func Semantics() interp.Semantics {
 	// then read as an expression: measured 2026-09-11 on 5.9.2, `typeset -A
 	// m; m[k]=9; $(( m[*] ))` is 9 and `a=(1+1); $(( a[*] * 3 ))` is 6.
 	s.ArithWholeArraySubscriptIsTheSlice = interp.Yes
+	// A subscript whose text expanded to nothing is not read as an
+	// expression here at all: measured 2026-09-11 on 5.9.2, `a=(5 6 7); w=;
+	// ${a[$w]}` is `bad math expression: empty string` and the shell ends,
+	// where `${a[ ]}` is the expression running out. The written `${a[]}`
+	// above is a third sentence again, which is why they are two axes.
+	s.EmptySubscriptTextIsAMathError = interp.Yes
 	// Whitespace between the brackets is refused too, and by a different
 	// part of the shell: measured 2026-09-10, `a=(1 2 3); echo $(( a[ ] ))`
 	// is `bad math expression: operand expected at end of string` — the
@@ -1708,6 +1714,11 @@ func Diagnostics() interp.Diagnostics {
 		// The same sentence at the parameter site, and its own field because
 		// the two coincide here and do not in bash — see the field.
 		EmptyParamSubscript: "invalid subscript",
+		// And the sentence for a subscript that expanded to nothing, which
+		// is the arithmetic reader's rather than the subscript machinery's:
+		// measured, `zsh:1: bad math expression: empty string`, where the
+		// written `${a[]}` on the line above is `invalid subscript`.
+		EmptySubscriptTextExpanded: "bad math expression: empty string",
 		// The two ways a subscripted array literal has no span to land in.
 		// Worded apart from each other here, and both without the subscript:
 		// what is reported is the name's kind rather than the number.

@@ -803,6 +803,10 @@ func Semantics() interp.Semantics {
 	// The same as the bash column: measured 2026-09-11 on ksh93u+,
 	// `typeset -A m; m[k]=9; $(( m[*] ))` is 0.
 	s.ArithWholeArraySubscriptIsTheSlice = interp.No
+	// And the same for a subscript that expanded to nothing, which this
+	// shell reads as the empty expression exactly as it reads the written
+	// `${a[]}`: measured 2026-09-11 on ksh93u+, both are element zero.
+	s.EmptySubscriptTextIsAMathError = interp.No
 	// And so is whitespace between them, which is the same reading one text
 	// further along: measured 2026-09-10, `a=(1 2 3); echo $(( a[ ] ))` is
 	// `1` and `(( a[ ] = 9 ))` writes element zero. The two texts coincide

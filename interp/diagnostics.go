@@ -2558,6 +2558,22 @@ type Diagnostics struct {
 	// writes, and whether the expression survives it, is
 	// Semantics.EmptyArithSubscript; this is only the wording.
 	ArithEmptySubscript string
+	// EmptySubscriptTextExpanded is the complaint about a subscript whose
+	// *text* came out empty — `${a[$w]}` with an empty `$w` — where a
+	// parameter expansion or an assignment reads it. No verbs: the one shell
+	// that refuses it names neither the array nor the subscript, because
+	// there is no subscript text left to name.
+	//
+	// Its own field rather than ArithEmptySubscript's, which is the written
+	// `a[]` one construct over and a different sentence in the same shell:
+	// `invalid subscript` there against `bad math expression: empty string`
+	// here. A subscript holding *blanks* is a third sentence again and needs
+	// no field, because it is the expression running out — see
+	// ArithExpressionRanOut, which words it already.
+	//
+	// Whether a dialect refuses at all is
+	// Semantics.EmptySubscriptTextIsAMathError; this is only the wording.
+	EmptySubscriptTextExpanded string
 
 	// The math-function sentences: `functions -M` registers a shell function
 	// under a name arithmetic can call, and one shell in the panel has the

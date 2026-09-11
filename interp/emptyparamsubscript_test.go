@@ -24,6 +24,12 @@ func emptyParamSub(a Answer) func(*Runner) {
 	return func(r *Runner) {
 		s := *r.Semantics
 		s.EmptyParamSubscriptIsAnError = a
+		// The subscript that *expanded* to nothing is the neighboring axis,
+		// answered the quiet way here so that a row about the written
+		// brackets reaches the question it is about — the rows below whose
+		// subscript comes through a parameter or a blank would otherwise be
+		// refused for the other axis before this one was asked.
+		s.EmptySubscriptTextIsAMathError = No
 		r.Semantics = &s
 	}
 }

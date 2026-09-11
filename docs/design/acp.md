@@ -1042,6 +1042,35 @@ questions it asks are drawn by whatever front end the person is using.
 The two front ends share `driver.Shell`, the runner it builds, the gate
 and the sink. An ACP session and a prompt session are the same shell.
 
+## How this is known to work
+
+`make acp` is the instrument, and it is deliberately outside the process:
+it launches the shipped binary as a subprocess, speaks JSON-RPC to it on a
+pipe, and imports nothing from `internal/acp` — every message shape in
+`internal/acpcheck` is written out again by hand, so that a field this
+implementation misnames is a field the grader disagrees with rather than
+one both sides get wrong together.
+
+It grades both directions. The agent side is driven the way an editor
+drives it. The client side is driven by a scripted agent the instrument
+re-executes itself as, which is how the claim this document rests on — a
+policy on the shell reaches the agent it is running — gets an answer
+without the account, network and model a real coding agent needs, and so
+without waiting on #729.
+
+Four of the rows are this document rather than the protocol, and they are
+the ones to look at if any of the argument above is in doubt: the gate
+consulted for a write that an `eval` built at run time, a refusal that is
+enforced rather than reported (the same script allowed and refused, and the
+file present in one and absent in the other), an option id the agent never
+offered treated as a denial, and a `-deny` that is never put to the client
+as a question — because a policy a client can answer yes to is a
+suggestion.
+
+`make acp-wire` prints one real session, message by message, with the
+refusal and the allowance side by side. It is the version to show somebody
+who is not going to read this file.
+
 ## Package layout
 
     internal/jsonrpc/      JSON-RPC 2.0 over a newline-delimited stream

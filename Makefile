@@ -36,7 +36,7 @@ PREFIX ?= /usr/local
 SHELLDIR ?= $(PREFIX)/libexec/sh
 SHELLS := sh bash zsh ksh dash
 
-.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects wild wild-run wild-run-contained fmt-wild smoke startup perfgate install uninstall
+.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects wild wild-run wild-run-contained fmt-wild smoke acp acp-wire startup perfgate install uninstall
 
 all: build
 
@@ -162,6 +162,18 @@ smoke: ## Drive a realistic interactive session through a pty and report, per fe
 	@go build -o $(BINDIR)/smoke-bash ./cmd/bash
 	@go build -o $(BINDIR)/smoke-zsh ./cmd/zsh
 	@go run ./internal/cmd/smoke -bash $(BINDIR)/smoke-bash -zsh $(BINDIR)/smoke-zsh $(ARGS)
+
+acp: ## Drive the Agent Client Protocol front end as a client would, and report what works, what it costs, and what a pipe would have seen
+	@mkdir -p $(BINDIR)
+	@go build -o $(BINDIR)/acp-sh ./cmd/sh
+	@go build -o $(BINDIR)/acpcheck ./internal/cmd/acpcheck
+	@$(BINDIR)/acpcheck -bin $(BINDIR)/acp-sh $(ARGS)
+
+acp-wire: ## Print a real annotated ACP session, message by message, for showing somebody
+	@mkdir -p $(BINDIR)
+	@go build -o $(BINDIR)/acp-sh ./cmd/sh
+	@go build -o $(BINDIR)/acpcheck ./internal/cmd/acpcheck
+	@$(BINDIR)/acpcheck -bin $(BINDIR)/acp-sh -wire $(ARGS)
 
 conformance-dialects: ## Grade each dialect binary against the shell it claims to be
 	@mkdir -p $(BINDIR)

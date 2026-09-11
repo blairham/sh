@@ -85,6 +85,8 @@ refuses what every real shell accepts is a core nobody can write against.
       corpusguard     fails when the corpus has lost a case
       fmtwild         lays out every script on the machine and checks
                       that nothing but the layout changed
+      acpcheck        speaks the Agent Client Protocol to the shipped
+                      binary, as a client, over a pipe
 
 **The core does not know its successors.** `syntax` and `interp` define the
 questions — a grammar flag, a semantics axis, a diagnostic value — and each
@@ -236,8 +238,8 @@ not pre-commit — it is too slow for every commit. When in doubt run
 `make check` *and* `make lint`.
 
 The report targets are `conformance`, `conformance-gated`,
-`conformance-dialects`, `wild`, `wild-run`, `wild-run-contained` and
-`smoke`. None of them gates; each is described below.
+`conformance-dialects`, `wild`, `wild-run`, `wild-run-contained`, `smoke`,
+`acp` and `acp-wire`. None of them gates; each is described below.
 
 ## Installing, and the name collision
 
@@ -621,6 +623,68 @@ Not a gate, for the reasons `make wild-run` is not one and one more: it
 asserts on a job actually resuming, which is timing. `go test` covers the
 instrument's own machinery — the wait discipline, the scratch home, the
 grading — and the session it drives is a target you run.
+
+`make acp` drives the Agent Client Protocol front end the way an editor
+does — `build/sh -acp` as a subprocess, JSON-RPC on a pipe — and prints
+three things: every property `docs/design/acp.md` claims, graded; what a
+turn costs against the process-per-command arrangement it replaces; and
+what an ordinary pipe would have seen of the same script. `internal/acpcheck`
+holds it and `internal/cmd/acpcheck` prints the tables.
+
+It exists because **a protocol tested only from inside is not tested.**
+`internal/acp`'s own tests stand an agent up in the test process and speak
+to it through a pipe the test made: they prove the two halves of one
+package agree, which is worth proving and is not the question anyone asks
+about a wire format. The question is whether the binary we ship says what
+somebody else's client will understand, and the only way to ask it is to
+be somebody else's client. So `internal/acpcheck` imports nothing from
+`internal/acp` and writes every message shape out again by hand — if it
+shared the types, both sides could misname a field together and the table
+would still be green.
+
+Three rules make the rows worth reading, and each is a way the suite could
+have lied instead.
+
+**A row that can only pass is not a row.** Where the claim is "this is
+refused", the row runs the allowed case too and requires the two to
+*differ*: reject the write and the file must not exist, allow it and it
+must. A check that sees a refusal without ever having seen the same action
+succeed cannot tell a working gate from a shell that fell over.
+
+**A row asserts on the side effect and not on the message.** "The file is
+not there afterwards" is enforcement; "the agent said refused" is a string,
+and a shell that printed it while writing the file anyway would pass.
+
+**The purity row is checked by construction.** The protocol says an agent
+must write nothing but messages on standard output, and one stray print
+anywhere under the driver breaks every client at once — so every line the
+agent writes is parsed, and anything that is not a message is recorded.
+Nothing else in this tree would notice.
+
+**Both directions are graded.** The rows above drive `sh -acp`, which is
+what an editor does. The rest drive `sh -acp-connect`, where this shell is
+the *client* and something else is the agent — and the claim there is the
+stronger one: a policy on the shell reaches the agent it is running,
+because the file the agent reads is a file we open and the command it runs
+is a command we start. Proving that needs a second process that speaks the
+protocol and asks for things, and a real coding agent needs an account, a
+network and a model — which is exactly where #729 has been stuck since the
+route was written. So the instrument re-executes itself as a scripted
+agent: it asks for one file and one command line, records what it was
+given or refused, and stops. The same agent runs twice, one `-deny` apart,
+and the two answers have to differ.
+
+`make acp-wire` prints one real session message by message, with a line of
+English beside each, refusing the first thing it is asked and allowing the
+second. It is the artifact for somebody who does not read Go: the shell
+announcing a write that is inside an `eval`, asking, being told no, and the
+file not existing afterwards.
+
+Not a gate, for the reason `make smoke` is not one: it launches real
+binaries, starts real children and times them. `go test ./internal/acpcheck`
+covers the instrument's own machinery — the framing, the correlation, the
+purity detection, the median — against a scripted agent that is not a shell,
+including one that answers nothing at all.
 
 `make corpus-guard` fails when the corpus has *lost* a case. It runs in
 `make check` and as a step of the required `Build and test (ubuntu-latest)`

@@ -3068,11 +3068,27 @@ is the refusal. dash refuses both signs alike, because it has not got the
 letter at all, which is what says the grant hangs on the shell *having* the
 letter and not on the state alone.
 
-What is still missing there is the invocation: real zsh takes `-t`,
+**The invocation is a route split inside one shell**
+(`Semantics.ImmovableOptionsSetAtInvocation`). Real zsh takes `-t`,
 `-o onecmd` and `-o singlecommand` on the command line and runs one line of a
-script, refusing only what a running script asks for. That is a route split
-inside one shell rather than a disagreement between two, and it is filed
-rather than built.
+script, refusing only what a *running script* asks for. Measured on zsh 5.9.2,
+2026-09-10, against a three-line script: each of the three invocations writes
+the first line and stops, `zsh -t -c 'echo "$-"'` is `569Xt`, and `set -t`,
+`setopt singlecommand` and `unsetopt singlecommand` inside such a script are
+all `can't change option` at 1 and fatal. So the five names that shell calls
+fixed are not five states it cannot reach; they are five a script may not
+change (#1730).
+
+The axis governs the *refusal* and not the applying, which is what keeps it
+one question rather than five. A dialect that answers `Yes` still has to say
+what each such name would move: the `-t` letter writes the substrate's
+`onecmd`, which is where the core reads the axis, and a name writes whatever
+the dialect's own table says — `dialect/zsh/setopt.go`'s `singleCommandOption`
+is the one entry in that table with something to apply, and the other four
+fixed names are refused at an invocation exactly as they are refused in a
+script. Both invocation routes reach the dialect table *after* the compat
+spellings have resolved, which is why `-o onecmd` and `-o singlecommand` get
+the same answer without the letter reader knowing either name.
 
 ## zsh's option names
 
@@ -3088,12 +3104,12 @@ first is unanimous across the table.** Every name is one of five kinds:
 
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
-| substrate-backed | 11 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e` |
+| substrate-backed | 14 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi` |
 | axis- or matcher-backed | 9 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`). `ksharrays` is one name over **five** axes — see below |
-| fixed | 18 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted |
+| fixed | 4 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and one of the four is taken at the *invocation* — see `singlecommand` below |
 | store-backed, read by the front end | 4 | `histignorespace`, read by the line editor before it records a line; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All four are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
-| switch-backed | 2 | `autocd` and `checkjobs`: each moves a capability the substrate holds under no option name of its own — a bare directory name really is read as a `cd`, and a job still running really does hold the exit |
-| **recorded** | 141 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| switch-backed | 3 | `aliases`, `autocd` and `checkjobs`: each moves a capability the substrate holds under no option name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, and a job still running really does hold the exit |
+| **recorded** | 151 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -3129,10 +3145,32 @@ questions in one neighbourhood: `multios` is zsh's name for the axis that
 sends a stream to every target it names and reads it from every source, and
 the other two are what a command that is only redirections runs — csh's
 reading refuses it, sh's runs `:`, and both are reached by pointing the
-null-command parameters at a name a script cannot write. Nothing else about
-the split moved: 141 of 185 is still most of the table, and the count above
-is the one produced by counting the constructors in
-`dialect/zsh/setopt.go`.
+null-command parameters at a name a script cannot write.
+
+**Ten names moved the other way in #1739** — out of "fixed" and into
+"recorded", except two which went further. Real zsh moves all twelve of the
+names this table had wired immovable, measured one at a time with no terminal:
+
+    zsh -f -c 'setopt NAME; print -n "on:$? "; unsetopt NAME; print -n "off:$?"'
+
+answers `on:0 off:0` for `banghist`, `chaselinks`, `emacs`,
+`functionargzero`, `hashdirs`, `ignorebraces`, `ignoreeof`,
+`interactivecomments`, `notify`, `privileged`, `shglob` and `vi`, where this
+shell answered `can't change option` to one direction of each. They are not
+one situation and were not swept. `emacs` and `vi` are the substrate's own
+editing mode, which really does move and really is one state under two
+names — `setopt vi` deselects `emacs`, measured in both shells — so they are
+substrate-backed now. The other ten are states this shell holds and does not
+leave, which the three-way split had no room for: "recognized, remembered,
+and the shell keeps doing the thing" is exactly what `recorded` says, and
+saying it is the honest answer where refusing a move nobody can observe was
+not. `login` is the tenth and is not from that list at all — see below.
+
+So 151 of 185 are recorded, the count above is the one produced by counting
+the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
+exactly the set real zsh refuses**: `interactive`, `shinstdin`,
+`singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
+where the shell has a terminal.
 
 The recorded kind is the change of position, and it is deliberate. A real
 `~/.zshrc` opens with a dozen `setopt` lines about completion, correction,
@@ -3146,18 +3184,35 @@ not change. A reader wanting to know which is which reads the table in
 `dialect/zsh/setopt.go`, where the recorded ones say `recorded(…)` and
 nothing else does.
 
-The five that refuse to move are the five about being interactive —
+The names that refuse to move are the ones about being interactive —
 `interactive`, `monitor`, `shinstdin`, `singlecommand`, `zle` — which is
 measured rather than chosen: asking a real non-interactive zsh for all 197
 names in both directions refused exactly those five (plus their two compat
-spellings) and granted every other one. The other thirteen fixed names are
-this shell's own — `aliases`, `banghist`, `chaselinks`, `emacs`,
-`functionargzero`, `hashdirs`, `ignorebraces`, `ignoreeof`,
-`interactivecomments`, `notify`, `privileged`, `shglob` and `vi` — each of
-which reads its state through the substrate or holds a constant and cannot
-move it, so asking it to move is refused rather than granted falsely. Real
-zsh grants all thirteen; that divergence is the price of not lying about
-symbolic links, brace expansion or a history that is not kept.
+spellings) and granted every other one. `monitor` left the set in #1720,
+because a zsh with a terminal moves it in both directions, and the remaining
+four are this shell's too. There is no longer a set of immovable names of
+our own: #1739 emptied it, which is what makes this table's refusals a fact
+about zsh rather than a confession about this implementation.
+
+`singlecommand` is the one of the four with a route split under it. A running
+script may not move it in either direction — measured, and this shell answers
+the same — while the command line that started the shell sets it under any of
+its three spellings, which is
+`Semantics.ImmovableOptionsSetAtInvocation` and the `set -t` section above.
+
+**`login` reads the invocation.** It is one of zsh's 185 and it reads on for
+exactly the invocations that made the shell a login shell, which is where zsh
+keeps that fact — `Semantics.LoginShowsLInDollarDash` is `Yes` here precisely
+because `$-` does not carry it, and bash spells the same fact
+`shopt login_shell` instead (#1709). Ours omitted it from the listing
+altogether: measured against zsh 5.9.2, `-l -c setopt` writes three lines
+there and two here, `login` being the missing one. It is the invocation's
+answer and still *movable* on top of that, which was measured rather than
+assumed and is the opposite of bash's answer for its own spelling: `setopt
+login` in a shell that is not one is 0 and reports `login` afterwards, and
+`unsetopt login` in a login shell is 0 and stops reporting it, where `shopt
+-s login_shell` is accepted and never moves. So it is recorded over a base
+state the front end supplied rather than over a constant (#1727).
 
 **The listings.** Every option has one printed spelling — the one that is
 off by default, so `noclobber` for an option that defaults on. A bare
@@ -3197,27 +3252,29 @@ seam this dialect's entries use to move a substrate option by its substrate
 name, so routing it through the table as well would have `setopt err_exit`
 call back into the table it was called from.
 
-Two consequences worth stating, because both are divergences rather than
-wins. Recording is unchanged: a listing 185 rows long still says nothing
-about whether a name is acted on, and 141 of them are remembered and not
-acted on exactly as before — the table is longer in the listing because zsh
+Two consequences worth stating. Recording is unchanged: a listing 185 rows
+long still says nothing about whether a name is acted on, and 151 of them are
+remembered and not acted on — the table is longer in the listing because zsh
 lists that many, not because more of it is implemented. And a `set -o` name
-this shell has and will not move now answers `can't change option` at 1,
+this shell has and will not move answers `can't change option` at 1,
 **fatally**, where it used to answer `not implemented` at 2 and carry on.
 That is right for the names zsh itself refuses — measured, `set -o onecmd`
-says exactly that and stops the script there too — and it reaches the
-thirteen fixed names that are this shell's own, which real zsh grants:
-`set -o physical` and `set -o histexpand` are the two of those the eight
-above name. The alternative is a second, gentler refusal for our own
-immovable names, which would be a second notion of what a refused `set -o`
-is.
+says exactly that and stops the script there too — and since #1739 those are
+the *only* names it reaches: `set -o physical` and `set -o histexpand`, the
+two the eight above name, are granted now, as real zsh grants them. The
+alternative would have been a second, gentler refusal for immovable names of
+our own, which would be a second notion of what a refused `set -o` is; there
+are none left to need it.
 
 **A known inaccuracy, inherited rather than introduced.** The table records
 zsh's default for each name, which is what the listings compare against.
 Four entries hold this shell's own state there instead — `banghist`,
 `emacs`, `hashcmds` and `interactivecomments` are all measured the other way
 round in real zsh — which silences four deviations the listing exists to
-show. Correcting them would make the bare `unsetopt` listing byte-identical
+show. #1739 moved three of the four between kinds and left the defaults
+exactly where it found them, because the kind and the default are different
+questions: what a name *does* when asked to move is this section, and what
+its listing compares against is this paragraph. Correcting them would make the bare `unsetopt` listing byte-identical
 to zsh's 184 lines and would move the same four lines of divergence onto the
 bare `setopt` listing, because the underlying fact is that this shell's
 state genuinely differs from zsh's for those four. It is a trade rather than

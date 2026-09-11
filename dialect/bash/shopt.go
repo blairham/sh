@@ -221,6 +221,86 @@ var shoptReadOnly = map[string]func(*interp.Runner) bool{
 	"restricted_shell": func(*interp.Runner) bool { return false },
 }
 
+// shoptRecorded are the names bash lists whose whole effect is on a line
+// somebody is completing, in ways this shell's completer does not provide.
+// They are reported at **bash's own default**, remembered when moved, and
+// acted on by nothing.
+//
+// It is the same bargain the zsh dialect's `recorded(…)` strikes over 141 of
+// its 185 names, arrived at here for the same reason and from the other end.
+// `shopt -p` is a **capture surface**: an agent harness snapshots a shell
+// with it and sources the result back ahead of every later command, so a
+// state this shell reports wrong is re-applied to every command it runs — and
+// a state *bash* reported and this shell will not read back is a complaint on
+// standard error ahead of each of them. Measured 2026-09-10: a real bash
+// 5.3.15's own `shopt -p`, sourced into this shell, wrote seven
+// `not implemented` lines (#1712).
+//
+// Three names rather than the whole table, because recording is a cost and
+// not a free win — a recorded name reports a state nothing keeps. These three
+// earn it on one test: the option decides what a *completer* offers, and
+// there is nothing else a script can ask it.
+//
+//   - force_fignore. bash's on state is that a word FIGNORE names is left out
+//     even when it is the only completion. This shell has no FIGNORE, so no
+//     word is ever named and there is no last resort to offer; the difference
+//     the option describes has nowhere to appear.
+//   - hostcomplete. Completing a word containing `@` against a host list.
+//     This completer reads no host list.
+//   - progcomp. Using the specifications `complete` registers. This shell
+//     keeps every spec verbatim and prints it back — see
+//     interp/completebuiltin.go, which exists because a bash_completion.d
+//     file dies at 127 otherwise — and the completer consults none of them.
+//
+// `complete_fullquote` is *not* here, and the difference is the point of
+// having the category at all: this shell really does backslash every shell
+// metacharacter in a completed name — see escapeName in repl/completeword.go
+// — so bash's on state is this implementation's state and it belongs in
+// shoptStates below with the rest of what is true.
+var shoptRecorded = map[string]bool{
+	"force_fignore": true,
+	"hostcomplete":  true,
+	"progcomp":      true,
+}
+
+// shoptRecordedStore is where a moved recorded name is kept: an array under a
+// name no script can reach, which is the shape the zsh dialect's own recorded
+// store uses and for the same reasons — a subshell deep-copies the variable
+// table, so `(shopt -u progcomp)` stays in the subshell.
+//
+// Deviations rather than states, so a shell that has never run `shopt` on one
+// of these holds an empty array and every name reads back at bash's default.
+const shoptRecordedStore = ".bash.shopt"
+
+// shoptRecordedState reads one recorded name.
+func shoptRecordedState(r *interp.Runner, name string, def bool) bool {
+	names, _ := r.GetArray(shoptRecordedStore)
+	for _, n := range names {
+		if n == name {
+			return !def
+		}
+	}
+	return def
+}
+
+// shoptSetRecorded records or clears one name's deviation, keeping the store
+// sorted so it is a function of the set rather than of the order an rc file
+// happened to write.
+func shoptSetRecorded(r *interp.Runner, name string, on, def bool) {
+	names, _ := r.GetArray(shoptRecordedStore)
+	out := make([]string, 0, len(names)+1)
+	for _, n := range names {
+		if n != name {
+			out = append(out, n)
+		}
+	}
+	if on != def {
+		out = append(out, name)
+		sort.Strings(out)
+	}
+	r.SetArray(shoptRecordedStore, out)
+}
+
 // shoptStates are the rest of the names bash 5.3 lists, with the state this
 // implementation is in — not the state bash defaults to, the same rule
 // interp's set-option table follows. Asking for the state we already hold is
@@ -276,19 +356,17 @@ var shoptStates = map[string]bool{
 	"compat42":             false,
 	"compat43":             false,
 	"compat44":             false,
-	"complete_fullquote":   false,
+	"complete_fullquote":   true,
 	"execfail":             false,
 	"extdebug":             false,
 	"extquote":             true,
 	"failglob":             false,
-	"force_fignore":        false,
 	"globasciiranges":      true,
 	"globskipdots":         true,
 	"gnu_errfmt":           false,
 	"histappend":           true,
 	"histreedit":           false,
 	"histverify":           false,
-	"hostcomplete":         false,
 	"huponexit":            false,
 	"inherit_errexit":      false,
 	"interactive_comments": true,
@@ -299,7 +377,6 @@ var shoptStates = map[string]bool{
 	"mailwarn":             false,
 	"noexpand_translation": false,
 	"patsub_replacement":   false,
-	"progcomp":             false,
 	"progcomp_alias":       false,
 	"promptvars":           true,
 	"shift_verbose":        false,
@@ -337,13 +414,17 @@ func shoptState(r *interp.Runner, name string) (on, known bool) {
 	if ro, ok := shoptReadOnly[name]; ok {
 		return ro(r), true
 	}
+	if def, ok := shoptRecorded[name]; ok {
+		return shoptRecordedState(r, name, def), true
+	}
 	on, known = shoptStates[name]
 	return on, known
 }
 
 // shoptNames is every name, sorted, for the listings.
 func shoptNames() []string {
-	names := make([]string, 0, len(shoptModes)+len(shoptSwitches)+len(shoptReadOnly)+len(shoptStates))
+	names := make([]string, 0,
+		len(shoptModes)+len(shoptSwitches)+len(shoptReadOnly)+len(shoptRecorded)+len(shoptStates))
 	for n := range shoptModes {
 		names = append(names, n)
 	}
@@ -351,6 +432,9 @@ func shoptNames() []string {
 		names = append(names, n)
 	}
 	for n := range shoptReadOnly {
+		names = append(names, n)
+	}
+	for n := range shoptRecorded {
 		names = append(names, n)
 	}
 	for n := range shoptStates {
@@ -479,6 +563,10 @@ func shoptApply(r *interp.Runner, names []string, on bool) int {
 			// An indicator: the request is taken, nothing moves, and nothing
 			// is said. Measured, and it is bash's answer whichever way the
 			// name already reads — see shoptReadOnly.
+			continue
+		}
+		if def, ok := shoptRecorded[name]; ok {
+			shoptSetRecorded(r, name, on, def)
 			continue
 		}
 		if held, ok := shoptStates[name]; ok {

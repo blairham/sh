@@ -548,7 +548,18 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				// got the letter at all refuses both, which is why the grant
 				// hangs on the dialect saying it has the letter rather than
 				// on the state alone.
-				if on == r.onecmd && strings.ContainsRune(r.diag().ImmovableOptionLetters["set"], opt) {
+				has := strings.ContainsRune(r.diag().ImmovableOptionLetters["set"], opt)
+				if has && r.atInvocation && r.sem().ImmovableOptionsSetAtInvocation == Yes {
+					// And the same shell takes it on the command line that
+					// started it, which is a route split inside one shell:
+					// measured, `zsh -t script` runs one line where `set -t`
+					// in that script stops it dead. The letter's state is
+					// the same `onecmd` the name writes, so `$-` reports `t`
+					// either way round.
+					r.onecmd = on
+					continue
+				}
+				if on == r.onecmd && has {
 					continue
 				}
 				if !r.badSetOptionLetter(opt, on) {

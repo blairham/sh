@@ -11586,6 +11586,16 @@ echo "st=$? alive"`,
 		Why:     "the second indicator and the other direction, with the reissuable spelling that a capture is made of: `shopt -p` writes the `shopt -u` line and reports 1 because the name is off, and the `-u` that would move it reports 0 and moves nothing",
 	},
 	{
+		ID: "shopt/a-snapshot-of-the-completion-flags-reads-back", Category: "shell options",
+		Snippet: "shopt -p complete_fullquote force_fignore hostcomplete progcomp > snap.sh\n. ./snap.sh\necho sourced=$?\n",
+		Why:     "the `shopt` half of the round trip above, on the four names whose defaults this shell read backwards. bash 5.3 writes four `shopt -s` lines and reads its own file back with nothing on standard error; bash 3.2 has three of the four and complains about `complete_fullquote`, which is what says the set grew. Ours reported all four off and answered each `shopt -s` with `not implemented`, so a harness sourcing a real bash's dump began every command with four complaints (#1712)",
+	},
+	{
+		ID: "opt/setopt-moves-a-name-this-shell-holds-still", Category: "shell options",
+		Snippet: "setopt banghist; printf 'on=%s ' \"$?\"; unsetopt banghist; printf 'off=%s\\n' \"$?\"\n",
+		Why:     "one shell's own option builtin, asked to move a name in both directions. It answers `on=0 off=0` — it moves every one of its 185 names except the five about being interactive, measured a name at a time — and the other five shells have no such command at all, so the row records five `command not found` pairs beside it. Ours refused eleven names that shell moves, which made `setopt` a table whose refusals described this implementation rather than the shell it imitates (#1739)",
+	},
+	{
 		ID: "opt/set-o-noexec-reads-and-never-runs", Category: "shell options",
 		Snippet: "echo before\nset -o noexec\necho after\n",
 		Why:     "the long spelling of `set -n`, and it behaves identically in all four: everything after it is read and never run, and the script still ends at 0 — the same option under its other name, which was refused as unimplemented here while the letter worked",

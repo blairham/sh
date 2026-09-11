@@ -1062,14 +1062,46 @@ two bits and not one.
 **The rest of the table is recognized, not implemented.** bash 5.3 lists
 59 names and this table holds all 59 — the same set, and a superset of
 bash 3.2's 34 — so nothing here is missing the way zsh's `setopt` names
-were (#856). What is missing is behavior: 52 of the 59 are held at the
+were (#856). What is missing is behavior: most of the rest are held at the
 state this shell is already in, and asking one of them to *move* is
-refused out loud with `shopt: name: not implemented`, status 1. 46 refuse
-`-s` and six — `extquote`, `globasciiranges`, `globskipdots`,
-`interactive_comments`, `promptvars` and `sourcepath` — refuse `-u`,
-because the behavior they name is simply how this shell works. Asking for
-the state already held is granted in both directions, which is the same
-bargain `set +o posix` strikes.
+refused out loud with `shopt: name: not implemented`, status 1. The ones
+that refuse `-u` rather than `-s` — `complete_fullquote`, `extquote`,
+`globasciiranges`, `globskipdots`, `histappend`, `interactive_comments`,
+`lithist`, `promptvars` and `sourcepath` — refuse it because the behavior
+they name is simply how this shell works. Asking for the state already
+held is granted in both directions, which is the same bargain `set +o
+posix` strikes.
+
+**Three names are recorded instead**, which is the bargain zsh's `setopt`
+table already strikes over 151 of its 185 names, arrived at here from the
+other end (#1712). `shopt -p` is a **capture surface**: an agent harness
+snapshots a shell with it and sources the result back ahead of every later
+command, so a state this shell reports wrong is re-applied to every command
+it runs, and a state *bash* reported and this shell will not read back is a
+complaint on standard error ahead of each of them. Measured 2026-09-10: a
+real bash 5.3.15's own `shopt -p`, sourced into this shell, wrote seven
+`not implemented` lines.
+
+Three of the seven earn recording on one test — the option decides what a
+*completer* offers, and there is nothing else a script can ask it:
+`force_fignore` (this shell has no FIGNORE, so no word is ever named and
+there is no last resort to leave out), `hostcomplete` (this completer reads
+no host list) and `progcomp` (`complete` keeps every spec verbatim and the
+completer consults none of them). They report bash's own default, remember
+a move, and promise nothing — the state lives in an array under a name no
+script can reach, so `(shopt -u progcomp)` stays inside the subshell.
+
+A fourth, `complete_fullquote`, is not recorded and that is the point of
+having the category at all: this shell really does backslash every shell
+metacharacter in a name it offers, so bash's `on` is this implementation's
+own state and it belongs with the rest of what is true. The remaining
+three of the seven are behaviours this shell genuinely does not have and
+genuinely does have: `patsub_replacement` gates `&` in a `${v/pat/rep}`
+replacement, which is unbuilt here, so reporting it on would be the worst
+kind of lie; `histappend` and `lithist` read **on** against bash's off
+because this shell's history really does append to the file and really does
+keep a multi-line entry's newlines, measured through a terminal. Those
+three are divergences reported honestly rather than defaults to copy.
 
 These are run-time states rather than semantics axes, which is why the
 core holds them as `interp.MatchOption` values and only the bash dialect

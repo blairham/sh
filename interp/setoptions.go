@@ -491,6 +491,21 @@ func (r *Runner) SetOptionLetters(letters string, on bool) int {
 	return 0
 }
 
+// AtInvocation reports whether the option request being served came from the
+// words the shell was started with rather than from a line of script.
+//
+// Exported for a dialect's own option table, which is the one place the
+// *route* can change the answer rather than only the wording: one shell in
+// the panel refuses an option to a running script and takes the same option
+// on its command line (Semantics.ImmovableOptionsSetAtInvocation). The core
+// cannot answer that on the dialect's behalf, because only the dialect knows
+// what such a name would move.
+//
+// Set for the length of one call in SetOptionLetters and SetNamedOption,
+// which are the front end's only way in, so a `setopt` written in a script
+// always reads false.
+func (r *Runner) AtInvocation() bool { return r.atInvocation }
+
 // SetNamedOption applies one long option — `-o pipefail`, `+o allexport` —
 // exactly as `set -o` reads it, returning 0 or the status the dialect gives
 // a name it refuses. Exported for the front end, with SetOptionLetters.

@@ -267,23 +267,28 @@ func TestSetoptCompatSpellingsShareTheCanonicalState(t *testing.T) {
 		// The canonical name and the compat one are one switch, so setting
 		// through one and clearing through the other leaves nothing behind.
 		{`setopt dotglob; unsetopt globdots; setopt`, "nohashdirs\n"},
+		// And the two that stopped being fixed in #1739: the borrowed
+		// spelling moves the canonical entry and the listing names the
+		// canonical one, exactly as `dotglob` does for `globdots`.
+		{`setopt physical; setopt`, "chaselinks\nnohashdirs\n"},
+		{`setopt physical; unsetopt chaselinks; setopt`, "nohashdirs\n"},
 	} {
 		out, st := runZsh(t, t.TempDir(), tc.src)
 		if st != 0 || out != tc.want {
 			t.Errorf("%s: out %q status %d, want %q", tc.src, out, st, tc.want)
 		}
 	}
-	// `braceexpand` and `physical` are fixed here rather than recorded —
-	// this shell always expands braces and never resolves a symbolic link on
-	// the way to a directory — and their canonical names are fixed with
-	// them, which is the sharpest evidence that an alias is the same entry:
-	// both spellings refuse identically, each echoing the one that was
-	// typed. Real zsh grants both, and docs/spec/semantics.md records that.
+	// `onecmd` and `stdin` are the two compat spellings that still land on a
+	// fixed entry — `singlecommand` and `shinstdin`, two of the five zsh
+	// itself refuses a running script — and their canonical names refuse
+	// with them, which is the sharpest evidence that an alias is the same
+	// entry: both spellings refuse identically, each echoing the one that
+	// was typed. Real zsh refuses all four the same way.
 	for _, tc := range []struct{ src, want string }{
-		{`setopt no_braceexpand`, "zsh:setopt:1: can't change option: no_braceexpand\n"},
-		{`setopt ignorebraces`, "zsh:setopt:1: can't change option: ignorebraces\n"},
-		{`setopt physical`, "zsh:setopt:1: can't change option: physical\n"},
-		{`setopt chaselinks`, "zsh:setopt:1: can't change option: chaselinks\n"},
+		{`setopt onecmd`, "zsh:setopt:1: can't change option: onecmd\n"},
+		{`setopt singlecommand`, "zsh:setopt:1: can't change option: singlecommand\n"},
+		{`setopt stdin`, "zsh:setopt:1: can't change option: stdin\n"},
+		{`setopt shinstdin`, "zsh:setopt:1: can't change option: shinstdin\n"},
 	} {
 		out, st := runZsh(t, t.TempDir(), tc.src)
 		if st != 1 || out != tc.want {

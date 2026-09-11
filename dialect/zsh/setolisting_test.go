@@ -178,12 +178,11 @@ func TestSetoptStillCarriesOnPastItsOwnRefusal(t *testing.T) {
 // from the *listing* and must not be gone from the *namespace* — seven of
 // them are spellings zsh takes as input and never writes.
 //
-// Five now answer exactly what real zsh answers, where three of those five
-// were `not implemented` at 2 before. The other two are the divergence
-// docs/spec/semantics.md already records: `histexpand` and `physical` are
-// zsh's `banghist` and `chaselinks`, two of the thirteen names whose state
-// this shell reads through the substrate and cannot move, so it refuses
-// rather than granting falsely. Real zsh grants both.
+// All seven now answer exactly what real zsh answers, where three of them
+// were `not implemented` at 2 before this listing was built and two more —
+// `histexpand` and `physical`, which are zsh's `banghist` and `chaselinks`
+// under their borrowed spellings — were `can't change option` at 1 until
+// #1739. Real zsh grants every one of the seven, measured a name at a time.
 func TestTheEightBashNamesAreStillAccepted(t *testing.T) {
 	for _, c := range []struct {
 		name, want string
@@ -194,9 +193,8 @@ func TestTheEightBashNamesAreStillAccepted(t *testing.T) {
 		{"nolog", "st=0\n", 0},
 		{"notify", "st=0\n", 0},
 		{"trackall", "st=0\n", 0},
-
-		{"histexpand", "zsh:set:1: can't change option: histexpand\n", 1},
-		{"physical", "zsh:set:1: can't change option: physical\n", 1},
+		{"histexpand", "st=0\n", 0},
+		{"physical", "st=0\n", 0},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), `set -o `+c.name+`; echo "st=$?"`)

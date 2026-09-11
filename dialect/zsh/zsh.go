@@ -392,6 +392,20 @@ func Semantics() interp.Semantics {
 	// refused rather than acted on. See Diagnostics.UnimplementedOptionLetters,
 	// which is where the letter is refused.
 	s.SetHasTheTLetter = interp.No
+	// What a running script may not move, the command line that started the
+	// shell may. Measured 2026-09-10 on zsh 5.9.2 against a three-line
+	// script: `zsh -t plain.sh`, `zsh -o singlecommand plain.sh` and
+	// `zsh -o onecmd plain.sh` each run the first line and stop, where
+	// `set -t` and `setopt singlecommand` inside such a script are
+	// `can't change option` at 1 and fatal. So this shell's five "fixed"
+	// names are five a script may not change rather than five states it
+	// cannot reach (#1730). See setopt.go's singleCommandOption for the one
+	// of them that has something to apply.
+	s.ImmovableOptionsSetAtInvocation = interp.Yes
+	// And the route the option does *not* stop, which is worth declaring now
+	// that this shell can have it on: measured, `zsh -t -c $'echo A\necho B'`
+	// writes both lines, so a command string is read to its end.
+	s.OneCommandStopsACommandString = interp.No
 	// `-c` and `-s` together: `-s` names the operands here, so `sh -sc CMD
 	// name a` keeps the shell in `$0` and makes both operands parameters.
 	// bash and dash let the command string name them instead.

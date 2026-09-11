@@ -252,13 +252,19 @@ Four things to read out of it:
 - **dash refuses `--login`** outright — `Illegal option --` at status 2 —
   which is why its `Login` spelling is `-l` alone.
 
-**zsh's letter is also a `set` option, and that is recorded rather than
-implemented.** Measured: `zsh -c 'set -l'` exits 0 and `$-` becomes
-`569Xl`; `zsh -lc 'set +l'` exits 0 and `$-` becomes `569X`; `setopt
-login` and `unsetopt login` do the same, and its `set -o` listing carries
-`login on` for a login shell. So in that one shell login-ness is a
-mutable option rather than only a startup fact. Ours reports the startup
-fact and refuses `set -l`, so `set +l` does not take the letter back out.
+**zsh's letter is also a `set` option.** Measured: `zsh -c 'set -l'` exits 0
+and `$-` becomes `569Xl`; `zsh -lc 'set +l'` exits 0 and `$-` becomes
+`569X`; `setopt login` and `unsetopt login` do the same, and its `set -o`
+listing carries `login on` for a login shell. So in that one shell
+login-ness is a mutable option rather than only a startup fact. The option
+half is implemented since #1727 — `setopt login`, `unsetopt login`,
+`[[ -o login ]]` and the three listings all move and all read the
+invocation's answer when nothing has moved them, which is how a login shell
+can be told apart from that namespace at all. It is the opposite of bash's
+answer for its own spelling two bullets up, where the request is taken and
+ignored, and the two were measured a name at a time rather than one read off
+the other. The **letter** is still recorded: ours reports the startup fact
+and refuses `set -l`, so `set +l` does not take the letter back out.
 **ksh93 is the mirror image and stranger**: `set -l` is a bad option
 there, and its own `set -o` listing says `login_shell off` in the very
 invocation whose `$-` contains `l` — a shell disagreeing with itself,

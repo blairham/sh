@@ -7913,6 +7913,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/a-set-o-listing-sources-back` | **2>** `<shell>: 1: set: Illegal option -o Current` *(status 2)* | `sourced=0` | `sourced=0` | `sourced=0` | **2>** `<shell>[2]: .[1]: set: Current: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `sourced=126` **2>** `./snap.sh:set:12: can't change option: monitor` |
 | `shopt/an-indicator-takes-a-request-and-does-not-move` | `s=127~q=127` **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` | `s=0~login_shell         	off~q=1` | `s=0~login_shell         	off~q=1` | `s=0~login_shell    	off~q=1` | `s=127~q=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found` | `s=127~q=127` **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` |
 | `shopt/an-indicator-takes-an-unset-too` | `u=127~p=127` **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` | `u=0~shopt -u restricted_shell~p=1` | `u=0~shopt -u restricted_shell~p=1` | `u=0~shopt -u restricted_shell~p=1` | `u=127~p=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found` | `u=127~p=127` **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` |
+| `shopt/a-snapshot-of-the-completion-flags-reads-back` | `sourced=0` **2>** `<shell>: 1: shopt: not found` | `sourced=0` | `sourced=0` | `sourced=0` **2>** `<shell>: line 0: shopt: complete_fullquote: invalid shell option name` | `sourced=0` **2>** `<shell>: shopt: not found` | `sourced=0` **2>** `<shell>:1: command not found: shopt` |
+| `opt/setopt-moves-a-name-this-shell-holds-still` | `on=127 off=127` **2>** `<shell>: 1: setopt: not found~<shell>: 1: unsetopt: not found` | `on=127 off=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `on=127 off=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `on=127 off=127` **2>** `<shell>: setopt: command not found~<shell>: unsetopt: command not found` | `on=127 off=127` **2>** `<shell>: setopt: not found~<shell>: unsetopt: not found` | `on=0 off=0` |
 | `opt/set-o-noexec-reads-and-never-runs` | `before` | `before` | `before` | `before` | `before` | `before` |
 | `opt/set-v-echoes-a-here-document-with-its-command` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` |
 | `opt/set-v-echoes-the-tail-after-the-last-command` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` |
@@ -8222,6 +8224,16 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shopt/an-indicator-takes-an-unset-too` — the second indicator and the other direction, with the reissuable spelling that a capture is made of: `shopt -p` writes the `shopt -u` line and reports 1 because the name is off, and the `-u` that would move it reports 0 and moves nothing
   ```sh
   shopt -u restricted_shell; echo "u=$?"; shopt -p restricted_shell; echo "p=$?"
+  ```
+- `shopt/a-snapshot-of-the-completion-flags-reads-back` — the `shopt` half of the round trip above, on the four names whose defaults this shell read backwards. bash 5.3 writes four `shopt -s` lines and reads its own file back with nothing on standard error; bash 3.2 has three of the four and complains about `complete_fullquote`, which is what says the set grew. Ours reported all four off and answered each `shopt -s` with `not implemented`, so a harness sourcing a real bash's dump began every command with four complaints (#1712)
+  ```sh
+  shopt -p complete_fullquote force_fignore hostcomplete progcomp > snap.sh
+  . ./snap.sh
+  echo sourced=$?
+  ```
+- `opt/setopt-moves-a-name-this-shell-holds-still` — one shell's own option builtin, asked to move a name in both directions. It answers `on=0 off=0` — it moves every one of its 185 names except the five about being interactive, measured a name at a time — and the other five shells have no such command at all, so the row records five `command not found` pairs beside it. Ours refused eleven names that shell moves, which made `setopt` a table whose refusals described this implementation rather than the shell it imitates (#1739)
+  ```sh
+  setopt banghist; printf 'on=%s ' "$?"; unsetopt banghist; printf 'off=%s\n' "$?"
   ```
 - `opt/set-o-noexec-reads-and-never-runs` — the long spelling of `set -n`, and it behaves identically in all four: everything after it is read and never run, and the script still ends at 0 — the same option under its other name, which was refused as unimplemented here while the letter worked
   ```sh

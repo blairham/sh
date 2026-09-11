@@ -276,6 +276,11 @@ func Semantics() interp.Semantics {
 	s.EchoOptions = "neE"
 	s.EchoLastEscapeFlagWins = interp.Yes
 	s.EchoExpandsHexEscapes = interp.Yes
+	// `echo -e '\u0041'` and `echo -e '\U00000041'` are both `A` in 5.3.15,
+	// and a run with no digit at all is left as written with a complaint —
+	// the leaving is what the second axis records here.
+	s.EchoExpandsUnicodeEscapes = interp.Yes
+	s.EchoEmptyHexDigitRunIsNul = interp.No
 	// Both spellings of the escape character, which is this shell alone in
 	// the panel: ksh93 has only `\E` and zsh only `\e`.
 	s.EchoExpandsEscEscape = interp.Yes

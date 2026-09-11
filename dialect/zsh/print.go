@@ -708,7 +708,13 @@ func expandEscapes(s string, how escapeReading) (string, bool) {
 				n = n*16 + printHexValue(s[j])
 				j++
 			}
-			b.WriteRune(rune(n))
+			// The core's encoder rather than a rune, because the values this
+			// shell writes are not all runes: a surrogate and anything past
+			// the last code point were a replacement character here and are
+			// the encoding itself there — `\ud800` is `ed a0 80` and
+			// `\U110000` is `f4 90 80 80` in zsh 5.9.2, measured, where
+			// Go's rune type refuses both (#1840).
+			b.WriteString(interp.EncodeCodePoint(n))
 			i = j - 1
 		case 'M', 'C':
 			if !how.printEscapes {

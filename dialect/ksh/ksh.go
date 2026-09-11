@@ -368,6 +368,9 @@ func Semantics() interp.Semantics {
 	s.EchoOptions = "ne"
 	// `\E` is the escape character here and `\e` is two characters — the
 	// opposite of zsh, which is why one axis could not answer for both.
+	// No `\u` and no `\U`: `echo 'a\u0041Z'` writes the characters as they
+	// stand in 93u+, where the two shells that have the escape write `aAZ`.
+	s.EchoExpandsUnicodeEscapes = interp.No
 	s.EchoExpandsEscEscape = interp.No
 	s.EchoExpandsCapitalEscEscape = interp.Yes
 	// read takes -r and -s plus -A, whose array is the first operand where

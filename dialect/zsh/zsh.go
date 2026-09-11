@@ -790,6 +790,12 @@ func Semantics() interp.Semantics {
 	s.EchoOptions = "neE"
 	s.EchoLastEscapeFlagWins = interp.No
 	s.EchoExpandsHexEscapes = interp.Yes
+	// `echo '\u0041'` and `echo '\U00000041'` are both `A` here, with no
+	// `-e` needed, and a hexadecimal escape with no digit after it is a NUL
+	// followed by whatever was there: `\xZ`, `\uZ` and a bare `\x` are all
+	// `00` and then the rest, where bash leaves the two characters standing.
+	s.EchoExpandsUnicodeEscapes = interp.Yes
+	s.EchoEmptyHexDigitRunIsNul = interp.Yes
 	// `\e` is the escape character here and `\E` is two characters — the
 	// opposite of ksh93.
 	s.EchoExpandsEscEscape = interp.Yes

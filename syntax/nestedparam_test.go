@@ -216,3 +216,51 @@ func TestASubscriptAfterANestedInnerIsRead(t *testing.T) {
 		t.Errorf("Index = %q, want 2", got)
 	}
 }
+
+// The inner expansion is read in the quoting the outer was written in.
+//
+// Whether a bare `{` inside `${…}` opens a level is BareBraceNestsInExpansion
+// *and* the quoting: the flag is only consulted outside double quotes, because
+// a quoted `{` is an ordinary character in every column. The lexer already knew
+// that; scanNestedExpansion did not, because it built a fresh lexer over the
+// inner text and a fresh lexer is in no quoting at all. So the inner expansion
+// of a double-quoted word was read as if the word stood bare, and everything
+// downstream of it — the operand it hands on, and the next expansion inside
+// that — was too.
+//
+// The operand is where it shows, and it is the whole mechanism: a span carries
+// its quoting, so an operand read as unquoted is split on IFS, globbed, and has
+// its own braces balanced the other way.
+func TestANestedExpansionTakesTheOuterQuoting(t *testing.T) {
+	d := nestingDialect()
+	d.BareBraceNestsInExpansion = true
+
+	// Read in double quotes, the inner expansion ends at the first `}` — the
+	// `{` of `x{y` opened nothing — so `${v-x{y}` is the inner, `z` is what
+	// the outer reads next, and the last `}` is text after the word.
+	const src = `echo "${${v-x{y}z}}"`
+	f, err := Parse(src, d)
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	sc := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+	spans := sc.Args[1].Spans
+	if len(spans) == 0 || spans[0].Kind != ParamExp || spans[0].Param == nil {
+		t.Fatalf("%q: first span is not an expansion: %+v", src, spans)
+	}
+	inner := spans[0].Param.Inner
+	if inner == nil || len(inner.Spans) != 1 || inner.Spans[0].Param == nil {
+		t.Fatalf("%q: inner is %+v, want one expansion", src, inner)
+	}
+	if got := inner.Spans[0].Value; got != "v-x{y" {
+		t.Errorf("%q: the inner expansion is ${%s}, want ${%s} — a bare `{` in double quotes opens no level", src, got, "v-x{y")
+	}
+	arg := inner.Spans[0].Param.Arg
+	if arg == nil || len(arg.Spans) != 1 {
+		t.Fatalf("%q: the inner operand is %+v, want one span", src, arg)
+	}
+	if arg.Spans[0].Quoting != DoubleQuoted {
+		t.Errorf("%q: the inner operand is %v, want DoubleQuoted — it is written inside the quotes the outer expansion is",
+			src, arg.Spans[0].Quoting)
+	}
+}

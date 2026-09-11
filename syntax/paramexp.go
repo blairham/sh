@@ -596,7 +596,7 @@ scan:
 	// rule, and mutants that widened *this* one were unobservable because
 	// the other still refused — which is how the duplication was found.
 	if p.dialect.NestedParamExpansion {
-		if inner, rest, ok := p.scanNestedExpansion(s, start); ok {
+		if inner, rest, ok := p.scanNestedExpansion(s, start, q); ok {
 			// Src as well as the node: a diagnostic about a nested expansion
 			// names the text it was written as, and there is no parameter
 			// name here for it to name instead.
@@ -1591,7 +1591,17 @@ func (p *Parser) operandDialect() Dialect {
 // second answer to the same question. What comes back has to be exactly one
 // substitution span at the front — anything else is not this shape, and the
 // caller then reads the text the ordinary way and fails the ordinary way.
-func (p *Parser) scanNestedExpansion(s string, at Pos) (inner *Word, rest string, ok bool) {
+//
+// The quoting the outer expansion was written in is carried in, because the
+// inner one is written inside it and the lexer's answers depend on it. A
+// fresh lexer with no quoting read `"${${:-${w::=%F{070\}}}+}"` as if the
+// word stood bare, which turns BareBraceNestsInExpansion back on for the
+// inner: the `{` of `%F{` opened a level, the expansion then ran past the
+// `}` that closes it, and what was left over came out as the literal text
+// `}+`. Measured on zsh 5.9.2 — quoted, that whole word is the empty string
+// and `$w` is `%F{070}` — and it is what powerlevel10k's prompt is built
+// out of (#2048).
+func (p *Parser) scanNestedExpansion(s string, at Pos, q Quoting) (inner *Word, rest string, ok bool) {
 	if p.depth >= maxParamDepth {
 		p.fail("expansions nested too deeply")
 		return nil, "", false
@@ -1632,20 +1642,35 @@ func (p *Parser) scanNestedExpansion(s string, at Pos) (inner *Word, rest string
 	// for the same reason, because the only quote stripped above is a `"`.
 	// The single-quoted spelling is refused by that strip and by nothing
 	// else, which is where to look if `${(@f)'$(cmd)'}` ever starts parsing.
-	t := NewLexer(s, p.dialect).Next()
-	if t.Kind != TokWord || len(t.Spans) == 0 {
+	sub := NewLexer(s, p.dialect)
+	// Where the substitution ended: the next span's start, or the whole of
+	// what was read when it was the only one. A span records where it began
+	// and not where it stopped, and the neighbor's position is the same fact
+	// read from the other side.
+	var spans []Span
+	var end int
+	if q == DoubleQuoted {
+		// The same reader quotedWordFrom uses, for the same reason: it is
+		// the one that knows this text stands in double quotes, and a
+		// second spelling of that knowledge beside it would be a second
+		// answer to the same question.
+		spans = sub.scanDoubleBody(at, false)
+		end = sub.off
+	} else {
+		t := sub.Next()
+		if t.Kind != TokWord {
+			return nil, "", false
+		}
+		spans, end = t.Spans, t.End.Offset
+	}
+	if len(spans) == 0 {
 		return nil, "", false
 	}
-	// Where the substitution ended: the next span's start, or the token's own
-	// end when it was the whole of it. A span records where it began and not
-	// where it stopped, and the neighbor's position is the same fact read
-	// from the other side.
-	end := t.End.Offset
-	if len(t.Spans) > 1 {
-		end = t.Spans[1].Pos.Offset
+	if len(spans) > 1 {
+		end = spans[1].Pos.Offset
 	}
 	if end > len(s) {
 		return nil, "", false
 	}
-	return p.newWord(t.Spans[:1], at, at), s[end:], true
+	return p.newWord(spans[:1], at, at), s[end:], true
 }

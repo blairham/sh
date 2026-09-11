@@ -3284,20 +3284,57 @@ func (l *Lexer) bareSubscript(name string, q Quoting) {
 			past = len(l.src) - len(rest)
 		}
 	}
+	// subEnd is where a substitution the scan is standing inside ends. Its
+	// characters do not end the *word*: the `(` of `$a[$((n))]` and of
+	// `$a[$(echo 3)]` is a word end everywhere else, so meeting it here gave
+	// the subscript up and left `[$((n))]` as literal text beside the whole
+	// array. Measured on zsh 5.9.2, `ar=(one two three); n=3`:
+	// `x=$ar[$((n))]` is `three`, where this shell answered
+	// `one two three[3]`. The quoted spelling was unaffected, which is why
+	// it went unseen — and powerlevel10k reads its saved prompt out of an
+	// associative array with exactly this shape (#2048).
+	//
+	// A substitution suspends the word-end test and **not** the bracket
+	// count, which is measured rather than assumed and is the half a
+	// wholesale skip would get wrong: `x=$a[$(echo 2; : [)]` leaves the
+	// brackets as text in zsh 5.9.2 where `x=$a[$(echo 2; : [ ])]` is the
+	// second element, so a `[` written inside still has to be closed.
+	//
+	// Where it ends is asked of the lexer's own skip rather than of a
+	// counter beside it. A sub-lexer is what carries the cursor, since this
+	// scan has not committed to the subscript yet and must be able to give
+	// the characters back.
+	subEnd := -1
 	for i := l.off; i < len(l.src); i++ {
 		if i > l.off && i < past {
 			continue
 		}
-		switch c := l.src[i]; {
+		c := l.src[i]
+		if i >= subEnd && (c == '`' || (c == '$' && i+1 < len(l.src) && l.src[i+1] == '(')) {
+			sub := NewLexer(l.src[i:], l.dialect)
+			if sub.skipSubstitution() && sub.Err() == nil {
+				subEnd = i + sub.off
+			}
+		}
+		switch {
 		case c == '[':
 			depth++
 		case c == ']':
 			if depth--; depth == 0 {
+				if i < subEnd {
+					// The bracket that balanced it was written *inside* the
+					// substitution, so what stands between the brackets is
+					// half a substitution and no subscript at all. zsh gives
+					// the characters back here too: `x=$a[$(: ]; echo 2)]`
+					// leaves them as text.
+					return
+				}
 				for l.off <= i {
 					l.advance()
 				}
 				return
 			}
+		case i < subEnd:
 		case q == DoubleQuoted && c == '"':
 			return
 		case q != DoubleQuoted && l.isWordEnd(c):

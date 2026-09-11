@@ -57,6 +57,19 @@ func TestABareSubscriptIsPartOfTheExpansion(t *testing.T) {
 		{"a negative subscript", "echo $a[-1]", "a[-1]", ""},
 		{"a subscript holding an expansion", "echo $a[$i]", "a[$i]", ""},
 		{"a nested subscript", "echo $a[$b[1]]", "a[$b[1]]", ""},
+		// A substitution's own `(` is a word end everywhere else, so meeting
+		// one here used to give the subscript up and leave the brackets as
+		// text beside the *whole* array. Both spellings, because the
+		// arithmetic one is the two characters `$(` as well (#2048).
+		{"a subscript holding an arithmetic substitution", "echo $a[$((i))]", "a[$((i))]", ""},
+		{"a subscript holding a command substitution", "echo $a[$(echo 1)]", "a[$(echo 1)]", ""},
+		{"a subscript holding a backquoted substitution", "echo $a[`echo 1`]", "a[`echo 1`]", ""},
+		// A substitution suspends the word-end test and not the bracket
+		// count: the blank in `echo 3` no longer ends the word, and a `[`
+		// written inside still has to be closed. Measured on zsh 5.9.2 —
+		// `x=$a[$(echo 2; : [ ])]` is the second element.
+		{"a balanced bracket inside the substitution", "echo $a[$(echo 2; : [ ])]", "a[$(echo 2; : [ ])]", ""},
+		{"text after a subscript holding a substitution", "echo $a[$(echo 1)]x", "a[$(echo 1)]", "x"},
 		{"text after the subscript", "echo $a[1]x", "a[1]", "x"},
 		{"only the first subscript", "echo $a[1][2]", "a[1]", "[2]"},
 		{"the whole positional list", "echo $@[1]", "@[1]", ""},
@@ -347,5 +360,33 @@ func TestABareSubscriptsTextKeepsTheExpansionsQuoting(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A subscript a substitution leaves unbalanced is no subscript, and the
+// characters go back to the word.
+//
+// The substitution suspends the word-end test and not the bracket count, so
+// a `[` written inside it still has to be closed and a `]` written inside it
+// still closes — and where either leaves the brackets unusable, the scan gives
+// them up rather than committing. Measured on zsh 5.9.2 with
+// `a=(one two three)`: both of these come back as the array joined with the
+// brackets behind it as text, where `x=$a[$(echo 2; : [ ])]` — the same shape
+// with the bracket closed — is the second element.
+func TestAnUnbalancedSubstitutionGivesTheBracketsBack(t *testing.T) {
+	for _, src := range []string{
+		`echo $a[$(: ]; echo 2)]`, // the `]` inside closes the subscript
+		`echo $a[$(echo 2; : [)]`, // the `[` inside is never closed
+	} {
+		spans := spansOf(t, src, bare())
+		if len(spans) == 0 || spans[0].Kind != syntax.ParamExp {
+			t.Fatalf("%q: first span is not an expansion: %+v", src, spans)
+		}
+		if spans[0].Value != "a" {
+			t.Errorf("%q: expansion is %q, want %q — the brackets are not a subscript here", src, spans[0].Value, "a")
+		}
+		if len(spans) < 2 || spans[1].Kind != syntax.Literal || spans[1].Value != "[" {
+			t.Errorf("%q: after the expansion comes %+v, want the literal `[`", src, spans[1:])
+		}
 	}
 }

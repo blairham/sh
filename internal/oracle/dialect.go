@@ -48,6 +48,14 @@ func Dialect() syntax.Dialect {
 	d.CasePatternListSpansBlanks = true
 	// `function f() { …; }`, both markers at once.
 	d.FunctionKeywordParens = true
+	// `function _p_${w} { … }` — a keyword name that is not a name, carried
+	// to the definition instead of refused while parsing. Two of the six
+	// answer that way and the corpus records what the other four do, so the
+	// grammar that has to *read* every case is the one that takes the
+	// construct, as above. The `name()` spelling is deliberately not widened
+	// with it: ksh93 refuses that one while reading, which is the split
+	// `cmd/a-function-name-may-hold-an-expansion` records.
+	d.FunctionNameCheckedWhenTheDefinitionRuns = true
 	// `function '' { … }` — the empty string as a name, which one of the six
 	// defines and four refuse where the definition runs rather than while
 	// reading it. The grammar that has to *read* every case is the one that

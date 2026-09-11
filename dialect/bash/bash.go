@@ -1068,7 +1068,7 @@ func Diagnostics() interp.Diagnostics {
 		// serves — PunctuatedFunctionNameIsRefused is No here, `f-g()` being
 		// a perfectly good definition — so there is one wording to keep.
 		FunctionNameInvalid: "`%[1]s': not a valid identifier",
-		Unterminated:  "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
+		Unterminated:        "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
 		// With nothing open to name — `f()` with no body — the sentence
 		// stops after the diagnosis rather than naming an empty construct.
 		UnterminatedNoConstruct: "syntax error: unexpected end of file",

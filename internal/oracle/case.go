@@ -1487,9 +1487,14 @@ var Corpus = []Case{
 		Why:     "the name is expanded once, when the definition runs, and never again — changing the variable afterwards leaves the old name defined and produces no new one. The body is the control beside it and goes the other way: it prints `w=bar`, because a body is expanded when it is *called*. Two opposite answers to `when` in one row, which is the pair that a single-arm case cannot show",
 	},
 	{
-		ID: "cmd/the-keyword-form-of-a-function-name-expansion", Category: "command language", SyntaxError: true,
+		ID: "cmd/the-keyword-form-of-a-function-name-expansion", Category: "command language",
 		Snippet: `w=foo; function _p_${w} { echo HI; }; _p_foo`,
-		Why:     "the same construct written with the keyword, and the half that was worse here than a refusal: this *parsed* and took the token's literal text, so it defined `_p_w` at status 0 with no diagnostic and the function the script asked for missing. bash and ksh93 both complain about the name and dash calls it a syntax error; only zsh defines it",
+		Why:     "the same construct written with the keyword, and the half that was worse here than a refusal: this *parsed* and took the token's literal text, so it defined `_p_w` at status 0 with no diagnostic and the function the script asked for missing. bash and ksh93 both complain about the name and dash calls it a syntax error; only zsh defines it. It is no longer a syntax error to the corpus grammar, because those two complaints come when the *definition* runs and not while reading it — see the row below",
+	},
+	{
+		ID: "cmd/a-keyword-function-name-is-refused-where-the-definition-runs", Category: "command language",
+		Snippet: `w=foo; function _p_${w} { echo HI; }; echo st=$?; echo after`,
+		Why:     "the stage, which the row above cannot show: bash 5.3 and bash 3.2 report `` `_p_${w}': not a valid identifier ``, give the definition 1 and **carry on** to `after` at 0; bash-as-sh says the same sentence and is fatal at 2; ksh93 says `_p_${w}: invalid function name` and stops at 1; zsh defines `_p_foo` and prints both lines; dash has no keyword and blames the brace. So `st=` and `after` are what is being compared rather than the wording — a parse refusal, which is what this implementation gave, answers neither. Both complaining columns name the word **as written**, which is the other half: the token's literal text is `_p_w` and no shell in the panel says that (#1296)",
 	},
 	{
 		ID: "core/a-function-with-no-name-runs-where-it-stands", Category: "command language",
@@ -6525,7 +6530,7 @@ echo "st=$?"`,
 	{
 		ID: "cmd/function-posix-name-in-quotes", Category: "command language",
 		Snippet: `'q'() { echo b; }; q; echo st=$?`,
-		Why:     "the sharpest control this group has and a *different* panel split from the rows above. The name is `q` — one nobody could object to — and the quotes are all that is unusual: zsh **and ksh93** remove them and define `q`, so it splits two against four where a name holding a space splits it one against five. That is what says these rows measure the quoting rather than a wider set of name characters, since no set of characters can exclude `q`. This implementation removes the quotes in every dialect, which is right for two columns and wrong for three (#1561, #1566)",
+		Why:     "the sharpest control this group has and a *different* panel split from the rows above. The name is `q` — one nobody could object to — and the quotes are all that is unusual: zsh **and ksh93** remove them and define `q`, so it splits two against four where a name holding a space splits it one against five. That is what says these rows measure the quoting rather than a wider set of name characters, since no set of characters can exclude `q`. This implementation removes the quotes for zsh and for ksh, which is those two columns, and the three bash spellings keep refusing the word while *parsing* where those shells read the definition and complain about the name when it runs (#1566)",
 	},
 	{
 		ID: "cmd/function-posix-name-with-a-bare-equals", Category: "command language",

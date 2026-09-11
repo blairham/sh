@@ -119,6 +119,11 @@ func corpusGrammar() syntax.Dialect {
 	d.FuncDefAtParen = true
 	d.FunctionKeywordParens = true
 	d.FunctionKeywordNameIsAnyWord = true
+	// And the stage two dialects check such a name at. Two cases are keyword
+	// definitions whose name holds an expansion, and without this the
+	// grammar refuses them while reading where those shells read them and
+	// complain when the definition runs.
+	d.FunctionNameCheckedWhenTheDefinitionRuns = true
 	// And the `name()` spelling of the same rule. Four cases name a function
 	// with a space, an operator, nothing at all or quotes, and the core
 	// refuses every one of them at the parenthesis.

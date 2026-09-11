@@ -481,6 +481,11 @@ func (sh Shell) errf(format string, args ...any) {
 }
 
 func (sh Shell) withDefaults(argv []string) Shell {
+	// The axis sweep's hook, and the identity in every build but its own —
+	// see driver/axissweep_off.go. It is here because this is the one gate
+	// every route passes through, and because the front end reads the vector
+	// for questions that never reach interp's own hook.
+	sh.Semantics = axisMutate(sh.Semantics)
 	if sh.Stdin == nil {
 		sh.Stdin = os.Stdin
 	}

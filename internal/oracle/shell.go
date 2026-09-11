@@ -39,6 +39,19 @@ type Shell struct {
 	// be bash rather than relying on a default to happen to match.
 	Args []string
 
+	// Env is extra environment for this column, appended to the four fixed
+	// variables and before anything the case names, so a case that sets the
+	// same variable still wins as it does over the fixed four.
+	//
+	// Empty for every panel member, and it has to be: an environment a column
+	// carries is a difference between the columns, which is exactly what the
+	// record exists not to have. It is here for a column that is not a shell
+	// being measured but an instrument being pointed at one — the axis sweep
+	// (#2031) runs the corpus through a binary built to move one axis, and
+	// names the axis this way because the mutation has to reach a shell
+	// process the harness starts.
+	Env []string
+
 	// Why records what this panel member is here to represent.
 	Why string
 

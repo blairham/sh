@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# is-at-least [ needed [ present ] ]
+#
+# A greater-than-or-equal-to comparison of two version strings, where a
+# version is numbers and text in segments separated by dots or dashes.  Zero
+# when `present` is at least `needed`, one when it is not.  `present` defaults
+# to $ZSH_VERSION, which is what a startup file wants: `is-at-least 5.1 &&
+# setopt …`.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files.  docs/spec/functions.md records the run.
+#
+# The rule, in full:
+#
+#   * split both strings on `.` and `-`;
+#   * ignore every segment that is not wholly digits, which is what "leading
+#     non-number parts ignored" comes to — `2.6-beta3` and `2.6` compare
+#     equal, and `2.6-dev-3` is greater than `2.6` because the `3` is a
+#     segment of its own;
+#   * pair what is left left-to-right, and count a missing segment as zero,
+#     so `5.0.0` and `5.0` are equal while `5.0.1` is greater.
+#
+# Ignoring a mixed segment rather than reading a number out of it is the one
+# place a measurement had to settle a reading, and it is settled the way the
+# manual's sentence reads.  1600 pairs of real version strings — every zsh
+# release spelling from 2.6-17 to 6.0, with the `-beta3`, `-zefram1` and
+# `-dev-1` suffixes that appear in the wild — answer identically here and in
+# zsh 5.9.2.  A segment that mixes digits and letters (`1a`, `x2`) is where
+# the two part company, and the shell being measured is not self-consistent
+# there: measured, `abc` is at once no greater than `0` and greater than `1a`,
+# which is not an ordering to reproduce.
+
+emulate -L zsh
+
+local -a wanted have need present
+local segment
+
+wanted=( ${(s:.:)${${1-}//-/.}} )
+have=( ${(s:.:)${${2:-$ZSH_VERSION}//-/.}} )
+for segment in $wanted; do
+	[[ $segment == <-> ]] && need+=( $segment )
+done
+for segment in $have; do
+	[[ $segment == <-> ]] && present+=( $segment )
+done
+
+local index mine theirs
+for (( index = 1; index <= $#need; index++ )); do
+	mine=${need[index]}
+	theirs=0
+	(( index <= $#present )) && theirs=${present[index]}
+	(( mine > theirs )) && return 1
+	(( mine < theirs )) && return 0
+done
+return 0

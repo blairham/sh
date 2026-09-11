@@ -55,3 +55,61 @@ func TestNoNameMeansNoRegexRecord(t *testing.T) {
 		t.Errorf("got %q, want an ordinary absent variable", out)
 	}
 }
+
+// reporting runs with the second shape: what `=~` matched published through
+// the parameters a reporting *pattern* already fills, rather than through a
+// dense array of its own.
+func reporting(r *Runner) { r.SetRegexCaptureReport() }
+
+// The second shape, in full. `$MATCH` is the whole match and `$match` the
+// groups **alone**, so the first element of the array is the first group and
+// not the whole match — which is the difference from the record above, and
+// the reason the two are two rather than one under an option.
+//
+// The indices below count from the base this vector has, which is zero, and
+// the positions are counted with it: publishMatch reads Runner.arrayBase for
+// exactly that reason, so a vector that counts from one moves the elements
+// and the numbers together. No shell is named here; the base is the axis.
+func TestARegexMatchCanReportThroughTheReportingParameters(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"whole match and positions", `[[ abcd =~ b(c) ]]; echo "[$MATCH] $MBEGIN $MEND"`, "[bc] 1 2"},
+		{"groups alone, with their positions", `[[ abcd =~ b(c) ]]
+echo "[${match[0]}] ${mbegin[0]} ${mend[0]} n=${#match[@]}"`, "[c] 2 2 n=1"},
+		// Characters rather than bytes, which is what the reporting pattern
+		// already answers — the same arithmetic, so the same code.
+		{"characters, not bytes", `[[ aébc =~ b ]]; echo "$MBEGIN $MEND"`, "2 2"},
+		// A group that did not participate is an empty element at -1, so the
+		// group after it keeps its number.
+		{"an unmatched group keeps its place", `[[ abcd =~ b(x)?(c) ]]
+echo "n=${#match[@]} [${match[0]}|${match[1]}] ${mbegin[0]} ${mend[0]}"`, "n=2 [|c] -1 -1"},
+		// A pattern with no groups leaves the array alone rather than
+		// emptying it, which is the reporting pattern's silence rule: a
+		// surface nothing asked for is not written.
+		{"no groups leaves the array alone", `[[ ab =~ (a) ]]; [[ cd =~ c ]]
+echo "[$MATCH] [${match[0]}]"`, "[c] [a]"},
+		// And a **failed** match leaves all of them holding what the match
+		// before it put there. That is the opposite of the dense record
+		// above, and it is the half one implementation for both shapes would
+		// have got wrong.
+		{"failure changes nothing", `[[ ab =~ (a) ]]; [[ ab =~ zz ]]
+echo "st=$? [$MATCH] [${match[0]}] $MBEGIN"`, "st=1 [a] [a] 0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, reporting)
+			if strings.TrimSpace(out) != tc.want {
+				t.Errorf("got %q, want %q", strings.TrimSpace(out), tc.want)
+			}
+		})
+	}
+}
+
+// Unasked, nothing is written — so a vector without the reporting parameters
+// keeps a `$MATCH` a script put there for its own reasons.
+func TestWithoutTheReportARegexMatchWritesNothing(t *testing.T) {
+	out, _ := run(t, `MATCH=mine; match=(mine)
+[[ abcd =~ b(c) ]]
+echo "st=$? [$MATCH] [${match[0]}] [${MBEGIN-UNSET}]"`, nil)
+	if strings.TrimSpace(out) != "st=0 [mine] [mine] [UNSET]" {
+		t.Errorf("got %q, want the script's own values untouched", strings.TrimSpace(out))
+	}
+}

@@ -1,0 +1,128 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# colors
+#
+# Fill the associative arrays that map color names to ANSI terminal codes, and
+# codes back to names.  A prompt theme reads `$fg[red]` and `$reset_color`
+# rather than writing escapes out, which is the whole of why this exists.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files.  docs/spec/functions.md records the run.
+#
+# What is filled, measured on zsh 5.9.2:
+#
+#   color, colour     every name to its code and every code to a name.  Two
+#                     separate arrays holding the same pairs — writing to one
+#                     does not change the other.  The base names and the `fg-`
+#                     spellings map to the foreground codes, `bg-` to the
+#                     background ones, and the reverse direction answers the
+#                     base name for a foreground code and the `bg-` spelling
+#                     for a background one.  The fourteen attributes are in
+#                     there too, both ways.
+#   fg, bg            the eight base names, plus `default`, `gray` and `grey`,
+#   fg_bold, bg_bold  each to the escape that sets it.  The plain pair change
+#   fg_no_bold        the color and leave the intensity alone; the others set
+#   bg_no_bold        or clear bold as they go.
+#   reset_color       the escape that turns everything off, and the one that
+#   bold_color        turns bold on.
+#
+# Every array but `color` and `colour` is declared with the hiding attribute,
+# so `typeset -p fg` writes the name and not eleven escape sequences.  That is
+# measured rather than chosen: `${(t)fg}` is `association-hideval` in zsh
+# 5.9.2 and `${(t)color}` is plain `association`.
+#
+# The attribute set is this shell's own installation's, not the manual's: the
+# manual names `standout` and `no-standout` where 5.9.2 has `italic` and
+# `no-italic`, and what the binary answers is what a script will have been
+# written against.
+
+emulate -L zsh
+
+typeset -gA color colour
+typeset -gAH fg fg_bold fg_no_bold bg bg_bold bg_no_bold
+typeset -gH reset_color bold_color
+
+local escape=$'\e'
+local -a base attributes
+local name code index
+
+base=( black red green yellow blue magenta cyan white )
+attributes=(
+	00 none
+	01 bold
+	02 faint
+	03 italic
+	04 underline
+	05 blink
+	07 reverse
+	08 conceal
+	22 normal
+	23 no-italic
+	24 no-underline
+	25 no-blink
+	27 no-reverse
+	28 no-conceal
+)
+
+for (( index = 1; index < $#attributes; index += 2 )); do
+	color[${attributes[index]}]=${attributes[index+1]}
+	color[${attributes[index+1]}]=${attributes[index]}
+done
+
+for (( index = 1; index <= $#base; index++ )); do
+	name=${base[index]}
+
+	code=$(( 29 + index ))
+	color[$code]=$name
+	color[$name]=$code
+	color[fg-$name]=$code
+	fg[$name]="${escape}[${code}m"
+	fg_bold[$name]="${escape}[01;${code}m"
+	fg_no_bold[$name]="${escape}[22;${code}m"
+
+	code=$(( 39 + index ))
+	color[$code]=bg-$name
+	color[bg-$name]=$code
+	bg[$name]="${escape}[${code}m"
+	bg_bold[$name]="${escape}[01;${code}m"
+	bg_no_bold[$name]="${escape}[22;${code}m"
+done
+
+# `default` is the terminal's own foreground and background, and it is a name
+# in both directions like the eight above it.
+color[39]=default
+color[default]=39
+color[fg-default]=39
+fg[default]="${escape}[39m"
+fg_bold[default]="${escape}[01;39m"
+fg_no_bold[default]="${escape}[22;39m"
+
+color[49]=bg-default
+color[bg-default]=49
+bg[default]="${escape}[49m"
+bg_bold[default]="${escape}[01;49m"
+bg_no_bold[default]="${escape}[22;49m"
+
+# `gray` and `grey` are the two spellings of black, and they run one way only:
+# code 30 answers `black`, never either of them.
+for name in gray grey; do
+	color[$name]=30
+	color[fg-$name]=30
+	color[bg-$name]=40
+	fg[$name]="${escape}[30m"
+	fg_bold[$name]="${escape}[01;30m"
+	fg_no_bold[$name]="${escape}[22;30m"
+	bg[$name]="${escape}[40m"
+	bg_bold[$name]="${escape}[01;40m"
+	bg_no_bold[$name]="${escape}[22;40m"
+done
+
+for name in ${(k)color}; do
+	colour[$name]=${color[$name]}
+done
+
+reset_color="${escape}[00m"
+bold_color="${escape}[01m"
+
+return 0

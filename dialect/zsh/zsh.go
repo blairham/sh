@@ -2265,6 +2265,22 @@ func Apply(r *interp.Runner) {
 	// which is the name that would move it, remains recorded rather than
 	// acted on (see setopt.go).
 	r.SetMatchOption(interp.StarStarCrossesDirectories, true)
+	// What `=~` matched is readable here, and under the *same* parameters a
+	// reporting pattern fills rather than under a record of its own: `$MATCH`
+	// is the whole match, `$match` the groups alone, and `$MBEGIN`/`$MEND`
+	// with `$mbegin`/`$mend` where each began and ended. Measured 2026-09-11
+	// against zsh 5.9.2 with `[[ 'hello world' =~ 'o (w[a-z]+)d' ]]`:
+	// `MATCH=o world MBEGIN=5 MEND=11`, `match=(worl) mbegin=(7) mend=(10)`.
+	//
+	// A failing match leaves all of them alone — measured, a `zzz` that
+	// matches nothing still reads back the match before it — which is the
+	// reporting pattern's own rule and the opposite of the dense array the
+	// other shell keeps. See interp/regexmatch.go.
+	//
+	// It is what makes `regexp-replace` possible: a global search and replace
+	// in shell needs the *extent* of each match and not only that there was
+	// one, and this is the only thing that reports it (#1968).
+	r.SetRegexCaptureReport()
 	// $LINES and $COLUMNS follow the window here too, and — like `**/` above
 	// — with no option name to ask for it: this shell simply does it, so
 	// there is nothing in setopt.go for a script to turn off. Measured

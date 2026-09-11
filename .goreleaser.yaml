@@ -78,6 +78,13 @@ archives:
   - NOTICE
   - README.md
   - docs/install.md
+  # The autoloadable functions one dialect ships. They are data rather than
+  # code, so they are the same file on every platform, and they have to be in
+  # the archive at the path the shell will look for them under: the search is
+  # derived from where the binary sits, and `share/sh/functions` is the second
+  # of the two directories it names. A release without them is a shell whose
+  # `$fpath` points at nothing.
+  - share/sh/functions/*
 
 # macOS signing and notarization, matching the other repositories in this tree.
 # Gated on isEnvSet, so a release still succeeds unsigned while the secrets are
@@ -144,6 +151,12 @@ brews:
   license: Apache-2.0
   install: |
     libexec.install "sh", "bash", "zsh", "ksh", "dash"
+    # Not into libexec beside the binaries. The function search is
+    # `<prefix>/share/sh/site-functions` then `<prefix>/share/sh/functions`,
+    # and the prefix a binary in the keg's libexec derives is the keg — so
+    # this is the directory the shell will actually look in, and
+    # `share/sh/site-functions` is left for whatever a person installs later.
+    (share/"sh").install "share/sh/functions"
   caveats: |
     The binaries are named bash, zsh, ksh, dash and sh, so they are NOT linked
     into #{HOMEBREW_PREFIX}/bin — that would shadow the system shells for
@@ -163,6 +176,13 @@ brews:
   test: |
     assert_equal "hi", shell_output("#{libexec}/bash -c 'echo hi'").chomp
     assert_equal "hi", shell_output("#{libexec}/sh -c 'echo hi'").chomp
+    # The shipped functions are reachable from the default search, which is
+    # the half a missing `files:` entry above would break silently: the shell
+    # still starts, and every `autoload` in a real startup file fails at the
+    # call instead.
+    assert_equal "5.9", shell_output(
+      "#{libexec}/zsh -f -c 'autoload -Uz is-at-least; is-at-least 5.0 5.9 && echo 5.9'"
+    ).chomp
 
 release:
   draft: false

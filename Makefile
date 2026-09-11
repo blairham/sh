@@ -32,9 +32,29 @@ BINDIR := $(CURDIR)/build
 #
 # DESTDIR is the packaging convention and prefixes only the copy. The PATH
 # check asks about SHELLDIR, because a staged tree's contents end up there.
+#
+# FUNCDIR is the other half of an installation, and it is not under SHELLDIR.
+# One dialect searches a path of directories for function definition files,
+# and driver.functionSearchDirs derives that path from where the binary sits:
+# `$(PREFIX)/share/sh/site-functions` then `$(PREFIX)/share/sh/functions`. So
+# the shipped functions go in the second of those, and a package that wants to
+# override one drops its own into the first.
 PREFIX ?= /usr/local
 SHELLDIR ?= $(PREFIX)/libexec/sh
+FUNCDIR ?= $(PREFIX)/share/sh/functions
 SHELLS := sh bash zsh ksh dash
+
+# The autoloadable functions this shell ships, and the directory they are kept
+# in within the checkout. That directory is *also* where an uninstalled build
+# finds them: `build/zsh` derives its prefix as the checkout root, so
+# `share/sh/functions` is on `$fpath` for a binary that was never installed,
+# and `make check` exercises the files that would ship rather than a copy.
+#
+# The list is the directory rather than a list beside it, so a file added here
+# is installed and packaged without anybody remembering to say so twice. The
+# archive in .goreleaser.yaml takes the same directory as a glob.
+FUNCSRC := share/sh/functions
+FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
 .PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate install uninstall
 
@@ -115,14 +135,20 @@ install: ## Build the five shells and install them into $(SHELLDIR) — see docs
 	@for s in $(SHELLS); do go build -trimpath -o $(BINDIR)/staged/$$s ./cmd/$$s || exit 1; done
 	@install -d "$(DESTDIR)$(SHELLDIR)"
 	@for s in $(SHELLS); do install -m 0755 $(BINDIR)/staged/$$s "$(DESTDIR)$(SHELLDIR)/$$s" || exit 1; done
+	@install -d "$(DESTDIR)$(FUNCDIR)"
+	@for f in $(FUNCS); do install -m 0644 $(FUNCSRC)/$$f "$(DESTDIR)$(FUNCDIR)/$$f" || exit 1; done
 	@echo "installed into $(DESTDIR)$(SHELLDIR): $(SHELLS)"
+	@echo "installed into $(DESTDIR)$(FUNCDIR): $(FUNCS)"
 	@echo "run one:      $(SHELLDIR)/bash -i"
 	@echo "login shell:  docs/install.md — /etc/shells and chsh, and what a session does not read yet"
 
-uninstall: ## Remove the shells `make install` put in $(SHELLDIR)
+uninstall: ## Remove the shells and functions `make install` put in $(SHELLDIR) and $(FUNCDIR)
 	@for s in $(SHELLS); do rm -f "$(DESTDIR)$(SHELLDIR)/$$s"; done
 	@rmdir "$(DESTDIR)$(SHELLDIR)" 2>/dev/null || true
+	@for f in $(FUNCS); do rm -f "$(DESTDIR)$(FUNCDIR)/$$f"; done
+	@rmdir "$(DESTDIR)$(FUNCDIR)" 2>/dev/null || true
 	@echo "removed $(SHELLS) from $(DESTDIR)$(SHELLDIR)"
+	@echo "removed $(FUNCS) from $(DESTDIR)$(FUNCDIR)"
 	@echo "if this was your login shell, change it back first — chsh -s /bin/zsh — and drop the line from /etc/shells"
 
 corpus-guard: ## Fail if the corpus has lost a case since the merge base with main

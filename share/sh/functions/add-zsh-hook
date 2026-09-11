@@ -1,0 +1,118 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# add-zsh-hook [ -L | -dD ] [ -Uzk ] hook function
+#
+# Add or remove a function from the array a special function reads.  `precmd`
+# and its fellows each have a `<hook>_functions` array, and this is the way a
+# plugin puts a name in one without knowing what is already there.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files.  docs/spec/functions.md records the run.
+#
+# Measured, and each line is a case a real startup reaches:
+#
+#   * a name already in the array is not added twice;
+#   * `-d` removes by exact name and `-D` reads the name as a pattern;
+#   * removing the last element **unsets** the array rather than leaving an
+#     empty one, so `${+precmd_functions}` is 0 afterwards;
+#   * removing a name that is not there is 0 and silent, as is removing from
+#     a hook nothing has ever set;
+#   * `-U`, `-z` and `-k` are handed to `autoload`, and the name is autoloaded
+#     whether or not any of them was given — so a hook can be declared before
+#     the file that defines it is read;
+#   * an unknown hook, no operands, or more than two is the usage on standard
+#     error and status 1;
+#   * `-L` writes each hook array back as a `typeset`, takes an optional hook
+#     to list, and is 0 and silent for a hook that is unset or unknown.
+#
+# `-L` with no hook lists in the order below.  Real zsh lists in the order its
+# own parameter table happens to hold them, which is neither this order, nor
+# alphabetical, nor the order the hooks were added; there is nothing there to
+# match.  What it writes is one `typeset -p` per hook, so it carries that
+# builtin's spelling — including the missing `-g` of #2041.
+#
+# `-k` is handed straight through, and this shell's `autoload` names it as not
+# implemented.  The complaint is the shell's and it is correct; taking the
+# letter and dropping it would read as a shell that had it.
+
+emulate -L zsh
+
+local -a hooktypes
+hooktypes=( chpwd precmd preexec periodic zshaddhistory zshexit zsh_directory_name )
+
+local usage="Usage: add-zsh-hook hook function
+Valid hooks are:
+  $hooktypes"
+
+local option
+local -a autoloadopts
+integer remove=0 listing=0
+
+while getopts "dDLUzk" option; do
+	case $option in
+	(d) remove=1 ;;
+	(D) remove=2 ;;
+	(L) listing=1 ;;
+	(U|z|k) autoloadopts+=( -$option ) ;;
+	(*) return 1 ;;
+	esac
+done
+shift $(( OPTIND - 1 ))
+
+if (( listing )); then
+	local -a wanted
+	if [[ -n $1 ]]; then
+		wanted=( $1 )
+	else
+		wanted=( $hooktypes )
+	fi
+	local name
+	for name in $wanted; do
+		typeset -p ${name}_functions 2>/dev/null
+	done
+	return 0
+fi
+
+if (( $# != 2 )); then
+	print -u2 -r -- $usage
+	return 1
+fi
+
+local hook=$1 fn=$2 known= candidate
+for candidate in $hooktypes; do
+	[[ $candidate == $hook ]] && known=yes
+done
+if [[ -z $known ]]; then
+	print -u2 -r -- $usage
+	return 1
+fi
+
+local array=${hook}_functions
+local -a current kept
+local entry
+current=( ${(P)array} )
+
+if (( remove )); then
+	for entry in $current; do
+		if (( remove == 1 )); then
+			[[ $entry == $fn ]] && continue
+		else
+			[[ $entry == ${~fn} ]] && continue
+		fi
+		kept+=( $entry )
+	done
+	if (( $#kept )); then
+		eval "typeset -ga $array; $array=( \"\${(@)kept}\" )"
+	else
+		unset $array
+	fi
+	return 0
+fi
+
+for entry in $current; do
+	[[ $entry == $fn ]] && return 0
+done
+autoload $autoloadopts -- $fn
+eval "typeset -ga $array; $array+=( \"\$fn\" )"
+return 0

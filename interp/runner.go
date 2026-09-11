@@ -1573,6 +1573,10 @@ type Runner struct {
 	// regexMatchName is what the dialect calls the record of what the last
 	// `=~` captured. With no name, nothing is recorded — see regexmatch.go.
 	regexMatchName string
+	// regexCaptureReport is whether a `=~` also reports what it matched
+	// through the parameters a reporting pattern fills. Off unless a dialect
+	// asks — see regexmatch.go.
+	regexCaptureReport bool
 	// shellOptsName is what the dialect calls the variable holding the long
 	// names of the options that are on. With no name there is no such
 	// variable and nothing is seeded from the environment — see shellopts.go.

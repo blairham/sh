@@ -455,18 +455,16 @@ func (r *Runner) writePlace(p arithPlace, v arithNum) error {
 		r.setAssocElem(p.name, p.sub, text)
 		return nil
 	}
-	if p.index == nil {
-		// A key that is not an expression, on a name that is not an
-		// association: the same refusal reading one earns, and refused rather
-		// than written, which is what bash 5.3 and zsh 5.9.2 both do —
-		// `(( a[.foo] = 9 ))` on an indexed array complains and leaves every
-		// element as it was.
-		_, err := r.arithSubscriptIndex(&syntax.ArithIndex{Name: p.name, Sub: p.sub})
-		if err != nil {
-			return err
-		}
-	}
-	idx, err := r.evalNum(p.index)
+	// Through the same reader the element is read by, so a text that is no
+	// expression is refused here as it is there — refused rather than
+	// written, which is what bash 5.3 and zsh 5.9.2 both do: `(( a[.k] = 9 ))`
+	// on an indexed array complains and leaves every element as it was. One
+	// call rather than a guard and an evaluation, so the number a subscript
+	// counts from cannot be worked out one way for the read and another for
+	// the write.
+	idx, err := r.arithSubscriptIndex(&syntax.ArithIndex{
+		Name: p.name, Index: p.index, Sub: p.sub, Empty: p.empty,
+	})
 	if err != nil {
 		return err
 	}

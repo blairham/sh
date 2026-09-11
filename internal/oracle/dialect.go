@@ -89,9 +89,21 @@ func Dialect() syntax.Dialect {
 	d.FunctionNameIsAnyWord = true
 	// `[[ x == @(a|b) ]]` — extended patterns where a condition reads them.
 	d.ExtendedPatternInCondition = true
-	// One case records `f() echo hi` as a syntax error, which only a
-	// grammar that insists on a compound body can reproduce.
-	d.FuncBodyMustBeCompound = true
+	// FuncBodyMustBeCompound is deliberately **off**, where it was on to let
+	// `f() echo hi` be recorded as a syntax error. It stopped being a
+	// narrowing of one production when the keyword form began reading it too
+	// (#1833), and the corpus has a case — `function a; echo B` — whose body
+	// is a simple command and which every grammar here has to read. The two
+	// cannot both hold, and the rule this file follows everywhere else
+	// decides it: the grammar that has to *read* every case is the one that
+	// takes the construct. The rows are still graded, by the panel's answers,
+	// which is where a refusal is a fact rather than a flag.
+	//
+	// Four cases stopped being marked SyntaxError with it — `f() echo hi`,
+	// `f() x=1`, `f() >out` and `f() echo hi >out`. That mark says only "this
+	// grammar rejects it", so what it cost is a skipped parse and what it
+	// bought back is a grammar that reads every keyword case.
+	//
 	// `coproc NAME { …; }` — the cases that pin where a name may be written,
 	// which needs both flags: the word, and the name a dialect may put after
 	// it. One dialect has the first and not the second, and the corpus

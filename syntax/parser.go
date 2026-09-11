@@ -2387,8 +2387,33 @@ func (p *Parser) parseFuncKeyword() Command {
 			return fn
 		}
 		p.failUnexpectedAt(body, "", false)
+		return fn
+	}
+	if !p.funcKeywordBodyIsTakenHere(fn.Body) {
+		p.failUnexpectedAt(body, "", false)
 	}
 	return fn
+}
+
+// funcKeywordBodyIsTakenHere reports whether the command read after the
+// `function` keyword may stand as a body in this dialect.
+//
+// The question is the body's *shape* and it is asked here rather than in
+// [Parser.parseFuncParensAndBody] because the two spellings of a definition
+// are not one rule: the shell that wants a compound body after the keyword
+// wants one after the parentheses too, and the shell that wants a brace group
+// after the keyword takes a bare simple command after the parentheses. See
+// [Dialect.FunctionKeywordBodyMustBeBraceGroup].
+func (p *Parser) funcKeywordBodyIsTakenHere(body Command) bool {
+	if p.dialect.FunctionKeywordBodyMustBeBraceGroup {
+		_, isGroup := body.(*Group)
+		return isGroup
+	}
+	if p.dialect.FuncBodyMustBeCompound {
+		_, isSimple := body.(*SimpleCmd)
+		return !isSimple
+	}
+	return true
 }
 
 func (p *Parser) parseSubshell() Command {

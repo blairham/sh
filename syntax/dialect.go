@@ -579,10 +579,41 @@ type Dialect struct {
 
 	// FuncBodyMustBeCompound refuses `f() echo hi`: bash alone wants a
 	// compound command after the parens, where dash, ksh93 and zsh take a
-	// simple command as a one-command body and run it. The keyword form is
-	// not this flag's question — its shapes differ per shell in ways the
-	// POSIX form's do not.
+	// simple command as a one-command body and run it.
+	//
+	// The `function` keyword's body is held to the same rule where the
+	// dialect has both — measured 2026-09-11 over a file holding `function a`
+	// and `echo B`, bash 5.3.15, bash 3.2.57 and bash-as-sh all answer
+	// ``syntax error near unexpected token `echo' `` at status 2, which is
+	// the sentence and the status the parenthesized form gets from them. It
+	// is not the whole of the keyword form's question, though, because the
+	// shell that originated the keyword is stricter still: see
+	// [Dialect.FunctionKeywordBodyMustBeBraceGroup].
 	FuncBodyMustBeCompound bool
+
+	// FunctionKeywordBodyMustBeBraceGroup refuses every body after the
+	// `function` keyword but a brace group — ksh93's rule, and narrower than
+	// [Dialect.FuncBodyMustBeCompound] rather than a spelling of it: a
+	// compound command is enough for the dialect that wants one, and this one
+	// wants the braces.
+	//
+	// Measured 2026-09-11 over a file holding `function a`, the body, and a
+	// call, ksh93u+ against the three bash columns:
+	//
+	//	body            bash              ksh93
+	//	echo B          at `echo', st 2   at `echo', st 3
+	//	(( 1 ))         runs              at `((', st 3
+	//	( echo B )      runs              at `(', st 3
+	//	for … done      runs              at `for', st 3
+	//	{ echo B; }     runs              runs
+	//
+	// It is the keyword's question alone. The same shell takes `f() echo hi`
+	// through the parenthesized form and refuses only what that body
+	// redirects, which is [Dialect.FuncBodyTakesNoRedirection] — so the two
+	// spellings of a definition are not one rule there, and a flag that tried
+	// to be both would have to pick one of the two answers and be wrong about
+	// the other.
+	FunctionKeywordBodyMustBeBraceGroup bool
 
 	// FuncBodyTakesNoRedirection refuses a redirection in a function body
 	// that is not compound: ksh93 takes `f() echo hi` and refuses `f() >out`,

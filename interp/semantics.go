@@ -208,6 +208,13 @@ type Semantics struct {
 	// source is expanded. The same rule decides whether `[[ abc == $p ]]`
 	// treats $p as a pattern, which is one behavior observed twice rather
 	// than two quirks.
+	//
+	// It is the one axis in this vector with a *run-time* name over it: the
+	// shell that answers `No` gives a script `setopt globsubst` to say
+	// otherwise, so the dialect moves this answer rather than carrying a bit
+	// of its own. The per-expansion spelling `${~spec}` overrides it for one
+	// expansion and is not an option — see interp/tildeflag.go, where the two
+	// meet.
 	GlobExpansionResults Answer
 	// GlobNoMatchIsError makes a pattern matching nothing an error instead of
 	// passing it through. True only in zsh.

@@ -611,6 +611,39 @@ answer the shell itself gives: `echo *(qqq)` is
 `unknown file attribute: q`. A space is such a character, and that is
 what makes the next part visible.
 
+**The whole reading is behind an option**, `BARE_GLOB_QUAL`, on by
+default. With it off a trailing group is pattern text again and nothing
+about the *word* changes — it is still one word and still a group.
+Measured on zsh 5.9.2, 2026-09-10, in a directory holding `AGENTS.md`,
+`CLA.md`, `xN` and `xy`:
+
+| written | `BARE_GLOB_QUAL` | `NO_BARE_GLOB_QUAL` |
+| --- | --- | --- |
+| `echo *.md(N)` | `AGENTS.md CLA.md` | `no matches found: *.md(N)`, 1 |
+| `echo x(N)` | nothing — no file `x` | `xN` |
+| `echo x(N\|y)` | `xN xy` — an alternation either way | `xN xy` |
+| `echo *(#q.)` | the regular files | the regular files |
+| `[[ xN == x(N) ]]` | true | true |
+
+Three things to read out of it. The `(#q…)` spelling is **not** gated,
+which is what it is for — it is the list wearing a spelling that works
+where the bare one has been turned off. A condition is unaffected,
+because pathname expansion is the only place a qualifier list is read at
+all. And `NO_EXTENDED_GLOB` does not turn it off: `echo *.md(N)` with
+only that name unset still expands the qualifier, so the two options in
+the agent preamble
+`{ shopt -u extglob || setopt NO_EXTENDED_GLOB NO_BARE_GLOB_QUAL; }`
+are two separate questions and only this one decides the qualifier.
+
+That preamble is why the option is not a corner a script has to opt
+into: it runs in front of **every** command an agent harness issues, so
+the off state is the state every such command is expanded in. Being more
+permissive than asked is the wrong direction there — the tool turns the
+reading off precisely so a generated pattern cannot be reinterpreted
+(#1729). The core holds it as `interp.TrailingGroupIsPartOfThePattern`,
+named for the state the name turns *off*, because a `MatchOption` starts
+at zero and the qualifier reading is the default.
+
 ### The parser has to say which position it is
 
     echo MY ( x )      two words: `MY` and `( x )`

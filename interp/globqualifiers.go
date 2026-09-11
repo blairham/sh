@@ -367,6 +367,28 @@ func (r *Runner) fieldQualifiers(field string) (pattern string, q globQualifiers
 		// file attribute that was never in the pattern.
 		return field, globQualifiers{}, false, true
 	}
+	if !strings.HasPrefix(list, "#q") && r.MatchOption(TrailingGroupIsPartOfThePattern) {
+		// The bare reading turned off: the parentheses are pattern text
+		// again, so the field goes to the matcher whole and a `(N)` matches
+		// the letter rather than emptying a miss. Measured — `echo *.md(N)`
+		// under `NO_BARE_GLOB_QUAL` is `no matches found: *.md(N)`, which is
+		// the ordinary answer for a pattern that matched nothing in a shell
+		// that treats a miss as an error.
+		//
+		// Before the `#q` spelling rather than after it, and reading the
+		// prefix rather than the flag, because that spelling is the one the
+		// option does not reach: `*(#q.)` still qualifies with the bare
+		// reading off, measured in the same run.
+		//
+		// It matters beyond a script that opts in. The preamble an agent
+		// harness puts in front of **every** command it runs is
+		// `{ shopt -u extglob || setopt NO_EXTENDED_GLOB NO_BARE_GLOB_QUAL; }`,
+		// so this is the state every command under one runs in, and reading
+		// a qualifier there is being more permissive than the tool asked for
+		// — which it asked precisely so a generated pattern could not be
+		// reinterpreted (#1729).
+		return field, globQualifiers{}, false, true
+	}
 	if after, cut := strings.CutPrefix(list, "#q"); cut {
 		// `(#q…)` is the same list wearing the extended flag group's
 		// spelling, and it is the only spelling that works where the bare

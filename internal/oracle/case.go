@@ -11351,6 +11351,17 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the same answer this shell already gives for a `*` arriving from a variable, asked of the closure: the characters of an expansion's result are not read as operators, so it is live-miss then lit-hit. Counting `#` as a metacharacter is what routes the question to the axis that says so, and a matcher that skipped the axis for it would answer live-hit",
 	},
 	{
+		ID: "pat/the-option-that-makes-a-result-a-pattern", Category: "pattern matching",
+		Snippet: `setopt globsubst 2>/dev/null; u='a*b'; [[ axb == $u ]] && echo cond-hit || echo cond-miss; case axb in ($u) echo case-hit;; (*) echo case-miss;; esac; w=axbtail; echo "[${w#$u}]"`,
+		Why:     "the option half of the question `${~spec}` asks per expansion. Five of the panel match the result of an expansion already and answer hit, hit, `[tail]` with the `setopt` doing nothing; the sixth answers the same *because of* it, and answers miss, miss, `[axbtail]` without it. Three surfaces in one row on purpose — a condition, a `case` arm and a trim — because the option is one switch over every path that takes a pattern operand, and reading it on only one of them is how it went unnoticed that nothing read it at all (#1734)",
+	},
+	{
+		ID: "pat/a-trailing-group-when-the-qualifier-reading-is-off", Category: "pattern matching",
+		SyntaxError: true,
+		Snippet:     `mkdir -p q && cd q && : > xN && : > xy && setopt NO_BARE_GLOB_QUAL 2>/dev/null; echo x(N) 2>&1; echo "st=$?"`,
+		Why:         "whether a trailing parenthesized group on a pattern is a glob qualifier list, and what turning that reading *off* leaves. One shell reads a list there and has an option for it: with the option off `x(N)` is an ordinary pattern and lists `xN`, and with it on the `(N)` is the qualifier that empties a miss, so nothing is listed. The other five cannot parse a bare group after a word at all — three wordings of `syntax error near unexpected token` and three different statuses — which is the other half of the same fact and is why the construct reaches the parser rather than only the matcher. The off state matters beyond a script that opts in: the preamble an agent harness puts in front of every command it runs sets `NO_BARE_GLOB_QUAL`, so it is the state every command under one is expanded in (#1729)",
+	},
+	{
 		ID: "exec/lines-run-as-they-are-read", Category: "command language", SyntaxError: true,
 		Script:  true,
 		Snippet: "echo one\n{ fi; }\necho three\n",

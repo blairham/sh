@@ -2461,9 +2461,11 @@ a `spec` with no tilde at all consults the option. The same table holds for
 the tilde half: `${t}` is `~/zz` with the option off and `HOME/zz` with it
 on, while `${~t}` is `HOME/zz` and `${~~t}` is `~/zz` regardless.
 
-`GLOB_SUBST` itself is recorded-and-inert in this implementation, so the
-zero-tilde row is the dialect's `GlobExpansionResults` answer and nothing
-else reaches it yet.
+`GLOB_SUBST` moves `GlobExpansionResults` since #1734, so the zero-tilde row
+follows the option as well as the dialect. That is the whole of the fix and
+the reason it is one line: the option and the flag were always the same
+question, and the flag was already an override of that axis — what was
+missing was anything moving the axis itself.
 
 ### Where the tilde may be written
 
@@ -2873,9 +2875,9 @@ read.
 
 ### What this implementation does not match
 
-- `GLOB_SUBST` is recorded-and-inert, so `setopt globsubst; ${=g}` splits
-  but does not then match — which the tilde flag's section already records
-  for its own half.
+- Nothing here. `GLOB_SUBST` was recorded-and-inert, so
+  `setopt globsubst; ${=g}` split and did not then match; it moves the axis
+  now (#1734) and both halves follow.
 
 ## A caret at the front: `${^spec}` — zsh only
 
@@ -3063,8 +3065,9 @@ unflagged reading beside it because the two field counts agree),
 ### What this implementation does not match
 
 - `RC_EXPAND_PARAM` is recorded-and-inert, so `setopt rcexpandparam` does not
-  make an unflagged expansion distributive — the same gap `GLOB_SUBST` has
-  behind `${~spec}`, and the flag is what the wild code writes.
+  make an unflagged expansion distributive. `GLOB_SUBST` had the same gap
+  behind `${~spec}` until #1734 and no longer does; the flag is what the wild
+  code writes either way.
 - A redirection target is one target here. zsh's `MULTIOS` opens one file per
   field, so `: > p_${^a}` creates a file per element there; this shell has no
   `MULTIOS`, and the divergence is that option's rather than this flag's.

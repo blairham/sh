@@ -140,6 +140,25 @@ type Fixture struct {
 	// and the row grades inert — safe, because inert is not a pass, but it
 	// hides the route rather than testing it.
 	Sock string
+	// Carved is a file *inside* the workspace that the denied policy names in
+	// a deny rule of its own, and the spelling routes are the only ones that
+	// use it.
+	//
+	// Every other route here aims outside the workspace, so the denied policy
+	// refuses it with `default deny` and one allow. That shape cannot see
+	// #2044: a respelled path outside the workspace is refused because it is
+	// outside, whatever the rule did, so a sweep built only from it stays
+	// green while the fold is missing. The carve-out — allow the workspace,
+	// deny one file in it — is the shape an agent sandbox is actually given,
+	// and it is the shape in which a name the deny fails to cover lands on
+	// the allow beside it.
+	Carved string
+	// CarvedUpper and CarvedDirUpper are the same file under the other names
+	// the volume answers to: the leaf respelled, and a directory component
+	// respelled. Two entries rather than one because a fold that reached only
+	// the last component would close the demonstration and not the hole.
+	CarvedUpper    string
+	CarvedDirUpper string
 }
 
 // SecretMark is what a read route is looking for. Distinctive enough that a
@@ -312,6 +331,16 @@ func newFixture(root string, n int) (Fixture, error) {
 	if err := os.WriteFile(f.Victim, []byte("victim\n"), 0o600); err != nil {
 		return f, err
 	}
+	carvedDir := filepath.Join(f.Ws, "carved")
+	if err := os.MkdirAll(carvedDir, 0o755); err != nil {
+		return f, err
+	}
+	f.Carved = filepath.Join(carvedDir, "secret.txt")
+	f.CarvedUpper = filepath.Join(carvedDir, "SECRET.TXT")
+	f.CarvedDirUpper = filepath.Join(f.Ws, "CARVED", "secret.txt")
+	if err := os.WriteFile(f.Carved, []byte(SecretMark+"\n"), 0o600); err != nil {
+		return f, err
+	}
 	f.Link = filepath.Join(f.Ws, "out")
 	if err := os.Symlink(f.Root, f.Link); err != nil {
 		return f, err
@@ -333,7 +362,15 @@ func policy(f Fixture, mode Mode) (string, error) {
 	case Ungated:
 		return "", nil
 	case Denied:
-		lines = []string{"version 1", "default deny", "allow path " + f.Ws + "/**"}
+		// The carve-out is what makes the spelling routes mean anything; see
+		// Fixture.Carved. It is written with the name the file actually has,
+		// so a route reaching it by another spelling is reaching past a rule
+		// rather than past the absence of one.
+		lines = []string{
+			"version 1", "default deny",
+			"allow path " + f.Ws + "/**",
+			"deny path " + f.Carved,
+		}
 	case Allowed:
 		lines = []string{"version 1", "default deny", "allow path /**", "allow signal"}
 	}

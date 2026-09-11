@@ -310,9 +310,17 @@ func (p *Policy) defaultFor(sl slot) bool {
 }
 
 // matches reports whether a path is one this rule speaks about, under either of
-// the names the platform has for it.
+// the names the platform has for it — and, for a deny, under any case the
+// filesystem would answer to as well. foldMatch states why that widening is
+// safe on a deny and unsafe on an allow.
 func (r Rule) matches(path string) bool {
-	return match(r.Pattern, path) || (r.Alias != "" && match(r.Alias, path))
+	if match(r.Pattern, path) || (r.Alias != "" && match(r.Alias, path)) {
+		return true
+	}
+	if r.Decision != interp.Deny {
+		return false
+	}
+	return foldMatch(r.Pattern, path) || (r.Alias != "" && foldMatch(r.Alias, path))
 }
 
 // Normalized is the rules that gained a second name when they were parsed, for

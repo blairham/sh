@@ -780,3 +780,51 @@ func TestElicitationIsClaimedOnlyWhenItCanBeServed(t *testing.T) {
 		})
 	}
 }
+
+// The two refusals differ on purpose, and this pins the difference so that the
+// next person to notice it corrects the reasoning rather than the behaviour.
+//
+// A refused read answers absence: it hides whether the file *exists*, which is
+// a fact about the disk. A refused write says permission denied: it reveals
+// only that a rule stands there, which is a fact about the policy and one the
+// agent learns anyway from the failure. Making them match in either direction
+// is a change of behaviour and wants an argument, not a tidy-up (#1798).
+func TestAReadHidesAndAWriteDoesNot(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "secret.txt")
+	if err := os.WriteFile(path, []byte("classified\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	seen := gateOf(t, "deny read "+dir+"/**\ndeny write "+dir+"/**\n")
+	c := &acp.Client{
+		Info:     acp.Implementation{Name: "test-client", Version: "1"},
+		Files:    true,
+		Boundary: boundary.Boundary{Gate: seen, Events: seen},
+	}
+	fake := &agentSide{}
+	against(t, c, fake)
+
+	var read acp.ReadTextFileResponse
+	err := fake.conn.Call(t.Context(), acp.MethodReadTextFile,
+		acp.ReadTextFileRequest{SessionID: "s1", Path: path}, &read)
+	if err == nil {
+		t.Fatalf("the denied read succeeded: %q", read.Content)
+	}
+	if !strings.Contains(err.Error(), "no such file or directory") {
+		t.Errorf("read refusal = %v, want it to hide that the file is there", err)
+	}
+	if strings.Contains(err.Error(), "classified") {
+		t.Errorf("the read refusal leaked the content: %v", err)
+	}
+
+	var wrote acp.WriteTextFileResponse
+	err = fake.conn.Call(t.Context(), acp.MethodWriteTextFile,
+		acp.WriteTextFileRequest{SessionID: "s1", Path: path, Content: "x"}, &wrote)
+	if err == nil {
+		t.Fatal("the denied write succeeded")
+	}
+	if !strings.Contains(err.Error(), "permission denied") {
+		t.Errorf("write refusal = %v, want it to say the rule plainly", err)
+	}
+}

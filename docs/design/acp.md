@@ -485,6 +485,36 @@ unchanged: `internal/boundary` already exists for exactly this — a front
 end asking the interpreter's gate about the front end's own accesses —
 and this is a fourth caller of it rather than a new mechanism.
 
+**The two file refusals are worded differently, on purpose.** A refused
+`fs/read_text_file` answers *no such file or directory*; a refused
+`fs/write_text_file` answers *permission denied*. The read hides whether
+the file **exists**, which is a fact about the disk the agent would not
+otherwise have, and it hides it for a resolved symlink too so that a
+hidden directory cannot be mapped one link at a time. A refused write
+reveals only that a rule stands there, which is a fact about the policy
+and one the agent learns anyway from the failure — and *no such file* is
+a strange answer to a write, where not existing yet is the normal case.
+
+Two things about that property are worth stating where the property is,
+because the code used to imply both and neither is true (#1798):
+
+- **It is not what the rest of the shell does.** Every other route says a
+  denied open was refused — `open: refused: <path>`, and `.` says
+  `Refused`. This one handler answers absence, and that is a considered
+  difference rather than the house style.
+- **It holds only while a client withholds `terminal/*`.** Measured
+  2026-09-10 with `-deny read:<path>` and terminals served: the agent is
+  told *no such file* by `fs/read_text_file`, then asks us to run `cat
+  <path>` and is handed the contents. The child does its own opening, and
+  an allowed `exec` is outside the boundary once it has started. So the
+  hiding protects a `Files: true, Terminals: false` client — a real
+  configuration — and protects nothing in the one `-acp-connect` builds.
+
+Which is the same sentence as the `tee` result under `terminal/*`, from
+the other end: **a file rule is only as strong as the exec rule beside
+it.** A reader who takes `-deny read` to mean the agent cannot obtain the
+file has read more into it than it says, in the default configuration.
+
 `session/request_permission` from the agent is the case where the gate
 is *not* the whole answer: the agent is asking about something it will
 do itself, in its own process, which our boundary does not cover. We

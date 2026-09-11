@@ -4357,22 +4357,22 @@ echo "st=$?"`,
 	{
 		ID: "arithmetic/a-key-that-is-no-expression", Category: "expansion",
 		Snippet: `typeset -A m; m[.k]=5; echo $(( m[.k] )); echo after`,
-		Why:     "an associative subscript is a key and not an expression, so a key that would not read as one is still the element. bash 5.3 and zsh answer 5; the two that have no attribute to declare never get that far. Ours refused it while parsing, before anything could ask what kind of name the brackets followed — which is the whole difficulty, since the name need not exist yet. `after` is printed so the row records whether the input unit was abandoned rather than only that a line went to standard error (#1875)",
+		Why:     "an associative subscript is a key and not an expression, so a key that would not read as one is still the element. All three columns with the attribute answer 5 — bash 5.3 under both its names, ksh93 and zsh — and the two without it never reach the expression: dash has no `typeset` and bash 3.2 no `-A`. Ours refused it while parsing, before anything could ask what kind of name the brackets followed, which is the whole difficulty: the name need not be declared when the subscript is read. `after` is printed so the row records whether the input unit was abandoned rather than only that a line went to standard error (#1875)",
 	},
 	{
 		ID: "arithmetic/a-key-that-is-no-expression-and-absent", Category: "expansion",
 		Snippet: `typeset -A m; echo $(( m[.k] )); echo after`,
-		Why:     "the same key with nothing stored under it, which is the row the plugin actually runs: an absent key is zero and not a complaint, in both shells that declare the attribute. It is the half a fix could get wrong in the other direction — answering zero for every unreadable subscript would pass here and swallow the refusal the row below keeps",
+		Why:     "the same key with nothing stored under it, which is the row the plugin actually runs: an absent key is zero and not a complaint, in all three columns that declare the attribute. It is the half a fix could get wrong in the other direction — answering zero for every unreadable subscript would pass here and swallow the refusals the row below keeps",
 	},
 	{
 		ID: "arithmetic/a-subscript-that-is-no-expression-on-an-indexed-name", Category: "expansion",
 		Snippet: `a=(1 2 3); echo $(( a[.k] )); echo after`,
-		Why:     "the same text where the name is an indexed array, which is where the subscript really is an expression: bash 5.3 and zsh both refuse it and word it differently — an operand expected against a named error token, and a bad floating point constant — so this is two refusals and not one, and a reading that took every unreadable subscript as a key would lose both. The pair with the row above is what says the answer depends on the name's attribute rather than on the text",
+		Why:     "the same text where the name is an indexed array, which is where the subscript really is an expression. Every column that reaches it refuses, and no two of the three agree on what to say: bash names an operand and the error token, ksh93 calls `.k` a parameter that is not set, and zsh a bad floating point constant. So this is three refusals rather than one, and a reading that took every unreadable subscript as a key would lose all of them. The pair with the row above is what says the answer depends on the name's attribute and not on the text",
 	},
 	{
 		ID: "arithmetic/a-key-that-is-no-expression-as-an-assignment-target", Category: "expansion",
 		Snippet: `typeset -A m; (( m[.k] = 3 )); echo "[${m[.k]}]"; echo after`,
-		Why:     "the write through such a key, which is not the same question as the read: with no expression to evaluate the target carries only text, and a store that decides by asking whether there is an index writes the *name* and leaves the element alone — a wrong answer with nothing printed. The element is echoed rather than the status, because that is the only thing that can tell the two stores apart",
+		Why:     "the write through such a key, which is not the same question as the read: with no expression to evaluate the target carries only text, and a store that decides by asking whether there is an index writes the *name* and leaves the element alone — a wrong answer with nothing printed. All three columns with the attribute store 3 under the key. The element is echoed rather than the status, because that is the only thing that can tell the two stores apart",
 	},
 	{
 		ID: "arithmetic/a-key-arriving-from-a-parameter", Category: "expansion",

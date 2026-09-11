@@ -204,10 +204,8 @@ func TestTheTerminalLoopScrubsWhatIsTyped(t *testing.T) {
 	// terminal back in its own line discipline to run a line and takes it
 	// into raw mode afterwards, and the kernel drops what is queued but
 	// unread across that change, so a ^D sent any earlier is simply gone and
-	// the session never ends. The next prompt is drawn after raw mode is
-	// restored and immediately before the read, which makes it the mark to
-	// wait on rather than a duration to guess at.
-	waitFor(t, out, "$ ", "the prompt after the line ran")
+	// the session never ends.
+	waitUntilReading(t, out, control)
 	if _, err := control.WriteString("\x04"); err != nil {
 		t.Fatal(err)
 	}
@@ -226,6 +224,111 @@ func TestTheTerminalLoopScrubsWhatIsTyped(t *testing.T) {
 	}
 	if strings.Contains(string(raw), fakeKeyID) {
 		t.Errorf("the credential reached the history file:\n%s", raw)
+	}
+}
+
+// waitUntilReading blocks until the shell has the terminal in raw mode and is
+// reading from it, and it is the mark a test writes a ^D after.
+//
+// **Waiting for the next prompt is not that mark**, which is what this was
+// before and is #1641: the editor draws the whole line — prompt included —
+// every time it draws at all, so a wait for the prompt text is answered by the
+// redraw of the line that was just typed, written before the line ran. Measured
+// on an idle machine: the buffer at that point holds `"$ \r\x1b[K$ export
+// …\r\n$ "`, three copies of the prompt for one line typed, and the wait for
+// "the prompt after the line ran" returned in 625ns without waiting for
+// anything. The test passed because the shell usually got back to its read
+// first anyway; under runner load it does not, the ^D lands in the window where
+// the terminal is in its own line discipline, and ^D there is the discipline's
+// own end-of-file character — consumed rather than queued, so nothing arrives
+// when the shell reads again and the session never ends.
+//
+// So the mark is made rather than looked for: send a keystroke and wait for the
+// editor to answer it. Only the editor writes to this buffer and it only runs
+// in raw mode, so the answer is proof — not an inference from output that was
+// already there.
+//
+// ^L is the keystroke because it is the one that survives being early. It is
+// not a character the line discipline claims (^D, ^C, ^U, ^W and the erase key
+// all are), so if it arrives while the terminal is in its own discipline it is
+// buffered rather than acted on, and the shell reads it when raw mode comes
+// back. What it draws — a clear and a home — appears nowhere else in a session,
+// and it leaves the line empty, which is what the ^D after it needs.
+func waitUntilReading(t *testing.T, out *syncBuffer, control *os.File) {
+	t.Helper()
+	if _, err := control.WriteString("\x0c"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, out, "\x1b[H\x1b[2J", "the editor answering ^L, which it can only do while reading")
+}
+
+// TestTheReadingMarkOutlastsTheLineThatIsStillRunning is why waitUntilReading
+// makes its own mark rather than waiting for the prompt (#1641).
+//
+// A line that takes a known time to run holds the terminal in its own line
+// discipline for at least that long, so a mark that means "the shell is reading
+// again" cannot arrive before it. The assertion is on the lower bound, so load
+// can only lengthen the wait — the direction that keeps this from becoming a
+// flake in its own right, the same reasoning as
+// TestAWaitBlocksUntilThePromptIsWrittenAgain.
+//
+// The prompt fails that on this very line: the editor's redraw of what was
+// typed carries a copy of the prompt and is written before the line runs, so a
+// wait for the prompt text is answered while the shell is still busy. It is
+// checked here rather than described, because it is the thing that was believed
+// and was not so.
+func TestTheReadingMarkOutlastsTheLineThatIsStillRunning(t *testing.T) {
+	const runs = 250 * time.Millisecond
+
+	control, tty, err := pty.Open()
+	if err != nil {
+		t.Skipf("no pseudo-terminal: %v", err)
+	}
+	defer func() {
+		_ = tty.Close()
+		_ = control.Close()
+	}()
+
+	out, errs := &syncBuffer{}, &syncBuffer{}
+	r := newTestRunner(map[string]string{"HISTFILE": "", "PS1": "$ "})
+	r.Stdout, r.Stderr = out, errs
+	s := Shell{Runner: r, In: tty, Out: out, Err: errs, Name: "sh"}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.Run(t.Context())
+		done <- err
+	}()
+
+	waitFor(t, out, "$ ", "the first prompt")
+	start := time.Now()
+	if _, err := control.WriteString("sleep 0.25\n"); err != nil {
+		t.Fatal(err)
+	}
+
+	// The mark the test used to wait on, taken first so that this one is the
+	// one with every chance of having waited. It has not: the redraw of the
+	// typed line is already in the buffer.
+	waitFor(t, out, "$ ", "a prompt, which is not the mark")
+	if drawn := time.Since(start); drawn >= runs {
+		t.Errorf("a prompt took %v to arrive, so this no longer separates the two marks", drawn)
+	}
+
+	waitUntilReading(t, out, control)
+	if waited := time.Since(start); waited < runs {
+		t.Errorf("the shell was reading again after %v, before the line it was running could have finished at %v", waited, runs)
+	}
+
+	if _, err := control.WriteString("\x04"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("the shell did not exit on ^D")
 	}
 }
 

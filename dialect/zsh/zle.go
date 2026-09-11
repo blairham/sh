@@ -602,7 +602,7 @@ func accepts(name string) bool {
 // callBuiltinWidget performs one of the editor's own actions, asked for from
 // inside a widget.
 //
-// Only the accept, which is the one the editor can honour *after* the widget
+// Only the accept, which is the one the editor can honor *after* the widget
 // returns rather than in the middle of it: zsh's `zle accept-line` does not
 // stop the function it is called from — the rest of the body still runs — and
 // the line is committed when the widget is finished. So it is recorded and

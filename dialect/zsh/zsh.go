@@ -552,9 +552,17 @@ func Semantics() interp.Semantics {
 	s.ArithNegativeExponentIsError = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.Yes
 	// Asked only under `ksharrays`, which is what makes a bare name one
-	// element here: the tables keep their insertion order, so the element is
-	// the first value in it rather than the one keyed `0` — measured, `h=(a 1
-	// 0 x); $h` is `1` and not `x`.
+	// element here: a table is read as an ordered list, so the element is the
+	// first value in the order this shell lists rather than the one keyed `0`
+	// — measured, `h=(a 1 0 x); $h` is `1` and not `x`.
+	//
+	// *Which* value that is depends on the order, and the order is not
+	// reproducible: measured 2026-09-11, zsh lists a table in the order its
+	// hash puts the keys in, so `m[z]=1; m[a]=2; m[m]=3` lists `z m a`
+	// whichever order the three were assigned in. This shell lists by key,
+	// which is ksh93's order exactly. So this answer is the right end of the
+	// order to read, and the order underneath it is ours — see
+	// docs/spec/semantics.md under KeyedTableOrder (#1758).
 	s.KeyedTableScalarIsTheFirstValue = interp.Yes
 	s.ArrayNameWithoutSubscriptIsTheList = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.No

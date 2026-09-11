@@ -3601,8 +3601,8 @@ type Semantics struct {
 	// element". Two readings, and they are the same disagreement about
 	// whether such a table has an order at all: bash and ksh93 look up the
 	// key `0` and hand back nothing when there is no such key, while the
-	// shell whose tables keep their insertion order hands back the first
-	// value in it.
+	// shell that reads a table as an ordered list hands back the first value
+	// in whatever order it lists.
 	//
 	// A second axis rather than a widening of the first, because the shells
 	// that share the first answer do not share this one, and because it is
@@ -3616,13 +3616,14 @@ type Semantics struct {
 	//	m=(z 9 a 1)   $m   zsh 9      so it is the order and not the sort
 	//	m=(a 1 0 x)   $m   zsh 1      and not the key `0` under another name
 	//
-	// "First" is whatever order `${m[@]}` yields, which is this shell's own
-	// and is a separate question from this one: the shell being modeled
-	// keeps a table's insertion order and this one sorts by key, so the two
-	// agree on a table of one and on any table written in sorted order and
-	// disagree elsewhere. That divergence is `${m[@]}`'s and predates this
-	// axis; the axis says which end of the order to read, not what the order
-	// is.
+	// "First" is whatever order `${m[@]}` yields, which is a separate
+	// question from this one — the axis says which end of the order to read
+	// and not what the order is. That order is **this implementation's own**,
+	// and deliberately: see KeyedTableOrder in docs/spec/semantics.md, where
+	// the panel is measured. It is not insertion order in any shell measured,
+	// so this axis agrees with the shell it was taken from exactly when the
+	// two orders happen to coincide — which is a table of one, and a table
+	// whose keys hash into their sorted order (#1758).
 	KeyedTableScalarIsTheFirstValue Answer
 
 	// ArrayBaseIsZero indexes arrays from 0. True in bash and ksh93, false in

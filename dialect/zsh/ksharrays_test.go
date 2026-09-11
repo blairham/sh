@@ -219,6 +219,36 @@ func TestKshArraysReadsAKeyedTablesFirstValue(t *testing.T) {
 	}
 }
 
+// Which value "the first" is depends on an order, and #1758 is about that
+// order rather than about this axis.
+//
+// The table above is built in sorted order, so it answers `1` under every
+// reading there is: the first inserted, the first by key, and the first this
+// shell lists are all the same element. This one is not — `z` is assigned
+// first and sorts last — and it is the probe that says which order is really
+// being read.
+//
+// Re-measured 2026-09-11: real zsh answers `1` here, because `z` is where its
+// *hash* puts the first key; it is not insertion order either, since all six
+// spellings of this table list `z m a` there. This shell lists by key, which
+// is ksh93's order exactly, so it answers `2`. Recorded rather than
+// reproduced — see docs/spec/semantics.md under KeyedTableOrder, and the
+// keys() comment in interp/assoc.go.
+func TestTheFirstValueIsTheFirstOfThisShellsOrder(t *testing.T) {
+	const table = "typeset -A h\nh[z]=1\nh[a]=2\nh[m]=3\n"
+	out, st := runZsh(t, t.TempDir(), "setopt ksharrays\n"+table+`echo "[$h]"`)
+	if got := strings.TrimSpace(out); st != 0 || got != "[2]" {
+		t.Errorf("= %q (status %d), want [2] — the value of the first key, `a`", got, st)
+	}
+	// And the order itself, which is the same however the table was built:
+	// the three assignments in a different order list the same way.
+	const other = "typeset -A h\nh[m]=3\nh[z]=1\nh[a]=2\n"
+	out, st = runZsh(t, t.TempDir(), other+`echo "[${(k)h}][${(v)h}]"`)
+	if got := strings.TrimSpace(out); st != 0 || got != "[a m z][2 3 1]" {
+		t.Errorf("= %q (status %d), want [a m z][2 3 1]", got, st)
+	}
+}
+
 // `emulate sh` and `emulate ksh` are what turn the option on in practice, so
 // the whole of this has to be checked through them rather than only through
 // the option's own name — a wrong answer here is a wrong answer for two

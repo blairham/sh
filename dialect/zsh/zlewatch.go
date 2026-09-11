@@ -93,6 +93,17 @@ import (
 //     stays usable — see watchfd.go, which carries what that costs *us*
 //     rather than this shell.
 //
+//     Re-measured side by side 2026-09-10, because #1759 reported the spin as
+//     a divergence — "zsh prints the handler once per readable turn" — and it
+//     is not one. The same startup file (`exec {wfd}< /etc/hosts`, a handler
+//     that prints, `zle -F $wfd handler`) driven through the same
+//     pseudo-terminal for the same window: **zsh 5.9.2 fired it 458,550 times
+//     and this shell 638,001**, and *both* answered every line typed while
+//     doing it. Same order, same usable prompt. What that issue was really
+//     seeing is in procsubst.go — a session that ended before it could type,
+//     which looked like the watcher because the watcher was what armed the
+//     descriptor.
+//
 // What is *not* here is a way to make one fire outside the read loop, and that
 // is measured too rather than left as a limit of this shell: with a six-second
 // command running and the descriptor becoming readable three seconds in, real

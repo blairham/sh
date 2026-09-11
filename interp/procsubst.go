@@ -68,6 +68,32 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 
 	sub := r.clone()
 	sub.inheritJobs(jobBoundarySubstitution)
+	// **A substitution's body never takes the terminal.** The shell hands the
+	// terminal to a command it is *waiting for*, so that ^C and ^Z reach the
+	// command rather than the shell — see runWatched. A substitution's body
+	// is not one: it runs beside the command that named it, on a goroutine,
+	// and the shell carries on. Leaving the hook in place made it one anyway,
+	// and the body then held the terminal for as long as its command lived.
+	//
+	// What that cost was a session. `exec {fd}< <(sleep 60)` in a startup
+	// file put `sleep`'s process group in front, and the shell's own group
+	// was a background one from that moment: a shell reading its terminal
+	// from a background group is sent SIGTTIN, which a shell ignores, and an
+	// ignored SIGTTIN turns the read into EIO. So the first read after the
+	// prompt failed with `read /dev/stdin: input/output error` and the
+	// session ended — measured through a pseudo-terminal with the shell in a
+	// session of its own, where real zsh 5.9.2 answers every line typed. It
+	// reproduces with the substitution alone; nothing else in the startup
+	// file is needed, which is why #1759 saw it from a watcher that never
+	// fired. A body whose command is quick — `<(echo hi)` — hid it, because
+	// the terminal came back before the prompt was read.
+	//
+	// nil rather than a flag on the clone, because the hook *is* the
+	// question: a Runner with nowhere to send the terminal is a Runner that
+	// does not send it, which is already what a script and a pipeline get.
+	// A background job reaches the same place by a different road — `r.bg`
+	// takes it down a branch that never asks — and a coprocess with it.
+	sub.Foreground = nil
 	// The one boundary no shell's `trap` sees across: even the dialect that
 	// keeps the parent's listing everywhere else lists nothing in
 	// `<(trap)` — measured, `cat <(trap)` prints nothing in all three

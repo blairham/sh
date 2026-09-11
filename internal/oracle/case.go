@@ -14275,6 +14275,25 @@ echo "read=[$l]"`,
 		Why:     "the selection is enforced and not merely recorded: the feature left off is `command not found` at 127, the three left on still answer, and the sign puts it back at 1 — the builtin's own complaint about its operands. The three statuses are the row, because 127 and 1 are the same shape from outside and a shell that recorded the selection and withdrew nothing answers 1 to all three",
 	},
 	{
+		ID: "zmodload/a-deselected-parameter-stops-answering", Category: "builtins",
+		Snippet: `zmodload zsh/parameter; f() { :; }; print "before=${#functions}"; zmodload -F zsh/parameter -p:functions; ` +
+			`print "off=${#functions} set=${+functions} elem=[${functions[f]}]"; zmodload -F zsh/parameter +p:functions; ` +
+			`print "back=${#functions}"`,
+		Why: "the parameter half of the row above, and the seam it needs is a different one because the shell answers " +
+			"differently: a deselected *builtin* refuses at 127, a deselected *parameter* says nothing at all. All " +
+			"three readings go to the unset answer together — the count, the set test and one element — which is what " +
+			"says the name became an ordinary name rather than an empty table, and the sign puts it back. Ours " +
+			"recorded the selection, reported it through `-lF`, and went on answering with the real count (#1841)",
+	},
+	{
+		ID: "zmodload/a-deselected-parameter-can-be-assigned", Category: "builtins",
+		Snippet: `zmodload zsh/parameter; zmodload -F zsh/parameter -p:parameters; parameters=(a b); print "assigned=[$parameters] st=$?"`,
+		Why: "and it is an *ordinary* name, not a read-only one with nothing in it. `$parameters` is read-only while " +
+			"the module provides it — a produced table with no writer would take an assignment into a stored table " +
+			"and shadow its own producer — so the attribute has to come off with the producer or a script meets " +
+			"`read-only variable` for a name this shell is claiming not to have. Ours did exactly that",
+	},
+	{
 		ID: "zmodload/unloading-what-was-never-loaded", Category: "builtins",
 		Snippet: `zmodload -u zsh/nosuchmodule; echo "st=$?"`,
 		Why:     "`no such module` here means *not loaded*, not *no such name*: `-u` on a module that was never loaded is `no such module zsh/nosuchmodule` and 1. The row that proves it is the next one, which says the same of a module zsh certainly ships",

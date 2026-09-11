@@ -239,6 +239,7 @@ func seedTables(r *Runner) {
 	r.declaring = map[string]bool{"seed": true}
 	r.disabledBuiltins = map[string]bool{"seed": true}
 	r.withdrawnBuiltins = map[string]bool{"seed": true}
+	r.withdrawnParams = map[string]withdrawnParameter{"seed": {}}
 	r.execFds = map[int]bool{7: true}
 	r.cloexecFds = map[int]bool{8: true}
 	r.exported = map[string]bool{"seed": true}

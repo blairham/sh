@@ -490,6 +490,11 @@ type Runner struct {
 	// with the fact first-hand there (#1864).
 	StartupFilesSuppressed bool
 
+	// withdrawnParams holds what a dialect's module selection took out of the
+	// parameter tables, keyed by name, so the name reads as an ordinary unset
+	// one until the selection puts it back. See withdrawnparameter.go.
+	withdrawnParams map[string]withdrawnParameter
+
 	// Dynamic holds parameters whose value is produced when they are read,
 	// rather than stored: `LINENO` is wherever execution has reached, and
 	// `RANDOM` is a different number every time. A dialect fills in the ones

@@ -141,6 +141,10 @@ func (c *Runner) ownTables(r *Runner) {
 	c.aliases = maps.Clone(r.aliases)
 	c.disabledBuiltins = maps.Clone(r.disabledBuiltins)
 	c.withdrawnBuiltins = maps.Clone(r.withdrawnBuiltins)
+	// And the parameter half, which has to travel with the tables it takes
+	// names out of: those are cloned below, so a withdrawal that stayed
+	// shared would put a name back into the wrong shell's tables.
+	c.withdrawnParams = maps.Clone(r.withdrawnParams)
 
 	// The extension points. An embedder registers these before a run and a
 	// dialect's Apply is the usual caller, so nothing a *script* does writes

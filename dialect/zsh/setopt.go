@@ -478,7 +478,25 @@ var zshOptions = []zshOption{
 	recorded("pushdtohome", false),
 	recorded("rcexpandparam", false),
 	recorded("rcquotes", false),
-	recorded("rcs", true),
+	// Whether this shell reads its startup files, which zsh initializes from
+	// the invocation: `-f` and `--no-rcs` turn it off, and the name is the
+	// only place the fact is published — `setopt` in a `-f` shell prints
+	// `norcs` beside `nohashdirs`, where a shell that read its files prints
+	// `nohashdirs` alone.
+	//
+	// The same shape `login` above has, and measured the same way on zsh
+	// 5.9.2, 2026-09-11: the invocation decides the base and a running
+	// script still moves it both ways. `zsh -f -c 'setopt rcs; [[ -o rcs ]]'`
+	// answers on and its `setopt` drops the line again, and `zsh -c
+	// 'unsetopt rcs'` answers off and gains one. So it is neither a constant
+	// nor a name that refuses — it is `recordedOver` the fact the front end
+	// carried in, Runner.StartupFilesSuppressed.
+	//
+	// Recorded and not implemented, which is the bargain the rest of that
+	// set strikes: nothing here re-reads the option to decide whether a
+	// *later* startup file is read. The files are `driver`'s, and it has the
+	// invocation first-hand (#1864).
+	recordedOver("rcs", true, func(r *interp.Runner) bool { return !r.StartupFilesSuppressed }),
 	recorded("recexact", false),
 	recorded("rematchpcre", false),
 	recorded("restricted", false),
@@ -680,7 +698,7 @@ func recorded(base string, def bool) zshOption {
 //
 // The store holds deviations, so the base state has to be supplied rather
 // than assumed: `hashdirs` is off here where zsh's compiled-in default is on,
-// and `login` is whatever the front end was told. Everything else is
+// and `login` and `rcs` are whatever the front end was told. Everything else is
 // `recorded`'s bargain unchanged — remembered, reported, and acted on by
 // nothing.
 func recordedOver(base string, def bool, state func(*interp.Runner) bool) zshOption {

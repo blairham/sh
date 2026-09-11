@@ -1311,6 +1311,13 @@ func (sh Shell) runInput(in source) int {
 	// files are read, which is readsLoginProfile's question and not this
 	// one.
 	r.LoginShell = in.loginShell()
+	// And the third invocation fact an option namespace publishes: whether
+	// this shell was told to read none of its startup files. Carried over
+	// for the reason the two above are, and *before* the invocation's own
+	// options below, so that a `-f` followed by `-o rcs` is the option
+	// moving off a base the front end already set rather than the other way
+	// round — measured, `zsh -f -o rcs` answers `rcs` on (#1864).
+	r.StartupFilesSuppressed = in.startup.none
 	if in.interactive {
 		// `sh -i script.sh` is interactive while it runs, and an interactive
 		// shell runs the monitor: measured, bash 5.3.15, dash, ksh93u+ and

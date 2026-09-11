@@ -70,6 +70,12 @@ func (sh Shell) session(argv []string, in source) int {
 	// answer different questions, and ksh93 is alone in turning the monitor
 	// on for `-i script.sh`.
 	r.Interactive = true
+	// Whether the invocation said to read no startup files, handed over here
+	// for the reason the three facts above are stated here: the prompt route
+	// never reaches the place the script routes carry it. Before
+	// applyOptions below, which is where the script route has it too — see
+	// Runner.StartupFilesSuppressed (#1864).
+	r.StartupFilesSuppressed = in.startup.none
 	// And an interactive shell runs the monitor. Unanimous with a terminal —
 	// bash, dash, ksh93 and zsh all report `monitor on` and put `m` in `$-`
 	// — and a prompt has one by definition on every route but `-i` with

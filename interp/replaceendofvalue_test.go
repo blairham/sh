@@ -12,7 +12,7 @@ import "testing"
 // matters only for a pattern that can match empty at all: `${v//*/X}` on a
 // non-empty value is one X in every shell in the panel and was two here — the
 // `*` took the whole value and then the position it stopped at was matched
-// again (#1341). The neighbours below are the control: they say the operator
+// again (#1341). The neighbors below are the control: they say the operator
 // still replaces everywhere it should, and that a pattern which cannot reach
 // the end is untouched by this.
 func TestAMatchEndingAtTheValuesEndIsTheLastOne(t *testing.T) {

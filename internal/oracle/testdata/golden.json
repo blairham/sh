@@ -554,6 +554,94 @@
         "TimedOut": false
       }
     },
+    "alias/a-sourced-file-uses-the-shells-aliases": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "./inc.sh: line 2: inner: command not found~./inc.sh: line 3: t: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "INNER~HIT~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "./inc.sh: line 2: inner: command not found~./inc.sh: line 3: t: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "INNER~HIT~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "HIT~st=0",
+        "Stderr": "\u003cscript\u003e[3]: .: line 2: inner: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "INNER~HIT~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-substitution-uses-the-shells-aliases": {
+      "bash": {
+        "Stdout": "v=~w=",
+        "Stderr": "\u003cscript\u003e: line 2: t: command not found~\u003cscript\u003e: line 4: t: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "v=SUB~w=BACK",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "v=~w=",
+        "Stderr": "\u003cscript\u003e: line 2: t: command not found~\u003cscript\u003e: line 4: t: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "v=SUB~w=BACK",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "v=SUB~w=BACK",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "v=SUB~w=BACK",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/a-suffix-alias-beats-the-command-of-that-name": {
       "bash": {
         "Stdout": "RAN~st=0",
@@ -682,6 +770,50 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:2: command not found: a",
         "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-trap-body-uses-the-shells-aliases": {
+      "bash": {
+        "Stdout": "end",
+        "Stderr": "\u003cscript\u003e: line 1: t: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "end~TRAP",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "end",
+        "Stderr": "\u003cscript\u003e: line 4: t: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "end~TRAP",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "end~TRAP",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "end~TRAP",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -994,6 +1126,50 @@
         "TimedOut": false
       }
     },
+    "alias/eval-uses-the-shells-aliases": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: line 3: e: command not found~\u003cscript\u003e: line 4: t: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "EVAL~HIT~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: line 5: e: command not found~\u003cscript\u003e: line 6: t: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "EVAL~HIT~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "HIT~st=0",
+        "Stderr": "\u003cscript\u003e[2]: eval: line 2: e: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "HIT~st=0",
+        "Stderr": "(eval):2: command not found: e",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/expands-a-command-word": {
       "bash": {
         "Stdout": "",
@@ -1076,6 +1252,50 @@
       },
       "zsh": {
         "Stdout": "ag=0~as=0~us=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/nested-text-expands-where-the-command-string-did-not": {
+      "bash": {
+        "Stdout": "v=",
+        "Stderr": "\u003cshell\u003e: line 1: t: command not found~\u003cshell\u003e: line 1: t: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "E~v=",
+        "Stderr": "\u003cshell\u003e: line 1: t: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "v=",
+        "Stderr": "\u003cshell\u003e: t: command not found~\u003cshell\u003e: t: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "E~v=",
+        "Stderr": "\u003cshell\u003e: 1: t: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "E~v=S",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "E~v=S",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -59,7 +59,13 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 		defer func() { r.globSuspended = true }()
 	}
 
-	p := syntax.NewParser(src, r.dialect())
+	// The alias tables go on it, because a substitution's commands are
+	// commands: `alias t=echo; v=$(t hi)` leaves `hi` in v in every shell of
+	// the panel that expands aliases at all, and left it empty here (#2096).
+	// Parsed whole rather than a line at a time, which is measured — an
+	// alias defined on a substitution's first line does not reach its
+	// second in dash, ksh93 or zsh.
+	p := r.ParseWithAliases(src, r.dialect())
 	f := p.Parse()
 	if err := p.Err(); err != nil {
 		// A substitution re-parses, so the syntax-error status is the

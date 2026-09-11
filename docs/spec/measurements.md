@@ -15935,6 +15935,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/the-two-kinds-are-two-namespaces` | `--plain--~t='z'~r='y'~G='x'~--g--~--s--` **2>** `alias: -g not found~alias: -s not found` *(status 1)* | `--plain--~alias r='y'~--g--~--s--` **2>** `<shell>: line 4: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 5: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` *(status 2)* | `--plain--~r='y'~--g--~--s--` **2>** `<shell>: line 4: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 5: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` *(status 2)* | `--plain--~alias r='y'~--g--~--s--` **2>** `<shell>: line 3: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` *(status 2)* | *(no output, status 2)* | `--plain--~G=x~r=y~--g--~G=x~--s--~t=z` |
 | `alias/unalias-a-leaves-the-suffix-aliases` | `st=0~--plain--~--s--` **2>** `alias: -s not found` *(status 1)* | `st=0~--plain--~--s--` **2>** `<shell>: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` *(status 2)* | `st=0~--plain--~--s--` **2>** `<shell>: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` *(status 2)* | `st=0~--plain--~--s--` **2>** `<shell>: line 3: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` *(status 2)* | *(no output, status 2)* | `st=0~--plain--~--s--~t=z` |
 | `alias/both-kinds-at-once-is-refused` | `st=1~st=1` **2>** `alias: -g not found~alias: -s not found~alias: -s not found` | `st=2~st=2` **2>** `<shell>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `st=2~st=2` **2>** `<shell>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `st=2~st=2` **2>** `<shell>: line 0: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 0: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | **2>** `alias: -g: unknown option~alias: -s: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `st=1~st=0` **2>** `<shell>:alias:1: illegal combination of options` |
+| `alias/a-sourced-file-uses-the-shells-aliases` | `INNER~HIT~st=0` | `st=127` **2>** `./inc.sh: line 2: inner: command not found~./inc.sh: line 3: t: command not found` | `INNER~HIT~st=0` | `st=127` **2>** `./inc.sh: line 2: inner: command not found~./inc.sh: line 3: t: command not found` | `HIT~st=0` **2>** `<script>[3]: .: line 2: inner: not found` | `INNER~HIT~st=0` |
+| `alias/eval-uses-the-shells-aliases` | `EVAL~HIT~st=0` | `st=127` **2>** `<script>: line 3: e: command not found~<script>: line 4: t: command not found` | `EVAL~HIT~st=0` | `st=127` **2>** `<script>: line 5: e: command not found~<script>: line 6: t: command not found` | `HIT~st=0` **2>** `<script>[2]: eval: line 2: e: not found` | `HIT~st=0` **2>** `(eval):2: command not found: e` |
+| `alias/a-substitution-uses-the-shells-aliases` | `v=SUB~w=BACK` | `v=~w=` **2>** `<script>: line 2: t: command not found~<script>: line 4: t: command not found` | `v=SUB~w=BACK` | `v=~w=` **2>** `<script>: line 2: t: command not found~<script>: line 4: t: command not found` | `v=SUB~w=BACK` | `v=SUB~w=BACK` |
+| `alias/a-trap-body-uses-the-shells-aliases` | `end~TRAP` | `end` **2>** `<script>: line 1: t: command not found` | `end~TRAP` | `end` **2>** `<script>: line 4: t: command not found` | `end~TRAP` | `end~TRAP` |
+| `alias/nested-text-expands-where-the-command-string-did-not` | `E~v=` **2>** `<shell>: 1: t: not found` | `v=` **2>** `<shell>: line 1: t: command not found~<shell>: line 1: t: command not found` | `E~v=` **2>** `<shell>: line 1: t: command not found` | `v=` **2>** `<shell>: t: command not found~<shell>: t: command not found` | `E~v=S` | `E~v=S` |
 | `alias/neither-kind-is-accepted-where-the-shell-has-not-got-it` | `ag=1~as=1~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=0~as=0~us=1` |
 | `alias/the-letters-alias-still-has-not-got` | `L=1~r=1~m=1` **2>** `alias: -L not found~alias: -r not found~alias: -m not found~alias: z* not found` | `L=2~r=2~m=2` **2>** `<shell>: line 1: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `L=2~r=2~m=2` **2>** `<shell>: line 1: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `L=2~r=2~m=2` **2>** `<shell>: line 0: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 0: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 0: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | **2>** `alias: -L: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `L=0~r=0~m=0` |
 
@@ -16113,6 +16118,39 @@ grades it and nothing drift-checks it either, for the same reason.
 - `alias/both-kinds-at-once-is-refused` — two namespaces, so one call cannot be about both — `illegal combination of options` at 1 in the shell with the letters, where the other five refuse whichever letter they meet first. The listing after it is what proves nothing was defined
   ```sh
   alias -g -s q=v; echo "st=$?"; alias -s; echo "st=$?"
+  ```
+- `alias/a-sourced-file-uses-the-shells-aliases` — a sourced file is text *this* shell reads, so both halves are the shell's: an alias the file defines works on the file's later lines, and one the caller defined works inside the file. dash and zsh do both, ksh93 does only the second — it reads the file through before running any of it — and bash expands neither without `shopt`. Ours answered `command not found` to both in every column, because the parser `.` builds was handed no table at all (#2096)
+  ```sh
+  alias t='echo HIT'
+  printf 'alias inner="echo INNER"\ninner\nt\n' > inc.sh
+  . ./inc.sh
+  echo "st=$?"
+  ```
+- `alias/eval-uses-the-shells-aliases` — the same two halves for `eval`, and the panel splits them differently: dash's eval reaches its own later lines and zsh's and ksh93's do not, which is exactly how the three answer whether `eval` runs what it has parsed. The caller's alias works inside the text in all three. That the two builtins disagree about the first half and agree about the second is what says the table and the reader are two separate things
+  ```sh
+  alias t='echo HIT'
+  eval 'alias e="echo EVAL"
+  e
+  t'
+  echo "st=$?"
+  ```
+- `alias/a-substitution-uses-the-shells-aliases` — a command substitution's commands are commands, in both spellings of it — and this is the route with no reader question attached, because a substitution is parsed through before it runs in every column. So the alias in it is the caller's and nothing defined inside reaches a later line. Ours left both variables empty
+  ```sh
+  alias t=echo
+  v=$(t SUB)
+  echo "v=$v"
+  w=`t BACK`
+  echo "w=$w"
+  ```
+- `alias/a-trap-body-uses-the-shells-aliases` — and the fourth door into the same room: a trap's action is read when it fires, by this shell, so the alias table it reads is this shell's. Unanimous among the three that expand aliases in a script, which is what makes it the control for the two rows above — a fix reaching `eval` and `.` and not this one would still leave the last `trap` on every exit path saying `command not found`
+  ```sh
+  alias t='echo TRAP'
+  trap 't' EXIT
+  echo end
+  ```
+- `alias/nested-text-expands-where-the-command-string-did-not` — the row this shell does not pass yet, kept because it is the evidence: zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases — the option is the only gate, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. `Dialect.ExpandAliases` records the symptom; #2109 is the model
+  ```sh
+  alias t=echo; eval "t E"; v=$(t S); echo "v=$v"
   ```
 - `alias/neither-kind-is-accepted-where-the-shell-has-not-got-it` — the three refusals as a status each — the complaint discarded and the call in a subshell, so the one column where a bad option to a special builtin is fatal loses only the subshell. Written that way because it is the only shape that can grade the *letters* in the four columns that do not have them: the wording and the usage line under it are measured elsewhere and differ from ours in one column, so any row carrying that text disagrees there whatever the letters do, and could never notice one being wrongly accepted. Three statuses and three answers — 2, 1 and 0 — which is `alias` reading options at all, then reading them and having none, then having both
   ```sh

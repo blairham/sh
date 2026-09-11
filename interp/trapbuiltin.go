@@ -7,8 +7,6 @@ import (
 	"sort"
 	"strings"
 	"syscall"
-
-	"github.com/blairham/sh/syntax"
 )
 
 // trapOutcome is what reading trap's options decided: either a status to
@@ -352,7 +350,11 @@ func (r *Runner) trapActionRefused(body string) (int, bool) {
 	// asked about an action that will not parse — which is the only case
 	// the dialects answer differently. A trap whose action is fine is set
 	// the same way everywhere and nobody is asked anything.
-	p := syntax.NewParser(body, r.dialect())
+	// With the tables, so that the question asked is whether the action
+	// *this shell* would run parses: an alias may hold a keyword, so
+	// `alias iff="if true; then"` makes `trap "iff echo x; fi" EXIT` a trap
+	// that parses, and a check made without them would refuse it.
+	p := r.ParseWithAliases(body, r.dialect())
 	p.Parse()
 	err := p.Err()
 	if err == nil {

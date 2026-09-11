@@ -476,6 +476,38 @@ that expand aliases in scripts:
 - **A value that is empty or all blanks leaves nothing behind**, and the
   command becomes whatever followed it.
 
+### The table reaches every text this shell reads
+
+Alias expansion is not a property of the *outermost* parse. Every place this
+shell reads shell source is a place an alias is expanded, measured 2026-09-11
+across dash, ksh93 and zsh — the three that expand aliases in a script at all:
+
+| route | the caller's alias works inside | a definition inside reaches its own later lines |
+| --- | --- | --- |
+| `.` / `source` a file | all three | dash, zsh — **not** ksh93 |
+| `eval` | all three | dash — **not** zsh, ksh93 |
+| `$( )` and `` ` ` `` | all three | none |
+| a trap body | all three | — |
+
+The second column is not a second axis. It is `EvalRunsWhatItParsed` and
+`SourcedFileRunsWhatItParsed`, which record whether that text is read through
+before it runs or read as it runs, and those answers line up with this table
+exactly. A text read through first has already been parsed by the time its
+first line runs, so a definition on line 1 cannot reach line 2 — which is the
+same sentence as "an alias defined and used on the same line does not expand",
+one level up.
+
+That correction matters because the reader question used to be asked only of
+text that *failed* to parse, on the ground that parsing has no effect of its
+own. It has one whenever a line changes how a later line parses, and an alias
+is the plain case; a `setopt` or `shopt` that moves the grammar is the same
+shape. So the question is now asked of any borrowed text with a later line in
+it, and of nothing else — a text with no newline after its last command reads
+the same either way.
+
+`$( )` is the route with no question attached: every column parses a
+substitution through before running it.
+
 ### Three kinds of alias, and two namespaces
 
 zsh has two further kinds, and no other shell in the panel has either:

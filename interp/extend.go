@@ -495,16 +495,21 @@ func (r *Runner) DefineFunctionExpandingAliases(name, body string) bool {
 // aliases is the parser's hook, and nil expands nothing.
 func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool {
 	p := syntax.NewParser(name+"() {\n"+body+"\n}\n", r.dialect())
-	p.Aliases = aliases
 	if aliases != nil {
 		// All three kinds together, because the file is read by the same
 		// rules a script is: measured, a function file read by `autoload`
 		// without `-U` has its global aliases expanded and its suffix
 		// aliases applied exactly as a line of the script would. A body
-		// read *with* `-U` has none of them, which is the nil above.
+		// read *with* `-U` has none of them, which is the nil below.
+		//
+		// Not [Runner.ExpandAliasesIn], deliberately: this route asks the
+		// *tables* and not the option, because the letter that reaches it
+		// runs the opposite way from the switch — see the two methods
+		// above. Which is why `aliases` is still a parameter.
 		p.GlobalAliases = r.LookupGlobalAlias
 		p.SuffixAliases = r.LookupSuffixAlias
 	}
+	p.Aliases = aliases
 	f := p.Parse()
 	if p.Err() != nil || len(f.Stmts) != 1 {
 		return false

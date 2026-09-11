@@ -73,12 +73,25 @@ func TestTheTwoReadersAreSeparateFields(t *testing.T) {
 	}
 }
 
-// TestTheReaderIsAskedAboutOnlyWhereItDecides: parsing has no effect of its
-// own, so text that parses runs the same under either answer and the question
-// is not asked of it.
+// TestTheReaderIsAskedAboutOnlyWhereItDecides: the question is asked of text
+// that has a newline in it and of no other text.
 //
-// Asserted with both left Unspecified, which is the state that makes an
-// unwanted question audible: `ask` writes a line naming the axis and refuses.
+// **This used to say that text which parses is never asked**, on the ground
+// that parsing has no effect of its own. That is false wherever a line
+// changes how a later line *parses*, and an alias is the plain case:
+// measured 2026-09-11, a sourced file holding `alias a='echo hit'` and then
+// `a` prints `hit` in dash and zsh and answers `a: not found` in ksh93 —
+// which is exactly how the three answer this axis. A `setopt` or a `shopt`
+// that moves the grammar is the same shape. So a text with a newline is
+// asked whether it parses or not (#2096).
+//
+// What survives is the half that is still true: a line cannot change how
+// *itself* parses, so text with no newline reads the same either way and is
+// not asked. That is what keeps `eval "echo hi"` running in a runner that
+// has chosen no dialect.
+//
+// Asserted with both left Unspecified, which is the state that makes a
+// question audible: `ask` writes a line naming the axis and refuses.
 func TestTheReaderIsAskedAboutOnlyWhereItDecides(t *testing.T) {
 	dir := t.TempDir()
 	script := write(t, dir, "s.sh", "echo one\necho two\n")
@@ -87,8 +100,18 @@ func TestTheReaderIsAskedAboutOnlyWhereItDecides(t *testing.T) {
 	sem.SourcedFileRunsWhatItParsed = Unspecified
 	for _, src := range []string{"eval 'echo one\necho two'", ". " + script} {
 		out, _ := sourceRun(t, dir, src, sem, Diagnostics{})
+		if !strings.Contains(out, "disagree") {
+			t.Errorf("%q said %q, want the reader question asked of text with a newline in it", src, out)
+		}
+	}
+	// A one-line file is a one-line text: the newline it ends with starts no
+	// later line, and counting it made every `. inc.sh` of an ordinary
+	// one-line file ask a question it could not answer.
+	oneLine := write(t, dir, "one.sh", "echo one\n")
+	for _, src := range []string{"eval 'echo one; echo two'", "eval 'echo one'", ". " + oneLine} {
+		out, _ := sourceRun(t, dir, src, sem, Diagnostics{})
 		if strings.Contains(out, "disagree") {
-			t.Errorf("%q said %q, want no question asked of text that parses", src, out)
+			t.Errorf("%q said %q, want no question asked of text with no later line", src, out)
 		}
 	}
 }

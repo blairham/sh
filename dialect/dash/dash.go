@@ -165,6 +165,9 @@ func Semantics() interp.Semantics {
 	// Neither spelling of the escape character: this shell's set is the XSI
 	// list alone, so `\e` and `\E` are the two characters they are written
 	// as.
+	// This shell expands escapes without `-e` and still has neither of these:
+	// `echo 'a\u0041Z'` is the characters as written.
+	s.EchoExpandsUnicodeEscapes = interp.No
 	s.EchoExpandsEscEscape = interp.No
 	s.EchoExpandsCapitalEscEscape = interp.No
 	s.LengthOfSpecialIsCount = interp.No

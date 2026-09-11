@@ -667,6 +667,16 @@ var Corpus = []Case{
 		Why:     "read as bytes, because an ESC is invisible in a rendered table and this row is entirely about which of the two letters produces one. The two shells that split `\\e` from `\\E` split them in *opposite* directions — ksh93 has `\\E` and not `\\e`, zsh has `\\e` and not `\\E` — so one answer for both letters is wrong for half the panel. bash 5.3 has both and bash 3.2 neither, which is also the version line here; dash has no -e and prints it. The same asymmetry the `%b` site has, and the row that says `echo` cannot borrow one answer for the pair",
 	},
 	{
+		ID: "echo/the-unicode-escapes", Category: "builtins",
+		Snippet: `echo -e 'a\u0041Z:a\U00000041Z:a\u41Z' | od -An -tx1 | tr -s " "`,
+		Why:     "read as bytes, because the wrong answers all look like text: a code point written as one byte and the escape left standing are both printable. Two of the six have the pair and the other four write the characters as they stand, and the two that have it agree about everything — four digits after `\\u`, eight after `\\U`, and fewer accepted, which the third field is there to show. Every code point here is **ASCII** on purpose: the two shells that have the escape answer the *locale* for anything above it, and under the LC_ALL=C this harness runs in one of them refuses `\\u00e9` as `character not in range` and the other leaves the escape standing. That is a fact about the locale rather than about the escape, and this shell is locale-blind here — #1851",
+	},
+	{
+		ID: "echo/a-hexadecimal-escape-with-no-digits", Category: "builtins",
+		Snippet: `echo -e 'a\xZ:a\uZ' | od -An -tx1 | tr -s " "`,
+		Why:     "one question for `\\x`, `\\u` and `\\U` together: a run with no digit after it is a NUL in one shell and the two characters as written everywhere else. Read as bytes because a NUL is not a character a table can show, and it is the same split the two `printf` sites record as part of their hex policy",
+	},
+	{
 		ID: "echo/the-order-of-e-and-capital-e", Category: "builtins",
 		Snippet: `echo -e -E 'm\tn'`,
 		Why:     "-e then -E: bash lets the last flag win and prints the backslash, zsh lets -e win and expands — the other order agrees everywhere and asks nothing",
@@ -13559,6 +13569,11 @@ echo "read=[$l]"`,
 		Why:     "the call is what reads the file, and the file's contents are the function's *body* — so its `$*` is the call's arguments, `a b`. The case writes its own `fpath` entry, because a row that reached for a real one would be a record of the machine",
 	},
 	{
+		ID: "autoload/a-file-that-defines-the-name-it-is-called", Category: "builtins",
+		Snippet: `mkdir -p fp; printf "%s\n" 'kfn() { print "K [$*]" }' > fp/kfn; printf "%s\n" 'pfn() { :; }' 'print "P [$*]"' > fp/pfn; fpath=(fp); autoload -Uz kfn pfn; kfn a b; echo "st=$?"; kfn c; pfn d`,
+		Why:     "a function file may hold the body or a definition of the name it is called, and both run. The **first** call is the whole row: the second worked either way, which is what made a load that defined and never ran silent — nothing missing afterwards, no diagnostic, status 0. `pfn` is the discriminator beside it: it defines the name *and* does something else, so it is a body and is not called, which separates \"the file was a definition\" from \"the load defined this name\"",
+	},
+	{
 		ID: "autoload/a-missing-file-fails-at-the-call", Category: "builtins",
 		Snippet: `fpath=(); autoload -Uz zznone; echo "decl=$?"; zznone; echo "call=$?"`,
 		Why:     "and where it fails: the declaration is 0 with an empty `fpath` and the *call* is `zznone: function definition file not found` at 1. Two statuses in one row, because a shell that resolved at the declaration would report the failure in the wrong place and a script's `autoload || return` would fire when nothing was wrong yet",
@@ -13648,6 +13663,11 @@ echo "read=[$l]"`,
 		ID: "zmodload/asking-whether-a-module-is-loaded", Category: "builtins",
 		Snippet: `zmodload -e zsh/main; echo "main=$?"; zmodload -e zsh/zutil; echo "zutil=$?"`,
 		Why:     "`-e` asks instead of loading, and says nothing either way: 0 for the module a fresh shell has and 1 for one it has not, with no output on either. This is the row that makes `-e` a question rather than a load, and the two answers side by side are what a shell that always answered 0 would fail",
+	},
+	{
+		ID: "zmodload/a-deselected-feature-is-not-callable", Category: "builtins",
+		Snippet: `zmodload zsh/zutil; zmodload -F zsh/zutil -b:zparseopts; zparseopts -D a:; echo "off=$?"; zstyle -s x y z; echo "on=$?"; zmodload -F zsh/zutil +b:zparseopts; zparseopts -D a:; echo "back=$?"`,
+		Why:     "the selection is enforced and not merely recorded: the feature left off is `command not found` at 127, the three left on still answer, and the sign puts it back at 1 — the builtin's own complaint about its operands. The three statuses are the row, because 127 and 1 are the same shape from outside and a shell that recorded the selection and withdrew nothing answers 1 to all three",
 	},
 	{
 		ID: "zmodload/unloading-what-was-never-loaded", Category: "builtins",

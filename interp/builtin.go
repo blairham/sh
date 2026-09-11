@@ -1867,8 +1867,20 @@ func biEcho(r *Runner, _ context.Context, args []string) int {
 			r.ask(r.sem().EchoExpandsEscEscape, "echo expanding \\e")
 		capEsc := strings.Contains(out, `\E`) &&
 			r.ask(r.sem().EchoExpandsCapitalEscEscape, "echo expanding \\E")
+		// One axis for the two Unicode letters, because no shell measured
+		// has one without the other, and one more for what a hexadecimal
+		// escape with no digit after it means — which is the same question
+		// for `\x`, `\u` and `\U`, and is asked only where such an escape
+		// actually runs out of digits.
+		unicode := (strings.Contains(out, `\u`) || strings.Contains(out, `\U`)) &&
+			r.ask(r.sem().EchoExpandsUnicodeEscapes, "echo expanding \\uHHHH and \\UHHHHHHHH")
+		how := echoEscapes{hex: hex, esc: esc, capEsc: capEsc, unicode: unicode}
+		if emptyHexRun(out, hex, unicode) {
+			how.emptyRunIsNul = r.ask(r.sem().EchoEmptyHexDigitRunIsNul,
+				"echo reading a hexadecimal escape with no digits")
+		}
 		var stopped bool
-		out, stopped = expandEchoEscapes(out, hex, esc, capEsc)
+		out, stopped = expandEchoEscapes(out, how)
 		if stopped {
 			// `\c` ends the output, newline included.
 			newline = false
@@ -1941,13 +1953,48 @@ func xsiEscape(c byte) (byte, bool) {
 	return 0, false
 }
 
+// echoEscapes is which of the extensions this dialect admits, for the one
+// argument being read. A struct rather than a row of booleans: the set grew to
+// five and a call site passing them positionally is a place two of them can be
+// swapped without anything failing to compile.
+type echoEscapes struct {
+	hex           bool
+	esc           bool
+	capEsc        bool
+	unicode       bool
+	emptyRunIsNul bool
+}
+
+// emptyHexRun reports whether the text carries a hexadecimal escape that runs
+// out of digits, which is the only place EchoEmptyHexDigitRunIsNul is asked.
+//
+// Asked of the escapes this dialect actually reads: a `\x` in a shell without
+// `\x` is two characters whatever the digits after it are, so the axis has no
+// bearing there and asking it would refuse a word the shell has an answer for.
+func emptyHexRun(s string, hex, unicode bool) bool {
+	for i := 0; i+1 < len(s); i++ {
+		if s[i] != '\\' {
+			continue
+		}
+		i++
+		switch {
+		case s[i] == 'x' && hex, (s[i] == 'u' || s[i] == 'U') && unicode:
+			if i+1 >= len(s) || !isHexDigit(s[i+1]) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // expandEchoEscapes interprets the escapes `echo` expands where the dialect
-// says it does: the XSI set, with `\xHH`, `\e` and `\E` admitted per
-// dialect — the last two separately, because ksh93 and zsh have one each and
-// not the other.
+// says it does: the XSI set, with `\xHH`, `\uHHHH`, `\UHHHHHHHH`, `\e` and
+// `\E` admitted per dialect — `\e` and `\E` separately, because ksh93 and zsh
+// have one each and not the other, and the two Unicode letters together,
+// because no shell measured has one without the other.
 // stopped reports a `\c`, which discards the rest of the output and the
 // closing newline with it.
-func expandEchoEscapes(s string, hex, esc, capEsc bool) (expanded string, stopped bool) {
+func expandEchoEscapes(s string, how echoEscapes) (expanded string, stopped bool) {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] != '\\' || i+1 >= len(s) {
@@ -1963,9 +2010,9 @@ func expandEchoEscapes(s string, hex, esc, capEsc bool) (expanded string, stoppe
 		case 'c':
 			return b.String(), true
 		case 'e', 'E':
-			admitted := esc
+			admitted := how.esc
 			if s[i] == 'E' {
-				admitted = capEsc
+				admitted = how.capEsc
 			}
 			if !admitted {
 				b.WriteByte('\\')
@@ -1983,22 +2030,38 @@ func expandEchoEscapes(s string, hex, esc, capEsc bool) (expanded string, stoppe
 			b.WriteByte(byte(n))
 			i = j - 1
 		case 'x':
-			if !hex {
+			if !how.hex {
 				b.WriteByte('\\')
 				b.WriteByte(s[i])
 				break
 			}
-			n, j := 0, i+1
-			for j < len(s) && j <= i+2 && isHexDigit(s[j]) {
-				n = n*16 + hexValue(s[j])
-				j++
-			}
-			if j == i+1 {
+			n, j := hexRun(s, i+1, 2)
+			if j == i+1 && !how.emptyRunIsNul {
 				// `\x` with no digits stays as written.
 				b.WriteString(`\x`)
 				break
 			}
 			b.WriteByte(byte(n))
+			i = j - 1
+		case 'u', 'U':
+			if !how.unicode {
+				b.WriteByte('\\')
+				b.WriteByte(s[i])
+				break
+			}
+			// Four digits after `\u` and eight after `\U`, fewer accepted:
+			// `\u41` is `A` and `\u00410` is `A` followed by a zero.
+			width := 4
+			if s[i] == 'U' {
+				width = 8
+			}
+			n, j := hexRun(s, i+1, width)
+			if j == i+1 && !how.emptyRunIsNul {
+				b.WriteByte('\\')
+				b.WriteByte(s[i])
+				break
+			}
+			b.WriteString(EncodeCodePoint(n))
 			i = j - 1
 		default:
 			b.WriteByte('\\')
@@ -2007,6 +2070,58 @@ func expandEchoEscapes(s string, hex, esc, capEsc bool) (expanded string, stoppe
 	}
 	return b.String(), false
 }
+
+// hexRun reads up to max hexadecimal digits from i, and reports the value and
+// where the run ended. An empty run is a zero at i, which is the caller's to
+// tell apart from a zero digit — see Semantics.EchoEmptyHexDigitRunIsNul.
+func hexRun(s string, i, maxDigits int) (n, end int) {
+	end = i
+	for end < len(s) && end < i+maxDigits && isHexDigit(s[end]) {
+		n = n*16 + hexValue(s[end])
+		end++
+	}
+	return n, end
+}
+
+// EncodeCodePoint writes one code point the way the escape sites do, which is
+// the *original* UTF-8 rather than the range it was later narrowed to.
+//
+// Exported because a dialect's own escape reader needs the same encoder and
+// must not grow a second one: `print` has `\u` and `\U` already, and wrote a
+// replacement character for everything Go's rune type refuses (#1840) while
+// the shell it copies writes the encoding.
+//
+// Measured 2026-09-10 against zsh 5.9.2 and bash 5.3.15, which agree on all of
+// it: a surrogate is encoded rather than replaced (`\ud800` is `ed a0 80`), so
+// is a value past the last code point (`\U110000` is `f4 90 80 80`), and the
+// five- and six-byte forms are reachable — `\U200000` is `f8 88 80 80 80` and
+// `\U4000000` is `fc 84 80 80 80 80`. A value past what six bytes can hold
+// overflows into the lead byte rather than being refused, which is the one
+// place the two shells part company and is left where the arithmetic puts it.
+func EncodeCodePoint(n int) string {
+	u := uint32(n)
+	switch {
+	case u < 0x80:
+		return string([]byte{byte(u)})
+	case u < 0x800:
+		return string([]byte{byte(0xC0 | u>>6), cont(u, 0)})
+	case u < 0x10000:
+		return string([]byte{byte(0xE0 | u>>12), cont(u, 6), cont(u, 0)})
+	case u < 0x200000:
+		return string([]byte{byte(0xF0 | u>>18), cont(u, 12), cont(u, 6), cont(u, 0)})
+	case u < 0x4000000:
+		return string([]byte{
+			byte(0xF8 | u>>24), cont(u, 18), cont(u, 12), cont(u, 6), cont(u, 0),
+		})
+	}
+	return string([]byte{
+		byte(0xFC | u>>30), cont(u, 24), cont(u, 18), cont(u, 12), cont(u, 6), cont(u, 0),
+	})
+}
+
+// cont is one continuation byte: the six bits at that shift, under the 10 the
+// encoding marks them with.
+func cont(u uint32, shift int) byte { return byte(0x80 | (u>>shift)&0x3F) }
 
 // biCd changes the shell's working directory.
 //

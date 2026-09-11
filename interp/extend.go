@@ -97,6 +97,12 @@ func (r *Runner) Builtin(name string) (Builtin, bool) { return r.lookupBuiltin(n
 // lookupBuiltin resolves a name, letting a registration win over the built-in
 // table so a dialect can replace as well as add.
 func (r *Runner) lookupBuiltin(name string) (Builtin, bool) {
+	if r.withdrawnBuiltins[name] {
+		// A module selection has taken the name out of the table: it is not
+		// a builtin at all until the selection puts it back, which is a
+		// different thing from `enable -n` below — see withdrawnbuiltin.go.
+		return nil, false
+	}
 	if r.disabledBuiltins[name] {
 		// `enable -n` puts a name aside without forgetting what it was, so
 		// the word is looked up on PATH like any other and enabling it again

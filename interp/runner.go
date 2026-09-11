@@ -688,6 +688,12 @@ type Runner struct {
 	// by declaration rather than by name alone, so a script redefining one
 	// takes the shell's voice away with it.
 	preludeFuncs map[string]*syntax.FuncDecl
+	// withdrawnBuiltins are the names a dialect's module selection has taken
+	// out of the table — see withdrawnbuiltin.go. Separate from
+	// disabledBuiltins because the two are not the same state: a disabled
+	// builtin is still listed and can be enabled again, and a withdrawn one
+	// is not there at all.
+	withdrawnBuiltins map[string]bool
 	// disabledBuiltins are the names `enable -n` has switched off. Kept
 	// apart from custom so that switching one on again gets back whatever
 	// was registered rather than the core's.

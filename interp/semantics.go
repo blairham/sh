@@ -258,6 +258,41 @@ type Semantics struct {
 	//
 	// Asked only where an `echo` argument actually carries a `\E`.
 	EchoExpandsCapitalEscEscape Answer
+	// EchoExpandsUnicodeEscapes admits `\uHHHH` and `\UHHHHHHHH` in an `echo`
+	// argument, each read as a code point and written in UTF-8: bash 5.3 and
+	// zsh do, bash 3.2, that binary as `sh`, dash and ksh93 write the
+	// characters as they stand.
+	//
+	// One axis for both letters, unlike `\e` and `\E` above, because the
+	// panel does not split them: measured 2026-09-10, every shell that reads
+	// one reads the other, and with the same rules — at most four hex digits
+	// after `\u` and at most eight after `\U`, fewer accepted (`\u41` is `A`
+	// in both), and the value written as UTF-8 rather than as a byte, so
+	// `\u00e9` is two bytes and `\u20ac` three.
+	//
+	// It is the *original* UTF-8 and not the range it was later narrowed to,
+	// which is measured rather than assumed: a surrogate and a value past the
+	// last code point are encoded rather than replaced — `\ud800` is three
+	// bytes and `\U110000` four — and the five- and six-byte forms are
+	// reachable, `\U200000` being five and `\U4000000` six, in both shells
+	// that have the escape.
+	//
+	// Asked only where an `echo` argument actually carries one.
+	EchoExpandsUnicodeEscapes Answer
+	// EchoEmptyHexDigitRunIsNul reads a hexadecimal escape with no digit
+	// after it as a zero rather than leaving it as written: `echo '\xZ'`,
+	// `echo '\uZ'` and `echo '\x'` are a NUL byte followed by what was
+	// there in zsh, and the two characters as written in bash 5.3.
+	//
+	// One question for `\x`, `\u` and `\U` together, because the shell that
+	// answers it answers the same for all three and the shells that leave one
+	// as written leave all of them. It is the same split
+	// PrintfHexEscapePolicy records at the two `printf` sites, where it is one
+	// of the three details that made a policy out of a bool.
+	//
+	// Asked only where such an escape actually runs out of digits, so
+	// `echo '\x41'` needs no answer to it.
+	EchoEmptyHexDigitRunIsNul Answer
 	// EchoInterpretsEscapes expands backslash escapes in `echo` without -e.
 	// True in dash and zsh, false in bash and ksh93 — a grouping no other
 	// axis produces.
@@ -5618,6 +5653,8 @@ func PosixSemantics() Semantics {
 		// add are theirs to add.
 		EchoOptions:                 "n",
 		EchoExpandsHexEscapes:       No,
+		EchoExpandsUnicodeEscapes:   No,
+		EchoEmptyHexDigitRunIsNul:   No,
 		EchoExpandsEscEscape:        No,
 		EchoExpandsCapitalEscEscape: No,
 		// The POSIX read: -r alone. The counts, delimiters and descriptors

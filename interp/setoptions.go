@@ -153,8 +153,16 @@ func (r *Runner) setEditingMode(mode EditingMode, on bool) {
 // imitated: `braceexpand` is on here for the same reason in all three shells
 // that have the name.
 var extraSetOptions = map[string]setOption{
-	// We expand braces, so a script may turn that on and may not turn it off.
-	"braceexpand": {on: true},
+	// Brace expansion, which really moves: `set +o braceexpand` leaves
+	// `{a,b}` the word it was written as, and setting it again puts the
+	// expansion back — unlike `noexec`, which is one-way in every shell that
+	// has it. The dialect still says whether the shell *has* the name, and
+	// Semantics.BraceExpansion says whether it has braces at all; this is
+	// only the switch beside them (#1856).
+	"braceexpand": {
+		apply: func(r *Runner, on bool) { r.noBraceExpand = !on },
+		get:   func(r *Runner) bool { return !r.noBraceExpand },
+	},
 	// Comments are honored wherever they are written, which is what this
 	// name asks for.
 	"interactive-comments": {on: true},

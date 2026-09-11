@@ -81,15 +81,79 @@ func TestANameThisShellDoesNotHaveIsStillInvalid(t *testing.T) {
 }
 
 // A name we are already doing goes the other way round: it can be turned on
-// and not off. Braces are expanded here, so a script may ask for that and may
-// not ask us to stop.
+// and not off. Comments are honored wherever they are written here, so a
+// script may ask for that and may not ask us to stop.
+//
+// It used to be `braceexpand` standing here, and that was the wrong name for
+// the shape: braces are something this shell *does*, so the switch beside them
+// is buildable and was built in #1856. The names left in this kind are the
+// ones with nothing behind them to move.
 func TestANameThisShellAlreadyDoesTurnsOnAndNotOff(t *testing.T) {
-	if out, st := run(t, "set -o braceexpand\necho {a,b}\n", withExtras); st != 0 || !strings.Contains(out, "a b") {
-		t.Errorf("set -o braceexpand gave %q (status %d), want it accepted", out, st)
+	setup := func(r *Runner) { r.AddSetOptions("interactive-comments") }
+	out, st := run(t, "set -o interactive-comments\necho \"st=$?\"\n", setup)
+	if st != 0 || !strings.Contains(out, "st=0") {
+		t.Errorf("set -o interactive-comments gave %q (status %d), want it accepted", out, st)
 	}
-	out, _ := run(t, "set +o braceexpand\necho \"st=$?\"\n", withExtras)
+	out, _ = run(t, "set +o interactive-comments\necho \"st=$?\"\n", setup)
 	if !strings.Contains(out, "not implemented") || !strings.Contains(out, "st=2") {
-		t.Errorf("set +o braceexpand gave %q, want it refused — braces are expanded here", out)
+		t.Errorf("set +o interactive-comments gave %q, want it refused — comments are honored here", out)
+	}
+}
+
+// And the name that left that kind: brace expansion moves in both directions,
+// so the request is acted on rather than remembered.
+//
+// Both directions on one run, because a shell that stopped expanding and could
+// not start again would pass the half that only turns it off — and `noexec` is
+// the option that really is one-way, which is what says this one had to be
+// asserted rather than assumed.
+func TestBraceExpansionIsASwitchAndNotOneWay(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, want string
+		status          int
+	}{
+		{name: "off", src: "set +o braceexpand\necho {a,b}\n", want: "{a,b}\n"},
+		{
+			name: "off and on again",
+			src:  "set +o braceexpand\nset -o braceexpand\necho {a,b}\n",
+			want: "a b\n",
+		},
+		{
+			// The redirection target counts braces of its own — two names
+			// are as ambiguous as none — so the switch has to be read there
+			// too and not only in a command's arguments.
+			name: "a redirection target is one name while it is off",
+			src:  "set +o braceexpand\n: > {a,b}\nprintf '[%s]' *\n",
+			want: "[{a,b}]",
+		},
+		{
+			// And back to two names once it is on again, which is what says
+			// the target reads the switch rather than having been given up on.
+			name:   "and two names again once it is back on",
+			src:    "set +o braceexpand\nset -o braceexpand\n: > {a,b}\n",
+			want:   "sh: {a,b}: ambiguous redirect\n",
+			status: 2,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			out, st := run(t, tc.src, func(r *Runner) {
+				// The axes a redirection target touches, so that a refusal
+				// here is about the switch and not about splitting or
+				// matching in general — see redirecttarget_test.go.
+				sem := testSemantics()
+				sem.SplitParamExpansion = Yes
+				sem.SplitCommandSubstitution = Yes
+				sem.GlobExpansionResults = Yes
+				sem.GlobNoMatchIsError = No
+				sem.RedirectTargetIsAnOrdinaryWord = Yes
+				r.Semantics, r.Dir = &sem, dir
+				withExtras(r)
+			})
+			if out != tc.want || st != tc.status {
+				t.Errorf("got %q (status %d), want %q (status %d)", out, st, tc.want, tc.status)
+			}
+		})
 	}
 }
 

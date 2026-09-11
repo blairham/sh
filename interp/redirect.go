@@ -593,7 +593,8 @@ func (r *Runner) redirectTarget(rd *syntax.Redirect) (string, bool) {
 	}
 	// bash's reading, and braces make words as surely as splitting does:
 	// `> {a,b}` names two files and so names none.
-	braced := r.braceCount(rd.Word) > 1 && r.ask(r.sem().BraceExpansion, "brace expansion")
+	braced := !r.noBraceExpand && r.braceCount(rd.Word) > 1 &&
+		r.ask(r.sem().BraceExpansion, "brace expansion")
 	if !braced && len(fields) == 1 {
 		return fields[0], false
 	}

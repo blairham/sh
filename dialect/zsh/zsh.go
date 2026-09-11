@@ -416,6 +416,12 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.No
+	// And `-B` is not brace expansion here either: measured 2026-09-11,
+	// `set -B` turns the terminal bell off and leaves `{a,b}` expanding,
+	// while `set +o braceexpand` — the borrowed spelling of `ignorebraces`
+	// — is what stops it. The letter stays among the ones this dialect
+	// refuses, since the bell is not implemented (#1856).
+	s.SetBTurnsOffBraceExpansion = interp.No
 	// `set -t` is a letter this shell has and will not move — the same answer
 	// it gives the `onecmd` name it borrowed for `singlecommand` — so it is
 	// refused rather than acted on. See Diagnostics.UnimplementedOptionLetters,

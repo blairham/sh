@@ -203,6 +203,10 @@ func Semantics() interp.Semantics {
 	s.StdinOptionNamesTheOperands = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
+	// `set +B` stops `{a,b}` expanding and `set -B` puts it back — measured
+	// 2026-09-11 on bash 5.3.15, both directions, and the letter leaves `$-`
+	// while it is off. So it is not one-way the way `noexec` is (#1856).
+	s.SetBTurnsOffBraceExpansion = interp.Yes
 	// Measured: `echo $-` reports `hB` — hashall and braceexpand — under
 	// -c, a script file and standard input alike, before the letters that
 	// describe the route.
@@ -1263,7 +1267,7 @@ func Diagnostics() interp.Diagnostics {
 			// the same request, so a letter listed here while the name is
 			// wired would refuse what the name grants — see
 			// Semantics.SetHasTheTLetter.
-			"set": "bkprBHP",
+			"set": "bkprHP",
 			// Options these builtins have here and this shell does not.
 			"wait": "fp",
 			// disown's sweepers: -a for every job, -h for HUP shielding

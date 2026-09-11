@@ -100,11 +100,13 @@ func TestBashRefusesAnInvocationOptionWithItsOwnUsageBlock(t *testing.T) {
 // `-t` is deliberately absent: the option behind it is built, so the letter
 // belongs to the accepted set and not to this one. A letter in both tables is
 // the pairing that broke in #1709 — listed by one and refused by the other.
+// `-B` left for the same reason in #1856: brace expansion really switches off
+// now, so the letter is accepted and its old line here would be dead data.
 func TestBashKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
-	if got, want := bash.Diagnostics().UnimplementedOptionLetters["set"], "bkprBHP"; got != want {
+	if got, want := bash.Diagnostics().UnimplementedOptionLetters["set"], "bkprHP"; got != want {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, want)
 	}
-	for _, l := range "bkprBHP" {
+	for _, l := range "bkprHP" {
 		src := "set -" + string(l) + "\n"
 		if got := refuseInScript(t, src); !strings.Contains(got, "is not implemented yet") {
 			t.Errorf("%q said %q, want it called missing rather than invalid", src, got)

@@ -99,13 +99,19 @@ func TestTheEditingModeNamesReachTheSubstrateSwitch(t *testing.T) {
 // TestARecordedNameRemembersWhatItWasTold: the whole of what the recorded
 // kind promises. The request is reported back faithfully by every door into
 // the namespace, and the shell goes on doing what it did.
+//
+// `correct` rather than `ignorebraces`, which used to stand here: that one is
+// about a behaviour this shell really performs, and a name whose request can
+// be acted on is the wrong exemplar for a kind whose whole claim is that
+// nothing follows from it. Recording it was the bug in #1856; spelling
+// correction is a thing this shell genuinely does not do.
 func TestARecordedNameRemembersWhatItWasTold(t *testing.T) {
 	var out, errs bytes.Buffer
 	code := driver.MainArgs(zshWriting(&out, &errs), []string{
 		"zsh", "-c",
-		`setopt ignorebraces; [[ -o ignorebraces ]]; echo "cond=$?"; setopt | grep ignorebraces; echo {a,b}`,
+		`setopt correct; [[ -o correct ]]; echo "cond=$?"; setopt | grep correct`,
 	})
-	if want := "cond=0\nignorebraces\na b\n"; out.String() != want || code != 0 {
+	if want := "cond=0\ncorrect\n"; out.String() != want || code != 0 {
 		t.Errorf("out %q status %d, want %q", out.String(), code, want)
 	}
 	// And a subshell's change stays in the subshell, because the store is in
@@ -113,7 +119,7 @@ func TestARecordedNameRemembersWhatItWasTold(t *testing.T) {
 	out.Reset()
 	code = driver.MainArgs(zshWriting(&out, &errs), []string{
 		"zsh", "-c",
-		`(setopt ignorebraces); [[ -o ignorebraces ]]; echo "cond=$?"`,
+		`(setopt correct); [[ -o correct ]]; echo "cond=$?"`,
 	})
 	if want := "cond=1\n"; out.String() != want || code != 0 {
 		t.Errorf("out %q status %d, want %q", out.String(), code, want)

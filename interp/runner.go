@@ -1467,6 +1467,19 @@ type Runner struct {
 	// expansion — a `case` pattern still matches, because that is matching
 	// and not expansion.
 	noglob bool
+	// noBraceExpand is the `braceexpand` option turned *off* — `set +B` in
+	// the two shells that have the letter, `setopt ignorebraces` in the one
+	// that spells it the other way round. `{a,b}` is then the word it was
+	// written as, everywhere a brace would otherwise be read: a command's
+	// arguments and a redirection's target alike.
+	//
+	// Stored as the negative so that the zero value is a shell that expands
+	// braces, which is what every shell that has them does at startup. It is
+	// a run-time switch and Semantics.BraceExpansion is the dialect's answer
+	// to whether this shell has braces at all; a shell whose braces do not
+	// expand never reads this, and a dialect that does not declare the option
+	// has no way to move it (#1856).
+	noBraceExpand bool
 
 	// globSuspended is pathname expansion switched off for one nested
 	// expansion, from the inside: the contexts where a word substitutes as

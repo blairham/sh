@@ -51,7 +51,14 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 	// still be an expansion — `{1..1}` is `1`, and a range whose honored
 	// step sign points away from the far endpoint holds one element — so
 	// the test is whether the word changed, not whether it multiplied.
-	if words := r.braceExpand(w); (len(words) > 1 || len(words) == 1 && words[0] != w) &&
+	// The run-time switch is read before the axis rather than beside it,
+	// because the two answer different questions: this shell has braces
+	// (the dialect's) and this script asked for them to stop (`set +B`).
+	// Reading it first is also what keeps a turned-off expansion silent —
+	// an unanswered range axis inside a brace nobody is going to expand is
+	// not a disagreement worth refusing a script over.
+	if words := r.braceExpand(w); !r.noBraceExpand &&
+		(len(words) > 1 || len(words) == 1 && words[0] != w) &&
 		r.ask(r.sem().BraceExpansion, "brace expansion") {
 		var out []string
 		for _, bw := range words {

@@ -402,6 +402,10 @@ func command(ctx context.Context, sh Found, c Case, dir string) *exec.Cmd {
 		"LC_ALL=C",
 		"TERM=dumb",
 	}
+	// A column's own environment before the case's, so the rule above holds
+	// for both: execve takes the last of a repeated name, and a case that
+	// names a variable means to decide it.
+	cmd.Env = append(cmd.Env, sh.Env...)
 	for _, kv := range c.Env {
 		kv = strings.ReplaceAll(kv, ArgSnippet, c.Snippet)
 		if strings.Contains(kv, ArgScript) {

@@ -36,7 +36,7 @@ PREFIX ?= /usr/local
 SHELLDIR ?= $(PREFIX)/libexec/sh
 SHELLS := sh bash zsh ksh dash
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate install uninstall
 
 all: build
 
@@ -177,6 +177,14 @@ acp-wire: ## Print a real annotated ACP session, message by message, for showing
 	@go build -o $(BINDIR)/acp-sh ./cmd/sh
 	@go build -o $(BINDIR)/acpcheck ./internal/cmd/acpcheck
 	@$(BINDIR)/acpcheck -bin $(BINDIR)/acp-sh -wire $(ARGS)
+
+# Deliberately not in `check`, and the comment is the rule: this is thousands
+# of shell processes against a 3000-row corpus, on demand. See the `lint`
+# comment above for what wiring a slow thing into every commit costs here.
+axis-sweep: ## Move every axis in interp.Semantics and report the ones nothing objected to (#2031)
+	@mkdir -p $(BINDIR)
+	@go build -tags shaxissweep -o $(BINDIR)/axis-sh ./cmd/sh
+	@go run ./internal/cmd/axissweep -bin $(BINDIR)/axis-sh $(ARGS)
 
 sandbox: ## Try every way a script has of reaching the filesystem, against the shipped binary, and report what the boundary stopped
 	@mkdir -p $(BINDIR)

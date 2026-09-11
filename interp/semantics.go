@@ -7313,11 +7313,15 @@ func CoreSemantics() Semantics {
 // not its to answer. Defaulting to the core answers it honestly: what every
 // shell agrees on is done, and anything else is refused until something above
 // chooses. A shell built on this package sets the field; that is its job.
+// The axis sweep hooks the return rather than any caller, because this is the
+// one place the interpreter reads the vector: a hook here covers a dialect
+// binary and a test that builds its own Semantics alike. axisMutate is the
+// identity in every build but the sweep's — see interp/axissweep_off.go.
 func (r *Runner) sem() Semantics {
 	if r.Semantics != nil {
-		return *r.Semantics
+		return axisMutate(*r.Semantics)
 	}
-	return CoreSemantics()
+	return axisMutate(CoreSemantics())
 }
 
 // swapSemantics moves an axis at run time, copy-on-write.

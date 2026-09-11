@@ -169,6 +169,22 @@ func verdict(c Case, want, got Result) (ok, relaxed bool) {
 	return false, false
 }
 
+// Verdict is verdict, for an instrument outside this package that has to
+// grade exactly the way RunConformance does.
+//
+// Exported rather than reimplemented. The axis sweep (#2031) grades the same
+// corpus against the same recorded answers, and a second copy of "did the
+// implementation agree" is a second answer to one question — the one that
+// would eventually be wrong is the copy nobody runs the corpus through.
+//
+// Graded reports whether a case can grade an implementation at all, for the
+// same reason: an instrument that picked its own subset would be measuring a
+// different corpus than the score everyone quotes.
+func Verdict(c Case, want, got Result) (ok, relaxed bool) { return verdict(c, want, got) }
+
+// Graded reports whether a case can grade an implementation. See graded.
+func Graded(c Case) bool { return graded(c) }
+
 // sameOutcome reports whether two runs ended the same way, ignoring what they
 // printed. It is what "agreed about what happened but not about the wording"
 // means, and no two shells word a diagnostic alike.

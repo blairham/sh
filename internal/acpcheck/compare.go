@@ -62,6 +62,34 @@ eval "rm -f ledger.txt"
 echo done
 `
 
+// TrueCommand is the absolute path of a program that does nothing and
+// succeeds, or "" if there is none to be found.
+//
+// Resolved rather than written down, because it was written down and it was
+// wrong. Both the cost rows below and the benchmarks in bench_test.go named
+// `/bin/true`, which does not exist on macOS — it lives in /usr/bin. Nothing
+// said so: the spawn rows discarded the error with `_ =`, so a shell that
+// started, failed to find the program, and exited 127 was timed as "the same
+// command as a fresh sh -c", and the gated turn was timing a permission round
+// trip for an exec that then failed. The numbers were plausible, which is why
+// it survived — a process start dominates either way — but they were not
+// measuring what the table said they were.
+//
+// An absolute path rather than a bare name because a bare name would be the
+// shell's own builtin on one side of the comparison and a process on the
+// other, which is the same mistake wearing a different hat.
+func TrueCommand() string {
+	// Where it actually is on macOS, and where it actually is elsewhere. A
+	// lookup on PATH would find a builtin-shadowing shim or nothing at all
+	// depending on whose PATH the instrument inherited.
+	for _, p := range []string{"/usr/bin/true", "/bin/true"} {
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return p
+		}
+	}
+	return ""
+}
+
 // Compare runs the script both ways and times both arrangements.
 func Compare(ctx context.Context, bin, dir string) (Comparison, error) {
 	c := Comparison{Script: strings.TrimSpace(compareScript), Samples: 25}
@@ -123,17 +151,38 @@ func Compare(ctx context.Context, bin, dir string) (Comparison, error) {
 	// builtin, which asks nobody anything, and then a command that asks and
 	// is allowed — the two ends of what a turn can cost.
 	c.TurnPlain = median(c.Samples, func() { _, _ = client.Prompt(ctx, session, ":") })
-	c.TurnGated = median(c.Samples, func() { _, _ = client.Prompt(ctx, session, "/bin/true") })
+	// Every row from here down runs one real program, and skips rather than
+	// invents a number if there is none to run. A row that cannot be measured
+	// prints as "-"; a row that measured a failure prints as a fact.
+	prog := TrueCommand()
+	if prog != "" {
+		c.TurnGated = median(c.Samples, func() { _, _ = client.Prompt(ctx, session, prog) })
+	}
 	_ = client.Close()
 
 	// And the cost of the arrangement it replaces: a process per command.
-	c.SpawnOurs = median(c.Samples, func() {
-		_ = exec.CommandContext(ctx, bin, "-c", "/bin/true").Run()
-	})
-	if bash, err := exec.LookPath("bash"); err == nil {
-		c.SpawnBash = median(c.Samples, func() {
-			_ = exec.CommandContext(ctx, bash, "-c", "/bin/true").Run()
+	// The error is checked now: discarding it is what let a command that was
+	// never found be timed as a command that ran.
+	if prog != "" {
+		var spawnErr error
+		c.SpawnOurs = median(c.Samples, func() {
+			if err := exec.CommandContext(ctx, bin, "-c", prog).Run(); err != nil {
+				spawnErr = err
+			}
 		})
+		if spawnErr != nil {
+			return c, fmt.Errorf("timing `%s -c %s`: %w", bin, prog, spawnErr)
+		}
+		if bash, err := exec.LookPath("bash"); err == nil {
+			c.SpawnBash = median(c.Samples, func() {
+				if err := exec.CommandContext(ctx, bash, "-c", prog).Run(); err != nil {
+					spawnErr = err
+				}
+			})
+			if spawnErr != nil {
+				return c, fmt.Errorf("timing `bash -c %s`: %w", prog, spawnErr)
+			}
+		}
 	}
 	return c, nil
 }

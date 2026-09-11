@@ -763,6 +763,35 @@ covers the instrument's own machinery — the framing, the correlation, the
 purity detection, the median — against a scripted agent that is not a shell,
 including one that answers nothing at all.
 
+`make acp-bench` says those same costs in `ns/op`, so one release can be
+diffed against the release before it. The table `make acp` prints is the
+better read — units a person uses, an argument attached — but its sample
+count is a constant in the source and its output is prose, so two runs a
+month apart can only be held against each other by eye, and nothing in the
+tree would have noticed the turn path getting slower. The benchmarks sit in
+`internal/acpcheck/bench_test.go` and drive the same client, so the two
+instruments are timing one thing and can be checked against each other.
+
+The spawn rows are in that file rather than a table of their own **because
+the claim is a ratio**, and a ratio whose halves were measured in different
+runs is not one — this machine is rarely quiet. For the same reason a
+connection is retired every 64 timed operations: the agent holds a live
+shell for every session opened on it and the client keeps every update it
+was sent, so a benchmark left on one connection drifts into measuring the
+accumulation rather than the operation.
+
+**Writing the measured command out twice is what made both copies wrong.**
+The gated turn and the spawn rows each named `/bin/true`, which on macOS is
+`/usr/bin/true`, and the spawn rows discarded the error with `_ =` — so all
+three were timing a shell that started, failed the lookup and exited 127.
+The table read 18x where the truth is 2.9x, and it survived for as long as
+it did because a process start dominates either way and the numbers stayed
+plausible. `acpcheck.TrueCommand` resolves it once for both callers now,
+and the test guarding it **runs** the program rather than checking that a
+path came back: the first version of that test *skipped* when the lookup
+found nothing, which is precisely the state the broken code was in on every
+Mac, so it would have stayed green for the whole life of the bug.
+
 `make sandbox` tries every way a script has of reaching the filesystem —
 redirection in each of its forms, `source`, a glob, a probe, an exec, a
 signal, and every module builtin that opens or changes a file — against the

@@ -1065,7 +1065,7 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 	"   Or: kill [ options ] -l [arg ...]"
 
 func Diagnostics() interp.Diagnostics {
-	return interp.Diagnostics{
+	d := interp.Diagnostics{
 		// A math complaint raised by a builtin names it, as bash's does:
 		// `let '1+'` is `ksh: let: 1+: more tokens expected`.
 		ArithErrorNamesTheBuiltin: true,
@@ -1168,14 +1168,20 @@ func Diagnostics() interp.Diagnostics {
 		// the 126 an unrunnable command carries. It is the only shell in the
 		// panel that words the two differently without also numbering them
 		// differently from bash.
-		ScriptNotFound:              "%[1]s: not found",
-		ScriptNotFoundStatus:        127,
-		ScriptNotReadable:           "%[1]s: cannot open [%[2]s]",
-		ScriptNotReadableStatus:     126,
-		Location:                    interp.LocationLineWordAfterFirst,
-		TraceQuoting:                interp.QuoteDollar,
-		TraceArrayLiteral:           interp.TraceArraySpaced,
-		ScriptLocation:              interp.LocationLineWord,
+		ScriptNotFound:          "%[1]s: not found",
+		ScriptNotFoundStatus:    127,
+		ScriptNotReadable:       "%[1]s: cannot open [%[2]s]",
+		ScriptNotReadableStatus: 126,
+		Location:                interp.LocationLineWordAfterFirst,
+		TraceQuoting:            interp.QuoteDollar,
+		TraceArrayLiteral:       interp.TraceArraySpaced,
+		ScriptLocation:          interp.LocationLineWord,
+		// At a prompt this shell names no line at all — see
+		// withPromptWordings, where the sentences it writes there are
+		// measured. The location is already name-only for line 1 under `-c`;
+		// this says so for every line, since a construct typed over three
+		// lines is still `ksh: syntax error: …` there.
+		PromptLocation:              interp.LocationNameOnly,
 		BuiltinLocation:             interp.LocationBracketLineAfterFirst,
 		ScriptBuiltinLocation:       interp.LocationBracketLine,
 		ParseFailureNamesItsOwnLine: true,
@@ -1207,9 +1213,6 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperatorExpected: "arithmetic syntax error",
 		// A digit the base does not have is the same sentence.
 		DigitTooGreatForBase: "arithmetic syntax error",
-		// ksh93 does not call this a bad substitution: it is a syntax error
-		// naming the character it could not read.
-		BadSubstitution: "syntax error at line %[2]d: `%[1]s' unexpected",
 		// Except for the `@` operator family, the one bad substitution ksh93
 		// defers to run time — measured, `${x@Q}` in a branch never taken is
 		// silent — and when reached it is reported as a bad substitution
@@ -1229,34 +1232,11 @@ func Diagnostics() interp.Diagnostics {
 		BadSubstitutionNames:          interp.NamesTheWholeWord,
 		FunctionNameInvalid:           "%[1]s: invalid function name",
 		FunctionNameDiscipline:        "%[1]s: invalid discipline function",
-		SyntaxUnexpected:              "syntax error at line %[3]d: `%[1]s' unexpected",
 		// A parse failure by every other measure, and 1 rather than this
 		// dialect's syntax-error status.
-		ForNameStatus: 1,
-		ForName:       "%[1]s: invalid variable name",
-		Unterminated:  "syntax error at line %[6]d: `%[3]s' unmatched",
-		// Nothing is unmatched when nothing was open, so the end of input is
-		// named as the thing that was unexpected instead.
-		UnterminatedNoConstruct: "syntax error at line %[6]d: `end of file' unexpected",
-		// Only the substitutions can go unmatched here — a quote the input
-		// runs out inside is closed and run, which is the grammar flag.
-		// The `"` case is a `${` that began inside a double quote, and it
-		// is worded as the quote character standing where it should not.
-		UnmatchedQuote:    "syntax error at line %[4]d: `%[1]s' unmatched",
-		UnmatchedCmdSubst: "syntax error at line %[4]d: `(' unmatched",
-		// A process substitution reaches a different *diagnosis* here, not
-		// only a different sentence: `$(` is an unmatched parenthesis named
-		// at the opener's line, and `<(` is the end of the file named at the
-		// line the file ended on. Measured — `cat <(echo hi` in a script
-		// answers "syntax error at line 2: `end of file' unexpected" where
-		// `v=$(echo hi` answers "syntax error at line 1: `(' unmatched".
-		UnmatchedProcSubst:  "syntax error at line %[5]d: `end of file' unexpected",
+		ForNameStatus:       1,
+		ForName:             "%[1]s: invalid variable name",
 		UnmatchedBraceSubst: "%[3]s{: bad substitution",
-		// Exactly what it says for `$(`: this shell blames the parenthesis
-		// and the opener's line and does not distinguish the two
-		// constructs. Written out rather than shared with UnmatchedCmdSubst
-		// so that a later change to one cannot silently move the other.
-		UnmatchedArithSubst: "syntax error at line %[4]d: `(' unmatched",
 		SyntaxErrorStatus:   3,
 		// The status is never reached — a file `.` cannot open ends the script
 		// here — but the wording is, and it names the operand and the reason in
@@ -1515,6 +1495,69 @@ func Diagnostics() interp.Diagnostics {
 		TimeDecimals: 2,
 		TimeBare:     interp.TimeBareShellUserSys,
 	}
+	return withPromptWordings(d)
+}
+
+// withPromptWordings fills in what this shell writes about a parse failure at
+// a **prompt**, which is each of the sentences above with the line taken out
+// of it.
+//
+// Measured 2026-09-11 under `-i`, the shell's own path normalized:
+//
+//	if; then          ksh: syntax error: `;' unexpected
+//	if true; then     ksh: syntax error: `then' unmatched
+//	x='never closed   ksh: syntax error: `'' unmatched
+//	v=$(echo hi       ksh: syntax error: `(' unmatched
+//	echo one &&       ksh: syntax error: `end of file' unexpected
+//	echo $((1+        ksh: syntax error: `(' unmatched
+//	echo ${x@         ksh: syntax error: `newline' unexpected
+//
+// Every one of them names the line in a script and none of them do here, and
+// this shell is the only one in the panel that carries the line *inside* the
+// sentence — the other three put it in the location, where one field answers
+// for all of their wordings at once. See interp.Diagnostics.PromptLocation.
+//
+// Each pair is built by one call so the two halves cannot drift: a prompt
+// sentence written out beside its script sentence is a second copy to keep in
+// step, and the rule relating them is exactly one clause.
+func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
+	d.SyntaxUnexpected, d.PromptSyntaxUnexpected = parseWording(3, "`%[1]s' unexpected")
+	d.Unterminated, d.PromptUnterminated = parseWording(6, "`%[3]s' unmatched")
+	// Nothing is unmatched when nothing was open, so the end of input is
+	// named as the thing that was unexpected instead.
+	d.UnterminatedNoConstruct, d.PromptUnterminatedNoConstruct = parseWording(6, "`end of file' unexpected")
+	// Only the substitutions can go unmatched here — a quote the input runs
+	// out inside is closed and run, which is the grammar flag. The `"` case
+	// is a `${` that began inside a double quote, and it is worded as the
+	// quote character standing where it should not.
+	d.UnmatchedQuote, d.PromptUnmatchedQuote = parseWording(4, "`%[1]s' unmatched")
+	d.UnmatchedCmdSubst, d.PromptUnmatchedCmdSubst = parseWording(4, "`(' unmatched")
+	// A process substitution reaches a different *diagnosis* here, not only a
+	// different sentence: `$(` is an unmatched parenthesis named at the
+	// opener's line, and `<(` is the end of the file named at the line the
+	// file ended on. Measured — `cat <(echo hi` in a script answers "syntax
+	// error at line 2: `end of file' unexpected" where `v=$(echo hi` answers
+	// "syntax error at line 1: `(' unmatched".
+	d.UnmatchedProcSubst, d.PromptUnmatchedProcSubst = parseWording(5, "`end of file' unexpected")
+	// Exactly what it says for `$(`: this shell blames the parenthesis and
+	// the opener's line and does not distinguish the two constructs. Written
+	// as its own call rather than shared with UnmatchedCmdSubst so that a
+	// later change to one cannot silently move the other.
+	d.UnmatchedArithSubst, d.PromptUnmatchedArithSubst = parseWording(4, "`(' unmatched")
+	// ksh93 does not call this a bad substitution: it is a syntax error
+	// naming the character it could not read.
+	d.BadSubstitution, d.PromptBadSubstitution = parseWording(2, "`%[1]s' unexpected")
+	return d
+}
+
+// parseWording is one sentence about a parse failure in both of its shapes:
+// with the line for a script and without it at a prompt.
+//
+// lineArg is the numbered argument that carries the line, which differs per
+// sentence because the arguments a wording is handed differ per failure.
+func parseWording(lineArg int, rest string) (inAScript, atAPrompt string) {
+	return fmt.Sprintf("syntax error at line %%[%d]d: %s", lineArg, rest),
+		"syntax error: " + rest
 }
 
 // Apply adjusts the substrate to ksh93: one removal and one addition.

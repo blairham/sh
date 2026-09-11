@@ -3899,6 +3899,33 @@ type Semantics struct {
 	// and a script branching on `${PIPESTATUS[0]}` after a negated test reads
 	// the opposite of what the shell it was written for reports (#1513).
 	NegatedTestRecordsThePostNegationStatus Answer
+	// PromptAsksAgainAfterARefusedToken draws the continuation prompt for a
+	// construct the parser has **refused**, rather than refusing it where it
+	// stands.
+	//
+	// Read by the front end rather than by the interpreter: it is about what a
+	// prompt does with a line, which is `repl`'s to do and `driver`'s to carry
+	// — the same shape as PlusSignedCommandStringIsDollarZero, and a plain
+	// bool for the same reason, since a prompt has no way to refuse to run
+	// over an unanswered axis.
+	//
+	// Measured 2026-09-11, `printf 'echo one\nif; then\necho three\n'` into
+	// each shell under `-i` with PS1 and PS2 set:
+	//
+	//	bash 5.3.15  refuses at once, no PS2, and then runs `echo three`
+	//	ksh93u+      the same
+	//	dash         the same
+	//	zsh 5.9.2    draws PS2 and waits
+	//
+	// `while; do` splits the panel the same way, and `for do` and `case in`
+	// split it *neither* way — every shell prompts for those, because they
+	// are input that has not finished rather than input that is wrong.
+	//
+	// The cost of answering yes where the shell answers no is a command
+	// disappearing: the next line typed is read as part of the construct
+	// already refused, so `echo three` above never runs (#1893).
+	PromptAsksAgainAfterARefusedToken bool
+
 	// CompoundBodyDecidesThePipelineStatusRecord asks the *body* whether a
 	// compound command writes the pipeline-status record, rather than letting
 	// the compound write it for having run.

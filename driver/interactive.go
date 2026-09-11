@@ -11,6 +11,7 @@ import (
 	"github.com/blairham/sh/internal/panicguard"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
+	"github.com/blairham/sh/syntax"
 )
 
 // Interactive reads and runs commands from a terminal until the input ends.
@@ -281,11 +282,14 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		In:      sh.Stdin,
 		Out:     sh.Stdout,
 		Err:     sh.Stderr,
-		// A parse failure is worded by the dialect here exactly as it is for
-		// a script, minus the line echo: the line is still on the screen
-		// above the complaint, having just been typed.
+		// A parse failure is worded by the dialect the way it words one at a
+		// **prompt**, which is its own route and not the script one: three of
+		// the four name no line there, where every one of them names a line
+		// for the same failure in a file (#1892). Minus the line echo either
+		// way — the line is still on the screen above the complaint, having
+		// just been typed.
 		Report: func(err error) string {
-			return dg.ParseDiagnostic(name, "", err, "")
+			return dg.ForPrompt().ParseDiagnostic(name, "", err, "")
 		},
 		// And it leaves the same status behind that it would as a script,
 		// from the same table: what a shell answers `$?` with after a refused
@@ -299,9 +303,27 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// bash's run-time status through here for the same reason it does
 		// through a script.
 		ParseFailureStatus: dg.StatusForParseError,
-		Style:              sh.PromptStyle,
-		Editor:             sh.EditorStyle,
-		History:            sh.HistoryStyle,
+		// And what it says about input it accepted anyway, worded by the same
+		// route: one dialect warns about a here-document the input ran out
+		// inside, at a prompt exactly as in a script, and the prompt had no
+		// path to say it at all.
+		Remark: func(rk syntax.Remark) string {
+			pdg := dg.ForPrompt()
+			msg := pdg.Remark(rk)
+			if msg == "" {
+				return ""
+			}
+			return pdg.Report(name, rk.Pos.Line, msg+"\n")
+		},
+		// And whether a construct it refused still asks for another line,
+		// which one of the four does — see
+		// Semantics.PromptAsksAgainAfterARefusedToken. Carried rather than
+		// decided here: the prompt is where the difference shows and the
+		// dialect is where the answer lives.
+		AskAgainAfterARefusedToken: sh.Semantics.PromptAsksAgainAfterARefusedToken,
+		Style:                      sh.PromptStyle,
+		Editor:                     sh.EditorStyle,
+		History:                    sh.HistoryStyle,
 		// And what it runs between commands, which is one dialect's `precmd`
 		// and `preexec` and nothing at all for the other three.
 		Hooks: sh.HookStyle,

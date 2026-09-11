@@ -1141,8 +1141,15 @@ func Diagnostics() interp.Diagnostics {
 		ScriptNotReadableStatus: 126,
 		SelectPrompt:            "#? ",
 		Location:                interp.LocationLineWord,
-		NotFound:                "%s: command not found",
-		UnboundVariable:         "%s: unbound variable",
+		// And no line at all at a prompt: measured 2026-09-11 under `-i`,
+		// `if; then` is `bash: syntax error near unexpected token `;'` where
+		// the same line in a script is `s.sh: line 1: …`. The line *inside* a
+		// sentence stays — `unexpected end of file from `if' command on line
+		// 1` is what it writes at a prompt too — which is why this is the
+		// location and not a second wording.
+		PromptLocation:  interp.LocationNameOnly,
+		NotFound:        "%s: command not found",
+		UnboundVariable: "%s: unbound variable",
 		// The sigil written back, which no other column does: `${@:=w}`
 		// with no parameters is `$@: cannot assign in this way`, and
 		// `${1:=w}` names `$1`. Identical in 3.2.57 and in the same binary

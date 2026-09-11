@@ -88,6 +88,32 @@ type Shell struct {
 	// exact moment it did not (#1299).
 	ParseFailureStatus func(err error) int
 
+	// Remark renders something the parser had to say about input it accepted
+	// anyway — the whole line, ready to write, or empty for nothing to say.
+	//
+	// Nil says nothing, which is what a caller without a dialect gets and
+	// what three of the four dialects say about everything. The one remark
+	// there is belongs to the end of the input: a here-document whose
+	// delimiter never arrived is accepted and run by every shell in the
+	// panel, and bash warns about it — at a prompt as well as in a script,
+	// measured. The script routes have said it since there were remarks; the
+	// prompt had no way to (#1892).
+	Remark func(rk syntax.Remark) string
+
+	// AskAgainAfterARefusedToken keeps the continuation prompt for a construct
+	// the parser has *refused*, rather than refusing it where it stands.
+	//
+	// The zero value refuses at once, which is what a caller without a dialect
+	// gets and what three of the four panel shells do. It is not a fallback
+	// chosen for being safe: a prompt that asks for another line after
+	// `if; then` reads the next command as part of the construct it has
+	// already refused, so the command a person typed next disappears (#1893).
+	//
+	// See [Shell.refusedForGood] for the measurement and for which failures
+	// this is about — a token the grammar cannot take, never input that has
+	// merely not finished.
+	AskAgainAfterARefusedToken bool
+
 	// Style is what this dialect does to a prompt parameter's value before
 	// it is drawn. The zero value draws it as it stands.
 	Style PromptStyle
@@ -960,7 +986,12 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 	// without being wrong, and a here-document with no delimiter yet is
 	// exactly that — the parser takes what it has and says there may be
 	// more, which is an error to a script and a question to a prompt.
-	if p.Incomplete() || endsWithContinuation(text) {
+	//
+	// And unfinished is not the only thing input can be. A construct the
+	// parser has *refused* is asked about first: it is unfinished as well, and
+	// no line that follows it can mend it, so a prompt that asked for one
+	// would be asking for something it is going to throw away.
+	if !s.refusedForGood(err) && (p.Incomplete() || endsWithContinuation(text)) {
 		// Kept for the continuation prompt: what the next line goes on with
 		// is what the parser is still inside, and this is the only place it
 		// is known.
@@ -1013,10 +1044,34 @@ func (s Shell) endOfInput(pending *strings.Builder) ([]*syntax.File, string, err
 		p.Aliases = s.Runner.ExpandingAlias
 	}
 	stmts, err := collect(p)
+	// Before the failure and whether or not there is one, which is the order
+	// the script route already writes them in and is measured: a here
+	// document with neither its delimiter nor its enclosing `}` produces both,
+	// the warning first.
+	s.sayRemarks(p.Remarks())
 	if err != nil {
 		return nil, "", err
 	}
 	return stmts, strings.TrimSuffix(text, "\n"), nil
+}
+
+// sayRemarks writes what the parser had to say about input it accepted anyway.
+//
+// Only from the end of the input, which is the only place a prompt can reach
+// one: the single remark the panel has is a here-document delimited by the end
+// of the input, and while a session is still running there is always another
+// line, so the parser is waiting for the delimiter rather than remarking on
+// its absence. A call beside accept would be a line no test could tell from a
+// line that was never there.
+func (s Shell) sayRemarks(rs []syntax.Remark) {
+	if s.Remark == nil {
+		return
+	}
+	for _, rk := range rs {
+		if line := s.Remark(rk); line != "" {
+			s.errf("%s", line)
+		}
+	}
 }
 
 // endsWithContinuation reports whether the text ends with a backslash joining
@@ -1245,6 +1300,41 @@ func (s Shell) refused(err error) {
 		return
 	}
 	s.Runner.SetExitStatus(s.ParseFailureStatus(err))
+}
+
+// refusedForGood reports whether a parse failure is one no further line could
+// mend, so that a prompt refuses it where it stands.
+//
+// `if; then` is the shape. The `if` has been opened and not closed, so the
+// parser says the input is incomplete and says so truthfully — but the `;`
+// after the keyword is a token the grammar does not want, and typing more will
+// not change that. "Unfinished" and "wrong" are two answers, and a prompt is
+// where the difference shows.
+//
+// The distinction is the error's own: this is syntax.ErrUnexpected at the `;`
+// rather than syntax.ErrUnterminated at the `if`, and the parser had told them
+// apart all along. What was missing is that the prompt asked only whether more
+// input was possible.
+//
+// Measured 2026-09-11, `printf 'echo one\nif; then\necho three\n'` into each
+// shell under `-i` with PS1 and PS2 set:
+//
+//	bash 5.3.15  refuses at once, no continuation prompt, then runs `echo three`
+//	ksh93u+      the same
+//	dash         the same
+//	zsh 5.9.2    draws PS2 and waits — and the typed `echo three` is swallowed
+//
+// So three of the four refuse *before* the next line is read, and the fourth
+// really does continue: interp.Semantics.PromptAsksAgainAfterARefusedToken,
+// carried here as a field. False — the zero value, and what a caller without a
+// dialect gets — refuses at once, which is the majority answer and the one
+// that does not eat a typed command (#1893).
+func (s Shell) refusedForGood(err error) bool {
+	if s.AskAgainAfterARefusedToken {
+		return false
+	}
+	var se *syntax.Error
+	return errors.As(err, &se) && se.Kind == syntax.ErrUnexpected
 }
 
 func (s Shell) report(err error) string {

@@ -602,6 +602,12 @@ func Semantics() interp.Semantics {
 	// replaces the record and `if [[ a = b ]]; then [[ b = b ]]; fi` leaves
 	// it, where neither body runs. Measured 2026-09-11 (#1931).
 	s.CompoundBodyDecidesThePipelineStatusRecord = interp.Yes
+	// A construct this shell has refused still asks for another line at a
+	// prompt, where the other three refuse it before the next line is read.
+	// Measured 2026-09-11 with `printf 'echo one\nif; then\necho three\n'`
+	// into `-i`: this shell draws PS2 twice and swallows the `echo three`,
+	// which is what makes it worth an answer rather than a bug (#1893).
+	s.PromptAsksAgainAfterARefusedToken = true
 	s.UnsetEndsTheProducedPipelineStatus = interp.Yes
 	s.SelectLayout = interp.SelectMenuColumns
 	s.SelectPromptNeedsTerminal = interp.No
@@ -1835,7 +1841,12 @@ func Diagnostics() interp.Diagnostics {
 		ScriptNotFoundStatus:    127,
 		ScriptNotReadableStatus: 127,
 		Location:                interp.LocationTightLine,
-		BadSubstitution:         "bad substitution",
+		// And no line at a prompt, which is the same answer this shell gives
+		// a program on standard input: measured 2026-09-11 under `-i`,
+		// `if; then` then end of input is `zsh: parse error near `\n'` where
+		// a script file is `s.sh:3: parse error near `\n'`.
+		PromptLocation:  interp.LocationNameOnly,
+		BadSubstitution: "bad substitution",
 		// The position is 1-based and counts from the `$`: `${(Y)x}` errors
 		// at 4, and a group that runs out of text errors just past the end.
 		ExpansionFlagsError: "error in flags near position %[1]d in '%[2]s'",

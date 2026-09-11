@@ -573,6 +573,84 @@ from making a shell nobody can leave. Measured at a prompt in all four:
 `exit`, `exit 7`, `eval 'exit 7'` and errexit firing (`set -e` then
 `false`) each end the session.
 
+## A construct a prompt can never finish
+
+Two things a parser can say about a half-typed line get run together, and a
+prompt is the one place the difference shows. `if true; then` is
+**unfinished**: the next line continues it. `if; then` is **wrong**: the `if`
+has been opened and not closed, so more input is possible, and the `;` after
+the keyword is a token the grammar will never take, so no amount of it would
+help.
+
+Measured 2026-09-11, `printf 'echo one\nif; then\necho three\n'` into each
+shell under `-i` with `PS1` and `PS2` set:
+
+| | after `if; then` | and then |
+| --- | --- | --- |
+| bash 5.3.15 | refuses at once, no continuation prompt | runs `echo three` |
+| ksh93u+ | the same | runs `echo three` |
+| dash | the same | — |
+| zsh 5.9.2 | draws `PS2` and waits | swallows `echo three` |
+
+The second column is the cost and is why this is not cosmetic: a prompt that
+asks for another line reads the command typed next as part of the construct it
+has already refused, so that command never runs and nothing says so.
+
+`Semantics.PromptAsksAgainAfterARefusedToken`, true for `zsh` alone, carried by
+`driver` to `repl.Shell.AskAgainAfterARefusedToken`. It is read by the front
+end rather than by the interpreter, which is what a prompt's question always
+is, and it is a plain bool rather than an `Answer` because a prompt has no way
+to refuse to run over an axis nobody answered.
+
+**Which failures it is about** is the error's own distinction, which the parser
+had all along: `syntax.ErrUnexpected` at the token, never
+`syntax.ErrUnterminated` at the construct. `while; do` splits the panel the
+same way `if; then` does. `for do` and `case in` split it neither way — every
+shell prompts for both, because what is missing there is a word rather than a
+word being in the way — and so do `echo one |`, `x='never closed`,
+`cat <<EOT` and a trailing backslash.
+
+The prompt asked only whether more input was possible, so this shell gave zsh's
+answer to all four (#1893).
+
+### And what it says when it refuses one
+
+A prompt is a **route**, the way a script file and standard input are, and
+`Diagnostics.ForPrompt()` is its answer beside `ForScript` and `ForStdin`.
+Three of the four shells name no line at all there, where every one of them
+names a line for the same failure in a file. Measured 2026-09-11,
+`printf 'echo one\nif; then\necho three\n'` into each shell under `-i`, the
+shell's own path normalized:
+
+| | at a prompt | in a file |
+| --- | --- | --- |
+| bash 5.3.15 | ``bash: syntax error near unexpected token `;' `` | `s.sh: line 1: …` |
+| ksh93u+ | ``ksh: syntax error: `;' unexpected`` | `s.sh: syntax error at line 1: …` |
+| zsh 5.9.2 | ``zsh: parse error near `\n' `` | `s.sh:3: …` |
+| dash | `dash: 2: Syntax error: ";" unexpected` | `s.sh: 1: …` |
+
+Two things move, and the second is why a location is not enough.
+`PromptLocation` is how bash and zsh say "no line here". ksh93 writes the line
+**inside its sentence**, so the sentence is what has to change: the `Prompt…`
+wordings, which that dialect builds in pairs with their script forms from one
+call, since the rule relating them is exactly one clause.
+
+**dash is the fourth and is different again.** It keeps its line and counts the
+**session** rather than the construct — the second line typed is `2` — which is
+state the front end would have to keep and is not modeled; see #2022.
+
+**The echoed line stays absent.** `ParseDiagnostic` is handed no source at a
+prompt, which is the right answer and not a gap: the line a person typed is
+still on the screen above the complaint. An empty source used to split into one
+empty line, so bash's second line came out as a bare `` `' `` (#1881).
+
+**A remark reaches a prompt too.** A here-document delimited by the end of the
+input is accepted and run by every shell in the panel, and bash warns about it —
+at a prompt exactly as in a script. The prompt had no remark path at all, so the
+body ran and nothing was said; `repl.Shell.Remark` is that path, and it is
+reached only from the end of the input, which is the only place a prompt can
+have one (#1892).
+
 **One divergence recorded rather than reproduced, and it is dash's alone.**
 The boundary here is "the shell is prompting", and dash's is narrower than
 that: with `-i` reading from a **pipe** rather than a terminal, dash prints

@@ -897,7 +897,7 @@ func TestAnAcceptDoesNotSurviveIntoTheNextWidget(t *testing.T) {
 
 // The other built-in actions are still refused out loud, which is the claim
 // zle.go makes about them: reaching back into the editor mid-keystroke is not
-// something this shell does, and an accept is the one that can be honoured
+// something this shell does, and an accept is the one that can be honored
 // *after* the widget returns rather than during it.
 func TestAnotherBuiltinWidgetIsStillRefused(t *testing.T) {
 	r, out := zleRunner(t, "w(){ zle .end-of-line }; zle -N w")

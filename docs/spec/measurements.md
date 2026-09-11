@@ -15564,7 +15564,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   false | true; { true | false; }; echo "[${PIPESTATUS[@]}]"
   ```
-- `pipestatus/a-redirected-compound-still-leaves-the-record` — a redirection on the compound does not make it write, which is the opposite of the rule the neighbouring axes follow — a redirected `[[ … ]]` and a redirected bare assignment both record. So the redirection row belongs to the body-reading mechanism and not to this one
+- `pipestatus/a-redirected-compound-still-leaves-the-record` — a redirection on the compound does not make it write, which is the opposite of the rule the neighboring axes follow — a redirected `[[ … ]]` and a redirected bare assignment both record. So the redirection row belongs to the body-reading mechanism and not to this one
   ```sh
   false | true; if false; then :; fi >/dev/null; echo "[${PIPESTATUS[@]}]"
   ```

@@ -474,7 +474,7 @@ above, which is what makes the pair worth measuring on one snippet.
 
 - **`exit` and errexit are caught nowhere.** `exit 7` in a sourced file
   exits 7 in all six, and `set -e` firing there ends the shell in all six.
-  That is what separates this from the neighbouring rule that `exit` in a
+  That is what separates this from the neighboring rule that `exit` in a
   startup file ends the shell and the files after it are not read.
 
 ### The one operand that is not an error
@@ -2858,7 +2858,7 @@ The `1` rows are the condition's status: `false` ran and recorded it, and the
 reading of the parse can produce, since it is a fact about a run rather than
 about a body. The two-element row is what says it is the inner **pipeline**
 rather than the inner last command. And a redirection on the compound does
-**not** change it, which is the opposite of the rule the neighbouring axes
+**not** change it, which is the opposite of the rule the neighboring axes
 follow and the one place the two mechanisms disagree about a rule they both
 state.
 
@@ -7417,7 +7417,7 @@ across runs; neither is a race.
 **Whether a bare `wait` frees the slots it waited for.** `sleep 0 & wait;
 jobs %1` — bash 1, dash 0, ksh93 0, zsh 127. So bash and zsh free the
 slot and dash and ksh93 keep the finished job. It is not taken because it
-does not hold still under the neighbouring probes: **bash 5.3.15 and bash
+does not hold still under the neighboring probes: **bash 5.3.15 and bash
 3.2.57 disagree with each other** on the same question without a `wait`
 (`sleep 0 & sleep 1; jobs %1` is 0 in 5.3 and 1 in 3.2), and ksh93 answers
 `wait` and `wait %1` differently — keeping the slot for the first and
@@ -8790,7 +8790,7 @@ a function the file calls, or inside a file the file sources, carries its
 argument in bash too — measured, an rc running `f(){ return 3; }; f` or
 `. inner.sh` leaves 3 in bash 5.3.15 — so it is a property of the
 outermost frame rather than of `return`. See `docs/spec/invocation.md`
-for the neighbouring routes.
+for the neighboring routes.
 
 
 ### jobs, `kill` and background work

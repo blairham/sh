@@ -17,7 +17,7 @@ import (
 // wrote the compound's own status for every one of these before (#2016),
 // which is the plausible one-element answer nothing reports.
 //
-// It is a different mechanism from the neighbouring shell's rather than the
+// It is a different mechanism from the neighboring shell's rather than the
 // other answer to one question: that one reads the body's *parse* and writes
 // the compound's own status, and this one reads nothing and writes nothing.
 // The rows below are the ones where the two differ.
@@ -47,7 +47,7 @@ func TestACompoundLeavesTheRecordToWhatRanInside(t *testing.T) {
 		{`{ if false; then :; fi; }`, "1"},
 		{`for i in a; do false; done`, "1"},
 		// A redirection on the compound does not change it, which is the
-		// opposite of the rule the neighbouring axes follow.
+		// opposite of the rule the neighboring axes follow.
 		{`if false; then :; fi >/dev/null`, "1"},
 		{`{ :; } >/dev/null`, "0"},
 		// A subshell is not a compound for this purpose: it is a job and

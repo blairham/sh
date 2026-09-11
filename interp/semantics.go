@@ -4000,7 +4000,7 @@ type Semantics struct {
 	//
 	// The two-element rows are what say it is the inner *pipeline* rather than
 	// the compound's last command, and the redirection row is where the two
-	// mechanisms part company about the rule the neighbouring axes follow.
+	// mechanisms part company about the rule the neighboring axes follow.
 	//
 	// A subshell is not a compound for this purpose in either of them: it
 	// reports its own status, one element, `( false | true | false )` leaving

@@ -11409,7 +11409,7 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 	{
 		ID: "pipestatus/a-redirected-compound-still-leaves-the-record", Category: "pipeline status",
 		Snippet: `false | true; if false; then :; fi >/dev/null; echo "[${PIPESTATUS[@]}]"`,
-		Why:     "a redirection on the compound does not make it write, which is the opposite of the rule the neighbouring axes follow — a redirected `[[ … ]]` and a redirected bare assignment both record. So the redirection row belongs to the body-reading mechanism and not to this one",
+		Why:     "a redirection on the compound does not make it write, which is the opposite of the rule the neighboring axes follow — a redirected `[[ … ]]` and a redirected bare assignment both record. So the redirection row belongs to the body-reading mechanism and not to this one",
 	},
 	{
 		ID: "pipestatus/a-compound-body-that-never-ran-still-counts-in-zsh", Category: "pipeline status",

@@ -546,7 +546,7 @@ func TestACompoundLeavesTheRecordToWhatRan(t *testing.T) {
 		{`{ if false; then :; fi; }`, "1"},
 		{`for i in a; do false; done`, "1"},
 		// A redirection on the compound does not change it, which is the
-		// opposite of the rule the neighbouring axes follow — and the row
+		// opposite of the rule the neighboring axes follow — and the row
 		// that needs the axis asked before the redirection is looked at.
 		{`if false; then :; fi >/dev/null`, "1"},
 		{`{ :; } >/dev/null`, "0"},

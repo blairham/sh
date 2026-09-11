@@ -257,7 +257,7 @@ func Semantics() interp.Semantics {
 	// `if false; then :; fi` holds the condition's 1 and `case a in b) :;;
 	// esac` leaves the record from before it untouched, having run nothing.
 	// A redirection on the compound does not change that, which is the
-	// opposite of the rule the neighbouring axes follow. Measured 2026-09-11
+	// opposite of the rule the neighboring axes follow. Measured 2026-09-11
 	// on 5.3.15 and 3.2.57 alike (#2016).
 	s.CompoundPipelineStatusRecord = interp.CompoundPipelineStatusFromWhatRan
 	s.UnsetEndsTheProducedPipelineStatus = interp.No

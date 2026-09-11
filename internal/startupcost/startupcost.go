@@ -401,12 +401,17 @@ func RichRCBody(s Subject, dir string) string {
 // and a command that did work would add its own.
 func RunCommand(s Subject) (time.Duration, error) {
 	argv := append(append([]string{}, s.CommandArgs...), ":")
-	cmd := exec.Command(s.Path, argv...)
-	cmd.Env = bareEnv(s.Env)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil
-	start := time.Now()
-	err := cmd.Run()
-	return time.Since(start), err
+	var took time.Duration
+	err := retryingTextFileBusy(func() error {
+		cmd := exec.Command(s.Path, argv...)
+		cmd.Env = bareEnv(s.Env)
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil
+		start := time.Now()
+		err := cmd.Run()
+		took = time.Since(start)
+		return err
+	})
+	return took, err
 }
 
 // RunPrompt starts the shell on a pseudo-terminal and returns how long it took
@@ -422,6 +427,18 @@ func RunCommand(s Subject) (time.Duration, error) {
 // rcDir empty measures a start that reads nothing; otherwise the subject's rc
 // route is used and the file is expected to be there already.
 func RunPrompt(s Subject, rcDir string) (time.Duration, error) {
+	var took time.Duration
+	err := retryingTextFileBusy(func() error {
+		var err error
+		took, err = runPromptOnce(s, rcDir)
+		return err
+	})
+	return took, err
+}
+
+// runPromptOnce is one attempt at the above, which is all of it apart from the
+// exec the kernel may refuse. See retryingTextFileBusy.
+func runPromptOnce(s Subject, rcDir string) (time.Duration, error) {
 	args, env := s.PromptArgs, append([]string(nil), s.Env...)
 	if rcDir != "" {
 		if len(s.RCPromptArgs) == 0 {

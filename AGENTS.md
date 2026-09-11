@@ -297,6 +297,50 @@ every route into this program is a POSIX one. The first tag is `v0.0.0`.
 stamped over it with `-X main.version=`; it is what `-acp` reports to a
 client, and a checkout says `0.0.0-dev`.
 
+### What v0.0.0 waits for, and how to count it
+
+The bar is **countable, not a judgement**: open `P1` = 0 **and** open
+`daily-driver` = 0. Nothing else gates the first tag.
+
+That makes the labels load-bearing, so the *counting method* is part of the
+definition. Three ways the obvious query has lied here, each of which has
+been believed at least once:
+
+- **`gh issue list` returns 30 rows by default.** A board of exactly 30 does
+  not look truncated, it looks like a count. Always pass `--limit` well above
+  the expected total and take the length with `jq`, never by eye.
+- **A label that does not exist returns 0**, identically to a label with no
+  issues. `gh issue list --label utter-nonsense` is `0`. Confirm the label is
+  in `gh label list` before reporting its count as met.
+- **An issue with no `P1`/`P2`/`P3` is invisible to the gate.** This is the
+  one that keeps happening: the agent best placed to label an issue is the one
+  least likely to, because filing is its last act. In a single session the
+  unprioritised count drifted to 5, then 2, then 6 — each time from issues
+  filed by an agent as it finished, and twice it made the bar read lower than
+  it was.
+
+So **re-run this before quoting either leg**, every time:
+
+    gh issue list --state open --limit 400 --json number,labels \
+      --jq '[.[]|select([.labels[].name]|any(.=="P1" or .=="P2" or .=="P3")|not)]|length'
+
+It must be `0`, or the bar is measuring a subset of the board.
+
+**And a label count is not a working shell.** "Bar met" was once reported
+from two green counts while `go run ./cmd/zsh` still wrote 48 lines to
+stderr. The second half of the check is the driver itself, against a real
+`~/.zshrc`, compared with the real shell run identically:
+
+    go build -o /tmp/zq ./cmd/zsh && /tmp/zq -i -c exit 2>&1 \
+      | sed -E 's/[0-9]+/N/g' | sort | uniq -c | sort -rn
+
+Note that the real shell's own line count is **not** a stable constant — it
+varies with whether the caller has a job-control terminal — so compare *which*
+diagnostics appear, not how many. And a scripted `-i -c exit` is not an
+interactive session: a plugin manager's deferred loads run past the first
+precmd, and a shell can pass this and still never reach a prompt. Where a
+fault shows only in a real terminal, use the pty harness and say so.
+
 ## Conventions
 
 - **Formatter**: gofumpt, pinned in `go.mod`'s `tool` block, run as

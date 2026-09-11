@@ -29,6 +29,7 @@ func visualStyle() PromptStyle {
 		Sequences: map[rune]string{
 			'H': "<H>", 'h': "<h>",
 			'L': "<L>", 'l': "<l>",
+			'N': "<N>", 'n': "<n>",
 			'z': "<z>",
 		},
 		Visual: map[rune]PromptVisual{
@@ -42,6 +43,13 @@ func visualStyle() PromptStyle {
 			// after it.
 			'L': {Attribute: AttributeUnderline},
 			'l': {Attribute: AttributeUnderline, Off: true},
+			// A third setting, so the order the restore writes in is pinned
+			// between two attributes and not only between an attribute and a
+			// color. It sits *before* the underline in the constants and
+			// after it in every row below, which is what makes the ordering
+			// assertions fail if the constants are reordered.
+			'N': {Attribute: AttributeStandout},
+			'n': {Attribute: AttributeStandout, Off: true},
 			// And a sequence with no entry at all, which is every code in
 			// every other dialect: bytes and nothing more.
 		},
@@ -81,6 +89,11 @@ func TestARestoringSequenceWritesBackWhatIsStillInEffect(t *testing.T) {
 		// whichever order they were set in.
 		{"%L%F{red}%h", "<L>\x1b[31m<h><L>\x1b[31m", "the attribute is written before the color"},
 		{"%F{red}%L%h", "\x1b[31m<L><h><L>\x1b[31m", "and the order is the constants', not the text's"},
+		// Two attributes, so the order between them is pinned as well:
+		// standout comes before underline whichever was set first.
+		{"%L%N%h", "<L><N><h><N><L>", "standout before underline"},
+		{"%N%L%h", "<N><L><h><N><L>", "and the same the other way round"},
+		{"%N%L%F{red}%K{blue}%h", "<N><L>\x1b[31m\x1b[44m<h><N><L>\x1b[31m\x1b[44m", "the whole order in one row"},
 		// A clear that is not marked Restores writes its sequence alone —
 		// which is the half a rule reading "an off code restores" gets wrong.
 		{"%F{red}a%lb", "\x1b[31ma<l>b", "a plain clear restores nothing"},
@@ -96,6 +109,7 @@ func TestARestoringSequenceWritesBackWhatIsStillInEffect(t *testing.T) {
 		{"%H%L%h", "<H><L><h><L>", "the cleared attribute is left out of its own restore"},
 		// Every setting at once, cleared by the one that clears everything.
 		{"%H%L%F{red}%K{blue}%l%h", "<H><L>\x1b[31m\x1b[44m<l><h>\x1b[31m\x1b[44m", "the whole state, minus what was cleared"},
+		{"%H%N%L%F{red}%K{blue}%n%h", "<H><N><L>\x1b[31m\x1b[44m<n><h><L>\x1b[31m\x1b[44m", "and with the standout cleared instead"},
 	} {
 		if got := expandVisual(t, tc.text); got != tc.want {
 			t.Errorf("%s: %q drew %q, want %q", tc.why, tc.text, got, tc.want)

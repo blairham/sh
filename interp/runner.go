@@ -2716,7 +2716,24 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			// then reported success for having done so.
 			return nil
 		}
-		if !r.substRan && !r.expandErr && !r.assignFailed && !r.unspecified {
+		if r.expandErr {
+			// A right-hand side that could not be expanded is the same
+			// failure a command's arguments suffer, reached one block later:
+			// the check above this switch runs *before* the assignments do,
+			// so nothing had yet failed when it looked. Without this,
+			// `x=$(( } ))` reported the arithmetic out loud and left 0 — so
+			// `x=$((…)) || handle` never fired and `set -e` never tripped.
+			//
+			// The same door a command's failure goes through, which is what
+			// keeps the two axes it asks from being answered twice: the
+			// status is 1 or 2 by dialect, and bash alone gives up the line
+			// and carries on at the next. Measured: `x=$(( } )); echo after`
+			// prints no `after` anywhere in the panel, and on two lines bash
+			// prints it where dash and zsh stop (#1191).
+			r.failedExpansion()
+			return nil
+		}
+		if !r.substRan && !r.assignFailed && !r.unspecified {
 			// Nothing in them reported, so the assignment itself does, and
 			// an assignment that happens cannot fail. One that was *refused*
 			// did fail, which is what assignFailed carries: the dialect that

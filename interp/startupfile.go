@@ -38,12 +38,25 @@ import (
 // The parse is still the caller's. A startup file that will not parse is
 // reported as a file — the path and the line, not `.`: two different questions
 // with two different answers, and this one is about control flow.
-func (r *Runner) RunStartupFile(ctx context.Context, f *syntax.File) (int, error) {
+//
+// path is what the shell opened, and it is what a diagnostic raised at the top
+// level of the file names. Without it the file had no frame, `currentFile` was
+// empty, and the location fell back to the shell's own name — which on the
+// script route is the script's path, so a `set -u` failure on line 3 of a
+// `~/.zshenv` sent a person to line 3 of a script that was fine. Every shell
+// in the panel that reads a startup file names the startup file (#1123).
+func (r *Runner) RunStartupFile(ctx context.Context, f *syntax.File, path string) (int, error) {
 	// The frame a `return` returns from. A count rather than a flag, and
 	// raised the same way `.` raises it, because a startup file may source
 	// another and each of them is its own boundary.
 	r.sourceDepth++
 	defer func() { r.sourceDepth-- }()
+	// And the frame a *diagnostic* names, which is what `.` pushes for the
+	// same reason. Marked as the shell's own rather than a call, so that the
+	// one dialect whose `$0` follows the stack keeps answering with the
+	// shell — see Frame.Startup.
+	r.pushFrame(Frame{File: path, Startup: true})
+	defer r.popFrame()
 	err := r.RunPart(ctx, f)
 	if r.ctl == controlReturn {
 		// Caught, so the shell goes on to the next startup file and then to

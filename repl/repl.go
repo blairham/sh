@@ -441,6 +441,16 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 				// second ^D is what actually ends it.
 				continue
 			}
+			stmts, text, perr := s.endOfInput(&pending)
+			switch {
+			case perr != nil:
+				s.errf("%s", s.report(perr))
+				s.refused(perr)
+			case len(stmts) > 0:
+				b := s.beginBlock(text)
+				s.run(ctx, state, text, stmts)
+				s.closeBlock(ctx, store, capture, b)
+			}
 			return s.status(), nil
 		case err != nil:
 			return s.status(), err
@@ -875,6 +885,16 @@ func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *outpu
 				// read, which ends at once, leaves.
 				continue
 			}
+			stmts, text, perr := s.endOfInput(&pending)
+			switch {
+			case perr != nil:
+				s.errf("%s", s.report(perr))
+				s.refused(perr)
+			case len(stmts) > 0:
+				b := s.beginBlock(text)
+				s.runStmts(ctx, text, stmts)
+				s.closeBlock(ctx, store, capture, b)
+			}
 			return s.status(), nil
 		}
 		line = strings.TrimSuffix(line, "\n")
@@ -957,6 +977,46 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 		remember(text)
 	}
 	return stmts, text, err, true
+}
+
+// endOfInput is what becomes of a half-typed construct when there is no more
+// input coming.
+//
+// At a prompt an unfinished construct asks for another line; at end of input
+// there is no other line, so the text is read as the whole of it — the same
+// reading a script file's last line gets. It is then either a command or a
+// failure, and both halves are measured and unanimous across the panel:
+//
+//	echo one \        every shell runs it and prints `one`
+//	cat <<EOT / body  every shell runs it and prints `body`
+//	x='never closed   every shell says what it was waiting for
+//	if true; then     every shell says what it was waiting for
+//
+// We did neither. The pending text was dropped without a word, so a person who
+// typed a quote by accident and pressed ^D was told nothing at all about why
+// their line had vanished (#1467).
+//
+// What happens *next* is where the panel divides — bash ends the session and
+// the other three prompt again — and that is deliberately not answered here:
+// this loop was already leaving at end of input, so it keeps doing so.
+func (s Shell) endOfInput(pending *strings.Builder) ([]*syntax.File, string, error) {
+	text := pending.String()
+	pending.Reset()
+	if strings.TrimSpace(text) == "" {
+		return nil, "", nil
+	}
+	p := syntax.NewParser(text, s.Dialect)
+	// The same alias table the accepted lines were parsed with: a construct
+	// half of which was typed through an alias must not finish differently
+	// for having been finished here.
+	if s.Runner != nil {
+		p.Aliases = s.Runner.ExpandingAlias
+	}
+	stmts, err := collect(p)
+	if err != nil {
+		return nil, "", err
+	}
+	return stmts, strings.TrimSuffix(text, "\n"), nil
 }
 
 // endsWithContinuation reports whether the text ends with a backslash joining

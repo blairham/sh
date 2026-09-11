@@ -302,7 +302,7 @@ func (sh Shell) sourceText(r *interp.Runner, path, text string) int {
 	// startup file, stops reading the file there and says nothing (#1422).
 	// Run would have made this a script's own top level, where the refusal
 	// belongs.
-	if _, err := r.RunStartupFile(context.Background(), f); err != nil {
+	if _, err := r.RunStartupFile(context.Background(), f, path); err != nil {
 		sh.errf("%s", sh.Diagnostics.Report(path, 1, err.Error()+"\n"))
 		return usageStatus
 	}

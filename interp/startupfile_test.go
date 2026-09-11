@@ -31,7 +31,7 @@ func startupRun(t *testing.T, src string, carries Answer) (string, int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := r.RunStartupFile(context.Background(), f)
+	st, err := r.RunStartupFile(context.Background(), f, "/rc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestAStartupFileDoesNotLeaveTheShellLookingSourced(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.RunStartupFile(context.Background(), rc); err != nil {
+	if _, err := r.RunStartupFile(context.Background(), rc, "/rc"); err != nil {
 		t.Fatal(err)
 	}
 	script, err := syntax.Parse("return 7\necho \"after st=$?\"\n", syntax.Core())
@@ -146,7 +146,7 @@ func TestAStartupFileThatReturnsDoesNotStopTheNextOne(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := r.RunStartupFile(context.Background(), f); err != nil {
+		if _, err := r.RunStartupFile(context.Background(), f, "/rc"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -171,5 +171,81 @@ func TestAStartupFileReturnWithNoAnswerRecordedIsNamed(t *testing.T) {
 	}
 	if strings.Contains(out, "AFTER") {
 		t.Errorf("said %q, want the file to stop at the return regardless", out)
+	}
+}
+
+// A diagnostic raised at the top level of a startup file names the startup
+// file, not whatever the shell was started for.
+//
+// The file got no frame, so the current file was empty and the location fell
+// back to the shell's own name — which on the script route is the script's
+// path. The line number was right and the file was the wrong one, which is
+// worse than no location at all: it sends a person to a line of a script that
+// is fine. Every shell in the panel that reads a startup file names the
+// startup file (#1123).
+func TestAStartupFileIsNamedByTheDiagnosticsItRaises(t *testing.T) {
+	var buf strings.Builder
+	sem := PosixSemantics()
+	dg := Diagnostics{Location: LocationTightLine, LocationNamesTheCurrentFile: true}
+	r := newTestRunner(t, &Runner{
+		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh",
+		Vars: map[string]string{"PATH": ""},
+	})
+	// The name the shell was started for, which is what the location used to
+	// answer with and what a passing test has to be able to tell apart.
+	r.SetScriptFile("/tmp/main.sh")
+
+	rc, err := syntax.Parse("# a\n# b\nnosuchcmd\n", syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.RunStartupFile(context.Background(), rc, "/etc/rc"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "/etc/rc:3: ") {
+		t.Errorf("said %q, want the startup file named at its own line", buf.String())
+	}
+	if strings.Contains(buf.String(), "/tmp/main.sh") {
+		t.Errorf("said %q, want the script not named", buf.String())
+	}
+
+	// And the frame is given back, so the script the shell was started for is
+	// named again afterwards.
+	buf.Reset()
+	script, err := syntax.Parse("nosuchcmd\n", syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Run(context.Background(), script); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "/tmp/main.sh:1: ") {
+		t.Errorf("after the file: said %q, want the script named again", buf.String())
+	}
+}
+
+// And the frame it is given is not a *call*, so the one dialect whose `$0`
+// follows the call stack still answers with the shell rather than with the rc.
+//
+// Measured: a `~/.zshrc` printing `$0` under `zsh -i` prints the path of the
+// zsh binary. The frame exists for the location and for nothing else, and
+// without the mark on it giving the file a frame would have moved `$0` too.
+func TestAStartupFileDoesNotBecomeDollarZero(t *testing.T) {
+	var buf strings.Builder
+	sem := PosixSemantics()
+	sem.DollarZeroNamesTheInnermostCall = Yes
+	dg := Diagnostics{}
+	r := newTestRunner(t, &Runner{
+		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh",
+	})
+	rc, err := syntax.Parse("echo \"zero=$0\"\n", syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.RunStartupFile(context.Background(), rc, "/etc/rc"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "zero=testsh") {
+		t.Errorf("said %q, want the shell's own name", buf.String())
 	}
 }

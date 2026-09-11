@@ -1658,6 +1658,29 @@ type Semantics struct {
 	// `name/unset-v-validates-the-lone-dash`.
 	LoneDashIsAnOption Answer
 
+	// LoopControlOutsideALoopIsFatal ends the script when `break` or
+	// `continue` is run with no loop around it, instead of reporting it (or
+	// not) and running the next command. True in zsh alone.
+	//
+	// Measured 2026-09-10, `-c`, with `echo t; break; echo after`: dash,
+	// bash 5.3, bash called as `sh` and bash 3.2 all print `after` and end
+	// at 0, and zsh prints neither `after` nor anything after it on a later
+	// *line* either — so it is the script that stops and not the line, which
+	// is why this reaches fatalQuiet rather than controlAbandon. The status
+	// is then the dialect's own for a fatal error, which is 1 there.
+	//
+	// The question is only about the misuse. A `break` with a loop around it
+	// is ordinary control flow in every shell in the panel, and a `break`
+	// inside a *subshell* that is inside a loop leaves that subshell in all
+	// of them, which is why the count this is asked against is the dynamic
+	// one a cloned Runner carries with it.
+	//
+	// Separate from the wording, because the two questions cut the panel
+	// differently: bash reports and carries on, zsh reports and stops, and
+	// dash says nothing and carries on. One field could not express the
+	// first of those three — see Diagnostics.LoopControlOutsideALoop.
+	LoopControlOutsideALoopIsFatal Answer
+
 	// ReturnOutsideAFunctionIsRefused reports a `return` that has nothing to
 	// return from and carries on, instead of ending the script with the
 	// status it was given. True in bash alone.

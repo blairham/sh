@@ -1064,6 +1064,30 @@ type Diagnostics struct {
 	// it and end the script, so there is nothing for them to word.
 	ReturnOutsideAFunction string
 
+	// LoopControlOutsideALoop is a `break` or a `continue` with no loop
+	// around it. One verb: the builtin's own name.
+	//
+	// The panel divides three ways and the wording carries only the first
+	// two. dash and bash called as `sh` say nothing at all, so their answer
+	// is the empty string; bash names the three loops POSIX has, and zsh
+	// names the four it has. Whether the misuse also stops the script is a
+	// separate question — see Semantics.LoopControlOutsideALoopIsFatal —
+	// because bash says this and carries on.
+	//
+	// Measured 2026-09-10 with `echo t; break; echo after`:
+	//
+	//	dash        nothing, `after` runs, status 0
+	//	bash 5.3    break: only meaningful in a `for', `while', or `until' loop
+	//	bash-as-sh  nothing, `after` runs, status 0
+	//	bash 3.2    the same as bash 5.3, at its own line number
+	//	zsh         break: not in while, until, select, or repeat loop
+	//
+	// The name is written into the message here and stripped again by the
+	// dialect that puts a builtin's name in the location instead, which is
+	// how `zsh:break:1: not in while, …` comes out without saying `break`
+	// twice.
+	LoopControlOutsideALoop string
+
 	// UnsetBadFunctionName is what `unset -f` says about an operand that
 	// could not be a function name. One verb: the operand.
 	UnsetBadFunctionName string
@@ -3271,12 +3295,47 @@ func (d Diagnostics) condPreamble(name, input string, err error) string {
 }
 
 // echoLine is the second line, or empty for none.
+func (d Diagnostics) echoLine(name, input string, line int, err error, src string) string {
+	text := d.offendingLine(line, err, src)
+	if text == "" {
+		return ""
+	}
+	return d.ReportFrom(name, input, line, text)
+}
+
+// SourceEcho is the echoed second line for text a builtin borrowed — `eval`'s
+// string, or a sourced file — located the way that text names itself.
+//
+// It sits beside SourceReport for the reason ParseFailure and ParseDiagnostic
+// do: the front end and the builtins that parse borrowed text have to say the
+// same thing, and the echo is as much a part of the dialect's answer as the
+// wording. Without it, `eval "case abc in @(abc|xyz)) echo m;; esac"` wrote
+// the complaint about the token and not the line it came from — which is the
+// only context a caller gets when the text was generated somewhere it cannot
+// see (#1728).
+//
+// line is the failure's line *within src*, so a caller that could not work
+// that out must not call this: indexing the borrowed text by the caller's own
+// line would quote a line from somewhere else.
+func (d Diagnostics) SourceEcho(naming SourceNaming, shell, source string, line int, err error, src string) string {
+	text := d.offendingLine(line, err, src)
+	if text == "" {
+		return ""
+	}
+	return d.SourceReport(naming, shell, source, line, text)
+}
+
+// offendingLine is the quoted text of the echoed second line, without a
+// location in front of it, or empty where there is none to write.
 //
 // Only a token the grammar did not want gets one: an input that simply ran out
 // has no offending line to point at, and the shell that does this prints none
-// for it.
-func (d Diagnostics) echoLine(name, input string, line int, err error, src string) string {
-	if !d.EchoesTheOffendingLine {
+// for it. Nor does text nobody handed over — a prompt passes no source,
+// because the line it would quote is still on the screen above the complaint,
+// and splitting the empty string yields one empty line that came out as a
+// bare "`'".
+func (d Diagnostics) offendingLine(line int, err error, src string) string {
+	if !d.EchoesTheOffendingLine || src == "" {
 		return ""
 	}
 	var se *syntax.Error
@@ -3287,7 +3346,7 @@ func (d Diagnostics) echoLine(name, input string, line int, err error, src strin
 	if line < 1 || line > len(lines) {
 		return ""
 	}
-	return d.ReportFrom(name, input, line, "`"+lines[line-1]+"'\n")
+	return "`" + lines[line-1] + "'\n"
 }
 
 // prefix renders the start of a diagnostic for a shell called name at line.

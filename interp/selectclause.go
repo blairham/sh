@@ -63,6 +63,9 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 			return nil
 		}
 
+		// A loop, the same way `repeat` is one: zsh names `select` among
+		// the loops a `break` may be in, and the count is what says so.
+		defer r.enteringLoop()()
 		menu := r.selectMenu(items)
 		show := true
 		for {

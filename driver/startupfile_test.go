@@ -279,3 +279,58 @@ func TestTheEnvironmentsOptionsAreOnBeforeTheStartupFiles(t *testing.T) {
 // which is a name no shell uses for the reason the file's variable above is:
 // the seam is what is under test.
 const optionRecordVar = "OPTIONRECORD"
+
+// A diagnostic raised at the top level of a startup file names the startup
+// file, not the script the shell was started for.
+//
+// Driven at full depth on purpose: the startup file is read while the shell is
+// running a *script*, which is the only arrangement in which the two names
+// differ. A one-line probe has nothing to confuse the file with, so it would
+// have passed against the shell that got this wrong — the location fell back
+// to the shell's own name, and on the script route that name is the script's
+// path (#1123).
+func TestADiagnosticInTheStartupFileNamesTheStartupFile(t *testing.T) {
+	sem := withStartupFile()
+	sh, out, errs := startupShell(t, sem)
+	sh.Diagnostics = interp.Diagnostics{
+		Location:                    interp.LocationTightLine,
+		LocationNamesTheCurrentFile: true,
+	}
+	rc := scriptAt(t, "echo RC-BEFORE\n# a line to count past\nnosuchcmd_zz\necho RC-AFTER\n")
+	script := scriptAt(t, "echo MAIN-RAN\n")
+	t.Setenv(startupVar, rc)
+
+	if code := MainArgs(sh, []string{"testsh", script}); code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs)
+	}
+	if want := rc + ":3: "; !strings.Contains(errs.String(), want) {
+		t.Errorf("said %q, want it to name %q", errs.String(), want)
+	}
+	if strings.Contains(errs.String(), script) {
+		t.Errorf("said %q, want the script not named — it is the file that is fine", errs.String())
+	}
+	// And the file is read to the end and the script still runs, which is what
+	// says the frame changed the name and nothing else.
+	if want := "RC-BEFORE\nRC-AFTER\nMAIN-RAN\n"; out.String() != want {
+		t.Errorf("output = %q, want %q", out.String(), want)
+	}
+}
+
+// And the frame is given back, so a failure in the script names the script.
+// Without that, reading any startup file at all would name the rc for the rest
+// of the run.
+func TestAfterTheStartupFileTheScriptIsNamedAgain(t *testing.T) {
+	sh, _, errs := startupShell(t, withStartupFile())
+	sh.Diagnostics = interp.Diagnostics{
+		Location:                    interp.LocationTightLine,
+		LocationNamesTheCurrentFile: true,
+	}
+	rc := scriptAt(t, "true\n")
+	script := scriptAt(t, "true\nnosuchcmd_zz\n")
+	t.Setenv(startupVar, rc)
+
+	MainArgs(sh, []string{"testsh", script})
+	if want := script + ":2: "; !strings.Contains(errs.String(), want) {
+		t.Errorf("said %q, want it to name %q", errs.String(), want)
+	}
+}

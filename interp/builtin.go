@@ -74,13 +74,53 @@ func init() {
 // ordinary control flow and modeling it as a failure would make every caller
 // check for something that is not one.
 func biBreak(r *Runner, _ context.Context, args []string) int {
+	if st, ok := r.loopControlMisused("break"); ok {
+		return st
+	}
 	r.ctl, r.ctlDepth = controlBreak, loopDepth(args)
 	return 0
 }
 
 func biContinue(r *Runner, _ context.Context, args []string) int {
+	if st, ok := r.loopControlMisused("continue"); ok {
+		return st
+	}
 	r.ctl, r.ctlDepth = controlContinue, loopDepth(args)
 	return 0
+}
+
+// loopControlMisused answers a `break` or `continue` with no loop around it,
+// reporting whether the builtin is finished here.
+//
+// The count is the dynamic one — how many loops execution is inside right now
+// — and not a lexical question about where the word was written. That is
+// measured rather than convenient: a function whose body is a bare `break`,
+// called from a loop, leaves the loop in bash 3.2 and in zsh, and a `break`
+// inside a subshell that is inside a loop leaves the subshell in every shell
+// in the panel. Both are `r.loopDepth` being nonzero, the second because a
+// cloned Runner carries the count with it.
+//
+// Ours used to set the control value whatever the count was, and nothing
+// consumed it, so it unwound past the top and the rest of the *script*
+// vanished — silently, at status 0. Two things were wrong and they are
+// separable: nothing was reported, and a line that five of the six panel
+// columns finish was given up (#1236).
+func (r *Runner) loopControlMisused(name string) (int, bool) {
+	if r.loopDepth > 0 {
+		return 0, false
+	}
+	if msg := Wording(r.diag().LoopControlOutsideALoop, "", name); msg != "" {
+		r.diagf("%s\n", msg)
+	}
+	if !r.ask(r.sem().LoopControlOutsideALoopIsFatal, "a `break` or `continue` with no loop around it") {
+		// Reported, or not, and then ignored: the next command on the line
+		// runs and the status is the builtin's own success. That is dash,
+		// ksh93, bash and bash called as `sh` alike — they differ over the
+		// message and agree about everything else.
+		return 0, true
+	}
+	r.fatalQuiet()
+	return r.status, true
 }
 
 func biReturn(r *Runner, _ context.Context, args []string) int {

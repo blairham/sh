@@ -146,13 +146,20 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		// that sources a file whose `if` never closes is reported at the
 		// line in *that file* by every shell in the panel, and this reported
 		// line 1 for all of them.
-		line := r.line
-		if at := r.diag().ParseFailureLine(err); at > 0 {
-			line = at
+		line, own := r.line, r.diag().ParseFailureLine(err)
+		if own > 0 {
+			line = own
 		}
 		d := r.diag()
 		r.errf("%s\n", d.SourceReport(s.naming(d), r.name(), s.sourceName(d),
 			line, d.ParseFailure(err)))
+		// And the offending line quoted back, for the dialect that writes
+		// one. Only when the failure said where it was: `own` is an offset
+		// into this text, and the fallback above is the *caller's* line,
+		// which would quote a line out of the wrong file (#1728).
+		if own > 0 {
+			r.errf("%s", d.SourceEcho(s.naming(d), r.name(), s.sourceName(d), own, err, src))
+		}
 		// POSIX makes a special builtin's failure fatal to a non-interactive
 		// shell. dash is the only member of the panel that does it here; the
 		// other three report the error and carry on.

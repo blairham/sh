@@ -294,6 +294,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/error-operator-on-an-unset-name` | **2>** `<script>: 1: V: parameter not set` *(status 2)* | **2>** `<script>: line 1: V: parameter not set` *(status 1)* | **2>** `<script>: line 1: V: parameter not set` *(status 1)* | **2>** `<script>: line 1: V: parameter null or not set` *(status 1)* | **2>** `<script>: line 1: V: parameter not set` *(status 1)* | **2>** `<script>:1: V: parameter not set` *(status 1)* |
 | `param/error-operator-default-word` | **2>** `<script>: 1: V: parameter not set or null` *(status 2)* | **2>** `<script>: line 1: V: parameter null or not set` *(status 1)* | **2>** `<script>: line 1: V: parameter null or not set` *(status 1)* | **2>** `<script>: line 1: V: parameter null or not set` *(status 1)* | **2>** `<script>: line 1: V: parameter null` *(status 1)* | **2>** `<script>:1: V: parameter not set` *(status 1)* |
 | `param/error-operator-on-a-name-that-is-set` | `[x][x][x]~after` | `[x][x][x]~after` | `[x][x][x]~after` | `[x][x][x]~after` | `[x][x][x]~after` | `[x][x][x]~after` |
+| `assignment/arithmetic-that-will-not-parse` | **2>** `<shell>: 1: arithmetic expression: expecting primary: " } "` *(status 2)* | **2>** `<shell>: line 1: } : arithmetic syntax error: operand expected (error token is "} ")` *(status 1)* | **2>** `<shell>: line 1: } : arithmetic syntax error: operand expected (error token is "} ")` *(status 127)* | **2>** `<shell>: } : syntax error: operand expected (error token is "} ")` *(status 1)* | **2>** `<shell>: syntax error at line 1: `)' unexpected` *(status 3)* | **2>** `<shell>:1: bad math expression: illegal character: }` *(status 1)* |
+| `assignment/arithmetic-that-will-not-parse-in-a-command` | **2>** `<shell>: 1: arithmetic expression: expecting primary: " } "` *(status 2)* | **2>** `<shell>: line 1: } : arithmetic syntax error: operand expected (error token is "} ")` *(status 1)* | **2>** `<shell>: line 1: } : arithmetic syntax error: operand expected (error token is "} ")` *(status 127)* | **2>** `<shell>: } : syntax error: operand expected (error token is "} ")` *(status 1)* | **2>** `<shell>: syntax error at line 1: `)' unexpected` *(status 3)* | **2>** `<shell>:1: bad math expression: illegal character: }` *(status 1)* |
 | `param/a-default-holding-a-space` | `[grep -E]~[a  b]` | `[grep -E]~[a  b]` | `[grep -E]~[a  b]` | `[grep -E]~[a  b]` | `[grep -E]~[a  b]` | `[grep -E]~[a  b]` |
 | `param/a-default-holding-a-hash` | `[a #b]` | `[a #b]` | `[a #b]` | `[a #b]` | `[a #b]` | `[a #b]` |
 | `shell/naming-itself-in-a-variable` | `anonymous` | `named` | `named` | `named` | `named` | `named` |
@@ -760,6 +762,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/error-operator-on-a-name-that-is-set` — the other side, and unanimous: with the parameter set the operator is not an error at all and expands to the value, word or no word. Recorded because the bug this pair was written for expanded it to nothing here while reporting nothing either — a case that only tested the failing side would have passed
   ```sh
   V=x; echo "[${V?}][${V:?}][${V?why}]"; echo after
+  ```
+- `assignment/arithmetic-that-will-not-parse` — an assignment whose right-hand side could not be expanded. The diagnostic was right and the status was not: ours reported the arithmetic out loud and left 0, so `x=$((…)) || handle` never fired and `set -e` never tripped. No column prints `after` — the rest of the line goes with the failure everywhere — and the status is 1 in bash, bash 3.2 and zsh, 2 in dash, 3 in ksh93 — which refuses the `)` at parse time rather than the `}` at evaluation — and 127 in bash called as `sh`, which is that shell's fatal-expansion status for the route (#1191)
+  ```sh
+  x=$(( } )); echo "after st=$?"
+  ```
+- `assignment/arithmetic-that-will-not-parse-in-a-command` — the same expression in a command position, which is what says the bug above was the assignment path and not the arithmetic: this one already reported the failure *and* the status. The check a command's arguments go through runs before the assignments do, so nothing had failed yet when it looked
+  ```sh
+  echo $(( } )); echo "after st=$?"
   ```
 - `param/a-default-holding-a-space` — everything up to the closing brace belongs to the operand, blanks included — `${GREP:-grep -E}` is the usual spelling and losing the space turns it into a command nobody has. A run of them is one run and not one space, which is what says the text was kept rather than rebuilt
   ```sh
@@ -2561,6 +2571,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `name/unset-f-on-a-name-that-is-merely-undefined` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>:unset:1: no such hash table element: nosuch` |
 | `name/a-lone-dash-given-to-a-builtin` | `st=1` **2>** `unalias: - not found` | `st=1` **2>** `<shell>: line 1: unalias: -: not found` | `st=1` **2>** `<shell>: line 1: unalias: -: not found` | `st=1` **2>** `<shell>: line 0: unalias: -: not found` | `st=1` | `st=1` **2>** `<shell>:unalias:1: not enough arguments` |
 | `name/unset-v-validates-the-lone-dash` | **2>** `<shell>: 1: unset: -: bad variable name` *(status 2)* | `st=1` **2>** `<shell>: line 1: unset: `-': not a valid identifier` | **2>** `<shell>: line 1: unset: `-': not a valid identifier` *(status 1)* | `st=1` **2>** `<shell>: line 0: unset: `-': not a valid identifier` | `st=1` **2>** `<shell>: unset: -: invalid variable name` | `st=1` **2>** `<shell>:unset:1: not enough arguments` |
+| `loop-control/break-with-no-loop-around-it` | `t~after` | `t~after` **2>** `<shell>: line 1: break: only meaningful in a `for', `while', or `until' loop` | `t~after` | `t~after` **2>** `<shell>: line 0: break: only meaningful in a `for', `while', or `until' loop` | `t~after` | `t` **2>** `<shell>:break:1: not in while, until, select, or repeat loop` *(status 1)* |
+| `loop-control/continue-with-no-loop-around-it` | `t~after` | `t~after` **2>** `<shell>: line 1: continue: only meaningful in a `for', `while', or `until' loop` | `t~after` | `t~after` **2>** `<shell>: line 0: continue: only meaningful in a `for', `while', or `until' loop` | `t~after` | `t` **2>** `<shell>:continue:1: not in while, until, select, or repeat loop` *(status 1)* |
+| `loop-control/break-inside-a-subshell-inside-a-loop` | `body~body~after` | `insub~body~insub~body~after` **2>** `<shell>: line 1: break: only meaningful in a `for', `while', or `until' loop~<shell>: line 1: break: only meaningful in a `for', `while', or `until' loop` | `insub~body~insub~body~after` | `body~body~after` | `body~body~after` | `body~body~after` |
+| `loop-control/break-inside-a-function-called-from-a-loop` | `body~body~after` | `body~body~after` **2>** `<shell>: line 1: break: only meaningful in a `for', `while', or `until' loop~<shell>: line 1: break: only meaningful in a `for', `while', or `until' loop` | `body~body~after` | `after` | `body~body~after` | `after` |
+| `eval/a-syntax-error-quotes-the-offending-line` | **2>** `<shell>: 1: eval: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `st=2` **2>** `<shell>: eval: line 1: syntax error near unexpected token `('~<shell>: eval: line 1: `case abc in @(abc\|xyz)) echo m;; esac'` | **2>** `<shell>: eval: line 1: syntax error near unexpected token `('~<shell>: eval: line 1: `case abc in @(abc\|xyz)) echo m;; esac'` *(status 2)* | `st=1` **2>** `<shell>: eval: line 0: syntax error near unexpected token `('~<shell>: eval: line 0: `case abc in @(abc\|xyz)) echo m;; esac'` | `m~st=0` | `st=0` |
+| `source/a-syntax-error-quotes-the-offending-line` | `one` **2>** `<shell>: 2: ./s.sh: Syntax error: ";" unexpected` *(status 2)* | `one~st=2` **2>** `./s.sh: line 2: syntax error near unexpected token `;'~./s.sh: line 2: `if; then'` | `one~st=2` **2>** `./s.sh: line 2: syntax error near unexpected token `;'~./s.sh: line 2: `if; then'` | `one~st=1` **2>** `./s.sh: line 2: syntax error near unexpected token `;'~./s.sh: line 2: `if; then'` | `st=3` **2>** `<shell>: .: syntax error at line 2: `;' unexpected` | `one~st=126` **2>** `./s.sh:3: parse error near `\n'` |
 | `return/with-nothing-to-return-from` | `before` *(status 7)* | `before~after st=2` **2>** `<shell>: line 1: return: can only `return' from a function or sourced script` | `before` **2>** `<shell>: line 1: return: can only `return' from a function or sourced script` *(status 2)* | `before~after st=1` **2>** `<shell>: line 0: return: can only `return' from a function or sourced script` | `before` *(status 7)* | `before` *(status 7)* |
 | `return/inside-a-sourced-file` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` |
 | `return/a-bare-name-as-the-operand` | **2>** `<shell>: 1: return: Illegal number: r` *(status 2)* | `st=2` **2>** `<shell>: line 1: return: r: numeric argument required` | **2>** `<shell>: line 1: return: r: numeric argument required` *(status 2)* | `st=255` **2>** `<shell>: line 0: return: r: numeric argument required` | `st=0` | `st=3` |
@@ -3328,6 +3344,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `name/unset-v-validates-the-lone-dash` — the other visible site of the LoneDashIsAnOption axis: `unset -v` validates its operand where bare `unset` does not, so bash, dash and ksh93 name the dash as a bad variable name — fatally in dash, whose unset failure ends the script — while zsh eats the dash as an option and complains it has nothing left to unset
   ```sh
   unset -v -; echo "st=$?"
+  ```
+- `loop-control/break-with-no-loop-around-it` — a `break` with no loop around it, and the panel divides three ways over two separable questions — whether anything is said, and whether the script goes on. dash, ksh93 and bash called as `sh` say nothing and run `after` at 0; bash names the three loops POSIX has and still runs `after` at 0; zsh names the four it has, stops the script and leaves 1. Ours set the control value whatever the depth was and nothing consumed it, so it unwound past the top: `after` vanished, silently, at status 0 — a script testing `$?` after a misplaced `break` was told it had succeeded (#1236)
+  ```sh
+  echo t; break; echo after
+  ```
+- `loop-control/continue-with-no-loop-around-it` — the same question asked of the other builtin, and the row that says the wording carries a verb: every column that speaks names `continue` here where the row above names `break`, so a message with either one written into it would be wrong in one of the two
+  ```sh
+  echo t; continue; echo after
+  ```
+- `loop-control/break-inside-a-subshell-inside-a-loop` — the near-miss the rows above have to be told from: the `break` is lexically inside a subshell and dynamically inside a loop, and bash 3.2, dash, ksh93 and zsh all leave the subshell quietly. Neither bash does — 5.3 reports it and the same binary called as `sh` says nothing — so their subshells do not carry the count and `insub` prints. Recorded because a fix that asked a *lexical* question would complain here about correct script, which neither row above could see
+  ```sh
+  for i in 1 2; do ( break; echo insub ); echo body; done; echo after
+  ```
+- `loop-control/break-inside-a-function-called-from-a-loop` — how far a `break` reaches through a *call*, which is the widest split in this family: bash 3.2 and zsh let it out of the function and end the loop, dash, ksh93 and bash-as-sh ignore it and run the loop twice, and bash 5.3 reports it twice and runs the loop twice. Recorded rather than answered — ours leaves the loop, which is two of the six
+  ```sh
+  f(){ break; }; for i in 1 2; do f; echo body; done; echo after
+  ```
+- `eval/a-syntax-error-quotes-the-offending-line` — what a shell prints for a parse failure in text a builtin borrowed. bash writes two lines — the complaint, then the offending input quoted back — and we wrote only the first, so a syntax error in generated text came back as a complaint about a token with nothing to attach it to. That is the normal case for a program driving the shell, where every command arrives as `eval <quoted string>`. ksh93 and zsh have the extended pattern in their grammar and never reach a failure at all — ksh93 matches and prints `m`, zsh matches nothing and prints neither (#1728)
+  ```sh
+  eval "case abc in @(abc|xyz)) echo m;; esac"; echo "st=$?"
+  ```
+- `source/a-syntax-error-quotes-the-offending-line` — the same second line for a sourced *file*, which is the other caller of the same machinery and had to be checked rather than assumed: the wording, the naming and the echo are three decisions that turn on one error, and `eval` and `.` must say the same thing about it. The statuses part company here — 2 in bash 5.3 and in the same binary called as `sh`, 1 in bash 3.2, 3 in ksh93, 126 in zsh, and 2 from a dash that ends the script over it — and the bashes are alone in writing the second line
+  ```sh
+  printf 'echo one\nif; then\n' > s.sh; . ./s.sh; echo "st=$?"
   ```
 - `return/with-nothing-to-return-from` — a `return` outside both a function and a sourced file has nothing to return from, and the panel splits over what that means — not over the wording but over *where the script stops*. Three obey it and end there with the status given; one reports it, leaves 2 behind and runs the next command. A script whose last statement is such a `return` therefore ends two different ways with the same output, which is why the status is half the case
   ```sh

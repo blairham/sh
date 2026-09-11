@@ -431,13 +431,11 @@ func TestTheEmptyParametersStayHonest(t *testing.T) {
 		{"dis_aliases", "disable -a nosuch"},
 		{"dis_functions", "disable -f nosuch"},
 		{"dis_functions_source", "disable -f nosuch"},
-		{"dis_galiases", "alias -g nosuch=x"},
+		{"dis_galiases", "disable -a nosuch"},
 		{"dis_patchars", "disable -p nosuch"},
 		{"dis_reswords", "disable -r nosuch"},
-		{"dis_saliases", "alias -s nosuch=x"},
-		{"galiases", "alias -g nosuch=x"},
+		{"dis_saliases", "disable -s nosuch"},
 		{"nameddirs", "hash -d nosuch=/tmp"},
-		{"saliases", "alias -s nosuch=x"},
 	} {
 		t.Run(tc.param, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), tc.waitsFor+` 2>&1
@@ -453,37 +451,41 @@ print -r -- "st=$?"`)
 	}
 }
 
-// A write to one of the ten is refused by the name of the letter that is
-// missing, which is a to-do rather than a wall — and it is also what keeps the
+// A write to one of the still-empty tables is refused by the name of the
+// letter that is missing, which is a to-do rather than a wall — and it is also what keeps the
 // view a view. A produced association with no writer takes the assignment into
 // a stored table, and a stored table is what a read finds first, so one
-// `galiases[x]=ls` would freeze the parameter at that instant with nothing
-// said at either end. The three zsh marks readonly refuse in zsh's own words
+// `dis_aliases[x]=ls` would freeze the parameter at that instant with
+// nothing said at either end. The three zsh marks readonly refuse in zsh's own words
 // instead, which does the same job.
 func TestWritingToAnEmptyParameterIsRefusedByName(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `galiases[x]=ls 2>&1
-print -r -- "after=${#galiases}"
+	out, st := runZsh(t, t.TempDir(), `dis_aliases[x]=ls 2>&1
+print -r -- "after=${#dis_aliases}"
 dis_functions[f]=x 2>&1
 print -r -- "after=${#dis_functions}"
 dis_reswords=(x) 2>&1
 print -r -- "unreached"`)
-	want := "zsh:1: galiases[x]: alias -g is not implemented yet\nafter=0\n" +
+	want := "zsh:1: dis_aliases[x]: disable -a is not implemented yet\nafter=0\n" +
 		"zsh:3: dis_functions[f]: disable -f is not implemented yet\nafter=0\n" +
 		"zsh:5: read-only variable: dis_reswords\n"
 	if out != want || st != 1 {
-		t.Errorf("writes to the empty nine = %q (status %d), want %q", out, st, want)
+		t.Errorf("writes to the still-empty tables = %q (status %d), want %q", out, st, want)
 	}
 }
 
-// emptyModuleParams is the ten of `zsh/parameter` that are empty here and
+// emptyModuleParams is the eight of `zsh/parameter` that are empty here and
 // right to be. Spelled out rather than read from the package, because a test
 // that asked the implementation which parameters it thought were empty would
 // agree with it whatever it said.
+//
+// It was ten. `galiases` and `saliases` left the list when `alias -g` and
+// `alias -s` arrived (#2081), which is exactly what the alarm below was for:
+// they are produced tables now and TestTheGlobalAndSuffixTablesAreLive is
+// what grades them.
 func emptyModuleParams() []string {
 	return []string{
 		"dis_aliases", "dis_functions", "dis_functions_source", "dis_galiases",
-		"dis_patchars", "dis_reswords", "dis_saliases", "galiases", "nameddirs",
-		"saliases",
+		"dis_patchars", "dis_reswords", "dis_saliases", "nameddirs",
 	}
 }
 
@@ -639,20 +641,20 @@ echo "b=[$options[hashall]] [$options[hashcmds]]"`)
 	}
 }
 
-// An element of one of the ten empty tables is *silent* on an unset where the
-// assignment refuses by name. The assignment's caller believes it has arranged
-// a global alias and would be told nothing at either end; an unset's caller
+// An element of one of the still-empty tables is *silent* on an unset where
+// the assignment refuses by name. The assignment's caller believes it has
+// arranged a disabled alias and would be told nothing at either end; an unset's caller
 // asked for absence and has it, and reads the same empty string here that zsh
 // reads. Both halves in one shell, because the point is that they differ.
 func TestUnsettingAnEmptyParametersElementIsSilent(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `unset "galiases[f]" 2>&1
-echo "unset=$? n=${#galiases} v=[${galiases[f]}]"
+	out, st := runZsh(t, t.TempDir(), `unset "dis_aliases[f]" 2>&1
+echo "unset=$? n=${#dis_aliases} v=[${dis_aliases[f]}]"
 unset "nameddirs[x]" 2>&1
 echo "nameddirs=$?"
-galiases[f]=ls 2>&1
+dis_aliases[f]=ls 2>&1
 echo "assign=$?"`)
 	want := "unset=0 n=0 v=[]\nnameddirs=0\n" +
-		"zsh:5: galiases[f]: alias -g is not implemented yet\nassign=0\n"
+		"zsh:5: dis_aliases[f]: disable -a is not implemented yet\nassign=0\n"
 	if out != want || st != 0 {
 		t.Errorf("unsetting an empty table's element = %q (status %d), want %q", out, st, want)
 	}
@@ -793,7 +795,7 @@ func moduleParams() []string {
 func implementedModuleParams() []string {
 	return []string{
 		"aliases", "builtins", "commands", "funcstack", "functions",
-		"options", "parameters",
+		"galiases", "options", "parameters", "saliases",
 	}
 }
 

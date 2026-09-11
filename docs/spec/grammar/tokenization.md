@@ -476,6 +476,94 @@ that expand aliases in scripts:
 - **A value that is empty or all blanks leaves nothing behind**, and the
   command becomes whatever followed it.
 
+### Three kinds of alias, and two namespaces
+
+zsh has two further kinds, and no other shell in the panel has either:
+`alias -g` and `alias -s` are `invalid option` in bash 5.3 and 3.2,
+`unknown option` in ksh93, and in dash — which reads no options for
+`alias` at all — a name it cannot find. Measured 2026-09-11.
+`Semantics.GlobalAliases` and `Semantics.SuffixAliases` are the axes.
+
+**A global alias is expanded wherever a word stands**, not only where a
+command word does, and it shares the table with the regular kind:
+
+    alias -g UP='| tr a-z A-Z'
+    echo hi UP                   →  HI
+
+Measured, one at a time, on zsh 5.9.2:
+
+| probe | expands |
+| --- | --- |
+| `echo 1 G`, `echo G 2` | yes — any argument |
+| `G` alone | yes — command position too |
+| `for x in G`, `case G in`, `a=(G)` | yes |
+| `echo x > G` | yes — a redirection target |
+| `cat << G` | yes — a heredoc delimiter |
+| `[[ G == … ]]` | yes |
+| `"G"`, `'G'`, `\G` | **no** — any quoting |
+| `"x G y"` | **no** — inside a quoted word |
+| `v=G` | **no** — one word, and its text is not the name |
+| `$(( G + 1 ))` | **no** — arithmetic is not word text |
+
+The value is spliced as **tokens**, exactly as a regular alias body is,
+so a command separator (`;`), a redirection operator (`>`) and a reserved
+word (`then`) all work from one — and a two-word value is two words.
+
+Two recursion rules, and they are not the same rule:
+
+- The set of spent names is **fresh per word**, where a regular alias
+  keeps one per *command*: `alias -g S=x` used twice in one command
+  expands twice, and a cycle `A`→`B`→`A` stops with `A` standing.
+- What a word spends is spent for the **command word** as well, which is
+  the half that keeps the two from fighting: `alias -g f='echo f'` run as
+  a command prints `f` rather than recurring.
+
+One table, so `alias -g dup=…` **replaces** a regular `dup`, a plain
+`alias` lists the regular and the global together, `alias -g` lists the
+global alone, and `unalias` has no `-g` — it is `bad option` there,
+because the plain form already removes either.
+
+**A suffix alias is keyed on a command word's extension**, and is the
+second namespace:
+
+    alias -s txt=cat
+    ./x.txt                      →  the file, through `cat`
+
+The rule is a substitution of *text*: a command word `text.name` where
+`text` is non-empty and `name` names a suffix alias becomes `value
+text.name`. So the value may hold a pipeline, and the filename lands
+after its last command; `*.ps` is replaced before globbing and so still
+globs; and a trailing space in the value is not special, because the
+spliced text ends in the word.
+
+Measured, again one at a time:
+
+| probe | result |
+| --- | --- |
+| `x.txt`, `./x.txt`, `/abs/x.txt`, `a/.txt` | substituted |
+| `.zsh` | **not** — `text` is empty |
+| `q.sh/w` | **not** — the run after the last dot is `sh/w` |
+| `./nope.txt`, `d.sh` (a directory) | substituted — the file need not exist or be a file |
+| `p.sh` with `p.sh` executable on PATH | substituted — it beats the executable |
+| `p.sh` with a function `p.sh` | substituted — it beats the function |
+| `p.sh` with `alias p.sh=…` | the **regular alias** wins |
+| `'./x.txt'`, `$f` holding the path | **not** — quoted, and not yet expanded |
+| `v=1 ./x.txt` | substituted — an assignment prefix does not move the command word |
+
+That order is not a policy; it falls out of doing this while the line is
+read. Neither the function nor the PATH entry exists yet, and the regular
+alias is looked for first.
+
+The namespaces are what `unalias` shows: `unalias txt` is "no such hash
+table element" with a suffix alias `txt` defined, `unalias -s txt`
+removes it, `unalias -a` empties the other table and leaves this one, and
+`unalias -s -a` does the reverse. `alias -g -s` asks for both at once and
+is `illegal combination of options`, status 1.
+
+zsh presents all three as parameters, which is the same statement in
+another surface: `$aliases` holds the regular kind alone, `$galiases` the
+global and `$saliases` the suffix.
+
 ## An unterminated quote at end of input
 
 `echo "abc` with no closing quote is a syntax error in bash, dash and

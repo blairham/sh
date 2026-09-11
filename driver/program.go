@@ -54,7 +54,11 @@ type program struct {
 	ran     int
 
 	dialect syntax.Dialect
-	aliases syntax.Aliases
+	// The three alias hooks the parser takes, kept together because they are
+	// one feature with three tables — see interp.Runner.ExpandingAlias.
+	aliases       syntax.Aliases
+	globalAliases syntax.Aliases
+	suffixAliases syntax.Aliases
 
 	p *syntax.Parser
 	// carried are the remarks of parsers already retired, so that a count of
@@ -89,6 +93,8 @@ func (pr *program) parser() *syntax.Parser {
 	}
 	p := syntax.NewParserAt(pr.pending, pr.dialect, pr.base+1)
 	p.Aliases = pr.aliases
+	p.GlobalAliases = pr.globalAliases
+	p.SuffixAliases = pr.suffixAliases
 	for range pr.ran {
 		// Already run. Parsed again only to reach what follows them, and
 		// discarded — parsing has no effect of its own.

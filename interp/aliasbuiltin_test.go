@@ -25,6 +25,11 @@ func aliasRunArgs(t *testing.T, tweak func(*Semantics), dg Diagnostics, src stri
 	sem := permissive()
 	sem.AliasParsesOptions = Yes
 	sem.AliasHasPrintOption = Yes
+	// Off by default here, so a test about the plain builtin is not also a
+	// test about the two kinds one dialect has. The tests that want them say
+	// so through tweak.
+	sem.GlobalAliases = No
+	sem.SuffixAliases = No
 	sem.AliasReportsNotFound = Yes
 	sem.UnaliasReportsNotFound = Yes
 	sem.AliasNotFoundStatusCounts = No

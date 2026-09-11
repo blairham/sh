@@ -658,7 +658,22 @@ type Runner struct {
 	// aliases is the table `alias` and `unalias` keep. Substitution happens
 	// when a line is parsed, which is the other half of the feature and lives
 	// in the parser rather than here; the two meet at [Runner.ExpandingAlias].
-	aliases map[string]string
+	//
+	// Regular and *global* aliases share it, because the shell that has the
+	// second kind shares one table for them: `alias -g dup=…` replaces a
+	// regular `dup` rather than standing beside it, and the plain listing
+	// shows both. See aliasDef.
+	aliases map[string]aliasDef
+
+	// suffixAliases is the second namespace, keyed on a command word's
+	// extension rather than on the whole word — `alias -s txt=cat` makes
+	// `./x.txt` run `cat ./x.txt`.
+	//
+	// A table of its own rather than a third flag on the one above, because
+	// the shell it models keeps them apart everywhere it can be seen: the
+	// two sets are never listed together, `unalias -a` empties one and
+	// leaves the other, and a name may be in both at once.
+	suffixAliases map[string]string
 
 	// aliasExpansion is whether a word being parsed *right now* is replaced
 	// by what the table holds for it, and aliasExpansionBase is the answer

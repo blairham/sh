@@ -265,6 +265,10 @@ func Semantics() interp.Semantics {
 	s.SelectPromptNeedsTerminal = interp.No
 	s.AliasParsesOptions = interp.Yes
 	s.AliasHasPrintOption = interp.Yes
+	// Neither of the other two kinds: `alias -g` and `alias -s` are both
+	// `invalid option` here, measured on 5.3 and 3.2 alike.
+	s.GlobalAliases = interp.No
+	s.SuffixAliases = interp.No
 	s.AliasReportsNotFound = interp.Yes
 	s.UnaliasReportsNotFound = interp.Yes
 	s.AliasNotFoundStatusCounts = interp.No

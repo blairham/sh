@@ -121,6 +121,15 @@ func registerParameterModule(r *interp.Runner) {
 	r.MarkHidden("builtins")
 	r.SetDynamicAssoc("aliases", zshAliasesView)
 	r.SetDynamicAssocWriter("aliases", writeZshAlias)
+	// The other two kinds, each with its own parameter, which is how this
+	// shell says they are three namespaces rather than one table with flags:
+	// `alias -g G=x; alias r=y; alias -s t=z` leaves `${(k)aliases}` naming
+	// `r` alone, `${(k)galiases}` naming `G` and `${(k)saliases}` naming `t`.
+	// Measured (#2081).
+	r.SetDynamicAssoc("galiases", zshGlobalAliasesView)
+	r.SetDynamicAssocWriter("galiases", writeZshGlobalAlias)
+	r.SetDynamicAssoc("saliases", zshSuffixAliasesView)
+	r.SetDynamicAssocWriter("saliases", writeZshSuffixAlias)
 	r.SetDynamicArray("funcstack", funcstackNames)
 	r.SetDynamicAssoc("parameters", zshParametersView)
 	r.SetDynamicAssocElement("parameters", zshParameterValue)
@@ -176,13 +185,17 @@ var zshEmptyParams = []struct {
 	{name: "dis_aliases", waitsFor: "disable -a"},
 	{name: "dis_functions", waitsFor: "disable -f"},
 	{name: "dis_functions_source", waitsFor: "disable -f", readonly: true},
-	{name: "dis_galiases", waitsFor: "alias -g"},
+	// The *disabled* half of the two kinds #2081 added, and they are still
+	// honestly empty: an alias is in these tables only once `disable` has
+	// taken it out of the live one, and `disable -a` — which covers the
+	// regular and the global kind alike — and `disable -s` are both `not
+	// implemented yet` here. The letter each waits on moved with the
+	// feature; the emptiness did not.
+	{name: "dis_galiases", waitsFor: "disable -a"},
 	{name: "dis_patchars", waitsFor: "disable -p", array: true, readonly: true},
 	{name: "dis_reswords", waitsFor: "disable -r", array: true, readonly: true},
-	{name: "dis_saliases", waitsFor: "alias -s"},
-	{name: "galiases", waitsFor: "alias -g"},
+	{name: "dis_saliases", waitsFor: "disable -s"},
 	{name: "nameddirs", waitsFor: "hash -d"},
-	{name: "saliases", waitsFor: "alias -s"},
 }
 
 // registerEmptyParameters installs the ten as *views* that happen to be
@@ -561,12 +574,7 @@ func zshBuiltinsView(r *interp.Runner) interp.AssocArray {
 // is measured and lives in syntax.Dialect.ExpandAliases — so an alias is in
 // here whether or not the route it was defined on would expand it.
 func zshAliasesView(r *interp.Runner) interp.AssocArray {
-	table := r.AliasTable()
-	out := make(interp.AssocArray, len(table))
-	for name, text := range table {
-		out[name] = text
-	}
-	return out
+	return aliasAssoc(r.AliasTable())
 }
 
 // writeZshAlias is `aliases[a]=text` and `unset "aliases[a]"`: the same pair
@@ -577,4 +585,49 @@ func writeZshAlias(r *interp.Runner, name, text string, set bool) {
 		return
 	}
 	r.SetAlias(name, text)
+}
+
+// zshGlobalAliasesView is `$galiases`: every *global* alias, which is the
+// kind expanded wherever a word stands rather than only in command position.
+//
+// A table of its own here and a shared one inside — see interp.aliasDef —
+// because that is what this shell shows: `alias -g` over a regular name
+// replaces it, so a name is in one of these two parameters and never both.
+func zshGlobalAliasesView(r *interp.Runner) interp.AssocArray {
+	return aliasAssoc(r.GlobalAliasTable())
+}
+
+// writeZshGlobalAlias is `galiases[G]=text`, which is `alias -g G=text`.
+func writeZshGlobalAlias(r *interp.Runner, name, text string, set bool) {
+	if !set {
+		r.RemoveAlias(name)
+		return
+	}
+	r.SetGlobalAlias(name, text)
+}
+
+// zshSuffixAliasesView is `$saliases`: the second namespace, keyed on a
+// command word's extension.
+func zshSuffixAliasesView(r *interp.Runner) interp.AssocArray {
+	return aliasAssoc(r.SuffixAliasTable())
+}
+
+// writeZshSuffixAlias is `saliases[txt]=text`, which is `alias -s txt=text`.
+func writeZshSuffixAlias(r *interp.Runner, name, text string, set bool) {
+	if !set {
+		r.RemoveSuffixAlias(name)
+		return
+	}
+	r.SetSuffixAlias(name, text)
+}
+
+// aliasAssoc is one of those tables as the parameter type. One conversion for
+// the three, because three copies of a two-line loop is three places for the
+// next fix to reach two of.
+func aliasAssoc(table map[string]string) interp.AssocArray {
+	out := make(interp.AssocArray, len(table))
+	for name, text := range table {
+		out[name] = text
+	}
+	return out
 }

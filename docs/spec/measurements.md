@@ -15867,6 +15867,17 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/unalias-is-not-alias` | `st=1` **2>** `unalias: nope not found` | `st=1` **2>** `<shell>: line 1: unalias: nope: not found` | `st=1` **2>** `<shell>: line 1: unalias: nope: not found` | `st=1` **2>** `<shell>: line 0: unalias: nope: not found` | `st=1` | `st=1` **2>** `<shell>:unalias:1: no such hash table element: nope` |
 | `alias/the-status-may-count-what-was-missing` | `st=1` **2>** `alias: n1 not found~alias: n2 not found~alias: n3 not found` | `st=1` **2>** `<shell>: line 1: alias: n1: not found~<shell>: line 1: alias: n2: not found~<shell>: line 1: alias: n3: not found` | `st=1` **2>** `<shell>: line 1: alias: n1: not found~<shell>: line 1: alias: n2: not found~<shell>: line 1: alias: n3: not found` | `st=1` **2>** `<shell>: line 0: alias: n1: not found~<shell>: line 0: alias: n2: not found~<shell>: line 0: alias: n3: not found` | `st=3` **2>** `n1: alias not found~n2: alias not found~n3: alias not found` | `st=1` |
 | `alias/unalias-removes-and-a-removes-all` | `b='2'~st=1` **2>** `alias: b not found` | `alias b='2'~st=1` **2>** `<shell>: line 1: alias: b: not found` | `b='2'~st=1` **2>** `<shell>: line 1: alias: b: not found` | `alias b='2'~st=1` **2>** `<shell>: line 0: alias: b: not found` | `b=2~st=1` **2>** `b: alias not found` | `b=2~st=1` |
+| `alias/a-global-alias-expands-in-an-argument` | `hi UP` **2>** `alias: -g not found` | `hi UP` **2>** `<script>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `hi UP` **2>** `<script>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `hi UP` **2>** `<script>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | **2>** `alias: -g: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `HI` |
+| `alias/a-global-alias-expands-in-command-position-too` | `f~st=0` **2>** `alias: -g not found` | `st=127` **2>** `<script>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 2: f: command not found` | `st=127` **2>** `<script>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 2: f: command not found` | `st=127` **2>** `<script>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 2: f: command not found` | **2>** `alias: -g: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `f~st=0` |
+| `alias/a-global-alias-expands-once-per-word` | `[S][S]~[A]` **2>** `alias: -g not found~alias: -g not found~alias: -g not found` | `[S][S]~[A]` **2>** `<script>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 3: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 4: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `[S][S]~[A]` **2>** `<script>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 3: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 4: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `[S][S]~[A]` **2>** `<script>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 3: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 4: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | **2>** `alias: -g: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `[x][x]~[A]` |
+| `alias/a-global-alias-is-not-expanded-quoted` | `[G][G][G][x G y]~assign=G` **2>** `alias: -g not found` | `[G][G][G][x G y]~assign=G` **2>** `<script>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `[G][G][G][x G y]~assign=G` **2>** `<script>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `[G][G][G][x G y]~assign=G` **2>** `<script>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | **2>** `alias: -g: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `[hello][G][G][x G y]~assign=G` |
+| `alias/a-suffix-alias-runs-a-file-by-its-extension` | `st=126` **2>** `alias: -s not found~<script>: 3: ./x.txt: Permission denied` | `st=126` **2>** `<script>: line 2: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 3: ./x.txt: Permission denied` | `st=126` **2>** `<script>: line 2: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 3: ./x.txt: Permission denied` | `st=126` **2>** `<script>: line 2: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 3: ./x.txt: Permission denied` | **2>** `alias: -s: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `hello~st=0` |
+| `alias/a-suffix-alias-beats-the-command-of-that-name` | `RAN~st=0` **2>** `alias: -s not found` | `RAN~st=0` **2>** `<script>: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `RAN~st=0` **2>** `<script>: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `RAN~st=0` **2>** `<script>: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | **2>** `alias: -s: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `SUFFIX p.sh~st=0` |
+| `alias/a-regular-alias-beats-a-suffix-alias` | `ALIAS~st=0` **2>** `alias: -s not found` | `st=127` **2>** `<script>: line 1: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 3: p.sh: command not found` | `ALIAS~st=0` **2>** `<script>: line 1: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `st=127` **2>** `<script>: line 1: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<script>: line 3: p.sh: command not found` | **2>** `alias: -s: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `ALIAS~st=0` |
+| `alias/the-two-kinds-are-two-namespaces` | `--plain--~t='z'~r='y'~G='x'~--g--~--s--` **2>** `alias: -g not found~alias: -s not found` *(status 1)* | `--plain--~alias r='y'~--g--~--s--` **2>** `<shell>: line 4: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 5: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` *(status 2)* | `--plain--~r='y'~--g--~--s--` **2>** `<shell>: line 4: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 5: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` *(status 2)* | `--plain--~alias r='y'~--g--~--s--` **2>** `<shell>: line 3: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` *(status 2)* | *(no output, status 2)* | `--plain--~G=x~r=y~--g--~G=x~--s--~t=z` |
+| `alias/unalias-a-leaves-the-suffix-aliases` | `st=0~--plain--~--s--` **2>** `alias: -s not found` *(status 1)* | `st=0~--plain--~--s--` **2>** `<shell>: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` *(status 2)* | `st=0~--plain--~--s--` **2>** `<shell>: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` *(status 2)* | `st=0~--plain--~--s--` **2>** `<shell>: line 3: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` *(status 2)* | *(no output, status 2)* | `st=0~--plain--~--s--~t=z` |
+| `alias/both-kinds-at-once-is-refused` | `st=1~st=1` **2>** `alias: -g not found~alias: -s not found~alias: -s not found` | `st=2~st=2` **2>** `<shell>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `st=2~st=2` **2>** `<shell>: line 1: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `st=2~st=2` **2>** `<shell>: line 0: alias: -g: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 0: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | **2>** `alias: -g: unknown option~alias: -s: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `st=1~st=0` **2>** `<shell>:alias:1: illegal combination of options` |
+| `alias/the-letters-alias-still-has-not-got` | `L=1~r=1~m=1` **2>** `alias: -L not found~alias: -r not found~alias: -m not found~alias: z* not found` | `L=2~r=2~m=2` **2>** `<shell>: line 1: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `L=2~r=2~m=2` **2>** `<shell>: line 1: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `L=2~r=2~m=2` **2>** `<shell>: line 0: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 0: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 0: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | **2>** `alias: -L: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `L=0~r=0~m=0` |
 
 - `alias/expands-a-command-word` — the headline of the expansion half. dash and ksh93 expand in a script; bash needs `shopt -s expand_aliases` and zsh will not under -c at all, so this is `hit` in two of the four and a command not found in the other two
   ```sh
@@ -15976,6 +15987,77 @@ grades it and nothing drift-checks it either, for the same reason.
 - `alias/unalias-removes-and-a-removes-all` — the table shrinks by one and then empties, and the second lookup fails — which is what proves -a did anything
   ```sh
   alias a=1 b=2; unalias a; alias b; unalias -a; alias b; echo "st=$?"
+  ```
+- `alias/a-global-alias-expands-in-an-argument` — the headline of the second kind: a global alias is expanded wherever a word stands, so `UP` in an *argument* becomes a pipeline and the line prints `HI`. zsh alone — the other five refuse the letter and then echo the two words. From a file because zsh expands no alias under -c
+  ```sh
+  alias -g UP='| tr a-z A-Z'
+  echo hi UP
+  ```
+- `alias/a-global-alias-expands-in-command-position-too` — and it is not *instead of* command position: the same table answers there, and the name is spent once — `f` rather than a recursion. The word after the expansion is an ordinary one, which is the guard reaching across the two kinds rather than each keeping its own
+  ```sh
+  alias -g f='echo f'
+  f
+  echo "st=$?"
+  ```
+- `alias/a-global-alias-expands-once-per-word` — the recursion rule, and it is not the regular kind's: the spent names are per *word* here, so `S` twice in one command expands twice where `alias e=…; e; e` in one command would not. A cycle still stops, with the name it started on standing
+  ```sh
+  alias -g S=x
+  printf '[%s]' S S; echo
+  alias -g A=B
+  alias -g B=A
+  printf '[%s]' A; echo
+  ```
+- `alias/a-global-alias-is-not-expanded-quoted` — the negative half, which is what makes the positive one a rule rather than a substitution of every occurrence: any quoting stops it, a name inside a quoted word is not a word, and an assignment is one word whose text is not the name — so `v=G` keeps the letter
+  ```sh
+  alias -g G=hello
+  printf '[%s]' G "G" 'G' "x G y"; echo
+  v=G; echo "assign=$v"
+  ```
+- `alias/a-suffix-alias-runs-a-file-by-its-extension` — the third kind: a command word `text.name` is replaced by the text `value text.name`, so a bare path with a known extension runs the command for it. zsh alone; the other five refuse the letter and then fail to exec the file
+  ```sh
+  echo hello > x.txt
+  alias -s txt=cat
+  ./x.txt
+  echo "st=$?"
+  ```
+- `alias/a-suffix-alias-beats-the-command-of-that-name` — which says *when* it happens: the substitution is made while the line is read, so it wins over an executable of that name on PATH — nothing has looked for the file yet. A shell that treated a suffix alias as a fallback for a command it could not find would run the script here
+  ```sh
+  printf '#!/bin/sh\necho RAN\n' > p.sh
+  chmod +x p.sh
+  PATH=.:$PATH
+  alias -s sh='echo SUFFIX'
+  p.sh
+  echo "st=$?"
+  ```
+- `alias/a-regular-alias-beats-a-suffix-alias` — and the other end of the same order: the table is looked in first, so a regular alias of the whole word wins. The pair is what pins the order rather than either row alone
+  ```sh
+  alias -s sh='echo SUFFIX'
+  alias p.sh='echo ALIAS'
+  p.sh
+  echo "st=$?"
+  ```
+- `alias/the-two-kinds-are-two-namespaces` — the listing rule, which is where the namespaces show: a plain `alias` writes the regular and the global together and never a suffix one, `-g` writes the global alone and `-s` the suffix alone. The five without the letters list the one alias they took. Emptied first, so the row is about what was defined here and not about a shell's own
+  ```sh
+  unalias -a 2>/dev/null
+  alias -g G=x 2>/dev/null; alias r=y; alias -s t=z 2>/dev/null
+  echo "--plain--"; alias
+  echo "--g--"; alias -g
+  echo "--s--"; alias -s
+  ```
+- `alias/unalias-a-leaves-the-suffix-aliases` — and the removal half, which is the strongest statement that they are two tables rather than one with a flag: `unalias -a` empties the aliases and leaves the suffix aliases standing. `unalias -s -a` does the reverse
+  ```sh
+  alias r=y; alias -s t=z 2>/dev/null
+  unalias -a; echo "st=$?"
+  echo "--plain--"; alias
+  echo "--s--"; alias -s
+  ```
+- `alias/both-kinds-at-once-is-refused` — two namespaces, so one call cannot be about both — `illegal combination of options` at 1 in the shell with the letters, where the other five refuse whichever letter they meet first. The listing after it is what proves nothing was defined
+  ```sh
+  alias -g -s q=v; echo "st=$?"; alias -s; echo "st=$?"
+  ```
+- `alias/the-letters-alias-still-has-not-got` — the paired table, from the other side: these three are zsh's remaining `alias` letters — a listing a startup file could read back, a listing restricted to the regular kind, and operands taken as patterns — and a shell that has not built them owes a refusal that says so rather than `bad option`, which claims no shell has the letter (#2081). The table is emptied first so the row is about the letters and not about whichever aliases a shell is born with
+  ```sh
+  unalias -a 2>/dev/null; alias -L; echo "L=$?"; alias -r; echo "r=$?"; alias -m 'z*'; echo "m=$?"
   ```
 
 ## invocation

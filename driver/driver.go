@@ -1454,6 +1454,8 @@ func (sh Shell) runInput(in source) int {
 	// partway through. See Runner.ExpandingAlias.
 	r.SetAliasExpansionBase(sh.Dialect.ExpandAliases.Has(in.programRoute()) || in.interactive)
 	pr.aliases = r.ExpandingAlias
+	pr.globalAliases = r.ExpandingGlobalAlias
+	pr.suffixAliases = r.ExpandingSuffixAlias
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
 			return code

@@ -13810,6 +13810,96 @@ echo "LINENO=$LINENO"`,
 		Snippet: `alias a=1 b=2; unalias a; alias b; unalias -a; alias b; echo "st=$?"`,
 		Why:     "the table shrinks by one and then empties, and the second lookup fails — which is what proves -a did anything",
 	},
+	// --- alias: the two kinds one dialect has (#2081) ------------------
+	{
+		ID: "alias/a-global-alias-expands-in-an-argument", Category: "alias",
+		Script: true,
+		Snippet: `alias -g UP='| tr a-z A-Z'
+echo hi UP`,
+		Why: "the headline of the second kind: a global alias is expanded wherever a word stands, so `UP` in an *argument* becomes a pipeline and the line prints `HI`. zsh alone — the other five refuse the letter and then echo the two words. From a file because zsh expands no alias under -c",
+	},
+	{
+		ID: "alias/a-global-alias-expands-in-command-position-too", Category: "alias",
+		Script: true,
+		Snippet: `alias -g f='echo f'
+f
+echo "st=$?"`,
+		Why: "and it is not *instead of* command position: the same table answers there, and the name is spent once — `f` rather than a recursion. The word after the expansion is an ordinary one, which is the guard reaching across the two kinds rather than each keeping its own",
+	},
+	{
+		ID: "alias/a-global-alias-expands-once-per-word", Category: "alias",
+		Script: true,
+		Snippet: `alias -g S=x
+printf '[%s]' S S; echo
+alias -g A=B
+alias -g B=A
+printf '[%s]' A; echo`,
+		Why: "the recursion rule, and it is not the regular kind's: the spent names are per *word* here, so `S` twice in one command expands twice where `alias e=…; e; e` in one command would not. A cycle still stops, with the name it started on standing",
+	},
+	{
+		ID: "alias/a-global-alias-is-not-expanded-quoted", Category: "alias",
+		Script: true,
+		Snippet: `alias -g G=hello
+printf '[%s]' G "G" 'G' "x G y"; echo
+v=G; echo "assign=$v"`,
+		Why: "the negative half, which is what makes the positive one a rule rather than a substitution of every occurrence: any quoting stops it, a name inside a quoted word is not a word, and an assignment is one word whose text is not the name — so `v=G` keeps the letter",
+	},
+	{
+		ID: "alias/a-suffix-alias-runs-a-file-by-its-extension", Category: "alias",
+		Script: true,
+		Snippet: `echo hello > x.txt
+alias -s txt=cat
+./x.txt
+echo "st=$?"`,
+		Why: "the third kind: a command word `text.name` is replaced by the text `value text.name`, so a bare path with a known extension runs the command for it. zsh alone; the other five refuse the letter and then fail to exec the file",
+	},
+	{
+		ID: "alias/a-suffix-alias-beats-the-command-of-that-name", Category: "alias",
+		Script: true,
+		Snippet: `printf '#!/bin/sh\necho RAN\n' > p.sh
+chmod +x p.sh
+PATH=.:$PATH
+alias -s sh='echo SUFFIX'
+p.sh
+echo "st=$?"`,
+		Why: "which says *when* it happens: the substitution is made while the line is read, so it wins over an executable of that name on PATH — nothing has looked for the file yet. A shell that treated a suffix alias as a fallback for a command it could not find would run the script here",
+	},
+	{
+		ID: "alias/a-regular-alias-beats-a-suffix-alias", Category: "alias",
+		Script: true,
+		Snippet: `alias -s sh='echo SUFFIX'
+alias p.sh='echo ALIAS'
+p.sh
+echo "st=$?"`,
+		Why: "and the other end of the same order: the table is looked in first, so a regular alias of the whole word wins. The pair is what pins the order rather than either row alone",
+	},
+	{
+		ID: "alias/the-two-kinds-are-two-namespaces", Category: "alias",
+		Snippet: `unalias -a 2>/dev/null
+alias -g G=x 2>/dev/null; alias r=y; alias -s t=z 2>/dev/null
+echo "--plain--"; alias
+echo "--g--"; alias -g
+echo "--s--"; alias -s`,
+		Why: "the listing rule, which is where the namespaces show: a plain `alias` writes the regular and the global together and never a suffix one, `-g` writes the global alone and `-s` the suffix alone. The five without the letters list the one alias they took. Emptied first, so the row is about what was defined here and not about a shell's own",
+	},
+	{
+		ID: "alias/unalias-a-leaves-the-suffix-aliases", Category: "alias",
+		Snippet: `alias r=y; alias -s t=z 2>/dev/null
+unalias -a; echo "st=$?"
+echo "--plain--"; alias
+echo "--s--"; alias -s`,
+		Why: "and the removal half, which is the strongest statement that they are two tables rather than one with a flag: `unalias -a` empties the aliases and leaves the suffix aliases standing. `unalias -s -a` does the reverse",
+	},
+	{
+		ID: "alias/both-kinds-at-once-is-refused", Category: "alias",
+		Snippet: `alias -g -s q=v; echo "st=$?"; alias -s; echo "st=$?"`,
+		Why:     "two namespaces, so one call cannot be about both — `illegal combination of options` at 1 in the shell with the letters, where the other five refuse whichever letter they meet first. The listing after it is what proves nothing was defined",
+	},
+	{
+		ID: "alias/the-letters-alias-still-has-not-got", Category: "alias",
+		Snippet: `unalias -a 2>/dev/null; alias -L; echo "L=$?"; alias -r; echo "r=$?"; alias -m 'z*'; echo "m=$?"`,
+		Why:     "the paired table, from the other side: these three are zsh's remaining `alias` letters — a listing a startup file could read back, a listing restricted to the regular kind, and operands taken as patterns — and a shell that has not built them owes a refusal that says so rather than `bad option`, which claims no shell has the letter (#2081). The table is emptied first so the row is about the letters and not about whichever aliases a shell is born with",
+	},
 	{
 		ID: "select/an-unterminated-final-reply", Category: "select",
 		Snippet: `printf 2 | { select x in a b; do echo "picked=$x"; break; done; }; echo "st=$?"`,

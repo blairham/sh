@@ -139,6 +139,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.funcFiles = maps.Clone(r.funcFiles)
 	c.exportedFuncs = maps.Clone(r.exportedFuncs)
 	c.aliases = maps.Clone(r.aliases)
+	c.suffixAliases = maps.Clone(r.suffixAliases)
 	c.disabledBuiltins = maps.Clone(r.disabledBuiltins)
 	c.withdrawnBuiltins = maps.Clone(r.withdrawnBuiltins)
 	// And the parameter half, which has to travel with the tables it takes

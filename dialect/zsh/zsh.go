@@ -613,6 +613,11 @@ func Semantics() interp.Semantics {
 	s.SelectPromptNeedsTerminal = interp.No
 	s.AliasParsesOptions = interp.Yes
 	s.AliasHasPrintOption = interp.No
+	// The two kinds nothing else in the panel has: a global alias expands
+	// wherever a word stands, and a suffix alias is a second namespace
+	// keyed on a command word's extension (#2081).
+	s.GlobalAliases = interp.Yes
+	s.SuffixAliases = interp.Yes
 	// The reverse of ksh93: silent about `alias nope` and not about
 	// `unalias nope`.
 	s.AliasReportsNotFound = interp.No
@@ -1965,6 +1970,18 @@ func Diagnostics() interp.Diagnostics {
 			// copy and -W is the `zsh/parameter` writability flag. -m and
 			// -M are implemented, in FunctionsOptions above.
 			"functions": "ckstuxzTUW",
+			// `alias`'s remaining letters, now that `-g` and `-s` are the
+			// two kinds this shell has rather than options nobody has
+			// (#2081): `-L` prints a listing in a form a startup file could
+			// read back, `-r` restricts a listing to the regular kind, and
+			// `-m` takes the operands as patterns. The paired rule is what
+			// puts them here — a letter belongs either in the set the
+			// builtin accepts or in this table, and one in neither reads as
+			// "zsh has no such letter".
+			"alias": "Lmr",
+			// `unalias` is the same rule with a shorter list: it has no
+			// `-L` or `-r` at all, and `-m` is its pattern form.
+			"unalias": "m",
 		},
 		// The builtin's name is stripped to the location prefix as ever:
 		// `zsh:read:1: -p: no coprocess`, measured with no coprocess to

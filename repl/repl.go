@@ -980,6 +980,8 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 	// that `shopt -u expand_aliases` typed at the prompt is honored.
 	if s.Runner != nil {
 		p.Aliases = s.Runner.ExpandingAlias
+		p.GlobalAliases = s.Runner.ExpandingGlobalAlias
+		p.SuffixAliases = s.Runner.ExpandingSuffixAlias
 	}
 	stmts, err := collect(p)
 	// Incomplete rather than incomplete-and-failed: input can be unfinished
@@ -1042,6 +1044,8 @@ func (s Shell) endOfInput(pending *strings.Builder) ([]*syntax.File, string, err
 	// for having been finished here.
 	if s.Runner != nil {
 		p.Aliases = s.Runner.ExpandingAlias
+		p.GlobalAliases = s.Runner.ExpandingGlobalAlias
+		p.SuffixAliases = s.Runner.ExpandingSuffixAlias
 	}
 	stmts, err := collect(p)
 	// Before the failure and whether or not there is one, which is the order

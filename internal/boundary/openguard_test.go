@@ -90,7 +90,7 @@ func TestEveryFrontEndOpenGoesThroughTheBoundaryOrSaysWhyNot(t *testing.T) {
 	t.Parallel()
 	var found []string
 	for _, dir := range frontEnd {
-		for _, call := range directOpens(t, dir) {
+		for _, call := range directCalls(t, dir, map[string]map[string]bool{"os": openers}) {
 			found = append(found, call)
 			if _, ok := exempt[call]; !ok {
 				t.Errorf("%s opens a file through the os package and nothing says why.\n"+
@@ -116,15 +116,20 @@ func TestEveryFrontEndOpenGoesThroughTheBoundaryOrSaysWhyNot(t *testing.T) {
 	}
 }
 
-// directOpens names every `os.<opener>(` call in a package's non-test files,
-// as "package.enclosingFunction".
+// directCalls names every call in a package's non-test files that reaches a
+// watched function of a watched package, as "package.enclosingFunction".
+//
+// `watch` is keyed by the imported package's name and then by the function's
+// — `{"os": {"Open": true}}` — so one walk serves both the front end's rule,
+// which is about opens through `os`, and the dialects', which is also about
+// `syscall` and about the verbs that change a file rather than read it.
 //
 // Files are read and parsed one at a time rather than through parser.ParseDir,
 // which does not consider build tags and is deprecated for saying so. The
 // package name is taken from the file, so a `_unix.go` and its `_windows.go`
 // sibling both count — an exemption that held only on one platform is exactly
 // the kind that goes unnoticed.
-func directOpens(t *testing.T, dir string) []string {
+func directCalls(t *testing.T, dir string, watch map[string]map[string]bool) []string {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -146,7 +151,7 @@ func directOpens(t *testing.T, dir string) []string {
 			if !ok || fd.Body == nil {
 				continue
 			}
-			if opensDirectly(fd.Body) {
+			if callsDirectly(fd.Body, watch) {
 				out = append(out, fmt.Sprintf("%s.%s", f.Name.Name, fd.Name.Name))
 			}
 		}
@@ -154,8 +159,8 @@ func directOpens(t *testing.T, dir string) []string {
 	return out
 }
 
-// opensDirectly reports whether a body calls one of the os package's openers.
-func opensDirectly(body *ast.BlockStmt) bool {
+// callsDirectly reports whether a body calls one of the watched functions.
+func callsDirectly(body *ast.BlockStmt, watch map[string]map[string]bool) bool {
 	found := false
 	ast.Inspect(body, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
@@ -166,7 +171,7 @@ func opensDirectly(body *ast.BlockStmt) bool {
 		if !ok {
 			return true
 		}
-		if id, ok := sel.X.(*ast.Ident); ok && id.Name == "os" && openers[sel.Sel.Name] {
+		if id, ok := sel.X.(*ast.Ident); ok && watch[id.Name][sel.Sel.Name] {
 			found = true
 		}
 		return true
@@ -192,7 +197,7 @@ func remembered() ([]byte, error) { return b.ReadFile(ctx, path) }
 	var opens []string
 	for _, d := range f.Decls {
 		fd := d.(*ast.FuncDecl)
-		if opensDirectly(fd.Body) {
+		if callsDirectly(fd.Body, map[string]map[string]bool{"os": openers}) {
 			opens = append(opens, fd.Name.Name)
 		}
 	}

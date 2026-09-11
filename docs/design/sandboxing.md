@@ -321,6 +321,35 @@ source of every package that holds a `Boundary` and fails on a direct
 open that is not on a written-down exemption list, because the tenth
 call site will be written by copying one of the nine.
 
+**A dialect holds no `Boundary`, and for a long time that meant nothing
+read one.** `interp` has the gate and `internal/boundary` has the front
+end's; `dialect/zsh` has neither, so the guard above — whose scope is
+exactly "packages holding a `Boundary`" — never opened a dialect's
+source, and a builtin one registers could open, create, delete and
+rename files with no test anywhere objecting. That is how three escapes
+arrived: `sysopen` and `zsystem flock` (#1805), `autoload` reading a
+function's file and then *running* it (#1812), and every mutating
+builtin in `zsh/files` (#1819) — a module whose whole purpose is
+changing the filesystem, none of whose nine operations is an open.
+
+`TestNoDialectReachesTheFilesystemWithoutSayingWhy` is the same rule
+over the other half, and it differs in two ways that follow from what a
+builtin does. It watches the verbs that change a *name* rather than a
+file's contents — `unlink`, `rename`, `mkdir`, `chmod` — and the
+`syscall` spellings beneath them, since going around the standard
+library must not also go around the gate. And it watches probes, which
+the front end's guard deliberately does not: that one asks about a path
+a person typed into a completion, while a dialect asks about one the
+*script* named, which is the subject the policy is about.
+
+The set of packages it reads is taken from the filesystem rather than
+listed, because a hand-written list is the failure being fixed: a fifth
+dialect covered only when somebody remembers to add it is a fifth
+dialect this rule does not cover. #1416 is the same shape one layer
+down, and #1808 is where the argument is made in full: a guarantee that
+is *checked* rather than enumerated is only as wide as the set it
+walks.
+
 Open, by construction and not by omission:
 
 - **Hard links and bind mounts.** Both names are real names for one

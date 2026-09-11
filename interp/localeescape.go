@@ -3,10 +3,7 @@
 
 package interp
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 // A `\uHHHH` or `\UHHHHHHHH` naming a code point the locale's encoding cannot
 // represent.
@@ -164,11 +161,4 @@ func (r *Runner) RefuseCodePoint() {
 		Wording(r.diag().CodePointOutsideTheLocale, "character not in range")))
 	r.status = 0
 	r.ctl = controlExit
-}
-
-// escapesCarryUnicode reports whether text holds a `\u` or `\U` at all,
-// which is the guard that keeps the axis from being asked of a word with no
-// such escape in it.
-func escapesCarryUnicode(s string) bool {
-	return strings.Contains(s, `\u`) || strings.Contains(s, `\U`)
 }

@@ -2354,8 +2354,9 @@ func Apply(r *interp.Runner) {
 	// shell's own descriptor table. See socketmodule.go.
 	registerSocketModule(r)
 	// And `zsh/terminfo`'s and `zsh/termcap`'s one parameter each: the
-	// terminal's capabilities under two name systems, over the values in
-	// repl.TerminalCapabilities. See terminfo.go.
+	// terminal's capabilities under two name systems, read out of the
+	// description `$TERM` names by repl.TerminalCapabilities. See
+	// terminfo.go.
 	registerTerminfoModules(r)
 	// And `zsh/langinfo`'s one: the locale's own vocabulary, answered from
 	// the variables that name the locale rather than from a fixed table. See

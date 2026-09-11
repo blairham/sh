@@ -3,190 +3,116 @@
 
 package repl
 
-import (
-	"strconv"
-
-	"github.com/blairham/sh/interp"
-)
-
 // What this shell can say about the terminal's capabilities, under the
 // terminfo and termcap names a script asks for them by.
 //
 // A **capability** is one thing a terminal can be told to do or one key it
 // sends, named by a short word and answered with the bytes that do it: `ed`
-// erases to the end of the screen, `kcuu1` is what the Up arrow sends. Two
-// name systems are in use for the same set of facts — terminfo's long names
-// and termcap's two-letter ones — so each capability here carries both, and
-// the value is measured once.
+// erases to the end of the screen, `kcuu1` is what the Up arrow sends, `cuu1`
+// moves the cursor up one line. Two name systems are in use for the same set
+// of facts — terminfo's long names and termcap's two-letter codes — so every
+// capability here carries both.
 //
 // It is here rather than in a dialect package for the reason cellwidth.go is:
-// this is a fact about the terminal and about what this shell's own editor
-// writes to it, not about which shell is speaking. A dialect owns the *name*
-// a script reads it through — one shell calls it `$terminfo` — and nothing
-// else about it, which is what keeps `interp` and `syntax` from having to
-// know a capability database exists.
+// this is a fact about the terminal, not about which shell is speaking. A
+// dialect owns the *name* a script reads it through — one shell calls it
+// `$terminfo` — and nothing else about it.
 //
-// # What is answered, and why so little
+// # The answers come from the database, which is what #2076 changed
 //
-// **This shell does not read the terminfo database.** It answers a fixed set
-// of capabilities and refuses every other name — see
-// [interp.Runner.SetAbsentElements] for the mechanism and #1388 for what
-// happens when a script cannot tell "absent" from "empty".
+// This used to answer a fixed table of thirteen capabilities and refuse every
+// other name, `$TERM` never consulted. The argument for it was that the table
+// described *this shell* — the line editor writes `\e[J` whatever `$TERM`
+// says — and each of the thirteen was a sequence this program already speaks
+// and that every description measured spelled identically.
 //
-// Two tests, and a capability is answered only when it passes **both**:
+// It was wrong about how the names get used, and powerlevel10k is the case
+// that shows why. A theme does not merely read a capability; it **tests
+// whether the capability is there** and builds something different when it is
+// not. `_p9k_init_prompt` guards its scroll-and-redraw block on `(( $+terminfo
+// [cuu1] ))`, so with `cuu1` refused the guard was false, the block never
+// entered the prompt, and what got installed was a prompt correct for a
+// terminal that cannot move the cursor up. Nothing failed. The first two
+// characters of zsh's rendering — a newline and `\e[A` — were simply not
+// there, and the shell had reported no error to say so.
 //
-//  1. **This shell already speaks the sequence.** editor.go writes `\r`,
-//     `\e[K`, `\e[J` and `\e[nA`/`B`/`C`/`D` to redraw a line, widgets.go
-//     writes `\e[H`, and escape.go's SS3 branch reads `\eOA` through `\eOD`
-//     as the arrows. So the value is a fact about this program, checkable by
-//     reading the file next to this one.
-//  2. **Every terminal description measured spells it the same way.** So the
-//     value does not depend on a `$TERM` this table never consults.
+// That is the shape of the whole problem, not one missing key: a refusal is a
+// silent substitution at the place a theme decides what to draw. Answering
+// only `cuu1` would move the same failure to whichever capability the next
+// theme asks about, so the fix is to answer from the description `$TERM`
+// names — every capability in it, under both name systems, with the bytes the
+// file holds. terminfodb.go reads it and terminfonames.go says which slot is
+// which.
 //
-// Either test alone lets a plausible guess through, and each catches
-// something the other does not. `cuu1` — cursor up one line — passes the
-// first and fails the second: it is `\e[A` in the xterm family and `\eM`
-// under `screen` and `tmux`, so answering it from what the editor happens to
-// write would hand a `screen` user an xterm's spelling. `sc` and `rc` — save
-// and restore the cursor — pass the second and fail the first: `\e7` and
-// `\e8` in every description measured, and nothing in this repository emits
-// either, so answering them would be this table making a claim of its own.
-// Both refuse.
+// # A `$TERM` with no description answers nothing, and says so by absence
 //
-// The measurement behind the second test, 2026-09-07 against zsh 5.9.2's
-// `$terminfo` and `$termcap` on this machine's database, over
-// `xterm-256color`, `xterm`, `screen`, `screen-256color`, `tmux-256color`,
-// `alacritty` and `ghostty`: every value below was byte-identical in all
-// seven. The ones that were not are named in terminfoRefused, with what they
-// disagreed about, because a reader's first question about a table this short
-// is what is missing from it.
+// Measured against zsh 5.9.2 on 2026-09-11: `${+terminfo}` is 1 under every
+// `$TERM` including one the database has never heard of, and `${#terminfo}`
+// is 220 for `xterm-256color`, 136 for `screen`, 50 for `dumb` and **0** for
+// a name with no entry. So the parameter always exists and the table is what
+// varies, which is exactly what a script testing `$+terminfo[cuu1]` is
+// written against.
 //
-// # $TERM is not consulted, and that is a choice rather than an omission
-//
-// Holding it fixed would be a bug if this table were describing a terminal.
-// It is describing *this shell*: the editor writes `\e[J` whatever `$TERM`
-// says, and interp's `%F{200}` draws the 256-color sequence under `dumb`,
-// which is the same choice recorded above interp's colorSequence. So the
-// answers here are `$TERM`-independent because the behavior they report is,
-// and a table that varied by `$TERM` while the shell did not would be
-// describing a terminal this shell declines to adapt to.
-//
-// Real zsh does adapt, because it reads the database: measured, its
-// `$terminfo` is 220 keys under `xterm-256color`, 136 under `screen`, 50
-// under `dumb` and **empty** under a `$TERM` its database has never heard of,
-// with `${+terminfo}` still 1 in all four. So the fixed table is a real
-// difference and not a rounding of one — it is narrower everywhere and
-// wider under a `$TERM` nobody has an entry for.
-//
-// The day a terminfo reader exists this table is where it plugs in, and
-// nothing above the seam changes: a dialect asks for a capability by name and
-// gets a value or nothing, which is the same question either way.
+// This is why nothing here substitutes a plausible value for a capability it
+// cannot find. A shell that answered `cuu1` with the xterm spelling under
+// `TERM=screen` would be handing a theme the wrong bytes with the theme's own
+// have-I-got-it test satisfied, which is worse than the absence: the absence
+// at least takes the branch written for it.
 
 // TerminalCapability is one capability, under both name systems.
 type TerminalCapability struct {
 	// Terminfo is the terminfo capability name — the long one.
 	Terminfo string
 
-	// Termcap is the termcap capability name — the two-letter one. Every
-	// capability here has both, which is a property of the set rather than a
-	// guarantee about capabilities in general: termcap named fewer things
-	// than terminfo does.
+	// Termcap is the termcap capability name — the two-letter code. Empty for
+	// an extended capability, which is a name the description carries itself
+	// and predates no termcap.
 	Termcap string
 
-	// Value is the bytes, or a decimal count for a numeric capability.
+	// Value is the bytes for a string capability, a decimal count for a
+	// numeric one, and `yes` or `no` for a boolean.
 	//
 	// A string capability whose sequence takes an argument keeps terminfo's
 	// own parameter language — `\e[%p1%dA` and not `\e[A` — because that is
-	// what the parameter hands a script in the shell being modeled, measured,
-	// and a caller either passes it to something that expands it or builds
-	// the sequence by hand from the shape.
+	// what the file holds and what the parameter hands a script in the shell
+	// being modeled.
 	Value string
 }
 
-// TerminalCapabilities is every capability this shell answers for, in
-// terminfo-name order.
+// TerminalCapabilities is every capability in the description `$TERM` names,
+// or nothing when there is no such description.
 //
-// A function rather than a package-level table so that no caller can hold a
-// reference and change it. Small enough that building it per call costs
-// nothing, and every caller wants the whole of it.
-func TerminalCapabilities() []TerminalCapability {
-	return []TerminalCapability{
-		// The one numeric capability, and the only entry whose value is not
-		// a sequence. It is read from interp rather than written here so
-		// that the count a script is told and the count this shell paints
-		// cannot drift apart — see interp.TerminalColors, which is also
-		// where the choice not to answer the *terminal's* count is recorded.
-		//
-		// This is the capability #1388 is about: a plugin manager builds its
-		// entire color table behind `-n ${terminfo[colors]}`, so with it
-		// absent every message it printed came out as raw markup.
-		{Terminfo: "colors", Termcap: "Co", Value: strconv.Itoa(interp.TerminalColors)},
-		// The four cursor motions, parameterized. editor.go writes all four
-		// while redrawing a wrapped line.
-		{Terminfo: "cub", Termcap: "LE", Value: "\x1b[%p1%dD"},
-		{Terminfo: "cud", Termcap: "DO", Value: "\x1b[%p1%dB"},
-		{Terminfo: "cuf", Termcap: "RI", Value: "\x1b[%p1%dC"},
-		{Terminfo: "cuu", Termcap: "UP", Value: "\x1b[%p1%dA"},
-		// Carriage return. Written before every redraw, and the one value
-		// here that is not an escape sequence at all.
-		{Terminfo: "cr", Termcap: "cr", Value: "\r"},
-		// Erase to the end of the screen, and to the end of the line.
-		// editor.go writes the first to clear a wrapped line it is about to
-		// redraw and the second where it knows the line fits on one row.
-		{Terminfo: "ed", Termcap: "cd", Value: "\x1b[J"},
-		{Terminfo: "el", Termcap: "ce", Value: "\x1b[K"},
-		// Cursor to the top left. Written as the first half of the
-		// clear-screen widget's `\e[H\e[2J`; the whole of that pair is
-		// `clear`, which is refused because the second half disagrees — see
-		// terminfoRefused.
-		{Terminfo: "home", Termcap: "ho", Value: "\x1b[H"},
-		// The four arrow keys, in the application-cursor spelling every
-		// description measured gives them. escape.go's SS3 branch reads
-		// exactly these four, which is the first test; it also reads the
-		// `\e[A` spelling, and a capability answers with one value, so the
-		// one the descriptions agree on is the one to give.
-		{Terminfo: "kcub1", Termcap: "kl", Value: "\x1bOD"},
-		{Terminfo: "kcud1", Termcap: "kd", Value: "\x1bOB"},
-		{Terminfo: "kcuf1", Termcap: "kr", Value: "\x1bOC"},
-		{Terminfo: "kcuu1", Termcap: "ku", Value: "\x1bOA"},
+// env reads one variable of the shell's environment and is how `$TERM`,
+// `$TERMINFO`, `$TERMINFO_DIRS` and `$HOME` are reached. A parameter rather
+// than this package reading the process's environment, for the reason
+// AGENTS.md gives about os.Getenv in library code and for one more: a test
+// that read the developer's real `$TERM` would pass on the machine that wrote
+// it and answer differently on a runner.
+//
+// The order is the description's own: every boolean name, then the numeric
+// capabilities it carries, then the string ones, then whatever its extended
+// section adds. A caller wanting them by name builds the map, which is what
+// both of this shell's two spellings of the parameter do.
+func TerminalCapabilities(env func(string) string) []TerminalCapability {
+	if env == nil {
+		return nil
 	}
-}
-
-// terminfoRefused is what a reader will look for above and not find, with the
-// test each capability failed.
-//
-// It is a comment with a name rather than prose because the tests read it:
-// every name here has to still refuse, so that a capability cannot be added
-// to the table above while the sentence explaining its absence stays behind.
-// Nothing consults it at run time — a name absent from
-// [TerminalCapabilities] refuses by that absence alone, whether it is listed
-// here or was never thought about.
-//
-// The measured disagreements, over the seven descriptions named above:
-//
-//	cuu1   `\e[A` in the xterm family, `\eM` under screen and tmux
-//	clear  `\e[H\e[2J` in the xterm family, `\e[H\e[J` under screen and tmux
-//	cnorm  `\e[?12l\e[?25h` in the xterm family, `\e[34h\e[?25h` under screen
-//	cvvis  `\e[?12;25h` in the xterm family, `\e[34l` under screen
-//	smcup  alacritty appends `\e[22;0;0t` to the xterm sequence, and rmcup
-//	rmcup  the matching `\e[23;0;0t`
-//	so     `\e[7m` — reverse — in the xterm family, `\e[3m` — italic — under screen
-//	se     `\e[27m` against `\e[23m`, the same split
-//
-// And the ones no description disagreed about, refused for failing the first
-// test — nothing in this repository writes or reads them, so a value here
-// would be this table's own claim rather than a report of what this shell
-// does:
-//
-//	sc rc     save and restore the cursor: `\e7` and `\e8`
-//	civis     hide the cursor: `\e[?25l`. This shell never hides it, and
-//	          `cnorm` — showing it again — disagrees anyway, so answering
-//	          `civis` alone would offer half of a pair.
-//	cud1 cub1 down and back one: `\n` and `\b`. The editor moves by a count
-//	cuf1      even when the count is one, so `cuu`/`cud`/`cuf`/`cub` are what
-//	          it speaks and the one-step forms are not.
-//	ncv       absent from every description measured, real zsh included.
-var terminfoRefused = []string{
-	"civis", "clear", "cnorm", "cub1", "cud1", "cuf1", "cuu1", "cvvis",
-	"ncv", "rc", "rmcup", "sc", "se", "smcup", "so",
+	term := env("TERM")
+	if !terminalNameIsOneComponent(term) {
+		return nil
+	}
+	for _, dir := range terminfoDirectories(env) {
+		for _, path := range terminfoEntryPaths(dir, term) {
+			data, err := readTerminalDescription(path)
+			if err != nil {
+				continue
+			}
+			caps, err := parseTerminalDescription(data)
+			if err != nil {
+				continue
+			}
+			return caps
+		}
+	}
+	return nil
 }

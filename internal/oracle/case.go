@@ -15242,12 +15242,19 @@ echo "st=$?"`,
 		Why:     "**a recorded divergence, and the one this module's rule turns on.** zsh has the parameter and writes `n=0 one=[]`, which is the truth there — no jobs. This shell has not got it, and answering the same `0` would hand a caller an empty value for a question nobody answered, at status 0, in the spelling a plugin manager writes most (`${p[k]}` reaches no unset check at all). So it refuses by name at the expansion instead, and the row records the difference rather than leaving it to be discovered",
 	},
 	// `zsh/terminfo` and `zsh/termcap`: the terminal's capabilities as two
-	// associations (#1388). What this shell can honestly say about one is a
-	// fixed table of thirteen — see repl/terminfo.go — where real zsh reads
-	// the terminfo database, so the rows below split three ways and the split
-	// is the point. Some agree exactly, one records a deliberate refusal, and
-	// one records the `$TERM` the harness holds fixed changing zsh's answer
-	// and not ours.
+	// associations (#1388, then #2076). Both parameters read the terminfo
+	// database now — see repl/terminfodb.go — where #1388 left a fixed table
+	// of thirteen capabilities and a refusal for every other name, so these
+	// rows agree with zsh where two of them used to record a divergence.
+	//
+	// #2076 is why that mattered and it is worth stating here because the
+	// rows read like a completeness exercise otherwise: a theme does not
+	// merely *read* a capability, it tests whether the capability is there and
+	// builds something different when it is not. powerlevel10k guards its
+	// scroll-and-redraw block on `(( $+terminfo[cuu1] ))`, so the refusal did
+	// not produce an error — it produced a prompt built for a terminal that
+	// cannot move the cursor up, with nothing said. The cursor-up row below is
+	// that test, written the way the theme writes it.
 	//
 	// The harness runs every case under `TERM=dumb`, which is the strongest
 	// possible held variable for this question: real zsh's table there is 50
@@ -15270,7 +15277,19 @@ echo "st=$?"`,
 		ID: "terminfo/a-capability-this-shell-does-not-answer", Category: "variables",
 		Env:     []string{"TERM=xterm-256color"},
 		Snippet: `echo "one=[${terminfo[cnorm]}]"; echo "after=$?"`,
-		Why:     "**a recorded divergence, and the same one `$jobstates` above records.** zsh reads the database and answers the show-cursor sequence. This shell answers thirteen capabilities and refuses the rest by name at the expansion, because the alternative is the shape #1388 was: an empty string is also what zsh gives for a capability the *terminal* genuinely lacks — measured, `${+terminfo[colors]}` there is 0 under `TERM=dumb` — so a caller reading empty cannot tell a terminal without the capability from a shell that never knew it. `cnorm` is the name because it is one a real prompt reads and one whose value is not the same in every terminal description — the xterm family and the screen family spell showing the cursor again differently, which is the second of the two tests repl/terminfo.go applies",
+		Why:     "**this was a recorded divergence until #2076 and is now an agreement**, which is why the ID still says what it says: zsh reads the terminfo database and answers the show-cursor sequence, and so does this shell. The old answer was thirteen fixed capabilities and a refusal for the rest, on the argument that an empty string is also what zsh gives for a capability the *terminal* genuinely lacks — measured, `${+terminfo[colors]}` is 0 under `TERM=dumb` — so a caller reading empty could not tell a terminal without the capability from a shell that never knew it. True, and the wrong conclusion: a theme's own have-I-got-it test is what the refusal broke. `cnorm` stays as the name because its value is not the same in every terminal description — the xterm family and the screen family spell showing the cursor again differently — so a shell that guessed rather than read would be visible in this row",
+	},
+	{
+		ID: "terminfo/cursor-up-the-capability-a-prompt-tests-for", Category: "variables",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `echo "set=${+terminfo[cuu1]} v=[${terminfo[cuu1]//$'\e'/ESC}]"; if (( $+terminfo[cuu1] )); then echo scroll-branch; else echo no-scroll-branch; fi`,
+		Why:     "#2076, written the way powerlevel10k writes it. `_p9k_init_prompt` guards its scroll-and-redraw block on `(( $+terminfo[cuu1] ))`, so a shell answering 0 there does not fail — it builds the other prompt, the one correct for a terminal that cannot move the cursor up, and the newline and `ESC[A` that begin zsh's own rendering are simply absent. The row asks both halves for that reason: the test the theme writes, and the bytes behind it, because a plausible-but-wrong value would satisfy the test and draw in the wrong place. `cuu1` is `ESC[A` in the xterm family and `ESCM` under screen and tmux, so it is also the capability a fixed table cannot answer honestly",
+	},
+	{
+		ID: "terminfo/a-boolean-capability-answers-yes-or-no", Category: "variables",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `echo "am=${terminfo[am]} hc=${terminfo[hc]} bce=${terminfo[bce]} set=${+terminfo[hc]}"`,
+		Why:     "a boolean is `yes` or `no` rather than empty or absent, and — the part worth a row — **every boolean name answers whether the description stores it or not**. `hc` is `no` for a terminal that is not a hardcopy, and it is *set*: measured, zsh's table under `TERM=dumb` is 50 keys of which 44 are the whole boolean roster, though `dumb`'s description stores far fewer. A shell answering only the stored ones would report `$+terminfo[bce]` as 0 on most terminals, which is #2076's failure — a theme told it has not got a capability it has — with a different key",
 	},
 	{
 		ID: "terminfo/asking-whether-a-capability-is-there", Category: "variables",

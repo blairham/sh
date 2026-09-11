@@ -24,6 +24,11 @@ func (r *Runner) repeatClause(ctx context.Context, c *syntax.RepeatClause) error
 		if !ok {
 			return nil
 		}
+		// A loop as far as `break` is concerned, which is what the count
+		// this raises is asked for: zsh names `repeat` among the loops a
+		// `break` may be in, and without this a `break` inside one would be
+		// reported as having none (#1236).
+		defer r.enteringLoop()()
 		for i := int64(0); i < n; i++ {
 			r.traceForIteration(c.Header, "", "")
 			if err := r.runList(ctx, c.Body); err != nil {

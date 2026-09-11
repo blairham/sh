@@ -48,6 +48,18 @@ type Frame struct {
 	// Line is the line this frame was entered from, in the frame below it.
 	Line int
 
+	// Startup marks a frame the *shell* entered rather than a script: a
+	// run-commands file, the login profile, `$ENV`, `$BASH_ENV`.
+	//
+	// It exists because such a file is a file the shell is *in* — a
+	// diagnostic raised at its top level names it, which is what the frame
+	// is for — and is at the same time outside the rule that lets `$0` name
+	// the innermost call. Measured: a `~/.zshrc` printing `$0` under `zsh
+	// -i` prints the path of the zsh binary, not the rc's, in the one shell
+	// whose `$0` follows the stack at all. Without the mark, giving the file
+	// a frame would have moved `$0` with it (#1123).
+	Startup bool
+
 	// serial numbers this frame among every frame ever pushed, so a
 	// sibling entered later at the same depth is still a different frame —
 	// which is the distinction the RETURN trap turns on.
@@ -129,6 +141,13 @@ func (r *Runner) innermostCall() (string, bool) {
 		return "", false
 	}
 	f := r.frames[len(r.frames)-1]
+	if f.Startup {
+		// A startup file is read by the shell rather than called by a
+		// script, so there is nothing here for `$0` to name — see
+		// Frame.Startup. A file *it* sources is an ordinary frame above
+		// this one and answers for itself.
+		return "", false
+	}
 	if f.Name == sourceFrameName {
 		return f.Operand, true
 	}

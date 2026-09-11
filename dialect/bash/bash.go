@@ -790,6 +790,10 @@ func Semantics() interp.Semantics {
 	s.BadSetOptionNameFatal = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.Yes
+	// `break` with no loop around it is reported and then ignored here: the
+	// next command on the line runs and the status stays 0. Measured with
+	// `echo t; break; echo after` — `after` prints and `$?` is 0.
+	s.LoopControlOutsideALoopIsFatal = interp.No
 	// A startup file is a sourced script, so a `return` in one is accepted
 	// everywhere — the split is only over what its argument does. bash
 	// discards it: measured through a pty, an rc of `return 3` leaves `$?`
@@ -878,6 +882,9 @@ func Semantics() interp.Semantics {
 // Diagnostics is how bash 5 reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// The three loops POSIX has, spelled with this shell's own quoting.
+		// It says this and carries on, which is the axis beside it.
+		LoopControlOutsideALoop: "%[1]s: only meaningful in a `for', `while', or `until' loop",
 		TypeKeyword:  "%[1]s is a shell keyword",
 		TypeFunction: "%[1]s is a function",
 		TypeNotFound: "type: %[1]s: not found",

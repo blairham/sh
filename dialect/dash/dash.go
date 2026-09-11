@@ -373,6 +373,10 @@ func Semantics() interp.Semantics {
 	// this preset with the construct turned back on is not left refusing.
 	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.No
+	// `break` with no loop around it is ignored here, silently: measured,
+	// `echo t; break; echo after` prints both and ends at 0, with no
+	// wording to go with it.
+	s.LoopControlOutsideALoopIsFatal = interp.No
 	// A startup file is a sourced script, so a `return` in one is accepted
 	// everywhere — the split is only over what its argument does, and this
 	// shell keeps it: measured through a pty, an rc of `return 3` and one

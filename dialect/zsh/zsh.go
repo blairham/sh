@@ -1226,6 +1226,11 @@ func Semantics() interp.Semantics {
 	s.BadSetOptionNameFatal = interp.Yes
 	s.UnknownConditionOptionIsAStatus = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No
+	// And `break` with no loop around it stops the script here, which is the
+	// opposite way round from the line above: measured, `echo t; break` on
+	// one line and on two both end at status 1 with nothing after the
+	// `break` running at all.
+	s.LoopControlOutsideALoopIsFatal = interp.Yes
 	// A startup file is a sourced script, so a `return` in one is accepted
 	// everywhere — the split is only over what its argument does, and this
 	// shell keeps it: measured through a pty, an rc of `return 3` and one
@@ -1492,6 +1497,10 @@ func Semantics() interp.Semantics {
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// The four loops this shell has, and the builtin's name is stripped
+		// back out of the front of it because this dialect puts it in the
+		// location: `zsh:break:1: not in while, …`.
+		LoopControlOutsideALoop: "%[1]s: not in while, until, select, or repeat loop",
 		// zsh names itself, not the path it was invoked by. `/bin/zsh` and a
 		// symlink called `myzsh` both say `zsh:`, and so does the shell run
 		// as `exec -a weirdname /bin/zsh` — measured all three ways, because

@@ -3718,6 +3718,46 @@ echo "st=$?"`,
 		Why:     "the other side, and unanimous: with the parameter set the operator is not an error at all and expands to the value, word or no word. Recorded because the bug this pair was written for expanded it to nothing here while reporting nothing either — a case that only tested the failing side would have passed",
 	},
 	{
+		ID: "loop-control/break-with-no-loop-around-it", Category: "builtins",
+		Snippet: `echo t; break; echo after`,
+		Why:     "a `break` with no loop around it, and the panel divides three ways over two separable questions — whether anything is said, and whether the script goes on. dash, ksh93 and bash called as `sh` say nothing and run `after` at 0; bash names the three loops POSIX has and still runs `after` at 0; zsh names the four it has, stops the script and leaves 1. Ours set the control value whatever the depth was and nothing consumed it, so it unwound past the top: `after` vanished, silently, at status 0 — a script testing `$?` after a misplaced `break` was told it had succeeded (#1236)",
+	},
+	{
+		ID: "loop-control/continue-with-no-loop-around-it", Category: "builtins",
+		Snippet: `echo t; continue; echo after`,
+		Why:     "the same question asked of the other builtin, and the row that says the wording carries a verb: every column that speaks names `continue` here where the row above names `break`, so a message with either one written into it would be wrong in one of the two",
+	},
+	{
+		ID: "loop-control/break-inside-a-subshell-inside-a-loop", Category: "builtins",
+		Snippet: `for i in 1 2; do ( break; echo insub ); echo body; done; echo after`,
+		Why:     "the near-miss the rows above have to be told from: the `break` is lexically inside a subshell and dynamically inside a loop, and five of the six columns leave the subshell quietly — only bash 5.3 reports it, so its subshell does not carry the count. Recorded because a fix that asked a *lexical* question would complain here about correct script, which neither row above could see",
+	},
+	{
+		ID: "loop-control/break-inside-a-function-called-from-a-loop", Category: "builtins",
+		Snippet: `f(){ break; }; for i in 1 2; do f; echo body; done; echo after`,
+		Why:     "how far a `break` reaches through a *call*, which is the widest split in this family: bash 3.2 and zsh let it out of the function and end the loop, dash, ksh93 and bash-as-sh ignore it and run the loop twice, and bash 5.3 reports it twice and runs the loop twice. Recorded rather than answered — ours leaves the loop, which is two of the six",
+	},
+	{
+		ID: "assignment/arithmetic-that-will-not-parse", Category: "expansion",
+		Snippet: `x=$(( } )); echo "after st=$?"`,
+		Why:     "an assignment whose right-hand side could not be expanded. The diagnostic was right and the status was not: ours reported the arithmetic out loud and left 0, so `x=$((…)) || handle` never fired and `set -e` never tripped. No column prints `after` — the rest of the line goes with the failure everywhere — and the status is 1 in bash, bash 3.2 and zsh, 2 in dash and ksh93, and 127 in bash called as `sh`, which is that shell's fatal-expansion status for the route (#1191)",
+	},
+	{
+		ID: "assignment/arithmetic-that-will-not-parse-in-a-command", Category: "expansion",
+		Snippet: `echo $(( } )); echo "after st=$?"`,
+		Why:     "the same expression in a command position, which is what says the bug above was the assignment path and not the arithmetic: this one already reported the failure *and* the status. The check a command's arguments go through runs before the assignments do, so nothing had failed yet when it looked",
+	},
+	{
+		ID: "eval/a-syntax-error-quotes-the-offending-line", Category: "builtins",
+		Snippet: "eval \"case abc in @(abc|xyz)) echo m;; esac\"; echo \"st=$?\"",
+		Why:     "what a shell prints for a parse failure in text a builtin borrowed. bash writes two lines — the complaint, then the offending input quoted back — and we wrote only the first, so a syntax error in generated text came back as a complaint about a token with nothing to attach it to. That is the normal case for a program driving the shell, where every command arrives as `eval <quoted string>`. ksh93 and zsh accept the extended pattern outright and print `m` (#1728)",
+	},
+	{
+		ID: "source/a-syntax-error-quotes-the-offending-line", Category: "builtins",
+		Snippet: "printf 'echo one\\nif; then\\n' > s.sh; . ./s.sh; echo \"st=$?\"",
+		Why:     "the same second line for a sourced *file*, which is the other caller of the same machinery and had to be checked rather than assumed: the wording, the naming and the echo are three decisions that turn on one error, and `eval` and `.` must say the same thing about it. The statuses part company here — 2 in the bashes, 3 in ksh93, 126 in zsh, 2 in dash — and the bashes are alone in writing the second line",
+	},
+	{
 		ID: "return/with-nothing-to-return-from", Category: "builtins",
 		Snippet: `echo before; return 7; echo "after st=$?"`,
 		Why:     "a `return` outside both a function and a sourced file has nothing to return from, and the panel splits over what that means — not over the wording but over *where the script stops*. Three obey it and end there with the status given; one reports it, leaves 2 behind and runs the next command. A script whose last statement is such a `return` therefore ends two different ways with the same output, which is why the status is half the case",

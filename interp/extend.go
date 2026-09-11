@@ -202,6 +202,26 @@ func (r *Runner) DynamicParameter(name string) bool {
 	return ok
 }
 
+// InSubshell reports whether this runner stands for a body a real shell would
+// have run in a process of its own: a subshell, a command substitution, a
+// process substitution, a pipeline element, or a background job.
+//
+// It is the seam for the corollary in AGENTS.md — where a real shell relies on
+// process boundaries, this one has to reconstruct the boundary by hand. Those
+// bodies are cloned Runners on goroutines of one process here, so anything
+// that reports *which process is running this* has a true answer that carries
+// a false claim: the body reads it as "me, and not the shell", and it is the
+// shell. A parameter whose value is a process id is the sharp case, because a
+// body that believes it has its own process also believes it leads its own
+// process group, and a teardown written `kill -- -$mypid` then reaches the
+// interactive shell that started it (#2046).
+//
+// So a dialect asks this where a value it produces would be read as an
+// identity rather than as a number. It is not job control and not a promise
+// about isolation — the clone shares the process either way, and this only
+// says that the script thinks otherwise.
+func (r *Runner) InSubshell() bool { return r.inSubshell }
+
 func (r *Runner) SetVar(name, value string) { r.setVar(name, value) }
 
 // GetVar reads a shell variable, falling back to the environment.

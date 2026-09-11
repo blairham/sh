@@ -4,10 +4,18 @@
 package zsh_test
 
 import (
+	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"sync"
 	"testing"
+
+	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // `$sysparams`, `$errnos` and `systell` — the three of `zsh/system` that are
@@ -180,5 +188,105 @@ func TestTheSystemModuleHasAllNineOfItsFeatures(t *testing.T) {
 	out, _, errs := runZshSplit(t, t.TempDir(), "zmodload zsh/system\nzsystem supports flock\nprint -r -- \"flock=$?\"\n")
 	if got, want := out+errs, "flock=0\n"; got != want {
 		t.Errorf("the module's own builtin = %q, want %q", got, want)
+	}
+}
+
+// TestSysParamsPidIsEmptyInsideABodyARealShellWouldHaveForked is #2046: the
+// key that tells a body which process it is, in a shell where a body has not
+// got one.
+//
+// Real zsh answers a different number in each of these, because each is a
+// fork. This shell runs all five on goroutines of one process, so the honest
+// answer is that four of them have no process to name — see subshellPid for
+// why the plausible answer is the one that kills the shell.
+func TestSysParamsPidIsEmptyInsideABodyARealShellWouldHaveForked(t *testing.T) {
+	self := strconv.Itoa(os.Getpid())
+	for _, c := range []struct{ name, src, want string }{
+		{"the shell itself", `print -r -- "[$sysparams[pid]]"`, "[" + self + "]"},
+		{"a subshell", `( print -r -- "[$sysparams[pid]]" )`, "[]"},
+		{"a command substitution", `print -r -- "[$(print -rn -- $sysparams[pid])]"`, "[]"},
+		{"a process substitution", "read -r line < <(print -r -- \"[$sysparams[pid]]\")\nprint -r -- $line", "[]"},
+		{"a background job", `{ print -r -- "[$sysparams[pid]]" } &` + "\nwait", "[]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := sysParam(t, c.src); got != c.want+"\n" {
+				t.Errorf("output = %q, want %q", got, c.want+"\n")
+			}
+		})
+	}
+}
+
+// And `$$` is unchanged everywhere, which is the half that makes the answer
+// above a *difference* rather than a shell that has lost track of itself. Real
+// zsh reports the parent's number in all five too — that is the whole reason
+// `$sysparams[pid]` exists next to it.
+func TestTheShellsOwnPidIsTheSameInsideThoseBodies(t *testing.T) {
+	self := strconv.Itoa(os.Getpid())
+	got := sysParam(t, `print -rn -- "[$$]"
+( print -rn -- "[$$]" )
+print -rn -- "[$(print -rn -- $$)]"
+read -r line < <(print -r -- "[$$]")
+print -rn -- $line
+{ print -rn -- "[$$]" } &
+wait
+print`)
+	want := strings.Repeat("["+self+"]", 5) + "\n"
+	if got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+// TestATeardownInsideAProcessSubstitutionDoesNotSignalTheShellsGroup is the
+// shape that was measured in the wild, asserted at the one place it can be
+// asserted without the test aiming a SIGTERM at the process running it: the
+// gate every signal leaving this shell passes through.
+//
+// The prompt theme on this machine writes, inside a `<(…)` body, a watchdog
+// whose last act is `kill -- -$pgid` with `pgid` taken from `$sysparams[pid]`.
+// Before #2046 that reached the gate as the shell's own process group,
+// negated. It must now reach the gate as nothing at all.
+func TestATeardownInsideAProcessSubstitutionDoesNotSignalTheShellsGroup(t *testing.T) {
+	var mu sync.Mutex
+	var aimed []int
+	gate := interp.GateFunc(func(_ context.Context, a interp.Action) interp.Decision {
+		if a.Kind == interp.ActionSignal {
+			mu.Lock()
+			aimed = append(aimed, a.PID)
+			mu.Unlock()
+			// Denied, so that a shell without the fix reports EPERM rather
+			// than signaling the process group this test is running in.
+			return interp.Deny
+		}
+		return interp.Allow
+	})
+
+	f, err := syntax.Parse(`read -r line < <(
+  pgid=$sysparams[pid]
+  print -r -- "[$pgid]"
+  kill -- -$pgid
+)
+print -r -- $line`, zsh.Dialect())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out, errs bytes.Buffer
+	sem, diag := zsh.Semantics(), zsh.Diagnostics()
+	r := &interp.Runner{
+		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &diag,
+		Dir: t.TempDir(), Name: "zsh", Dialect: presetDialect(), Gate: gate,
+	}
+	zsh.Apply(r)
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := out.String(); got != "[]\n" {
+		t.Errorf("the body read %q as its own process, want %q", got, "[]\n")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(aimed) != 0 {
+		t.Errorf("signals left the shell aimed at %v, want none; -%d is this process's own group",
+			aimed, os.Getpid())
 	}
 }

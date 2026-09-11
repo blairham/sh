@@ -26,11 +26,20 @@ import (
 // echoingUnicode is the core with the escape admitted and one answer given to
 // what an out-of-range code point does.
 func echoingUnicode(p OutsideLocaleEscapePolicy, locale string) func(*Runner) {
+	return echoingUnicodeUnset(p, locale, No)
+}
+
+// echoingUnicodeUnset is the same with the unset-locale axis answered as well,
+// for the rows that leave the locale unnamed. The default above is the answer
+// every panel member but one gives, so a row that names a locale never reaches
+// it either way.
+func echoingUnicodeUnset(p OutsideLocaleEscapePolicy, locale string, unset Answer) func(*Runner) {
 	return func(r *Runner) {
 		sem := PosixSemantics()
 		sem.EchoInterpretsEscapes = Yes
 		sem.EchoExpandsUnicodeEscapes = Yes
 		sem.UnicodeEscapeOutsideTheLocale = p
+		sem.UnsetLocaleIsUnicodeAware = unset
 		r.Semantics = &sem
 		if locale != "" {
 			r.Vars = map[string]string{"LC_ALL": locale}
@@ -111,10 +120,6 @@ func TestAnEscapeInsideTheLocaleNeverAsksTheAxis(t *testing.T) {
 		// locale and `\u0080` is the first one outside it.
 		{"ASCII is in range even in C", "C", `echo 'a\u0041Z'`, "aAZ\n"},
 		{"and so is the last ASCII byte", "C", `echo 'a\u007fZ'`, "a\x7fZ\n"},
-		// Nothing names a locale: left alone, deliberately, because the panel
-		// disagrees about that case and the disagreement is not this axis's.
-		// See Runner.localeRefusesCodePoint.
-		{"nothing named is left alone", "", `echo 'a\u00e9Z'`, "a\u00e9Z\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// Unspecified on purpose: reaching the axis here would refuse the
@@ -126,4 +131,44 @@ func TestAnEscapeInsideTheLocaleNeverAsksTheAxis(t *testing.T) {
 			}
 		})
 	}
+}
+
+// With nothing naming a locale, whether the character fits is the *other*
+// axis's question — and it decides which of the two answers above is reached.
+//
+// Measured 2026-09-11 under `env -i`: bash 5.3.15 writes `61 c3 a9 5a` for
+// `echo -e 'a\u00e9Z'` and zsh 5.9.2 refuses it, the same two answers they
+// give to `s=héllo; echo ${#s}` and to uppercasing `café`. So one question
+// decides all three (#2020), and this is the escape's half of it.
+func TestAnUnsetLocaleDecidesWhetherTheEscapeFits(t *testing.T) {
+	t.Run("Unicode-aware, so the character is written and no axis is asked",
+		func(t *testing.T) {
+			// UnicodeEscapeOutsideTheLocale left unspecified on purpose:
+			// reaching it would refuse, so a written character is evidence
+			// the locale had room.
+			out, st := run(t, `echo 'a\u00e9Z'`,
+				echoingUnicodeUnset(OutsideLocaleEscapeUnspecified, "", Yes))
+			if out != "a\u00e9Z\n" || st != 0 {
+				t.Errorf("got %q status %d, want %q status 0", out, st, "a\u00e9Z\n")
+			}
+		})
+	t.Run("the C locale, so the escape's own axis decides", func(t *testing.T) {
+		out, _ := run(t, `echo 'a\u00e9Z'`,
+			echoingUnicodeUnset(OutsideLocaleEscapeRefused, "", No))
+		if out != refusal+"a\n" {
+			t.Errorf("got %q, want %q", out, refusal+"a\n")
+		}
+		out, st := run(t, `echo 'a\u00e9Z'`,
+			echoingUnicodeUnset(OutsideLocaleEscapeWritten, "", No))
+		if out != `a\u00E9Z`+"\n" || st != 0 {
+			t.Errorf("got %q status %d, want %q status 0", out, st, `a\u00E9Z`+"\n")
+		}
+	})
+	t.Run("and an ASCII code point asks neither", func(t *testing.T) {
+		out, st := run(t, `echo 'a\u0041Z'`,
+			echoingUnicodeUnset(OutsideLocaleEscapeUnspecified, "", Unspecified))
+		if out != "aAZ\n" || st != 0 {
+			t.Errorf("got %q status %d, want %q status 0", out, st, "aAZ\n")
+		}
+	})
 }

@@ -918,6 +918,12 @@ func Semantics() interp.Semantics {
 	// before the escape, and abandons the script with the status it already
 	// had. Measured 2026-09-11 under `LC_ALL=C` (#1851).
 	s.UnicodeEscapeOutsideTheLocale = interp.OutsideLocaleEscapeRefused
+	// And an *unset* locale is the C locale here, on every operator that
+	// reads one: under `env -i`, 5.9.2 answers 6 for `s=héllo; echo ${#s}`,
+	// leaves `${(U)s}` on `café` as `CAFé`, and refuses the escape above the
+	// way it refuses it under `LC_ALL=C`. bash 5.3.15 answers 5, `CAFÉ` and
+	// the encoded character to the same three (#2020).
+	s.UnsetLocaleIsUnicodeAware = interp.No
 	s.EchoEmptyHexDigitRunIsNul = interp.Yes
 	// `\e` is the escape character here and `\E` is two characters — the
 	// opposite of ksh93.

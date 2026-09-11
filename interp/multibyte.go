@@ -91,29 +91,67 @@ func LocaleCodeset(locale string) string {
 	return locale[i+1:]
 }
 
-// multibyteLocale reports whether the runner's locale names an encoding this
-// implementation decodes.
+// localeEncoding is what the runner's locale variables say about the encoding
+// in force: one of them names a UTF-8 codeset, one of them names something
+// else, or none of them names anything at all.
 //
-// UTF-8 and nothing else. The other multibyte encodings a real shell may be
-// asked for — eucJP, GB18030, Big5 — would each be a decoder, and the panel
-// under them is unreachable from the corpus anyway because the harness runs
-// every case under a fixed locale. Anything that is not UTF-8 therefore counts
-// bytes, which is the right answer for the single-byte encodings (C, POSIX,
-// ISO8859-1, measured above) and a known limit for the rest.
+// Three states and not a bool, because the third is a **question the dialects
+// answer differently** rather than a value: see Semantics.UnsetLocaleIsUnicodeAware.
+// Every reader of a locale in this package goes through here so that the
+// three-way reading is written once.
+type localeEncoding uint8
+
+const (
+	// localeUnnamed is no locale variable set to anything, which is what a
+	// cron job, a container and `env -i` have.
+	localeUnnamed localeEncoding = iota
+	// localeSingleByte is a named locale whose codeset this implementation
+	// counts in bytes: C, POSIX, ISO8859-1, and every multibyte encoding
+	// that is not UTF-8.
+	localeSingleByte
+	// localeUTF8 is a named locale whose codeset is UTF-8.
+	localeUTF8
+)
+
+// localeEncoding reads the locale variables in POSIX's order and says which of
+// the three states holds.
+//
+// UTF-8 and nothing else counts as multibyte. The other multibyte encodings a
+// real shell may be asked for — eucJP, GB18030, Big5 — would each be a
+// decoder, and the panel under them is unreachable from the corpus anyway
+// because the harness runs every case under a fixed locale. Anything that is
+// not UTF-8 therefore counts bytes, which is the right answer for the
+// single-byte encodings (C, POSIX, ISO8859-1, measured above) and a known
+// limit for the rest.
 //
 // A locale with no codeset at all is single-byte: `LC_ALL=UTF-8` is not a
 // locale name, and the panel splits on it — bash reads a codeset out of it,
 // ksh93 and zsh refuse it and stay in C. Refusing it is ksh93's and zsh's
 // answer and also dash's, and it is the reading that needs no guess.
-func (r *Runner) multibyteLocale() bool {
+func (r *Runner) localeEncoding() localeEncoding {
 	for _, name := range localeVariables {
 		v, _ := r.getVar(name)
 		if v == "" {
 			continue
 		}
-		return codesetIsUTF8(v)
+		if codesetIsUTF8(v) {
+			return localeUTF8
+		}
+		return localeSingleByte
 	}
-	return false
+	return localeUnnamed
+}
+
+// unsetLocaleIsUnicodeAware asks the dialect what a locale nothing names is,
+// and is the one place that question is put.
+//
+// Asked only where the answer changes what is written: a value whose bytes are
+// all ASCII is the same length under either reading, an ASCII code point is
+// representable in every encoding, and case mapping below 0x80 is the same map
+// either way. So a shell that never sees a byte above ASCII never needs an
+// answer, which is what keeps the core from refusing `${#x}` on `abcd`.
+func (r *Runner) unsetLocaleIsUnicodeAware() bool {
+	return r.ask(r.sem().UnsetLocaleIsUnicodeAware, "an unset locale being Unicode-aware")
 }
 
 // codesetIsUTF8 reads the codeset out of a locale name.
@@ -141,17 +179,26 @@ func codesetIsUTF8(locale string) bool {
 }
 
 // localeIsC reports an explicit C or POSIX locale, read the way POSIX ranks
-// the variables and multibyteLocale reads them: LC_ALL over LC_CTYPE over
-// LANG.
+// the variables and localeEncoding reads them: LC_ALL over LC_CTYPE over LANG.
 //
-// A **different question** from multibyteLocale, and it lives here so that
-// the two are read in one place and cannot drift apart. It is asked about
-// case mapping — whether `${x^^}` on `café` is `CAFé` — and the two differ
-// where nothing is set at all: measured, a shell stripped of every locale
-// variable still cases beyond ASCII, so unset is not C here, while unset is
-// single-byte for a length because every panel member counts bytes with no
-// locale to consult.
+// A **different question** from localeEncoding, and it lives here so that the
+// two are read in one place and cannot drift apart: a locale naming a codeset
+// this implementation does not decode — `en_US.ISO8859-1` — counts bytes and
+// is still not the C locale, so `${x^^}` on `café` is `CAFÉ` there.
+//
+// Where nothing names a locale the two meet again, on the axis: measured
+// 2026-09-11 under `env -i`, bash 5.3.15 uppercases `café` to `CAFÉ` and
+// answers 5 for `s=héllo; echo ${#s}`, while zsh 5.9.2 and ksh93u+ give
+// `CAFé` and 6. So one shell reads an unset locale as UTF-8 and the others
+// read it as C, on both operators at once, and the question is
+// Semantics.UnsetLocaleIsUnicodeAware rather than a rule this file can state.
+//
+// Asked only for a value with a byte above ASCII in it, since case mapping
+// below 0x80 is the same map in every locale.
 func (r *Runner) localeIsC() bool {
+	if r.localeEncoding() == localeUnnamed {
+		return !r.unsetLocaleIsUnicodeAware()
+	}
 	for _, name := range localeVariables {
 		if v, ok := r.getVar(name); ok && v != "" {
 			return v == "C" || v == "POSIX"
@@ -169,11 +216,33 @@ func (r *Runner) localeIsC() bool {
 // is what keeps the core, whose answer to nearly everything is "unanswered",
 // from refusing `${#x}` on `abcd`.
 func (r *Runner) countsCharacters(v string) bool {
-	if !r.multibyteLocale() || isASCII(v) {
+	return !isASCII(v) && r.countsTheLocalesCharacters()
+}
+
+// countsTheLocalesCharacters is the pair of questions behind a length, for a
+// string already known to hold a byte above ASCII.
+//
+// The order they are asked in is the point. A named single-byte locale ends it
+// before any axis is reached, because every panel member counts bytes there —
+// which is what keeps the corpus, whose harness pins `LC_ALL=C`, from asking
+// the core a question in every case that holds a non-ASCII byte. A dialect
+// with no multibyte decoder ends it next, dash being the one, so dash never
+// reaches a locale question whose answer could not move it. Only what is left
+// — a shell that decodes, with nothing naming a locale — is the disagreement
+// UnsetLocaleIsUnicodeAware records.
+func (r *Runner) countsTheLocalesCharacters() bool {
+	encoding := r.localeEncoding()
+	if encoding == localeSingleByte {
 		return false
 	}
-	return r.ask(r.sem().MultibyteEncodingIsHonored,
-		"a character being the locale's rather than a byte")
+	if !r.ask(r.sem().MultibyteEncodingIsHonored,
+		"a character being the locale's rather than a byte") {
+		return false
+	}
+	if encoding == localeUTF8 {
+		return true
+	}
+	return r.unsetLocaleIsUnicodeAware()
 }
 
 // patternCountsCharacters is countsCharacters for a match rather than a
@@ -184,21 +253,12 @@ func (r *Runner) countsCharacters(v string) bool {
 // pattern is one ASCII byte and the answer still moves, because what it
 // consumes is one *character* of the subject.
 func (r *Runner) patternCountsCharacters(texts ...string) bool {
-	if !r.multibyteLocale() {
-		return false
-	}
-	allASCII := true
 	for _, t := range texts {
 		if !isASCII(t) {
-			allASCII = false
-			break
+			return r.countsTheLocalesCharacters()
 		}
 	}
-	if allASCII {
-		return false
-	}
-	return r.ask(r.sem().MultibyteEncodingIsHonored,
-		"a character being the locale's rather than a byte")
+	return false
 }
 
 // isASCII reports whether every byte of s is a single-byte character in every

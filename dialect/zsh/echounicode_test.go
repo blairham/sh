@@ -21,12 +21,14 @@ func TestEchoReadsTheUnicodeEscapes(t *testing.T) {
 		{"four digits", `echo 'a\u0041Z'`, "aAZ\n"},
 		{"eight digits", `echo 'a\U00000041Z'`, "aAZ\n"},
 		{"fewer than the width", `echo 'a\u41Z'`, "aAZ\n"},
-		// Above ASCII both shells answer the locale and this one does not
-		// (#1851); these are what they all write in a UTF-8 one.
-		{"two bytes", `echo 'a\u00e9Z'`, "a\u00e9Z\n"},
-		{"three bytes", `echo 'a\u20acZ'`, "a\u20acZ\n"},
-		{"a surrogate is encoded, not replaced", `echo '\ud800'`, "\xed\xa0\x80\n"},
-		{"past the last code point", `echo '\U110000'`, "\xf4\x90\x80\x80\n"},
+		// Above ASCII the locale decides, so these name one: a UTF-8 locale
+		// is where the reading is the whole of the question (#1851), and a
+		// plain assignment is enough to be in one. The C locale and the
+		// unset one are localeescape_test.go's.
+		{"two bytes", `LC_ALL=en_US.UTF-8; echo 'a\u00e9Z'`, "a\u00e9Z\n"},
+		{"three bytes", `LC_ALL=en_US.UTF-8; echo 'a\u20acZ'`, "a\u20acZ\n"},
+		{"a surrogate is encoded, not replaced", `LC_ALL=en_US.UTF-8; echo '\ud800'`, "\xed\xa0\x80\n"},
+		{"past the last code point", `LC_ALL=en_US.UTF-8; echo '\U110000'`, "\xf4\x90\x80\x80\n"},
 		{"no digits at all is a NUL", `echo 'a\uZ'`, "a\x00Z\n"},
 		{"and the same for the hex one", `echo 'a\xZ'`, "a\x00Z\n"},
 	} {

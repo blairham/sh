@@ -40,7 +40,7 @@ import "fmt"
 // as a policy" in docs/spec/semantics.md, which settled it once for every
 // operator (#367) and which case conversion already follows. `LC_ALL` over
 // `LC_CTYPE` over `LANG`, and a plain assignment is enough — no export needed.
-// The reader below is [Runner.multibyteLocale]'s, so the encoding question has
+// The reader below is [Runner.localeEncoding]'s, so the encoding question has
 // one answer in this package rather than two.
 
 // localeRefusesCodePoint reports whether the locale in force cannot hold a
@@ -48,25 +48,23 @@ import "fmt"
 //
 // Three states and not two, which is the part worth writing down. A locale
 // variable naming UTF-8 holds everything; one naming anything else holds ASCII
-// and no more; and **nothing named at all is left alone**, because the panel
-// disagrees about that case and this shell's answer to the disagreement is not
-// this axis's to settle. Measured 2026-09-11 under `env -i`, with no locale
-// variable set anywhere:
+// and no more; and **nothing named at all is the dialect's own answer**,
+// because the panel disagrees about that case. Measured 2026-09-11 under
+// `env -i`, with no locale variable set anywhere:
 //
 //	echo "a\u00e9Z"       bash 5.3  61 c3 a9 5a  zsh 5.9.2  not in range
 //	s=héllo; echo ${#s}    bash 5.3  5            zsh 5.9.2  6
 //
 // So bash reads an unset locale as UTF-8-capable and zsh reads it as C, and
 // the split is not about this escape: the string-length row splits the same
-// way, and this shell answers zsh's there. Narrowing it here would change an
-// answer nobody measured for this operator while claiming to fix the one that
-// was measured, so unset keeps the behavior it already had and the
-// disagreement is filed on its own.
+// way and so does case mapping, which is why it is one question for all three
+// rather than a rule this file could state — Semantics.UnsetLocaleIsUnicodeAware,
+// asked through [Runner.unsetLocaleIsUnicodeAware] (#2020).
 //
 // ASCII and no more, for a locale naming a single-byte encoding that is not
 // ASCII: bash transcodes there, writing U+00E9 as the single byte `e9` under
 // `en_US.ISO8859-1`, and this shell has no charset tables. It is the limit
-// [Runner.multibyteLocale] already records for the same reason — every
+// [Runner.localeEncoding] already records for the same reason — every
 // non-UTF-8 encoding counts bytes — and it is stated rather than hidden, since
 // the alternative is a table per charset.
 func (r *Runner) localeRefusesCodePoint(n int) bool {
@@ -77,15 +75,16 @@ func (r *Runner) localeRefusesCodePoint(n int) bool {
 		// code point — is refused by zsh and written back by bash.
 		return false
 	}
-	for _, name := range localeVariables {
-		v, _ := r.getVar(name)
-		if v == "" {
-			continue
-		}
-		return !codesetIsUTF8(v)
+	switch r.localeEncoding() {
+	case localeUTF8:
+		return false
+	case localeSingleByte:
+		return true
 	}
-	// Nothing names a locale. See above: not this axis's question.
-	return false
+	// Nothing names a locale, which is the dialect's own question and not
+	// this axis's: see Semantics.UnsetLocaleIsUnicodeAware, and the
+	// measurement above that put the same split on a string's length.
+	return !r.unsetLocaleIsUnicodeAware()
 }
 
 // unicodeEscapeSpelling is the escape written back the way the shell that

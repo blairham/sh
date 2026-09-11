@@ -170,7 +170,11 @@ func (r *Runner) countsForPipelineStatus(c syntax.Command) bool {
 		// The body is one command rather than a list, and it is a *call*:
 		// `() { :; }` runs where it stands, so its body is body here where a
 		// named definition's is not.
-		if len(x.Redirs) > 0 || !r.bodyDecides() {
+		decided, counts := r.compoundDecidedWithoutTheBody()
+		if decided {
+			return counts
+		}
+		if len(x.Redirs) > 0 {
 			return true
 		}
 		return x.Body != nil && r.countsForPipelineStatus(x.Body)
@@ -193,7 +197,10 @@ func (r *Runner) countsForPipelineStatus(c syntax.Command) bool {
 // and the two tests follow: a redirection makes the job, so the record is
 // written whatever the body holds.
 func (r *Runner) compoundCounts(redirs []*syntax.Redirect, lists ...[]*syntax.Stmt) bool {
-	if len(redirs) > 0 || !r.bodyDecides() {
+	if decided, counts := r.compoundDecidedWithoutTheBody(); decided {
+		return counts
+	}
+	if len(redirs) > 0 {
 		return true
 	}
 	for _, l := range lists {
@@ -204,16 +211,30 @@ func (r *Runner) compoundCounts(redirs []*syntax.Redirect, lists ...[]*syntax.St
 	return false
 }
 
-// bodyDecides asks whether this dialect reads a compound's body to decide
-// whether the compound writes the record.
+// compoundDecidedWithoutTheBody answers for the compound where the dialect
+// needs no look at its body: the first result says the question is settled and
+// the second is the answer.
 //
 // One place rather than at each call site, so a construct added to the switch
-// above cannot ask the question a different way — and so the question is
-// asked *after* the redirection check everywhere, which is what keeps it from
-// being asked in a shell whose answer could not be observed.
-func (r *Runner) bodyDecides() bool {
-	return r.ask(r.sem().CompoundBodyDecidesThePipelineStatusRecord,
-		"a compound's body deciding whether it writes the pipeline status")
+// above cannot ask the question a different way. It is asked **before** the
+// redirection check, which is a change from when the axis had two values:
+// a redirection made the job and so wrote the record under either answer, and
+// under this one it does not — measured, `if false; then :; fi >/dev/null`
+// leaves the condition's 1 rather than the `if`'s status. So the redirection
+// is now the body-reading mechanism's rule rather than the axis's, and asking
+// first is what lets the other mechanism say so.
+func (r *Runner) compoundDecidedWithoutTheBody() (decided, counts bool) {
+	switch r.compoundPipelineStatus() {
+	case CompoundPipelineStatusFromWhatRan:
+		// Nothing is written for the compound, so the record it leaves is
+		// whatever ran inside it — which needs no cooperation here, since
+		// every pipeline inside wrote its own as it ran.
+		return true, false
+	case CompoundPipelineStatusUnspecified:
+		// Already reported. The safe direction is the one that writes.
+		return true, true
+	}
+	return false, false
 }
 
 // listCountsForPipelineStatus reports whether anything in a list would write

@@ -474,7 +474,7 @@ above, which is what makes the pair worth measuring on one snippet.
 
 - **`exit` and errexit are caught nowhere.** `exit 7` in a sourced file
   exits 7 in all six, and `set -e` firing there ends the shell in all six.
-  That is what separates this from the neighbouring rule that `exit` in a
+  That is what separates this from the neighboring rule that `exit` in a
   startup file ends the shell and the files after it are not read.
 
 ### The one operand that is not an error
@@ -2834,16 +2834,48 @@ is a rule rather than an axis. A redirection on the compound writes the
 record whatever the body says, exactly as it does for the two constructs
 above.
 
-`CompoundBodyDecidesThePipelineStatusRecord`, on for `zsh` alone. bash
-answers no, and its own rule is a third thing rather than the opposite of
-this one: it keeps whatever the last pipeline *inside* the compound left, so
-`if false; then :; fi` holds the condition's 1 there and
-`case a in b) :;; esac` leaves the record alone because nothing ran (#2016).
+**And bash's rule is a second mechanism rather than the other answer to that
+question.** A compound writes nothing at all there; what stands after one is
+whatever the last pipeline that actually *ran* inside it wrote, so a compound
+that ran nothing leaves the record from before it. Measured 2026-09-11 on
+bash 5.3.15 and 3.2.57 alike, each line after a `false | true`:
 
-Silent when it is wrong the same way the axis above is: a plausible
-one-element record where the pipeline's elements should still be there,
-which is the shape `pipestatus/reading-it-twice-in-one-chain` exists to
-protect (#1931).
+| | bash |
+| --- | --- |
+| `if false; then :; fi` | `1` |
+| `if [[ a = b ]]; then :; fi` | `1` |
+| `while false; do :; done` | `1` |
+| `case a in b) :;; esac` | `1 0` |
+| `for i in ; do :; done` | `1 0` |
+| `{ [[ a = a ]] & }` | `1 0` |
+| `{ [[ a = a ]] \| [[ b = b ]]; }` | `0 0` |
+| `{ :; }` | `0` |
+| `if false; then :; fi >/dev/null` | `1` |
+
+The `1` rows are the condition's status: `false` ran and recorded it, and the
+`if` wrote nothing over it. The `1 0` rows are the record from the pipeline
+*before* the compound, untouched because nothing inside ran — which no
+reading of the parse can produce, since it is a fact about a run rather than
+about a body. The two-element row is what says it is the inner **pipeline**
+rather than the inner last command. And a redirection on the compound does
+**not** change it, which is the opposite of the rule the neighboring axes
+follow and the one place the two mechanisms disagree about a rule they both
+state.
+
+A subshell is not a compound for this purpose under either of them: it is a
+job and reports its own status, `( false | true | false )` leaving a
+one-element `1`.
+
+`Semantics.CompoundPipelineStatusRecord`, whose two answers are those two
+mechanisms — the body's parse for `zsh`, what ran for `bash`. The third
+reading, a compound writing its own status for having run whatever its body
+holds and whatever ran inside it, is what this shell used to do and what no
+panel member does; it is ruled out by being unnamed. ksh93 and dash have no
+name for the record, so the axis is never reached there.
+
+Silent when it is wrong, both ways: a plausible one-element record where the
+pipeline's elements should still be there, which is the shape
+`pipestatus/reading-it-twice-in-one-chain` exists to protect (#1931, #2016).
 
 Two more things about it are axes:
 
@@ -7385,7 +7417,7 @@ across runs; neither is a race.
 **Whether a bare `wait` frees the slots it waited for.** `sleep 0 & wait;
 jobs %1` — bash 1, dash 0, ksh93 0, zsh 127. So bash and zsh free the
 slot and dash and ksh93 keep the finished job. It is not taken because it
-does not hold still under the neighbouring probes: **bash 5.3.15 and bash
+does not hold still under the neighboring probes: **bash 5.3.15 and bash
 3.2.57 disagree with each other** on the same question without a `wait`
 (`sleep 0 & sleep 1; jobs %1` is 0 in 5.3 and 1 in 3.2), and ksh93 answers
 `wait` and `wait %1` differently — keeping the slot for the first and
@@ -8758,7 +8790,7 @@ a function the file calls, or inside a file the file sources, carries its
 argument in bash too — measured, an rc running `f(){ return 3; }; f` or
 `. inner.sh` leaves 3 in bash 5.3.15 — so it is a property of the
 outermost frame rather than of `return`. See `docs/spec/invocation.md`
-for the neighbouring routes.
+for the neighboring routes.
 
 
 ### jobs, `kill` and background work

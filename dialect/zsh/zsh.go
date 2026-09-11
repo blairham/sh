@@ -601,7 +601,7 @@ func Semantics() interp.Semantics {
 	// its body holds rather than by what ran: `if [[ a = b ]]; then :; fi`
 	// replaces the record and `if [[ a = b ]]; then [[ b = b ]]; fi` leaves
 	// it, where neither body runs. Measured 2026-09-11 (#1931).
-	s.CompoundBodyDecidesThePipelineStatusRecord = interp.Yes
+	s.CompoundPipelineStatusRecord = interp.CompoundPipelineStatusFromTheBody
 	// A construct this shell has refused still asks for another line at a
 	// prompt, where the other three refuse it before the next line is read.
 	// Measured 2026-09-11 with `printf 'echo one\nif; then\necho three\n'`

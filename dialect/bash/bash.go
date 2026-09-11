@@ -252,13 +252,14 @@ func Semantics() interp.Semantics {
 	// not affected — `! false` records 1 in both — so this is a rule about
 	// the construct rather than about negation (#1513).
 	s.NegatedTestRecordsThePostNegationStatus = interp.Yes
-	// A compound's body does not decide whether it writes the record here.
-	// This shell's own rule is a third thing rather than the opposite of
-	// zsh's — it keeps what the last pipeline *inside* the compound left, so
-	// `if false; then :; fi` holds 1 and `case a in b) :;; esac` leaves the
-	// record alone — and that is #2016 rather than this axis, which no is
-	// what this shell already did.
-	s.CompoundBodyDecidesThePipelineStatusRecord = interp.No
+	// And a compound writes the record for nobody: what stands after one is
+	// whatever the last pipeline that actually *ran* inside it left, so
+	// `if false; then :; fi` holds the condition's 1 and `case a in b) :;;
+	// esac` leaves the record from before it untouched, having run nothing.
+	// A redirection on the compound does not change that, which is the
+	// opposite of the rule the neighboring axes follow. Measured 2026-09-11
+	// on 5.3.15 and 3.2.57 alike (#2016).
+	s.CompoundPipelineStatusRecord = interp.CompoundPipelineStatusFromWhatRan
 	s.UnsetEndsTheProducedPipelineStatus = interp.No
 	s.SelectLayout = interp.SelectMenuVerticalThenColumns
 	s.SelectPromptNeedsTerminal = interp.No

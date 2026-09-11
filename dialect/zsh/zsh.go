@@ -984,6 +984,13 @@ func Semantics() interp.Semantics {
 	// sourced, and goes back to the script's name when that call returns.
 	s.DollarZeroNamesTheInnermostCall = interp.Yes
 	s.BuiltinSyntaxErrorFatal = interp.No
+	// A sourced file is read a command at a time and `eval`'s text is read
+	// through first, which is the split that makes these two fields rather
+	// than one. Measured with a side effect: a file whose second line will
+	// not parse has run its first, and the same two lines inside `eval` have
+	// run nothing.
+	s.EvalRunsWhatItParsed = interp.No
+	s.SourcedFileRunsWhatItParsed = interp.Yes
 	// An error inside a file `.` read ends that file and nothing above it:
 	// measured, `.` reports 126 and the sourcing file runs the command after
 	// it. The status is Diagnostics.SourcedFatalStatus.

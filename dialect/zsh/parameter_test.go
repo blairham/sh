@@ -813,3 +813,38 @@ func absentModuleParams() []string {
 		"patchars", "reswords", "userdirs", "usergroups",
 	}
 }
+
+// `${functions[f]}` and the whole table have to say the same thing about
+// every name, because since #1806 they are two different routes: a key goes
+// to zshFunctionValue and the table to zshFunctionsView, and the first exists
+// only because running the second to answer one key was ten seconds of a real
+// startup.
+//
+// Four names, each a shape where the two could drift: one defined here, one
+// still waiting to be autoloaded — whose value is neither its listing nor its
+// body — one that is the shell's own and so not in the listing at all, and
+// one that is nothing. `pushd` is the shell's own — a function that exists
+// and is deliberately not a key — so the prelude is loaded here; without it
+// that row would be a second spelling of `nosuch` and would prove nothing.
+// The comparison is against the table's own answer,
+// fetched through `(k)`, so a change to either route that did not change the
+// other fails this.
+func TestTheKeyAndTheTableAgreeAboutEveryFunction(t *testing.T) {
+	out, st := runZshPrelude(t, t.TempDir(), `f(){ echo hi; }
+autoload -Uz a1
+for n in f a1 pushd nosuch; do
+  key="${functions[$n]-UNSET}"
+  table=UNSET
+  for k in "${(@k)functions}"; do
+    if [[ $k = $n ]]; then table="${functions[$k]}"; fi
+  done
+  if [[ $key = $table ]]; then echo "$n agree [$key]"; else echo "$n DIFFER key=[$key] table=[$table]"; fi
+done`)
+	want := "f agree [\techo hi]\n" +
+		"a1 agree [builtin autoload -XU]\n" +
+		"pushd agree [UNSET]\n" +
+		"nosuch agree [UNSET]\n"
+	if out != want || st != 0 {
+		t.Errorf("key against table = %q (status %d), want %q", out, st, want)
+	}
+}

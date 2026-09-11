@@ -1306,11 +1306,13 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 			return v, true
 		}
 	}
-	if a, ok := r.assocFor(e.Name); ok {
+	if r.assocDeclared(e.Name) {
 		// The attribute decides the subscript's reading before anything is
 		// looked up: a declared name takes it as a key, an undeclared one
-		// falls through to the numeric path below.
-		return r.assocSubscript(a, e), true
+		// falls through to the numeric path below. Asked of the name rather
+		// than of a table produced to answer it — whether *any* table is
+		// needed is the next question and not this one.
+		return r.assocSubscriptOfTheName(e), true
 	}
 	elems, scalar, ok := r.subscriptTarget(e)
 	if !ok {

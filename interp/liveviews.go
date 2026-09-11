@@ -44,6 +44,19 @@ import (
 // shell's own implementation and the other does not.
 func (r *Runner) ListedFuncNames() []string { return r.scriptFuncNames() }
 
+// FunctionIsListed reports whether one name is among the ones
+// [Runner.ListedFuncNames] yields.
+//
+// The same predicate, asked of a name instead of answered for all of them,
+// and it exists because the whole list is the wrong unit for a lookup: a
+// dialect answering `${functions[precmd]}` needs to know about `precmd` and
+// building a sorted slice of every other function to find out is the cost
+// SetDynamicAssocElement was added to stop paying.
+func (r *Runner) FunctionIsListed(name string) bool {
+	fn, ok := r.funcs[name]
+	return ok && !r.speaksForTheShell(fn)
+}
+
 // FunctionBodyText is a function's body as a listing writes it, without the
 // header line and without the braces around it.
 //

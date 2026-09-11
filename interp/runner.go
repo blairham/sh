@@ -486,6 +486,17 @@ type Runner struct {
 	// fills in the names it has through SetDynamicAssoc.
 	DynamicAssocs map[string]func(*Runner) AssocArray
 
+	// dynamicAssocElements is the *one-key* reading of a produced
+	// association, where DynamicAssocs is the whole-table one. Both are
+	// answers to the same question and the pair exists because producing
+	// every key to hand back one is the difference between a lookup and a
+	// walk: `$functions` holds a body per name and rendering all of them to
+	// answer `${functions[precmd]}` was measured at thirty milliseconds a
+	// read. Unexported for the reason dynamicAssocWriters is — nothing reads
+	// this table back — and optional, since a producer cheap enough to run
+	// whole needs no second entry point. See SetDynamicAssocElement.
+	dynamicAssocElements map[string]func(*Runner, string) (string, bool)
+
 	// dynamicAssocWriters is what an assignment to one element of a produced
 	// association does. Unexported because it is not a table anything reads
 	// back — see SetDynamicAssocWriter for why a produced association a

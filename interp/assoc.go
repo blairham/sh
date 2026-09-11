@@ -51,9 +51,18 @@ func (a AssocArray) values() []string {
 // A *produced* one carries it as much as a stored one: the attribute decides
 // how a subscript is read, and `${functions[a b]}` has to be a key wherever
 // the table came from.
+// Asked of the *tables* rather than through assocFor, which is the same
+// question and not the same work: assocFor produces, and every caller here
+// throws the table away. Measured on a real startup, ninety-two of the three
+// hundred and forty-one renderings of `$functions` were this predicate —
+// `functions[f]=…` and `unset "functions[f]"` each asking whether the name
+// was keyed and building nineteen hundred function bodies to find out.
 func (r *Runner) assocDeclared(name string) bool {
-	_, ok := r.assocFor(name)
-	return ok
+	if _, stored := r.AssocArrays[name]; stored {
+		return true
+	}
+	_, produced := r.DynamicAssocs[name]
+	return produced
 }
 
 // markAssoc gives a name the associative attribute, which is what
@@ -163,6 +172,40 @@ func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
 	if v, ok := a[key]; ok {
 		return []string{v}
 	}
+	return r.absentAssocElement(e, key)
+}
+
+// assocSubscriptOfTheName is a subscript on a name that reads as an
+// association, and what it decides is how much of the table the read needs.
+//
+// One key wants one key. Where the name has a keyed producer — see
+// SetDynamicAssocElement — that is the whole of the work, and the
+// whole-table producer is never run; every other shape goes the long way,
+// which is the same answer arrived at by walking. The two spellings of the
+// whole array are the shapes that need the table, and they are told apart
+// here rather than inside the keyed route so that the route is only ever
+// taken by a read a single lookup can finish.
+func (r *Runner) assocSubscriptOfTheName(e *syntax.ParamExpr) []string {
+	if produce, keyed := r.assocElementProducer(e.Name); keyed {
+		// Decided on the subscript as written and before any reading of
+		// quotes, for the reason assocSubscript gives: a *quoted* `@` is an
+		// ordinary key, and asking the produced key instead would collapse
+		// the two spellings into one.
+		if w := r.searchOperand(e.Subscript()); w != "@" && w != "*" {
+			key := r.assocKey(e.Subscript())
+			if v, ok := produce(r, key); ok {
+				return []string{v}
+			}
+			return r.absentAssocElement(e, key)
+		}
+	}
+	a, _ := r.assocFor(e.Name)
+	return r.assocSubscript(a, e)
+}
+
+// absentAssocElement is what a key an association has not got reads as, by
+// either route to it.
+func (r *Runner) absentAssocElement(e *syntax.ParamExpr, key string) []string {
 	if r.refuseAbsentElement(e, key) {
 		// A produced association that answers only some of the keys its name
 		// is asked for, asked for one of the others. Refused by name here
@@ -402,6 +445,54 @@ func (r *Runner) SetDynamicAssocWriter(name string, write func(r *Runner, key, v
 		r.dynamicAssocWriters = map[string]func(*Runner, string, string, bool){}
 	}
 	r.dynamicAssocWriters[name] = write
+}
+
+// SetDynamicAssocElement says how a produced association answers *one* key,
+// for the names where producing the whole table to read one entry is the
+// wrong shape of work.
+//
+// Optional, and the default is right for most: a producer whose table is a
+// map the runner already holds costs nothing to run whole, and registering a
+// second entry point for it would be two answers to maintain where one would
+// do. It earns its place where a key's value has to be *made* — `$functions`
+// renders each body through the printer, so producing all of them to hand
+// back one was measured at thirty milliseconds a read on a real startup's
+// nineteen hundred functions, against a hundred and fifty microseconds for
+// the one.
+//
+// # The contract is that the two readings agree
+//
+// This is a faster route to the same answer and not a second opinion. For
+// every key, the element producer must say found with the value the whole
+// table would hold, and not-found exactly where the table would have no such
+// key — because which of the two it says is what decides whether
+// `${m[k]:-d}` takes the default, and, for a name with absent elements
+// declared, whether the read is refused by name. A producer that disagreed
+// with its own table would make `${m[k]}` and `${(k)m}` describe different
+// shells.
+//
+// A *stored* table shadows both readings, the same way and for the same
+// reason it shadows the whole-table producer — see assocFor.
+func (r *Runner) SetDynamicAssocElement(name string, value func(r *Runner, key string) (string, bool)) {
+	if r.dynamicAssocElements == nil {
+		r.dynamicAssocElements = map[string]func(*Runner, string) (string, bool){}
+	}
+	r.dynamicAssocElements[name] = value
+}
+
+// assocElementProducer is the one-key reading a name has, if it has one and
+// nothing stored is standing in front of it.
+//
+// The stored-table check is not an optimisation but the shadowing rule:
+// assocFor asks AssocArrays first, so a name something has written to reads
+// out of that table, and a keyed producer that answered anyway would make the
+// write invisible to `${m[k]}` while `${(k)m}` still showed it.
+func (r *Runner) assocElementProducer(name string) (func(*Runner, string) (string, bool), bool) {
+	if _, stored := r.AssocArrays[name]; stored {
+		return nil, false
+	}
+	produce, ok := r.dynamicAssocElements[name]
+	return produce, ok
 }
 
 // assocFor is the associative table a name reads as, produced or stored.

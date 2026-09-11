@@ -460,3 +460,171 @@ func TestAProducedAssociationWithoutTheReasonStillReadsEmpty(t *testing.T) {
 		t.Errorf("AbsentElements(plain) = %q, true; want nothing registered", reason)
 	}
 }
+
+// The one-key reading of a produced association, which is the second half of
+// the seam above and exists because the first half is the wrong unit for a
+// lookup. A parameter whose values have to be *made* — rendered, searched
+// for, computed — pays for every key it holds on a read that wanted one, and
+// on a real startup that was the difference between a shell that starts and
+// one that appears to hang. See SetDynamicAssocElement.
+
+// A single-key read takes the keyed route, and the whole-table producer is
+// not run at all. The counter is the assertion: an answer that happened to be
+// right would not say which of the two produced it.
+func TestAKeyedProducerAnswersWithoutBuildingTheTable(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	whole := 0
+	r.SetDynamicAssoc("view", func(*Runner) AssocArray {
+		whole++
+		return AssocArray{"a": "1", "b": "2"}
+	})
+	r.SetDynamicAssocElement("view", func(_ *Runner, key string) (string, bool) {
+		v, ok := AssocArray{"a": "1", "b": "2"}[key]
+		return v, ok
+	})
+	runSeam(t, r, `printf '[%s][%s][%s]' "${view[a]}" "${view[b]}" "${view[nope]}"`)
+	if got, want := out.String(), "[1][2][]"; got != want {
+		t.Errorf("three keyed reads = %q, want %q", got, want)
+	}
+	if whole != 0 {
+		t.Errorf("whole-table producer ran %d times, want 0 — the keyed route was not taken", whole)
+	}
+}
+
+// And the two readings have to agree about *absence* as much as about value,
+// because which one a read gets is what decides whether the default applies.
+// A keyed producer saying not-found is the table having no such key.
+func TestAKeyedProducerSayingNotFoundIsAnAbsentElement(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"here": ""} })
+	r.SetDynamicAssocElement("view", func(_ *Runner, key string) (string, bool) {
+		return "", key == "here"
+	})
+	// `here` is set and empty, `gone` is not set at all, and the default is
+	// what tells them apart — the same distinction the stored path draws.
+	runSeam(t, r, `printf '[%s][%s]' "${view[here]:-D}" "${view[gone]:-D}"`)
+	if got, want := out.String(), "[D][D]"; got != want {
+		t.Errorf("`:-` over a keyed producer = %q, want %q", got, want)
+	}
+	runSeam(t, r, `printf '[%s][%s]' "${view[here]-D}" "${view[gone]-D}"`)
+	if got, want := out.String(), "[D][D][][D]"; got != want {
+		t.Errorf("`-` over a keyed producer = %q, want %q", got, want)
+	}
+}
+
+// The whole-array spellings still need the whole table, and they are told
+// apart before the keyed route is taken — `@` and `*` are the two shapes a
+// single lookup cannot finish.
+func TestTheWholeArraySpellingsStillBuildTheTable(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	whole := 0
+	r.SetDynamicAssoc("view", func(*Runner) AssocArray {
+		whole++
+		return AssocArray{"a": "1"}
+	})
+	r.SetDynamicAssocElement("view", func(_ *Runner, key string) (string, bool) {
+		v, ok := AssocArray{"a": "1"}[key]
+		return v, ok
+	})
+	runSeam(t, r, `printf '[%s]' "${view[@]}" "${view[*]}"`)
+	if got, want := out.String(), "[1][1]"; got != want {
+		t.Errorf("the whole-array spellings = %q, want %q", got, want)
+	}
+	if whole != 2 {
+		t.Errorf("`@` and `*` ran the whole-table producer %d times, want 2", whole)
+	}
+	// And a plain key beside them still does not.
+	runSeam(t, r, `printf '[%s]' "${view[a]}"`)
+	if whole != 2 {
+		t.Errorf("a plain key ran the whole-table producer, total %d, want 2", whole)
+	}
+}
+
+// A name with absent elements declared refuses by name on the keyed route
+// too. The refusal is about a key the producer has no answer for, so moving
+// where the key is looked up must not move where it is refused — see
+// absentparam.go.
+func TestAKeyedProducerStillRefusesAnAbsentElementByName(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"here": "yes"} })
+	r.SetDynamicAssocElement("view", func(_ *Runner, key string) (string, bool) {
+		return "yes", key == "here"
+	})
+	r.SetAbsentElements("view", "no answer for that one")
+	// The refusal is fatal to the expansion, and what is asserted is the
+	// sentence: which status a fatal error carries is an axis, and this
+	// runner answers it only so the refusal does not draw a second
+	// diagnostic about the unanswered one.
+	f, err := syntax.Parse(`printf '[%s]' "${view[gone]}"`, syntax.Core())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	_, _ = r.Run(context.Background(), f)
+	if out.String() != "" {
+		t.Errorf("a refused element still printed %q", out.String())
+	}
+	if want := "view[gone]: no answer for that one"; !strings.Contains(errs.String(), want) {
+		t.Errorf("refusal = %q, want it to contain %q", errs.String(), want)
+	}
+}
+
+// A *stored* table shadows the keyed producer exactly as it shadows the
+// whole-table one. Not a nicety: assocFor asks the stored table first, so a
+// keyed producer that answered anyway would leave `${m[k]}` reading past a
+// write that `${(k)m}` could still see.
+func TestAStoredTableShadowsTheKeyedProducerToo(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"a": "produced"} })
+	r.SetDynamicAssocElement("view", func(*Runner, string) (string, bool) {
+		return "keyed", true
+	})
+	// No writer registered, so the assignment lands in a stored table — the
+	// shadowing SetDynamicAssocWriter exists to prevent. What is asserted
+	// here is only that both readings are shadowed the same way.
+	runSeam(t, r, `view[b]=2
+printf '[%s][%s]' "${view[a]}" "${view[b]}"`)
+	if got, want := out.String(), "[][2]"; got != want {
+		t.Errorf("reads after a write with no writer = %q, want %q", got, want)
+	}
+}
+
+// Asking whether a name is an association produces nothing. Every caller of
+// that predicate throws the table away, and on a real startup it was more
+// than a quarter of the renderings of the costliest view in the shell:
+// `m[k]=v` and `unset "m[k]"` each asked, and each built the lot to find out.
+func TestAskingWhetherANameIsAnAssociationProducesNothing(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	whole := 0
+	table := map[string]string{"a": "1"}
+	r.SetDynamicAssoc("view", func(*Runner) AssocArray {
+		whole++
+		copied := make(AssocArray, len(table))
+		for k, v := range table {
+			copied[k] = v
+		}
+		return copied
+	})
+	r.SetDynamicAssocWriter("view", func(_ *Runner, key, value string, set bool) {
+		if !set {
+			delete(table, key)
+			return
+		}
+		table[key] = value
+	})
+	runSeam(t, r, "view[b]=2")
+	if whole != 0 {
+		t.Errorf("an assignment produced the table %d times, want 0", whole)
+	}
+	// And the write still arrived, so nothing was skipped along with the
+	// production.
+	runSeam(t, r, `printf '[%s]' "${view[b]}"`)
+	if got, want := out.String(), "[2]"; got != want {
+		t.Errorf("the element written = %q, want %q", got, want)
+	}
+}

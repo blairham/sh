@@ -180,6 +180,10 @@ func Semantics() interp.Semantics {
 		SuppressInteractive: "--norc",
 		NameInteractive:     "--rcfile --init-file",
 	}
+	// What `bash --version` writes. Measured 2026-09-11: the real shell
+	// answers on standard output at status 0, and the first line is the one
+	// scripts read — see version, in prelude.go, for why the tag is there.
+	s.VersionOption = interp.VersionOption{Spellings: "--version", Text: versionLine()}
 	// `-c` and `-s` together: the command string names the operands here,
 	// so `sh -sc CMD name a` has `$0` of `name` and one parameter — the
 	// same answer in the 3.2 macOS ships. ksh93 and zsh let `-s` name them.

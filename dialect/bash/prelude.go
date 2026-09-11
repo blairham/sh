@@ -284,6 +284,21 @@ const (
 	tag                 = "blairham"
 )
 
+// versionLine is what this shell writes when the invocation asks for its
+// version, and it is the same identity BASH_VERSION carries one line up —
+// spelled the way the real shell's first line spells it, because that line is
+// what a version test reads: everything after `version ` up to the first space
+// is what `--version | head -1` is cut down to.
+//
+// The first line and nothing else. The real shell follows it with a copyright
+// notice and a statement of the GPL, and reproducing that here would be a
+// false statement about this code's license as well as its authorship — this
+// is Apache-2.0 and is not that program. The tag in the version says the same
+// thing to anything that reads the string rather than the digits.
+func versionLine() string {
+	return fmt.Sprintf("GNU bash, version %s(%d)-%s (%s)", version, patch, tag, machine())
+}
+
 // machine is the triple bash puts last in BASH_VERSINFO. Ours is the build's,
 // which is the honest answer to "what was this compiled for".
 func machine() string { return runtime.GOARCH + "-" + runtime.GOOS }

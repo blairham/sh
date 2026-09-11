@@ -352,6 +352,11 @@ func MainArgs(sh Shell, argv []string) int {
 		sh.errf("%s: %v\n", sh.Name, err)
 		return usageStatus
 	}
+	if in.version {
+		// Before the prompt and before any route: the invocation asked the
+		// shell to name itself and there is nothing to run.
+		return sh.announceVersion()
+	}
 	if in.prompt {
 		// A prompt rather than a script, and reached from here so that every
 		// binary built on this front end has one. It was in a single binary's
@@ -456,6 +461,21 @@ func (sh Shell) context() context.Context {
 	return context.Background()
 }
 
+// announceVersion writes what this dialect says when asked for its version,
+// and answers with the status it exits.
+//
+// Which stream and which status are the dialect's, not this front end's — see
+// Semantics.VersionOption, where the panel disagrees about both.
+func (sh Shell) announceVersion() int {
+	v := sh.Semantics.VersionOption
+	w := sh.Stdout
+	if v.ToStandardError {
+		w = sh.Stderr
+	}
+	_, _ = fmt.Fprintln(w, v.Text)
+	return v.Status
+}
+
 func (sh Shell) errf(format string, args ...any) {
 	_, _ = fmt.Fprintf(sh.Stderr, format, args...)
 }
@@ -539,6 +559,11 @@ type source struct {
 	// file — `-c`, or standard input. It is the floor of the call stack: a
 	// script asking where it is means this, and only the front end knows.
 	file string
+	// version says the invocation asked this shell to name its version and
+	// there is nothing to run. It travels on the source because the option
+	// loop is where it was read and because it beats every route: see
+	// Semantics.VersionOption.
+	version bool
 	// wholeFirst parses the whole input before running any of it, which one
 	// dialect does for a command string and no dialect does for a script.
 	wholeFirst bool
@@ -693,6 +718,11 @@ type invocation struct {
 	// way the rest is and read off the dialect's own spellings; see
 	// Semantics.StartupFileOptions.
 	startup startupFlags
+	// version is the dialect's version option — `--version`. It ends the
+	// invocation where it stands: measured, all three shells in the panel
+	// that have one print their version for `--version -c 'echo hi'` and
+	// never run the command.
+	version bool
 	opts    []optionSpec
 }
 
@@ -783,6 +813,13 @@ func (sh Shell) input(argv []string) (source, error) {
 			if err != nil {
 				return source{}, err
 			}
+			if inv.version {
+				// Nothing after it is read and nothing before it runs. The
+				// route the rest of the vector would have chosen is never
+				// decided, which is why this returns here rather than
+				// carrying a flag through operands.
+				return source{version: true}, nil
+			}
 			args = rest
 		default:
 			return sh.operands(args, inv)
@@ -820,6 +857,15 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 	// without that option would have taken the *next word* as a command
 	// string and run it.
 	if strings.HasPrefix(a, "--") {
+		// The version option first, because it answers rather than records:
+		// nothing after it is read, so there is no interaction with the rest
+		// for an order to decide. A dialect that names no spelling — dash
+		// names none — falls through to the refusal below, which is what
+		// dash does with the word.
+		if spelt(sh.Semantics.VersionOption.Spellings, a) {
+			inv.version = true
+			return nil, nil
+		}
 		rest, matched, err := sh.startupOption(a, args, inv)
 		if matched {
 			return rest, err

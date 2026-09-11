@@ -117,6 +117,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -514,7 +515,7 @@ func pickDialect(name string) (driver.Shell, error) {
 		// disagree about is refused rather than silently given one shell's
 		// answer. A portability check rather than a runtime.
 		return driver.Shell{
-			Dialect: syntax.Core(), Semantics: interp.CoreSemantics(),
+			Dialect: syntax.Core(), Semantics: coreSemantics(),
 			Diagnostics: interp.CoreDiagnostics(),
 		}, nil
 	case "posix":
@@ -549,6 +550,27 @@ func pickDialect(name string) (driver.Shell, error) {
 	}
 	return driver.Shell{},
 		fmt.Errorf("unknown dialect %q: want core, posix, bash, zsh, ksh or dash", name)
+}
+
+// coreSemantics is the core's own vector with the one answer this *binary*
+// has to supply: what it says when asked for its version.
+//
+// The version option is a dialect's, and the core is not imitating a member of
+// the panel — it is this program, which is asked `--version` by installers,
+// editors and agents deciding whether a shell is usable, and a tool that
+// cannot answer that is read as broken. The text can only be filled in here:
+// interp holds no build's version, and the string below is written by the
+// build — see version, in acp.go.
+//
+// The other dialects answer for themselves, including the one that refuses:
+// `sh -dialect dash --version` is refused, because that is what dash does.
+func coreSemantics() interp.Semantics {
+	s := interp.CoreSemantics()
+	s.VersionOption = interp.VersionOption{
+		Spellings: "--version",
+		Text:      fmt.Sprintf("sh %s (%s-%s)", version, runtime.GOARCH, runtime.GOOS),
+	}
+	return s
 }
 
 // printf writes one line of a dump.

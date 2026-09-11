@@ -3,6 +3,11 @@
 
 package zsh
 
+import (
+	"fmt"
+	"runtime"
+)
+
 // Prelude is the part of the dialect written as shell rather than as Go.
 //
 // With the dialect rather than in the binary, so that `sh -dialect zsh` and
@@ -256,10 +261,24 @@ popd() {
 // zsh reports `typeset ZSH_ARGZERO=…`, does not export it, and lets a script
 // assign to it or unset it like any other scalar.
 const identity = `
-ZSH_VERSION='5.9.2-blairham'
+ZSH_VERSION='` + zshVersion + `'
 ZSH_NAME=zsh
 ZSH_ARGZERO=$0
 `
+
+// The version this dialect implements, with the tag that says whose zsh it is.
+// One value rather than two, because the parameter above and the line
+// `--version` writes are the same claim and a shell answering them
+// differently is a shell whose version depends on how it was asked.
+const zshVersion = "5.9.2-blairham"
+
+// versionLine is what this shell writes when the invocation asks for its
+// version — the name, the version and the machine it was built for, which is
+// the shape the real shell's one line has. Measured 2026-09-11: standard
+// output, status 0, and nothing else printed.
+func versionLine() string {
+	return fmt.Sprintf("zsh %s (%s-%s)", zshVersion, runtime.GOARCH, runtime.GOOS)
+}
 
 // nullCommands is what a command that is only redirections runs, as the two
 // ordinary parameters this shell keeps them in.

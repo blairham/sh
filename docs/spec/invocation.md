@@ -1522,6 +1522,87 @@ ksh93 answer 2 either way and zsh 1 either way, so bash is alone and only in
 one of the two orders. An axis for the position of a letter within a bundle
 would be a field asked once.
 
+## Naming a version: `--version`
+
+**The rule.** Three of the four shells in the panel answer an invocation
+option that asks for their version, and the answer **ends the invocation** —
+nothing after the option is read and nothing before it runs. The spelling, the
+text, the stream it goes to and the status the shell exits are all the
+dialect's; a dialect naming no spelling refuses the word the way it refuses any
+unknown long option.
+
+It matters more than a version string usually does. `--version` is how
+installers, editors and agents decide a shell is usable at all, so a shell that
+refuses it is read as broken by everything that probes without a fallback —
+which is what this shell was until #1713, in every dialect, while every version
+*parameter* was already right.
+
+### Measured
+
+2026-09-11, `env -i <shell> --version`, macOS 25.5.
+
+| shell | writes | on | exits |
+| --- | --- | --- | --- |
+| bash 5.3.15 | `GNU bash, version 5.3.15(1)-release (aarch64-apple-darwin25.4.0)` and five more lines | stdout | 0 |
+| bash 3.2.57 | `GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)` and one more | stdout | 0 |
+| zsh 5.9.2 | `zsh 5.9.2 (aarch64-apple-darwin25.4.0)` | stdout | 0 |
+| ksh93u+ | `  version         sh (AT&T Research) 93u+ 2012-08-01` | **stderr** | **2** |
+| dash | `/bin/dash: 0: Illegal option --` | stderr | 2 |
+
+Three facts, and none follows from the others: whether the shell knows the
+option, which stream carries the answer, and what it exits. ksh93 is why all
+three are modeled — it names its version *and* exits a failure for having been
+asked, because the word reaches its generic option reader rather than a case of
+its own.
+
+Three more, measured the same day:
+
+- **It ends the invocation.** `--version -c 'echo hi'` prints the version and
+  never runs the command, in all three that have it.
+- **It is read wherever it stands**, and repeating it changes nothing —
+  except in bash, whose long options must come before any short one:
+  `bash -x --version` is `--: invalid option` at status 2 where zsh and ksh93
+  answer. That is bash's GNU long-option reader rather than a fact about the
+  version option, and it is **not modeled**: this front end reads a long
+  option in any position.
+- **An operand ends the options first.** `sh -c 'echo hi' --version` runs the
+  command and hands the word to the script in all three.
+
+### What this shell writes
+
+The version is the dialect's own — what *this* shell implements, not what a
+panel member installed on the same machine reports. Each line carries the tag
+that `$BASH_VERSION`, `$ZSH_VERSION` and `$KSH_VERSION` already carry, so a
+test that parses the digits passes and anything printing the string sees at
+once that it is not upstream.
+
+| dialect | writes | on | exits |
+| --- | --- | --- | --- |
+| bash | `GNU bash, version 5.3.15(1)-blairham (arm64-darwin)` | stdout | 0 |
+| zsh | `zsh 5.9.2-blairham (arm64-darwin)` | stdout | 0 |
+| ksh | `  version         sh (blairham) 93u+ 2026-09-02` | stderr | 2 |
+| dash | refused, as every unknown long option is | stderr | 2 |
+| `sh` | `sh <build version> (arm64-darwin)` | stdout | 0 |
+
+**The first line and no more.** The real bash follows its version with a
+copyright notice and a statement of the GPL; reproducing that would be a false
+statement about this code's licence as well as its authorship. The first line
+is the one `--version | head -1` reads anyway.
+
+**The substrate's own line is the binary's, not a dialect's.** `interp` holds
+no build's version and may not name a shell, so `cmd/sh` fills the core's in
+from the string its build writes — see `coreSemantics` there. The other
+dialects answer for themselves, the refusing one included:
+`sh -dialect dash --version` is refused.
+
+### Where it lives
+
+`interp.Semantics.VersionOption` — spelling, text, stream, status — read by
+`driver`, which answers it in `announceVersion` before any route is chosen.
+Nothing in `interp` reads the field, the same way nothing in it reads
+`StartupFileOptions`: both are invocation inputs, and the front end is where an
+invocation is read.
+
 ## Two startup inputs the environment carries
 
 Neither is an axis: one shell in the panel reads both names and the other three

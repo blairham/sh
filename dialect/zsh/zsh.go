@@ -515,6 +515,9 @@ func Semantics() interp.Semantics {
 		Login:       "-l --login",
 		SuppressAll: "-f --no-rcs",
 	}
+	// What `zsh --version` writes, on standard output at status 0 — measured
+	// 2026-09-11, one line and no more.
+	s.VersionOption = interp.VersionOption{Spellings: "--version", Text: versionLine()}
 	// The parameter an `autoload`d name is looked up on, and the panel's only
 	// one: `autoload -Uz is-at-least` finds its file on `$FPATH` and nothing
 	// else does. Measured under `-f`, so it is the shell's own value and not a

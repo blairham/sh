@@ -214,6 +214,25 @@ type ParamExpr struct {
 	Arg *Word
 	// Arg2 is the replacement for `/`, or the length for a substring.
 	Arg2 *Word
+	// Arg2Enclosed is the *replacement* operand read a second way: as
+	// content of the quoting around the expansion, rather than as a word of
+	// its own. Nil unless the two readings could differ, which is what makes
+	// it the question rather than an alternative to Arg2.
+	//
+	// Both readings are kept for the reason ArithIndex.Sub keeps the raw text
+	// beside the parsed expression: which of the two applies is not a
+	// property of the text. The panel divides on it — bash 5.3, that build as
+	// `sh` and ksh93 read the operand as a word, so `"${s/a/'$v'}"` is
+	// `x$vy`, while bash 3.2 and zsh read it as double-quoted content, where
+	// the quotes are two characters of the result and the `$v` between them
+	// is still substituted, giving `x'VAL'y`. Unquoted, all five agree with
+	// the first reading, which is what says the disagreement belongs to the
+	// enclosing context. Answered by
+	// interp.Semantics.ReplacementOperandTakesTheEnclosingQuoting (#1209).
+	//
+	// The pattern operand never takes it: its quotes quote in every column,
+	// unanimously, which is why only Arg2 has a second reading.
+	Arg2Enclosed *Word
 	// All is `//`, replacing every match rather than the first.
 	All bool
 	// Anchor is '#' for `/#` or '%' for `/%`, and 0 otherwise.
@@ -1329,6 +1348,12 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 		if i := indexUnquoted(rest, '/'); i >= 0 {
 			e.Arg = p.wordFrom(rest[:i], start, Unquoted)
 			e.Arg2 = p.wordFrom(rest[i+1:], start, Unquoted)
+			// And the same text read as content of the quoting around the
+			// expansion, where that could come to something else. See
+			// ParamExpr.Arg2Enclosed.
+			if q == DoubleQuoted && replacementReadingsCanDiffer(rest[i+1:]) {
+				e.Arg2Enclosed = p.wordFrom(rest[i+1:], start, q)
+			}
 		} else {
 			// Omitting the replacement deletes the match.
 			e.Arg = p.wordFrom(rest, start, Unquoted)
@@ -1357,6 +1382,34 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 			e.Arg = p.wordFrom(rest, start, word)
 		}
 	}
+}
+
+// replacementReadingsCanDiffer reports whether reading a replacement operand
+// as a word of its own and reading it as double-quoted content could produce
+// different text — which is what decides whether the axis is asked at all.
+//
+// Three characters part them, and the list is measured rather than reasoned
+// out. With `s=xay` inside double quotes, the word reading (bash 5.3, that
+// build as `sh`, ksh93) against the enclosing one (zsh):
+//
+//	'q'      q          against  'q'      a single quote quotes, or is a character
+//	\q       q          against  \q       a backslash escapes, or stands before one
+//	~        the home   against  ~        a leading tilde expands, or does not
+//	"q"      q          against  q        the same either way
+//	*        *          against  *        the same
+//	{p,q}    {p,q       against  {p,q     the same
+//	p~q      p~q        against  p~q      the same — only a leading tilde expands
+//
+// So a `"`, a glob, a brace group and a tilde that is not at the front are
+// answered alike by both readings and must not reach the axis: a core that
+// refused `"${s/a/b}"` would be refusing where the whole panel agrees.
+//
+// bash 3.2 answers the first three the way zsh does and keeps the `"` as a
+// character besides, which is a further difference inside the keeping group.
+// No dialect here targets that build, so it is recorded in the corpus rather
+// than modeled.
+func replacementReadingsCanDiffer(text string) bool {
+	return strings.HasPrefix(text, "~") || strings.ContainsAny(text, `'\`)
 }
 
 // indexUnquoted finds c outside quotes and not backslash-escaped.

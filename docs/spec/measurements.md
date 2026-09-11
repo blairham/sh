@@ -5579,6 +5579,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/double-quotes-in-a-quoted-expansion-body` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` |
 | `core/single-quotes-in-a-quoted-pattern-operand` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | **2>** `<shell>:1: unmatched '~<shell>:1: unmatched "` *(status 1)* |
 | `core/quotes-in-a-quoted-replacement-operand` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[xZy][x$vy][x$vy]` | `[xZy][x$vy][x$vy]` | `[xZy][x'VAL'y][x$vy]` | `[xZy][x$vy][x$vy]` | `[xZy][x'VAL'y][x$vy]` |
+| `core/the-characters-a-replacement-operand-parts-on` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[x'q'y][x\qy][x~y][x"q"y][xp~qy]` | `[xqy][xqy][x<tmp>y][xqy][xp~qy]` | `[x'q'y][x\qy][x~y][xqy][xp~qy]` |
 | `core/single-quotes-in-a-heredoc-expansion-body` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` |
 | `core/a-case-arm-inside-backquotes-inside-an-expansion` | `[y]` | `[y]` | `[y]` | `[y]` | `[y]` | `[y]` |
 
@@ -5670,9 +5671,13 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   s=xay; printf '[%s]' "${s#'x'}" "${s#'a$(b'}"; echo
   ```
-- `core/quotes-in-a-quoted-replacement-operand` — the third reading of a quote in a `${ }` operand, and the one the panel divides on: a *pattern* operand's quotes quote and are removed everywhere, and a **replacement** operand's do in bash 5.3, that build as `sh` and ksh93 while bash 3.2 and zsh keep them as characters. Unquoted all five agree again, which is what says the disagreement is about the quoted context and not about the operator. dash has no operator and refuses the line. Recorded rather than answered — it wants a semantics axis, and this row is what a fix routed through the word operand's rule would break
+- `core/quotes-in-a-quoted-replacement-operand` — the third reading of a quote in a `${ }` operand, and the one the panel divides on: a *pattern* operand's quotes quote and are removed everywhere, and a **replacement** operand's do in bash 5.3, that build as `sh` and ksh93 while bash 3.2 and zsh keep them as characters. Unquoted all five agree again, which is what says the disagreement is about the quoted context and not about the operator. dash has no operator and refuses the line. Answered by Semantics.ReplacementOperandTakesTheEnclosingQuoting (#1209); the first and third fields are the guards a fix routed through the word operand's rule would break
   ```sh
   s=xay; v=VAL; printf '[%s]' "${s/'a'/Z}" "${s/a/'$v'}" ${s/a/'$v'}; echo
+  ```
+- `core/the-characters-a-replacement-operand-parts-on` — which characters the two readings of a replacement operand actually part on, which is what decides where the axis may be asked. The first three divide the panel — a single quote, a backslash, and a tilde at the front — and the last two do not: a double quote is removed under both readings that this shell's axis models and a tilde that is not at the front expands under neither. bash 3.2 is the exception on the double quote and keeps it as a character, which is a further divergence inside the keeping group rather than a third reading of the axis, and it has no dialect here to answer for it. A rule reached on the last two would be refusing where the whole panel agrees, and one that missed the first three would be picking a reading in silence
+  ```sh
+  s=xay; printf '[%s]' "${s/a/'q'}" "${s/a/\q}" "${s/a/~}" "${s/a/"q"}" "${s/a/p~q}"; echo
   ```
 - `core/single-quotes-in-a-heredoc-expansion-body` — a here-document body is the same context reached by the other road: it expands like a double-quoted string, so the quotes are characters there too and the `$v` between them is substituted. Unanimous, and it is the row that says the answer is the context's rather than the double quote character's
   ```sh

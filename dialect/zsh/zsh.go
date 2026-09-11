@@ -1251,6 +1251,17 @@ func Semantics() interp.Semantics {
 	// An operator on `${a[*]}` applies to the joined string here, once:
 	// `${a[*]#a}` on `(aa ab)` is `a ab` where the other two say `a b`.
 	s.OperatorDistributesOverStarSubscript = interp.No
+	// A replacement operand inside double quotes is double-quoted *content*
+	// here, not a word of its own: measured 2026-09-07, `"${s/a/'$v'}"` on
+	// `s=xay` and `v=VAL` is `x'VAL'y` — the quotes are two characters of the
+	// result and the `$v` between them is still substituted — where bash 5.3
+	// and ksh93 give `x$vy`. bash 3.2 agrees with this shell, which is what
+	// makes it an axis rather than a fact about zsh.
+	//
+	// The same rule the *word* operand takes everywhere, applied one operand
+	// further along: `\q` stays a backslash and a `q`, and a leading `~` does
+	// not expand. Unquoted, this shell agrees with the rest again (#1209).
+	s.ReplacementOperandTakesTheEnclosingQuoting = interp.Yes
 	s.ExportCarriesFunctions = interp.No
 	// No `-n` either, and unlike `-f` it is a letter this shell has simply
 	// never heard of — so it earns the ordinary `bad option: -n` rather

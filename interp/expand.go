@@ -2746,13 +2746,14 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 	// and not a pattern (#1337), and having the two branches read it two
 	// ways is exactly how that fix would come undone in the branch nobody
 	// looks at.
+	repl := r.replacementWord(e)
 	if !reportsAMatch(o) {
-		with := r.replacementOf(e.Arg2)
+		with := r.replacementOf(repl)
 		return replace(value, pattern, e, o, func(matchReport) string { return with })
 	}
 	return replace(value, pattern, e, o, func(m matchReport) string {
 		r.publishMatch(m)
-		return r.replacementOf(e.Arg2)
+		return r.replacementOf(repl)
 	})
 }
 
@@ -3145,6 +3146,29 @@ func (r *Runner) substitutedWordText(w *syntax.Word) string {
 // replacement stops globbing on its own.
 func (r *Runner) replacementOf(w *syntax.Word) string {
 	return strings.Join(r.expandWordNoSplit(w), "")
+}
+
+// replacementWord is the replacement operand of `${v/pat/repl}`, chosen
+// between the two readings the parser kept.
+//
+// Arg2Enclosed is nil unless the expansion was double-quoted *and* the two
+// readings could come to different text, so this asks the axis only at the
+// disagreement: an ordinary `"${v/a/b}"` never reaches it, and neither does
+// any unquoted one, where the whole panel agrees with the word reading.
+//
+// See Semantics.ReplacementOperandTakesTheEnclosingQuoting for the panel, and
+// syntax.ParamExpr.Arg2Enclosed for why both readings are parsed rather than
+// one being derived from the other: the trees are not the same shape, so the
+// choice has to be made before either is expanded.
+func (r *Runner) replacementWord(e *syntax.ParamExpr) *syntax.Word {
+	if e.Arg2Enclosed == nil {
+		return e.Arg2
+	}
+	if r.ask(r.sem().ReplacementOperandTakesTheEnclosingQuoting,
+		"a quote in a quoted replacement operand") {
+		return e.Arg2Enclosed
+	}
+	return e.Arg2
 }
 
 // ifs returns the field separators. Unset means the default; set and empty

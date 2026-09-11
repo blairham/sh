@@ -1250,7 +1250,12 @@ var Corpus = []Case{
 	{
 		ID: "core/quotes-in-a-quoted-replacement-operand", Category: "quoting",
 		Snippet: `s=xay; v=VAL; printf '[%s]' "${s/'a'/Z}" "${s/a/'$v'}" ${s/a/'$v'}; echo`,
-		Why:     "the third reading of a quote in a `${ }` operand, and the one the panel divides on: a *pattern* operand's quotes quote and are removed everywhere, and a **replacement** operand's do in bash 5.3, that build as `sh` and ksh93 while bash 3.2 and zsh keep them as characters. Unquoted all five agree again, which is what says the disagreement is about the quoted context and not about the operator. dash has no operator and refuses the line. Recorded rather than answered — it wants a semantics axis, and this row is what a fix routed through the word operand's rule would break",
+		Why:     "the third reading of a quote in a `${ }` operand, and the one the panel divides on: a *pattern* operand's quotes quote and are removed everywhere, and a **replacement** operand's do in bash 5.3, that build as `sh` and ksh93 while bash 3.2 and zsh keep them as characters. Unquoted all five agree again, which is what says the disagreement is about the quoted context and not about the operator. dash has no operator and refuses the line. Answered by Semantics.ReplacementOperandTakesTheEnclosingQuoting (#1209); the first and third fields are the guards a fix routed through the word operand's rule would break",
+	},
+	{
+		ID: "core/the-characters-a-replacement-operand-parts-on", Category: "quoting",
+		Snippet: `s=xay; printf '[%s]' "${s/a/'q'}" "${s/a/\q}" "${s/a/~}" "${s/a/"q"}" "${s/a/p~q}"; echo`,
+		Why:     "which characters the two readings of a replacement operand actually part on, which is what decides where the axis may be asked. The first three divide the panel — a single quote, a backslash, and a tilde at the front — and the last two do not: a double quote is removed under both readings that this shell's axis models and a tilde that is not at the front expands under neither. bash 3.2 is the exception on the double quote and keeps it as a character, which is a further divergence inside the keeping group rather than a third reading of the axis, and it has no dialect here to answer for it. A rule reached on the last two would be refusing where the whole panel agrees, and one that missed the first three would be picking a reading in silence",
 	},
 	{
 		ID: "param/bare-brace-in-an-unquoted-operand", Category: "expansion",

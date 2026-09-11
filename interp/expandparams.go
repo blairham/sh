@@ -80,7 +80,7 @@ func expandableParam(p *syntax.ParamExpr) bool {
 	if p == nil {
 		return false
 	}
-	for _, w := range []*syntax.Word{p.Index, p.Inner, p.Arg, p.Arg2} {
+	for _, w := range []*syntax.Word{p.Index, p.Inner, p.Arg, p.Arg2, p.Arg2Enclosed} {
 		if w != nil && !expandableSpans(w.Spans) {
 			return false
 		}

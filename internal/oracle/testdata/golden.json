@@ -33115,6 +33115,50 @@
         "TimedOut": false
       }
     },
+    "core/the-characters-a-replacement-operand-parts-on": {
+      "bash": {
+        "Stdout": "[xqy][xqy][x\u003ctmp\u003ey][xqy][xp~qy]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[xqy][xqy][x\u003ctmp\u003ey][xqy][xp~qy]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[x'q'y][x\\qy][x~y][x\"q\"y][xp~qy]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[xqy][xqy][x\u003ctmp\u003ey][xqy][xp~qy]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[x'q'y][x\\qy][x~y][xqy][xp~qy]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/the-cleanup-half-belongs-to-a-brace-group-alone": {
       "bash": {
         "Stdout": "",

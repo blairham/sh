@@ -781,6 +781,10 @@ func Semantics() interp.Semantics {
 	s.ArraysAreSparse = interp.Yes
 	// An operator on `${a[*]}` trims each element before the join here.
 	s.OperatorDistributesOverStarSubscript = interp.Yes
+	// A replacement operand's quotes quote and are removed, as in bash 5.3:
+	// measured 2026-09-07, `"${s/a/'$v'}"` on `s=xay` and `v=VAL` is `x$vy`
+	// (#1209).
+	s.ReplacementOperandTakesTheEnclosingQuoting = interp.No
 	s.ExportCarriesFunctions = interp.No
 	// No `-n` either: measured, `export: -n: unknown option` with the usage
 	// line under it, and the script ends there.

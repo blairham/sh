@@ -122,15 +122,16 @@ func (r *Runner) elementReplacer(e *syntax.ParamExpr) func(string) (string, bool
 	// text — the same reading `:#` takes, and the same axis that keeps
 	// `p="t*"; echo $p` from globbing.
 	pattern := r.patternOf(e.Arg)
+	repl := r.replacementWord(e)
 	if r.patternReports(pattern) {
 		return func(el string) (string, bool) {
 			if !r.matchPatternR(pattern, el, false) {
 				return "", false
 			}
-			return r.replacementOf(e.Arg2), true
+			return r.replacementOf(repl), true
 		}
 	}
-	with := r.replacementOf(e.Arg2)
+	with := r.replacementOf(repl)
 	return func(el string) (string, bool) {
 		if !r.matchPatternR(pattern, el, false) {
 			return "", false

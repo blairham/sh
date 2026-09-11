@@ -1199,3 +1199,115 @@ func (r *Runner) ReadFileGated(path string) ([]byte, error) {
 	r.emit(r.ctx, Event{Kind: EventAccess, Action: action})
 	return b, nil
 }
+
+// AllowModify asks the gate about a path a dialect's builtin is about to
+// change in place: unlink it, rename it, create a directory at it, or change
+// its mode or its owner.
+//
+// It is the seam #1808 named as missing. #1807 gave a dialect `AllowOpen` and
+// `VerifyOpened`, which answer "may this builtin read or write the *contents*
+// of a file", and every other verb had nothing to call at all. So `zsh/files`
+// arrived with nine builtins whose entire purpose is modifying the
+// filesystem, each one reaching for the `os` package directly, and a policy
+// that refused every write still let `zf_rm` delete whatever it was pointed
+// at — silently, with a zero status, and with nothing on the audit stream
+// (#1819).
+//
+// # A modification is a write, and deliberately not a kind of its own
+//
+// The action is an `ActionOpen` with `Write` set, which is the slot the
+// `write` selector already covers. That is a decision rather than a shortcut.
+// A new `ActionUnlink` would have to be added to the policy grammar, to the
+// `-deny` surface, and to every Gate anyone has written — and until all three
+// caught up, `default deny write` would not refuse `zf_rm`. A policy author
+// who writes "deny write" and is then handed `rm` has been given a policy
+// that does not mean what it says, which is the sentence policy.go already
+// uses to explain why the probes group with the read.
+//
+// What it costs is a record that says `open` for something that never opened
+// a descriptor. That is the honest reading of it: the audit says a write to
+// this path was permitted, which is exactly what happened, and the builtin's
+// own name is on the same line through Event.Line and the diagnostic.
+//
+// # There is no verify half, and why that is sound rather than unfinished
+//
+// `AllowOpen` must be followed by `VerifyOpened` because a name is not an
+// object: a symbolic link under an allowed directory is a name the gate
+// permits and an object it would not. These verbs have no descriptor to
+// verify against, so the same question has to be answered differently, and
+// the answer differs by verb:
+//
+//   - `unlink` and `rmdir` act on the *name*, never on what it points at.
+//     Removing a link out of an allowed directory removes the link, so the
+//     object the rule was protecting is untouched and the name is the right
+//     thing to have checked.
+//   - `rename` likewise moves a name.
+//   - `mkdir` creates at a name that by definition resolves to nothing yet.
+//   - `chmod` and `chown` *do* follow a link, and the caller is expected to
+//     ask about the path with symlinks refused — see fileGatedPaths in
+//     dialect/zsh, which is the only caller and does exactly that.
+//
+// A refusal is reported to the script in the same words a refused redirection
+// gets, and sets the failing status, because unlike a probe there is no
+// honest way to carry on: a `zf_rm` that was refused has not removed
+// anything, and saying so is the only answer that is not a lie.
+func (r *Runner) AllowModify(ctx context.Context, path string) bool {
+	action := r.act(Action{Kind: ActionOpen, Path: path, Write: true})
+	if !r.allowed(ctx, action) {
+		return false
+	}
+	r.emit(ctx, Event{Kind: EventAccess, Action: action})
+	return true
+}
+
+// AllowReadPath asks the gate whether a builtin may make the contents at a
+// path reachable, where it will not be opening the file to do it.
+//
+// `zf_ln` is why it exists, and it is worth stating because the case looks
+// like it should not need a read check at all: the builtin never reads a
+// byte. A hard link is a second *name* for one object, so `zf_ln secret
+// ./inside` puts the object inside the allowed subtree, and every later read
+// of `./inside` is then allowed on its own merits — there is no link for the
+// resolving walk to notice, because a hard link is not a link in that sense.
+// The contents crossed the boundary at the moment the name was created, which
+// makes creating it a read of the source (#1819).
+//
+// A symbolic link needs no such check and does not get one: reading through
+// it walks to the object, and internal/opened checks what the walk reached.
+func (r *Runner) AllowReadPath(ctx context.Context, path string) bool {
+	action := r.act(Action{Kind: ActionOpen, Path: path})
+	if !r.allowed(ctx, action) {
+		return false
+	}
+	r.emit(ctx, Event{Kind: EventAccess, Action: action})
+	return true
+}
+
+// AllowProbe asks the gate a question about a path on behalf of a dialect's
+// builtin, with the probe semantics the rest of the shell's probes have.
+//
+// `zstat` is the caller. fsgate.go opens by saying every stat in the
+// interpreter comes through the gate because a probe is an oracle, and
+// `zstat` was outside that sentence: on one path in one script, `[[ -f
+// secret ]]` was refused into "not there" while `zstat +size secret`
+// answered with the true size and mtime (#1819).
+//
+// False means hidden, and the caller must treat it exactly as it treats a
+// path that is not there — quietly, with no diagnostic of its own. That is
+// the same rule ActionStat documents and for the same reason: a refusal that
+// identified itself would be an oracle for what the policy hides, which is
+// the thing the refusal exists to prevent.
+func (r *Runner) AllowProbe(ctx context.Context, path string) bool {
+	return !r.probeDenied(r.act(Action{Kind: ActionStat, Path: path}))
+}
+
+// AllowList asks the gate whether a builtin may enumerate a directory.
+//
+// `zf_rm -r` is the caller: a recursive removal reads every directory on its
+// way down, which is the enumeration ActionReadDir exists to cover — `echo
+// /**` and a tree walk learn the same thing. Refused the same quiet way a
+// probe is, and the caller reports the failure a directory it cannot read
+// would already have caused.
+func (r *Runner) AllowList(ctx context.Context, path string) bool {
+	return !r.probeDenied(r.act(Action{Kind: ActionReadDir, Path: path}))
+}

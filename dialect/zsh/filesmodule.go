@@ -53,7 +53,10 @@ import (
 type fileOp struct {
 	name    string
 	letters string
-	run     func(r *interp.Runner, f fileFlags, args []string) int
+	// The context is carried to every operation because each of them asks
+	// the gate before it touches anything, and the gate is asked with the
+	// context the builtin was invoked under — see filesgate.go.
+	run func(r *interp.Runner, ctx context.Context, f fileFlags, args []string) int
 }
 
 // fileParanoid is the letter that is refused by name wherever it is valid.
@@ -109,12 +112,12 @@ func fileOps() []fileOp {
 // fileBuiltin wraps one operation in the option reading every one of them
 // shares.
 func fileBuiltin(op fileOp) interp.Builtin {
-	return func(r *interp.Runner, _ context.Context, args []string) int {
+	return func(r *interp.Runner, ctx context.Context, args []string) int {
 		flags, rest, code := fileOptions(r, op, args)
 		if code != 0 {
 			return code
 		}
-		return op.run(r, flags, rest)
+		return op.run(r, ctx, flags, rest)
 	}
 }
 
@@ -190,16 +193,16 @@ func fileLetter(flags *fileFlags, letter byte) {
 // fileChgrp is `chgrp group file ...`, which the manual defines as `chown`
 // with a user-spec of `:group` — so it is that, rather than a second
 // implementation of the same walk.
-func fileChgrp(r *interp.Runner, flags fileFlags, args []string) int {
+func fileChgrp(r *interp.Runner, ctx context.Context, flags fileFlags, args []string) int {
 	if len(args) < 2 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}
-	return fileChown(r, flags, append([]string{":" + args[0]}, args[1:]...))
+	return fileChown(r, ctx, flags, append([]string{":" + args[0]}, args[1:]...))
 }
 
 // fileChown is `chown user-spec file ...`.
-func fileChown(r *interp.Runner, flags fileFlags, args []string) int {
+func fileChown(r *interp.Runner, ctx context.Context, flags fileFlags, args []string) int {
 	if len(args) < 2 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
@@ -211,7 +214,7 @@ func fileChown(r *interp.Runner, flags fileFlags, args []string) int {
 	}
 	status := 0
 	for _, path := range args[1:] {
-		if !fileWalk(r, flags, path, func(p string) error {
+		if !fileWalk(r, ctx, flags, path, func(p string) error {
 			if flags.noDeref {
 				return os.Lchown(p, uid, gid)
 			}
@@ -293,7 +296,7 @@ func fileLookupGroup(name string) (int, error) {
 
 // fileChmod is `chmod mode file ...`, and the mode is octal and nothing else —
 // measured, `zf_chmod u+x f` is “invalid mode `u+x'“ and so is `999`.
-func fileChmod(r *interp.Runner, flags fileFlags, args []string) int {
+func fileChmod(r *interp.Runner, ctx context.Context, flags fileFlags, args []string) int {
 	if len(args) < 2 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
@@ -305,7 +308,7 @@ func fileChmod(r *interp.Runner, flags fileFlags, args []string) int {
 	}
 	status := 0
 	for _, path := range args[1:] {
-		if !fileWalk(r, flags, path, func(p string) error { return os.Chmod(p, mode) }) {
+		if !fileWalk(r, ctx, flags, path, func(p string) error { return os.Chmod(p, mode) }) {
 			status = 1
 		}
 	}
@@ -337,9 +340,23 @@ func fileOctalMode(text string) (fs.FileMode, bool) {
 // The directory itself is changed before its contents, which is the order the
 // manual states and the order that matters: a `chmod -R 0` that took the
 // contents first would still be able to read the directory to find them.
-func fileWalk(r *interp.Runner, flags fileFlags, path string, apply func(string) error) bool {
+func fileWalk(r *interp.Runner, ctx context.Context, flags fileFlags, path string, apply func(string) error) bool {
 	base := shellPath(r, path)
+	// Whether the operation follows a link decides what has to be permitted.
+	// `-h` makes it an `lchown`, which changes the link itself and therefore
+	// asks only about the name; without it the call lands on whatever the
+	// link points at, and the object at the end of the chain is what the
+	// rule is about — see fileMayModifyTarget.
+	allow := func(p string) bool {
+		if flags.noDeref {
+			return fileMayModify(r, ctx, p)
+		}
+		return fileMayModifyTarget(r, ctx, p)
+	}
 	if !flags.recursive {
+		if !allow(base) {
+			return false
+		}
 		if err := apply(base); err != nil {
 			r.Diagnosef("%s\n", fileReason(path, err))
 			return false
@@ -357,34 +374,57 @@ func fileWalk(r *interp.Runner, flags fileFlags, path string, apply func(string)
 		}
 		return filepath.Join(path, rel)
 	}
+	// The descent is this package's own rather than filepath.WalkDir's,
+	// because WalkDir reads every directory it passes through with the `os`
+	// package and a gate cannot see it do that. A recursive `zf_chmod` over a
+	// denied tree would have learned the tree's whole shape even where every
+	// change in it was refused, which is the disclosure ActionReadDir exists
+	// to cover.
+	//
+	// Otherwise it is WalkDir's own shape: pre-order, so the directory is
+	// changed before its contents as the manual requires, and a link is never
+	// descended into, because the entry is what Lstat says it is.
 	ok := true
-	err := filepath.WalkDir(base, func(p string, _ fs.DirEntry, err error) error {
-		if err != nil {
-			r.Diagnosef("%s\n", fileReason(said(p), err))
+	var walk func(p string)
+	walk = func(p string) {
+		if !allow(p) {
 			ok = false
-			return nil
+			return
 		}
 		if err := apply(p); err != nil {
 			r.Diagnosef("%s\n", fileReason(said(p), err))
 			ok = false
 		}
-		return nil
-	})
-	if err != nil {
+		info, err := os.Lstat(p)
+		if err != nil || !info.IsDir() {
+			return
+		}
+		entries, err := fileReadDir(r, ctx, p)
+		if err != nil {
+			r.Diagnosef("%s\n", fileReason(said(p), err))
+			ok = false
+			return
+		}
+		for _, e := range entries {
+			walk(filepath.Join(p, e.Name()))
+		}
+	}
+	if _, err := fileLstat(r, ctx, base); err != nil {
 		r.Diagnosef("%s\n", fileReason(path, err))
 		return false
 	}
+	walk(base)
 	return ok
 }
 
 // fileLn is `ln filename dest` and `ln filename ... dir`.
-func fileLn(r *interp.Runner, flags fileFlags, args []string) int {
+func fileLn(r *interp.Runner, ctx context.Context, flags fileFlags, args []string) int {
 	if len(args) == 0 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}
 	sources, dest := fileTargets(args)
-	if len(sources) > 1 && !fileIsDir(r, dest, flags) {
+	if len(sources) > 1 && !fileIsDir(r, ctx, dest, flags) {
 		r.Diagnosef("last of many arguments must be a directory\n")
 		return 1
 	}
@@ -398,20 +438,33 @@ func fileLn(r *interp.Runner, flags fileFlags, args []string) int {
 			// link needs nothing: `zf_ln -s nosuch d` writes a dangling one
 			// and is 0, which is what makes a link to a path that will exist
 			// later possible at all.
-			if _, err := os.Lstat(shellPath(r, src)); err != nil {
+			if _, err := fileLstat(r, ctx, src); err != nil {
 				r.Diagnosef("%s\n", fileReason(src, err))
 				status = 1
 				continue
 			}
+			// A hard link is the one operation here that carries a file's
+			// *contents* somewhere else without opening it, so the source
+			// has to be readable — see fileMayRead. A symbolic link carries
+			// nothing and needs no such permission: reading through one
+			// walks to the object and is checked on what it reached.
+			if !fileMayRead(r, ctx, src) {
+				status = 1
+				continue
+			}
 		}
-		target := fileInDir(r, dest, src, flags)
+		target := fileInDir(r, ctx, dest, src, flags)
+		if !fileMayModify(r, ctx, target) {
+			status = 1
+			continue
+		}
 		// **A link never replaces by default** — the manual says so and it is
 		// measured: a second `zf_ln -s b bl` is `file exists`, with no query
 		// even when the name in the way cannot be written to. So `-f` and a
 		// `-i` answered yes are the only two things that clear it, and both
 		// clear it by unlinking first, because the system call itself will
 		// not overwrite.
-		if !fileConfirm(r, "zf_ln", "replace", flags, target, false) {
+		if !fileConfirm(r, ctx, "zf_ln", "replace", flags, target, false) {
 			continue
 		}
 		if flags.force || flags.interactive {
@@ -443,30 +496,37 @@ func fileLn(r *interp.Runner, flags fileFlags, args []string) int {
 // will not move files across devices" — so a move off the filesystem reports
 // what the system call said rather than falling back to a copy that would have
 // different failure modes and a different meaning for an interrupted run.
-func fileMv(r *interp.Runner, flags fileFlags, args []string) int {
+func fileMv(r *interp.Runner, ctx context.Context, flags fileFlags, args []string) int {
 	if len(args) < 2 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}
 	sources, dest := fileTargets(args)
-	if len(sources) > 1 && !fileIsDir(r, dest, flags) {
+	if len(sources) > 1 && !fileIsDir(r, ctx, dest, flags) {
 		r.Diagnosef("last of many arguments must be a directory\n")
 		return 1
 	}
 	status := 0
 	for _, src := range sources {
-		if _, err := os.Lstat(shellPath(r, src)); err != nil {
+		if _, err := fileLstat(r, ctx, src); err != nil {
 			r.Diagnosef("`%s': %s\n", src, fileErrText(err))
 			status = 1
 			continue
 		}
-		target := fileInDir(r, dest, src, flags)
+		target := fileInDir(r, ctx, dest, src, flags)
+		// Both ends: a rename takes the source name away and puts the
+		// target name there, so it is a change to each of them and a policy
+		// permitting only one of the two has not permitted this.
+		if !fileMayModify(r, ctx, src) || !fileMayModify(r, ctx, target) {
+			status = 1
+			continue
+		}
 		// A rename replaces what is there by itself, so nothing is unlinked
 		// first: the question is only whether to go on. Asked about a
 		// destination that exists and cannot be written to, which is the
 		// manual's default and is what an unguarded `zf_mv` onto a read-only
 		// file stops for.
-		if !fileConfirm(r, "zf_mv", "replace", flags, target, true) {
+		if !fileConfirm(r, ctx, "zf_mv", "replace", flags, target, true) {
 			continue
 		}
 		if err := os.Rename(shellPath(r, src), shellPath(r, target)); err != nil {
@@ -490,9 +550,8 @@ func fileTargets(args []string) (sources []string, dest string) {
 // fileIsDir reports whether a destination is a directory to put things in.
 // With `-h` a symbolic link to one is not, which is what makes `ln -sfh t sl`
 // replace the link rather than write inside what it points at.
-func fileIsDir(r *interp.Runner, path string, flags fileFlags) bool {
-	at := shellPath(r, path)
-	info, err := os.Lstat(at)
+func fileIsDir(r *interp.Runner, ctx context.Context, path string, flags fileFlags) bool {
+	info, err := fileLstat(r, ctx, path)
 	if err != nil {
 		return false
 	}
@@ -500,7 +559,7 @@ func fileIsDir(r *interp.Runner, path string, flags fileFlags) bool {
 		if flags.noDeref {
 			return false
 		}
-		if info, err = os.Stat(at); err != nil {
+		if info, err = fileStat(r, ctx, path); err != nil {
 			return false
 		}
 	}
@@ -509,15 +568,15 @@ func fileIsDir(r *interp.Runner, path string, flags fileFlags) bool {
 
 // fileInDir is where one source lands: the destination itself, or a name of
 // the same last component inside it.
-func fileInDir(r *interp.Runner, dest, src string, flags fileFlags) string {
-	if !fileIsDir(r, dest, flags) {
+func fileInDir(r *interp.Runner, ctx context.Context, dest, src string, flags fileFlags) string {
+	if !fileIsDir(r, ctx, dest, flags) {
 		return dest
 	}
 	return filepath.Join(dest, filepath.Base(strings.TrimRight(src, string(filepath.Separator))))
 }
 
 // fileMkdir is `mkdir [-p] [-m mode] dir ...`.
-func fileMkdir(r *interp.Runner, flags fileFlags, args []string) int {
+func fileMkdir(r *interp.Runner, ctx context.Context, flags fileFlags, args []string) int {
 	if len(args) == 0 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
@@ -533,13 +592,25 @@ func fileMkdir(r *interp.Runner, flags fileFlags, args []string) int {
 	}
 	status := 0
 	for _, dir := range args {
-		if err := fileMakeDir(shellPath(r, dir), mode, flags); err != nil {
+		if err := fileMakeDir(r, ctx, shellPath(r, dir), mode, flags); err != nil {
+			if errors.Is(err, errFileRefused) {
+				// The refusal has already been reported, in the same words
+				// every other refused action gets. Saying "cannot make
+				// directory" after it would be a second diagnostic about one
+				// event, and the first one is the accurate one.
+				status = 1
+				continue
+			}
 			r.Diagnosef("cannot make directory `%s': %s\n", dir, fileErrText(err))
 			status = 1
 		}
 	}
 	return status
 }
+
+// errFileRefused marks a failure the gate has already reported, so a caller
+// that would otherwise wrap it in a diagnostic of its own can stay quiet.
+var errFileRefused = errors.New("refused")
 
 // fileMakeDir creates one directory, with the parents `-p` asked for.
 //
@@ -551,9 +622,19 @@ func fileMkdir(r *interp.Runner, flags fileFlags, args []string) int {
 // mode passed to the system call is masked by the umask and the letter is a
 // statement about the result — measured, `zf_mkdir -m 700 d` is `drwx------`
 // under a umask that would have taken bits off it.
-func fileMakeDir(dir string, mode fs.FileMode, flags fileFlags) error {
+func fileMakeDir(r *interp.Runner, ctx context.Context, dir string, mode fs.FileMode, flags fileFlags) error {
+	// Every directory this call would create is asked about, not just the one
+	// the script named: `-p` creates the missing ancestors too, and a policy
+	// that permits `a/b/c` has not thereby permitted making `a` and `a/b`.
+	// Collected deepest-first by walking up while the name is not there, so
+	// the set is exactly what MkdirAll would go on to create.
+	for _, missing := range fileMissingParents(r, ctx, dir, flags) {
+		if !fileMayModify(r, ctx, missing) {
+			return errFileRefused
+		}
+	}
 	if flags.parents {
-		if info, err := os.Stat(dir); err == nil {
+		if info, err := fileStat(r, ctx, dir); err == nil {
 			if info.IsDir() {
 				return nil
 			}
@@ -572,15 +653,46 @@ func fileMakeDir(dir string, mode fs.FileMode, flags fileFlags) error {
 	return os.Chmod(dir, mode)
 }
 
+// fileMissingParents is every directory a `mkdir` would bring into being, the
+// named one included.
+//
+// Without `-p` that is just the name itself, because nothing else will be
+// created. With it, the walk goes up while each name is absent and stops at
+// the first that is there — which is where MkdirAll would stop too — so the
+// answer is the set of names the command is about to add to the filesystem
+// and no more.
+//
+// The existence questions go through the gate like every other probe here: a
+// `zf_mkdir -p` over a denied tree would otherwise report, by how far it got,
+// which of its ancestors exist.
+func fileMissingParents(r *interp.Runner, ctx context.Context, dir string, flags fileFlags) []string {
+	if !flags.parents {
+		return []string{dir}
+	}
+	var missing []string
+	for at := dir; ; {
+		if _, err := fileLstat(r, ctx, at); err == nil {
+			break
+		}
+		missing = append(missing, at)
+		parent := filepath.Dir(at)
+		if parent == at {
+			break
+		}
+		at = parent
+	}
+	return missing
+}
+
 // fileRm is `rm [-dfiRrs] file ...`.
-func fileRm(r *interp.Runner, flags fileFlags, args []string) int {
+func fileRm(r *interp.Runner, ctx context.Context, flags fileFlags, args []string) int {
 	if len(args) == 0 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}
 	status := 0
 	for _, path := range args {
-		if !fileRemove(r, flags, path) {
+		if !fileRemove(r, ctx, flags, path) {
 			status = 1
 		}
 	}
@@ -590,8 +702,8 @@ func fileRm(r *interp.Runner, flags fileFlags, args []string) int {
 // fileRemove is one operand of `rm`, and the whole of the letter precedence:
 // `-d` unlinks whatever it is and takes precedence over `-R` and `-r`, and
 // `-f` silences everything and takes precedence over `-i`.
-func fileRemove(r *interp.Runner, flags fileFlags, path string) bool {
-	info, err := os.Lstat(shellPath(r, path))
+func fileRemove(r *interp.Runner, ctx context.Context, flags fileFlags, path string) bool {
+	info, err := fileLstat(r, ctx, path)
 	if err != nil {
 		if flags.force && errors.Is(err, fs.ErrNotExist) {
 			// `-f` "suppresses all error indications", and a name that is not
@@ -605,20 +717,20 @@ func fileRemove(r *interp.Runner, flags fileFlags, path string) bool {
 	}
 	switch {
 	case flags.dirs:
-		return fileUnlinkOne(r, flags, path)
+		return fileUnlinkOne(r, ctx, flags, path)
 	case info.IsDir() && !flags.recursive:
 		r.Diagnosef("%s: is a directory\n", path)
 		return false
 	case info.IsDir():
-		return fileRemoveTree(r, flags, path)
+		return fileRemoveTree(r, ctx, flags, path)
 	}
-	return fileUnlinkOne(r, flags, path)
+	return fileUnlinkOne(r, ctx, flags, path)
 }
 
 // fileRemoveTree empties a directory and then removes it, which is the order
 // the manual states: everything below goes before the directory itself does.
-func fileRemoveTree(r *interp.Runner, flags fileFlags, path string) bool {
-	entries, err := os.ReadDir(shellPath(r, path))
+func fileRemoveTree(r *interp.Runner, ctx context.Context, flags fileFlags, path string) bool {
+	entries, err := fileReadDir(r, ctx, path)
 	if err != nil {
 		if flags.force {
 			return true
@@ -628,9 +740,12 @@ func fileRemoveTree(r *interp.Runner, flags fileFlags, path string) bool {
 	}
 	ok := true
 	for _, e := range entries {
-		if !fileRemove(r, flags, filepath.Join(path, e.Name())) {
+		if !fileRemove(r, ctx, flags, filepath.Join(path, e.Name())) {
 			ok = false
 		}
+	}
+	if !fileMayModify(r, ctx, path) {
+		return false
 	}
 	if err := os.Remove(shellPath(r, path)); err != nil {
 		if flags.force {
@@ -644,8 +759,14 @@ func fileRemoveTree(r *interp.Runner, flags fileFlags, path string) bool {
 
 // fileUnlinkOne removes one name, asking first where asking is what a real
 // shell does.
-func fileUnlinkOne(r *interp.Runner, flags fileFlags, path string) bool {
-	if !fileConfirm(r, "zf_rm", "remove", flags, path, true) {
+func fileUnlinkOne(r *interp.Runner, ctx context.Context, flags fileFlags, path string) bool {
+	// Asked before the question is put to the person, not after: a refused
+	// removal must not first prompt about a file the script may not touch,
+	// which would confirm the file is there and name its mode.
+	if !fileMayModify(r, ctx, path) {
+		return false
+	}
+	if !fileConfirm(r, ctx, "zf_rm", "remove", flags, path, true) {
 		return true
 	}
 	if err := fileUnlink(shellPath(r, path)); err != nil {
@@ -660,14 +781,14 @@ func fileUnlinkOne(r *interp.Runner, flags fileFlags, path string) bool {
 
 // fileRmdir is `rmdir dir ...`, which removes empty directories and nothing
 // else — a name that is not a directory is refused rather than unlinked.
-func fileRmdir(r *interp.Runner, _ fileFlags, args []string) int {
+func fileRmdir(r *interp.Runner, ctx context.Context, _ fileFlags, args []string) int {
 	if len(args) == 0 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}
 	status := 0
 	for _, dir := range args {
-		info, err := os.Lstat(shellPath(r, dir))
+		info, err := fileLstat(r, ctx, dir)
 		switch {
 		case err != nil:
 			r.Diagnosef("cannot remove directory `%s': %s\n", dir, fileErrText(err))
@@ -675,6 +796,10 @@ func fileRmdir(r *interp.Runner, _ fileFlags, args []string) int {
 			continue
 		case !info.IsDir():
 			r.Diagnosef("cannot remove directory `%s': not a directory\n", dir)
+			status = 1
+			continue
+		}
+		if !fileMayModify(r, ctx, dir) {
 			status = 1
 			continue
 		}
@@ -687,7 +812,11 @@ func fileRmdir(r *interp.Runner, _ fileFlags, args []string) int {
 }
 
 // fileSyncOp is `sync`, which takes nothing at all.
-func fileSyncOp(r *interp.Runner, _ fileFlags, args []string) int {
+// The context is unused because `sync` names no path: it flushes the
+// system's own buffers, which is not an access to anything a rule could be
+// written about. Kept in the signature so every one of the nine has the same
+// shape and a future operand cannot arrive without one.
+func fileSyncOp(r *interp.Runner, _ context.Context, _ fileFlags, args []string) int {
 	if len(args) > 0 {
 		r.Diagnosef("too many arguments\n")
 		return 1
@@ -713,9 +842,9 @@ func fileSyncOp(r *interp.Runner, _ fileFlags, args []string) int {
 // The question goes to standard error with no newline after it, measured, and
 // end of input is a no: a script whose input came from nowhere is not
 // answering yes by accident.
-func fileConfirm(r *interp.Runner, command, verb string, flags fileFlags, path string, unwritable bool) bool {
+func fileConfirm(r *interp.Runner, ctx context.Context, command, verb string, flags fileFlags, path string, unwritable bool) bool {
 	at := shellPath(r, path)
-	info, err := os.Lstat(at)
+	info, err := fileLstat(r, ctx, path)
 	switch {
 	case err != nil:
 		// Nothing is in the way, so there is nothing to ask about — which is

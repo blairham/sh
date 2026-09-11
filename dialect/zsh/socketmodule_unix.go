@@ -48,7 +48,7 @@ type zsocketOpts struct {
 	retarget bool
 }
 
-func zsocketBuiltin(r *interp.Runner, _ context.Context, args []string) int {
+func zsocketBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	opts, rest, code := zsocketOptions(r, args)
 	if code != 0 {
 		return code
@@ -65,14 +65,14 @@ func zsocketBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 			r.Diagnosef("-l requires an argument\n")
 			return 1
 		}
-		return zsocketListen(r, opts, rest[0])
+		return zsocketListen(r, ctx, opts, rest[0])
 	case len(rest) == 0:
 		// Measured, and worded as the builtin words it: the sentence names
 		// the command rather than a letter, because no letter is missing.
 		r.Diagnosef("zsocket requires an argument\n")
 		return 1
 	}
-	return zsocketConnect(r, opts, rest[0])
+	return zsocketConnect(r, ctx, opts, rest[0])
 }
 
 func zsocketOptions(r *interp.Runner, args []string) (opts zsocketOpts, rest []string, code int) {
@@ -117,7 +117,15 @@ func zsocketOptions(r *interp.Runner, args []string) (opts zsocketOpts, rest []s
 
 // zsocketConnect is the plain form: open a connection to a socket somebody
 // else is listening on.
-func zsocketConnect(r *interp.Runner, opts zsocketOpts, path string) int {
+func zsocketConnect(r *interp.Runner, ctx context.Context, opts zsocketOpts, path string) int {
+	// A connected socket is a two-way channel, so the question is the
+	// stronger of the two permissions rather than the weaker: a script that
+	// may only read a path must not be able to send down a socket at it.
+	// Refused the way a refused redirection is, because there is no honest
+	// way to carry on — see interp.AllowModify (#1819).
+	if !r.AllowModify(ctx, shellPath(r, path)) {
+		return 1
+	}
 	f, err := zsocketOpen(shellPath(r, path), func(fd int, addr *syscall.SockaddrUnix) error {
 		return syscall.Connect(fd, addr)
 	})
@@ -136,7 +144,15 @@ func zsocketConnect(r *interp.Runner, opts zsocketOpts, path string) int {
 // socket out from under the descriptor the script is left holding. The
 // descriptor is what the script was given, so the path has to outlive the
 // value that made it.
-func zsocketListen(r *interp.Runner, opts zsocketOpts, path string) int {
+func zsocketListen(r *interp.Runner, ctx context.Context, opts zsocketOpts, path string) int {
+	// Binding creates a filesystem object at the path and leaves it there —
+	// the paragraph above is about it outliving the descriptor — so this is
+	// as much a write as `> path` is, and was not asked about at all until
+	// #1819: `zsocket -l` under `default deny` returned 0 and left a socket
+	// outside the boundary.
+	if !r.AllowModify(ctx, shellPath(r, path)) {
+		return 1
+	}
 	f, err := zsocketOpen(shellPath(r, path), func(fd int, addr *syscall.SockaddrUnix) error {
 		if err := syscall.Bind(fd, addr); err != nil {
 			return err

@@ -9,6 +9,7 @@ import (
 	"os/user"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/blairham/sh/interp"
@@ -123,7 +124,7 @@ type zstatOpts struct {
 // +mtime` is the seconds and not the number.
 func (o zstatOpts) stringly() bool { return o.strings || o.format != "" || o.gmt }
 
-func zstatBuiltin(r *interp.Runner, _ context.Context, args []string) int {
+func zstatBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	opts, files, code := zstatOptions(r, args)
 	if code != 0 {
 		return code
@@ -152,7 +153,7 @@ func zstatBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		r.Diagnosef("only one file allowed with -H\n")
 		return 1
 	}
-	return zstatReport(r, opts, files)
+	return zstatReport(r, ctx, opts, files)
 }
 
 // zstatOptions reads the letters and the one `+element`.
@@ -315,7 +316,7 @@ func zstatElement(name string) (elem, why string) {
 // The two are one rule seen twice — output happens as it goes and an
 // assignment happens at the end — so a script reading the array never sees
 // half an answer.
-func zstatReport(r *interp.Runner, opts zstatOpts, files []string) int {
+func zstatReport(r *interp.Runner, ctx context.Context, opts zstatOpts, files []string) int {
 	showNames := opts.names || (!opts.noNames && !opts.toArray && !opts.toHash && len(files) > 1)
 	if opts.noNames {
 		showNames = false
@@ -337,7 +338,7 @@ func zstatReport(r *interp.Runner, opts zstatOpts, files []string) int {
 		names = []string{""}
 	}
 	for n, name := range names {
-		fields, err := zstatOne(r, opts, name)
+		fields, err := zstatOne(r, ctx, opts, name)
 		if err != nil {
 			r.Diagnosef("%s\n", err.Error())
 			status = 1
@@ -390,9 +391,28 @@ func zstatReport(r *interp.Runner, opts zstatOpts, files []string) int {
 
 // zstatOne is the stat itself: a descriptor when `-f` named one, otherwise a
 // path, following links unless `-L` said not to.
-func zstatOne(r *interp.Runner, opts zstatOpts, name string) (statFields, error) {
+func zstatOne(r *interp.Runner, ctx context.Context, opts zstatOpts, name string) (statFields, error) {
 	if !opts.useFd {
-		f, err := statPath(shellPath(r, name), !opts.lstat)
+		at := shellPath(r, name)
+		// The gate first, and answered as "not there" when it refuses.
+		// interp/fsgate.go opens by saying every probe in the shell comes
+		// through the gate because a probe is an oracle, and this one was
+		// outside that sentence until #1819: on one path in one script,
+		// `[[ -f secret ]]` was refused into ENOENT while `zstat +size
+		// secret` answered with the true size and mtime of the same file.
+		//
+		// Indistinguishable from a missing path on purpose. `zstat nosuch`
+		// is already `nosuch: no such file or directory`, so a refusal
+		// wearing those words tells a script nothing it could not have
+		// learned by naming something that does not exist.
+		// The bare errno, which is what statPath hands back for a path that
+		// is not there: a *fs.PathError would print the resolved absolute
+		// path inside the message and make the refusal recognizable at a
+		// glance — and hand the script the very name the policy withheld.
+		if !r.AllowProbe(ctx, at) {
+			return statFields{}, fmt.Errorf("%s: %w", name, syscall.ENOENT)
+		}
+		f, err := statPath(at, !opts.lstat)
 		if err != nil {
 			return f, fmt.Errorf("%s: %w", name, err)
 		}

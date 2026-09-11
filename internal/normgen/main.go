@@ -8,7 +8,7 @@
 // It exists for the reason internal/widthgen exists, and is deliberately the
 // same shape: this module has no dependencies of its own, and canonical
 // decomposition cannot be derived from the standard library. Go ships the
-// general categories — so a combining mark can be recognised — but not the
+// general categories — so a combining mark can be recognized — but not the
 // canonical combining class and not the decomposition mappings, and without
 // those two there is no way to tell that `café` and `café` are one
 // name. The tables are generated into the repository rather than imported.
@@ -39,6 +39,7 @@ import (
 	"compress/gzip"
 	"flag"
 	"fmt"
+	"go/format"
 	"os"
 	"sort"
 	"strconv"
@@ -125,7 +126,7 @@ func readUnicodeData(path string) (map[rune]uint8, map[rune][]rune, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	ccc := map[rune]uint8{}
 	decomp := map[rune][]rune{}
@@ -188,10 +189,8 @@ const Version = %q
 	writeRuneSlice(&b, "cccKeys", keys)
 	fmt.Fprintf(&b, "var cccVals = [...]uint8{")
 	for i, r := range keys {
-		if i%16 == 0 {
-			b.WriteString("\n\t")
-		}
-		fmt.Fprintf(&b, "%d, ", ccc[r])
+		sep(&b, i, 16)
+		fmt.Fprintf(&b, "%d,", ccc[r])
 	}
 	b.WriteString("\n}\n\n")
 
@@ -212,25 +211,45 @@ const Version = %q
 	writeRuneSlice(&b, "decompKeys", dkeys)
 	fmt.Fprintf(&b, "var decompOffsets = [...]uint32{")
 	for i, o := range offsets {
-		if i%12 == 0 {
-			b.WriteString("\n\t")
-		}
-		fmt.Fprintf(&b, "%d, ", o)
+		sep(&b, i, 12)
+		fmt.Fprintf(&b, "%d,", o)
 	}
 	b.WriteString("\n}\n\n")
 	writeRuneSlice(&b, "decompRunes", flat)
-	return os.WriteFile(path, []byte(b.String()), 0o644)
+	// Through go/format so the output is canonical Go rather than whatever
+	// this file's Fprintf calls happened to produce. A generated file that
+	// the formatter would change is a generated file that fails the commit
+	// hook of whoever regenerates it.
+	src, err := format.Source([]byte(b.String()))
+	if err != nil {
+		return fmt.Errorf("generated source does not parse: %w", err)
+	}
+	return os.WriteFile(path, src, 0o644)
 }
 
 func writeRuneSlice(b *strings.Builder, name string, rs []rune) {
 	fmt.Fprintf(b, "var %s = [...]rune{", name)
 	for i, r := range rs {
-		if i%8 == 0 {
-			b.WriteString("\n\t")
-		}
-		fmt.Fprintf(b, "0x%04X, ", r)
+		sep(b, i, 8)
+		fmt.Fprintf(b, "0x%04X,", r)
 	}
 	b.WriteString("\n}\n\n")
+}
+
+// sep writes what goes *before* an element — a new line every perLine, a
+// single space otherwise — so that no line ends in one.
+//
+// Which is not a matter of taste. A trailing space is what this repository's
+// trailing-whitespace hook removes at commit time, so a generator that emits
+// one produces a file that changes the moment it is committed and changes
+// back the moment it is regenerated. The first version of this did exactly
+// that, and the diff was 1043 lines of nothing.
+func sep(b *strings.Builder, i, perLine int) {
+	if i%perLine == 0 {
+		b.WriteString("\n\t")
+		return
+	}
+	b.WriteString(" ")
 }
 
 func sortedKeys[V any](m map[rune]V) []rune {
@@ -249,21 +268,37 @@ func sortedKeys[V any](m map[rune]V) []rune {
 // large enough that the large-file hook would refuse it, and because a test
 // that reads its own fixture with compress/gzip costs nothing and keeps the
 // run offline and deterministic.
-func writeFixture(tests, out string) (int, error) {
+func writeFixture(tests, out string) (n int, err error) {
 	f, err := os.Open(tests)
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
+
 	w, err := os.Create(out)
 	if err != nil {
 		return 0, err
 	}
-	defer w.Close()
+	// Both closes report, and the compressor's especially: gzip writes its
+	// final block when it is closed, so a Close whose error goes unread is
+	// the exact way to leave a file that looks finished and is short. The
+	// fixture is written once and read by every run afterwards, and the
+	// conformance test would simply see fewer cases and pass.
+	//
+	// Declared before the compressor's so that it runs after it — the bytes
+	// have to reach the file before the file is closed.
+	defer func() {
+		if cerr := w.Close(); err == nil {
+			err = cerr
+		}
+	}()
 	gz := gzip.NewWriter(w)
-	defer gz.Close()
+	defer func() {
+		if cerr := gz.Close(); err == nil {
+			err = cerr
+		}
+	}()
 
-	n := 0
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
@@ -293,7 +328,9 @@ func writeFixture(tests, out string) (int, error) {
 			if err != nil {
 				return 0, err
 			}
-			fmt.Fprintf(gz, "%s\t%s\n", src, nfd)
+			if _, err := fmt.Fprintf(gz, "%s\t%s\n", src, nfd); err != nil {
+				return n, err
+			}
 			n++
 		}
 	}

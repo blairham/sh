@@ -31,12 +31,12 @@ func TestUnicodesOwnConformanceFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fixture: %v — regenerate with internal/normgen", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 
 	var cases, failures int
 	sc := bufio.NewScanner(gz)
@@ -100,8 +100,8 @@ func TestASCIIIsUntouched(t *testing.T) {
 
 // TestCompatibilityIsNotFolded. NFKD maps these onto their plain spellings
 // and NFD must not: no filesystem treats `ﬁ` and `fi` as one name, so a gate
-// that folded them would refuse files nobody denied — the overblocking half
-// of the same mistake.
+// that folded them would refuse files nobody denied, which is the half of
+// this mistake that refuses too much.
 func TestCompatibilityIsNotFolded(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct{ in, notWant string }{

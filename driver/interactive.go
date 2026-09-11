@@ -71,6 +71,13 @@ func (sh Shell) session(argv []string, in source) int {
 	// answer different questions, and ksh93 is alone in turning the monitor
 	// on for `-i script.sh`.
 	r.Interactive = true
+	// And the text it runs was typed at a prompt, which is what locates every
+	// run-time diagnostic in the session: no shell in the panel writes a line
+	// number for one, and every line typed at a prompt is line 1 anyway. Set
+	// beside Interactive and not folded into it — that one says what the
+	// shell *is*, this one says where its program came from, and they part
+	// company inside a sourced file. See interp.Runner.AtPrompt (#2024).
+	r.AtPrompt = true
 	// Whether the invocation said to read no startup files, handed over here
 	// for the reason the three facts above are stated here: the prompt route
 	// never reaches the place the script routes carry it. Before

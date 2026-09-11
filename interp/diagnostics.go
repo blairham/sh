@@ -3846,10 +3846,28 @@ func CoreDiagnostics() Diagnostics { return Diagnostics{} }
 
 // diag reports the runner's diagnostics, defaulting to the substrate's own.
 func (r *Runner) diag() Diagnostics {
+	d := CoreDiagnostics()
 	if r.Diagnostics != nil {
-		return *r.Diagnostics
+		d = *r.Diagnostics
 	}
-	return CoreDiagnostics()
+	if r.AtPrompt && r.borrowedFiles == 0 {
+		// A line typed at a prompt is located the prompt's way — see
+		// Runner.AtPrompt and Diagnostics.ForPrompt. Applied here rather
+		// than once by the front end because it must *stop* applying inside
+		// a sourced file, and only this package knows when the shell is in
+		// one.
+		//
+		// A file is a file however it was reached, which is measured and is
+		// not what a session does to everything else it runs: zsh 5.9.2
+		// sourcing a file at a prompt reports `f.sh:cd:1: no such file or
+		// directory`, keeping both the name and the line, where the same
+		// `cd` typed at the prompt is `cd: no such file or directory`. Text
+		// handed to `eval` is the other way and needs no exception — bash
+		// 5.3.15 answers `bash: cd: …` for `eval "cd /nope"` at a prompt,
+		// with no line, exactly as for the line itself (#2024).
+		d = d.ForPrompt()
+	}
+	return d
 }
 
 // RedirectLine is which line a failed redirect is reported at.

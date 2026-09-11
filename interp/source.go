@@ -224,6 +224,14 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// them. See Runner.tracePrefixDepth.
 	r.indirection++
 	defer func() { r.indirection-- }()
+	if !s.eval {
+		// Inside a *file*, which stops a prompt's wording from reaching the
+		// diagnostics of the lines in it: a sourced file is a file however
+		// it was reached, and the shell that names one keeps its name and
+		// its line at a prompt. See Runner.diag and Runner.AtPrompt (#2024).
+		r.borrowedFiles++
+		defer func() { r.borrowedFiles-- }()
+	}
 	d := r.dialect().On(s.route())
 	p := syntax.NewParser(src, d)
 	whole := p.Parse()

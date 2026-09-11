@@ -1856,8 +1856,15 @@ func Diagnostics() interp.Diagnostics {
 		// a program on standard input: measured 2026-09-11 under `-i`,
 		// `if; then` then end of input is `zsh: parse error near `\n'` where
 		// a script file is `s.sh:3: parse error near `\n'`.
-		PromptLocation:  interp.LocationNameOnly,
-		BadSubstitution: "bad substitution",
+		PromptLocation: interp.LocationNameOnly,
+		// And a builtin's complaint at a prompt is the *builtin's* name
+		// alone — no shell, no line — which is the same answer this shell
+		// gives a program on standard input and a different one from the
+		// shell's own messages above: measured 2026-09-11 under `-i`,
+		// `cd /nope` is `cd: no such file or directory: /nope` where
+		// `nosuchcmd` is `zsh: command not found: nosuchcmd` (#2024).
+		PromptBuiltinLocation: interp.LocationBuiltinNameOnly,
+		BadSubstitution:       "bad substitution",
 		// The position is 1-based and counts from the `$`: `${(Y)x}` errors
 		// at 4, and a group that runs out of text errors just past the end.
 		ExpansionFlagsError: "error in flags near position %[1]d in '%[2]s'",

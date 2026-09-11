@@ -1158,9 +1158,15 @@ func Diagnostics() interp.Diagnostics {
 		// sentence stays — `unexpected end of file from `if' command on line
 		// 1` is what it writes at a prompt too — which is why this is the
 		// location and not a second wording.
-		PromptLocation:  interp.LocationNameOnly,
-		NotFound:        "%s: command not found",
-		UnboundVariable: "%s: unbound variable",
+		PromptLocation: interp.LocationNameOnly,
+		// And a builtin's complaint drops the line there too, which needs
+		// saying separately because BuiltinLocation is a field of its own:
+		// measured 2026-09-11 under `-i`, `cd /nope` is `bash: cd: /nope: No
+		// such file or directory` where the same line in a script names one
+		// (#2024).
+		PromptBuiltinLocation: interp.LocationNameOnly,
+		NotFound:              "%s: command not found",
+		UnboundVariable:       "%s: unbound variable",
 		// The sigil written back, which no other column does: `${@:=w}`
 		// with no parameters is `$@: cannot assign in this way`, and
 		// `${1:=w}` names `$1`. Identical in 3.2.57 and in the same binary

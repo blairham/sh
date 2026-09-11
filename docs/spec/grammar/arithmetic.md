@@ -227,6 +227,65 @@ scanner rather than about the operator.
 
 Grammar flag: `ArithCharacterCode` — core: off; `zsh`: on.
 
+## Quote characters inside an expression
+
+Measured 2026-09-07 and re-measured 2026-09-10, from a script file with
+`n=5`. This is where the panel divides most sharply, and the two quote
+characters divide it differently — no shell's answer to one predicts its
+answer to the other.
+
+### The double quote
+
+| probe | bash 5.3.15 | bash-as-`sh` | bash 3.2.57 | ksh93u+ | zsh 5.9.2 | dash |
+| --- | --- | --- | --- | --- | --- | --- |
+| `$(( "1" + 1 ))` | `2` | `2` | error | `2` | `2` | error |
+| `$(( "n" + 1 ))` | `6` | `6` | error | `6` | `6` | error |
+| `$(( 1 + "2" ))` | `3` | `3` | error | `3` | `3` | error |
+| `$(( "" + 7 ))` | `7` | `7` | error | `7` | `7` | error |
+| `$(( 1"0" ))` | **`10`** | **`10`** | error | **error** | **error** | error |
+| `$(( n"a"me ))` | `0`, the name `name` | same | error | error | error | error |
+
+Four shells read through the quote and two refuse it — and the last two
+rows split those four again. bash **removes** the byte from the text
+before anything reads it, so two digits with a quote between them are one
+number; ksh93 and zsh **skip** it only where a token may begin, so the
+quote ends the number and two operands run together. The removal shows up
+in the diagnostic too: `$(( "1" "2" ))` is reported against `1 2` in bash
+and against the text as written in the other two.
+
+Three readings, all additive — the core refuses, and a dialect that has
+one accepts more — so it is `syntax.Dialect.ArithDoubleQuote` and not a
+semantics axis, the same call [the character code operator](#the-character-code-operator--zsh-only)
+makes.
+
+It is worth more than the spelling suggests. `$(( "$n" + 1 ))` is a shape
+that looks defensive and is common, and refusing it fails under bash, ksh
+and zsh alike.
+
+### The single quote
+
+| probe | bash 5.3.15 | bash 3.2.57 | bash-as-`sh` | ksh93u+ | zsh 5.9.2 | dash |
+| --- | --- | --- | --- | --- | --- | --- |
+| `$(( '1' + 1 ))` | error | error | error | **`50`** | `illegal character: '` | error |
+| `$(( 'a' ))` | error | error | error | **`97`** | same | error |
+| `$(( 'ab' ))` | error | error | error | **error** | same | error |
+| `$(( 'a ))` | error | error | error | **`97`** | same | error |
+| `$(( '' ))` | error | error | error | **`39`** | same | error |
+| `$(( '\101' ))` | error | error | error | **`65`** | same | error |
+
+ksh93 alone reads it as a **character constant**, the way C does: the code
+of the character between the quotes, with the escapes `$'…'` decodes. The
+closing quote is optional — `'a` is 97 and `''` is 39, the second quote
+read as the character with nothing left to close it — which is also why
+`'ab'` is a syntax error rather than a multi-character constant: the
+reading stops after the `a` and the `b` is left standing where an operator
+belongs.
+
+One shell has it and five refuse it, so it is a flag too:
+`syntax.Dialect.ArithCharacterConstant`. It builds the same node `##c`
+builds, because it asks the same question and two nodes would be two
+places for the escape table to drift apart.
+
 ## `$[expr]` — the older spelling
 
 `$[ … ]` is arithmetic in four of the six and nothing at all in the other

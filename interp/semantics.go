@@ -5604,6 +5604,40 @@ type Semantics struct {
 	// parameters go in before the expression is read. See
 	// EmptyArithSubscriptPolicy.
 	EmptyArithSubscript EmptyArithSubscriptPolicy
+	// BlankArithSubscriptIsTheEmptyExpression reads a subscript holding
+	// whitespace and nothing else — `$(( a[ ] ))` — as the blank expression,
+	// which is zero, so the operand is the *element that subscript names*
+	// rather than a flat zero. Yes in bash and ksh93; No in zsh, where the
+	// subscript's reader wants a value and reports that it reached the end of
+	// the text instead.
+	//
+	// A separate axis from EmptyArithSubscript, and asked one text further
+	// along, because bash answers the two apart: `a[]` is `bad array
+	// subscript` and a flat zero there, while `a[ ]` is silently element
+	// zero. One axis worded for both would have had to give one of those
+	// answers to the other.
+	//
+	// Asked at the subscript and not at the expression, which is where the
+	// panel actually splits: `$((   ))` with nothing but spaces in it is zero
+	// in all three of those shells, so an axis placed on the blank
+	// *expression* would move a row the panel agrees about.
+	//
+	// Not reached on an associative name, where a subscript is a key and
+	// never an expression — `$(( m[ ] ))` looks up the one-space key — and
+	// not reached on a name that is not set where
+	// ArithSubscriptSkippedWhenNameUnset answers first. See #1762.
+	//
+	// Measured 2026-09-10, `a=(1 2 3)` then `echo $(( a[ ] ))`:
+	//
+	//	bash 5.3, bash 3.2   1, the first element, silently
+	//	ksh93u+              1, the same
+	//	zsh 5.9.2            bad math expression: operand expected at end
+	//	                     of string, and no value at all
+	//
+	// The same split, unchanged, with the subscript standing as an assignment
+	// target: `(( a[ ] = 9 ))` writes element zero in bash and ksh93 and is
+	// refused with that sentence in zsh.
+	BlankArithSubscriptIsTheEmptyExpression Answer
 
 	// SubscriptedArrayLiteral is what `a[i]=(p q)` does — an array literal
 	// standing where one element's value goes. The panel disagrees about it

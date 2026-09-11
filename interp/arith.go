@@ -289,13 +289,33 @@ func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 	tree := p.ParseArithFor(x.Sub, syntax.Pos{})
 	err := p.Err()
 	if err == nil && tree == nil {
-		// Brackets holding only space. There is no expression in them and
-		// nothing was wrong with what was there either, so the parser has no
-		// complaint to hand over — the expression simply ran out, which is
-		// the failure the panel names: measured on zsh 5.9.2, `$(( a[ ] ))`
-		// against a declared array is `operand expected at end of string`,
-		// the same sentence `$(( 1+ ))` earns. Not the empty pair `a[]`,
-		// which is a different answer again and has an axis of its own.
+		// Brackets holding only space, which is the shape `a[$w]` takes once
+		// a `$w` holding spaces has gone in. There is no expression in them
+		// and nothing was wrong with what was there either, so the parser has
+		// no complaint to hand over, and the panel divides over what that
+		// means — see Semantics.BlankArithSubscriptIsTheEmptyExpression. Not
+		// the empty pair `a[]`, which is a different answer again and has an
+		// axis of its own.
+		switch r.sem().BlankArithSubscriptIsTheEmptyExpression {
+		case Yes:
+			// The brackets hold the blank expression, which is zero, so the
+			// element this names is element zero — which is what a nil tree
+			// already means to evalNum.
+			return r.evalNum(nil)
+		case Unspecified:
+			// Refused by name rather than guessed at: one answer is a value
+			// and the other is no value at all, and neither can stand in for
+			// the other.
+			return intNum(0), arithError{
+				msg:      r.unanswered("a subscript holding only whitespace"),
+				complete: true,
+			}
+		}
+		// No: the expression simply ran out, which is the failure the panel
+		// names — measured on zsh 5.9.2, `$(( a[ ] ))` against a declared
+		// array is `operand expected at end of string`, the same sentence
+		// `$(( 1+ ))` earns. Worded through the same path every other
+		// subscript failure takes rather than a second copy of it.
 		err = &syntax.Error{Kind: syntax.ErrArithOperandEnd, Expr: x.Sub, Token: x.Sub}
 	}
 	if err != nil {
@@ -490,11 +510,13 @@ func (r *Runner) writePlace(p arithPlace, v arithNum) error {
 func (r *Runner) charCode(x *syntax.ArithCharCode) int {
 	if x.Char != "" {
 		text := x.Char
-		if x.Op == "##" {
+		if x.Op != "#" {
 			// The escapes are the ones `$'…'` decodes, against this dialect's
-			// table rather than a second copy of it. The single-`#` spelling
-			// has no escapes: a backslash there takes the next character as
-			// itself.
+			// table rather than a second copy of it. That covers `##c` and
+			// the `'c'` constant alike — measured, `$(( '\101' ))` is 65 in
+			// the shell that has the constant, so its escapes are the same
+			// ones. The single-`#` spelling is the exception and has none: a
+			// backslash there takes the next character as itself.
 			text = r.expandDollarSingle(text)
 		} else {
 			text = strings.TrimPrefix(text, `\`)

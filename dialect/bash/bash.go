@@ -21,6 +21,19 @@ func Dialect() syntax.Dialect {
 	// bash has documented it as deprecated for years and both builds
 	// in the panel still take it (#900).
 	d.DollarBracketArith = true
+	// A double quote inside an arithmetic expression is taken out of the
+	// text before anything reads it. Measured 2026-09-10 in 5.3.15 and as
+	// `sh`: with `n=5`, `$(( "1" + 1 ))` is 2, `$(( "n" + 1 ))` is 6 and
+	// `$(( 1 + "2" ))` is 3 — and `$(( 1"0" ))` is 10, which is what says
+	// the bytes are gone rather than stepped over: ksh93 and zsh read the
+	// first three the same way and refuse that one. Its failures quote back
+	// the text without the quotes in it, `$(( "1" "2" ))` being reported
+	// against `1 2`, which falls out of the same removal.
+	//
+	// 3.2.57 refuses all four with `syntax error: operand expected`, so
+	// this is a version line inside one lineage; the preset is the current
+	// build (#1223).
+	d.ArithDoubleQuote = syntax.ArithDoubleQuoteRemoved
 	// bash expands them interactively and needs `shopt -s expand_aliases`
 	// otherwise, which is not modeled yet — so no route, rather than a route
 	// this shell only takes with an option set. Measured on all three.
@@ -700,6 +713,14 @@ func Semantics() interp.Semantics {
 	// builds; that is an artifact of evaluating the word twice rather than a
 	// fact about the construct, and once is what this writes.
 	s.EmptyArithSubscript = interp.EmptyArithSubscriptIsReported
+	// Whitespace between the brackets is not that text and is not answered
+	// by it: measured 2026-09-10 in 5.3.15 and in 3.2.57, `a=(1 2 3); echo
+	// $(( a[ ] ))` is `1` with a clean stream — the blank expression is
+	// zero, and zero names the first element — where `a[]` one character
+	// shorter writes `a[]: bad array subscript` and answers with a flat
+	// zero. The same split holds with the subscript as an assignment
+	// target: `(( a[ ] = 9 ))` writes element zero (#1762).
+	s.BlankArithSubscriptIsTheEmptyExpression = interp.Yes
 	// `a[1]=(p q)` is refused and the script ends: measured 2026-09-07 in
 	// 5.3.15 and in 3.2.57, which give the same sentence at status 1 and run
 	// nothing after it. It does not depend on what the name holds — an array,

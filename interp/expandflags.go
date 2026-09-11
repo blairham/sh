@@ -399,8 +399,20 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		words = r.escapeFlagged(e, words)
 	}
 	if strings.ContainsRune(e.Flags, '%') {
+		// Written *twice* is a second question, and the only one of the
+		// repeated flags in this file that is. Measured on zsh 5.9.2,
+		// 2026-09-11, with `V=WORLD` and `s='a${V}b'`:
+		//
+		//	setopt promptsubst    ${(%)s}   a${V}b     ${(%%)s}   aWORLDb
+		//	unsetopt promptsubst  ${(%)s}   a${V}b     ${(%%)s}   a${V}b
+		//
+		// So one `%` draws the escapes and never expands, and two also run
+		// the value through parameter, command and arithmetic expansion —
+		// gated on PROMPT_SUBST, which is what the third row says. A third
+		// `%` adds nothing over the second.
+		subst := strings.Count(e.Flags, "%") >= 2
 		for i, w := range words {
-			v, pok := r.promptEscapes(w, e)
+			v, pok := r.promptEscapes(w, e, subst)
 			if !pok {
 				return nil, false, false, false
 			}
@@ -1242,7 +1254,11 @@ func (r *Runner) convertCase(v string, upper bool) string {
 // The second result is false where an escape was refused; the refusal has
 // already been written, and the caller's business is only to stop.
 func (r *Runner) PromptExpand(text string) (string, bool) {
-	return r.promptEscapes(text, nil)
+	// Always expanded, subject to the option: measured, `print -P 'a${V}b'`
+	// draws `aWORLDb` under PROMPT_SUBST and `a${V}b` without it. That is
+	// the doubled `%` flag's answer rather than the single one's, and this
+	// is the route a *builtin* asks by.
+	return r.promptEscapes(text, nil, true)
 }
 
 // promptEscapes is the `%` flag over one word.
@@ -1264,8 +1280,22 @@ func (r *Runner) PromptExpand(text string) (string, bool) {
 // e is the expansion this is the `%` flag of, and nil where a *builtin*
 // asked — see PromptExpand. It decides only how a refusal names the place it
 // happened.
-func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr) (string, bool) {
-	out, code, ok := ExpandPromptStyle(r.promptStyle, v, r.promptField, r.promptQuantity)
+//
+// subst says whether the value is also expanded before the escapes are
+// drawn, which is the difference between one `%` flag and two and is what
+// `print -P` does always. It goes through [RenderPromptValue] rather than
+// running a second expansion here, because that helper holds the pair —
+// which pass runs first is [PromptStyle.ExpandBeforeEscapes] and differs by
+// dialect, and a refusal has to stop both. Writing the order out again here
+// is how the two readers drift apart.
+func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr, subst bool) (string, bool) {
+	expand := ExpandPromptStyle
+	if subst {
+		expand = func(st PromptStyle, text string, f PromptResolver, q PromptQuantityResolver) (string, string, bool) {
+			return RenderPromptValue(st, r, text, f, q)
+		}
+	}
+	out, code, ok := expand(r.promptStyle, v, r.promptField, r.promptQuantity)
 	if !ok {
 		src := ""
 		if e != nil {

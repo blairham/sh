@@ -259,12 +259,21 @@ func TestTheGateSeesEverySignalThatLeaves(t *testing.T) {
 			// is an action that leaves.
 			return a.PID == os.Getpid() && a.Signal == syscall.SIGCONT
 		}},
-		{"a job spec", "/bin/sleep 30 &\nkill -TERM %1", func(a Action, jobPID int) bool {
-			// Negative, because a job is a process group and that is how the
-			// kernel is told to mean one. Nonzero as well: a job that never
-			// started would make an unasked gate and a gate asked about
-			// nothing the same answer.
+		{"a job spec under the monitor", "set -m\n/bin/sleep 30 &\nkill -TERM %1", func(a Action, jobPID int) bool {
+			// Negative, because a job under the monitor is a process group
+			// and that is how the kernel is told to mean one. Nonzero as
+			// well: a job that never started would make an unasked gate and a
+			// gate asked about nothing the same answer.
 			return jobPID != 0 && a.PID == -jobPID && a.Signal == syscall.SIGTERM
+		}},
+		{"a job spec with the monitor off", "/bin/sleep 30 &\nkill -TERM %1", func(a Action, jobPID int) bool {
+			// Positive, because with the monitor off the job has no group of
+			// its own: it runs in this shell's, so the group is not the job's
+			// to name and the process is what `%1` means (#1738). The gate
+			// still sees it — this one goes through killProcess rather than
+			// through the embedder's group hook, and every signal this
+			// package delivers itself is visible to the boundary.
+			return jobPID != 0 && a.PID == jobPID && a.Signal == syscall.SIGTERM
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -294,6 +303,9 @@ func TestTheGateSeesEverySignalThatLeaves(t *testing.T) {
 				// cannot signal one at all — and the gate belongs above the
 				// hook, which this fake is here to demonstrate.
 				SignalGroup: func(int, syscall.Signal) error { return nil },
+				// A terminal, so the `set -m` in the row above is granted
+				// rather than refused over an axis this test is not about.
+				Terminal: true,
 			})
 			f, err := syntax.Parse(tc.src, syntax.Core())
 			if err != nil {

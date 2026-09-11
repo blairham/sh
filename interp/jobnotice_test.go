@@ -126,6 +126,15 @@ func notices(t *testing.T, src string, jobControl bool, announces Answer, dg Dia
 		sem.JobsListNewestFirst = No
 		r.Semantics, r.Diagnostics = &sem, &dg
 		r.JobControl = jobControl
+		// A prompt runs a monitor, and both notices ride on it: with the
+		// monitor off the start notice is an axis and the finish notice is
+		// silence in every column (#1738). A shell told there is somebody to
+		// tell and *not* told it is managing jobs is a state no route
+		// produces, so saying both here is what makes these tests about the
+		// notices. The case that is about the monitor being off is
+		// TestTheNoticesRideOnTheMonitor.
+		r.Terminal = true
+		r.SetInteractiveMonitor()
 		if into != nil {
 			*into = r
 		}

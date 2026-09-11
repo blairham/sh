@@ -1738,6 +1738,31 @@ type Semantics struct {
 	// Only ever at a prompt: no shell announces one to a script.
 	AnnouncesBackgroundJob Answer
 
+	// AnnouncesBackgroundJobWithoutTheMonitor keeps that announcement when
+	// the monitor has been turned *off* — `set +m`, `unsetopt monitor` — at a
+	// prompt where there is still somebody to tell.
+	//
+	// Measured 2026-09-10 on a pseudo-terminal, with the monitor off:
+	//
+	//	bash 5.3.15   [1] <pid>      bash 3.2.57   [1] <pid>
+	//	ksh93u+       [1]	<pid>     zsh 5.9.2     nothing
+	//	dash          nothing
+	//
+	// So the start notice is a *second* question and not a consequence of the
+	// first: dash answers no to both, zsh announces a job with the monitor on
+	// and stops when it is off, and the two shells that carry on announcing
+	// are announcing something the option says they are not managing. It is
+	// asked only when the monitor is off and there is somebody to tell, which
+	// is the one place the two answers differ.
+	//
+	// **The other end of the job is not an axis.** With the monitor off no
+	// shell in the panel says anything when the job *finishes* — measured the
+	// same day, against the same jobs — so that is shared ground and
+	// FinishedJobNotices simply stays quiet. dash's late report of a finished
+	// job with an empty command is its own oddity, measured and not
+	// reproduced (#1738).
+	AnnouncesBackgroundJobWithoutTheMonitor Answer
+
 	// UnsetFunctionChecksTheName judges the operand `unset -f` was given as
 	// a name, and refuses one that could not be a function name. True in
 	// ksh93 alone.

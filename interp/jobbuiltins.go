@@ -614,6 +614,23 @@ func (r *Runner) reportJobLookup(spec string, code int, name string) int {
 // started, and refusing it here would leave a stopped job with nothing able
 // to reach it. `kill -CONT %1` is the script choosing, and that one is gated.
 func (r *Runner) signalJob(j *Job, sig syscall.Signal) error {
+	if j.PID != 0 && !j.ownGroup {
+		// The job runs in *this shell's* group — a background job started
+		// with the monitor off — so the group is not the job's to signal:
+		// aiming at it would reach the shell, every other job it started and,
+		// on a terminal, the whole foreground group. The process is the only
+		// honest target, and here it is the whole job for the same reason the
+		// group is elsewhere: without the monitor a pipeline has no group of
+		// its own to be more than one process in (#1738).
+		//
+		// Through killProcess, so this signal passes the gate and reaches the
+		// event stream. The group above does not, and the difference is
+		// deliberate rather than an oversight: that is the embedder's own hook
+		// being called, where this is the interpreter asking the kernel
+		// itself, and every signal *this* package delivers is visible to the
+		// boundary — see interp/signalgate.go.
+		return r.killProcess(j.PID, sig)
+	}
 	if j.PID == 0 {
 		// A job with no process of its own — a builtin or a compound command
 		// running on a cloned runner. There is nothing to signal, and saying

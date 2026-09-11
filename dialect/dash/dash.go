@@ -378,6 +378,10 @@ func Semantics() interp.Semantics {
 	// a special builtin.
 	s.ExportTakesTheAttributeOff = interp.No
 	s.AnnouncesBackgroundJob = interp.No
+	// And nothing with the monitor off either, which is the same answer
+	// reached twice: this shell announces neither end of a job in any state
+	// (#1738).
+	s.AnnouncesBackgroundJobWithoutTheMonitor = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.Yes
 	s.ChildInterruptEndsTheScript = interp.No

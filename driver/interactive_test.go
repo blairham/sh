@@ -133,6 +133,12 @@ func TestOnlyAPromptReportsItsJobs(t *testing.T) {
 	sh := shell()
 	sem := interp.PosixSemantics()
 	sem.AnnouncesBackgroundJob = interp.Yes
+	// And with the monitor off, which is what an `-i` on a pipe has: measured
+	// 2026-09-11, `printf 'sleep 0.2 &\n' | bash -i` says `no job control in
+	// this shell` and still prints `[1] <pid>`. This test is about the front
+	// end having somebody to tell, so the monitor question is answered rather
+	// than left to refuse (#1738).
+	sem.AnnouncesBackgroundJobWithoutTheMonitor = interp.Yes
 	sh.Semantics = sem
 
 	t.Run("a prompt announces", func(t *testing.T) {

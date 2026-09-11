@@ -319,7 +319,11 @@ func (r *Runner) killTarget(t string) (pid int, group bool, bad int) {
 		// the missing job it behaves as.
 		return 0, false, jobMissing
 	}
-	return j.PID, true, jobFound
+	// A group only where the job leads one. Started with the monitor off it
+	// runs in this shell's group, so naming the group would name the shell —
+	// and every other job it started, and on a terminal the whole foreground
+	// group. The process is what `%1` means there (#1738).
+	return j.PID, j.ownGroup, jobFound
 }
 
 // signalGroupPid sends to a job's process group.

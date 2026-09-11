@@ -538,6 +538,60 @@ for the one dialect that runs a monitor and stays quiet anyway.
 That is why `Runner.SetInteractiveJobNotices` reads the monitor rather than
 taking a terminal, and why it has to be called after `SetInteractiveMonitor`.
 
+#### Turning the monitor off turns the job back into a plain child
+
+The rows above are about a monitor that was never granted. Turning one **off**
+at a prompt — `set +m`, `unsetopt monitor` — is the other direction, and it has
+to change what the shell does and not only what it says about itself.
+
+Measured 2026-09-10 and again 2026-09-11, interactive on a pseudo-terminal and
+non-interactively, by having the job ask the kernel for its own group:
+
+| | with the monitor | without it |
+| --- | --- | --- |
+| bash 5.3.15 | its own group | **the shell's** |
+| bash 3.2.57 | its own group | **the shell's** |
+| ksh93u+ | its own group | **the shell's** |
+| dash | its own group | **the shell's** |
+| zsh 5.9.2 | its own group | **the shell's** |
+
+Unanimous, so it is shared ground rather than an axis, and the same answer a
+plain non-interactive `sh -c 'cmd &'` gives — the monitor is off there too.
+This shell gave a background job a group of its own on every route (#1738),
+which promises exactly what the option says is not happening: a job in a group
+of its own is one the shell can signal as a group, hand the terminal to, and
+stop.
+
+Three things follow from taking the group away, and each is measured rather
+than reasoned about:
+
+- **The start notice is an axis.** With the monitor off, bash 5.3.15, bash
+  3.2.57 and ksh93 still print `[1] <pid>` and zsh and dash say nothing —
+  `Semantics.AnnouncesBackgroundJobWithoutTheMonitor`. It narrows
+  `AnnouncesBackgroundJob` rather than replacing it: a dialect that announces
+  nothing at a prompt announces nothing here either.
+- **The finish notice is not.** With the monitor off no shell in the panel
+  says anything when the job ends — not even the two that still announce its
+  start — so `FinishedJobNotices` is silent and there is nothing to ask. dash's
+  late report of a finished job with an empty command is its own oddity,
+  measured and not reproduced.
+- **`kill %1`, `bg` and `fg` reach the process instead.** They reach a job
+  through a *group* led by the job's pid, and with no group of its own that
+  group is the shell's: signaling it would reach the shell, every other job it
+  started and, on a terminal, the whole foreground group. So a job that leads
+  no group is signaled as a process — `Job.ownGroup` is what says which, and
+  it is written with the pid because the two are one fact about one process.
+
+The process signal goes through the gate and the group signal does not, and
+that difference is deliberate: the group is the embedder's hook being called,
+and the process is this package asking the kernel itself. Every signal `interp`
+delivers is visible to the boundary — see `interp/signalgate.go`.
+
+**The foreground half is unchanged.** A command the front end is watching still
+gets a group of its own whether or not the monitor is on, because there the
+group is not a promise about job control but the only way a shell that is
+watching can stop or interrupt what it is watching.
+
 #### Where the notice goes, and when
 
 **To standard error, between commands.** Measured on the same route with the

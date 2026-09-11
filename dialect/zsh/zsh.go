@@ -1280,6 +1280,10 @@ func Semantics() interp.Semantics {
 	// with the script carrying on.
 	s.ExportTakesTheAttributeOff = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
+	// But not with the monitor off: `unsetopt monitor` and a background job
+	// is started in silence here, where bash and ksh93 still announce it.
+	// Measured 2026-09-10 on a pseudo-terminal (#1738).
+	s.AnnouncesBackgroundJobWithoutTheMonitor = interp.No
 	s.ReportsACommandKilledBySignal = interp.No
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.No

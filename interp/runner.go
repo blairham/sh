@@ -434,6 +434,28 @@ type Runner struct {
 	// monitor on for `-i script.sh`, so the two do not move together.
 	Interactive bool
 
+	// AtPrompt says the text this runner is running was **typed at a
+	// prompt**, which is a question about where the input came from rather
+	// than about which shell is reading it — the third route beside a script
+	// file and a program on standard input.
+	//
+	// It decides how a run-time diagnostic is located, through
+	// Diagnostics.ForPrompt: measured 2026-09-11, no shell in the panel
+	// writes a line number for one. `nosuchcmd` at a prompt is
+	// `bash: nosuchcmd: command not found`, `zsh: command not found:
+	// nosuchcmd` and `ksh: nosuchcmd: not found`, where the same failure in a
+	// script names a line in all three. Every line typed at a prompt is line
+	// 1, so a number there says nothing whatever it is (#2024, the run-time
+	// half of #1892).
+	//
+	// The front end's to set, for the reason Interactive is: a library Runner
+	// has no standing to ask the process where its program came from. Not the
+	// same question as Interactive either — that one says what the shell *is*
+	// and this one says what it is reading — and they part company inside a
+	// **sourced file**, which is a file however it was reached. See
+	// Runner.diag, which stops applying the prompt's wording there.
+	AtPrompt bool
+
 	// Terminal says this shell has a terminal, which is the fact job control
 	// turns on: the kernel hands SIGINT and SIGTSTP to whatever process group
 	// owns one, so a shell with none has nothing to hand a job and nothing to
@@ -1658,6 +1680,20 @@ type Runner struct {
 	// a subshell add no level and the three above each add one, so they are
 	// different questions about different things.
 	indirection int
+	// borrowedFiles counts how deep inside sourced *files* this runner is,
+	// which decides whether a prompt's wording applies to what it is running.
+	//
+	// A file is a file however it was reached: measured 2026-09-11, zsh 5.9.2
+	// sourcing a file at a prompt keeps the file's name and the line in every
+	// diagnostic from it, where a line typed at that prompt carries neither.
+	// Text handed to `eval` is not a file and is not counted here, which is
+	// measured the same way — `eval "cd /nope"` at a prompt is located like
+	// the prompt in every column that locates it at all. See Runner.AtPrompt
+	// and Runner.diag (#2024).
+	//
+	// Not r.indirection, which counts every kind of re-read including `eval`
+	// and a command substitution.
+	borrowedFiles int
 	// depth bounds function recursion, because a shell script can recurse
 	// and a stack overflow is not a diagnostic anyone can act on.
 	depth int

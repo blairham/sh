@@ -651,6 +651,54 @@ body ran and nothing was said; `repl.Shell.Remark` is that path, and it is
 reached only from the end of the input, which is the only place a prompt can
 have one (#1892).
 
+### And what a *run-time* failure says there
+
+The same route, and the wider half: every diagnostic a session writes is
+worded by the **runner's** `Diagnostics`, so a prompt that answered only for
+parse failures still wrote a line number for everything else. Measured
+2026-09-11, one typed line at a time into each shell under `-i`, the shell's
+path normalized:
+
+| typed | bash 5.3.15 | zsh 5.9.2 | ksh93u+ |
+| --- | --- | --- | --- |
+| `nosuchcmd` | `bash: nosuchcmd: command not found` | `zsh: command not found: nosuchcmd` | `ksh: nosuchcmd: not found` |
+| `cd /nope` | `bash: cd: /nope: No such…` | `cd: no such file or directory: /nope` | `ksh: cd: /nope: [No such…]` |
+| `echo ${u?boom}` | `bash: u: boom` | `zsh: u: boom` | `ksh: u: boom` |
+| `echo $((1/0))` | `bash: 1/0: division by 0 …` | `zsh: division by zero` | `ksh: 1/0: divide by zero` |
+| `echo hi > /nope/x` | `bash: /nope/x: No such…` | `zsh: no such file or directory: /nope/x` | `ksh: /nope/x: cannot create …` |
+
+Not one of them names a line, and every line typed at a prompt is line 1, so
+the number this shell wrote said nothing whatever it was. The same failures in
+a file name a line in all three.
+
+**A builtin's complaint is a second question.** zsh answers it differently
+from its own messages *in the same session* — `cd: no such file or directory`,
+the builtin's name with no shell and no line, against `zsh: command not found`
+— which is what `PromptBuiltinLocation` is for. A prompt answer applied to
+`Location` alone leaves half of a session wrong, and the half it leaves is the
+half a person meets most.
+
+**It is the route and not the complaint**, so everything a typed line runs is
+located with it: a trap's own command, a command substitution, a function's
+builtin, and text handed to `eval` — measured, `eval "cd /nope"` at a prompt is
+`bash: cd: /nope: …` and `cd: no such file or directory: /nope`, exactly as the
+line itself is.
+
+**A sourced file is the exception, and it is a file however it was reached.**
+zsh sourcing a file at a prompt keeps both the name and the line —
+`f.sh:cd:1: no such file or directory` — where the same `cd` typed at that
+prompt has neither. So the prompt's wording stops at the boundary of borrowed
+text that came from a *file*, and does not stop at `eval`'s, which is not one.
+`interp.Runner.AtPrompt` is what the front end sets and `Runner.borrowedFiles`
+is where it stops applying (#2024).
+
+**One difference left unfixed and stated.** bash sourcing a file at a prompt
+names *itself* rather than the file — `bash: cd: /nope: …` where the same
+`. ./f.sh` under `-c` is `./f.sh: line 1: cd: …`. This shell names the file on
+both routes. That is a question about which name a sourced file's complaint
+carries rather than about the line, it was true before this change and is true
+after it, and it is not #2024's.
+
 **One divergence recorded rather than reproduced, and it is dash's alone.**
 The boundary here is "the shell is prompting", and dash's is narrower than
 that: with `-i` reading from a **pipe** rather than a terminal, dash prints

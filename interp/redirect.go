@@ -429,7 +429,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// The noclobber fallback creates nothing, and one dialect
 			// words it as the open it is: see openThroughNoclobber.
 			creating := flags != os.O_RDONLY &&
-				!(fellBack && r.diag().NoclobberFallbackIsAnOpen)
+				(!fellBack || !r.diag().NoclobberFallbackIsAnOpen)
 			format, fallback := r.diag().CannotOpen, "cannot open %[1]s: %[2]s"
 			if creating {
 				format, fallback = r.diag().CannotCreate, "cannot create %[1]s: %[2]s"

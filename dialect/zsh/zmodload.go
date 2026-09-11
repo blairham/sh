@@ -251,7 +251,12 @@ func zmodloadHasFeature(r *interp.Runner, feature string) bool {
 	case "b":
 		return r.KnownBuiltin(name)
 	case "p":
-		return r.DynamicParameter(name)
+		// A withdrawn parameter is still one this shell has: the selection
+		// took it out of the tables and kept what was in them, so `+p:name`
+		// can put it back. The same split the builtin arm makes, where
+		// KnownBuiltin goes on saying yes for a name that is not currently
+		// in the lookup (#1841).
+		return r.DynamicParameter(name) || r.ParameterWithdrawn(name)
 	case "f":
 		return r.KnownMathFunction(name)
 	}
@@ -479,10 +484,25 @@ func zmodloadNarrow(r *interp.Runner, module string, features []string) {
 // copies; [interp.Runner.SetBuiltinWithdrawn] keeps the builtin instead, so
 // putting one back needs nothing to have been remembered.
 //
-// Only the `b:` features. A deselected parameter stops answering in that
-// shell — `zmodload -F zsh/parameter -p:functions` leaves `${#functions}` at
-// 0 — and reads as empty rather than refusing, which is a different seam and
-// is #1841.
+// The `p:` features go the same way through a seam of their own (#1841), and
+// the two seams differ in the one way the shell does. A deselected *builtin*
+// refuses — `command not found` — where a deselected *parameter* says nothing
+// at all. Measured on zsh 5.9.2, 2026-09-10, with one function defined:
+//
+//	zmodload zsh/parameter
+//	zmodload -F zsh/parameter -p:functions
+//	${#functions}    0        ${+functions}   0
+//	${functions[f]}  (empty)  ${(k)functions} (empty)
+//
+// all at status 0, and `parameters=(a b)` after `-p:parameters` *assigns*
+// where ours answered `read-only variable`. So the name becomes an ordinary
+// unset one rather than an absent one: [interp.Runner.SetAbsentParameter]
+// would refuse by name, which is a diagnostic where the shell being copied is
+// silent. See interp.Runner.SetParameterWithdrawn.
+//
+// A `c:` or `f:` feature is left alone, for the reason each was left alone
+// when the module was built: a condition has no registry to withdraw from,
+// and no module in the table names a math function beside anything else.
 func zmodloadEnforce(r *interp.Runner, module string, selected []string) {
 	on := make(map[string]bool, len(selected))
 	for _, f := range selected {
@@ -490,10 +510,15 @@ func zmodloadEnforce(r *interp.Runner, module string, selected []string) {
 	}
 	for _, f := range zmodloadFeatures[module] {
 		kind, name, ok := strings.Cut(f, ":")
-		if !ok || kind != "b" {
+		if !ok {
 			continue
 		}
-		r.SetBuiltinWithdrawn(name, !on[f])
+		switch kind {
+		case "b":
+			r.SetBuiltinWithdrawn(name, !on[f])
+		case "p":
+			r.SetParameterWithdrawn(name, !on[f])
+		}
 	}
 }
 

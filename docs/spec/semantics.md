@@ -4926,9 +4926,36 @@ What was built, all through the extension seam — registered builtins in each
   names to functions. The feature name is the builtin name, so there is
   nothing to keep in step.
 
-  The parameter half is not enforced. A deselected `p:functions` reads as
-  **empty** in that shell rather than refusing — `${#functions}` is 0 — which
-  is a different seam from the absent-parameter one, and is #1841.
+  **The parameter half goes the same way through a seam of its own** (#1841),
+  and the two seams differ in the one way the shell does. A deselected
+  *builtin* refuses; a deselected *parameter* says nothing at all. Measured
+  2026-09-10 with one function defined:
+
+      zmodload zsh/parameter
+      zmodload -F zsh/parameter -p:functions
+      ${#functions}    0         ${+functions}    0
+      ${functions[f]}  (empty)   ${(k)functions}  (empty)
+      ${(t)functions}  (empty)   status           0 throughout
+
+  So `SetAbsentParameter` would have been the wrong seam and not merely an
+  inexact one: that one refuses by name, which is a diagnostic where this
+  shell is silent — "I never had this" against "you asked me to put it down".
+  `interp.Runner.SetParameterWithdrawn` takes the name out of the parameter
+  tables and keeps what was in them, so the selection moves in both
+  directions without a second table of feature names to producers, exactly as
+  the builtin half does.
+
+  **Read-only comes off with it**, which is measured rather than tidied.
+  `$parameters` and `$builtins` carry the attribute so that a write cannot
+  land in a stored table and shadow its own producer; with the producer gone
+  there is nothing to shadow, and `zmodload -F zsh/parameter -p:parameters;
+  parameters=(a b)` assigns in real zsh and prints `a b` where ours answered
+  `read-only variable: parameters`. The mark comes back with the producer.
+
+  One divergence is left and is recorded rather than modeled: putting a
+  parameter back **after a script has assigned to the name** is `Can't add
+  module parameter` and status 2 in real zsh, where ours restores in silence
+  at 0. The value a later read gets is the script's either way.
 
   Refused by name: `-a` with `-b`/`-c`/`-f`/`-p` (autoloaded builtins,
   conditions, functions and parameters), `-A` and `-R` (module aliases), `-d`

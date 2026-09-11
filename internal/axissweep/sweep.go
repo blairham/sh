@@ -131,6 +131,9 @@ type Result struct {
 	// Flaky are rows whose own output moved between two unmutated runs.
 	// They cannot grade anything and are listed rather than dropped.
 	Flaky []string `json:"flaky,omitempty"`
+	// Presets is what the four dialects hold for each axis, which answers a
+	// question the flip test structurally cannot — see values.go.
+	Presets []ValueUse `json:"presets,omitempty"`
 	// Baseline is how many rows agreed with the reference before anything
 	// was moved, per dialect. A field can only be pinned by a row that was
 	// passing, so this bounds what the sweep could possibly have found.

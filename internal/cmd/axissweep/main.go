@@ -44,7 +44,18 @@ func main() {
 	out := flag.String("json", "", "write every flip to this file as JSON")
 	unspecified := flag.Bool("unspecified", false, "also flip to and from the unspecified constant, which measures reachability rather than disagreement")
 	quiet := flag.Bool("quiet", false, "only print the report")
+	presets := flag.Bool("presets", false, "only ask the presets what they hold — no shell is run, which takes a second rather than an hour")
 	flag.Parse()
+
+	uses, err := axissweep.PresetUse()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "axissweep:", err)
+		os.Exit(2)
+	}
+	if *presets {
+		fmt.Print(axissweep.PresetReport(uses))
+		return
+	}
 
 	record, err := oracle.Load(*golden)
 	if err != nil {
@@ -94,7 +105,9 @@ func main() {
 			os.Exit(2)
 		}
 	}
+	res.Presets = uses
 	fmt.Print(res.Report())
+	fmt.Print(axissweep.PresetReport(uses))
 	if len(res.Unpinned()) > 0 {
 		os.Exit(1)
 	}

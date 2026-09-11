@@ -55,6 +55,67 @@ func (r *Runner) CallFunction(ctx context.Context, name string, args ...string) 
 	return true, r.callFunc(ctx, fn, args)
 }
 
+// RunFunctionBodyInPlace runs a function's body in the frame that is already
+// running, rather than pushing one of its own, and reports whether there was a
+// function to run.
+//
+// It is [Runner.CallFunction] for the one caller that is not making a call:
+// a builtin that has just *replaced* the function it is running inside and has
+// to carry on in the body it put there. zsh's autoload stub is the case — see
+// dialect/zsh's autoloadRunResolved — and the difference is observable from
+// inside the body:
+//
+//	autoload -Uz f; f      ${#funcstack} is 1 in zsh 5.9.2 on every call
+//
+// where a nested call counts two on the first and one on every one after,
+// which is a frame that is there on the cold call and gone afterwards
+// (#1842). A diagnostic from the body sees the same thing: zsh locates it at
+// `f:1:` both times, where the nested arrangement reported `f:builtin:1:` on
+// the first call, the builtin that made the call still being on the stack.
+//
+// So this pushes no frame, opens no scope and does not raise the recursion
+// depth. The positional parameters are already the frame's, which is what the
+// caller wants — the body of a function loaded this way runs with the
+// arguments the stub was called with, measured — so there are none to pass.
+//
+// **It is not the general case and must not become it.** A function that runs
+// another function is making a call and wants CallFunction; this is for a
+// frame whose *body* was swapped underneath it, which only a shell that
+// resolves a name at the moment it is first used can produce. Measured, zsh
+// itself nests where the replacement is written by hand rather than generated:
+// a `builtin autoload -X` inside a function a script wrote counts three
+// frames, because there the stub is a real function of its own and the loaded
+// body is a call from within it.
+//
+// The builtin's name is out of the way for the length of the body, because a
+// diagnostic raised in the loaded text is the *function* speaking and not the
+// builtin that happened to load it. That is the same thing
+// [Runner.DiagnoseOutsideBuiltin] does for a builtin reporting on behalf of
+// something else, at the other end of the same question.
+func (r *Runner) RunFunctionBodyInPlace(ctx context.Context, name string) (bool, error) {
+	fn, ok := r.funcs[name]
+	if !ok {
+		return false, nil
+	}
+	saved := r.ctx
+	r.ctx = ctx
+	defer func() { r.ctx = saved }()
+	savedLine, savedIn := r.funcLine, r.inBuiltin
+	r.funcLine, r.inBuiltin = fn.Pos().Line, ""
+	defer func() { r.funcLine, r.inBuiltin = savedLine, savedIn }()
+	// The frame was pushed for the stub, whose file is wherever the
+	// declaration was read; the body running in it now came out of the file
+	// the resolution found, so the frame says so for as long as it runs.
+	if n := len(r.frames); n > 0 {
+		savedFile := r.frames[n-1].File
+		if file := r.funcFiles[name]; file != "" {
+			r.frames[n-1].File = file
+		}
+		defer func() { r.frames[n-1].File = savedFile }()
+	}
+	return true, r.command(ctx, fn.Body)
+}
+
 // HasFunction reports whether a name is a function this shell has defined.
 //
 // The question [Runner.CallFunction] answers by calling, asked without

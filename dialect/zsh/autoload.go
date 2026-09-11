@@ -385,10 +385,15 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 		if !ok {
 			return autoloadBad(r)
 		}
+		// Asked before the resolution, which is what makes the answer
+		// meaningful: resolving replaces the body, so afterwards no name is
+		// a pending stub any more. See autoloadRunResolved for what the
+		// answer decides.
+		stub := autoloadPending(r, name)
 		if code := autoloadResolveIn(r, name, names); code != 0 {
 			return code
 		}
-		return autoloadRunResolved(r, ctx, name)
+		return autoloadRunResolved(r, ctx, name, stub)
 	}
 	if len(names) == 0 {
 		// `+X` with nothing to resolve lists, the same as a bare
@@ -455,15 +460,49 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 //     returned. `AFTER 7` says both halves of that, so no control flow is
 //     requested here and the status is simply returned.
 //
+// **All three are about a stub a script wrote by hand**, and the *generated*
+// one is a different construct that reaches the same place (#1842). A name
+// declared with `autoload -Uz f` is given a body of `builtin autoload -XUz`,
+// so calling it enters a frame, runs this, and a nested call would enter a
+// second frame with the same name. Measured on zsh 5.9.2 with one file on
+// `$fpath`:
+//
+//	fpath=(fns); autoload -Uz fstk; fstk a
+//	  first call    n=1 stack=fstk        second call  n=1 stack=fstk
+//
+// where this shell answered `n=2 stack=fstk fstk` on the first call and
+// agreed on every one after — a frame that is there on the cold call and gone
+// afterwards, which is the shape of a bug that reproduces only once per
+// function per session. A diagnostic from the body showed the same seam from
+// the other side: `fstk3:builtin:1: command not found` on the first call
+// against zsh's `fstk3:1:`, the builtin that made the call still being on the
+// stack.
+//
+// zsh *replaces* the stub rather than calling through it, so the loaded body
+// runs in the frame the call already opened — which is
+// [interp.Runner.RunFunctionBodyInPlace]. The hand-written spelling keeps the
+// nested call, because there the stub is a function the script really wrote
+// and the measurement above is what that construct does; `stub` is which of
+// the two this is, asked before the resolution took the stub's body away.
+//
 // An error from the call is a fatal one — a canceled context, not a status —
 // and a builtin has an int to answer with and no way to pass it on. It is
 // reported and answered 1 rather than dropped, which at least leaves a
 // failing status where the shell would have stopped.
-func autoloadRunResolved(r *interp.Runner, ctx context.Context, name string) int {
-	// A copy, because the call replaces r.Params for the length of the body
-	// and restores the slice header afterwards.
-	args := append([]string(nil), r.Params...)
-	ran, err := r.CallFunction(ctx, name, args...)
+func autoloadRunResolved(r *interp.Runner, ctx context.Context, name string, stub bool) int {
+	run := func() (bool, error) {
+		if stub {
+			// No arguments: the frame the body is running in is the call's
+			// own, so its positional parameters already are the ones the
+			// declaration's name was called with.
+			return r.RunFunctionBodyInPlace(ctx, name)
+		}
+		// A copy, because the call replaces r.Params for the length of the
+		// body and restores the slice header afterwards.
+		args := append([]string(nil), r.Params...)
+		return r.CallFunction(ctx, name, args...)
+	}
+	ran, err := run()
 	if err != nil {
 		r.Diagnosef("%s: %v\n", name, err)
 		return 1

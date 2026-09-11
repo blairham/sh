@@ -91,7 +91,9 @@ func runWithFileStdout(t *testing.T, src string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer out.Close()
+	// The shell closes it through the script; this is only the belt and
+	// braces for a case that fails before it gets there.
+	defer func() { _ = out.Close() }()
 	sem := PosixSemantics()
 	sem.RedirectErrorOnSpecialBuiltinFatal = No
 	r := newTestRunner(t, &Runner{

@@ -11466,6 +11466,94 @@
         "TimedOut": false
       }
     },
+    "assignment/arithmetic-that-will-not-parse": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: } : arithmetic syntax error: operand expected (error token is \"} \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: } : arithmetic syntax error: operand expected (error token is \"} \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: } : syntax error: operand expected (error token is \"} \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" } \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `)' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: illegal character: }",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "assignment/arithmetic-that-will-not-parse-in-a-command": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: } : arithmetic syntax error: operand expected (error token is \"} \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: } : arithmetic syntax error: operand expected (error token is \"} \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: } : syntax error: operand expected (error token is \"} \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" } \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `)' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: illegal character: }",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "assoc/a-compound-literal-and-unset": {
       "bash": {
         "Stdout": "n=1 b=2 a=gone",
@@ -45699,6 +45787,50 @@
         "TimedOut": false
       }
     },
+    "eval/a-syntax-error-quotes-the-offending-line": {
+      "bash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: eval: line 1: syntax error near unexpected token `('~\u003cshell\u003e: eval: line 1: `case abc in @(abc|xyz)) echo m;; esac'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: eval: line 1: syntax error near unexpected token `('~\u003cshell\u003e: eval: line 1: `case abc in @(abc|xyz)) echo m;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: eval: line 0: syntax error near unexpected token `('~\u003cshell\u003e: eval: line 0: `case abc in @(abc|xyz)) echo m;; esac'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: eval: Syntax error: \"(\" unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "m~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "eval/an-abandoned-statement-does-not-end-the-text": {
       "bash": {
         "Stdout": "IN-BEFORE~IN-AFTER~OUT-AFTER st=0",
@@ -64490,6 +64622,182 @@
         "Stdout": "st=127",
         "Stderr": "./inc.sh:1: command not found: nosuchcmd-xyz",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "loop-control/break-inside-a-function-called-from-a-loop": {
+      "bash": {
+        "Stdout": "body~body~after",
+        "Stderr": "\u003cshell\u003e: line 1: break: only meaningful in a `for', `while', or `until' loop~\u003cshell\u003e: line 1: break: only meaningful in a `for', `while', or `until' loop",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "body~body~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "body~body~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "body~body~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "loop-control/break-inside-a-subshell-inside-a-loop": {
+      "bash": {
+        "Stdout": "insub~body~insub~body~after",
+        "Stderr": "\u003cshell\u003e: line 1: break: only meaningful in a `for', `while', or `until' loop~\u003cshell\u003e: line 1: break: only meaningful in a `for', `while', or `until' loop",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "insub~body~insub~body~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "body~body~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "body~body~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "body~body~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "body~body~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "loop-control/break-with-no-loop-around-it": {
+      "bash": {
+        "Stdout": "t~after",
+        "Stderr": "\u003cshell\u003e: line 1: break: only meaningful in a `for', `while', or `until' loop",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "t~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "t~after",
+        "Stderr": "\u003cshell\u003e: line 0: break: only meaningful in a `for', `while', or `until' loop",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "t~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "t~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e:break:1: not in while, until, select, or repeat loop",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "loop-control/continue-with-no-loop-around-it": {
+      "bash": {
+        "Stdout": "t~after",
+        "Stderr": "\u003cshell\u003e: line 1: continue: only meaningful in a `for', `while', or `until' loop",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "t~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "t~after",
+        "Stderr": "\u003cshell\u003e: line 0: continue: only meaningful in a `for', `while', or `until' loop",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "t~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "t~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e:continue:1: not in while, until, select, or repeat loop",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -111022,6 +111330,50 @@
       "zsh": {
         "Stdout": "st=1~none=1",
         "Stderr": "\u003cshell\u003e:zsocket:1: connection failed: no such file or directory~\u003cshell\u003e:zsocket:1: zsocket requires an argument",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "source/a-syntax-error-quotes-the-offending-line": {
+      "bash": {
+        "Stdout": "one~st=2",
+        "Stderr": "./s.sh: line 2: syntax error near unexpected token `;'~./s.sh: line 2: `if; then'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~st=2",
+        "Stderr": "./s.sh: line 2: syntax error near unexpected token `;'~./s.sh: line 2: `if; then'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~st=1",
+        "Stderr": "./s.sh: line 2: syntax error near unexpected token `;'~./s.sh: line 2: `if; then'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: 2: ./s.sh: Syntax error: \";\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=3",
+        "Stderr": "\u003cshell\u003e: .: syntax error at line 2: `;' unexpected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~st=126",
+        "Stderr": "./s.sh:3: parse error near `\\n'",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

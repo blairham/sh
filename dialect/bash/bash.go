@@ -885,9 +885,9 @@ func Diagnostics() interp.Diagnostics {
 		// The three loops POSIX has, spelled with this shell's own quoting.
 		// It says this and carries on, which is the axis beside it.
 		LoopControlOutsideALoop: "%[1]s: only meaningful in a `for', `while', or `until' loop",
-		TypeKeyword:  "%[1]s is a shell keyword",
-		TypeFunction: "%[1]s is a function",
-		TypeNotFound: "type: %[1]s: not found",
+		TypeKeyword:             "%[1]s is a shell keyword",
+		TypeFunction:            "%[1]s is a function",
+		TypeNotFound:            "type: %[1]s: not found",
 		// The same complaint from `command -V`, blaming `command`.
 		CommandVNotFound: "command: %[1]s: not found",
 		// The target as it was written, not as it expanded.

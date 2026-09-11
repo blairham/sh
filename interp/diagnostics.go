@@ -2288,6 +2288,31 @@ type Diagnostics struct {
 	// the token failed in the report's leading position — `08+1` is blamed
 	// as `08`, `1+08` as `1+08` — rather than the whole expression.
 	ArithErrorNamesThePrefix bool
+	// ArithErrorSkipsLeadingSpace quotes the expression back from its first
+	// non-blank character, where the rest quote back exactly the text the
+	// construct held. Measured 2026-09-11 on `x=$(( 1+ ))`, whose expression
+	// is ` 1+ `: bash 5.3 writes `1+ : arithmetic syntax error…` and ksh93
+	// ` 1+ : more tokens expected`, with the same asymmetry on a runtime
+	// failure — `1/0 : division by 0` against ` 1/0 : divide by zero`.
+	//
+	// Only the *leading* blanks. What follows the failing token is the other
+	// end of the same question and belongs to ArithErrorNamesThePrefix,
+	// which decides how much of the tail is named at all.
+	ArithErrorSkipsLeadingSpace bool
+	// ArithErrorNamesTheConstruct puts the construct that raised a math
+	// complaint in front of it — `((: ` or `[[: ` — the way a builtin's name
+	// goes in front of one it raised. bash alone: measured 2026-09-11,
+	//
+	//	(( 1+ ))            ((: 1+ : arithmetic syntax error: operand expected
+	//	for (( i=1+; ; ))   ((: i=1+: arithmetic syntax error: operand expected
+	//	[[ 1+ -eq 1 ]]      [[: 1+: arithmetic syntax error: operand expected
+	//	x=$(( 1+ ))         1+ : arithmetic syntax error: operand expected
+	//
+	// so it is the *command* routes that name themselves and the expansion
+	// that does not — which is the same line `let` is already on, naming
+	// itself through ArithErrorNamesTheBuiltin. ksh93 and zsh name no
+	// construct on any route.
+	ArithErrorNamesTheConstruct bool
 
 	// FdVariableWithoutADescriptor is `exec {name}>&-` when the name holds
 	// no descriptor number. One verb: the variable's name as written,
@@ -3097,7 +3122,35 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 		}
 	}
 	return Wording(d.ArithError, "%[1]s: %[2]s",
-		expr, Wording(reason, fallback, se.Token), se.Token)
+		d.arithBlamedText(expr), Wording(reason, fallback, se.Token), se.Token)
+}
+
+// arithBlamedText is the expression as this dialect quotes it back.
+//
+// The text the construct held, less the leading blanks in the one dialect
+// that starts reading at the first character of the expression proper. Not
+// trimmed at both ends for everyone, which is what this was: it made
+// `$(( 1/0 ))` read `1/0: divide by zero` in a shell that writes
+// ` 1/0 : divide by zero`, and there is no shell in the panel the trimmed
+// form is right for.
+func (d Diagnostics) arithBlamedText(expr string) string {
+	if d.ArithErrorSkipsLeadingSpace {
+		return strings.TrimLeft(expr, " \t")
+	}
+	return expr
+}
+
+// arithConstructFailure is a math complaint raised by a construct rather than
+// by an expansion, named the way this dialect names one.
+//
+// The construct's spelling comes from the caller because it is the caller that
+// knows it, and a dialect either names all of them or none: one field and one
+// door, rather than a field per construct that could disagree.
+func (d Diagnostics) arithConstructFailure(construct, msg string) string {
+	if !d.ArithErrorNamesTheConstruct {
+		return msg
+	}
+	return construct + ": " + msg
 }
 
 // readOn reports whether the dialect blaming expr read past what the parser

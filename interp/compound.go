@@ -383,13 +383,16 @@ func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
 		return 0, false
 	}
 	if perr != nil {
-		r.diagf("%s\n", r.diag().ParseFailure(perr))
+		r.diagf("%s\n", r.diag().arithConstructFailure("((", r.diag().ParseFailure(perr)))
 		r.status = 1
 		return 0, false
 	}
 	v, err := r.evalArith(resolved)
 	if err != nil {
-		r.diagf("%v\n", err)
+		// The part is named, the way the construct it is part of names one:
+		// `((: i<1/0: division by 0` and not a bare `division by 0`, which
+		// said nothing about which of the three parts had failed (#1985).
+		r.diagf("%s\n", r.diag().arithConstructFailure("((", r.arithFailure(text, err)))
 		r.status = 1
 		return 0, false
 	}

@@ -378,6 +378,39 @@ rather than printing it — the same reason `Span.Backquoted` exists.
 Division by zero is an error in every shell, unanimously, and it is a
 runtime error rather than a syntax error — the expression parses.
 
+### What a complaint quotes back
+
+Two questions, and they are answered per dialect rather than per failure: a
+parse failure and an evaluation failure carry the same prefix as each other on
+the same route. Measured 2026-09-11, `-c`:
+
+| route | bash 5.3.15 | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `(( 1/0 ))` | `((: 1/0 : division by 0 (error token is "0 ")` | ` 1/0 : divide by zero` | `division by zero` |
+| `for (( i=0; i<1/0; i++ ))` | `((: i<1/0: division by 0` | ` i<1/0: divide by zero` | `division by zero` |
+| `[[ 1/0 -eq 1 ]]` | `[[: 1/0: division by 0` | `1/0: divide by zero` | `division by zero` |
+| `let '1/0'` | `let: 1/0: division by 0` | `let: 1/0: divide by zero` | `division by zero` |
+| `x=$(( 1/0 ))` | `1/0 : division by 0` | ` 1/0 : divide by zero` | `division by zero` |
+
+**The construct names itself, in bash alone.** `((: ` and `[[: ` go in front
+the way a builtin's name does, on the routes that are *commands*; the expansion
+carries no name. ksh93 and zsh name no construct anywhere, and `let` is already
+on this footing through the builtin — bash and ksh93 write `let: ` and zsh
+writes nothing.
+
+**The expression is quoted as the construct held it.** Blanks included:
+`((    1/0   ))` is `   1/0   : divide by zero` in ksh93, spaces and all.
+bash skips the *leading* blanks and keeps the rest — `((: 1/0   : ` — so the
+question is one-sided rather than a trim.
+
+Diagnostics: `ArithErrorNamesTheConstruct` and `ArithErrorSkipsLeadingSpace`,
+both bash alone. zsh names no expression at all, so neither reaches it.
+
+**Not yet matched:** bash's *error token* runs from the failing operand to the
+end of the expression — `1/0 ` blames `0 `, `1/0 + 2 ` blames `0 + 2 ` — where
+a literal the reader refused blames itself alone (`8#9`). Ours names the
+operand without the tail, on every route equally.
+
 A variable whose value is not a number splits three ways:
 
 | `x=abc; $((x+1))` | result |

@@ -199,6 +199,12 @@ func TestTheSystemModuleHasAllNineOfItsFeatures(t *testing.T) {
 // fork. This shell runs all five on goroutines of one process, so the honest
 // answer is that four of them have no process to name — see subshellPid for
 // why the plausible answer is the one that kills the shell.
+//
+// **With no placeholder program supplied**, which is what runZshSplit builds
+// and what a Runner embedded in another program is. A shell binary gives a
+// process substitution's body a process group of its own, and that row answers
+// the group's id instead — see systemgroup_unix_test.go, which measures the
+// same five contexts with one. The other four are unchanged either way.
 func TestSysParamsPidIsEmptyInsideABodyARealShellWouldHaveForked(t *testing.T) {
 	self := strconv.Itoa(os.Getpid())
 	for _, c := range []struct{ name, src, want string }{

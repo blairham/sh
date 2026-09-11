@@ -238,6 +238,49 @@ func sysparamsView(r *interp.Runner) interp.AssocArray {
 // collision rather than a dead shell, and it is the trade this file already
 // made once one key along.
 //
+// # The fifth answer, which is the one this gives now
+//
+// Empty was safe and it was not free: a body that needs a process of its own
+// declines to start, in silence, and what declined was the prompt's git
+// backend on every interactive start — five lines of `gitstatus failed to
+// initialize` where real zsh says nothing (#2083). The daemon log was two
+// lines long and said exactly this: `local pgid=` and `return`.
+//
+// So the four answers above were not all of them. Counted across the plugin
+// tree on this machine, fifteen lines read this key and five of them read it
+// from inside a body a real shell would have forked. Four of those five are
+// inside a **process substitution** — the prompt theme's async worker, its git
+// backend, an autosuggestion plugin and a syntax highlighter — and all four
+// spend the value the same way:
+//
+//	local pgid=$sysparams[pid]   # which process am I?
+//	… start a daemon …
+//	kill -- -$pgid               # and tear the whole group down
+//
+// The value is read as an identity and spent as a **process group**, and a
+// process group is something this shell can have honestly: interp starts a
+// placeholder to lead one, puts the body's children in it, and answers with
+// its id. That is real, it names everything the body started, and it names
+// nothing of the shell's — the three properties the script is relying on, and
+// the last of them is the one that made this shell's own number a catastrophe.
+//
+// So this key answers the group where there is one, and empty where there is
+// not: a plain subshell, a command substitution, a pipeline element and a
+// background job have no group of their own yet, and a front end that supplied
+// no anchor has none anywhere. See [interp.Runner.SubshellProcessGroup], and
+// interp/procanchor.go for the whole argument.
+//
+// The fifth of those five reads is the one the group does not cover, and it is
+// named rather than rounded off: gitstatus's `mbuild` — a build script, not
+// anything a startup runs — reads it inside `{ … } | while read; do; done`,
+// which is a pipeline element. It gets the same empty value it got before, for
+// the same reason, and closing that gap is a lifetime this shell does not
+// reconstruct yet rather than a different answer to the question.
+//
+// It is not this process's number in any of those cases, and it must never
+// become one. That is the deviation this file has recorded twice and the
+// measurement behind it is #2046.
+//
 // # `ppid` is not the same question
 //
 // It is left reporting this process's parent, which is what it reports
@@ -247,6 +290,9 @@ func sysparamsView(r *interp.Runner) interp.AssocArray {
 // reads it at all, and nothing aims a signal at it.
 func subshellPid(r *interp.Runner) string {
 	if r != nil && r.InSubshell() {
+		if pgid, ok := r.SubshellProcessGroup(); ok {
+			return strconv.Itoa(pgid)
+		}
 		return ""
 	}
 	return strconv.Itoa(os.Getpid())

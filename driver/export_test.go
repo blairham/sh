@@ -74,3 +74,10 @@ func InstallPrefixForTest(exe string) string { return installPrefix(exe) }
 
 // FunctionSearchDirsForTest is functionSearchDirs.
 func FunctionSearchDirsForTest(prefix string) []string { return functionSearchDirs(prefix) }
+
+// AnchorArgForTest is anchorArg, reachable from the package's external tests.
+//
+// The word itself rather than a copy of it: a test that spelled it out again
+// would go on passing after the constant changed, which is the one failure a
+// test of a spelling can have.
+const AnchorArgForTest = anchorArg

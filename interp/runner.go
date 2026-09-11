@@ -409,6 +409,26 @@ type Runner struct {
 	// later child built on a descriptor that is no longer there.
 	InheritedFiles []*os.File
 
+	// ProcessAnchor names a program that does nothing and exits when its
+	// standard input reaches end of file. It is what lets a process
+	// substitution's body have a **process group of its own** — see
+	// procanchor.go for why a group is the answer to a question that looks
+	// like it is about a process, and for which scripts ask it.
+	//
+	// A field for the same reason InheritedFiles above is one, and the same
+	// split. Starting a copy of the shell is a fact about *this process* —
+	// where its own program lives on disk — and a library may not reach for
+	// it: a Runner embedded in some other program would be starting copies of
+	// that program, which is not a placeholder but a second instance of
+	// whatever the embedder is. So driver looks, because a binary that is the
+	// shell is the one place the question is the right one to ask, and an
+	// embedder decides by filling this in or leaving it empty.
+	//
+	// Empty is a shell whose substitution bodies have no group, which is what
+	// every body had before this existed: the parameter that would report one
+	// answers as it did, and nothing else changes.
+	ProcessAnchor []string
+
 	// JobControl says this shell reports its jobs to a person: it announces
 	// one when it is backgrounded and says so when it ends.
 	//
@@ -3262,6 +3282,19 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// WaitForCommand — which is the front end saying there is something
 		// able to notice.
 		setProcessGroup(cmd)
+	}
+	if pgid, ok := r.anchoredGroup(); ok {
+		// Inside a process substitution's body that has a process group of
+		// its own, a command **joins that group** — which is what a real
+		// shell's fork would have done without anybody deciding, and is what
+		// makes the teardown the script writes reach the daemon it started.
+		//
+		// After the block above rather than instead of it: the two disagree
+		// only about which group, and this is the narrower answer. A group of
+		// its own would leave the body's children outside the group the body
+		// handed the script, so `kill -- -$pgid` would reach the placeholder
+		// and nothing else. See procanchor.go.
+		setProcessGroupIn(cmd, pgid)
 	}
 	cmd.Dir = r.Dir
 	cmd.Env = env

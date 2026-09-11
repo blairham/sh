@@ -3531,7 +3531,7 @@ trailing `(…)` is a glob qualifier list or pattern text, and it is
 
 `ignorebraces` moved out of "recorded" the same way in #1856, and it is the
 clearest case of why the recorded kind is a placeholder rather than an answer:
-the name is about a **behaviour this shell really performs**, so remembering
+the name is about a **behavior this shell really performs**, so remembering
 the request and going on expanding braces was a shell that agreed it had been
 told and then did the opposite. #1739 had moved it *into* recorded, which was
 the honest state of that change — the alternative was going on refusing a move

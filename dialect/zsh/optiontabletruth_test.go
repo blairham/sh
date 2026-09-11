@@ -101,7 +101,7 @@ func TestTheEditingModeNamesReachTheSubstrateSwitch(t *testing.T) {
 // the namespace, and the shell goes on doing what it did.
 //
 // `correct` rather than `ignorebraces`, which used to stand here: that one is
-// about a behaviour this shell really performs, and a name whose request can
+// about a behavior this shell really performs, and a name whose request can
 // be acted on is the wrong exemplar for a kind whose whole claim is that
 // nothing follows from it. Recording it was the bug in #1856; spelling
 // correction is a thing this shell genuinely does not do.

@@ -13,7 +13,7 @@ import (
 // `set +o braceexpand` does the same, `set -B` afterwards puts the expansion
 // back, `$-` drops the letter while it is off and `[[ -o braceexpand ]]`
 // answers 1. Ours refused `+B` as not implemented and expanded the braces
-// anyway — the refusal and the behaviour disagreeing about the same request.
+// anyway — the refusal and the behavior disagreeing about the same request.
 func TestBraceExpansionCanBeTurnedOff(t *testing.T) {
 	for _, tc := range []struct {
 		name, src, want string

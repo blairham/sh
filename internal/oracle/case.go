@@ -552,7 +552,7 @@ var Corpus = []Case{
 	{
 		ID: "expand/brace-turned-off-by-letter", Category: "expansion",
 		Snippet: `set +B; echo {a,b}`,
-		Why:     "the letter that turns brace expansion off. bash and ksh93 mean `braceexpand` by `-B` and write `{a,b}`; dash has no such letter and stops; zsh has it, means the terminal bell by it, and goes on expanding. So the letter is a dialect's question where the long name below is not. Ours refused it as not implemented and expanded anyway — a refusal and a behaviour disagreeing about one request (#1856)",
+		Why:     "the letter that turns brace expansion off. bash and ksh93 mean `braceexpand` by `-B` and write `{a,b}`; dash has no such letter and stops; zsh has it, means the terminal bell by it, and goes on expanding. So the letter is a dialect's question where the long name below is not. Ours refused it as not implemented and expanded anyway — a refusal and a behavior disagreeing about one request (#1856)",
 	},
 	{
 		ID: "expand/brace-turned-off-by-name", Category: "expansion",

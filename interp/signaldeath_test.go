@@ -74,16 +74,18 @@ func deathRunPersisting(t *testing.T, a Answer, src string, env []string) (strin
 	t.Helper()
 	var out string
 	var st int
-	for try := 1; try <= deathRunAttempts; try++ {
+	tries := 0
+	for tries < deathRunAttempts {
 		out, st = deathRunOnce(t, a, src, env)
+		tries++
 		if st != cannotExecute {
-			return out, st, try
+			break
 		}
-		if try < deathRunAttempts {
+		if tries < deathRunAttempts {
 			time.Sleep(deathRunPause)
 		}
 	}
-	return out, st, deathRunAttempts
+	return out, st, tries
 }
 
 func deathRunOnce(t *testing.T, a Answer, src string, env []string) (string, int) {

@@ -7545,6 +7545,21 @@ echo "st=$?"`,
 		Why:     "@P runs the prompt language over the value: \\n is a newline and \\\\ is one backslash. Probed with only the two escapes whose answer is the same on every machine — \\t is the time of day and \\w the directory, so a case using either would record the clock",
 	},
 	{
+		ID: "param/transform-prompt-escapes-run-before-the-expansion", Category: "parameter expansion",
+		Snippet: `c='\u'; v='X${c}Y'; printf '[%s]\n' "${v@P}"`,
+		Why:     "@P is the whole prompt transformation and not only the escape table: both passes run, and in the order this shell draws a prompt. The escapes go first, so the `\\u` the parameter *produced* is text and stays two characters — which is the fact `PromptStyle.ExpandBeforeEscapes` records, measured in the other direction for the shell whose prompt expands first. A machine-independent probe on purpose: the same construct with `\\u` written in the value would record whoever ran it",
+	},
+	{
+		ID: "param/transform-prompt-escapes-and-the-expansion-both-run", Category: "parameter expansion",
+		Snippet: `d='$(echo cmd)'; e='a\\b'; printf '[%s][%s]\n' "${d@P}" "${e@P}"`,
+		Why:     "the other half of the pair above: the expansion really runs — a command substitution in the value is executed — and the table really runs beside it, with the doubled escape drawing one of itself. Two facts in one row because either alone would pass an implementation that did only the other",
+	},
+	{
+		ID: "param/transform-prompt-escapes-over-an-array", Category: "parameter expansion",
+		Snippet: `a=(x '\\' y); printf '[%s]' "${a[@]@P}"; echo; printf '[%s]' "${nosuch@P}"; echo "st=$?"`,
+		Why:     "@P distributes over a stored array like the rest of the family — three elements in, three fields out, each read as a prompt of its own — and an unset name is the empty string at status 0 rather than a complaint, since there is no escape in nothing",
+	},
+	{
 		ID: "param/transform-writes-an-assignment", Category: "parameter expansion",
 		Snippet: `x='a b'; echo "${x@A}"; declare -irx v=1; echo "${v@A}"; printf "[%s][%s]\n" "${v@a}" "${x@a}"`,
 		Why:     "@A writes the statement that would recreate the variable — the value @Q-quoted, and attributes turning it into a declare with its letters in front — while @a is those letters alone, empty for a name with none",

@@ -52,32 +52,29 @@ func (s Shell) history(text string) string {
 	return b.String()
 }
 
-// table draws each code in the prompt's text.
-//
-// The walker is [interp.ExpandPromptStyle] and the table is the dialect's,
-// which is the same table the interpreter's `${(%)…}` and `print -P` read —
-// see repl/promptstyle.go for why that is one type and not two. This is the
-// *resolver* half, and the drawer's resolver answers everything: a session
-// knows its own history number, its terminal's name and what the parser is
-// still inside, so nothing here is ever refused and the walker's refusal
-// path is unreachable from this side. The escapes it would refuse for a
-// script are the ones this Shell answers.
+// The table half of the drawing — the walker and the resolvers — is
+// [interp.RenderPromptValue], called from render above. The table is the
+// dialect's, which is the same table the interpreter's `${(%)…}`, `print -P`
+// and bash's `${v@P}` read; see repl/promptstyle.go for why that is one type
+// and not two. What this file supplies is the *resolver* half, and the
+// drawer's resolver answers everything: a session knows its own history
+// number, its terminal's name and what the parser is still inside, so nothing
+// here is ever refused and the walker's refusal path is unreachable from this
+// side. The escapes it would refuse for a script are the ones this Shell
+// answers.
 //
 // A code the table lists as Unsupported is the one exception, and it is the
 // one place the two readers deliberately differ: an expansion refuses it by
 // name, and a prompt has to draw something and falls through to whatever
 // Unknown says — the same answer it had when the code was in no table at all.
 //
-// Before expansion rather than after, which is measurable and not a detail:
-// with `x='\u'` set, bash draws `$x` as the two characters and not as the user
-// name, so a code that arrives *through* expansion is text and not a code. The
-// order also explains a thing that looks like a prompt feature and is not —
-// `\$` drawing a bare dollar in dash, which has no table at all, is what a
-// backslash does to a dollar during the expansion that follows.
-func (s Shell) table(text string) string {
-	out, _, _ := interp.ExpandPromptStyle(s.Style, text, s.promptField, s.promptQuantity)
-	return out
-}
+// The escapes run before the expansion where the dialect says so, which is
+// measurable and not a detail: with `x='\u'` set, bash draws `$x` as the two
+// characters and not as the user name, so a code that arrives *through*
+// expansion is text and not a code. The order also explains a thing that looks
+// like a prompt feature and is not — `\$` drawing a bare dollar in dash, which
+// has no table at all, is what a backslash does to a dollar during the
+// expansion that follows.
 
 // promptField is the drawer's resolver: every code, always answered.
 //

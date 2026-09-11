@@ -1261,7 +1261,11 @@ func (r *Runner) PromptExpand(text string) (string, bool) {
 func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr) (string, bool) {
 	out, code, ok := ExpandPromptStyle(r.promptStyle, v, r.promptField, r.promptQuantity)
 	if !ok {
-		return r.refusePromptEscape(e, code)
+		src := ""
+		if e != nil {
+			src = e.Src
+		}
+		return r.refusePromptEscape(src, code)
 	}
 	return out, true
 }
@@ -1275,22 +1279,29 @@ func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr) (string, bool) {
 // is not an escape and would send a reader looking for the wrong thing.
 //
 // The expansion route quotes the whole construct back, because `${(%)…}` can
-// hold several words and a reader needs to know which. A builtin has already
-// been named by the location the dialect writes, so it says the sentence
-// alone — and it does not set expandErr, because nothing is being expanded
-// and the builtin's own status is the answer.
+// hold several words and a reader needs to know which — src is that construct
+// as written, and empty where a *builtin* asked. A builtin has already been
+// named by the location the dialect writes, so it says the sentence alone —
+// and it does not set expandErr, because nothing is being expanded and the
+// builtin's own status is the answer.
+//
+// The escape character is the dialect's rather than a percent sign written
+// out: the same refusal reaches `${v@P}`, where the language is bash's and an
+// escape is spelled `\!`. A message naming `%!` there would send a reader
+// looking for a construct their script does not contain.
 //
 // Setting it there would in fact change nothing observable: the flag is
 // cleared at the start of every command, so a builtin cannot leak it into
 // the next one, and the builtin's own operands were expanded before it ran.
 // It is left out because it would be false rather than because it would
 // break, and a mutation that puts it back survives for that reason.
-func (r *Runner) refusePromptEscape(e *syntax.ParamExpr, c string) (string, bool) {
-	if e == nil {
-		r.diagf("the %%%s prompt escape is not implemented\n", c)
+func (r *Runner) refusePromptEscape(src, c string) (string, bool) {
+	esc := string(r.promptStyle.Escape)
+	if src == "" {
+		r.diagf("the %s%s prompt escape is not implemented\n", esc, c)
 		return "", false
 	}
-	r.diagf("${%s}: the %%%s prompt escape is not implemented\n", e.Src, c)
+	r.diagf("${%s}: the %s%s prompt escape is not implemented\n", src, esc, c)
 	r.expandErr = true
 	return "", false
 }

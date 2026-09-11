@@ -1005,14 +1005,40 @@ only; and multibyte `@Q` records the locale, as above.
 
 ### What this implementation answers
 
-Nine of the ten letters are implemented from the table above. **`@P` is
-refused out loud** — `${x@P}: the @P transformation is not implemented` —
-because prompt expansion is the front end's language, over state (`\u`,
-`\w`, `\h`, the clock) the interpreter does not hold, and returning the
-value unchanged would be right only for a value carrying no escape:
-a silent wrong answer for every value that carries one. The corpus row
-`param/transform-prompt-escapes` therefore records a conformance
-difference on purpose, which is the honest shape for a deferred feature.
+All ten letters are implemented from the table above. **`@P` is the
+prompt transformation**, and it is the *whole* of it rather than the
+escape table alone: the value goes through the dialect's table of codes
+and through parameter and command expansion, in the order that dialect
+draws a prompt. Measured on bash 5.3.15, 2026-09-11:
+
+```sh
+v='[\u][\h]';  "${v@P}"   →  the user and the host
+d='$(echo cmd)'; "${d@P}"  →  cmd            — the expansion runs
+c='\u'; v='X${c}Y'
+                 "${v@P}"  →  X\uY          — and the escapes ran first
+a=(x '\u' y);   "${a[@]@P}" → three fields, the middle one the user
+```
+
+The order is `PromptStyle.ExpandBeforeEscapes`, false for bash and true
+for zsh, so a code a parameter *produced* is text in the one and a code
+in the other. It is the same value the prompt drawer and `PS4` read, and
+the same walker: one function runs both passes for all three readers, so
+a fourth cannot get half the rule.
+
+An unset name is the empty string at status 0 — there is no escape in
+nothing — and a runner told no table transforms nothing at all, which is
+`PromptStyle`'s zero value and the substrate's own answer.
+
+**An escape naming a fact a Runner has not got is refused by name**, not
+drawn as a plausible number: `\!` is the history number, `\#` is how many
+commands the session has run, and `\l` is the terminal's name. bash
+answers `1`, `1` and `tty` for those in a non-interactive shell, so this
+is a deliberate difference and it is the same one `${(%)…}` already
+makes — zsh answers `0` for `%!` where this shell refuses it. One promise
+across both spellings of the question was worth more than making `@P` the
+one place that invents a session fact; the refusal is loud, names the
+escape in the dialect's own spelling (`\!`, not `%!`), and stops the
+command.
 
 The four differences #577 recorded are settled, three as answers a
 dialect gives and one as core behavior:

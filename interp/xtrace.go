@@ -320,30 +320,16 @@ func (r *Runner) tracePrefix() string {
 //
 // So this is the prompt drawer's render minus its history pass: whether a `!`
 // in a trace prefix becomes the history number is not measured yet, and
-// drawing one would be inventing it.
+// drawing one would be inventing it. Both passes and their order are
+// [RenderPromptValue], which the drawer and `${v@P}` call too — a refusal
+// there is left where it was written, because a diagnostic about a trace
+// prefix belongs even less in the middle of a trace than the decoration does.
 func (r *Runner) renderTracePrefix(v string) string {
 	if v == "" {
 		return ""
 	}
-	st := r.promptStyle
-	expand := func() {
-		if st.Expand != nil && st.Expand(r) {
-			v = r.Expand(v)
-		}
-	}
-	escapes := func() {
-		if out, _, ok := ExpandPromptStyle(st, v, r.tracePromptField, r.promptQuantity); ok {
-			v = out
-		}
-	}
-	if st.ExpandBeforeEscapes {
-		expand()
-		escapes()
-	} else {
-		escapes()
-		expand()
-	}
-	return v
+	out, _, _ := RenderPromptValue(r.promptStyle, r, v, r.tracePromptField, r.promptQuantity)
+	return out
 }
 
 // tracePromptField is the trace's resolver: the Runner's own answers, and the

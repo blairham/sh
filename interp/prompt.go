@@ -547,6 +547,55 @@ func ExpandPromptStyle(st PromptStyle, text string, field PromptResolver, quanti
 	return w.b.String(), w.refused, w.refused == ""
 }
 
+// RenderPromptValue turns a prompt parameter's value into the text it stands
+// for: the escape table over it, and parameter and command expansion over it,
+// in the order this style draws them.
+//
+// One place rather than three, which is the point. There are three readers of
+// the same value — the prompt drawer, `PS4` in front of a trace line, and
+// bash's `${v@P}` — and each of them has to run *both* passes in
+// [PromptStyle.ExpandBeforeEscapes]'s order. Written out per reader, a reader
+// added later gets one pass, or gets both in the order its author assumed;
+// this repository's recurring failure is a second helper that omits half of a
+// rule the first one carries, and an ordering measured in both directions is
+// exactly the kind of rule that goes missing.
+//
+// The style is a parameter rather than read from the runner because the
+// drawer holds its own copy — a front end may draw with a table the
+// interpreter was never given — and so are the resolvers, which is what the
+// three readers really differ by: the drawer answers every code, a trace
+// falls through to the dialect's policy for an unknown one, and a script's
+// expansion refuses by name what the runner has no answer for.
+//
+// A refusal stops both passes. The second result is the escape that was
+// refused, spelled as [ExpandPromptStyle] spells it, and the text comes back
+// as it was written: there is no drawing on past an escape whose value is
+// unknown, and no running a command substitution for a value that is going to
+// be refused either. A reader with a resolver that answers everything never
+// sees it.
+//
+// r may be nil, which is a value with no shell behind it: the escapes are
+// drawn and nothing is expanded.
+func RenderPromptValue(st PromptStyle, r *Runner, text string, field PromptResolver, quantity PromptQuantityResolver) (string, string, bool) {
+	expand := func(v string) string {
+		if r == nil || st.Expand == nil || !st.Expand(r) {
+			return v
+		}
+		return r.Expand(v)
+	}
+	escapes := func(v string) (string, string, bool) {
+		return ExpandPromptStyle(st, v, field, quantity)
+	}
+	if st.ExpandBeforeEscapes {
+		return escapes(expand(text))
+	}
+	out, code, ok := escapes(text)
+	if !ok {
+		return text, code, false
+	}
+	return expand(out), "", true
+}
+
 // promptWalk is the walker's state: what has been drawn, and where on the
 // line it has reached.
 //

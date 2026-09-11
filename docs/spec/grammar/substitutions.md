@@ -256,6 +256,26 @@ opened can see a pipe with no writer in it, which is end of file. A script
 that sleeps between the open and the read — which is what the workload this
 came from does — cannot see it.
 
+**And one read is not the output.** A single `read(2)` on a pipe returns what
+has arrived, so a substitution whose body writes twice answers one read with
+however much of it had been written by then — `[one]` where the whole of it is
+`onetwo`, 4 runs in 15 on this machine. That is true of the shell being copied
+as well and is not a divergence; what differs is the odds, because there the
+writer is a process already running and here it is a goroutine the poll has
+just let go. A reader that wants the output reads **to end of input**, and a
+test that reads once is measuring the scheduler (#1907).
+
+Two consequences of keeping the name follow, and the second was a defect for a
+day. The end-of-file nudge — the repeated last-writer close in
+`nudgeFifoEOF`, which exists because a reader can come out of `open` into a
+pipe whose end-of-file has already gone past — used to be ended by the unlink:
+ENOENT said there was no pipe to tell through. With the name kept and a reader
+that stays for the session, neither of its two answers could ever arrive, and
+it went round every twenty milliseconds for the life of the shell, per
+substitution. It has a deadline now: a hundred milliseconds of repeating a
+transition whose race is between two system calls, after which a reader that
+is still there is one holding the pipe for its own reasons.
+
 ## `$(<file)` — the substitution that reads a file
 
 A command substitution whose **whole body is one input redirection and

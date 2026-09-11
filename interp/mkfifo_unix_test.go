@@ -13,9 +13,9 @@ import (
 	"time"
 )
 
-// nudgeFifoEOF has two ways out and no third, and both are load-bearing: a
-// loop with neither would run for the life of the process, and a loop missing
-// one would run for the life of the command.
+// nudgeFifoEOF has three ways out and all of them are load-bearing: a loop
+// with none would run for the life of the process, and a loop missing one
+// would run for the life of whatever the missing answer was going to end it.
 func TestNudgingAPipeEndsOnBothOfItsAnswers(t *testing.T) {
 	t.Run("no reader left to tell", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "sub")
@@ -49,6 +49,27 @@ func TestNudgingAPipeEndsOnBothOfItsAnswers(t *testing.T) {
 		}()
 		if !within(t, 5*time.Second, func() { nudgeFifoEOF(path) }) {
 			t.Error("nudging did not stop when the pipe was taken away")
+		}
+	})
+
+	t.Run("a reader that stays, and a pipe that stays with it", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "sub")
+		if err := mkfifo(path); err != nil {
+			t.Fatal(err)
+		}
+		// The arrangement #1750 made possible and #1907 was: the reader is
+		// one of this shell's own descriptors, so the pipe keeps its name
+		// for as long as the descriptor is open — and neither of the other
+		// two answers can ever arrive. Measured before the deadline went
+		// in: 56 rounds in the second of script life after the body had
+		// finished, and no end to it but the process exiting.
+		end, hold, err := openFifoReadEnd(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = end.Close(); _ = hold.Close() }()
+		if !within(t, 5*time.Second, func() { nudgeFifoEOF(path) }) {
+			t.Error("nudging a pipe whose reader stays did not stop")
 		}
 	})
 }

@@ -193,12 +193,28 @@ func openFifoReadEnd(path string) (end, hold *os.File, err error) {
 // and anything holding the write end open is the very thing keeping the
 // end-of-file away.
 //
-// Each round costs one open and one close, and there are two ways out and no
-// third: ENXIO says no reader is left to tell, and anything else — ENOENT
-// above all, which is removeProcSubs having taken the pipe away at the end of
-// the command that named it — says there is no pipe to tell through. So this
-// cannot outlive the command, and in the ordinary case it ends on the first
-// or second round, as soon as the reader has taken its end-of-file and gone.
+// Each round costs one open and one close, and there are three ways out.
+// ENXIO says no reader is left to tell; anything else — ENOENT among them —
+// says there is no pipe to tell through; and a deadline says the transition
+// has been repeated for longer than a lost wakeup could plausibly need. In
+// the ordinary case it ends on the first or second round, as soon as the
+// reader has taken its end-of-file and gone.
+//
+// The deadline is the third way out because the second stopped being
+// guaranteed. It used to be: removeProcSubs took the pipe away at the end of
+// the command that named it, so a loop that had run out of readers to tell
+// hit ENOENT and stopped, and "this cannot outlive the command" was true by
+// construction. Since #1750 a pipe keeps its name while one of this shell's
+// descriptors is open on it — which is exactly the arrangement where a
+// reader stays open for the rest of the session — and the loop then
+// succeeded forever: measured at 56 rounds in the second of script life
+// after the body had finished, once every twenty milliseconds, for every
+// substitution a shell holds open (#1907).
+//
+// It is a deadline rather than a count because what it bounds is time: the
+// race it covers is between two system calls on two threads, and a hundred
+// milliseconds is several orders of magnitude more than that window, while
+// the round count that spans it changes with the backoff above.
 //
 // It is not gated on the platform. A lost wakeup is not a thing a program can
 // ask about, and a shell that only worked on the kernels somebody had
@@ -214,7 +230,9 @@ func nudgeFifoEOF(path string) {
 	const (
 		firstWait = 100 * time.Microsecond
 		lastWait  = 20 * time.Millisecond
+		giveUp    = 100 * time.Millisecond
 	)
+	deadline := time.Now().Add(giveUp)
 	for wait := firstWait; ; {
 		fd, err := syscall.Open(path, syscall.O_WRONLY|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
 		if err != nil {
@@ -227,6 +245,12 @@ func nudgeFifoEOF(path string) {
 			return
 		}
 		_ = syscall.Close(fd)
+		if time.Now().After(deadline) {
+			// The transition has been delivered for long enough. A reader
+			// that is still there is one holding the pipe for its own
+			// reasons rather than one that missed an end-of-file.
+			return
+		}
 		time.Sleep(wait)
 		if wait *= 2; wait > lastWait {
 			wait = lastWait

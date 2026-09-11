@@ -3618,6 +3618,16 @@ type Semantics struct {
 	// The letter is the visible half; the expansion is the feature. A
 	// dialect answering Yes and expanding nothing would list an alias it
 	// never uses, which is the shape #2081 was filed against in reverse.
+	//
+	// `make axis-sweep` pins this in three of the four dialects and cannot
+	// in dash, which is a fact about dash rather than a gap: `alias` there
+	// reads no options at all — AliasParsesOptions is No — so the accepted
+	// set is never consulted, and no shell in the panel has an `unalias -g`
+	// for it to be consulted from either. The answer has no reachable
+	// consequence in that dialect, which is the third of the four triages
+	// docs/spec/semantics.md lists. SuffixAliases is pinned in all four,
+	// because `unalias -s` reads the axis whatever `alias` does with its
+	// operands.
 	GlobalAliases Answer
 
 	// SuffixAliases gives this dialect the third kind, which is a second

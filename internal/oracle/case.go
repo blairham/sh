@@ -13896,6 +13896,13 @@ echo "--s--"; alias -s`,
 		Why:     "two namespaces, so one call cannot be about both — `illegal combination of options` at 1 in the shell with the letters, where the other five refuse whichever letter they meet first. The listing after it is what proves nothing was defined",
 	},
 	{
+		ID: "alias/neither-kind-is-accepted-where-the-shell-has-not-got-it", Category: "alias",
+		Snippet: `(alias -g G=x) 2>/dev/null; echo "ag=$?"
+(alias -s t=z) 2>/dev/null; echo "as=$?"
+(unalias -s n) 2>/dev/null; echo "us=$?"`,
+		Why: "the three refusals as a status each — the complaint discarded and the call in a subshell, so the one column where a bad option to a special builtin is fatal loses only the subshell. Written that way because it is the only shape that can grade the *letters* in the four columns that do not have them: the wording and the usage line under it are measured elsewhere and differ from ours in one column, so any row carrying that text disagrees there whatever the letters do, and could never notice one being wrongly accepted. Three statuses and three answers — 2, 1 and 0 — which is `alias` reading options at all, then reading them and having none, then having both",
+	},
+	{
 		ID: "alias/the-letters-alias-still-has-not-got", Category: "alias",
 		Snippet: `unalias -a 2>/dev/null; alias -L; echo "L=$?"; alias -r; echo "r=$?"; alias -m 'z*'; echo "m=$?"`,
 		Why:     "the paired table, from the other side: these three are zsh's remaining `alias` letters — a listing a startup file could read back, a listing restricted to the regular kind, and operands taken as patterns — and a shell that has not built them owes a refusal that says so rather than `bad option`, which claims no shell has the letter (#2081). The table is emptied first so the row is about the letters and not about whichever aliases a shell is born with",

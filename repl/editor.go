@@ -231,8 +231,14 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			return e.abandon(prompt)
 		case claimed && b.Function != "":
 			// An action of the shell's own rather than one of this editor's.
-			// See shellwidget.go.
-			e.runShellWidget(b.Function, prompt)
+			// See shellwidget.go. A widget that asked for the line to be
+			// committed gets the same ending a typed Return gets — which is
+			// the whole of how a plugin's wrapper around `accept-line` works,
+			// since the wrapper is what the key is bound to (#2082).
+			if e.runShellWidget(b.Function, prompt) {
+				e.endLine(prompt, "")
+				return string(e.line), nil
+			}
 			continue
 		case claimed:
 			e.runWidget(b.Widget, prompt)

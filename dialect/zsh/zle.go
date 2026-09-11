@@ -200,6 +200,11 @@ const (
 	zleCursor = ".zsh.zle.cursor"
 	zleWidget = ".zsh.zle.widget"
 	zleActive = ".zsh.zle.active"
+	// zleAccept is set by `zle accept-line` inside a widget and read once, by
+	// the call that ran the widget. A parameter under a name no script can
+	// spell, the way the rest of this file keeps its state, so a subshell gets
+	// its own and nothing leaks past the keystroke.
+	zleAccept = ".zsh.zle.accept"
 )
 
 // zleLineParameters are the four a widget reads and writes the line through.
@@ -580,13 +585,63 @@ func widgetListing(defined map[string]widgetDefinition, name string, source bool
 // Only from inside another, which is measured and is not a restriction this
 // shell invented: the line the widget would edit exists only while the editor
 // is holding one.
+// accepts reports whether a widget name is the editor's "commit this line".
+//
+// Read off editorControlKeys rather than written out again, so the two cannot
+// disagree about what Return is called: bindkey.go is where this shell names
+// the keys the editor reads, and `accept-line` is one of them.
+func accepts(name string) bool {
+	for _, widget := range editorControlKeys {
+		if widget == name && widget == "accept-line" {
+			return true
+		}
+	}
+	return false
+}
+
+// callBuiltinWidget performs one of the editor's own actions, asked for from
+// inside a widget.
+//
+// Only the accept, which is the one the editor can honour *after* the widget
+// returns rather than in the middle of it: zsh's `zle accept-line` does not
+// stop the function it is called from — the rest of the body still runs — and
+// the line is committed when the widget is finished. So it is recorded and
+// carried back by runWidgetFunction, and repl ends the line the way a typed
+// Return ends it.
+//
+// The others are still refused out loud. `zle end-of-line` from inside a
+// widget really does mean re-entering the read loop mid-keystroke, which this
+// shell cannot do and should not pretend to — see the file comment.
+func callBuiltinWidget(r *interp.Runner, name string) int {
+	if !accepts(name) {
+		if _, editors := bindkeyWidgets[name]; editors {
+			r.Diagnosef("%s: calling a built-in widget is not implemented yet\n", name)
+			return 1
+		}
+		return 1
+	}
+	r.SetVar(zleAccept, "1")
+	return 0
+}
+
 func callWidget(r *interp.Runner, ctx context.Context, name string, args []string) int {
 	if !editorRunning(r) {
 		r.Diagnosef("widgets can only be called when ZLE is active\n")
 		return 1
 	}
+	// A leading `.` names the *built-in* widget explicitly, past whatever a
+	// plugin has rebound the bare name to. That spelling is how a wrapper
+	// reaches the thing it wrapped — zsh-autosuggestions writes
+	// `_zsh_autosuggest_orig_accept-line() { zle .accept-line }` — so it is
+	// read here rather than treated as a name nothing answers to.
+	if builtin, isDotted := strings.CutPrefix(name, "."); isDotted {
+		return callBuiltinWidget(r, builtin)
+	}
 	def, defined := widgetDefinitionOf(r, name)
 	if !defined {
+		if accepts(name) {
+			return callBuiltinWidget(r, name)
+		}
 		if _, editors := bindkeyWidgets[name]; editors {
 			r.Diagnosef("%s: calling a built-in widget is not implemented yet\n", name)
 			return 1
@@ -666,7 +721,14 @@ func runWidgetFunction(
 	if err != nil {
 		return in, false
 	}
-	return widgetLine(r), true
+	out := widgetLine(r)
+	// Read once: the request belongs to this keystroke, and unsetWidgetState
+	// clears it on the way out with the rest of the call's state, so a widget
+	// that accepted cannot leave the next one accepting too.
+	if asked, _ := r.GetVar(zleAccept); asked == "1" {
+		out.Accept = true
+	}
+	return out, true
 }
 
 // openWidgetParameters gives the widget its five parameters, produced rather
@@ -823,7 +885,7 @@ func editorRunning(r *interp.Runner) bool {
 // unsetWidgetState clears what the call left behind, so nothing about one
 // keystroke's widget is visible to the next one's.
 func unsetWidgetState(r *interp.Runner) {
-	for _, name := range []string{zleBuffer, zleCursor, zleWidget, zleActive} {
+	for _, name := range []string{zleBuffer, zleCursor, zleWidget, zleActive, zleAccept} {
 		r.SetVar(name, "")
 	}
 }

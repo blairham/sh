@@ -548,6 +548,31 @@ stays true. Run the targets for the current scores.
 It is deliberately **not** a gate. The number is meant to be low and to
 climb; failing CI on it would only mean failing CI on unfinished work.
 
+`make axis-sweep` moves every axis in `interp.Semantics` to each of its
+other legal values, runs the graded corpus against the shell each dialect
+claims to be, and reports the axes **nothing objected to**.
+
+An axis records a measured disagreement between real shells, so one that can
+be flipped with nothing failing is not an untested code path — it asserts a
+fact nobody checked, and reads exactly like one that was measured. Four were
+found vacuous in a single day, each by accident, and `make check` was green
+for all four because it does not run the grader.
+
+The enumeration is derived from the struct by reflection and from the
+constants the source declares, never from a list: a field whose type the
+sweep cannot move is an **error**, because a silent skip reports as "nothing
+objected" and files a bug against an axis nobody touched. That is the third
+instance here of a guarantee that was *checked* rather than *enumerated*, and
+so was only as wide as the set it walked.
+
+It exits nonzero when it finds something, which it is expected to. It is
+**not** in `make check` and must not be — thousands of processes against
+three thousand rows — and `docs/spec/semantics.md` has the three-way triage
+its output needs: an unpinned axis is a missing row, an axis the corpus
+cannot reach, **or a disagreement that is not there**, and only re-measuring
+the panel tells you which. `ARGS='-only <Field>'` sweeps one axis while
+triaging it.
+
 `make startup` times process start to a first prompt, and the `-c` path a
 script's every subshell pays, against the real shells on the same machine in
 the same minute. `internal/startupcost` is the harness; it uses a

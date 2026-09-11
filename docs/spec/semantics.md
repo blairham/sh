@@ -12687,3 +12687,78 @@ letter and folds to `10 12`, so an array with nothing in it is not a
 compound value the name can be started over from — measured in bash 5.3.15,
 where `typeset -ia b=(); b=(5+5 6+6)` gives the same `10 12` as the
 valueless declaration.
+
+## An axis nothing objects to is not a measurement
+
+Every field above claims a fact about real shells: they were run, they
+disagreed, and this records how. A field that can be moved to another
+value with nothing anywhere failing makes that claim without it being
+true of anything — and the next person to read the file cannot tell the
+two apart, because a measured axis and an invented one are spelled
+identically.
+
+That is worse than an untested code path. An untested path is a risk; a
+vacuous axis is *documentation of a fact nobody checked*, and it will be
+cited.
+
+Four were found vacuous in a single day, every one by accident — an agent
+editing the line beside it noticed that reverting the assignment failed
+nothing. `make check` was green for all four, and would be: it does not
+run the conformance grader, so an axis can be set, shipped and believed
+while no row anywhere can tell its answers apart.
+
+`make axis-sweep` is the instrument. For each field it writes each of the
+field's other legal values, runs the graded corpus against the shell each
+dialect claims to be, and reports the fields for which nothing objected.
+That list is the deliverable — the run is expected to *find* things, so it
+exits nonzero when it does.
+
+It is not in `make check` and must not be: it is thousands of shell
+processes against three thousand rows. It runs on demand, and what it
+produces is a backlog rather than a gate.
+
+### The enumeration is derived, not kept
+
+The fields come from reflection over the struct and the values from the
+constants the source declares, so an axis added tomorrow is swept without
+anyone remembering to add it. A field whose type the sweep cannot move is
+an **error** and never a skip — a silent skip reports as "nothing
+objected", which is a bug filed against an axis that was never touched.
+
+This is the third time the same shape has cost something here. A
+`reflect.Map` walk over one struct while the tables behind a slice escaped
+it; a boundary guard that read only the packages holding a `Boundary`
+while every dialect escaped it. A guarantee that is *checked* rather than
+*enumerated* is only ever as wide as the set it walks.
+
+### Three things an unpinned axis can be
+
+The list the sweep produces is not a list of missing tests. It is a list
+of axes whose status is *unknown*, and triage separates three cases that
+need opposite fixes:
+
+1. **Unpinned but real.** The disagreement exists and nothing discriminates
+   it. Add the corpus row. This is the common case.
+2. **Not reachable from the corpus.** The disagreement is real but no
+   snippet can show it — a wording whose default is never read, an axis a
+   dialect's grammar cannot reach. A Go test, or a note on the field
+   saying why not.
+3. **The disagreement is not there.** Re-measured, the shells agree. Then
+   the axis is not an unpinned measurement but a **false** one, and
+   pinning it with a row would carve the false fact into the golden
+   record. Delete it, with the measurement.
+
+**The discriminator between 1 and 3 is to re-measure the panel, and it is
+not optional.** An axis nothing exercises is precisely where a mistaken
+measurement survives: nothing has ever contradicted it. Landing rows for
+the whole list without re-measuring pins whichever of the two each one is,
+and leaves nobody able to say which was done.
+
+### A flip to `Unspecified` asks a different question
+
+Moving a specified axis to `Unspecified` makes the shell refuse wherever
+the axis is consulted, so almost everything objects to it. What it
+measures is whether the axis is *reached*, which is a much easier bar than
+whether anything can tell `Yes` from `No`. Only a flip between two answers
+asks the question that found the four, so that is what the sweep counts;
+the reachability flips are behind `-unspecified`.

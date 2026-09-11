@@ -15,11 +15,12 @@
 # the text this match consumed — the useful thing to write in one.  Through
 # the expansion flag that asks for exactly that, and not through an `eval` of
 # the text inside quotes: measured, a replacement holding a lone `"` is
-# replaced literally, where an eval would report `unmatched "` and drop it.  `$match`,
-# `$mbegin` and `$mend` are the groups, and they are the regular expression
-# code's parameters rather than this function's, which is why the manual says
-# not to keep anything of your own in them.  They are declared local here, so
-# a caller's own `$MATCH` survives the call.
+# replaced literally, where an eval would report `unmatched "` and drop it.
+#
+# `$match`, `$mbegin` and `$mend` are the groups, and they are the regular
+# expression code's parameters rather than this function's, which is why the
+# manual says not to keep anything of your own in them.  They are declared
+# local here, so a caller's own `$MATCH` survives the call.
 #
 # Measured on zsh 5.9.2, and each of these is a case the loop below is shaped
 # by:

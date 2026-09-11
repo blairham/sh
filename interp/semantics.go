@@ -1450,6 +1450,18 @@ type Semantics struct {
 	// so `set -f; echo *.txt` lists the files.
 	SetFTurnsOffGlobbing Answer
 
+	// SetBTurnsOffBraceExpansion makes `-B` the short spelling of the
+	// `braceexpand` option, so `set +B` stops `{a,b}` expanding and `set -B`
+	// puts it back. True in bash and ksh93. zsh has the letter and means
+	// something else by it — measured 2026-09-11, `set -B` there turns the
+	// terminal bell off and leaves braces alone, so that dialect keeps `B`
+	// among the letters it refuses. dash has no such letter at all.
+	//
+	// Asked only where the letter is written, like SetFTurnsOffGlobbing: the
+	// long name `braceexpand` raises no question, because a shell either
+	// declares it or has never heard of it.
+	SetBTurnsOffBraceExpansion Answer
+
 	// NoglobLetterIsF puts `f` in `$-` while noglob is on, which is the
 	// letter POSIX gives it and what bash, dash and ksh93 report. False in
 	// zsh, which reports the capital: `-F` is the short option that means

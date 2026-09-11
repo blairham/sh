@@ -3329,17 +3329,53 @@ The rest are declared by each dialect that has them:
 
 dash declares none of them: it has the fourteen and nothing else.
 
-Of these, five are real here — `pipefail` (the pipeline code reads it),
+Of these, six are real here — `pipefail` (the pipeline code reads it),
 `hashall`/`trackall` (one state behind both names: permission to cache
 rather than a promise to), `histignoredups` (kept truthfully over a
-history this shell does not keep), and `onecmd` (below). The rest are
-recorded with the state we are already in, so that turning them off
-succeeds honestly:
-`braceexpand` and `interactive-comments` are **on**, because we do expand
-braces and do honor comments wherever they are written; everything else is
+history this shell does not keep), `braceexpand` (below), and `onecmd`
+(below). The rest are recorded with the state we are already in, so that
+turning them off succeeds honestly: `interactive-comments` is **on**,
+because we do honor comments wherever they are written; everything else is
 **off**. That is not a claim about what any other shell defaults to —
 bash has `hashall` on and we do not hash at all, so ours is off and a
 script turning it off gets what it asked for.
+
+### `braceexpand`, and the letter `set -B`
+
+`braceexpand` was in the recorded set until #1856, and it is the case that
+says what is wrong with recording a name wired to something. The option is
+**on** here because braces really do expand, so `set -o braceexpand` was
+granted and said nothing false; `set +o braceexpand` was refused as not
+implemented, and the letter `-B` was refused as a letter this shell has not
+got — while the braces went on expanding under either spelling. zsh's own
+name for it, `ignorebraces`, had gone the other way in #1739 and was
+*accepted*, listed, and read back by `[[ -o ignorebraces ]]`, with nothing
+following from it. A request remembered is worse than a request refused,
+because only one of the two tells the script the truth.
+
+What it needed was a run-time switch beside the dialect's answer, and the
+two are different questions: `Semantics.BraceExpansion` is whether this
+shell has braces at all — dash does not — and the option is whether the
+script has asked it to stop. Measured 2026-09-11:
+
+| asked | bash 5.3.15 | ksh93 | zsh 5.9.2 | dash |
+| --- | --- | --- | --- | --- |
+| `set +B; echo {a,b}` | `{a,b}` | `{a,b}` | `a b` | `Illegal option -B` |
+| `set +o braceexpand; echo {a,b}` | `{a,b}` | `{a,b}` | `{a,b}` | refused |
+| `set +B; set -B; echo {a,b}` | `a b` | `a b` | `a b` | refused |
+| `set +B; echo $-` | `hc` | `chs` | `569X` | refused |
+
+Four things follow, and each is a place the switch has to be *read* rather
+than only stored. The long name is unanimous among the shells that have
+braces and so needs no axis; the letter is not, because zsh means the
+terminal bell by `-B` — that is `SetBTurnsOffBraceExpansion`. A redirection
+target counts braces of its own, so `: > {a,b}` is one filename while the
+option is off and an ambiguous redirect once it is back on. `$-` drops the
+letter, which is the only kind of letter `$-` cannot derive from a state —
+a startup letter is on before any script runs, so the dialect's string says
+so and turning the option off has to take it back out. And it is **not
+one-way**: `set -B` after `set +B` restores the expansion, unlike `noexec`,
+so a switch asserted in one direction only would be a trap.
 
 The table is a subset of what these shells actually have — ksh93's own
 listing runs to `bgnice`, `globstar`, `letoctal`, `markdirs` and a dozen
@@ -3445,12 +3481,12 @@ first is unanimous across the table.** Every name is one of five kinds:
 
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
-| substrate-backed | 14 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi` |
+| substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
 | axis- or matcher-backed | 11 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below |
 | fixed | 4 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and one of the four is taken at the *invocation* — see `singlecommand` below |
 | store-backed, read by the front end | 4 | `histignorespace`, read by the line editor before it records a line; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All four are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 3 | `aliases`, `autocd` and `checkjobs`: each moves a capability the substrate holds under no option name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, and a job still running really does hold the exit |
-| **recorded** | 149 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 148 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -3519,7 +3555,17 @@ trailing `(…)` is a glob qualifier list or pattern text, and it is
 `interp.TrailingGroupIsPartOfThePattern` — see
 `docs/spec/grammar/patterns.md`, which has both measurements.
 
-So 149 of 185 are recorded, the count above is the one produced by counting
+`ignorebraces` moved out of "recorded" the same way in #1856, and it is the
+clearest case of why the recorded kind is a placeholder rather than an answer:
+the name is about a **behavior this shell really performs**, so remembering
+the request and going on expanding braces was a shell that agreed it had been
+told and then did the opposite. #1739 had moved it *into* recorded, which was
+the honest state of that change — the alternative was going on refusing a move
+real zsh takes in both directions — and it is now the switch beside
+`Semantics.BraceExpansion` instead. Recording is right for a completion knob
+this shell has no completer for; it is wrong for a knob wired to something.
+
+So 148 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
@@ -8687,6 +8733,21 @@ Makes `set -f` the short spelling of `set -o noglob`. True in bash, dash
 and ksh93. zsh spells that option the long way only: there `-f` is about
 startup files and leaves globbing alone, so `set -f; echo *.txt` lists
 the files.
+
+**`SetBTurnsOffBraceExpansion`** — bash yes · dash no · ksh93 yes · zsh no
+
+Makes `-B` the short spelling of `braceexpand`, so `set +B` stops `{a,b}`
+expanding and `set -B` puts it back. Measured 2026-09-11: bash 5.3.15 and
+ksh93 write `{a,b}` after `set +B` and `a b` after setting it again, and
+`$-` drops the letter while it is off. zsh has the letter and means the
+terminal bell by it — `set -B` there leaves braces expanding — so that
+dialect keeps `B` among the letters it refuses, and a `no` here falls
+through to the dialect's own refusal rather than to a silent no-op. dash
+has neither the letter nor braces.
+
+Asked only where the letter is written, like SetFTurnsOffGlobbing: the
+long name `braceexpand` raises no question, because a shell either
+declares it or has never heard of it.
 
 **`SetHLetterTracksCommands`** — bash yes · dash yes · ksh93 yes · zsh no
 

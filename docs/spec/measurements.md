@@ -265,6 +265,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expand/a-value-backslash-before-a-metacharacter` | `[a\*]` | `[a\*]` | `[a\*]` | `[a\*]` | `[a\b]` | `[a\*]` |
 | `expand/a-value-backslash-before-an-ordinary-character-in-a-pattern` | `[ab]` | `[ab]` | `[ab]` | `[ab]` | `[a\bc]` | `[a\b*]` |
 | `expand/brace` | `{1..3}` | `1 2 3` | `1 2 3` | `1 2 3` | `1 2 3` | `1 2 3` |
+| `expand/brace-turned-off-by-letter` | **2>** `<shell>: 1: set: Illegal option -B` *(status 2)* | `{a,b}` | `{a,b}` | `{a,b}` | `{a,b}` | `a b` |
+| `expand/brace-turned-off-by-name` | *(no output, status 2)* | `{a,b}` | `{a,b}` | `{a,b}` | `{a,b}` | `{a,b}` |
+| `expand/brace-turned-off-is-not-one-way` | *(no output, status 2)* | `a b` | `a b` | `a b` | `a b` | `a b` |
+| `expand/brace-letter-leaves-dollar-dash` | *(no output, status 2)* | `letter=no` | `letter=no` | `letter=no` | `letter=no` | `letter=no` |
 | `expand/brace-range-alphabetic` | `{a..e}~{e..a}` | `a b c d e~e d c b a` | `a b c d e~e d c b a` | `a b c d e~e d c b a` | `a b c d e~e d c b a` | `a b c d e~e d c b a` |
 | `expand/brace-range-stepped` | `{1..10..3}` | `1 4 7 10` | `1 4 7 10` | `{1..10..3}` | `1 4 7 10` | `1 4 7 10` |
 | `expand/brace-range-zero-padded` | `{01..03}~{1..03}~{-03..3..3}` | `01 02 03~01 02 03~-03 000 003` | `01 02 03~01 02 03~-03 000 003` | `1 2 3~1 2 3~{-03..3..3}` | `1 2 3~1 2 3~-3 0 3` | `01 02 03~01 02 03~-03 000 003` |
@@ -647,6 +651,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expand/brace` — brace expansion is absent from dash
   ```sh
   echo {1..3}
+  ```
+- `expand/brace-turned-off-by-letter` — the letter that turns brace expansion off. bash and ksh93 mean `braceexpand` by `-B` and write `{a,b}`; dash has no such letter and stops; zsh has it, means the terminal bell by it, and goes on expanding. So the letter is a dialect's question where the long name below is not. Ours refused it as not implemented and expanded anyway — a refusal and a behavior disagreeing about one request (#1856)
+  ```sh
+  set +B; echo {a,b}
+  ```
+- `expand/brace-turned-off-by-name` — the same request under the long name, which is the spelling every shell that has braces agrees on: the three write `{a,b}` and dash stops on a name it has not got. It is the half that says the letter is the dialect's question and the option is not — including in the shell whose own spelling for it is `ignorebraces`, which takes `braceexpand` as a borrowed name for the same state inverted
+  ```sh
+  set +o braceexpand 2>/dev/null; echo {a,b}
+  ```
+- `expand/brace-turned-off-is-not-one-way` — and it goes back on, which `noexec` does not: every shell with braces writes `a b` here. A switch that stopped the expansion and could not start it again would pass a test that only turned it off, which is why the pair is one case
+  ```sh
+  set +B 2>/dev/null; set -B 2>/dev/null; echo {a,b}
+  ```
+- `expand/brace-letter-leaves-dollar-dash` — the reporting half: the two shells that start with `B` in `$-` drop it while the option is off, and the shell that never had the letter there answers the same way for its own reason. A startup letter is the one kind `$-` cannot derive from a state — the option is on before any script runs — so ours went on writing `B` after `set +B` until the letter was made withdrawable. Asked as a `case` rather than by printing `$-`, because no two shells order the merged string the same way
+  ```sh
+  set +B 2>/dev/null; case $- in (*B*) echo letter=yes ;; (*) echo letter=no ;; esac
   ```
 - `expand/brace-range-alphabetic` — a letter range counts bytes either way — unanimous among the shells that expand braces at all
   ```sh

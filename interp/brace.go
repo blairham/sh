@@ -421,7 +421,10 @@ func (r *Runner) walkRange(from, to, step int, hasStep, negStep bool, render fun
 // never be used must not be the thing that refuses the script — dash prints
 // `{01..3}` as written and is never asked what the zeros mean.
 func (r *Runner) askRange(a Answer, axis string) bool {
-	if r.sem().BraceExpansion != Yes {
+	// And the same for a shell whose braces are switched off at run time:
+	// what the range came to is put back by the caller, so a range that will
+	// never be used must not be the thing that refuses the script.
+	if r.sem().BraceExpansion != Yes || r.noBraceExpand {
 		return false
 	}
 	return r.ask(a, axis)

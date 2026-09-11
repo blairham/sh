@@ -615,6 +615,25 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			if r.ask(r.sem().SetFTurnsOffGlobbing, "`set -f` turning off pathname expansion") {
 				r.noglob = on
 			}
+		case 'B':
+			// The short spelling of `braceexpand`, in the two shells that
+			// mean brace expansion by the letter. The third has it and means
+			// the terminal bell, so a dialect that answers no falls through
+			// to its own refusal rather than to a silent no-op — which is
+			// why this reaches badSetOptionLetter and `-f` above does not.
+			// Measured 2026-09-11: `set -B` in that shell writes nothing and
+			// leaves `{a,b}` expanding, and ours has never implemented its
+			// bell.
+			if r.ask(r.sem().SetBTurnsOffBraceExpansion, "`set -B` turning brace expansion off") {
+				r.noBraceExpand = !on
+				continue
+			}
+			if r.unspecified {
+				return false
+			}
+			if !r.badSetOptionLetter(opt, on) {
+				return false
+			}
 		default:
 			// A letter this shell has not got. What comes back is whether to
 			// carry on rather than whether it worked: one dialect reports it

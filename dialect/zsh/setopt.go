@@ -339,7 +339,11 @@ var zshOptions = []zshOption{
 	recorded("histsubstpattern", false),
 	recorded("histverify", false),
 	recorded("hup", true),
-	recorded("ignorebraces", false),
+	// Implemented rather than recorded since #1856: the substrate has a
+	// run-time switch beside its BraceExpansion axis, and this name is that
+	// switch under zsh's spelling — inverted, because zsh names the state
+	// that stops the expansion where the substrate names the expansion.
+	setOptBacked("ignorebraces", false, "braceexpand", true),
 	recorded("ignoreclosebraces", false),
 	recorded("ignoreeof", false),
 	recorded("incappendhistory", false),

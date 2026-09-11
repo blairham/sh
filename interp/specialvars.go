@@ -192,12 +192,43 @@ func (r *Runner) optionLetters() string {
 // and are not in either string: `i` for being interactive at all, `c` and `s`
 // for the route, and `m` for a monitor that is really running.
 func (r *Runner) startupOptionLetters() string {
+	letters := r.sem().DefaultOptionLetters
 	if r.Interactive {
-		if letters := r.sem().InteractiveOptionLetters; letters != "" {
-			return letters
+		if interactive := r.sem().InteractiveOptionLetters; interactive != "" {
+			letters = interactive
 		}
 	}
-	return r.sem().DefaultOptionLetters
+	return withdrawnStartupLetters(r, letters)
+}
+
+// startupLetterIsOn holds, per startup letter, whether the option behind it is
+// still on. A letter is *only* here where this runner really holds the state:
+// a letter we merely record would answer the same either way, and writing a
+// predicate for it would be a claim we do not keep.
+//
+// It exists because a startup letter is the one kind `$-` cannot derive from
+// a field — the option is on before any script runs, so the string says so
+// rather than a state doing it — and a script that turns such an option off
+// has to take the letter back out. Measured on bash 5.3.15: `set +B; echo $-`
+// answers `hc`, the `B` gone (#1856).
+//
+// One table rather than a check beside each letter, so that a second letter
+// earning a state is an entry here and not a second mechanism.
+var startupLetterIsOn = map[byte]func(*Runner) bool{
+	'B': func(r *Runner) bool { return !r.noBraceExpand },
+}
+
+// withdrawnStartupLetters drops the startup letters whose option this script
+// has since turned off.
+func withdrawnStartupLetters(r *Runner, letters string) string {
+	var b strings.Builder
+	for i := 0; i < len(letters); i++ {
+		if on, ok := startupLetterIsOn[letters[i]]; ok && !on(r) {
+			continue
+		}
+		b.WriteByte(letters[i])
+	}
+	return b.String()
 }
 
 // showsS reports whether `$-` carries the `s` of the standard-input route.

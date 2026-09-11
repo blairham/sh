@@ -129,3 +129,50 @@ func TestEveryNumberTakingLetterIsALetterTheDialectHas(t *testing.T) {
 		})
 	}
 }
+
+// The same invariant for `set`, whose letters are a switch in the shared
+// reader rather than an optstring a dialect hands over.
+//
+// A `set` letter the reader acts on is claimed by a Semantics answer instead
+// of by a string, so the pairing is between that answer and
+// UnimplementedOptionLetters: a dialect that says yes has the letter
+// implemented, and its "not implemented yet" line can never be reached. That
+// is the shape #1856 was filed on — `-B` lived in bash's refusal table while
+// nothing accepted it, and moving one half without the other is how half a
+// fix ships.
+//
+// Only the axis-gated letters are here. The unconditional ones — `-e`, `-x`
+// and the rest — are implemented in every dialect and would be a constant row
+// saying nothing; the per-dialect question is exactly the one an axis asks.
+func TestNoSetLetterIsBothAnsweredYesAndRefused(t *testing.T) {
+	for _, d := range []struct {
+		name string
+		sem  interp.Semantics
+		diag interp.Diagnostics
+	}{
+		{"bash", bash.Semantics(), bash.Diagnostics()},
+		{"dash", dash.Semantics(), dash.Diagnostics()},
+		{"ksh", ksh.Semantics(), ksh.Diagnostics()},
+		{"zsh", zsh.Semantics(), zsh.Diagnostics()},
+	} {
+		t.Run(d.name, func(t *testing.T) {
+			refused := d.diag.UnimplementedOptionLetters["set"]
+			for _, l := range []struct {
+				letter byte
+				answer interp.Answer
+				axis   string
+			}{
+				{'f', d.sem.SetFTurnsOffGlobbing, "SetFTurnsOffGlobbing"},
+				{'B', d.sem.SetBTurnsOffBraceExpansion, "SetBTurnsOffBraceExpansion"},
+				{'t', d.sem.SetHasTheTLetter, "SetHasTheTLetter"},
+				{'h', d.sem.SetHasTheHLetter, "SetHasTheHLetter"},
+			} {
+				if l.answer == interp.Yes && strings.IndexByte(refused, l.letter) >= 0 {
+					t.Errorf("set: %s says this shell has -%c, and UnimplementedOptionLetters %q "+
+						"refuses it; the refusal can never be reached",
+						l.axis, l.letter, refused)
+				}
+			}
+		})
+	}
+}

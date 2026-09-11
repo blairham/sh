@@ -196,6 +196,9 @@ func Semantics() interp.Semantics {
 	s.UnsplitAtListJoinsOnIFS = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
+	// And `-B` is this shell's `braceexpand` too — measured 2026-09-11,
+	// `set +B; echo {a,b}` writes `{a,b}` and `$-` loses the letter (#1856).
+	s.SetBTurnsOffBraceExpansion = interp.Yes
 	// `set -t`, and the letter is the whole of it here: this shell has no
 	// long name for the option at all, so `set -o onecmd` is `bad option(s)`
 	// where the letter is taken. Measured on a script file, on standard input
@@ -1275,7 +1278,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-t` is not here: this shell really does stop after one
 			// command, and the letter is the only spelling it has for the
 			// option — see Semantics.SetHasTheTLetter.
-			"set": "bkprsBGH",
+			"set": "bkprsGH",
 			// ksh93 answers --version on most builtins, and has its own
 			// letters for these two.
 			"wait": "-",

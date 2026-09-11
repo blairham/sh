@@ -64,7 +64,7 @@ print "read=[$line]"`)
 	}
 }
 
-// The neighbouring refusal, which must not move: a number nothing is open at
+// The neighboring refusal, which must not move: a number nothing is open at
 // is `bad file number` and not a mode complaint. Measured as `zsh:print:1: bad
 // file number: 9` at 1 in that shell.
 func TestPrintStillRefusesADescriptorNothingIsOpenAt(t *testing.T) {

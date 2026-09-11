@@ -310,8 +310,16 @@ been believed at least once:
   not look truncated, it looks like a count. Always pass `--limit` well above
   the expected total and take the length with `jq`, never by eye.
 - **A label that does not exist returns 0**, identically to a label with no
-  issues. `gh issue list --label utter-nonsense` is `0`. Confirm the label is
-  in `gh label list` before reporting its count as met.
+  issues. `gh issue list --label utter-nonsense` is `0`, and **exits 0**.
+  Confirm the label is in `gh label list` before reporting its count as met.
+
+  Note that cross-checking with a second instrument does **not** catch this
+  one: `gh search issues --label utter-nonsense` also answers `0`. Two
+  instruments agreeing is good evidence against a *transport* fault — a
+  truncated page, a stale index right after a label edit — and no evidence
+  at all against a *question* fault, where both are faithfully answering
+  something other than what was asked. Only `gh label list` distinguishes
+  "no issues have this label" from "nothing has ever had this label".
 - **An issue with no `P1`/`P2`/`P3` is invisible to the gate.** This is the
   one that keeps happening: the agent best placed to label an issue is the one
   least likely to, because filing is its last act. In a single session the

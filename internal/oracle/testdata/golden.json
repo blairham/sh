@@ -56391,6 +56391,94 @@
         "TimedOut": false
       }
     },
+    "glob/an-empty-component-behind-a-matched-one": {
+      "bash": {
+        "Stdout": "[cx/ax][sym/ax]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[cx/ax][sym/ax]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[cx/ax][sym/ax]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[cx//ax][sym//ax]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[cx//ax][sym//ax]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[cx//ax][sym//ax]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "glob/an-empty-component-is-a-separator": {
+      "bash": {
+        "Stdout": "[cx//ax][cx//dx]~[cx///ax][cx///dx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[cx//ax][cx//dx]~[cx///ax][cx///dx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[cx//ax][cx//dx]~[cx///ax][cx///dx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[cx//ax][cx//dx]~[cx///ax][cx///dx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[cx//ax][cx//dx]~[cx///ax][cx///dx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[cx//ax][cx//dx]~[cx///ax][cx///dx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "glob/matches-are-in-order": {
       "bash": {
         "Stdout": "1digit Apple Cherry _under banana",

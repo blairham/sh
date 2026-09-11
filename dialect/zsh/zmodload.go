@@ -453,6 +453,48 @@ func zmodloadNarrow(r *interp.Runner, module string, features []string) {
 	}
 	selected[module] = strings.Join(features, " ")
 	r.SetAssoc(zmodloadFeatureStore, selected)
+	zmodloadEnforce(r, module, features)
+}
+
+// zmodloadEnforce makes the *table* agree with the selection: a builtin the
+// selection leaves off is taken out of it, and one it puts back is put back.
+//
+// Recording the selection is not the whole of what `-F` does. Measured on zsh
+// 5.9.2, 2026-09-10:
+//
+//	zmodload zsh/zutil
+//	zmodload -F zsh/zutil -b:zparseopts
+//	zparseopts -D a:      zsh:1: command not found: zparseopts    127
+//	zstyle -s x y z                                               1
+//
+// so the three features left on still answer and the one left off is not
+// there at all — and it comes back, at 1 rather than 127, on either
+// `+b:zparseopts` or a plain `zmodload zsh/zutil`. This shell recorded the
+// selection, reported it truthfully through `-lF`, and left every builtin
+// callable (#1635).
+//
+// The feature name *is* the builtin name — `b:zparseopts` — so nothing here
+// keeps a second table of features to functions. That table is what the issue
+// was wary of, and it is the kind that drifts from the registrations it
+// copies; [interp.Runner.SetBuiltinWithdrawn] keeps the builtin instead, so
+// putting one back needs nothing to have been remembered.
+//
+// Only the `b:` features. A deselected parameter stops answering in that
+// shell — `zmodload -F zsh/parameter -p:functions` leaves `${#functions}` at
+// 0 — and reads as empty rather than refusing, which is a different seam and
+// is #1841.
+func zmodloadEnforce(r *interp.Runner, module string, selected []string) {
+	on := make(map[string]bool, len(selected))
+	for _, f := range selected {
+		on[f] = true
+	}
+	for _, f := range zmodloadFeatures[module] {
+		kind, name, ok := strings.Cut(f, ":")
+		if !ok || kind != "b" {
+			continue
+		}
+		r.SetBuiltinWithdrawn(name, !on[f])
+	}
 }
 
 // zmodloadWiden puts a module back to all-features-on, which is what a plain
@@ -469,6 +511,7 @@ func zmodloadWiden(r *interp.Runner, module string) {
 	}
 	delete(selected, module)
 	r.SetAssoc(zmodloadFeatureStore, selected)
+	zmodloadEnforce(r, module, zmodloadFeatures[module])
 }
 
 // zmodloadSpec reads one `[+-]feature` operand: the feature it names and
@@ -754,16 +797,15 @@ func zmodloadListing(r *interp.Runner, commands bool) int {
 // script needs — `zmodload zsh/complete` is refused here for four conditions
 // nobody can find, and the narrowed form does not have to be.
 //
-// The one thing it does not do is take a feature *away*. A module narrowed to
-// one builtin leaves the other three of `zsh/zutil` callable here, where zsh
-// removes them from its table outright — measured, `zmodload zsh/zutil;
-// zmodload -F zsh/zutil -b:zparseopts; zparseopts` is `command not found` in
-// zsh. Nothing in this shell provides those builtins *through* the module —
-// they are the dialect's, registered before any script runs — so withdrawing
-// one would take away a command the line before `zmodload` could already run.
-// The selection is recorded and reported truthfully by `-lF`, which is what a
-// script reads, and #1635 is the divergence written down where it can be
-// argued with rather than only here.
+// And it takes a feature *away*: a module narrowed to one builtin leaves the
+// others not callable, measured as `command not found` at 127 — see
+// zmodloadEnforce, which is where that half lives. It was recorded and
+// reported through `-lF` and not enforced, so a script that narrowed a module
+// went on using what it had just switched off (#1635).
+//
+// The parameter half is not enforced. A deselected `p:functions` reads as
+// empty in that shell rather than refusing, which is a different seam from
+// the absent-parameter one, and is #1841.
 func zmodloadFeatureCommand(r *interp.Runner, opts zmodloadOpts, args []string) int {
 	if opts.commands && len(args) == 0 {
 		// `-LF` alone is the whole shell's selection, one line per loaded

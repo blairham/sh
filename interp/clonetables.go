@@ -140,6 +140,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.exportedFuncs = maps.Clone(r.exportedFuncs)
 	c.aliases = maps.Clone(r.aliases)
 	c.disabledBuiltins = maps.Clone(r.disabledBuiltins)
+	c.withdrawnBuiltins = maps.Clone(r.withdrawnBuiltins)
 
 	// The extension points. An embedder registers these before a run and a
 	// dialect's Apply is the usual caller, so nothing a *script* does writes

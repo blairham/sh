@@ -7779,6 +7779,11 @@ echo "st=$?"`,
 		Why:     "`${#s[@]}` on a name holding one string: zsh measures the string, every other shell with the construct counts a list of one, and dash refuses it. The three-character value is what fixes the reading — an empty scalar answering 0 alone would only say \"no elements\", and `a b` answering 3 says the whole-array subscript reached the *value*. `${#h}` beside it is the control that says the width is not new, and `${e+S}` says the name is set in every column, so the split is about how a scalar is seen as a list and not about whether it exists. It is how a script asks \"did I get anything?\" after a parse: `(( ${#opts[@]} ))` reads 1 for a name that never became an array, a count agreeing with the wrong answer (#1553)",
 	},
 	{
+		ID: "param/argv-is-the-positional-parameters", Category: "parameter expansion",
+		Snippet: `set -- 'a b' c; printf "[%s]" "$argv" "${#argv}" "${argv[1]}" "${argv[2]}"; argv[1]=zz; printf "[%s]" "$1"; f() { printf "[%s]" "${argv[1]}" "$#"; }; f q w; printf "[%s]" "$1" "$#"; echo`,
+		Why:     "one shell gives the positional parameters a name, and it is a real array rather than a synonym for `@` — the bare `$argv` joins where `\"$@\"` keeps its fields, so the axes that decide what a bare array name means decide this one too. The panel is unanimous the other way, which is what makes it a dialect's parameter: four columns read an ordinary unset name and answer the first four brackets empty. The write is the sharp half and is why the run continues past it: `argv[1]=zz` reaches `$1` in the shell that has the name and creates a *stray global* in the ones that do not, so the function's bracket is `q` there and `zz` here — a leftover read in place of the frame's own first parameter, at status 0. The last pair says the assignment did not disturb the count (#1633)",
+	},
+	{
 		ID: "param/array-slice", Category: "parameter expansion",
 		Snippet: `a=(p q r s); printf "[%s]" "${a[@]:1}" "${a[@]:1:2}" "${a[@]: -2}"`,
 		Why:     "a slice of the list rather than a substring of its elements joined together. Unanimous in the three that have arrays, including that the offset counts from 0 in zsh, whose *subscripts* count from 1 — so the slice does not inherit the base axis that `${a[1]}` does",

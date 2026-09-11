@@ -107,7 +107,10 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo 
 	a := Array{}
 	next := 0
 	if appendTo {
-		switch old, ok := r.Arrays[name]; {
+		// arrayForWrite rather than the store, so an append to a *produced*
+		// array goes after the elements the producer reports rather than
+		// after nothing: `set -- a b c; argv+=(d)` leaves four parameters.
+		switch old, ok := r.arrayToAppendTo(name); {
 		case ok:
 			a = old
 			// After the highest subscript rather than after the count:
@@ -272,4 +275,17 @@ func isDecimalSubscript(s string) bool {
 	}
 	_, err := strconv.Atoi(s)
 	return err == nil
+}
+
+// arrayToAppendTo is what `name+=(…)` adds to, and whether the name holds an
+// array at all. A produced array counts as one — its elements are what an
+// append goes after, exactly as a stored array's are.
+func (r *Runner) arrayToAppendTo(name string) (Array, bool) {
+	if a, stored := r.Arrays[name]; stored {
+		return a, true
+	}
+	if _, produced := r.DynamicArrays[name]; produced {
+		return r.arrayForWrite(name), true
+	}
+	return nil, false
 }

@@ -119,6 +119,17 @@ func (r *Runner) setArray(name string, elems []string) {
 
 // storeArray puts an array back and keeps the scalar view in step.
 func (r *Runner) storeArray(name string, a Array) {
+	if write, produced := r.dynamicArrayWriters[name]; produced {
+		// A *produced* array, whose elements are not this table's to keep:
+		// the producer answers ahead of anything stored here, so a write left
+		// in the store would be accepted in silence and then read back as
+		// whatever the producer says. The one chokepoint every write reaches
+		// — a literal, an append, an element, a splice — so the producer
+		// hears about all four rather than about whichever one a hook was
+		// written beside. See SetDynamicArrayWriter.
+		write(r, r.readArray(a))
+		return
+	}
 	if r.Arrays == nil {
 		r.Arrays = map[string]Array{}
 	}
@@ -277,10 +288,7 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 		r.spliceScalarElem(name, idx, sub, value, false)
 		return
 	}
-	a := r.Arrays[name]
-	if a == nil {
-		a = Array{}
-	}
+	a := r.arrayForWrite(name)
 	pos, ok := r.elemPos(a, idx)
 	if !ok {
 		if idx < 0 && r.ask(r.sem().NegativeSubscriptPastTheStartInserts,
@@ -2076,4 +2084,27 @@ func (r *Runner) foldedElems(name string, a Array) Array {
 		folded[sub] = v
 	}
 	return folded
+}
+
+// arrayForWrite is the array an element assignment starts from: what the name
+// already holds, produced or stored, as storage this caller may write into.
+//
+// A produced array has nothing in r.Arrays, so reading that table directly
+// made `argv[2]=x` on a name whose elements come from a producer start at an
+// empty array — the write landed at position 2 of nothing, and the elements
+// the producer would have reported were gone. The elements are copied rather
+// than aliased, because the producer's slice may be the runner's own storage
+// and an element assignment writes in place.
+func (r *Runner) arrayForWrite(name string) Array {
+	if a, stored := r.Arrays[name]; stored {
+		return a
+	}
+	if produce, produced := r.DynamicArrays[name]; produced {
+		a := make(Array, 0)
+		for i, v := range produce(r) {
+			a[i] = v
+		}
+		return a
+	}
+	return Array{}
 }

@@ -497,6 +497,14 @@ type Runner struct {
 	// whole needs no second entry point. See SetDynamicAssocElement.
 	dynamicAssocElements map[string]func(*Runner, string) (string, bool)
 
+	// dynamicArrayWriters is what an assignment to a produced *array* does.
+	// Unexported for the reason dynamicAssocWriters is — nothing reads this
+	// table back — and the same failure is what makes it necessary: the
+	// producer answers ahead of the stored array, so a write with nowhere to
+	// go is accepted in silence and read back as whatever the producer says.
+	// See SetDynamicArrayWriter.
+	dynamicArrayWriters map[string]func(*Runner, []string)
+
 	// dynamicAssocWriters is what an assignment to one element of a produced
 	// association does. Unexported because it is not a table anything reads
 	// back — see SetDynamicAssocWriter for why a produced association a

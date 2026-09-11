@@ -224,6 +224,7 @@ func seedTables(r *Runner) {
 	r.dynamicAssocElements = map[string]func(*Runner, string) (string, bool){
 		"seed": func(*Runner, string) (string, bool) { return "", false },
 	}
+	r.dynamicArrayWriters = map[string]func(*Runner, []string){"seed": func(*Runner, []string) {}}
 	r.dynamicAssocWriters = map[string]func(*Runner, string, string, bool){
 		"seed": func(*Runner, string, string, bool) {},
 	}

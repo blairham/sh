@@ -21,16 +21,16 @@ import (
 // to a function was taken in silence, reporting 0 with nothing on stderr,
 // where every shell in the reference panel complains (#1219).
 //
-// What the refusal *costs* is deliberately not asserted here beyond its not
-// having changed: whether it is fatal and whether the command still runs
-// splits by the kind of command, and the two lenient shells split opposite
-// ways, so there is no axis to test against yet. The whole rendered line is
-// asserted rather than a substring, because the whole of this is a
-// diagnostic, and a Contains cannot see a prefix that should not be there.
+// What the refusal *costs* is the three axes prefixrefusal_test.go covers; it
+// is held at the answers that cost nothing here so that these rows are about
+// the reporting alone. The whole rendered line is asserted rather than a
+// substring, because the whole of this is a diagnostic, and a Contains cannot
+// see a prefix that should not be there.
 
-// readonlyPrefixRun runs src with the refusal fatal, which is the answer that
-// would show up as a changed control flow if the prefix paths had been wired
-// through refuseReadonly instead of reporting on their own.
+// readonlyPrefixRun runs src with the *plain* refusal fatal and the prefix's
+// refusal costing nothing, which is bash's pair. The plain fatality is the
+// answer that would show up as a changed control flow if the prefix paths had
+// been wired through refuseReadonly instead of deciding for themselves.
 func readonlyPrefixRun(t *testing.T, src string) (stdout, stderr string, status int) {
 	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
@@ -40,6 +40,9 @@ func readonlyPrefixRun(t *testing.T, src string) (stdout, stderr string, status 
 	sem := permissive()
 	sem.ReadonlyReassignmentFatal = Yes
 	sem.ReadonlyReassignmentByDeclarationFatal = Yes
+	sem.PrefixToARegularBuiltinIsRefused = Yes
+	sem.PrefixRefusalFatality = PrefixRefusalNeverFatal
+	sem.PrefixRefusalCostsTheCommand = No
 	var out, errs bytes.Buffer
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{

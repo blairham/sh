@@ -2491,7 +2491,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   readonly x=1; x=2 command echo RAN; echo after
   ```
-- `roprefix/in-front-of-an-alias` — the last command kind, and the one that says what ksh93's silence is about: `al` is a word of its own that resolves, through the alias, to a *builtin*. ksh93 says nothing and runs it, exactly as it does for a bare `echo`, so its rule reads the kind the word resolves to after alias expansion rather than the word that was written. zsh is fatal here as it is on every internal kind. The three bash columns answer something else entirely — a non-interactive bash expands no alias, so `al` is a command it cannot find and their cells are that fact rather than this one, which is why this is its own row rather than another cell of the `command` pair above
+- `roprefix/in-front-of-an-alias` — the last command kind, and the one that says what ksh93's silence is about: `al` is a word of its own that resolves, through the alias, to a *builtin*. ksh93 says nothing and runs it, exactly as it does for a bare `echo`, so its rule reads the kind the word resolves to after alias expansion rather than the word that was written. zsh is fatal here as it is on every internal kind. The three bash columns answer something else entirely — a non-interactive bash expands no alias, so `al` is a command it cannot find and their cells are that fact rather than this one, which is why this is its own row rather than another cell of the `command` pair above. Ours does not match ksh93 or zsh here and the reason is not this axis: an alias is not expanded at all when the command word carries an assignment prefix, so the word reaches the dispatch unresolved and reads as an external command
   ```sh
   readonly x=1
   alias al='echo ALIASED'
@@ -2522,7 +2522,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   readonly x=1; x=$((1/0)) /bin/echo RAN; echo after
   ```
-- `roprefix/a-value-that-fails-to-expand-in-front-of-a-function` — the same ordering question on a function, where it is compounded by a second gap: a prefix to a function is discarded entirely here rather than made visible to the body, so its value is never expanded and there is no expansion error to preempt the refusal. Every column reports something and we reported nothing; what we report now is bash's answer, which is the one the panel splits on
+- `roprefix/a-value-that-fails-to-expand-in-front-of-a-function` — the same ordering question on a function, where it is compounded by a second gap: a prefix to a function is discarded entirely here rather than made visible to the body, so its value is never expanded and there is no expansion error to preempt the refusal. Every column reported something and we reported nothing. Now that the prefix reaches the dispatch, the value is expanded here as it always was on the external route, so both routes give the expand-first answer — dash, ksh93 and zsh's — and the bash cell is the one recorded divergence rather than two different ones on two paths
   ```sh
   readonly x=1; f() { echo INFUNC; }; x=$((1/0)) f; echo after
   ```

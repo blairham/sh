@@ -225,6 +225,40 @@ type Semantics struct {
 	// do not.
 	AssignmentPrefixPersistsOnSpecialBuiltin Answer
 
+	// PrefixToARegularBuiltinIsRefused applies the readonly refusal to an
+	// assignment written in front of a *regular builtin* — `readonly x=1;
+	// x=2 true`.
+	//
+	// No in ksh93 alone, where that line says nothing at all, runs the
+	// builtin and reports 0 — and so do `x=2 echo E`, an alias naming a
+	// regular builtin, and `command` naming one. Yes everywhere else.
+	// Measured 2026-09-11 from a script file.
+	//
+	// Asked only in front of a regular builtin, which is the only position
+	// the panel parts at: an external command, a special builtin and a
+	// function are all refused in all six columns. See #1219.
+	PrefixToARegularBuiltinIsRefused Answer
+	// PrefixRefusalFatality is what a *reported* refusal of an assignment
+	// prefix costs the script. Four answers, two of them keyed on the kind of
+	// command the prefix stood in front of and keyed on different lines. See
+	// PrefixRefusalFatalityPolicy.
+	PrefixRefusalFatality PrefixRefusalFatalityPolicy
+	// PrefixRefusalCostsTheCommand leaves the command the prefix stood in
+	// front of unrun, at status 1. Yes in ksh93 and zsh — `readonly x=1;
+	// x=2 /bin/echo RAN; echo after` prints the complaint and `after` and
+	// never `RAN` — and No in bash, which reports the refusal, runs the
+	// command with the name still holding its old value, and reports 0.
+	//
+	// Asked only where the refusal is reported and is not fatal, which is
+	// the only place the two readings differ: a script that ends has not run
+	// the command either.
+	//
+	// A separate axis from the fatality because the two are independent in
+	// both directions across the panel — ksh93 is fatal on a function and
+	// not on an external and skips the command in both non-fatal positions,
+	// where bash is fatal nowhere and skips nothing. See #1219.
+	PrefixRefusalCostsTheCommand Answer
+
 	// EchoOptions is the set of letters `echo` reads as options: `n` for
 	// every shell measured, `e` everywhere but dash, `E` in bash and zsh
 	// alone. A word carrying any other letter is not an option at all — the
@@ -6159,6 +6193,14 @@ func PosixSemantics() Semantics {
 		// panel do.
 		SetReportsEveryBadOption:  No,
 		ReadonlyReassignmentFatal: Yes,
+		// XCU makes an assignment to a readonly name an error, and an error
+		// in a special builtin or in an assignment ends a non-interactive
+		// shell — which is what a prefix assignment's refusal is. dash is
+		// the panel member that follows it here, and it follows it for every
+		// kind of command. The command's fate is not asked once the script
+		// is over, so PrefixRefusalCostsTheCommand stays unanswered (#1219).
+		PrefixToARegularBuiltinIsRefused: Yes,
+		PrefixRefusalFatality:            PrefixRefusalAlwaysFatal,
 		// XCU makes an expansion error fatal to a non-interactive shell, so
 		// the standard's preset does not survive one.
 		FailedExpansionAbandonsTheLine:         No,
@@ -7368,6 +7410,80 @@ func (r *Runner) unsetArraySpan() UnsetArraySpanPolicy {
 // no answer at all means removal too.
 func (r *Runner) unsetBlanksInPlace() bool {
 	return r.sem().UnsetArraySpan == UnsetArraySpanLeavesOneEmptyElement
+}
+
+// PrefixRefusalFatalityPolicy is what a refused assignment prefix — `x=2 cmd`
+// where `x` is readonly — costs the script.
+//
+// Four answers rather than two, and two of them are not a property of the
+// prefix at all: they are keyed on the *kind of command* the prefix stood in
+// front of, and the two shells that do that draw the line in different places
+// and read different words to find it.
+//
+// Measured 2026-09-11 from a script file, `env -i PATH=/usr/bin:/bin` with a
+// scratch HOME and ZDOTDIR, with `readonly x=1` and then `x=2 <cmd>; echo
+// after`:
+//
+//	                  bash 5.3   dash    ksh93u+        zsh 5.9.2
+//	/bin/echo RAN     R, RAN, 0  fatal   R, skip, 1     R, skip, 1
+//	true              R, run, 0  fatal   silent, 0      R, fatal 1
+//	echo E            R, E, 0    fatal   silent, E, 0   R, fatal 1
+//	command true      R, 0       fatal   silent, 0      R, skip, 1
+//	command /bin/echo R, CE, 0   fatal   R, skip, 1     R, skip, 1
+//	an alias for true R, 0       fatal   silent, 0      R, fatal 1
+//	:                 R, 0       fatal   R, fatal 1     R, fatal 1
+//	a function        R, run, 0  fatal   R, fatal 1     R, fatal 1
+//
+// An earlier reading of this issue held `true` fixed throughout and got
+// ksh93's answer backwards for five of those rows, which is what the two
+// kind-keyed values are here to prevent: `true` is one of the least
+// representative command words available.
+//
+// One column does give up the rest of the *command list* without ending the
+// script — bash invoked as `sh`, which reports and then reaches the next line
+// — and there is no value for it, because no preset answers for that column:
+// the `sh` invocation changes the grammar and not the semantics vector. The
+// corpus records it. What made #1219 is that the same state was *ours* in
+// bash and in ksh, which is what the `;` cells of that issue measured.
+type PrefixRefusalFatalityPolicy int
+
+const (
+	// PrefixRefusalFatalityUnspecified is no answer, and it is refused by
+	// name: one shell ends the script for every command kind, one for none,
+	// and two for sets that do not contain one another.
+	PrefixRefusalFatalityUnspecified PrefixRefusalFatalityPolicy = iota
+	// PrefixRefusalNeverFatal reports and carries on whatever the command
+	// was: bash, in both builds measured.
+	PrefixRefusalNeverFatal
+	// PrefixRefusalAlwaysFatal ends the script whatever the command was:
+	// dash, which is uniform in the other direction.
+	PrefixRefusalAlwaysFatal
+	// PrefixRefusalFatalOnASpecialBuiltinOrFunction ends the script for the
+	// two kinds that would have *kept* the assignment and carries on for the
+	// rest: ksh93. `command` is transparent to it — what matters is the kind
+	// the word resolves to, so `command /bin/echo` is the external answer and
+	// `command true` the regular builtin's.
+	PrefixRefusalFatalOnASpecialBuiltinOrFunction
+	// PrefixRefusalFatalOnACommandThisShellRuns ends the script for every
+	// kind that runs inside the shell and carries on for an external one:
+	// zsh. `command` is *not* transparent there — it is read as the word that
+	// was written, and a command written with it in front carries on whatever
+	// it names, which is the row that separates this from the value above.
+	PrefixRefusalFatalOnACommandThisShellRuns
+)
+
+func (p PrefixRefusalFatalityPolicy) String() string {
+	switch p {
+	case PrefixRefusalNeverFatal:
+		return "never fatal"
+	case PrefixRefusalAlwaysFatal:
+		return "always fatal"
+	case PrefixRefusalFatalOnASpecialBuiltinOrFunction:
+		return "fatal on a special builtin or a function"
+	case PrefixRefusalFatalOnACommandThisShellRuns:
+		return "fatal on a command this shell runs"
+	}
+	return "unspecified"
 }
 
 // EmptyArithSubscriptPolicy is what a subscript written with nothing between

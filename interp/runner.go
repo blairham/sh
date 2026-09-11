@@ -2887,21 +2887,29 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// setVarAs, so only that path ever met the refusal, and a prefix to
 		// a function was taken in silence. `readonly x=1; x=2 f` reported 0
 		// with nothing on stderr where all six panel columns complain.
-		//
-		// A loop rather than a check on the first one, because bash and
-		// bash 3.2 name *every* frozen name in the prefix: `readonly x=1 z=9;
-		// x=2 z=8 cmd` writes two complaints, in the order they were written.
-		// The shells that name only the first are the ones that abandon the
-		// command at the first refusal, which is the question this leaves
-		// alone — so naming them all is what carrying on entails (#1219).
+		// The value is expanded before the refusal is reported, which is what
+		// the external route has always done: three of the panel name the
+		// expansion's failure and never mention the frozen name, and bash
+		// checks the prefix first and never evaluates the value at all.
+		// Ours is on the expand-first side, and this is the line that stops
+		// the two routes answering it differently — a prefix to a function is
+		// otherwise discarded, so its value was never expanded and bash's
+		// answer fell out of a gap rather than a choice (#1219).
 		for _, a := range c.Assigns {
-			if a.Operand {
-				continue
+			if !a.Operand && r.readonly[a.Name] {
+				r.expandWord(a.Value)
 			}
-			if r.prefixAssignsPositional(a) {
-				continue
+		}
+		if _, stop := r.refusePrefixes(c.Assigns, prefixCommand{kind: prefixBeforeFunction}, !r.expandErr); stop {
+			return nil
+		}
+		// A numbered prefix is applied to the shell here, which is measured
+		// and is why the acting spelling is called rather than the asking
+		// one: `set -- a b; 1=X f` shows the function `X` in `$1`.
+		for _, a := range c.Assigns {
+			if !a.Operand {
+				r.prefixAssignsPositional(a)
 			}
-			r.refusePrefix(a.Name, true)
 		}
 		return r.callFunc(ctx, fn, argv[1:])
 	}
@@ -2914,6 +2922,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// taken back afterward. The exception is a *special* builtin,
 		// where POSIX has the assignment persist; dash and ksh93 follow
 		// that and bash and zsh do not, so the dialect answers it.
+		// A frozen name is decided before anything is assigned, and decided
+		// once for the whole prefix: whether it is refused at all, whether
+		// the builtin still runs, and whether the script ends here. Ahead of
+		// the loop below because a refusal that costs the command must not
+		// have applied the names in front of it first.
+		kind := r.prefixCommandOf(argv)
+		refused, stop := r.refusePrefixes(c.Assigns, kind, true)
+		if stop {
+			return nil
+		}
 		var undo []savedVar
 		for _, a := range c.Assigns {
 			if a.Operand {
@@ -2924,6 +2942,15 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 				// The parameters are not in the table the undo below saves,
 				// so this one is not taken back — which is measured, not a
 				// gap. See Runner.prefixAssignsPositional.
+				continue
+			}
+			if refused && r.readonly[a.Name] {
+				// Reported above, or deliberately not reported where the
+				// dialect says a regular builtin's prefix is no refusal at
+				// all. Either way the name keeps its value: the builtin runs
+				// with what the shell already holds, which is what every
+				// column shows a child through `export x; readonly x=1;
+				// x=2 env`.
 				continue
 			}
 			v := strings.Join(r.expandWord(a.Value), " ")
@@ -3011,6 +3038,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	}
 
 	// An assignment prefix applies to this command's environment only.
+	//
+	// A frozen name is decided first, and for the whole prefix at once, the
+	// same way the builtin route decides it. The report waits for the value
+	// to have expanded below, because the order of the two is a dialect
+	// question and not this one's.
+	external := prefixCommand{kind: prefixBeforeExternal}
 	env := r.environ()
 	for _, a := range c.Assigns {
 		if a.Operand {
@@ -3036,7 +3069,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// about `x` there and about the expansion and the file everywhere
 		// else. Ours is on the everywhere-else side on both, and staying
 		// there is what keeps this change to the half the panel agrees on.
-		if r.refusePrefix(a.Name, !r.expandErr) {
+		if r.readonly[a.Name] {
 			// Refused, so nothing is appended: the assignment did not happen,
 			// and the child is handed this shell's own environment for the
 			// name. The two are only distinguishable with the name exported,
@@ -3048,6 +3081,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			continue
 		}
 		env = append(env, a.Name+"="+value)
+	}
+	if _, stop := r.refusePrefixes(c.Assigns, external, !r.expandErr); stop {
+		return nil
 	}
 	return r.exec(ctx, argv, env)
 }
@@ -3986,40 +4022,6 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 		return
 	}
 	r.diagf("%s\n", msg)
-}
-
-// refusePrefix refuses an assignment prefixed to a frozen name, and reports
-// whether it did — so its caller can leave the assignment undone rather than
-// deciding a second time whether the name is frozen.
-//
-// The report and nothing more, which is the whole of what the panel agrees
-// about here: all six columns complain, and what they do next splits by the
-// kind of command the prefix is attached to, with the two lenient shells
-// splitting opposite ways — ksh93 stops on a special builtin or a function
-// and carries on for an external command, zsh stops on everything internal
-// and carries on for an external one. Deciding that here would be inventing
-// an axis rather than measuring one, so this leaves the status, the rest of
-// the list and the script exactly as they were (#1219).
-//
-// report is the caller's, because a value that failed to expand has already
-// had a complaint of its own and which of the two a shell writes is a second
-// split: bash names the frozen name and never evaluates the value, and dash,
-// ksh93 and zsh name the expansion and never mention the name. The refusal
-// itself stands either way — a value that would not expand is not a value the
-// name may take.
-//
-// The form is assignedAnyhow and not a declaration's, which is what a prefix
-// is: it is never `export x=2`, so the declaration wording and the builtin's
-// name in the location are never this refusal's, whatever builtin happens to
-// be running the command it is prefixed to.
-func (r *Runner) refusePrefix(name string, report bool) bool {
-	if !r.readonly[name] {
-		return false
-	}
-	if report {
-		r.reportReadonlyRefusal(name, assignedAnyhow, false)
-	}
-	return true
 }
 
 // refuseReadonly reports whether an assignment to a frozen name is refused,

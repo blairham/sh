@@ -805,6 +805,26 @@ func Semantics() interp.Semantics {
 	// identifier` — so it is the positional alone that parts (#1541).
 	s.AssignThroughExpansionMayNameAPositional = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No
+	// An assignment prefix to a frozen name is answered by the kind of
+	// command too, and on a different line from ksh93's: everything this
+	// shell runs itself ends the script, and an external one does not.
+	// `command` is read as the word that was *written* rather than looked
+	// through, which is the row that separates the two readings. Measured
+	// 2026-09-11 with `readonly x=1` and `x=2 <cmd>; echo after`:
+	//
+	//	/bin/echo RAN      complains, never runs it, 1, reaches `after`
+	//	true, echo E       complains and ends the script at 1
+	//	an alias for true  complains and ends the script at 1
+	//	command true       complains, never runs it, 1, carries on
+	//	command /bin/echo  the same
+	//	: and a function   complains and ends the script at 1
+	//
+	// The refusal always costs the command where it is not fatal, and the
+	// status is 1 rather than the 127 a name nothing can run would earn:
+	// the lookup never happens (#1219).
+	s.PrefixToARegularBuiltinIsRefused = interp.Yes
+	s.PrefixRefusalFatality = interp.PrefixRefusalFatalOnACommandThisShellRuns
+	s.PrefixRefusalCostsTheCommand = interp.Yes
 	// hash counts only what PATH holds: a builtin or a function is "no
 	// such command" to it.
 	s.HashSearchesPathAlone = interp.Yes

@@ -494,6 +494,16 @@ func Semantics() interp.Semantics {
 	// this way`, in 5.3.15, in the same binary under argv[0] of `sh` and in
 	// 3.2.57 alike. Only zsh assigns (#1541).
 	s.AssignThroughExpansionMayNameAPositional = interp.No
+	// An assignment prefix to a frozen name is reported and costs nothing
+	// at all: measured 2026-09-11 in 5.3.15 and in 3.2.57, `readonly x=1;
+	// x=2 /bin/echo RAN; echo after` prints the complaint, `RAN` and
+	// `after` at status 0 — the command runs with the name still holding
+	// its old value — and the same holds for a regular builtin, a special
+	// one, a function and `command`. Uniform across every kind, which is
+	// what separates this shell from the two that answer by kind (#1219).
+	s.PrefixToARegularBuiltinIsRefused = interp.Yes
+	s.PrefixRefusalFatality = interp.PrefixRefusalNeverFatal
+	s.PrefixRefusalCostsTheCommand = interp.No
 	// A failed expansion gives up the line here and the shell carries on at
 	// the next one, which is this shell alone among the four. Measured over
 	// both routes and both separators — see the axis for the 2x2 — on a bad

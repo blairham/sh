@@ -396,6 +396,25 @@ func Semantics() interp.Semantics {
 	// it made a keyword function refuse a declaration this shell takes
 	// (#1177).
 	s.DeclarationMayShadowAReadonly = interp.Yes
+	// An assignment prefix to a frozen name is answered by the kind of
+	// command it stands in front of, and by the kind the word *resolves*
+	// to: `command` is transparent here. Measured 2026-09-11 with
+	// `readonly x=1` and `x=2 <cmd>; echo after`:
+	//
+	//	/bin/echo RAN      complains, never runs it, 1, reaches `after`
+	//	true, echo E       says nothing at all, runs it, 0
+	//	command true       says nothing at all, 0
+	//	command /bin/echo  complains, never runs it, 1
+	//	an alias for true  says nothing at all, 0
+	//	: and a function   complains and ends the script at 1
+	//
+	// So the silence is the *regular builtin*'s, whichever way the word
+	// reached one, and the fatality is the two kinds that would have kept
+	// the assignment. An earlier reading of this held `true` fixed
+	// throughout and got five of those rows backwards (#1219).
+	s.PrefixToARegularBuiltinIsRefused = interp.No
+	s.PrefixRefusalFatality = interp.PrefixRefusalFatalOnASpecialBuiltinOrFunction
+	s.PrefixRefusalCostsTheCommand = interp.Yes
 	// The attribute cannot come off, though, which is where this shell parts
 	// from zsh and why the two are separate questions: `typeset +r x` on a
 	// frozen name is `typeset: x: is read only` and ends the script.

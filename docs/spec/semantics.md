@@ -15,6 +15,8 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | globs the *result* of an expansion | yes | yes | yes | **no** |
 | `&>` is one redirection operator | **no** | yes | *build* | yes |
 | assignment prefix persists on a special builtin | **yes** | no | **yes** | no |
+| a refused assignment prefix ends the script | **always** | never | **special builtin or function** | **a command it runs itself** |
+| a refused assignment prefix costs the command | — | no | **yes** | **yes** |
 | brace group needs a terminator before `}` | yes | yes | yes | **no** |
 | `}` as an ordinary argument | yes | yes | yes | **reserved** |
 | an unterminated construct is reported on | last line | **the line after** | last line | last line |
@@ -244,10 +246,10 @@ An axis whose wrong answer is an error is self-limiting. An axis whose
 wrong answer is a different working program is not, and it is the case a
 dialect system exists to get right. See `grammar/tokenization.md`.
 
-## An assignment prefixed to a frozen name: one answer, and one axis not yet asked
+## An assignment prefixed to a frozen name: one unanimous answer and three axes
 
-`readonly x=1` then `x=2 cmd` is two questions, and only the first of
-them is settled.
+`readonly x=1` then `x=2 cmd` is two questions: whether the refusal is
+reported, which is unanimous, and what it costs, which is three axes.
 
 **Reporting is unanimous.** Every column in the panel complains about the
 refused name, on every kind of command, with the sole exception of ksh93
@@ -260,7 +262,8 @@ refused. That half is implemented: the complaint is written wherever the
 command is dispatched, and nothing else about the command moves.
 
 **What the refusal costs is not one answer, and it splits by the kind of
-command the prefix is attached to.** Measured 2026-09-07, script file,
+command the prefix is attached to.** Measured 2026-09-07 and re-measured
+2026-09-11, script file,
 `env -i` with an isolated `HOME`, `ZDOTDIR`, `HISTFILE` and `ENV`; **R**
 is a refusal reported, **run** that the command ran, **fatal** that the
 script stopped:
@@ -309,21 +312,44 @@ the name was frozen does not enter into it either: `readonly x`, with no
 value, and `typeset -r x=1` refuse exactly as `readonly x=1` does in
 every column that has the spelling.
 
-**So the consequence is not implemented, deliberately.** It needs the
-command kind to reach the refusal — which it does not today for an
-external command or a function, because the refusal happens nowhere near
-the dispatch — and it needs *two* answers rather than one, whether the
-script stops and whether the command still runs, with the line drawn in
-a different place per shell. Writing one axis from the bash rows would
-have given ksh93 the opposite answer for five kinds of nine, which is
-how this was first filed. `AssignmentPrefixPersistsOnSpecialBuiltin` is
-the nearest neighbour and shows the kind is knowable for a builtin; it
-is not knowable for the other two until the refusal moves.
+**Three axes, because the table above needs three questions answered.**
+Writing one axis from the bash rows would have given ksh93 the opposite
+answer for five kinds of nine, which is how this was first filed.
 
-**One thing follows from reporting alone and is implemented with it.** A
-shell that carries on names *every* frozen name in the prefix, in written
-order; the shells that name only the first are the ones that give the
-command up at the first refusal. So the count is not a separate answer.
+- **`PrefixToARegularBuiltinIsRefused`** — whether it is a refusal at all
+  in that one position. No in ksh93 and Yes everywhere else. Asked only
+  in front of a regular builtin, which is the only position the panel
+  parts at.
+- **`PrefixRefusalFatality`** — never (bash), always (dash), on a special
+  builtin or a function (ksh93), or on a command this shell runs itself
+  (zsh). The last two are the kind-keyed values, and they read *different
+  words* to find the kind: `command` is transparent to ksh93 and is not
+  to zsh, which is what the `command` pair in the corpus is the probe
+  for.
+- **`PrefixRefusalCostsTheCommand`** — whether the command is left unrun
+  at status 1 where the refusal is not fatal. Yes in ksh93 and zsh, No in
+  bash. Unanswered in the standard's preset, where every refusal is fatal
+  and the command's fate never arises.
+
+The kind is read once, at the dispatch, by resolving the command word the
+way the dispatch itself resolves it — a function shadows a builtin and a
+builtin shadows an external — so the axes cannot disagree with what runs.
+
+**Two things follow from those and are not axes.** A shell that carries
+on names *every* frozen name in the prefix, in written order; the shells
+that name only the first are the ones that give the command up at the
+first refusal, so the count follows from
+`PrefixRefusalCostsTheCommand`. And a name that resolves to nothing is an
+external command that fails to run, so the columns that skip the command
+report 1 and never write `command not found`.
+
+**What is left, and it is not this.** bash checks the prefix *before* it
+expands the value or opens a redirection, so `x=$((1/0)) cmd` and
+`x=2 cmd >/nope/f` complain about `x` there and about the expansion and
+the file everywhere else. Ours is on the everywhere-else side, on every
+dispatch route alike now, and the three `roprefix/` rows that measure it
+are the recorded divergence. That ordering is one axis of its own and has
+not been asked.
 
 Corpus: the twenty `roprefix/` rows, one per command kind and one per
 variable the construct turned out to depend on — including the control,

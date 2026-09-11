@@ -343,7 +343,67 @@ is the same on every machine. See `prompt/the-default-prompt-is-a-parameter-at-a
   answer taken is the one `PS1` gives — `PS2` is left unset there. Recorded
   here rather than fixed, because splitting the entry per parameter would be a
   knob for one column.
-- **`PS4` and `PS3`.** Every column sets `PS4` on every route, interactive or
-  not, and ksh93 and zsh set `PS3` (`#? ` and `?# `). Neither is assigned here
-  and neither is read: xtrace writes a fixed `+`, and `select` writes its own
-  prompt. Measured and recorded; not implemented.
+- **`PS3`.** ksh93 and zsh set it (`#? ` and `?# `). It is not assigned here
+  and not read: `select` writes its own prompt. Measured and recorded; not
+  implemented.
+- **`PS4` is read but not assigned.** The trace prefix is this parameter in
+  every column and has been here since #1454 — see "The trace prefix is a
+  prompt" below — but the *default* is still a fallback in the code rather
+  than a value written into the parameter. Every column assigns it on every
+  route, interactive or not: `+ ` in four of them and `+%N:%i> ` in zsh. The
+  difference that leaves is what `unset PS4` does, and it is measured: three
+  columns then draw no prefix at all and ksh93 draws `+ ` again, where this
+  shell falls back to its dialect's prefix in every case. See
+  `xtrace/ps4-unset-is-not-the-default-again`.
+
+## The trace prefix is a prompt
+
+`PS4` decides what `set -x` writes in front of each command, and the value goes
+through **the prompt language of the dialect reading it** — which makes the
+trace prefix the only route to a prompt escape that needs no terminal, and
+therefore the only one the corpus can reach. Every other escape this shell
+draws is pinned by a test that builds a session.
+
+### Measured
+
+2026-09-11, `env -i <shell> -c '…'`, macOS 25.5.
+
+| | bash 5.3 | bash 3.2 | dash | ksh93 | zsh 5.9 |
+| --- | --- | --- | --- | --- | --- |
+| `PS4="XX "; set -x; :` | `XX :` | `XX :` | `XX :` | `XX :` | `XX :` |
+| `PS4=; set -x; :` | `:` | `:` | `:` | `:` | `:` |
+| `PS4='<\u>'` | `<bhamilton>` | `<bhamilton>` | `<\u>` | `<u>` | `<\u>` |
+| `PS4='%n '` | `%n ` | `%n ` | `%n ` | `%n ` | `bhamilton ` |
+| `PS4='+$LINENO '`, two lines | `+1`, `+2` | `+1`, `+2` | `+1`, `+2` | `+1`, `+2` | `+$LINENO` twice |
+| default `$PS4` | `+ ` | `+ ` | `+ ` | `+ ` | `+%N:%i> ` |
+
+Three readings, and they are the three halves of one question:
+
+- **the escape table is the dialect's own.** bash reads its backslash codes,
+  zsh reads its `%` codes, ksh93 has no code for `\u` and drops the backslash
+  of an escape it does not know, and dash has no table at all. Those are
+  exactly each dialect's `PromptStyle`, so the prefix asks the same value the
+  prompt drawer asks rather than growing a second table.
+- **the expansion is the same question again.** Three shells expand the value
+  at every trace and zsh does not unless a script has turned prompt
+  substitution on — `PromptStyle.Expand`, which is a function for this reason.
+- **an escape with no answer is the drawer's policy, not a script's.** A prefix
+  has to draw something, so a code in no table falls through to
+  `PromptStyle.Unknown` rather than being refused by name the way `${(%)…}`
+  refuses it.
+
+### bash repeats the first character by indirection
+
+Measured 2026-09-11, bash 5.3.15 and 3.2.57 alike:
+
+```
+$ bash -c 'set -x; eval :'          $ bash -c 'PS4="XY "; set -x; eval :'
++ eval :                            XY eval :
+++ :                                XXY :
+```
+
+An `eval`, a sourced file and a command substitution each add one level; a
+function call and a subshell add none, so it counts **text being read again**
+rather than the depth of the stack. dash, ksh93 and zsh draw the same prefix at
+every depth. `Diagnostics.TracePrefixRepeatsAtIndirection` is the answer, and
+`Runner.indirection` is the count.

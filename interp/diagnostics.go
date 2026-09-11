@@ -2702,6 +2702,20 @@ type Diagnostics struct {
 	// `case $v in` once, zsh prints `case v (pattern)` once per pattern it
 	// tries, and the corpus records the difference rather than claiming it.
 	TraceForHeader TraceForHeader
+	// TracePrefixRepeatsAtIndirection repeats the trace prefix's first
+	// character once per level of indirection — an `eval`, a sourced file or
+	// a command substitution the traced command is inside.
+	//
+	// bash alone, measured 2026-09-11: `set -x; eval :` traces `+ eval :`
+	// then `++ :`, and `eval "eval :"` reaches `+++ :`. A function call and a
+	// subshell add nothing, so the count is of text being read again rather
+	// than of the stack. dash, ksh93 and zsh leave the prefix alone at every
+	// depth.
+	//
+	// The *first character* rather than the whole prefix, which is what makes
+	// it a rule about the prefix rather than about the plus sign:
+	// `PS4='XY '` traces `XY eval :` and then `XXY :`.
+	TracePrefixRepeatsAtIndirection bool
 
 	// Location is how the shell prefixes a diagnostic with where it
 	// happened. Measured, and all four differ:

@@ -1090,6 +1090,10 @@ func Diagnostics() interp.Diagnostics {
 		KillListing:         interp.KillListingNumbered,
 		TraceQuoting:        interp.QuoteShell,
 		TraceForHeader:      interp.TraceForSource,
+		// The panel's only shell that says how deep the text it is reading
+		// came from: `set -x; eval :` traces `+ eval :` and then `++ :`.
+		// Measured 2026-09-11 on 5.3.15 and 3.2.57 alike.
+		TracePrefixRepeatsAtIndirection: true,
 		// bash names the construct and the line it opened on, and nothing
 		// about what would have closed it.
 		EvalNaming:       interp.SourceBeforeLocation,

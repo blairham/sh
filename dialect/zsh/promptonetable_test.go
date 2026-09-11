@@ -57,7 +57,22 @@ func TestTheDrawerAndTheInterpreterReadOneTable(t *testing.T) {
 	// and a nested parse would then run as a shell these tests are not about.
 	r := preset.Runner(dialecttest.Base{Dir: t.TempDir()})
 	drawn := zsh.PromptStyle()
-	if got := r.PromptStyleValue(); !reflect.DeepEqual(got, drawn) {
+	got := r.PromptStyleValue()
+	// The one field that cannot be compared by value: reflect.DeepEqual
+	// calls two non-nil funcs different however they were built, so leaving
+	// Expand in would fail this for every table including a table compared
+	// with itself. It is compared by *identity* instead — the same function,
+	// not merely one that answers alike — and then taken out of both copies
+	// so the rest is still asserted whole.
+	drawnExpand, gotExpand := expandOf(drawn), expandOf(got)
+	if drawnExpand == 0 {
+		t.Error("the dialect's Expand is nil, so `setopt prompt_subst` could never turn it on")
+	}
+	if gotExpand != drawnExpand {
+		t.Errorf("the interpreter's Expand is not the drawer's: %v against %v", gotExpand, drawnExpand)
+	}
+	got.Expand, drawn.Expand = nil, nil
+	if !reflect.DeepEqual(got, drawn) {
 		t.Errorf("the interpreter's table is not the drawer's:\n interp: %+v\n drawer: %+v", got, drawn)
 	}
 	// And it is not the empty table, which would make the comparison above
@@ -236,4 +251,10 @@ func TestABraceInTheFlagOperandEndsIt(t *testing.T) {
 	if out != want || st != 0 {
 		t.Errorf("the flag operand with a brace = %q (status %d), want %q", out, st, want)
 	}
+}
+
+// expandOf is a PromptStyle.Expand as a comparable identity, which is the
+// only way to ask whether two tables carry the *same* function.
+func expandOf(st interp.PromptStyle) uintptr {
+	return reflect.ValueOf(st.Expand).Pointer()
 }

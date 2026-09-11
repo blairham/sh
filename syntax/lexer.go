@@ -710,8 +710,12 @@ func (l *Lexer) tryFdVariable() (Token, bool) {
 	n := 1
 	for {
 		c := l.peekAt(n)
-		if c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(n > 1 && c >= '0' && c <= '9') {
+		// A digit leads only where the dialect takes a positional
+		// parameter here — `{1}>&-` closes the descriptor `$1` holds.
+		// Whether a *mixed* name like `{1a}` is one anybody has is the
+		// resolver's question and not this one's; see FdVariablePositional.
+		digit := c >= '0' && c <= '9' && (n > 1 || l.dialect.FdVariablePositional)
+		if c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || digit {
 			n++
 			continue
 		}

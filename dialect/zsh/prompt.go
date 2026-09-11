@@ -32,7 +32,11 @@ import "github.com/blairham/sh/interp"
 // disagrees about this, and the disagreement is why the field exists.
 func PromptStyle() interp.PromptStyle {
 	return interp.PromptStyle{
-		Expand: false,
+		// `setopt PROMPT_SUBST`, asked at every draw — see promptsubst.go.
+		Expand: promptSubstIsOn,
+		// And the expansion runs before the table, which is this shell's
+		// order and not bash's. Measured both ways; see the field.
+		ExpandBeforeEscapes: true,
 		// Measured, one code per prompt, through a pty against zsh 5.9.2.
 		Escape: '%',
 		// A count in front of a code — `%2~` is the last two components. See

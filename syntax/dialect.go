@@ -2134,6 +2134,29 @@ type Dialect struct {
 	// ordinary word.
 	FdVariableRedirections bool
 
+	// FdVariablePositional lets the name inside those braces begin with a
+	// digit, which is how a *positional parameter* names a descriptor:
+	// `exec {1}>&-` closes the one whose number is in `$1`.
+	//
+	// zsh alone. Measured 2026-09-10: `f(){ exec {1}</dev/null; }` opens the
+	// descriptor and puts its number in `$1` there, where bash 5.3 answers
+	// `exec: {1}: not found` — it read the braces as a word — and ksh93
+	// answers `1: invalid variable name`. So two of the three shells with
+	// the parent feature refuse it, which is the same shape
+	// FdVariableSubscript has and the reason this is a flag of its own
+	// rather than a consequence of having the parent.
+	//
+	// A digit-leading name must be *all* digits, and that rule is the
+	// runtime's rather than the lexer's: measured, `{1a}` and `{1_}` are
+	// taken as the token and then refused with `not an identifier: 1a`,
+	// where `{01}` and `{99}` work. So the lexer admits the run and
+	// whoever resolves the name decides, which is also what keeps the two
+	// halves from disagreeing about what a name is.
+	//
+	// It is needed by a real prompt theme: a scheduler handed a descriptor
+	// as its first argument closes it exactly this way.
+	FdVariablePositional bool
+
 	// MultiDigitFdNumber lets a redirection's descriptor number have more
 	// than one digit: `exec 10>file` opens the file on ten.
 	//

@@ -164,7 +164,7 @@ func TestTheDialectsPromptStyleReachesThePrompt(t *testing.T) {
 		style repl.PromptStyle
 		want  string
 	}{
-		{"expanded", repl.PromptStyle{Expand: true}, "[someone]"},
+		{"expanded", repl.PromptStyle{Expand: interp.PromptExpandsAlways}, "[someone]"},
 		{"as it stands", repl.PromptStyle{}, "[$who]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -187,7 +187,7 @@ func TestTheDialectsPromptStyleReachesThePrompt(t *testing.T) {
 func TestTheDialectsAnswersReachTheFrontEnd(t *testing.T) {
 	sh := shell()
 	sh.Name = "testsh"
-	sh.PromptStyle = repl.PromptStyle{Expand: true, Escape: '%'}
+	sh.PromptStyle = repl.PromptStyle{Expand: interp.PromptExpandsAlways, Escape: '%'}
 	sh.EditorStyle = repl.EditorStyle{Interrupt: "<int>"}
 	sh.HistoryStyle = repl.HistoryStyle{SearchPrompt: "<search %s>", Ignore: "SOMEVAR"}
 	front := sh.FrontEndForTest(nil, "testsh", interp.Diagnostics{})
@@ -197,7 +197,7 @@ func TestTheDialectsAnswersReachTheFrontEnd(t *testing.T) {
 	if front.History.SearchPrompt != "<search %s>" || front.History.Ignore != "SOMEVAR" {
 		t.Errorf("History = %+v, want it carried across", front.History)
 	}
-	if !front.Style.Expand || front.Style.Escape != '%' {
+	if front.Style.Expand == nil || front.Style.Escape != '%' {
 		t.Errorf("Style = %+v, want it carried across", front.Style)
 	}
 	if front.Name != "testsh" {

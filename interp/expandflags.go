@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULfsj@kvP%qMuoOniaQbcwWA~Zze-lr0"
+const implementedParamFlags = "ULfsj@kvP%qMuoOniaQbcwWA~Zze-lr0V"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -394,6 +394,14 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	if n := strings.Count(e.Flags, "q"); n > 0 {
 		for i, w := range words {
 			words[i] = quoteFlagged(w, n, e.QuoteModifier, nothing)
+		}
+	}
+	// And after the quoting, which is the order `${(Vq)}` measures: a tab
+	// comes out `a$'\t'b`, so the quoting saw the control character and
+	// this did not. See visibleflag.go.
+	if strings.ContainsRune(e.Flags, 'V') {
+		for i, w := range words {
+			words[i] = visibleText(w)
 		}
 	}
 	// Rule 14's third spelling: `(b)` marks the *pattern* metacharacters and

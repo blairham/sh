@@ -18,7 +18,7 @@ import "github.com/blairham/sh/interp"
 // disagrees about this, and the disagreement is why the field exists.
 func PromptStyle() interp.PromptStyle {
 	return interp.PromptStyle{
-		Expand: true,
+		Expand: interp.PromptExpandsAlways,
 		// Measured with nothing assigned: real dash prompts `$ ` and continues
 		// with `> `, which is what the substrate does anyway. Stated rather than
 		// left empty so the dialect describes itself.

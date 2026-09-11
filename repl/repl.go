@@ -1026,12 +1026,22 @@ func (s Shell) render(value string) string {
 	if value == "" {
 		return value
 	}
-	// Three passes, in the order the panel draws them: the dialect's table of
-	// codes, then expansion, then the character that stands for the history
-	// number.
-	value = s.table(value)
-	if s.Style.Expand {
-		value = s.Runner.Expand(value)
+	// Three passes: the dialect's table of codes, the expansion, and the
+	// character that stands for the history number. The first two run in
+	// the order the *dialect* draws them — see PromptStyle.ExpandBeforeEscapes,
+	// which is measured in both directions and is what decides whether an
+	// escape a parameter produced is one the table ever sees.
+	expand := func() {
+		if s.Style.Expand != nil && s.Style.Expand(s.Runner) {
+			value = s.Runner.Expand(value)
+		}
+	}
+	if s.Style.ExpandBeforeEscapes {
+		expand()
+		value = s.table(value)
+	} else {
+		value = s.table(value)
+		expand()
 	}
 	return s.history(value)
 }

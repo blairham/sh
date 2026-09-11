@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/blairham/sh/interp"
+
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/pty"
 	"github.com/blairham/sh/repl"
@@ -178,7 +180,7 @@ func TestAColoredPromptDrawsColorAndNoMarkers(t *testing.T) {
 	// The shape of every colored prompt there is: a bracketed sequence, some
 	// text, and a bracketed sequence turning it off again.
 	sh.PromptStyle = repl.PromptStyle{
-		Expand: true,
+		Expand: interp.PromptExpandsAlways,
 		Escape: '\\',
 		Codes: map[rune]repl.PromptField{
 			'[': repl.FieldNonPrintingStart,

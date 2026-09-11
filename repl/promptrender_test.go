@@ -6,6 +6,8 @@ package repl
 import (
 	"testing"
 	"time"
+
+	"github.com/blairham/sh/interp"
 )
 
 func at(t *testing.T, hour, min, sec int) func() time.Time {
@@ -274,7 +276,7 @@ func TestTheTableIsReadBeforeExpansion(t *testing.T) {
 	s := Shell{
 		Runner: newTestRunner(map[string]string{"USER": "someone", "x": `\u`}),
 		Style: PromptStyle{
-			Expand: true, Escape: '\\',
+			Expand: interp.PromptExpandsAlways, Escape: '\\',
 			Codes: map[rune]PromptField{'u': FieldUser},
 		},
 	}
@@ -355,7 +357,7 @@ func TestTheBangIsReadAfterExpansionAndTheTableBeforeIt(t *testing.T) {
 	s := Shell{
 		Runner: newTestRunner(map[string]string{"x": "!", "USER": "someone"}),
 		Style: PromptStyle{
-			Expand: true, History: '!', Escape: '\\',
+			Expand: interp.PromptExpandsAlways, History: '!', Escape: '\\',
 			Codes: map[rune]PromptField{'u': FieldUser},
 		},
 		counts: &counts{history: 6},

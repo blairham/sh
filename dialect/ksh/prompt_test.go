@@ -17,8 +17,8 @@ import (
 // are not answered by this field.
 
 func TestPromptStyle(t *testing.T) {
-	if got := ksh.PromptStyle().Expand; got != true {
-		t.Errorf("Expand = %v, want %v", got, true)
+	if expand := ksh.PromptStyle().Expand; expand == nil || !expand(nil) {
+		t.Error("Expand does not expand, and this shell expands a prompt always")
 	}
 }
 

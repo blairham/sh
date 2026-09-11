@@ -16,8 +16,8 @@ import (
 // again at every prompt.
 
 func TestPromptStyle(t *testing.T) {
-	if got := bash.PromptStyle().Expand; got != true {
-		t.Errorf("Expand = %v, want %v", got, true)
+	if expand := bash.PromptStyle().Expand; expand == nil || !expand(nil) {
+		t.Error("Expand does not expand, and this shell expands a prompt always")
 	}
 }
 

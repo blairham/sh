@@ -7,6 +7,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/interp"
 )
 
 // Whether a prompt parameter's value is expanded is the dialect's answer, not
@@ -21,13 +23,13 @@ func TestAPromptIsExpandedWhenTheDialectSaysSo(t *testing.T) {
 		ps1   string
 		want  string
 	}{
-		{"expanded", PromptStyle{Expand: true}, "<$who>@ ", "<someone>@ "},
+		{"expanded", PromptStyle{Expand: interp.PromptExpandsAlways}, "<$who>@ ", "<someone>@ "},
 		{"drawn as it stands", PromptStyle{}, "<$who>@ ", "<$who>@ "},
-		{"arithmetic too", PromptStyle{Expand: true}, "<$((1+1))>", "<2>"},
+		{"arithmetic too", PromptStyle{Expand: interp.PromptExpandsAlways}, "<$((1+1))>", "<2>"},
 		// The default is expanded like anything else, and a lone dollar
 		// before a space is a dollar: the fallback has to survive its own
 		// expansion or every shell without a PS1 draws a broken prompt.
-		{"the default survives it", PromptStyle{Expand: true}, "", ""},
+		{"the default survives it", PromptStyle{Expand: interp.PromptExpandsAlways}, "", ""},
 		{"and is drawn as it stands when nothing expands", PromptStyle{}, "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -58,7 +60,7 @@ func TestAPromptIsExpandedWhenTheDialectSaysSo(t *testing.T) {
 func TestTheDefaultIsRenderedTheSameWay(t *testing.T) {
 	s := Shell{
 		Runner: newTestRunner(map[string]string{"who": "someone"}),
-		Style:  PromptStyle{Expand: true},
+		Style:  PromptStyle{Expand: interp.PromptExpandsAlways},
 	}
 	if got := s.prompt("PS1", "<$who> "); got != "<someone> " {
 		t.Errorf("default = %q, want it expanded like any other prompt", got)
@@ -80,7 +82,7 @@ func TestAPromptIsExpandedAtEachDraw(t *testing.T) {
 	r.Stdout = &out
 	s := Shell{
 		Runner: r, In: in, Out: &out, Err: &errs,
-		Style: PromptStyle{Expand: true},
+		Style: PromptStyle{Expand: interp.PromptExpandsAlways},
 	}
 	if _, err := s.Run(t.Context()); err != nil {
 		t.Fatal(err)
@@ -105,7 +107,7 @@ func TestACommandSubstitutionRunsAgainAtEachPrompt(t *testing.T) {
 	r.Stdout = &out
 	s := Shell{
 		Runner: r, In: in, Out: &out, Err: &errs,
-		Style: PromptStyle{Expand: true},
+		Style: PromptStyle{Expand: interp.PromptExpandsAlways},
 	}
 	if _, err := s.Run(t.Context()); err != nil {
 		t.Fatal(err)
@@ -134,7 +136,7 @@ func TestTheContinuationPromptIsReadLikeTheFirst(t *testing.T) {
 	s := Shell{
 		Runner: r, In: in, Out: &out, Err: &errs,
 		Style: PromptStyle{
-			Expand: true, Escape: '\\', Unknown: KeepBoth,
+			Expand: interp.PromptExpandsAlways, Escape: '\\', Unknown: KeepBoth,
 			Codes: map[rune]PromptField{
 				'u': FieldUser,
 				'[': FieldNonPrintingStart, ']': FieldNonPrintingEnd,
@@ -228,4 +230,50 @@ func drawn(s Shell, continuing bool) string {
 		pending.WriteString("for i in 1\n")
 	}
 	return s.beforeReading(context.Background(), nil, &pending).text
+}
+
+// The two orders a prompt can be drawn in, and the difference is whether an
+// escape that came *out of a parameter* is one the table ever sees.
+//
+// Measured in both directions on real shells. bash, with `C='\u'` and
+// `PS1='A${C}B\u C '`, draws `A\uBbhamilton C` — the escapes are read first
+// and the parameter's `\u` survives as text. zsh, with `C='%F{red}'` under
+// `setopt prompt_subst`, draws both colors — the expansion runs first and
+// the table reads its result.
+//
+// Both orders are asserted here, from one style and one value, because a
+// test of the zsh order alone passes for a shell that always expands first
+// and would have taken bash's prompt with it.
+func TestTheExpansionAndTheEscapeTableRunInTheDialectsOrder(t *testing.T) {
+	base := PromptStyle{
+		Expand: interp.PromptExpandsAlways,
+		Escape: '%',
+		Codes:  map[rune]interp.PromptField{'m': interp.FieldHost},
+	}
+	for _, tc := range []struct {
+		name   string
+		before bool
+		want   string
+	}{
+		// What the host renders *to* is empty in this harness and is not
+		// the question. The question is which occurrences the table
+		// reached: with the table first, the `%m` the parameter produces
+		// arrives too late and survives as text.
+		{"escapes first", false, "[][%m]"},
+		// With the expansion first both are in the string by the time the
+		// table walks it, so neither survives.
+		{"expansion first", true, "[][]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := base
+			st.ExpandBeforeEscapes = tc.before
+			s := Shell{Runner: newTestRunner(map[string]string{
+				"C":   "%m",
+				"PS1": "[%m][$C]",
+			}), Style: st}
+			if got := s.prompt("PS1", "$ "); got != tc.want {
+				t.Errorf("prompt = %q, want %q", got, tc.want)
+			}
+		})
+	}
 }

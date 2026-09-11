@@ -16,9 +16,9 @@ import (
 // # What asks for it
 //
 // A script that starts a daemon through `<(…)` and wants to be able to stop it
-// again. The shape is the same in every instance of it installed on this
-// machine — a prompt theme's asynchronous worker, its git backend, and an
-// autosuggestion plugin — and it is three lines long:
+// again. The shape is the same in all four instances of it installed on this
+// machine — a prompt theme's asynchronous worker, its git backend, an
+// autosuggestion plugin and a syntax highlighter — and it is three lines long:
 //
 //	sysopen -r -u fd <(
 //	  local pgid=$sysparams[pid]   # which process am I?
@@ -60,7 +60,7 @@ import (
 //
 // The anchor is started at the first read and never otherwise. A `<(…)` whose
 // body never asks which process it is costs nothing, which is every one in the
-// corpus and all but three in the plugin tree — and the three that ask are
+// corpus and all but four in the plugin tree — and the four that ask are
 // asking for something worth a process.
 //
 // # What ends it

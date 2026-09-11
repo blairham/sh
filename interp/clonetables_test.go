@@ -70,6 +70,8 @@ func seedStacks(r *Runner) {
 		savedReadonly:    map[string]bool{"seed": true},
 		savedHideInScope: map[string]bool{"seed": true},
 		savedAttrs:       map[string]nameAttributes{"seed": {}},
+		savedAssigned:    map[string]string{"seed": "v"},
+		assignedSpoken:   map[string]bool{"seed": true},
 		savedExported:    map[string]bool{"seed": true},
 		exportedSpoken:   map[string]bool{"seed": true},
 		exportedShadow:   map[string]string{"seed": "v"},

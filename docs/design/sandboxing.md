@@ -598,13 +598,32 @@ first did not cover the second (#2045). It is the identical bug with a
 different alphabet, so it gets the identical answer: the fold
 canonicalises composition as well as case, and only on a deny.
 
-This is the one place the substrate spends a dependency, and it is
-recorded rather than absorbed. `golang.org/x/text/unicode/norm` is now a
-direct requirement of this module, and it is the only thing outside the
-standard library that the shipped binary links. Nothing in the standard
-library composes or decomposes a character — `unicode` will classify a
-combining mark but will not join it to the letter in front of it — so
-there is no table-free comparison that gets the two spellings to meet.
+Nothing in the standard library composes or decomposes a character —
+`unicode` will classify a combining mark but will not join it to the
+letter in front of it — so the comparison needs Unicode data that has to
+come from somewhere.
+
+It comes from `internal/unorm`, whose tables this repository generates
+with `internal/normgen`. That is the same answer `internal/eastasian`
+already reached for East Asian Width, and for the same stated reason:
+this module ships no dependency it can generate instead. It was briefly
+the other answer — `golang.org/x/text/unicode/norm` closed #2045 for a
+day — and owning it costs 2081 decompositions and 934 combining classes
+against roughly twice the binary size the imported package added.
+
+What owning it gives up is somebody else's correctness, and that is
+bought back rather than assumed: `internal/unorm` runs Unicode's own
+`NormalizationTest.txt`, every line, in all three canonically equivalent
+spellings. The oracle is the standard rather than another
+implementation, which is the same arrangement the rest of this
+repository has with the shells it measures against.
+
+Only the canonical decomposition is here. Two strings are canonically
+equivalent exactly when their NFD forms match, so composing again would
+be work whose result is discarded — and the compatibility mappings are
+deliberately absent, because NFKD folds `ﬁ` onto `fi` and no filesystem
+treats those as one name. A gate that folded them would refuse files
+nobody denied.
 
 The two alternatives were weighed and both cost more:
 
@@ -618,10 +637,11 @@ The two alternatives were weighed and both cost more:
   (#1114): a descriptor pins an object and not a name, and the answer
   moved at about a third of attempts under a concurrent rename.
 
-`internal/depsurface` pins what that spend bought. It fails if the
-shipped binary starts linking anything this page has not argued for,
-which turns "no runtime dependencies at all" from a sentence in a
-comment into a property something checks.
+`internal/depsurface` is what remains of the day the dependency was
+taken. Its list is empty again, and it fails if the shipped binary
+starts linking anything this page has not argued for — which turns "no
+runtime dependencies at all" from a sentence in a comment into a
+property something checks.
 
 ### The shell's own scaffolding is recorded, never refused
 

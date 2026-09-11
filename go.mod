@@ -7,7 +7,7 @@ tool (
 	mvdan.cc/gofumpt
 )
 
-require golang.org/x/text v0.40.0
+require golang.org/x/text v0.40.0 // indirect
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.4.0 // indirect

@@ -56,14 +56,14 @@ func optionTableRunner(t *testing.T, src string, dg Diagnostics, sem *Semantics)
 	}
 	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &s, Diagnostics: &dg, Name: "sh"})
 	r.SetOptionTable(
-		func() []ListedOption {
+		func(*Runner) []ListedOption {
 			rows := make([]ListedOption, 0, len(table))
 			for _, o := range table {
 				rows = append(rows, ListedOption{Name: o.name, On: o.on})
 			}
 			return rows
 		},
-		func(name string, on bool) (moved, known bool) {
+		func(_ *Runner, name string, on bool) (moved, known bool) {
 			o := find(name)
 			if o == nil {
 				return false, false
@@ -213,8 +213,8 @@ func TestTheDialectsTableDoesNotSwallowTheSubstratesOwnSeam(t *testing.T) {
 	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
 	moves := 0
 	r.SetOptionTable(
-		func() []ListedOption { return nil },
-		func(string, bool) (bool, bool) { moves++; return false, false },
+		func(*Runner) []ListedOption { return nil },
+		func(*Runner, string, bool) (bool, bool) { moves++; return false, false },
 	)
 	// A substrate name, through the seam a dialect's option builtin uses.
 	if code := r.ApplyNamedOption("errexit", true); code != 0 {

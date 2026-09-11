@@ -263,7 +263,7 @@ func TestTheOptionTestAsksTheDialectsNamespace(t *testing.T) {
 		r.Semantics = &s
 		d := Diagnostics{UnknownConditionOptionStatus: 3}
 		r.Diagnostics = &d
-		r.SetOptionNamespace(func(name string) (on, known bool) {
+		r.SetOptionNamespace(func(_ *Runner, name string) (on, known bool) {
 			switch name {
 			case "one_true_name":
 				return true, true
@@ -327,7 +327,7 @@ func TestDialectOptionReadsTheNamespaceAndNotTheSetONames(t *testing.T) {
 	if on, known := r.DialectOption("errexit"); !known || on {
 		t.Errorf("before any namespace: errexit on=%v known=%v, want off and known", on, known)
 	}
-	r.SetOptionNamespace(func(name string) (on, known bool) {
+	r.SetOptionNamespace(func(_ *Runner, name string) (on, known bool) {
 		switch name {
 		case "HIST_IGNORE_SPACE":
 			return true, true

@@ -8251,6 +8251,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/set-plus-o-does-not-borrow-another-shells-vocabulary` | `0` *(status 1)* | `3` | `3` | `3` | `0` *(status 1)* | `0` *(status 1)* |
 | `opt/set-o-takes-a-name-only-this-shell-has` | **2>** `<shell>: 1: set: Illegal option -o autocd` *(status 2)* | `st=2` **2>** `<shell>: line 1: set: autocd: invalid option name` | **2>** `<shell>: line 1: set: autocd: invalid option name` *(status 2)* | `st=1` **2>** `<shell>: line 0: set: autocd: invalid option name` | **2>** `<shell>: set: autocd: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `st=0` |
 | `opt/set-o-and-the-listing-are-one-namespace` | *(no output, status 2)* | `0` *(status 1)* | *(no output, status 2)* | `0` *(status 1)* | *(no output, status 2)* | `1` |
+| `opt/a-subshells-option-listing-is-its-own` | `1~0` *(status 1)* | `1~0` *(status 1)* | `1~0` *(status 1)* | `1~0` *(status 1)* | `0~0` *(status 1)* | `1~0` *(status 1)* |
+| `opt/a-subshells-option-test-reads-the-subshell` | `in=127~out=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `in=0~out=1` | `in=0~out=1` | `in=0~out=1` | `in=0~out=1` | `in=0~out=1` |
+| `opt/a-subshells-errexit-is-readable-in-the-subshell` | `after=127` **2>** `<shell>: 1: [[: not found` | `alive~after=0` | `alive~after=0` | `alive~after=0` | `alive~after=0` | `alive~after=0` |
 | `opt/set-o-a-name-this-shell-has-and-will-not-move` | **2>** `<shell>: 1: set: Illegal option -o onecmd` *(status 2)* | `st=0~after` | `st=0~after` | `st=0~after` | **2>** `<shell>: set: onecmd: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: can't change option: onecmd` *(status 1)* |
 | `opt/set-t-stops-after-the-line-that-set-it` | `A` **2>** `<script>: 2: set: Illegal option -t` *(status 2)* | `A` | `A` | `A` | `A` | `A` **2>** `<script>:set:2: can't change option: -t` *(status 1)* |
 | `opt/set-t-lets-its-own-line-finish` | **2>** `<script>: 1: set: Illegal option -t` *(status 2)* | `B` | `B` | `B` | `B` | **2>** `<script>:set:1: can't change option: -t` *(status 1)* |
@@ -8542,6 +8545,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `opt/set-o-and-the-listing-are-one-namespace` — written through `set -o` and read back through `set +o`, which is what makes the two rows above facts about one namespace rather than about two tables that happen to differ. One shell counts 1; bash 5.3 and bash 3.2 refuse the name, carry on and count 0; and the three that treat a refused `set -o` as fatal — bash-as-`sh`, dash and ksh93 — never reach the second command, so the case records their exit rather than a count
   ```sh
   set -o extendedglob 2>/dev/null; set +o | grep -cE '^set -o extendedglob$'
+  ```
+- `opt/a-subshells-option-listing-is-its-own` — an option moved inside a subshell applies there and does not escape, read back through the listing that writes the state. Three of the panel count 1 then 0; ksh93 counts 0 twice because its `+o` names only what is on in a vocabulary of its own, which is a fact about the listing rather than about the subshell. Ours counted 1 then 1 under the shell whose option table is its own: the dialect installed the listing as a closure over the shell it registered against, so a subshell — a cloned runner that keeps the field — moved and read the *parent* (#1855)
+  ```sh
+  (set -o noglob; set +o | grep -c "^set -o noglob$"); set +o | grep -c "^set -o noglob$"
+  ```
+- `opt/a-subshells-option-test-reads-the-subshell` — the same question through the condition operator, which is the route a script actually asks it on. Every shell with `[[ ]]` answers 0 inside and 1 after; dash has no such operator and reports it twice. It is the half the listing case cannot see, because a shell can have one namespace for `set -o` and a wider one for `[[ -o ]]` — and where that wider one was installed as a closure, every kind of option at once read the shell that spawned the subshell
+  ```sh
+  (set -o noglob; [[ -o noglob ]]; echo "in=$?"); [[ -o noglob ]]; echo "out=$?"
+  ```
+- `opt/a-subshells-errexit-is-readable-in-the-subshell` — why a wrong answer here is not only a wrong answer. With errexit held, a bare condition that answers false ends the shell it is in, so a subshell that misreads its own errexit does not print the wrong status — it prints nothing and exits non-zero. The three shells with the operator write `alive` and `after=0`; dash reports the operator missing. Ours wrote no `alive` line at all
+  ```sh
+  (set -e; [[ -o errexit ]]; echo alive); echo "after=$?"
   ```
 - `opt/set-o-a-name-this-shell-has-and-will-not-move` — a name a shell *has* and refuses to change, which is a third answer beside taking it and never having heard of it. The bash columns have `onecmd` and set it silently at 0; dash and ksh93 have no such name and stop; zsh has it — as a borrowed spelling for its own `singlecommand` — and refuses it with `can't change option`, fatally, which is a different sentence from the `no such option` it gives a name it does not have. Ours said `not implemented` and carried on, which was neither
   ```sh

@@ -11962,6 +11962,21 @@ echo "st=$? alive"`,
 		Why:     "written through `set -o` and read back through `set +o`, which is what makes the two rows above facts about one namespace rather than about two tables that happen to differ. One shell counts 1; bash 5.3 and bash 3.2 refuse the name, carry on and count 0; and the three that treat a refused `set -o` as fatal — bash-as-`sh`, dash and ksh93 — never reach the second command, so the case records their exit rather than a count",
 	},
 	{
+		ID: "opt/a-subshells-option-listing-is-its-own", Category: "shell options",
+		Snippet: `(set -o noglob; set +o | grep -c "^set -o noglob$"); set +o | grep -c "^set -o noglob$"`,
+		Why:     "an option moved inside a subshell applies there and does not escape, read back through the listing that writes the state. Three of the panel count 1 then 0; ksh93 counts 0 twice because its `+o` names only what is on in a vocabulary of its own, which is a fact about the listing rather than about the subshell. Ours counted 1 then 1 under the shell whose option table is its own: the dialect installed the listing as a closure over the shell it registered against, so a subshell — a cloned runner that keeps the field — moved and read the *parent* (#1855)",
+	},
+	{
+		ID: "opt/a-subshells-option-test-reads-the-subshell", Category: "shell options",
+		Snippet: `(set -o noglob; [[ -o noglob ]]; echo "in=$?"); [[ -o noglob ]]; echo "out=$?"`,
+		Why:     "the same question through the condition operator, which is the route a script actually asks it on. Every shell with `[[ ]]` answers 0 inside and 1 after; dash has no such operator and reports it twice. It is the half the listing case cannot see, because a shell can have one namespace for `set -o` and a wider one for `[[ -o ]]` — and where that wider one was installed as a closure, every kind of option at once read the shell that spawned the subshell",
+	},
+	{
+		ID: "opt/a-subshells-errexit-is-readable-in-the-subshell", Category: "shell options",
+		Snippet: `(set -e; [[ -o errexit ]]; echo alive); echo "after=$?"`,
+		Why:     "why a wrong answer here is not only a wrong answer. With errexit held, a bare condition that answers false ends the shell it is in, so a subshell that misreads its own errexit does not print the wrong status — it prints nothing and exits non-zero. The three shells with the operator write `alive` and `after=0`; dash reports the operator missing. Ours wrote no `alive` line at all",
+	},
+	{
 		ID: "opt/set-o-a-name-this-shell-has-and-will-not-move", Category: "shell options",
 		Snippet: "set -o onecmd\necho \"st=$?\"\necho after\n",
 		Why:     "a name a shell *has* and refuses to change, which is a third answer beside taking it and never having heard of it. The bash columns have `onecmd` and set it silently at 0; dash and ksh93 have no such name and stop; zsh has it — as a borrowed spelling for its own `singlecommand` — and refuses it with `can't change option`, fatally, which is a different sentence from the `no such option` it gives a name it does not have. Ours said `not implemented` and carried on, which was neither",

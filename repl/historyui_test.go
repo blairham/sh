@@ -371,7 +371,7 @@ func TestTheTerminalLoopHonorsAnOptionSpelledKnob(t *testing.T) {
 	}
 	// A namespace shaped like a dialect's: it answers about the names it has
 	// and reports every other name unknown.
-	namespace := func(name string) (bool, bool) {
+	namespace := func(_ *interp.Runner, name string) (bool, bool) {
 		switch name {
 		case "HIST_IGNORE_SPACE":
 			return true, true
@@ -422,7 +422,7 @@ func TestTheTerminalLoopKeepsAPatternIgnoredLineOnTheArrow(t *testing.T) {
 	}
 	vars := map[string]string{"HISTORY_IGNORE": "echo hidden"}
 	prepare := func(r *interp.Runner) {
-		r.SetOptionNamespace(func(string) (bool, bool) { return false, false })
+		r.SetOptionNamespace(func(*interp.Runner, string) (bool, bool) { return false, false })
 	}
 	sess := atThePromptWith(t, vars, style, prepare, "echo seeded")
 

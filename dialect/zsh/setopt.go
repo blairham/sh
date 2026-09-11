@@ -206,7 +206,12 @@ var zshOptions = []zshOption{
 	recorded("autoresume", false),
 	recorded("badpattern", true),
 	recorded("banghist", false),
-	recorded("bareglobqual", true),
+	// BARE_GLOB_QUAL: whether a trailing `(…)` on a pattern is a glob
+	// qualifier list or part of the pattern. On by default and implemented
+	// rather than recorded since #1729 — see
+	// interp.TrailingGroupIsPartOfThePattern, which the pattern matcher reads
+	// and which is named for the state this one turns *off*.
+	matchBacked("bareglobqual", true, interp.TrailingGroupIsPartOfThePattern, true),
 	recorded("bashautolist", false),
 	recorded("bashrematch", false),
 	recorded("beep", true),
@@ -277,7 +282,38 @@ var zshOptions = []zshOption{
 	recorded("globcomplete", false),
 	matchBacked("globdots", false, interp.PatternsMatchHidden, false),
 	recorded("globstarshort", false),
-	recorded("globsubst", false),
+	{
+		// GLOB_SUBST: the result of an expansion is read as a pattern rather
+		// than as literal text. It is this shell's name for the axis the
+		// vector already carries, which is what makes it one switch over
+		// every path that takes a pattern operand — `[[ ]]`, a `case` arm, a
+		// trim, a `:#` filter — rather than a bit each of them would have had
+		// to consult.
+		//
+		// Recorded until #1734, which is the shape of the bug worth naming:
+		// the per-expansion spelling of the same request, `${~x}`, was
+		// carried and honored, so the machinery for "this result is a
+		// pattern" existed and the *option* was what nothing asked. Measured
+		// on zsh 5.9.2, 2026-09-10, under `setopt globsubst` with `u='a*b'`:
+		// `[[ axb == $u ]]` and `case axb in ($u)` both match there and
+		// neither matched here, `${w#$u}` trimmed there and not here, and
+		// `${(M)${:-axb}:#$u}` kept the element there and dropped it here.
+		// The quoting flags reach it too: `[[ $v == ${(q)v} ]]` and the `(b)`
+		// form are true in that shell, the escape each writes being read as a
+		// pattern rather than as text.
+		//
+		// Read off the axis rather than off a stored bit, which is what makes
+		// `(setopt globsubst)` stay in the subshell — the same arrangement
+		// `multios` and `shwordsplit` use.
+		base: "globsubst", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.GlobExpansionResults == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			swapAxes(r, func(s *interp.Semantics) { s.GlobExpansionResults = answer(on) })
+			return 0
+		},
+	},
 	setOptBacked("hashcmds", false, "hashall", false),
 	recordedOver("hashdirs", true, constantState(false)),
 	recorded("hashexecutablesonly", false),

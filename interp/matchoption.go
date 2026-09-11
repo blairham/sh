@@ -84,6 +84,27 @@ const (
 	// which is what that shell does.
 	ExtendedPatternOperators
 
+	// TrailingGroupIsPartOfThePattern reads a parenthesized group at the end
+	// of a pattern as *pattern text* rather than as the qualifier list that
+	// narrows what the pattern matched. Off is the reading the one dialect
+	// with glob qualifiers defaults to, which is why the bit names the other
+	// state: `*.md(N)` is a pattern with a qualifier on it until a script
+	// asks otherwise, and an ordinary pattern — one matching a name ending
+	// `N` — afterwards.
+	//
+	// It reaches pathname expansion only. Measured on zsh 5.9.2, 2026-09-10:
+	// with the option's own name turned off, `echo *.md(N)` in a directory
+	// holding two `.md` files is `no matches found: *.md(N)` at 1 where the
+	// default expands both, `echo x(N|y)` still reads the group as the
+	// alternation it always was, and `[[ xN == x(N) ]]` is true either way —
+	// a condition has no qualifier list to lose.
+	//
+	// The `(#q…)` spelling of the same list is **not** gated by it, which is
+	// measured too and is the whole reason this is a check of its own rather
+	// than a second reading of ExtendedPatternOperators: `echo *(#q.)` still
+	// lists regular files with the bare reading turned off.
+	TrailingGroupIsPartOfThePattern
+
 	// QuantifiedGroupsEverywhere reads `@(a|b)` and the other quantified
 	// groups in every pattern, not only where the dialect's grammar already
 	// has them. This one reaches the parser: whether `(` belongs to a group

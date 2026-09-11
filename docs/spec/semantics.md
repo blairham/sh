@@ -3129,11 +3129,11 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 14 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi` |
-| axis- or matcher-backed | 9 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`). `ksharrays` is one name over **five** axes — see below |
+| axis- or matcher-backed | 11 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below |
 | fixed | 4 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and one of the four is taken at the *invocation* — see `singlecommand` below |
 | store-backed, read by the front end | 4 | `histignorespace`, read by the line editor before it records a line; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All four are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 3 | `aliases`, `autocd` and `checkjobs`: each moves a capability the substrate holds under no option name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, and a job still running really does hold the exit |
-| **recorded** | 151 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 149 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -3190,7 +3190,19 @@ and the shell keeps doing the thing" is exactly what `recorded` says, and
 saying it is the honest answer where refusing a move nobody can observe was
 not. `login` is the tenth and is not from that list at all — see below.
 
-So 151 of 185 are recorded, the count above is the one produced by counting
+**Two more left "recorded" in #1734 and #1729**, and they left for the
+sharpest version of the reason: each was a name this shell read, stored and
+reported faithfully while asking it nowhere, which is worse than a name that
+is missing. `globsubst` is this shell's own name for `GlobExpansionResults`
+and now moves it, so the result of an expansion is read as a pattern on every
+path that takes a pattern operand — the per-expansion spelling `${~x}` was
+already an override of that axis, which is what said the machinery existed
+and the *option* was what nothing consulted. `bareglobqual` decides whether a
+trailing `(…)` is a glob qualifier list or pattern text, and it is
+`interp.TrailingGroupIsPartOfThePattern` — see
+`docs/spec/grammar/patterns.md`, which has both measurements.
+
+So 149 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it

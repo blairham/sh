@@ -8521,6 +8521,26 @@ echo unreachable`,
 		Why:     "bash, ksh93 and zsh resolve a value that names another variable until it is a number; dash calls b an illegal number and stops",
 	},
 	{
+		ID: "arith/a-chased-name-that-is-unset", Category: "arithmetic",
+		Snippet: `x=abc; echo $((x+1)); echo after`,
+		Why:     "the end of the chase, and where the three shells that chase at all divide: bash and zsh read a name that is not set as the zero any unset name is and print 1, where ksh93 reads it as a *parameter reference* and refuses — `abc: parameter not set`, status 1, the script abandoned, with nounset off. Silent at 1 in every dialect here until #1629, so a ksh script whose variable held a stale name got a plausible number where the real shell had stopped. `echo after` is the fatality: it is the half a status alone cannot show",
+	},
+	{
+		ID: "arith/a-chased-name-that-is-empty", Category: "arithmetic",
+		Snippet: `y=; x=y; echo $((x+1)); echo after`,
+		Why:     "the discriminator for the row above: set-but-empty is 1 in every column, the refusing shell included, so what that shell refuses is an unset *name* rather than a value it could not read as a number. Without this row the refusal reads as a complaint about a value that is not a number, which is the reading the ksh preset carried for a year",
+	},
+	{
+		ID: "arith/a-chased-name-two-deep", Category: "arithmetic",
+		Snippet: `z=7; y=z; x=y; echo $((x+1)); echo "st=$?"`,
+		Why:     "the chase is not one step: three shells follow the values as far as they lead and answer 8. It is the row that says which shell chases at all — the axis comment claimed ksh93 did not, and the preset saying it did was the one that matched the shell",
+	},
+	{
+		ID: "arith/a-value-that-is-no-name-at-all", Category: "arithmetic",
+		Snippet: `x=1abc; echo $((x+1)); echo after`,
+		Why:     "a value no chase can start on, which is the other side of the row above: with nothing to look up, ksh93 calls it an arithmetic syntax error rather than a parameter that is not set. We said `parameter not set` here — the sentence a chased name earns — because the preset stood that wording in for a lookup it was not doing",
+	},
+	{
 		ID: "arith/an-operand-the-expression-ran-out-of", Category: "arithmetic",
 		Snippet: `echo "[$((1+))]"; echo "st=$?"`,
 		Why:     "an operand was wanted and the text ended, which two of the panel word apart from an operand that was wanted and found: ksh93 says more tokens expected and zsh names the end of the string. The pair with `arith/an-operand-the-expression-found` is the whole of it — either row alone passes under one wording for both, which is what let the end-of-input sentence stand for every operand failure in two dialects",

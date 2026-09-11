@@ -7670,6 +7670,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/overflow-saturates-in-one-shell` | `-9223372036854775808` | `-9223372036854775808` | `-9223372036854775808` | `-9223372036854775808` | `9223372036854775807` | `-9223372036854775808` |
 | `arith/an-empty-expression-diverges` | **2>** `<shell>: 1: arithmetic expression: expecting primary: " "` *(status 2)* | `0~st=0` | `0~st=0` | `0~st=0` | `0~st=0` | `0~st=0` |
 | `arith/a-name-shaped-value-is-chased` | **2>** `<shell>: 1: Illegal number: b` *(status 2)* | `3~st=0` | `3~st=0` | `3~st=0` | `3~st=0` | `3~st=0` |
+| `arith/a-chased-name-that-is-unset` | **2>** `<shell>: 1: Illegal number: abc` *(status 2)* | `1~after` | `1~after` | `1~after` | **2>** `<shell>: abc: parameter not set` *(status 1)* | `1~after` |
+| `arith/a-chased-name-that-is-empty` | **2>** `<shell>: 1: Illegal number: y` *(status 2)* | `1~after` | `1~after` | `1~after` | `1~after` | `1~after` |
+| `arith/a-chased-name-two-deep` | **2>** `<shell>: 1: Illegal number: y` *(status 2)* | `8~st=0` | `8~st=0` | `8~st=0` | `8~st=0` | `8~st=0` |
+| `arith/a-value-that-is-no-name-at-all` | **2>** `<shell>: 1: Illegal number: 1abc` *(status 2)* | **2>** `<shell>: line 1: 1abc: value too great for base (error token is "1abc")` *(status 1)* | **2>** `<shell>: line 1: 1abc: value too great for base (error token is "1abc")` *(status 127)* | **2>** `<shell>: 1abc: value too great for base (error token is "1abc")` *(status 1)* | **2>** `<shell>: 1abc: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `abc'` *(status 1)* |
 | `arith/an-operand-the-expression-ran-out-of` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "1+"` *(status 2)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 127)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `arith/an-operand-the-expression-found` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "%"` *(status 2)* | **2>** `<shell>: line 1: %: arithmetic syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: line 1: %: arithmetic syntax error: operand expected (error token is "%")` *(status 127)* | **2>** `<shell>: %: syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: %: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at `%'` *(status 1)* |
 | `arith/an-operand-found-after-an-operator` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "1+&2"` *(status 2)* | **2>** `<shell>: line 1: 1+&2: arithmetic syntax error: operand expected (error token is "&2")` *(status 1)* | **2>** `<shell>: line 1: 1+&2: arithmetic syntax error: operand expected (error token is "&2")` *(status 127)* | **2>** `<shell>: 1+&2: syntax error: operand expected (error token is "&2")` *(status 1)* | **2>** `<shell>: 1+&2: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at `&2'` *(status 1)* |
@@ -7827,6 +7831,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `arith/a-name-shaped-value-is-chased` — bash, ksh93 and zsh resolve a value that names another variable until it is a number; dash calls b an illegal number and stops
   ```sh
   a=b; b=3; echo $((a)); echo "st=$?"
+  ```
+- `arith/a-chased-name-that-is-unset` — the end of the chase, and where the three shells that chase at all divide: bash and zsh read a name that is not set as the zero any unset name is and print 1, where ksh93 reads it as a *parameter reference* and refuses — `abc: parameter not set`, status 1, the script abandoned, with nounset off. Silent at 1 in every dialect here until #1629, so a ksh script whose variable held a stale name got a plausible number where the real shell had stopped. `echo after` is the fatality: it is the half a status alone cannot show
+  ```sh
+  x=abc; echo $((x+1)); echo after
+  ```
+- `arith/a-chased-name-that-is-empty` — the discriminator for the row above: set-but-empty is 1 in every column, the refusing shell included, so what that shell refuses is an unset *name* rather than a value it could not read as a number. Without this row the refusal reads as a complaint about a value that is not a number, which is the reading the ksh preset carried for a year
+  ```sh
+  y=; x=y; echo $((x+1)); echo after
+  ```
+- `arith/a-chased-name-two-deep` — the chase is not one step: three shells follow the values as far as they lead and answer 8. It is the row that says which shell chases at all — the axis comment claimed ksh93 did not, and the preset saying it did was the one that matched the shell
+  ```sh
+  z=7; y=z; x=y; echo $((x+1)); echo "st=$?"
+  ```
+- `arith/a-value-that-is-no-name-at-all` — a value no chase can start on, which is the other side of the row above: with nothing to look up, ksh93 calls it an arithmetic syntax error rather than a parameter that is not set. We said `parameter not set` here — the sentence a chased name earns — because the preset stood that wording in for a lookup it was not doing
+  ```sh
+  x=1abc; echo $((x+1)); echo after
   ```
 - `arith/an-operand-the-expression-ran-out-of` — an operand was wanted and the text ended, which two of the panel word apart from an operand that was wanted and found: ksh93 says more tokens expected and zsh names the end of the string. The pair with `arith/an-operand-the-expression-found` is the whole of it — either row alone passes under one wording for both, which is what let the end-of-input sentence stand for every operand failure in two dialects
   ```sh

@@ -502,12 +502,46 @@ type Semantics struct {
 	// correctly under one group and misread it under the other.
 	FatalErrorStatusIsOne Answer
 	// ArithNameValueRecurses re-evaluates a name-shaped value as an
-	// expression: with `x=abc`, `$((x+1))` is 1 in bash and zsh, because
-	// `abc` is looked up in turn and is unset. dash and ksh93 error instead.
-	// The interpreter once followed the two that agree and said so in a
+	// expression: with `y=5; x=y`, `$((x+1))` is 6 because `y` is looked up
+	// in turn, and it recurses as far as the values lead — `y=z; z=7; x=y`
+	// is 8. Yes in bash, zsh and ksh93; **dash alone** reads the value as a
+	// literal and refuses it, `Illegal number: y`.
+	//
+	// The interpreter once followed the shells that agree and said so in a
 	// comment, which is the shape of a guess rather than a measurement; it
 	// asks here now, and arithValueOf is where the ask is made.
+	//
+	// This comment said "dash and ksh93 error instead" until #1629, and the
+	// preset it contradicted was the right one: measured 2026-09-11, ksh93
+	// recurses exactly as bash and zsh do. What it does differently is one
+	// step further in — see ArithRecursedNameMustBeSet, which is the axis
+	// that mistake was really about.
 	ArithNameValueRecurses Answer
+	// ArithRecursedNameMustBeSet makes an unset name *reached through another
+	// name's value* an error rather than a zero. Asked only where
+	// ArithNameValueRecurses says the lookup happens at all, and only below
+	// the top: a name written in the expression itself is zero when it is
+	// unset in every shell in the panel, `$((nosuch+1))` being 1 everywhere.
+	//
+	// Measured 2026-09-11, `x=abc` with `abc` unset:
+	//
+	//	bash 5.3.15   $((x+1)) is 1, the script runs on
+	//	bash 3.2.57   $((x+1)) is 1, the script runs on
+	//	zsh 5.9.2     $((x+1)) is 1, the script runs on
+	//	ksh93u+       abc: parameter not set, status 1, the script stops
+	//	dash          never gets here: it does not recurse
+	//
+	// The refusal is the shell's `set -u` sentence word for word, with
+	// nounset off — ksh93 reads a name arrived at this way as a *parameter
+	// reference* rather than as text that might be a number. It is fatal the
+	// way an unset parameter under nounset is: `||` does not catch it, and a
+	// subshell dies alone.
+	//
+	// Silent when it is wrong, which is why it is worth an axis rather than
+	// a wording: `x=abc; $((x+1))` answered 1 and carried on, so a ksh script
+	// whose variable held a stale name got a plausible number where the real
+	// shell had stopped.
+	ArithRecursedNameMustBeSet Answer
 	// ArithSubscriptSkippedWhenNameUnset looks the name up before it reads
 	// the brackets, and answers zero for a name that is not there without
 	// evaluating the subscript at all. Yes in zsh alone: measured 2026-09-10,
@@ -5837,6 +5871,9 @@ func PosixSemantics() Semantics {
 		// requires only "greater than zero", which decides nothing.
 		FatalErrorStatusIsOne:  No,
 		ArithNameValueRecurses: No,
+		// ArithRecursedNameMustBeSet is deliberately left unanswered: with
+		// no recursion there is no name below the top for it to be asked
+		// about, so an answer here would be a value nothing can measure.
 		// A login shell reads ~/.profile whether or not it is going to
 		// prompt: dash, ksh93 and zsh, with bash the holdout. POSIX names
 		// ~/.profile as the file a login shell reads and does not make it

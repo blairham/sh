@@ -898,6 +898,18 @@ func (r *Runner) arithValueOf(name string, depth int) (arithNum, error) {
 	}
 	value, ok := r.getVar(name)
 	if !ok {
+		if depth > 0 && r.ask(r.sem().ArithRecursedNameMustBeSet, "an unset name reached through a value") {
+			// One dialect reads a name arrived at through another name's
+			// value as a *parameter reference* rather than as text that
+			// might be a number, so an unset one is the same refusal its
+			// `set -u` writes — with nounset off, and fatal. See
+			// Semantics.ArithRecursedNameMustBeSet.
+			//
+			// Only below the top: a name written in the expression itself
+			// is zero when it is unset in every shell in the panel.
+			text := Wording(r.diag().UnboundVariable, "%s: parameter not set", name)
+			return intNum(0), arithError{msg: text, token: name, complete: true}
+		}
 		return intNum(0), nil
 	}
 	return r.arithNumOfStored(value, depth)

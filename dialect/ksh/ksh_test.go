@@ -407,8 +407,14 @@ func TestKshHasItsOwnNamesForThings(t *testing.T) {
 	if !d.DotNoOperandUnprefixed {
 		t.Error("`.` with no operand should print its usage bare")
 	}
-	if got, want := d.InvalidNumber, "%[1]s: parameter not set"; got != want {
-		t.Errorf("InvalidNumber = %q, want %q — a value that is not a number is a name here", got, want)
+	// Text that is no number and no name: measured 2026-09-11, `x=1abc;
+	// $((x+1))` and `x="1 2"; $((x+1))` are both `arithmetic syntax error`
+	// here, which is the same reason this shell gives for an expression it
+	// cannot parse. It said `parameter not set` until #1629, standing in for
+	// a lookup that did not happen; the lookup happens now — see
+	// Semantics.ArithRecursedNameMustBeSet — and that sentence belongs to it.
+	if got, want := d.InvalidNumber, "%[1]s: arithmetic syntax error"; got != want {
+		t.Errorf("InvalidNumber = %q, want %q", got, want)
 	}
 }
 

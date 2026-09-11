@@ -81,6 +81,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"LastBackgroundPidIsZeroBeforeAnyJob", s.LastBackgroundPidIsZeroBeforeAnyJob, interp.Yes},
 		{"ExitTrapIsFunctionLocal", s.ExitTrapIsFunctionLocal, interp.Yes},
 		{"ArithNameValueRecurses", s.ArithNameValueRecurses, interp.Yes},
+		{"ArithRecursedNameMustBeSet", s.ArithRecursedNameMustBeSet, interp.No},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.No},
 		{"DuplicationTargetErrorOnABuiltinIsFatal", s.DuplicationTargetErrorOnABuiltinIsFatal, interp.Yes},

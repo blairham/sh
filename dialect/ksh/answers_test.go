@@ -74,6 +74,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"LastBackgroundPidIsZeroBeforeAnyJob", s.LastBackgroundPidIsZeroBeforeAnyJob, interp.No},
 		{"ExitTrapIsFunctionLocal", s.ExitTrapIsFunctionLocal, interp.No},
 		{"ArithNameValueRecurses", s.ArithNameValueRecurses, interp.Yes},
+		{"ArithRecursedNameMustBeSet", s.ArithRecursedNameMustBeSet, interp.Yes},
 		{"ArithInvalidOctalDigitIsError", s.ArithInvalidOctalDigitIsError, interp.No},
 		{"IntegerAssignmentReadsALeadingZeroAsDecimal", s.IntegerAssignmentReadsALeadingZeroAsDecimal, interp.Yes},
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.Yes},

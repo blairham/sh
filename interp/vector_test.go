@@ -72,6 +72,10 @@ func testSemantics() Semantics {
 	s.ScalarUnderATableDeclaration = ScalarUnderACompoundBecomesTheFirstElement
 	s.IndirectionYieldsName = No
 	s.ArithNameValueRecurses = Yes
+	// And what an unset name found that way is: a zero, which is what three
+	// of the four do. The suite that is *about* it sets both — see
+	// arithrecurse_test.go.
+	s.ArithRecursedNameMustBeSet = No
 	s.BraceExpansion = Yes
 	s.SetFTurnsOffGlobbing = Yes
 	s.RegexQuotingMakesLiteral = Yes

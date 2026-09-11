@@ -13905,6 +13905,49 @@ echo "--s--"; alias -s`,
 		Snippet: `alias -g -s q=v; echo "st=$?"; alias -s; echo "st=$?"`,
 		Why:     "two namespaces, so one call cannot be about both — `illegal combination of options` at 1 in the shell with the letters, where the other five refuse whichever letter they meet first. The listing after it is what proves nothing was defined",
 	},
+	// --- alias: the text this shell reads one level down (#2096) --------
+	{
+		ID: "alias/a-sourced-file-uses-the-shells-aliases", Category: "alias",
+		Script: true,
+		Snippet: `alias t='echo HIT'
+printf 'alias inner="echo INNER"\ninner\nt\n' > inc.sh
+. ./inc.sh
+echo "st=$?"`,
+		Why: "a sourced file is text *this* shell reads, so both halves are the shell's: an alias the file defines works on the file's later lines, and one the caller defined works inside the file. dash and zsh do both, ksh93 does only the second — it reads the file through before running any of it — and bash expands neither without `shopt`. Ours answered `command not found` to both in every column, because the parser `.` builds was handed no table at all (#2096)",
+	},
+	{
+		ID: "alias/eval-uses-the-shells-aliases", Category: "alias",
+		Script: true,
+		Snippet: `alias t='echo HIT'
+eval 'alias e="echo EVAL"
+e
+t'
+echo "st=$?"`,
+		Why: "the same two halves for `eval`, and the panel splits them differently: dash's eval reaches its own later lines and zsh's and ksh93's do not, which is exactly how the three answer whether `eval` runs what it has parsed. The caller's alias works inside the text in all three. That the two builtins disagree about the first half and agree about the second is what says the table and the reader are two separate things",
+	},
+	{
+		ID: "alias/a-substitution-uses-the-shells-aliases", Category: "alias",
+		Script: true,
+		Snippet: `alias t=echo
+v=$(t SUB)
+echo "v=$v"
+w=` + "`t BACK`" + `
+echo "w=$w"`,
+		Why: "a command substitution's commands are commands, in both spellings of it — and this is the route with no reader question attached, because a substitution is parsed through before it runs in every column. So the alias in it is the caller's and nothing defined inside reaches a later line. Ours left both variables empty",
+	},
+	{
+		ID: "alias/a-trap-body-uses-the-shells-aliases", Category: "alias",
+		Script: true,
+		Snippet: `alias t='echo TRAP'
+trap 't' EXIT
+echo end`,
+		Why: "and the fourth door into the same room: a trap's action is read when it fires, by this shell, so the alias table it reads is this shell's. Unanimous among the three that expand aliases in a script, which is what makes it the control for the two rows above — a fix reaching `eval` and `.` and not this one would still leave the last `trap` on every exit path saying `command not found`",
+	},
+	{
+		ID: "alias/nested-text-expands-where-the-command-string-did-not", Category: "alias",
+		Snippet: `alias t=echo; eval "t E"; v=$(t S); echo "v=$v"`,
+		Why: "the row this shell does not pass yet, kept because it is the evidence: zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases — the option is the only gate, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. `Dialect.ExpandAliases` records the symptom; #2109 is the model",
+	},
 	{
 		ID: "alias/neither-kind-is-accepted-where-the-shell-has-not-got-it", Category: "alias",
 		Snippet: `(alias -g G=x) 2>/dev/null; echo "ag=$?"

@@ -4,6 +4,8 @@
 package zsh
 
 import (
+	"sync"
+
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
 )
@@ -11,55 +13,40 @@ import (
 // The `zsh/terminfo` and `zsh/termcap` modules: the terminal's capabilities,
 // presented as two associations a script can read.
 //
-// The names are all that is here. What a capability *is* and what this shell
-// can honestly say about one is [repl.TerminalCapabilities], for the reason
-// every terminal fact in this tree sits there: it is a statement about the
-// screen and about what this shell's own editor writes to it, and a dialect
-// that owned it would be a dialect the substrate had to know about. This file
-// is the two spellings — `$terminfo` keyed by terminfo's long names,
-// `$termcap` by termcap's two-letter ones — over one set of measured values.
+// The names are all that is here. What a capability *is*, and where the
+// answers come from, is repl/terminfo.go, for the reason every terminal fact
+// in this tree sits there: it is a statement about the terminal, and a
+// dialect that owned it would be a dialect the substrate had to know about.
+// This file is the two spellings — `$terminfo` keyed by terminfo's long
+// names, `$termcap` by termcap's two-letter codes — over one reading of the
+// description `$TERM` names.
 //
-// # What this fixes, and it is not the parameter's own absence
+// # What #1388 fixed, and what #2076 fixed after it
 //
-// #1388. A plugin manager builds its entire color table behind one test:
+// #1388 was the parameters' absence. A plugin manager builds its entire color
+// table behind one test:
 //
 //	if [[ -z $SOURCED && ( ${+terminfo} -eq 1 && -n ${terminfo[colors]} ) \
 //	   || ( ${+termcap} -eq 1 && -n ${termcap[Co]} ) ]] { … }
 //
 // With neither parameter registered the test was false, the table was never
-// filled in, and the formatter's `${ZI[col-$2]:-$1}` fell through to its own
-// argument — which is the markup. So every message the shell printed during
-// startup came out as `{error}Error{ehi}:{rst} …` rather than as colored
-// text. #1369 recorded that line as the visible consequence of an arithmetic
-// bug; it was this.
+// filled in, and every message the shell printed during startup came out as
+// `{error}Error{ehi}:{rst} …` rather than as colored text.
 //
-// Two halves of that test matter separately, and a partial table has to
-// satisfy both. `${+terminfo}` is 1 because the parameter is *produced* — a
-// produced association whose producer has entries is set, so registering the
-// view is what makes the name exist. And `-n ${terminfo[colors]}` is
-// satisfied because `colors` is one of the capabilities answered; the count
-// comes from interp.TerminalColors, so what a theme is told matches what
-// `%F{200}` will actually paint.
+// #1388 answered it with a fixed table of thirteen capabilities and a refusal
+// — `terminfo[cnorm]: capability not implemented yet` — for every other name.
+// #2076 is what that cost. powerlevel10k's `_p9k_init_prompt` guards its
+// scroll-and-redraw block on `(( $+terminfo[cuu1] ))`, so a refused `cuu1`
+// did not produce an error: it produced a *different prompt*, correct for a
+// terminal that cannot move the cursor up, missing the newline and `\e[A`
+// that begin zsh's own rendering, with nothing said. A capability test is how
+// a theme decides what to build, so refusing one silently changes what gets
+// built.
 //
-// # A key that is not answered refuses by name
-//
-// Thirteen capabilities are answered and every other name is refused —
-// `terminfo[cnorm]: capability not implemented yet`, at the expansion that
-// asked. Not empty, and the difference is the whole of what #1388 was:
-// measured, real zsh's `$terminfo[colors]` is genuinely *absent* under
-// `TERM=dumb`, so a caller reading an empty string cannot tell a terminal
-// without the capability from a shell that never knew it. Answering empty
-// from inside the parameter would be the same confusion with the parameter
-// present, which is worse than the absence — the absence at least made
-// `${+terminfo}` say no.
-//
-// A script that *asks* is answered rather than refused: `$+terminfo[cnorm]`
-// is 0, and `${terminfo[cnorm]-}` is the script's own default. Both are
-// exemptions in [interp.Runner.SetAbsentElements], and the first is not a
-// nicety — swept across a real plugin tree, the set test is the commonest way
-// these keys are touched, and a well-written theme reads `cnorm` only after
-// `(( $+terminfo[civis] && $+terminfo[cnorm] ))` has told it there is
-// something to read.
+// Both parameters now read the terminfo database. `${terminfo[colors]}` is
+// still non-empty under any `$TERM` with a color entry, which is #1388's
+// test; `$+terminfo[cuu1]` is 1 with the terminal's own bytes behind it,
+// which is #2076's.
 //
 // # Both are readonly, and hidden with it
 //
@@ -82,29 +69,115 @@ import (
 // modules load now because their *parameters* are here, and a script that
 // calls `echoti` finds out where it called it.
 
-// registerTerminfoModules installs `$terminfo` and `$termcap`: two views over
-// one capability table, each keyed by its own name system.
-func registerTerminfoModules(r *interp.Runner) {
-	registerCapabilityParameter(r, "terminfo", zshTerminfoView)
-	registerCapabilityParameter(r, "termcap", zshTermcapView)
+// capabilityTables is one reading of the terminal description, under both
+// name systems, kept for as long as the environment it was read from says the
+// same thing.
+//
+// A cache rather than a read per expansion, because a produced association is
+// produced on every read and a prompt theme asks about capabilities in bulk:
+// powerlevel10k's initialization alone tests dozens of names, and each test
+// would otherwise be a directory search and a parse of a few kilobytes.
+//
+// The key is the environment the answer depends on, so a script that exports
+// a different `$TERM` — or points `$TERMINFO` at its own database — is
+// answered from the new one rather than from the old table. That is the same
+// rule SetDynamicAssocWriter exists for one layer up: a view that stops
+// tracking is worse than no view, because nothing about it says it stopped.
+type capabilityTables struct {
+	// A mutex rather than nothing, because a Runner's producers are shared
+	// with the subshells it spawns and two of those can read a parameter at
+	// once.
+	mu       sync.Mutex
+	from     string
+	terminfo interp.AssocArray
+	termcap  interp.AssocArray
 }
 
-// registerCapabilityParameter installs one of them, with the three things a
-// partial produced association needs: the producer, the refusal for the keys
-// it has no answer for, and the readonly-and-hidden pair.
+// terminfoEnvironment is every variable the answer depends on, in the order
+// repl reads them.
+var terminfoEnvironment = []string{"TERM", "TERMINFO", "TERMINFO_DIRS", "HOME"}
+
+// load returns the two tables, reading the database if the environment has
+// moved since the last read.
+func (c *capabilityTables) load(r *interp.Runner) (interp.AssocArray, interp.AssocArray) {
+	env := func(name string) string {
+		value, _ := r.GetVar(name)
+		return value
+	}
+	key := ""
+	for _, name := range terminfoEnvironment {
+		// A separator that cannot appear in a variable's value, so that two
+		// different environments cannot spell one key.
+		key += env(name) + "\x00"
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.terminfo != nil && c.from == key {
+		return c.terminfo, c.termcap
+	}
+	caps := repl.TerminalCapabilities(env)
+	byTerminfo := make(interp.AssocArray, len(caps))
+	byTermcap := make(interp.AssocArray, len(caps))
+	for _, entry := range caps {
+		byTerminfo[entry.Terminfo] = entry.Value
+		// Skipped rather than keyed by the empty string: an extended
+		// capability is a name the description carries itself and predates no
+		// termcap, so it has no two-letter code to be found under.
+		//
+		// First writer wins, which is measured rather than arbitrary. Three
+		// codes are claimed twice by terminfo(5)'s own table — `MT` by the
+		// boolean `OTMT` and the string `smgtb`, `ma` by the number and the
+		// string of that name, `ML` by `smgl` and `smglr` — and zsh answers
+		// `$termcap[MT]` with the boolean, which is the one its search
+		// reaches first because booleans come before strings.
+		if _, taken := byTermcap[entry.Termcap]; entry.Termcap != "" && !taken {
+			byTermcap[entry.Termcap] = entry.Value
+		}
+	}
+	c.from, c.terminfo, c.termcap = key, byTerminfo, byTermcap
+	return byTerminfo, byTermcap
+}
+
+// registerTerminfoModules installs `$terminfo` and `$termcap`: two views over
+// one reading of the terminal's description, each keyed by its own name
+// system.
+func registerTerminfoModules(r *interp.Runner) {
+	tables := &capabilityTables{}
+	registerCapabilityParameter(r, "terminfo", func(r *interp.Runner) interp.AssocArray {
+		found, _ := tables.load(r)
+		return found
+	})
+	registerCapabilityParameter(r, "termcap", func(r *interp.Runner) interp.AssocArray {
+		_, found := tables.load(r)
+		return found
+	})
+}
+
+// registerCapabilityParameter installs one of them, with the two things a
+// produced association over a terminal's description needs: the producer, and
+// the readonly-and-hidden pair.
 //
 // One function for both because the two parameters differ in exactly one
 // thing — which column of the capability table is the key — and writing them
 // out twice is how the second one comes to be missing whatever the first one
 // gains.
+//
+// There is no SetAbsentElements call here and there was, until #2076. A key
+// the table has no answer for is now genuinely a capability this terminal
+// does not have, which is what real zsh reports and what a script testing
+// `$+terminfo[…]` is written against; refusing it was right only while the
+// table was a stub.
 func registerCapabilityParameter(r *interp.Runner, name string, view func(*interp.Runner) interp.AssocArray) {
 	r.SetDynamicAssoc(name, view)
-	// The wording is this dialect's, because which shell has the module is
-	// this dialect's; the mechanism is interp's, so a second dialect with a
-	// partial table cannot arrive at a second answer. "Capability" rather
-	// than "parameter": the parameter is there, and it is one key that is
-	// not.
-	r.SetAbsentElements(name, "capability not implemented yet")
+	// One key without building the map, which is the shape a capability test
+	// has: a theme asks about a name at a time. The two readings agree by
+	// construction — this is a lookup in the table the producer returns — so
+	// the contract SetDynamicAssocElement states is met by there being one
+	// table.
+	r.SetDynamicAssocElement(name, func(r *interp.Runner, key string) (string, bool) {
+		value, ok := view(r)[key]
+		return value, ok
+	})
 	// Readonly rather than given a writer, which is zsh's own answer and the
 	// same call `builtins` makes in parameter.go. A produced association with
 	// neither would take an assignment into a stored table, and a stored
@@ -113,31 +186,4 @@ func registerCapabilityParameter(r *interp.Runner, name string, view func(*inter
 	// tracking.
 	r.MarkReadonly(name)
 	r.MarkHidden(name)
-}
-
-// zshTerminfoView is `$terminfo`: the capabilities this shell answers for,
-// under terminfo's long names.
-func zshTerminfoView(*interp.Runner) interp.AssocArray {
-	caps := repl.TerminalCapabilities()
-	out := make(interp.AssocArray, len(caps))
-	for _, c := range caps {
-		out[c.Terminfo] = c.Value
-	}
-	return out
-}
-
-// zshTermcapView is `$termcap`: the same capabilities under termcap's
-// two-letter names.
-//
-// The same values and not a second measurement of them, which is measured
-// rather than assumed: zsh's `$termcap` hands out terminfo's parameter
-// language too — `${termcap[UP]}` is `\e[%p1%dA`, not termcap's own `%d`
-// spelling — so one value serves both names.
-func zshTermcapView(*interp.Runner) interp.AssocArray {
-	caps := repl.TerminalCapabilities()
-	out := make(interp.AssocArray, len(caps))
-	for _, c := range caps {
-		out[c.Termcap] = c.Value
-	}
-	return out
 }

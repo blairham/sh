@@ -125,6 +125,19 @@ var exempt = map[string]string{
 		"before there is a script — or a policy — to ask about.",
 	"repl.lookupTerminal": "/dev, listed to name this session's terminal. A fixed path, and " +
 		"no content is read.",
+	"repl.readTerminalDescription": "the terminal's compiled description, read out of a " +
+		"terminfo database to answer `$terminfo` and `$termcap` (#2076). The path is " +
+		"`<database>/<x>/<name>`: the name is `$TERM` with terminalNameIsOneComponent " +
+		"having refused anything that is not a single component — no separator, no `.` or " +
+		"`..`, nothing beginning with a dot — so a script setting `$TERM` selects a file " +
+		"inside a database directory and cannot leave one. The directories are the terminfo " +
+		"environment plus a fixed system list, which is the argument interp.CommandsOnPath " +
+		"already makes about `$PATH`: the shell chose them, and this is the lookup every " +
+		"curses program on the machine makes before this shell starts. A file that is not a " +
+		"compiled description reads as no description at all, so nothing that is not a " +
+		"terminal's capability table can reach a script through it, and a refusal here would " +
+		"hide `cuu1` from a prompt while telling it nothing — which is the silent " +
+		"substitution #2076 is about.",
 	"repl.userHomes": "the account file, read to answer `~name` completion. A fixed path the " +
 		"front end chose — the person types a prefix, never the path — and the standard " +
 		"library has no call that enumerates accounts. It is the last of the three #951 " +

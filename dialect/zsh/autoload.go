@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // `autoload` marks a name to be defined from `$fpath` the first time it is
@@ -527,7 +528,11 @@ func autoloadResolveIn(r *interp.Runner, name string, dirs []string) int {
 			r.DiagnoseAsTheShellf("%s: function definition file not found\n", name)
 			return 1
 		}
-		if !r.DefineFunction(name, string(body)) {
+		text := string(body)
+		if inner, lone := autoloadLoneDefinition(name, text); lone {
+			text = inner
+		}
+		if !r.DefineFunction(name, text) {
 			r.DiagnoseAsTheShellf("%s: bad function definition\n", name)
 			return 1
 		}
@@ -543,6 +548,9 @@ func autoloadResolveIn(r *interp.Runner, name string, dirs []string) int {
 		r.DiagnoseAsTheShellf("%s: function definition file not found\n", name)
 		return 1
 	}
+	if inner, lone := autoloadLoneDefinition(name, body); lone {
+		body = inner
+	}
 	if !r.DefineFunction(name, body) {
 		// The file is not something this shell can read as a body. Its own
 		// complaint rather than "not found", because the file *was* found
@@ -551,6 +559,80 @@ func autoloadResolveIn(r *interp.Runner, name string, dirs []string) int {
 		return 1
 	}
 	return 0
+}
+
+// autoloadLoneDefinition reports a function file that holds **nothing but a
+// definition of the function it is named after**, and gives back the text of
+// that definition's own body.
+//
+// A function file may hold the body, or it may hold a `name() { … }` for the
+// name it is called. Both are written in the wild and this shell ran only the
+// first: the file's text became the body, so the first call ran a
+// *definition*, redefined the function and returned 0 having done nothing.
+// The second call then worked, which is what made it silent — nothing is
+// missing afterwards, no diagnostic is written, and a completion or plugin
+// function that returns 0 having done nothing is indistinguishable from one
+// that declined (#1704).
+//
+// The shape is decided at **load** time and not at call time, which is
+// measured rather than chosen: `autoload +X kfn; functions kfn` writes the
+// *inner* body in zsh 5.9.2, so the file was read as a definition before
+// anything called it. Defining from the inner body here therefore needs no
+// second call and no re-entry — the first call runs the real body, with the
+// arguments it was made with.
+//
+// It is the *whole file* that has to be the definition, which is the
+// measurement that decides between the two readings the issue left open. With
+// two files in one directory, 2026-09-10:
+//
+//	kfn   kfn() { print A }                     first call  A
+//	tw2   helper() { … }; tw2() { print B }     first call  nothing, second B
+//
+// So it is not "the load defined this name" — `tw2` does, and is not called —
+// and not "the last command was a definition" either. A definition wrapped in
+// a group is not one command that is a definition, and is not called; a
+// comment above the definition is, and is. A trailing `;` makes no
+// difference. Every one of those is measured.
+//
+// The text handed back is what stands between the definition's braces. A
+// listing is printed from the tree rather than from the file, so the
+// whitespace does not survive either way and `functions kfn` writes the same
+// body in both shells.
+//
+// Both routes into a function file ask: the search along `$fpath` and the one
+// directory an `-X` was handed. A file read one way and not the other would
+// be the same bug reachable by the other road.
+func autoloadLoneDefinition(name, body string) (inner string, lone bool) {
+	f, err := syntax.Parse(body, Dialect())
+	if err != nil || len(f.Stmts) != 1 {
+		return "", false
+	}
+	pipe, ok := f.Stmts[0].Expr.(*syntax.Pipeline)
+	if !ok || len(pipe.Cmds) != 1 {
+		return "", false
+	}
+	decl, ok := pipe.Cmds[0].(*syntax.FuncDecl)
+	if !ok || decl.Name != name {
+		return "", false
+	}
+	group, ok := decl.Body.(*syntax.Group)
+	if !ok || len(group.List) == 0 {
+		// A body that is not a brace group, or a definition with nothing in
+		// it: there is no inner text to hand back, and the file is left to be
+		// read the way it always was.
+		return "", false
+	}
+	// Between the braces, taken from the *group* and not from the statements
+	// inside it: a statement written without a separator before the closing
+	// brace has no end position, and slicing to it produced an empty range
+	// that quietly left this whole path unreached — which is the spelling
+	// `kfn() { print x }` uses and the one a real function file is written
+	// in. The group's own end is one past the brace.
+	start, end := group.Start.Offset+1, group.Stop.Offset-1
+	if start >= end || end > len(body) || body[end] != '}' {
+		return "", false
+	}
+	return body[start:end], true
 }
 
 // autoloadFile reads the first file named `name` on `$fpath`.

@@ -17,7 +17,7 @@ import (
 // Measured 2026-09-10 against bash 5.3.15 (`shopt -p`, with and without `-l`,
 // a name at a time). Sourcing that shell's own snapshot into this one wrote
 // seven `not implemented` lines; four of them are gone here and the other
-// three are behaviours this shell genuinely does not have — see #1712 and the
+// three are behaviors this shell genuinely does not have — see #1712 and the
 // prose over shoptStates and shoptRecorded.
 
 // TestTheCompletionNamesReadBashsDefault: `complete_fullquote` is this
@@ -58,7 +58,7 @@ echo ok
 // TestARecordedShoptNameRemembersAndPromisesNothing: the three that are
 // recorded move in both directions, exactly as bash moves them, and the move
 // stays inside a subshell because the store is in the variable table a clone
-// deep-copies. What none of them buys is behaviour, which is the whole of
+// deep-copies. What none of them buys is behavior, which is the whole of
 // what "recorded" claims.
 func TestARecordedShoptNameRemembersAndPromisesNothing(t *testing.T) {
 	out, st := runBash(t, t.TempDir(),

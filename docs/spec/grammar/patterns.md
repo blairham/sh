@@ -1095,7 +1095,7 @@ A fourth, `complete_fullquote`, is not recorded and that is the point of
 having the category at all: this shell really does backslash every shell
 metacharacter in a name it offers, so bash's `on` is this implementation's
 own state and it belongs with the rest of what is true. The remaining
-three of the seven are behaviours this shell genuinely does not have and
+three of the seven are behaviors this shell genuinely does not have and
 genuinely does have: `patsub_replacement` gates `&` in a `${v/pat/rep}`
 replacement, which is unbuilt here, so reporting it on would be the worst
 kind of lie; `histappend` and `lithist` read **on** against bash's off

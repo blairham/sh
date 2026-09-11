@@ -59,8 +59,10 @@ func (n *ArithVar) arithNode() {}
 // two spellings differ in how the operand is read rather than in what the
 // result means.
 type ArithCharCode struct {
-	// Op is `#` or `##`, kept because it decides how Char is read: `$((##\n))`
-	// is a newline and `$((#\n))` the letter n.
+	// Op is `#`, `##` or `''`, kept because it decides how Char is read:
+	// `$((##\n))` is a newline and `$((#\n))` the letter n. `''` is the
+	// character *constant* rather than an operator — `$(( 'a' ))` — and reads
+	// its character the way `##` does, escapes and all.
 	Op string
 	// Name is the parameter whose first character is taken, empty when the
 	// operand is a character or when there is no operand at all. A `#` with
@@ -244,6 +246,24 @@ type arithParser struct {
 	at   Pos
 	p    *Parser
 	dial Dialect
+	// blame is where the text a leftover failure names begins: the cursor
+	// after the whitespace in front of it, but *before* any double quote the
+	// dialect steps over.
+	//
+	// The two part only in the dialect that skips a quote, and there the
+	// measurement says they must: `$(( "1" "2" ))` is reported against
+	// ``" "2" `` in zsh 5.9.2 — the quote it read through is in the sentence
+	// — while `$(( 1 2 ))` is reported against `2 ` with the space gone. So
+	// the reader consumes the whitespace after a token and stops at a quote,
+	// and blaming from the cursor alone would have dropped a quote from every
+	// such sentence.
+	blame int
+	// stopped is where the last skip ended, which makes space idempotent:
+	// several frames ask for it at the same cursor on the way down, and only
+	// the first of them may move blame. Without it the second call would
+	// re-blame from *after* a quote the first had stepped over. -1 rather
+	// than 0 so that the first call at the start of the text still runs.
+	stopped int
 }
 
 // hasExpansion reports whether an arithmetic expression contains something
@@ -302,14 +322,20 @@ func (p *Parser) parseArith(src string, at Pos) ArithExpr {
 	if hasExpansion(src) {
 		return nil
 	}
-	a := &arithParser{src: src, at: at, p: p, dial: p.dialect}
+	if p.dialect.ArithDoubleQuote == ArithDoubleQuoteRemoved {
+		// Removed before anything reads the text, which is the whole of that
+		// reading: it is what makes `1"0"` the number 10, and what makes the
+		// text a failure quotes back the one without the quotes in it.
+		src = strings.ReplaceAll(src, `"`, "")
+	}
+	a := &arithParser{src: src, at: at, p: p, dial: p.dialect, stopped: -1}
 	e := a.expr()
 	a.space()
 	if e != nil && a.off < len(a.src) {
 		kind := a.leftoverKind()
 		// The two operand and operator failures name everything from here to
 		// the end of the expression; the byte's own verdict names the byte.
-		token := a.src[a.off:]
+		token := a.src[a.blame:]
 		if kind == ErrArithIllegalByte {
 			token = a.src[a.off : a.off+1]
 		}
@@ -380,10 +406,22 @@ func (a *arithParser) failArith(kind ErrorKind, token string) {
 }
 
 func (a *arithParser) space() {
-	for a.off < len(a.src) && (a.src[a.off] == ' ' || a.src[a.off] == '\t' || a.src[a.off] == '\n') {
+	if a.off == a.stopped {
+		return
+	}
+	for a.off < len(a.src) && isArithSpace(a.src[a.off]) {
 		a.off++
 	}
+	a.blame = a.off
+	if a.dial.ArithDoubleQuote == ArithDoubleQuoteSkipped {
+		for a.off < len(a.src) && (isArithSpace(a.src[a.off]) || a.src[a.off] == '"') {
+			a.off++
+		}
+	}
+	a.stopped = a.off
 }
+
+func isArithSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' }
 
 func (a *arithParser) has(s string) bool {
 	return strings.HasPrefix(a.src[a.off:], s)
@@ -620,6 +658,9 @@ func (a *arithParser) primary() ArithExpr {
 	}
 	if a.dial.ArithCharacterCode && a.src[a.off] == '#' {
 		return a.charCode(start)
+	}
+	if a.dial.ArithCharacterConstant && a.src[a.off] == '\'' {
+		return a.charConstant(start)
 	}
 	if c := a.src[a.off]; c >= '0' && c <= '9' {
 		return a.number(start)
@@ -881,7 +922,7 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 				// an earlier failure on the path where one is already
 				// recorded — either way the state the caller had.
 				held := a.p.err
-				sub := &arithParser{src: inner, at: a.at, p: a.p, dial: a.dial}
+				sub := &arithParser{src: inner, at: a.at, p: a.p, dial: a.dial, stopped: -1}
 				e := sub.expr()
 				sub.space()
 				if e == nil || sub.off < len(sub.src) {
@@ -943,6 +984,35 @@ func (a *arithParser) charCode(start Pos) ArithExpr {
 		}
 	}
 	n.Stop = start
+	return n
+}
+
+// charConstant reads `'c'`, the character constant, where the dialect has it.
+//
+// It builds the same node the `##c` spelling does rather than one of its own,
+// because it is the same question: the code of one character, with the escapes
+// the dialect's table decodes. A second node would be a second place for the
+// escape rules to drift apart.
+//
+// The closing quote is optional and is measured that way — `$(( 'a ))` is 97
+// and `$(( ” ))` is 39, the second quote read as the character with nothing
+// left to close it. Only one character is read, so `'ab'` leaves `b'` standing
+// where an operator belongs and the caller reports it, which is the syntax
+// error that shell gives.
+func (a *arithParser) charConstant(start Pos) ArithExpr {
+	a.off++ // the opening quote
+	size := charCodeOperandLen(a.src[a.off:], true)
+	if size == 0 {
+		a.failArith(ErrArithOperandEnd, "'")
+		return nil
+	}
+	n := &ArithCharCode{
+		Op: "''", Char: a.src[a.off : a.off+size], Start: start, Stop: start,
+	}
+	a.off += size
+	if a.off < len(a.src) && a.src[a.off] == '\'' {
+		a.off++
+	}
 	return n
 }
 

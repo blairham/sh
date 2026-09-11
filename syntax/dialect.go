@@ -1525,6 +1525,44 @@ type Dialect struct {
 	// operator belonged.
 	ArithBytesRefusedOutright string
 
+	// ArithDoubleQuote is what a `"` standing inside an arithmetic expression
+	// is: a byte the reader passes over, a byte it removes from the text
+	// before reading it at all, or no part of any token. See
+	// [ArithDoubleQuotePolicy].
+	//
+	// Measured 2026-09-07 and re-measured 2026-09-10, from a script file with
+	// `n=5`: `$(( "1" + 1 ))` is 2, `$(( "n" + 1 ))` is 6 and `$(( 1 + "2" ))`
+	// is 3 in bash 5.3.15, that build as `sh`, ksh93u+ and zsh 5.9.2; bash
+	// 3.2.57 and dash refuse all three. So four shells read what the quote
+	// held and two refuse it — additive, which is why it is here and not on
+	// the semantics vector, exactly as [ArithCharacterCode] is.
+	//
+	// It matters more than the spelling suggests: `$(( "$n" + 1 ))` looks
+	// defensive and is common, and refusing it fails under three of the four
+	// dialects graded here (#1223).
+	ArithDoubleQuote ArithDoubleQuotePolicy
+
+	// ArithCharacterConstant enables `'c'` inside an arithmetic expression:
+	// the code of the character between the quotes, the way C reads one.
+	//
+	// One shell in the panel. Measured 2026-09-10 on ksh93u+, where
+	// `$(( '1' + 1 ))` is 50 — the code of `1` is 49 — `$(( 'a' ))` is 97 and
+	// `$(( '\101' ))` is 65, against bash 5.3.15, bash 3.2.57, bash as `sh`
+	// and dash, which call it an arithmetic syntax error, and zsh 5.9.2,
+	// which refuses the byte outright as an illegal character. A literal one
+	// shell has and five refuse is the additive kind of split (#1223).
+	//
+	// The closing quote is optional, which is measured rather than assumed:
+	// `$(( 'a ))` is 97 and `$(( '' ))` is 39 — the second quote read as the
+	// character, with nothing left to close it. That also says why `$(( 'ab' ))`
+	// is a syntax error rather than a multi-character constant: the reading
+	// stops after `a`, and the `b` is left standing where an operator belongs.
+	//
+	// Kept apart from the double-quote question above because no shell's
+	// answer to one predicts its answer to the other: the four that read
+	// through a double quote include three that refuse this.
+	ArithCharacterConstant bool
+
 	// ExtendedPattern enables `@(a|b)`, `?(a)`, `+(a)`, `*(a)` and `!(a)` in
 	// a pattern: a group with a quantifier in front of it. ksh93 has them
 	// wherever a pattern may stand.
@@ -2489,3 +2527,45 @@ func Core() Dialect {
 // deliberately narrower than any shell anyone actually runs, which makes it
 // the right setting for a portability check and the wrong one for a runtime.
 func POSIX() Dialect { return Dialect{} }
+
+// ArithDoubleQuotePolicy is what a `"` inside an arithmetic expression is.
+//
+// Three readings rather than two, and the third is measured rather than
+// invented: the four shells that read *through* a double quote do not agree
+// about a quote standing in the middle of a token. `$(( 1"0" ))` is 10 in
+// bash 5.3 — the quotes are gone before anything reads the text, so the two
+// digits are one number — and an arithmetic syntax error in ksh93u+ and zsh
+// 5.9.2, where the quote ends the number and leaves a second operand behind.
+// Measured 2026-09-10 (#1223).
+type ArithDoubleQuotePolicy int
+
+const (
+	// ArithDoubleQuoteRefused is no part of any token: the quote is where a
+	// value should be, and the expression is refused for wanting an operand.
+	// bash 3.2.57 and dash, and the core, which refuses what the panel
+	// disagrees about.
+	ArithDoubleQuoteRefused ArithDoubleQuotePolicy = iota
+	// ArithDoubleQuoteSkipped passes over the byte wherever a token may
+	// begin, so `"1" + 1` is 2 and `"n" + 1` reads the parameter n — but a
+	// quote inside a token still ends it, and `1"0"` is two operands running
+	// together. ksh93 and zsh.
+	ArithDoubleQuoteSkipped
+	// ArithDoubleQuoteRemoved takes the byte out of the text before the
+	// expression is read, so `1"0"` is the number 10 and `n"a"me` is the
+	// parameter `name`. bash 5.3, and the same build invoked as `sh`.
+	//
+	// It is also what that shell quotes back when the expression fails —
+	// `$(( "1" "2" ))` is reported against `1 2` there — which falls out of
+	// removing the bytes rather than having to be arranged.
+	ArithDoubleQuoteRemoved
+)
+
+func (p ArithDoubleQuotePolicy) String() string {
+	switch p {
+	case ArithDoubleQuoteSkipped:
+		return "skipped"
+	case ArithDoubleQuoteRemoved:
+		return "removed"
+	}
+	return "refused"
+}

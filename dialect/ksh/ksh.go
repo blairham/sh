@@ -125,6 +125,20 @@ func Dialect() syntax.Dialect {
 	d.TimesIsReserved = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
+	// A double quote inside an arithmetic expression is stepped over
+	// wherever a token may begin. Measured 2026-09-10 on ksh93u+: with
+	// `n=5`, `$(( "1" + 1 ))` is 2, `$(( "n" + 1 ))` is 6 and
+	// `$(( 1 + "2" ))` is 3, while `$(( 1"0" ))` is an arithmetic syntax
+	// error — the quote ends the number rather than vanishing from the
+	// text, which is the line between this reading and bash's (#1223).
+	d.ArithDoubleQuote = syntax.ArithDoubleQuoteSkipped
+	// `'c'` is the code of the character between the quotes, the way C
+	// reads one, and this is the only shell in the panel with it: measured
+	// 2026-09-10, `$(( '1' + 1 ))` is 50 and `$(( 'a' ))` is 97 where the
+	// other five answer with a diagnostic. Nothing about the double quote
+	// predicts it — three of the four shells that read through one refuse
+	// this (#1223).
+	d.ArithCharacterConstant = true
 	// Extended patterns wherever a pattern may stand.
 	d.ExtendedPattern = true
 	// And inside `[[ ]]`, which is the only place bash reads them.
@@ -722,6 +736,11 @@ func Semantics() interp.Semantics {
 	// first element. The stream stays clean and the status stays 0, which is
 	// the only one of the three answers the panel gives that says nothing.
 	s.EmptyArithSubscript = interp.EmptyArithSubscriptIsTheEmptyExpression
+	// And so is whitespace between them, which is the same reading one text
+	// further along: measured 2026-09-10, `a=(1 2 3); echo $(( a[ ] ))` is
+	// `1` and `(( a[ ] = 9 ))` writes element zero. The two texts coincide
+	// here, and they do not in bash, which is why they are two axes (#1762).
+	s.BlankArithSubscriptIsTheEmptyExpression = interp.Yes
 	// And the complaint is the builtin's: `unset` reports 1 and the script
 	// goes on, which is what makes `unset a[@]` survivable here.
 	s.BadSubscriptToUnsetFatal = interp.No

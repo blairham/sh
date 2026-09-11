@@ -4400,6 +4400,21 @@ echo "st=$?"`,
 		Why:     "the same text on a name nothing declared, which is the row that makes this two questions rather than one: zsh is a silent zero here and `invalid subscript` above, because it looks the name up before it reads the brackets. bash reports either way and ksh93 is silent either way, so the shell that parts is the one whose answer depends on the name. The pair is the shape a completion plugin runs as `bind_count=$((_ZSH_AUTOSUGGEST_BIND_COUNTS[$widget]))` with an empty `$widget`, and a case holding only this row would pass under a rule that answered zero for every empty subscript",
 	},
 	{
+		ID: "arithmetic/a-blank-subscript-on-a-name-that-is-set", Category: "expansion",
+		Snippet: `a=(5 6 7); echo $(( a[ ] )); echo after`,
+		Why:     "brackets holding whitespace and nothing else, which is what `$(( a[$w] ))` is once a `$w` holding spaces has gone in — the same substitute-then-parse order that makes an empty `$w` into `a[]`, one row up. It is a different question from that one and the panel says so: bash reads the blank as the blank *expression*, which is zero and so names the first element, where `a[]` one character shorter is `bad array subscript` and a flat zero. ksh93 gives element zero to both. zsh refuses this one with the expression reader's own end-of-input sentence, not the `invalid subscript` it gives the empty pair. The array is what carries it: against an unset name every column reads zero and no probe could tell the readings apart",
+	},
+	{
+		ID: "arithmetic/a-blank-subscript-as-an-assignment-target", Category: "expansion",
+		Snippet: `a=(5 6 7); (( a[ ] = 9 )); echo "st=$?"; printf "[%s]" "${a[*]}"; echo`,
+		Why:     "the same blank brackets standing where a target goes, which is the row that says the split belongs to the subscript rather than to reading one: bash and ksh93 write element zero and zsh refuses with the identical sentence it uses for the read. The empty pair in the same position is a third question again — three shells, three answers — and has no axis, so it is not this row",
+	},
+	{
+		ID: "arithmetic/a-blank-subscript-on-an-associative-name", Category: "expansion",
+		Snippet: `typeset -A m; m[k]=v; echo $(( m[ ] )); echo after`,
+		Why:     "the same brackets on a name whose subscript is a key rather than an expression, where the three shells with the attribute agree on zero: no key is made of that whitespace, so nothing is found and the reader is never reached. It is the control for the row above — a rule that refused every blank subscript would take this one with it, and the line it appears on in the wild is a completion plugin's `$((TABLE[$widget]))` with an empty widget",
+	},
+	{
 		ID: "arithmetic/a-subscript-of-an-unset-name-that-would-fail", Category: "expansion",
 		Snippet: `echo $(( nodecl[1/0] )); echo after`,
 		Why:     "whether the subscript is evaluated at all when the name in front of it is not there. zsh answers zero without reading it and the other three divide by zero, which is the only place the axis is visible: a subscript with no error and no side effect gives the same zero under both readings. It is also what makes the empty-subscript row above a consequence rather than a special case, and the reason a probe expecting zero cannot grade the empty subscript on its own",
@@ -8574,6 +8589,21 @@ echo unreachable`,
 		ID: "arith/a-refused-byte-with-nothing-read-but-space", Category: "arithmetic",
 		Snippet: `echo "[$((  @  ))]"; echo "st=$?"`,
 		Why:     "whitespace is not reading. The cursor is not at the start of the text and zsh still gives the byte its own verdict, which rules out the offset as the test — what decides is whether anything has been *consumed*, and here nothing has",
+	},
+	{
+		ID: "arith/a-double-quote-around-an-operand", Category: "arithmetic",
+		Snippet: `n=5; printf "[%s][%s][%s]" "$(( "1" + 1 ))" "$(( "n" + 1 ))" "$(( 1 + "2" ))"; echo " st=$?"`,
+		Why:     "a double quote standing where a value belongs, and the panel divides four to two: bash 5.3, that build as `sh`, ksh93 and zsh read what the quote held and answer 2, 6 and 3, where bash 3.2 and dash refuse the line for wanting an operand. It is a version line inside one lineage as well as a difference between shells, which is what says a flag called `Bash` could not carry it. The `n` row is the one that matters in practice: `$(( \"$n\" + 1 ))` is a shape that looks defensive and is common, so refusing it fails scripts written for three of the four dialects graded here",
+	},
+	{
+		ID: "arith/a-double-quote-inside-a-token", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$(( 1"0" ))"; echo " st=$?"`,
+		Why:     "the row that splits the four shells that read through a quote into two readings. bash takes the bytes out of the text before anything reads it, so the two digits are one number and the answer is 10 — and its failures quote back the text with the quotes gone, `$(( \"1\" \"2\" ))` reported against `1 2`. ksh93 and zsh step over the byte only where a token may begin, so the quote ends the number here and two operands run together. Without this row a single boolean would have given one of those answers to the other three columns",
+	},
+	{
+		ID: "arith/a-single-quoted-character-is-a-code-point", Category: "arithmetic",
+		Snippet: `printf "[%s][%s]" "$(( '1' + 1 ))" "$(( 'a' ))"; echo " st=$?"`,
+		Why:     "the other quote character, and a different split entirely: ksh93 alone reads `'1'` as a character constant the way C does — the code of `1` is 49, so the sum is 50 — where bash in both builds and dash call it an arithmetic syntax error and zsh refuses the byte outright as an illegal character. Nobody's answer here is predictable from their answer to the double quote: three of the four shells that read through one refuse this. It is the one answer in the row that is a value rather than a diagnostic, which is why a probe reading only the status could not see it",
 	},
 	{
 		ID: "arith/the-error-names-what-was-consumed", Category: "arithmetic",

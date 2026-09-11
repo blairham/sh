@@ -109,6 +109,17 @@ func Dialect() syntax.Dialect {
 	d.SeparatorWhereACommandBelongs = syntax.AnySeparatorWhereACommandBelongs
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
+	// A double quote inside an arithmetic expression is stepped over
+	// wherever a token may begin. Measured 2026-09-10 on zsh 5.9.2: with
+	// `n=5`, `$(( "1" + 1 ))` is 2, `$(( "n" + 1 ))` is 6 and
+	// `$(( 1 + "2" ))` is 3, while `$(( 1"0" ))` is `operator expected` —
+	// the quote ends the number here as it does in ksh93, and does not
+	// vanish from the text as it does in bash 5.3.
+	//
+	// The single quote is the opposite answer and is the row below: it is
+	// refused outright here, where ksh93 reads it as a character constant
+	// (#1223).
+	d.ArithDoubleQuote = syntax.ArithDoubleQuoteSkipped
 	// The bytes this shell's arithmetic reader refuses as part of no token at
 	// all, so they are reported at the byte — `illegal character: @` — rather
 	// than as a value it could not read. Measured 2026-09-07 against zsh
@@ -1160,6 +1171,14 @@ func Semantics() interp.Semantics {
 	// and declared is the refusal, and this shell was giving `bad math
 	// expression` to both (#1745).
 	s.EmptyArithSubscript = interp.EmptyArithSubscriptIsInvalid
+	// Whitespace between the brackets is refused too, and by a different
+	// part of the shell: measured 2026-09-10, `a=(1 2 3); echo $(( a[ ] ))`
+	// is `bad math expression: operand expected at end of string` — the
+	// expression reader's own end-of-input sentence, where `a[]` is the
+	// subscript machinery's `invalid subscript`. Only on an indexed name:
+	// the same brackets on an associative one are a key made of spaces, and
+	// on a name that is not set the subscript is never read at all (#1762).
+	s.BlankArithSubscriptIsTheEmptyExpression = interp.No
 	// `a[2]=(p q)` puts the words *where the subscript points* and the array
 	// grows by one: `a=(x y); a[1]=(p q)` reads back `p q y`. Measured
 	// 2026-09-07 against zsh 5.9.2, over the shapes that could have told a

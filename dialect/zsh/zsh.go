@@ -2249,6 +2249,7 @@ func Apply(r *interp.Runner) {
 	// How zsh scripts actually change options, and how they change shells.
 	// See setopt.go and emulate.go.
 	registerSetopt(r)
+	registerZcompile(r)
 	registerLocalOptions(r)
 	// `**/` crosses directory levels here with no option asked for, and
 	// there is no `setopt` name that turns it off — which is why this is a

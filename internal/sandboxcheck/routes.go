@@ -400,7 +400,7 @@ zf_chmod 777 ./sneaky`,
 		Only:   zsh,
 		Script: `echo ':' > c.zsh; zcompile {{target}} c.zsh`,
 		Did:    made,
-		Why:    "not a builtin yet — it writes a compiled file wherever it is told to",
+		Why:    "#1405: it writes a compiled file wherever it is told to",
 	}}
 }
 

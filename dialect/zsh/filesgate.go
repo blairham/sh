@@ -5,6 +5,7 @@ package zsh
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -47,6 +48,41 @@ import (
 func fileMayModify(r *interp.Runner, ctx context.Context, path string) bool {
 	return r.AllowModify(ctx, shellPath(r, path))
 }
+
+// fileWriteWhole replaces what is at a path with the bytes given, asking the
+// gate about the path first.
+//
+// `zcompile` is the caller and the only one: it produces a whole file at a
+// name the script chose, which is a modification of that name whether or not
+// anything was there before.
+//
+// The removal in front of the write is not tidiness. The mode is read-only —
+// zsh's compiled files are 0444 and this matches — so a second `zcompile`
+// over an existing product would be refused by the permissions the first one
+// set. Measured on zsh 5.9.2: compiling the same file twice in a row
+// succeeds, so the removal is what makes this shell agree.
+//
+// One AllowModify for the name covers both calls: they are one replacement,
+// and asking twice about the same path would only put a second identical
+// entry in the audit log.
+func fileWriteWhole(r *interp.Runner, ctx context.Context, path string, data []byte, mode fs.FileMode) error {
+	resolved := shellPath(r, path)
+	if !r.AllowModify(ctx, resolved) {
+		return errGateRefused
+	}
+	_ = os.Remove(resolved)
+	return os.WriteFile(resolved, data, mode)
+}
+
+// errGateRefused is a refusal by the *gate*, which AllowModify has already
+// reported in the same words a refused redirection gets. It is distinct from
+// whatever the kernel says about a write it declined, because the caller must
+// tell them apart: one has been spoken about and the other has not, and
+// reporting the first again says it twice while swallowing the second says
+// nothing at all. Returning fs.ErrPermission for both did the second — a
+// `zcompile` into an unwritable directory failed silently where zsh says
+// `can't write zwc file`.
+var errGateRefused = errors.New("refused by the policy")
 
 // fileMayModifyTarget is fileMayModify for an operation that follows a
 // symbolic link to do its work, which `chmod` and `chown` do unless `-h`

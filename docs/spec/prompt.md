@@ -172,7 +172,7 @@ does.
 | `%l` `%y` | terminal, with and without the `tty` | `s008`, `ttys008` |
 | `%_` | what the line is still inside | `for` |
 | `%{` `%}` | non-printing markers | see above |
-| `%B` `%b` | bold on, and **everything** off | `\e[1m`, `\e[0m` |
+| `%B` `%b` | bold on, and **everything** off — and both write back what they cleared, see below | `\e[1m`, `\e[0m` |
 | `%U` `%u` | underline on and off | `\e[4m`, `\e[24m` |
 | `%S` `%s` | standout on and off | `\e[7m`, `\e[27m` |
 | `%F{c}` `%f` | foreground color, and default | `\e[31m` for `red`, `\e[39m` |
@@ -189,6 +189,73 @@ than about the spelling: measured at the same moment, bash's `\t` drew
 `06:11:40` and zsh's `%*` drew `6:11:43`. Midnight says what the difference
 is — zsh drew `0:17:07`, so the zero is taken off rather than replaced with
 a space, and the hour keeps a digit.
+
+### The restore, and which codes do it
+
+There is no way on this terminal to turn boldface off on its own: `%b` writes
+`\e[0m` — select-graphic-rendition nought, which clears everything, colors
+included. So zsh writes the reset **and then writes back whatever else was in
+effect**:
+
+```
+${(%%)'%F{031}a%b%k%F{242}x%f'}
+\e[38;5;31m a \e[0m\e[38;5;31m \e[49m \e[38;5;242m x \e[39m
+```
+
+The `\e[38;5;31m` after the reset is the restore. With no color set beforehand
+the same text has nothing to write back — `${(%%)'%b%k%F{242}x%f'}` is the
+reset alone — which is what says this is the restore and not the reset.
+
+**Four codes restore and the rest do not**, measured a sequence at a time
+against zsh 5.9.2 under `TERM=xterm-256color`. Two of the four are surprises:
+bold-*on* restores where underline-on and standout-on do not, and `%u`
+restores although its `\e[24m` clears nothing but the underline.
+
+| sequence | drew | |
+| --- | --- | --- |
+| `%F{red}%Ba` | `\e[31m` `\e[1m\e[31m` a | bold-on **restores** |
+| `%F{red}%Ua` | `\e[31m` `\e[4m` a | underline-on does not |
+| `%F{red}%Sa` | `\e[31m` `\e[7m` a | standout-on does not |
+| `%F{red}a%b` | `\e[31m` a `\e[0m\e[31m` | bold-off **restores** |
+| `%F{red}a%u` | `\e[31m` a `\e[24m\e[31m` | underline-off **restores** |
+| `%F{red}a%s` | `\e[31m` a `\e[27m\e[31m` | standout-off **restores** |
+| `%B%F{red}a%f` | `\e[1m\e[31m` a `\e[39m` | foreground-off does not |
+| `%B%F{red}a%k` | `\e[1m\e[31m` a `\e[49m` | background-off does not |
+| `%Ba%F{blue}` | `\e[1m` a `\e[34m` | setting a color does not |
+
+So neither "an off code restores" nor "a sequence that resets everything
+restores" is the rule: the first writes a restore after `%f`, the second
+leaves one off `%u`, and both are wrong about `%B`.
+
+**What a restore writes, and in what order.** Everything still in effect
+except the code's own attribute — which the code has just written for itself,
+so `%F{red}%B%Ba` is `\e[31m` `\e[1m\e[31m` `\e[1m\e[31m` and never
+`\e[1m\e[1m`. The order is fixed rather than the order the text set things in:
+
+    bold, standout, underline, foreground, background
+
+measured both ways round — `%U%S%F{red}%K{blue}a%b` and
+`%S%U%F{red}%K{blue}a%b` both restore `\e[7m\e[4m\e[31m\e[44m` — and with
+bold in front of standout, from `%B%Sa%u` restoring `\e[1m\e[7m`.
+
+An attribute the code itself cleared is left out, so `%B%U a %u` restores the
+bold and not the underline. A color cleared by `%f` or `%k` is left out the
+same way, which is why those two are part of this even though they never
+restore: `%F{red}a%f%b` ends `\e[39m\e[0m` with nothing after it.
+
+The whole rule in one string, which is the longest probe taken:
+
+```
+${(%%)'%F{red}%B%U%Sa%s%u%b'}
+\e[31m \e[1m\e[31m \e[4m \e[7m a \e[27m\e[1m\e[4m\e[31m \e[24m\e[1m\e[31m \e[0m\e[31m
+```
+
+**Why it matters beyond the bytes.** powerlevel10k writes `%b%k` between every
+pair of segments, so a shell that emits the reset alone loses the color of
+every segment after the first — eight places in one real `${(%%)PROMPT}`, all
+of them a missing `\e[38;5;NNm` or `\e[30m` directly after an `\e[0m` (#2075).
+The state is per expansion: it starts empty at every walk, so nothing one
+prompt set reaches the next.
 
 ### The colors
 

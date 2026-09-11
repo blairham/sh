@@ -138,6 +138,10 @@ func PromptStyle() interp.PromptStyle {
 		// on the wire. `%b` is not bold-off but everything-off — it drew
 		// `\e[0m` where `%u` drew `\e[24m` — which is why these are strings
 		// the dialect names rather than a notion the substrate has.
+		//
+		// Which of them also *restores* is the Visual table below, and it is
+		// the reason `%b` is more than a string: writing `\e[0m` clears the
+		// color too, and zsh writes it back.
 		Sequences: map[rune]string{
 			'B': "\x1b[1m",
 			'b': "\x1b[0m",
@@ -148,6 +152,53 @@ func PromptStyle() interp.PromptStyle {
 			'f': "\x1b[39m",
 			'k': "\x1b[49m",
 			'E': "\x1b[K",
+		},
+		// What each of those sequences does to the terminal's visual state.
+		//
+		// The point of the table is `%b`. On this terminal the only way to
+		// turn boldface off is `\e[0m`, which clears everything — so zsh
+		// writes the reset and then writes back whatever else was in effect.
+		// Measured against zsh 5.9.2 under `TERM=xterm-256color`:
+		//
+		//	${(%%)'%F{031}a%b%k%F{242}x%f'}
+		//	\e[38;5;31m a \e[0m\e[38;5;31m \e[49m \e[38;5;242m x \e[39m
+		//
+		// where the `\e[38;5;31m` after the reset is the restore. Without it
+		// the text after the first `%b` has no color, and a prompt theme that
+		// writes `%b%k` between segments loses the color of every one of them
+		// (#2075).
+		//
+		// **Four codes restore and the rest do not**, which was measured a
+		// sequence at a time rather than reasoned about — the two halves of
+		// the surprise are that bold-*on* restores where underline-on and
+		// standout-on do not, and that `%u` restores where its `\e[24m`
+		// clears nothing but the underline:
+		//
+		//	%F{red}%Ba    \e[31m \e[1m\e[31m a          restores
+		//	%F{red}%Ua    \e[31m \e[4m a                does not
+		//	%F{red}%Sa    \e[31m \e[7m a                does not
+		//	%F{red}a%u    \e[31m a \e[24m\e[31m          restores
+		//	%F{red}a%s    \e[31m a \e[27m\e[31m          restores
+		//	%B%F{red}a%f  \e[1m\e[31m a \e[39m           does not
+		//	%B%F{red}a%k  \e[1m\e[31m a \e[49m           does not
+		//	%Ba%F{blue}   \e[1m a \e[34m                does not
+		//
+		// `%f` and `%k` are here without restoring for the other half of the
+		// job: they *clear* a color, and a walker that did not know it would
+		// write the cleared color back at the next `%b`. Measured,
+		// `%F{red}a%f%b` ends `\e[39m\e[0m` with nothing after it.
+		//
+		// `%E` is not here at all: clearing to the end of the line changes
+		// nothing about what the next character looks like.
+		Visual: map[rune]interp.PromptVisual{
+			'B': {Attribute: interp.AttributeBold, Restores: true},
+			'b': {Attribute: interp.AttributeBold, Off: true, Restores: true},
+			'U': {Attribute: interp.AttributeUnderline},
+			'u': {Attribute: interp.AttributeUnderline, Off: true, Restores: true},
+			'S': {Attribute: interp.AttributeStandout},
+			's': {Attribute: interp.AttributeStandout, Off: true, Restores: true},
+			'f': {Attribute: interp.AttributeForeground, Off: true},
+			'k': {Attribute: interp.AttributeBackground, Off: true},
 		},
 		// `%F{red}` drew `\e[31m` and `%K{blue}` drew `\e[44m`.
 		Colors: map[rune]interp.PromptColor{

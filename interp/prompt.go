@@ -132,6 +132,21 @@ type PromptStyle struct {
 	// Read after Codes, so a letter in both is the field.
 	Sequences map[rune]string
 
+	// Visual is which of those sequences change the terminal's visual state,
+	// and how. See [PromptVisual]: it is what lets a bold-off write the
+	// color back that clearing the bold took with it.
+	//
+	// Consulted for Sequences codes only. A Colors code always sets its own
+	// layer and never restores, which is measured — `%F{red}%Ba` restores
+	// and `%Ba%F{blue}` does not — so there is nothing for a dialect to say
+	// about one.
+	//
+	// A dialect that leaves this empty has no visual state kept for it and
+	// its sequences are written as they stand, which is every dialect but
+	// one: bash and ksh93 spell their colors as raw escape bytes a person
+	// wrote, so there is no code for the shell to know the meaning of.
+	Visual map[rune]PromptVisual
+
 	// Colors is the codes that set a color, and which half of the screen each
 	// sets. The code takes an argument in braces — zsh spells the foreground
 	// `%F{red}` — and the sequence itself is the terminal's rather than the
@@ -508,6 +523,99 @@ const (
 	Background
 )
 
+// PromptAttribute is one setting of the terminal's visual state, for the
+// walker to keep while it draws.
+//
+// It has to keep one, because on this terminal there is no way to turn a
+// single attribute off. Measured against zsh 5.9.2 under
+// `TERM=xterm-256color`, `%b` writes `\e[0m` — select-graphic-rendition
+// nought, which clears *everything*, colors included — and then writes the
+// color that was in effect again, so the text after it is still red:
+//
+//	${(%%)'%F{red}%Bbold%b still'}
+//	\e[31m \e[1m\e[31m bold \e[0m\e[31m  still
+//
+// Without the second half a prompt loses its color at the first bold-off,
+// which a theme that writes `%b%k` between segments does on every segment.
+//
+// The names are the terminal's rather than a shell's, in the way
+// [PromptColor] and the numbers in promptcolor.go already are: bold,
+// standout and underline are terminfo's `bold`, `smso` and `smul`, and a
+// second dialect with a visual language gets the machinery without saying
+// any of it again.
+//
+// **The constants are in the order a restore writes them**, which is
+// measured rather than chosen: `%U%S%F{red}%K{blue}a%b` restored
+// `\e[7m\e[4m\e[31m\e[44m` — standout before underline whichever order they
+// were turned on in — and `%B%S...%u` restored `\e[1m\e[7m`.
+type PromptAttribute int
+
+const (
+	// AttributeNone is the zero value, so a [PromptVisual] that names no
+	// attribute changes none. A code can still restore without owning a
+	// setting of its own; nothing in the panel does, and the zero value is
+	// what says so.
+	AttributeNone PromptAttribute = iota
+	AttributeBold
+	AttributeStandout
+	AttributeUnderline
+	// AttributeForeground and AttributeBackground are the two [PromptColor]
+	// layers, as settings to be restored. A Colors code sets its own layer
+	// without being named here; these are for the codes that *clear* one,
+	// which a dialect spells as a fixed sequence — zsh's `%f` is `\e[39m` —
+	// and which the walker would otherwise have no way to know had cleared
+	// anything.
+	AttributeForeground
+	AttributeBackground
+)
+
+// attributeOf is the setting a color layer occupies. The two enumerations
+// are parallel by construction rather than by upkeep, which this is the
+// only place that needs.
+func attributeOf(layer PromptColor) PromptAttribute {
+	if layer == Background {
+		return AttributeBackground
+	}
+	return AttributeForeground
+}
+
+// PromptVisual is what one [PromptStyle.Sequences] code does to the terminal's
+// visual state, for the dialects whose visual language has codes that disturb
+// more than they name.
+//
+// A code not in [PromptStyle.Visual] is bytes and nothing more, which is what
+// every code was before this and what most still are.
+type PromptVisual struct {
+	// Attribute is the setting this code owns. Setting it records the
+	// code's own sequence as what is in effect; see Off for the other half.
+	Attribute PromptAttribute
+
+	// Off says the code clears its attribute rather than setting it.
+	Off bool
+
+	// Restores says the sequence disturbs settings other than its own, so
+	// everything still in effect is written again after it — in the order
+	// the [PromptAttribute] constants are in, and skipping this code's own
+	// attribute, which the code has just written for itself.
+	//
+	// Which codes need it is measured and is not the tidy answer. Against
+	// zsh 5.9.2 the four that restore are `%B`, `%b`, `%u` and `%s` —
+	// bold-on and the three attribute-offs — while `%U`, `%S`, `%f`, `%k`,
+	// `%F{…}` and `%K{…}` write their sequence and nothing else:
+	//
+	//	%F{red}%Ba   \e[31m \e[1m\e[31m a      bold-on restores
+	//	%F{red}%Ua   \e[31m \e[4m a           underline-on does not
+	//	%B%F{red}a%f \e[1m\e[31m a \e[39m     foreground-off does not
+	//	%B%Sa%u      \e[1m\e[7m a \e[24m\e[1m\e[7m
+	//
+	// So it is a row of the table rather than a rule over it: a reader that
+	// derived it from "this sequence turns something off" would write the
+	// restore after `%f` too, and one that derived it from "this sequence
+	// resets everything" would leave it off `%u`, whose `\e[24m` resets
+	// nothing but the underline.
+	Restores bool
+}
+
 // PromptResolver is what one code draws, for the reader that holds the facts.
 //
 // arg is what stood in braces after the code — a color, or a `strftime`
@@ -622,6 +730,14 @@ type promptWalk struct {
 	// column: measured, `%{XY%}ab` has drawn two columns and not four.
 	hidden int
 
+	// visual is the terminal's visual state as this walk has set it: the
+	// sequence currently in effect for each [PromptAttribute], empty where
+	// nothing is. It is what a restoring code writes back — see
+	// [PromptVisual.Restores] — and it starts empty at every walk, which is
+	// measured: `${(%%)'%b%k%F{242}x%f'}` writes the reset and restores
+	// nothing, where the same text after a `%F{031}` restores the color.
+	visual [AttributeBackground + 1]string
+
 	// refused is the escape this reader had no answer for, empty until one is
 	// met. It stops the walk: there is no drawing on past an escape whose
 	// value is unknown, because whatever follows would be in the wrong place.
@@ -717,12 +833,19 @@ func (w *promptWalk) walk(runes []rune) {
 			// and not counted: measured, `%F{red}abc` has drawn three
 			// columns.
 			w.b.WriteString(seq)
+			w.visualWritten(code, seq)
 			continue
 		}
 		if layer, ok := w.st.Colors[code]; ok {
 			arg, next, _ := promptArgument(runes, i+1)
 			i = next
-			w.b.WriteString(colorSequence(layer, arg))
+			seq := colorSequence(layer, arg)
+			w.b.WriteString(seq)
+			// A color code is the one that is always a setting: it names the
+			// layer it paints, so the walker knows what is in effect without
+			// the dialect saying anything. It never restores; see
+			// PromptStyle.Visual.
+			w.visual[attributeOf(layer)] = seq
 			continue
 		}
 		if v, ok := promptOctalByte(w.st.Octal, runes, i); ok {
@@ -759,6 +882,41 @@ func (w *promptWalk) walk(runes []rune) {
 			return
 		}
 		w.draw(v)
+	}
+}
+
+// visualWritten records what a sequence did to the terminal's visual state,
+// and writes back whatever it disturbed on the way.
+//
+// This is the whole of the restore, and it is here — in the walker both
+// readers share — rather than in a second pass over the finished text,
+// because the sequence to write back is the one that was in effect *at that
+// point* in the walk. A pass over the result would have to parse the escapes
+// back out to know, which is reading our own output to learn what we meant.
+func (w *promptWalk) visualWritten(code rune, seq string) {
+	v, ok := w.st.Visual[code]
+	if !ok {
+		return
+	}
+	if v.Attribute != AttributeNone {
+		if v.Off {
+			w.visual[v.Attribute] = ""
+		} else {
+			w.visual[v.Attribute] = seq
+		}
+	}
+	if !v.Restores {
+		return
+	}
+	for a := AttributeBold; a <= AttributeBackground; a++ {
+		// Its own attribute is skipped rather than written twice: this code
+		// has just written it, and measured, `%F{red}%B%Ba` is
+		// `\e[31m \e[1m\e[31m \e[1m\e[31m` — one bold per `%B` and the color
+		// after each, never `\e[1m\e[1m`.
+		if a == v.Attribute {
+			continue
+		}
+		w.b.WriteString(w.visual[a])
 	}
 }
 

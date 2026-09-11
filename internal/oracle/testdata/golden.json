@@ -26295,6 +26295,226 @@
         "TimedOut": false
       }
     },
+    "complist/a-module-that-supports-features-and-names-none": {
+      "bash": {
+        "Stdout": "complist=127~main=127~select=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "complist=127~main=127~select=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "complist=127~main=127~select=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "complist=127~main=127~select=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "complist=127~main=127~select=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "complist=0~main=1~select=0",
+        "Stderr": "\u003cshell\u003e:zmodload:1: module `zsh/main' does not support features",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "complist/binding-a-key-in-the-keymap-the-module-creates": {
+      "bash": {
+        "Stdout": "before=127~after=127",
+        "Stderr": "\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: bindkey: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "before=127~after=127",
+        "Stderr": "\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: bindkey: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "before=127~after=127",
+        "Stderr": "\u003cshell\u003e: bindkey: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: bindkey: command not found~\u003cshell\u003e: bindkey: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "before=127~after=127",
+        "Stderr": "\u003cshell\u003e: 1: bindkey: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: bindkey: not found~\u003cshell\u003e: 1: bindkey: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "before=127~after=127",
+        "Stderr": "\u003cshell\u003e: bindkey: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: bindkey: not found~\u003cshell\u003e: bindkey: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "before=1~after=0~\"^O\" accept-and-infer-next-history",
+        "Stderr": "\u003cshell\u003e:bindkey:1: no such keymap `menuselect'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "complist/the-keymaps-the-module-creates": {
+      "bash": {
+        "Stdout": "---",
+        "Stderr": "\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: bindkey: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "---",
+        "Stderr": "\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: bindkey: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "---",
+        "Stderr": "\u003cshell\u003e: bindkey: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: bindkey: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "---",
+        "Stderr": "\u003cshell\u003e: 1: bindkey: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: bindkey: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "---",
+        "Stderr": "\u003cshell\u003e: bindkey: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: bindkey: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": ".safe~command~emacs~isearch~main~vicmd~viins~viopp~visual~---~.safe~command~emacs~isearch~listscroll~main~menuselect~vicmd~viins~viopp~visual",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "complist/the-module-a-completion-library-loads": {
+      "bash": {
+        "Stdout": "st=127~e=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~e=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~e=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~e=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~e=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~e=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "complist/the-widget-the-module-defines": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: menu=${+widgets[menu-select]} bol=${+widgets[beginning-of-line]}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: menu=${+widgets[menu-select]} bol=${+widgets[beginning-of-line]}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: menu=${+widgets[menu-select]} bol=${+widgets[beginning-of-line]}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `+' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "menu=1 bol=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cond/a-condition-opened-on-one-line-and-refused-on-another": {
       "bash": {
         "Stdout": "",

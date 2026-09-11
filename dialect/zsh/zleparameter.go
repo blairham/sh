@@ -147,9 +147,10 @@ func zshWidgetSpelling(def widgetDefinition) string {
 
 // zshKeymapsView is `$keymaps`: the keymaps this shell has, by name.
 //
-// keymapNames rather than a list of its own, which is what keeps this and
-// `bindkey -l` from ever disagreeing — and it is already sorted, so the order
-// needs nothing done to it here.
-func zshKeymapsView(*interp.Runner) []string {
-	return append([]string(nil), keymapNames...)
+// keymapsNow rather than a list of its own, which is what keeps this and
+// `bindkey -l` from ever disagreeing — including about the keymaps a module
+// added, since that function derives the list from what is loaded rather than
+// keeping a second copy. It sorts, so the order needs nothing done to it here.
+func zshKeymapsView(r *interp.Runner) []string {
+	return keymapsNow(r)
 }

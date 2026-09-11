@@ -14896,6 +14896,40 @@ echo "st=$?"`,
 		Snippet: `zmodload -F; echo "st=$?"`,
 		Why:     "and `-F` with nothing to act on is `-F requires a module name` and 1, where the bare builtin with no letters at all is a listing and 0 — so the operand is required by the letter rather than by the builtin",
 	},
+	// `zsh/complist` — the module a real completion library loads two lines
+	// before it binds a key in the keymap the module creates (#2090). It is
+	// the one module in the table that names **no features at all**, which is
+	// not the same as `zsh/main` naming none: the rows below record the
+	// difference, because both have an empty list and only the status can
+	// tell them apart.
+	//
+	// What this shell provides of it is the keymaps and not the widget, and
+	// the last row records that divergence rather than leaving it to be found.
+	{
+		ID: "complist/the-module-a-completion-library-loads", Category: "builtins",
+		Snippet: `zmodload -i zsh/complist; echo "st=$?"; zmodload -e zsh/complist; echo "e=$?"`,
+		Why:     "`zmodload -i zsh/complist` written as Oh My Zsh's completion library writes it, and the same two questions the `zsh/zutil` row asks: loading is silence and 0, and the module is then loaded, which is what `-e` afterwards is for. `-i` is the letter that file uses and it is about a complaint rather than a status — a module already loaded loads again without a word in either shell",
+	},
+	{
+		ID: "complist/the-keymaps-the-module-creates", Category: "builtins",
+		Snippet: `bindkey -l; echo "---"; zmodload zsh/complist; bindkey -l`,
+		Why:     "the whole of what a load leaves behind that this shell can see: `listscroll` and `menuselect`, landing *inside* the sorted nine rather than after them — after `isearch` and after `main`. A listing rather than a set test because a shell that appended the two names would answer every containment question correctly and print this in the wrong order",
+	},
+	{
+		ID: "complist/binding-a-key-in-the-keymap-the-module-creates", Category: "builtins",
+		Snippet: `bindkey -M menuselect '^o' accept-and-infer-next-history; echo "before=$?"; zmodload zsh/complist; bindkey -M menuselect '^o' accept-and-infer-next-history; echo "after=$?"; bindkey -M menuselect '^o'`,
+		Why:     "the pair #2090 was opened for, and the reason only one of its two lines was ever a defect: with the module absent `bindkey -M menuselect` is ``no such keymap `menuselect'`` and 1 in *both* shells, so the second message was the honest consequence of the first. After the load it is 0 and the binding is stored — against a widget neither shell has, which is measured and not an accident: an unknown widget name is not an error, it is kept, and the key does nothing",
+	},
+	{
+		ID: "complist/a-module-that-supports-features-and-names-none", Category: "builtins",
+		Snippet: `zmodload zsh/complist; zmodload -lF zsh/complist; echo "complist=$?"; zmodload -lF zsh/main; echo "main=$?"; zmodload -F zsh/complist; echo "select=$?"`,
+		Why:     "the distinction the row above rests on. Both modules have an empty feature list and they are not the same case: `-lF` on a loaded `zsh/complist` writes **nothing at 0**, where the same command about `zsh/main` is ``module `zsh/main' does not support features`` at 1. So complist loads vacuously — everything it names is present, because it names nothing — and a shell deciding on the length of the list alone gives it the other module's sentence",
+	},
+	{
+		ID: "complist/the-widget-the-module-defines", Category: "builtins",
+		Snippet: `zmodload zsh/zleparameter; zmodload zsh/complist; echo "menu=${+widgets[menu-select]} bol=${+widgets[beginning-of-line]}"`,
+		Why:     "**a recorded divergence, and the line this shell deliberately does not cross.** zsh's module defines the `menu-select` widget as well as the keymaps, so the set test is 1 there and 0 here. Menu selection is a scrolling highlighted list and this editor has none, so naming the widget would be the `$terminfo` trap of #2076 in a second place: a caller testing whether the widget is there before wrapping it would be told yes and find nothing behind it. `beginning-of-line` beside it so the row cannot be satisfied by a `$widgets` that answers 0 to everything",
+	},
 	// `zsh/langinfo`, `zsh/mathfunc`, `zsh/zleparameter` and the last three
 	// of `zsh/system` — the four modules a real startup loads that were
 	// `failed to load module` until #1618, two of which took a plugin down

@@ -108,6 +108,9 @@ func TestSemantics(t *testing.T) {
 		{"BraceRangeEndpointsExpanded", s.BraceRangeEndpointsExpanded, interp.Yes},
 		{"ArithInvalidOctalDigitIsError", s.ArithInvalidOctalDigitIsError, interp.No},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.Yes},
+		// Octal in the expression reader and decimal in the integer
+		// attribute's: `$((010))` is 8 and `typeset -i d=010` is 10.
+		{"IntegerAssignmentReadsALeadingZeroAsDecimal", s.IntegerAssignmentReadsALeadingZeroAsDecimal, interp.Yes},
 		{"ArithIntegerOperatorRefusesFloat", s.ArithIntegerOperatorRefusesFloat, interp.Yes},
 		{"LastPipelineElementInCurrentShell", s.LastPipelineElementInCurrentShell, interp.Yes},
 		// A `jobs` listing: which end it starts from, and whether a job that

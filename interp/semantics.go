@@ -493,6 +493,38 @@ type Semantics struct {
 	//
 	// zsh never reaches this: nothing there made the zero octal.
 	ArithInvalidOctalDigitIsError Answer
+	// IntegerAssignmentReadsALeadingZeroAsDecimal makes `typeset -i d=010`
+	// ten rather than eight, in a shell whose *arithmetic* still reads
+	// `$((010))` as eight.
+	//
+	// Measured 2026-09-10 from a script file under `env -i`:
+	//
+	//	                        $((010))   typeset -i d=010   e=010; typeset -i e
+	//	bash 5.3.15, bash 3.2      8              8                  010
+	//	ksh93u+                    8             10                   10
+	//	zsh 5.9.2                 10             10                   10
+	//
+	// The middle row is the whole of the question: one shell has two
+	// readers, and the one an *assignment* to an integer name goes through
+	// does not apply the octal rule the expression reader does. The other
+	// two rows agree with themselves for two different reasons — bash
+	// applies octal in both, and zsh has no octal-by-leading-zero at all —
+	// which is why this is a field and not a rule. bash's third column is a
+	// third fact and not this axis: it never re-reads a standing value, and
+	// AttributeRereadsTheValueItFinds is where that lives.
+	//
+	// Asked only where the text is a signed digit string with a leading
+	// zero in front of another digit, and only where
+	// ArithLeadingZeroIsOctal is Yes. Outside that shape the two readers
+	// agree — `$((010+1))` and `typeset -i d=010+1` are both nine in the
+	// shell that splits — and where nothing made the zero octal there is
+	// nothing to choose between. See Runner.zeroPaddedInteger for the
+	// measured edges.
+	//
+	// Silent and arithmetically wrong either way it is answered wrongly: a
+	// zero-padded date field or counter comes out eight where the shell
+	// says ten, with nothing said about it.
+	IntegerAssignmentReadsALeadingZeroAsDecimal Answer
 	// IndirectionYieldsName makes `${!x}` the *name* rather than the value it
 	// names: with `x=y`, ksh93 gives `x` and bash gives the value of `y`.
 	//

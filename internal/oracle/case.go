@@ -9767,6 +9767,16 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the half of the base that is not the letter, and zsh alone: the base is learned from the *radix prefix* of the value assigned, and it sticks to the name — a later plain `5` under a name that learned 16 reads `16#5`, and a name that learned 8 renders 99 as `8#143`. ksh93 learns none and prints 16, 5 and 99. Two things do not teach it in any column: a leading zero, which is not a radix, and a value that arrived already evaluated — `$((0x10))` hands the assignment four decimal characters and there is no prefix left to read. The leading-zero row splits the panel for a reason of its own and not this one: `016` is 14 in the three bash columns, which read it as octal, and 16 in both shells that have a base, which do not — recorded here and answered in #1270",
 	},
 	{
+		ID: "declare/an-integer-assignment-reads-a-leading-zero", Category: "declarations",
+		Snippet: "echo \"arith=$((010))\"\ntypeset -i d=010; echo \"decl=[$d]\"\ne=010; typeset -i e; echo \"reread=[$e]\"\ntypeset -i f; f=010; echo \"assign=[$f]\"",
+		Why:     "one shell in the panel reads the same four characters two ways: ksh93's arithmetic makes `010` eight and its *integer assignment* makes it ten, so the two are different readers there and the first column is the control that says so. bash applies octal in both and zsh in neither, which is why their columns agree with themselves for two different reasons and neither of them settles the question. The third line is a second fact riding along — bash never re-reads a standing value, so `010` is still the text it was — and the fourth says the reading belongs to the name rather than to the declaration that met it. Answered by #1270",
+	},
+	{
+		ID: "declare/what-counts-as-a-zero-padded-integer-assignment", Category: "declarations",
+		Snippet: "typeset -i a=\" 010 \"; echo \"1[$a]\"\ntypeset -i b=010+1; echo \"2[$b]\"\ntypeset -i c=-010; echo \"3[$c]\"\ntypeset -i d=0x10; echo \"4[$d]\"\ntypeset -i e=0; echo \"5[$e]\"",
+		Why:     "where the decimal reading stops, measured a shape at a time on the shell that has it: spaces around the digits and an operator among them both hand the value back to the expression reader, so `010` is eight again in ksh93 — the two rows that say this is a *number* being recognized and not a leading zero being ignored. A sign belongs to the number and `-010` is -10 there against -8 in bash. The last two are the controls whose columns must not move: a radix prefix and a single zero read the same in every shell that spells the builtin",
+	},
+	{
 		ID: "declare/an-output-base-belongs-to-the-name", Category: "declarations",
 		Snippet: "typeset -i i=5; typeset -i16 i; echo \"1[$i]\"\ntypeset -i16 h=255; typeset -i8 h; echo \"2[$h]\"\ntypeset -i16 j=255; typeset +i j; echo \"3[$j]\"; j=3; echo \"4[$j]\"",
 		Why:     "the base is a property of the name and not of the assignment that met it: a declaration that names one re-renders what the name is already holding — `16#5` from a plain 5, and `8#377` from a `16#ff` — which is a change of spelling rather than a re-read, so it meets no dialect. `+i` takes the base off with the attribute and leaves the characters that are there alone, so `3[$j]` is still `16#ff` and only the *next* assignment is plain. Both shells with the feature agree on all four",

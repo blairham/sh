@@ -1355,6 +1355,12 @@ func (r *Runner) integerValue(text string) (string, bool) {
 // dialect it parses under and the wording of both failures are one thing, and
 // a second evaluator here is the shape that has cost this tree seven bugs.
 func (r *Runner) integerNumber(text string) (int, bool) {
+	if n, ok := r.zeroPaddedInteger(text); ok {
+		return n, true
+	}
+	if r.unspecified {
+		return 0, false
+	}
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return 0, true
@@ -1371,6 +1377,72 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 		return 0, false
 	}
 	return v, true
+}
+
+// zeroPaddedInteger answers a value written as a digit string with a leading
+// zero, where the dialect reads one in decimal — see
+// Semantics.IntegerAssignmentReadsALeadingZeroAsDecimal. The second result is
+// whether that reading applied at all; everything else goes on to the
+// arithmetic parse below it.
+//
+// Asked here rather than inside the arithmetic evaluator because it is the
+// *assignment* that splits and not the expression: measured 2026-09-10 on
+// ksh93u+, `$((010))` is 8 and `typeset -i d=010` is 10 in the same shell, so
+// the two are different readers there and a fix routed through the evaluator
+// would move both.
+//
+// The shape is the whole of what is asked, and each edge of it is measured on
+// the shell that reads decimal:
+//
+//	typeset -i d=010    10   the digits, in decimal
+//	typeset -i d=-010  -10   a sign belongs to the number
+//	typeset -i d=09      9   an invalid octal digit is just a digit
+//	typeset -i d=0       0   one digit is no disagreement at all
+//	typeset -i d=" 010 " 8   not a number, so the expression reader has it
+//	typeset -i d=010+1   9   an expression, and octal inside it
+//	typeset -i d=0x10   16   a prefix both readers agree about
+//
+// So the text has to be the number and nothing else — no spaces around it, no
+// operator in it — which is what tells an assignment of a padded number apart
+// from an expression that happens to start with one.
+func (r *Runner) zeroPaddedInteger(text string) (int, bool) {
+	if !zeroPadded(text) {
+		return 0, false
+	}
+	if r.sem().ArithLeadingZeroIsOctal != Yes {
+		// The two readings agree: nothing made the zero octal, so the
+		// expression reader already answers ten for `010`. Asking a dialect
+		// to choose between two identical answers is the shape that refuses
+		// a line no shell disagrees about.
+		return 0, false
+	}
+	if !r.ask(r.sem().IntegerAssignmentReadsALeadingZeroAsDecimal,
+		"a zero-padded number assigned to an integer name") {
+		return 0, false
+	}
+	n, err := strconv.Atoi(text)
+	if err != nil {
+		// Out of range for this machine's int, which the expression reader
+		// below reports in its own words rather than this one guessing.
+		return 0, false
+	}
+	return n, true
+}
+
+// zeroPadded reports whether text is a decimal digit string, optionally
+// signed, whose first digit is a zero standing in front of another — the one
+// shape the two readings answer differently.
+func zeroPadded(text string) bool {
+	digits := strings.TrimPrefix(strings.TrimPrefix(text, "-"), "+")
+	if len(digits) < 2 || digits[0] != '0' {
+		return false
+	}
+	for i := 0; i < len(digits); i++ {
+		if digits[i] < '0' || digits[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // defaultFloatPlaces is how many decimal places `-F` writes with no number

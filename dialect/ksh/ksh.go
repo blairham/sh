@@ -416,6 +416,9 @@ func Semantics() interp.Semantics {
 	s.SetReportsEveryBadOption = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.ArithInvalidOctalDigitIsError = interp.No
+	// The integer attribute has a reader of its own, and it is not the
+	// arithmetic one: `$((010))` is 8 here and `typeset -i d=010` is 10.
+	s.IntegerAssignmentReadsALeadingZeroAsDecimal = interp.Yes
 	s.IndirectionYieldsName = interp.Yes
 	s.BraceExpansion = interp.Yes
 	// The one shell that strips a range endpoint's zeros — `{01..3}` is

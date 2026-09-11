@@ -359,6 +359,11 @@ typeset -i e; e=$((0x10)); echo "5[$e]"`,
 			func(s *Semantics) {
 				s.IntegerBaseDigits = "0123456789abcdefghijklmnopqrstuvwxyz"
 				s.IntegerBaseComesFromTheValueAssigned = tc.learns
+				// Row 4's octal reading is the expression reader's, which
+				// is a question of its own — see
+				// IntegerAssignmentReadsALeadingZeroAsDecimal. Answered
+				// here so this test reaches the base it is about.
+				s.IntegerAssignmentReadsALeadingZeroAsDecimal = No
 			}, Diagnostics{})
 		if out != tc.want || st != 0 || errs != "" {
 			t.Errorf("%v = %q (stderr %q, status %d), want %q", tc.learns, out, errs, st, tc.want)

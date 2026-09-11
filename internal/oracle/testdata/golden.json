@@ -35535,6 +35535,50 @@
         "TimedOut": false
       }
     },
+    "declare/an-integer-assignment-reads-a-leading-zero": {
+      "bash": {
+        "Stdout": "arith=8~decl=[8]~reread=[010]~assign=[8]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "arith=8~decl=[8]~reread=[010]~assign=[8]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "arith=8~decl=[8]~reread=[010]~assign=[8]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "arith=8~decl=[]~reread=[010]~assign=[010]",
+        "Stderr": "\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 3: typeset: not found~\u003cshell\u003e: 4: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "arith=8~decl=[10]~reread=[10]~assign=[10]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "arith=10~decl=[10]~reread=[10]~assign=[10]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/an-integer-attribute-carries-an-output-base": {
       "bash": {
         "Stdout": "1[64]~2[]~3[]~4[]",
@@ -40941,6 +40985,50 @@
       },
       "zsh": {
         "Stdout": "[]~after=[out]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/what-counts-as-a-zero-padded-integer-assignment": {
+      "bash": {
+        "Stdout": "1[8]~2[9]~3[-8]~4[16]~5[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1[8]~2[9]~3[-8]~4[16]~5[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1[8]~2[9]~3[-8]~4[16]~5[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "1[]~2[]~3[]~4[]~5[]",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 3: typeset: not found~\u003cshell\u003e: 4: typeset: not found~\u003cshell\u003e: 5: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1[8]~2[9]~3[-10]~4[16]~5[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1[10]~2[11]~3[-10]~4[16#10]~5[0]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -102,6 +102,8 @@ func TestSemantics(t *testing.T) {
 		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.Yes},
 		{"TerminalTestRequiresANumber", s.TerminalTestRequiresANumber, interp.Yes},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.Yes},
+		// And one reader for both, where ksh93 has two.
+		{"IntegerAssignmentReadsALeadingZeroAsDecimal", s.IntegerAssignmentReadsALeadingZeroAsDecimal, interp.No},
 		// A `jobs` listing: which end it starts from, and whether a job that
 		// has already ended appears in it at all. Both split the panel two
 		// and two, which is why both are fields.

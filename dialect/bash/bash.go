@@ -390,6 +390,9 @@ func Semantics() interp.Semantics {
 	// with — `typeset +r UID` draws the identical refusal.
 	s.ReadonlyAttributeCanBeRemoved = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	// One reader for both: `$((010))` and `typeset -i d=010` are eight
+	// alike, where ksh93 answers eight and ten.
+	s.IntegerAssignmentReadsALeadingZeroAsDecimal = interp.No
 	// An attribute added to a name that already holds a value waits for the
 	// next assignment: `FOO=bar; typeset -i FOO` still reads `bar`, and
 	// `d=MiXeD; typeset -u d` still reads `MiXeD`. ksh93 and zsh re-read on

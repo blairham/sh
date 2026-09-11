@@ -97,7 +97,7 @@ func TestAReplacementOperandThatCannotDifferNeverAsks(t *testing.T) {
 //
 // The command that depended on it does not run and the list carries on, which
 // is what every other expansion-level axis does — `${a[*]#a}` and `${x:h}`
-// answer this way too, and a refusal shaped differently from its neighbours
+// answer this way too, and a refusal shaped differently from its neighbors
 // would be a second convention rather than a stricter one.
 func TestAQuotedReplacementOperandUnansweredIsRefused(t *testing.T) {
 	src := `s=xay; printf "[%s]" "${s/a/'q'}"; echo after`

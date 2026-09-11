@@ -775,6 +775,11 @@ func Semantics() interp.Semantics {
 	// not one: measured 2026-09-11 on 5.3.15, `typeset -A m; m[k]=9;
 	// $(( m[*] ))` is 0, where the expansion `"${m[*]}"` is 9.
 	s.ArithWholeArraySubscriptIsTheSlice = interp.No
+	// A subscript that *expanded* to nothing is the expression that is zero,
+	// so `${a[$w]}` with an empty `$w` is element zero — measured 2026-09-11
+	// on 5.3.15, `a=(5 6 7); w=; ${a[$w]}` is `5` at status 0, and `${a[ ]}`
+	// beside it is too.
+	s.EmptySubscriptTextIsAMathError = interp.No
 	// Whitespace between the brackets is not that text and is not answered
 	// by it: measured 2026-09-10 in 5.3.15 and in 3.2.57, `a=(1 2 3); echo
 	// $(( a[ ] ))` is `1` with a clean stream — the blank expression is

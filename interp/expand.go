@@ -2627,7 +2627,10 @@ func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) i
 	restore := r.withoutGlobbing()
 	text := strings.TrimSpace(r.joinWord(w))
 	restore()
-	n, err := r.subscriptValue(text)
+	// The range's own reader, not the subscript's: an offset that expanded
+	// to nothing is zero in every column, where the same emptiness in a
+	// subscript is refused in one of them.
+	n, err := r.expressionValue(text)
 	if err != nil {
 		// What is *blamed* is not always what was evaluated: one dialect
 		// names the offset together with everything after it in the range.

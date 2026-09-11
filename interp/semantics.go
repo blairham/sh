@@ -6214,6 +6214,53 @@ type Semantics struct {
 	// there and a refusal here for that reason and not for this one.
 	ArithWholeArraySubscriptIsTheSlice Answer
 
+	// EmptySubscriptTextIsAMathError refuses a subscript whose text is
+	// *empty or blank once it has been expanded* — `${a[$w]}` with an empty
+	// `$w`, and `${a[ ]}` beside it — where an expression reads it.
+	//
+	// Measured 2026-09-11, `-c`, with `a=(5 6 7)` and `w=`:
+	//
+	//	probe             bash 5.3   ksh93u+   zsh 5.9.2
+	//	${a[$w]}          `5`, 0     `5`, 0    bad math expression: empty string, and the shell ends
+	//	${a[ ]}           `5`, 0     `5`, 0    bad math expression: operand expected at end of string
+	//	${a[$w]} on a scalar  —      —         the same as the first row
+	//	a[$w]=z           assigns    assigns   the same as the first row
+	//	${#a[$w]}         `1`, 0     `1`, 0    the same as the first row
+	//
+	// So two columns read the empty text as the expression that is zero and
+	// one will not read it at all. dash has no subscript in a parameter
+	// expansion to ask about.
+	//
+	// **It is the expanded text and not the written brackets.** `${a[]}` —
+	// nothing between them as written — is EmptyParamSubscriptIsAnError, and
+	// the shell that refuses both gives them *different* sentences: `invalid
+	// subscript` for the written pair, the arithmetic reader's complaint
+	// here. One axis for both would have had to give one of those answers to
+	// the other.
+	//
+	// **And it is the subscript and not every number a parameter expansion
+	// reads.** A substring's offset is the neighbor that says so: measured,
+	// `x=abcdef; ${x:$w:2}` with the same empty `$w` is `ab` in every column,
+	// the refusing one included. So the question is asked where a subscript
+	// is evaluated and not in the arithmetic the two sites share.
+	//
+	// **Nor is it an association's subscript**, which is a key and never an
+	// expression: `typeset -A m; ${m[$w]}` is the empty string at status 0 in
+	// every column that has the attribute, so the key path is reached before
+	// this is asked — the same ordering arithElement keeps for the same
+	// reason (#1875). bash writes `m: bad array subscript` beside that empty
+	// string and still answers it, which is a diagnostic of its own and is
+	// #1972 rather than this axis.
+	//
+	// The arithmetic site is a different partition of the panel again and
+	// has axes of its own: EmptyArithSubscript for `$(( a[] ))` and
+	// BlankArithSubscriptIsTheEmptyExpression for the blank one.
+	//
+	// The wording of the empty half is Diagnostics.EmptySubscriptTextExpanded;
+	// the blank half is the expression running out and is worded by
+	// Diagnostics.ArithExpressionRanOut, which already words `$(( a[ ] ))`.
+	EmptySubscriptTextIsAMathError Answer
+
 	// BlankArithSubscriptIsTheEmptyExpression reads a subscript holding
 	// whitespace and nothing else — `$(( a[ ] ))` — as the blank expression,
 	// which is zero, so the operand is the *element that subscript names*

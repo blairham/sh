@@ -186,8 +186,9 @@ func (a *procAnchor) stop() {
 // It answers only for a process substitution's body, which is where the
 // question is asked in the wild and the one place this shell already
 // reconstructs that body's lifetime — see substEnd. A subshell, a command
-// substitution and a background job have no group of their own yet and answer
-// false, which is what every body answered before this existed.
+// substitution, a pipeline element and a background job have no group of their
+// own yet and answer false, which is what every body answered before this
+// existed.
 //
 // A dialect asks it where it would otherwise have to answer "which process am
 // I" with a number that is not one. The answer is deliberately the *group*:

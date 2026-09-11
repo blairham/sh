@@ -164,7 +164,12 @@ POSIX extended regular expressions. The variable is changed in place; 0
 when at least one replacement happened, 1 when none did.
 
 The replacement text is expanded once per match, so `$MATCH` in it is the
-text that match consumed. `MATCH`, `match`, `MBEGIN`, `MEND`, `mbegin` and
+text that match consumed. Through the expansion flag that asks for exactly
+that, `${(e)…}`, rather than through an `eval` of the text inside quotes:
+measured, a replacement holding a lone `"` is replaced literally
+(`regexp-replace v b 'x"y'` over `abc` is `ax"yc`), where an eval reports
+`unmatched "` and drops it. That corner is in the table below because it is
+the one place a reasonable implementation is visibly wrong. `MATCH`, `match`, `MBEGIN`, `MEND`, `mbegin` and
 `mend` are declared local, which is measured: `$MATCH` is empty at the top
 level after the call.
 
@@ -178,6 +183,8 @@ level after the call.
 | `aXaXa` | `^a` | `Z` | `ZXaXa` |
 | `abc` | `(a)(b)` | `${match[2]}${match[1]}` | `bac` |
 | `abc` | `b` | `x&y` | `ax&yc` — `&` is not special |
+| `abc` | `b` | `x"y` | `ax"yc` — and not an `unmatched "` |
+| `abc` | `b` | `a\b` | `aa\bc` |
 
 The empty match is what shapes the loop: a pattern that can match nothing
 matches between every pair of characters, so the loop carries the character

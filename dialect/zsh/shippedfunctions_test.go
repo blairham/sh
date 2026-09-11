@@ -588,10 +588,13 @@ second=0 keys=11
 // is why "^a" over "aXaXa" replaces once — zshcontrib(1) warns of exactly
 // that.
 //
-// The last three rows are about the parameters rather than the replacement: a
-// caller's own $MATCH, $match and $MBEGIN survive the call, the variable may
+// The tail of the table is about the parameters rather than the replacement:
+// a caller's own $MATCH, $match and $MBEGIN survive the call, the variable may
 // be named indirectly, and a name holding nothing is status 1 with nothing
-// written.
+// written. The last two rows are why the replacement is expanded through the
+// flag that asks for expansion rather than through an eval of it inside
+// quotes — a lone double quote in a replacement is replaced literally, where
+// an eval reports "unmatched" and drops it.
 func TestRegexpReplaceAnswersWhatZshAnswers(t *testing.T) {
 	out, st := runShipped(t, regexpReplaceProbe)
 	if out != regexpReplaceWant || st != 0 {
@@ -623,6 +626,8 @@ v=abcabc; regexp-replace v 'b' 'B'
 print -r -- "caller MATCH=[$MATCH] match=[${match[@]}] MBEGIN=[$MBEGIN]"
 foo='one two'; name=foo; regexp-replace $name ' ' '-'; print -r -- "indirect foo=[$foo] $?"
 unset nv; regexp-replace nv 'a' 'b'; print -r -- "unset var st=$? nv=[$nv]"
+t 'abc' 'b' 'x"y'
+t 'abc' 'b' 'a\b'
 `
 
 const regexpReplaceWant = `[hello world] /o/0/ -> [hell0 w0rld] 0
@@ -645,6 +650,8 @@ const regexpReplaceWant = `[hello world] /o/0/ -> [hell0 w0rld] 0
 caller MATCH=[kept] match=[kept] MBEGIN=[99]
 indirect foo=[one-two] 0
 unset var st=1 nv=[]
+[abc] /b/x"y/ -> [ax"yc] 0
+[abc] /b/a\b/ -> [aa\bc] 0
 `
 
 // A shipped function loaded with -U is not rewritten by the caller's aliases,

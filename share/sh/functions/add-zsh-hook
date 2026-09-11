@@ -29,7 +29,12 @@
 # `-L` with no hook lists in the order below.  Real zsh lists in the order its
 # own parameter table happens to hold them, which is neither this order, nor
 # alphabetical, nor the order the hooks were added; there is nothing there to
-# match.
+# match.  What it writes is one `typeset -p` per hook, so it carries that
+# builtin's spelling — including the missing `-g` of #2041.
+#
+# `-k` is handed straight through, and this shell's `autoload` names it as not
+# implemented.  The complaint is the shell's and it is correct; taking the
+# letter and dropping it would read as a shell that had it.
 
 emulate -L zsh
 

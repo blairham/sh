@@ -2735,6 +2735,21 @@ echo "reached-after st=$?"`,
 		Why:     "three wordings and two statuses: bash and zsh report 1, ksh93 reports 2 and prints a bare usage line with no shell name in front of it",
 	},
 	{
+		ID: "let/an-illegal-character-keeps-the-value-before-it", Category: "arithmetic",
+		Snippet: `let '1 @'; echo "one=$?"; let '0 @'; echo "zero=$?"; let '1+2 @'; echo "sum=$?"; let '@'; echo "alone=$?"`,
+		Why:     "a byte the arithmetic reader refuses as part of no token, and the one shell that does not throw away what it had read when it met one: zsh reports the illegal character and then answers as `let` always does — false for an expression that came out zero — over the value that stood *before* the byte, so `1 @` is 0 and `0 @` is 1. bash, bash 3.2 and ksh93 are 1 for all four. The four expressions are what tells that from `a failure is success there`: the pair differing only in the digit is the measurement, and `@` alone has nothing before it and is 1 everywhere. dash has no `let` at all",
+	},
+	{
+		ID: "let/an-illegal-character-is-not-any-math-failure", Category: "arithmetic",
+		Snippet: `let '1+'; echo "ranout=$?"; let '5 5'; echo "leftover=$?"; let '1/0'; echo "divzero=$?"`,
+		Why:     "the control the row above needs. A value stood before each of these failures too — `1`, `5`, `1` — and the shell that keeps it for a refused byte keeps none of them, answering 1 for all three. So it is the reader giving up mid-stream rather than arithmetic failure in general, and a fix that read `the last value survives a failure` would move these three",
+	},
+	{
+		ID: "let/a-math-complaint-names-the-builtin-or-does-not", Category: "arithmetic",
+		Snippet: `let '1+'`,
+		Why:     "who the complaint belongs to. bash and ksh93 put the builtin in front of the sentence — `let: 1+: …` — and zsh puts it nowhere, writing `zsh:1:` where the same shell's `cd` writes `zsh:cd:1:` and where its own `let` with no operand writes `zsh:let:1:`. So a math failure is the shell's there rather than the builtin's, the way a division by zero and an unset parameter already are, and the blanket rule that puts a builtin's name in that shell's location needed something to say which messages it does not cover",
+	},
+	{
 		ID: "ulimit/reads-the-file-size-limit", Category: "traps and exit",
 		Snippet: `ulimit; ulimit -f`,
 		Why:     "bare `ulimit` is `-f`, which is why it reports the file-size limit rather than a summary — unanimous, and the reason a script that means something else has to say which",

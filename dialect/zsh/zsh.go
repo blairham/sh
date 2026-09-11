@@ -963,6 +963,10 @@ func Semantics() interp.Semantics {
 	// never reaches `two`. Note it is `[[ ]]` alone: the same expression
 	// in `(( ))` complains and the shell goes on.
 	s.ConditionArithmeticErrorIsFatal = interp.Yes
+	// The arithmetic reader stops at a byte it refuses and what it had by
+	// then stands, which `let` then reads for truth: `let '1 @'` is 0 here
+	// and 1 in the other three. Only that failure — `let '1+'` is 1 here too.
+	s.LetKeepsTheValueBeforeAnIllegalByte = interp.Yes
 	// A math error inside `(( ))` leaves 2 here where the rest of the panel
 	// leaves 1, and the sentence in front of it is already the same in both:
 	// `(( 1+ )); echo $?` is 2 in zsh 5.9.2 and 1 in bash 5.3, while
@@ -2155,9 +2159,14 @@ func Diagnostics() interp.Diagnostics {
 		// line: `zsh:shift:1:`. A rule rather than a handful of cases, and the
 		// only shell in the panel that does it.
 		NamesBuiltinInLocation: true,
-		LowercaseReason:        true,
-		DirectoryReason:        "Permission denied",
-		HashNotFound:           "no such command: %[1]s",
+		// Except for a math complaint, which this shell writes as its own:
+		// `let '1+'` is `zsh:1: bad math expression: …` where its `cd` is
+		// `zsh:cd:1: …`, and `let` with no operand at all *is* the builtin's
+		// and does say `zsh:let:1:`. See the field.
+		ArithErrorNamesTheBuiltin: false,
+		LowercaseReason:           true,
+		DirectoryReason:           "Permission denied",
+		HashNotFound:              "no such command: %[1]s",
 	}
 }
 

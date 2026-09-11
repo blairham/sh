@@ -1760,6 +1760,38 @@ type Semantics struct {
 	// reaches it.
 	ArithCommandErrorIsFatal Answer
 
+	// LetKeepsTheValueBeforeAnIllegalByte leaves `let` with the value its
+	// expression had reached when the arithmetic reader met a byte it refuses,
+	// instead of leaving it with nothing. True in zsh alone.
+	//
+	// `let` reports *false* for an expression that came out zero, which is
+	// unanimous and not a question — `let "x=5"` is 0 and `let "x=0"` is 1
+	// everywhere. What this decides is the value that rule is then applied to.
+	// Measured 2026-09-11, zsh 5.9.2 against bash 5.3, bash 3.2 and ksh93:
+	//
+	//	let '1 @'  	zsh 0, the others 1
+	//	let '0 @'  	1 everywhere
+	//	let '1+2 @'	zsh 0, the others 1
+	//	let '@'    	1 everywhere
+	//
+	// So it is not "a failure is success there": the value before the byte is
+	// what decides, and where nothing stood before it the answer is the same
+	// as everybody's.
+	//
+	// Only the byte the reader refuses outright, which is the discriminating
+	// half and the reason this is not a statement about arithmetic failure at
+	// large: `let '1+'` and `let '5 5'` are 1 in that shell too, though a
+	// value stood before those failures as well. The reader gave up
+	// mid-stream in one case and the grammar rejected the whole expression in
+	// the others.
+	//
+	// Asked in `let` and nowhere else, because nowhere else can it be seen:
+	// the same text inside `$(( ))` or `(( ))` abandons the line in that shell
+	// whatever value stood, at 1 and at 2 respectively. #1191 recorded those
+	// three statuses and warned against copying one of them to the others;
+	// this is the narrow field that does not.
+	LetKeepsTheValueBeforeAnIllegalByte Answer
+
 	// RegexQuotingMakesLiteral treats a quoted right operand of `=~` as a
 	// literal string. True in bash alone; ksh93 and zsh keep it a regex, so
 	// quoting a regex is unportable in either direction.
@@ -6462,9 +6494,12 @@ func PosixSemantics() Semantics {
 		// dash carries — so there is no text to read here and the base takes
 		// the answer three of the four give: the status is left for the next
 		// line, which runs.
-		ArithCommandErrorIsFatal:          No,
-		LastPipelineElementInCurrentShell: No,
-		ShiftPastEndFatal:                 Yes,
+		ArithCommandErrorIsFatal: No,
+		// POSIX has no `let` either, and the answer three of the four give is
+		// that a failed expression leaves nothing behind: the status is 1.
+		LetKeepsTheValueBeforeAnIllegalByte: No,
+		LastPipelineElementInCurrentShell:   No,
+		ShiftPastEndFatal:                   Yes,
 		// The standard describes one refusal and says nothing about a
 		// second, so the preset stops at the first the way three of the
 		// panel do.

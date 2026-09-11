@@ -461,3 +461,25 @@ func (r *Runner) SecondsFrom() float64 {
 	}
 	return base + r.Uptime().Seconds()
 }
+
+// SetParameterTypeWord installs the wording `${(t)name}` answers with: what a
+// name *is*, said the way this shell says it.
+//
+// The seam ParameterAttributes already exists for, reached from the other
+// side. A dialect publishes the same facts as a table of every name — see the
+// `$parameters` view in dialect/zsh — and this is the one-name spelling of
+// it, so the two cannot come to different words about one parameter.
+//
+// Nil is the runner nobody told, and there the flag is refused by name. That
+// is deliberate and is the sharpest case of the rule `(p)` and `(g)` already
+// follow: `[[ ${(t)x} == *array* ]]` is what a function writes to check what
+// it was handed, and a word invented here would answer it at status 0 in a
+// shell that has no such vocabulary.
+//
+// The function is called only for a name the runner *has*; an unset one is
+// the empty string and never reaches it, which is measured — `${(t)nosuch}`
+// is empty and `${(t)nosuch-D}` is `D`, so the expansion is *unset* rather
+// than an empty value.
+func (r *Runner) SetParameterTypeWord(word func(ParameterAttributes) string) {
+	r.parameterTypeWord = word
+}

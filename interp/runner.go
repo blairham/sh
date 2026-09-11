@@ -1192,6 +1192,12 @@ type Runner struct {
 	// tried and answer the rest at status 0. Installed through
 	// SetExpansionEscapes; see interp/escapeflag.go.
 	expansionEscapes func(text, opts string) string
+	// parameterTypeWord words what a name *is* — `${(t)v}`'s answer — the
+	// way this shell says it. A function the dialect supplies for the reason
+	// flagArgEscapes is one: the vocabulary is a shell's and this package
+	// holds nobody's, so a runner nobody told refuses the letter by name
+	// rather than inventing a word for it. See SetParameterTypeWord.
+	parameterTypeWord func(ParameterAttributes) string
 	// reevalDepth bounds the `(e)` expansion flag's re-reading, because a
 	// value that names itself would otherwise recur forever: `v='${(e)v}'`
 	// re-reads text that asks for the same expansion again. It is the same

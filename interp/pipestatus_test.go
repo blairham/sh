@@ -43,14 +43,14 @@ func TestThePipelineStatusRecordsEveryElement(t *testing.T) {
 		{"inside a function", `f() { false | true; echo "${P[@]}"; }; f`, "1 0"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// The compound row needs the third axis answered: *whether* a
-			// compound writes the record at all is
-			// CompoundBodyDecidesThePipelineStatusRecord's question, and both
-			// of its answers are covered in TestACompoundFollowsItsBodyOrNot.
-			// No is the reading these rows are about — the clause writes for
-			// having run.
+			// The compound row needs the third axis answered: what a
+			// compound does to the record is
+			// CompoundPipelineStatusRecord's question, and both of its
+			// answers have a test of their own below. The body-reading one
+			// is the reading these rows are about, and the `then` holds a
+			// command that counts, so the clause writes its own status.
 			out, _ := run(t, tc.src, named("P", func(s *Semantics) {
-				s.CompoundBodyDecidesThePipelineStatusRecord = No
+				s.CompoundPipelineStatusRecord = CompoundPipelineStatusFromTheBody
 			}))
 			if strings.TrimSpace(out) != tc.want {
 				t.Errorf("got %q, want %q", strings.TrimSpace(out), tc.want)
@@ -181,10 +181,10 @@ func TestReadingTheRecordTwiceInOneChain(t *testing.T) {
 		out, _ := runGrammar(t, src, enableTestAndArith, named("P", func(s *Semantics) {
 			s.TestAndArithmeticUpdatePipelineStatus = tc.a
 			// The `if` around the chain is a compound, so the third axis is
-			// reached; it is not this test's subject and the answer does not
-			// move either row, since the record is read inside the clause
-			// rather than after it.
-			s.CompoundBodyDecidesThePipelineStatusRecord = No
+			// reached; it is not this test's subject and neither answer moves
+			// either row, since the record is read inside the clause rather
+			// than after it.
+			s.CompoundPipelineStatusRecord = CompoundPipelineStatusFromTheBody
 		}))
 		if got := strings.TrimSpace(out); got != tc.want {
 			t.Errorf("%v: got %q, want %q", tc.a, got, tc.want)
@@ -226,24 +226,39 @@ func TestNegationAndRedirectionAlwaysWriteTheRecord(t *testing.T) {
 	}
 }
 
-// A compound command writes the record, and neither of the two axes about a
-// command's *shape* is asked about one. Whether it writes at all is a third
-// axis, answered here as it was assumed before it existed.
+// One snippet under both mechanisms, and neither of the two axes about a
+// command's *shape* is asked about the compound itself.
 //
 // The `(( … ))` in the body is what makes this discriminating. Write `:`
 // there instead and the body's own write leaves the same single 0 the clause
 // would, so the snippet cannot tell a clause that writes from one that is
 // transparent — which is exactly what the corpus row of that shape could not
 // tell, and why its reason now says so.
+//
+// The body-reading mechanism answers `0` whatever the arithmetic says,
+// because the **condition** is body too and a pipeline of two counts there
+// whatever it holds. The other one asks nothing of the parse: with the
+// arithmetic answered Yes the `(( … ))` ran and wrote the clause's 0, and
+// with it answered No nothing inside wrote at all, so the condition's own two
+// elements are what stands.
 func TestACompoundCommandWritesTheRecord(t *testing.T) {
 	const src = `if false | true; then (( 1 )); fi; echo "${P[@]}"`
-	for _, a := range []Answer{Yes, No} {
+	for _, tc := range []struct {
+		policy CompoundPipelineStatusPolicy
+		a      Answer
+		want   string
+	}{
+		{CompoundPipelineStatusFromTheBody, Yes, "0"},
+		{CompoundPipelineStatusFromTheBody, No, "0"},
+		{CompoundPipelineStatusFromWhatRan, Yes, "0"},
+		{CompoundPipelineStatusFromWhatRan, No, "1 0"},
+	} {
 		out, _ := runGrammar(t, src, enableTestAndArith, named("P", func(s *Semantics) {
-			s.TestAndArithmeticUpdatePipelineStatus = a
-			s.CompoundBodyDecidesThePipelineStatusRecord = No
+			s.TestAndArithmeticUpdatePipelineStatus = tc.a
+			s.CompoundPipelineStatusRecord = tc.policy
 		}))
-		if got := strings.TrimSpace(out); got != "0" {
-			t.Errorf("%v: got %q, want the clause's own status alone", a, got)
+		if got := strings.TrimSpace(out); got != tc.want {
+			t.Errorf("%v/%v: got %q, want %q", tc.policy, tc.a, got, tc.want)
 		}
 	}
 }
@@ -388,17 +403,18 @@ func TestTheAxisMovesTheRecordAndNotTheStatus(t *testing.T) {
 	}
 }
 
-// CompoundBodyDecidesThePipelineStatusRecord, both answers — #1931.
+// CompoundPipelineStatusFromTheBody, the mechanism that reads the parse —
+// #1931.
 //
 // The rule is about the **parse** rather than about what ran, and the first
 // two rows are what say so: neither body runs, the condition being false both
 // times, and the only difference between them is the text inside `then`. An
 // unexecuted `:` is enough.
 //
-// Every `want` under Yes is the answer measured from zsh 5.9.2 on 2026-09-11;
-// under No the compound writes for having run, which is a single element every
-// time.
-func TestACompoundFollowsItsBodyOrNot(t *testing.T) {
+// Every `want` is the answer measured from zsh 5.9.2 on 2026-09-11. The other
+// mechanism is TestACompoundLeavesTheRecordToWhatRan below, whose rows are
+// chosen for where the two differ.
+func TestACompoundFollowsItsBody(t *testing.T) {
 	for _, c := range []struct{ src, follows string }{
 		// The pair the issue is written around.
 		{`if [[ a = b ]]; then :; fi`, "0"},
@@ -460,20 +476,15 @@ func TestACompoundFollowsItsBodyOrNot(t *testing.T) {
 		{`{ f() { :; }; }`, "1 0"},
 		{`{ f() { :; }; [[ a = a ]]; }`, "1 0"},
 	} {
-		for _, tc := range []struct {
-			a    Answer
-			want string
-		}{{Yes, c.follows}, {No, "0"}} {
-			out, _ := runGrammar(t, "false | true; "+c.src+`; echo "${P[@]}"`, enableTestAndArith,
-				named("P", func(s *Semantics) {
-					s.TestAndArithmeticUpdatePipelineStatus = No
-					s.AssignmentUpdatesPipelineStatus = No
-					s.NegatedTestRecordsThePostNegationStatus = No
-					s.CompoundBodyDecidesThePipelineStatusRecord = tc.a
-				}))
-			if got := strings.TrimSpace(out); got != tc.want {
-				t.Errorf("%v: `false | true; %s` gave %q, want %q", tc.a, c.src, got, tc.want)
-			}
+		out, _ := runGrammar(t, "false | true; "+c.src+`; echo "${P[@]}"`, enableTestAndArith,
+			named("P", func(s *Semantics) {
+				s.TestAndArithmeticUpdatePipelineStatus = No
+				s.AssignmentUpdatesPipelineStatus = No
+				s.NegatedTestRecordsThePostNegationStatus = No
+				s.CompoundPipelineStatusRecord = CompoundPipelineStatusFromTheBody
+			}))
+		if got := strings.TrimSpace(out); got != c.follows {
+			t.Errorf("`false | true; %s` gave %q, want %q", c.src, got, c.follows)
 		}
 	}
 }
@@ -482,13 +493,106 @@ func TestACompoundFollowsItsBodyOrNot(t *testing.T) {
 // both shells that keep a record answer the same way. Measured 2026-09-11,
 // `false | true; f() { :; }` is `1 0` in bash 5.3.15 and zsh 5.9.2 alike.
 func TestAFunctionDefinitionLeavesTheRecordAlone(t *testing.T) {
-	for _, a := range []Answer{Yes, No, Unspecified} {
+	for _, policy := range []CompoundPipelineStatusPolicy{
+		CompoundPipelineStatusFromTheBody,
+		CompoundPipelineStatusFromWhatRan,
+		CompoundPipelineStatusUnspecified,
+	} {
 		out, _ := run(t, `false | true; f() { :; }; echo "${P[@]}"`,
 			named("P", func(s *Semantics) {
-				s.CompoundBodyDecidesThePipelineStatusRecord = a
+				s.CompoundPipelineStatusRecord = policy
 			}))
 		if got := strings.TrimSpace(out); got != "1 0" {
-			t.Errorf("%v: got %q, want the pipeline's elements with no dialect needed", a, got)
+			t.Errorf("%v: got %q, want the pipeline's elements with no dialect needed", policy, got)
 		}
+	}
+}
+
+// CompoundPipelineStatusFromWhatRan, the other mechanism — #2016.
+//
+// Nothing is written *for* the compound, so what stands after one is whatever
+// the last pipeline that actually ran inside it wrote, and a compound that ran
+// nothing leaves the record from before it. Every row is measured on bash
+// 5.3.15 and 3.2.57 alike, each snippet after `false | true` so a replaced
+// record shows as one element, and the two axes about a command's shape are
+// answered as that shell answers them so the rows are comparable with it.
+//
+// The rows are chosen for where the two mechanisms differ: under the
+// body-reading one every `want` here would be the compound's own status
+// instead — a single 0 for all but the last two.
+func TestACompoundLeavesTheRecordToWhatRan(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		// The condition ran and wrote the record; the clause wrote nothing
+		// over it. This is the row the issue is written around.
+		{`if false; then :; fi`, "1"},
+		{`if [[ a = b ]]; then :; fi`, "1"},
+		{`while false; do :; done`, "1"},
+		// Nothing inside ran, so the record from *before* the compound is
+		// what stands — which is the half a mechanism reading the parse
+		// cannot produce at all.
+		{`case a in b) :;; esac`, "1 0"},
+		{`case a in b) ;; esac`, "1 0"},
+		{`for i in ; do :; done`, "1 0"},
+		// A backgrounded statement writes no record in the shell that
+		// started it.
+		{`{ [[ a = a ]] & }`, "1 0"},
+		// Two elements survive the braces, which is what says it is the
+		// inner *pipeline* rather than the inner last command.
+		{`{ true | false; }`, "0 1"},
+		{`{ [[ a = a ]] | [[ b = b ]]; }`, "0 0"},
+		// And what did run writes it, however deep.
+		{`{ :; }`, "0"},
+		{`{ { :; } }`, "0"},
+		{`{ if false; then :; fi; }`, "1"},
+		{`for i in a; do false; done`, "1"},
+		// A redirection on the compound does not change it, which is the
+		// opposite of the rule the neighbouring axes follow — and the row
+		// that needs the axis asked before the redirection is looked at.
+		{`if false; then :; fi >/dev/null`, "1"},
+		{`{ :; } >/dev/null`, "0"},
+		// A subshell is not a compound for this purpose in either mechanism:
+		// it is a job and reports its own status, one element.
+		{`( : )`, "0"},
+		{`( false | true | false )`, "1"},
+		// A leading `!` makes a pipeline of whatever follows it, and a
+		// pipeline writes the record wherever this axis stands.
+		{`! { false; }`, "1"},
+	} {
+		out, _ := runGrammar(t, "false | true; "+c.src+`; echo "${P[@]}"`, enableTestAndArith,
+			named("P", func(s *Semantics) {
+				s.TestAndArithmeticUpdatePipelineStatus = Yes
+				s.AssignmentUpdatesPipelineStatus = Yes
+				s.NegatedTestRecordsThePostNegationStatus = Yes
+				s.CompoundPipelineStatusRecord = CompoundPipelineStatusFromWhatRan
+			}))
+		if got := strings.TrimSpace(out); got != c.want {
+			t.Errorf("`false | true; %s` gave %q, want %q", c.src, got, c.want)
+		}
+	}
+}
+
+// And with no answer the compound writes, which is the safe direction, with
+// the axis named — rather than a default standing in for a dialect.
+func TestACompoundWithNoAnswerReports(t *testing.T) {
+	out, _ := run(t, `false | true; { :; }; echo "${P[@]}"`,
+		named("P", func(s *Semantics) {
+			s.CompoundPipelineStatusRecord = CompoundPipelineStatusUnspecified
+		}))
+	if !strings.Contains(out, "what a compound does to the pipeline status") {
+		t.Errorf("got %q, want the axis named", out)
+	}
+}
+
+// A shell with no name for the record asks nothing, whatever the axis says:
+// the question is unobservable there, and the core must not refuse `{ :; }`
+// over a difference nothing could see.
+func TestACompoundAsksNothingWithoutANameForTheRecord(t *testing.T) {
+	out, st := run(t, `false | true; { :; }; echo done`, func(r *Runner) {
+		sem := PosixSemantics()
+		sem.CompoundPipelineStatusRecord = CompoundPipelineStatusUnspecified
+		r.Semantics = &sem
+	})
+	if strings.TrimSpace(out) != "done" || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0 with nothing asked", out, st, "done")
 	}
 }

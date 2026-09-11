@@ -2834,16 +2834,48 @@ is a rule rather than an axis. A redirection on the compound writes the
 record whatever the body says, exactly as it does for the two constructs
 above.
 
-`CompoundBodyDecidesThePipelineStatusRecord`, on for `zsh` alone. bash
-answers no, and its own rule is a third thing rather than the opposite of
-this one: it keeps whatever the last pipeline *inside* the compound left, so
-`if false; then :; fi` holds the condition's 1 there and
-`case a in b) :;; esac` leaves the record alone because nothing ran (#2016).
+**And bash's rule is a second mechanism rather than the other answer to that
+question.** A compound writes nothing at all there; what stands after one is
+whatever the last pipeline that actually *ran* inside it wrote, so a compound
+that ran nothing leaves the record from before it. Measured 2026-09-11 on
+bash 5.3.15 and 3.2.57 alike, each line after a `false | true`:
 
-Silent when it is wrong the same way the axis above is: a plausible
-one-element record where the pipeline's elements should still be there,
-which is the shape `pipestatus/reading-it-twice-in-one-chain` exists to
-protect (#1931).
+| | bash |
+| --- | --- |
+| `if false; then :; fi` | `1` |
+| `if [[ a = b ]]; then :; fi` | `1` |
+| `while false; do :; done` | `1` |
+| `case a in b) :;; esac` | `1 0` |
+| `for i in ; do :; done` | `1 0` |
+| `{ [[ a = a ]] & }` | `1 0` |
+| `{ [[ a = a ]] \| [[ b = b ]]; }` | `0 0` |
+| `{ :; }` | `0` |
+| `if false; then :; fi >/dev/null` | `1` |
+
+The `1` rows are the condition's status: `false` ran and recorded it, and the
+`if` wrote nothing over it. The `1 0` rows are the record from the pipeline
+*before* the compound, untouched because nothing inside ran — which no
+reading of the parse can produce, since it is a fact about a run rather than
+about a body. The two-element row is what says it is the inner **pipeline**
+rather than the inner last command. And a redirection on the compound does
+**not** change it, which is the opposite of the rule the neighbouring axes
+follow and the one place the two mechanisms disagree about a rule they both
+state.
+
+A subshell is not a compound for this purpose under either of them: it is a
+job and reports its own status, `( false | true | false )` leaving a
+one-element `1`.
+
+`Semantics.CompoundPipelineStatusRecord`, whose two answers are those two
+mechanisms — the body's parse for `zsh`, what ran for `bash`. The third
+reading, a compound writing its own status for having run whatever its body
+holds and whatever ran inside it, is what this shell used to do and what no
+panel member does; it is ruled out by being unnamed. ksh93 and dash have no
+name for the record, so the axis is never reached there.
+
+Silent when it is wrong, both ways: a plausible one-element record where the
+pipeline's elements should still be there, which is the shape
+`pipestatus/reading-it-twice-in-one-chain` exists to protect (#1931, #2016).
 
 Two more things about it are axes:
 

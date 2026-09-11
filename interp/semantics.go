@@ -3942,12 +3942,13 @@ type Semantics struct {
 	// already refused, so `echo three` above never runs (#1893).
 	PromptAsksAgainAfterARefusedToken bool
 
-	// CompoundBodyDecidesThePipelineStatusRecord asks the *body* whether a
-	// compound command writes the pipeline-status record, rather than letting
-	// the compound write it for having run.
+	// CompoundPipelineStatusRecord is what a compound command does to the
+	// pipeline-status record — see CompoundPipelineStatusPolicy, whose two
+	// answers are two *mechanisms* rather than two values for one rule.
 	//
-	// It is a question about the **parse** and not about what ran, which is
-	// what makes it worth an axis of its own. Measured 2026-09-11, zsh 5.9.2,
+	// The first is a question about the **parse** and not about what ran,
+	// which is what makes it worth an axis at all. Measured 2026-09-11,
+	// zsh 5.9.2,
 	// each line after `false | true` so a replaced record is visible:
 	//
 	//	false | true; if [[ a = b ]]; then :; fi              0
@@ -3979,17 +3980,35 @@ type Semantics struct {
 	// A redirection on the compound writes the record whatever the body says
 	// — `{ [[ a = a ]]; } >/dev/null` and `if … fi >/dev/null` are both one
 	// element — which is the same rule the two axes above follow, and for the
-	// same reason: the redirection is what makes the job.
+	// same reason: the redirection is what makes the job. That is this
+	// mechanism's rule and not the other's; see the table below.
 	//
-	// bash answers no, and its own rule is a third thing rather than this
-	// one's opposite: it records what the last pipeline *inside* the compound
-	// left, so `if false; then :; fi` holds 1 there — the condition's status
-	// — and `case a in b) :;; esac` leaves the record alone because nothing
-	// ran. See #2016; answering no keeps what this shell already did.
+	// The second mechanism is bash's, and it is not this one's opposite: the
+	// compound writes **nothing**, and the record it leaves is whatever the
+	// last pipeline that actually ran inside it wrote. Measured 2026-09-11 on
+	// bash 5.3.15 and 3.2.57 alike, each line after `false | true`:
 	//
-	// Silent when it is wrong: a plausible one-element record where the
-	// pipeline's elements should still be there (#1931).
-	CompoundBodyDecidesThePipelineStatusRecord Answer
+	//	if false; then :; fi              1     the condition ran and wrote it
+	//	if [[ a = b ]]; then :; fi        1     and so did this one
+	//	while false; do :; done           1
+	//	case a in b) :;; esac             1 0   nothing ran: the record stands
+	//	for i in ; do :; done             1 0
+	//	{ [[ a = a ]] & }                 1 0   a background job writes nothing here
+	//	{ [[ a = a ]] | [[ b = b ]]; }    0 0   two elements survive the braces
+	//	{ :; }                            0     the `:` inside wrote it
+	//	if false; then :; fi >/dev/null   1     a redirection does not change it
+	//
+	// The two-element rows are what say it is the inner *pipeline* rather than
+	// the compound's last command, and the redirection row is where the two
+	// mechanisms part company about the rule the neighbouring axes follow.
+	//
+	// A subshell is not a compound for this purpose in either of them: it
+	// reports its own status, one element, `( false | true | false )` leaving
+	// `1` after a record of `1 0`.
+	//
+	// Silent when it is wrong, both ways: a plausible one-element record where
+	// the pipeline's elements should still be there (#1931, #2016).
+	CompoundPipelineStatusRecord CompoundPipelineStatusPolicy
 	// UnsetEndsTheProducedPipelineStatus makes `unset` permanent. zsh says
 	// yes and the name never fills again; in bash the producer outlives it.
 	// It is the opposite of what a produced *scalar* does, where unset ends
@@ -8518,6 +8537,60 @@ func (r *Runner) outsideLocaleEscape() OutsideLocaleEscapePolicy {
 			r.unanswered(`a \u escape outside the locale`)))
 		r.status = 2
 		r.ctl = controlExit
+	}
+	return p
+}
+
+// CompoundPipelineStatusPolicy is what a compound command does to the record
+// of the last pipeline's statuses.
+//
+// Two answers and not a bool, for the reason ReadonlyElementPolicy is not one:
+// they are two mechanisms rather than two values of one rule, and the third
+// reading — a compound writing its own status for having run, whatever its
+// body holds and whatever ran inside it — is what this shell used to do and
+// what no panel member does. A field named for one of the two would read as
+// `false` meaning the other by accident, and it would leave nowhere for that
+// third reading to be ruled out.
+//
+// Only the two shells that keep such a record reach it: ksh93 and dash have no
+// name for it, so the axis is never asked there. interp/pipestatus.go holds
+// the mechanics and Semantics.CompoundPipelineStatusRecord the measurements.
+type CompoundPipelineStatusPolicy uint8
+
+const (
+	// CompoundPipelineStatusUnspecified is no answer, and is refused like any
+	// other.
+	CompoundPipelineStatusUnspecified CompoundPipelineStatusPolicy = iota
+	// CompoundPipelineStatusFromTheBody writes the compound's own status
+	// where its **body** holds anything that would write the record standing
+	// alone, and leaves the record alone otherwise — a question about the
+	// parse, answered without running any of it: zsh.
+	CompoundPipelineStatusFromTheBody
+	// CompoundPipelineStatusFromWhatRan writes nothing for the compound at
+	// all, so the record is whatever the last pipeline that actually ran
+	// inside it left — and a compound that ran nothing leaves the record from
+	// before it: bash.
+	CompoundPipelineStatusFromWhatRan
+)
+
+func (p CompoundPipelineStatusPolicy) String() string {
+	switch p {
+	case CompoundPipelineStatusFromTheBody:
+		return "the body decides, without being run"
+	case CompoundPipelineStatusFromWhatRan:
+		return "left to whatever ran inside it"
+	}
+	return "unspecified"
+}
+
+// compoundPipelineStatus resolves the axis, and reports it unanswered the way
+// ask does for a two-valued one.
+func (r *Runner) compoundPipelineStatus() CompoundPipelineStatusPolicy {
+	p := r.sem().CompoundPipelineStatusRecord
+	if p == CompoundPipelineStatusUnspecified {
+		r.diagf("%s\n", r.unanswered("what a compound does to the pipeline status"))
+		r.status = 2
+		r.unspecified = true
 	}
 	return p
 }

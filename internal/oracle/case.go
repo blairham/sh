@@ -11384,12 +11384,32 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 	{
 		ID: "pipestatus/a-compound-command-with-a-body-that-writes-nothing", Category: "pipeline status",
 		Snippet: `if false | true; then (( 1 )); fi; echo "[${PIPESTATUS[@]}]"`,
-		Why:     "the discriminating version of the row above: `(( 1 ))` is chosen for the body because it leaves the record alone in the shell that would otherwise obscure the answer, so one element holding 0 here is the clause's own status and not the body's. bash and zsh agree, which is what makes it a rule rather than an axis",
+		Why:     "the discriminating version of the row above: `(( 1 ))` is chosen for the body because it leaves the record alone in the shell that would otherwise obscure the answer. The two shells reach the single 0 by different routes and that is the point of the pair — here the arithmetic counts as a command and writes it, where under zsh's name for the record next door nothing in the body writes at all and the clause does. The value agrees; the mechanism is what #2016 and #1931 separate",
 	},
 	{
 		ID: "pipestatus/a-compound-command-with-a-body-that-writes-nothing-in-zsh", Category: "pipeline status",
 		Snippet: `if false | true; then (( 1 )); fi; echo "[${pipestatus[@]}]"`,
 		Why:     "the same under zsh's name for the record, where the body genuinely writes nothing — so the single element can only have come from the clause",
+	},
+	{
+		ID: "pipestatus/a-compound-leaves-what-its-condition-recorded", Category: "pipeline status",
+		Snippet: `false | true; if false; then :; fi; echo "[${PIPESTATUS[@]}]"`,
+		Why:     "a compound writes no record of its own in bash: the `false` in the condition ran and recorded 1, the clause wrote nothing over it, and the single element is the condition's status rather than the `if`'s. We wrote the clause's own 0 here, which is a plausible one-element answer nothing reports (#2016)",
+	},
+	{
+		ID: "pipestatus/a-compound-that-ran-nothing-leaves-the-record-alone", Category: "pipeline status",
+		Snippet: `false | true; case a in b) :;; esac; echo "[${PIPESTATUS[@]}]"`,
+		Why:     "the half no reading of the *parse* can produce: nothing inside the `case` ran, so what a script reads afterwards is the record from the pipeline **before** it, two elements and all. It is the row that says bash decides this by what ran rather than by what the body holds, and the pair with the condition row above",
+	},
+	{
+		ID: "pipestatus/a-pipeline-inside-a-group-survives-it", Category: "pipeline status",
+		Snippet: `false | true; { true | false; }; echo "[${PIPESTATUS[@]}]"`,
+		Why:     "two elements come out of the braces, which is what says the record left behind is the inner **pipeline**'s and not the inner last command's — a compound writing one element for its own status, or for its body's, would answer with one either way",
+	},
+	{
+		ID: "pipestatus/a-redirected-compound-still-leaves-the-record", Category: "pipeline status",
+		Snippet: `false | true; if false; then :; fi >/dev/null; echo "[${PIPESTATUS[@]}]"`,
+		Why:     "a redirection on the compound does not make it write, which is the opposite of the rule the neighbouring axes follow — a redirected `[[ … ]]` and a redirected bare assignment both record. So the redirection row belongs to the body-reading mechanism and not to this one",
 	},
 	{
 		ID: "pipestatus/a-compound-body-that-never-ran-still-counts-in-zsh", Category: "pipeline status",

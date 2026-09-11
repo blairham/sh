@@ -60,8 +60,9 @@ Then check it runs:
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `PREFIX` | `/usr/local` | The usual prefix. Only `SHELLDIR` derives from it. |
+| `PREFIX` | `/usr/local` | The usual prefix. `SHELLDIR` and `FUNCDIR` derive from it. |
 | `SHELLDIR` | `$(PREFIX)/libexec/sh` | Where the five binaries land. |
+| `FUNCDIR` | `$(PREFIX)/share/sh/functions` | Where the shipped autoloadable functions land. See below — this one is not free to move, because the shell derives where it looks. |
 | `DESTDIR` | empty | Staging root for packaging. Prefixes the copy and nothing else — the `PATH` check still asks about `SHELLDIR`, because that is where a staged tree ends up. |
 | `ALLOW_PATH_SHADOW` | unset | `1` allows an install into a directory on `PATH`. |
 
@@ -71,6 +72,53 @@ To remove them:
 
 **Do not uninstall while one of them is your login shell.** A login shell
 that is not there is a login that fails; change your shell back first.
+
+## The functions this shell ships, and pointing at somebody else's
+
+One dialect — `zsh` — looks for **function definition files** when a
+script says `autoload -Uz name` and then calls `name`. The search is
+`$fpath`, and with nothing in the environment saying otherwise it is two
+directories, derived from where the running binary sits:
+
+    $(PREFIX)/share/sh/site-functions      whatever a package installed
+    $(PREFIX)/share/sh/functions           what this shell shipped
+
+The second is what `make install` fills, and the four files in it are the
+ones a real startup file reaches before it has done anything of its own:
+
+| | |
+| --- | --- |
+| `is-at-least` | compare two version strings; `is-at-least 5.1 && setopt …` |
+| `add-zsh-hook` | put a function in `precmd_functions` and its fellows |
+| `colors` | fill `$fg`, `$bg`, `$color` and `$reset_color` |
+| `regexp-replace` | replace in place in a named variable, with EREs |
+
+They are written here from the published description of what each one
+does and from what the installed shell answers when asked — never from
+anybody's function files. `docs/spec/functions.md` records the run.
+
+**`compinit` is not among them**, so a startup file that calls it still
+gets a complaint. That is a real gap and not a silent one.
+
+### Pointing it at your own zsh's functions instead
+
+There is nothing to build and no option to pass. `$fpath` follows `FPATH`
+from the environment, and a value there **replaces** the default rather
+than adding to it, so name both:
+
+    export FPATH="$(/bin/zsh -fc 'print -rn -- ${(j.:.)fpath}'):/usr/local/share/sh/functions"
+
+That is one line in whatever starts the shell. Ask your own zsh where its
+functions are rather than copying a path out of this file: two builds of
+zsh on one machine disagree about the layout as well as the prefix — a
+Homebrew build answers `…/Cellar/zsh/5.9.2/share/zsh/functions` and
+Apple's answers `/usr/share/zsh/5.9/functions` — so there is no path here
+that would be right on your machine.
+
+It is not the default, and will not become one. A portable binary can
+honestly know where it was itself installed; it cannot know where some
+other shell was, and a table of guesses in the code would be the paths of
+the machine it was written on.
 
 ## Homebrew
 

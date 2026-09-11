@@ -41,3 +41,48 @@ func (r *Runner) recordRegexMatch(m []string) {
 	}
 	r.setArray(r.regexMatchName, m)
 }
+
+// SetRegexCaptureReport makes a `=~` evaluation publish what it matched
+// through the same parameters a *reporting pattern* fills — the whole match,
+// the groups, and the character positions of each. A dialect calls it from
+// Apply, beside SetRegexMatch.
+//
+// Two shapes rather than one, because the shells that keep captures disagree
+// about more than the name. One keeps a single dense array whose element 0 is
+// the whole match; the other splits the whole match from the groups and
+// reports where each began and ended, which is the same record a pattern flag
+// already writes — so the second shape needs no parameters of its own, only
+// permission to use the ones patterncapture.go already knows.
+//
+// It is a switch and not a name for that reason: the names are the reporting
+// pattern's, and a dialect that has one has the other.
+func (r *Runner) SetRegexCaptureReport() { r.regexCaptureReport = true }
+
+// publishRegexCapture writes a successful `=~` into the reporting parameters.
+//
+// Only a successful one, which is measured: a match that fails leaves the
+// parameters holding what the match before it put there, exactly as a
+// reporting *pattern* that fails does. That is the opposite of the dense
+// record beside it, which is emptied on every evaluation — and both are the
+// shell they belong to, which is why they are two calls rather than one.
+//
+// loc is the byte offsets `regexp` reports: a pair per group, the first pair
+// being the whole match, and -1 for a group that did not participate.
+func (r *Runner) publishRegexCapture(subject string, loc []int) {
+	if !r.regexCaptureReport || loc == nil {
+		return
+	}
+	report := matchReport{
+		subject:  subject,
+		whole:    capSpan{begin: loc[0], end: loc[1], set: true},
+		wantsAll: true,
+	}
+	for i := 2; i+1 < len(loc); i += 2 {
+		var span capSpan
+		if loc[i] >= 0 {
+			span = capSpan{begin: loc[i], end: loc[i+1], set: true}
+		}
+		report.groups = append(report.groups, span)
+	}
+	r.publishMatch(report)
+}

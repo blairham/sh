@@ -773,24 +773,55 @@ func autoloadFile(r *interp.Runner, name string) (string, bool) {
 		text, err := r.ReadFileGated(path)
 		return string(text), err == nil
 	}
+	_, text, ok := autoloadLocate(r, name)
+	return text, ok
+}
+
+// autoloadLocate is the one walk of `$fpath`, and everything that asks where
+// a function file is asks it.
+//
+// There were two — the read that a call does and the resolution that `-r`
+// does — and they are the same question twice, which is this file's recurring
+// defect: #1704 fixed how a file that holds a `name() { … }` is read and #1854
+// fixed it again on the other road, #1993 folded four routes into one
+// define-from-text, and #1991 found four defects in exactly this lookup. A
+// second copy of a search does not stay equal to the first; it stays equal
+// until the next fix lands on one of them.
+//
+// It hands back the path *and* the text, because the two callers want
+// different halves of one answer and reading the file twice to give each its
+// own was what the second copy cost: the resolution read every candidate to
+// learn it was readable and then the call read the winner again.
+//
+// The path is resolved against the shell's directory through shellPath, since
+// a `-r` records it and reads it again later, after the shell may have moved.
+// The text is what was read here and now, so it needs no such care.
+func autoloadLocate(r *interp.Runner, name string) (path, text string, ok bool) {
 	if strings.ContainsRune(name, filepath.Separator) {
 		// A name with a directory in it is looked for where it says and
 		// nowhere else, which is what `autoload /path/to/fn` means.
-		text, err := r.ReadFileGated(name)
-		return string(text), err == nil
+		body, err := r.ReadFileGated(name)
+		if err != nil {
+			return "", "", false
+		}
+		return shellPath(r, name), string(body), true
 	}
 	dirs, _ := r.GetArray("fpath")
 	for _, dir := range dirs {
 		if dir == "" {
 			dir = "."
 		}
-		text, err := r.ReadFileGated(filepath.Join(dir, name))
+		candidate := filepath.Join(dir, name)
+		// Read rather than stat: "readable" is the rule, so an entry this
+		// shell could not open is one the search goes past rather than one it
+		// stops on — which is what makes a stale `$fpath` entry harmless.
+		body, err := r.ReadFileGated(candidate)
 		if err != nil {
 			continue
 		}
-		return string(text), true
+		return shellPath(r, candidate), string(body), true
 	}
-	return "", false
+	return "", "", false
 }
 
 // autoloadFixPath is the `-r` and `-R` half of a declaration: resolve the
@@ -866,52 +897,26 @@ func autoloadFixedPath(r *interp.Runner, name string) (string, bool) {
 	return path, ok
 }
 
-// autoloadSearch is autoloadFile's search without the read: the path the
-// name resolves to on `$fpath`, by the same rule that the first *readable*
-// entry wins.
+// autoloadSearch is where a name resolves on `$fpath`, without the caller
+// wanting what is in the file.
 //
-// **What it returns is resolved against the shell's directory**, which
-// autoloadFile's own search deliberately does not need: that one hands the
-// written path to ReadFileGated and reads it there and then, where this one is
-// *recorded* and read again later, after the shell may have moved. A relative
-// `$fpath` entry kept as written is a fixed path that is not fixed — measured
-// 2026-09-11 on zsh 5.9.2 with `fns/rf` under the shell's directory:
+// It is autoloadLocate with the text dropped, and that is the point: the path
+// a `-r` records and the file a call reads are one search, asked once. It was
+// two — a walk here and a walk in autoloadFile — and a fix landing on one of
+// them is exactly how #1704 and #1854 became the same bug twice. See
+// autoloadLocate.
+//
+// What it hands back is resolved against the shell's directory, because this
+// path is *recorded* and read again later, after the shell may have moved. A
+// relative `$fpath` entry kept as written is a fixed path that is not fixed —
+// measured 2026-09-11 on zsh 5.9.2 with `fns/rf` under the shell's directory:
 //
 //	cd D/w; fpath=(fns); autoload -rUz rf; cd /; rf
 //	zsh    builtin autoload -XUz D/w/fns   in the stub, and the call runs
 //	ours   builtin autoload -XUz fns       and the call is not found
-//
-// That is the second route into a function file, and it is the one #1704 and
-// #1854 both name: the fix the other route carries has to be here too, or it
-// works in the spelling that was tested and fails in the one a real startup
-// takes. Through shellPath rather than a join written out again, which is the
-// same rule every other builtin in this dialect resolves a script's relative
-// name by (#1968).
 func autoloadSearch(r *interp.Runner, name string) (string, bool) {
-	if strings.ContainsRune(name, filepath.Separator) {
-		// A name that says where it is resolves to itself, and is still a
-		// resolution that can fail: `-R` on an unreadable path is the same
-		// complaint as `-R` on a name that is nowhere on `$fpath`.
-		if _, err := r.ReadFileGated(name); err != nil {
-			return "", false
-		}
-		return shellPath(r, name), true
-	}
-	dirs, _ := r.GetArray("fpath")
-	for _, dir := range dirs {
-		if dir == "" {
-			dir = "."
-		}
-		path := filepath.Join(dir, name)
-		// Read rather than stat, so that "readable" here means what it means
-		// in autoloadFile — an entry this shell could not open is one the
-		// search goes past rather than one it stops on.
-		if _, err := r.ReadFileGated(path); err != nil {
-			continue
-		}
-		return shellPath(r, path), true
-	}
-	return "", false
+	path, _, ok := autoloadLocate(r, name)
+	return path, ok
 }
 
 // autoloadListing is the bare form: the names still waiting to be defined,

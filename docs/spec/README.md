@@ -32,6 +32,7 @@ A spec entry with no citation is a guess and does not belong here.
     hooks.md          what a session runs between one command and the next
     editing.md        what the keys do while a line is being typed
     completion.md     what Tab does to the word under the cursor
+    functions.md      the autoloadable functions this shell ships, measured
     style.md          how source is laid back out, and what each dialect says
     grammar/          per-construct specs
       tokenization.md   input to tokens, and where quoting is recorded

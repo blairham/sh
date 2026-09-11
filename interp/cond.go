@@ -224,9 +224,25 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// The captures are the point of matching, not a by-product: element 0
 		// is the whole match and the rest are the groups. The core records
 		// them and a dialect names the record — see regexmatch.go.
-		m := re.FindStringSubmatch(left)
+		//
+		// The offsets are asked for rather than the texts, because the two
+		// records a dialect can ask for want different things out of one
+		// match: the dense array wants the strings, and the reporting
+		// parameters want where each span began and ended. Matching twice to
+		// get both would be two answers to one question.
+		loc := re.FindStringSubmatchIndex(left)
+		var m []string
+		if loc != nil {
+			m = make([]string, len(loc)/2)
+			for i := range m {
+				if loc[2*i] >= 0 {
+					m[i] = left[loc[2*i]:loc[2*i+1]]
+				}
+			}
+		}
 		r.recordRegexMatch(m)
-		return m != nil, nil
+		r.publishRegexCapture(left, loc)
+		return loc != nil, nil
 
 	case "==", "=", "!=":
 		// A process substitution in this position is one shell's alone, and

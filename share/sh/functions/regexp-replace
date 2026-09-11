@@ -1,0 +1,68 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# regexp-replace var regexp replace
+#
+# A global search and replace over the string a *named* variable holds, with
+# POSIX extended regular expressions.  The variable is changed in place; the
+# status is 0 when something was replaced and 1 when nothing matched.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files.  docs/spec/functions.md records the run.
+#
+# The replacement is expanded, once, per match: parameter, command and
+# arithmetic expansions in it are done then, which is what makes `$MATCH` —
+# the text this match consumed — the useful thing to write in one.  `$match`,
+# `$mbegin` and `$mend` are the groups, and they are the regular expression
+# code's parameters rather than this function's, which is why the manual says
+# not to keep anything of your own in them.  They are declared local here, so
+# a caller's own `$MATCH` survives the call.
+#
+# Measured on zsh 5.9.2, and each of these is a case the loop below is shaped
+# by:
+#
+#   aaa   `a*` -> X        X            a match that eats the string
+#   abc   `x*` -> Y        YaYbYc       an empty match advances by one
+#   abcabc `b*` -> -       -a--c-a--c   both at once, and no match past the end
+#   hello `z`  -> X        unchanged, status 1
+#
+# The empty match is the whole of why this is a loop over a shrinking subject
+# rather than one pass: a pattern that can match nothing matches *between*
+# every pair of characters, and a loop that did not step over one would not
+# end.
+#
+# `^` anchors what is left of the subject rather than the original string, so
+# `regexp-replace v '^a' Z` over `aXaXa` replaces the first `a` and stops.
+# That is measured, and zshcontrib(1) warns of it in the same words: with
+# POSIX EREs the `^` and word-boundary operators may not work as expected.
+
+emulate -L zsh
+
+local variable=$1 expression=$2 replacement=$3
+local MATCH MBEGIN MEND
+local -a match mbegin mend
+local subject result piece
+integer replaced=0
+
+subject=${(P)variable}
+
+while [[ -n $subject ]]; do
+	[[ $subject =~ $expression ]] || break
+	replaced=1
+	result+=${subject[1,MBEGIN-1]}
+	eval "piece=\"$replacement\""
+	result+=$piece
+	if (( MEND < MBEGIN )); then
+		# An empty match. Carry the character it sat in front of over
+		# untouched and go on from the next one, or the same position would
+		# match again forever.
+		result+=${subject[MBEGIN]}
+		subject=${subject[MBEGIN+1,-1]}
+	else
+		subject=${subject[MEND+1,-1]}
+	fi
+done
+
+(( replaced )) || return 1
+typeset -g "$variable"="${result}${subject}"
+return 0

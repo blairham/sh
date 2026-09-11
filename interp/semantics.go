@@ -4219,6 +4219,43 @@ type Semantics struct {
 	// Diagnostics.
 	BuiltinSyntaxErrorFatal Answer
 
+	// EvalRunsWhatItParsed runs the commands `eval` has already read when a
+	// later line of its text will not parse, instead of reading the text
+	// through and running none of it.
+	//
+	// Measured 2026-09-11, counting a side effect rather than reading a
+	// transcript, because the transcript is what a shell's buffering can
+	// reorder:
+	//
+	//	$ <shell> -c 'eval "printf x >> f
+	//	if; then"'
+	//
+	//	bash 5.3, bash 3.2, dash	f holds x
+	//	zsh, ksh93              	f does not exist
+	//
+	// Not the same question as the wording or the status of the complaint,
+	// both of which are Diagnostics' and both of which are written either
+	// way. What this decides is whether the *work* before the offending line
+	// happened.
+	//
+	// A separate field from the sourced-file one because zsh splits them: it
+	// reads a file a command at a time and reads `eval`'s text through first.
+	EvalRunsWhatItParsed Answer
+
+	// SourcedFileRunsWhatItParsed is the same question for `.`, and the
+	// answer is not always the same one.
+	//
+	// Measured the same day and the same way, with a file holding `printf y
+	// >> f` and then `if; then`:
+	//
+	//	bash 5.3, bash 3.2, dash, zsh	f holds y
+	//	ksh93                        	f does not exist
+	//
+	// It is worth more here than for `eval`: a file that sets six names and
+	// has a typo on the last line leaves six names set in five of the six
+	// columns, and a shell reading it through first leaves none.
+	SourcedFileRunsWhatItParsed Answer
+
 	// FatalErrorEndsBorrowedTextOnly makes an error that would end a script
 	// end only the text a special builtin is running — a file `.` read, or
 	// `eval`'s argument — handing the builtin a status and letting the script
@@ -6217,8 +6254,16 @@ const (
 // wrong one for a runtime.
 func PosixSemantics() Semantics {
 	return Semantics{
-		SplitParamExpansion:      Yes,
-		SplitCommandSubstitution: Yes,
+		SplitParamExpansion: Yes,
+		// 2.11 has the shell read its input and execute commands as it goes,
+		// and 2.14's `eval` "shall be read and executed by the shell" in the
+		// same way. So text that will not parse further stops the reading
+		// rather than unwinding what has already run, and dash — the shell in
+		// the panel that targets this text — complies for both. zsh's `eval`
+		// and ksh93 are the departures.
+		EvalRunsWhatItParsed:        Yes,
+		SourcedFileRunsWhatItParsed: Yes,
+		SplitCommandSubstitution:    Yes,
 		// 2.7.2 puts noclobber on `>` and says nothing about `>>`, so
 		// appending still creates. Four of the panel comply; zsh departs.
 		NoclobberBlocksAppendCreate: No,

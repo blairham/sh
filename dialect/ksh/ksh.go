@@ -561,6 +561,11 @@ func Semantics() interp.Semantics {
 	// POSIX "a special builtin's failure is fatal" rule are answered
 	// differently, which is why they are two axes.
 	s.BuiltinSyntaxErrorFatal = interp.No
+	// The only column that reads both through before running either: neither
+	// `eval` nor a sourced file leaves anything behind from the lines before
+	// the one that will not parse.
+	s.EvalRunsWhatItParsed = interp.No
+	s.SourcedFileRunsWhatItParsed = interp.No
 	// An error inside a file `.` read ends that file and nothing above it:
 	// measured, `.` reports 1 and the sourcing file runs the command after
 	// it — for an unset parameter under `set -u`, a readonly assignment, a

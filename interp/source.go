@@ -132,6 +132,86 @@ func (s sourced) route() syntax.ProgramRoutes {
 	return syntax.RouteFromScriptFile
 }
 
+// runsWhatItParsed is whether this kind of borrowed text runs the commands it
+// has already read when a later line will not parse.
+//
+// Two fields because the panel does not group them, which is the same shape
+// this file already has for naming and for the grammar route. Measured
+// 2026-09-11, counting a side effect rather than reading a transcript —
+// `eval "printf x >> f\nif; then"`, and a sourced file holding the same two
+// lines:
+//
+//	bash 5.3, bash 3.2, dash	both run the first line
+//	zsh                     	the file does, `eval` does not
+//	ksh93                   	neither does
+//
+// It matters beyond the transcript. Everything before the offending line
+// really happened in the columns that answer Yes, so a `.` of a file that sets
+// six names and has a typo on the last line leaves six names set there and
+// none where the text is read through first.
+func (s sourced) runsWhatItParsed(sem Semantics) Answer {
+	if s.eval {
+		return sem.EvalRunsWhatItParsed
+	}
+	return sem.SourcedFileRunsWhatItParsed
+}
+
+// readerAxis names the question for a shell that has not answered it.
+func (s sourced) readerAxis() string {
+	if s.eval {
+		return "whether `eval` runs the commands it has read before a later line fails to parse"
+	}
+	return "whether a sourced file runs the commands it has read before a later line fails to parse"
+}
+
+// nextBorrowedLine hands back the next group of statements to run: the whole
+// text at once where it was parsed through first, and one logical line at a
+// time where it is read as it is run.
+//
+// The reader is syntax.Parser.NextLine, which the prompt and the script route
+// already use — `driver/program.go` reads a script incrementally, which is why
+// the *script* route has always run what it had. The gap this closes is that
+// borrowed text did not go through the same reader.
+func nextBorrowedLine(p *syntax.Parser, whole **syntax.File) (*syntax.File, bool) {
+	if *whole != nil {
+		f := *whole
+		*whole = nil
+		return f, true
+	}
+	return p.NextLine()
+}
+
+// borrowedTextFailed reports a parse failure in borrowed text and says what
+// the builtin leaves behind.
+func (r *Runner) borrowedTextFailed(err error, s sourced, src string) int {
+	// The failure's own line, not the caller's. `.` on line 1 of a script
+	// that sources a file whose `if` never closes is reported at the
+	// line in *that file* by every shell in the panel, and this reported
+	// line 1 for all of them.
+	line, own := r.line, r.diag().ParseFailureLine(err)
+	if own > 0 {
+		line = own
+	}
+	d := r.diag()
+	r.errf("%s\n", d.SourceReport(s.naming(d), r.name(), s.sourceName(d),
+		line, d.ParseFailure(err)))
+	// And the offending line quoted back, for the dialect that writes
+	// one. Only when the failure said where it was: `own` is an offset
+	// into this text, and the fallback above is the *caller's* line,
+	// which would quote a line out of the wrong file (#1728).
+	if own > 0 {
+		r.errf("%s", d.SourceEcho(s.naming(d), r.name(), s.sourceName(d), own, err, src))
+	}
+	// POSIX makes a special builtin's failure fatal to a non-interactive
+	// shell. dash is the only member of the panel that does it here; the
+	// other three report the error and carry on.
+	if r.ask(r.sem().BuiltinSyntaxErrorFatal, "a parse failure inside a special builtin being fatal") {
+		r.fatalQuiet()
+		return r.status
+	}
+	return s.syntaxStatus
+}
+
 // runSourced parses src and runs it on this runner.
 //
 // The status is the last command's, or 0 when nothing ran — which is not the
@@ -144,35 +224,22 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// them. See Runner.tracePrefixDepth.
 	r.indirection++
 	defer func() { r.indirection-- }()
-	p := syntax.NewParser(src, r.dialect().On(s.route()))
-	f := p.Parse()
+	d := r.dialect().On(s.route())
+	p := syntax.NewParser(src, d)
+	whole := p.Parse()
 	if err := p.Err(); err != nil {
-		// The failure's own line, not the caller's. `.` on line 1 of a script
-		// that sources a file whose `if` never closes is reported at the
-		// line in *that file* by every shell in the panel, and this reported
-		// line 1 for all of them.
-		line, own := r.line, r.diag().ParseFailureLine(err)
-		if own > 0 {
-			line = own
+		// Text that will not parse all the way through, which is the only
+		// case where it matters whether the shell read it through first or a
+		// command at a time — parsing has no effect of its own, so text that
+		// parses runs the same either way and the question is not asked of
+		// it. See sourced.runsWhatItParsed.
+		if !r.ask(s.runsWhatItParsed(r.sem()), s.readerAxis()) {
+			return r.borrowedTextFailed(err, s, src)
 		}
-		d := r.diag()
-		r.errf("%s\n", d.SourceReport(s.naming(d), r.name(), s.sourceName(d),
-			line, d.ParseFailure(err)))
-		// And the offending line quoted back, for the dialect that writes
-		// one. Only when the failure said where it was: `own` is an offset
-		// into this text, and the fallback above is the *caller's* line,
-		// which would quote a line out of the wrong file (#1728).
-		if own > 0 {
-			r.errf("%s", d.SourceEcho(s.naming(d), r.name(), s.sourceName(d), own, err, src))
-		}
-		// POSIX makes a special builtin's failure fatal to a non-interactive
-		// shell. dash is the only member of the panel that does it here; the
-		// other three report the error and carry on.
-		if r.ask(r.sem().BuiltinSyntaxErrorFatal, "a parse failure inside a special builtin being fatal") {
-			r.fatalQuiet()
-			return r.status
-		}
-		return s.syntaxStatus
+		// Read again, a line at a time, running each as it is read, so that
+		// the failure is met where a reader would meet it: with everything
+		// before it already done.
+		p, whole = syntax.NewParser(src, d), nil
 	}
 	// Whatever a borrowed script reports is the *script's*, not this
 	// builtin's. Measured: an unset parameter inside a sourced file is
@@ -203,9 +270,7 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// status 0, by the parameter whose whole job is to say otherwise. It is
 	// also what a prompt hook needs, since every one of them is handed the
 	// status of the line before it (Runner.FireChain).
-	if len(f.Stmts) == 0 {
-		r.status = 0
-	}
+	ran := false
 	// Borrowed text is a *file* of statements as far as giving one up goes,
 	// which is what abandoned records: measured, `readonly r=1` and then
 	// `r=2` inside `eval` or inside a sourced file reports, gives up that
@@ -213,25 +278,59 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// bash 3.2 alike. Without this the give-up cost the whole borrowed text,
 	// which is the same error as the one this file is named for, one level
 	// down. The rule is RunPart's, and it is spelled the same way there.
-	abandoned := 0
-	for _, st := range f.Stmts {
-		if abandoned != 0 && r.lineOf(st.Pos()) == abandoned {
-			continue
-		}
-		if err := r.stmt(ctx, st); err != nil {
-			// A Builtin returns a status and not an error, so there is nowhere
-			// for this to go but a diagnostic — the same place runTrapBody
-			// puts it, and for the same reason.
-			r.diagf("%s: %v\n", s.label, err)
-			return 2
-		}
-		if r.ctl == controlAbandon {
-			r.ctl, abandoned = controlNone, r.abandonLine
-			continue
-		}
-		if r.ctl != controlNone {
+	abandoned, stopped := 0, false
+	for !stopped {
+		f, ok := nextBorrowedLine(p, &whole)
+		if !ok {
 			break
 		}
+		for _, st := range f.Stmts {
+			ran = true
+			if abandoned != 0 && r.lineOf(st.Pos()) == abandoned {
+				continue
+			}
+			if err := r.stmt(ctx, st); err != nil {
+				// A Builtin returns a status and not an error, so there is
+				// nowhere for this to go but a diagnostic — the same place
+				// runTrapBody puts it, and for the same reason.
+				r.diagf("%s: %v\n", s.label, err)
+				return 2
+			}
+			if r.ctl == controlAbandon {
+				r.ctl, abandoned = controlNone, r.abandonLine
+				continue
+			}
+			if r.ctl != controlNone {
+				stopped = true
+				break
+			}
+		}
+	}
+	// A failure the reader reached only because everything before it ran. The
+	// text that was parsed through first has already been reported and
+	// returned above, so this is the incremental reader alone — and never
+	// after an `exit` or a `return`, because a shell that stopped reading
+	// never met the line.
+	if !stopped {
+		if err := p.Err(); err != nil {
+			return r.borrowedTextFailed(err, s, src)
+		}
+	}
+	// Cleared only when there was nothing to run, which is where the two
+	// measured facts part company. `false; eval ""` and `false; . empty.sh`
+	// both end at 0 in every shell in the panel, so text with no commands in
+	// it *clears* a failure rather than preserving it — but `false; eval
+	// "echo $?"` prints 1 in all six, so text with a command in it is shown
+	// the caller's status and not a fresh one.
+	//
+	// This cleared it before the first command instead, which answered the
+	// first fact and got the second wrong in the direction nothing catches:
+	// borrowed text asking `$?` read 0 after a failure — success, reported at
+	// status 0, by the parameter whose whole job is to say otherwise. It is
+	// also what a prompt hook needs, since every one of them is handed the
+	// status of the line before it (Runner.FireChain).
+	if !ran {
+		r.status = 0
 	}
 	if s.catchReturn && r.ctl == controlReturn {
 		r.ctl = controlNone

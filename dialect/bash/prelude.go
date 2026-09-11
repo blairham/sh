@@ -292,7 +292,7 @@ const (
 //
 // The first line and nothing else. The real shell follows it with a copyright
 // notice and a statement of the GPL, and reproducing that here would be a
-// false statement about this code's licence as well as its authorship — this
+// false statement about this code's license as well as its authorship — this
 // is Apache-2.0 and is not that program. The tag in the version says the same
 // thing to anything that reads the string rather than the digits.
 func versionLine() string {

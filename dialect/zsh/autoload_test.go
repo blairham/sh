@@ -597,6 +597,11 @@ lf`)
 // The directory `-X` is given wins outright: a name that is not in it is not
 // found, however much of `$fpath` would have had it. And two operands are
 // too many, which is the letter's own complaint rather than `bad autoload`.
+//
+// The location names **`autoload`** and not the `builtin` that reached it.
+// Measured 2026-09-11 on zsh 5.9.2: `nf:autoload: -X: too many arguments`,
+// where this test asserted `nf:builtin:` until #1968 — the expectation had
+// recorded the defect rather than the shell.
 func TestMinusXTakesOneDirectoryAndNoMore(t *testing.T) {
 	fp := fpathDir(t, map[string]string{"mf": `print FROM_FPATH`, "nf": `print N`})
 	other := fpathDir(t, map[string]string{"mf": `print FROM_OPERAND`})
@@ -606,7 +611,7 @@ mf
 nf() { builtin autoload -XU `+fp+` `+other+`; print -r -- "after=$?" } 2>&1
 nf 2>&1
 print -r -- "st=$?"`)
-	want := "FROM_OPERAND\nafter=0\nnf:builtin: -X: too many arguments\nafter=1\nst=0\n"
+	want := "FROM_OPERAND\nafter=0\nnf:autoload: -X: too many arguments\nafter=1\nst=0\n"
 	if out != want || st != 0 {
 		t.Errorf("-X with a directory = %q (status %d), want %q", out, st, want)
 	}
@@ -624,5 +629,108 @@ print -r -- "st=$?"`)
 	want := "pf () {\n\t# undefined\n\tbuiltin autoload -XUz\n}\nst=0\n"
 	if out != want || st != 0 {
 		t.Errorf("+X with nothing = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A **relative** `$fpath` entry is resolved against the directory the *shell*
+// is in, which is not the directory the process is in.
+//
+// Measured 2026-09-11 on zsh 5.9.2 with `/tmp/fp/a/f1` on disk:
+//
+//	cd /tmp/fp; fpath=(a); autoload -Uz f1; f1     ->  A version
+//
+// where this shell answered `f1:1: f1: function definition file not found`.
+// The read went through os.ReadFile on the bare `a/f1`, so it was resolved
+// against the *process's* directory — the one a Runner deliberately does not
+// own, and the one a second Runner embedded in the same program does not
+// share. AGENTS.md calls it the PATH rule; `.` and every redirection already
+// resolve through Runner.atDir, and the whole-file seam a dialect's builtin
+// reads through did not (#1968).
+//
+// The test turns on the two directories differing: the shell is put in a
+// scratch directory with `fns/` under it, while the process stays in the
+// package's own directory, where no `fns` exists. An implementation that
+// reaches for the process's cwd finds nothing here and passes in a test that
+// happens to run from the right place.
+func TestARelativeFpathEntryIsResolvedAgainstTheShellsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	fns := filepath.Join(dir, "fns")
+	if err := os.MkdirAll(fns, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fns, "rf"), []byte(`print -r -- "rf ran"`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runZsh(t, dir, `fpath=(fns)
+autoload -Uz rf
+rf
+print -r -- "st=$?"`)
+	want := "rf ran\nst=0\n"
+	if out != want || st != 0 {
+		t.Errorf("a relative entry = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A complaint raised by a body `autoload` has just read is the **function's**,
+// not the builtin's.
+//
+// Measured 2026-09-11 on zsh 5.9.2 with a file holding a call to a command
+// that is not there, run from a script file:
+//
+//	errf:2: command not found: nosuchcmd_abc
+//
+// which is the same location a function written in the script gets, and this
+// shell wrote `errf:builtin:2:` for the autoloaded one. The stub a
+// declaration writes is `builtin autoload -X`, so the builtin that reached
+// the body was still on the record while the body ran and the dialect that
+// names a builtin in the location named it. The body is the script's code,
+// and to the script there is no builtin in the picture at all (#1968).
+//
+// A function defined the ordinary way is asserted beside it, because the two
+// lines being *identical* is the claim: an implementation that fixed the
+// autoloaded one by dropping the builtin from every location would pass half
+// of this and lose `zsh:cd:1:` everywhere else.
+func TestADiagnosticFromAnAutoloadedBodyIsNotTheBuiltinsFunc(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"errf": "print -r -- one\nnosuchcmd_abc\n"})
+	out, _ := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+autoload -Uz errf
+errf
+plainf() {
+  print -r -- one
+  nosuchcmd_abc
+}
+plainf`)
+	want := "one\nerrf:2: command not found: nosuchcmd_abc\none\nplainf:2: command not found: nosuchcmd_abc\n"
+	if out != want {
+		t.Errorf("a loaded body's complaint = %q, want %q", out, want)
+	}
+}
+
+// `builtin NAME` puts **NAME** in the location, not `builtin`.
+//
+// Measured 2026-09-11 on zsh 5.9.2:
+//
+//	builtin cd /nope/nope   zsh:cd:1: no such file or directory: /nope/nope
+//	builtin shift 5         zsh:shift:1: shift count must be <= $#
+//	builtin nosuchbuiltin   zsh:1: no such builtin: nosuchbuiltin
+//
+// This shell said `zsh:builtin:1:` for the first two — the word the script
+// wrote to *reach* a builtin standing in for the one it reached. The third is
+// the case that has no builtin speaking at all, and it was already right;
+// asserted here so that naming the operand does not start naming a name that
+// is not a builtin.
+//
+// It is on zsh's own autoload path rather than a corner: every stub a
+// declaration writes is `builtin autoload -X`, so every complaint from a
+// resolution came out named after `builtin` (#1968).
+func TestBuiltinNamesTheBuiltinItRanInTheLocation(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), `builtin cd /nope/nope
+builtin shift 5
+builtin nosuchbuiltin`)
+	want := "zsh:cd:1: no such file or directory: /nope/nope\n" +
+		"zsh:shift:2: shift count must be <= $#\n" +
+		"zsh:3: no such builtin: nosuchbuiltin\n"
+	if out != want {
+		t.Errorf("`builtin NAME`'s locations = %q, want %q", out, want)
 	}
 }

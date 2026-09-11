@@ -157,3 +157,45 @@ func TestANestedBuiltinRestoresTheOuterName(t *testing.T) {
 		t.Errorf("output = %q, want the outer builtin named again afterwards", out)
 	}
 }
+
+// TestAFunctionCalledByABuiltinIsNotTheBuiltinsDiagnostic is the same rule one
+// step further in: a *function* a builtin reached through Runner.CallFunction
+// is shell code the script wrote, so what it reports belongs to it.
+//
+// The borrowed-script test above covers text a builtin reads and runs. This is
+// the other door into shell code from inside a builtin, and it was open: the
+// builtin stayed on the record for the whole call, so every diagnostic the
+// body raised carried its name. It reached a real shell through the dialect
+// whose autoload stub is `builtin autoload -X` — the builtin resolves the
+// function and then calls what it defined, and every complaint from every
+// autoloaded body was named after the builtin that had loaded it (#1968).
+func TestAFunctionCalledByABuiltinIsNotTheBuiltinsDiagnostic(t *testing.T) {
+	dg := Diagnostics{
+		Location: LocationTightLine, NamesBuiltinInLocation: true,
+		LocationNamesTheFunction: true,
+	}
+	f, err := syntax.Parse("target() {\n\tnosuchcmd-xyz\n}\ncaller-bi\n", syntax.Core())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	var out, errs bytes.Buffer
+	sem := permissive()
+	dir := t.TempDir()
+	r := newTestRunner(t, &Runner{
+		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
+		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
+	})
+	r.Register("caller-bi", func(r *Runner, ctx context.Context, args []string) int {
+		if _, err := r.CallFunction(ctx, "target"); err != nil {
+			t.Errorf("CallFunction: %v", err)
+		}
+		return 0
+	})
+	if _, rerr := r.Run(context.Background(), f); rerr != nil {
+		t.Fatalf("run: %v", rerr)
+	}
+	if got := errs.String(); !strings.Contains(got, "target:1:") ||
+		strings.Contains(got, "caller-bi") {
+		t.Errorf("output = %q, want the function's own location and no builtin in it", got)
+	}
+}

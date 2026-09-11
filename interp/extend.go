@@ -1258,7 +1258,20 @@ func (r *Runner) VerifyOpened(ctx context.Context, a *Action, f *os.File) bool {
 // The context is the runner's own, as the probes in fsgate.go take theirs, and
 // for the same reason: the callers are search and resolution paths several
 // frames below any builtin that was handed one.
+//
+// A relative name is resolved against **this runner's** directory, through the
+// same atDir `.` and a redirection go through. That is the PATH rule from
+// AGENTS.md applied to a read: os.ReadFile below resolves a bare `fns/f`
+// against the *process's* directory, which a Runner does not own and a second
+// Runner in the same program does not share. It is reachable from a script —
+// `cd d; fpath=(fns)` is a relative entry on zsh's function search path, which
+// real zsh finds and this shell did not, because the shell's `cd` had moved
+// r.Dir and the process had stayed where it started (#1968). Resolving here
+// rather than in each caller is what keeps the gate honest as well: a policy
+// asked about `fns/f` is being asked about a path that depends on a directory
+// it cannot see.
 func (r *Runner) ReadFileGated(path string) ([]byte, error) {
+	path = r.atDir(path)
 	notThere := func() ([]byte, error) {
 		return nil, &fs.PathError{Op: "open", Path: path, Err: syscall.ENOENT}
 	}

@@ -40,6 +40,15 @@ import "context"
 // leaves it. A caller that must not disturb the shell's status saves it and
 // puts it back; every hook site does, because no shell in the panel lets a
 // hook's status reach the next command — see repl.Shell.fireHook.
+// **The body is the script's, not the caller's.** A builtin that calls a
+// function is a route into shell code and not a frame the code belongs to, so
+// nothing the body reports is located as the builtin's: the dialect that names
+// a builtin in a diagnostic's location said `errf:builtin:2: command not
+// found: …` for a missing command inside a function `autoload` had just
+// loaded, where zsh says `errf:2:` — the same words a function defined in the
+// script gets. The word `builtin` there was the autoload stub's own
+// implementation showing through. It is the rule `command` and `.` already
+// follow for the text they run; see biCommand.
 func (r *Runner) CallFunction(ctx context.Context, name string, args ...string) (bool, error) {
 	fn, ok := r.funcs[name]
 	if !ok {
@@ -52,6 +61,9 @@ func (r *Runner) CallFunction(ctx context.Context, name string, args ...string) 
 	saved := r.ctx
 	r.ctx = ctx
 	defer func() { r.ctx = saved }()
+	outerBuiltin := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outerBuiltin }()
 	return true, r.callFunc(ctx, fn, args)
 }
 

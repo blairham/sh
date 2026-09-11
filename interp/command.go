@@ -130,8 +130,22 @@ func biBuiltin(r *Runner, ctx context.Context, args []string) int {
 		r.diagf("%s\n", Wording(r.diag().NotABuiltin, "builtin: %s: not a shell builtin", args[0]))
 		return 1
 	}
+	// And the *name* is the one that ran, not this wrapper's. The dialect
+	// that puts a builtin in the location says `zsh:cd:1: no such file or
+	// directory: /nope` and `zsh:shift:1: shift count must be <= $#` for
+	// `builtin cd /nope` and `builtin shift 5` alike, where this shell said
+	// `zsh:builtin:1:` for both — the word the script wrote to *reach* the
+	// builtin standing in for the one it reached. It is on zsh's own autoload
+	// path, because the stub a declaration writes is `builtin autoload -X`
+	// and every complaint from a resolution came out named after `builtin`
+	// (#1968). Saved and put back for the reason the dispatch above does it:
+	// a builtin can run another one.
+	//
 	// The fold names the builtin that wrote, not this wrapper — the same
 	// reason runWithoutFunctions folds for itself.
+	outer := r.inBuiltin
+	r.inBuiltin = args[0]
+	defer func() { r.inBuiltin = outer }()
 	return r.callBuiltin(ctx, args[0], fn, args[1:])
 }
 

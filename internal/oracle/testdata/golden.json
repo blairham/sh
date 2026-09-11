@@ -13314,6 +13314,50 @@
         "TimedOut": false
       }
     },
+    "autoload/a-loaded-body-reports-as-itself": {
+      "bash": {
+        "Stdout": "a=127~one~p=127",
+        "Stderr": "\u003cshell\u003e: line 4: autoload: command not found~\u003cshell\u003e: line 5: efn: command not found~\u003cshell\u003e: line 9: zznocmd: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=127~one~p=127",
+        "Stderr": "\u003cshell\u003e: line 4: autoload: command not found~\u003cshell\u003e: line 5: efn: command not found~\u003cshell\u003e: line 9: zznocmd: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a=127~one~p=127",
+        "Stderr": "\u003cshell\u003e: line 3: autoload: command not found~\u003cshell\u003e: line 4: efn: command not found~\u003cshell\u003e: line 8: zznocmd: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 3: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e[4]: typeset: -U: unknown option~\u003cshell\u003e[4]: typeset: -z: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~a=127~one~p=127",
+        "Stderr": "efn:2: command not found: zznocmd~pfn:2: command not found: zznocmd",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "autoload/a-missing-file-fails-at-the-call": {
       "bash": {
         "Stdout": "decl=127~call=127",
@@ -13353,6 +13397,50 @@
       "zsh": {
         "Stdout": "decl=0~call=1",
         "Stderr": "\u003cshell\u003e:1: zznone: function definition file not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "autoload/a-relative-fpath-entry": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: autoload: command not found~\u003cshell\u003e: line 1: rfn: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: autoload: command not found~\u003cshell\u003e: line 1: rfn: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: autoload: command not found~\u003cshell\u003e: rfn: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: typeset: -U: unknown option~\u003cshell\u003e: typeset: -z: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "rfn ran~st=0",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -17050,6 +17138,50 @@
       "zsh": {
         "Stdout": "hi~st=0",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "builtin/the-location-names-the-builtin-that-ran": {
+      "bash": {
+        "Stdout": "cd=1~shift=1~bad=1",
+        "Stderr": "\u003cshell\u003e: line 1: cd: /nope/nope: No such file or directory~\u003cshell\u003e: line 1: builtin: zznotabuiltin: not a shell builtin",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "cd=1~shift=1~bad=1",
+        "Stderr": "\u003cshell\u003e: line 1: cd: /nope/nope: No such file or directory~\u003cshell\u003e: line 1: shift: 5: shift count out of range~\u003cshell\u003e: line 1: builtin: zznotabuiltin: not a shell builtin",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "cd=1~shift=1~bad=1",
+        "Stderr": "\u003cshell\u003e: line 0: cd: /nope/nope: No such file or directory~\u003cshell\u003e: line 0: builtin: zznotabuiltin: not a shell builtin",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "cd=127~shift=127~bad=127",
+        "Stderr": "\u003cshell\u003e: 1: builtin: not found~\u003cshell\u003e: 1: builtin: not found~\u003cshell\u003e: 1: builtin: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "cd=1~shift=1~bad=1",
+        "Stderr": "builtin: /nope/nope: not found~builtin: shift: restricted name~builtin: 5: not found~builtin: zznotabuiltin: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "cd=1~shift=1~bad=1",
+        "Stderr": "\u003cshell\u003e:cd:1: no such file or directory: /nope/nope~\u003cshell\u003e:shift:1: shift count must be \u003c= $#~\u003cshell\u003e:1: no such builtin: zznotabuiltin",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

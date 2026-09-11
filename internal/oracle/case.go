@@ -2916,6 +2916,16 @@ echo "reached-after st=$?"`,
 		Why:     "bash and ksh93 give each assignment its own line; dash and zsh put them on one",
 	},
 	{
+		ID: "xtrace/assignment-value-runs-once", Category: "shell options",
+		Snippet: `exec 3>&2 2>trace; set -x; x=$(printf . >> f); set +x; exec 2>&3; printf "[%s]" "$(wc -c < f | tr -d " ")"`,
+		Why:     "unanimous, and the only shape that can tell the two readings apart: a trace observes the command it is about to run, so the value is expanded once however loudly it is reported. Counted as a side effect rather than compared as a value, because a second run of `$(printf .)` leaves the value right and the file twice as long — which is exactly how this shell passed for a value and appended two bytes (#1915). The trace goes to a file so the row records the count and not six spellings of the same line",
+	},
+	{
+		ID: "xtrace/assignment-traces-the-value-stored", Category: "shell options",
+		Snippet: `set -x; x=1 y=$x`,
+		Why:     "the other half of expanding once: each assignment lands before the next is expanded, so every shell traces `y=1` and none of them traces an empty `y`. It says the trace is built from the values the run actually stored, which is what a reader of a trace is relying on — expanding the whole list up front to print it reported `y=''` and stored 1",
+	},
+	{
 		ID: "xtrace/disabling-set-diverges", Category: "shell options",
 		Snippet: `set -x; set +x; echo done`,
 		Why:     "ksh93 applies the change before printing the command that makes it, so the command that stops tracing leaves no trace of itself",

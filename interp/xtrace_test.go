@@ -6,6 +6,8 @@ package interp_test
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -94,15 +96,77 @@ func TestTraceStyleIsADialectAnswer(t *testing.T) {
 
 // TestTraceAssignmentsSeparately pins the axis by name: Yes gives each
 // assignment of `a=1 b=2` its own line, No traces them as one.
+//
+// It decides *when* the line is written as well as how many it holds, and the
+// second half is only visible when a value takes a command of its own to
+// produce: a line that stands for one assignment can be written as soon as that
+// value is known, and a line that stands for the whole list cannot be written
+// until the last one is.
 func TestTraceAssignmentsSeparately(t *testing.T) {
 	sem := permissive()
 	sem.TraceAssignmentsSeparately = Yes
 	if got := traceOf(t, `set -x; a=1 b=2`, sem, Diagnostics{}); got != "+ a=1\n+ b=2\n" {
 		t.Errorf("Yes: got %q", got)
 	}
+	if got := traceOf(t, `set -x; a=$(echo x) b=$(echo y)`, sem, Diagnostics{}); got != "+ echo x\n+ a=x\n+ echo y\n+ b=y\n" {
+		t.Errorf("Yes: order: got %q", got)
+	}
 	sem.TraceAssignmentsSeparately = No
 	if got := traceOf(t, `set -x; a=1 b=2`, sem, Diagnostics{}); got != "+ a=1 b=2\n" {
 		t.Errorf("No: got %q", got)
+	}
+	if got := traceOf(t, `set -x; a=$(echo x) b=$(echo y)`, sem, Diagnostics{}); got != "+ echo x\n+ echo y\n+ a=x b=y\n" {
+		t.Errorf("No: order: got %q", got)
+	}
+}
+
+// TestTraceReportsTheValueStored: an assignment lands before the next value is
+// expanded, so the trace of `y=$x` reports what `x` was just set to. Both
+// answers to the per-line axis, because the value is not the axis's to move.
+//
+// Expanding the whole list up front to print it reported `y=”` while storing
+// `1`, which is a trace that contradicts the run it is describing.
+func TestTraceReportsTheValueStored(t *testing.T) {
+	for _, tc := range []struct {
+		separately Answer
+		want       string
+	}{
+		{Yes, "+ x=1\n+ y=1\n"},
+		{No, "+ x=1 y=1\n"},
+	} {
+		sem := permissive()
+		sem.TraceAssignmentsSeparately = tc.separately
+		if got := traceOf(t, `set -x; x=1 y=$x`, sem, Diagnostics{}); got != tc.want {
+			t.Errorf("%v: got %q, want %q", tc.separately, got, tc.want)
+		}
+	}
+}
+
+// TestTraceDoesNotRunTheValueTwice: tracing an assignment observes it and does
+// not run it again.
+//
+// The trace prints the value, and printing it by expanding the right-hand side
+// a second time ran the command substitution there twice, with both sets of
+// side effects — a traced `x=$(mktemp)` left a file behind and `n=$(curl …)`
+// made two requests (#1915).
+//
+// It counts a side effect rather than comparing the value, which is the only
+// probe that can tell the two apart: running `$(printf .)` twice leaves the
+// value right and the file twice as long, so a test that read `$x` passed with
+// the bug fully intact.
+func TestTraceDoesNotRunTheValueTwice(t *testing.T) {
+	for _, separately := range []Answer{Yes, No} {
+		path := filepath.Join(t.TempDir(), "ran")
+		sem := permissive()
+		sem.TraceAssignmentsSeparately = separately
+		traceOf(t, `set -x; x=$(printf . >> `+path+`)`, sem, Diagnostics{})
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("%v: %v", separately, err)
+		}
+		if string(got) != "." {
+			t.Errorf("%v: the substitution ran %d times, want 1", separately, len(got))
+		}
 	}
 }
 

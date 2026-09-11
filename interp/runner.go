@@ -348,6 +348,10 @@ type Runner struct {
 	// substRan records that a command substitution reported a status during
 	// the expansion just performed — see simple().
 	substRan bool
+	// expanded carries the right-hand side an assignment's caller has
+	// already expanded, so assign() does not expand the same word a second
+	// time — see Runner.assignValue.
+	expanded *expandedAssign
 	// streams holds one lock per stream the caller supplied, shared with
 	// every subshell — see lockedWriter.
 	streams *streamLocks
@@ -2718,16 +2722,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// So: run them with the previous status still in place, and decide
 		// afterwards from whether a substitution reported anything.
 		r.substRan = false
-		if r.xtrace {
-			values := make([]string, 0, len(c.Assigns))
-			for _, a := range c.Assigns {
-				values = append(values, strings.Join(r.expandWord(a.Value), " "))
-			}
-			r.traceAssignments(c.Assigns, values)
-		}
-		for _, a := range c.Assigns {
-			r.assign(a)
-		}
+		r.assignAll(c.Assigns)
 		if r.ctl == controlExit || r.ctl == controlAbandon {
 			// A readonly reassignment is fatal in three of the four shells
 			// and abandons the statement in the fourth. Zeroing the status
@@ -4299,6 +4294,83 @@ func (r *Runner) clearTypeAttributes(name string) {
 	delete(r.uppered, name)
 }
 
+// assignAll performs a bare assignment list, tracing it as it goes.
+//
+// One loop, and every shell's order comes out of it, because the order follows
+// from a single fact: the value is expanded once, and each assignment is stored
+// before the next one is expanded. That much is unanimous — `set -x; x=1 y=$x`
+// traces `y=1` in all four, so the second value was expanded after the first
+// had landed. Expanding the whole list up front traced `y=”` while storing 1,
+// which is a trace that disagrees with the run it is describing.
+//
+// What the dialects split on is when the line can be written. A shell that
+// gives each assignment its own line writes it the moment that value is known,
+// so a substitution's own trace sits immediately above the line reporting what
+// it produced: bash 5.3 and ksh93 answer `set -x; x=$(echo a) y=$(echo b)`
+// with `echo a`, `x=a`, `echo b`, `y=b`. A shell that writes one line for the
+// whole list cannot write it until the last value is known, so dash answers
+// `echo a`, `echo b`, `x=a y=b`. The same axis decides both, which is why it is
+// asked once here rather than inside the printing.
+//
+// Nothing re-expands. Tracing observes a command; it does not run it again, and
+// doing so ran the command substitution on a right-hand side twice with both
+// sets of side effects (#1915).
+func (r *Runner) assignAll(assigns []*syntax.Assign) {
+	if !r.xtrace {
+		for _, a := range assigns {
+			r.assign(a)
+		}
+		return
+	}
+	separately := r.ask(r.sem().TraceAssignmentsSeparately,
+		"each assignment getting its own trace line")
+	values := make([]string, len(assigns))
+	for i, a := range assigns {
+		values[i] = r.expandAssignValue(a.Value)
+		if separately {
+			r.traceAssignments(assigns[i:i+1], values[i:i+1])
+		}
+		r.withExpandedValue(a, values[i])
+	}
+	if !separately {
+		r.traceAssignments(assigns, values)
+	}
+}
+
+// expandedAssign is one assignment's right-hand side, expanded once by
+// whoever is about to perform it.
+type expandedAssign struct {
+	assign *syntax.Assign
+	value  string
+}
+
+// assignValue is the value an assignment stores, expanded.
+//
+// It hands back the value the caller expanded already when there is one,
+// because expanding the word a second time *runs* it a second time: the trace
+// of a bare assignment prints the value, and printing it by re-expanding ran
+// the command substitution on the right-hand side twice, with both sets of
+// side effects. Measured on `set -x; x=$(echo . >> f)`, which wrote two bytes
+// where the panel writes one (#1915). Tracing observes; it does not run.
+//
+// A word rather than a flag on the Runner would not do: only the caller knows
+// which assignment the value belongs to, and a stale one silently stored the
+// previous assignment's value under this one's name.
+func (r *Runner) assignValue(a *syntax.Assign) string {
+	if r.expanded != nil && r.expanded.assign == a {
+		return r.expanded.value
+	}
+	return r.expandAssignValue(a.Value)
+}
+
+// withExpandedValue performs one assignment from a value already expanded.
+func (r *Runner) withExpandedValue(a *syntax.Assign, value string) {
+	saved := r.expanded
+	r.expanded = &expandedAssign{assign: a, value: value}
+	defer func() { r.expanded = saved }()
+	r.assign(a)
+}
+
 // assign performs one assignment, which is three different things wearing the
 // same syntax: a scalar, a whole array, or one element of one.
 func (r *Runner) assign(a *syntax.Assign) {
@@ -4373,7 +4445,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 		// This is the switch the attribute exists to throw — the same text
 		// on an undeclared name falls through to the arithmetic reading.
 		key := r.assocKey(a.Index)
-		value := r.expandAssignValue(a.Value)
+		value := r.assignValue(a)
 		if a.Append {
 			// `m[k]+=v` joins the element it names, the same operation the
 			// indexed form performs on a subscript — an unset key leaves
@@ -4398,10 +4470,10 @@ func (r *Runner) assign(a *syntax.Assign) {
 		}
 		text := r.subscriptAsWritten(a.Index)
 		if a.Append {
-			r.appendArrayElem(a.Name, idx, text, r.expandAssignValue(a.Value))
+			r.appendArrayElem(a.Name, idx, text, r.assignValue(a))
 			return
 		}
-		r.setArrayElem(a.Name, idx, text, r.expandAssignValue(a.Value))
+		r.setArrayElem(a.Name, idx, text, r.assignValue(a))
 	case a.Index != nil:
 		// The subscript is an expression, and one that will not evaluate ends
 		// the script in every shell measured — the same complaint, worded the
@@ -4422,7 +4494,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 		case outcome == spanResolved && r.spanReplacesElements(a.Name):
 			elems, _ := r.arrayElemsOfTheName(a.Name)
 			r.spliceElementSpan(a.Name, text, elems, from, to,
-				[]string{r.expandAssignValue(a.Value)})
+				[]string{r.assignValue(a)})
 			return
 		case outcome == spanResolved && r.subscriptSplicesCharacters(a.Name):
 			// The name is holding a string, so the pair names a span of its
@@ -4437,7 +4509,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 				return
 			}
 			r.spliceCharacterSpan(a.Name, from, to,
-				r.expandAssignValue(a.Value), false)
+				r.assignValue(a), false)
 			return
 		}
 		idx, err := r.subscriptValue(text)
@@ -4449,12 +4521,12 @@ func (r *Runner) assign(a *syntax.Assign) {
 			// `a[0]+=Q` appends to element 0. Distinct from `a+=(Q)`, which
 			// adds an element after the last: the subscript is what says
 			// which of the two `+=` means.
-			r.appendArrayElem(a.Name, idx, text, r.expandAssignValue(a.Value))
+			r.appendArrayElem(a.Name, idx, text, r.assignValue(a))
 			return
 		}
-		r.setArrayElem(a.Name, idx, text, r.expandAssignValue(a.Value))
+		r.setArrayElem(a.Name, idx, text, r.assignValue(a))
 	default:
-		value := r.expandAssignValue(a.Value)
+		value := r.assignValue(a)
 		if r.assocDeclared(a.Name) && a.Append {
 			// `m+=x` over a declared table joins the element whose key is
 			// `0`. The plain spelling is not here: what a scalar does to a

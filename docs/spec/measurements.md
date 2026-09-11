@@ -8186,6 +8186,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `xtrace/ps4-draws-the-user-escape` | `differs` | `names-the-login-name` | `names-the-login-name` | `names-the-login-name` | `differs` | `differs` |
 | `xtrace/ps4-user-escape-is-not-a-variable` | `differs~[impostor]` | `names-the-login-name~[impostor]` | `names-the-login-name~[impostor]` | `names-the-login-name~[impostor]` | `differs~[impostor]` | `differs~[impostor]` |
 | `xtrace/assignments-per-line-diverges` | **2>** `+ a=1 b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+<shell>:1> a=1 b=2 ` |
+| `xtrace/assignment-value-runs-once` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
+| `xtrace/assignment-traces-the-value-stored` | **2>** `+ x=1 y=1` | **2>** `+ x=1~+ y=1` | **2>** `+ x=1~+ y=1` | **2>** `+ x=1~+ y=1` | **2>** `+ x=1~+ y=1` | **2>** `+<shell>:1> x=1 y=1 ` |
 | `xtrace/disabling-set-diverges` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` | `done` **2>** `+<shell>:1> set +x` |
 | `xtrace/compound-header-diverges` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+<shell>:1> i=1~+<shell>:1> echo 1~+<shell>:1> i=2~+<shell>:1> echo 2` |
 | `xtrace/pipeline-order-diverges` **(unordered)** | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ cat~+ echo a` | `a` **2>** `+<shell>:1> echo a~+<shell>:1> cat` |
@@ -8313,6 +8315,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `xtrace/assignments-per-line-diverges` — bash and ksh93 give each assignment its own line; dash and zsh put them on one
   ```sh
   set -x; a=1 b=2
+  ```
+- `xtrace/assignment-value-runs-once` — unanimous, and the only shape that can tell the two readings apart: a trace observes the command it is about to run, so the value is expanded once however loudly it is reported. Counted as a side effect rather than compared as a value, because a second run of `$(printf .)` leaves the value right and the file twice as long — which is exactly how this shell passed for a value and appended two bytes (#1915). The trace goes to a file so the row records the count and not six spellings of the same line
+  ```sh
+  exec 3>&2 2>trace; set -x; x=$(printf . >> f); set +x; exec 2>&3; printf "[%s]" "$(wc -c < f | tr -d " ")"
+  ```
+- `xtrace/assignment-traces-the-value-stored` — the other half of expanding once: each assignment lands before the next is expanded, so every shell traces `y=1` and none of them traces an empty `y`. It says the trace is built from the values the run actually stored, which is what a reader of a trace is relying on — expanding the whole list up front to print it reported `y=''` and stored 1
+  ```sh
+  set -x; x=1 y=$x
   ```
 - `xtrace/disabling-set-diverges` — ksh93 applies the change before printing the command that makes it, so the command that stops tracing leaves no trace of itself
   ```sh

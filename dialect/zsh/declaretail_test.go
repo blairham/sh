@@ -4,6 +4,7 @@
 package zsh_test
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -85,35 +86,67 @@ func TestTypesetCapitalFIsNotTheBareWord(t *testing.T) {
 // both spellings: reading the `3` of `typeset -F 3 SECONDS=0` as a name is
 // what made a plugin loader complain once per plugin.
 func TestTypesetCapitalFFormatsTheValueAtItsPrecision(t *testing.T) {
-	for _, c := range []struct{ name, src, want string }{
+	for _, c := range []struct {
+		name, src, want string
+		// shape is asserted in place of want where the value is the
+		// *machine's* and only its form is this shell's. See the `SECONDS`
+		// row, which is the only one that has one.
+		shape *regexp.Regexp
+	}{
 		{
 			"the bare letter, at its default of ten places",
-			`typeset -F v=1.5; echo "[$v]"`, "[1.5000000000]\n",
+			`typeset -F v=1.5; echo "[$v]"`, "[1.5000000000]\n", nil,
 		},
 		{
 			"a precision as a word of its own",
-			`typeset -F 3 v=1.5; echo "[$v]"`, "[1.500]\n",
+			`typeset -F 3 v=1.5; echo "[$v]"`, "[1.500]\n", nil,
 		},
 		{
 			"the same precision attached to the letter",
-			`typeset -F3 v=1.5; echo "[$v]"`, "[1.500]\n",
+			`typeset -F3 v=1.5; echo "[$v]"`, "[1.500]\n", nil,
 		},
 		{
+			// The elapsed time is the machine's and the *shape* is the
+			// shell's, so only the shape is asserted: three decimal places,
+			// which is the precision the letter was given, and a status of 0,
+			// which is the `3` having been read as that argument rather than
+			// as a second name. Both are what this row is for.
+			//
+			// It asserted the exact string `0.000` until #1952, which holds
+			// only while less than 0.0005s of wall clock passes between the
+			// assignment and the echo — and `SECONDS` is counted on each read
+			// rather than stored, as the note twelve lines below says. On a
+			// box running eight agents at once that is a coin toss, and a
+			// test that passes on timing luck reads as weather: it trains
+			// everyone to rerun the job rather than look at it.
+			//
+			// The integer part is held to one digit rather than left open, so
+			// the row still says the assignment took effect — ten seconds
+			// between two commands on one line is a broken machine rather
+			// than a slow one, and `SECONDS` unzeroed would be the shell's
+			// whole uptime.
 			"the line a plugin loader opens with",
-			`typeset -F 3 SECONDS=0; echo "st=$? [$SECONDS]"`, "st=0 [0.000]\n",
+			`typeset -F 3 SECONDS=0; echo "st=$? [$SECONDS]"`, "",
+			regexp.MustCompile(`^st=0 \[[0-9]\.[0-9]{3}\]\n$`),
 		},
 		{
 			"a word that is not a number, which is a second name after all",
-			`typeset -F abc v=1; echo "[$v][$abc]"`, "[1.0000000000][0.0000000000]\n",
+			`typeset -F abc v=1; echo "[$v][$abc]"`, "[1.0000000000][0.0000000000]\n", nil,
 		},
 		{
 			"one number and not a list, the second being an operand that ends the script",
 			`typeset -F 3 4 v=1.5 2>&1; echo "st=$?"`,
-			"zsh:typeset:1: not an identifier: 4\n",
+			"zsh:typeset:1: not an identifier: 4\n", nil,
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, _ := runZsh(t, t.TempDir(), c.src)
+			if c.shape != nil {
+				if !c.shape.MatchString(out) {
+					t.Errorf("got %q, want it to match %v", out, c.shape)
+				}
+				return
+			}
 			if out != c.want {
 				t.Errorf("got %q, want %q", out, c.want)
 			}

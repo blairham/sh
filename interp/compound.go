@@ -585,6 +585,14 @@ func isPlainFuncName(s string) bool {
 }
 
 func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
+	if c.RefusedName != "" {
+		// The grammar read a word where a name belonged and left the check
+		// to here, which is the stage two of the panel answer at — see
+		// syntax.Dialect.FunctionNameCheckedWhenTheDefinitionRuns. Nothing
+		// is defined and the word is named as it was written.
+		r.refuseFuncName(c.RefusedName)
+		return nil
+	}
 	if len(c.AlsoNamed) > 0 {
 		// One body under several names — `function clipcopy clippaste { … }`
 		// — which is one definition per name and not one function with two.

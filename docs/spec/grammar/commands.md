@@ -1984,10 +1984,11 @@ dash has no keyword at all and blames the brace (measured:
 `-with-an-empty-name-is-callable`, `-with-a-name-holding-a-space`,
 `-with-a-name-holding-an-operator`, `-with-a-name-holding-a-dollar`,
 `-with-a-name-of-punctuation`). Grammar flag:
-`FunctionKeywordNameIsAnyWord`, zsh alone. There is no definition-time
-name check in this parser, so the four that refuse the name keep
-refusing it while parsing, at their own wording — the flag says only
-whether the word is a name.
+`FunctionKeywordNameIsAnyWord`, zsh alone. The flag says only whether
+the word is a name; the four that refuse it keep refusing it while
+parsing, at their own wording — except for a name holding an
+*expansion*, where two of them are carried to the definition and
+complain there. That is a separate flag and is below.
 
 **The rule is that there is no rule**, which is why this is a flag of
 its own and not a wider `FunctionNamePunctuation`. Measured over the
@@ -2047,10 +2048,10 @@ where it runs and carry on; bash-as-`sh` says the same sentence and is
 fatal at 2; ksh93 stops the script at 1 with `a b: invalid function
 name`; **dash alone refuses to parse it**, `Bad function name` at 2. So
 five of the six read the definition and four of those refuse the name
-where it runs. Grammar flag `FunctionNameIsAnyWord`, zsh only, and the
-same reasoning as the keyword form above: there is no definition-time
-name check here, so the five that decline keep declining while parsing,
-at their own wording.
+where it runs. Grammar flag `FunctionNameIsAnyWord`, on for `zsh` and
+for `ksh` — see the quoting control below for why the second one is
+there. The three bash columns keep declining while parsing, at their own
+wording, which is #1566.
 
 The two spellings had come apart inside this parser, which is what made
 it an issue: the keyword form took the name and `name()` refused a quoted
@@ -2060,8 +2061,11 @@ a function and `a\ b() { … }`, the same name, was a parse error (#1743).
 The quotes are the control here as they are there, and the panel splits
 differently: `'q'() { … }` is a definition in ksh93 as well as zsh, both
 removing the quotes before reading the name, so it is two against four
-where the space splits it one against five (#1561, still open for the
-wording).
+where the space splits it one against five. The flag is on for `ksh` for
+that reason, and the name is read **expanded** there: `a\ b() { :; }` is
+`a b: invalid function name`, naming the two words and not the
+backslash, so the check the definition then meets is
+`PunctuatedFunctionNameIsRefused`, which ksh already answered (#1561).
 
 The one group the flag does not carry is the same one: a name whose
 *bare* text holds `*`, `?` or `[` is matched against the filesystem
@@ -2135,20 +2139,115 @@ ending `function clipcopy clippaste { … }`. Before the flag each file was
 refused whole, at its closing brace, because the second name was read as
 the *body* and the brace group after it had nothing to be part of.
 
-Two neighboring readings are measured and **not** implemented:
+**The parenthesis spelling takes the same name list**, and takes it from
+the *argument* loop rather than from a test on one word — so any word
+list followed by `()` is a definition there. Measured 2026-09-10, all at
+status 0 in zsh 5.9.2 and a syntax error at the `(` in the other five
+(`cmd/function-posix-form-with-several-names`,
+`-with-a-name-list-of-any-words`):
 
-- The **parenthesis spelling takes a name list too**. `a b () { … }`
-  defines both in zsh, and so does `echo hi () { … }`, which makes any
-  word list followed by `()` a definition — a wider change than this
-  flag, at a different site, and it appears in no script on this
-  machine (#1685).
-- A name list with **no body** is an *autoload declaration* there.
-  `function af1` puts a stub in the table and calling it reads the file
-  off `fpath`, at status 0. It is refused here as a definition whose body
-  never began (#1686), which is also why
-  `function a b if true; then …` is blamed on the `;` here and on the
-  `then` in zsh: `if` and `true` are two more names either way, and only
-  zsh lets the `;` end the declaration.
+    a b () { echo "[$0]"; }             defines both
+    clipcopy clippaste() { … }          the same, written without a blank
+    echo hi () { … }                    defines `echo` and `hi`
+
+The last row is what makes it the argument loop's reading: `echo` is a
+command name everywhere, and the parentheses at the end of the line are
+all that makes it a name. Two shapes bound it and both are refusals
+there as here — `x=1 a b () { … }`, where an assignment ends the reading,
+and `a b ()`, the body not being optional in this spelling. It is read
+*after* the declaration readings, so `typeset -aU e1=()` is still an
+array: measured, `a e1=() { echo X; }` defines `a` and `e1=` where the
+same word after `typeset -a` is the array and a `()` after it is a parse
+error (#1685).
+
+One row is measured and **not** read: a redirection written between the
+names and the parentheses is still a definition there, `a b >out () { … }`
+sending both calls to the file. The parentheses then follow the
+redirection's target rather than a name, and the redirection sits inside
+the header text a formatter copies from the source, so the body would
+write it a second time (#1838).
+
+### A name list with no body
+
+    function a b
+
+**A `function` keyword's name list may end without a body**, and each
+name is then defined with an **empty** one. Measured 2026-09-10 on zsh
+5.9.2 (`cmd/function-keyword-with-no-body-at-all`): `eval "function a b"`
+leaves `typeset +f` listing `a` and `b`, `functions a` printing
+`a () { }`, and a call to either printing nothing at status 0. The other
+five call the line a syntax error, and dash has no keyword at all.
+
+It is **not** an autoload stub, which #1686 recorded and the same run
+disproves: `autoload af1` prints `# undefined` and `builtin autoload -X`
+under `functions af1` and a call reads the file off `fpath`, where a
+bodyless declaration prints an empty body and a call prints nothing.
+
+**A separator may stand between the names and the body**, and that is
+why the two are one flag rather than two. `function a; echo B` binds
+`echo B` as the body, so it never runs where it stands — read the other
+way, the same line would define an empty `a` and print `B` immediately,
+at status 0 either way. The body is absent exactly when no command
+follows: at the end of the input, before a `}`, a `fi` or a `done`,
+before `&&` and before a `|`.
+
+Grammar flag: `FunctionKeywordBodyIsOptional`, zsh alone. It is also why
+`function a b if true; then …` is blamed on the `then` there: `if` and
+`true` are read as two more names and the `;` ends a declaration with no
+body.
+
+An absent body is an **empty brace group** in the tree rather than a nil
+one. A nil body is what a failed parse leaves behind, so saying "no body
+on purpose" that way would say it in the one spelling everything
+downstream already reads as a refusal — and an empty body is what the
+shell itself reports. It prints back as `{ }`, because printed bare the
+statement after it would be swallowed as the body the source did not
+have.
+
+One row is measured and **not** read: with a body that is not a brace
+group, that shell takes the whole and-or list as the body.
+`function a; echo X && echo Y` prints `X` then `Y` from a call, where
+`function a { echo X; } && echo Y` prints `Y` then `X` (#1832).
+
+### A name the definition refuses when it runs
+
+    w=foo; function _p_${w} { echo HI; }
+
+**A `function` keyword whose name is not a name parses in two of the
+six**, the complaint coming when the definition is reached. The same
+stage question `ForNameCheckedWhenTheLoopRuns` asks of a loop variable,
+and the same two shells answer it that way. Measured 2026-09-10 through
+`-c`, over `w=foo; function _p_${w} { echo HI; }; echo st=$?; echo
+after` (`cmd/function-keyword-with-an-expansion-in-the-name`):
+
+| shell | answer |
+| --- | --- |
+| bash 5.3 | `` `_p_${w}': not a valid identifier ``, then `st=1` and `after`, exit 0 |
+| bash 3.2 | the same two lines |
+| bash-as-`sh` | the same sentence and nothing after: fatal at 2 |
+| ksh93 | `_p_${w}: invalid function name`, fatal at 1 |
+| zsh 5.9.2 | defines `_p_foo` — `FunctionNameExpands` |
+| dash | no keyword at all, and the brace group's `}` is where it stops |
+
+Both of the four **name the offending text, and name it as written** —
+`_p_${w}`, and `_p_$@` for a word that would produce several fields.
+Not what the word comes to, and not its literal spelling, which is why
+`FuncDecl.RefusedName` keeps the source text rather than a name or a
+word.
+
+Grammar flag: `FunctionNameCheckedWhenTheDefinitionRuns`, on for `bash`
+and `ksh`. What happens when the definition is reached is
+`interp.Semantics.FunctionNameWhenTheDefinitionRuns`, three answers
+among those two with POSIX mode as the third — bash's own name fails the
+definition and carries on, `sh` and `set -o posix` stop at the
+syntax-error status, ksh93 stops at 1. The wording is
+`Diagnostics.FunctionNameInvalid`, the same field the *expanded*-name
+refusal uses, because ksh93 says one sentence for both (#1296).
+
+Only the keyword form is carried this far. The `name()` spelling is its
+own question with its own panel: `_p_${w}() { … }` is
+``syntax error … `}' unexpected`` in ksh93 and the run-time complaint in
+bash, which is a different split again.
 
 ### When the definition is committed to
 

@@ -1531,8 +1531,52 @@ type Dialect struct {
 	// either way and took the token's literal text, which for `_p_${w}` is
 	// `_p_w` — a different function, defined at status 0, with the one the
 	// script asked for missing. Off, a name holding an expansion is refused
-	// rather than flattened.
+	// rather than flattened — while parsing, or where the definition runs;
+	// see [Dialect.FunctionNameCheckedWhenTheDefinitionRuns], which is the
+	// stage those two shells answer at.
 	FunctionNameExpands bool
+
+	// FunctionNameCheckedWhenTheDefinitionRuns makes a `function` keyword
+	// whose name is not a name **parse**, with the word carried on the
+	// declaration as source text and the complaint raised when the definition
+	// is reached.
+	//
+	// The same stage question [Dialect.ForNameCheckedWhenTheLoopRuns] asks of
+	// a loop variable, and the same two shells answer it that way. Measured
+	// 2026-09-10 through `-c`, over `w=foo; function _p_${w} { echo HI; };
+	// echo st=$?; echo after`:
+	//
+	//	bash 5.3.15  `` `_p_${w}': not a valid identifier ``, then
+	//	             `st=1` and `after` — the script carries on
+	//	bash 3.2.57  the same two lines
+	//	bash-as-sh   the same sentence and nothing after: fatal at 2
+	//	ksh93u+      `_p_${w}: invalid function name`, fatal at 1
+	//	zsh 5.9.2    defines `_p_foo` — FunctionNameExpands, above
+	//	dash         no keyword at all, and the brace group's `}` is
+	//	             where it stops
+	//
+	// **Both of the four name the offending text, and they name it as it was
+	// written.** `_p_${w}` and `_p_$@`, not what the word would come to and
+	// not its literal spelling — which is why the word is kept on
+	// [FuncDecl.RefusedName] as source text rather than as a name or a
+	// [Word]. A refusal that named neither left a script with several such
+	// definitions no way to tell which one was disliked, which is half of
+	// what #1296 is about.
+	//
+	// The other half is the stage, and it matters more: ours refused this
+	// while *parsing*, so the script stopped where bash reports and carries
+	// on. dash is a syntax error there, so the split is real rather than a
+	// simplification — and it is the reason this is a grammar flag and the
+	// three answers behind it are not. What happens when the definition is
+	// reached is interp.Semantics.FunctionNameWhenTheDefinitionRuns.
+	//
+	// Only the *keyword* form is carried this far. The `name()` spelling is
+	// its own question with its own panel — see
+	// [Dialect.FunctionNameIsAnyWord] — and the two shells here read a
+	// quoted word there where ksh93 refuses an expansion outright:
+	// `_p_${w}() { … }` is ``syntax error … `}' unexpected`` in ksh93 and
+	// the run-time complaint in bash, which is a different split again.
+	FunctionNameCheckedWhenTheDefinitionRuns bool
 
 	// PatternAlternation enables a bare `(a|b)` inside a pattern word, which
 	// zsh has and the others do not: `a(b|c)` matches `ab` there. It is why

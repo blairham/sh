@@ -2257,11 +2257,22 @@ func (p *Parser) parseFuncKeyword() Command {
 		return fn
 	}
 	first, ok := p.funcKeywordName()
-	if !ok {
+	switch {
+	case ok:
+		fn.Name, fn.NameWord = first.Name, first.Word
+	case p.dialect.FunctionNameCheckedWhenTheDefinitionRuns:
+		// The word is not a name, and this dialect says so where the
+		// definition *runs* rather than here — so the declaration is read
+		// whole and the word is kept as it was written, which is what the
+		// complaint quotes. The name list below is not entered: no dialect
+		// has both this and [Dialect.FunctionMultipleNames], and a list of
+		// names one of which is refused is a shape no shell in the panel has.
+		fn.RefusedName = p.textBetween(p.tok.Pos, p.tok.End)
+		p.next()
+	default:
 		p.fail("expected a name after `function`")
 		return fn
 	}
-	fn.Name, fn.NameWord = first.Name, first.Word
 	// Every word after the first is another name for the same body, where the
 	// dialect has the list. Greedily, the way a loop's name list is taken:
 	// the words stop at the body's `{`, at the `()` of the hybrid form, at a

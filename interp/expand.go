@@ -1661,6 +1661,30 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	// function expands the inner: asking twice would run a command
 	// substitution in there twice.
 	if e.Length && e.Inner != nil {
+		if name, isRef := r.nestedLengthReference(e); isRef {
+			// `${#${(P)h}}` is `${#arr}` — the inner is a *name* and not a
+			// value, so the length is the one that name answers and not the
+			// one its fields join to. Measured on zsh 5.9.2 with `h=arr`:
+			//
+			//	arr=(a b c);      ${#${(P)h}}   3   the element count
+			//	ARR=(x y);        ${#${(UP)h}}  2   the letters rename, so
+			//	                                   this measures `ARR`
+			//	typeset -A tab=(k1 v1 k2 v2)
+			//	nt=tab;           ${#${(P)nt}}  2   an association counts
+			//	                                   its pairs
+			//	typeset -A one=(a arr); ${#${(P)one[a]}}  3
+			//
+			// Against 3, 3, 5 and 5 from measuring the joined text, which is
+			// a plausible number at status 0 — and the wrong one in the
+			// direction a script minds, since `(( ${#${(P)h}} ))` is how a
+			// function asks whether the array it was handed the name of has
+			// anything in it (#1638).
+			//
+			// The same split the subscript path already makes: a `(P)` inner
+			// is a parameter reference and every other inner is a value. See
+			// interp/nestedsub.go.
+			return r.expandParam(&syntax.ParamExpr{Name: name, Length: true, Src: e.Src})
+		}
 		// Measured rather than used, which the inner has to know: a
 		// substitution in the name position is not field-split under a
 		// length. See nestedInnerSplit, and note that the flag has to reach

@@ -238,8 +238,15 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		// writes *this* name and not the one the expansion spelled. See
 		// interp/indirectassign.go — reading the flag on the way out only
 		// left the name holding what the parameter should have.
-		indirect = &indirectTarget{text: strings.Join(words, " "), set: set}
-		words, set, isList = r.indirectBase(indirect.text, e.Flags)
+		text, tset := r.indirectSourceText(e, words, set)
+		indirect = &indirectTarget{text: text, set: tset}
+		// The *name* is read off the front of that text and the rest is
+		// dropped, where the assignment further down is handed the text
+		// whole: measured, `x='tgt junk'; ${(P)x}` reads `$tgt` and
+		// `${(P)x::=new}` is `not an identifier: tgt junk`. So the two are
+		// not the same string, and indirectTarget keeps the one the write
+		// wants. See indirectName.
+		words, set, isList = r.indirectBase(indirectName(text), e.Flags)
 	}
 
 	// The is-it-set question, asked of whatever the base and `(P)` came to:
@@ -562,6 +569,17 @@ func isAssignOp(op syntax.ParamOp) bool {
 func (r *Runner) flagKeepsFields(e *syntax.ParamExpr) bool {
 	if strings.ContainsRune(e.Flags, '@') || e.Name == "@" {
 		return true
+	}
+	if strings.ContainsRune(e.Flags, 'P') {
+		// A `(P)` moves the expansion one parameter along, and the subscript
+		// was written on the one it moved *from*: the `@` belonged to the
+		// base, and the words being substituted come from somewhere else
+		// entirely. Measured on zsh 5.9.2 with `typeset -A one=(a arr)` and
+		// `arr=(x y z)`, `set -- "${(P)one[@]}"` leaves `$#` at 1 — one
+		// field holding `x y z` — against 3 for the reading that carries the
+		// base's `@` across. The letter is a different matter and still
+		// keeps them: `"${(@P)one[@]}"` is three fields (#1638).
+		return false
 	}
 	return e.Index != nil && r.atArrayIndex(e)
 }

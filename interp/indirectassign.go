@@ -3,6 +3,12 @@
 
 package interp
 
+import (
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
+
 // The `(P)` flag beside an operator that assigns.
 //
 // `(P)` says the base is the *name* of the parameter the expansion is about,
@@ -151,4 +157,117 @@ func (r *Runner) assignIndirect(written string, t *indirectTarget, v string) boo
 	}
 	r.setVar(name, v)
 	return true
+}
+
+// indirectSpecialNames are the one-character parameter names a `(P)` can read
+// out of the front of its base. A name of letters, of digits, or one of
+// these, and nothing else: measured on zsh 5.9.2 with `set -- aa bb cc`,
+// `x=(p q)` and `_u=UU`, the text on the left resolving to the value on the
+// right.
+//
+//	'x junk'   p q       the name is read off the front and the rest dropped
+//	'x-y'      p q       any character a name cannot hold ends it
+//	'x=y'      p q
+//	'x.y'      p q
+//	'_u-z'     UU        `_` starts one
+//	'2x'       bb        a digit run is a positional parameter
+//	'12x'      ``        and `$12` is nothing with three of them
+//	'#x'       3         a one-character special name is that one character
+//	'@x'       aa bb cc
+//	' x'       ``        so a leading space is *no* name at all
+//	'x[1] junk' p        a subscript is part of the name
+const indirectSpecialNames = "@*#?-$!"
+
+// indirectName is the parameter name a `(P)` reads out of the text it
+// resolved its base to.
+//
+// **The text is read from the front and the rest is discarded**, which is the
+// whole of this function and is measured rather than assumed — see the table
+// above. Looking the *whole* text up instead found nothing whenever the base
+// held more than one word, so `${(P)two}` over a two-element array and
+// `${(P)n2}` over a scalar holding `x y` both substituted empty at status 0
+// (#1639, #1543). Empty is also the answer where the front is not a name at
+// all, and that is a measurement too: a leading space is not skipped.
+//
+// A base holding several words is *joined* before it gets here, which is what
+// makes the array and the scalar one rule rather than two — the first element
+// is what the front of the join comes from either way.
+func indirectName(text string) string {
+	if text == "" {
+		return ""
+	}
+	switch c := text[0]; {
+	case c == '_' || isLetter(c):
+		i := 1
+		for i < len(text) && (text[i] == '_' || isLetter(text[i]) || isDigit(text[i])) {
+			i++
+		}
+		if i < len(text) && text[i] == '[' {
+			n := subscriptSpan(text[i:])
+			if n == 0 {
+				return ""
+			}
+			return text[:i+n]
+		}
+		return text[:i]
+	case isDigit(c):
+		i := 1
+		for i < len(text) && isDigit(text[i]) {
+			i++
+		}
+		return text[:i]
+	case strings.IndexByte(indirectSpecialNames, c) >= 0:
+		return text[:1]
+	}
+	return ""
+}
+
+// subscriptSpan is the length of the bracketed subscript at the front of s,
+// counting nested brackets so that `a[b[1]]` is not cut at the first close.
+//
+// Zero for an unterminated bracket, which leaves the name empty rather than
+// dropping the bracket and answering with the whole parameter: zsh reports
+// `invalid subscript` for `x=(p q); v='x['; ${(P)v}`, and the elements would
+// be a plausible answer at status 0 where the shell refuses the line.
+func subscriptSpan(s string) int {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '[':
+			depth++
+		case ']':
+			if depth--; depth == 0 {
+				return i + 1
+			}
+		}
+	}
+	return 0
+}
+
+// indirectSourceText is the text a `(P)` resolves its base to: the base's
+// words joined, with one correction that a subscript makes.
+//
+// **A subscript that names a list is not part of the resolution.** Measured
+// on zsh 5.9.2 with `x=(p q); y=(r s); z=(t u); n=(x y z)`:
+//
+//	${(P)n}        p q   with no subscript the first element is the name
+//	${(P)n[@]}     p q   and `[@]` changes nothing
+//	${(P)n[*]}     p q
+//	${(P)n[1,2]}   p q   nor does a range — not even one that starts past
+//	${(P)n[2,3]}   p q   the first element, or names a single one
+//	${(P)n[3,3]}   p q
+//	${(P)n[5,6]}   p q   or names none at all
+//	${(P)n[2]}     r s   while an index naming one element *is* the name
+//	${(P)n[-1]}    t u
+//	${(P)n[4]}     ``    and one naming nothing is no name
+//
+// So the two readings split on the subscript's *shape* and not on what it
+// selected, which is subscriptYieldsAList's question and is asked nowhere
+// else. Taking the selected elements instead answered `r s` for the two rows
+// that start at the second element — a plausible value at status 0.
+func (r *Runner) indirectSourceText(e *syntax.ParamExpr, words []string, set bool) (string, bool) {
+	if e.Inner == nil && e.Index != nil && r.subscriptYieldsAList(e) {
+		words, set, _ = r.namedBase(e.Name, baseFlags(e.Flags))
+	}
+	return strings.Join(words, " "), set
 }

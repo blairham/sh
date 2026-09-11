@@ -11354,6 +11354,26 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the same under zsh's name for the record, where the body genuinely writes nothing — so the single element can only have come from the clause",
 	},
 	{
+		ID: "pipestatus/a-compound-body-that-never-ran-still-counts-in-zsh", Category: "pipeline status",
+		Snippet: `false | true; if [[ a = b ]]; then :; fi; echo "[${pipestatus[@]}]"`,
+		Why:     "whether a compound replaces the record is decided by what its body *holds* rather than by what ran: the condition is false, so the `:` never runs, and the single element is the clause's own status all the same. Half of a pair — the row below writes a test in the same place and gets the pipeline's two elements back, so the difference between them is the text inside `then` and nothing else (#1931)",
+	},
+	{
+		ID: "pipestatus/a-compound-body-holding-only-a-test-in-zsh", Category: "pipeline status",
+		Snippet: `false | true; if [[ a = b ]]; then [[ b = b ]]; fi; echo "[${pipestatus[@]}]"`,
+		Why:     "the other half: a body holding only `[[ … ]]` leaves the record alone in zsh, so the pipeline's two elements are still there after the clause. Neither this body nor the one above runs, which is what makes the pair a statement about the parse",
+	},
+	{
+		ID: "pipestatus/a-group-holding-only-a-test-in-zsh", Category: "pipeline status",
+		Snippet: `false | true; { [[ a = a ]]; }; echo "[${pipestatus[@]}]"`,
+		Why:     "the same rule reached by a body that does run, and by the plainest compound there is: a brace group holding nothing that makes a job is transparent to the record in zsh, where every compound replaced it here",
+	},
+	{
+		ID: "pipestatus/a-subshell-holding-only-a-test-in-zsh", Category: "pipeline status",
+		Snippet: `false | true; ( [[ a = a ]] ); echo "[${pipestatus[@]}]"`,
+		Why:     "the control for the three rows above: a subshell is a job however it ends, so it replaces the record with the same body that leaves it alone inside braces. Without this row the rule would read as `a compound never counts` rather than as a question asked of the body",
+	},
+	{
 		ID: "pipestatus/negation-does-not-reach-it", Category: "pipeline status",
 		Snippet: `! false | true; echo "st=$? [${PIPESTATUS[@]}]"`,
 		Why:     "`!` inverts what the pipeline reports and not what its elements did, so the record is taken before the inversion",

@@ -142,7 +142,120 @@ func (r *Runner) countsForPipelineStatus(c syntax.Command) bool {
 		}
 		return r.ask(r.sem().TestAndArithmeticUpdatePipelineStatus,
 			"`(( … ))` counting as a command for the pipeline status")
+	case *syntax.Group:
+		return r.compoundCounts(x.Redirs, x.List)
+	case *syntax.IfClause:
+		lists := [][]*syntax.Stmt{x.Cond, x.Then, x.Else}
+		for _, e := range x.Elifs {
+			lists = append(lists, e.Cond, e.Then)
+		}
+		return r.compoundCounts(x.Redirs, lists...)
+	case *syntax.LoopClause:
+		return r.compoundCounts(x.Redirs, x.Cond, x.Body)
+	case *syntax.ForClause:
+		return r.compoundCounts(x.Redirs, x.Body)
+	case *syntax.ForArithClause:
+		return r.compoundCounts(x.Redirs, x.Body)
+	case *syntax.RepeatClause:
+		return r.compoundCounts(x.Redirs, x.Body)
+	case *syntax.CaseClause:
+		lists := make([][]*syntax.Stmt, 0, len(x.Items))
+		for _, it := range x.Items {
+			lists = append(lists, it.Body)
+		}
+		return r.compoundCounts(x.Redirs, lists...)
+	case *syntax.TryClause:
+		return r.compoundCounts(x.Redirs, x.Try, x.Always)
+	case *syntax.AnonFunc:
+		// The body is one command rather than a list, and it is a *call*:
+		// `() { :; }` runs where it stands, so its body is body here where a
+		// named definition's is not.
+		if len(x.Redirs) > 0 || !r.bodyDecides() {
+			return true
+		}
+		return x.Body != nil && r.countsForPipelineStatus(x.Body)
+	case *syntax.FuncDecl:
+		// A definition runs nothing, and **both** shells that keep a record
+		// leave it alone for one: measured 2026-09-11, `false | true;
+		// f() { :; }` is `1 0` in bash 5.3.15 and in zsh 5.9.2 alike. So this
+		// is not the axis below — there is nothing for a dialect to answer —
+		// and the body is not read either, which is the discriminating half:
+		// `{ f() { :; }; }` leaves the record where `{ :; }` replaces it.
+		return false
 	}
+	return true
+}
+
+// compoundCounts answers countsForPipelineStatus for a compound command,
+// whose body is the answer where the dialect reads it.
+//
+// The redirection check comes first and is the same rule the bare assignment
+// and the two tests follow: a redirection makes the job, so the record is
+// written whatever the body holds.
+func (r *Runner) compoundCounts(redirs []*syntax.Redirect, lists ...[]*syntax.Stmt) bool {
+	if len(redirs) > 0 || !r.bodyDecides() {
+		return true
+	}
+	for _, l := range lists {
+		if r.listCountsForPipelineStatus(l) {
+			return true
+		}
+	}
+	return false
+}
+
+// bodyDecides asks whether this dialect reads a compound's body to decide
+// whether the compound writes the record.
+//
+// One place rather than at each call site, so a construct added to the switch
+// above cannot ask the question a different way — and so the question is
+// asked *after* the redirection check everywhere, which is what keeps it from
+// being asked in a shell whose answer could not be observed.
+func (r *Runner) bodyDecides() bool {
+	return r.ask(r.sem().CompoundBodyDecidesThePipelineStatusRecord,
+		"a compound's body deciding whether it writes the pipeline status")
+}
+
+// listCountsForPipelineStatus reports whether anything in a list would write
+// the record, by the same rules the list's statements would be judged by if
+// each stood alone.
+//
+// Static: the list is read rather than run, which is the whole of #1931. An
+// `if` whose condition is false still counts for what stands inside its
+// `then`.
+func (r *Runner) listCountsForPipelineStatus(list []*syntax.Stmt) bool {
+	for _, st := range list {
+		if st.Background {
+			// Backgrounding makes a job of whatever it is, the same way a
+			// redirection does.
+			return true
+		}
+		if r.exprCountsForPipelineStatus(st.Expr) {
+			return true
+		}
+	}
+	return false
+}
+
+// exprCountsForPipelineStatus is listCountsForPipelineStatus for one
+// and-or expression.
+//
+// A pipeline of more than one command, and one with a `!` in front of it,
+// count whatever they hold: both are jobs in the shell this models, which is
+// the same reading recordSingleStatus gives a negated pipeline standing alone.
+func (r *Runner) exprCountsForPipelineStatus(e syntax.Expr) bool {
+	switch x := e.(type) {
+	case *syntax.BinaryExpr:
+		return r.exprCountsForPipelineStatus(x.X) || r.exprCountsForPipelineStatus(x.Y)
+	case *syntax.Pipeline:
+		if x.Negated || len(x.Cmds) != 1 {
+			return true
+		}
+		return r.countsForPipelineStatus(x.Cmds[0])
+	}
+	// A timed pipeline reports, and an expression this does not know is
+	// counted rather than assumed away: the safe direction is the one that
+	// writes the record, which is what every dialect but one does anyway.
 	return true
 }
 

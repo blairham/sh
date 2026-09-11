@@ -2722,6 +2722,45 @@ Silent when it is wrong: a plausible one-element record, no diagnostic, and
 a script branching on `${PIPESTATUS[0]}` after a negated test reads the
 opposite of what the shell it was written for reports (#1513).
 
+**And whether a compound writes it at all is decided by its body's *parse*
+in one shell.** Measured 2026-09-11, zsh 5.9.2, each line after a
+`false | true`:
+
+| | zsh 5.9.2 |
+| --- | --- |
+| `if [[ a = b ]]; then :; fi` | `0` |
+| `if [[ a = b ]]; then [[ b = b ]]; fi` | `1 0` |
+| `{ :; }` | `0` |
+| `{ [[ a = a ]]; }` | `1 0` |
+| `while false; do [[ a = a ]]; done` | `0` |
+| `while [[ a = b ]]; do [[ a = a ]]; done` | `1 0` |
+| `( [[ a = a ]] )` | `0` |
+| `{ f() { :; }; }` | `1 0` |
+
+The first pair is the whole of it. Neither body runs — the condition is
+false both times — and the only difference is the text inside `then`, so an
+**unexecuted** `:` is enough to make the compound count as a command. The
+rule composes: a compound counts where its body holds anything that would
+count standing alone, by the two axes below, and the `while` pair says a
+condition is body as well. Four shapes answer for themselves whatever they
+hold, because each is a job: a subshell, a coprocess, anything backgrounded,
+and a timed pipeline. A function *definition* is the opposite — it runs
+nothing, and both shells that keep a record leave it alone for one, so that
+is a rule rather than an axis. A redirection on the compound writes the
+record whatever the body says, exactly as it does for the two constructs
+above.
+
+`CompoundBodyDecidesThePipelineStatusRecord`, on for `zsh` alone. bash
+answers no, and its own rule is a third thing rather than the opposite of
+this one: it keeps whatever the last pipeline *inside* the compound left, so
+`if false; then :; fi` holds the condition's 1 there and
+`case a in b) :;; esac` leaves the record alone because nothing ran (#2016).
+
+Silent when it is wrong the same way the axis above is: a plausible
+one-element record where the pipeline's elements should still be there,
+which is the shape `pipestatus/reading-it-twice-in-one-chain` exists to
+protect (#1931).
+
 Two more things about it are axes:
 
 - **a bare assignment counts as a command.** bash says yes, so

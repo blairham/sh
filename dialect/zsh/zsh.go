@@ -597,6 +597,11 @@ func Semantics() interp.Semantics {
 	// shell writes what the construct itself reported: `false | true;
 	// ! [[ a = a ]]` leaves 0 here and 1 there. Measured 2026-09-11.
 	s.NegatedTestRecordsThePostNegationStatus = interp.No
+	// And whether a *compound* writes the record at all is decided by what
+	// its body holds rather than by what ran: `if [[ a = b ]]; then :; fi`
+	// replaces the record and `if [[ a = b ]]; then [[ b = b ]]; fi` leaves
+	// it, where neither body runs. Measured 2026-09-11 (#1931).
+	s.CompoundBodyDecidesThePipelineStatusRecord = interp.Yes
 	s.UnsetEndsTheProducedPipelineStatus = interp.Yes
 	s.SelectLayout = interp.SelectMenuColumns
 	s.SelectPromptNeedsTerminal = interp.No

@@ -27,12 +27,17 @@ import (
 // traceOf builds a runner with no table at all.
 func tracedWith(t *testing.T, src string, diag Diagnostics, st PromptStyle, user string) string {
 	t.Helper()
+	return tracedSem(t, src, permissive(), diag, st, user)
+}
+
+// tracedSem is tracedWith for a test that has an opinion about the vector.
+func tracedSem(t *testing.T, src string, sem Semantics, diag Diagnostics, st PromptStyle, user string) string {
+	t.Helper()
 	d := syntax.Core()
 	f, err := syntax.Parse(src, d)
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}
-	sem := permissive()
 	var out, errOut bytes.Buffer
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errOut,
@@ -53,12 +58,6 @@ func TestTheTracePrefixIsTheParameter(t *testing.T) {
 		{"a value set in the shell", `PS4="XX "; set -x; :`, "XX :\n"},
 		{"an empty value draws nothing before the command", `PS4=; set -x; :`, ":\n"},
 		{"no value falls back to this dialect's own prefix", `set -x; :`, "+ :\n"},
-		{
-			// Each time it is drawn rather than once when it is assigned,
-			// which is the whole reason a prompt parameter is expanded.
-			"the value is expanded at every trace",
-			"PS4='+$n '; set -x; n=1; n=2", "+ n=1\n+1 n=2\n",
-		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			got := tracedWith(t, c.src, Diagnostics{}, PromptStyle{Expand: PromptExpandsAlways}, "")
@@ -71,6 +70,52 @@ func TestTheTracePrefixIsTheParameter(t *testing.T) {
 
 // The value goes through the *prompt* language, which is what makes the trace
 // prefix the only route to a prompt escape that needs no terminal.
+// Each time it is drawn rather than once when it is assigned, which is the
+// whole reason a prompt parameter is expanded — and *when* it is drawn is the
+// axis that decides how many lines an assignment list gets.
+//
+// A shell writing one line per assignment writes it as soon as that value is
+// known, which is before the assignment lands, so a live `$n` in the prefix
+// still reads the old value. A shell writing one line for the whole list
+// cannot write it until the last value is known, by which time every
+// assignment in it has landed. Both fall out of the order #1936 established,
+// and this pins the pair so neither can be moved without the other being
+// looked at.
+//
+// Measured 2026-09-11 with `PS4='+$n '; set -x; n=1; n=2`:
+//
+//	bash 5.3.15   + n=1   then  +1 n=2      one line per assignment
+//	dash          +1 n=1  then  +2 n=2      one line for the list
+//	zsh 5.9.2     +$n n=1 then  +$n n=2     no expansion without promptsubst
+//	ksh93u+       +1 n=1  then  +2 n=2      one line per assignment, and yet
+//	                                        the prefix is drawn after it
+//
+// ksh93 is the row this shell does not reproduce: it writes a line per
+// assignment *and* draws the prefix from the state the assignment left, which
+// is a third combination the two questions cannot produce while they are one.
+// Recorded rather than modeled — a dialect knob for one column — and it is
+// visible only through a prefix that reads a name the line assigns.
+func TestWhenTheTracePrefixIsDrawnFollowsTheLineCount(t *testing.T) {
+	for _, c := range []struct {
+		name       string
+		separately Answer
+		want       string
+	}{
+		{"one line per assignment, drawn before it lands", Yes, "+ n=1\n+1 n=2\n"},
+		{"one line for the list, drawn once they have", No, "+1 n=1\n+2 n=2\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := permissive()
+			sem.TraceAssignmentsSeparately = c.separately
+			got := tracedSem(t, "PS4='+$n '; set -x; n=1; n=2", sem, Diagnostics{},
+				PromptStyle{Expand: PromptExpandsAlways}, "")
+			if got != c.want {
+				t.Errorf("traced %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
 func TestTheTracePrefixReadsTheDialectsPromptLanguage(t *testing.T) {
 	style := PromptStyle{
 		Escape:  '%',

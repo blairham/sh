@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"strings"
+	"time"
 )
 
 // Glob qualifiers: the parenthesized list a pattern may carry at its end,
@@ -153,8 +154,12 @@ type globTest struct {
 	// number is not obliged to fit a uid — one that does not fit matches
 	// nothing, which is what a uid no file carries would do anyway.
 	id uint64
-	// count is `l`'s comparison: the number written and which way the
-	// file's own number has to stand against it.
+	// unit is how long one of `m`'s units is — the letter after the
+	// qualifier, defaulting to a day. Zero for every test that is not about
+	// a time, which is what keeps fileAge from being asked about one.
+	unit time.Duration
+	// count is `l`'s comparison, and `m`'s: the number written and which way
+	// the file's own number has to stand against it.
 	count globCount
 }
 
@@ -221,6 +226,18 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 			}
 			i += n
 			section = append(section, globTest{kind: 'l', negated: negate, follow: follow, count: count})
+		case 'm':
+			// The modification time, as an age in whole units — see
+			// parseGlobAge for the unit letter and fileAge for why the
+			// comparison is over a truncated number.
+			count, unit, n, diag := parseGlobAge(list[i:])
+			if diag != "" {
+				return q, diag, false
+			}
+			i += n
+			section = append(section, globTest{
+				kind: 'm', negated: negate, follow: follow, count: count, unit: unit,
+			})
 		case 'u', 'g':
 			id, n, diag := parseOwnerArgument(c, list[i:])
 			if diag != "" {
@@ -271,7 +288,7 @@ func sectionKeeps(section []globTest, f *globFile) bool {
 		if info == nil {
 			return false
 		}
-		if globTestMatches(t, info) == t.negated {
+		if globTestMatches(t, info, f.now()) == t.negated {
 			return false
 		}
 	}
@@ -291,7 +308,7 @@ func sectionKeeps(section []globTest, f *globFile) bool {
 // may execute", which is a property of the file, and it stays true of a file
 // this shell could not execute. zsh has separate letters for the effective
 // user's own access, and they are refused by name; see patterns.md.
-func globTestMatches(t globTest, info fs.FileInfo) bool {
+func globTestMatches(t globTest, info fs.FileInfo, now time.Time) bool {
 	mode := info.Mode()
 	switch t.kind {
 	case '.':
@@ -321,6 +338,8 @@ func globTestMatches(t globTest, info fs.FileInfo) bool {
 	case 'l':
 		links, ok := fileLinks(info)
 		return ok && t.count.holds(links)
+	case 'm':
+		return t.count.holds(fileAge(info.ModTime(), now, t.unit))
 	}
 	if bit, ok := globPermissionBits[t.kind]; ok {
 		return mode.Perm()&bit != 0
@@ -454,6 +473,20 @@ func (r *Runner) keepQualified(paths []string, q globQualifiers) []string {
 		}
 	}
 	return kept
+}
+
+// now is the clock this file's tests are asked against, through the Runner so
+// that a test can pin it — see Runner.Clock, which exists for exactly this.
+//
+// Taken per file rather than once for the walk, which costs a clock read per
+// candidate and is the answer that cannot drift: a walk over a large tree
+// takes real time, and a file written *during* it is younger than the walk's
+// start, not older.
+func (f *globFile) now() time.Time {
+	if f == nil || f.r == nil {
+		return time.Time{}
+	}
+	return f.r.Now()
 }
 
 // globFile is one candidate path, and the two answers a qualifier list may

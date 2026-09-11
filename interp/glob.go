@@ -346,7 +346,19 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	}
 	if !hasQuals && !hasUnescapedMeta(field, r.dialect().NumericRangePattern,
 		r.dialect().PatternAlternation, r.dialect().ExtendedPattern,
-		r.MatchOption(ExtendedPatternOperators)) {
+		r.MatchOption(ExtendedPatternOperators)) &&
+		(!r.dialect().PatternTopLevelAlternation || !hasUnescapedByte(field, '|')) {
+		// The bar is the one metacharacter hasUnescapedMeta must not count
+		// on its own — a field holding nothing else is not a pattern in the
+		// dialects where it only means something inside a group, and
+		// counting it there would send every such field to the filesystem.
+		// Where a top-level one *is* an alternation it is a pattern by
+		// itself, and measured: with `L='a|b'` in a directory holding `a`
+		// and `b`, `print -l -- ${~L}` lists both files in zsh 5.9.2 (#1497).
+		//
+		// The same composition resultReadsAsPattern already makes one level
+		// up, and for the same reason: the escaping is what says the bar was
+		// live, so a quoted one never reaches here unescaped.
 		return nil, false
 	}
 	// The `~` exclusions, taken off the field before it is split into

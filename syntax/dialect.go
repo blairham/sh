@@ -1660,6 +1660,24 @@ type Dialect struct {
 	// extended pattern — the same text, read by a different rule.
 	PatternAlternation bool
 
+	// PatternTopLevelAlternation reads a `|` standing outside every group and
+	// bracket as an alternation of the whole pattern — `a|b` matching `a` or
+	// `b` rather than the three characters.
+	//
+	// Only reachable from a value, which is why it is a separate flag rather
+	// than a consequence of the one above: the written spelling is a *parse
+	// error* in the one shell that has it, so this can only be read in a
+	// pattern a live expansion supplied — `L='a|b'; [[ a = ${~L} ]]`, the
+	// same value under `setopt globsubst`, or a `case` arm expanded from one.
+	// Measured on zsh 5.9.2: all three match, and `[[ a = a|b ]]` is
+	// `parse error near '|'` there and here alike.
+	//
+	// Separate from PatternAlternation because the two are answered
+	// independently: a dialect with bare groups need not read a bar outside
+	// one, and #1331 fixed the group while leaving this — the two were
+	// measured together and only one of them was about groups (#1497).
+	PatternTopLevelAlternation bool
+
 	// BackgroundAndDisown reads `&!` and `&|` as terminators that start a
 	// statement in the background and then let go of the job: nothing lists
 	// it and nothing waits for it by number. zsh's, and the two spellings

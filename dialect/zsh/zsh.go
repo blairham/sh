@@ -149,6 +149,12 @@ func Dialect() syntax.Dialect {
 	// A bare `(a|b)` inside a pattern word, which makes `@(abc|xyz)` a
 	// literal `@` followed by a group here rather than an extended pattern.
 	d.PatternAlternation = true
+	// And a `|` outside every group, which is the same alternation one level
+	// out and is reachable only from a value: the written spelling is a parse
+	// error here as it is everywhere else, so `L='a|b'; [[ a = ${~L} ]]` is
+	// the only way to say it. Measured on zsh 5.9.2 in a condition, in a
+	// `case` arm, under `setopt globsubst` and in a glob alike (#1497).
+	d.PatternTopLevelAlternation = true
 	// The same alternation reaching the `case` arm's own pattern list, where
 	// one of the alternatives may be written as nothing: `(|https|git|ftp)`
 	// matches one of those schemes or none at all. `~/.zi/bin/lib/zsh/install.zsh`

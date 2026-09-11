@@ -371,6 +371,61 @@ metacharacters, no for the extended constructs — and this implementation
 gives bash's answer in ksh93's dialect on both rows. The second of them
 answered that way before #1331 and the first now joins it.
 
+### A live bar outside a group is an alternation in one dialect
+
+The same `|`, one level out. In the shell with bare groups a bar that
+arrived from a value is an alternation at the **top** of a pattern, not
+only inside `( … )` — and again only where it arrived live, since the
+written spelling is a parse error:
+
+    [[ a = a|b ]]                      parse error near `|' — zsh 5.9.2 and here
+
+Measured on zsh 5.9.2, 2026-09-08 and again 2026-09-11, each probe in a
+script file of its own under `env -i`:
+
+    L='a|b'; [[ a = ${~L} ]]                    matches
+    L='a|b'; [[ b = ${~L} ]]                    matches
+    L='a|b'; [[ 'a|b' = ${~L} ]]                does not   ← the discriminator
+    L='a|b'; case a in ${~L}) …                 takes the arm
+    setopt globsubst; L='a|b'; [[ a = $L ]]     matches
+    L='a|b'; print -l -- ${~L}                  lists the files `a` and `b`
+
+The third row is the one that separates the two readings: under "the bar is
+a character" the value matches its own text, which is what this
+implementation answered until #1497 — `[[ a = ${~L} ]]` was a quiet false
+while the identical value inside a group was an alternation, because #1331
+fixed the group and the two had been measured together.
+
+Three boundaries, each measured:
+
+- **A bracket expression is stepped over.** `L='[a|b]'` matches `a` and
+  matches `|`, so the bar between two members is not a split. A walker that
+  counted only parentheses answers no to the second.
+- **An arm may be empty.** `L='a|'` matches `a` and matches the empty
+  string, and `L='|'` matches the empty string.
+- **Against the filesystem the split is per component**, because that is
+  where a glob matches: `Q='d1|d2'; print -l -- ${~Q}/*` lists `d1/x` and
+  `d2/y`, while `P='d1/x|d2/y'` matches no file at all — an arm holding a
+  `/` cannot cross a component. In a condition, where there are no
+  components, the same value matches the whole string.
+
+A top-level bar also makes a field a **pattern by itself**: `L='a|b'` with
+no other metacharacter in it is generated against the filesystem in that
+shell, where in every dialect whose bar means something only inside a group
+a field holding one is an ordinary word. That is why the bar is composed in
+beside `hasUnescapedMeta` rather than counted by it — the same composition
+`resultReadsAsPattern` already makes one level up.
+
+`Dialect.PatternTopLevelAlternation` is the answer, and `matchTopLevel` is
+where the split is made: at the one entry point every surface's match goes
+through, so a condition, a `case`, a trim and a glob all take it.
+
+**One divergence is recorded and not implemented**, and it is older than
+this and not confined to a live bar: a *longest*-match trim over an
+alternation takes the longest arm here where zsh takes the first arm that
+matches. `x=abc; ${x##(a|ab)}` is `bc` there and `c` here, with the written
+group and with a live bar alike. See #1918.
+
 ## Extended patterns are not core
 
     ?(…)  *(…)  +(…)  @(…)  !(…)

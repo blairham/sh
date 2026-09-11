@@ -327,7 +327,12 @@ const usageStatus = 2
 // It reads the conventional invocations — `-c COMMAND`, a script path, or
 // standard input — and returns the status to exit with rather than exiting, so
 // that it is testable.
-func Main(sh Shell) int { return MainArgs(sh, os.Args) }
+func Main(sh Shell) int {
+	// The collector's threshold, which only a binary may set — see
+	// collector.go for the measurement and for why MainArgs does not.
+	tuneCollector()
+	return MainArgs(sh, os.Args)
+}
 
 // MainArgs is Main with the argument vector given rather than taken from the
 // process, which is what makes it testable without a subprocess.

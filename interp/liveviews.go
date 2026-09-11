@@ -94,23 +94,7 @@ func (r *Runner) FunctionBodyText(name string) (string, bool) {
 // preludeDefined, so assigning over a prelude function takes the shell's voice
 // away from the name exactly as writing `pushd() { … }` does.
 func (r *Runner) DefineFunctionFromText(name, body string) bool {
-	f, err := syntax.Parse(name+" () {\n"+body+"\n}\n", r.dialect())
-	if err != nil || len(f.Stmts) != 1 {
-		return false
-	}
-	pipe, ok := f.Stmts[0].Expr.(*syntax.Pipeline)
-	if !ok || len(pipe.Cmds) != 1 {
-		return false
-	}
-	decl, ok := pipe.Cmds[0].(*syntax.FuncDecl)
-	if !ok {
-		return false
-	}
-	if r.funcs == nil {
-		r.funcs = map[string]*syntax.FuncDecl{}
-	}
-	r.funcs[name] = decl
-	return true
+	return r.defineFromText(name, body, nil)
 }
 
 // RemoveFunction undefines one, and reports whether the script had one.

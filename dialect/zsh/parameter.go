@@ -366,7 +366,7 @@ func writeZshFunction(r *interp.Runner, name, body string, set bool) {
 		r.RemoveFunction(name)
 		return
 	}
-	if !r.DefineFunctionFromText(name, body) {
+	if !zshDefineFromText(r, name, body, false) {
 		r.Diagnosef("%s: not a function body this shell can read\n", name)
 	}
 }

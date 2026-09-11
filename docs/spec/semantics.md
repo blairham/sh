@@ -5420,11 +5420,34 @@ What was built, all through the extension seam — registered builtins in each
   away.
 
   Letters: zsh has `d k m r R t T U w W X z`, measured a letter at a time
-  against all fifty-two, and refuses every other as `bad option`. `-U`
-  (no alias expansion while the file is read) and `-z` (zsh-style
-  parsing) are accepted and change nothing here — an autoloaded file is
-  parsed with this shell's own grammar, which *is* zsh's, and every real
-  script writes `-Uz`. The other nine are named as missing: per-function
+  against all fifty-two, and refuses every other as `bad option`. `-z`
+  (zsh-style parsing) is accepted and changes nothing here — an autoloaded
+  file is parsed with this shell's own grammar, which *is* zsh's. `-U`
+  **suppresses alias expansion while the file is read**, and it is acted
+  on rather than only recorded. Measured 2026-09-11 on zsh 5.9.2 with a
+  file for `af` holding the one word `myalias` and
+  `alias myalias='print -r -- X'` defined before the call:
+
+      autoload -Uz af    af:1: command not found: myalias
+      autoload -z  af    X
+      autoload     af    X
+
+  Every declaration a real startup writes is `-Uz`, which is the column we
+  already matched and the whole reason a shell that behaved as though the
+  letter were always given went unnoticed (#1993).
+
+  What decides it for a file with no `-U` is this shell's **`aliases`
+  option**, not the route the program arrived by. Measured under `env -i`
+  with `-f`: `zsh -c 'alias myalias=…; autoload af; af'` prints `X`, where
+  the same invocation leaves an alias written in its own command string
+  alone. `unsetopt aliases` leaves the file unexpanded on both routes. The
+  table read is the one live **at the call**, which is where the file is
+  read — an `unalias` between the declaration and the call takes the
+  expansion away. Corpus:
+  `autoload/a-function-file-expands-aliases` and
+  `autoload/a-function-file-with-minus-u-does-not`.
+
+  The other nine are named as missing: per-function
   tracing (`-t`/`-T`), the ksh-style and pattern forms (`-d`/`-k`/`-m`),
   resolving the path now (`-r`/`-R`) and compiled `.zwc` files
   (`-w`/`-W`).
@@ -5440,7 +5463,12 @@ What was built, all through the extension seam — registered builtins in each
   not-found; bash and dash have no such builtin. The seam this needed is
   `interp.Runner.DefineFunction`, the write half of `FunctionText`: a
   definition arriving from outside the script rather than from a
-  `f() { … }` the parser already read. Corpus: `autoload/*`.
+  `f() { … }` the parser already read. It has a second spelling for the
+  alias question — `DefineFunctionExpandingAliases` — and both, with
+  `DefineFunctionFromText` beside them, are one implementation: three ways
+  of reading a body out of text is three places for the next fix to reach
+  two of, which is exactly how #1993 came to need fixing twice. Corpus:
+  `autoload/*`.
 - **zsh `bindkey`** (dialect/zsh/bindkey.go): the line editor's key table.
   See below for why this moved out of the not-built list.
 - **zsh `zle`** (dialect/zsh/zle.go): defining an editing action in shell,

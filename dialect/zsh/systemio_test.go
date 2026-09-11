@@ -515,11 +515,16 @@ print -r -- "invented=$?"`)
 // The first row is the one that matters in the wild — `buf[$#buf+1]` is how
 // a prompt theme's worker accumulates a response one `sysread` at a time —
 // and it was refused here until the assignment path underneath it spliced
-// characters instead of building an array (#1746).
+// characters instead of building an array (#1746). It is written **twice**,
+// because one write cannot tell an append from a write at subscript 3: the
+// second read is what says the subscript is re-read against the string the
+// first one left. The pair is also the fifth shape, which a numeric subscript
+// does not reach — a range names a span of characters.
 func TestSysreadAssignsThroughASubscriptedDestination(t *testing.T) {
 	systemDeadline(t, "sysread destinations", func() {
 		out, st, errs := runZshSplit(t, t.TempDir(), `buf=xy
 print -n Z | { sysread 'buf[$#buf+1]' }
+print -n W | { sysread 'buf[$#buf+1]' }
 print -r -- "scalar=[$buf]"
 n=ab
 print -n XY | { sysread -c 'n[2]' b }
@@ -529,8 +534,11 @@ print -n V | { sysread 'h[k]' }
 print -r -- "assoc=[${h[k]}]"
 a=(p q)
 print -n V | { sysread 'a[2]' }
-print -r -- "elem=[${a[2]}] n=${#a}"`)
-		want := "scalar=[xyZ]\ncount=[a2] into=[XY]\nassoc=[V]\nelem=[V] n=2\n"
+print -r -- "elem=[${a[2]}] n=${#a}"
+span=abcdef
+print -n Z | { sysread 'span[2,3]' }
+print -r -- "span=[$span]"`)
+		want := "scalar=[xyZW]\ncount=[a2] into=[XY]\nassoc=[V]\nelem=[V] n=2\nspan=[aZdef]\n"
 		if out != want || st != 0 {
 			t.Errorf("sysread destinations = %q (status %d), want %q (stderr %q)", out, st, want, errs)
 		}
@@ -540,17 +548,63 @@ print -r -- "elem=[${a[2]}] n=${#a}"`)
 	})
 }
 
-// A name that is not an identifier at all is still a usage error, and it is
-// the *only* refusal left on this operand.
+// A name that is not a name is still a usage error, and it is the *only*
+// refusal left on this operand — but "not a name" covers the subscript's
+// **shape** as well as the word without one, and the shape is where taking it
+// on trust said the wrong thing: `sysread 'buf[]'` reached the store, which
+// gave up the script over a subscript that would not evaluate, where the
+// shell calls the operand a bad name and runs the next command. Every row is
+// measured on zsh 5.9.2, 2026-09-10.
 func TestSysreadRefusesADestinationThatIsNotAName(t *testing.T) {
 	systemDeadline(t, "sysread bad name", func() {
-		out, st, errs := runZshSplit(t, t.TempDir(), `print -n hi | { sysread 'bad name' }
-print -r -- "name=$?"`)
-		if want := "name=1\n"; out != want || st != 0 {
-			t.Errorf("sysread bad name = %q (status %d), want %q", out, st, want)
+		for _, name := range []string{
+			"bad name",                   // no brackets at all
+			"1buf[1]",                    // a base that is not an identifier
+			"buf[]",                      // nothing between the brackets
+			"buf[(]", "buf[)]", "buf[[]", // a bracket or parenthesis left open
+			"buf[a)b]",  // and one that closes what nothing opened
+			"buf[a]b]",  // a closing bracket that is not the last character
+			"buf[1][2]", // which is what a second subscript looks like
+			`buf[\]`,    // an escaped bracket, so the subscript never ends
+			"buf[1]x",   // anything after the closing bracket
+		} {
+			out, st, errs := runZshSplit(t, t.TempDir(), `buf=xy
+print -n hi | { sysread '`+name+`' }
+print -r -- "name=$? buf=[$buf]"`)
+			if want := "name=1 buf=[xy]\n"; out != want || st != 0 {
+				t.Errorf("sysread %q = %q (status %d), want %q", name, out, st, want)
+			}
+			if want := "zsh:sysread:2: not an identifier: " + name + "\n"; errs != want {
+				t.Errorf("sysread %q said %q, want %q", name, errs, want)
+			}
 		}
-		if !strings.Contains(errs, "not an identifier: bad name") {
-			t.Errorf("refusal = %q, want the destination named", errs)
+	})
+}
+
+// The shapes on the other side of that line: names this shell takes and then
+// complains about, where the complaint is the **store's** and is located as
+// the shell's own. Measured on zsh 5.9.2, which words and places all three
+// exactly this way — no `sysread:` in the location, and the script given up.
+func TestSysreadLetsTheStoreRefuseASubscript(t *testing.T) {
+	systemDeadline(t, "sysread subscripts", func() {
+		for _, tc := range []struct{ src, errs string }{
+			{`buf=xy
+print -n Z | { sysread 'buf[0]' }
+print -r -- "unreached=$?"`, "zsh:2: buf: assignment to invalid subscript range\n"},
+			{`buf=xy
+print -n Z | { sysread 'buf[1+]' }
+print -r -- "unreached=$?"`, "zsh:2: bad math expression: operand expected at end of string\n"},
+			{`readonly buf=xy
+print -n Z | { sysread 'buf[1]' }
+print -r -- "unreached=$?"`, "zsh:2: read-only variable: buf\n"},
+		} {
+			out, st, errs := runZshSplit(t, t.TempDir(), tc.src)
+			if out != "" || st != 1 {
+				t.Errorf("%s = %q (status %d), want the script given up at 1", tc.src, out, st)
+			}
+			if errs != tc.errs {
+				t.Errorf("%s said %q, want %q", tc.src, errs, tc.errs)
+			}
 		}
 	})
 }

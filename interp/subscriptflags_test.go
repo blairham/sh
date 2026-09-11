@@ -389,25 +389,17 @@ func TestASubscriptSearchOverAnEmptyScalar(t *testing.T) {
 // A search over a target this does not carry is refused by name, and the
 // refusal replaces a *silent* wrong answer.
 //
-// The one target left is the assignment's: a search on the left of `=` over a
-// string names a character position there, and the character assignment that
-// position would need is not built either — so returning the index would turn
-// a refusal into two spaces and a `Q`.
+// The one target left is the table: the letters mean something else over keys
+// and the ordered array's rule would write to a plausible wrong one. A search
+// on the left of `=` over a **string** was here too, and is not any more —
+// the position it names is written now, which is what
+// TestASearchOnTheLeftOverAStringNamesTheSameThingTheReadDoes asserts
+// (#1532).
 func TestASubscriptSearchOverATargetThisDoesNotCarryIsRefused(t *testing.T) {
 	// The value is asserted as well as the refusal: a refusal that still
 	// wrote somewhere would leave the name changed, and the whole reason to
-	// refuse is that the write would land on a plausible wrong character.
+	// refuse is that the write would land on a plausible wrong element.
 	for _, tc := range []struct{ name, src, why, kept string }{
-		{
-			"a scalar assigned through a search",
-			`s=hello; s[(r)l]=Q; printf "[%s]" "$s"`,
-			"for a scalar", "[hello]",
-		},
-		{
-			"and through an index search",
-			`s=hello; s[(i)l]=Q; printf "[%s]" "$s"`,
-			"for a scalar", "[hello]",
-		},
 		{
 			"an association assigned through one",
 			`typeset -A h; h[k1]=v1; h[(r)v1]=Q; printf "[%s]" "${h[k1]}"`,

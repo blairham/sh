@@ -77,16 +77,65 @@ func TestASubscriptFlagThisDialectReadsAndDoesNotCarry(t *testing.T) {
 			t.Errorf("%s = %q (status %d), want a refusal naming %s", tc.src, out, st, tc.names)
 		}
 	}
-	// The one target still refused: a search on the *left* of `=` over a
-	// plain string names a character position, and this dialect writes a
-	// character there — `s=hello; s[3]=Q` is `heQlo` in the shell — which is
-	// not built, so the index the search found has nowhere to go. The value
-	// is asserted with the refusal because an assignment refused this way
-	// leaves the status at 0, so nothing else says the write did not land.
-	out, _ := runZsh(t, t.TempDir(), `s=hello; s[(r)l]=Q; printf "[%s]" "$s"`)
-	if !strings.Contains(out, "(r) subscript flag is not implemented for a scalar") ||
-		!strings.Contains(out, "[hello]") {
-		t.Errorf(`s[(r)l]=Q = %q, want the flag refused and hello kept`, out)
+}
+
+// A search on the **left** of `=` over a plain string names the character
+// position the read side answers, and the assignment writes there.
+//
+// It was refused by name while the write turned the string into an array —
+// `s=hello; s[3]=Q` left two spaces and a `Q` — since handing the index on
+// would have turned a refusal into that value (#1532). Measured 2026-09-10 on
+// zsh 5.9.2, and every row pairs the write with the read that names the same
+// position, because the two agreeing is the whole of the rule.
+func TestASearchOnTheLeftOfAnAssignmentNamesACharacter(t *testing.T) {
+	const s = `s=hello` + "\n"
+	for _, tc := range []struct{ src, want string }{
+		{`printf "[%s]" "${s[(i)l]}"; s[(r)l]=Q; printf "[%s]" "$s"`, `[3][heQlo]`},
+		{`s[(i)l]=Q; printf "[%s]" "$s"`, `[heQlo]`},
+		{`printf "[%s]" "${s[(I)l]}"; s[(I)l]=Q; printf "[%s]" "$s"`, `[4][helQo]`},
+		{`s[(R)l]=Q; printf "[%s]" "$s"`, `[helQo]`},
+		{`s[(re)l]=Q; printf "[%s]" "$s"`, `[heQlo]`},
+		// The value replaces the span of one the subscript names, however
+		// many characters it is, exactly as a numeric subscript does.
+		{`s[(r)l]=QQ; printf "[%s]" "$s"`, `[heQQlo]`},
+		{`s[(r)l]=; printf "[%s]" "$s"`, `[helo]`},
+		// `+=` joins the character back where it was.
+		{`s[(r)l]+=Q; printf "[%s]" "$s"`, `[helQlo]`},
+		// A forward search that matches nothing names one past the last
+		// character, so both letters append.
+		{`s[(i)zz]=Q; printf "[%s]" "$s"`, `[helloQ]`},
+		{`s[(r)zz]=Q; printf "[%s]" "$s"`, `[helloQ]`},
+		// A multi-character operand matches a substring, and the write lands
+		// where that substring starts.
+		{`s="hello world"; s[(r)wor]=Q; printf "[%s]" "$s"`, `[hello Qorld]`},
+		{`s="hello world"; s[(I)l]=Q; printf "[%s]" "$s"`, `[hello worQd]`},
+		// The other flags in the group are read here as they are on the
+		// right: an `n`th match and a start position.
+		{`s[(n:2:i)l]=Q; printf "[%s]" "$s"`, `[helQo]`},
+		{`s[(b:4:i)l]=Q; printf "[%s]" "$s"`, `[helQo]`},
+	} {
+		out, st := runZsh(t, t.TempDir(), s+tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+	// A name holding nothing is not a string, so the same subscript builds an
+	// array — the boundary subscriptSplicesCharacters draws, reached through a
+	// search rather than through a number.
+	out, st := runZsh(t, t.TempDir(), `s[(r)l]=Q; typeset -p s`)
+	if out != "typeset -a s=( Q )\n" || st != 0 {
+		t.Errorf("s[(r)l]=Q on an unset name = %q (status %d)", out, st)
+	}
+	// A backward search that matched nothing names the position before the
+	// first character, which is the subscript `s[0]=Q` is refused for. The
+	// shell says the same thing about `(R)` missing; its `(I)` missing writes
+	// `hellQhello` — the first four characters, the value, and then the whole
+	// string — which is no rule at all, and is not reproduced.
+	for _, src := range []string{`s=hello; s[(R)zz]=Q; printf "[%s]" "$s"`, `s=hello; s[(I)zz]=Q; printf "[%s]" "$s"`} {
+		out, st := runZsh(t, t.TempDir(), src)
+		if out != "zsh:1: s: assignment to invalid subscript range\n" || st != 1 {
+			t.Errorf("%s = %q (status %d), want the subscript refused at 1", src, out, st)
+		}
 	}
 }
 

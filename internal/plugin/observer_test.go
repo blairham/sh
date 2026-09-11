@@ -279,6 +279,81 @@ func TestWhatIsAlreadyNumberedIsDeliveredAtShutdown(t *testing.T) {
 	}
 }
 
+// A plugin still working through what it was sent is not killed part-way.
+//
+// This is #1906, and the mechanism turned out not to be the guess in the
+// issue: the shutdown *does* drain the feed, and every record reaches the
+// plugin's pipe before its input is closed. What it did not do is wait for
+// the plugin to act on them — the bound ran from the moment the input was
+// closed, so a plugin holding records it had not been given a processor for
+// was killed with them unread. Measured before the fix with this fixture:
+// one of three records handled, the other two gone with the plugin. On a
+// loaded machine the ordinary fixture reached the same place with no sleep in
+// it at all, which is the flake the issue was filed for.
+//
+// The fixture takes a second per record, which is longer than the whole bound
+// — so this fails without the fix rather than merely becoming likely to.
+func TestAPluginStillHandlingRecordsIsNotKilledPartWay(t *testing.T) {
+	t.Parallel()
+	relayed := &syncBuffer{}
+	h := launch(t, "slowobserver", plugin.Options{Stderr: relayed})
+	sink := h.Sink()
+	if sink == nil {
+		t.Fatal("Sink() is nil for a plugin that declared the observer role")
+	}
+	const records = 3
+	ctx := t.Context()
+	for i := range records {
+		sink.Emit(ctx, interp.Event{
+			Kind:   interp.EventAccess,
+			Action: interp.Action{Kind: interp.ActionStat, Path: "/srv/x"},
+			Line:   i,
+		})
+	}
+	// A deadline on the test, because the failure this guards against in the
+	// other direction is a shutdown that waits for a plugin forever: three
+	// seconds of fixture, a ceiling of ten, and this well past both, so a
+	// regression fails in seconds rather than hanging until the suite's own
+	// timeout.
+	done := make(chan error, 1)
+	go func() { done <- h.Close() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Close() = %v", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("Close did not return: a plugin that keeps writing is deciding when the shell leaves")
+	}
+	if got := strings.Count(relayed.String(), "handled a record"); got != records {
+		t.Errorf("the plugin handled %d of %d records: %q", got, records, relayed.String())
+	}
+}
+
+// And a plugin that has gone quiet is still killed, and now says so.
+//
+// The other half of the same bound, and the half that keeps it a bound: the
+// clock restarts on a byte from the plugin, so a plugin writing nothing is
+// exactly the hung plugin it was written for and goes as it always did. What
+// is new is the line — a record that was put on the wire and died unread is a
+// lost audit record, and one nobody is told about is the failure the observer
+// role exists to prevent.
+func TestAPluginKilledWithRecordsUnreadSaysSo(t *testing.T) {
+	t.Parallel()
+	relayed := &syncBuffer{}
+	h := launch(t, "deafobserver", plugin.Options{Stderr: relayed})
+	h.Sink().Emit(t.Context(), interp.Event{
+		Kind:   interp.EventAccess,
+		Action: interp.Action{Kind: interp.ActionStat, Path: "/srv/x"},
+	})
+	if err := h.Close(); err != nil {
+		t.Fatalf("Close() = %v", err)
+	}
+	if !strings.Contains(relayed.String(), "anything it had not yet read is lost") {
+		t.Errorf("relayed = %q, want the shell to have said the record was lost", relayed.String())
+	}
+}
+
 // observerBufferForTest is one fewer than nothing in particular: it is a
 // number chosen to be under the host's buffer so that no record is dropped,
 // stated here rather than derived from the unexported constant because an

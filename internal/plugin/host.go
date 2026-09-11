@@ -50,6 +50,11 @@ const (
 	// cancel, and the answer reported is the truth in both branches — the
 	// plugin either received them or the stream stopped where it stopped.
 	flushWait = 2 * time.Second
+	// shutdownCeiling is the most a plugin may take over its shutdown however
+	// busy it looks. The bound below is on silence, so a plugin that goes on
+	// writing goes on being waited for — and something has to say that a shell
+	// leaving is not a thing a plugin may veto by being noisy.
+	shutdownCeiling = 10 * time.Second
 	// drainWait is how long the read loop gets to finish consuming what an
 	// exiting plugin already wrote before the host takes its output away. It
 	// exists because the last thing a plugin writes is usually the response to
@@ -118,6 +123,11 @@ type Host struct {
 	serveDone chan struct{}
 	relayDone chan struct{}
 	procDone  chan struct{}
+	// sign carries a byte the plugin wrote, on either of the two streams it
+	// writes — see alive. One slot and a non-blocking send, because what a
+	// reader of it wants is "something happened since I last looked" and not
+	// a count.
+	sign chan struct{}
 
 	closeOnce sync.Once
 
@@ -182,6 +192,7 @@ func Launch(ctx context.Context, o Options) (*Host, error) {
 		serveDone: make(chan struct{}),
 		relayDone: make(chan struct{}),
 		procDone:  make(chan struct{}),
+		sign:      make(chan struct{}, 1),
 		calls:     map[string]*call{},
 	}
 	if err := h.start(path); err != nil {
@@ -241,7 +252,10 @@ func (h *Host) start(path string) error {
 	_ = errW.Close()
 
 	h.cmd, h.in, h.out, h.errs = cmd, inW, outR, errR
-	h.conn = jsonrpc.NewConn(outR, inW, h)
+	// Through signReader, so that a plugin answering the protocol counts as a
+	// sign of life exactly as one writing a diagnostic does. Both are bytes
+	// this process is already reading; neither is a new channel to the plugin.
+	h.conn = jsonrpc.NewConn(signReader{f: outR, h: h}, inW, h)
 
 	go h.reap()
 	go h.relay()
@@ -302,6 +316,7 @@ func (h *Host) relay() {
 	for {
 		n, err := h.errs.Read(chunk)
 		if n > 0 {
+			h.alive()
 			buf = append(buf, chunk[:n]...)
 			for {
 				i := bytes.IndexByte(buf, '\n')
@@ -319,6 +334,86 @@ func (h *Host) relay() {
 				h.say(string(buf))
 			}
 			return
+		}
+	}
+}
+
+// alive records that the plugin has just written something.
+//
+// Non-blocking and lossy on purpose: the one reader is the shutdown wait
+// below, and what it asks is whether anything has happened since it last
+// looked. A count would be a different question and nobody asks it.
+func (h *Host) alive() {
+	select {
+	case h.sign <- struct{}{}:
+	default:
+	}
+}
+
+// signReader is the plugin's protocol stream with alive wired into it.
+//
+// A plugin that answers a call and writes no diagnostic is working just as
+// visibly as one that writes to standard error, and a shutdown that watched
+// only the diagnostic stream would kill the quiet one mid-record.
+type signReader struct {
+	f *os.File
+	h *Host
+}
+
+func (r signReader) Read(p []byte) (int, error) {
+	n, err := r.f.Read(p)
+	if n > 0 {
+		r.h.alive()
+	}
+	return n, err
+}
+
+// waitForExit waits for the plugin to go, and reports whether it did.
+//
+// The bound is on **silence**, not on shutdown, and that distinction is the
+// whole of #1906. A plugin is sent its records and then has its input closed;
+// a cooperating one reads what is in the pipe, acts on it and exits, and the
+// exit is the proof that it consumed everything. Bounding that from the moment
+// the input was closed meant a plugin which had been handed work and not yet
+// been given a processor lost it: measured with an observer taking a second
+// over each event, one of three records was reported and the other two died
+// with the plugin. On a loaded machine the ordinary fixture reached the same
+// place with no sleep in it at all, which is what made a test flake.
+//
+// So the clock restarts every time the plugin writes a byte, on either stream.
+// A plugin that is still producing is still working; one that has gone quiet
+// for shutdownWait is the hung plugin the bound was written for, and is killed
+// exactly as before. The ceiling is what stops the other extreme — a plugin
+// that writes forever must not be able to decide when this shell exits.
+func (h *Host) waitForExit() bool {
+	// The slot may be holding a byte from before the shutdown began, and that
+	// is not a sign of life *now*. Taken out so the first wait is a full one
+	// measured from here; at most one can be there, because the slot is one
+	// deep.
+	select {
+	case <-h.sign:
+	default:
+	}
+	quiet := time.NewTimer(shutdownWait)
+	defer quiet.Stop()
+	ceiling := time.NewTimer(shutdownCeiling)
+	defer ceiling.Stop()
+	for {
+		select {
+		case <-h.procDone:
+			return true
+		case <-h.sign:
+			if !quiet.Stop() {
+				select {
+				case <-quiet.C:
+				default:
+				}
+			}
+			quiet.Reset(shutdownWait)
+		case <-quiet.C:
+			return false
+		case <-ceiling.C:
+			return false
 		}
 	}
 }
@@ -509,10 +604,19 @@ func (h *Host) Close() error {
 			}
 		}
 		_ = h.in.Close()
-		select {
-		case <-h.procDone:
-		case <-time.After(shutdownWait):
+		if !h.waitForExit() {
 			killGroup(h.cmd)
+			if h.obs != nil {
+				// Said out loud rather than dropped. Every record this shell
+				// put on the wire is in that plugin's pipe, and a plugin
+				// killed before it read them took them with it — which is a
+				// lost audit record, and a lost audit record nobody is told
+				// about is the failure the observer role exists to prevent.
+				// Only where there was an observer: a plugin that was sent no
+				// records lost none, and a line about every shutdown would be
+				// the noise that makes the real one unreadable (#1906).
+				h.say("it did not finish before the shell left, so anything it had not yet read is lost")
+			}
 		}
 		<-h.procDone
 		_ = h.out.Close()

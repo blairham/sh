@@ -320,20 +320,37 @@ func TestAFailedLaunchClosesThePluginsAlreadyStarted(t *testing.T) {
 // holds. That is the point of the role costing one method: internal/event was
 // written as a shared contract, and a consumer of an audit stream is already a
 // consumer of this.
+//
+// Nothing forks in the loop — the fields come out by parameter expansion
+// rather than through three command substitutions and three `sed` processes,
+// which is what this used to do. The plugin is a child of a shell that is
+// about to exit, and a fixture spending nine forks on three records is a
+// fixture that needs a processor nine more times than the thing it is standing
+// in for. It is the same reasoning internal/plugin's counter fixture carries,
+// and it is half of #1906: the host now waits on the plugin's *progress*
+// rather than on a clock, and a fixture that produces its first byte promptly
+// is one that never reaches the bound at all.
 const watcher = `#!/bin/sh
 exec 3>&1
 send() { printf '%s\n' "$1" >&3; }
 while IFS= read -r line; do
 	case $line in
 	*'"method":"observer/event"'*)
-		ev=$(printf '%s' "$line" | sed -n 's/.*"event":"\([^"]*\)".*/\1/p')
-		act=$(printf '%s' "$line" | sed -n 's/.*"action":"\([^"]*\)".*/\1/p')
-		path=$(printf '%s' "$line" | sed -n 's/.*"path":"\([^"]*\)".*/\1/p')
+		ev=${line#*\"event\":\"}
+		[ "$ev" = "$line" ] && ev=
+		ev=${ev%%\"*}
+		act=${line#*\"action\":\"}
+		[ "$act" = "$line" ] && act=
+		act=${act%%\"*}
+		path=${line#*\"path\":\"}
+		[ "$path" = "$line" ] && path=
+		path=${path%%\"*}
 		printf 'saw %s %s %s\n' "$ev" "$act" "$path" >&2
 		continue
 		;;
 	esac
-	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	id=${line#*\"id\":}
+	id=${id%%,*}
 	case $line in
 	*'"method":"initialize"'*)
 		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"watcher\",\"commands\":[],\"observer\":true}}"

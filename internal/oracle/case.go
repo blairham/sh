@@ -5084,6 +5084,11 @@ echo "st=$?"`,
 		Why:     "the same pairing with the operator that looks least like one, and the row that says the refusal is about the operator rather than about the character `#`: there is no second `#` here and four of the five still refuse. zsh answers 2 for the same reason as the trim — apply, then measure",
 	},
 	{
+		ID: "expansion/a-replacement-scan-stops-where-the-last-match-ended", Category: "expansion",
+		Snippet: `v=abcd; printf "[%s]" "${v//*/X}" "${v//b*/X}" "${v//?/X}"; echo`,
+		Why:     "the empty match waiting at the end of a value a `*` has already consumed. bash, ksh93 and zsh all print one X for the first field; this implementation printed two, having offered the final position to the matcher again after the whole value was taken (#1341). The second field is what makes it the end of the scan rather than a rule about `*`: the scan reaches the end from the middle and the answer is still one X. The third is the control for the other direction, since a pattern that never reaches the end is replaced at every position, so a scan that stopped too early would collapse it to a single X",
+	},
+	{
 		ID: "expansion/a-length-with-a-replacement-operator", Category: "expansion",
 		Snippet: `v=abc; echo ${#v/b/XX}`,
 		Why:     "the operator that makes the value *longer*, which is what separates measuring the result from measuring the subject: zsh answers 4 where the untouched value is 3, so a reading that quietly ignored the operator cannot hide behind a coincidence here the way it can on a pattern that trims nothing",

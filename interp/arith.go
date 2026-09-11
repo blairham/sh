@@ -49,7 +49,7 @@ func (r *Runner) arithFailure(text string, err error) string {
 	// built from it.
 	ae, _ := err.(arithError)
 	token := ae.token
-	expr := strings.TrimSpace(text)
+	expr := r.diag().arithBlamedText(text)
 	if token == "" {
 		// bash blames the whole expression when the failing part is the whole
 		// expression, which is also the honest answer when the tree cannot
@@ -1369,7 +1369,7 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 		r.unspecified = false
 		tree, perr := r.arithTree(c.Parsed, c.Expr)
 		if perr != nil {
-			r.diagf("%s\n", r.diag().ParseFailure(perr))
+			r.diagf("%s\n", r.diag().arithConstructFailure("((", r.diag().ParseFailure(perr)))
 			r.status = r.arithCmdFailed(r.diag().StatusForParseError(perr))
 			return nil
 		}
@@ -1379,7 +1379,12 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 			return nil
 		}
 		if err != nil {
-			r.diagf("%v\n", err)
+			// The expression is named here as it is everywhere else an
+			// expression fails. It was not, and a loop doing arithmetic
+			// reported `division by 0` with nothing to say which iteration
+			// or which expression had done it — where the expansion route
+			// for the identical failure quoted it back (#1985).
+			r.diagf("%s\n", r.diag().arithConstructFailure("((", r.arithFailure(c.Expr, err)))
 			r.status = r.arithCmdFailed(1)
 			return nil
 		}

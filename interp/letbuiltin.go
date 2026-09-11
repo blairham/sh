@@ -59,7 +59,11 @@ func biLet(r *Runner, _ context.Context, args []string) int {
 			return 2
 		}
 		if err != nil {
-			r.mathDiagf("%v", err)
+			// Named with its expression, the way the expansion route names
+			// one: `let: 1/0: division by 0` and not `let: division by 0`
+			// (#1985). The text is the expanded one the tree was built from,
+			// which is what the shells quote back.
+			r.mathDiagf("%s", r.arithFailure(text, err))
 			return 1
 		}
 		// Every expression is evaluated — they have side effects, and

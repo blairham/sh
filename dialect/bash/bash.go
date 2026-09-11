@@ -1160,10 +1160,14 @@ func Diagnostics() interp.Diagnostics {
 		// follows 5.3.
 		UnsetSubscriptBeforeTheFirstElement: "unset: [%[2]s]: bad array subscript",
 		// `unset a[@]` where `a` holds a scalar. Identical in bash 3.2.
-		UnsetNotAnArray:       "unset: %[1]s: not an array variable",
-		ArithError:            `%[1]s: %[2]s (error token is "%[3]s")`,
-		DivisionByZero:        "division by 0",
-		ArithNegativeExponent: "exponent less than 0",
+		UnsetNotAnArray: "unset: %[1]s: not an array variable",
+		ArithError:      `%[1]s: %[2]s (error token is "%[3]s")`,
+		// The expression is quoted back from its first non-blank
+		// character, and a construct names itself in front of it.
+		ArithErrorSkipsLeadingSpace: true,
+		ArithErrorNamesTheConstruct: true,
+		DivisionByZero:              "division by 0",
+		ArithNegativeExponent:       "exponent less than 0",
 
 		// bash reserves its generic arithmetic wording for operands that are
 		// not literals, so a bad digit gets a reason of its own.

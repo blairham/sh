@@ -2797,6 +2797,26 @@ echo "reached-after st=$?"`,
 		Why:     "the control the row above needs. A value stood before each of these failures too — `1`, `5`, `1` — and the shell that keeps it for a refused byte keeps none of them, answering 1 for all three. So it is the reader giving up mid-stream rather than arithmetic failure in general, and a fix that read `the last value survives a failure` would move these three",
 	},
 	{
+		ID: "let/a-math-complaint-that-evaluates-names-the-expression", Category: "arithmetic",
+		Snippet: `let '1/0'; echo "st=$?"`,
+		Why:     "the expression is quoted back on the route that *evaluates*, not only on the one that fails to parse: bash and ksh93 write `let: 1/0: …` where ours wrote `let: division by 0` and said nothing about which expression it was (#1985). The row beside it is `let '1+'`, which never reaches the evaluator and kept its expression all along — the pair is what says the loss was the evaluation error's and not the builtin's",
+	},
+	{
+		ID: "arith/a-command-math-complaint-names-the-construct", Category: "arithmetic",
+		Snippet: `(( 1/0 ))`,
+		Why:     "bash names the construct in front of the complaint — `((: 1/0 : division by 0` — the way it names a builtin, and only for the command form: the identical failure written `$(( 1/0 ))` carries no `((: `. ksh93 and zsh name none. Ours named neither the construct nor the expression, so a loop doing arithmetic reported a bare `division by 0` with nothing to tell one iteration from another",
+	},
+	{
+		ID: "arith/a-math-complaint-quotes-the-expression-as-written", Category: "arithmetic",
+		Snippet: `((    1/0   ))`,
+		Why:     "how much of the text the complaint quotes, which needs blanks on both sides to see: ksh93 quotes it exactly as the construct held it, bash skips the *leading* blanks and keeps the rest, and neither trims both ends — which is what ours did to every arithmetic complaint. bash's error token carries the tail with it, which is the half still unmatched here",
+	},
+	{
+		ID: "arith/a-for-header-part-that-will-not-evaluate", Category: "arithmetic",
+		Snippet: `for (( i=0; i<1/0; i++ )); do echo body; done; echo "st=$?"`,
+		Why:     "three expressions in one header, so a complaint with no expression in it cannot say which of them failed: bash and ksh93 name `i<1/0`. The loop body must not run either, which is the half a diagnostic alone would not show",
+	},
+	{
 		ID: "let/a-math-complaint-names-the-builtin-or-does-not", Category: "arithmetic",
 		Snippet: `let '1+'`,
 		Why:     "who the complaint belongs to. bash and ksh93 put the builtin in front of the sentence — `let: 1+: …` — and zsh puts it nowhere, writing `zsh:1:` where the same shell's `cd` writes `zsh:cd:1:` and where its own `let` with no operand writes `zsh:let:1:`. So a math failure is the shell's there rather than the builtin's, the way a division by zero and an unset parameter already are, and the blanket rule that puts a builtin's name in that shell's location needed something to say which messages it does not cover",

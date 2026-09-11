@@ -282,11 +282,11 @@ func (r *Runner) condArith(text string) (int, error) {
 	p := syntax.NewParser("", r.dialect())
 	tree := p.ParseArithFor(text, syntax.Pos{})
 	if perr := p.Err(); perr != nil {
-		return 0, r.condArithFailed(r.diag().ParseFailure(perr))
+		return 0, r.condArithFailed(r.diag().arithConstructFailure("[[", r.diag().ParseFailure(perr)))
 	}
 	v, err := r.evalArith(tree)
 	if err != nil {
-		return 0, r.condArithFailed(r.arithFailure(text, err))
+		return 0, r.condArithFailed(r.diag().arithConstructFailure("[[", r.arithFailure(text, err)))
 	}
 	return v, nil
 }

@@ -408,8 +408,12 @@ pre-commit builds an environment for a hook even when `SKIP` tells it not
 to run one, which cost two and a half minutes a build installing a linter
 this job then declines to use.
 
-**After a merge.** One test job, on one platform — see `main-canary.yml`
-for why that and nothing else.
+**After a merge.** Nothing, currently — and that is a gap rather than a
+decision. `main-canary.yml` was **deleted in #53** (`280f8394`); the run
+history simply stops there, so it reads like a lapsed schedule and is not
+one. `drift.yml` does not fill it: that is weekly, deliberately
+non-gating, and watches the oracle *panel* for drift rather than this
+tree. See the note under *Why not re-run on `main`* below.
 
 `go vet` is deliberately not a step of its own: `govet` is one of the
 linters `.golangci.yml` enables, so the lint job already runs it over the
@@ -451,11 +455,31 @@ has to be up to date before merging, a squash merge lands the tree that
 was already tested, so re-running deterministic checks afterwards tests
 nothing new.
 
-The exception is `main-canary.yml`, which runs the tests once on
-`ubuntu-latest` after a merge, and only when the merge touched Go. Determinism is the whole argument above,
-and races are not deterministic: a test can pass on a branch and fail on
-`main` with the same tree. That has happened before and only a post-merge
-run caught it, so one cheap job stays rather than the full matrix.
+**The exception that argument allows is currently missing.** Determinism
+is the whole case above, and races are not deterministic: a test can pass
+on a branch and fail on `main` with the same tree. That has happened here,
+and only a post-merge run caught it. `main-canary.yml` was that job — one
+cheap run on `ubuntu-latest`, only when a merge touched Go — and it was
+deleted in #53, so nothing plays that part today.
+
+There is a second hole in the same place, and the two compound.
+`ci.yml`'s `concurrency` is `group: ci-${{ github.ref }}` with
+`cancel-in-progress: true`, unscoped. That is right for a pull-request
+branch, where a superseded push is not worth finishing. It is wrong for
+`main`, where every merge is a *different* change, so cancelling does not
+discard a stale answer — it discards the only answer that commit will ever
+get. Measured 2026-09-11 with several agents merging: **nine of the last
+ten `main` runs were `cancelled`**, one succeeded.
+
+Why that matters beyond tidiness: a green check on a pull request tested
+the branch against its **merge base**, not the tree the squash produced.
+The run on `main` is the only thing that tests what actually landed, so a
+defect arising from the *interaction* of two separately-green PRs has
+nothing left to catch it. Tracked as **#1900**.
+
+**So `conclusion: cancelled` is not `success`.** Before saying `main` is
+green, check that the run completed — `gh run list --branch main --json
+status,conclusion`.
 
 `make conformance` grades our own `sh` against a panel shell over the whole
 corpus. It is the point of having built the harness: the corpus already

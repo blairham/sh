@@ -1275,6 +1275,16 @@ type Dialect struct {
 	// `${a:-x}` is still a default for the same reason.
 	ParamElementSelection bool
 
+	// ParamArrayZip is `${a:^b}` and `${a:^^b}`: interleave a parameter with
+	// the array the operand names, one element from each in turn. `:^` stops
+	// when the shorter runs out, `:^^` cycles it.
+	//
+	// zsh alone. Without the flag the colon opens a substring and `^b` is
+	// handed to arithmetic, which refuses it — that refusal is what a real
+	// startup file produced, from `FG=( ${codes:^fg} )` in Oh My Zsh's
+	// spectrum library (#2112).
+	ParamArrayZip bool
+
 	// ParamWholeElementReplace enables `${a:/pattern/replacement}`, the
 	// fourth operator of that family: the elements the pattern matches
 	// **whole** become the replacement and the rest are left alone, and an

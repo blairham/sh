@@ -4409,6 +4409,88 @@ substitution in it runs a single time for the whole array.
 `${(M@)a:/foo/Z}` is `Z bar`: the `M` flag, which reads `:#` from the
 other side, has nothing to reverse here and is ignored.
 
+## Interleaving two lists: `:^` and `:^^` — zsh only
+
+    ${a:^other}     pair the elements of `a` with those of the array
+                    named `other`, stopping when either runs out
+    ${a:^^other}    the same, but cycle the shorter of the two until
+                    the longer is spent
+
+The one operator in this family that produces a list **longer** than
+either input, which is why it is not one of the four above: they choose
+or rewrite elements and this one interleaves, so a reading that maps one
+output per input has nowhere to put the second field. Measured on
+zsh 5.9.2:
+
+    a=(1 2 3); b=(x y z);   ${a:^b}     1 x 2 y 3 z
+    a=(1 2);   b=(x y z w); ${a:^b}     1 x 2 y
+    a=(1 2);   b=(x y z w); ${a:^^b}    1 x 2 y 1 z 2 w
+    a=(1 2 3 4); b=(x);     ${a:^^b}    1 x 2 x 3 x 4 x
+
+Either side may be the shorter one; `:^` stops at whichever ends first
+and `:^^` cycles whichever ends first.
+
+The operand is the **name** of another array, as `:|` and `:*` take one
+and unlike the pattern operators — so there is nowhere to write a
+subscript on it, and reading a bare name as its elements is
+`ArrayNameWithoutSubscriptIsTheList` rather than anything this operator
+decides. A scalar is the one-element list it already is, on either side:
+`s=one; b=(x y); ${s:^b}` is `one x`.
+
+A name nothing is stored under contributes no second list at all, and
+the left operand comes back untouched — which is the **opposite** of
+what the set operators do with the same absence, where an empty set
+removes everything or keeps nothing:
+
+    a=(1 2); ${a:^nosuch}     1 2
+    a=(1 2); ${a:^^nosuch}    1 2
+    a=(1 2); b=(); ${a:^b}    — no field at all
+    a=(1 2); b=(); ${a:^^b}   1 2      — nothing to cycle
+
+### The longer spelling has to be read first
+
+`:^^` is its own operator and not `:^` with a caret in its operand.
+Nothing else distinguishes them, so a parser that tries the two-character
+spelling first answers the doubled one as the plain one — silently, with
+half the fields missing and status 0.
+
+### Quoting picks the operand's shape, not the result's
+
+The left side is joined to one word **before** the zip sees it, and what
+comes back is still a list:
+
+    a=(1 2 3); b=(x y z); "${a:^b}"     two fields: `1 2 3` and `x`
+    a=(1 2 3); b=(x);     "${a:^b}"     the same two fields
+
+That falls out of the ordinary quoting rule rather than needing one of
+its own — the quoted `$a` is the joined value, and the zip pairs that one
+word with the other list's first element.
+
+Quoting does guarantee what `:#` guarantees: an answer with nothing in it
+is one **empty** field rather than no field.
+
+    a=(1 2 3); b=(); set -- ${a:^b};   $# is 0
+    a=(1 2 3); b=(); set -- "${a:^b}"; $# is 1, and that field is empty
+
+Set-and-empty is not never-set, and the two are distinguished on the left
+as well: an empty array quoted is one empty word, which pairs with the
+other list's first element, where a name that was never set is no word to
+pair with at all.
+
+    a=();    b=(x y); set -- "${a:^b}"    2 fields: `` and `x`
+    unset a; b=(x y); set -- "${a:^b}"    1 field, empty
+
+A probe built from `printf '[%s]'` cannot see any of the three rows
+above: it runs its format once even with no arguments, so `[]` is what
+comes back both from an empty list and from a single empty field. The
+field **count** is what tells them apart, and the missing field here read
+as correct until it was counted.
+
+Grammar flag `ParamArrayZip`, set where `ParamElementSelection` is and
+for the same reason: without it the colon opens a substring and the caret
+goes to the arithmetic that reads the offset, which is what the other
+five shells in the panel do with the same characters.
+
 ## A process substitution in an operand — bash only
 
     unset u
@@ -4637,6 +4719,7 @@ reason: `${$((6*7))[1]}`.
     ParamSplitFlag         ${=x}, the split-into-words flag — zsh only
     ParamSetTestFlag       ${+x}, the is-it-set count — zsh only
     ParamElementSelection  ${a:#pat} ${a:|b} ${a:*b} — zsh only
+    ParamArrayZip          ${a:^b} ${a:^^b} — zsh only
     ParamWholeElementReplace
                            ${a:/pat/rep}, the same family's fourth
                            operator — zsh only
@@ -4660,9 +4743,9 @@ reason: `${$((6*7))[1]}`.
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
 `ParamTransformations`, `ParamExpansionFlags`, `ParamTildeFlag`,
-`ParamSplitFlag`, `ParamSetTestFlag`, `ParamElementSelection` and
-`ParamWholeElementReplace` are false for `core`:
-the first and the last two are one shell's, and the `!` family is two
+`ParamSplitFlag`, `ParamSetTestFlag`, `ParamElementSelection`,
+`ParamWholeElementReplace` and `ParamArrayZip` are false for `core`:
+the first and the last three are one shell's, and the `!` family is two
 shells' — neither is a common denominator. `BareSubscript` is false for
 both, and for the same reason as `ParamExpansionFlags`: one shell reads
 those characters that way and three read them as text.

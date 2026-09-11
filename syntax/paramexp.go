@@ -47,6 +47,17 @@ const (
 	// rejected unless the dialect has them.
 	ParamUpper
 	ParamLower
+	// ParamZip is `:^` and ParamZipCycle `:^^`: interleave this parameter
+	// with the array the operand names, taking one element from each in
+	// turn. `:^` stops when the shorter runs out and `:^^` cycles it
+	// instead — `(1 2):^(x y z w)` is `1 x 2 y` and `:^^` is
+	// `1 x 2 y 1 z 2 w`.
+	//
+	// Like the two set operators below, the operand is the **name** of
+	// another array rather than a pattern. zsh alone, so it is rejected
+	// unless the dialect has it.
+	ParamZip
+	ParamZipCycle
 	// ParamExclude is `:#`, ParamKeepOnly its inverse under a flag, and
 	// ParamSetDifference `:|` and ParamSetIntersection `:*`. All four choose
 	// which *elements* survive, where ParamSubstring chooses which
@@ -124,6 +135,10 @@ func (o ParamOp) String() string {
 		return ":"
 	case ParamExclude:
 		return ":#"
+	case ParamZip:
+		return ":^"
+	case ParamZipCycle:
+		return ":^^"
 	case ParamSetDifference:
 		return ":|"
 	case ParamSetIntersection:
@@ -1215,6 +1230,15 @@ func (p *Parser) scanParamOp(s string, e *ParamExpr) (ParamOp, string, bool) {
 	// would otherwise be read as arithmetic — which is exactly what a
 	// grammar without the flag does, and what the error `operand expected
 	// at \`#fig_precmd\'` was.
+	// The zip pair, before the element selection and the substring for the
+	// same reason they are before the substring: `:^` would otherwise be an
+	// offset of `^name`, handed to arithmetic, which is the refusal
+	// `operand expected at ` + "`" + `^fg'` + "`" + ` was (#2112). The longer spelling is
+	// tested first so `:^^` is one operator rather than `:^` and a caret.
+	case p.dialect.ParamArrayZip && strings.HasPrefix(s, ":^^"):
+		return ParamZipCycle, s[3:], true
+	case p.dialect.ParamArrayZip && strings.HasPrefix(s, ":^"):
+		return ParamZip, s[2:], true
 	case p.dialect.ParamElementSelection && len(s) >= 2 && s[0] == ':' &&
 		strings.IndexByte("#|*", s[1]) >= 0:
 		return elementSelectOp(s[1]), s[2:], true
@@ -1373,7 +1397,8 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 			e.Arg = p.wordFrom(rest, start, Unquoted)
 		}
 	case ParamTrimPrefix, ParamTrimPrefixLong, ParamTrimSuffix, ParamTrimSuffixLong,
-		ParamExclude, ParamSetDifference, ParamSetIntersection:
+		ParamExclude, ParamSetDifference, ParamSetIntersection,
+		ParamZip, ParamZipCycle:
 		if rest != "" {
 			e.Arg = p.wordFrom(rest, start, Unquoted)
 		}

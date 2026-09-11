@@ -548,6 +548,9 @@ func Semantics() interp.Semantics {
 	// As zsh: `more tokens expected` and the input is abandoned.
 	s.ConditionArithmeticErrorIsFatal = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
+	// The longest arm, as in the bash column: measured 2026-09-11 on
+	// ksh93u+, `x=abc`, `${x##@(a|ab)}` and `${x##@(ab|a)}` are both `c`.
+	s.LongestPrefixTrimTakesTheWrittenArm = interp.No
 	// Leading digits and no further: `return 3abc` is 3 and `return r` is 0
 	// whatever `r` holds. Not arithmetic, which the leading zero settles —
 	// `return 010` is 10 here while `$((010))` is 8, so the operand is plainly

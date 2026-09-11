@@ -72,16 +72,59 @@ func Decide(out PermissionOutcome) Decision {
 // belongs to docs/design/sandboxing.md, which this composes with rather than
 // duplicates. ActionInherit is never here because the interpreter never asks
 // the gate about it at all.
+//
+// A write to a discarding device is the reads' case rather than the writes':
+// see discardingDevices.
 func Escalates(a interp.Action) bool {
 	switch a.Kind {
 	case interp.ActionExec, interp.ActionSignal:
 		return true
 	case interp.ActionOpen:
-		return a.Write
+		return a.Write && !discards(a)
 	case interp.ActionStat, interp.ActionReadDir, interp.ActionInherit:
 		return false
 	}
 	return false
+}
+
+// discardingDevices are the device files a write to leaves nothing behind.
+//
+// The paragraph above is the whole argument for this, applied to the one
+// write that is in almost every script: `>/dev/null` appears several times a
+// line in ordinary shell, and approving it protects nothing — the bytes go
+// nowhere, nothing afterwards can observe that the write happened, and a
+// client that refuses it changes only whether the command works. A prompt
+// arriving at that rate is the reflex-making prompt Escalates exists to
+// avoid, and it arrived on the *first* script the protocol instrument ran
+// (#1813).
+//
+// A fixed set of names rather than a rule about paths, and the difference is
+// the point. "Anything under /dev" or a prefix list would be the sandboxing
+// policy language written badly in the wrong package, which is exactly what
+// the comment above rules out; `/dev/sda` and `/dev/tty` are writes that
+// change the world as much as any file does. These three are a different kind
+// of statement — named devices whose contract *is* that a write to them is
+// unobservable — and the set does not grow without the same argument being
+// made again about a specific name.
+//
+// `/dev/tty` is deliberately absent. A write there is seen by a person, which
+// is a thing that happens outside the shell; the argument for these three is
+// that nothing happens at all.
+var discardingDevices = map[string]bool{
+	"/dev/null": true,
+	"/dev/zero": true,
+	"/dev/full": true,
+}
+
+// discards reports whether an open reached one of those devices.
+//
+// Both names are asked, because either can be the device: Path is what the
+// script wrote and Resolved is the kernel's own name where the two differ, so
+// a link to /dev/null is still a write to /dev/null. Exact spellings only — a
+// path this has to normalize first is a path rule, and a path rule is the
+// policy language this is not.
+func discards(a interp.Action) bool {
+	return discardingDevices[a.Path] || discardingDevices[a.Resolved]
 }
 
 // Memory holds the answers a person asked to have kept.

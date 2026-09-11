@@ -562,6 +562,24 @@ Reads — a non-writing open, a stat, a directory read — are allowed and
 **recorded**, never asked about. `ActionInherit` is not gated at all, by
 the interpreter's own contract.
 
+**A write to a discarding device is a read's case, not a write's.**
+`/dev/null`, `/dev/zero` and `/dev/full` are opened for writing by
+`>/dev/null`, which is in almost every non-trivial script and often
+several times a line — and approving it protects nothing, because the
+bytes go nowhere and nothing afterwards can observe that the write
+happened. Asking about it is precisely the rate that makes a prompt a
+reflex, and the instrument found it on the first script it ran (#1813).
+The write is still **recorded**: the event stream is where "this script
+wrote to /dev/null" belongs, exactly as a read belongs there. What
+changes is only whether a person is stopped for it.
+
+Three names, compared exactly, and that is deliberate. A prefix rule —
+"anything under `/dev`" — would be the policy language below written
+badly in the wrong place, and it would be wrong: `/dev/sda` is a disk and
+`/dev/tty` is seen by a person. These three are the devices whose
+contract *is* that a write to them is unobservable, and the set does not
+grow without that argument being made again about a specific name.
+
 The set is a value rather than a constant, so a caller that wants
 everything escalated can have it. What it is not is a policy language:
 refusing reads by rule is `docs/design/sandboxing.md`, and this composes

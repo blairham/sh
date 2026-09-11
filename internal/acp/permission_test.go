@@ -77,6 +77,28 @@ func TestEscalatesOnlyForWhatChangesTheWorld(t *testing.T) {
 		{"a stat", interp.Action{Kind: interp.ActionStat, Path: "/tmp/f"}, false},
 		{"a directory read", interp.Action{Kind: interp.ActionReadDir, Path: "/tmp"}, false},
 		{"an inherited descriptor", interp.Action{Kind: interp.ActionInherit, Path: "/dev/fd/3"}, false},
+		// A write that leaves nothing behind is the reads' case: `>/dev/null`
+		// is in almost every script, several times a line, and approving it
+		// protects nothing (#1813).
+		{"a write to the null device", interp.Action{Kind: interp.ActionOpen, Path: "/dev/null", Write: true}, false},
+		{"a write to the zero device", interp.Action{Kind: interp.ActionOpen, Path: "/dev/zero", Write: true}, false},
+		{"a write to the full device", interp.Action{Kind: interp.ActionOpen, Path: "/dev/full", Write: true}, false},
+		// Reached under another name, which is the reason the resolved name
+		// is asked as well as the written one.
+		{
+			"a link that reached the null device",
+			interp.Action{Kind: interp.ActionOpen, Path: "/tmp/link", Resolved: "/dev/null", Write: true},
+			false,
+		},
+		// Reading one is a read like any other and was never asked about.
+		{"a read of the null device", interp.Action{Kind: interp.ActionOpen, Path: "/dev/null"}, false},
+		// The set is three names and not a rule about /dev. A terminal is
+		// seen by a person and a disk is a disk.
+		{"a write to a terminal", interp.Action{Kind: interp.ActionOpen, Path: "/dev/tty", Write: true}, true},
+		{"a write to a device that is not one of them", interp.Action{Kind: interp.ActionOpen, Path: "/dev/sda", Write: true}, true},
+		// And not a prefix: a file *named* for one is an ordinary file.
+		{"a write to a path under the name", interp.Action{Kind: interp.ActionOpen, Path: "/dev/null/x", Write: true}, true},
+		{"a write to a path beginning with the name", interp.Action{Kind: interp.ActionOpen, Path: "/dev/nullx", Write: true}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

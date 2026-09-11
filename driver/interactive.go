@@ -299,9 +299,15 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// bash's run-time status through here for the same reason it does
 		// through a script.
 		ParseFailureStatus: dg.StatusForParseError,
-		Style:              sh.PromptStyle,
-		Editor:             sh.EditorStyle,
-		History:            sh.HistoryStyle,
+		// And whether a construct it refused still asks for another line,
+		// which one of the four does — see
+		// Semantics.PromptAsksAgainAfterARefusedToken. Carried rather than
+		// decided here: the prompt is where the difference shows and the
+		// dialect is where the answer lives.
+		AskAgainAfterARefusedToken: sh.Semantics.PromptAsksAgainAfterARefusedToken,
+		Style:                      sh.PromptStyle,
+		Editor:                     sh.EditorStyle,
+		History:                    sh.HistoryStyle,
 		// And what it runs between commands, which is one dialect's `precmd`
 		// and `preexec` and nothing at all for the other three.
 		Hooks: sh.HookStyle,

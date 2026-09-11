@@ -573,6 +573,46 @@ from making a shell nobody can leave. Measured at a prompt in all four:
 `exit`, `exit 7`, `eval 'exit 7'` and errexit firing (`set -e` then
 `false`) each end the session.
 
+## A construct a prompt can never finish
+
+Two things a parser can say about a half-typed line get run together, and a
+prompt is the one place the difference shows. `if true; then` is
+**unfinished**: the next line continues it. `if; then` is **wrong**: the `if`
+has been opened and not closed, so more input is possible, and the `;` after
+the keyword is a token the grammar will never take, so no amount of it would
+help.
+
+Measured 2026-09-11, `printf 'echo one\nif; then\necho three\n'` into each
+shell under `-i` with `PS1` and `PS2` set:
+
+| | after `if; then` | and then |
+| --- | --- | --- |
+| bash 5.3.15 | refuses at once, no continuation prompt | runs `echo three` |
+| ksh93u+ | the same | runs `echo three` |
+| dash | the same | — |
+| zsh 5.9.2 | draws `PS2` and waits | swallows `echo three` |
+
+The second column is the cost and is why this is not cosmetic: a prompt that
+asks for another line reads the command typed next as part of the construct it
+has already refused, so that command never runs and nothing says so.
+
+`Semantics.PromptAsksAgainAfterARefusedToken`, true for `zsh` alone, carried by
+`driver` to `repl.Shell.AskAgainAfterARefusedToken`. It is read by the front
+end rather than by the interpreter, which is what a prompt's question always
+is, and it is a plain bool rather than an `Answer` because a prompt has no way
+to refuse to run over an axis nobody answered.
+
+**Which failures it is about** is the error's own distinction, which the parser
+had all along: `syntax.ErrUnexpected` at the token, never
+`syntax.ErrUnterminated` at the construct. `while; do` splits the panel the
+same way `if; then` does. `for do` and `case in` split it neither way — every
+shell prompts for both, because what is missing there is a word rather than a
+word being in the way — and so do `echo one |`, `x='never closed`,
+`cat <<EOT` and a trailing backslash.
+
+The prompt asked only whether more input was possible, so this shell gave zsh's
+answer to all four (#1893).
+
 **One divergence recorded rather than reproduced, and it is dash's alone.**
 The boundary here is "the shell is prompting", and dash's is narrower than
 that: with `-i` reading from a **pipe** rather than a terminal, dash prints

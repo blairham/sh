@@ -602,6 +602,12 @@ func Semantics() interp.Semantics {
 	// replaces the record and `if [[ a = b ]]; then [[ b = b ]]; fi` leaves
 	// it, where neither body runs. Measured 2026-09-11 (#1931).
 	s.CompoundBodyDecidesThePipelineStatusRecord = interp.Yes
+	// A construct this shell has refused still asks for another line at a
+	// prompt, where the other three refuse it before the next line is read.
+	// Measured 2026-09-11 with `printf 'echo one\nif; then\necho three\n'`
+	// into `-i`: this shell draws PS2 twice and swallows the `echo three`,
+	// which is what makes it worth an answer rather than a bug (#1893).
+	s.PromptAsksAgainAfterARefusedToken = true
 	s.UnsetEndsTheProducedPipelineStatus = interp.Yes
 	s.SelectLayout = interp.SelectMenuColumns
 	s.SelectPromptNeedsTerminal = interp.No

@@ -577,6 +577,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `length/a-hash-with-a-trim-a-replacement-and-a-substring` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][][X][2]` | `[][][X][2]` | `[][][X][2]` | `[][][X][2]` | `[][][X][2]` |
 | `length/a-hash-then-a-name-is-a-length` | `[1][1][0][0]` | `[1][1][0][0]` | `[1][1][0][0]` | `[1][1][0][0]` | `[1][1][0][0]` | `[1][1][0][0]` |
 | `length/a-hash-then-a-name-and-a-word` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/an-ampersand-in-a-replacement` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a[b]c][a[b]c][a[&]c]` | `[a[b]c][a[b]c][a[&]c]` | `[a[&]c][a[&]c][a[\&]c]` | `[a[&]c][a[&]c][a[&]c]` | `[a[&]c][a[&]c][a[\&]c]` |
+| `param/the-replacement-ampersand-is-the-span-the-pattern-took` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a<XbX>c][<a><b>c<a><b>c][<a>bcabc][abcab<c>]` | `[a<XbX>c][<a><b>c<a><b>c][<a>bcabc][abcab<c>]` | `[a<&>c][<&><&>c<&><&>c][<&>bcabc][abcab<&>]` | `[a<&>c][<&><&>c<&><&>c][<&>bcabc][abcab<&>]` | `[a<&>c][<&><&>c<&><&>c][<&>bcabc][abcab<&>]` |
+| `param/quoting-a-replacement-ampersand` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a&c][abc][a&c]` | `[a&c][abc][a&c]` | `[a&c][a&c][a&c]` | `[a&c][a&c][a&c]` | `[a&c][a&c][a&c]` |
+| `param/a-backslash-in-an-expanded-replacement` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a[&]c][a[\b]c][a[\a]c]` | `[a[&]c][a[\b]c][a[\a]c]` | `[a[\&]c][a[\\&]c][a[\a]c]` | `[a[\&]c][a[\&]c][a[\a]c]` | `[a[\&]c][a[\\&]c][a[\a]c]` |
 
 - `expand/results-not-rescanned-quote` — a quote in expanded text is a literal quote
   ```sh
@@ -1911,6 +1915,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `length/a-hash-then-a-name-and-a-word` — where the panel parts, and it parts on the *parse* rather than on a value: five shells read the `#` as the parameter and answer `$#`, and zsh reads a length over `$-` with a stray `w` after it and refuses. This implementation refuses with zsh — taking the five-shell side would replace one shell's loud refusal with a plausible number, which is the trade the spec entry names as open
   ```sh
   set -- p q; printf '[%s]' "${#-w}"; echo
+  ```
+- `param/an-ampersand-in-a-replacement` — whether an unescaped `&` in a pattern substitution's replacement is the text the pattern matched. bash 5.3 and that build as `sh` read it -- `a[b]c` for the first two -- and nothing else in the panel does, so it is a run-time option (`shopt patsub_replacement`, on with nothing said there) rather than an axis. The third field is the escape half, and it divides the four columns that do not read the `&` as well: bash 3.2 and zsh keep the backslash and ksh93 removes it, which is why a fix that only added the reading would still owe that column an answer. bash 3.2 has neither the behavior nor the option name. dash has no operator and refuses the line (#1862)
+  ```sh
+  v=abc; printf "[%s]" "${v/b/[&]}" "${v//b/[&]}" "${v/b/[\&]}"; echo
+  ```
+- `param/the-replacement-ampersand-is-the-span-the-pattern-took` — what the `&` stands for, on the four shapes a literal pattern cannot tell apart. A wildcard pattern gives `a<XbX>c`, so it is the span the match *took* and not the pattern text -- which is all a history modifier's `&` can ever be, since that one replaces a literal substring. A global substitution reads the replacement once per match rather than once, and the anchored forms read it too. Every other column writes the ampersand through unchanged, so the row is a single difference in four places
+  ```sh
+  v=aXbXc; w=abcabc; printf "[%s]" "${v/X*X/<&>}" "${w//[ab]/<&>}" "${w/#a/<&>}" "${w/%c/<&>}"; echo
+  ```
+- `param/quoting-a-replacement-ampersand` — which `&` is read, in the shell that reads any of them: quoting turns it off character by character, the same channel that decides whether a `*` in the *pattern* half is a pattern. The three fields are one written between quotes, one arriving from an unquoted expansion and the same expansion quoted, and only the middle one is read -- `abc` against `a&c` twice. A fix that read the finished replacement text answers the first and third wrongly while passing every row above, which is why they are recorded here rather than left to the reading rows
+  ```sh
+  v=abc; r="&"; a=${v/b/"&"}; b=${v/b/$r}; c=${v/b/"$r"}; printf "[%s]" "$a" "$b" "$c"; echo
+  ```
+- `param/a-backslash-in-an-expanded-replacement` — the escape rule the ampersand reading brings with it, over text an expansion carried rather than text that was written down -- a written backslash is gone to ordinary quote removal before the replacement is ever read, so only this route can ask. In the column that reads the `&`, a backslash escapes an `&` and another backslash and stands as itself in front of anything else: `[&]`, `[\b]`, `[\a]`. The order is observable in the second field, where resolving the escapes before the ampersands would answer `[\&]`. It is a different rule from the history modifier's, where a backslash stands for whatever byte follows it, which is why the two share one pass with the rule handed in
+  ```sh
+  v=abc; p='[\&]'; q='[\\&]'; r='[\a]'; printf "[%s]" "${v/b/$p}" "${v/b/$q}" "${v/b/$r}"; echo
   ```
 
 ## semantics axes
@@ -8424,6 +8444,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shopt/dash-o-writes-then-reads-back` | **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` *(status 127)* | `vi                  	on~set -o vi` | `vi                  	on~set -o vi` | `vi             	on~set -o vi` | **2>** `<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found` *(status 127)* | **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` *(status 127)* |
 | `shopt/dash-o-listing-is-the-set-o-listing` | `differs` **2>** `<shell>: 1: shopt: not found` | `same` | `same` | `same` | `differs` **2>** `<shell>: shopt: not found` | `differs` **2>** `<shell>:1: command not found: shopt` |
 | `shopt/dash-o-rejects-a-shopt-name` | `st=127` **2>** `<shell>: 1: shopt: not found` | `st=1` **2>** `<shell>: line 1: shopt: cdspell: invalid option name` | `st=1` **2>** `<shell>: line 1: shopt: cdspell: invalid option name` | `st=1` **2>** `<shell>: line 0: shopt: cdspell: invalid option name` | `st=127` **2>** `<shell>: shopt: not found` | `st=127` **2>** `<shell>:1: command not found: shopt` |
+| `shopt/patsub-replacement-reports-on` | `s=127` | `shopt -s patsub_replacement~s=0` | `shopt -s patsub_replacement~s=0` | `s=1` | `s=127` | `s=127` |
+| `shopt/turning-the-replacement-ampersand-off` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` |
 
 - `xtrace/traces-each-command` — the structure is unanimous: every simple command goes to stderr, expanded, before it runs
   ```sh
@@ -8996,6 +9018,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shopt/dash-o-rejects-a-shopt-name` — the two namespaces are not one: `cdspell` is a perfectly good `shopt` name and not a `set -o` option, and bash's wording for the refusal is a word shorter here — `invalid option name` against the `invalid shell option name` its own names get
   ```sh
   shopt -o cdspell; echo st=$?
+  ```
+- `shopt/patsub-replacement-reports-on` — the reissuable line for the option that gates the ampersand reading, and its status. bash 5.3 writes `shopt -s patsub_replacement` at 0 because the option is on with nothing said; bash 3.2 has no such name and answers 1 with its complaint suppressed, and the three shells without the builtin answer 127. It is a capture surface -- a harness snapshots a shell with `shopt -p` and sources the result back -- so a shell reporting the wrong state here re-applies it to every later command (#1712, #1862)
+  ```sh
+  shopt -p patsub_replacement 2>/dev/null; echo s=$?
+  ```
+- `shopt/turning-the-replacement-ampersand-off` — the other state of the option, which is what makes it an option rather than a dialect's fixed answer. With the reading off every column agrees on `a[&]c` for the first field, so the row is not discriminating between shells and is not meant to be -- it is the guard that says the switch is honored, and a shell that read the ampersand unconditionally is the only thing it can fail. The second field is the escape half moving with it: the backslash an expansion brought is kept here where the reading on would have taken it
+  ```sh
+  v=abc; r='[\&]'; shopt -u patsub_replacement 2>/dev/null; printf "[%s]" "${v/b/[&]}" "${v/b/$r}"; echo
   ```
 
 ## parameter expansion

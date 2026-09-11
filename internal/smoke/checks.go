@@ -56,6 +56,14 @@ func (st *state) sessionRestarted() { st.suspended = false }
 // The invariant is checked rather than remembered — see the test.
 type probe struct{ line, mark string }
 
+// blockFailStatus is what the failing-line row exits with.
+//
+// 7 rather than 1: a row that asserted "non-zero" would pass for a store that
+// recorded any failure at all, and the question is whether it recorded *this*
+// one. 1 is what a dozen things return by accident, so it cannot tell the two
+// apart; 7 is returned by nothing else in this suite.
+const blockFailStatus = 7
+
 var (
 	// Asked of an exported variable rather than of the prompt, so that "the
 	// file was read" and "the prompt was set from it" stay two findings.
@@ -75,6 +83,17 @@ var (
 	pipelineProbe = probe{"echo pipe-$((6 * 7)) | tr a-z A-Z", "PIPE-42"}
 	recallProbe   = probe{"echo recall-$((6 * 7))", "recall-42"}
 	searchProbe   = probe{"echo needle-$((6 * 7))-found", "needle-42-found"}
+	// The two the block store's rows run. Looked up in the store afterwards by
+	// exactly this text, which is what the store keeps — the line as typed,
+	// before expansion.
+	blockProbe = probe{"echo block-$((6 * 7))-recorded", "block-42-recorded"}
+	// Prints and then fails, so one row can ask whether the status recorded is
+	// the line's own rather than merely non-zero. The subshell is what makes
+	// the line fail without ending the session.
+	blockStatusProbe = probe{
+		fmt.Sprintf("echo blockfail-$((6 * 7))-recorded; (exit %d)", blockFailStatus),
+		"blockfail-42-recorded",
+	}
 	// A line after the one being searched for, so the search has to find what
 	// it was asked for rather than the last thing typed — which up-arrow
 	// would also have found.
@@ -571,6 +590,50 @@ func checks() []check {
 					return Fail, "C-r did not find the earlier line: " + err.Error()
 				}
 				return Pass, "C-r found a line two back and ran it"
+			},
+		},
+		{
+			name: "a line reaches the block store",
+			proves: "the session writes its durable record of what ran — the one thing here " +
+				"that can stop working without any other row noticing",
+			run: func(ctx context.Context, s *session, _ *state) (Outcome, string) {
+				if err := s.runProbe(blockProbe); err != nil {
+					return Fail, "the line to record did not run: " + err.Error()
+				}
+				r, body, err := s.blockFor(ctx, blockProbe.line)
+				if err != nil {
+					return Fail, err.Error()
+				}
+				if r.Status != 0 {
+					return Fail, fmt.Sprintf(
+						"recorded status %d for a line that succeeded", r.Status)
+				}
+				// The body as well as the record, because a store that kept
+				// the line and lost what it printed is half a feature, and the
+				// two halves ship separately by design.
+				if !strings.Contains(body, blockProbe.mark) {
+					return Fail, "the record kept no output holding " +
+						quote(blockProbe.mark) + ": " + quote(Readable(body))
+				}
+				return Pass, "recorded the line, its status and the output it printed"
+			},
+		},
+		{
+			name:   "a failing line's own status is recorded",
+			proves: "the record carries the status the line exited with, which is what sends a person looking for it",
+			run: func(ctx context.Context, s *session, _ *state) (Outcome, string) {
+				if err := s.runProbe(blockStatusProbe); err != nil {
+					return Fail, "the line to record did not run: " + err.Error()
+				}
+				r, _, err := s.blockFor(ctx, blockStatusProbe.line)
+				if err != nil {
+					return Fail, err.Error()
+				}
+				if r.Status != blockFailStatus {
+					return Fail, fmt.Sprintf("recorded status %d, and the line exited with %d",
+						r.Status, blockFailStatus)
+				}
+				return Pass, fmt.Sprintf("recorded status %d", blockFailStatus)
 			},
 		},
 		{

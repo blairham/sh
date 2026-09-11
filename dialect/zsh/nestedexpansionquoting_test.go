@@ -82,3 +82,84 @@ func TestANestedExpansionIsReadInTheQuotingAroundIt(t *testing.T) {
 		})
 	}
 }
+
+// The third fault in the same neighborhood, and the one the second uncovered.
+//
+// A `${ }` written inside a double-quoted run brings its own quoting with it,
+// so the `"` in `"${:-"Z"}"` is that expansion's rather than the run's closing
+// one. The scan that looks for the run's end read it as the close, which left
+// the nested `${` swallowed and uncounted while its `}` landed outside and
+// closed the *enclosing* expansion. What followed fell out as literal text.
+//
+// This is what powerlevel10k's directory segment is written as —
+// `${P9K_CONTENT::="%{d%}${:-"%B%F{039}"}…%{d%}"}` — and the prompt drew the
+// `"}`, `}+}` and `}}}+}` tails of the expansions it closed early, with the
+// leading path components gone (#2092). It could not be seen until #2074 made
+// the marker replacement run at all, so it is a defect rather than a
+// regression.
+//
+// Measured on zsh 5.9.2, 2026-09-11, under `env -i`. The fix is the core's —
+// all six panel columns answer `[X{039}z]` to
+// `printf '[%s]' "${u:-"${w:-"X{039}"}z"}"` — and these rows are here because
+// this is the shell whose prompt is made of the shape.
+func TestABracedExpansionInAQuotedRunKeepsItsOwnQuotes(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{
+			// The assignment form the theme writes, in miniature: the value
+			// is a quoted run holding a quoted nested expansion.
+			name: "an assignment operand holding a quoted nested expansion",
+			src:  `unset v; print -r -- "[${v::="a${:-"X{1}"}b"}]" "[$v]"`,
+			want: "[aX{1}b] [aX{1}b]\n",
+		},
+		{
+			// The control, and it is one by measurement rather than by
+			// intention: with nothing unbalanced in the nested expansion the
+			// misread quotes fall back into place, so this row answered
+			// correctly before the fix and answers correctly after. It is
+			// here to say what the rows around it are *not* about — the
+			// quote alone is not enough, the braces have to be moved by it.
+			name: "nothing unbalanced inside, which always worked",
+			src:  `unset v; print -r -- "[${v::="A${:-"B"}C"}]" "[$v]"`,
+			want: "[ABC] [ABC]\n",
+		},
+		{
+			// The silent route, and the one the prompt takes: `${(%%)…}`
+			// re-reads the text as a raw body, where there is no enclosing
+			// word for the stray quote to unbalance. This wrote
+			// `aX{1"}b"}` and exited 0.
+			name: "through the prompt flag, which said nothing",
+			src:  `setopt promptsubst; unset v; s='${v::="a${:-"X{1}"}b"}'; print -r -- "[${(%%)s}]" "[$v]"`,
+			want: "[aX{1}b] [aX{1}b]\n",
+		},
+		{
+			// Three levels, which is what the segment really nests to.
+			name: "three levels of it",
+			src:  `unset u w x; print -r -- "[${u:-"${w:-"${x:-"p{q}r"}s"}t"}]"`,
+			want: "[p{q}rst]\n",
+		},
+		{
+			// The neighbor the change must not move: a bare `{` in a
+			// double-quoted expansion still opens no level, which is
+			// TestANestedExpansionIsReadInTheQuotingAroundIt's subject and
+			// the reading the step-over has to preserve.
+			name: "a bare brace in the run still closes nothing",
+			src:  `unset w; print -r -- "[${${:-${w::=a{b}c}}+]" "[$w]"`,
+			want: "[a{bc+] [a{b]\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, dir, tc.src)
+			if st != 0 {
+				t.Fatalf("status = %d, out %q", st, out)
+			}
+			if out != tc.want {
+				t.Errorf("%s\noutput = %q\n  want   %q", tc.src, out, tc.want)
+			}
+		})
+	}
+}

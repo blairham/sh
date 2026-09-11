@@ -211,6 +211,57 @@ which is not a second answer about operands but this one, since a
 process substitution is no more written inside double quotes here than
 anywhere else.
 
+### A nested `${ }` in a quoted run brings its own quoting
+
+A `"` written inside an operand opens a run of its own, and an expansion
+written **inside that run** is quoted the same way a substitution is: its
+own `"` are its, not the run's closing one.
+
+Measured 2026-09-11 from a script file under `env -i`, **unanimous** across
+zsh 5.9.2, bash 5.3.15, that build invoked as `sh`, bash 3.2.57, dash and
+ksh93, with `u` and `w` unset:
+
+| probe | result |
+| --- | --- |
+| `"${u:-"${w:-ab}z"}"` | `abz` |
+| `"${u:-"${w:-"X{039}"}z"}"` | `X{039}z` |
+| `"${u:-"${w:-"a}b"}z"}"` | `a}bz` |
+| `"${u:-"${w:-"$( echo q )"}z"}"` | `qz` |
+
+The first row is the control and the last is the `$( )` spelling of the
+same nesting, which has its own entry above; the middle two are what the
+rule is for.
+
+Reading the run as text does not merely mispair the quotes, it moves the
+**braces**. The nested `${` is consumed inside the quote and never
+counted, and its `}` then lands outside and closes the *enclosing*
+expansion — so `"${u:-"${w:-"X{039}"}z"}"` ended at the `}` of `X{039}`
+and `"}z"}` fell out as literal characters. In a word the leftover quote
+usually unbalances something and the line is refused; in a here-document
+body, and in the `${(%%)…}` that re-reads a prompt, there is no enclosing
+word to unbalance, so the same misreading writes the wrong text and exits
+0. powerlevel10k's directory segment is
+`${P9K_CONTENT::="…${:-"%B%F{039}"}…"}`, and the prompt drew the `"}`,
+`}+}` and `}}}+}` tails of the expansions closed early, with the leading
+path components gone (#2092).
+
+The run is still a run once the reader is inside it, so the nested
+expansion is double-quoted **content**: a bare `{` in it opens no level,
+by the rule above. In a here-document body, where a leftover quote
+unbalances nothing,
+
+    [${u:-"${w:-a{b}c"}z"}]
+
+is `[a{bcz"}]` in zsh 5.9.2, bash 5.3.15, that build as `sh`, bash 3.2.57
+and dash, the nested `${w:-a{b}` having ended at the first `}`. ksh93
+refuses the line — it is the panel member that balances a bare brace
+hardest — and no dialect here answers for it.
+
+What the step-over does **not** decide is what quoting means once it is
+inside: a single quote in a double-quoted operand is still an ordinary
+character by the rule above, so `"${x:-"${y:-'"'}"}"` is still refused
+by five of the six and still refused here.
+
 ### Where a word operand is matched
 
 A word operand is part of the word it is written in, and it is matched

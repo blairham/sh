@@ -2748,6 +2748,13 @@ func unescapeBackquoted(s string) string {
 // steps over a nested substitution whole, exactly as scanDouble does when it
 // is building spans rather than skipping them.
 //
+// A `${ }` written inside the run is the same sentence, and it was left out
+// of it for a year: its operand is a word rather than a program, but the word
+// brings its own quoting just as the program does, so the `"` in
+// `"${y:-"Z"}"` is that expansion's and not this run's closing one (#2092).
+// The loop below has it; skipSubstitution deliberately does not, and the note
+// on it says why.
+//
 // Single quotes need none of this: nothing inside them is special, which is
 // the whole of their specification, and `escapes` is the flag that already
 // separates the two.
@@ -2768,6 +2775,45 @@ func (l *Lexer) skipQuoted(quote byte, escapes bool) {
 			continue
 		}
 		if escapes && l.skipSubstitution() {
+			continue
+		}
+		if escapes && c == '$' && l.peekAt(1) == '{' {
+			// A `${…}` written inside this run brings its own quoting too,
+			// so the `"` in `"${y:-"Z"}"` belongs to that expansion and is
+			// not the one that ends this run. Skipping the run character by
+			// character reads it as the closing quote, which leaves the
+			// braces on either side of it counted by the *wrong* scanner:
+			// the nested `${` is consumed inside the quote and uncounted,
+			// and its `}` then lands outside and closes the enclosing
+			// expansion. Measured 2026-09-11, unanimous across the six-shell
+			// panel — `unset u w; printf '[%s]' "${u:-"${w:-"X{039}"}x"}"`
+			// is `[X{039}x]` in zsh 5.9.2, bash 5.3.15, bash-as-sh, bash
+			// 3.2.57, dash and ksh93, where this shell ended the expansion
+			// at the `}` of `X{039}` and left `"}x"}` as literal text.
+			//
+			// This is the same sentence as the `$( )` case just above, one
+			// construct over, and it was left out of it: powerlevel10k's
+			// directory segment is `${P9K_CONTENT::="…${:-"%B%F{039}"}…"}`
+			// and the prompt drew the `"}`, `}+}` and `}}}+}` tails of the
+			// expansions this closed early (#2092).
+			//
+			// scanBraces rather than a brace counter here, because it is
+			// already the answer to "where does a `${` end" — it knows that
+			// a `}` inside quotes closes nothing, that `$(` ends at its own
+			// parenthesis, and which dialects let a bare `{` nest. A second
+			// counter beside it would be a second answer to one question.
+			// DoubleQuoted because that is what this run is, and it is the
+			// half that is measured rather than assumed: a bare `{` inside
+			// one opens no level, so in a here-document body
+			// `[${u:-"${w:-a{b}c"}z"}]` is `[a{bcz"}]` in zsh 5.9.2, bash
+			// 5.3.15, that build as `sh`, bash 3.2.57 and dash alike. Passing
+			// the run's quoting on is what keeps that true — read as if the
+			// nested expansion stood bare, the `{` opens a level, the
+			// expansion runs past the `}` that closes it and the line is
+			// refused. With BareBraceNestsInExpansion off, as it is in the
+			// core, the two readings agree, which is why the row that grades
+			// this one carries the flag.
+			l.scanBraces(DoubleQuoted)
 			continue
 		}
 		l.advance()
@@ -2819,6 +2865,14 @@ func unterminatedQuoteMsg(quote byte) string {
 // agreeing — `${x:-"${y:-'"'}"}` is accepted by bash alone and refused by the
 // other five — so it is a dialect question rather than a delimiter one, and
 // nothing here should answer it.
+//
+// Where a `${ }` *does* have to be stepped over is skipQuoted, and the
+// difference is which question is being asked: there the run has already been
+// entered and the only thing wanted is where the nested expansion ends, which
+// scanBraces answers. Here the caller is still choosing what it is looking
+// at, and the two callers want opposite things — scanBraces counts a nested
+// `${` on its own loop, with its own `brace` and its own dialect flags, and a
+// step-over here would take that decision away from it.
 func (l *Lexer) skipSubstitution() bool {
 	if l.peek() == '`' {
 		l.skipBackticks()

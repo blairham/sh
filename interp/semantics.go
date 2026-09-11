@@ -2637,7 +2637,22 @@ type Semantics struct {
 	// One field for both builtins, because no shell in the panel splits them:
 	// where the bare form differs from `-p` it differs for both, and by the
 	// same rule.
+	//
+	// It is the *filtered* listing's row as well — `declare -x` and
+	// `typeset -a` with no names — which is measured and not assumed: bash
+	// writes `declare -x e="1"` for both, and ksh93 and zsh drop the command
+	// word for both, `e=1`. So the filter chooses the names and this chooses
+	// the row, and neither builtin needs a form of its own.
 	BareDeclarationListing DeclarationListingForm
+
+	// DeclarationListingFilter is how a `declare` or `typeset` with attribute
+	// letters and no names combines them when more than one is written —
+	// `declare -ir`, `typeset -ax`. See DeclarationFilterForm, which carries
+	// the three shells' three answers and the measurements.
+	//
+	// Asked only where two letters were written: all three readings agree on
+	// one letter, so a dialect that has not answered still lists `declare -x`.
+	DeclarationListingFilter DeclarationFilterForm
 
 	// DeclarePrintReportsAMissingName makes `typeset -p nosuch` say so and
 	// fail. bash and zsh report it (with their own wording — see

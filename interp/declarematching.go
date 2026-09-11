@@ -72,11 +72,20 @@ func (r *Runner) declareMatching(name string, patterns []string, f declareFlags)
 		// match to 9 and `typeset +m 'p*'=9` does the same, which is
 		// measured and is the one place the plus sign decides nothing.
 		return r.matchedListing(patterns, f.matchNames)
-	case !f.added && f.attributeFilter() != nil:
+	case !f.added && f.attributeLetterWritten():
 		// Every letter on the line was written with a plus, so none of them
 		// is a declaration and all of them are a *filter*: the matching
 		// names carrying those attributes, named and not valued.
-		return r.matchedNameListing(patterns, f.attributeFilter())
+		//
+		// The arm asks only what the *line* says, so that a dialect which
+		// has not answered how two letters combine is consulted here and not
+		// in front of the arms above — a `-fm` or a `-pm` is neither this
+		// listing nor a line that needs the answer.
+		keep, answered := r.attributeFilter(f)
+		if !answered {
+			return r.status
+		}
+		return r.matchedNameListing(patterns, keep)
 	}
 	// Whatever the letters ask for, applied to the parameters that already
 	// exist. A pattern creates nothing: `typeset -mx 'nosuch*'` is a silent
@@ -123,43 +132,158 @@ func withoutMatching(f declareFlags) declareFlags {
 	return f
 }
 
-// attributeFilter is the test a plus-signed attribute letter makes of a
-// declaration, or nil where no such letter was written. It is the `+mx`
-// reading — the matching names that are exported — and it is a filter rather
-// than a request because a plus letter takes an attribute *off*, which no
-// listing does.
+// DeclarationFilterForm is how the attribute letters of a listing with no
+// names combine when more than one is written — `declare -ir`, `typeset -ax`.
+//
+// One letter is not enough to pin it: the three shells agree about `-x`
+// alone and give three different answers to two letters together, so this is
+// a form rather than a flag. Measured 2026-09-10 with a scrubbed environment
+// and no startup files, over a table holding an array, an integer array, a
+// readonly array, an association, an integer, a readonly, an export and a
+// readonly export.
+type DeclarationFilterForm int
+
+const (
+	// DeclarationFilterUnspecified is no answer. One letter still lists,
+	// because all three readings agree there; two letters together are
+	// refused like any other unanswered axis.
+	DeclarationFilterUnspecified DeclarationFilterForm = iota
+	// DeclarationFilterAnyLetter lists a name carrying *any* of the letters'
+	// attributes: zsh. `typeset -ax` there writes every array and every
+	// exported name, and `typeset +xr` every exported name and every
+	// read-only one.
+	//
+	// zsh's own *kind* letters are mutually exclusive — it refuses
+	// `typeset -ai x=(1 2)` as an inconsistent type — and two of them
+	// written together select one rather than both, by a precedence of its
+	// own: `typeset -ai` and `typeset -ia` alike write the integers and no
+	// array, `typeset -aA` and `typeset -Aa` alike write the associations.
+	// That is deliberately not modeled. It is a fact about a type system
+	// this engine does not share — here an array *can* be an integer array —
+	// and the reading below writes both kinds, which is a superset of what
+	// zsh writes for a line zsh cannot even declare.
+	DeclarationFilterAnyLetter
+	// DeclarationFilterEveryLetter lists a name carrying *all* of them:
+	// ksh93, where `typeset -xi` and `typeset +xi` both write the one name
+	// that is exported and an integer, and `typeset -ir` writes nothing at
+	// all. Its kind letters never reach this reading — `typeset -ax` there
+	// is refused outright as an invalid variable name.
+	DeclarationFilterEveryLetter
+	// DeclarationFilterKindNarrowsAny is bash's, and it is neither of the
+	// other two: the kind letters `-a` and `-A` *narrow* and the rest join.
+	// A name must be every kind that was written and carry any one of the
+	// remaining attributes.
+	//
+	// Measured from the same table: `declare -ir` writes the integers and
+	// the read-only names alike — a join — while `declare -ai` writes only
+	// the array that is also an integer and `declare -ax` only the array
+	// that is also exported. `declare -aA` writes nothing, since no name is
+	// both kinds, and the letters' order decides nothing: `-xa` and `-ax`
+	// agree.
+	DeclarationFilterKindNarrowsAny
+)
+
+func (f DeclarationFilterForm) String() string {
+	switch f {
+	case DeclarationFilterAnyLetter:
+		return "DeclarationFilterAnyLetter"
+	case DeclarationFilterEveryLetter:
+		return "DeclarationFilterEveryLetter"
+	case DeclarationFilterKindNarrowsAny:
+		return "DeclarationFilterKindNarrowsAny"
+	}
+	return "DeclarationFilterUnspecified"
+}
+
+// attributeLetterWritten reports whether any letter this filter reads was
+// written at all. Purely a question about the line, so it is the one a switch
+// arm can ask before the dialect is consulted — see declareMatching.
+func (f declareFlags) attributeLetterWritten() bool {
+	return f.integer || f.float || f.readonly || f.export || f.array ||
+		f.assoc || f.lower || f.upper || f.unique || f.hidden
+}
+
+// attributeFilter is the test the attribute letters make of a declaration, or
+// nil where no such letter was written. It is the `+mx` reading — the
+// matching names that are exported — and the `declare -x` one, which selects
+// the same names and writes their values; the two share it so that a letter
+// added to one is read by both.
 //
 // `-g` is deliberately absent: it says where a declaration lands rather than
 // what a name carries, so there is nothing for it to filter on and a line
 // that writes only `+g` is a declaration and not a listing.
-func (f declareFlags) attributeFilter() func(declaration) bool {
-	var tests []func(declaration) bool
-	add := func(on bool, test func(declaration) bool) {
+//
+// The second result is whether the line is one this dialect answers at all.
+// Only a line writing two letters can fail, and only where the dialect left
+// DeclarationFilterForm unanswered: the three readings coincide on one
+// letter, so the common line is answered whatever the dialect said.
+func (r *Runner) attributeFilter(f declareFlags) (func(declaration) bool, bool) {
+	var kinds, attrs []func(declaration) bool
+	add := func(on bool, test func(declaration) bool, to *[]func(declaration) bool) {
 		if on {
-			tests = append(tests, test)
+			*to = append(*to, test)
 		}
 	}
-	add(f.integer, func(d declaration) bool { return d.integer })
-	add(f.float, func(d declaration) bool { return d.float })
-	add(f.readonly, func(d declaration) bool { return d.readonly })
-	add(f.export, func(d declaration) bool { return d.exported })
-	add(f.array, func(d declaration) bool { return d.isArr })
-	add(f.assoc, func(d declaration) bool { return d.isAssoc })
-	add(f.lower, func(d declaration) bool { return d.lower })
-	add(f.upper, func(d declaration) bool { return d.upper })
-	add(f.unique, func(d declaration) bool { return d.unique })
-	add(f.hidden, func(d declaration) bool { return d.hidden })
+	// The kind letters first, and apart, because one dialect reads them as a
+	// narrowing where the others read them as two more members of the join.
+	add(f.array, func(d declaration) bool { return d.isArr }, &kinds)
+	add(f.assoc, func(d declaration) bool { return d.isAssoc }, &kinds)
+	add(f.integer, func(d declaration) bool { return d.integer }, &attrs)
+	add(f.float, func(d declaration) bool { return d.float }, &attrs)
+	add(f.readonly, func(d declaration) bool { return d.readonly }, &attrs)
+	add(f.export, func(d declaration) bool { return d.exported }, &attrs)
+	add(f.lower, func(d declaration) bool { return d.lower }, &attrs)
+	add(f.upper, func(d declaration) bool { return d.upper }, &attrs)
+	add(f.unique, func(d declaration) bool { return d.unique }, &attrs)
+	add(f.hidden, func(d declaration) bool { return d.hidden }, &attrs)
+	switch len(kinds) + len(attrs) {
+	case 0:
+		return nil, true
+	case 1:
+		// Every reading agrees on one letter, so the dialect is not asked —
+		// which is what keeps `declare -x` answered in a dialect that has
+		// not chosen. See "Ask only where it matters".
+		return anyOf(append(kinds, attrs...)), true
+	}
+	switch r.sem().DeclarationListingFilter {
+	case DeclarationFilterAnyLetter:
+		return anyOf(append(kinds, attrs...)), true
+	case DeclarationFilterEveryLetter:
+		return everyOf(append(kinds, attrs...)), true
+	case DeclarationFilterKindNarrowsAny:
+		narrow, join := everyOf(kinds), anyOf(attrs)
+		switch {
+		case join == nil:
+			// Kind letters alone — `declare -aA`, which selects nothing
+			// because no name is both.
+			return narrow, true
+		case narrow == nil:
+			// No kind letter, so there is nothing to narrow and the join is
+			// the whole of it: `declare -ir` writes the integers and the
+			// read-only names alike.
+			return join, true
+		}
+		return func(d declaration) bool { return narrow(d) && join(d) }, true
+	}
+	r.diagf("%s\n", r.unanswered("what two attribute letters together select"))
+	r.status = 2
+	r.unspecified = true
+	return nil, false
+}
+
+// anyOf is a declaration carrying at least one of the attributes — the join.
+//
+// Measured rather than the reading a filter invites: `typeset +mxi '[ipq]'`
+// over an exported `q`, an integer `i` and a plain `p` writes `i` and `q` in
+// zsh 5.9.2, so a name carrying *either* attribute is in and `p` is out for
+// carrying neither. The same answer without a pattern: `typeset +xr` writes
+// every exported name and every read-only one. An intersection agrees with it
+// on one letter and disagrees on every line that writes two, which is why one
+// letter is not enough to pin it (#1576).
+func anyOf(tests []func(declaration) bool) func(declaration) bool {
 	if len(tests) == 0 {
 		return nil
 	}
-	// Any of them and not all of them, which is measured rather than the
-	// reading a filter invites: `typeset +mxi '[ipq]'` over an exported `q`,
-	// an integer `i` and a plain `p` writes `i` and `q` in zsh 5.9.2 — so a
-	// name carrying *either* attribute is in, and `p` is out for carrying
-	// neither. The same answer without a pattern: `typeset +xr` writes every
-	// exported name and every read-only one. An intersection agrees with it
-	// on one letter and disagrees on every line that writes two, which is
-	// why one letter is not enough to pin it (#1576).
 	return func(d declaration) bool {
 		for _, test := range tests {
 			if test(d) {
@@ -167,6 +291,22 @@ func (f declareFlags) attributeFilter() func(declaration) bool {
 			}
 		}
 		return false
+	}
+}
+
+// everyOf is a declaration carrying all of them — ksh93's whole reading, and
+// bash's of the kind letters alone.
+func everyOf(tests []func(declaration) bool) func(declaration) bool {
+	if len(tests) == 0 {
+		return nil
+	}
+	return func(d declaration) bool {
+		for _, test := range tests {
+			if !test(d) {
+				return false
+			}
+		}
+		return true
 	}
 }
 
@@ -288,6 +428,33 @@ func (r *Runner) declarationNameListing(names []string) int {
 // the letters already said which attributes these are.
 func (r *Runner) matchedNameListing(patterns []string, keep func(declaration) bool) int {
 	return r.declarationFilteredNameListing(r.matchedNames(patterns), keep)
+}
+
+// declarationFilteredListing is the *valued* half: the names a minus-signed
+// attribute letter selects, each written as a row rather than as a bare name
+// — `declare -x e="1"`, `q=( a b )`.
+//
+// The row is BareDeclarationListing's, which is measured rather than assumed:
+// the shape bash writes for `declare -x` is the shape it writes for a bare
+// `export`, and the shape ksh93 and zsh write for `typeset -x` is the one
+// they write for a bare `export` too. See that field.
+//
+// Deliberately beside declarationFilteredNameListing and taking the same
+// `keep`: the two listings differ in what they *write* and not in which names
+// they write, and a second selection here is how the two would come to
+// disagree about a name.
+func (r *Runner) declarationFilteredListing(names []string, keep func(declaration) bool) int {
+	for _, name := range names {
+		// Whatever declarationOf knows, the way the bare listing takes it: a
+		// name that is typed and holds nothing is still a row, and the form
+		// is what decides how it writes one.
+		d, _ := r.declarationOf(name)
+		if !keep(d) {
+			continue
+		}
+		r.printf("%s\n", r.listedDeclaration(r.sem().BareDeclarationListing, d))
+	}
+	return 0
 }
 
 // declarationFilteredNameListing is that reading over names already chosen —

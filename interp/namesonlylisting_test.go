@@ -32,6 +32,10 @@ func withNamesOnly(s *Semantics) {
 	s.DeclaredNameWithoutValueIsEmpty = Yes
 	s.SignAloneIsAnOptionWord = Yes
 	s.FunctionNamesUnderPlus = Yes
+	// How two letters combine, which the *filter* needs and the sign does
+	// not: one letter reads the same under every answer, so this only
+	// decides the two-letter rows. See Semantics.DeclarationListingFilter.
+	s.DeclarationListingFilter = DeclarationFilterAnyLetter
 }
 
 // The plus sense of the `f` letter, with no pattern anywhere on the line —
@@ -161,35 +165,180 @@ func TestAPlusSignedAttributeLetterIsAFilterOverTheWholeTable(t *testing.T) {
 	}
 }
 
-// The *minus* sign on the same attribute letter is not this listing. It is the
-// filtered listing carrying values — the names selected, each with what it
-// holds — and that one is not built (#1756).
+// The *minus* sign on the same attribute letter is the other listing: the
+// names that filter selects, each written as a row carrying its value. The
+// two signs must not answer alike — a minus form reaching the *names* listing
+// would look exactly like a working `-x` to anything reading it, and is a
+// shape no shell writes.
 //
-// What must not happen is the third answer: the minus form quietly reaching
-// the *names* listing, which would look exactly like a working `-x` to
-// anything reading it and is a shape no shell writes. So the assertion is the
-// pair rather than either row — the two signs must not answer alike, and the
-// minus must write no bare-name row at all.
-func TestAMinusSignedAttributeLetterIsNotTheNamesListing(t *testing.T) {
+// It wrote nothing at all, at status 0, until #1868: the letter was read as a
+// filter and then given up on, so the common way to dump an environment as
+// re-readable declarations came back empty.
+//
+// The row is BareDeclarationListing's, which is asserted here as *bytes*
+// rather than by containment: a listing that grew a command word or lost one
+// is the failure this catches, and a substring test cannot see either.
+func TestAMinusSignedAttributeLetterListsTheSelectedValues(t *testing.T) {
+	src := "qa=1\nexport qb=2\ntypeset -i qc=3\n"
+	clustered := func(s *Semantics) {
+		withNamesOnly(s)
+		s.BareDeclarationListing = DeclareListingClustered
+	}
+	plain := func(s *Semantics) {
+		withNamesOnly(s)
+		s.BareDeclarationListing = DeclareListingPlainAssignment
+		s.DeclareValueQuoting = ListingQuoteWhenNeededPlain
+	}
+	for _, tc := range []struct {
+		name, line string
+		set        func(*Semantics)
+		want       string
+	}{
+		{"the row the clustered form writes", "typeset -x", clustered, "declare -x qb=\"2\"\n"},
+		{"the row the plain form writes", "typeset -x", plain, "qb=2\n"},
+		{"the other letter", "typeset -i", plain, "qc=3\n"},
+		{"two letters follow the axis", "typeset -xi", plain, "qb=2\nqc=3\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, st := declRun(t, src+tc.line, tc.set, Diagnostics{})
+			if onlyQ(out) != tc.want || errs != "" || st != 0 {
+				t.Errorf("%s = %q (stderr %q, status %d), want %q", tc.line, out, errs, st, tc.want)
+			}
+		})
+	}
+}
+
+// The two signs are two listings, which is the pair this asserts rather than
+// either row: the plus names the selection and the minus values it.
+func TestTheTwoSignsOfAnAttributeLetterAreTwoListings(t *testing.T) {
 	src := "qa=1\nexport qb=2\n"
-	plus, errs, st := declRun(t, src+"typeset +x", withNamesOnly, Diagnostics{})
+	plain := func(s *Semantics) {
+		withNamesOnly(s)
+		s.BareDeclarationListing = DeclareListingPlainAssignment
+		s.DeclareValueQuoting = ListingQuoteWhenNeededPlain
+	}
+	plus, errs, st := declRun(t, src+"typeset +x", plain, Diagnostics{})
 	if onlyQ(plus) != "qb\n" || errs != "" || st != 0 {
 		t.Fatalf("typeset +x = %q (stderr %q, status %d), want %q", plus, errs, st, "qb\n")
 	}
-	minus, errs, st := declRun(t, src+"typeset -x", withNamesOnly, Diagnostics{})
-	if st != 0 || errs != "" {
-		t.Errorf("typeset -x = %q (stderr %q, status %d), want a silent 0", minus, errs, st)
+	minus, errs, st := declRun(t, src+"typeset -x", plain, Diagnostics{})
+	if onlyQ(minus) != "qb=2\n" || errs != "" || st != 0 {
+		t.Fatalf("typeset -x = %q (stderr %q, status %d), want %q", minus, errs, st, "qb=2\n")
 	}
 	if onlyQ(minus) == onlyQ(plus) {
 		t.Errorf("typeset -x and typeset +x both wrote %q: the sign picks between two "+
 			"listings and the minus one carries values, so answering them alike is a "+
 			"third shape no shell writes", onlyQ(plus))
 	}
-	for _, row := range []string{"qa\n", "qb\n"} {
-		if containsDeclLine(minus, row) {
-			t.Errorf("typeset -x = %q, want no bare-name row %q — that is the plus "+
-				"form's shape, and this one is unbuilt rather than named (#1756)", minus, row)
+}
+
+// A name that is typed and holds nothing is a row of the filtered listing,
+// which is the state #1664 added and the one a listing is likeliest to drop:
+// the kind is all there is, and nothing scalar records it.
+//
+// It was dropped, and by a *second* reading of "is this still a declaration"
+// — declarableNames kept its own list of the attributes that outlive a value
+// and that list had no room for a compound, so `typeset -p q` wrote the row
+// from the same state the listing passed over.
+func TestAValuelessCompoundIsAmongTheFilteredRows(t *testing.T) {
+	kept := func(s *Semantics) {
+		withNamesOnly(s)
+		s.BareDeclarationListing = DeclareListingClustered
+		s.LocalOptions = "aAgilprux"
+		// The other reading of a valueless declaration: the name is left
+		// typed and unset rather than empty, which is the state this is
+		// about — an empty compound has elements to print and never reaches
+		// the question.
+		s.DeclaredNameWithoutValueIsEmpty = No
+	}
+	// A local is the route that reaches the state: the name is typed, the
+	// scope has taken its value away, and the kind is the whole of what is
+	// left.
+	out, errs, st := declRun(t, "f() { local -a qz\ntypeset -a\n}\nf", kept, Diagnostics{})
+	if onlyQ(out) != "declare -a qz\n" || errs != "" || st != 0 {
+		t.Errorf("typeset -a = %q (stderr %q, status %d), want %q",
+			out, errs, st, "declare -a qz\n")
+	}
+}
+
+// How two letters combine is the axis, and it is asked only where two were
+// written: the three readings agree on one letter, so a dialect that has not
+// chosen still answers `typeset -x`.
+//
+// The table is one name per interesting combination, so that a union, an
+// intersection and a narrowing each write something the other two do not.
+func TestTheAttributeLettersCombineTheWayTheAxisSays(t *testing.T) {
+	src := "qa=1\nexport qb=2\ntypeset -i qc=3\ntypeset -a qd=(p)\ntypeset -ai qe=(4)\n"
+	with := func(form DeclarationFilterForm) func(*Semantics) {
+		return func(s *Semantics) {
+			withNamesOnly(s)
+			s.BareDeclarationListing = DeclareListingPlainAssignment
+			s.DeclareValueQuoting = ListingQuoteWhenNeededPlain
+			s.DeclarationListingFilter = form
 		}
+	}
+	for _, tc := range []struct {
+		name, line string
+		form       DeclarationFilterForm
+		want       string
+	}{
+		// One letter, under every answer: the row that says the axis is not
+		// asked on the line a script actually writes.
+		{"one letter, any", "typeset -i", DeclarationFilterAnyLetter, "qc=3\nqe=( 4 )\n"},
+		{"one letter, every", "typeset -i", DeclarationFilterEveryLetter, "qc=3\nqe=( 4 )\n"},
+		{"one letter, narrowing", "typeset -i", DeclarationFilterKindNarrowsAny, "qc=3\nqe=( 4 )\n"},
+		{"one letter, unanswered", "typeset -i", DeclarationFilterUnspecified, "qc=3\nqe=( 4 )\n"},
+
+		// Two attribute letters: a join, and the intersection that is its
+		// opposite on the same table.
+		{"two letters joined", "typeset -xi", DeclarationFilterAnyLetter, "qb=2\nqc=3\nqe=( 4 )\n"},
+		{"two letters intersected", "typeset -xi", DeclarationFilterEveryLetter, ""},
+
+		// A kind letter beside an attribute one, which is where the third
+		// answer parts company with the first: joined it writes every array
+		// and every integer, narrowed only the array that is an integer.
+		{"a kind letter joins", "typeset -ai", DeclarationFilterAnyLetter, "qc=3\nqd=( p )\nqe=( 4 )\n"},
+		{"a kind letter narrows", "typeset -ai", DeclarationFilterKindNarrowsAny, "qe=( 4 )\n"},
+		{"a kind letter intersects", "typeset -ai", DeclarationFilterEveryLetter, "qe=( 4 )\n"},
+
+		// And the narrowing keeps the join among the letters it narrows:
+		// `-axi` is the arrays that are exported *or* integers.
+		{"the narrowed letters still join", "typeset -axi", DeclarationFilterKindNarrowsAny, "qe=( 4 )\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, st := declRun(t, src+tc.line, with(tc.form), Diagnostics{})
+			if onlyQ(out) != tc.want || errs != "" || st != 0 {
+				t.Errorf("%s under %v = %q (stderr %q, status %d), want %q",
+					tc.line, tc.form, out, errs, st, tc.want)
+			}
+		})
+	}
+}
+
+// Two letters where the axis is unanswered is a refusal and not a guess, on
+// the discipline the whole substrate runs on: the three shells disagree and
+// nothing chose. The control is one letter on the same dialect, which still
+// answers.
+func TestTwoAttributeLettersAreRefusedWhereNoDialectChose(t *testing.T) {
+	unchosen := func(s *Semantics) {
+		withNamesOnly(s)
+		s.BareDeclarationListing = DeclareListingPlainAssignment
+		s.DeclareValueQuoting = ListingQuoteWhenNeededPlain
+		s.DeclarationListingFilter = DeclarationFilterUnspecified
+	}
+	src := "export qb=2\ntypeset -i qc=3\n"
+	out, errs, st := declRun(t, src+"typeset -xi", unchosen, Diagnostics{})
+	if out != "" || st != 2 {
+		t.Errorf("typeset -xi = %q (stderr %q, status %d), want the axis refused", out, errs, st)
+	}
+	if !strings.Contains(errs, "the shells disagree here and no dialect was chosen") {
+		t.Errorf("stderr = %q, want the unanswered-axis refusal", errs)
+	}
+	// The same dialect, one letter: answered, because all three readings say
+	// the same thing there.
+	out, errs, st = declRun(t, src+"typeset -x", unchosen, Diagnostics{})
+	if onlyQ(out) != "qb=2\n" || errs != "" || st != 0 {
+		t.Errorf("typeset -x = %q (stderr %q, status %d), want %q", out, errs, st, "qb=2\n")
 	}
 }
 

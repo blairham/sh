@@ -16056,6 +16056,32 @@ echo "read=[$l]"`,
 		Why:     "the filter the `+m` reading is, over the whole table instead of a pattern's matches: the names carrying the attribute, and no attribute words in front of them. Two letters are the discriminating half -- they are a **union** and not an intersection, `+xi` naming the exported name *and* the integer one where an intersection names neither, and one letter answers the same under both readings so a row with one letter is not evidence",
 	},
 	{
+		ID: "declare/a-minus-signed-attribute-letter-lists-the-values", Category: "declarations",
+		Snippet: `qa=1; export qb=2; typeset -i qc=3; typeset -x | grep -E '^(declare -[a-z]+ )?q[abc]='; echo "--"; typeset -i | grep -E '^(declare -[a-z]+ )?q[abc]='`,
+		Why:     "the other sign of the same filter, and the other listing: the names it selects with their **values** rather than their names alone. Two row shapes rather than one -- bash writes its `-p` row, `declare -x qb=\"2\"`, and ksh93 and zsh drop the command word to a plain `qb=2`, which is the shape their bare `export` writes and not the shape their own `typeset -p` writes. This wrote nothing at all here, silently and at 0, which is the worst pair: `declare -x` is how a script dumps an environment as re-readable declarations and it came back empty (#1868). Filtered through `grep` because the unfiltered listing is the machine's environment",
+	},
+	{
+		ID: "declare/two-attribute-letters-select-three-ways", Category: "declarations",
+		Snippet: `qa=1; export qb=2; typeset -i qc=3; typeset -xi | grep -E '^(declare -[a-z]+ )?q[abc]='`,
+		Why:     "the discriminating row, and the one a single letter cannot reach: two letters together are a **union** in bash and zsh -- the exported name *and* the integer one -- and an **intersection** in ksh93, which writes neither because no name here is both. One letter reads the same under every answer, so a row with one letter is not evidence about the combination; this is the whole of Semantics.DeclarationListingFilter",
+	},
+	{
+		ID: "declare/a-kind-letter-narrows-or-joins", Category: "declarations",
+		Snippet: `typeset -a qd=(p); export qe=2; typeset -ax | grep -E '^(declare -[a-z]+ )?q[de]='`,
+		Why:     "and the third answer, which is why the combination is a form rather than a flag: bash's *kind* letters narrow the rest, so `-ax` is the arrays that are exported and writes nothing here, where zsh joins them and writes the array *and* the exported scalar. ksh93 refuses the pair outright. The same two shells that agreed about `-xi` above disagree here, so neither row can stand for the other",
+	},
+	{
+		ID: "declare/a-filtered-row-spells-a-compound-its-own-way", Category: "declarations",
+		Snippet: `typeset -a qd=(p q); typeset -a | grep -E '^(declare -[a-z]+ )?qd='`,
+		Why:     "the row shape, asked of the value a listing is likeliest to spell differently: bash writes subscripts and double quotes, zsh pads its parentheses and ksh93 does not, and each of the three is that shell's own `-p` value with whatever command word the bare form drops. A listing that borrowed one shell's spelling for another would pass every scalar row above and fail this one",
+	},
+	{
+		ID: "declare/a-valueless-typed-name-is-among-the-filtered-rows", Category: "declarations",
+		Script:  true,
+		Snippet: "f() { local -a qz; typeset -a | grep -E '^(declare -[a-z]+ )?qz'; }\nf\n",
+		Why:     "a name that is typed and holds nothing, which is the row a listing is likeliest to drop: the kind is all there is and no scalar attribute records it. bash lists `declare -a qz` with no value, zsh -- which declares such a name *empty* rather than leaving it unset -- lists it with empty parentheses, and ksh93 has no `local` at all. It was dropped here by a second reading of \"is this still a declaration\" that had no room for a compound, while `typeset -p qz` wrote the row from the same state (#1868)",
+	},
+	{
 		ID: "declare/the-global-letter-filters-nothing", Category: "declarations",
 		Snippet: `qa=1; export qb=2; typeset +g | grep -E '^q[ab]='; echo "--"; typeset +gx | grep '^q'`,
 		Why:     "the control for the row above, and the reason a letter cannot be read as \"a letter, therefore a filter\": `-g` says where a declaration *lands* rather than what a name carries, so it drops out and the whole table stands with its values. `+gx` writing what `+x` writes is the same fact from the other side",

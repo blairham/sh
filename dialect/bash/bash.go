@@ -241,6 +241,13 @@ func Semantics() interp.Semantics {
 	// The bare form is this shell's `-p` form exactly, in both builds and in
 	// the POSIX mode: `export` writes `declare -x V="a b"` however it is asked.
 	s.BareDeclarationListing = interp.DeclareListingClustered
+	// Two attribute letters on a listing with no names: the kind letters
+	// narrow and the rest join. Measured 2026-09-10 over a table holding an
+	// array, an integer array, an exported array, an association, an
+	// integer, a readonly and an exported name — `declare -ir` writes the
+	// integers *and* the read-only names, where `declare -ai` writes only
+	// the array that is also an integer and `declare -aA` writes nothing.
+	s.DeclarationListingFilter = interp.DeclarationFilterKindNarrowsAny
 	s.DeclarePrintReportsAMissingName = interp.Yes
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No

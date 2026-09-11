@@ -570,6 +570,11 @@ func Semantics() interp.Semantics {
 	// this shell's `readonly` parts company with its own `readonly -p` by more
 	// than a word: `typeset -r R=2` with the letter, `R=2` without it.
 	s.BareDeclarationListing = interp.DeclareListingPlainAssignment
+	// Every letter joins, kind letters included: `typeset -ax` writes every
+	// array and every exported name, and `typeset +xr` every exported name
+	// and every read-only one. Measured 2026-09-10, and the same answer
+	// under both signs.
+	s.DeclarationListingFilter = interp.DeclarationFilterAnyLetter
 	s.DeclarePrintReportsAMissingName = interp.Yes
 	s.TrapBodyLine = interp.TrapBodyLineWhereItFired
 	s.TrapActionIsParsedWhenSet = interp.Yes

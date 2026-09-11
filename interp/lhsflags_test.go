@@ -233,24 +233,27 @@ func TestAnUnwritableFlagGroupIsRefusedByName(t *testing.T) {
 // honest and the store it would have reached was not, so `s[(r)b]=Z` on `abc`
 // would have left ` Z` — a plausible wrong string at status 0 (#1532).
 func TestASearchOnTheLeftOverAStringNamesTheSameThingTheReadDoes(t *testing.T) {
-	// The element column's answers are the shape the bug left behind, which
-	// is why they are asserted rather than merely differing: the string is
-	// gone, an element sits at the index the search found, and joining the
-	// elements with a space is what makes it look like a string again.
+	// The element column writes an element at the index the search found and
+	// keeps the string as the *first* element, which is what an element
+	// write over a name holding a string does however the subscript was
+	// spelled (#1570) — so `hello` is at the base, the gap between it and
+	// the index is filled, and joining the elements with a space is what
+	// makes the result look like a string again. It used to lose the string,
+	// which is the shape that made this refusal worth keeping.
 	for _, tc := range []struct{ name, write, character, element string }{
-		{"a found match", `s[(r)l]=Q`, `[heQlo]`, `[  Q]`},
-		{"and the index spelling of the same one", `s[(i)l]=Q`, `[heQlo]`, `[  Q]`},
-		{"a reverse search, which is a different position", `s[(I)l]=Q`, `[helQo]`, `[   Q]`},
+		{"a found match", `s[(r)l]=Q`, `[heQlo]`, `[hello  Q]`},
+		{"and the index spelling of the same one", `s[(i)l]=Q`, `[heQlo]`, `[hello  Q]`},
+		{"a reverse search, which is a different position", `s[(I)l]=Q`, `[helQo]`, `[hello   Q]`},
 		// A forward search that matched nothing names one past the last unit,
 		// which is an append on either reading — so what parts here is the
 		// padding and not the index.
-		{"a forward search that matched nothing", `s[(i)zz]=Q`, `[helloQ]`, `[     Q]`},
-		{"joined rather than replaced", `s[(r)l]+=Q`, `[helQlo]`, `[  Q]`},
+		{"a forward search that matched nothing", `s[(i)zz]=Q`, `[helloQ]`, `[hello     Q]`},
+		{"joined rather than replaced", `s[(r)l]+=Q`, `[helQlo]`, `[hello  Q]`},
 		// The value is not one unit wide, and the span it replaces is not
 		// either: a reading that overwrote a position would answer `[heQlo]`
 		// to the first of these.
-		{"a value wider than what it replaces", `s[(r)l]=QQ`, `[heQQlo]`, `[  QQ]`},
-		{"and one narrower", `s[(r)l]=`, `[helo]`, `[  ]`},
+		{"a value wider than what it replaces", `s[(r)l]=QQ`, `[heQQlo]`, `[hello  QQ]`},
+		{"and one narrower", `s[(r)l]=`, `[helo]`, `[hello  ]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			src := `s=hello; ` + tc.write + `; printf "[%s]" "$s"`

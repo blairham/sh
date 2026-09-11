@@ -3615,6 +3615,15 @@ An **empty** group is `bad pattern` there and a parse error here — the
 lexer takes `()` for a function definition rather than a group, so the
 word ends at the parenthesis — so neither writes.
 
+**A refusal on this side ends the line at a failing status**, which is
+what the shell does for each of the three shapes above and what the read
+side has always done. It did not: the refusal set the flag an *expansion*
+reads and nothing on the assignment path read it, so the line carried on
+and ended at whatever the command before it had left. Nothing was written,
+so the value was at least not wrong — but a script testing `$?` after one
+of these was told it had succeeded, which is the opposite of the point of
+refusing by name (#1536).
+
 `unset 'b[(r)y]'` is the one direction still unread: the subscript arrives
 as a *runtime string* rather than as a parsed word, so the group has
 nowhere to hang its operand. Filed rather than guessed (#1275).

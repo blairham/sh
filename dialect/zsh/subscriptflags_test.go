@@ -139,6 +139,27 @@ func TestASearchOnTheLeftOfAnAssignmentNamesACharacter(t *testing.T) {
 	}
 }
 
+// And a refusal on the left of `=` ends the line at a failing status, which
+// is what this shell does for every shape it declines there — `b[(w)x]=Q` is
+// `assignment to invalid subscript range` at 1. It left the status at
+// whatever the command before it had, so a script testing `$?` after one was
+// told it had succeeded (#1536). The value is read back from an EXIT trap,
+// because a `printf` after the refusal never runs.
+func TestARefusedSubscriptFlagOnTheLeftEndsTheLine(t *testing.T) {
+	for _, src := range []string{
+		`b=(x y); trap 'printf "[%s]" "${b[*]}"' EXIT; b[(w)x]=Q`,
+		`typeset -A h; h[k]=v; trap 'printf "[%s]" "${h[k]}"' EXIT; h[(r)v]=Q`,
+	} {
+		out, st := runZsh(t, t.TempDir(), src)
+		if !strings.Contains(out, "subscript flag is not implemented") || st != 1 {
+			t.Errorf("%s = %q (status %d), want the refusal at 1", src, out, st)
+		}
+		if !strings.Contains(out, "[x y]") && !strings.Contains(out, "[v]") {
+			t.Errorf("%s = %q, want the value kept", src, out)
+		}
+	}
+}
+
 // A search over a plain string is this dialect's too, and it is the ordered
 // array's search counting through *characters*: the operand matches a
 // substring, the answer is where that substring starts, and `(r)` reads that

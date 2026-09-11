@@ -395,24 +395,45 @@ func TestASubscriptSearchOverAnEmptyScalar(t *testing.T) {
 // the position it names is written now, which is what
 // TestASearchOnTheLeftOverAStringNamesTheSameThingTheReadDoes asserts
 // (#1532).
+//
+// The refusal is **fatal at a failing status**, which is the half that was
+// missing: it set the flag an *expansion* reads and nothing on this side read
+// it, so the line carried on and ended at whatever the command before it had
+// left (#1536). A script testing `$?` after one of these was told it had
+// succeeded.
 func TestASubscriptSearchOverATargetThisDoesNotCarryIsRefused(t *testing.T) {
 	// The value is asserted as well as the refusal: a refusal that still
 	// wrote somewhere would leave the name changed, and the whole reason to
-	// refuse is that the write would land on a plausible wrong element.
+	// refuse is that the write would land on a plausible wrong element. Read
+	// from an EXIT trap, because the refusal ends the script and a `printf`
+	// after it would never run.
 	for _, tc := range []struct{ name, src, why, kept string }{
 		{
+			"a letter this dialect does not carry",
+			`b=(x y); trap 'printf "[%s]" "${b[*]}"' EXIT; b[(w)x]=Q`,
+			"(w) subscript flag is not implemented", "[x y]",
+		},
+		{
+			"a backward search that found nothing",
+			`b=(x y); trap 'printf "[%s]" "${b[*]}"' EXIT; b[(R)nomatch]=Q`,
+			"not implemented where nothing matched", "[x y]",
+		},
+		{
 			"an association assigned through one",
-			`typeset -A h; h[k1]=v1; h[(r)v1]=Q; printf "[%s]" "${h[k1]}"`,
-			"for an associative array", "[v1]",
+			`typeset -A h; h[k1]=v1; trap 'printf "[%s]" "${h[k1]}"' EXIT; h[(r)v1]=Q`,
+			"not implemented for an associative array", "[v1]",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, _ := runSub(t, tc.src)
-			if !strings.Contains(out, "subscript flag is not implemented "+tc.why) {
+			out, status := runSub(t, tc.src)
+			if !strings.Contains(out, tc.why) {
 				t.Errorf("output %q does not refuse %s", out, tc.why)
 			}
 			if !strings.Contains(out, tc.kept) {
 				t.Errorf("output %q does not keep %s", out, tc.kept)
+			}
+			if status == 0 {
+				t.Errorf("status %d, want the refusal visible to a caller", status)
 			}
 		})
 	}

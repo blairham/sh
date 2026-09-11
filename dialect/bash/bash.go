@@ -703,10 +703,17 @@ func Semantics() interp.Semantics {
 	// A subscript that will not evaluate ends the script here, as a bad
 	// expression does wherever one is written.
 	s.BadSubscriptToUnsetFatal = interp.Yes
+	// An element write over a name holding a string promotes the string
+	// first, so a subscript counting back from the end finds the element it
+	// just made: `a=abc; a[-1]=x` writes the first one.
+	s.NegativeSubscriptCountsOverAPromotedScalar = interp.Yes
 	// A negative subscript that counts back past the first element is
 	// refused rather than placed in front of it, and the refusal ends the
 	// script. Measured in both bash builds.
 	s.NegativeSubscriptPastTheStartInserts = interp.No
+	// `declare a=1; declare a+=2` is `12`: a declaration's operand carries
+	// the append operator here, where the other three refuse the name `a+`.
+	s.DeclarationTakesAnAppendOperand = interp.Yes
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No

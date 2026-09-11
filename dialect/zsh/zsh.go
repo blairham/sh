@@ -1159,6 +1159,9 @@ func Semantics() interp.Semantics {
 	// shell refuses is `a[0]`, which is below its first element rather than
 	// counting back from the last.
 	s.NegativeSubscriptPastTheStartInserts = interp.Yes
+	// `not valid in this context: a+` — the append operator is not a
+	// declaration operand here.
+	s.DeclarationTakesAnAppendOperand = interp.No
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No

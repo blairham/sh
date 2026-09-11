@@ -538,6 +538,27 @@ func (r *Runner) refuseSubscriptFlag(e *syntax.ParamExpr, flag, where string) {
 	r.expandErr = true
 }
 
+// refuseAssignSubscriptFlag is the same refusal on the left of `=`, where the
+// failure has to reach a caller by a different road.
+//
+// A read's refusal reaches one through expandErr: the command path consults
+// it, abandons the word and fails. An assignment never passes that way. The
+// operand was refused, nothing was written, and the line went on to report
+// whatever the command *before* it had left — so a script testing `$?` after
+// one of these was told it had succeeded (#1536). Nothing was wrong with the
+// value, because there was no value; what was wrong is that the whole point
+// of refusing by name is to be visible to a caller and not only to a reader
+// of stderr.
+//
+// Fatal, which is where the two sides meet again: the read side's refusal
+// ends the line at 1 through the expansion path, a bad *subscript* on the
+// left of `=` is already fatal here — see setArrayElem — and the shell with
+// the construct ends the line at 1 for each of the shapes this refuses.
+func (r *Runner) refuseAssignSubscriptFlag(e *syntax.ParamExpr, flag, where string) {
+	r.refuseSubscriptFlag(e, flag, where)
+	r.fatalQuiet()
+}
+
 // lastOf is the last character of s that is in set, or 0 for none.
 func lastOf(s, set string) byte {
 	last := byte(0)
@@ -576,7 +597,7 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 	e := &syntax.ParamExpr{Name: a.Name, Index: a.Index, IndexFlags: g}
 	for _, c := range g.Flags {
 		if !strings.ContainsRune(implementedSubscriptFlags, c) {
-			r.refuseSubscriptFlag(e, string(c), "")
+			r.refuseAssignSubscriptFlag(e, string(c), "")
 			return 0, false
 		}
 	}
@@ -600,7 +621,7 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 		// letters mean something else over a table, and answering with the
 		// ordered array's rule would write to a plausible wrong key. The
 		// shell refuses it too, as `attempt to set slice`.
-		r.refuseSubscriptFlag(e, string(search), " for an associative array")
+		r.refuseAssignSubscriptFlag(e, string(search), " for an associative array")
 		return 0, false
 	}
 	elems, scalar, held := r.subscriptTarget(e)
@@ -642,6 +663,6 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 	// first, which is what the read side answers and what an assignment
 	// cannot use. Refused by name rather than guessed at; see the issue the
 	// spec entry names.
-	r.refuseSubscriptFlag(e, string(search), " where nothing matched")
+	r.refuseAssignSubscriptFlag(e, string(search), " where nothing matched")
 	return 0, false
 }

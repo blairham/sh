@@ -3720,6 +3720,69 @@ type Semantics struct {
 	// shell that never sees a non-ASCII byte never needs an answer.
 	MultibyteEncodingIsHonored Answer
 
+	// DeclarationTakesAnAppendOperand reads a declaration builtin's
+	// `name+=value` operand as the append operator rather than as a name
+	// with a `+` on the end of it: `declare a=1; declare a+=2` leaves `12`.
+	//
+	// Measured 2026-09-09 with `declare a=1; declare a+=2; echo "$a"`, and
+	// the same three lines under `export`, `readonly` and `local`:
+	//
+	//	bash 5.3.15         12
+	//	bash 5.3.15 as sh   12
+	//	bash 3.2.57         12
+	//	ksh93               typeset: a+: invalid variable name
+	//	zsh 5.9.2           not valid in this context: a+
+	//	dash                export: a+: bad variable name
+	//
+	// So it is one shell's operand rather than a core one. The three that
+	// refuse it all name **`a+`** — the text in front of the `=` — and not
+	// the whole operand, which is what the two of them that otherwise quote
+	// a bad operand back do for `typeset 1x=v`. That is the tell that they
+	// read the `+=` as an operator too and then refuse the name it left.
+	//
+	// The value joins through the name's attributes, which is the same join
+	// the bare statement performs and not a second rule: `declare -i a=1;
+	// declare a+=2` is 3, `declare -a arr=(p q); declare arr+=x` is `px q`,
+	// and a declared table joins its `0` key.
+	//
+	// Asked only where an operand's name ends in `+` and a value follows it.
+	// A `+` with no `=` is not this spelling — `declare a+` is refused as a
+	// name in every column, the one that takes the operator included — so
+	// nothing well formed ever reaches the question.
+	DeclarationTakesAnAppendOperand Answer
+
+	// NegativeSubscriptCountsOverAPromotedScalar resolves a negative
+	// subscript on the left of `=` against the array a held *scalar* is
+	// about to become, rather than against the elements the name already
+	// has — of which a scalar has none.
+	//
+	// An element write over a name holding a string keeps the string as the
+	// first element, which is core and unanimous: `a=abc; a[1]=x` leaves
+	// `abc` beside the `x` in every shell in the panel that has arrays. When
+	// that happens relative to reading the subscript is not unanimous, and a
+	// subscript counting back from the end is the only spelling that can
+	// tell. Measured 2026-09-09 with `a=abc; a[-1]=x; typeset -p a`:
+	//
+	//	bash 5.3.15         declare -a a=([0]="x")
+	//	bash 5.3.15 as sh   declare -a a=([0]="x")
+	//	bash 3.2.57         a[-1]: bad array subscript
+	//	ksh93               a: subscript out of range
+	//
+	// bash promotes and then counts back over the one element it made;
+	// ksh93 counts back first and refuses. bash 3.2 has no negative
+	// subscripts at all — `a=(p q); a[-1]=x` is the same complaint there —
+	// which is the absence of the spelling rather than a third answer.
+	//
+	// Asked only where there is a scalar to promote *and* the subscript is
+	// negative. A non-negative one lands at the number it names whether the
+	// promotion happened before or after it, and an unset name has nothing
+	// to promote, so `unset a; a[-1]=x` is refused in both columns and needs
+	// no answer from either.
+	//
+	// The dialect where a subscript on a string names a character never
+	// arrives here at all: there is no array to promote into on that side.
+	NegativeSubscriptCountsOverAPromotedScalar Answer
+
 	// NegativeSubscriptPastTheStartInserts places a new element in front of
 	// every other when a negative subscript counts back past the first one:
 	// `a=(p q); a[-3]=x` leaves three elements with `x` at the head, however

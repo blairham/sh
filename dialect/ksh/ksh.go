@@ -694,9 +694,16 @@ func Semantics() interp.Semantics {
 	// And the complaint is the builtin's: `unset` reports 1 and the script
 	// goes on, which is what makes `unset a[@]` survivable here.
 	s.BadSubscriptToUnsetFatal = interp.No
+	// A negative subscript is read against the elements the name has, and a
+	// name holding a string has none: `a=abc; a[-1]=x` is `subscript out of
+	// range` where the write over a non-negative subscript promotes.
+	s.NegativeSubscriptCountsOverAPromotedScalar = interp.No
 	// A negative subscript past the first element is refused here too, and
 	// the refusal ends the script.
 	s.NegativeSubscriptPastTheStartInserts = interp.No
+	// `typeset: a+: invalid variable name` — the append operator is not a
+	// declaration operand here.
+	s.DeclarationTakesAnAppendOperand = interp.No
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes

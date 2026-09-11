@@ -1438,7 +1438,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		return status
 	}
 	for _, a := range args {
-		name, value, hasValue := strings.Cut(a, "=")
+		name, value, hasValue, appends := declarationOperand(a)
 		if base, sub, subscripted := r.subscriptOperand(name); subscripted && hasValue {
 			// `export a[1]=v` in the two dialects that take the operand:
 			// measured, ksh93u+ and zsh 5.9.2 both write the element, and
@@ -1462,7 +1462,16 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			if r.unspecified {
 				return r.status
 			}
-			r.setVarAs(name, value, assignedByDeclaration)
+			// `export a=1; export a+=2` is `a=12`. See declarationAppend.
+			// No shadow is taken here either, so the value it joins is the
+			// one the name already reads even inside a function.
+			if appends {
+				if !r.declarationAppend(name, value, false, false) {
+					return r.status
+				}
+			} else {
+				r.setVarAs(name, value, assignedByDeclaration)
+			}
 			if r.ctl == controlExit {
 				// The assignment ended the script, so the builtin has
 				// nothing left to report — and returning its own status
@@ -3275,7 +3284,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		return status
 	}
 	for _, a := range args {
-		name, value, hasValue := strings.Cut(a, "=")
+		name, value, hasValue, appends := declarationOperand(a)
 		if base, sub, subscripted := r.subscriptOperand(name); subscripted && hasValue {
 			// `local a[1]=v` is `typeset a[1]=v` under the other word, and
 			// the scope is the whole of what it adds — see declareelement.go.
@@ -3341,12 +3350,23 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		}
-		if hasValue {
+		switch {
+		case hasValue && appends:
+			// `local a+=2` joins what the *local* is holding, which the
+			// shadow above has already made: with no outer value carried
+			// in, `f(){ local a+=2; }` leaves `2`. See declarationAppend.
+			if !r.declarationAppend(name, value, false, fresh) {
+				return r.status
+			}
+			if r.ctl == controlExit {
+				return r.status
+			}
+		case hasValue:
 			r.setVar(name, value)
 			if r.ctl == controlExit {
 				return r.status
 			}
-		} else {
+		default:
 			if r.valuelessDeclarationLists(name, f, fresh) {
 				// The same listing under the other word, on a name this
 				// scope has already made local: `f(){ local s=1; local s; }`
@@ -3431,7 +3451,7 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		return status
 	}
 	for _, a := range args {
-		name, value, hasValue := strings.Cut(a, "=")
+		name, value, hasValue, appends := declarationOperand(a)
 		if base, sub, subscripted := r.subscriptOperand(name); subscripted {
 			// The readonly attribute on an element is the axis with three
 			// answers — see Semantics.ReadonlyElement. Only the two dialects
@@ -3471,6 +3491,22 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			}
 			if r.unspecified {
 				return r.status
+			}
+			// `readonly a+=2` joins what the name holds and then freezes it.
+			// No shadow here either, so the join is over the standing value.
+			if appends {
+				if !r.declarationAppend(name, value, false, false) {
+					return r.status
+				}
+				if r.ctl == controlExit {
+					return r.status
+				}
+				r.declarationAssignmentExport(name, false)
+				if r.unspecified {
+					return r.status
+				}
+				r.markReadonly(name)
+				continue
 			}
 			r.setVarAs(name, value, assignedByDeclaration)
 			if r.ctl == controlExit {

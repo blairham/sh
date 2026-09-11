@@ -120,7 +120,7 @@ import (
 // $'\x05'; do …; done` a loop that ends when the far side does.
 
 // sysopenBuiltin is `sysopen [-arw] [-m mode] [-o opts] -u fd file`.
-func sysopenBuiltin(r *interp.Runner, _ context.Context, args []string) int {
+func sysopenBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	opts, rest, code := systemOptions(r, args, "mou", "arw")
 	if code != 0 {
 		return code
@@ -159,9 +159,33 @@ func sysopenBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
-	f, err := sysOpenFile(shellPath(r, rest[0]), flags, perm)
+	path := shellPath(r, rest[0])
+	// Through the gate, like every other open the shell makes. This builtin
+	// opened files directly until #1805, so a policy refusing every read and
+	// write still handed a script the filesystem and recorded nothing.
+	//
+	// Write covers create and truncate as well as the write modes: a policy
+	// that refuses to let a script write a path is refusing `sysopen -o creat`
+	// at it, which is how the file came to exist.
+	action, ok := r.AllowOpen(ctx, path, flags&(os.O_WRONLY|os.O_RDWR|os.O_CREATE|os.O_TRUNC|os.O_APPEND) != 0)
+	if !ok {
+		// The diagnostic is the gate's — `open: refused: path` — and the
+		// status is this builtin's own, because to the script this is a file
+		// it could not open.
+		return 1
+	}
+	f, err := sysOpenFile(path, flags, perm)
 	if err != nil {
 		r.Diagnosef("can't open file %s: %s\n", rest[0], sysErrnoText(err))
+		return 1
+	}
+	// And asked again about where the name went, which is what makes the
+	// first answer mean anything: a symlink under an allowed directory is an
+	// allowed name and a denied object. The open above is this builtin's own
+	// because the nonblocking form needs flags os.OpenFile cannot carry, so
+	// the verification is the part that has to come back here.
+	if !r.VerifyOpened(ctx, &action, f) {
+		_ = f.Close()
 		return 1
 	}
 	sysopenPublish(r, f, dest, number, numeric, cloexec)

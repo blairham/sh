@@ -633,3 +633,121 @@ func TestADenyValueUnderAPlatformAliasProtectsBothNames(t *testing.T) {
 		t.Errorf("out = %q, want the physical path refused too", got.out)
 	}
 }
+
+// zsh/system is the boundary's blind spot, found by escape-testing rather
+// than by reading (#1805).
+//
+// `sysopen` and `zsystem flock` open files themselves, and for as long as they
+// did it with a bare os.OpenFile a policy refusing every read and every write
+// still handed a script the filesystem — and recorded nothing, because an open
+// nobody consults is an open nobody reports either. These are the routes a
+// script actually has, so each is asked for in the words a script would use.
+//
+// The wider lesson is in the issue and not fixable by a test here: the guard
+// reads the packages that hold a Boundary, and a dialect holds none. zsh/stat
+// and zsh/files are safe today only because #1670 has not given them builtins
+// yet.
+func TestSysopenIsInsideTheBoundary(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	secret := filepath.Join(dir, "secret")
+	if err := os.WriteFile(secret, []byte("TOPSECRET\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := writePolicy(t, "default deny")
+	got := sandboxed(t, "zsh", "-policy", p, "-c",
+		"zmodload zsh/system\nsysopen -r -u 3 "+secret+" && sysread -i 3 x && echo LEAKED=$x\necho status=$?\n")
+	if strings.Contains(got.out, "TOPSECRET") {
+		t.Errorf("out = %q: a denied file was read through sysopen.\n"+
+			"The gate refuses this path to a redirection in the same breath; a builtin "+
+			"that opens files is the shell opening a file and answers to the same rule.", got.out)
+	}
+	if !strings.Contains(got.errs, "refused") {
+		t.Errorf("err = %q, want the refusal reported the way a redirection's is", got.errs)
+	}
+}
+
+// The other half, without which the test above would pass for a `sysopen`
+// that simply does not work.
+func TestAnAllowedSysopenStillOpens(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	data := filepath.Join(dir, "data")
+	if err := os.WriteFile(data, []byte("contents\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := writePolicy(t, "default deny", "allow read "+dir+"/**", "allow stat "+dir+"/**")
+	got := sandboxed(t, "zsh", "-policy", p, "-c",
+		"zmodload zsh/system\nsysopen -r -u 3 "+data+" && sysread -i 3 x && echo got=$x\n")
+	if !strings.Contains(got.out, "contents") {
+		t.Errorf("out = %q errs = %q, want an allowed sysopen to read the file", got.out, got.errs)
+	}
+}
+
+// Creating and truncating are writes, and a policy that refuses to let a
+// script write a path is refusing `sysopen -o creat` at it — which is how the
+// file would have come to exist.
+func TestSysopenCannotCreateOrTruncateADeniedPath(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	made := filepath.Join(dir, "made")
+	p := writePolicy(t, "default deny")
+	got := sandboxed(t, "zsh", "-policy", p, "-c",
+		"zmodload zsh/system\nsysopen -o creat -w -u 4 "+made+" && syswrite -o 4 PWNED && echo WROTE\n")
+	if strings.Contains(got.out, "WROTE") {
+		t.Errorf("out = %q, want the create refused", got.out)
+	}
+	if _, err := os.Stat(made); err == nil {
+		t.Errorf("%s exists: a refused open created the file anyway", made)
+	}
+}
+
+// A symlink under an allowed directory is an allowed *name* and a denied
+// *object*, so consulting the gate before the open is not enough on its own —
+// the descriptor has to be asked about too. This is the half the first version
+// of the fix missed: it gated the path, passed this test's sibling, and still
+// leaked here, because the verification had no name to compare and quietly
+// allowed everything.
+func TestSysopenCannotFollowASymlinkOutOfAnAllowedDirectory(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	allowed, secret := filepath.Join(dir, "allowed"), filepath.Join(dir, "secret")
+	if err := os.MkdirAll(allowed, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(secret, []byte("TOPSECRET\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(allowed, "sneaky")
+	if err := os.Symlink(secret, link); err != nil {
+		t.Fatal(err)
+	}
+	p := writePolicy(t, "default deny", "allow read "+allowed+"/**", "allow stat "+allowed+"/**")
+	got := sandboxed(t, "zsh", "-policy", p, "-c",
+		"zmodload zsh/system\nsysopen -r -u 3 "+link+" && sysread -i 3 x && echo LEAKED=$x\n")
+	if strings.Contains(got.out, "TOPSECRET") {
+		t.Errorf("out = %q: sysopen followed a link out of the allowed directory.\n"+
+			"The name is allowed and the object is not, so the descriptor is what the "+
+			"second question has to be about.", got.out)
+	}
+}
+
+// A lock is taken by opening the file, so `zsystem flock` is an open and
+// answers to the same rule.
+func TestZsystemFlockIsInsideTheBoundary(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	target := filepath.Join(dir, "lockable")
+	if err := os.WriteFile(target, []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := writePolicy(t, "default deny")
+	got := sandboxed(t, "zsh", "-policy", p, "-c",
+		"zmodload zsh/system\nzsystem flock "+target+" && echo FLOCKED\n")
+	if strings.Contains(got.out, "FLOCKED") {
+		t.Errorf("out = %q, want the lock's open refused", got.out)
+	}
+	if !strings.Contains(got.errs, "refused") {
+		t.Errorf("err = %q, want the refusal reported", got.errs)
+	}
+}

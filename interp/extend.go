@@ -12,6 +12,8 @@ import (
 	"sync"
 
 	"github.com/blairham/sh/syntax"
+
+	"github.com/blairham/sh/internal/opened"
 )
 
 // Builtin is a command the shell runs itself rather than executing.
@@ -1090,4 +1092,65 @@ func (r *Runner) ArithValue(text string) (int, bool) {
 	// An integer context, which is what a comparison with a test number is:
 	// a float truncates, exactly as an array subscript does.
 	return n.asInt(), true
+}
+
+// AllowOpen asks the gate about a file a dialect's builtin is about to open,
+// and is half of the seam a builtin needs to be inside the boundary.
+//
+// It exists because a builtin a dialect registers opens a file as much as a
+// redirection does, and until #1805 nothing said so. `sysopen` and `zsystem
+// flock` called os.OpenFile directly, so a policy that refused every read and
+// every write still handed a script the whole filesystem — and left no record
+// of it, because an open nobody consults is an open nobody reports either.
+// The gate lives in this package and a dialect could not reach it, which is
+// what made that possible rather than merely unnoticed.
+//
+// The refusal is reported to the script here, in the same words a refused
+// redirection gets, and the caller decides the status: what a refused open
+// means to `sysopen` is what an unopenable file means to it, which is the
+// builtin's answer and not this package's.
+//
+// The returned Action must be handed to VerifyOpened once the descriptor is
+// in hand. Consulting without verifying is the #943 defect with a new caller:
+// the gate would have answered about a *name*, and a symlink under an allowed
+// directory is a name that is allowed and an object that is not.
+func (r *Runner) AllowOpen(ctx context.Context, path string, write bool) (Action, bool) {
+	action := r.act(Action{Kind: ActionOpen, Path: path, Write: write})
+	return action, r.allowed(ctx, action)
+}
+
+// VerifyOpened is the other half: it confirms that the descriptor a builtin
+// has just opened is the object the gate allowed, and records the access.
+//
+// Asking again about where the name *went* is what makes the first answer
+// mean anything, and it works on any descriptor because the question is put
+// to the kernel rather than to the path — see verifyOpened and Action.Resolved.
+// A builtin that opens with flags this package cannot express, as the
+// nonblocking half of `sysopen` does, therefore keeps its own open and is
+// still inside the boundary.
+//
+// False means the open is refused: the script has been told, the denial is on
+// the record, and the caller closes the descriptor and fails the way it fails
+// for a file it could not open.
+func (r *Runner) VerifyOpened(ctx context.Context, a *Action, f *os.File) bool {
+	// The name the *kernel* has for the descriptor, which is what makes this
+	// answerable at all: opened.Reached carries the path a walk resolved, and
+	// a builtin that did its own open has no walk to report. Without it
+	// Elsewhere has nothing to compare, returns false, and this whole check
+	// quietly passes everything — which is how the first version of this fix
+	// still leaked a symlink under an allowed directory.
+	//
+	// A platform that cannot name a descriptor leaves it empty, and that is
+	// the nameless case the package already has an answer for: no rule is
+	// speaking about an object with no name.
+	reached := opened.Reached{File: f}
+	if name, ok := opened.Path(f); ok {
+		reached.Name = name
+	}
+	if !r.verifyOpened(ctx, a, reached) {
+		r.reportRefusal(*a)
+		return false
+	}
+	r.emit(ctx, Event{Kind: EventAccess, Action: *a})
+	return true
 }

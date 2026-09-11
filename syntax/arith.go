@@ -128,7 +128,13 @@ func (n *ArithCond) arithNode() {}
 // rather than an expansion: `${a[1]}` is substituted before the expression is
 // read, and `a[1]` is read as part of it.
 type ArithIndex struct {
-	Name  string
+	Name string
+	// Index is the subscript read as an expression, and nil when the text
+	// will not read as one — `m[.accept-line]`, whose brackets hold a key and
+	// not a sum. That is not a parse failure, because whether it is a key or
+	// an expression depends on an attribute of the name, which the parser
+	// cannot see: see Sub, and subscript. Nil also when the brackets held
+	// nothing: see Empty.
 	Index ArithExpr
 	// Sub is the subscript exactly as it was written, brackets excluded.
 	//
@@ -426,7 +432,7 @@ func (a *arithParser) assign() ArithExpr {
 		// is taken back below when no operator follows: refusing inside the
 		// bracket read would make `$(( a[] ))` a parse error on the strength
 		// of an assignment that is not there, which is what it was.
-		index, sub, empty := a.subscript(true)
+		sub := a.subscript(true)
 		a.space()
 		for _, op := range assignOps {
 			// `==` is equality, not assignment, so it must not be taken here.
@@ -434,7 +440,7 @@ func (a *arithParser) assign() ArithExpr {
 				break
 			}
 			if a.take(op) {
-				if empty {
+				if sub.Empty {
 					// An assignment *target* with nothing between the
 					// brackets keeps the refusal it has always had. The three
 					// shells with the construct part here too and part
@@ -450,7 +456,7 @@ func (a *arithParser) assign() ArithExpr {
 					a.failArith(ErrArithOperandEnd, op)
 					return nil
 				}
-				return &ArithAssign{Name: name, Index: index, Sub: sub, Op: op, Value: v, Start: start}
+				return &ArithAssign{Name: name, Index: sub.Index, Sub: sub.Text, Op: op, Value: v, Start: start}
 			}
 		}
 	}
@@ -636,9 +642,9 @@ func (a *arithParser) primary() ArithExpr {
 		if a.dial.ArithFunctionCall && a.off < len(a.src) && a.src[a.off] == '(' {
 			return a.call(name, start, begin)
 		}
-		if index, sub, empty := a.subscript(true); index != nil || empty {
+		if sub := a.subscript(true); sub.Present {
 			return &ArithIndex{
-				Name: name, Index: index, Sub: sub, Empty: empty,
+				Name: name, Index: sub.Index, Sub: sub.Text, Empty: sub.Empty,
 				Start: start, Stop: start,
 			}
 		}
@@ -802,28 +808,57 @@ func isNumByte(c byte) bool {
 		(c >= 'A' && c <= 'F') || c == 'x' || c == 'X'
 }
 
-// subscript reads `[ … ]` after a name, returning nil when there is none.
+// arithSubscript is what a bracketed subscript after a name came to.
 //
-// The inside is an expression, so `a[i+1]` and `a[n]` both work and the
-// subscript is evaluated rather than taken as text.
-// subscript reads `[…]` after a name, returning the expression it parses as,
-// the text it was written with — see ArithIndex.Sub for why both — and whether
-// the brackets held nothing at all.
+// It is a record rather than a list of results because the four facts it
+// carries are not independent, and a caller that reads only some of them gets
+// the wrong answer: `a[]` and `a[.k]` both have no expression, and only one of
+// them is empty.
+type arithSubscript struct {
+	// Present says there was a bracket pair at all. Everything else is
+	// meaningless when it is false — a bare name has no subscript, and so
+	// does `a[1` , whose bracket never closes.
+	Present bool
+	// Index is the expression the text parses as, and nil when it does not
+	// parse as one. See Text.
+	Index ArithExpr
+	// Text is the subscript exactly as written, brackets excluded.
+	Text string
+	// Empty says the brackets held nothing at all. See ArithIndex.Empty.
+	Empty bool
+}
+
+// subscript reads `[…]` after a name.
+//
+// The inside is read as an expression, because on an indexed array that is
+// what it is: `a[i+1]` counts from the value of i. It is *not* refused when it
+// will not read as one, and that is the whole point of the record this
+// returns. A subscript is only an expression when the name is an indexed
+// array; on an associative one it is a key, read exactly as `${m[k]}` reads
+// it — and the parser cannot know which the name is, because the name need not
+// exist yet or at all. So the text is kept, the expression is left nil, and
+// the question is handed to whoever evaluates it, which is the only place the
+// answer is knowable.
+//
+// Refusing here is what `$(( m[.accept-line] ))` used to meet: a key that is
+// not an expression, on a name the parser had no way to know was associative.
+// Measured, bash 5.3 and zsh 5.9.2 both answer that with the element and not
+// with a complaint.
 //
 // emptyOK says the caller can carry a `[]` written with nothing between the
 // brackets. Where it is false the empty pair is the parse failure it has
-// always been; where it is true the third result says so and the expression is
-// nil, which is a question for whoever evaluates it. See ArithIndex.Empty.
-func (a *arithParser) subscript(emptyOK bool) (ArithExpr, string, bool) {
+// always been; where it is true Empty says so and Index is nil, which is a
+// question for whoever evaluates it. See ArithIndex.Empty.
+func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 	// The same flag that admits `${a[1]}`: one question about whether the
 	// dialect has subscripts at all, asked in the two places that need it.
 	// Where it is off, `a[0]` is a name followed by text that cannot be an
 	// operator, and is reported as that.
 	if !a.dial.ArraySubscript {
-		return nil, "", false
+		return arithSubscript{}
 	}
 	if a.off >= len(a.src) || a.src[a.off] != '[' {
-		return nil, "", false
+		return arithSubscript{}
 	}
 	open := a.off
 	depth := 0
@@ -837,16 +872,23 @@ func (a *arithParser) subscript(emptyOK bool) (ArithExpr, string, bool) {
 				inner := a.src[open+1 : a.off]
 				a.off++
 				if inner == "" && emptyOK {
-					return nil, "", true
+					return arithSubscript{Present: true, Empty: true}
 				}
+				// The inner parser shares the outer one's error slot, so a
+				// text that is not an expression would leave a refusal behind
+				// even though this is no longer a refusal. Put back what was
+				// there before it read, which is nil on the ordinary path and
+				// an earlier failure on the path where one is already
+				// recorded — either way the state the caller had.
+				held := a.p.err
 				sub := &arithParser{src: inner, at: a.at, p: a.p, dial: a.dial}
 				e := sub.expr()
 				sub.space()
 				if e == nil || sub.off < len(sub.src) {
-					a.p.failKind(ErrArithOperand, "bad array subscript: %s", inner)
-					return nil, "", false
+					a.p.err = held
+					return arithSubscript{Present: true, Text: inner}
 				}
-				return e, inner, false
+				return arithSubscript{Present: true, Index: e, Text: inner}
 			}
 		}
 		a.off++
@@ -854,7 +896,7 @@ func (a *arithParser) subscript(emptyOK bool) (ArithExpr, string, bool) {
 	// No closing bracket: not a subscript at all, so the name stands alone
 	// and whatever follows is the caller's problem to report.
 	a.off = open
-	return nil, "", false
+	return arithSubscript{}
 }
 
 // charCode reads `#name`, `#\c` and `##c`, where the dialect has them.

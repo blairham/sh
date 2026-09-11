@@ -362,3 +362,31 @@ func TestABareSubscriptsTextKeepsTheExpansionsQuoting(t *testing.T) {
 		})
 	}
 }
+
+// A subscript a substitution leaves unbalanced is no subscript, and the
+// characters go back to the word.
+//
+// The substitution suspends the word-end test and not the bracket count, so
+// a `[` written inside it still has to be closed and a `]` written inside it
+// still closes — and where either leaves the brackets unusable, the scan gives
+// them up rather than committing. Measured on zsh 5.9.2 with
+// `a=(one two three)`: both of these come back as the array joined with the
+// brackets behind it as text, where `x=$a[$(echo 2; : [ ])]` — the same shape
+// with the bracket closed — is the second element.
+func TestAnUnbalancedSubstitutionGivesTheBracketsBack(t *testing.T) {
+	for _, src := range []string{
+		`echo $a[$(: ]; echo 2)]`, // the `]` inside closes the subscript
+		`echo $a[$(echo 2; : [)]`, // the `[` inside is never closed
+	} {
+		spans := spansOf(t, src, bare())
+		if len(spans) == 0 || spans[0].Kind != syntax.ParamExp {
+			t.Fatalf("%q: first span is not an expansion: %+v", src, spans)
+		}
+		if spans[0].Value != "a" {
+			t.Errorf("%q: expansion is %q, want %q — the brackets are not a subscript here", src, spans[0].Value, "a")
+		}
+		if len(spans) < 2 || spans[1].Kind != syntax.Literal || spans[1].Value != "[" {
+			t.Errorf("%q: after the expansion comes %+v, want the literal `[`", src, spans[1:])
+		}
+	}
+}

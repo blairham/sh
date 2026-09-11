@@ -233,9 +233,18 @@ what a binary meant to be liftable into its own repository must not need.
 `build`, `test`, `fmt`, `vet`, `lint`, `tidy`, `clean`, `check`,
 `install`, `uninstall`.
 
-`check` runs `fmt vet test corpus-guard oracle-check`. Lint runs in CI,
-not pre-commit — it is too slow for every commit. When in doubt run
-`make check` *and* `make lint`.
+`check` runs `fmt vet test corpus-guard oracle-check`. **That is an
+agent's gate. Run `make check`, and nothing else.**
+
+**Never run `golangci-lint` yourself** — not `make lint`, not `go tool
+golangci-lint run`, not wrapped in a script, not "just once to check". It
+is deliberately not a pre-commit hook here: it type-checks the whole
+module, measured at ~3GB resident and 300% CPU per run, and several agents
+each starting their own is what has repeatedly driven this machine to load
+20+ and starved the real work. It runs in CI, in the `Lint` job, against
+the merge base — that is where you read its output, and fixing what CI
+reports is the whole workflow. `make lint` stays as a target a human may
+run deliberately; it is not a gate an agent runs.
 
 The report targets are `conformance`, `conformance-gated`,
 `conformance-dialects`, `wild`, `wild-run`, `wild-run-contained`, `smoke`,
@@ -343,10 +352,11 @@ cannot.
 
 **Local, on every commit.** The hooks in `.pre-commit-config.yaml`:
 hygiene, secrets, license headers, `go mod tidy`, the toolchain-pin
-invariant, and golangci-lint in two forms — `golangci-lint-fmt` applies
-every formatter the config names, and `golangci-lint` lints *what changed
-since HEAD*. Seconds, not minutes, and it is the only feedback that
-arrives before the code leaves the machine.
+invariant, and the Go formatters — `go-fumpt-repo` covers gofumpt and
+goimports. golangci-lint is **not** among them, on purpose; the
+measurement that took it out is recorded in `.pre-commit-config.yaml`.
+Seconds, not minutes, and it is the only feedback that arrives before the
+code leaves the machine.
 
 **On a pull request.** The gate, in two tiers.
 
@@ -357,17 +367,20 @@ none of which is worth detecting changes for, and a secret committed to a
 draft is committed. A hook can be skipped and a contributor may never have
 installed one, which is why it runs here as well as there.
 
-Linting happens there too, and only there. The hook is
-`golangci-lint-full`, which lints the whole module — not `golangci-lint`,
-which runs `--new-from-rev HEAD` and, in upstream's own words, cannot make
-linters like `unused` "work as expected". There is no separate lint job to
-keep in step, because a second whole-module run would find exactly what
-the first one did.
+Linting happens in a **job of its own**, `Lint`, and only there — it does
+not belong at `git commit` time, for the cost recorded above.
 
-It is worth knowing why that is affordable: a warm whole-module lint of
-this repository takes under a second. A lint job spends two minutes on
-`setup-go` and the module download to run something that fast, which is
-what made it look expensive and made splitting it seem necessary.
+It diffs from the **merge base**, not `--new-from-rev HEAD`. On a runner
+the checkout is clean, so `HEAD` diffs against nothing and the linter
+reports nothing at all — which is exactly what it had been doing here,
+silently, while being expensive on a laptop. The merge base is the commit
+this branch actually departed from, so what it prints is what this change
+introduced.
+
+That job needs `fetch-depth: 0`, and the reason is worth keeping: a merge
+base cannot be computed from a shallow clone, and without it the base
+resolves to nothing and the linter exits 0 having examined nothing. A
+green check that means the opposite of green.
 
 Only once pre-commit passes is it worth asking the expensive question.
 `Detect changed files` gates build and test with `-race` on Linux and

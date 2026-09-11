@@ -203,3 +203,61 @@ func runPatternAxis(t *testing.T, glob Answer, src string) (out string, status i
 		r.Semantics = &sem
 	})
 }
+
+// A `#` where a word could begin inside an operand is a character of that
+// word, and the quoting behind it survives into the pattern.
+//
+// The two halves are one fault. The lexer read the `#` as opening a comment
+// and consumed the rest of the operand; the parser then put the consumed run
+// back as raw text, so the characters reappeared and their *quoting* did not —
+// a `'b'` that should be the one character `b` reached the matcher as three,
+// and a `\*` that should be a literal star reached it as a live one. The text
+// coming back is what made it silent: every row here whose pattern has no
+// quoting in it answered correctly throughout (#2074).
+//
+// Measured 2026-09-11 from a script file under `env -i`, on zsh 5.9.2, bash
+// 5.3.15, bash 3.2.57 and dash — unanimous in every shell that has the
+// operator, which is what makes this the core's answer and not a dialect's.
+// dash has neither `/` nor `$'…'`.
+func TestAHashInAPatternOperandIsNotAComment(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		// The control: a `#` with nothing quoted behind it always worked,
+		// because the raw repair put back exactly what was written.
+		{"a hash in a trim's pattern", `v="a #b"; printf "[%s]" "${v#a #b}"`, "[]"},
+		{"a hash in a replacement's pattern", `v="a #b"; printf "[%s]" "${v/a #b/Q}"`, "[Q]"},
+		// The quoting behind it, which is the half that was lost.
+		{"single quotes behind it", `v="a #b"; printf "[%s]" "${v/a #'b'/Q}"`, "[Q]"},
+		{"double quotes behind it", `v="a #b"; printf "[%s]" "${v/a #"b"/Q}"`, "[Q]"},
+		{"a backslash behind it", `v="a #b"; printf "[%s]" "${v/a #\b/Q}"`, "[Q]"},
+		// A metacharacter behind it, which is the direction the raw repair
+		// got wrong the other way: quoted, the star is a star.
+		{"a quoted star behind it", `v="a #*"; printf "[%s]" "${v/a #'*'/Q}"`, "[Q]"},
+		{"a quoted star matches nothing else", `v="a #zz"; printf "[%s]" "${v/a #'*'/Q}"`, "[a #zz]"},
+		// The replacement's own text is lexed the same way and lost the same
+		// thing — there as a quote that stayed in the output.
+		{"quotes in the replacement", `v=abc; r=${v/b/x #'y'}; printf "[%s]" "$r"`, "[ax #yc]"},
+		// A trim, so the fix is not the replacement operator's.
+		{"a suffix trim", `v="a #b"; printf "[%s]" "${v%#'b'}"`, "[a ]"},
+		// The operand of a `:-`, which is a word rather than a pattern and
+		// goes through the same lexing.
+		{"a word operand", `u=; w=${u:-a #'b'}; printf "[%s]" "$w"`, "[a #b]"},
+		// And the same operand written inside double quotes, where the
+		// quotes behind the `#` are ordinary characters rather than quoting —
+		// measured, `u=; printf '[%s]' "${u:-a #'b'}"` is `[a #'b']` on zsh
+		// 5.9.2, bash 5.3.15 and bash 3.2.57. It is the row that says the
+		// fix did not simply delete quotes: a double-quoted *word* operand is
+		// read as quoted content and never reaches the lexing this is about.
+		{"a word operand inside double quotes", `u=; printf "[%s]" "${u:-a #'b'}"`, "[a #'b']"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runGrammar(t, tc.src, patternGrammar, nil)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}

@@ -208,6 +208,69 @@ func TestTheReportingFlagsInThisShell(t *testing.T) {
 	}
 }
 
+// A flag group in front of a quoted or escaped literal, which is the shape a
+// prompt theme writes and the shape that did not match.
+//
+// The flag group ends the operand's first word, so the `#` behind its `(`
+// stood where a word could begin — and there this lexer read a *comment*,
+// consumed the rest of the operand, and the parser put the run back as raw
+// text. The characters came back and their quoting did not, so
+// `${v/(#b)(*)'X'/Q}` asked the matcher for a pattern holding two literal
+// quote marks and `${v/(#b)(*)\X/Q}` for one holding a live backslash.
+// Neither matches, and neither says anything (#2074).
+//
+// The fix is the core's — an operand is not a command position, so it has no
+// comments — and these rows are here because this is the dialect whose flag
+// groups put a `#` in that position at all. See
+// syntax.TestAnExpansionsOperandHasNoComment for the unanimous measurement.
+//
+// Measured on zsh 5.9.2, 2026-09-11, from a script file under `env -i`: every
+// row's answer is `Q`, `[Q]` or the value on the right, and the `(#i)` and
+// `(#m)` rows say it was never about backreferences — any flag group in front
+// of anything quoted behaved the same way.
+//
+// powerlevel10k's directory segment is the reason it is a daily-driver bug:
+// it marks each component with `$'\2'` and then styles them with
+// `"${(@)parts/%(#b)(*)$'\2'/…}"`, so a replacement that does not match
+// leaves the marker bytes in `$PROMPT` and the prompt draws `^B`.
+func TestAFlagGroupInFrontOfAQuotedLiteral(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src, want string }{
+		// The control: nothing quoted behind the group, which always matched.
+		{"a bare literal", `v=pX; print -r -- "${v/(#b)(*)X/Q}"`, "Q"},
+		// The five spellings of "not a bare literal".
+		{"single quotes", `v=pX; print -r -- "${v/(#b)(*)'X'/Q}"`, "Q"},
+		{"double quotes", `v=pX; print -r -- "${v/(#b)(*)"X"/Q}"`, "Q"},
+		{"a backslash", `v=pX; print -r -- "${v/(#b)(*)\X/Q}"`, "Q"},
+		{"a dollar-single escape", `v=pX; print -r -- "${v/(#b)(*)$'X'/Q}"`, "Q"},
+		{"a parameter", `v=pX; y=X; print -r -- "${v/(#b)(*)$y/Q}"`, "Q"},
+		// No group needed: the flag alone is enough to put the `#` there.
+		{"no group at all", `v=pX; print -r -- "${v/(#b)\X/Q}"`, "pQ"},
+		// Every occurrence, which is the spelling the theme uses.
+		{"the global form", `v=pXqX; print -r -- "${v//(#b)(?)\X/<$match[1]>}"`, "<p><q>"},
+		// Anchored, since the anchor is read off the operand before the
+		// pattern is lexed and could have taken the `#` with it.
+		{"anchored at the end", `v=pX; print -r -- "${v/%(#b)(*)\X/[$match[1]]}"`, "[p]"},
+		{"anchored at the front", `v=pX; print -r -- "${v/#(#b)(p)\X/[$match[1]]}"`, "[p]"},
+		// The reporting flags still report, so the fix is not the pattern
+		// arriving as something that merely matches.
+		{"the groups are filled", `v=pX; print -r -- "${v/(#b)(*)'X'/Q} $match[1] $mbegin[1] $mend[1]"`, "Q p 1 1"},
+		{"the whole match", `v=pX; print -r -- "${v/(#m)\X/<$MATCH:$MBEGIN:$MEND>}"`, "p<X:2:2>"},
+		// It was never about backreferences: a flag that only changes how a
+		// literal compares was just as dead.
+		{"a case-folding flag", `v=pX; print -r -- "${v/(#i)\x/Q}"`, "pQ"},
+		// The marker the theme actually uses, in miniature.
+		{"a control character marker", `v=$'/tmp\2'; print -r -- "${v/(#b)(*)$'\2'/<$match[1]>}"`, "</tmp>"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, dir, "setopt extendedglob\n"+tc.src)
+			if strings.TrimSpace(out) != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
 // The refusals, which are the half this change is really about: a `(#b)` also
 // fills `$match`, so one that was quietly dropped left a script reading
 // `$match[1]` with an empty value rather than seeing that the feature is not

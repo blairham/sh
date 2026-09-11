@@ -570,7 +570,9 @@ func Semantics() interp.Semantics {
 	// and the value written as UTF-8. A `\u` with no digit after it stands
 	// as written, with a warning on standard error and a status that is
 	// still zero — the same shape this shell's `\x` has. bash 3.2 has none
-	// of it, which is why the two bash columns of the corpus differ here.
+	// of it, which is why the corpus's `bash32` column differs from the other
+	// two; `bash` and `bash-as-sh` agree, the escape being 5.3's rather than
+	// something argv[0] turns off.
 	s.PrintfUnicodeEscape = interp.PrintfUnicodeEscapeCodePoint
 	s.PrintfBUnicodeEscape = interp.PrintfUnicodeEscapeCodePoint
 	s.PrintfBEscEscape = interp.Yes

@@ -414,6 +414,29 @@ func TestPrintfUnfinishedConversionIsALiteralPercent(t *testing.T) {
 	}
 }
 
+// `\u` and `\U` are code points in a *format* and nothing at all in a `%b`,
+// the same per-site split this shell's `\x` makes. An empty digit run ends
+// that pass over the format — the reading no other shell in the panel has for
+// any escape — and it ends the pass and not the builtin, so the operands that
+// are left go through the format again.
+func TestPrintfUnicodeEscapeEndsThePassWithoutDigits(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a\u0041Z'`, "aAZ"},
+		{`printf 'a\U00000041Z'`, "aAZ"},
+		{`printf 'a\u41Z'`, "aAZ"},
+		{`printf 'a\uZ'`, "a"},
+		{`printf '[%s]\uZ' x y`, "[x][y]"},
+		{`printf '\uZ[%s]' x y`, ""},
+		{`printf '%b' 'a\u0041Z'`, `a\u0041Z`},
+		{`printf '%b' 'a\U00000041Z'`, `a\U00000041Z`},
+	} {
+		if out, _ := runKsh(t, dir, tc.src+"\n"); out != tc.want {
+			t.Errorf("%s: said % x, want % x", tc.src, out, tc.want)
+		}
+	}
+}
+
 // `\x` reads every digit that follows, and more than two of them make the
 // value a code point rather than a byte.
 func TestPrintfHexEscapeReadsACodePoint(t *testing.T) {

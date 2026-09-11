@@ -1891,8 +1891,9 @@ Measured with `/opt/homebrew/bin/bash` 5.3.15 (as `bash` and as `sh`),
 `/bin/bash` 3.2.57, `/bin/ksh` 93u+ 2012-08-01,
 `/opt/homebrew/bin/zsh` 5.9.2 and `/bin/dash`, reading bytes with
 `od -An -tx1` from a script file (macOS, 2026-09-05 and re-measured
-2026-09-10). bash 3.2, that binary as `sh`, and dash write every escape
-below as it stands, so they are left out of the lines that follow:
+2026-09-10). bash 3.2 and dash write every escape below as it stands, so
+they are left out of the lines that follow; bash 5.3 behaves the same under
+either argv[0], so its two columns are one here:
 
     printf 'a\u0041Z'       bash 61 41 5a   ksh93 61 41 5a   zsh 61 41 5a
     printf 'a\U00000041Z'    bash 61 41 5a   ksh93 61 41 5a   zsh 61 41 5a
@@ -1911,10 +1912,14 @@ questions `PrintfHexEscape` asks and splitting in different places:
 
 - **Whether the escape is there.** Three of the six have it and three do
   not, which is a *smaller* set than the five that have `\x`: bash 3.2 and
-  that binary under an argv[0] of `sh` write `a\u0041Z` as its ten
-  characters, where they read `\x41` as an `A`. The two escapes are
-  therefore not one question, and bash's two columns of the corpus differ
-  here as they do for `%(fmt)T`.
+  dash write `a\u0041Z` as its ten characters where they read `\x41` as an
+  `A`, so the two escapes are not one question. It is the **version** that
+  decides and not argv[0] — bash 5.3 has the escape as `bash` and as `sh`
+  alike, so the corpus's `bash` and `bash-as-sh` columns agree and only
+  `bash32` differs. Conflating `bash-as-sh` with a bash 3.2 run under that
+  name is how #909's own table came to record the column as not having the
+  escape — the mistake `oracle.md` warns about, caught here by the golden
+  record rather than by review.
 - **How wide the digit run is.** This is the question `\x` splits on and
   this one does not: all three that have the escape take up to four digits
   after `\u` and up to eight after `\U`, accept fewer, and end the run at
@@ -3179,8 +3184,8 @@ Two shells read them and four do not. Measured 2026-09-10 with the bytes
 read back through `od`:
 
     echo 'a\u0041Z'      zsh  aAZ        the rest  a\u0041Z
-    echo -e 'a\u0041Z'   bash 5.3  aAZ   bash 3.2, that binary as sh,
-                                          dash, ksh93  a\u0041Z
+    echo -e 'a\u0041Z'   bash 5.3  aAZ   under either argv[0]
+                                          bash 3.2, dash, ksh93  a\u0041Z
 
 The two letters never split the panel, so they are one axis —
 `Semantics.EchoExpandsUnicodeEscapes` — where `\e` and `\E` had to be two.

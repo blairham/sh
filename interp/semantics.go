@@ -1206,7 +1206,7 @@ type Semantics struct {
 	// splitting in a different place:
 	//
 	//	printf 'a\u0041Z'  bash 5.3, ksh93, zsh  aAZ
-	//	                    bash 3.2, bash as sh, dash  a\u0041Z
+	//	                    bash 3.2, dash  a\u0041Z
 	//	printf 'a\uZ'      bash 5.3  a\uZ, and `printf: missing unicode digit
 	//	                              for \u` on standard error, status 0
 	//	                    zsh       a<0x00>Z
@@ -1234,7 +1234,7 @@ type Semantics struct {
 	// ksh93 is again the shell that separates them:
 	//
 	//	printf '%b' 'a\u0041Z'  bash 5.3, zsh  aAZ
-	//	                         bash 3.2, bash as sh, dash, ksh93  as written
+	//	                         bash 3.2, dash, ksh93  as written
 	//
 	// So ksh93 reads the escape in a format and writes the characters as
 	// they stand in a `%b`, exactly as it does for `\x`. No dialect in the
@@ -6883,8 +6883,10 @@ func (r *Runner) bHexEscape() PrintfHexEscapePolicy {
 // Four answers, and they are not PrintfHexEscapePolicy's four. The two escapes
 // ask the same three questions and the panel answers them in different places:
 //
-//   - Whether the escape exists. bash 3.2, that binary as `sh`, and dash have
-//     no `\u` at all, so `printf 'a\u0041Z'` is the ten characters as written.
+//   - Whether the escape exists. bash 3.2 and dash have no `\u` at all, so
+//     `printf 'a\u0041Z'` is the ten characters as written. bash 5.3 has it
+//     under either argv[0], so the panel's `bash` and `bash-as-sh` columns
+//     agree here and it is the *version* that decides rather than the name.
 //   - How wide the digit run is. Unanimous among the three that have it, and
 //     the one question `\x` splits on that this one does not: four digits
 //     after `\u` and eight after `\U`, with fewer accepted and the run ending
@@ -6905,7 +6907,7 @@ const (
 	// other.
 	PrintfUnicodeEscapeUnspecified PrintfUnicodeEscapePolicy = iota
 	// PrintfUnicodeEscapeAbsent has no `\u` or `\U` at all, so the backslash
-	// and the letter stand as written: bash 3.2, bash as `sh`, dash.
+	// and the letter stand as written: bash 3.2 and dash.
 	PrintfUnicodeEscapeAbsent
 	// PrintfUnicodeEscapeCodePoint reads the digits and leaves an escape with
 	// no digit after it as written, with a complaint that does not change the

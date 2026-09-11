@@ -6981,6 +6981,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/hex-escape-four-digits-is-a-code-point` | ` 5b 5c 78 30 30 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 41 5d ` | ` 5b 00 34 31 5d ` |
 | `printf/hex-escape-with-no-digits` | ` 61 5c 78 5a ` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 0: printf: missing hex digit for \x` | ` 61 00 5a ` | ` 61 00 5a ` |
 | `printf/hex-escape-is-not-a-b-escape` | ` 61 5c 78 34 31 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 5c 78 34 31 5a ` | ` 61 41 5a ` |
+| `printf/unicode-escape-in-a-format` | ` 61 5c 75 30 30 34 31 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 5c 75 30 30 34 31 5a ` | ` 61 41 5a ` | ` 61 41 5a ` |
+| `printf/unicode-escape-long-spelling-in-a-format` | ` 61 5c 55 30 30 30 30 30 30 34 31 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 5c 55 30 30 30 30 30 30 34 31 5a ` | ` 61 41 5a ` | ` 61 41 5a ` |
+| `printf/unicode-escape-takes-a-shorter-run` | ` 61 5c 75 34 31 5a 3a 61 5c 75 30 30 34 31 30 ` | ` 61 41 5a 3a 61 41 30 ` | ` 61 41 5a 3a 61 41 30 ` | ` 61 5c 75 34 31 5a 3a 61 5c 75 30 30 34 31 30 ` | ` 61 41 5a 3a 61 41 30 ` | ` 61 41 5a 3a 61 41 30 ` |
+| `printf/unicode-escape-with-no-digits` | ` 61 5c 75 5a ` | ` 61 5c 75 5a ` **2>** `<shell>: line 1: printf: missing unicode digit for \u` | ` 61 5c 75 5a ` **2>** `<shell>: line 1: printf: missing unicode digit for \u` | ` 61 5c 75 5a ` | ` 61 ` | ` 61 00 5a ` |
+| `printf/unicode-escape-truncation-ends-the-pass` | ` 5b 78 5d 5c 75 5a 5b 79 5d 5c 75 5a ` | ` 5b 78 5d 5c 75 5a 5b 79 5d 5c 75 5a ` **2>** `<shell>: line 1: printf: missing unicode digit for \u~<shell>: line 1: printf: missing unicode digit for \u` | ` 5b 78 5d 5c 75 5a 5b 79 5d 5c 75 5a ` **2>** `<shell>: line 1: printf: missing unicode digit for \u~<shell>: line 1: printf: missing unicode digit for \u` | ` 5b 78 5d 5c 75 5a 5b 79 5d 5c 75 5a ` | ` 5b 78 5d 5b 79 5d ` | ` 5b 78 5d 00 5a 5b 79 5d 00 5a ` |
+| `printf/unicode-escape-is-not-a-b-escape` | ` 61 5c 75 30 30 34 31 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 5c 75 30 30 34 31 5a ` | ` 61 5c 75 30 30 34 31 5a ` | ` 61 41 5a ` |
 | `printf/an-octal-in-a-b-escape-is-not-the-formats` | ` 61 41 5a ~~ 61 08 31 5a ` | ` 61 41 5a ~~ 61 08 31 5a ` | ` 61 41 5a ~~ 61 08 31 5a ` | ` 61 41 5a ~~ 61 08 31 5a ` | ` 61 41 5a ~~ 61 08 31 5a ` | ` 61 41 5a ~~ 61 08 31 5a ` |
 | `printf/a-b-escape-octal-is-a-byte` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
 | `printf/a-b-escape-octal-without-the-zero-diverges` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 5c 31 30 31 5a ` | ` 61 5c 31 30 31 5a ` |
@@ -7157,6 +7163,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `printf/hex-escape-is-not-a-b-escape` — the site matters and not only the shell: ksh93 reads \x41 in a format and leaves it as written in a %b argument, which expands the set echo expands. bash and zsh have it in both and dash in neither, so ksh93 alone separates the two tables
   ```sh
   printf '%b' 'a\x41Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/unicode-escape-in-a-format` — \uHHHH is an escape in a format for bash 5.3, ksh93 and zsh, where bash 3.2 and dash have none and write the ten characters as they stand. bash 5.3 has it under either argv[0], so the bash and bash-as-sh columns agree and it is the version that decides rather than the name — a smaller set than the five that have \x, so the two escapes are not one question
+  ```sh
+  printf 'a\u0041Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/unicode-escape-long-spelling-in-a-format` — the eight-digit spelling, which groups the panel exactly as the four-digit one does: a shell that has one has the other, and the letter decides only how many digits may follow
+  ```sh
+  printf 'a\U00000041Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/unicode-escape-takes-a-shorter-run` — how wide the digit run is, and the one question \x splits on that this escape does not: all three that have it accept fewer than four digits and stop at four, so \u41Z is aAZ and \u00410 is an A followed by a zero
+  ```sh
+  printf 'a\u41Z:a\u00410' | od -An -tx1 | tr -s " "
+  ```
+- `printf/unicode-escape-with-no-digits` — an empty digit run, where the three that have the escape part three ways: bash leaves it standing and warns without failing, zsh reads the run as a zero and writes a NUL, and ksh93 drops the rest of the format — a fourth reading no \x anywhere in the panel has
+  ```sh
+  printf 'a\uZ' | od -An -tx1 | tr -s " "
+  ```
+- `printf/unicode-escape-truncation-ends-the-pass` — what ksh93 drops is the rest of that pass over the format and not the builtin: the operands go on being consumed, so this is [x][y] there, where a \c that stops writes [x] and ends. Two operands are what tells the two apart and one cannot
+  ```sh
+  printf '[%s]\uZ' x y | od -An -tx1 | tr -s " "
+  ```
+- `printf/unicode-escape-is-not-a-b-escape` — the site matters and not only the shell, and it is ksh93 that separates them again: it reads \u0041 in a format and writes the ten characters as they stand in a %b, exactly as it does for \x, so bash 5.3 — under either argv[0] — and zsh alone have the escape at this site
+  ```sh
+  printf '%b' 'a\u0041Z' | od -An -tx1 | tr -s " "
   ```
 - `printf/an-octal-in-a-b-escape-is-not-the-formats` — the two escape tables in one line, and unanimous in both halves: a %b reads \0 and up to three octal digits after it, so \0101 is an A, where a format reads up to three digits with the zero optional, so the same text is a backspace and a 1. Reading a %b the format's way gives neither answer
   ```sh

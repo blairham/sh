@@ -2328,7 +2328,7 @@ echo "reached-after st=$?"`,
 	{
 		ID: "printf/unicode-escape-in-a-format", Category: "printf",
 		Snippet: `printf 'a\u0041Z' | od -An -tx1 | tr -s " "`,
-		Why:     "\\uHHHH is an escape in a format for bash 5.3, ksh93 and zsh, where bash 3.2, that binary as sh, and dash have none and write the ten characters as they stand — a smaller set than the five that have \\x, so the two escapes are not one question",
+		Why:     "\\uHHHH is an escape in a format for bash 5.3, ksh93 and zsh, where bash 3.2 and dash have none and write the ten characters as they stand. bash 5.3 has it under either argv[0], so the bash and bash-as-sh columns agree and it is the version that decides rather than the name — a smaller set than the five that have \\x, so the two escapes are not one question",
 	},
 	{
 		ID: "printf/unicode-escape-long-spelling-in-a-format", Category: "printf",
@@ -2353,7 +2353,7 @@ echo "reached-after st=$?"`,
 	{
 		ID: "printf/unicode-escape-is-not-a-b-escape", Category: "printf",
 		Snippet: `printf '%b' 'a\u0041Z' | od -An -tx1 | tr -s " "`,
-		Why:     "the site matters and not only the shell, and it is ksh93 that separates them again: it reads \\u0041 in a format and writes the ten characters as they stand in a %b, exactly as it does for \\x, so bash 5.3 and zsh alone have the escape at this site",
+		Why:     "the site matters and not only the shell, and it is ksh93 that separates them again: it reads \\u0041 in a format and writes the ten characters as they stand in a %b, exactly as it does for \\x, so bash 5.3 — under either argv[0] — and zsh alone have the escape at this site",
 	},
 	{
 		ID: "printf/an-octal-in-a-b-escape-is-not-the-formats", Category: "printf",

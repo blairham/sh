@@ -545,6 +545,34 @@ func TestPrintfMissingFormatCharacter(t *testing.T) {
 	}
 }
 
+// `\u` and `\U` are code points at both sites, and an empty digit run leaves
+// the escape standing with a complaint that does not fail the command — the
+// same shape this shell's `\x` has. bash 3.2 has none of it, so this is 5.3's
+// answer and not "bash's".
+func TestPrintfUnicodeEscapeIsACodePoint(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a\u0041Z'`, "aAZ"},
+		{`printf 'a\U00000041Z'`, "aAZ"},
+		{`printf 'a\u41Z'`, "aAZ"},
+		{`printf 'a\u00410'`, "aA0"},
+		{`printf '%b' 'a\u0041Z'`, "aAZ"},
+		{`printf '%b' 'a\U00000041Z'`, "aAZ"},
+	} {
+		if out, _ := runBash(t, dir, tc.src+"\n"); out != tc.want {
+			t.Errorf("%s: said % x, want % x", tc.src, out, tc.want)
+		}
+	}
+	out, st := runBash(t, dir, `printf 'a\uZ'`+"\n")
+	if out != "bash: line 1: printf: missing unicode digit for \\u\na\\uZ" || st != 0 {
+		t.Errorf("said %q status %d, want the warning, the text, and a zero status", out, st)
+	}
+	out, st = runBash(t, dir, `printf 'a\UZ'`+"\n")
+	if out != "bash: line 1: printf: missing unicode digit for \\U\na\\UZ" || st != 0 {
+		t.Errorf("said %q status %d, want the long spelling named and a zero status", out, st)
+	}
+}
+
 // `\x` reads at most two digits as one byte, and an empty digit run leaves
 // the escape standing with a complaint that does not fail the command.
 func TestPrintfHexEscapeIsAByte(t *testing.T) {

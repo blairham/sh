@@ -479,6 +479,26 @@ func TestPrintfMissingFormatCharacter(t *testing.T) {
 	}
 }
 
+// `\u` and `\U` are code points at both sites, and an empty digit run is a
+// zero rather than an escape left standing — the same NUL this shell's `\x`
+// gives.
+func TestPrintfUnicodeEscapeIsACodePointOrANul(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a\u0041Z'`, "aAZ"},
+		{`printf 'a\U00000041Z'`, "aAZ"},
+		{`printf 'a\u41Z'`, "aAZ"},
+		{`printf 'a\uZ'`, "a\x00Z"},
+		{`printf 'a\UZ'`, "a\x00Z"},
+		{`printf '%b' 'a\u0041Z'`, "aAZ"},
+		{`printf '%b' 'a\uZ'`, "a\x00Z"},
+	} {
+		if out, _ := runZsh(t, dir, tc.src+"\n"); out != tc.want {
+			t.Errorf("%s: said % x, want % x", tc.src, out, tc.want)
+		}
+	}
+}
+
 // `\x` reads at most two digits as one byte, and an empty digit run as a
 // zero rather than as an escape left standing.
 func TestPrintfHexEscapeIsAByteOrANul(t *testing.T) {

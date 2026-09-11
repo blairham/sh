@@ -4316,6 +4316,11 @@ echo "st=$?"`,
 		Why:     "`:s` replaces a **literal** substring, not a pattern — measured: `${x:s/?/Z/}` on `abc` answers `abc`, and the `?` is replaced only where the value really holds one. The other three read `s/X/-/` as arithmetic and refuse it, which is why the status is the second line",
 	},
 	{
+		ID: "param/a-substring-modifier-reads-its-own-backslashes", Category: "parameter expansion",
+		Snippet: `x=a/b/c; echo "[${x:s/\//:/}]"; y=aXbXc; echo "[${y:s/X/[\&]/}][${y:s/X/[\\&]/}]"; echo "st=$?"`,
+		Why:     "a modifier reads its own text rather than a value, and it is the only operand of a `${ }` that does — so the backslash has to survive as far as the modifier. The escaped delimiter is what holds the first field open; the two ampersand fields are the pair that says the escapes and the matched text are answered in one pass, since `\\&` is the character and `\\\\&` is a backslash followed by the match. The escape was removed before the modifier saw anything here: the first field arrived empty, which is this modifier's spelling for the previous substitution, and reported there had not been one (#1198). The other three read the whole range as arithmetic and refuse it, which is why the status is the last line",
+	},
+	{
 		ID: "param/a-substring-modifier-after-an-offset-and-a-length", Category: "parameter expansion",
 		Snippet: `x=/tmp/Dir/File.Txt.gz; t=0; echo "[${x:1:5:t}]"; echo "st=$?"`,
 		Why:     "a modifier after **both** an offset and a length, which is a third shape rather than a variation of either: the tail of the five characters from offset one. The parser splits a range once, so `5:t` arrives whole — it reached the evaluator as an expression here and was an arithmetic failure over a range the shell with modifiers reads without complaint",
@@ -5082,6 +5087,11 @@ echo "st=$?"`,
 		ID: "expansion/a-length-with-a-substring-operator", Category: "expansion",
 		Snippet: `v=abc; echo ${#v:1}`,
 		Why:     "the same pairing with the operator that looks least like one, and the row that says the refusal is about the operator rather than about the character `#`: there is no second `#` here and four of the five still refuse. zsh answers 2 for the same reason as the trim — apply, then measure",
+	},
+	{
+		ID: "expansion/a-replacement-scan-stops-where-the-last-match-ended", Category: "expansion",
+		Snippet: `v=abcd; printf "[%s]" "${v//*/X}" "${v//b*/X}" "${v//?/X}"; echo`,
+		Why:     "the empty match waiting at the end of a value a `*` has already consumed. bash, ksh93 and zsh all print one X for the first field; this implementation printed two, having offered the final position to the matcher again after the whole value was taken (#1341). The second field is what makes it the end of the scan rather than a rule about `*`: the scan reaches the end from the middle and the answer is still one X. The third is the control for the other direction, since a pattern that never reaches the end is replaced at every position, so a scan that stopped too early would collapse it to a single X",
 	},
 	{
 		ID: "expansion/a-length-with-a-replacement-operator", Category: "expansion",

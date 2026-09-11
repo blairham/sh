@@ -2871,6 +2871,14 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 			b.WriteString(value[end:])
 			return b.String()
 		}
+		if end == len(value) {
+			// A match that ended at the end of the value leaves nothing to
+			// scan, so the empty match waiting at the final stop is not a
+			// second match. Without this, a pattern that can match empty
+			// replaces once more than it matched: `${v//*/X}` on a non-empty
+			// value is one X, because the `*` took the whole of it.
+			return b.String()
+		}
 		if end == i {
 			// An empty match must still make progress.
 			if i < len(value) {

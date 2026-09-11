@@ -461,6 +461,40 @@ directory listing into the middle of a string at status 0, and the
 bracket expression that made it noticeable was the same fault reaching a
 dialect where an unmatched pattern is fatal (#1337).
 
+### The scan stops where the last match ended
+
+`${x//pat/rep}` walks the value looking for somewhere else to match, and
+**a match that ended at the end of the value leaves nowhere left**. The
+empty match waiting at the final position is not a second match.
+
+It is only visible for a pattern that can match empty at all, which is
+why `*` is the shape that shows it. Measured 2026-09-07 on bash 5.3.15,
+ksh93u+ and zsh 5.9.2 — dash has no such operator:
+
+    v=abcd
+    ${v//*/X}   →  X      in all three
+    ${v//b*/X}  →  aX     in all three
+    ${v//?/X}   →  XXXX   in all three
+
+The second row is what says this is the end of the scan rather than the
+`*` being special: the `b` means the scan reaches the end from the
+middle, and one X is still the answer. The third is the control for the
+other direction — a pattern that never reaches the end is replaced at
+every position, so a rule that ended the scan too early would show up
+there as a single X.
+
+This implementation replaced twice for the first row, because the value's
+end was offered to the matcher again after `*` had consumed the whole of
+it and an empty match was found there (#1341).
+
+The panel does not agree about every empty match, only about this one.
+A pattern that can match empty *without* reaching the end parts them:
+with `v=abc`, the empty-or-`b` pattern (`@(b|)` in bash and ksh93,
+`(b|)` in zsh) is `<>a<><>c` in bash and zsh and `<>a<>c<>` in ksh93 —
+one declines every empty match at the end of the value and the other
+declines one adjacent to the match before it. Both agree on the rows
+above, which is the whole of what this section claims.
+
 ## The `!` that lists names instead of following one
 
 Two more spellings open with `!` and are not indirection:

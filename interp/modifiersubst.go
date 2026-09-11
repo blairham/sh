@@ -54,6 +54,11 @@ func (r *Runner) substituteModifier(value, rest string, global bool, e *syntax.P
 		r.reportBadSubstitution(e)
 		return "", false
 	}
+	// The pattern is a literal string, so its escapes are resolved here and
+	// what is remembered for the next `:s` is the string itself. The
+	// replacement keeps its escapes until it is used, because an `&` in it is
+	// not a character.
+	pattern = unescapeModifier(pattern)
 	with, tail, closed := scanDelimited(after, delim)
 	if !closed {
 		// The closing delimiter is optional, so everything left is the
@@ -94,27 +99,42 @@ func (r *Runner) repeatSubstitution(value string, global bool, _ *syntax.ParamEx
 	return substituteLiteral(value, r.lastSubst.pattern, r.lastSubst.with, global), true
 }
 
-// scanDelimited reads up to the next unescaped delim, answering the text, what
-// is left after the delimiter, and whether one was found.
+// scanDelimited reads up to the next unescaped delim, answering the field as
+// it was written, what is left after the delimiter, and whether one was found.
 //
-// A backslash before the delimiter makes it literal and the backslash goes;
-// a backslash before anything else is kept, both of it. Measured: with
-// `x=a/b/c`, `${x:s/\//:/}` is `a:b/c`, so the escape is consumed and the
-// slash survives.
+// A backslash protects the byte after it, so an escaped delimiter does not end
+// the field. The escapes are left in the text rather than resolved here,
+// because the replacement half has one more question to ask of them than the
+// pattern half does — see substituteLiteral.
 func scanDelimited(s string, delim byte) (text, rest string, found bool) {
-	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		switch {
-		case s[i] == '\\' && i+1 < len(s) && s[i+1] == delim:
-			b.WriteByte(delim)
+		case s[i] == '\\' && i+1 < len(s):
 			i++
 		case s[i] == delim:
-			return b.String(), s[i+1:], true
-		default:
-			b.WriteByte(s[i])
+			return s[:i], s[i+1:], true
 		}
 	}
-	return b.String(), "", false
+	return s, "", false
+}
+
+// unescapeModifier resolves the escapes of a field that has already been
+// found: a backslash stands for the byte after it, whatever that byte is.
+// Measured, with the modifier's own delimiter out of the way: `${x:s/\./:/}`
+// replaces a `.` rather than a backslash-dot, and `${x:s/\\a/:/}` replaces a
+// backslash followed by an `a`.
+func unescapeModifier(s string) string {
+	if !strings.ContainsRune(s, '\\') {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			i++
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 // substituteLiteral replaces pattern with the replacement — the first
@@ -136,13 +156,20 @@ func substituteLiteral(value, pattern, with string, global bool) string {
 	return strings.Replace(value, pattern, expandAmpersand(with, pattern), n)
 }
 
-// expandAmpersand puts the matched text where the replacement wrote `&`.
+// expandAmpersand puts the matched text where the replacement wrote `&`, and
+// resolves the replacement's escapes in the same pass.
+//
+// One pass rather than two, because the order of the two questions is
+// observable: `\&` is a literal ampersand and `\\&` is a literal backslash
+// followed by the matched text. A pass that resolved the escapes first would
+// turn the second into `\&` and then read that as the literal, and a pass that
+// answered the ampersands first would never see the difference at all.
 func expandAmpersand(with, matched string) string {
 	var b strings.Builder
 	for i := 0; i < len(with); i++ {
 		switch {
-		case with[i] == '\\' && i+1 < len(with) && with[i+1] == '&':
-			b.WriteByte('&')
+		case with[i] == '\\' && i+1 < len(with):
+			b.WriteByte(with[i+1])
 			i++
 		case with[i] == '&':
 			b.WriteString(matched)

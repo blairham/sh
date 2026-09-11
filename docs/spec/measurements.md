@@ -15361,6 +15361,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/expands-a-command-word` | `hit` | **2>** `<shell>: line 2: a: command not found` *(status 127)* | `hit` | **2>** `<shell>: line 1: a: command not found` *(status 127)* | `hit` | **2>** `<shell>:2: command not found: a` *(status 127)* |
 | `alias/an-alias-may-hold-a-keyword` | `yes` | **2>** `<shell>: -c: line 2: syntax error near unexpected token `fi'~<shell>: -c: line 2: `iff echo yes; fi'` *(status 2)* | `yes` | **2>** `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `iff echo yes; fi'` *(status 2)* | `yes` | **2>** `<shell>:2: parse error near `fi'` *(status 1)* |
 | `alias/a-trailing-space-carries-on` | `BEE` | **2>** `<shell>: line 2: a: command not found` *(status 127)* | `BEE` | **2>** `<shell>: line 1: a: command not found` *(status 127)* | `BEE` | **2>** `<shell>:2: command not found: a` *(status 127)* |
+| `alias/an-assignment-prefix-does-not-move-the-command-word` | `HI~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `HI~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `HI~st=0` | `HI~st=0` |
+| `alias/a-self-reference-through-a-prefix-does-not-loop` | `st=127` **2>** `<script>: 2: a: not found` | `st=127` **2>** `<script>: line 2: a: command not found` | `st=127` **2>** `<script>: line 2: a: command not found` | `st=127` **2>** `<script>: line 2: a: command not found` | `st=127` **2>** `<script>: line 2: a: not found` | `st=127` **2>** `<script>:2: command not found: a` |
 | `alias/a-self-reference-does-not-loop` | `x hi` | `hi` | `x hi` | `hi` | `x hi` | `hi` |
 | `alias/not-on-the-line-that-defines-it` | `st=127` **2>** `<shell>: 1: a: not found` | `st=127` **2>** `<shell>: line 1: a: command not found` | `st=127` **2>** `<shell>: line 1: a: command not found` | `st=127` **2>** `<shell>: a: command not found` | `st=127` **2>** `<shell>: a: not found` | `st=127` **2>** `<shell>:1: command not found: a` |
 | `alias/a-diagnostic-names-the-use-site` | **2>** `<shell>: 2: nosuchcmd: not found` *(status 127)* | **2>** `<shell>: line 2: bad: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 1: bad: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: not found` *(status 127)* | **2>** `<shell>:2: command not found: bad` *(status 127)* |
@@ -15392,6 +15394,18 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   alias a='echo ' b=BEE
   a b
+  ```
+- `alias/an-assignment-prefix-does-not-move-the-command-word` — an assignment written in front of a command does not move where the command word is, so the word after it is still the one an alias stands for: ksh93 and zsh both print `HI` at status 0. From a file rather than -c because zsh expands on only one of those routes. bash expands no alias in a script either way and answers `command not found` to both halves, which is its own rule and not this one. Ours resolved the word as written and answered 127 (#1942)
+  ```sh
+  alias a=echo
+  y=2 a HI
+  echo "st=$?"
+  ```
+- `alias/a-self-reference-through-a-prefix-does-not-loop` — the recursion guard reaches across the prefix: the value puts the same name back where a command word stands, and it is a word rather than an alias the second time — `a: not found` in ksh93 and zsh alike. Without one set spanning both positions this expands forever, which is why the row stands beside the one above it
+  ```sh
+  alias a='y=1 a'
+  y=2 a HI
+  echo "st=$?"
   ```
 - `alias/a-self-reference-does-not-loop` — an alias is not expanded twice in one command, which is what stops `alias echo='echo x'` from recurring forever — the second `echo` is an ordinary word and runs the builtin
   ```sh

@@ -39,6 +39,14 @@ type Parser struct {
 	// by LineShift, for a caller that parses a program in pieces and has to
 	// carry the numbering from one piece to the next.
 	aliasLineShift int
+	// aliasDone are the names already expanded in the command being read. It
+	// is a field rather than a local because the command word is not always
+	// reached from one place: assignment prefixes stand in front of it, so
+	// the word after them is expanded in parseSimple while the first word was
+	// expanded in parseCommand, and the two have to share a set or
+	// `alias al='y=1 al'` expands forever. Measured: that alias is
+	// `al: not found` in ksh93 and zsh alike, so the inner name is spent.
+	aliasDone map[string]bool
 
 	err        error
 	incomplete bool
@@ -1052,7 +1060,8 @@ func (p *Parser) parseCommand() Command {
 	// The set is fresh per command, so `e yes; e two` expands `e` twice.
 	if p.Aliases != nil {
 		p.aliasNextWord = false
-		p.expandAlias(map[string]bool{})
+		p.aliasDone = map[string]bool{}
+		p.expandAlias(p.aliasDone)
 	}
 	switch {
 	case p.at(TokEOF), p.at(TokNewline), p.atStopWord():
@@ -1714,6 +1723,37 @@ func (p *Parser) parseSimple() Command {
 			if h, ok := p.isAssign(p.tok); ok && !seenArg {
 				c.Assigns = append(c.Assigns, p.parseAssign(h))
 				continue
+			}
+			// The command word is where an alias is expanded, and an
+			// assignment prefix does not move it: `alias al=echo; y=2 al HI`
+			// prints `HI` in both shells of the panel that expand aliases in
+			// a script. parseCommand expanded the word it dispatched on, and
+			// that word turned out to be an assignment, so the expansion has
+			// to be made again here — where the real command word finally
+			// stands. Left out, the word resolved as written and the answer
+			// was `command not found` (#1942).
+			//
+			// aliasSpliced == 0 keeps this to a word of the *input*: an alias
+			// value's own second word is not expanded in turn, only the word
+			// after a value ending in a blank is, which is the rule the
+			// trailing-space branch below carries. The set is
+			// parseCommand's, so a name already spent in this command is not
+			// expanded again.
+			if len(c.Assigns) > 0 && !seenArg && p.aliasSpliced == 0 && p.Aliases != nil {
+				p.aliasNextWord = false
+				p.expandAlias(p.aliasDone)
+				if h, ok := p.isAssign(p.tok); ok {
+					// The value put an assignment where the command word was
+					// — `alias al='x=1 echo'` — and it is a prefix like the
+					// ones written out, so the word after it is the command
+					// word in turn. Measured `HI`, status 0.
+					c.Assigns = append(c.Assigns, p.parseAssign(h))
+					continue
+				}
+				// Otherwise the word stands as the command word, expanded or
+				// not, and the readings below are the ones it would have had.
+				// Falling through rather than looping is what keeps a word
+				// that names no alias from being offered here forever.
 			}
 			if a, consumed := p.declarationArray(c); consumed {
 				if a != nil {

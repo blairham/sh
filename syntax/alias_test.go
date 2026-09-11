@@ -114,6 +114,46 @@ func TestAliasExpansion(t *testing.T) {
 			"each command gets a fresh set",
 			table("e", "echo"), "e one; e two", "echo one; echo two",
 		},
+		{
+			// An assignment prefix does not move the command word, so the
+			// word after it is still the one an alias stands for. Measured
+			// 2026-09-11 in both panel shells that expand aliases in a
+			// script: `alias al=echo; y=2 al HI` prints `HI` at status 0,
+			// where this parser resolved `al` as written and the shell
+			// answered `command not found` (#1942).
+			"an assignment prefix does not stop the expansion",
+			table("a", "echo"), "y=2 a HI", "y=2 echo HI",
+		},
+		{
+			// Several prefixes are still one command word.
+			"more than one prefix",
+			table("a", "echo"), "y=2 z=3 a HI", "y=2 z=3 echo HI",
+		},
+		{
+			// The value may itself carry a prefix, and it is a prefix like
+			// the written ones: `alias al='x=1 echo'; y=2 al HI` is `HI`.
+			"a value may add a prefix of its own",
+			table("a", "x=1 echo"), "y=2 a HI", "y=2 x=1 echo HI",
+		},
+		{
+			// The same set stops recursion here as in front of it, so a
+			// value naming itself again resolves as a word. Measured: `alias
+			// al='y=1 al'; y=2 al HI` is `al: not found` in both.
+			"a self-reference through a prefix does not loop",
+			table("a", "y=1 a"), "y=2 a HI", "y=2 y=1 a HI",
+		},
+		{
+			// Only the command word, as ever: the prefix does not make an
+			// argument eligible.
+			"an argument after a prefix is still not expanded",
+			table("a", "echo one", "b", "NOPE"), "y=2 a b", "y=2 echo one b",
+		},
+		{
+			// The value's own second word is not expanded in turn either —
+			// that stays the trailing-blank rule's job.
+			"a value's second word is not expanded",
+			table("a", "echo b", "b", "NOPE"), "y=2 a", "y=2 echo b",
+		},
 		{"no table expands nothing", nil, "a hi", "a hi"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

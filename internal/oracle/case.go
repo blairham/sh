@@ -13271,6 +13271,22 @@ a b`,
 		Why: "a value ending in a space makes the *next* word eligible too, which is the rule behind `alias sudo='sudo '`. The space makes the word after the value eligible and not the value's own second word",
 	},
 	{
+		ID: "alias/an-assignment-prefix-does-not-move-the-command-word", Category: "alias",
+		Script: true,
+		Snippet: `alias a=echo
+y=2 a HI
+echo "st=$?"`,
+		Why: "an assignment written in front of a command does not move where the command word is, so the word after it is still the one an alias stands for: ksh93 and zsh both print `HI` at status 0. From a file rather than -c because zsh expands on only one of those routes. bash expands no alias in a script either way and answers `command not found` to both halves, which is its own rule and not this one. Ours resolved the word as written and answered 127 (#1942)",
+	},
+	{
+		ID: "alias/a-self-reference-through-a-prefix-does-not-loop", Category: "alias",
+		Script: true,
+		Snippet: `alias a='y=1 a'
+y=2 a HI
+echo "st=$?"`,
+		Why: "the recursion guard reaches across the prefix: the value puts the same name back where a command word stands, and it is a word rather than an alias the second time — `a: not found` in ksh93 and zsh alike. Without one set spanning both positions this expands forever, which is why the row stands beside the one above it",
+	},
+	{
 		ID: "alias/a-self-reference-does-not-loop", Category: "alias",
 		Snippet: `alias echo='echo x'
 echo hi`,

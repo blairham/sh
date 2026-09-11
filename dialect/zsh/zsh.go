@@ -186,6 +186,12 @@ func Dialect() syntax.Dialect {
 	// syntax.Dialect.FunctionMultipleNames has the six answers, and the
 	// construct is what an Oh-My-Zsh clipboard library ends with (#1680).
 	d.FunctionMultipleNames = true
+	// And a name list with no body after it, plus the `;` that may stand
+	// between the names and a body it does have — see
+	// syntax.Dialect.FunctionKeywordBodyIsOptional for the run that says a
+	// bodyless declaration defines an empty function rather than an autoload
+	// stub, and that `function a; echo B` binds `echo B` as the body (#1686).
+	d.FunctionKeywordBodyIsOptional = true
 	// After the keyword, the word is the name whatever is in it — the empty
 	// string, a space, a semicolon, a dollar, all of it — and this shell is
 	// the only one in the panel that reads it that way. The other four with

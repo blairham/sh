@@ -85,9 +85,11 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 // core cannot read. ClobberOverrideMarker is an eighth, and three of its
 // cases are the same kind: `>>|`, `&>>|` and `>>!` after a compound are text
 // the core reads as a pipe or a stray word rather than as a redirection.
-// FunctionMultipleNames is a ninth and the newest: four cases whose `function`
-// keyword gives one body several names, where the core reads the second name
-// as the body and the brace group after it closes nothing. The rest change
+// FunctionMultipleNames is a ninth: eight cases giving one body several
+// names, where the core reads the second name as the body and the brace group
+// after it closes nothing, or reads the whole list as a command with a stray
+// `(` after it. FunctionKeywordBodyIsOptional is a tenth and the newest: two
+// cases whose keyword form has a `;` before its body or no body at all. The rest change
 // what a case *means* rather than whether it parses, and they are here
 // because the printer should be exercised on those meanings rather than on
 // whatever a narrower reading turns them into.
@@ -121,10 +123,16 @@ func corpusGrammar() syntax.Dialect {
 	// with a space, an operator, nothing at all or quotes, and the core
 	// refuses every one of them at the parenthesis.
 	d.FunctionNameIsAnyWord = true
-	// One body under several names. Four cases, and the core reads none of
-	// them: without it the second name is the *body* and the brace group
-	// after it has nothing to be part of.
+	// One body under several names, in both spellings. Eight cases, and the
+	// core reads none of them: after the keyword the second name is read as
+	// the *body* and the brace group after it has nothing to be part of, and
+	// before the parentheses the words are a command's arguments with a `(`
+	// behind them.
 	d.FunctionMultipleNames = true
+	// And a name list that ends without a body, plus the `;` that may stand
+	// between the names and a body it does have. Two cases, one of them
+	// inside an `eval` where the printer never reaches it.
+	d.FunctionKeywordBodyIsOptional = true
 	d.MultiDigitFdNumber = true
 	d.ParamCaseChange = true
 	// `<(cmd)`. Three cases are written with it — the ones about `sysopen`,

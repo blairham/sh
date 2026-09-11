@@ -196,3 +196,124 @@ func TestANameListPrintsBackWhole(t *testing.T) {
 		}
 	}
 }
+
+// The parenthesis spelling takes the same name list, and takes it from the
+// *argument* loop rather than from a name test on one word — so any word list
+// followed by `()` is a definition there, `echo hi () { … }` included.
+func TestTheParenthesisSpellingTakesANameList(t *testing.T) {
+	d := manyFuncNames()
+	d.FunctionNameIsAnyWord = true
+	for _, tc := range []struct {
+		src   string
+		names []string
+	}{
+		{`a b () { :; }`, []string{"a", "b"}},
+		{`clipcopy clippaste() { :; }`, []string{"clipcopy", "clippaste"}},
+		{`a b c () { :; }`, []string{"a", "b", "c"}},
+		// A word that is a command name everywhere else is a name here,
+		// which is what makes this the argument loop's reading and not a
+		// widening of what a name may be.
+		{`echo hi () { :; }`, []string{"echo", "hi"}},
+		// A later name is read where an argument stands, so the `=` that
+		// ends a *first* name is ordinary text in one behind it.
+		{`a c=d () { :; }`, []string{"a", "c=d"}},
+		// One name is still one name, with no list behind it.
+		{`a () { :; }`, []string{"a"}},
+	} {
+		fn := decl(t, tc.src, d)
+		got := append([]string{fn.Name}, nil...)
+		for _, n := range fn.AlsoNamed {
+			got = append(got, n.Name)
+		}
+		if len(got) != len(tc.names) {
+			t.Errorf("%s: names %v, want %v", tc.src, got, tc.names)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.names[i] {
+				t.Errorf("%s: names %v, want %v", tc.src, got, tc.names)
+				break
+			}
+		}
+	}
+	// Without the flag the same text is a command followed by a parenthesis,
+	// which every other dialect refuses there.
+	for _, src := range []string{`a b () { :; }`, `clipcopy clippaste() { :; }`} {
+		mustFail(t, src, oneFuncName(), "a name list before the parens without the flag")
+	}
+}
+
+// Two shapes bound the reading, and both are measured rather than chosen: an
+// assignment in front of the names ends it, and the body is not optional in
+// this spelling the way it is after the keyword.
+func TestTheParenthesisNameListStopsAtAnAssignmentAndWantsABody(t *testing.T) {
+	d := manyFuncNames()
+	d.FunctionNameIsAnyWord = true
+	for _, src := range []string{
+		`x=1 a b () { :; }`,
+		`a b ()`,
+	} {
+		mustFail(t, src, d, "a bounded shape of the parenthesis name list")
+	}
+}
+
+// Every name in the list is read by the rule the name in front of the
+// parentheses is read by, which is what stops the list from being a wider
+// reading of what a name may be.
+func TestEveryNameBeforeTheParensIsReadTheSameWay(t *testing.T) {
+	d := manyFuncNames()
+	d.FunctionNameIsAnyWord = true
+	// A quoted name is a name here because the dialect says any word is.
+	fn := decl(t, `a "b c" () { :; }`, d)
+	if len(fn.AlsoNamed) != 1 || fn.AlsoNamed[0].Name != "b c" {
+		t.Errorf(`a "b c" (): extra names %v`, fn.AlsoNamed)
+	}
+	// A bare pattern character is matched against the filesystem in the shell
+	// this models, so it names nothing there and must name nothing here —
+	// in the list as in front of it.
+	mustFail(t, `a*b c () { :; }`, d, "a bare pattern character in an earlier name")
+	mustFail(t, `a b*c () { :; }`, d, "a bare pattern character in a later name")
+
+	// An expansion in a name is kept as a word where the dialect expands one.
+	exp := d
+	exp.FunctionNameExpands = true
+	fn = decl(t, `a _p_${w} () { :; }`, exp)
+	if len(fn.AlsoNamed) != 1 || fn.AlsoNamed[0].Word == nil {
+		t.Errorf(`a _p_${w} (): the later name lost its word: %v`, fn.AlsoNamed)
+	}
+	// And without that flag it is refused rather than flattened to `_p_w`,
+	// which would be a perfectly good name for a different function.
+	mustFail(t, `a _p_${w} () { :; }`, d, "an expansion in a later name")
+}
+
+// The parenthesis spelling prints back whole too, and it prints back in the
+// spelling it was written in: the keyword is not in this tree, so nothing may
+// put one there.
+func TestTheParenthesisNameListPrintsBackWhole(t *testing.T) {
+	d := manyFuncNames()
+	d.FunctionNameIsAnyWord = true
+	for _, tc := range []struct{ src, want string }{
+		{`a b () { :; }`, "a b() { :; }"},
+		{`clipcopy clippaste() { :; }`, "clipcopy clippaste() { :; }"},
+		{`echo hi () { :; }`, "echo hi() { :; }"},
+	} {
+		f, err := Parse(tc.src, d)
+		if err != nil {
+			t.Errorf("%s: %v", tc.src, err)
+			continue
+		}
+		got := Print(f)
+		if got != tc.want {
+			t.Errorf("%s: printed %q, want %q", tc.src, got, tc.want)
+			continue
+		}
+		back, err := Parse(got, d)
+		if err != nil {
+			t.Errorf("%s: printed form does not parse: %v", tc.src, err)
+			continue
+		}
+		if why, ok := SameProgram(f, back); !ok {
+			t.Errorf("%s: printed form is a different program: %s", tc.src, why)
+		}
+	}
+}

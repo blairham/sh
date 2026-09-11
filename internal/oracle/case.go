@@ -6463,6 +6463,26 @@ echo "st=$?"`,
 		Why:     "the same name twice, which is one function and not a complaint in the shell that takes the list — the second definition replaces the first and there is nothing to collide with. The row exists because a table keyed by name is the obvious implementation and a *list* keyed by nothing is the other one, and only this input parts them",
 	},
 	{
+		ID: "cmd/function-keyword-with-no-body-at-all", Category: "command language",
+		Snippet: `eval "function a b"; a && b && echo defined; echo st=$?`,
+		Why:     "a name list that ends without a body, which one shell reads as a declaration and the rest as an unfinished definition: zsh defines every name with an *empty* body — both calls succeed and `defined` prints at 0 — where bash 5.3, bash 3.2, bash-as-sh and ksh93 make the eval a syntax error and leave both names not found, and dash has no keyword at all. It is not an autoload stub, which is what #1686 recorded and what a call would show: a stub reads its file off `fpath` and prints what is in it. Inside an `eval` on purpose — written at the top level the command after it is the *body*, which is the row below and the other half of the same production",
+	},
+	{
+		ID: "cmd/function-keyword-with-a-separator-before-the-body", Category: "command language",
+		Snippet: `function a; echo B; echo mid; a; echo st=$?`,
+		Why:     "the `;` that may stand between a name list and its body, and the row that says what it does with the command after it: zsh binds `echo B` as the body, so `mid` prints first and `B` only when `a` is called. Read the other way — the separator ending a declaration with no body — the same line would print `B` where it stands and a call to `a` would print nothing, at status 0 either way, which is why the *order* is what this case compares. The other five have no such reading: three are a syntax error at the `;`, ksh93 the same, and dash runs `echo B` and `echo mid` as ordinary commands with no `a` to call",
+	},
+	{
+		ID: "cmd/function-posix-form-with-several-names", Category: "command language",
+		Snippet: `a b () { echo "[$0]"; }; a; b; echo st=$?`,
+		Why:     "the parenthesis spelling of one body under several names, which the keyword rows above have and this one did not: zsh defines both and answers each call with its own name, where bash 5.3, bash 3.2, bash-as-sh, ksh93 and dash are all a syntax error at the `(`. The `$0` is the row — a reading that defined one function and pointed the other name at it prints `[a]` twice (#1685)",
+	},
+	{
+		ID: "cmd/function-posix-form-with-a-name-list-of-any-words", Category: "command language",
+		Snippet: `echo hi () { printf '[%s]\n' "$0"; }; hi; printf 'st=%s\n' "$?"`,
+		Why:     "what makes the name list before `()` the *argument* loop's reading rather than a wider name test: the first word is `echo`, a command name everywhere, and the parentheses at the end of the line are all that makes it a name. zsh defines `echo` and `hi` both — which is why the status is printed with `printf` and not with the `echo` this line has just replaced — and the other five refuse the `(`",
+	},
+	{
 		ID: "cmd/function-posix-form", Category: "command language",
 		Snippet: `f() { echo posix; }; f`,
 		Why:     "the universal definition form",

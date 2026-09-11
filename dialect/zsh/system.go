@@ -206,7 +206,7 @@ func sysparamsView(r *interp.Runner) interp.AssocArray {
 // # What answering the shell's number does
 //
 // It is the catastrophe the note on `procsubstpid` above describes, arrived at
-// through the neighbouring key. A forked body leads its own process group, so
+// through the neighboring key. A forked body leads its own process group, so
 // a teardown writes `kill -- -$sysparams[pid]` meaning "me and the children I
 // started". Read here, that is the interactive shell's own process group.
 //

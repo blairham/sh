@@ -75,7 +75,7 @@ import (
 //
 // A cache rather than a read per expansion, because a produced association is
 // produced on every read and a prompt theme asks about capabilities in bulk:
-// powerlevel10k's initialisation alone tests dozens of names, and each test
+// powerlevel10k's initialization alone tests dozens of names, and each test
 // would otherwise be a directory search and a parse of a few kilobytes.
 //
 // The key is the environment the answer depends on, so a script that exports

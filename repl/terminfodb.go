@@ -51,10 +51,10 @@ const (
 )
 
 // A capability is absent when its stored value is negative, and the format
-// distinguishes two reasons — never set, and cancelled by a description that
+// distinguishes two reasons — never set, and canceled by a description that
 // builds on another. Both read as absent here, which is what a script sees:
 // zsh answers `${+terminfo[U8]}` with 0 for `xterm-256color`, whose extended
-// numeric `U8` is stored cancelled.
+// numeric `U8` is stored canceled.
 const terminfoAbsent = -1
 
 // errNoDescription is every failure this file has, for the reason given
@@ -316,7 +316,7 @@ func boolByte(b bool) byte {
 //
 // `yes` and `no`, which is the wording measured out of zsh 5.9.2 rather than
 // this file's choice, and anything that is not a stored 1 is `no` — the
-// format's cancelled marker included, because a cancelled capability is one
+// format's canceled marker included, because a canceled capability is one
 // the terminal does not have.
 func terminfoBoolean(v byte) string {
 	if v == 1 {

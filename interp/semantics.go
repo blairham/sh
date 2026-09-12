@@ -6115,6 +6115,14 @@ type Semantics struct {
 	// Silent and wrong either way: a descriptor number that arrived from
 	// arithmetic and overflowed is answered about some other descriptor,
 	// with nothing said.
+	//
+	// unpinned zsh: the corpus runs with no terminal, so a narrowed
+	// descriptor and an un-narrowed one are both false — the only field
+	// that can tell them apart is one where the *conversion* fails, and
+	// the shells that refuse such an operand are bash and dash. zsh takes
+	// it quietly under either answer, so nothing a row can say moves that
+	// pair without a pseudo-terminal, which the harness has not got. The
+	// two sides are pinned in interp/terminaltest_test.go, which opens one.
 	TerminalTestDescriptorNarrowsToThirtyTwoBits Answer
 
 	// TerminalTestMinusOneIsATerminal has `[ -t -1 ]` hold whatever the

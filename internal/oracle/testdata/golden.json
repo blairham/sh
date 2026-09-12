@@ -135051,6 +135051,50 @@
         "TimedOut": false
       }
     },
+    "test/a-terminal-test-descriptor-past-the-integer": {
+      "bash": {
+        "Stdout": "big=2~wide=2",
+        "Stderr": "\u003cshell\u003e: line 1: [: 9223372036854775808: integer expected~\u003cshell\u003e: line 1: [: 99999999999999999999: integer expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "big=2~wide=2",
+        "Stderr": "\u003cshell\u003e: line 1: [: 9223372036854775808: integer expected~\u003cshell\u003e: line 1: [: 99999999999999999999: integer expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "big=1~wide=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "big=2~wide=2",
+        "Stderr": "\u003cshell\u003e: 1: [: Illegal number: 9223372036854775808~\u003cshell\u003e: 1: [: Illegal number: 99999999999999999999",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "big=0~wide=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "big=1~wide=1",
+        "Stderr": "\u003cshell\u003e:1: number truncated after 18 digits: 9223372036854775808~\u003cshell\u003e:1: number truncated after 19 digits: 99999999999999999999",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "test/a-terminal-test-descriptor-too-wide": {
       "bash": {
         "Stdout": "m1=1~m2=1~wrap=1~zero=1~max=1",

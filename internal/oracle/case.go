@@ -10807,6 +10807,11 @@ printf 'TWO=still-running\n'`,
 		Snippet: `[ -t -1 ]; echo "m1=$?"; [ -t -2 ]; echo "m2=$?"; [ -t 4294967295 ]; echo "wrap=$?"; [ -t 4294967296 ] </dev/null; echo "zero=$?"; [ -t 9223372036854775807 ]; echo "max=$?"`,
 		Why:     "the two axes over what `-t`'s operand is converted to. ksh93 reads it at the width of a machine int, so 4294967295 and the largest integer it can hold both narrow to -1 — and -1 answers true whatever the shell is holding, which is what the first field shows with no terminal anywhere. `-2` is false in all six, so it is the one value and not a rule about negative descriptors, and 4294967296 narrows to descriptor 0, redirected here to the null device, which is what makes the reading a *narrowing* rather than `a big number is true`. Every other column answers a descriptor nothing is open at false however it was spelled (#2000)",
 	},
+	{
+		ID: "test/a-terminal-test-descriptor-past-the-integer", Category: "test",
+		Snippet: `[ -t 9223372036854775808 ]; echo "big=$?"; [ -t 99999999999999999999 ]; echo "wide=$?"`,
+		Why:     "an operand too wide for the shell's own integer, which is where the narrowing above becomes visible in a run with no terminal in it. bash and dash convert first and refuse what will not fit, at 2 with their integer wordings; ksh93 saturates and narrows to -1, which is true; bash 3.2 and zsh answer a quiet false. Ours owes zsh a warning here — that shell truncates *any* number past nineteen digits and says so, in arithmetic and `printf` as much as in `test`, which is a reader of its own and not this operand's question. Kept as a row because it is the only place a run without a terminal can tell a narrowed descriptor from a refused one (#2000)",
+	},
 
 	// --- times: the last special builtin, and the most divergent for its size
 	//

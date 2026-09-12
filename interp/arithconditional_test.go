@@ -93,9 +93,19 @@ func TestAStrayColonIsAMathTokenWhereTheDialectSaysSo(t *testing.T) {
 		if out, _ := runConditional(t, true, d, c.src); !strings.Contains(out, c.token) {
 			t.Errorf("token, %s: got %q, want %q", c.src, out, c.token)
 		}
-		// Without the flag the colon is text left over, which is what the
-		// other three make of it.
-		if out, _ := runConditional(t, false, d, c.src); !strings.Contains(out, c.leftover) {
+		// Without the flag the colon is text left over — the same *kind*,
+		// reached by the other road, so a dialect with a sentence for a
+		// stray colon still says it. The reading that changes is how far
+		// the reader got, which is the row above: with nothing after the
+		// colon the token reading runs out of input and this one does not.
+		if out, _ := runConditional(t, false, d, c.src); !strings.Contains(out, "no question") {
+			t.Errorf("leftover with a sentence, %s: got %q, want %q", c.src, out, "no question")
+		}
+		// And a dialect with no sentence for it falls back to the one it
+		// gives any leftover text, which is what three of the four say.
+		plain := *d
+		plain.ArithColonWithoutQuestion = ""
+		if out, _ := runConditional(t, false, &plain, c.src); !strings.Contains(out, c.leftover) {
 			t.Errorf("leftover, %s: got %q, want %q", c.src, out, c.leftover)
 		}
 	}

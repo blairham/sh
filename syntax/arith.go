@@ -457,13 +457,21 @@ func (a *arithParser) leftoverKind() ErrorKind {
 		return ErrArithOperator
 	case c == ':':
 		// A `:` reaches here only where the dialect does *not* take it as a
-		// math token, and both shells that word it separately still read it
-		// as one: bash gives it the sentence it gives any leftover text
-		// rather than the one it keeps for a byte that could be no operator.
-		// So it is text left over and not a byte the reader refuses — which
-		// is also the honest reading, the byte being an operator in every
-		// shell that has a conditional.
-		return ErrArithOperator
+		// math token, and it is text left over rather than a byte the reader
+		// refuses — the byte being an operator in every shell that has a
+		// conditional. It is nonetheless its own kind, because one shell
+		// words a stray colon in a shape no other leftover gets: ksh93u+
+		// writes `:: invalid character in expression -  1 : ` where `1 2`
+		// and `1 ]` are the ordinary `<expression>: <reason>`, measured
+		// 2026-09-12 over every printable byte (#2224). Two dialects have
+		// no sentence for it and fall back to the leftover one, which is
+		// what they said before this kind reached them.
+		//
+		// Wherever the colon stands: after a complete conditional as much as
+		// with no `?` at all — `$(( 1 ? 2 : 3 : 4 ))` is the same shape
+		// there — and inside a subscript, which is an expression like any
+		// other.
+		return ErrArithColonWithoutQuestion
 	}
 	// Where an operator belonged is one of the two positions the byte's own
 	// verdict stands at, the expression having read a complete value and been

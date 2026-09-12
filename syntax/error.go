@@ -92,13 +92,20 @@ const (
 	// the `:` and everything after it.
 	ErrArithConditionalElse
 	// ErrArithColonWithoutQuestion is a `:` standing where no `?` opened a
-	// conditional, in the dialect whose reader takes `:` as a math token
-	// wherever it is written: `$(( 1 : 2 ))` is `':' without '?'` in zsh.
+	// conditional: `$(( 1 : 2 ))`, and `$(( 1 ? 2 : 3 : 4 ))` after a
+	// complete one.
 	//
-	// Reachable only under Dialect.ArithColonIsAToken. Everywhere else the
-	// `:` is text left over, which is ErrArithOperator's — and that is the
-	// same reading, since a shell that did not know the byte would call it
-	// no operator at all.
+	// Two readers arrive here. Under Dialect.ArithColonIsAToken the colon is
+	// read as a math token and the failure comes after the second value has
+	// been found; everywhere else it is text left over, which is where
+	// leftoverKind sends it. The kinds are one because the dialects that
+	// word it apart word it the same in both readings — and because one of
+	// them, ksh93, gives a stray colon a shape no other leftover gets, which
+	// only a kind of its own can carry (#2224).
+	//
+	// Token is the text from the colon to the end of the expression. A
+	// dialect with no sentence for it falls back to the leftover-text one,
+	// which is what it said before this kind reached it.
 	ErrArithColonWithoutQuestion
 	// ErrArithCharacterMissing is the character-code operator with nothing
 	// after it to take the code of: `$((##))`, or a backslash at the end of

@@ -1511,6 +1511,12 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperandExpected:  "arithmetic syntax error",
 		ArithExpressionRanOut: "more tokens expected",
 		ArithOperatorExpected: "arithmetic syntax error",
+		// A stray `:` is the one construct this shell writes back to front:
+		// the byte, the reason, and then the expression after a ` - `, where
+		// every other math complaint it makes is `<expression>: <reason>`.
+		// Measured 2026-09-12 over every printable byte — `:` is the only
+		// one (#2224).
+		ArithColonWithoutQuestionLine: ":: invalid character in expression - %[1]s",
 		// A conditional with no `:` says so, and so does one with no value
 		// after the `?` — this shell reports the colon it is still waiting
 		// for rather than the value. A missing *else* is the ordinary end of

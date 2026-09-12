@@ -75,22 +75,95 @@ print -r -- $line`))
 	}
 }
 
-// The three bodies that are not a process substitution are unchanged, and
-// deliberately so: only a substitution's body has a lifetime this shell
-// already reconstructs, so only a substitution's body can have a group. A
-// subshell, a command substitution and a background job answer what they have
-// always answered, which is nothing.
-func TestOnlyASubstitutionBodyGetsAGroup(t *testing.T) {
+// And the other four bodies, which had nothing until #2114: a subshell, a
+// command substitution, a pipeline element and a background job.
+//
+// Measured against zsh 5.9.2, one script and the same contexts. Real zsh
+// answers a different pid in every one of them, because it forked; here each
+// answers the group its body leads, which is the reading the value is spent
+// under. The assertion is the one the session rides on and not "non-empty":
+// the number must be neither this process nor this process's group, since the
+// script's next line is `kill -- -$pgid`.
+func TestEveryForkedBodyGetsAGroupOfItsOwn(t *testing.T) {
 	for _, c := range []struct{ name, src string }{
-		{"a subshell", `( print -r -- "[$sysparams[pid]]" )`},
-		{"a command substitution", `print -r -- "[$(print -rn -- $sysparams[pid])]"`},
-		{"a background job", `{ print -r -- "[$sysparams[pid]]" } &` + "\nwait"},
+		{"a subshell", `( print -r -- $sysparams[pid] )`},
+		{"a command substitution", `print -r -- $(print -rn -- $sysparams[pid])`},
+		{"a pipeline element", `{ print -r -- $sysparams[pid] } | { read -r l; print -r -- $l }`},
+		{"a background job", `{ print -r -- $sysparams[pid] } &` + "\nwait"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			if got := runZshAnchored(t, c.src); got != "[]\n" {
-				t.Errorf("output = %q, want %q", got, "[]\n")
-			}
+			assertBodyGroup(t, runZshAnchored(t, c.src))
 		})
+	}
+}
+
+// The last element of a zsh pipeline is the exception, and it is not an
+// oversight: that element runs on the shell itself, so the honest answer is
+// the shell's own number.
+//
+// Measured, real zsh answers exactly that — `echo a | { read l; print -r --
+// $sysparams[pid] }` prints the shell's pid where an element with something
+// after it prints a
+// fork's. It falls out of the mechanism rather than being special-cased:
+// only the elements the pipeline *clones* are given an anchor, and the last
+// one is not cloned.
+func TestTheLastPipelineElementIsStillTheShell(t *testing.T) {
+	got := strings.TrimSpace(runZshAnchored(t, "print -rn -- a | { read -r l; print -r -- $sysparams[pid] }"))
+	if got != strconv.Itoa(os.Getpid()) {
+		t.Errorf("the last element answered %q, want this shell's %d — it is the shell", got, os.Getpid())
+	}
+}
+
+// Nothing is started for a body that never asks, which is what keeps this
+// affordable: the anchor is a process, and a script full of subshells that
+// never mention the key must not fork one per subshell.
+//
+// Asked as the count of children this process has left behind, which is zero
+// either way once they are reaped — so it is asked the only way a test can:
+// the parameter is unread, and the output is exactly what the body printed.
+func TestABodyThatNeverAsksStartsNothing(t *testing.T) {
+	const src = `( print -r -- one )
+print -r -- $(print -rn -- two)
+{ print -r -- three } | { read -r l; print -r -- $l }
+{ print -r -- four } &
+wait`
+	if got := runZshAnchored(t, src); got != "one\ntwo\nthree\nfour\n" {
+		t.Errorf("output = %q, want the four lines and nothing else", got)
+	}
+}
+
+// A body nested inside another gets its own group, which is what a real shell
+// does: it forks again.
+func TestANestedBodyGetsItsOwnGroup(t *testing.T) {
+	got := runZshAnchored(t, `( print -r -- $sysparams[pid]; ( print -r -- $sysparams[pid] ) )`)
+	lines := strings.Fields(got)
+	if len(lines) != 2 {
+		t.Fatalf("output = %q, want two numbers", got)
+	}
+	if lines[0] == lines[1] {
+		t.Errorf("both bodies answered %s; the inner one is a second fork in a real shell", lines[0])
+	}
+	assertBodyGroup(t, lines[0]+"\n")
+	assertBodyGroup(t, lines[1]+"\n")
+}
+
+// assertBodyGroup is the whole of what a body's answer has to be: a number,
+// and neither this process nor the group this process is in.
+func assertBodyGroup(t *testing.T, out string) {
+	t.Helper()
+	pgid, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil {
+		t.Fatalf("the body answered %q, want a number: %v", out, err)
+	}
+	if pgid == os.Getpid() {
+		t.Fatalf("the body was given this shell's own pid %d", pgid)
+	}
+	self, err := syscall.Getpgid(0)
+	if err != nil {
+		t.Fatalf("Getpgid: %v", err)
+	}
+	if pgid == self {
+		t.Fatalf("the body was given this shell's own process group %d; `kill -- -%d` is the shell", pgid, pgid)
 	}
 }
 

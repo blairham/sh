@@ -113,6 +113,9 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 		sub.lineBase = 0
 	}
 	sub.Stdout = &out
+	// The same group a subshell gets, and the same lifetime: the expansion
+	// does not finish until the body has. See Runner.anchorForkedBody.
+	defer sub.anchorForkedBody()()
 	if _, err := sub.Run(ctx, f); err != nil {
 		r.diagf("%v\n", err)
 		return ""

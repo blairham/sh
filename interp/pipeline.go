@@ -349,6 +349,15 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// shell closing its own process's name for the file and nobody
 		// else's. See ownDescriptors (#2116).
 		releaseFds[i] = sub.ownDescriptors()
+		// And the group a fork would have given this element. Released with
+		// the descriptors below, because it has the same lifetime they do:
+		// the element's own run. Only the elements that are *cloned* get one,
+		// which is what leaves the last element of a zsh pipeline answering
+		// the shell's own number — measured, that is what real zsh answers
+		// there, because that element really is the shell.
+		releaseAnchor := sub.anchorForkedBody()
+		release := releaseFds[i]
+		releaseFds[i] = func() { release(); releaseAnchor() }
 		// A pipeline element is a subshell whose trap listing survives in a
 		// different pair of shells than `( … )` does, so the boundary says
 		// what kind it is.

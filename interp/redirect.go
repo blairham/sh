@@ -179,10 +179,16 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// becomes of a write inside it and of a failure — and, whoever runs
 		// the command, an expansion that failed is not a name and is not
 		// opened. See redirtarget.go.
-		name, bad := r.redirectTargetForItsProcess(rd)
+		names, bad := r.redirectTargetForItsProcess(rd)
 		if bad {
 			return closers, nil
 		}
+		// The word as one name, for the questions that are about the *word*
+		// rather than about what it opens. Several words are not a
+		// descriptor, which is measured: `v=(1 2); echo x >&$v` makes two
+		// files in the shell that fans a target out, because the operator
+		// takes its csh reading when the word is not a number.
+		name := strings.Join(names, " ")
 
 		// `N>&M` and `N<&M` duplicate a descriptor, and `N>&-` closes one.
 		// No file is opened, so the gate has nothing to see: this rearranges
@@ -380,12 +386,11 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		if rd.N == nil && (flags == os.O_RDONLY || op == syntax.TokLessGreat) {
 			fd = 0
 		}
-		// The shell picks the descriptor: the next free number from ten up,
-		// clear of the single digits a script says `2>&1` about. Whether it
-		// outlives the command is the axis ksh93 answers alone.
+		// Whether a descriptor the shell picks outlives the command is the
+		// axis ksh93 answers alone, and it is asked once for the redirection
+		// rather than once per name: it is a question about the operator.
 		persists := false
 		if fdVar != "" {
-			fd = r.nextFreeFd()
 			persists = r.ask(r.sem().FdVariableOutlivesTheCommand,
 				"a variable-named descriptor outliving its command")
 			if r.unspecified {
@@ -394,163 +399,183 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			}
 		}
 
-		// A name that is not there is not a relative one. Joining it to the
-		// working directory turns "no name" into *the directory*, which then
-		// opens: `cd /tmp; cat < $unset` read the directory rather than
-		// failing, and only because the shell had been told where it was.
-		// Every shell reports that it cannot open "". atDir is where that
-		// rule lives now — it was written here first, and the file tests had
-		// the identical bug because the rule had not reached the resolution
-		// they shared (#1189).
-		path := r.atDir(name)
-		action := r.act(Action{Kind: ActionOpen, Path: path, Write: flags != os.O_RDONLY})
-		// Unless the path is a pipe this shell made for a substitution in
-		// this very command: `cmd > >(inner)` redirects to a name the
-		// interpreter chose, so a policy refusing it refuses the construct
-		// rather than an access the script asked for. ownPipe carries the
-		// argument. The open still happens and is still recorded below.
-		if !r.ownPipe(path) && !r.allowed(ctx, action) {
-			// A refused open is an open that did not happen, and the command
-			// must not run without it. Returning quietly let it run with the
-			// stream it was redirecting *away from*: `echo x > denied` wrote
-			// to the terminal and reported success, which is the shape of
-			// failure a gate exists to prevent — the write goes somewhere
-			// the script did not ask for and nothing says so.
-			//
-			// The status is the one any unopenable redirect gives, because
-			// that is what this is to the script. A caller that needs to tell
-			// a refusal from a failure has the event, which says which it
-			// was.
-			r.status = r.diag().redirectFailureStatus()
-			r.redirErr = true
-			return closers, nil
-		}
-
-		// A background job's pid is settled before an open that may never
-		// return, so that `&` can hand the shell back. See
-		// settleBackgroundJobBeforeABlockingOpen: this is where a job whose
-		// first act blocks would otherwise leave the shell waiting for a pid
-		// that is not coming.
-		r.settleBackgroundJobBeforeABlockingOpen(path)
-		f, fellBack, err := r.openThroughNoclobber(ctx, &action, path, flags)
-		if errors.Is(err, errRefused) {
-			// The gate let the *name* through and refused what the name
-			// reached — a link into a denied place. Reported here rather
-			// than through allowed(), and reported with the name the script
-			// wrote: see verifyOpened for why the audit record and the
-			// diagnostic say different things. To the script this is the
-			// refusal above, word for word.
-			r.reportRefusal(action)
-			r.status = r.diag().redirectFailureStatus()
-			r.redirErr = true
-			return closers, nil
-		}
-		if err != nil {
-			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-			// Two verbs, positional because the shells order them
-			// differently: %[1]s is the name as written and %[2]s the
-			// reason. Two wordings because two of the four say "create"
-			// rather than "open" when the redirect was making the file.
-			// The noclobber fallback creates nothing, and one dialect
-			// words it as the open it is: see openThroughNoclobber.
-			creating := flags != os.O_RDONLY &&
-				(!fellBack || !r.diag().NoclobberFallbackIsAnOpen)
-			format, fallback := r.diag().CannotOpen, "cannot open %[1]s: %[2]s"
-			if creating {
-				format, fallback = r.diag().CannotCreate, "cannot create %[1]s: %[2]s"
+		// One redirection per name, which is one name in every shell but the
+		// one that fans a target out — see redirectTarget, which is where the
+		// several come from and where the two axes that allow them are asked.
+		// The descriptor is the same number for all of them, so the fan-out
+		// and fan-in below join them exactly as two redirections written out
+		// would be joined; `{name}` is the exception and takes a fresh number
+		// per name, leaving the variable holding the last, which is measured.
+		for _, name := range names {
+			// The shell picks the descriptor: the next free number from its
+			// base up, clear of the single digits a script says `2>&1`
+			// about. Inside the loop, because a `{name}` target that came to
+			// several words takes a number *each*: `v=(f g); exec {n}<$v`
+			// leaves `n` holding the second of two, and `<&$n` reads the
+			// second file — measured on zsh 5.9.2, which is the only shell
+			// that has both halves.
+			if fdVar != "" {
+				fd = r.nextFreeFd()
 			}
-			if r.noclobber && (op == syntax.TokGreat || op == syntax.TokAmpGreat) &&
-				errors.Is(err, fs.ErrExist) &&
-				r.diag().NoclobberRefusal != "" {
-				// Half the panel has a sentence for this one refusal — the
-				// file `set -C` would not overwrite — and the other half
-				// words it as any other failed create, which is what an
-				// empty wording leaves in place.
-				format = r.diag().NoclobberRefusal
-			}
-			if name == "" && r.diag().EmptyRedirectTarget != "" {
-				// One dialect says something shorter for a name that is not
-				// there, and says it the same way in both directions.
-				r.diagf("%s\n", Wording(r.diag().EmptyRedirectTarget, "", name))
+			// A name that is not there is not a relative one. Joining it to the
+			// working directory turns "no name" into *the directory*, which then
+			// opens: `cd /tmp; cat < $unset` read the directory rather than
+			// failing, and only because the shell had been told where it was.
+			// Every shell reports that it cannot open "". atDir is where that
+			// rule lives now — it was written here first, and the file tests had
+			// the identical bug because the rule had not reached the resolution
+			// they shared (#1189).
+			path := r.atDir(name)
+			action := r.act(Action{Kind: ActionOpen, Path: path, Write: flags != os.O_RDONLY})
+			// Unless the path is a pipe this shell made for a substitution in
+			// this very command: `cmd > >(inner)` redirects to a name the
+			// interpreter chose, so a policy refusing it refuses the construct
+			// rather than an access the script asked for. ownPipe carries the
+			// argument. The open still happens and is still recorded below.
+			if !r.ownPipe(path) && !r.allowed(ctx, action) {
+				// A refused open is an open that did not happen, and the command
+				// must not run without it. Returning quietly let it run with the
+				// stream it was redirecting *away from*: `echo x > denied` wrote
+				// to the terminal and reported success, which is the shape of
+				// failure a gate exists to prevent — the write goes somewhere
+				// the script did not ask for and nothing says so.
+				//
+				// The status is the one any unopenable redirect gives, because
+				// that is what this is to the script. A caller that needs to tell
+				// a refusal from a failure has the event, which says which it
+				// was.
 				r.status = r.diag().redirectFailureStatus()
 				r.redirErr = true
 				return closers, nil
 			}
-			r.diagf("%s\n", Wording(format, fallback,
-				name, r.diag().openReason(err, creating)))
-			r.status = r.diag().redirectFailureStatus()
-			r.redirErr = true
-			return closers, nil
-		}
-		// The open that happened, not only the one that failed: an audit
-		// trail fed by the error path alone held every file the shell could
-		// not open and none it could.
-		r.emit(ctx, Event{Kind: EventAccess, Action: action})
-		// The name as the script named it, kept for the one caller that has
-		// to word a failure of its own *after* this succeeded. See
-		// Runner.openedName.
-		r.openedName = name
-		// And only now the number, because the order is measured: under a
-		// limit of twenty, `exec 20>fresh` complains and the file is there
-		// afterwards. The open happens and the descriptor it produces is what
-		// cannot be moved to the number the script asked for.
-		if r.refuseFdOverLimit(fd) || r.unspecified {
-			_ = f.Close()
-			r.redirErr = true
-			return closers, nil
-		}
-		if !persists {
-			// A descriptor that outlives the command must not be closed
-			// when it ends, which is the same exemption `exec` already has
-			// — exec skips every closer.
-			closers = append(closers, f)
-		}
 
-		switch fd {
-		case -1:
-			w := r.eachTarget(-1, f, opened)
-			r.Stdout, r.Stderr = w, w
-		case 0:
-			r.Stdin = r.eachSource(0, f, sources)
-		case 1:
-			r.Stdout = r.eachTarget(1, f, opened)
-		case 2:
-			r.Stderr = r.eachTarget(2, f, opened)
-		default:
-			// A descriptor beyond the three named streams goes into the
-			// table, where `>&N` finds it. `default` used to land on stdout,
-			// so `exec 3>out.txt` sent every later `echo` into the file —
-			// then it was refused outright, and now the number is kept.
+			// A background job's pid is settled before an open that may never
+			// return, so that `&` can hand the shell back. See
+			// settleBackgroundJobBeforeABlockingOpen: this is where a job whose
+			// first act blocks would otherwise leave the shell waiting for a pid
+			// that is not coming.
+			r.settleBackgroundJobBeforeABlockingOpen(path)
+			f, fellBack, err := r.openThroughNoclobber(ctx, &action, path, flags)
+			if errors.Is(err, errRefused) {
+				// The gate let the *name* through and refused what the name
+				// reached — a link into a denied place. Reported here rather
+				// than through allowed(), and reported with the name the script
+				// wrote: see verifyOpened for why the audit record and the
+				// diagnostic say different things. To the script this is the
+				// refusal above, word for word.
+				r.reportRefusal(action)
+				r.status = r.diag().redirectFailureStatus()
+				r.redirErr = true
+				return closers, nil
+			}
+			if err != nil {
+				r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
+				// Two verbs, positional because the shells order them
+				// differently: %[1]s is the name as written and %[2]s the
+				// reason. Two wordings because two of the four say "create"
+				// rather than "open" when the redirect was making the file.
+				// The noclobber fallback creates nothing, and one dialect
+				// words it as the open it is: see openThroughNoclobber.
+				creating := flags != os.O_RDONLY &&
+					(!fellBack || !r.diag().NoclobberFallbackIsAnOpen)
+				format, fallback := r.diag().CannotOpen, "cannot open %[1]s: %[2]s"
+				if creating {
+					format, fallback = r.diag().CannotCreate, "cannot create %[1]s: %[2]s"
+				}
+				if r.noclobber && (op == syntax.TokGreat || op == syntax.TokAmpGreat) &&
+					errors.Is(err, fs.ErrExist) &&
+					r.diag().NoclobberRefusal != "" {
+					// Half the panel has a sentence for this one refusal — the
+					// file `set -C` would not overwrite — and the other half
+					// words it as any other failed create, which is what an
+					// empty wording leaves in place.
+					format = r.diag().NoclobberRefusal
+				}
+				if name == "" && r.diag().EmptyRedirectTarget != "" {
+					// One dialect says something shorter for a name that is not
+					// there, and says it the same way in both directions.
+					r.diagf("%s\n", Wording(r.diag().EmptyRedirectTarget, "", name))
+					r.status = r.diag().redirectFailureStatus()
+					r.redirErr = true
+					return closers, nil
+				}
+				r.diagf("%s\n", Wording(format, fallback,
+					name, r.diag().openReason(err, creating)))
+				r.status = r.diag().redirectFailureStatus()
+				r.redirErr = true
+				return closers, nil
+			}
+			// The open that happened, not only the one that failed: an audit
+			// trail fed by the error path alone held every file the shell could
+			// not open and none it could.
+			r.emit(ctx, Event{Kind: EventAccess, Action: action})
+			// The name as the script named it, kept for the one caller that has
+			// to word a failure of its own *after* this succeeded. See
+			// Runner.openedName.
+			r.openedName = name
+			// And only now the number, because the order is measured: under a
+			// limit of twenty, `exec 20>fresh` complains and the file is there
+			// afterwards. The open happens and the descriptor it produces is what
+			// cannot be moved to the number the script asked for.
+			if r.refuseFdOverLimit(fd) || r.unspecified {
+				_ = f.Close()
+				r.redirErr = true
+				return closers, nil
+			}
 			if !persists {
-				saveFds()
+				// A descriptor that outlives the command must not be closed
+				// when it ends, which is the same exemption `exec` already has
+				// — exec skips every closer.
+				closers = append(closers, f)
 			}
-			// And a number repeated in one redirection list joins its
-			// targets exactly as a named stream does, under the dialect that
-			// joins them: `exec 3>a 3>b; echo hi >&3` fills both files in zsh
-			// 5.9.2 and only `b` in the other five, and `exec 3<fa 3<fb;
-			// cat <&3` reads both in order there. Measured 2026-09-12.
-			//
-			// The named streams have had this since #1261 and a numbered one
-			// had not, which is #734's third residue: the fan-out was written
-			// where the switch happened to land rather than for every
-			// descriptor, so the same script said different things about 1
-			// and about 3.
-			//
-			// Which direction to join is the open's own flags. `<>` is left
-			// alone deliberately: it is one descriptor that both reads and
-			// writes, and joining one half of it would model half of the
-			// pair.
-			var held any = f
-			switch {
-			case flags == os.O_RDONLY:
-				held = r.eachSource(fd, f, sources)
-			case flags&os.O_RDWR == 0:
-				held = r.eachTarget(fd, f, opened)
-			}
-			r.setFd(fd, held)
-			r.redirWrote(fd)
-			if fdVar != "" {
-				r.setFdVar(fdVar, itoa(fd))
+
+			switch fd {
+			case -1:
+				w := r.eachTarget(-1, f, opened)
+				r.Stdout, r.Stderr = w, w
+			case 0:
+				r.Stdin = r.eachSource(0, f, sources)
+			case 1:
+				r.Stdout = r.eachTarget(1, f, opened)
+			case 2:
+				r.Stderr = r.eachTarget(2, f, opened)
+			default:
+				// A descriptor beyond the three named streams goes into the
+				// table, where `>&N` finds it. `default` used to land on stdout,
+				// so `exec 3>out.txt` sent every later `echo` into the file —
+				// then it was refused outright, and now the number is kept.
+				if !persists {
+					saveFds()
+				}
+				// And a number repeated in one redirection list joins its
+				// targets exactly as a named stream does, under the dialect
+				// that joins them: `exec 3>a 3>b; echo hi >&3` fills both
+				// files in zsh 5.9.2 and only `b` in the other five, and
+				// `exec 3<fa 3<fb; cat <&3` reads both in order there.
+				// Measured 2026-09-12.
+				//
+				// The named streams have had this since #1261 and a numbered
+				// one had not, which is #734's third residue: the fan-out was
+				// written where the switch happened to land rather than for
+				// every descriptor, so the same script said different things
+				// about 1 and about 3.
+				//
+				// Which direction to join is the open's own flags. `<>` is
+				// left alone deliberately: it is one descriptor that both
+				// reads and writes, and joining one half of it would model
+				// half of the pair.
+				var held any = f
+				switch {
+				case flags == os.O_RDONLY:
+					held = r.eachSource(fd, f, sources)
+				case flags&os.O_RDWR == 0:
+					held = r.eachTarget(fd, f, opened)
+				}
+				r.setFd(fd, held)
+				r.redirWrote(fd)
+				if fdVar != "" {
+					r.setFdVar(fdVar, itoa(fd))
+				}
 			}
 		}
 	}
@@ -655,27 +680,42 @@ type closerFunc func() error
 
 func (f closerFunc) Close() error { return f() }
 
-// redirectTarget is the name a redirection opens, and says whether the shell
-// refused it.
+// redirectTarget is the name — or names — a redirection opens, and says
+// whether the shell refused it.
 //
 // Two answers, and this had a third that is nobody's: it expanded the target
 // the way an argument is expanded — split into fields and matched as a
 // pattern — and then quietly took the first field. So `e="a b"; echo hi > $e`
 // wrote to `a`, and `e="x*"` truncated whichever file happened to match,
 // which the script never named.
-func (r *Runner) redirectTarget(rd *syntax.Redirect) (string, bool) {
-	fields, plain := r.expandRedirectTargetViews(rd.Word)
+//
+// **Several names is the shell that does not split one.** A target that
+// comes to more than one word is `ambiguous redirect` under the ordinary-word
+// reading, and under the other reading it is one redirection per word — which
+// the fan-out and fan-in then join, so `v=(f g); cat <$v` reads both files
+// and `v=(a b); echo hi >$v` fills both. Measured 2026-09-12 on zsh 5.9.2,
+// with the option that joins them turned off as the control: `unsetopt
+// multios` there gives the *joined* name, one file called `f g`, which is
+// what this shell used to do always (#1792).
+//
+// So the two questions are asked in that order, and the second is the fan's
+// own axis rather than a new one. A dialect that does not split a target and
+// does not join several of them is not in the panel, and its answer here is
+// the joined name it always was.
+func (r *Runner) redirectTarget(rd *syntax.Redirect) ([]string, bool) {
+	fields, words, plain := r.expandRedirectTargetViews(rd.Word)
 
-	// Asked only where the two readings differ, which is almost never: `> f`
-	// and `> "$e"` are one word under both, and so is a pattern that matches
-	// nothing. Asking every time would refuse every redirection in the core
-	// over a question that decides nothing.
+	// Asked only where the readings differ, which is almost never: `> f`
+	// and `> "$e"` are one word under all three, and so is a pattern that
+	// matches nothing. Asking every time would refuse every redirection in
+	// the core over a question that decides nothing.
 	//
 	// Braces count as differing: a target that expands to several words is
 	// several words to the dialect that expands one.
-	same := len(fields) == 1 && fields[0] == plain && r.braceCount(rd.Word) == 1
+	same := len(fields) == 1 && fields[0] == plain &&
+		len(words) == 1 && words[0] == plain && r.braceCount(rd.Word) == 1
 	if same {
-		return plain, false
+		return []string{plain}, false
 	}
 
 	if !r.ask(r.sem().RedirectTargetIsAnOrdinaryWord, "a redirection target expanded as an ordinary word") {
@@ -684,25 +724,50 @@ func (r *Runner) redirectTarget(rd *syntax.Redirect) (string, bool) {
 			// after saying the shells disagree would be answering the
 			// question anyway.
 			r.redirErr = true
-			return "", true
+			return nil, true
 		}
-		// Expanded and no more: whatever it came to is the name, spaces and
-		// pattern characters included.
-		return plain, false
+		if len(words) > 1 {
+			if r.ask(r.sem().RedirectsUseEveryTarget,
+				"a redirection target that came to several words") {
+				return words, false
+			}
+			if r.unspecified {
+				r.redirErr = true
+				return nil, true
+			}
+			// Not joined: the words the reading produced, written out with a
+			// space between them, which is the single filename the shell
+			// with the option turned off opens.
+			return []string{plain}, false
+		}
+		if len(words) == 1 {
+			// One word, and it is the word rather than the text: a *pattern*
+			// written in the source is matched under this reading too —
+			// `cat <p?` opens the one file it found, measured — where the
+			// text view still holds `p?`. A pattern that arrived through an
+			// expansion is not matched, and does not need excluding here:
+			// the expansion's own text carries no glob marks, which is the
+			// axis about globbing a result rather than this one.
+			return words, false
+		}
+		// Nothing at all, which is a name of no characters and is opened as
+		// one: `v=(); cat <$v` reports the empty name in the shell that has
+		// the reading.
+		return []string{plain}, false
 	}
 	// bash's reading, and braces make words as surely as splitting does:
 	// `> {a,b}` names two files and so names none.
 	braced := !r.noBraceExpand && r.braceCount(rd.Word) > 1 &&
 		r.ask(r.sem().BraceExpansion, "brace expansion")
 	if !braced && len(fields) == 1 {
-		return fields[0], false
+		return fields[:1], false
 	}
 	// Anything but exactly one word, which includes none: an empty variable
 	// is as ambiguous as two filenames, because neither says where to write.
 	r.diagf("%s\n", Wording(r.diag().AmbiguousRedirect, "%[1]s: ambiguous redirect", rd.Text))
 	r.redirErr = true
 	r.status = 1
-	return "", true
+	return nil, true
 }
 
 // atoiSigned reads a decimal integer that may carry a sign, which atoi does

@@ -13,22 +13,19 @@ import (
 )
 
 // A redirection's target is expanded and then, in three of the four shells,
-// neither split into fields nor matched as a pattern. bash expands it the way
-// an argument is expanded and refuses anything that is not exactly one word.
+// not split into fields. bash expands it the way an argument is expanded and
+// refuses anything that is not exactly one word.
 //
 // This did neither: it took bash's expansion and quietly kept the first field,
 // which is the answer no shell gives. `> $e` with a space in it wrote to `a`,
 // and `> $e` holding a pattern truncated whichever file happened to match —
 // a file the script never named.
-func TestARedirectionTargetIsNotSplitOrMatched(t *testing.T) {
+func TestARedirectionTargetIsNotSplit(t *testing.T) {
 	for _, tc := range []struct {
 		name, src, wantFile string
 	}{
 		{"a space in it is part of the name", `e="a b"; echo hi > $e`, "a b"},
 		{"quoting changes nothing here", `e="c d"; echo hi > "$e"`, "c d"},
-		// The dangerous one. `x1` exists, and matching would have written
-		// into it.
-		{"a pattern is a name", `e="x*"; echo hi > $e`, "x*"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -43,6 +40,69 @@ func TestARedirectionTargetIsNotSplitOrMatched(t *testing.T) {
 				t.Errorf("x1 = %q, want a file the script never named left alone", got)
 			}
 		})
+	}
+}
+
+// **Matched, though — and by the axis that answers it for every word.**
+//
+// This row used to sit in the table above as "a pattern is a name", and it
+// was measuring the *joining* this shell used to do rather than a rule about
+// targets. The two questions come apart under the option the shell with this
+// reading spells `globsubst`, and it decides the target exactly as it decides
+// an argument. Measured 2026-09-12 on zsh 5.9.2, with `x1` in the directory:
+//
+//	e="x*"; echo hi > $e                    makes a file called `x*`
+//	setopt globsubst; e="x*"; echo hi > $e  writes into `x1`
+//
+// So a pattern that arrived through an expansion is a name only because that
+// shell does not match the result of an expansion at all — `GlobExpansionResults`
+// — and a pattern written in the source *is* matched: `cat <p?` opens the one
+// file it found. The old row asserted the first with the axis answered the
+// other way, which no shell does (#1792).
+func TestARedirectionTargetIsMatchedByTheSameAxisAsAWord(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		globs Answer
+		want  string
+	}{
+		{"the result of an expansion is not matched", No, "x*"},
+		{"and is where the shell matches one", Yes, "x1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			touch(t, dir, "x1")
+			_, st := run(t, `e="x*"; echo hi > $e`, func(r *Runner) {
+				sem := CoreSemantics()
+				sem.SplitParamExpansion = Yes
+				sem.SplitCommandSubstitution = Yes
+				sem.GlobExpansionResults = tc.globs
+				sem.GlobNoMatchIsError = No
+				sem.RedirectTargetIsAnOrdinaryWord = No
+				r.Semantics, r.Dir = &sem, dir
+			})
+			if st != 0 {
+				t.Fatalf("status %d", st)
+			}
+			if got := readFile(t, dir, tc.want); got != "hi\n" {
+				t.Errorf("%s = %q, want the redirection to have written it", tc.want, got)
+			}
+		})
+	}
+}
+
+// And a pattern written in the source is matched under this reading, which is
+// the half no axis moves: `cat <p?` opens the file it found where the target
+// used to be opened as the four characters.
+func TestALiteralPatternTargetIsMatched(t *testing.T) {
+	dir := t.TempDir()
+	sem := CoreSemantics()
+	sem.GlobNoMatchIsError = No
+	sem.RedirectTargetIsAnOrdinaryWord = No
+	out, st := run(t, `printf 'a\n' > p1; printf "[%s]" "$(cat <p?)"`, func(r *Runner) {
+		r.Semantics, r.Dir = &sem, dir
+	})
+	if want := "[a]"; out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
 	}
 }
 

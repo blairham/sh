@@ -1391,6 +1391,38 @@ to a child the table rebuild does not start.
 cannot join a set on one side without modeling half of the pair, so
 `exec 3<>a 3<>b` keeps `b` under either answer.
 
+**A target that comes to several words is several redirections**, under
+the reading that does not split one, and the fan is what joins them.
+Measured 2026-09-12 on zsh 5.9.2, with `printf 'a\n' >f; printf 'b\n'
+>g`:
+
+    v=(f g); cat <$v                    a then b
+    v=(a b); echo hi >$v                both files
+    cat <p?          (two matches)      both files
+    e="f g"; cat <$e                    no such file or directory: f g
+    unsetopt multios; v=(f g); cat <$v  no such file or directory: f g
+
+The last two are the controls, and the second of them settles which
+mechanism it is: turn the joining option off and the *joined filename*
+comes back, so the expansion makes words and the fan makes redirections.
+This shell joined them always, so `v=(f g); cat <$v` opened one file
+called `f g` (#1792). A `{name}` target takes a number **each** and
+leaves the variable holding the last, which is measured too.
+
+A third view of the target is what this needs and the two the expander
+already produced could not give: the ordinary-word view splits `e="f g"`
+into two fields and the text view joins `v=(f g)` into one name, and
+neither is the reading where a scalar is one word and an array is two.
+See `expandRedirectTargetViews`.
+
+**And a target is matched.** Not a separate rule: `cat <p?` opens the
+file it found, and whether a pattern that arrived through an *expansion*
+is matched is `GlobExpansionResults`, the same axis that answers it for
+every other word. Measured with `x1` in the directory: `e="x*"; echo hi
+> $e` makes a file called `x*` in zsh and writes into `x1` under `setopt
+globsubst`. An earlier test here asserted the first with that axis
+answered the other way, which no shell does.
+
 Two earlier revisions of this paragraph called the whole thing
 deliberately unbuilt and outlived the decision each time; the failure
 mode this file records about the interpreter's comments applies to its

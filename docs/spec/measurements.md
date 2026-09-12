@@ -11690,6 +11690,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/the-reading-parameter-is-the-lone-input-redirection` | `\|\|\|` | `\|\|\|` | `\|\|\|` | `\|\|\|` | `\|\|\|` | `R\|R\|N\|N` |
 | `redir/a-null-command-with-nothing-in-it-is-refused` | `after[made=y]` | `after[made=y]` | `after[made=y]` | `after[made=y]` | `after[made=y]` | **2>** `<shell>:1: redirection with no command` *(status 1)* |
 | `redir/multios-reads-from-every-source` | `[b]` | `[b]` | `[b]` | `[b]` | `[b]` | `[a~b]` |
+| `redir/a-target-that-comes-to-several-words-reads-them-all` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[a]` | `[a]` | `[a]` | `[a]` | `[a~b]` |
+| `redir/a-target-that-comes-to-several-words-writes-them-all` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[a=hi][b=]` | `[a=hi][b=]` | `[a=hi][b=]` | `[a=hi][b=]` | `[a=hi][b=hi]` |
+| `redir/a-target-that-is-a-pattern-matching-twice` | `[]` **2>** `<shell>: 1: cannot open p?: No such file` | `[]` **2>** `<shell>: line 1: p?: ambiguous redirect` | `[]` **2>** `<shell>: line 1: p?: No such file or directory` | `[]` **2>** `<shell>: p?: ambiguous redirect` | `[]` **2>** `<shell>: p?: cannot open [No such file or directory]` | `[a~b]` |
 | `heredoc/no-delimiter-and-a-warning` | `body` | `body` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` | `body` | `body` |
 | `heredoc/no-delimiter-and-no-body` | *(no output, status 0)* | **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `heredoc/a-body-that-runs-to-the-end` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` |
@@ -12019,6 +12022,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/multios-reads-from-every-source` — the other direction of the same option the fan-out row records: a descriptor redirected twice for reading arrives as both files in the order written, where the other five take the last and drop the first silently. One switch over both directions in the shell that has it, which is why it is one axis here — and the reason `$(<f <g)` is not the file-read form: two sources are a different question from one
   ```sh
   printf 'a\n' > f; printf 'b\n' > g; printf "[%s]" "$(cat <f <g)"
+  ```
+- `redir/a-target-that-comes-to-several-words-reads-them-all` — one redirection written and two made. The shell that does not split a target still expands an array to several *words* there, and each word is a redirection — which the fan-in of the row above then joins, so the two files arrive in order. bash and ksh93 take the array's first element and read `f` alone; dash has no array literal at all. This shell joined the words into the single filename `f g` until #1792, which is what `unsetopt multios` gives in the shell that has it — the control that says the fan and not the expansion is what makes two
+  ```sh
+  printf 'a\n' > f; printf 'b\n' > g; v=(f g); printf "[%s]" "$(cat <$v)"
+  ```
+- `redir/a-target-that-comes-to-several-words-writes-them-all` — the writing half of the same word, and the one that loses output silently where the reading half only reads less: the fan-out shell fills both files, bash and ksh93 fill `a` alone from the array's first element, and nothing is said in any column
+  ```sh
+  v=(a b); echo hi >$v; printf "[a=%s][b=%s]" "$(cat a 2>/dev/null)" "$(cat b 2>/dev/null)"
+  ```
+- `redir/a-target-that-is-a-pattern-matching-twice` — the same several-words question reached by a pattern rather than by an array, which is what says it is about the *words* and not about arrays: the fan-in shell reads both, bash calls it an ambiguous redirect, and ksh93 and dash match nothing and try to open the pattern itself. It is also the row that says a target is matched at all in the shell that does not split one — a single match opens, which `redir/…-several-words-reads-them-all` cannot show
+  ```sh
+  printf 'a\n' > p1; printf 'b\n' > p2; printf "[%s]" "$(cat <p?)"
   ```
 - `heredoc/no-delimiter-and-a-warning` — one shell remarks on a here-document whose delimiter never arrived and three say nothing. The remark is located where the input ran out and names the line the here-document began on, which is two different lines and the reason a parse-time remark carries two positions
   ```sh

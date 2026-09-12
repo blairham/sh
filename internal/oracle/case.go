@@ -4401,6 +4401,21 @@ echo "st=$?"`,
 		Why:     "the other direction of the same option the fan-out row records: a descriptor redirected twice for reading arrives as both files in the order written, where the other five take the last and drop the first silently. One switch over both directions in the shell that has it, which is why it is one axis here — and the reason `$(<f <g)` is not the file-read form: two sources are a different question from one",
 	},
 	{
+		ID: "redir/a-target-that-comes-to-several-words-reads-them-all", Category: "redirection",
+		Snippet: `printf 'a\n' > f; printf 'b\n' > g; v=(f g); printf "[%s]" "$(cat <$v)"`,
+		Why:     "one redirection written and two made. The shell that does not split a target still expands an array to several *words* there, and each word is a redirection — which the fan-in of the row above then joins, so the two files arrive in order. bash and ksh93 take the array's first element and read `f` alone; dash has no array literal at all. This shell joined the words into the single filename `f g` until #1792, which is what `unsetopt multios` gives in the shell that has it — the control that says the fan and not the expansion is what makes two",
+	},
+	{
+		ID: "redir/a-target-that-comes-to-several-words-writes-them-all", Category: "redirection",
+		Snippet: `v=(a b); echo hi >$v; printf "[a=%s][b=%s]" "$(cat a 2>/dev/null)" "$(cat b 2>/dev/null)"`,
+		Why:     "the writing half of the same word, and the one that loses output silently where the reading half only reads less: the fan-out shell fills both files, bash and ksh93 fill `a` alone from the array's first element, and nothing is said in any column",
+	},
+	{
+		ID: "redir/a-target-that-is-a-pattern-matching-twice", Category: "redirection",
+		Snippet: `printf 'a\n' > p1; printf 'b\n' > p2; printf "[%s]" "$(cat <p?)"`,
+		Why:     "the same several-words question reached by a pattern rather than by an array, which is what says it is about the *words* and not about arrays: the fan-in shell reads both, bash calls it an ambiguous redirect, and ksh93 and dash match nothing and try to open the pattern itself. It is also the row that says a target is matched at all in the shell that does not split one — a single match opens, which `redir/…-several-words-reads-them-all` cannot show",
+	},
+	{
 		ID: "exec/a-command-is-named-as-it-was-written", Category: "commands",
 		Snippet: `basename --bad 2>&1 | head -1`,
 		Why:     "a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else",

@@ -61,7 +61,7 @@ import "github.com/blairham/sh/syntax"
 // confineToTheProcess is one: the target expands exactly as it always did,
 // and the whole of this is what becomes of the writes and the failure it
 // leaves behind.
-func (r *Runner) redirectTargetForItsProcess(rd *syntax.Redirect) (string, bool) {
+func (r *Runner) redirectTargetForItsProcess(rd *syntax.Redirect) ([]string, bool) {
 	// The copy is taken only where it could be needed: a target that is one
 	// literal — which is most of them, `> out` and `2>&1` alike — expands to
 	// itself and cannot write anything, and a command this shell runs itself
@@ -73,7 +73,7 @@ func (r *Runner) redirectTargetForItsProcess(rd *syntax.Redirect) (string, bool)
 	if watching {
 		before = r.saveExpansionTables()
 	}
-	name, bad := r.redirectTarget(rd)
+	names, bad := r.redirectTarget(rd)
 	wrote := watching && r.wroteSince(before)
 	failed := r.targetExpansionFailed()
 	inTheCommand := false
@@ -86,7 +86,7 @@ func (r *Runner) redirectTargetForItsProcess(rd *syntax.Redirect) (string, bool)
 			// either reading after saying the shells disagree would answer
 			// the question anyway.
 			r.redirErr = true
-			return name, true
+			return names, true
 		}
 	}
 	switch {
@@ -117,7 +117,7 @@ func (r *Runner) redirectTargetForItsProcess(rd *syntax.Redirect) (string, bool)
 		// failure's.
 		r.redirErr = true
 	}
-	return name, bad || failed
+	return names, bad || failed
 }
 
 // targetExpansionFailed reports whether expanding the target left an error

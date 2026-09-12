@@ -62,6 +62,12 @@ func main() {
 		return
 	}
 
+	// Whatever routes the panel opened are closed here, once, however this
+	// command ends. A container column is the only one that holds anything,
+	// and a stray container on a machine running a dozen sessions is exactly
+	// the kind of leftover nobody can tell from live work.
+	defer oracle.Shutdown()
+
 	if err := run(*check, *golden, *doc); err != nil {
 		fmt.Fprintln(os.Stderr, "oracle:", err)
 		os.Exit(exitFailure)
@@ -91,10 +97,17 @@ func run(check bool, goldenPath, docPath string) error {
 	for _, s := range got.Shells {
 		fmt.Printf("  %-12s %s\n", s.Name, s.Version)
 	}
-	if len(got.Missing) > 0 {
+	for _, a := range got.Absent {
 		// Not a failure. A narrower panel is a weaker claim, and the right
 		// response is to say so rather than to pretend or to refuse to run.
-		fmt.Printf("  not present: %v\n", got.Missing)
+		//
+		// One line per column, with the reason, rather than a list of names
+		// on the end of the panel table. A name in a list beside seven
+		// version strings reads as a footnote; `ash  NOT RUN` in the column
+		// the versions are in does not, and telling those two apart is the
+		// whole of what an honest degradation is. The reason matters as much
+		// as the name: "install it" and "start Docker" are different work.
+		fmt.Printf("  %-12s NOT RUN — %s\n", a.Name, a.Reason)
 	}
 	fmt.Printf("  %d cases across %d shells\n\n", len(oracle.Corpus), len(got.Shells))
 
@@ -159,7 +172,22 @@ func run(check bool, goldenPath, docPath string) error {
 		fmt.Fprintln(os.Stderr)
 	}
 	if len(drifts) == 0 {
-		fmt.Println("no drift: the panel behaves as recorded.")
+		// Qualified by what did not run, and never the bare sentence when
+		// something did not. `no drift` over a panel missing a column is the
+		// exact misreading this repository already has a scar from — a gate
+		// inert on one platform reads as a pass — and it was available here
+		// long before ash: bash32 is absent on every Linux machine and the
+		// verdict said "the panel behaves as recorded" anyway.
+		if silent := notRun(got, want); len(silent) > 0 {
+			fmt.Printf("no drift among the %d column(s) that ran — but the record has %d this\n"+
+				"machine did not run, so nothing here says anything about %s:\n",
+				len(got.Shells), len(silent), strings.Join(silent, ", "))
+			for _, a := range got.Absent {
+				fmt.Printf("  %-12s NOT RUN — %s\n", a.Name, a.Reason)
+			}
+		} else {
+			fmt.Println("no drift: the panel behaves as recorded.")
+		}
 		if stale {
 			// Said twice on purpose. The record check runs first because it
 			// needs no shells, and the panel run that follows takes half a
@@ -193,6 +221,25 @@ the one that produced the record, it is the gate.
 `)
 	os.Exit(exitDrift)
 	return nil
+}
+
+// notRun is the columns the golden record has and this run does not.
+//
+// It is asked of the *record* rather than of the panel because that is the
+// question a reader of the verdict is really asking: the record makes a claim
+// about ash, and this machine either re-checked it or did not.
+func notRun(got, want *oracle.Run) []string {
+	ran := map[string]bool{}
+	for _, s := range got.Shells {
+		ran[s.Name] = true
+	}
+	var silent []string
+	for _, s := range want.Shells {
+		if !ran[s.Name] {
+			silent = append(silent, s.Name)
+		}
+	}
+	return silent
 }
 
 // checkRecord compares the committed artifacts against each other and reports

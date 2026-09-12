@@ -62,6 +62,22 @@ type Shell struct {
 	// missing one, because nothing looks wrong.
 	MustReport string
 
+	// Via is how this member is reached, and the zero value — nil, meaning
+	// LocalReach — is the answer for every member but one. See Reach: it is
+	// the single concept covering a binary on this machine and a shell that
+	// exists only inside a container image.
+	//
+	// It is deliberately not a bool or an image name hanging off this struct.
+	// A second way to reach a shell written as a special case beside the
+	// first is this repository's recurring failure mode, and the two would
+	// drift: the local route would gain a scrub or a normalization rule that
+	// the container route quietly did not.
+	//
+	// It never crosses the wire to the runner inside a container: there, the
+	// shell *is* a local binary, and a Found that still claimed a container
+	// route would ask the runner to start one inside itself.
+	Via Reach `json:"-"`
+
 	// SelfName, when set, is the fixed word this shell writes when it names
 	// itself in a diagnostic, whatever it was invoked as.
 	//
@@ -131,6 +147,34 @@ var Panel = []Shell{
 		SelfName: "zsh",
 		Why:      "the interactive incumbent, and the most divergent semantics",
 	},
+	{
+		// The one member that is not a binary on the machine that runs the
+		// harness, and the reason Reach exists. There is no BusyBox on macOS
+		// and no way to get one — no formula, no cask, no clean build, and a
+		// published static binary is Linux ELF — so dialect/ash shipped
+		// measured by hand and graded by nothing, which lasted about an hour
+		// (#2272). The image is pinned by digest rather than by the `3` tag
+		// for the reason on ContainerReach: a tag moves, and a record that
+		// moves underneath its own drift check detects nothing.
+		//
+		// Lookup is read inside the image rather than on this machine, which
+		// is the same field doing the same job through a different route. It
+		// also keeps the normalizer honest: the recorded cells name the
+		// shell by this basename, and the re-normalization check reads
+		// Lookup to know what that basename could have been.
+		Name:   "ash",
+		Lookup: []string{"/bin/ash", "/bin/busybox"},
+		Via: &ContainerReach{
+			Image:  "alpine",
+			Digest: "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+		},
+		// BusyBox answers neither --version nor ${.sh.version}; the string
+		// appears only in the --help line the version probe added for this
+		// column in #1032. Without the check, /bin/sh in some other image
+		// would record as ash and nothing would look wrong.
+		MustReport: "busybox",
+		Why:        "BusyBox ash: what Alpine and most embedded systems call sh, and the fifth dialect",
+	},
 }
 
 // Found is a panel member that exists on this machine, with the build string
@@ -140,31 +184,62 @@ type Found struct {
 	Shell
 	Path    string
 	Version string
+
+	// sess is the opened route for a member that is not a process this
+	// harness can start directly, and nil for one that is. Exec reads it and
+	// nothing else does. It is a pointer so that every copy of this value —
+	// and Exec takes one by value — speaks to the one container rather than
+	// starting another.
+	//
+	// Unexported, so it does not cross the wire to the runner inside the
+	// container: there, this same value has to take the local route, which is
+	// what makes the two columns one implementation of Exec rather than two.
+	sess *session
 }
 
-// Resolve returns the panel members present on this machine, and the names of
-// those that are missing.
+// Resolve returns the panel members this machine can reach, and an Absence
+// for each one it cannot, carrying the reason.
 //
 // A missing shell is not an error. It is reported, because a table generated
 // from three shells is a weaker claim than the same table generated from five,
 // and silently narrowing the panel would overstate the evidence.
-func Resolve(ctx context.Context) (found []Found, missing []string) {
+func Resolve(ctx context.Context) (found []Found, absent []Absence) {
 	for _, s := range Panel {
-		path, ok := locate(s.Lookup)
-		if !ok {
-			missing = append(missing, s.Name)
+		via := s.Via
+		if via == nil {
+			via = LocalReach{}
+		}
+		f, err := via.open(ctx, s)
+		if err != nil {
+			absent = append(absent, Absence{Name: s.Name, Reason: err.Error()})
 			continue
 		}
-		v := version(ctx, path)
-		if s.MustReport != "" && !strings.Contains(strings.ToLower(v), s.MustReport) {
-			// The path exists but is not the shell this entry names.
-			missing = append(missing, s.Name)
-			continue
-		}
-		found = append(found, Found{Shell: s, Path: path, Version: v})
+		found = append(found, f)
 	}
-	return found, missing
+	return found, absent
 }
+
+// Names is the bare list, for the record, which has always stored names.
+func Names(absent []Absence) []string {
+	if len(absent) == 0 {
+		return nil
+	}
+	names := make([]string, len(absent))
+	for i, a := range absent {
+		names[i] = a.Name
+	}
+	return names
+}
+
+// Version is the build string a shell at this path reports. Exported for the
+// runner inside a container, which has to answer the same question about the
+// shell in the image and must answer it the same way.
+func Version(ctx context.Context, path string) string { return version(ctx, path) }
+
+// Locate is locate, for the same reason: the runner resolves Shell.Lookup
+// inside the image, and a second implementation of "first candidate that
+// exists wins" is a second answer to one question.
+func Locate(candidates []string) (string, bool) { return locate(candidates) }
 
 func locate(candidates []string) (string, bool) {
 	for _, c := range candidates {

@@ -16,6 +16,17 @@ import (
 type Run struct {
 	Shells  []ShellRecord `json:"shells"`
 	Missing []string      `json:"missing,omitempty"`
+
+	// Absent is Missing with the reason attached, for a person rather than
+	// for the record. It is not written down: a reason is a fact about the
+	// machine that ran, and two machines that both lack a shell lack it for
+	// different reasons, so storing it would make the record differ between
+	// machines that agree about every shell they have.
+	//
+	// It is here at all because a column that did not run must never read
+	// like a column that agreed, and a bare name in a list is exactly the
+	// shape that gets skimmed as the second.
+	Absent []Absence `json:"-"`
 	// Results is caseID -> shellName -> result.
 	Results map[string]map[string]Result `json:"results"`
 }
@@ -28,12 +39,12 @@ type ShellRecord struct {
 
 // Execute runs every case in every shell that is present.
 func Execute(ctx context.Context, cases []Case) (*Run, error) {
-	found, missing := Resolve(ctx)
+	found, absent := Resolve(ctx)
 	if len(found) == 0 {
-		return nil, fmt.Errorf("no reference shells found; the panel is %d shells and none are installed", len(Panel))
+		return nil, fmt.Errorf("no reference shells found; the panel is %d shells and none are reachable", len(Panel))
 	}
 
-	r := &Run{Missing: missing, Results: make(map[string]map[string]Result, len(cases))}
+	r := &Run{Missing: Names(absent), Absent: absent, Results: make(map[string]map[string]Result, len(cases))}
 	for _, sh := range found {
 		r.Shells = append(r.Shells, ShellRecord{Name: sh.Name, Version: sh.Version})
 	}

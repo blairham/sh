@@ -200,7 +200,7 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 		return nil, fmt.Errorf("no binary at %s: %w", path, err)
 	}
 
-	found, missing := Resolve(ctx)
+	found, absent := Resolve(ctx)
 	var ref Found
 	for _, f := range found {
 		if f.Name == against {
@@ -208,7 +208,15 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 		}
 	}
 	if ref.Path == "" {
-		return nil, fmt.Errorf("reference shell %q is not installed", against)
+		// Which reason is the difference between "install it" and "start
+		// Docker", and a bare "not installed" was wrong for the ash column
+		// from the day it existed.
+		for _, a := range absent {
+			if a.Name == against {
+				return nil, fmt.Errorf("reference shell %q cannot be reached here: %s", against, a.Reason)
+			}
+		}
+		return nil, fmt.Errorf("reference shell %q is not in the panel", against)
 	}
 
 	ours := Found{
@@ -239,7 +247,7 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 		Path: path,
 	}
 
-	rep := &Report{Against: against, Missing: missing}
+	rep := &Report{Against: against, Missing: Names(absent)}
 	for _, c := range cases {
 		if !graded(c) {
 			continue

@@ -227,6 +227,11 @@ func Dialect() syntax.Dialect {
 	// bodyless declaration defines an empty function rather than an autoload
 	// stub, and that `function a; echo B` binds `echo B` as the body (#1686).
 	d.FunctionKeywordBodyIsOptional = true
+	// And a body that is not a brace group reaches to the end of the and-or
+	// list: `function a; echo X && echo Y` binds both, where
+	// `function a { echo X; } && echo Y` binds only the group. See
+	// syntax.Dialect.FunctionKeywordBodyIsAnAndOrList (#1832).
+	d.FunctionKeywordBodyIsAnAndOrList = true
 	// After the keyword, the word is the name whatever is in it — the empty
 	// string, a space, a semicolon, a dollar, all of it — and this shell is
 	// the only one in the panel that reads it that way. The other four with

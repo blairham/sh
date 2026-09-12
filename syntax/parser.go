@@ -301,6 +301,13 @@ var reservedWords = map[string]bool{
 	"function": true, "select": true, "time": true,
 }
 
+// atReservedWord reports whether the current token is one of the words the
+// grammar reserves, written unquoted. Quoting removes the reservation exactly
+// as it does for [Parser.atWord]: `"if"` is a command name.
+func (p *Parser) atReservedWord() bool {
+	return p.tok.Kind == TokWord && !p.tok.IsQuoted() && reservedWords[p.tok.Literal()]
+}
+
 // atReservedPrecommand reports whether the current token is one of the words
 // the dialect takes away in front of a command — see
 // [Dialect.ReservedPrecommands]. Quoting removes the reservation, exactly as
@@ -1674,9 +1681,34 @@ func spansHoldAnExpansion(spans []Span) bool {
 // `a*'b'` is not, because the `*` in it is still bare.
 func (p *Parser) keywordFuncName(t Token) bool {
 	if !p.dialect.FunctionKeywordNameIsAnyWord {
-		return isFuncName(t.Literal(), p.dialect.FunctionNamePunctuation)
+		return isFuncName(p.funcNameText(t), p.dialect.FunctionNamePunctuation)
 	}
 	return !holdsBarePatternCharacter(t)
+}
+
+// funcNameText is the text a definition's name is tested as.
+//
+// One dialect reads the word as it was **written** and the rest read what it
+// comes to, which is [Dialect.FunctionNameIsSourceText] and is the whole of
+// the difference between defining `f` from `function 'f'` and refusing it.
+// The refused word is carried on the declaration as source text either way,
+// so this changes which words are refused and never how one is named.
+func (p *Parser) funcNameText(t Token) string {
+	if p.dialect.FunctionNameIsSourceText {
+		return p.textBetween(t.Pos, t.End)
+	}
+	return t.Literal()
+}
+
+// referenceListName reports whether t may stand in the word list a `function`
+// keyword's name may be followed by in one dialect.
+//
+// A name and nothing else: quoting comes off first — `function a "b"` is
+// taken there — and an expansion, an assignment and a word that is not an
+// identifier are one refusal between them. See
+// [Dialect.FunctionKeywordReferenceList], where the rows are.
+func (p *Parser) referenceListName(t Token) bool {
+	return !tokenHoldsAnExpansion(t) && isName(t.Literal())
 }
 
 // holdsBarePatternCharacter reports whether any literal span of t that the
@@ -1781,7 +1813,7 @@ func (p *Parser) parseSimple() Command {
 				// nowhere to go after it — `nocorrect if true; then echo hi;
 				// fi` is `parse error near `if'` in the shell that has the
 				// word, not an `if` with a modifier in front of it.
-				if p.atStopWord() || p.at(TokWord) && !p.tok.IsQuoted() && reservedWords[p.tok.Literal()] {
+				if p.atStopWord() || p.atReservedWord() {
 					p.failUnexpected("")
 					return c
 				}
@@ -2028,15 +2060,21 @@ func (p *Parser) looksLikeFuncDef() bool {
 	}
 	// A quoted name is not a definition in most dialects, and quoting is not
 	// an expansion: `'q'() { :; }` is refused here as it was before the flag.
-	// The one dialect for which it is a definition is the branch above.
-	if p.tok.IsQuoted() {
+	// Two dialects read one, by different routes: the one whose names are any
+	// word at all, in the branch above, and the one that reads the name as
+	// *source text* and refuses it when the definition runs — where the
+	// quotes are in the name rather than around it, so a quoted word is a
+	// definition and the name it declares is not one.
+	if p.tok.IsQuoted() && !p.dialect.FunctionNameIsSourceText {
 		return false
 	}
 	// One unquoted literal span is the ordinary name. Where the dialect
 	// expands a name, several spans are allowed and an expansion among them
-	// is the point.
-	if !p.dialect.FunctionNameExpands &&
-		(len(p.tok.Spans) != 1 || p.tok.Spans[0].Kind != Literal) {
+	// is the point — and where it reads the name as source text, several
+	// spans are allowed too so long as none of them is an expansion:
+	// `a\ b()` is three spans there and is the definition bash reads before
+	// refusing the name.
+	if !p.dialect.FunctionNameExpands && !p.tokenIsPlainText(p.tok) {
 		return false
 	}
 	if p.dialect.FuncDefAtParen {
@@ -2078,6 +2116,28 @@ func (p *Parser) looksLikeFuncDef() bool {
 	return p.lex.peekIsFuncParens()
 }
 
+// tokenIsPlainText reports whether t holds text and nothing the shell would
+// expand, which is what a name may be made of where a name is not a word.
+//
+// One span is the ordinary reading and the only one most dialects allow: a
+// second span means quoting, and quoting is what those dialects refuse before
+// this is reached. The dialect that reads a name as source text keeps the
+// quoting *in* the name, so it has several spans to walk.
+func (p *Parser) tokenIsPlainText(t Token) bool {
+	if !p.dialect.FunctionNameIsSourceText {
+		return len(t.Spans) == 1 && t.Spans[0].Kind == Literal
+	}
+	if len(t.Spans) == 0 {
+		return false
+	}
+	for _, sp := range t.Spans {
+		if sp.Kind != Literal {
+			return false
+		}
+	}
+	return true
+}
+
 // anyWordFuncDef is looksLikeFuncDef where the word before the parentheses is
 // the name whatever is in it — see [Dialect.FunctionNameIsAnyWord].
 //
@@ -2112,6 +2172,15 @@ func (p *Parser) anyWordFuncDef() bool {
 
 func (p *Parser) parseFuncPosix() Command {
 	fn := &FuncDecl{Name: p.tok.Literal(), Start: p.tok.Pos}
+	if text := p.funcNameText(p.tok); text != fn.Name &&
+		!isFuncName(text, p.dialect.FunctionNamePunctuation) {
+		// The dialect that reads the name as source text, given a word whose
+		// text is not one: the declaration is read whole and the word is
+		// kept as it was written, which is what the complaint quotes when
+		// the definition runs. The keyword form takes the same branch in
+		// parseFuncKeyword; only these two spellings have a name at all.
+		fn.RefusedName = text
+	}
 	if p.dialect.FunctionNameExpands && tokenHoldsAnExpansion(p.tok) {
 		// A name that is not text until the shell runs, kept whole. p.word()
 		// consumes it, which is the p.next() the plain path takes.
@@ -2421,6 +2490,18 @@ func (p *Parser) parseFuncKeyword() Command {
 		}
 		fn.AlsoNamed = append(fn.AlsoNamed, also)
 	}
+	// And where the dialect takes words after the name that are *not* names
+	// for the body, they are read and dropped. The list stops at the end of
+	// the line, which is what makes the one-line spelling blame the line
+	// after it — see [Dialect.FunctionKeywordReferenceList].
+	for p.dialect.FunctionKeywordReferenceList && p.at(TokWord) &&
+		!p.atReservedWord() {
+		if !p.referenceListName(p.tok) {
+			p.fail("invalid reference list")
+			return fn
+		}
+		p.next()
+	}
 	if p.at(TokLeftParen) {
 		// The hybrid `function f() {}`: bash and zsh take it, ksh93 rejects
 		// it. Accepting it everywhere the keyword exists meant the ksh
@@ -2447,7 +2528,7 @@ func (p *Parser) parseFuncKeyword() Command {
 	}
 	body := p.tok
 	p.funcBody = true
-	if fn.Body = p.parseCommand(); fn.Body == nil {
+	if fn.Body = p.funcKeywordBody(); fn.Body == nil {
 		if p.dialect.FunctionKeywordBodyIsOptional && p.err == nil {
 			// No body at all, which is a declaration rather than a failure:
 			// each name is defined with an empty one. An empty group is how
@@ -2464,6 +2545,36 @@ func (p *Parser) parseFuncKeyword() Command {
 		p.failUnexpectedAt(body, "", false)
 	}
 	return fn
+}
+
+// funcKeywordBody reads the body of a `function` keyword's declaration.
+//
+// One dialect ends the declaration at a brace group's `}` and lets every
+// other body reach to the end of the and-or list — see
+// [Dialect.FunctionKeywordBodyIsAnAndOrList], where the order the two
+// readings print in is measured. Everywhere else a body is one command, which
+// is what [Parser.parseCommand] reads.
+//
+// A list of more than one pipeline is wrapped in a [Group], because
+// [FuncDecl.Body] is a Command and an and-or list is not one. A single
+// command is handed back bare: it is the body it was before this flag, and
+// wrapping it would change what every existing definition prints back as.
+func (p *Parser) funcKeywordBody() Command {
+	if !p.dialect.FunctionKeywordBodyIsAnAndOrList || p.atWord("{") {
+		return p.parseCommand()
+	}
+	expr := p.parseAndOr()
+	if expr == nil {
+		return nil
+	}
+	if pl, ok := expr.(*Pipeline); ok && !pl.Negated && len(pl.Cmds) == 1 {
+		return pl.Cmds[0]
+	}
+	return &Group{
+		List:  []*Stmt{{Expr: expr}},
+		Start: expr.Pos(),
+		Stop:  expr.End(),
+	}
 }
 
 // funcKeywordBodyIsTakenHere reports whether the command read after the

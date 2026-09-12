@@ -88,6 +88,11 @@ func Dialect() syntax.Dialect {
 	// interp.Semantics.FunctionNameWhenTheDefinitionRuns is what happens
 	// then (#1296).
 	d.FunctionNameCheckedWhenTheDefinitionRuns = true
+	// And the word it carries is the *source text*, which is also what is
+	// tested for being a name: `function 'f' { … }` is refused here where
+	// the two shells that remove the quotes define `f`. See
+	// syntax.Dialect.FunctionNameIsSourceText for the six columns (#1566).
+	d.FunctionNameIsSourceText = true
 	// And inside `[[ ]]`, which is the only place bash reads them.
 	d.ExtendedPatternInCondition = true
 	// `[[ -v name ]]`, which asks whether a parameter is set. Not core: bash

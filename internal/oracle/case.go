@@ -7404,7 +7404,7 @@ echo "st=$?"`,
 	{
 		ID: "cmd/function-keyword-with-a-quoted-ordinary-name", Category: "command language",
 		Snippet: `function 'f' { echo p; }; f; echo st=$?`,
-		Why:     "the sharpest control in this group, and the row that says what the quoting is doing. The name is `f` — a name nobody could object to — and the *quotes* are all that is unusual. zsh and ksh93 remove them before reading the name and define `f`; bash 5.3, bash 3.2 and bash-as-sh take the whole word including the quotes and answer `` `'f'': not a valid identifier ``, so the name they refused was never a punctuated one at all. That splits the panel two against three where the punctuated rows split it one against four, which is what says the two questions are different — and it says the quoted-name rows measure the quoting rather than a wider set of name characters, since no set of characters can contain `f`. This implementation removes the quotes in every dialect and defines `f` in all of them, which is right for two columns and wrong for three (#1566)",
+		Why:     "the sharpest control in this group, and the row that says what the quoting is doing. The name is `f` — a name nobody could object to — and the *quotes* are all that is unusual. zsh and ksh93 remove them before reading the name and define `f`; bash 5.3, bash 3.2 and bash-as-sh take the whole word including the quotes and answer `` `'f'': not a valid identifier ``, so the name they refused was never a punctuated one at all. That splits the panel two against three where the punctuated rows split it one against four, which is what says the two questions are different — and it says the quoted-name rows measure the quoting rather than a wider set of name characters, since no set of characters can contain `f`. This implementation reads the name as source text in the bash dialect and as the word's text everywhere else, so all six columns answer as they are measured here (#1566). The flag is syntax.Dialect.FunctionNameIsSourceText",
 	},
 	{
 		ID: "cmd/function-keyword-with-a-quoted-pattern-in-the-name", Category: "command language",
@@ -7489,7 +7489,7 @@ echo "st=$?"`,
 	{
 		ID: "cmd/function-posix-name-in-quotes", Category: "command language",
 		Snippet: `'q'() { echo b; }; q; echo st=$?`,
-		Why:     "the sharpest control this group has and a *different* panel split from the rows above. The name is `q` — one nobody could object to — and the quotes are all that is unusual: zsh **and ksh93** remove them and define `q`, so it splits two against four where a name holding a space splits it one against five. That is what says these rows measure the quoting rather than a wider set of name characters, since no set of characters can exclude `q`. This implementation removes the quotes for zsh and for ksh, which is those two columns, and the three bash spellings keep refusing the word while *parsing* where those shells read the definition and complain about the name when it runs (#1566)",
+		Why:     "the sharpest control this group has and a *different* panel split from the rows above. The name is `q` — one nobody could object to — and the quotes are all that is unusual: zsh **and ksh93** remove them and define `q`, so it splits two against four where a name holding a space splits it one against five. That is what says these rows measure the quoting rather than a wider set of name characters, since no set of characters can exclude `q`. This implementation removes the quotes for zsh and for ksh, which is those two columns, and reads the bash dialect's name as source text, so the three bash spellings read the definition and complain about the name when it runs, exactly as they do (#1566)",
 	},
 	{
 		ID: "cmd/function-posix-name-with-a-bare-equals", Category: "command language",
@@ -7525,6 +7525,21 @@ echo "st=$?"`,
 		ID: "cmd/open-brace-with-no-blank-is-not-a-brace-expansion", Category: "command language",
 		Snippet: `{a,b}; echo st=$?`,
 		Why:     "what the reserved `{` costs where a command may begin: the shell that reads it as a word of its own gets a brace group running a command called `a,b`, so no brace expansion happens there at all. The three bash spellings and ksh93 expand the word and look for a command called `a` with `b` as its argument; dash has no brace expansion and looks for one called `{a,b}`. Three readings of one line at the same status, which is why the row is graded on what each of them named — and the one that says the opening brace is a token boundary rather than a special case inside a definition",
+	},
+	{
+		ID: "cmd/function-keyword-body-takes-the-and-or-list", Category: "command language",
+		Snippet: `function a; echo X && echo Y; a; echo st=$?`,
+		Why:     "how far a keyword body that is not a brace group reaches, and the row is graded on the **order** rather than on the output: both readings print `X`, `Y` and `st=0`. zsh binds the whole and-or list as the body, so nothing runs at the definition and the call prints X then Y; a reading that took `echo X` alone would run `&& echo Y` where it stands and print Y first. The other five never get that far — three bash spellings and ksh93 refuse the `;` after the name, and dash has no keyword and runs `function`, `echo X && echo Y` and a call to a name nobody defined",
+	},
+	{
+		ID: "cmd/function-keyword-brace-body-ends-the-declaration", Category: "command language",
+		Snippet: `function a { echo X; } && echo Y; a; echo st=$?`,
+		Why:     "the control for the row above and the reason it is about the *shape* of the body: with braces the declaration ends at the `}`, so the `&&` is its own continuation and Y prints first in all five shells that have the keyword. Without this row the reach could be read as a rule about the separator, and dash's refusal of the brace is a different sentence again",
+	},
+	{
+		ID: "cmd/function-keyword-extra-words-then-a-body-on-the-next-line", Script: true, Category: "command language",
+		Snippet: "function a zz\n{ echo hi; }\na\nzz\necho st=$?",
+		Why:     "words after the keyword's name that are neither more names nor the body: ksh93 takes them as a list of name references and **discards** them, so `a` is defined, `zz` is not found at 127, and the brace group on the *next* line is still read as the body. zsh defines both names and prints `hi` twice, which is the pair that says the two readings are different constructs rather than one lenience. The three bash spellings refuse the second word, and dash has no keyword. From a file because the answer is about which line the body was found on (#2014)",
 	},
 	{
 		ID: "cmd/function-keyword-form", Category: "command language",

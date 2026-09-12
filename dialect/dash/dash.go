@@ -603,7 +603,7 @@ func Diagnostics() interp.Diagnostics {
 		// `echo $[1+2` runs and prints the text — so there is one spelling
 		// to word here and not two.
 		UnmatchedArithSubst: "Syntax error: Missing '))'",
-		SyntaxError:         "Syntax error: %s",
+		SyntaxError:         "Syntax error: %[1]s",
 		BadSubstitution:     "Bad substitution",
 		// The bare name and the shell's own sentence for a name nothing may
 		// be assigned to: `${@:=w}` with no parameters is `@: bad variable

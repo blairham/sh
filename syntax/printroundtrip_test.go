@@ -84,7 +84,14 @@ import (
 // [syntax.FuncDecl.RefusedName] — source text, printed back as it stood,
 // because quoting it would hand back a program those shells refuse for a
 // different reason or accept.
-const keywordFunctionsInTheCorpus = 28
+//
+// Thirty-one since the `function` header cluster: two rows measuring how far
+// a body that is not a brace group reaches (#1832) and one measuring the
+// words a keyword's name may be followed by (#2014). All three are ordinary
+// keyword definitions to this grammar — the reach and the reference list are
+// each one dialect's, and neither flag is on here — so they exercise the same
+// path the twenty-eight already did and are counted with them.
+const keywordFunctionsInTheCorpus = 31
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 	// The arrangement a formatter asks for, alongside the zero value that a

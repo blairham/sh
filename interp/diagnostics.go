@@ -2041,8 +2041,21 @@ type Diagnostics struct {
 	// other failed open.
 	NoclobberFallbackIsAnOpen bool
 
-	// SyntaxError wraps a parse failure's own text. One verb: the text.
+	// SyntaxError wraps a parse failure's own text — the sentence the
+	// substrate wrote for a refusal that has no wording of its own. Two
+	// verbs: %[1]s the text, %[2]d the line it was refused on.
+	//
+	// The line is here because one shell carries it *inside* the sentence
+	// rather than in the location — `syntax error at line 1: invalid
+	// reference list` — which is the same split
+	// [Diagnostics.PromptSyntaxUnexpected] exists for, and the reason the
+	// verbs are indexed: a dialect that wants only the text writes `%[1]s`
+	// and the unused line is silently dropped.
 	SyntaxError string
+
+	// PromptSyntaxError is SyntaxError for a line typed at a prompt, where
+	// the shell that names the line has none to name.
+	PromptSyntaxError string
 
 	// EvalNaming and SourceFileNaming are where the name of borrowed text
 	// goes in a diagnostic about it. Two fields because they are two
@@ -3394,7 +3407,7 @@ func (d Diagnostics) nearText(text string) string {
 func (d Diagnostics) ParseFailure(err error) string {
 	var se *syntax.Error
 	if !errors.As(err, &se) {
-		return Wording(d.SyntaxError, "%s", parseMessage(err))
+		return Wording(d.SyntaxError, "%[1]s", parseMessage(err), 0)
 	}
 	switch se.Kind {
 	case syntax.ErrBadSubstitution:
@@ -3465,7 +3478,7 @@ func (d Diagnostics) ParseFailure(err error) string {
 			se.Construct, se.ConstructLine, se.Innermost, se.Expected,
 			escapeToken(se.LastToken), se.Pos.Line)
 	}
-	return Wording(d.SyntaxError, "%s", se.Msg)
+	return Wording(d.SyntaxError, "%[1]s", se.Msg, se.Pos.Line)
 }
 
 // Remark renders something the parser had to say about input it accepted
@@ -3544,6 +3557,7 @@ func (d Diagnostics) ForPrompt() Diagnostics {
 		{&d.UnmatchedArithSubst, d.PromptUnmatchedArithSubst},
 		{&d.UnmatchedProcSubst, d.PromptUnmatchedProcSubst},
 		{&d.BadSubstitution, d.PromptBadSubstitution},
+		{&d.SyntaxError, d.PromptSyntaxError},
 	} {
 		if w.prompt != "" {
 			*w.at = w.prompt

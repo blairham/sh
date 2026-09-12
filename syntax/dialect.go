@@ -877,6 +877,47 @@ type Dialect struct {
 	// source, so the body would write it a second time. See #1838.
 	FunctionMultipleNames bool
 
+	// FunctionKeywordReferenceList lets the `function` keyword's name be
+	// followed by more words, which are **taken and discarded**: only the
+	// first word is a function, and the rest name nothing.
+	//
+	// ksh93 alone, where they are a list of name references the body may
+	// bind. Measured 2026-09-11 and 2026-09-12 from a script file on
+	// ksh93u+, because the blame lands on a later line and `-c` has none:
+	//
+	//	function a b { print hi; } ⏎ a ⏎ b
+	//	    `hi`, then `b: not found` at 127 — `a` is defined and `b` is not
+	//	function a b c d { print hi; } ⏎ a      `hi`
+	//	function a "b" { print hi; } ⏎ a        `hi` — the quotes come off
+	//	function a 1b { print hi; }             invalid reference list
+	//	function a b=c { print hi; }            invalid reference list
+	//	function a $foo { print hi; }           invalid reference list
+	//	function a b; { print hi; }             `;' unexpected
+	//	function a b > out { print hi; }        `>' unexpected
+	//
+	// So the words are names and nothing else is: an expansion, an
+	// assignment and a word that is not an identifier are all the same
+	// refusal, and an operator is refused as the operator it is. Quoting is
+	// removed before the test, which is what parts this from
+	// [Dialect.FunctionNameIsSourceText].
+	//
+	// It is **not** [Dialect.FunctionMultipleNames], and the pair of them is
+	// what says so: zsh defines every name in its list and answers each call
+	// with its own `$0`, where here `b` is not found. No dialect sets both.
+	//
+	// The list stops at the end of the line, and that is where the rule is
+	// visible from the outside. This shell wants a brace group after the
+	// keyword ([Dialect.FunctionKeywordBodyMustBeBraceGroup]), so
+	// `function a echo B` ⏎ `a` blames the `a` on **line 2** — `echo` and `B`
+	// were eaten as header words and the body never started — where
+	// `function a echo` ⏎ `{ print hi; }` is status 0.
+	//
+	// Discarded by the *grammar* and not quite by the shell: `typeset -f`
+	// writes the declaration back with its list, `function a b { print hi;
+	// }`. That is a listing question rather than a parsing one (#1494), and
+	// nothing about `b` is reachable from a script.
+	FunctionKeywordReferenceList bool
+
 	// FunctionKeywordBodyIsOptional lets a `function` keyword's name list be
 	// followed by a separator, and lets it end with no body at all. Each name
 	// is then defined with an **empty** body, which is what the shell reports
@@ -901,12 +942,46 @@ type Dialect struct {
 	// exactly when no command follows: `function a b` at the end of the
 	// input, before a `}`, a `fi` or a `done`, before `&&` and before a `|`.
 	//
-	// Measured alongside it, and **not** modeled: with a body that is not a
-	// brace group, that shell reads the whole and-or list as the body —
-	// `function a; echo X && echo Y` prints `X` then `Y` from a call, where
-	// `function a { echo X; } && echo Y` prints `Y` then `X`. The body here
-	// is one command either way; see #1832.
+	// How far a body that is not a brace group reaches is a flag of its own:
+	// [Dialect.FunctionKeywordBodyIsAnAndOrList], below.
 	FunctionKeywordBodyIsOptional bool
+
+	// FunctionKeywordBodyIsAnAndOrList makes a `function` keyword's body
+	// reach to the end of the and-or list where the body is not a brace
+	// group. The brace group is the one shape that ends the declaration at
+	// its `}`; everything else takes the `&&` and `||` after it.
+	//
+	// zsh alone, and measured 2026-09-12 on zsh 5.9.2 by the **order** the
+	// two commands come out in, which is the only thing that parts the two
+	// readings — both print `X` and `Y` at status 0:
+	//
+	//	function a; echo X && echo Y  ⏎ a     X then Y — one body
+	//	function a { echo X; } && echo Y ⏎ a  Y then X — `&&` is the
+	//	                                      declaration's continuation
+	//
+	// A pipeline is inside the body too — `function a; echo X | cat && echo
+	// Y` prints X then Y — and so is every other compound, which is what
+	// says the brace group is special rather than "compound" being: an `if`
+	// takes the `&&` after it, `function a; if true; then echo X; fi &&
+	// echo Y` printing X then Y from the call.
+	//
+	// The hybrid form goes with the keyword and not with the parentheses:
+	// `function a() echo X && echo Y` prints X then Y, where the bare
+	// `a() echo X && echo Y` prints Y then X. So this is asked where the
+	// keyword was written, and [Parser.parseFuncParensAndBody] never asks it.
+	//
+	// A `&` ends the list as it ends any and-or, and it then backgrounds the
+	// whole declaration: `function a; echo X &` leaves `a` undefined in the
+	// shell that ran it, the definition having happened in the subshell.
+	//
+	// [syntax.FuncDecl.Body] is a Command and an and-or list is an Expr, so
+	// a body of more than one pipeline is wrapped in a [Group]. That is the
+	// same program written back — `function a { echo X && echo Y; }` reads to
+	// the same tree — which is what [SameProgram] asks of a printer. A body
+	// of exactly one pipeline of one command is left bare, because it already
+	// was one before this flag and wrapping it would change what every
+	// existing definition prints back as.
+	FunctionKeywordBodyIsAnAndOrList bool
 
 	// TimeKeyword makes `time` a reserved word at the start of a pipeline,
 	// timing the whole pipeline — `time true | wc -l` measures both elements
@@ -1694,6 +1769,40 @@ type Dialect struct {
 	// `_p_${w}() { … }` is ``syntax error … `}' unexpected`` in ksh93 and
 	// the run-time complaint in bash, which is a different split again.
 	FunctionNameCheckedWhenTheDefinitionRuns bool
+
+	// FunctionNameIsSourceText makes a definition's name the word as it was
+	// **written** — quotes, backslashes and all — rather than the text the
+	// word comes to. A name nobody could object to is refused when it is
+	// spelled with quotes around it, because the quotes are in the name.
+	//
+	// bash alone, in all three of its spellings. Measured 2026-09-12 over
+	// `sh -c "function 'f' { echo p; }; f; echo st=\$?"`, and again with the
+	// `'f'() { … }` spelling, which answers the same:
+	//
+	//	bash 5.3.15  `` `'f'': not a valid identifier ``, then
+	//	             `f: command not found` and st 127
+	//	bash 3.2.57  the same two lines
+	//	bash-as-sh   the same diagnostic, fatal at 2
+	//	ksh93u+      `p`, st 0 — the quotes come off and `f` is defined
+	//	zsh 5.9.2    the same
+	//	dash         no keyword at all
+	//
+	// The name is `f`. Nothing about it is unusual except the quotes, which
+	// is what makes this the *control* for the two flags either side of it:
+	// [Dialect.FunctionKeywordNameIsAnyWord] and
+	// [Dialect.FunctionNameIsAnyWord] are about a **wider set of names**, and
+	// no set of names could exclude `f`. Every other spelling of the same
+	// fact answers the same way there — `function "f"`, `function f""` and
+	// `function \f` are all `not a valid identifier` naming the source text.
+	//
+	// It pairs with [Dialect.FunctionNameCheckedWhenTheDefinitionRuns] and is
+	// not the same question: that one says *when* a bad name is refused, and
+	// this one says what the name is. Without it the quotes came off here in
+	// every dialect and `f` was defined — right for two columns and wrong for
+	// three (#1566). With it the refused word reaches
+	// [FuncDecl.RefusedName] as it always did, which is why the wording is
+	// already what those three print.
+	FunctionNameIsSourceText bool
 
 	// PatternAlternation enables a bare `(a|b)` inside a pattern word, which
 	// zsh has and the others do not: `a(b|c)` matches `ab` there. It is why

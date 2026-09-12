@@ -231,3 +231,31 @@ func TestWhoseProcessAHereDocumentIsForIsPerRedirectionList(t *testing.T) {
 		t.Errorf("out = %q, want it to end in n=1 m=1 — both bodies confined to the program they fed", out)
 	}
 }
+
+// TestAHereDocumentBodyIsAbandonedAtItsFirstFailedExpansion: a body is one
+// text and it is given up where the first expansion in it failed, which is the
+// rule a *word* has always followed one construct over.
+//
+// Measured 2026-09-12 with two failing expansions in one body: bash 5.3.15,
+// bash 3.2.57, bash as sh, dash, ksh93u+ and zsh 5.9.2 each report **once**,
+// do not run the command, and run the line after it. This reported twice,
+// because the body's walk was the one expansion loop in the package with no
+// stop in it (#2053).
+//
+// The assertion is the whole output rather than a count of lines: what makes
+// the second diagnostic wrong is that it is a second complaint about one
+// failure, and a test that only looked for "division by zero" would pass for
+// either shell.
+func TestAHereDocumentBodyIsAbandonedAtItsFirstFailedExpansion(t *testing.T) {
+	out, st := run(t, ": <<END\n$(( 1/0 )) $(( 2/0 ))\nEND\necho after\n", func(r *Runner) {
+		dg := Diagnostics{DivisionByZero: "division by zero"}
+		r.Diagnostics = &dg
+	})
+	const want = "sh: division by zero\nafter\n"
+	if out != want {
+		t.Errorf("out = %q, want %q: one complaint about one failure", out, want)
+	}
+	if st != 0 {
+		t.Errorf("status = %d, want 0: the command was given up, not the script", st)
+	}
+}

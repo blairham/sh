@@ -105,6 +105,31 @@ type PromptStyle struct {
 	// read again — which is exactly what this shell drew.
 	ExpandBeforeEscapes bool
 
+	// FailedExpansionKeepsWhatItDrew hands back the text in front of the
+	// **first** substitution when the expansion pass gives up partway,
+	// instead of the text as it stood when the pass began.
+	//
+	// The other half of the boundary in promptabandon.go: that one says the
+	// script carries on, and this one says what the rendering is worth. Both
+	// halves are measured, on the same value in two shells, and they
+	// disagree. With `s='PRE-$((nofunc()))-POST'` and the function not
+	// registered, zsh's `${(%%)s}` draws `PRE-` — and draws it for
+	// `PRE-${V}-$((nofunc()))-POST` too, so the `${V}` that succeeded is
+	// **not** kept and the rule is about the first substitution rather than
+	// about the failing one. bash's `${v@P}` on the same value draws
+	// `PRE-$((nofunc()))-POST`, the text unchanged, with the substitutions
+	// simply not performed.
+	//
+	// The escape pass is not affected either way: measured with `%B` and
+	// `\e[1m` in front of the failure, both shells draw the escape and then
+	// stop, so what a given-up pass hands back is read by the table exactly
+	// as a finished one would be.
+	//
+	// It is here rather than on [Semantics] because it is a question only a
+	// prompt asks: nothing outside a prompt rendering has a *pass* to give
+	// up, and a dialect with no prompt language never reads it.
+	FailedExpansionKeepsWhatItDrew bool
+
 	// Escape introduces a code in the prompt: a backslash in bash and ksh93,
 	// a percent sign in zsh, and nothing at all in dash. Zero means the
 	// dialect has no escape language and the rest of these are never read.
@@ -689,7 +714,11 @@ func RenderPromptValue(st PromptStyle, r *Runner, text string, field PromptResol
 		if r == nil || st.Expand == nil || !st.Expand(r) {
 			return v
 		}
-		return r.Expand(v)
+		// Not Runner.Expand: this pass is a boundary, and a failure inside
+		// it costs the rendering rather than the script. See
+		// interp/promptabandon.go, which is where the one catch lives so
+		// that every reader of this helper gets it.
+		return r.expandPromptText(v)
 	}
 	escapes := func(v string) (string, string, bool) {
 		return ExpandPromptStyle(st, v, field, quantity)

@@ -565,6 +565,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `subscript/a-chain-whose-first-link-names-nothing` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${a[9][1]-none}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${a[9][1]-none}: bad substitution` *(status 127)* | `[none]` | `[none]` | `[none]` |
 | `subst/a-case-inside-a-substitution` | `[yes]` | `[yes]` | `[yes]` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;;'~<shell>: -c: line 0: `x=$(case a in a) echo yes;; esac); echo "[$x]"'` *(status 2)* | `[yes]` | `[yes]` |
 | `subst/a-substitution-inside-an-arm` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` |
+| `prompt/a-failed-rendering-costs-the-rendering-not-the-script` | **2>** `<script>: 1: setopt: not found~<script>: 3: Bad substitution` *(status 2)* | `TWO=still-running` **2>** `<script>: line 1: setopt: command not found~<script>: line 3: ${(%%)s}: bad substitution` | **2>** `<script>: line 1: setopt: command not found~<script>: line 3: ${(%%)s}: bad substitution` *(status 1)* | `TWO=still-running` **2>** `<script>: line 1: setopt: command not found~<script>: line 3: ${(%%)s}: bad substitution` | **2>** `<script>: line 1: setopt: not found~<script>: line 3: syntax error at line 3: `s}' unexpected` *(status 3)* | `ONE=[]~TWO=still-running` **2>** `<script>:3: unknown function: nofunc` |
+| `prompt/a-failed-rendering-costs-the-rendering-not-the-command-string` | **2>** `<shell>: 1: setopt: not found~<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: ${(%%)s}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: ${(%%)s}: bad substitution` *(status 127)* | **2>** `<shell>: setopt: command not found~<shell>: ${(%%)s}: bad substitution` *(status 1)* | **2>** `<shell>: setopt: not found~<shell>: syntax error at line 1: `s}' unexpected` *(status 3)* | `ONE=[]~TWO=still-running` **2>** `<shell>:1: unknown function: nofunc` |
+| `prompt/a-given-up-rendering-is-worth-what-it-drew` | **2>** `<shell>: 1: setopt: not found~<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: ${(%%)s}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: ${(%%)s}: bad substitution` *(status 127)* | **2>** `<shell>: setopt: command not found~<shell>: ${(%%)s}: bad substitution` *(status 1)* | **2>** `<shell>: setopt: not found~<shell>: syntax error at line 1: `s}' unexpected` *(status 3)* | `ONE=[PRE-]~TWO=still-running` **2>** `<shell>:1: unknown function: nofunc` |
+| `prompt/a-given-up-rendering-drops-a-substitution-that-had-succeeded` | **2>** `<shell>: 1: setopt: not found~<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: ${(%%)s}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: ${(%%)s}: bad substitution` *(status 127)* | **2>** `<shell>: setopt: command not found~<shell>: ${(%%)s}: bad substitution` *(status 1)* | **2>** `<shell>: setopt: not found~<shell>: syntax error at line 1: `s}' unexpected` *(status 3)* | `ONE=[PRE-]~TWO=still-running` **2>** `<shell>:1: unknown function: nofunc` |
+| `prompt/the-escape-table-still-reads-what-a-given-up-rendering-drew` | **2>** `<shell>: 1: setopt: not found~<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: ${(%%)s}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: ${(%%)s}: bad substitution` *(status 127)* | **2>** `<shell>: setopt: command not found~<shell>: ${(%%)s}: bad substitution` *(status 1)* | **2>** `<shell>: setopt: not found~<shell>: syntax error at line 1: `s}' unexpected` *(status 3)* | `ONE=[PRE-%-]~TWO=still-running` **2>** `<shell>:1: unknown function: nofunc` |
+| `prompt/the-error-operator-ends-the-shell-at-a-rendering` | **2>** `<shell>: 1: setopt: not found~<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: ${(%%)s}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: ${(%%)s}: bad substitution` *(status 127)* | **2>** `<shell>: setopt: command not found~<shell>: ${(%%)s}: bad substitution` *(status 1)* | **2>** `<shell>: setopt: not found~<shell>: syntax error at line 1: `s}' unexpected` *(status 3)* | **2>** `<shell>:1: NOPEV: gone` *(status 1)* |
+| `prompt/print-P-is-the-same-boundary` | `TWO=still-running` **2>** `<shell>: 1: setopt: not found~<shell>: 1: print: not found` | `TWO=still-running` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: print: command not found` | `TWO=still-running` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: print: command not found` | `TWO=still-running` **2>** `<shell>: setopt: command not found~<shell>: print: command not found` | `TWO=still-running` **2>** `<shell>: setopt: not found~<shell>: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]` | `PRE-~TWO=still-running` **2>** `<shell>:1: unknown function: nofunc` |
+| `prompt/at-P-keeps-the-text-a-given-up-rendering-was-handed` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `ONE=[PRE-$((nofunc()))-POST]~TWO=still-running` **2>** `<shell>: line 1: nofunc(): arithmetic syntax error in expression (error token is "()")` | `ONE=[PRE-$((nofunc()))-POST]~TWO=still-running` **2>** `<shell>: line 1: nofunc(): arithmetic syntax error in expression (error token is "()")` | **2>** `<shell>: ${v@P}: bad substitution` *(status 1)* | **2>** `<shell>: "${v@P}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `glob/matches-are-in-order` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` |
 | `glob/a-trailing-slash-stays-on-every-match` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` |
 | `glob/a-trailing-slash-without-the-slash` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` |
@@ -1873,6 +1881,41 @@ grades it and nothing drift-checks it either, for the same reason.
 - `subst/a-substitution-inside-an-arm` — the other nesting, which counting got right and which has to keep working: the parentheses here really do pair
   ```sh
   case a in a) echo "[$(echo inner)]";; esac
+  ```
+- `prompt/a-failed-rendering-costs-the-rendering-not-the-script` — the whole divergence on one row: zsh reports the unknown function naming the script and the line, renders the failed expansion as nothing, prints the command's own output `ONE=[]`, runs the next command and exits 0. The diagnostic was already byte-identical here and the three facts after it were not — the `print` was swallowed, the script abandoned and the status 1 (#2053). A script file rather than `-c` because #1104 fixed this shape for a *sourced* file and it survived on the route a person actually runs
+  ```sh
+  setopt promptsubst
+  s='${$((nofunc()))+}X'
+  printf 'ONE=[%s]\n' "${(%%)s}"
+  printf 'TWO=still-running\n'
+  ```
+- `prompt/a-failed-rendering-costs-the-rendering-not-the-command-string` — the same shape down the `-c` route, which is a different boundary in this shell's own terms — a `-c` string has no file to name and its errors are fatal in shapes a script file survives — and answers identically. The pair is what says the catch is at the *rendering* and not at whatever is reading the text
+  ```sh
+  setopt promptsubst; s='${$((nofunc()))+}X'; printf 'ONE=[%s]\n' "${(%%)s}"; printf 'TWO=still-running\n'
+  ```
+- `prompt/a-given-up-rendering-is-worth-what-it-drew` — a given-up rendering is not empty and is not the value either: zsh draws `PRE-`, the text in front of the substitution that failed, and drops the rest. The row above cannot see this — its value begins with the substitution, so what it drew and nothing at all are the same string
+  ```sh
+  setopt promptsubst; s='PRE-$((nofunc()))-POST'; printf 'ONE=[%s]\n' "${(%%)s}"; printf 'TWO=still-running\n'
+  ```
+- `prompt/a-given-up-rendering-drops-a-substitution-that-had-succeeded` — what is kept is the text in front of the **first** substitution rather than everything that had worked: `${V}` expands to `MID` and is thrown away with the rest, so the answer is `PRE-` and not `PRE-MID-`. Recorded because an implementation that simply stopped its walk at the failing span would answer `PRE-MID-` and pass the row above
+  ```sh
+  setopt promptsubst; V=MID; s='PRE-${V}-$((nofunc()))-POST'; printf 'ONE=[%s]\n' "${(%%)s}"; printf 'TWO=still-running\n'
+  ```
+- `prompt/the-escape-table-still-reads-what-a-given-up-rendering-drew` — the two passes of a prompt rendering are not both given up: the escape table reads what the abandoned expansion left, so the doubled percent still draws one and the answer is `PRE-%-`. An implementation that returned early from the whole rendering would write `PRE-%%-`
+  ```sh
+  setopt promptsubst; s='PRE-%%-$((nofunc()))-POST'; printf 'ONE=[%s]\n' "${(%%)s}"; printf 'TWO=still-running\n'
+  ```
+- `prompt/the-error-operator-ends-the-shell-at-a-rendering` — `${x?word}` parts company with every other failure here exactly as it does at a sourced file: zsh reports and ends the shell before the `printf`, at 1, because its own manual documents the operand as exiting rather than as complaining. So this boundary asks the same axis the file boundary does rather than catching whatever is unwinding
+  ```sh
+  setopt promptsubst; s='PRE-${NOPEV?gone}-POST'; printf 'ONE=[%s]\n' "${(%%)s}"; printf 'TWO=still-running\n'
+  ```
+- `prompt/print-P-is-the-same-boundary` — the other spelling of the same rendering reaches the same boundary: `print -P` writes `PRE-`, the line after it runs, and the status is 0. Worth a row because the two spellings are one expansion here by construction and a boundary written at the `${(%%)…}` reader alone would leave this one abandoning the script. The location is where this shell is still short — zsh writes `<shell>:1:` and we name the builtin as well, which is #2131
+  ```sh
+  setopt promptsubst; print -P 'PRE-$((nofunc()))-POST'; printf 'TWO=still-running\n'
+  ```
+- `prompt/at-P-keeps-the-text-a-given-up-rendering-was-handed` — the same boundary in the other shell that has a prompt language, and the row that makes what a given-up rendering is worth an *answer* rather than a rule: bash reports the arithmetic failure and hands back `PRE-$((nofunc()))-POST`, the text as it stood with the substitutions simply not performed, where zsh hands back what it drew. Both carry on and both exit 0, so the boundary is unanimous and only its value divides them
+  ```sh
+  v='PRE-$((nofunc()))-POST'; printf 'ONE=[%s]\n' "${v@P}"; printf 'TWO=still-running\n'
   ```
 - `glob/matches-are-in-order` — byte order, which every shell in the panel gives under the LC_ALL=C both sweeps run in. Outside that locale three of the four collate and dash does not, and the two platforms disagree about where punctuation goes — none of which this can record, which is exactly why the ordering it does record is worth pinning
   ```sh
@@ -10847,6 +10890,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `heredoc/two-on-one-line-collect-in-operator-order` | `first~second` | `first~second` | `first~second` | `first~second` | `first~second` | `first~second` |
 | `heredoc/two-on-one-command-and-the-last-is-read` | `b` | `b` | `b` | `b` | `b` | `a~b` |
 | `heredoc/a-body-that-never-ended-its-last-line` | `body` | `body` **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` | `body` | `body` |
+| `heredoc/a-body-is-abandoned-at-its-first-failed-expansion` | `after` **2>** `<shell>: 1: arithmetic expression: expecting EOF: "nofunc()"` | `after` **2>** `<shell>: line 1: nofunc(): arithmetic syntax error in expression (error token is "()")` | `after` **2>** `<shell>: line 1: nofunc(): arithmetic syntax error in expression (error token is "()")` | `after` **2>** `<shell>: nofunc(): syntax error in expression (error token is "()")` | `after` **2>** `<shell>: nofunc(): unknown function` | `after` **2>** `<shell>:1: unknown function: nofunc` |
 | `redir/the-shell-picks-the-descriptor` | **2>** `<shell>: 1: exec: {fd}: not found` *(status 127)* | `hi` | `hi` | **2>** `<shell>: line 0: exec: {fd}: not found` *(status 127)* | `hi` | `hi` |
 | `redir/a-picked-descriptor-may-outlive-its-command` | **2>** `<shell>: 3: Syntax error: Bad fd number` *(status 2)* | `one~two` | `one~two` | `dead~one {fd}` **2>** `<shell>: line 1: $fd: ambiguous redirect` | `one~dead` **2>** `<shell>[2]: 10: cannot open [Bad file descriptor]` | `one~two` |
 | `redir/closing-through-a-name-that-holds-nothing` | **2>** `<shell>: 1: exec: {nofd}: not found` *(status 127)* | `st=1` **2>** `<shell>: line 1: nofd: ambiguous redirect` | **2>** `<shell>: line 1: nofd: ambiguous redirect` *(status 1)* | **2>** `<shell>: line 0: exec: {nofd}: not found` *(status 127)* | `st=0` | `st=1` **2>** `<shell>:1: parameter nofd does not contain a file descriptor` |
@@ -11514,6 +11558,13 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   cat <<X
   body
+  ```
+- `heredoc/a-body-is-abandoned-at-its-first-failed-expansion` — unanimous, and it is the rule a *word* has always followed one construct over: a body holding two failures is **one** diagnostic in all six columns, not two, so the body is given up at the first of them. The command does not run and the line after it does, in every column. Ours diagnosed both, because the body's walk was the one expansion loop with no stop in it (#2053)
+  ```sh
+  cat <<END
+  a $((nofunc())) b $((nofunc2())) c
+  END
+  printf 'after\n'
   ```
 - `redir/the-shell-picks-the-descriptor` — three of the four allocate a descriptor for `{fd}` and assign its number to the variable; to dash the braces are a command word and exec goes looking for it
   ```sh

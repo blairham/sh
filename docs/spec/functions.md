@@ -13,6 +13,53 @@ them. A real `~/.zshrc` reaches four of these names before it has done
 anything of its own, and every one of them failed at the call with
 `function definition file not found`.
 
+## The decision
+
+**What a shell's default `$fpath` holds is a statement about what the shell
+is**, which is why #1282 was a decision and not a defect. Four options were
+on the table: ship nothing and keep the honest refusal; point the default at
+another installation's library; ship a small library of our own; or fire the
+hooks first and then decide. The maintainer took the last two together —
+**#1281 first, then a library of our own** — and this file is the record of
+what that came to.
+
+Both halves are load-bearing and neither is worth much alone:
+
+* **#1281 made the hooks fire.** `precmd`, `preexec` and their `_functions`
+  arrays were registered correctly and never run, so a shell that shipped
+  `add-zsh-hook` before that landed would have shipped a function that puts a
+  name in a list nothing reads — a stub in all but spelling, and exactly the
+  silent failure this repository's honest-refusal convention exists to
+  prevent.
+* **#1968 shipped the files.** Four of them rather than the two the decision
+  named, because the same measurement that counted `is-at-least` and
+  `add-zsh-hook` found `colors` and `regexp-replace` on the same startup path
+  for the same cost.
+
+The join is the thing neither issue could test on its own, and it has its own
+acceptance test now: a startup file registers a hook through the *shipped*
+`add-zsh-hook`, a command is typed at a real prompt, and the hook has to run
+(`cmd/zsh`, `TestAHookTheShippedFunctionRegisteredFiresAtThePrompt`). Each
+half was already graded — the file against zsh's answers, the firing against
+an array a test filled in Go — and both passed, in that order, while this
+shell registered hooks byte-identically to zsh's and ran none of them.
+
+**Reading another installation's library stays reachable by hand** and always
+did; `FPATH=/opt/homebrew/share/zsh/5.9.2/functions` is a line in a startup
+file. The decision was only about what the *default* is, and the default is
+now this shell's own.
+
+### What this does not reach
+
+`compinit`, and therefore an arbitrary real `~/.zshrc`. That was true of
+every option on the table and the decision was taken knowing it: completion
+is a project rather than a function file, and `$fpath` moves none of it —
+the file itself is refused, `zmodload zsh/complete` refuses by name, and
+`compdef` and `compctl` are reached and are not there. On this
+machine's own rc the four files take the startup from 14 complaints to 3,
+and the three are `compinit` twice and `vcs_info` once. See *What is not
+shipped, and why* at the end of this file.
+
 ## Provenance
 
 Every behavior below was learned two ways, and **neither of them was
@@ -33,6 +80,17 @@ Nothing here is a transcription. Each function is written from the
 description of what it does plus a table of inputs and answers, and the
 tables are in this file so that the next person can check the implementation
 against the *behavior* rather than against anyone's code.
+
+**Twelve of those rows are corpus cases** — the `function library` category
+in `internal/oracle/case.go`, which runs each snippet through every panel
+shell and records what came back. That matters more than a count of passing
+tests: every other record of these functions is an expectation somebody
+typed, and a case re-measures. The four panel members without such a name
+are in the same row and do not fail alike — three report the call not found
+and carry on, and ksh93 stops at the `autoload -Uz` line, where `autoload`
+is `typeset -fu` and those are not its letters. That is the fact worth
+keeping beside the other two: these are zsh's functions, and pointing
+`$fpath` somewhere does not give them to anybody else.
 
 Measured against **zsh 5.9.2** (Homebrew) on macOS, 2026-09-11, every probe
 under `env -i HOME=… zsh -f`, so no startup file is speaking.
@@ -66,9 +124,18 @@ leaves open, and it is settled by measurement rather than by taste:
 
 **1600 of 1600 pairs agree.** The panel is every zsh release spelling from
 `2.6-17` to `6.0` crossed with itself, `-beta`, `-zefram` and `-dev`
-suffixes included; `internal/oracle` was not used, because the subject is a
-function rather than a construct, so the comparison was run by hand with
-the same method and the case list is in `dialect/zsh/shippedfunctions_test.go`.
+suffixes included. That sweep is too wide for a corpus row and is run by
+hand, with the case list in `dialect/zsh/shippedfunctions_test.go`; the four
+readings the sweep turns on — component counts, numeric ordering, a
+non-numeric segment, the defaulted second argument — are corpus cases, under
+`fnlib/is-at-least-*`. The two are the same measurement at two widths, and
+the narrow one is the one that re-runs.
+
+A corpus row cannot ask about `$ZSH_VERSION` itself: this shell reports
+`5.9.2-blairham` and the shell it is compared against reports `5.9.2`, so a
+row naming a version near either would record the version rather than the
+comparison. The defaulting row uses bounds far enough away — `5.0` and `99`
+— that only the default's *presence* is what moves it.
 
 **Where it diverges, and why that is the right call.** A segment that mixes
 digits and letters in one piece — `1a`, `x2`, `3x` — is ignored here and is
@@ -119,6 +186,21 @@ One row is a real gap rather than a cosmetic one: `add-zsh-hook -k` passes
 implemented (`dialect/zsh/autoload.go`, `autoloadUnimplemented`). The
 complaint is correct and it is the shell's, not the function's — passing
 the letter and saying nothing would be worse.
+
+What arrives at the *caller*, though, is a status, and that one disagrees.
+`-z` and `-k` name two different autoload styles, so zsh refuses the pair:
+
+| | zsh 5.9.2 | ours |
+| --- | --- | --- |
+| `add-zsh-hook -k precmd kf` | `0`, silent | `0`, and the complaint |
+| `add-zsh-hook -Uzk precmd kf2` | **`1`** | **`0`** |
+| `add-zsh-hook -q precmd kf3` | `1` | `1` |
+
+The hook is installed either way in both shells, so the status is the whole
+of the difference — which is why the corpus row suppresses standard error:
+the diagnostic names the line the call stands on in the function file, and
+that is a fact about whose file it is rather than about the behavior.
+**#2149.**
 
 ## `colors`
 

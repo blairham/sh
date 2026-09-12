@@ -58899,6 +58899,534 @@
         "TimedOut": false
       }
     },
+    "fnlib/add-zsh-hook-adds-a-name-once": {
+      "bash": {
+        "Stdout": "n=0 []",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n=0 []",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "n=0 []",
+        "Stderr": "\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "n=1 [f1]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "fnlib/add-zsh-hook-autoload-letters": {
+      "bash": {
+        "Stdout": "k=127 []~Uzk=127 []~q=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "k=127 []~Uzk=127 []~q=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "k=127 []~Uzk=127 []~q=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "k=0 [kf]~Uzk=1 [kf kf2]~q=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "fnlib/add-zsh-hook-autoloads-the-name": {
+      "bash": {
+        "Stdout": "st=127 []",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127 []",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127 []",
+        "Stderr": "\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: whence: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [notdefinedyet]~notdefinedyet: function",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "fnlib/add-zsh-hook-delete-exact-and-pattern": {
+      "bash": {
+        "Stdout": "exact=[]",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: pattern=[${precmd_functions[*]}] set=${+precmd_functions}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "exact=[]",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: pattern=[${precmd_functions[*]}] set=${+precmd_functions}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "exact=[]",
+        "Stderr": "\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: pattern=[${precmd_functions[*]}] set=${+precmd_functions}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `+' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "exact=[f1 f2]~pattern=[] set=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "fnlib/add-zsh-hook-every-hook-name": {
+      "bash": {
+        "Stdout": "no chpwd~no precmd~no preexec~no periodic~no zshaddhistory~no zshexit~no zsh_directory_name~[][][][][][][]",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "no chpwd~no precmd~no preexec~no periodic~no zshaddhistory~no zshexit~no zsh_directory_name~[][][][][][][]",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "no chpwd~no precmd~no preexec~no periodic~no zshaddhistory~no zshexit~no zsh_directory_name~[][][][][][][]",
+        "Stderr": "\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "no chpwd~no precmd~no preexec~no periodic~no zshaddhistory~no zshexit~no zsh_directory_name",
+        "Stderr": "\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[f1][f1][f1][f1][f1][f1][f1]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "fnlib/add-zsh-hook-listing": {
+      "bash": {
+        "Stdout": "L=127~unset=127~unknown=127",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "L=127~unset=127~unknown=127",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "L=127~unset=127~unknown=127",
+        "Stderr": "\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "L=127~unset=127~unknown=127",
+        "Stderr": "\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -g -a precmd_functions=( f1 )~L=0~unset=0~unknown=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "fnlib/add-zsh-hook-refuses-its-misuses": {
+      "bash": {
+        "Stdout": "unknown=127~one=127~none=127~three=127",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "unknown=127~one=127~none=127~three=127",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "unknown=127~one=127~none=127~three=127",
+        "Stderr": "\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "unknown=127~one=127~none=127~three=127",
+        "Stderr": "\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "unknown=1~one=1~none=1~three=1",
+        "Stderr": "Usage: add-zsh-hook hook function~Valid hooks are:~  chpwd precmd preexec periodic zshaddhistory zshexit zsh_directory_name~Usage: add-zsh-hook hook function~Valid hooks are:~  chpwd precmd preexec periodic zshaddhistory zshexit zsh_directory_name~Usage: add-zsh-hook hook function~Valid hooks are:~  chpwd precmd preexec periodic zshaddhistory zshexit zsh_directory_name~Usage: add-zsh-hook hook function~Valid hooks are:~  chpwd precmd preexec periodic zshaddhistory zshexit zsh_directory_name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "fnlib/add-zsh-hook-removing-what-is-not-there": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: set=${+precmd_functions}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: add-zsh-hook: command not found~\u003cshell\u003e: line 1: set=${+precmd_functions}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: add-zsh-hook: command not found~\u003cshell\u003e: set=${+precmd_functions}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: add-zsh-hook: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `+' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "set=0~absent=0~unsethook=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "fnlib/is-at-least-component-counts": {
+      "bash": {
+        "Stdout": "[127][127][127]",
+        "Stderr": "\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[127][127][127]",
+        "Stderr": "\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[127][127][127]",
+        "Stderr": "\u003cshell\u003e: is-at-least: command not found~\u003cshell\u003e: is-at-least: command not found~\u003cshell\u003e: is-at-least: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[127][127][127]",
+        "Stderr": "\u003cshell\u003e: 1: is-at-least: not found~\u003cshell\u003e: 1: is-at-least: not found~\u003cshell\u003e: 1: is-at-least: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0][1][0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "fnlib/is-at-least-non-numeric-segments": {
+      "bash": {
+        "Stdout": "[127][127][127]",
+        "Stderr": "\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[127][127][127]",
+        "Stderr": "\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[127][127][127]",
+        "Stderr": "\u003cshell\u003e: is-at-least: command not found~\u003cshell\u003e: is-at-least: command not found~\u003cshell\u003e: is-at-least: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[127][127][127]",
+        "Stderr": "\u003cshell\u003e: 1: is-at-least: not found~\u003cshell\u003e: 1: is-at-least: not found~\u003cshell\u003e: 1: is-at-least: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0][1][0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "fnlib/is-at-least-second-argument-defaults": {
+      "bash": {
+        "Stdout": "[127][127][127][127]",
+        "Stderr": "\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[127][127][127][127]",
+        "Stderr": "\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[127][127][127][127]",
+        "Stderr": "\u003cshell\u003e: is-at-least: command not found~\u003cshell\u003e: is-at-least: command not found~\u003cshell\u003e: is-at-least: command not found~\u003cshell\u003e: is-at-least: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[127][127][127][127]",
+        "Stderr": "\u003cshell\u003e: 1: is-at-least: not found~\u003cshell\u003e: 1: is-at-least: not found~\u003cshell\u003e: 1: is-at-least: not found~\u003cshell\u003e: 1: is-at-least: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0][1][0][0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "fnlib/is-at-least-segments-are-numbers": {
+      "bash": {
+        "Stdout": "[127][127][127][127]",
+        "Stderr": "\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[127][127][127][127]",
+        "Stderr": "\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found~\u003cshell\u003e: line 1: is-at-least: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[127][127][127][127]",
+        "Stderr": "\u003cshell\u003e: is-at-least: command not found~\u003cshell\u003e: is-at-least: command not found~\u003cshell\u003e: is-at-least: command not found~\u003cshell\u003e: is-at-least: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[127][127][127][127]",
+        "Stderr": "\u003cshell\u003e: 1: is-at-least: not found~\u003cshell\u003e: 1: is-at-least: not found~\u003cshell\u003e: 1: is-at-least: not found~\u003cshell\u003e: 1: is-at-least: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0][0][1][1]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "functions/a-listing-said-back-keeps-the-locals-local": {
       "bash": {
         "Stdout": "[OUT]",

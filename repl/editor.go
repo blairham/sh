@@ -141,7 +141,20 @@ type editor struct {
 	// `bindkey` is a command run at the prompt as well as in an rc file. Nil,
 	// or an empty table, is a session where nothing was rebound and every key
 	// reaches the dispatch below. See bindings.go.
-	bindings func() map[string]Binding
+	//
+	// Asked for the keymap the editor is *in*, which is the whole of what
+	// makes a binding written into a command map live: before there was a
+	// command mode to be in, the map existed and nothing ever read it.
+	bindings func(Keymap) map[string]Binding
+
+	// vi says whether this session edits the vi way, viCommand says it is in
+	// command mode right now, and find is the last `f` or `t` for `;` and `,`
+	// to repeat. viInsertSkipsBlanks is where `I` puts the cursor, which is a
+	// dialect's answer. See vi.go, which is the whole of the mode.
+	vi                  func() bool
+	viCommand           bool
+	viInsertSkipsBlanks bool
+	find                viFind
 
 	// runFunc runs one of the shell's own actions over the line, where the
 	// front end gave this session a way to. Nil is a session with no such
@@ -182,6 +195,11 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// stack belongs to the line rather than to the session.
 	e.changes = nil
 	e.lastArg = lastArgWalk{}
+	// Every line starts in insert mode, which is measured: Escape leaves
+	// command mode nowhere, and a line accepted from it is followed by a
+	// prompt that takes typing.
+	e.viCommand = false
+	e.find = viFind{}
 	e.write(prompt.text)
 
 	var buf [1]byte
@@ -242,6 +260,24 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			continue
 		case claimed:
 			e.runWidget(b.Widget, prompt)
+			continue
+		}
+		if e.viCommand {
+			// A second state, and a whole grammar of its own — see vi.go. It
+			// is after the override layer above and not before it, because a
+			// key written into the command keymap has to win over what this
+			// editor does with the same key, which is the same order the
+			// insert map is read in.
+			switch e.viKey(buf[0], prompt) {
+			case viAccepted:
+				e.endLine(prompt, "")
+				return string(e.line), nil
+			case viAbandoned:
+				return e.abandon(prompt)
+			case viStopped:
+				e.endLine(prompt, "")
+				return "", io.EOF
+			}
 			continue
 		}
 		switch c := buf[0]; c {
@@ -311,6 +347,14 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			e.lastTab = true
 			continue
 		case esc:
+			if e.viEditing() && e.escapeIsTheModeSwitch() {
+				// In vi mode Escape is how a person leaves insert, and it is
+				// also the first byte of every arrow key. See
+				// escapeIsTheModeSwitch for how the two are told apart and
+				// what it costs.
+				e.enterViCommand(prompt)
+				continue
+			}
 			if e.escape(prompt) == keyAbandoned {
 				return e.abandon(prompt)
 			}

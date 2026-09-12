@@ -23,7 +23,7 @@ func typedThroughShell(t *testing.T, run func(Line) (Line, bool), keys string) s
 	t.Helper()
 	var out strings.Builder
 	s := Shell{
-		KeyBindings: func() map[string]Binding { return map[string]Binding{"\a": {Function: "w"}} },
+		KeyBindings: func(Keymap) map[string]Binding { return map[string]Binding{"\a": {Function: "w"}} },
 	}
 	if run != nil {
 		s.RunWidget = func(_ context.Context, name string, in Line) (Line, bool) {
@@ -117,7 +117,7 @@ func TestAPanickingActionDoesNotEndTheLine(t *testing.T) {
 	var out strings.Builder
 	s := Shell{
 		Name: "sh", Err: &errs,
-		KeyBindings: func() map[string]Binding { return map[string]Binding{"\a": {Function: "w"}} },
+		KeyBindings: func(Keymap) map[string]Binding { return map[string]Binding{"\a": {Function: "w"}} },
 		RunWidget: func(context.Context, string, Line) (Line, bool) {
 			panic("in a widget")
 		},

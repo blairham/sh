@@ -125,7 +125,7 @@ func bindingsAfter(t *testing.T, src string) map[string]repl.Binding {
 	if _, err := r.Run(t.Context(), preset.Parse(t, src)); err != nil {
 		t.Fatalf("run %q: %v", src, err)
 	}
-	return bash.KeyBindings(r)
+	return bash.KeyBindings(r, repl.KeymapMain)
 }
 
 // TestBindRefusesByNameRatherThanAcceptingSilently is the rule the whole
@@ -279,7 +279,7 @@ func TestKeyBindingsReportsOnlyWhatChanged(t *testing.T) {
 	if _, err := r.Run(t.Context(), preset.Parse(t, `bind '"\C-g": clear-screen'`)); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	table := bash.KeyBindings(r)
+	table := bash.KeyBindings(r, repl.KeymapMain)
 	if got, want := table["\a"], (repl.Binding{Widget: repl.WidgetClearScreen}); got != want {
 		t.Errorf("^G = %v, want %v", got, want)
 	}
@@ -327,6 +327,16 @@ func TestBindWarnsWhereThereIsNoLineEditorAndAnswersAnyway(t *testing.T) {
 // dialect has no name for something the editor does, and `bind -p` would
 // report a working key as unbound. The reverse, a name with no action behind
 // it, is what repl/widgets.go says is worse than a name not offered.
+//
+// With one measured exception, which is the three actions that move between
+// insert and command mode. They are reached from the command mode's own
+// dispatch — `i`, `a` and `I` — rather than from a key in the map a person
+// types in, so this listing has nothing to print for them, and real bash
+// prints the same thing: `bind -P` in bash 5.3.15 says `vi-movement-mode is
+// not bound to any keys` and the same for `vi-insertion-mode` and
+// `vi-append-mode`, in emacs mode and in vi mode alike. (In vi mode it does
+// find `vi-movement-mode` on `\e`; that row is viUnbound's open half — see
+// the note there.)
 func TestEveryActionThisEditorPerformsHasANameAndAKey(t *testing.T) {
 	rows, _ := bindRun(t, "bind -P")
 	offered := map[string]bool{}
@@ -340,7 +350,7 @@ func TestEveryActionThisEditorPerformsHasANameAndAKey(t *testing.T) {
 		if len(fields) == 0 {
 			continue
 		}
-		if strings.Contains(line, "is not bound to any keys") {
+		if strings.Contains(line, "is not bound to any keys") && !viUnbound[fields[0]] {
 			t.Errorf("%q, in a shell where nothing was rebound — "+
 				"either the editor has an action with no key or this dialect has no name for one", line)
 		}
@@ -356,9 +366,26 @@ func TestEveryActionThisEditorPerformsHasANameAndAKey(t *testing.T) {
 	// And the count is the actions plus the one control key, so a listing
 	// that quietly stopped printing rows fails here rather than passing the
 	// loop above by having nothing to check.
-	if want := len(bindActionNames()) + 1; named != want {
+	if want := len(bindActionNames()) + 1 + len(viUnbound); named != want {
 		t.Errorf("bind -P printed %d rows, want %d", named, want)
 	}
+}
+
+// viUnbound are the three actions this listing has no key for, and the reason
+// the test above has an exception at all.
+//
+// They are how a person gets between the editor's two states, and the keys
+// that do it live in the command mode's own dispatch rather than in the map
+// this listing prints. Measured, real bash prints them as unbound too.
+//
+// The open half: in vi mode real bash reports `vi-movement-mode can be found
+// on "\e"`, because Escape is what selects command mode there. This listing
+// does not say so, which is one row of one listing and not a key that fails to
+// work — Escape leaves insert mode here whether or not `bind -P` mentions it.
+var viUnbound = map[string]bool{
+	"vi-movement-mode":  true,
+	"vi-insertion-mode": true,
+	"vi-append-mode":    true,
 }
 
 // bindActionNames is every action the editor performs, as the set of widgets

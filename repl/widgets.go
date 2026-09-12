@@ -53,6 +53,64 @@ const (
 	WidgetComplete
 	WidgetUndo
 	WidgetInsertLastWord
+
+	// The three that move between this editor's two states, and the only
+	// vi-only actions with a constant here.
+	//
+	// **The decision, and why it went this way** (#1427). A command mode
+	// brings two kinds of new thing: the *motions* — `w`, `b`, `f`, `$` — and
+	// the handful of actions that get a person between insert and command
+	// mode. Only the second kind is named here, and the split is the same one
+	// this file is built on rather than a line drawn to keep the list short.
+	//
+	// A Widget is **what one key does on its own**. A motion is half of an
+	// action: `w` on its own moves the cursor, and the same `w` after `d`
+	// names a *range* — from where the cursor was, up to but not including
+	// where it landed — and `dw` is one action made of the two. The range is
+	// the part a Widget cannot carry, because a Widget answers "what did this
+	// key do" and a motion has to answer "how far" to something else. So the
+	// motions are a vocabulary of their own beside this list, in vi.go, where
+	// the operator grammar that reads them is; a Widget for `w` would be a
+	// name a dialect could bind whose meaning changed depending on what was
+	// pressed before it, which is not what any other name in this list does.
+	//
+	// The mode changes are the other way round. Each is complete on one key,
+	// each leaves the editor in a state a person can see, and — the part that
+	// decides it — **both dialects already name all three and people already
+	// bind them.** `bindkey -M viins jk vi-cmd-mode` is the commonest line in
+	// a vi user's rc file; `bind -m vi-insert '"jk": vi-movement-mode'` is its
+	// counterpart. Leaving them out would put those lines in the same
+	// position `vi-command` bindings were in before this change — accepted,
+	// stored and inert.
+	//
+	// There is no Widget for leaving *command* mode by pressing Escape,
+	// because Escape in command mode does nothing at all: measured, it is not
+	// an action, it is a key with nothing on it.
+	WidgetViCommandMode
+	WidgetViInsertMode
+	WidgetViAppendMode
+)
+
+// Keymap is which table of bindings the editor reads.
+//
+// One editor, two states, and a dialect that keeps a table per keymap has to
+// be told which one to answer for. Before there was a command mode this
+// question had one answer and was not asked: both dialects' binding builtins
+// already kept a `vi-command` — `vicmd` in the other's spelling — table, and
+// what was written into it was stored and never read, because nothing could
+// make it current. See bindings.go and Shell.KeyBindings.
+type Keymap int
+
+const (
+	// KeymapMain is the table for typing a line: the emacs keymap, or vi's
+	// insert keymap, whichever this session selected. The two are one table
+	// here — what an editing mode changes is the *command* map and whether
+	// Escape reaches it.
+	KeymapMain Keymap = iota
+
+	// KeymapViCommand is the table vi command mode reads. A session that is
+	// not editing the vi way never asks for it.
+	KeymapViCommand
 )
 
 // Binding is what a key sequence was rebound to.
@@ -152,5 +210,11 @@ func (e *editor) runWidget(w Widget, prompt drawnPrompt) {
 		// The one action that draws itself, because walking the history for a
 		// second copy is part of what it does — see lastarg.go.
 		e.insertLastArg(prompt)
+	case WidgetViCommandMode:
+		e.enterViCommand(prompt)
+	case WidgetViInsertMode:
+		e.leaveViCommand(e.pos, prompt)
+	case WidgetViAppendMode:
+		e.leaveViCommand(e.pos+1, prompt)
 	}
 }

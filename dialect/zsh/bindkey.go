@@ -117,6 +117,14 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"undo":                                repl.WidgetUndo,
 	"vi-undo-change":                      repl.WidgetUndo,
 	"insert-last-word":                    repl.WidgetInsertLastWord,
+
+	// The three that move between insert and command mode, which are the only
+	// vi-only actions repl names — see repl/widgets.go, which carries the
+	// decision and why the motions are not among them. This shell's names.
+	"vi-cmd-mode":   repl.WidgetViCommandMode,
+	"vi-insert":     repl.WidgetViInsertMode,
+	"vi-insert-bol": repl.WidgetViInsertMode,
+	"vi-add-next":   repl.WidgetViAppendMode,
 	// The key that means "this key does nothing", which is what `-r` leaves
 	// behind and what `bindkey` prints for a key nobody bound.
 	undefinedKey: repl.WidgetNone,
@@ -136,9 +144,11 @@ const undefinedKey = "undefined-key"
 // pressing them works. See repl/defaultkeys.go, whose test pins the table
 // against the editor's own dispatch.
 //
-// Not zsh's whole keymap. See the file comment — the two `main` maps differ
-// only in that `viins` leaves the letters to insert themselves, which they do
-// here in either case because this editor has no command mode.
+// Not zsh's whole keymap, and not one table per keymap: what this lists is the
+// keys this editor reads while a line is being *typed*, which the two `main`
+// maps share. The command mode is a second dispatch rather than a second table
+// of the same shape — see repl/vi.go — so `vicmd` carries what somebody bound
+// into it and nothing else, which is also what KeyBindings reports for it.
 var defaultBindings = buildDefaultBindings()
 
 // widgetNames is this shell's canonical name for each action, which is the
@@ -168,6 +178,9 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetComplete:              "expand-or-complete",
 	repl.WidgetUndo:                  "undo",
 	repl.WidgetInsertLastWord:        "insert-last-word",
+	repl.WidgetViCommandMode:         "vi-cmd-mode",
+	repl.WidgetViInsertMode:          "vi-insert",
+	repl.WidgetViAppendMode:          "vi-add-next",
 }
 
 // editorControlKeys are the keys the editor reads that are not actions a key
@@ -216,11 +229,20 @@ func registerBindkey(r *interp.Runner) {
 // is what redefining one means, and it is the order `zle -N accept-line
 // my-accept` in a real startup file asks for; it is also the only order in
 // which a plugin's wrapper around a standard widget can work. See zle.go.
-func KeyBindings(r *interp.Runner) map[string]repl.Binding {
+func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 	out := map[string]repl.Binding{}
-	for seq, widget := range readBindings(r) {
-		if def, standard := defaultBindings[seq]; standard && def == widget {
-			continue
+	for seq, widget := range readBindings(r, keymapFor(r, km)) {
+		if km == repl.KeymapMain {
+			// A key left at the editor's own default is left out, so that the
+			// table stays the override layer repl/bindings.go describes. Only
+			// for the typing map: defaultBindings is what this editor does
+			// with a key while a line is being typed, and in command mode the
+			// same key means something else — so comparing against it there
+			// would drop a `bindkey -M vicmd` a person wrote because an
+			// unrelated map happens to agree with it.
+			if def, standard := defaultBindings[seq]; standard && def == widget {
+				continue
+			}
 		}
 		if _, defined := widgetDefinitionOf(r, widget); defined {
 			out[seq] = repl.Binding{Function: widget}
@@ -231,21 +253,49 @@ func KeyBindings(r *interp.Runner) map[string]repl.Binding {
 	return out
 }
 
-// readBindings is the current keymap's table: the defaults with whatever was
-// changed laid over them.
-func readBindings(r *interp.Runner) map[string]string {
+// ViEditing reports whether this session has a command mode.
+//
+// **Two commands ask for it and only one of them is the option**, which is
+// measured and is the reason repl asks a dialect rather than reading the
+// core's editing mode: in zsh 5.9.2 under a pty, `bindkey -v` gives a working
+// command mode and leaves `set -o` reporting both `emacs off` and `vi off`,
+// while `set -o vi` gives the same command mode and reports `vi on`. So either
+// is enough, and neither can be read off the other.
+func ViEditing(r *interp.Runner) bool {
+	switch currentKeymap(r) {
+	case "viins", "vicmd":
+		return true
+	}
+	return r.EditingMode() == interp.EditingModeVi
+}
+
+// readBindings is one keymap's table: the defaults with whatever was changed
+// laid over them.
+func readBindings(r *interp.Runner, keymap string) map[string]string {
 	out := map[string]string{}
 	for seq, w := range defaultBindings {
 		out[seq] = w
 	}
 	flat, _ := r.GetArray(bindkeyStore)
 	for i := 0; i+3 <= len(flat); i += 3 {
-		if flat[i] != currentKeymap(r) {
+		if flat[i] != keymap {
 			continue
 		}
 		out[flat[i+1]] = flat[i+2]
 	}
 	return out
+}
+
+// keymapFor is the table behind one of the editor's two states.
+//
+// `vicmd` is not "whichever keymap is current": it is the one map this shell
+// keeps for command mode, and asking currentKeymap for it would answer `viins`
+// — the map for typing, and the reason a `bindkey -M vicmd` never fired.
+func keymapFor(r *interp.Runner, km repl.Keymap) string {
+	if km == repl.KeymapViCommand {
+		return "vicmd"
+	}
+	return currentKeymap(r)
 }
 
 // changeBinding records one change against the current keymap, replacing any
@@ -433,7 +483,7 @@ func bindPairs(r *interp.Runner, words []string, text bool) int {
 // listBindings is the whole keymap, sorted by the bytes each key sends —
 // measured, which is why `^_` comes before a space and `^?` after a tilde.
 func listBindings(r *interp.Runner, commands bool) {
-	table := readBindings(r)
+	table := readBindings(r, currentKeymap(r))
 	seqs := make([]string, 0, len(table))
 	for seq := range table {
 		if table[seq] != undefinedKey {
@@ -451,7 +501,7 @@ func listBindings(r *interp.Runner, commands bool) {
 // answer, not a failure.
 func showBinding(r *interp.Runner, spelled string, commands bool) {
 	seq := decodeKeySequence(spelled)
-	widget, bound := readBindings(r)[seq]
+	widget, bound := readBindings(r, currentKeymap(r))[seq]
 	if !bound {
 		widget = undefinedKey
 	}

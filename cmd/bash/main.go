@@ -37,6 +37,7 @@ func shell() driver.Shell {
 		PromptStyle:  bash.PromptStyle(),
 		EditorStyle:  bash.EditorStyle(),
 		KeyBindings:  bash.KeyBindings,
+		ViEditing:    bash.ViEditing,
 		RunWidget:    bash.RunWidget,
 		HistoryStyle: bash.HistoryStyle(),
 		HookStyle:    bash.HookStyle(),

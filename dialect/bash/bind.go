@@ -78,12 +78,13 @@ import (
 // naming half — which key runs what — and the two kinds of target share one
 // slot per key, which is measured rather than assumed.
 //
-// What `-m vi-command` gets is acceptance, not refusal, and the distinction
-// matters: it is a keymap this shell plainly has and `set -o vi` selects
-// `vi-insert`, so a binding in the command map is stored and simply never
-// current — because this editor has no command mode. The zsh dialect's
-// `vicmd` is the same documented partial, and closing it would serve both at
-// once, which is why it is filed on its own rather than folded in here.
+// **`-m vi-command` reaches a keymap that is now current when the mode is.**
+// It used to be acceptance without effect — the map existed, a binding written
+// into it was stored, and nothing ever read it, because this editor had no
+// command mode to be in. #1427 built the mode in repl, where it belongs, and
+// this dialect's half is one question: which keymap the editor is in, answered
+// by currentKeymap below. `set -o vi` is what turns Escape into the mode
+// switch here; see ViEditing.
 
 // bindStore is the table of what a person rebound, in the Runner's variables
 // under a name no script can reach — the way `shopt` keeps its own state, and
@@ -181,6 +182,16 @@ var bindFunctions = map[string]repl.Widget{
 	"yank-last-arg":          repl.WidgetInsertLastWord,
 	"insert-last-argument":   repl.WidgetInsertLastWord,
 	"vi-yank-arg":            repl.WidgetInsertLastWord,
+
+	// The three that move between insert and command mode, which are the only
+	// vi-only actions repl names — see repl/widgets.go, which carries the
+	// decision and why the motions are not among them. bash's names, and it
+	// has two for entering insert mode at the cursor because `vi-insert-mode`
+	// and `vi-insertion-mode` are one function.
+	"vi-movement-mode":  repl.WidgetViCommandMode,
+	"vi-insertion-mode": repl.WidgetViInsertMode,
+	"vi-insert-mode":    repl.WidgetViInsertMode,
+	"vi-append-mode":    repl.WidgetViAppendMode,
 }
 
 // bindFunctionNames is the name a listing prints for each action — the
@@ -208,6 +219,9 @@ var bindFunctionNames = map[repl.Widget]string{
 	repl.WidgetComplete:              "complete",
 	repl.WidgetUndo:                  "undo",
 	repl.WidgetInsertLastWord:        "yank-last-arg",
+	repl.WidgetViCommandMode:         "vi-movement-mode",
+	repl.WidgetViInsertMode:          "vi-insertion-mode",
+	repl.WidgetViAppendMode:          "vi-append-mode",
 }
 
 // editorControlKeys are the keys the editor reads that are not actions a key
@@ -267,18 +281,23 @@ func registerBind(r *interp.Runner) {
 // *changes*: a key nobody mentioned is absent, and reaches the editor's own
 // dispatch.
 //
-// Only the current keymap's changes, which is what makes `set -o vi` mean
+// Only the named keymap's changes, which is what makes `set -o vi` mean
 // something here — a binding written with `-m vi-insert` is live once vi mode
 // selects that map, and inert until then. Measured: `set -o vi` makes
 // `vi-insert` the map `bind` answers from.
+//
+// The editor asks for a keymap because it is the only thing that knows which
+// state it is in, and the command map is the reason: measured under a pty,
+// `bind -m vi-command '"\C-xz": beginning-of-line'` moves the cursor when the
+// key is pressed in command mode and does nothing at all in insert mode.
 //
 // A key bound to a macro rather than to a function is present and bound to
 // nothing, so it does nothing rather than going on doing what it did. Typing
 // text from a key is not something this editor can be asked to do, and the
 // listing says so plainly by showing the text back — see bindMacro.
-func KeyBindings(r *interp.Runner) map[string]repl.Binding {
+func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 	out := map[string]repl.Binding{}
-	for seq, bound := range readBindings(r, currentKeymap(r)) {
+	for seq, bound := range readBindings(r, keymapFor(r, km)) {
 		if bound.command {
 			// A key `bind -x` put a shell command on. The command text rides
 			// Function, which repl does not look inside — see
@@ -287,12 +306,32 @@ func KeyBindings(r *interp.Runner) map[string]repl.Binding {
 			out[seq] = repl.Binding{Function: bound.target}
 			continue
 		}
-		if def, standard := defaultBindings[seq]; standard && def == bound.target {
-			continue
+		if km == repl.KeymapMain {
+			// A key whose binding is the editor's own default is left out, so
+			// that the table stays the override layer repl/bindings.go
+			// describes. Only for the typing map: defaultBindings is what
+			// *this* editor does with a key while a line is being typed, and
+			// in command mode the same key means something else entirely — so
+			// comparing against it there would drop a binding a person wrote
+			// on the grounds that an unrelated map agrees with it.
+			if def, standard := defaultBindings[seq]; standard && def == bound.target {
+				continue
+			}
 		}
 		out[seq] = repl.Binding{Widget: bindFunctions[bound.target]}
 	}
 	return out
+}
+
+// ViEditing reports whether this session has a command mode, which in this
+// shell is exactly whether vi editing is selected.
+//
+// One command and it is the option: `set -o vi`, and `set -o emacs` or
+// `set +o vi` to leave it. The other shell with an editor answers this from
+// two places, which is why repl asks the dialect rather than reading the
+// core's editing mode itself.
+func ViEditing(r *interp.Runner) bool {
+	return r.EditingMode() == interp.EditingModeVi
 }
 
 // readBindings is one keymap's table: the defaults with whatever was changed
@@ -355,6 +394,19 @@ func currentKeymap(r *interp.Runner) string {
 		return "vi-insert"
 	}
 	return "emacs"
+}
+
+// keymapFor is the table behind one of the editor's two states.
+//
+// The command map is not "whichever map is current" — it is the one map this
+// shell keeps for command mode, under all three of the names `bind -m` takes
+// for it. Asking currentKeymap for it would answer `vi-insert`, which is the
+// map for typing and the reason a command binding never fired.
+func keymapFor(r *interp.Runner, km repl.Keymap) string {
+	if km == repl.KeymapViCommand {
+		return "vi-command"
+	}
+	return currentKeymap(r)
 }
 
 // bindUsage is the line a refused option prints after the complaint, which

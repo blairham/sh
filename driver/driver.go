@@ -118,7 +118,21 @@ type Shell struct {
 	// It takes the Runner rather than being a table because the table is
 	// *state*: it changes while the session runs, and a value collected here
 	// would be the one the shell started with.
-	KeyBindings func(*interp.Runner) map[string]repl.Binding
+	//
+	// And a keymap, because a shell with vi editing keeps one table per keymap
+	// and the editor is the only thing that knows which it is in. See
+	// repl.Keymap.
+	KeyBindings func(*interp.Runner, repl.Keymap) map[string]repl.Binding
+
+	// ViEditing reports whether this session edits the vi way — whether
+	// Escape leaves insert mode for a command mode. Nil is a dialect with no
+	// vi editing, which is the two without a line editor.
+	//
+	// From the Runner, and a dialect's answer rather than this package reading
+	// interp's editing mode, because the two shells that have it are asked
+	// differently: `set -o vi` is the option in one and `bindkey -v` — which
+	// leaves the option off, measured — is the ordinary spelling in the other.
+	ViEditing func(*interp.Runner) bool
 
 	// RunWidget runs one of this dialect's own editing actions — what a key
 	// bound to something the shell was told about at run time does. Nil is a

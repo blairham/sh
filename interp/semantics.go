@@ -6032,102 +6032,100 @@ type Semantics struct {
 	// Answering No makes `trap -p` set a trap whose action is the word `-p`, and
 	// the failure surfaces later, when it fires.
 	//
-	// Asked of the letters a dialect knows as much as of the ones it does
-	// not, because zsh takes `-p` as the action just as it takes `-Q`. A
-	// lone `-` is trap's own word for "put it back" and is never an option,
-	// and `--` ends them in all four.
+	// Asked of the letters a preset knows as much as of the ones it does not,
+	// because a No takes `-p` as the action just as it takes `-Q`. A lone `-` is
+	// trap's own word for "put it back" and is never an option, and `--` ends
+	// them under every answer.
 	TrapParsesOptions Answer
 
 	// TrapPrintsWithP makes `trap -p` write the traps currently set, and
-	// `trap -p condition ...` only the named ones. bash and ksh93 have it;
-	// dash rejects the letter along with every other.
+	// `trap -p condition ...` only the named ones. Answering No rejects the
+	// letter along with every other.
 	TrapPrintsWithP Answer
 
-	// TrapPrintsBareWithP makes `trap -P condition ...` write the action
-	// alone, with no `trap --` around it. bash only, and it is the one option
-	// that insists on an operand: printing all of them is `-p`'s job.
+	// TrapPrintsBareWithP makes `trap -P condition ...` write the action alone,
+	// with no `trap --` around it. It is the one option that insists on an
+	// operand: printing all of them is `-p`'s job.
 	TrapPrintsBareWithP Answer
 
 	// TrapListsSignalsWithL makes `trap -l` list the signal names, the way
-	// `kill -l` does. bash only — ksh93 refuses the letter.
+	// `kill -l` does. Answering No refuses the letter.
 	TrapListsSignalsWithL Answer
 
 	// TrapPrintsBareWithConditions makes `trap -p condition ...` write the
 	// action alone rather than the whole `trap -- action condition` line.
 	//
-	// ksh93 only, and it is why `-p` and bash's `-P` are two questions and
-	// not one: ksh93 reaches bash's `-P` output through `-p` with an operand,
-	// and has no `-P` at all.
+	// It is why `-p` and `-P` are two questions and not one: a preset may reach
+	// the bare output through `-p` with an operand and have no `-P` at all.
 	TrapPrintsBareWithConditions Answer
 
-	// TrapOneArgumentIsACondition reads `trap EXIT` as "put EXIT back"
-	// rather than as an action with no condition to attach it to.
-	//
-	// Three of the four do, which makes `trap EXIT` the short spelling of
-	// `trap - EXIT`. ksh93 refuses the form and the refusal ends the script.
+	// TrapOneArgumentIsACondition reads `trap EXIT` as "put EXIT back" rather
+	// than as an action with no condition to attach it to, which makes
+	// `trap EXIT` the short spelling of `trap - EXIT`. Answering No refuses the
+	// form, and the refusal ends the script.
 	TrapOneArgumentIsACondition Answer
 
-	// TrapReportsAnUnknownSingleCondition complains when that one word turns
-	// out not to name a condition. zsh says nothing — and does complain about
-	// `trap : foo`, so this is the single-word form's own answer rather than
-	// zsh declining to check at all.
+	// TrapReportsAnUnknownSingleCondition complains when that one word turns out
+	// not to name a condition.
+	//
+	// A No still complains about `trap : foo`, so this is the single-word form's
+	// own answer rather than declining to check at all.
 	TrapReportsAnUnknownSingleCondition Answer
 
-	// TrapSingleUnknownConditionIsUsage prints the usage line rather than
-	// naming the word. bash does: with one word it cannot tell a misspelled
-	// condition from an action someone forgot to give a condition to. dash
-	// names the word the same way it does anywhere else.
+	// TrapSingleUnknownConditionIsUsage prints the usage line rather than naming
+	// the word: with one word there is no telling a misspelled condition from an
+	// action someone forgot to give a condition to. Answering No names the word
+	// the same way it does anywhere else.
 	TrapSingleUnknownConditionIsUsage Answer
 
 	// TrapHasErrCondition makes `trap … ERR` a condition rather than a
-	// misspelled signal: the action runs after every command that fails
-	// where `set -e` would judge it — with or without `set -e` on, which is
-	// measured rather than assumed. dash alone refuses the name, with the
-	// same words it refuses any other word that names no signal.
+	// misspelled signal: the action runs after every command that fails where
+	// `set -e` would judge it — with or without `set -e` on, which is measured
+	// rather than assumed. Answering No refuses the name, with the same words it
+	// refuses any other word that names no signal.
 	TrapHasErrCondition Answer
 
 	// TrapHasDebugCondition makes `trap … DEBUG` run the action before each
-	// simple command. dash alone refuses the name.
+	// simple command. Answering No refuses the name.
 	TrapHasDebugCondition Answer
 
-	// TrapHasReturnCondition makes `trap … RETURN` a condition that fires
-	// when a sourced file finishes, and when a function whose own body set
-	// the trap returns. bash alone; the other three refuse the name the way
-	// they refuse any word that names no signal.
+	// TrapHasReturnCondition makes `trap … RETURN` a condition that fires when a
+	// sourced file finishes, and when a function whose own body set the trap
+	// returns. Answering No refuses the name the way any word that names no
+	// signal is refused.
 	TrapHasReturnCondition Answer
 
 	// ErrTrapRunsInsideFunctions fires the ERR trap for a failure inside a
-	// function the trap was not set in. bash does not — there a function
-	// does not inherit the ERR trap, so only the call itself is judged
-	// where the trap can see it. ksh93 and zsh fire it inside too.
+	// function the trap was not set in. Answering No has a function not inherit
+	// the ERR trap, so only the call itself is judged where the trap can see it.
 	//
-	// The suppression is per *frame*, not per depth, which is measured: a
-	// trap set inside a function fires in that function and at the top
-	// level after it returns, and does not fire inside a sibling function
-	// entered afterwards, though the sibling's own failing call still does.
+	// The suppression is per *frame*, not per depth, which is measured: a trap
+	// set inside a function fires in that function and at the top level after it
+	// returns, and does not fire inside a sibling function entered afterwards,
+	// though the sibling's own failing call still does.
 	ErrTrapRunsInsideFunctions Answer
 
-	// ErrTrapRunsInSubshells fires the ERR trap for a failure inside a
-	// subshell or a command substitution. zsh alone: `trap 'echo E' ERR;
-	// x=$(false; echo hi)` captures an E there and nowhere else. bash and
-	// ksh93 reset the trap on the way into the child, the way they reset
-	// every trap that is not ignored.
+	// ErrTrapRunsInSubshells fires the ERR trap for a failure inside a subshell
+	// or a command substitution: `trap 'echo E' ERR; x=$(false; echo hi)`
+	// captures an E under Yes. Answering No resets the trap on the way into the
+	// child, the way every trap that is not ignored is reset.
 	ErrTrapRunsInSubshells Answer
 
-	// DebugTrapRunsInsideCalls fires the DEBUG trap before commands inside
-	// a function or a sourced file the trap was not set in. bash does not;
-	// ksh93 and zsh do. Not the ERR axis under another name, and not only
-	// because bash controls the two with different options: a sourced file
-	// bounds DEBUG there and does not bound ERR — measured, with a
-	// top-level trap of each, `false` inside a dotted file fires ERR and
-	// the commands of the same file fire no DEBUG.
+	// DebugTrapRunsInsideCalls fires the DEBUG trap before commands inside a
+	// function or a sourced file the trap was not set in.
+	//
+	// Not the ERR axis under another name, and not only because the two can sit
+	// under different options: a sourced file may bound DEBUG and not bound ERR
+	// — with a top-level trap of each, `false` inside a dotted file fires ERR
+	// and the commands of the same file fire no DEBUG.
 	DebugTrapRunsInsideCalls Answer
 
 	// DebugTrapRunsInSubshells fires the DEBUG trap inside a subshell or a
-	// command substitution. ksh93 and zsh do — a command substitution there
-	// captures the handler's output into the variable — and bash does not,
-	// which is a grouping ErrTrapRunsInSubshells does not have: ksh93
-	// carries DEBUG into the child and not ERR.
+	// command substitution — where a command substitution captures the handler's
+	// output into the variable.
+	//
+	// A grouping ErrTrapRunsInSubshells does not have: an implementation may
+	// carry DEBUG into the child and not ERR.
 	DebugTrapRunsInSubshells Answer
 
 	// A subshell starts with the parent's handled traps back at their
@@ -6140,41 +6138,37 @@ type Semantics struct {
 	// USR2 and nothing the parent had.
 
 	// SubshellKeepsTrapListing makes `trap` inside `( … )` or `$( … )` still
-	// list the traps the parent had, though a handled one no longer fires —
-	// the save=$(trap) idiom POSIX carves out, extended to the compound.
-	// bash and ksh93; dash and zsh list only what survived the entry.
+	// list the traps the parent had, though a handled one no longer fires — the
+	// save=$(trap) idiom POSIX carves out, extended to the compound. Answering
+	// No lists only what survived the entry.
 	SubshellKeepsTrapListing Answer
 
-	// PipelineElementKeepsTrapListing is the same question asked of a
-	// pipeline element that runs in a subshell environment, and the panel
-	// pairs off the other way: bash and zsh keep the listing there, ksh93
-	// and dash do not. `trap 'echo x' USR1; trap | cat` prints the trap in
-	// bash and zsh and nothing in the other two — the shape issue #339
-	// measured.
+	// PipelineElementKeepsTrapListing is the same question asked of a pipeline
+	// element that runs in a subshell environment, and it pairs the presets off
+	// differently from the axis above: `trap 'echo x' USR1; trap | cat` prints
+	// the trap under Yes and nothing under No.
 	PipelineElementKeepsTrapListing Answer
 
-	// BackgroundJobKeepsTrapListing asks it of `… &`. bash alone: the other
-	// three list nothing the parent had there.
+	// BackgroundJobKeepsTrapListing asks it of `… &`. Answering No lists nothing
+	// the parent had there.
 	BackgroundJobKeepsTrapListing Answer
 
-	// KeptTrapListingIncludesExit says a kept listing shows the parent's
-	// EXIT trap alongside the signals. bash and ksh93 list it; zsh keeps a
-	// pipeline element's listing and still drops EXIT from it. Unanswerable
-	// where nothing is kept, so dash never reaches the question.
+	// KeptTrapListingIncludesExit says a kept listing shows the parent's EXIT
+	// trap alongside the signals. An implementation may keep a pipeline
+	// element's listing and still drop EXIT from it. Unanswerable where nothing
+	// is kept, so such a preset never reaches the question.
 	KeptTrapListingIncludesExit Answer
 
-	// SubshellHidesInheritedIgnoredTraps drops an *inherited* ignore from
-	// the child's listing while the signal stays ignored in fact: zsh, where
-	// `trap '' INT; (trap)` prints nothing and `(kill -INT $$; echo alive)`
-	// still prints alive. The other three list what POSIX says is still a
-	// current trap. An ignore the child sets itself is listed everywhere.
+	// SubshellHidesInheritedIgnoredTraps drops an *inherited* ignore from the
+	// child's listing while the signal stays ignored in fact: `trap '' INT;
+	// (trap)` prints nothing under Yes and `(kill -INT $$; echo alive)` still
+	// prints alive. Answering No lists what POSIX says is still a current trap.
+	// An ignore the child sets itself is listed under both.
 	SubshellHidesInheritedIgnoredTraps Answer
 
-	// LocalOutsideAFunctionIsAnError refuses `local x=2` written where there
-	// is no function to be local to.
-	//
-	// bash and dash refuse it, zsh takes it and sets a global instead. ksh93
-	// has no `local` at all, so it never reaches the question.
+	// LocalOutsideAFunctionIsAnError refuses `local x=2` written where there is
+	// no function to be local to. Answering No takes it and sets a global
+	// instead; a preset with no `local` at all never reaches the question.
 	LocalOutsideAFunctionIsAnError Answer
 
 	// LocalOutsideAFunctionIsFatal ends the script rather than carrying on

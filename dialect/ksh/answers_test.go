@@ -134,6 +134,9 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.StatusArgument, interp.StatusArgLeadingDigits; got != want {
 		t.Errorf("StatusArgument = %v, want %v", got, want)
 	}
+	if got, want := s.ReadTrailingEscapedSeparator, interp.ReadTrailingEscapedSeparatorTrimmed; got != want {
+		t.Errorf("ReadTrailingEscapedSeparator = %v, want %v", got, want)
+	}
 	if got, want := s.SubshellJobTable, interp.SubshellJobsKept; got != want {
 		t.Errorf("SubshellJobTable = %v, want %v", got, want)
 	}

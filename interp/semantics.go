@@ -222,6 +222,55 @@ type Semantics struct {
 	// elements for a line of spaces where it gives one.
 	ReadNoFieldsIsOneEmptyElement Answer
 
+	// ReadTrailingEscapedSeparator is what `read` does with an IFS
+	// *whitespace* character the line escaped at the very end of the value
+	// its last name takes. Without `-r` a backslash makes the character
+	// after it data, and `read` carries that as a mask into the splitter;
+	// the trim at the tail does not agree across the panel about whether the
+	// mask reaches it.
+	//
+	// Measured 2026-09-12 from a script file, default IFS, each row a `read`
+	// of its own over one printed line:
+	//
+	//	          `a b c\ `   `a b\ `   `a\ `    `a b\ c\ `
+	//	          read x y    read x y  read x   read x y
+	//	          the last name's value
+	//	dash      b c         b         a        b c
+	//	                      ^ keeps          all four keep the space
+	//	bash      b c         b         a        b c
+	//	ksh93     b c         b         a        b c
+	//
+	// — with the trailing space shown by the brackets in the corpus row
+	// rather than here. Three columns and three answers:
+	//
+	//	dash    keeps the escaped space everywhere: the mask reaches the trim
+	//	bash    trims it, but only from a value that took a *remainder*
+	//	ksh93   trims it from the last name's value however it was reached
+	//	zsh     ksh93's answer
+	//
+	// The bash column is the one that needs the third value, and the row
+	// that says so is `a b\ c\ `: the escaped space in the middle joins `b`
+	// and `c` into one field, so the line holds exactly one field per name
+	// and the last name takes its own field rather than a remainder — bash
+	// keeps the closing space there and trims it in the first column, where
+	// there are three fields for two names.
+	//
+	// Two questions the axis does *not* have to carry, both measured the
+	// same day and both unanimous:
+	//
+	//   - a **non-whitespace** separator. The trim only ever takes
+	//     whitespace, so the mask cannot be seen through it: with `IFS=:`,
+	//     `a:b:c\:` gives `b:c:` in all six, and so does the unescaped
+	//     `a:b:c:`.
+	//   - a non-default **whitespace** IFS. With `IFS` a tab and tabs for
+	//     separators the rows split exactly as above, so the answer is about
+	//     the trim and not about which character it is trimming.
+	//
+	// Asked where the readings land differently and nowhere else: a value
+	// whose closing IFS whitespace was escaped. `-r` never reaches it,
+	// because there is no mask for the trim to disagree about (#1360).
+	ReadTrailingEscapedSeparator ReadTrailingEscapedSeparatorPolicy
+
 	// GlobExpansionResults matches the *result* of an expansion against the
 	// filesystem. False in zsh, where only a pattern written literally in the
 	// source is expanded. The same rule decides whether `[[ abc == $p ]]`
@@ -9023,6 +9072,55 @@ func (r *Runner) emptyMatchDeclined() EmptyMatchDeclinedPolicy {
 	p := r.sem().ReplacementEmptyMatchDeclined
 	if p == EmptyMatchDeclinedUnspecified {
 		r.diagf("%s\n", r.unanswered("which empty match a replacement declines"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// ReadTrailingEscapedSeparatorPolicy is what `read` does with an escaped IFS
+// whitespace character closing the last name's value. See
+// Semantics.ReadTrailingEscapedSeparator for the measurements.
+type ReadTrailingEscapedSeparatorPolicy int
+
+const (
+	// ReadTrailingEscapedSeparatorUnspecified is no answer, and reads as
+	// Kept after the refusal — the same shape ask() has, where an unanswered
+	// axis is reported and then does not move the value.
+	ReadTrailingEscapedSeparatorUnspecified ReadTrailingEscapedSeparatorPolicy = iota
+	// ReadTrailingEscapedSeparatorKept lets the mask reach the trim, so an
+	// escaped separator is data wherever it stands: dash.
+	ReadTrailingEscapedSeparatorKept
+	// ReadTrailingEscapedSeparatorTrimmedFromARemainder ignores the mask,
+	// and only for a last name that took the *remainder* of the line — one
+	// field per name leaves the field's own closing space alone: bash, in
+	// all three builds measured.
+	ReadTrailingEscapedSeparatorTrimmedFromARemainder
+	// ReadTrailingEscapedSeparatorTrimmed ignores the mask for the last
+	// name's value however it was reached, remainder or single field:
+	// ksh93 and zsh.
+	ReadTrailingEscapedSeparatorTrimmed
+)
+
+func (p ReadTrailingEscapedSeparatorPolicy) String() string {
+	switch p {
+	case ReadTrailingEscapedSeparatorKept:
+		return "kept"
+	case ReadTrailingEscapedSeparatorTrimmedFromARemainder:
+		return "trimmed from a remainder"
+	case ReadTrailingEscapedSeparatorTrimmed:
+		return "trimmed"
+	}
+	return "unspecified"
+}
+
+// readTrailingEscapedSeparator resolves the axis, and is reached only where
+// the readings would leave different values behind.
+func (r *Runner) readTrailingEscapedSeparator() ReadTrailingEscapedSeparatorPolicy {
+	p := r.sem().ReadTrailingEscapedSeparator
+	if p == ReadTrailingEscapedSeparatorUnspecified {
+		r.diagf("%s\n", r.unanswered(
+			"an escaped IFS whitespace character closing a `read` value"))
 		r.status = 2
 		r.unspecified = true
 	}

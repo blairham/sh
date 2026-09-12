@@ -201,6 +201,11 @@ func Semantics() interp.Semantics {
 	// way and on the same day: `v='a\*'; set -- $v` is `a\*` here, so the
 	// `*` behind the backslash is not a metacharacter (#1367).
 	s.ValueBackslashQuotesWhatFollows = interp.Yes
+	// The mask reaches the trim, so an escaped IFS whitespace character
+	// closing a `read` value is data and stays — this shell alone.
+	// Measured 2026-09-12: `printf 'a b c\\ \n' | read x y` leaves `b c `
+	// here and `b c` in the other five (#1360).
+	s.ReadTrailingEscapedSeparator = interp.ReadTrailingEscapedSeparatorKept
 	// `.` with no filename at all is not an error here: dash does nothing and
 	// reports success, where the other three complain. Everything else about
 	// `.` and `eval` is the POSIX answer, which dash keeps and the others have

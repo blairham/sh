@@ -612,6 +612,12 @@ func Semantics() interp.Semantics {
 	// either reading, which is what makes the arrangement discriminating
 	// (#1367).
 	s.ValueBackslashQuotesWhatFollows = interp.No
+	// The trim ignores the mask and reaches the last name's value however it
+	// was arrived at. Measured 2026-09-12: `printf 'a b\\ \n' | read x y`
+	// leaves `b` here and `b ` in dash and the three bashes — one field per
+	// name, so bash has no remainder to trim and this shell trims anyway
+	// (#1360).
+	s.ReadTrailingEscapedSeparator = interp.ReadTrailingEscapedSeparatorTrimmed
 	// The longest arm, as in the bash column: measured 2026-09-11 on
 	// ksh93u+, `x=abc`, `${x##@(a|ab)}` and `${x##@(ab|a)}` are both `c`.
 	s.LongestMatchTakesTheWrittenArm = interp.No

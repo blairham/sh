@@ -3300,7 +3300,9 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		case i >= len(fields):
 			r.storeThroughOperand(name, "")
 		case i == len(args)-1 && len(fields) > len(args):
-			r.storeThroughOperand(name, readRemainder(text, at[i], lits, ifs))
+			r.storeThroughOperand(name, r.readRemainderValue(text, at, fields, i, ifs))
+		case i == len(args)-1:
+			r.storeThroughOperand(name, r.readLastFieldValue(fields[i], ifs))
 		default:
 			r.storeThroughOperand(name, fields[i])
 		}
@@ -3335,6 +3337,99 @@ func readRemainder(text string, start int, literal []bool, ifs string) string {
 		end--
 	}
 	return text[start:end]
+}
+
+// readRemainderValue is the remainder with Semantics.ReadTrailingEscapedSeparator
+// applied, for the last name on a `read` that took the rest of the line.
+//
+// Two readings, and both are written out here because the axis is read only
+// where they differ:
+//
+//   - the trim ignores the escape mask, so the closing run of IFS whitespace
+//     comes off whether it was escaped or not. bash, ksh93 and zsh.
+//   - the remainder ends where the **last field with content of its own**
+//     ends, so a field's escaped trailing space is part of the field and
+//     survives, while a field made of nothing but escaped separators does
+//     not. dash.
+//
+// The second is measured rather than reasoned, and two rows settle its shape.
+// `a b c\ ` leaves `b c ` there — the escaped space belongs to the field `c`
+// closes — while `a b \ ` leaves `b`, where the escaped space is a field of
+// its own and goes. A rule written about the character before it instead
+// would answer `x b ` for `a x b\ \ `, which dash answers `x b  `.
+//
+// This implementation had neither: it honored the mask character by
+// character, which is dash's answer on the first row and nobody's on the
+// second (#1360).
+func (r *Runner) readRemainderValue(text string, at []int, fields []string, i int, ifs string) string {
+	start := at[i]
+	bare := readRemainder(text, start, nil, ifs)
+	// The end can only ever move *forward* from the plain trim, because the
+	// only thing either reading declines to take off is whitespace the other
+	// one took: a non-whitespace separator is not trimmed by anybody, and a
+	// field's own content is past the plain trim's stop by definition.
+	end := start + len(bare)
+	for j := i; j < len(fields) && j < len(at); j++ {
+		if allSeparatorWhitespace(fields[j], ifs) {
+			continue
+		}
+		if e := at[j] + len(fields[j]); e > end {
+			end = e
+		}
+	}
+	kept := text[start:end]
+	if kept == bare {
+		return bare
+	}
+	// Both trimming answers take the plain end here and part on the
+	// single-field value below. An unanswered axis is reported and then
+	// leaves the value where it found it.
+	if r.readTrailingEscapedSeparator() == ReadTrailingEscapedSeparatorTrimmedFromARemainder ||
+		r.sem().ReadTrailingEscapedSeparator == ReadTrailingEscapedSeparatorTrimmed {
+		return bare
+	}
+	return kept
+}
+
+// allSeparatorWhitespace reports whether every byte of a field is an IFS
+// whitespace character — which, a field's content being what the splitter did
+// *not* treat as a separator, means every byte of it was escaped.
+//
+// An empty field counts, and that is the answer the remainder wants: the
+// empty fields two adjacent non-whitespace separators leave are not content
+// and must not hold the end open. `IFS=: read x y` on `a:b:c::` is `b:c::` in
+// all six shells, and it stays that way because the plain trim never takes a
+// colon — not because an empty field extended it.
+func allSeparatorWhitespace(field, ifs string) bool {
+	for i := range len(field) {
+		c := field[i]
+		if c != ' ' && c != '\t' && c != '\n' {
+			return false
+		}
+		if strings.IndexByte(ifs, c) < 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// readLastFieldValue is the last name's value where the line held exactly one
+// field per name, so there was no remainder to take.
+//
+// A field can only end in IFS whitespace that was escaped — an unescaped one
+// is what closed the field and the splitter kept it out — so the trim below
+// differing from the field at all *is* the disagreement, and is where the
+// axis is read. One column trims here and the other two leave the field
+// alone, which is the row that made the axis three-valued.
+func (r *Runner) readLastFieldValue(field, ifs string) string {
+	trimmed := readRemainder(field, 0, nil, ifs)
+	if trimmed == field {
+		return field
+	}
+	if r.readTrailingEscapedSeparator() == ReadTrailingEscapedSeparatorTrimmed {
+		return trimmed
+	}
+	return field
 }
 
 // readBadNumber is a count, timeout or descriptor argument that is not a

@@ -543,6 +543,10 @@ func TestNoclobberRefusalCoversAFailedOpen(t *testing.T) {
 // looks like ksh93's until the bytes are read.
 func TestPrintfAnswers(t *testing.T) {
 	s := zsh.Semantics()
+	if got, want := s.ReadTrailingEscapedSeparator,
+		interp.ReadTrailingEscapedSeparatorTrimmed; got != want {
+		t.Errorf("ReadTrailingEscapedSeparator = %v, want %v", got, want)
+	}
 	if got, want := s.PrintfBackslashC, interp.PrintfBackslashCStops; got != want {
 		t.Errorf("PrintfBackslashC = %v, want %v", got, want)
 	}

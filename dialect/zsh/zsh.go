@@ -1136,6 +1136,9 @@ func Semantics() interp.Semantics {
 	// directory holding `a\b` and `a*`: `v='a\*'; print -r -- ${~v}` is
 	// `a\*`, so the `*` behind the backslash was not live (#1367).
 	s.ValueBackslashQuotesWhatFollows = interp.Yes
+	// ksh93's answer for the trim at the end of a `read` value, measured the
+	// same way: `printf 'a b\\ \n' | read x y` leaves `b` here (#1360).
+	s.ReadTrailingEscapedSeparator = interp.ReadTrailingEscapedSeparatorTrimmed
 	// The arm written first, which is this shell alone in the panel:
 	// measured 2026-09-11 on 5.9.2, `x=abc`, `${x##(a|ab)}` is `bc` where
 	// `${x##(ab|a)}` is `c`. The same order decides what a `(#b)` reports,

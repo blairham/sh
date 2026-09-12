@@ -2042,6 +2042,31 @@ type Dialect struct {
 	// which Span.Bracketed carries for anything writing one back.
 	DollarBracketArith bool
 
+	// ArithSubstFallsBackToCommandSubst decides what `$((` opens where the
+	// parentheses do not close as `))`.
+	//
+	// `$(( … ))` is arithmetic and `$( ( … ) )` is a command substitution
+	// whose first command is a subshell, and the second may be written with
+	// the parentheses touching. POSIX tells the author to separate them and
+	// says nothing about the shell that meets them together, so this is
+	// measured.
+	//
+	// Measured 2026-09-12: `echo $((echo ab cde) )` prints `ab cde` in bash
+	// 5.3.15, in the 3.2.57 macOS ships, in that build invoked as `sh`, in
+	// ksh93u+ and in zsh 5.9.2; dash 0.5.12 and BusyBox ash 1.37.0 refuse it
+	// for a missing `))`. Every shell in the panel but the two minimal ones,
+	// which is the head count that put ProcessSubstitution in the core, so
+	// this is on in [Core] and off in [POSIX].
+	//
+	// Additive rather than a conflict: where it is off the text is arithmetic
+	// and nothing else, which is what the two say by refusing it. Where it is
+	// on, the rule the five agree on is positional — counting from one after
+	// the `$((`, the `)` that brings the count to zero is arithmetic only
+	// when another `)` follows it immediately. So `$(( 1 ) + (2 ))` is a
+	// command substitution even though `(1) + (2)` is good arithmetic, and
+	// `$(( (1+2)) )` runs `1+2` as a command where `$(( (1+2) ))` is 3.
+	ArithSubstFallsBackToCommandSubst bool
+
 	// Whether `0100` is sixty-four or one hundred is deliberately *not* a
 	// field here. A literal is kept as written, so the tree bakes in no
 	// answer and nothing in the parser has the question to ask; the answer
@@ -3282,6 +3307,11 @@ func Core() Dialect {
 		// the core — and docs/spec/core.md has named it as core since before
 		// there was code to refuse it.
 		ProcessSubstitution: true,
+		// The same head count once more: bash, bash 3.2, bash-as-sh, ksh93
+		// and zsh all read `$((echo hi) )` as a command substitution holding
+		// a subshell, where dash and BusyBox ash refuse it for a missing
+		// `))`. Measured 2026-09-12.
+		ArithSubstFallsBackToCommandSubst: true,
 		// dash is the only shell in the panel that leaves `$(<f)` empty,
 		// and it leaves it empty by not having the form rather than by
 		// meaning something else by it — the same head count that put

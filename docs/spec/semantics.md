@@ -11283,6 +11283,14 @@ an indexed one. In ksh93 `a=([1+1]=c)` stores under the three
 characters, `typeset -p a` answers `typeset -A`, and `${a[2]}` finds
 nothing; bash and zsh evaluate the subscript and the value lands at 2.
 
+A **plain decimal** subscript is no exception, which #1659 was filed
+against the belief that it was: `a=([05]=q)` is `typeset -A a=([05]=q)`
+with `${a[5]}` empty, and `a=([0]=x [1]=y)` is an association though it
+has no gap in it. Only an unanswered axis treats a decimal as neutral,
+and only so a core that has chosen no shell can still run `a=([2]=c)`.
+The indexed letter written on the same command as the literal puts the
+subscript back to an expression — see `commands.md`.
+
 One concept with two consequences, like whether an assignment prefix
 survives a special builtin.
 
@@ -13019,21 +13027,66 @@ Asked only where there is a scope to take, so a declaration at the top
 level never reaches it. Folding the two fields into one would have given
 zsh's refusal to whichever of the two the other shell was measured for.
 
-**`ReadonlyElement`** — bash unspecified · dash absent · ksh93 written · zsh refused
+**`TableLetterReachesItsOwnOperandsSubscript`** — bash yes · dash absent · ksh93 no · zsh refuses the shape
+
+Reads a subscripted operand's subscript as a **key** when the table
+letter that would make it one is written on the same command —
+`typeset -A m[k]=v`.
+
+Measured 2026-09-12, and the discriminator is a *set* name:
+
+| written | bash 5.3.15 | ksh93u+ |
+| --- | --- | --- |
+| `typeset -A m[k]=v` | `declare -A m=([k]="v")` | `typeset -A m=([0]=v)` |
+| `k=7; typeset -A m[k]=v` | `declare -A m=([k]="v")` | `typeset -A m=([7]=v)` |
+| `typeset -A m[1+1]=v` | `declare -A m=([1+1]="v")` | `typeset -A m=([2]=v)` |
+| `typeset -A m; typeset m[k]=v` | `declare -A m=([k]="v")` | `typeset -A m=([k]=v)` |
+
+ksh93 evaluates the subscript because the attribute has not landed when
+the operand is read; the number it comes to is then the key in the table
+the letter did create. #1380 recorded the first row as the subscript
+being *discarded* and the value landing under `0`, which is what an unset
+`k` evaluates to — the second and third rows rule that reading out.
+
+Not asked of a table declared on an **earlier** command, which is the last
+row: both readings take the key there, so the two part only over the
+letter's own operand. It is the same kind of answer `ReadonlyElement`
+records below — an ordering between the attribute and the operand — and
+not a rule about tables.
+
+zsh 5.9.2 refuses the shape outright (`m[k]: inconsistent type for
+assignment`) and so reaches no answer here.
+
+**`ReadonlyElement`** — bash frozen first · dash absent · ksh93 written · zsh refused
 
 What a declaration does when it would freeze the array whose element its
 operand names. Three answers rather than two, which is why it is a policy
-and not an `Answer`, and only two of the three are modeled.
+and not an `Answer`.
 
-bash's is the third: `typeset -r a[1]=v` creates the array **frozen and
-empty**, then reports `a: readonly variable` about the element write it
-has just made impossible, and reports success — `declare -p a` reads back
-`declare -ar a=()` and `$?` is 0. Implementing it needs the freeze to
-happen before the write rather than instead of it, which is a change to
-the order every other declaration keeps; it is measured and recorded here
-and left unanswered, so the combination refuses by name in that dialect
-rather than doing something plausible in silence. `readonly a[1]=v` never
-reaches the question in bash, which refuses the operand as a bad name.
+bash's is the third, and it is an **order** rather than an emptiness:
+`typeset -r a[1]=v` declares the container the letters name, freezes it,
+and then loses the element write to the freeze the same declaration has
+just applied — `a: readonly variable`, `$?` is 0, and the script carries
+on. The shortest probe makes it look like *create it frozen and empty*,
+because `declare -p a` reads back `declare -ar a=()`; measured
+2026-09-12 on bash 5.3.15 with an array already standing, it is not:
+
+| written | listed back |
+| --- | --- |
+| `typeset -r a[1]=v` | `declare -ar a=()` |
+| `a=(x y z); typeset -r a[1]=v` | `declare -ar a=([0]="x" [1]="y" [2]="z")` |
+| `a=scalar; typeset -r a[1]=v` | `declare -ar a=([0]="scalar")` |
+| `typeset -Ar m[k]=v` | an empty, frozen table |
+
+Every element stands with `y` unreplaced, a scalar is promoted into
+element 0 rather than discarded, and `typeset -r a[1]=v b=2` still
+freezes `b` at 2. Only the element write is lost.
+
+It reports through the **store's** refusal rather than the builtin's,
+which the wording shows: `typeset -r a[1]=v` says `a: readonly variable`
+where an already-frozen `readonly a; typeset a[1]=v` says `typeset: a:
+readonly variable` at 1. `readonly a[1]=v` never reaches the question in
+bash, which refuses the operand as a bad name.
 
 The refusal is asked without a value as well — `readonly "a[1]"` is
 refused in the same words as `readonly a[1]=v` — because it is about the

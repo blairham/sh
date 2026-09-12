@@ -1018,6 +1018,17 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, h
 		return true
 	}
 	if f.array {
+		if r.literalOperands[name] {
+			// The indexed letter and an array literal on one command, which
+			// is the shape whose subscripts go back to being expressions —
+			// see Runner.indexedLetterHere. Recorded here rather than
+			// inferred later because the operand assignment cannot see the
+			// letters: the parser hands the utility the bare name.
+			if r.indexedLetterHere == nil {
+				r.indexedLetterHere = map[string]bool{}
+			}
+			r.indexedLetterHere[name] = true
+		}
 		v, p := r.declaredCompoundOverAScalar(name, f, r.sem().ScalarUnderAnArrayDeclaration,
 			"an array declaration over a name already holding a scalar")
 		switch p {

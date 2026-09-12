@@ -503,17 +503,58 @@ holding `ice.zsh`, `other.zsh` and one file named `ice|other.zsh`:
     L='ice|other'; print -r -- ($L).zsh      →  ice|other.zsh
     L='ice|other'; print -r -- (${~L}).zsh   →  ice.zsh other.zsh
 
-**One divergence is recorded and not implemented.** ksh93 globs a `*` out
-of a value and refuses to read an extended group out of one, where bash
-reads both:
+**The group's shape is the source's and its leaves are the value's**, in
+one dialect. `ExpansionResultSuppliesGroupSyntax` — bash yes, ksh93 no —
+is read only where `GlobExpansionResults` says yes, and it says that
+`(`, `)` and `|` arriving out of an expansion are three literal
+characters while every other metacharacter is live.
 
-    L='ice|other'; echo @($L).zsh      ksh93: @(ice|other).zsh   bash: ice.zsh other.zsh
-    L='@(ice|other)'; echo $L.zsh      ksh93: @(ice|other).zsh   bash: ice.zsh other.zsh
+Re-measured 2026-09-12 on ksh93u+ 2012-08-01, in a directory holding
+`ice.zsh`, `other.zsh` and one file literally named `ice|other.zsh`. That
+third file is what makes the claim falsifiable at all: without it, *the
+group is text* and *the group is a group whose one branch holds a literal
+bar* both leave the word standing unchanged, and the probe set #1499 was
+filed with cannot tell them apart.
 
-So `GlobExpansionResults` has a third value there — yes for the ordinary
-metacharacters, no for the extended constructs — and this implementation
-gives bash's answer in ksh93's dialect on both rows. The second of them
-answered that way before #1331 and the first now joins it.
+| written | ksh93 | bash 5.3 |
+| --- | --- | --- |
+| `L='ice\|other'; echo @($L).zsh` | **`ice\|other.zsh`** | `ice.zsh other.zsh` |
+| `B='\|'; echo @(ice${B}other).zsh` | **`ice\|other.zsh`** | `ice.zsh other.zsh` |
+| `L=ice; echo @($L\|other).zsh` | `ice.zsh other.zsh` | `ice.zsh other.zsh` |
+| `L='ice*'; echo @($L).zsh` | `ice.zsh ice\|other.zsh` | same |
+| `L='ic?'; echo @($L).zsh` | `ice.zsh` | same |
+| `S='[io]*'; echo $S` | all three | same |
+| `L='@(ice\|other)'; echo $L.zsh` | `@(ice\|other).zsh` — no match | `ice.zsh other.zsh` |
+| `Q='@'; echo ${Q}(ice\|other).zsh` | `ice.zsh other.zsh` | bash refuses the parse |
+
+Row 1 **matched a file**, so the group is a group and its bar is a
+character rather than a choice between two names — #1499 was filed as
+*the construct is not re-read*, which is right about row 7 and wrong
+about row 1. Row 2 is the same fact with the bar alone coming from a
+value, so it is the character's provenance and not the value's shape.
+Rows 3 to 6 say everything else out of an expansion is live, inside a
+group as much as outside one. Row 7 is where *text* is the right word:
+all three characters are dead, so nothing matches. **Row 8 is what
+decides it** — with the parentheses written in the source and only the
+`@` coming from a value, the group is read.
+
+The condition surface does not do it — `L='a|b'; [[ a == @($L) ]]`
+matches in ksh93 as in bash — and it is a different path in this
+implementation too: a pattern operand's expansion goes through
+`expansionPattern`, which the marking never reaches.
+
+**No corpus row.** A snippet with `@(` in argument position needs
+`Dialect.ExtendedPattern` in `corpusDialect()`, and turning it on stops
+`pat/an-empty-quantified-group-is-not-a-function-definition` parsing at
+all: `a+() { echo fn; }` becomes a quantified group where that case
+exists to record it as a function definition. Two constructs, one
+spelling, and the corpus already has a row for the other one. The rows
+above are pinned by `dialect/ksh`'s own test instead.
+
+**One thing here is still ours alone.** Row 8 does not parse in this
+implementation — a group whose `@` comes from an expansion is a syntax
+error in the `ksh` dialect — so the row that fixes the rule is one we
+record and cannot yet run.
 
 ### A `(` opening an expansion's pattern operand is refused in one dialect
 

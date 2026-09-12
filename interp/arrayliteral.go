@@ -95,7 +95,7 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo 
 		// because a half-expanded list is not evidence about the shape either.
 		return
 	}
-	if r.literalSubscriptIsAKey(parsed) {
+	if r.literalSubscriptIsAKey(name, parsed) {
 		// The subscript is text rather than an expression, and a literal
 		// written with one declares a keyed array — one concept with two
 		// consequences, so the elements go where a declared name's would.
@@ -250,17 +250,47 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 // literalSubscriptIsAKey asks whether a subscript inside a literal is the text
 // between the brackets or an expression to evaluate.
 //
-// Asked only where the two readings differ. A subscript spelled as a plain
-// decimal numeral evaluates to itself, so `a=([2]=c)` fills the same slot
-// either way and the common form asks nothing — which is what keeps the
-// construct usable in a core that has chosen no shell. `[1+1]`, `[i]` and
-// `[k]` are where the answers part.
-func (r *Runner) literalSubscriptIsAKey(parsed []literalElem) bool {
+// A subscript spelled as a plain decimal numeral evaluates to itself, so
+// `a=([2]=c)` fills slot 2 under either reading — but only the *slot* is the
+// same, and that is as far as the old shortcut here was right. It skipped the
+// axis entirely for a decimal subscript, which cost the shells that answer
+// yes the one thing the answer decides: what kind of array the literal
+// *creates*. Measured 2026-09-12 against ksh93u+ 2012-08-01, where the
+// letter and the keys move together:
+//
+//	a=([5]=q)        typeset -A a=([5]=q)        ${a[05]} empty, ${a[5]} is q
+//	a=([05]=q)       typeset -A a=([05]=q)       ${a[05]} is q, ${a[5]} empty
+//	a=([0]=x [1]=y)  typeset -A a=([0]=x [1]=y)  ${a[01]} empty
+//	a[5]=q           typeset -a a=([5]=q)        ${a[05]} is q
+//
+// — so the literal is what builds the association, not the gap in it. #1659
+// was filed reading the first row as a *listing* rule about sparseness, and
+// it is neither: the third row is dense and still `-A`, the fourth is sparse
+// and still `-a`, and a rule keyed on the gap prints the wrong letter for
+// both. The subscript being a key is the whole of it, and the letter follows
+// from having keys rather than the other way round.
+//
+// So an answered axis decides every subscripted literal, decimal or not, and
+// only an *unanswered* one still leans on the shortcut: a core that has
+// chosen no shell keeps `a=([2]=c)` usable rather than diagnosing it, and
+// complains where the two readings visibly part — `[1+1]`, `[i]`, `[k]`.
+func (r *Runner) literalSubscriptIsAKey(name string, parsed []literalElem) bool {
+	answer := r.sem().ArrayLiteralSubscriptIsAKey
+	if r.indexedLetterHere[name] {
+		// `typeset -a a=([5]=q)` — the indexed letter on the same command as
+		// the literal, which is the one route that puts the subscript back to
+		// being an expression. Not the attribute: every other way of reaching
+		// an already-indexed name still reads the subscripts as keys.
+		return false
+	}
 	for _, e := range parsed {
-		if !e.subscripted || isDecimalSubscript(e.sub) {
+		if !e.subscripted {
 			continue
 		}
-		return r.ask(r.sem().ArrayLiteralSubscriptIsAKey,
+		if answer == Unspecified && isDecimalSubscript(e.sub) {
+			continue
+		}
+		return r.ask(answer,
 			"a subscript inside an array literal being a key rather than an expression")
 	}
 	return false

@@ -44,6 +44,12 @@ func runCondition(t *testing.T, dir, src string) (string, int) {
 		r.Dir = dir
 		sem := *r.Semantics
 		sem.GlobNoMatchIsError = Yes
+		// The reading that leaves a value's group syntax live, which is every
+		// column but one and is not what these rows are about: the qualifier
+		// group has to be *written* to be read, and that is a rule of the
+		// word rather than of the value — see
+		// Semantics.ExpansionResultSuppliesGroupSyntax.
+		sem.ExpansionResultSuppliesGroupSyntax = Yes
 		r.Semantics = &sem
 		r.SetMatchOption(ExtendedPatternOperators, true)
 	})

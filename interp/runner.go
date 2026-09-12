@@ -1865,6 +1865,20 @@ type Runner struct {
 	// type letter over exactly that shape. See
 	// Semantics.TypeLetterAndAnArrayLiteralIsAnInconsistentType.
 	literalOperands map[string]bool
+	// indexedLetterHere is the subset of those names whose declaration also
+	// carried the *indexed* container letter — `typeset -a a=([5]=q)` and not
+	// `typeset -a a` followed by the assignment on the next line.
+	//
+	// It is the letter's presence on the same command that matters and not the
+	// attribute it leaves behind, which is measurable rather than a guess:
+	// ksh93u+ answers `typeset -A a=([5]=q)` for `typeset -a a; a=([5]=q)`,
+	// for `a=(x y); a=([5]=q)` and for `a[0]=x; a=([5]=q)` — every route
+	// where the name is already an indexed array — and `typeset -a a=([5]=q)`
+	// for the one command carrying both. `typeset -a a=([1+1]=q)` is
+	// `typeset -a a=([2]=q)` there, so the letter puts the subscript back to
+	// being an *expression* rather than only changing the letter listed. See
+	// Runner.literalSubscriptIsAKey.
+	indexedLetterHere map[string]bool
 	// integer names evaluate what is assigned to them: with the attribute,
 	// `n=5+2` stores 7 rather than the four characters. It is a property of
 	// the name and not of the assignment, which is why it is recorded here.
@@ -3623,6 +3637,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// z=(1 2)` is refused in the same words as `typeset -i z=(1 2)`.
 		outerLiterals := r.literalOperands
 		r.literalOperands = arrayLiteralOperands(c)
+		// Recorded by the builtin as it reads its letters, and read by the
+		// operand assignments that run after it — so it is cleared here
+		// rather than seeded, and restored beside literalOperands for the
+		// same reason: a builtin can run another one.
+		outerIndexed := r.indexedLetterHere
+		r.indexedLetterHere = nil
 		if locks {
 			r.assignOperands(c)
 		} else {
@@ -3667,6 +3687,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		r.applyDeferredFreeze()
 		r.freezing = outerFreezing
 		r.literalOperands = outerLiterals
+		r.indexedLetterHere = outerIndexed
 		if fatal {
 			return nil
 		}

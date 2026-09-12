@@ -206,6 +206,10 @@ func Semantics() interp.Semantics {
 	s.ReadOptions = "rp:t:n:"
 	// `unset` has the two POSIX letters and calls anything else illegal:
 	// `unset -q x` is `illegal option -q`.
+	// unanswered ExpansionResultSuppliesGroupSyntax: BusyBox ash has no
+	// pattern groups either, for the same reason dash has none.
+	// unanswered TableLetterReachesItsOwnOperandsSubscript: BusyBox ash has
+	// no arrays and no table letter, for the same reason dash has neither.
 	// unanswered UnsetReferenceLetterRemovesANonReference: no `-n` on `unset`
 	// here either. Measured 2026-09-12 on BusyBox v1.37.0, `unset -n x` is
 	// `unset: line 0: illegal option -n`, and the shell ends at 2 without

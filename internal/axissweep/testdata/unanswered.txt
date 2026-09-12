@@ -76,6 +76,7 @@ ash   EmptySubscriptTextIsAMathError
 ash   ErrTrapRunsInSubshells
 ash   ErrTrapRunsInsideFunctions
 ash   ExitTrapFiresPastTheEnd
+ash   ExpansionResultSuppliesGroupSyntax
 ash   ExportLetterDeclaresAGlobal
 ash   ExportedCompoundReachesAChildAsItsFirstValue
 ash   ForNameWhenTheLoopRuns
@@ -135,6 +136,7 @@ ash   SubscriptedArrayLiteral
 ash   SubscriptedOperandCarriesTheAttributes
 ash   SubscriptedOperandTakesALocalDeclaration
 ash   SubscriptedOperandTakesTheIntegerAttribute
+ash   TableLetterReachesItsOwnOperandsSubscript
 ash   TableUnderAnArrayDeclaration
 ash   TestAndArithmeticUpdatePipelineStatus
 ash   TransformLetterCheckedOnlyWhenValued
@@ -157,7 +159,6 @@ bash  ExitTrapFiresPastTheEnd
 bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
 bash  PrintfOutputPrecedesComplaint
-bash  ReadonlyElement
 bash  SetArrayBadNameLeavesZeroFromCommandString
 bash  SetArrayLetter
 bash  SetArrayOptionsContinuePastTheName
@@ -220,6 +221,7 @@ dash  ErrTrapRunsInSubshells
 dash  ErrTrapRunsInsideFunctions
 dash  ErrexitSeesPipefailFailure
 dash  ExitTrapFiresPastTheEnd
+dash  ExpansionResultSuppliesGroupSyntax
 dash  ExportLetterDeclaresAGlobal
 dash  ExportedCompoundReachesAChildAsItsFirstValue
 dash  ForNameWhenTheLoopRuns
@@ -284,6 +286,7 @@ dash  SubscriptedArrayLiteral
 dash  SubscriptedOperandCarriesTheAttributes
 dash  SubscriptedOperandTakesALocalDeclaration
 dash  SubscriptedOperandTakesTheIntegerAttribute
+dash  TableLetterReachesItsOwnOperandsSubscript
 dash  TableUnderAnArrayDeclaration
 dash  TestAndArithmeticUpdatePipelineStatus
 dash  TransformLetterCheckedOnlyWhenValued
@@ -326,6 +329,7 @@ ksh   TrapReportsAnUnknownSingleCondition
 ksh   TrapSingleUnknownConditionIsUsage
 ksh   UnsetEndsTheProducedPipelineStatus
 
+zsh   ExpansionResultSuppliesGroupSyntax
 zsh   ForNameWhenTheLoopRuns
 zsh   FunctionNameWhenTheDefinitionRuns
 zsh   IndirectionYieldsName
@@ -337,6 +341,7 @@ zsh   ReadCountJudgesTheNamesAfterTheFirst
 zsh   ReadExactCountKeepsPartial
 zsh   ReadPartialCountSucceeds
 zsh   ReportsAKilledCommandInACommandSubstitution
+zsh   TableLetterReachesItsOwnOperandsSubscript
 zsh   TransformLetterCheckedOnlyWhenValued
 zsh   TrapListsSignalsWithL
 zsh   TrapPrintsBareWithConditions

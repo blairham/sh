@@ -1306,6 +1306,14 @@ func Semantics() interp.Semantics {
 	// `s=hello`, `${s[2]}` is `e` here and nothing in the four that read a
 	// scalar as an array of one.
 	s.ScalarSubscriptIsACharacter = interp.Yes
+	// unanswered ExpansionResultSuppliesGroupSyntax: read only where
+	// GlobExpansionResults says yes, and zsh answers that one no — it does
+	// not match the result of an expansion against the filesystem at all, so
+	// there is no pattern here whose group syntax could count.
+	// unanswered TableLetterReachesItsOwnOperandsSubscript: zsh refuses the
+	// shape the axis is about rather than answering it — measured 2026-09-12,
+	// `typeset -A m[k]=v` is `m[k]: inconsistent type for assignment` and
+	// fatal, so there is no key and no evaluated subscript to choose between.
 	s.ArrayLiteralSubscriptIsAKey = interp.No
 	// The FUNCTION_ARGZERO option, on by default and the reason this shell
 	// alone moves `$0`: it names the function being run, or the file being

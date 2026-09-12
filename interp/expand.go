@@ -1606,7 +1606,106 @@ func (r *Runner) escapeResult(v string, glob Answer) string {
 		// observed twice rather than two quirks.
 		return globEscape(v)
 	}
-	return esc
+	return r.markGroupSyntaxFromTheValue(esc)
+}
+
+// groupSyntax is the three characters that build an extended group: the two
+// parentheses that give it its extent and the bar that separates its
+// branches. Everything else a pattern is made of is a *leaf* — `*`, `?`, a
+// bracket expression — and one dialect keeps the leaves live while making
+// these three text. See markGroupSyntaxFromTheValue.
+const groupSyntax = "()|"
+
+// markGroupSyntaxFromTheValue is the second half of GlobExpansionResults for
+// the one column that answers it in halves: the result of an expansion is
+// matched against the filesystem as a pattern, and the group syntax *in* that
+// result is not read as syntax.
+//
+// Measured 2026-09-12 on ksh93u+ 2012-08-01, in a directory holding
+// `ice.zsh`, `other.zsh` and one file literally named `ice|other.zsh` — the
+// third file is what makes the first two rows falsifiable at all, because
+// without it "the group is text" and "the group is a group with one literal
+// branch" both leave the word standing:
+//
+//	L='ice|other'; echo @($L).zsh      ice|other.zsh   ← matched a file
+//	B='|'; echo @(ice${B}other).zsh    ice|other.zsh
+//	L=ice; echo @($L|other).zsh        ice.zsh other.zsh
+//	L='ice*'; echo @($L).zsh           ice.zsh ice|other.zsh
+//	L='ic?'; echo @($L).zsh            ice.zsh
+//	S='[io]*'; echo $S                 all three
+//	L='@(ice|other)'; echo $L.zsh      @(ice|other).zsh — no match
+//	Q='@'; echo ${Q}(ice|other).zsh    ice.zsh other.zsh
+//
+// Row 1 matched a file, so the group is a *group* whose single branch holds a
+// literal bar — #1499 was filed as "the construct is not re-read", which is
+// right about row 7 and wrong about row 1. Rows 3 to 6 say every other
+// metacharacter out of a value is live, inside a group as much as outside
+// one. Row 8 is what says the source decides: with only the `@` coming from a
+// value and the parentheses written, the group is read.
+//
+// So the group's shape is the source's and its leaves are the value's, which
+// is exactly these three bytes and no others.
+//
+// The condition surface does not do it — `L='a|b'; [[ a == @($L) ]]` matches
+// in ksh93 as in bash — and it is a different path here too: a pattern's
+// expansion goes through expansionPattern in pattern.go, which this never
+// reaches.
+//
+// Asked only where the dialect has groups for the syntax to build and the
+// value actually carries one of the three live. A shell with no groups reads
+// these as text however they arrived, and asking there would refuse a field
+// with nothing wrong with it.
+func (r *Runner) markGroupSyntaxFromTheValue(esc string) string {
+	// Read only where GlobExpansionResults says yes, which is what makes this
+	// its second half rather than an axis of its own: a shell that does not
+	// match a result against the filesystem at all has no pattern here whose
+	// group syntax could count, and asking would refuse a field it was never
+	// going to glob. zsh is that shell, and reaches this only for a value
+	// that is not a pattern either way.
+	if r.sem().GlobExpansionResults != Yes {
+		return esc
+	}
+	d := r.dialect()
+	if !d.ExtendedPattern && !d.PatternAlternation && !r.MatchOption(ExtendedPatternOperators) {
+		return esc
+	}
+	if !hasLiveByteOf(esc, groupSyntax) {
+		return esc
+	}
+	if r.ask(r.sem().ExpansionResultSuppliesGroupSyntax,
+		"an expansion result supplying the syntax of a pattern group") {
+		return esc
+	}
+	var b strings.Builder
+	b.Grow(len(esc))
+	for i := 0; i < len(esc); i++ {
+		if esc[i] == '\\' && i+1 < len(esc) {
+			b.WriteByte(esc[i])
+			b.WriteByte(esc[i+1])
+			i++
+			continue
+		}
+		if strings.IndexByte(groupSyntax, esc[i]) >= 0 {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(esc[i])
+	}
+	return b.String()
+}
+
+// hasLiveByteOf reports whether the escaped form carries one of these bytes
+// unmarked — a `\(` is already text and raises no question.
+func hasLiveByteOf(esc, set string) bool {
+	for i := 0; i < len(esc); i++ {
+		if esc[i] == '\\' {
+			i++
+			continue
+		}
+		if strings.IndexByte(set, esc[i]) >= 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // resultReadsAsPattern reports whether leaving this result live would let

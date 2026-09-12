@@ -293,17 +293,38 @@ func TestAPlusFormAsksNeitherElementRefusal(t *testing.T) {
 	}
 }
 
-// The attribute on the same declaration decides how the subscript is read:
-// `typeset -A m[k]=v` places a key rather than an element numbered by
-// whatever `k` evaluates to.
+// Whether the attribute on the same declaration decides how the subscript is
+// read is itself an axis, and only one of the two shells that reach the shape
+// says yes — see Semantics.TableLetterReachesItsOwnOperandsSubscript.
 func TestAnAssociativeAttributeOnTheSameDeclarationKeysTheSubscript(t *testing.T) {
+	reaches := func(s *Semantics) { s.TableLetterReachesItsOwnOperandsSubscript = Yes }
+
 	// Two keys rather than one, because one cannot tell the readings apart:
 	// an unset name is zero to the arithmetic reading, so a single `m[k]`
 	// lands on element 0 and reads back out of it either way.
 	out, status := runDeclareElement(t,
-		`typeset -A m[k]=v; typeset m[j]=w; echo "[${m[k]}][${m[j]}]"`, nil)
+		`typeset -A m[k]=v; typeset m[j]=w; echo "[${m[k]}][${m[j]}]"`, reaches)
 	if want := "[v][w]\n"; out != want || status != 0 {
 		t.Errorf("typeset -A m[k]=v = %q (status %d), want %q at 0", out, status, want)
+	}
+
+	// The other answer, with the discriminator #1380 was measured without:
+	// a *set* name, so the number the expression comes to is not the 0 an
+	// unset one gives and cannot be mistaken for a discarded subscript.
+	out, status = runDeclareElement(t,
+		`k=7; typeset -A m[k]=v; echo "[${m[k]}][${m[7]}]"`, func(s *Semantics) {
+			s.TableLetterReachesItsOwnOperandsSubscript = No
+		})
+	if want := "[][v]\n"; out != want || status != 0 {
+		t.Errorf("the letter arriving late = %q (status %d), want %q at 0", out, status, want)
+	}
+
+	// And the earlier declaration, which raises no question: both readings
+	// take the key from a table that was already one.
+	out, status = runDeclareElement(t,
+		`k=7; typeset -A m; typeset m[k]=v; echo "[${m[k]}][${m[7]}]"`, nil)
+	if want := "[v][]\n"; out != want || status != 0 {
+		t.Errorf("a table declared earlier = %q (status %d), want %q at 0", out, status, want)
 	}
 }
 

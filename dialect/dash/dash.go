@@ -236,6 +236,12 @@ func Semantics() interp.Semantics {
 	// counts, -d, -t, -u) is refused as unknown here.
 	s.ReadOptions = "rp:"
 	// dash has the two POSIX letters and calls anything else illegal.
+	// unanswered ExpansionResultSuppliesGroupSyntax: dash has no pattern
+	// groups at all, so `(`, `)` and `|` out of a value are text here
+	// however they arrived and there is nothing for the axis to choose.
+	// unanswered TableLetterReachesItsOwnOperandsSubscript: dash has no
+	// arrays and no table letter, so `typeset -A m[k]=v` is a bad command
+	// name here rather than a declaration whose ordering could be measured.
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`

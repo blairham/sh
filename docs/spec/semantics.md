@@ -491,7 +491,7 @@ failing on its third line under `set -u`:
 | | `. ./p.sh` from `s.sh` | `eval` in `e.sh` |
 | --- | --- | --- |
 | dash | `./s.sh: 3: ./p.sh: NOPE: …` | `./e.sh: 3: eval: NOPE: …` |
-| bash 5.3 | `./p.sh: line 3: NOPE: …` | `./e.sh: line 4: NOPE: …` |
+| bash 5.3 | `./p.sh: line 3: NOPE: …` | `./e.sh: line 4: NOPE: …` (see below) |
 | ksh93 | `./s.sh[2]: .: line 3: NOPE: …` | `./e.sh[2]: eval: line 3: NOPE: …` |
 | zsh | `./p.sh:3: NOPE: …` | `(eval):3: NOPE: …` |
 
@@ -500,7 +500,7 @@ for a parse failure, and three of the four rows are already answered by
 something else: zsh's and bash's `SourceReplacesShell` is what
 `LocationNamesTheCurrentFile` and `LocationNamesTheEvalText` do, and ksh93's
 `SourceBeforeLocation` is a *stack* rendered into the prefix rather than a
-name — `#2452`. **dash's `SourceAfterLocation` is the one this rule adds**,
+name — #2461. **dash's `SourceAfterLocation` is the one this rule adds**,
 and `Runner.borrowedName` is where it is written.
 
 `Diagnostics.BorrowedTextIsNamedAtRunTime` is what turns it on, and it is a
@@ -533,6 +533,12 @@ under either rule.
 cloned like `frames` for the reason `interp/clonetables.go` gives — a
 subshell started inside a sourced file would otherwise append into the
 parent's array.
+
+bash's `eval` row above is a fourth question and not this one: its `line 4`
+where every other shell says `line 3` is bash numbering the evaluated text on
+from the line the `eval` word is written on, `$LINENO` included. Measured with
+the whole `eval` on one physical line, which is what tells that reading from
+the physical one — #2462.
 
 ### The one operand that is not an error
 

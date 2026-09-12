@@ -2349,7 +2349,7 @@ func (r *Runner) locationPrefix() string {
 //
 // A named type over `sourced` rather than `sourced` itself, so that the stack
 // says what it is a stack *of* — and so that the shape has somewhere to grow
-// when the dialect that renders the whole chain arrives (#2452).
+// when the dialect that renders the whole chain arrives (#2461).
 type borrowedText struct{ sourced }
 
 // borrowedAtLocation is the text a diagnostic's line was read from, when that
@@ -2393,7 +2393,7 @@ func (r *Runner) borrowedAtLocation() (borrowedText, bool) {
 // locationNameAndLine above, so reaching for the name again would write it
 // twice; SourceBeforeLocation is ksh93's, and that shell also renders the
 // *caller's* line into the prefix (`./s.sh[2]: .: line 3:`), which is a stack
-// rather than a name and which nothing here models yet — see #2452.
+// rather than a name and which nothing here models yet — see #2461.
 //
 // Measured 2026-09-12, dash 0.5.12, `env -i` over a script file: a failure on
 // line 3 of a file sourced from `./s.sh` is `./s.sh: 3: ./p.sh: NOPE:

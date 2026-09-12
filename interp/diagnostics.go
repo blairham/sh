@@ -2491,7 +2491,7 @@ type Diagnostics struct {
 	// from the location itself — turning this on there would write the name
 	// twice. ksh93 is the one that will want it and does not have it yet:
 	// that shell renders the whole call stack into the prefix
-	// (`./s.sh[2]: .: line 3:`), which is more than a name and is #2452.
+	// (`./s.sh[2]: .: line 3:`), which is more than a name and is #2461.
 	//
 	// Where the name goes is still EvalNaming's and SourceFileNaming's to
 	// say, and what it is still EvalSourceName's and SourceFileIsTheBuiltin's

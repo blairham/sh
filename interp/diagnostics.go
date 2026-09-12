@@ -2365,6 +2365,44 @@ type Diagnostics struct {
 	// syntax-error status.
 	ForNameStatus int
 
+	// ForArithHeader is a C-style `for` header that does not hold the two
+	// separators its three expressions are parted by — `for (())`,
+	// `for ((;))`, `for ((i=0))`, `for ((1;2))`. Three verbs: %[1]s the last
+	// part of the header trimmed, %[2]s the header as written with its
+	// parentheses, %[3]d the line the header opens on.
+	//
+	// Every shell in the panel refuses it and each says something different:
+	// a sentence about the expression that was not there, a complaint about
+	// the closer, or the text of the last part. Empty falls back to the
+	// substrate's own sentence (#2225).
+	ForArithHeader string
+	// ForArithHeaderNoPart is the same refusal where the last part is empty,
+	// for the dialect that names that part and so has nothing to name:
+	// `for ((;))` is a bare `parse error` in zsh where `for ((;2))` is
+	// `parse error near `2'`. Empty means the dialect says the same either
+	// way, which three of the four do.
+	ForArithHeaderNoPart string
+	// ForArithSeparator is a C-style `for` header with *more* than two
+	// separators, in a dialect that refuses one — see
+	// syntax.Dialect.ForArithExtraSeparators for the two that do not. The
+	// same three verbs.
+	//
+	// A field of its own rather than a shape of ForArithHeader because the
+	// one dialect that refuses both words them apart: `` `;' unexpected ``
+	// here against `arithmetic expression required` there.
+	ForArithSeparator string
+	// ForArithHeaderEcho is the second line written under either of those
+	// two, for the dialect that echoes something after a parse failure.
+	// One verb: %[1]s the header as written.
+	//
+	// Not the offending *line*, which is what EchoesTheOffendingLine writes
+	// everywhere else: bash answers `for ((;;;)); do :; done` with
+	// ``syntax error: `((;;;))'`` on its second line — the header alone,
+	// under a repeat of the sentence's opening words — and answers a header
+	// written over four lines with all four of them. Empty means no second
+	// line, which is what the other three write.
+	ForArithHeaderEcho string
+
 	// Unterminated is input that ran out with a construct still open, and it
 	// is four verbs because the panel names four different parts of that one
 	// state rather than wording a shared diagnosis four ways:
@@ -3435,6 +3473,7 @@ type Diagnostics struct {
 	PromptUnmatchedArithSubst     string
 	PromptUnmatchedProcSubst      string
 	PromptBadSubstitution         string
+	PromptForArithHeader          string
 }
 
 // LocationStyle is one shell's way of saying where a diagnostic happened.
@@ -3929,6 +3968,14 @@ func (d Diagnostics) ParseFailure(err error) string {
 		return d.arithParseFailure(se, se.Expr)
 	case syntax.ErrForName:
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)
+	case syntax.ErrForArithHeader:
+		form := d.ForArithHeader
+		if se.LastToken == "" && d.ForArithHeaderNoPart != "" {
+			form = d.ForArithHeaderNoPart
+		}
+		return Wording(form, se.Msg, se.LastToken, se.Token, se.Pos.Line)
+	case syntax.ErrForArithSeparator:
+		return Wording(d.ForArithSeparator, se.Msg, se.LastToken, se.Token, se.Pos.Line)
 	case syntax.ErrCondOperand:
 		if d.CondOperand != "" {
 			return Wording(d.CondOperand, "", se.Token, se.Expected, se.LastToken, se.Pos.Line)
@@ -4065,6 +4112,7 @@ func (d Diagnostics) ForPrompt() Diagnostics {
 		{&d.UnmatchedProcSubst, d.PromptUnmatchedProcSubst},
 		{&d.BadSubstitution, d.PromptBadSubstitution},
 		{&d.SyntaxError, d.PromptSyntaxError},
+		{&d.ForArithHeader, d.PromptForArithHeader},
 	} {
 		if w.prompt != "" {
 			*w.at = w.prompt
@@ -4289,12 +4337,35 @@ func (d Diagnostics) SourceEcho(naming SourceNaming, shell, source string, line 
 // because the line it would quote is still on the screen above the complaint,
 // and splitting the empty string yields one empty line that came out as a
 // bare "`'".
+//
+// A refused C-style `for` header is the exception on both counts, and it is an
+// exception because the shell that writes it measurably treats it as one: the
+// text it echoes is the *header* rather than the line, so a header written
+// over four lines comes back over four lines and the sentence carries its own
+// opening words. That text came from the parser rather than from the source,
+// so it survives where there is no source to index — measured 2026-09-12 on a
+// pseudo-terminal, where bash writes both lines for `for ((i=0))` with no line
+// number in front of either (#2225).
 func (d Diagnostics) offendingLine(line int, err error, src string) string {
+	var se *syntax.Error
+	if !errors.As(err, &se) {
+		return ""
+	}
+	switch se.Kind {
+	case syntax.ErrForArithHeader, syntax.ErrForArithSeparator:
+		// A refused `for` header is echoed as the header rather than as the
+		// line it sits on, and it needs no source: the parser carried the
+		// text, so `eval` and a prompt get the second line as readily as a
+		// script does.
+		if d.ForArithHeaderEcho == "" {
+			return ""
+		}
+		return Wording(d.ForArithHeaderEcho, "", se.Token) + "\n"
+	}
 	if !d.EchoesTheOffendingLine || src == "" {
 		return ""
 	}
-	var se *syntax.Error
-	if !errors.As(err, &se) || se.Kind != syntax.ErrUnexpected {
+	if se.Kind != syntax.ErrUnexpected {
 		return ""
 	}
 	lines := strings.Split(src, "\n")

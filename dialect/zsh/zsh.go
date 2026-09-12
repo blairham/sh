@@ -80,6 +80,14 @@ func Dialect() syntax.Dialect {
 	// $i; i=$((i+1)) }` counts up without stopping here, which is what says
 	// so.
 	d.ShortForm = true
+	// A C-style `for` header may hold more than the two separators its three
+	// expressions need: everything past the second `;` is part of the third
+	// expression, semicolons and all, so `for ((;;;)); do echo body; break;
+	// done` prints `body` here and is a whole-script syntax error in bash.
+	// Measured 2026-09-12 against bash 5.3.15, bash 3.2.57, the same bash as
+	// `sh`, and ksh93u+, which agrees with this shell. Fewer than two is not
+	// this flag: `for ((i=0))` is refused by every column (#2225).
+	d.ForArithExtraSeparators = true
 	// `for key value ( a 1 b 2 ) { … }`: the loop takes one word per name on
 	// every pass, and a short final pass leaves the names it did not reach
 	// empty. Independent of the two flags above, measured over all four
@@ -2322,9 +2330,18 @@ func Diagnostics() interp.Diagnostics {
 		// zsh:1: parse error near `true'.
 		MissingFuncBodyOmitsTheLine: true,
 		ForName:                     "parse error near `%[1]s'",
-		Unterminated:                "parse error near `%[5]s'",
-		UnmatchedQuote:              "unmatched %[1]s",
-		UnmatchedCmdSubst:           "parse error near `%[3]s'",
+		// A C-style `for` header with fewer than two separators, named by
+		// the text of its last part and by nothing where that part is blank.
+		// Measured 2026-09-12: `for ((i=0))` is `parse error near `i=0'`,
+		// `for ((;2))` names `2`, and `for ((;))`, `for ((1;))` and
+		// `for (( x ; ))` are a bare `parse error`. More than two separators
+		// is not refused here at all — see
+		// syntax.Dialect.ForArithExtraSeparators (#2225).
+		ForArithHeader:       "parse error near `%[1]s'",
+		ForArithHeaderNoPart: "parse error",
+		Unterminated:         "parse error near `%[5]s'",
+		UnmatchedQuote:       "unmatched %[1]s",
+		UnmatchedCmdSubst:    "parse error near `%[3]s'",
 		// This shell prints at most twenty bytes of the word and marks it,
 		// and marks it at exactly twenty as well — see the field. The other
 		// three print the whole word or none of it.

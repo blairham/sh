@@ -3068,6 +3068,7 @@ func (p *Parser) parseForArith(start Pos) Command {
 
 	init, cond, post := splitForArith(text)
 	c.InitText, c.CondText, c.PostText = init, cond, post
+	p.checkForArithSeparators(text, at)
 	// The deferred trees are built from the parts *as written* rather than
 	// from the trimmed fields, so that an offset one of them records — the
 	// `YStart` a division's blame is sliced from — indexes the same string
@@ -3210,6 +3211,50 @@ func (c *ForArithClause) PartsAsWritten() (init, cond, post string) {
 		}
 	}
 	return c.InitText, c.CondText, c.PostText
+}
+
+// checkForArithSeparators refuses a C-style `for` header that does not hold
+// the two separators its three expressions are parted by.
+//
+// The count is what the header *means*, not decoration: two separators are
+// three expressions, and a missing one is a missing expression rather than an
+// empty one. The condition is the expression that matters, because an absent
+// condition is true — which is what makes `for ((;;))` the endless loop every
+// shell spells that way, and what made `for (())` an endless loop here when it
+// should have been refused before anything ran (#2225).
+//
+// text is the header between the parentheses, and at the position the header
+// opens at, which is the line every shell that reports this names — the line
+// the `for ((` is on, not the line the count ran out on, so a header written
+// over four lines is still reported at its first.
+func (p *Parser) checkForArithSeparators(text string, at Pos) {
+	if p.err != nil {
+		return
+	}
+	// The parts as the header wrote them rather than as splitForArith pads
+	// them: one dialect names the last part's text, and a header with one
+	// part has that part as its last where the padded three have an empty
+	// string there.
+	parts := strings.Split(text, ";")
+	kind, msg := ErrForArithHeader, "arithmetic expression required"
+	switch seps := len(parts) - 1; {
+	case seps == 2:
+		return
+	case seps > 2:
+		if p.dialect.ForArithExtraSeparators {
+			// The dialect folds everything past the second separator into
+			// the third expression and lets the arithmetic reader complain
+			// about it if the loop ever gets there, which is what the two
+			// shells that take this header do.
+			return
+		}
+		kind, msg = ErrForArithSeparator, "`;' unexpected"
+	}
+	p.err = &Error{
+		Pos: at, Kind: kind, Msg: msg,
+		Token:     "((" + text + "))",
+		LastToken: strings.TrimSpace(parts[len(parts)-1]),
+	}
 }
 
 // splitForArith cuts the header into its three parts.

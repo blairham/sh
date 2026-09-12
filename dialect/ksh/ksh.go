@@ -36,6 +36,14 @@ func Dialect() syntax.Dialect {
 	// And a second `!` inverts the first, as in bash: `! ! true` answers 0.
 	d.RepeatedNegationToggles = true
 	d.ParamIndirection = true
+	// A C-style `for` header may hold more than the two separators its three
+	// expressions need, as in zsh: the leftover text belongs to the third
+	// expression and is refused as arithmetic if the loop ever evaluates it,
+	// so `for ((;;;)); do echo body; break; done` prints `body` here and
+	// `for ((;;;)); do :; done` stops on its first pass with an arithmetic
+	// complaint. bash refuses the whole script instead. Measured 2026-09-12
+	// across the panel (#2225).
+	d.ForArithExtraSeparators = true
 	// A single `;` written where a command belongs is stepped over — `; b`,
 	// `a ; ; b`, `a & ; b`, `a |& ; b`, `a && ; b` and `a || ; b` all run —
 	// and it is stepped over rather than standing in for anything: `false ||
@@ -1832,6 +1840,13 @@ func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	// ksh93 does not call this a bad substitution: it is a syntax error
 	// naming the character it could not read.
 	d.BadSubstitution, d.PromptBadSubstitution = parseWording(2, "`%[1]s' unexpected")
+	// A C-style `for` header with fewer than two separators is an unexpected
+	// closer here, whatever the header held: measured 2026-09-12, `for (())`,
+	// `for (( ))`, `for ((1;2))` and `for ((i=0))` are each `syntax error at
+	// line 1: `))' unexpected`, so the sentence names neither the header nor
+	// the part the way the other two columns do. More than two separators is
+	// accepted — see syntax.Dialect.ForArithExtraSeparators (#2225).
+	d.ForArithHeader, d.PromptForArithHeader = parseWording(3, "`))' unexpected")
 	// A refusal with no wording of its own — the substrate's own sentence,
 	// which this shell still puts its line in front of. Measured from a
 	// script: `function a 1b { :; }` is `syntax error at line 1: invalid

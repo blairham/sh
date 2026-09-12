@@ -270,6 +270,33 @@ type Dialect struct {
 	// the parenthesis after `for` is a syntax error.
 	CStyleFor bool
 
+	// ForArithExtraSeparators lets a C-style `for` header hold more than the
+	// two separators its three expressions need: `for ((;;;))`,
+	// `for ((1;2;3;4))`.
+	//
+	// The header is still three expressions there — everything past the
+	// second `;` is part of the third, semicolons and all — so the loop
+	// parses and the leftover text is refused as arithmetic, at run time and
+	// only if that expression is ever reached. `for ((;;;)); do break; done`
+	// therefore runs and prints nothing, where `for ((;;;)); do :; done`
+	// reaches the third expression on its first pass and stops.
+	//
+	// Measured 2026-09-12 on `for ((;;;)); do echo body; break; done`: ksh93u+
+	// and zsh 5.9.2 print `body`, and bash 5.3.15, bash 3.2.57 and the same
+	// bash under argv[0] of `sh` all refuse the script with `` `;'
+	// unexpected `` and run none of it. So this is an acceptance the two add
+	// rather than a refusal bash has, and it is off in Core for that reason
+	// (#2225).
+	//
+	// *Fewer* than two separators is not this flag and has no flag: every
+	// shell in the panel refuses `for (())`, `for ((;))` and `for ((i=0))`,
+	// which is [ErrForArithHeader]. The two were one over-acceptance here
+	// until they were measured apart, and the missing refusal was unbounded
+	// rather than wrong — a header with no separators has no condition, an
+	// absent condition is true, and `for (()); do echo x; done` printed for
+	// as long as it was left alone.
+	ForArithExtraSeparators bool
+
 	// Select enables `select name [in words] do … done`, the menu loop.
 	// Absent from dash, where `select` is an ordinary word and the `do` that
 	// follows it is a syntax error.

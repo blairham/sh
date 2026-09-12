@@ -107344,6 +107344,13 @@
       }
     },
     "param/the-escape-flag-reads-the-meta-prefixes-too": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: ${(g:e:)v}: bad substitution",
@@ -127278,6 +127285,13 @@
       }
     },
     "print/a-code-point-escape-is-not-a-meta-target": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: print: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: print: command not found",
@@ -127730,6 +127744,13 @@
       }
     },
     "print/a-meta-prefix-takes-the-next-escape": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: print: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: print: command not found",
@@ -127774,6 +127795,13 @@
       }
     },
     "print/a-meta-prefix-with-nothing-after-it": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: print: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: print: command not found",

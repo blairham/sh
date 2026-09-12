@@ -1257,6 +1257,18 @@ type Runner struct {
 	// bg is set on the runner *inside* a background job, so the process it
 	// starts can be recorded against the job.
 	bg *Job
+	// inJob is the background job whose processes this shell is starting,
+	// which is a wider set of shells than bg is set on: every element of a
+	// backgrounded pipeline is part of the job, and only the last of them
+	// names it. Keeping the two apart is what lets `$!` stay one pid while
+	// `kill %1` reaches the whole pipeline — see Job.took, and the comment
+	// beside `sub.bg = nil` in pipeline.go for why only one element may
+	// settle the number.
+	inJob *Job
+	// part is this shell's share of the job's start: `&` does not return
+	// until every element of a backgrounded pipeline has one. Nil where this
+	// shell is not one of several — see Job.expectPart.
+	part *jobPart
 	// scopes is the stack `local` unwinds. Shell scoping is dynamic, so
 	// there is one set of variables and this records what to put back.
 	scopes []*scope
@@ -3495,7 +3507,8 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	// again: `basename --bad` complains as `basename` in every shell in the
 	// panel and complained as `/usr/bin/basename` here.
 	cmd.Args[0] = argv[0]
-	if (r.bg != nil && r.monitor) || (r.bg == nil && r.WaitForCommand != nil) {
+	ownGroup := (r.bg != nil && r.monitor) || (r.bg == nil && r.WaitForCommand != nil)
+	if ownGroup {
 		// A process group of its own, which is what makes signaling and
 		// terminal ownership answerable at all — for a foreground command as
 		// much as a background one, once there is something able to notice it
@@ -3530,6 +3543,11 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// handed the script, so `kill -- -$pgid` would reach the placeholder
 		// and nothing else. See procanchor.go.
 		setProcessGroupIn(cmd, pgid)
+		// And then the group is the substitution's rather than this
+		// process's, so a signal aimed at the job must be aimed at the
+		// process: the group holds the anchor and every other command the
+		// body started.
+		ownGroup = false
 	}
 	cmd.Dir = r.Dir
 	cmd.Env = env
@@ -3563,17 +3581,19 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// while this goroutine blocks on the process. Once, and settlePID says
 		// why: a job that starts a second external command reaches this again,
 		// by which time the shell has already read the field.
-		r.bg.settleStartedPID(cmd.Process.Pid, r.monitor)
+		r.bg.settleStartedPID(cmd.Process.Pid, ownGroup)
+		r.tookJobProcess(cmd.Process.Pid, ownGroup)
 		r.status = r.waitForBackgroundProcess(cmd)
+		r.releasedJobProcess(cmd.Process.Pid)
 		r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
 		return nil
 	}
 
 	if r.WaitForCommand != nil {
-		return r.runWatched(ctx, cmd, argv, action)
+		return r.runWatched(ctx, cmd, argv, action, ownGroup)
 	}
 
-	err := cmd.Run()
+	err := r.startAndWait(cmd, ownGroup)
 	r.addChildTime(cmd.ProcessState)
 	var ee *exec.ExitError
 	switch {
@@ -3657,7 +3677,7 @@ func (r *Runner) waitForBackgroundProcess(cmd *exec.Cmd) int {
 // Started rather than run: the wait is the caller's, so this must not also be
 // waiting — two waits on one child is a race over who reaps it, and the loser
 // gets an error instead of a status.
-func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, action Action) error {
+func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, action Action, ownGroup bool) error {
 	if err := cmd.Start(); err != nil {
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		r.diagf("%s: %v\n", argv[0], err)
@@ -3665,6 +3685,8 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		return nil
 	}
 	pid := cmd.Process.Pid
+	r.tookJobProcess(pid, ownGroup)
+	defer r.releasedJobProcess(pid)
 	// The command's own group is the terminal's foreground group while it
 	// runs, so ^C and ^Z reach it rather than this shell. Taken back
 	// afterwards however it ended — a shell that left the terminal with a

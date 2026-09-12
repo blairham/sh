@@ -113,13 +113,19 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 	job := &Job{
 		done:     make(chan struct{}),
 		ready:    make(chan struct{}),
+		started:  make(chan struct{}),
 		stopNote: make(chan struct{}),
-		Command:  name,
+		// The body itself, released when its pid settles either way — the
+		// same count `&` keeps, for the same reason. See Job.expectPart.
+		parts:   1,
+		Command: name,
 	}
 	sub := r.clone()
 	sub.inheritJobs(jobBoundaryBackground)
 	sub.retagTrapBoundary(trapContextBackground)
 	sub.bg = job
+	sub.inJob = job
+	sub.part = nil
 	// Its own copy of the descriptor table, as a background job takes: a
 	// coprocess runs beside the shell that started it, and a descriptor the
 	// script parks and then drops is dropped underneath it otherwise. See
@@ -157,8 +163,9 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 		job.finish(status)
 	})
 	<-job.ready
+	<-job.started
 
-	r.jobs = append(r.jobs, job)
+	r.addJob(job)
 	r.setLastJob(job)
 	r.becomeCurrentJob(job)
 

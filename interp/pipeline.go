@@ -329,8 +329,20 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	}
 	subs := make([]*Runner, last)
 	releaseFds := make([]func(), last)
+	// A backgrounded pipeline is one job made of several processes, and the
+	// shell that ran `&` must not move on before they exist: `kill %1` on the
+	// next line means all of them. One element settles the job's pid and
+	// releases the body's own share of the count, so raising the count for
+	// every element here — before any of them runs — is what keeps it from
+	// reaching zero in between. See Job.expectPart.
+	if r.bg != nil {
+		r.bg.expectPart(last)
+	}
 	for i := 0; i < last; i++ {
 		sub := r.clone()
+		if r.bg != nil {
+			sub.part = &jobPart{job: r.bg}
+		}
 		// Every element runs at once, so each one's descriptors are its own
 		// copies rather than one table's. An element that closes a parked
 		// descriptor — `{ exec {a}<&-; } | { read v <&$a; }` — is a real
@@ -410,6 +422,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			// Done last, because it is what releases the shell to read
 			// everything above.
 			defer wg.Done()
+			// An element that ended without ever starting a process is as
+			// started as it is going to get, and the shell that ran `&` is
+			// waiting on exactly that.
+			subs[i].part.started()
 			// An element that never reached a trace point must still let the
 			// next one print, or the pipeline deadlocks on its own logging.
 			subs[i].releaseTraceTurn()

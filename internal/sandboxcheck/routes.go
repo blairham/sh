@@ -202,7 +202,7 @@ func coreRoutes() []Route {
 		Only:   []string{"zsh"},
 		Script: `read L < =(read x < {{secret}}; echo $x); echo $L`,
 		Did:    leaked,
-		Why:    "the substitution that materialises a file, so it writes before it reads",
+		Why:    "the substitution that materializes a file, so it writes before it reads",
 	}, {
 		Name: "read/coproc",
 		Only: []string{"bash"},

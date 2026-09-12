@@ -85,16 +85,20 @@ func testSemantics() Semantics {
 	s.DeclareListing = DeclareListingClustered
 	s.DeclareValueQuoting = ListingQuoteAlwaysDouble
 	s.DeclaredNameWithoutValueIsEmpty = No
-	// The four declaration questions whose answer the suite needs but is not
+	// The declaration questions whose answer the suite needs but is not
 	// about. Each is a dialect's divergence and the majority of the panel
 	// answers it the quiet way, which is what a test not asking the question
 	// should meet: the suites that *are* about them set both sides
 	// themselves — see declarationlisting_test.go, exportglobal_test.go,
-	// inconsistenttype_test.go and readonlycompound_test.go.
+	// inconsistenttype_test.go, typeletterfamily_test.go and
+	// readonlycompound_test.go.
 	s.ExportLetterDeclaresAGlobal = No
 	s.ValuelessDeclarationOfAHeldNameListsIt = No
 	s.ScalarOverACompoundIsAnInconsistentType = No
 	s.ReadonlyRecordsTheCompoundAttribute = No
+	s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = No
+	s.NumericAttributeReplacesTheCaseAttribute = No
+	s.CaseAttributeReplacesTheNumericAttribute = No
 	s.DeclarePrintReportsAMissingName = Yes
 	s.TypesetLocalNeedsKeywordFunction = No
 	s.ReadonlyReassignmentFatal = No

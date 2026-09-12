@@ -2905,6 +2905,94 @@ type Semantics struct {
 	// Only the listing observes it in the shell that says no: a frozen name
 	// cannot then be assigned an array to tell the two apart.
 	ReadonlyRecordsTheCompoundAttribute Answer
+	// TypeLetterAndAnArrayLiteralIsAnInconsistentType refuses a declaration
+	// that names a *type* — the integer or the float letter — and assigns an
+	// array literal to the same name, and ends the script over it.
+	//
+	// Measured 2026-09-12, from a script file with `env -i` and a scratch
+	// HOME:
+	//
+	//	typeset -ia z=(1 2); echo "st=$?"; typeset -p z; echo tail
+	//
+	//	zsh 5.9.2    typeset: z: inconsistent type for assignment, status 1,
+	//	             and the script ends
+	//	bash 5.3.15  st=0 · declare -ai z=([0]="1" [1]="2") · tail
+	//	ksh93u+      st=0 · typeset -a -i z=(1 2) · tail
+	//
+	// The array letter is not what triggers it, which is the measurement
+	// that says this is about the *type* and not about a pairing: `typeset
+	// -i z=(1 2)` with no `-a` is the same refusal, `typeset -F 3 z=(1 2)`
+	// and `typeset -E 3 z=(1 2)` are too, and `typeset -ua q=(ab cd)` is
+	// taken and lists as `typeset -au q=( ab cd )`. The case letters name
+	// what happens *to* a value and the numeric ones name what the value
+	// *is*, so only the second kind is two things at once with an array.
+	// The width letters side with the case ones — `typeset -Z 4 z=(1 2)`
+	// lists as `typeset -aZ4 z=( 1 2 )` and `typeset -L 4 z=(ab cd)` as
+	// `typeset -aL4 z=( ab cd )`.
+	//
+	// It is the **letter on this line** and not the attribute the name is
+	// carrying, which is the second discriminating row: `typeset -i z;
+	// typeset z=(1 2)` is taken in the same shell and leaves `typeset -a z=(
+	// 1 2 )`, the integer letter simply lost. So the question is asked of a
+	// declaration and never of a store.
+	//
+	// All four declaration utilities refuse it, each naming itself:
+	// `readonly -i z=(1 2)` is `readonly: z: inconsistent type for
+	// assignment`, `export -i z=(1 2)` is `export:`, and `local -i z=(1 2)`
+	// inside a function is `f:local:`. The wording is
+	// Diagnostics.InconsistentType, shared with
+	// ScalarOverACompoundIsAnInconsistentType — one sentence, two questions
+	// that reach it.
+	//
+	// Silent where it is answered wrongly, and in the worse direction: the
+	// script that should have stopped carries on holding an array of the
+	// type it was refused.
+	TypeLetterAndAnArrayLiteralIsAnInconsistentType Answer
+	// NumericAttributeReplacesTheCaseAttribute makes the integer and float
+	// letters take a case attribute off the name they are given, rather than
+	// standing beside it.
+	//
+	// Measured 2026-09-12, from a script file:
+	//
+	//	typeset z=1; typeset -l z; typeset -i z; typeset -p z
+	//
+	//	ksh93u+      typeset -i z=1     the `-l` is gone
+	//	zsh 5.9.2    typeset -i z=1     the same
+	//	bash 5.3.15  declare -il z="1"  both stand
+	//
+	// `-F` is the same letter's family and behaves the same way: `typeset
+	// -l z; typeset -F z` is `typeset -F z=1.0000000000` in both shells that
+	// answer yes.
+	//
+	// The converse is a separate question and the panel splits differently
+	// on it — see CaseAttributeReplacesTheNumericAttribute, which is what
+	// makes this a direction rather than a set.
+	//
+	// Only a listing observes it, so the whole cost of the wrong answer is a
+	// `typeset -p` that says more than the shell would.
+	NumericAttributeReplacesTheCaseAttribute Answer
+	// CaseAttributeReplacesTheNumericAttribute is the other direction: `-l`
+	// and `-u` take the integer or float letter off the name they are given.
+	//
+	// Measured 2026-09-12, from a script file:
+	//
+	//	typeset y=1; typeset -i y; typeset -l y; typeset -p y
+	//
+	//	ksh93u+      typeset -l y=1      the `-i` is gone
+	//	zsh 5.9.2    typeset -il y=1     both stand
+	//	bash 5.3.15  declare -il y="1"   both stand
+	//
+	// So ksh93 holds one family — a name carries one letter saying what its
+	// values are, and the last one written speaks — where zsh replaces in
+	// one direction only and bash in neither. Two axes rather than one
+	// three-valued answer because the two directions were measured
+	// separately and one shell answers them differently.
+	//
+	// The value the earlier letter produced stays: `typeset -F z; typeset -l
+	// z` is `typeset -l z=1.0000000000` in ksh93, so what goes is the
+	// rendering of what comes next and not what is already there — the same
+	// reading `+i` and `+F` already have.
+	CaseAttributeReplacesTheNumericAttribute Answer
 	// AttributeRereadsTheValueItFinds makes an attribute a declaration adds
 	// re-read the value the name already holds, on the spot, rather than
 	// waiting for the next assignment. `typeset -i FOO` on a `FOO=bar`

@@ -14971,6 +14971,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/the-function-listing-keeps-the-declarations-keyword` | **2>** `<script>: 2: Syntax error: "}" unexpected` *(status 2)* | **2>** `<script>: line 3: functions: command not found~<script>: line 4: functions: command not found` *(status 127)* | **2>** `<script>: line 3: functions: command not found~<script>: line 4: functions: command not found` *(status 127)* | **2>** `<script>: line 3: functions: command not found~<script>: line 4: functions: command not found` *(status 127)* | `f(){ :; }~function g { echo x; }` | `f () {~	:~}~g () {~	echo x~}` |
 | `declare/a-listed-function-still-declares-its-locals` | **2>** `<script>: 2: Syntax error: "}" unexpected` *(status 2)* | `out=g` **2>** `<script>: line 3: functions: command not found` | `out=g` **2>** `<script>: line 3: functions: command not found` | `out=g` **2>** `<script>: line 3: functions: command not found` | `out=g` | `out=g` |
 | `declare/the-function-listing-under-its-other-word` | **2>** `<script>: 2: typeset: not found~<script>: 3: typeset: not found` *(status 127)* | `f () ~{ ~    echo a;~    echo b~}~f () ~{ ~    echo a;~    echo b~}` | `f () ~{ ~    echo a;~    echo b~}~f () ~{ ~    echo a;~    echo b~}` | `f () ~{ ~    echo a;~    echo b~}` **2>** `<script>: line 3: typeset: f: not found` *(status 1)* | `f(){ echo a; echo b; }~f(){ echo a; echo b; }` | `f () {~	echo a~	echo b~}~f () {~	echo a~	echo b~}` |
+| `declare/a-type-letter-beside-an-array-literal` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~declare -ai z=([0]="1" [1]="2")~tail` | `st=0~declare -ai z=([0]="1" [1]="2")~tail` | `st=0~declare -ai z='([0]="1" [1]="2")'~tail` | `st=0~typeset -a -i z=(1 2)~tail` | **2>** `<script>:typeset:1: z: inconsistent type for assignment` *(status 1)* |
+| `declare/the-array-letter-is-not-what-the-type-refusal-turns-on` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `1 st=0~declare -au q=([0]="AB" [1]="CD")~2 st=0~tail` | `1 st=0~declare -au q=([0]="AB" [1]="CD")~2 st=0~tail` | `1 st=2~declare -a q='([0]="ab" [1]="cd")'~2 st=0~tail` **2>** `<script>: line 1: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1 st=0~typeset -a -u q=(AB CD)~2 st=0~tail` | `1 st=0~typeset -au q=( ab cd )` **2>** `<script>:typeset:3: z: inconsistent type for assignment` *(status 1)* |
+| `declare/a-standing-type-attribute-and-a-later-array-literal` | **2>** `<script>: 1: typeset: not found~<script>: 2: Syntax error: "(" unexpected` *(status 2)* | `st=0~declare -ai z=([0]="1" [1]="2")` | `st=0~declare -ai z=([0]="1" [1]="2")` | `st=0~declare -ai z='([0]="1" [1]="2")'` | `st=0~typeset -a z=(1 2)` | `st=0~typeset -a z=( 1 2 )` |
+| `declare/a-numeric-letter-over-a-case-attribute` | **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found~<script>: 3: typeset: not found~<script>: 4: typeset: not found` *(status 127)* | `declare -il z="1"` | `declare -il z="1"` | `declare -i z="1"` **2>** `<script>: line 2: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -i z=1` | `typeset -i z=1` |
+| `declare/a-case-letter-over-a-numeric-attribute` | **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found~<script>: 3: typeset: not found~<script>: 4: typeset: not found` *(status 127)* | `declare -il y="1"` | `declare -il y="1"` | `declare -i y="1"` **2>** `<script>: line 3: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -l y=1` | `typeset -il y=1` |
 | `declare/listing-a-control-byte` | `st=127` **2>** `<shell>: 1: typeset: not found` | `declare -- v=$'a\001b'~st=0` | `declare -- v=$'a\001b'~st=0` | `declare -- v="ab"~st=0` | `v=$'a\x01b'~st=0` | `typeset v=$'a\C-Ab'~st=0` |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
@@ -16323,6 +16328,39 @@ grades it and nothing drift-checks it either, for the same reason.
   f(){ echo a; echo b; }
   typeset -f f
   typeset -fp f
+  ```
+- `declare/a-type-letter-beside-an-array-literal` — a declaration that names a *type* and assigns an array literal in one line, which one shell calls two kinds at once. zsh refuses it fatally -- `typeset: z: inconsistent type for assignment` at 1, and neither the listing nor `tail` runs -- where bash writes `declare -ai z=([0]="1" [1]="2")` and ksh93 `typeset -a -i z=(1 2)`, both at 0. The integer letter makes a name a scalar of that type in the refusing shell, so there is no array of it to declare. Run from a script rather than `-c` because the whole point is what does *not* run after the refusal
+  ```sh
+  typeset -ia z=(1 2); echo "st=$?"
+  typeset -p z
+  echo tail
+  ```
+- `declare/the-array-letter-is-not-what-the-type-refusal-turns-on` — the two halves that say the refusal above is about the *type* and not about pairing a value letter with `-a`. A case letter with the array letter is taken everywhere -- zsh lists `typeset -au q=( ab cd )`, keeping the text, and bash and ksh93 list the folded `AB CD` -- and the numeric letter with **no** array letter is refused just the same, so `-a` is neither necessary nor sufficient. Both in one row because either alone reads as a fact about the letter written rather than about the kind it names, and the taken line comes first so the refusal that ends the script cannot hide it
+  ```sh
+  typeset -ua q=(ab cd); echo "1 st=$?"
+  typeset -p q
+  typeset -i z=(1 2); echo "2 st=$?"
+  echo tail
+  ```
+- `declare/a-standing-type-attribute-and-a-later-array-literal` — the same two facts about one name, split across two lines, and the refusing shell takes it: the question is asked of the *letter on this line* and never of the attribute the name is carrying. zsh answers `typeset -a z=( 1 2 )` -- the integer letter simply lost -- where bash and ksh93 keep it and write `declare -ai` and `typeset -a -i`. A check written against the name's attribute rather than the line's letters refuses a line every shell in the panel writes an array for
+  ```sh
+  typeset -i z
+  typeset z=(1 2); echo "st=$?"
+  typeset -p z
+  ```
+- `declare/a-numeric-letter-over-a-case-attribute` — which of the letters that say what a name's values *are* may stand together. ksh93 and zsh both answer `typeset -i z=1` -- the case letter is gone, replaced rather than joined -- where bash keeps both and writes `declare -il z="1"`. The float letter is the same family in the shells that spell it: `typeset -l v; typeset -F v` drops the `l` in exactly those two
+  ```sh
+  typeset z=1
+  typeset -l z
+  typeset -i z
+  typeset -p z
+  ```
+- `declare/a-case-letter-over-a-numeric-attribute` — the same two letters in the other order, and it is the row that says the replacement has a *direction*. ksh93 answers `typeset -l y=1`, one family with the last letter speaking, while zsh keeps both -- `typeset -il y=1` -- having dropped the case letter in the row above. So the two directions are two answers and one shell gives them different ones; bash keeps both either way
+  ```sh
+  typeset y=1
+  typeset -i y
+  typeset -l y
+  typeset -p y
   ```
 - `declare/listing-a-control-byte` — how a listing spells a byte below 0x20 inside `$'...'`: an octal escape, a hex one, and a caret pair are three answers from three columns that otherwise quote alike, which is why the control escape is a field of its own rather than part of the quoting style. The fourth has no such builtin (#2057)
   ```sh

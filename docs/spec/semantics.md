@@ -7060,6 +7060,44 @@ each dialect's `UnimplementedOptionLetters`, so `declare -n ref=x` is
 refused today as "not implemented yet" rather than misread as an
 ordinary declaration. Filed as part of #430's scope decision.
 
+## The bare declaration listing, and the sign that reaches it
+
+Measured 2026-09-12, bash 5.3.15 `--norc --noprofile` with a scrubbed
+environment.
+
+A bare `declare` in bash is not a listing of its own. It is that shell's
+`set` listing, to the byte:
+
+    diff <(declare) <(set)        empty
+    diff <(declare +f) <(declare) empty
+    diff <(declare +F) <(declare) empty
+
+— every variable as an assignment, sorted, and then every function laid
+out the way that shell says a function back.
+
+That settles two things at once. The bare word had no answer here at all,
+so `declare` refused; and the plus-signed function letters had nothing to
+fall through to.
+
+**The plus sign on `f` or `F` takes the function attribute off**; it is
+not a names-only listing, which is what the two shells that have one do
+with the same spelling. What is left depends on whether an operand was
+written:
+
+    declare +f f    silent, 0 — and `declare -F` after it still names f
+    declare +f      the bare listing above
+    declare +F      the same listing again
+
+The operand row is the discriminating one: a shell that ignored the sign
+on its way to a listing writes the body there, and a shell that read it
+as "name the functions" writes the name. bash writes neither.
+
+The three shells apart: zsh writes the bare name for `typeset +f` with an
+operand and without one alike; ksh93 writes the spelling the function was
+declared with — `f()` for the parenthesised form and the bare name for
+the keyword one; dash has no `typeset`.
+
+
 ## The job and lookup long tail: type's letters, job specs, wait -n, disown, ulimit -a, the directory stack
 
 Oracle runs, 2026-09-04, bash 5.3, dash, ksh93u+, zsh 5.9.2. Corpus rows

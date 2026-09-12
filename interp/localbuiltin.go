@@ -42,6 +42,21 @@ const (
 	// what a shell *holds* rather than in what a listing looks like — the
 	// same thing SetListingAssignments says about a bare `set` there.
 	BareLocalListsEveryParameter
+	// BareLocalListsWhatSetLists is bash's answer for the *declaration*
+	// word, and it is not a fourth listing: it is byte-for-byte the listing
+	// a bare `set` writes in that shell — every variable as an assignment,
+	// then every function laid out the way it says functions back.
+	//
+	// Measured 2026-09-12 on bash 5.3.15, `--norc --noprofile` with a
+	// scrubbed environment: `diff <(declare) <(set)` is empty, and so is
+	// `diff <(declare +f) <(declare)`. So the form points at SetListing's
+	// walk rather than repeating it — two copies of one listing is how the
+	// two would come to disagree about a hidden name or a compound value.
+	//
+	// It reaches only the declaration word. That shell's bare `local` is
+	// BareLocalListsLocals, which is a genuinely different listing, and this
+	// value is deliberately not offered to it.
+	BareLocalListsWhatSetLists
 )
 
 func (f BareLocalListingForm) String() string {
@@ -52,6 +67,8 @@ func (f BareLocalListingForm) String() string {
 		return "BareLocalListsNothing"
 	case BareLocalListsEveryParameter:
 		return "BareLocalListsEveryParameter"
+	case BareLocalListsWhatSetLists:
+		return "BareLocalListsWhatSetLists"
 	}
 	return "BareLocalListingUnspecified"
 }
@@ -368,6 +385,11 @@ func (r *Runner) bareDeclarationListing() int {
 			r.printf("%s\n", r.attributeWordDeclaration(d, locals[name]))
 		}
 		return 0
+	case BareLocalListsWhatSetLists:
+		// Not a listing of its own: the one a bare `set` writes, run again
+		// under this word. See the constant for the measurement that says
+		// they are the same bytes.
+		return r.setListing()
 	case BareLocalListsLocals:
 		// No shell answers a bare declaration this way, and the value is in
 		// the form for `local`'s sake. Reaching it would be a preset saying

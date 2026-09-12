@@ -279,6 +279,14 @@ func (r *Runner) cannotRun(err error, how naming) int {
 	// format tolerates an unused argument and a plain one does not, which is
 	// the same trap interp/wording_test.go already pins.
 	r.diagf("%s\n", Wording(format, how.fallback, name))
+	if r.NotFoundHint != nil {
+		// A second line, from a caller that knows something this package may
+		// not — see Runner.NotFoundHint. The operand as written rather than
+		// the resolved path: a hint is about the word the person typed.
+		if hint := r.NotFoundHint(pe.name); hint != "" {
+			r.errf("%s\n", hint)
+		}
+	}
 	return 127
 }
 

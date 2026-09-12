@@ -47,6 +47,12 @@ type Parser struct {
 	// by LineShift, for a caller that parses a program in pieces and has to
 	// carry the numbering from one piece to the next.
 	aliasLineShift int
+	// flagTailFrom is the byte offset, one past a refused expansion flag
+	// group's `)`, that the rest of the word is read from — set by
+	// parseParamExp, which has the braces alone, and spent by newWord, which
+	// is the one place that knows where the word ends. Zero when no flag
+	// group has been refused. See Error.FlagGroupWordTail.
+	flagTailFrom int32
 	// aliasDone are the names already expanded in the command being read. It
 	// is a field rather than a local because the command word is not always
 	// reached from one place: assignment prefixes stand in front of it, so
@@ -1611,6 +1617,16 @@ func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
 	for i := range out {
 		if out[i].Kind == ParamExp && out[i].Param != nil && out[i].Param.FlagsErrPos > 0 {
 			out[i].Param.FlagsErrTail = p.sourceBetween(out[i].Pos, stop)
+		}
+	}
+	// And the dialect that has no flag groups at all refuses the same text
+	// while reading it, so the tail lands on the error rather than on a
+	// node. Same word and same end; a different start, because that shell
+	// quotes back only what follows the group's `)`.
+	if from := p.flagTailFrom; from > 0 {
+		p.flagTailFrom = 0
+		if pe, isErr := p.err.(*Error); isErr && pe.FlagGroupWordTail == "" {
+			pe.FlagGroupWordTail = flagGroupTail(p.sourceBetween(Pos{Offset: from, Line: 1, Col: 1}, stop))
 		}
 	}
 	return &Word{Spans: out, Start: start, Stop: stop}

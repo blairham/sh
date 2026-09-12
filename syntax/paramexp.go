@@ -599,9 +599,16 @@ func (p *Parser) parseParamExp(src string, start Pos, q Quoting, bare bool) *Par
 			// reading, the rest defer to the run — measured, a flag group in
 			// a branch never taken is never diagnosed there.
 			if p.dialect.BadSubstitutionAtParseTime {
+				first := p.err == nil
 				p.failKind(ErrBadSubstitution, "unknown operator in ${%s}", src)
-				if pe, isErr := p.err.(*Error); isErr {
+				if pe, isErr := p.err.(*Error); isErr && first {
 					pe.Token = "("
+					// The dialect that refuses here quotes the rest of the
+					// word back rather than the `(`, and only newWord knows
+					// where the word ends — see Error.FlagGroupWordTail.
+					if n := flagGroupClose(src); n >= 0 {
+						p.flagTailFrom = start.Offset + int32(len("${")+n+1)
+					}
 				}
 				return e
 			}
@@ -1799,4 +1806,42 @@ func (p *Parser) scanNestedExpansion(s string, at Pos, q Quoting) (inner *Word, 
 		return nil, "", false
 	}
 	return p.newWord(spans[:1], at, at), s[end:], true
+}
+
+// flagGroupClose is the index in an expansion's inner source of the `)` that
+// closes the flag group it opens with, or -1 where the scan cannot reach one.
+//
+// The scan is deliberately shallow: it honors a backslash and stops at a
+// nested `(`, which is what the shell whose refusal reads this does.
+// Measured on ksh93u+, 2026-09-12: `${(s.:.)x}` and `${(ps:\):)x}` both name
+// the text after their group's `)`, and `${(l(3))x}` goes back to naming the
+// `(` — so a group with a `(` inside it is one this cannot read either.
+func flagGroupClose(src string) int {
+	for i := 1; i < len(src); i++ {
+		switch src[i] {
+		case '\\':
+			i++
+		case '(':
+			return -1
+		case ')':
+			return i
+		}
+	}
+	return -1
+}
+
+// flagGroupTail is the text a refused flag group's word tail is quoted back
+// as. See Error.FlagGroupWordTail for the measurement, and for the two
+// shapes this does not reproduce.
+func flagGroupTail(src string) string {
+	if strings.ContainsAny(src, "$`") {
+		// An expansion in the tail and the quotes stay as written.
+		return src
+	}
+	return strings.Map(func(r rune) rune {
+		if r == '\'' || r == '"' {
+			return -1
+		}
+		return r
+	}, src)
 }

@@ -1984,6 +1984,9 @@ func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	// ksh93 does not call this a bad substitution: it is a syntax error
 	// naming the character it could not read.
 	d.BadSubstitution, d.PromptBadSubstitution = parseWording(2, "`%[1]s' unexpected")
+	// And a refused flag group is quoted back as the rest of the word rather
+	// than as the `(` — see Diagnostics.FlagGroupNamesTheWordTail.
+	d.FlagGroupNamesTheWordTail = true
 	// A C-style `for` header with fewer than two separators is an unexpected
 	// closer here, whatever the header held: measured 2026-09-12, `for (())`,
 	// `for (( ))`, `for ((1;2))` and `for ((i=0))` are each `syntax error at

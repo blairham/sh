@@ -2985,16 +2985,16 @@ type Diagnostics struct {
 	EmptySubscriptTextExpanded string
 
 	// The math-function sentences: `functions -M` registers a shell function
-	// under a name arithmetic can call, and one shell in the panel has the
-	// facility, so the other five leave all seven of these empty. See
-	// interp/mathfunc.go, where each was measured.
+	// under a name arithmetic can call. Only a preset with the facility fills
+	// these in; the rest leave all seven empty. See interp/mathfunc.go, where
+	// each was measured.
 	//
 	// The three at the call are *complete* sentences and are not wrapped by
-	// ArithError — measured, `zsh:1: unknown function: nosuchmf` where an
-	// ordinary failure in the same place is `zsh:1: bad math expression:
-	// operand expected at end of string`. The four at the registration are a
-	// builtin's and carry its name in the location the way every other
-	// builtin complaint here does.
+	// ArithError — `<shell>:1: unknown function: nosuchmf` where an ordinary
+	// failure in the same place is `<shell>:1: bad math expression: operand
+	// expected at end of string`. The four at the registration are a builtin's
+	// and carry its name in the location the way every other builtin complaint
+	// here does.
 
 	// MathFunctionUnknown is a name arithmetic called that no registration
 	// answers for. One verb: the name.
@@ -3025,27 +3025,26 @@ type Diagnostics struct {
 	// SubstringRangeError wraps a substring offset or length that would not
 	// evaluate. Two verbs: the parameter as written — `x`, or `a[@]` when a
 	// subscript was given — and the arithmetic sentence, already worded by
-	// ArithError. Empty leaves the sentence to stand alone, which is what two
-	// of the three shells with substrings do; bash alone puts the parameter in
-	// front of it.
+	// ArithError. Empty leaves the sentence to stand alone, the common answer; a
+	// preset may put the parameter in front of it.
 	//
 	// A separate field from ArithError rather than a flag on it, because the
-	// same shell wraps a subscript's failure without any such prefix: `${a[b
-	// c]}` is blamed on `b c` and `${x:b c}` on `x: b c`. One field could not
-	// say both.
+	// same preset wraps a subscript's failure without any such prefix:
+	// `${a[b c]}` is blamed on `b c` and `${x:b c}` on `x: b c`. One field could
+	// not say both.
 	SubstringRangeError string
 
 	// UnrecognizedModifier is the reason when a substring range read as a
-	// modifier list names one the dialect does not have. One verb: the
-	// segment as written.
+	// modifier list names one the preset does not have. One verb: the segment as
+	// written.
 	//
-	// Only reachable where SubstringRangeReadsModifiers is yes, so only one
-	// dialect fills it in.
+	// Only reachable where SubstringRangeReadsModifiers is yes, so only such a
+	// preset fills it in.
 	UnrecognizedModifier string
-	// UnrecognizedModifierAlone is the same complaint with nothing named,
-	// which is what the shell says when the segment *began* with a modifier
-	// and has text left over — `${x:ha}`, where `h` is one and `a` following
-	// it in the same segment is not. No verbs.
+	// UnrecognizedModifierAlone is the same complaint with nothing named, which
+	// is what is said when the segment *began* with a modifier and has text left
+	// over — `${x:ha}`, where `h` is one and `a` following it in the same
+	// segment is not. No verbs.
 	//
 	// A second field rather than an empty verb, because the two sentences do
 	// not differ by a substitution: one ends in a quoted name and the other
@@ -3053,71 +3052,69 @@ type Diagnostics struct {
 	UnrecognizedModifierAlone string
 
 	// SubstringErrorNamesTheWholeRange blames a failing offset together with
-	// everything written after it: `${x:1+:2}` is `1+:2` rather than `1+`.
-	// ksh93 alone, which reads `offset:length` as one string and reports from
-	// the failing point to its end — so a failing *length* is named on its own
-	// there, having nothing after it.
+	// everything written after it: `${x:1+:2}` is `1+:2` rather than `1+`. A
+	// preset that answers true reads `offset:length` as one string and reports
+	// from the failing point to its end — so a failing *length* is named on its
+	// own there, having nothing after it.
 	SubstringErrorNamesTheWholeRange bool
-	// EqualsNotFound is `=cmd` naming nothing. One verb: the name. zsh omits
-	// the colon it uses everywhere else, which is why this is not NotFound.
+	// EqualsNotFound is `=cmd` naming nothing. One verb: the name. The preset
+	// with the construct omits the colon it uses everywhere else, which is why
+	// this is not NotFound.
 	EqualsNotFound string
-	// UnboundVariable is an unset parameter under `set -u`. One verb: the
-	// name. bash calls it unbound where the other three call it not set.
+	// UnboundVariable is an unset parameter under `set -u`. One verb: the name.
+	// "unbound" and "not set" are both measured.
 	UnboundVariable string
 	// UnboundPositional is the same failure for a parameter whose name is not
 	// a variable name — `$1`, and `$!` before any background command. One
 	// verb: the name, without its `$`. Empty means "the same as
-	// UnboundVariable", which is true of three of the four — bash alone
-	// writes the `$` back, saying `$1: unbound variable` and
-	// `$!: unbound variable` where it says `NOPE: unbound variable` for a
-	// name.
+	// UnboundVariable", the common answer; a preset may write the `$` back,
+	// saying `$1: unbound variable` and `$!: unbound variable` where it says
+	// `NOPE: unbound variable` for a name.
 	//
-	// Named for the positional because that is where it was found, and it
-	// holds for `$!` too because bash's rule is about the *sigil* rather than
-	// about the parameter: measured, `set -u; echo "[$!]"` says
-	// `$!: unbound variable` in all three bash columns and dash says
-	// `!: parameter not set`, which is exactly the pair this field and
-	// UnboundVariable already carry.
+	// Named for the positional because that is where it was found, and it holds
+	// for `$!` too because the rule is about the *sigil* rather than about the
+	// parameter: `set -u; echo "[$!]"` is `$!: unbound variable` under one
+	// reading and `!: parameter not set` under the other, which is exactly the
+	// pair this field and UnboundVariable already carry.
 	UnboundPositional string
 	// AssignThroughExpansionBadName is an assignment written inside an
 	// expansion whose parameter cannot be assigned to at all — `${#::=w}`,
-	// where `#` is not a name, and `${@:=w}`, which every shell in the panel
-	// refuses. Two verbs: the name without its `$`, and the expansion as it
-	// was written, quoting run and all.
+	// where `#` is not a name, and `${@:=w}`, which every preset refuses. Two
+	// verbs: the name without its `$`, and the expansion as it was written,
+	// quoting run and all.
 	//
-	// Four wordings, measured 2026-09-11 with `set --`:
+	// Four wordings, measured with `set --`:
 	//
-	//	bash 5.3 / as-sh / 3.2   $@: cannot assign in this way
-	//	dash                     @: bad variable name
-	//	ksh93                    ${@:=abc}: bad substitution
-	//	zsh 5.9.2                not an identifier: @
+	//	$@: cannot assign in this way
+	//	@: bad variable name
+	//	${@:=abc}: bad substitution
+	//	not an identifier: @
 	//
-	// bash writes the sigil back and dash does not; ksh93 names neither and
-	// blames the whole expansion, which is the second verb's only reader —
-	// and it names the *quoting run* rather than the braces alone, so
-	// `x${@:=abc}y` and `"${@:=abc}"` are blamed whole.
+	// One writes the sigil back and another does not; a third names neither and
+	// blames the whole expansion, which is the second verb's only reader — and
+	// it names the *quoting run* rather than the braces alone, so `x${@:=abc}y`
+	// and `"${@:=abc}"` are blamed whole.
 	//
-	// The status is not here. dash exits 2 where the other three exit 1, and
-	// that is Semantics.FatalErrorStatusIsOne, which this failure already
-	// goes through — a second number would be the same axis written twice.
+	// The status is not here. It is Semantics.FatalErrorStatusIsOne, which this
+	// failure already goes through — a second number would be the same axis
+	// written twice.
 	//
-	// Its own field rather than a reuse of a builtin's bad-name wording
-	// because the two are worded differently by the shell that has the
-	// construct: `set -A 1v q` there is `not an identifier: 1v` with the
-	// builtin hidden, and this is `not an identifier: #` from an expansion
-	// that names no builtin to hide. The sentences coincide today and the
-	// routes do not, and one field for both would tie a future change on
-	// either route to the other.
+	// Its own field rather than a reuse of a builtin's bad-name wording because
+	// the two are worded differently by a preset that has the construct: `set -A
+	// 1v q` is `not an identifier: 1v` with the builtin hidden, and this is `not
+	// an identifier: #` from an expansion that names no builtin to hide. The
+	// sentences coincide and the routes do not, and one field for both would tie
+	// a future change on either route to the other.
 	//
-	// zsh's is the fallback because it is the one shell whose grammar has
-	// `${name::=word}`, the operator that reaches this question on every
-	// name. The conditional `${name:=word}` beside it is in every dialect,
-	// which is why the other three are filled in (#1541).
+	// The fallback comes from the one preset whose grammar has
+	// `${name::=word}`, the operator that reaches this question on every name.
+	// The conditional `${name:=word}` beside it is in every preset, which is why
+	// the rest are filled in.
 	AssignThroughExpansionBadName string
-	// BadPattern is a pattern the dialect rejects. One verb: the pattern.
+	// BadPattern is a pattern the preset rejects. One verb: the pattern.
 	BadPattern string
 	// CodePointOutsideTheLocale is a `\u` escape naming a code point the
-	// locale's encoding cannot hold, in the dialect that refuses one. No
+	// locale's encoding cannot hold, under a preset that refuses one. No
 	// verbs: the shell that says this names neither the escape nor the
 	// value, measured — `zsh:1: character not in range` and nothing else,
 	// once per command however many such escapes the word holds.

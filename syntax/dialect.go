@@ -207,9 +207,9 @@ type Dialect struct {
 	// It is a *pipeline with no commands*, which is the reading the status
 	// settles: `true; !` and `false; !` both answer 1 wherever the line is
 	// taken, so nothing ran and a success was inverted. It is not "the `!`
-	// negates the next line's pipeline", which #948 read it as — that would
-	// make `! ⏎ echo x; echo "st=$?"` print `st=1`, and it prints `st=0` in
-	// all three shells that take the line.
+	// negates the next line's pipeline" — that would make
+	// `! ⏎ echo x; echo "st=$?"` print `st=1`, and it prints `st=0` under every
+	// preset that takes the line.
 	//
 	// The values carry the measurements; see [BareNegationReach].
 	BareNegationReach BareNegationReach
@@ -217,16 +217,15 @@ type Dialect struct {
 	// RepeatedNegationToggles lets a pipeline carry more than one `!`, each
 	// inverting the one before it.
 	//
-	// bash 5.3, that binary as `sh`, and ksh93. Measured 2026-09-12, and it
-	// really is a toggle rather than an idempotent mark:
+	// It really is a toggle rather than an idempotent mark:
 	//
 	//	! ! true    st=0     ! ! false   st=1
 	//	! ! !       st=1     ! ! ! true  st=1
 	//	! !         st=0
 	//
-	// dash and zsh refuse a second `!` outright, which is what makes this a
-	// question of its own rather than part of [Dialect.BareNegationReach]:
-	// zsh takes a bare `!` and refuses `! !`, so a dialect answering one
+	// A preset may refuse a second `!` outright, which is what makes this a
+	// question of its own rather than part of [Dialect.BareNegationReach]: one
+	// that takes a bare `!` may still refuse `! !`, so a preset answering one
 	// answers nothing about the other.
 	//
 	// The tree carries one flag and not a count, which the toggle is what
@@ -243,28 +242,28 @@ type Dialect struct {
 	// both shells that have it, so the parser writes the redirection out
 	// rather than the interpreter growing a second way to point a stream.
 	//
-	// Two of the six panel columns accept this reading — bash 5.3 and zsh —
-	// which is why it is not core. bash 3.2 has no `|&` at all, so this is a
-	// version fact as much as a dialect one; dash has none either. ksh93
-	// spells a *coprocess* with the same two characters, and it is not this
-	// construct with another meaning but another slot in the grammar: ksh93
-	// refuses `a | ; b` and accepts `a |& ; b`, so its `|&` terminates a
-	// command the way `&` does rather than joining two. That reading is
-	// [Dialect.CoprocPipeOperator], a flag of its own beside Coproc and
-	// never a second value of this one.
+	// Only some presets accept this reading, which is why it is not core, and
+	// builds of one implementation differ — so it is a version fact as much as a
+	// preset one. A preset may spell a *coprocess* with the same two characters,
+	// and that is not this construct with another meaning but another slot in
+	// the grammar: it refuses `a | ; b` and accepts `a |& ; b`, so its `|&`
+	// terminates a command the way `&` does rather than joining two. That
+	// reading is [Dialect.CoprocPipeOperator], a flag of its own beside Coproc
+	// and never a second value of this one.
 	//
 	// Where it is off, `a |& b` is not silently something else: the operator
-	// table falls back to `|` and then `&`, which is exactly what bash 3.2
-	// and dash lex, so the refusal lands on the `&` where theirs does.
+	// table falls back to `|` and then `&`, which is exactly what a preset
+	// without the operator lexes, so the refusal lands on the `&` where its
+	// does.
 	PipeBothStreams bool
 
-	// CaseFallthrough enables `;&`, which runs the next case body. Absent
-	// from dash, and from bash before 4.0 — so it cannot be reached through
-	// macOS's /bin/sh.
+	// CaseFallthrough enables `;&`, which runs the next case body. Absent from
+	// some presets, and from older builds of one of them — so a system shipping
+	// such a build cannot reach it.
 	CaseFallthrough bool
 
-	// CStyleFor enables `for ((init; cond; post))`. Absent from dash, where
-	// the parenthesis after `for` is a syntax error.
+	// CStyleFor enables `for ((init; cond; post))`. Where it is off, the
+	// parenthesis after `for` is a syntax error.
 	CStyleFor bool
 
 	// ForArithExtraSeparators lets a C-style `for` header hold more than the
@@ -278,42 +277,41 @@ type Dialect struct {
 	// therefore runs and prints nothing, where `for ((;;;)); do :; done`
 	// reaches the third expression on its first pass and stops.
 	//
-	// Measured 2026-09-12 on `for ((;;;)); do echo body; break; done`: ksh93u+
-	// and zsh 5.9.2 print `body`, and bash 5.3.15, bash 3.2.57 and the same
-	// bash under argv[0] of `sh` all refuse the script with `` `;'
-	// unexpected `` and run none of it. So this is an acceptance the two add
-	// rather than a refusal bash has, and it is off in Core for that reason
-	// (#2225).
+	// Measured on `for ((;;;)); do echo body; break; done`: a preset with the
+	// flag prints `body`, and one without refuses the script with
+	// `` `;' unexpected `` and runs none of it. So this is an acceptance some
+	// presets add rather than a refusal others have, and it is off in Core for
+	// that reason.
 	//
-	// *Fewer* than two separators is not this flag and has no flag: every
-	// shell in the panel refuses `for (())`, `for ((;))` and `for ((i=0))`,
-	// which is [ErrForArithHeader]. The two were one over-acceptance here
+	// *Fewer* than two separators is not this flag and has no flag: every preset
+	// refuses `for (())`, `for ((;))` and `for ((i=0))`, which is
+	// [ErrForArithHeader]. The two were one over-acceptance here
 	// until they were measured apart, and the missing refusal was unbounded
 	// rather than wrong — a header with no separators has no condition, an
 	// absent condition is true, and `for (()); do echo x; done` printed for
 	// as long as it was left alone.
 	ForArithExtraSeparators bool
 
-	// Select enables `select name [in words] do … done`, the menu loop.
-	// Absent from dash, where `select` is an ordinary word and the `do` that
-	// follows it is a syntax error.
+	// Select enables `select name [in words] do … done`, the menu loop. Where it
+	// is off, `select` is an ordinary word and the `do` that follows it is a
+	// syntax error.
 	Select bool
 
 	// ForMultipleNames lets a `for` or `foreach` name more than one variable,
 	// so the loop takes that many words from its list on every pass:
-	// `for key value ( a 1 b 2 ) { … }` runs twice with the pairs. zsh alone
-	// has it, and it is how a script walks a serialized key/value table.
+	// `for key value ( a 1 b 2 ) { … }` runs twice with the pairs. It is how a
+	// script walks a serialized key/value table.
 	//
 	// Separate from ForBraceBody and from ShortForm, and measured that way
-	// rather than assumed: all four combinations of the name count and the
-	// body spelling parse in zsh independently. `for a b in x 1 y 2; do … done`
+	// rather than assumed: all four combinations of the name count and the body
+	// spelling parse independently. `for a b in x 1 y 2; do … done`
 	// works, so does `for a b ( … ) { … }`, so does `for a b ( … ); do … done`,
 	// and so does `for a b` with no list at all, which walks the positional
 	// parameters in groups. This flag is the name count and nothing else.
 	//
-	// `select` does **not** take it — measured, `select a b (x y) { … }` is a
-	// parse error in the shell that has every other spelling — so the loop
-	// whose header is a `for`'s parts company here. `foreach` does take it.
+	// `select` does **not** take it — `select a b (x y) { … }` is a parse error
+	// under the preset that has every other spelling — so the loop whose header
+	// is a `for`'s parts company here. `foreach` does take it.
 	//
 	// **Names are taken greedily, and that is subtractive.** Every word after
 	// the first is another name until the header ends: at `in`, at `(`, at a

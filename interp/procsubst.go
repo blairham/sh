@@ -227,6 +227,25 @@ func (r *Runner) substBody(src string) (*syntax.File, bool) {
 func (r *Runner) substRunner(kind syntax.SpanKind) (*Runner, func()) {
 	sub := r.clone()
 	sub.inheritJobs(jobBoundarySubstitution)
+	// **Which input the body reads is one question, asked once.** `<(cmd)`
+	// and `=(cmd)` keep what this chooses; `>(cmd)` replaces it in procSub
+	// with the reading end of its own pipe, which is what that spelling *is*
+	// and is why it cannot observe the axis. Deciding it here rather than in
+	// each branch is the point of this helper — #1933 was filed before the
+	// file form landed precisely so the two could not be fixed apart.
+	//
+	// Before the copy below rather than after, because the copy is what makes
+	// the chosen stream the body's own: the input a `<(cmd)` inside a
+	// pipeline element inherits is that element's pipe, and the pipeline
+	// closes it when the element finishes (#2144). `>(cmd)` inherits nothing
+	// to copy — procSub hands it the pipe, whose lifetime substEnd counts —
+	// so it is emptied here rather than left pointing at a stream the body
+	// will never read.
+	if kind == syntax.ProcSubstOut {
+		sub.Stdin = nil
+	} else {
+		sub.Stdin = r.substStdin()
+	}
 	// The body runs beside the command that named it, so the descriptors it
 	// inherited are its own copies rather than the shell's — the half of a
 	// fork that a goroutine does not get. Released by whoever spawned it;
@@ -237,15 +256,6 @@ func (r *Runner) substRunner(kind syntax.SpanKind) (*Runner, func()) {
 	// with nobody and needs no copy — and a preparation written out per
 	// spelling is the next fix one of them misses.
 	releaseFds := sub.ownDescriptors()
-	// **Which input the body reads is one question, asked once.** `<(cmd)`
-	// and `=(cmd)` keep what this chooses; `>(cmd)` replaces it in procSub
-	// with the reading end of its own pipe, which is what that spelling *is*
-	// and is why it cannot observe the axis. Deciding it here rather than in
-	// each branch is the point of this helper — #1933 was filed before the
-	// file form landed precisely so the two could not be fixed apart.
-	if kind != syntax.ProcSubstOut {
-		sub.Stdin = r.substStdin()
-	}
 	// And the record itself does not cross: the body is a shell of its own,
 	// whose Stdin is now whatever it is going to read, so nothing inside it
 	// is still waiting for a pipe to be installed.

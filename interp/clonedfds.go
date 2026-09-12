@@ -41,6 +41,23 @@ import "os"
 // by the first: they are one bug about ownership, and only one of them can be
 // asked a question that always answers the same way.
 //
+// # The input is part of the table
+//
+// Descriptor 0 is not in `fds` — the named three are fields — and leaving it
+// out made the same bug again one number lower. A process substitution's body
+// reads the input of the command the word stands in, and inside a pipeline
+// that input is the element's pipe, which runPipeline closes the moment the
+// element finishes; a body that outlives its element then read a descriptor
+// that was already gone. Measured with `printf "PIPE\n" | { exec 3< <(sleep
+// 0.4; cat >out); }`, where bash 5.3 writes `PIPE` and this wrote
+// `cat: stdin: Bad file descriptor` (#2144).
+//
+// **The writing side is deliberately not copied**, and that is not an
+// oversight to fix later: a second holder of a pipe's *write* end is a reader
+// that never sees end-of-file, so duplicating stdout here would change when a
+// pipeline ends rather than only who owns what. Nothing holds a read end
+// against anybody, which is why this half is safe on its own.
+//
 // # What it does not copy
 //
 // A descriptor the shell opened for its *own* plumbing stays shared, which is
@@ -63,21 +80,32 @@ import "os"
 // ending when the outer one returns.
 func (c *Runner) ownDescriptors() func() {
 	var dups []*os.File
-	for fd, v := range c.fds {
+	// take is the copy itself, written once because the input and the table
+	// entries are the same question about two places a descriptor is kept.
+	//
+	// A failure leaves the entry as it was — nothing to duplicate with, or
+	// nothing left to duplicate. That is the sharing this is here to end, and
+	// a shell that cannot take its own copy is no worse off than it was
+	// before there was one to take.
+	take := func(v any) (*os.File, bool) {
 		f, ok := v.(*os.File)
 		if !ok {
-			continue
+			return nil, false
 		}
 		d, err := dupFile(f)
 		if err != nil {
-			// Nothing to duplicate with, or nothing left to duplicate. The
-			// entry stays as it was, which is the sharing this is here to
-			// end — a shell that cannot take its own copy is no worse off
-			// than it was before there was one to take.
-			continue
+			return nil, false
 		}
-		c.fds[fd] = d
 		dups = append(dups, d)
+		return d, true
+	}
+	if d, ok := take(c.Stdin); ok {
+		c.Stdin = d
+	}
+	for fd, v := range c.fds {
+		if d, ok := take(v); ok {
+			c.fds[fd] = d
+		}
 	}
 	if dups == nil {
 		return func() {}

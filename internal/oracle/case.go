@@ -361,6 +361,41 @@ var Corpus = []Case{
 		Why:     "it is the closing *run* of separators that decides and not the last byte: the trailing space does not hide the colon in front of it, so this is two fields where `'a  '` is one. A reading that looked at the last character alone would answer one here",
 	},
 	{
+		ID: "ifs/a-value-backslash-before-a-separator", Category: "IFS",
+		Snippet: `IFS=:; v='a\:b'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; printf "[%s]" "$2"`,
+		Why:     "a value's backslash standing directly in front of a separator: the separator still separates — two fields in all five shells that split a parameter expansion at all — and the backslash stays in the first field as one character. The **length** is the assertion and is why it is printed beside the field: this shell answered `a\\` with *two* backslashes, and a row showing only the text reads as a quoting artifact of whatever is displaying it. Nothing about the separator being a colon: the whitespace row below is the same answer. The fields an expansion produces are carried in a form where a mark is a backslash and the byte behind it, and the splitter walked that form a byte at a time — it cut at the marked separator and left the mark behind on the field in front of it, where the unescape read it as a marked backslash (#2212)",
+	},
+	{
+		ID: "ifs/a-value-backslash-before-a-whitespace-separator", Category: "IFS",
+		Snippet: `IFS=' '; v='a\ b'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; printf "[%s]" "$2"`,
+		Why:     "the same shape with the separator a space, which is what says the row above is not about a non-whitespace IFS: two fields and a first field of two characters again. It matters because the whitespace form is the one an ordinary script reaches — `v` holding a Windows path, or a `find -exec` line — with IFS left entirely alone",
+	},
+	{
+		ID: "ifs/a-value-doubled-backslash-before-a-separator", Category: "IFS",
+		Snippet: `IFS=:; v='a\\:b'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; printf "[%s]" "$2"`,
+		Why:     "the neighbor a fix must not move, and the one that says the field above is short by a character rather than the pair being long by one: two backslashes in the value are two in the field, so this row is three characters where the one above is two. The two rows have the same rendered shape and different counts, which is the whole reason the count is in the probe",
+	},
+	{
+		ID: "ifs/a-value-backslash-before-an-ordinary-character-and-a-separator-later", Category: "IFS",
+		Snippet: `IFS=:; v='a\bc:d'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; printf "[%s]" "$2"`,
+		Why:     "the backslash moved off the separator: it is an ordinary character in the middle of a field, four characters in all six, and it was already right. It is here so that a fix reaching for the backslash rather than for the separator's own mark is caught — dropping the pair wherever it appears answers `abc` and looks like quote removal nobody asked for",
+	},
+	{
+		ID: "ifs/a-value-backslash-before-a-separator-at-each-edge", Category: "IFS",
+		Snippet: `IFS=:; v='\:b'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; w='a\:'; set -- $w; printf " %d" "$#"; printf "[%s:%d]" "$1" "${#1}"`,
+		Why:     "the two edges, where the field the backslash lands on is empty of anything else. A leading marked separator gives two fields with a first field of exactly one backslash, and a trailing one is still absorbed — one field of two characters, not two. The pair is one row because the leading and trailing rules are already asymmetric and a fix that cut at the mark in one place and at the separator in the other would pass either half alone",
+	},
+	{
+		ID: "ifs/a-value-backslash-before-a-separator-under-the-split-option", Category: "IFS",
+		Snippet: `setopt shwordsplit; IFS=:; v='a\:b'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; printf "[%s]" "$2"`,
+		Why:     "the sixth shell, which leaves a parameter expansion unsplit and so answers the rows above with the value whole. With its splitting turned on it splits exactly as the other five do, down to the count — so this is not a divergence to model but the same rule reached by the other route, and it is the row that makes the shell's own `${=v}` and `shwordsplit` paths graded rather than assumed. The `setopt` is not found in the other five and costs them nothing",
+	},
+	{
+		ID: "ifs/a-value-backslash-before-a-separator-with-a-mixed-ifs", Category: "IFS",
+		Snippet: `IFS=" :"; v='a\:b c'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; printf "[%s]" "$2"; printf "[%s]" "$3"`,
+		Why:     "whitespace and non-whitespace separators in one IFS and both used in one value: three fields, and the marked colon separates on the same terms the plain space does. A reading that treated the mark as making the byte behind it data would answer two fields here and would still answer two for a value with only the colon in it, which is the shape a single-separator row cannot tell apart",
+	},
+	{
 		ID: "ifs/nonws-trailing-cmdsub", Category: "IFS",
 		Snippet: `IFS=:; set -- $(printf "a:"); printf "%d" "$#"; printf "[%s]" "$@"`,
 		Why:     "the same divergence with no option set and no flag written, which is what says it is reachable by ordinary means in every shell: an unquoted command substitution is split in all six, including the one that leaves parameter expansions alone, so the tail question is asked here whatever the splitting option says",

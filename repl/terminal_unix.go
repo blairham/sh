@@ -7,54 +7,34 @@ package repl
 
 import (
 	"os"
-	"syscall"
-	"unsafe"
 
 	"github.com/blairham/sh/internal/tty"
 )
 
-// Raw mode, through syscall directly.
+// Raw mode, and where the ioctls went.
 //
-// No dependency for it: this module has none outside the linter's tooling, and
-// a shell reaching for a terminal library to turn off echo would be a poor
-// trade. Two ioctls and a struct is the whole of it.
+// The termios plumbing is in internal/tty now, for the reason the terminal
+// test moved there ahead of it: `interp` needs the same pair of ioctls —
+// `read -k` reads characters from the terminal as they are typed — and `repl`
+// imports `interp`, so the dependency only runs one way and a second copy
+// here is how the two would come to disagree. What stays is the editor's
+// *name* for the thing, because the rest of this package calls it that.
+//
+// See internal/tty's mode.go, which carries the flag list, why the editor
+// wants every one of them off, and the measurement that says `read -k` wants
+// only the line buffering.
 
 // terminalState is what was there before raw mode, kept so it can be put back.
-type terminalState struct {
-	fd    int
-	saved syscall.Termios
-}
+type terminalState struct{ mode *tty.Mode }
 
 // makeRaw turns off the line discipline: no echo, no line buffering, no
 // signal characters.
-//
-// The shell wants the bytes as they are typed. Echo has to go because the
-// editor draws the line itself — it is the only one that knows where the
-// cursor is among the characters already there. Canonical mode has to go
-// because otherwise nothing arrives until Return. And ISIG has to go so that
-// ^C arrives as a byte the editor can act on rather than as a signal that
-// would have to be caught and raced against a read already in progress.
 func makeRaw(f *os.File) (*terminalState, error) {
-	fd := int(f.Fd())
-	var t syscall.Termios
-	if err := ioctl(fd, tcGets, &t); err != nil {
+	mode, err := tty.Raw(f)
+	if err != nil {
 		return nil, err
 	}
-	saved := t
-	t.Iflag &^= syscall.IGNBRK | syscall.BRKINT | syscall.PARMRK | syscall.ISTRIP |
-		syscall.INLCR | syscall.IGNCR | syscall.ICRNL | syscall.IXON
-	t.Oflag &^= syscall.OPOST
-	t.Lflag &^= syscall.ECHO | syscall.ECHONL | syscall.ICANON | syscall.ISIG | syscall.IEXTEN
-	t.Cflag &^= syscall.CSIZE | syscall.PARENB
-	t.Cflag |= syscall.CS8
-	// One byte is enough to return from a read, and no timer: the editor
-	// blocks until something is typed rather than spinning.
-	t.Cc[syscall.VMIN] = 1
-	t.Cc[syscall.VTIME] = 0
-	if err := ioctl(fd, tcSets, &t); err != nil {
-		return nil, err
-	}
-	return &terminalState{fd: fd, saved: saved}, nil
+	return &terminalState{mode: mode}, nil
 }
 
 // restore puts the line discipline back.
@@ -66,17 +46,7 @@ func (s *terminalState) restore() error {
 	if s == nil {
 		return nil
 	}
-	saved := s.saved
-	return ioctl(s.fd, tcSets, &saved)
-}
-
-func ioctl(fd int, req uintptr, t *syscall.Termios) error {
-	_, _, errno := syscall.Syscall6(syscall.SYS_IOCTL, uintptr(fd), req,
-		uintptr(unsafe.Pointer(t)), 0, 0, 0)
-	if errno != 0 {
-		return errno
-	}
-	return nil
+	return s.mode.Restore()
 }
 
 // IsTerminal reports whether this file is one.

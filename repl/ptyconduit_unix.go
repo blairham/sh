@@ -16,6 +16,7 @@ import (
 	"syscall"
 
 	"github.com/blairham/sh/internal/pty"
+	"github.com/blairham/sh/internal/tty"
 )
 
 // A ptyConduit is a pseudo-terminal between the shell's children and the
@@ -175,11 +176,7 @@ func translatesNewlines(f *os.File) bool {
 	if f == nil {
 		return false
 	}
-	var t syscall.Termios
-	if err := ioctl(int(f.Fd()), tcGets, &t); err != nil {
-		return false
-	}
-	return t.Oflag&syscall.OPOST != 0
+	return tty.TranslatesNewlines(f)
 }
 
 // Stream is the file a child writes to, and it is a terminal.
@@ -392,12 +389,4 @@ func (c *ptyConduit) close() {
 // Only the output flags: this terminal has no reader, so its input discipline
 // is nobody's business, and touching more of it than the one thing that is
 // wrong would be a second change hidden inside this one.
-func rawOutput(f *os.File) error {
-	fd := int(f.Fd())
-	var t syscall.Termios
-	if err := ioctl(fd, tcGets, &t); err != nil {
-		return err
-	}
-	t.Oflag &^= syscall.OPOST
-	return ioctl(fd, tcSets, &t)
-}
+func rawOutput(f *os.File) error { return tty.RawOutput(f) }

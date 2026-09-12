@@ -902,20 +902,29 @@ func (p *printer) caseArms(x *CaseClause) {
 // parse error and `((x) y)` printed as `(x) y)` is worse, being a program
 // that parses to something else.
 //
+// A bare newline counts for the same reason and used not to.
+// [Dialect.CasePatternListSpansNewlines] is the same grammar, but the word
+// printer wrote a newline back **quoted**, so the paren it asked for was one
+// the printed text did not need — the paren went in on the first pass and the
+// quoting took it back out on the second, which made the print unsettled
+// rather than wrong. That circularity is gone: inside the paren the newline
+// goes back bare, exactly as the blank does, so asking for the paren and
+// writing the character it is for are now one decision. It is also what the
+// shell being modeled writes — its `functions` listing prints an arm of
+// `(a|` ⏎ `b)` back with the newline bare (#1254).
+//
 // Read off the spans rather than off the source, because it is the *printed*
-// text this is about, and that is also why a newline is not here although
-// [Dialect.CasePatternListSpansNewlines] is the same grammar: the word
-// printer already writes a bare newline back **quoted**, so the paren it
-// would need is one the printed text does not. Asking about it made the
-// print unsettled rather than wrong — the paren went in on the first pass and
-// the quoting took it back out on the second.
+// text this is about. A blank or a newline in an *unquoted* literal span is
+// itself the evidence that the dialect had the rule: no other grammar here
+// puts either character in one, and the printer is handed a Layout rather
+// than a Dialect, so the shape is the only thing that can say so.
 func patternsNeedTheParen(it *CaseItem) bool {
 	for _, w := range it.Patterns {
 		for _, sp := range w.Spans {
 			if sp.Kind != Literal || sp.Quoting != Unquoted {
 				continue
 			}
-			if strings.ContainsAny(sp.Value, " \t") {
+			if strings.ContainsAny(sp.Value, " \t\n") {
 				return true
 			}
 		}
@@ -1368,7 +1377,7 @@ func (p *printer) literal(s Span) {
 			return
 		}
 		if p.caseBlanks {
-			p.str(escapeBareWith(s.Value, bareEscapedKeepingBlanks))
+			p.str(escapeBareWith(s.Value, bareEscapedKeepingBlanks, true))
 			return
 		}
 		p.str(escapeBare(s.Value))
@@ -1417,7 +1426,7 @@ func escapeIn(s, chars string) string {
 // something else —
 // which cannot appear in an unquoted literal span from this parser, and is
 // escaped anyway because a tree does not have to have come from a parser.
-func escapeBare(s string) string { return escapeBareWith(s, bareEscaped) }
+func escapeBare(s string) string { return escapeBareWith(s, bareEscaped, false) }
 
 // bareEscaped is everything that would end an unquoted word or start
 // something else, and bareEscapedKeepingBlanks is the same set without the
@@ -1428,7 +1437,12 @@ const (
 )
 
 // escapeBareWith is escapeBare over a given set of characters to protect.
-func escapeBareWith(s, protect string) string {
+//
+// bareNewline says a newline may be written as itself, which is the same
+// permission keeping the blanks is and comes from the same place — a `case`
+// arm's parenthesized pattern list, where both characters are the pattern's.
+// See printer.caseBlanks.
+func escapeBareWith(s, protect string, bareNewline bool) string {
 	if s == "" {
 		return "''"
 	}
@@ -1449,15 +1463,24 @@ func escapeBareWith(s, protect string) string {
 		if s[i] == '\n' {
 			// A backslash before a newline is a *line continuation*, which
 			// the next read removes — so escaping it that way is the one
-			// case where protecting a character loses it. Single quotes keep
-			// it, and keep it as the same character: a newline is literal
-			// text under either quoting, so nothing that matched the word
-			// before stops matching it.
+			// case where protecting a character loses it.
 			//
 			// Reachable only from a `case` arm whose parenthesized pattern
 			// list spans one; nothing else in the grammar puts a bare
-			// newline inside a word.
-			b.WriteString("'\n'")
+			// newline inside a word. Where the arm's parenthesis is being
+			// written the newline is a character of the pattern exactly as a
+			// blank there is, so it goes back as itself — which is what the
+			// shell being modeled writes, its own `functions` listing
+			// printing an arm of `(a |` ⏎ ` b)` back with the newline bare
+			// (#1254). Anywhere else single quotes keep it, and keep it as
+			// the same character: a newline is literal text under either
+			// quoting, so nothing that matched the word before stops
+			// matching it.
+			if bareNewline {
+				b.WriteByte('\n')
+			} else {
+				b.WriteString("'\n'")
+			}
 			i++
 			continue
 		}

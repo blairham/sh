@@ -2935,6 +2935,7 @@ type Dialect struct {
 	//
 	//	m[foo bar]=v      the key `foo bar`
 	//	m[foo	bar]=v    a tab the same way
+	//	m[foo\nbar]=v     and a newline: the word spans the line
 	//	m[a; b]=v         and a `;`, a `|`, a `>` and an `&&`
 	//	m[#c]=v           a `#` is not a comment in there
 	//	m[a [b] c]=v      brackets nest, so the *matching* `]` ends it
@@ -2954,8 +2955,9 @@ type Dialect struct {
 	// Additive and not a semantics axis: zsh 5.9.2 is the panel's holdout
 	// and it does not mean something else by the text, it refuses it —
 	// `bad pattern: m[foo`, exit 1 — and dash and BusyBox ash have no
-	// arrays to subscript. So the flag gives a reading to text that four
-	// shells read one way and the other three do not read at all.
+	// arrays to subscript at all. So four columns read the text one way,
+	// one refuses it outright, and two never reach a subscript: there is no
+	// second *meaning* for a semantics axis to switch between.
 	//
 	// Where the bracket has **no** matching `]` the word is left exactly as
 	// a grammar without the flag reads it, and that is deliberate. The two

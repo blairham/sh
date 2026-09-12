@@ -335,6 +335,64 @@ Measured: `redir/the-picked-descriptors-name-may-be-an-element` and
 
 Grammar flag: `FdVariableSubscript` — core: off; `bash` and `ksh`: on.
 
+## A subscript at command position runs to its matching `]`
+
+An associative array's subscript is text, and text may hold a blank. The
+question that raises is not what the key is but where the *word* ends,
+and the panel gives three answers to it.
+
+Measured 2026-09-12, each row read back with `typeset -p m`:
+
+    typeset -A m; m[foo bar]=qux
+      bash 5.3   `declare -A m=(["foo bar"]="qux" )`
+      bash as sh the same
+      ksh93      `typeset -A m=(['foo bar']=qux)`
+      zsh        `bad pattern: m[foo`, status 1 — nothing is stored
+      bash 3.2   no `-A`, so the subscript is read as arithmetic, and
+                 `foo bar: syntax error in expression` is the tell that
+                 its word ran to the matching bracket too
+      dash, ash  no arrays; the word ends at the blank
+
+So once a **name** at command position is followed by `[`, four of the
+seven columns read through to the matching `]`. It is the brackets and
+not the blank that do this, which the rest of the rows say:
+
+    m[foo<tab>bar]=v   a tab the same way
+    m[foo\nbar]=v      and a newline: the word spans the line
+    m[a; b]=v          `;`, `|`, `>` and `&&` are all key characters
+    m[#c]=v            a `#` in there is not a comment
+    m[a [b] c]=v       brackets nest, so it is the *matching* `]`
+    m['a]b' c]=v       a quoted `]` closes nothing, nor an escaped one
+
+Three things are required and each was measured by taking it away.
+
+**A name.** `1m[foo bar]=v`, `m-n[foo bar]=v` and `[foo bar]=v` all still
+end at the blank in every column that takes the construct.
+
+**Command position.** An argument does not: `printf '<%s>' m[foo bar]=v`
+prints two fields in every column. An assignment *prefix* is command
+position, so `a=1 m[foo bar]=v` stores the element. A redirection target
+is not, in bash — which is the column this follows, ksh93 spanning there
+too.
+
+**No `=`.** The assignment is not part of the condition — `m[foo bar]`
+alone is quoted back whole as `m[foo bar]: command not found` — so the
+word is one word before anything has looked for an assignment.
+
+Where the bracket has **no** matching `]` the two columns diverge: bash
+refuses with ``unexpected EOF while looking for matching `]'`` and ksh93
+swallows the rest of the input into the word. There is no common answer,
+so the word is left as a grammar without the construct reads it, and
+nothing that parsed before parses differently.
+
+Measured: `assoc/a-key-holding-a-blank-is-written`,
+`assoc/a-key-holding-a-blank-is-appended-to`,
+`assoc/a-key-holding-an-operator`, `assoc/a-key-holding-a-nested-bracket`
+and `subscript/a-blank-in-an-argument-subscript`.
+
+Grammar flag: `SubscriptSpansSeparators` — core: off; `bash` and `ksh`:
+on.
+
 ## Comments
 
 `#` begins a comment only where a word could begin. Mid-word it is an

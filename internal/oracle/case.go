@@ -7461,7 +7461,7 @@ echo "st=$?"`,
 	{
 		ID: "assoc/a-key-holding-a-blank-is-written", Category: "syntax",
 		Snippet: `typeset -A m; m[foo bar]=qux; echo "[${m[foo bar]}]"`,
-		Why:     "a subscript is text and text may hold a blank, so the question is where the *word* ends. bash 5.3 under both its names and ksh93 read a name followed by `[` at command position through to the matching `]` and store the key `foo bar`; zsh refuses the same line with `bad pattern: m[foo` before anything is stored; bash 3.2 has no `-A` and reaches the subscript as arithmetic; dash has no arrays at all. The read side `${m[foo bar]}` is not in question anywhere — it is the assignment that four of the six cut — so a shell that ends the word at the blank runs `m[foo` as a command and answers the empty element (#2410)",
+		Why:     "a subscript is text and text may hold a blank, so the question is where the *word* ends. bash 5.3 under both its names and ksh93 read a name followed by `[` at command position through to the matching `]` and store the key `foo bar`; zsh refuses the same line with `bad pattern: m[foo` before anything is stored; bash 3.2 has no `-A` and reaches the subscript as arithmetic; dash has no arrays at all. The read side `${m[foo bar]}` is not in question anywhere; it is the *assignment* that the word boundary cuts, so a shell that ends the word at the blank runs `m[foo` as a command and answers the empty element (#2410)",
 	},
 	{
 		ID: "assoc/a-key-holding-a-blank-is-appended-to", Category: "syntax",

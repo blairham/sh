@@ -1180,6 +1180,21 @@ type Diagnostics struct {
 	// front, which is what ksh93 does with every usage line.
 	BuiltinUsageUnprefixed bool
 
+	// BuiltinComplaintUnprefixed names the builtins whose *complaint* is
+	// written bare as well, where the dialect prefixes everyone else's.
+	//
+	// A set rather than a flag, because it is not the dialect's rule: ksh93
+	// writes `/bin/ksh: command: -Q: unknown option` and, from the same
+	// invocation a line later, `alias: -Q: unknown option` with nothing in
+	// front. Measured over every builtin this shell has, exactly three are
+	// bare — `alias`, `builtin` and `pwd` — and the rest carry the shell's
+	// name. Nothing about those three explains it, which is why this is a
+	// list of measurements and not a rule with a reason (#2345).
+	//
+	// It reaches the complaint only. BuiltinUsageUnprefixed already answers
+	// for the usage block under it, and answers for the whole dialect.
+	BuiltinComplaintUnprefixed map[string]bool
+
 	// JobLine is one row of a `jobs` listing. Four verbs: the number, the
 	// marker that says which job `%%` means, the state and the command.
 	//

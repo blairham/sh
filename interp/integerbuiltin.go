@@ -92,7 +92,7 @@ func biInteger(r *Runner, _ context.Context, args []string) int {
 		if r.unspecified {
 			return r.status
 		}
-		f.remove = off
+		f.remove, f.signDecided = off, true
 		// And where a plus form does remove, it reaches the attribute the
 		// *name* asked for only when `i` is the letter that was written.
 		f.integerForced = off && !f.integerOff

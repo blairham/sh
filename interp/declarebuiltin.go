@@ -120,6 +120,13 @@ type declareFlags struct {
 	// apart: `integer +x n` is still an integer in both shells that have the
 	// word, and `integer +i n` is one in only one of them.
 	integerOff bool
+	// signDecided records that the *builtin's name* has already settled
+	// whether this line removes the integer attribute, so the letters must
+	// not be read again. `integer +i n` reaches it: the plus form removes
+	// nothing under that name in one dialect, which is a fact about the word
+	// and not about the sign the letter carries — see
+	// Semantics.IntegerPlusFormTakesAttributesOff.
+	signDecided bool
 	// inert records that a letter out of Semantics.DeclareOptionsWithoutEffect
 	// was read. Nothing consults it as an attribute; it exists so that a
 	// declaration carrying only such a letter is not mistaken for the bare
@@ -449,7 +456,33 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			break
 		}
 	}
+	r.blockALaterPlus(&f)
 	return args[i:], f, 0
+}
+
+// blockALaterPlus is one dialect's reading of a declaration that writes both
+// signs: a plus word that follows a minus word takes nothing off.
+//
+// `typeset -x e=1; typeset +x e` unexports in every shell that has the
+// letters, and `typeset -i +x e` leaves `e` exported in ksh93 — the `-i` has
+// made the line a declaration, and the plus word rides along as part of it.
+// Order is the whole of it: `typeset +x -i e` *does* unexport there, so this
+// is a minus **before** a plus and not simply both being present.
+//
+// See Semantics.EarlierDeclarationLetterBlocksALaterPlus, which is where the
+// panel is and why the field names an order.
+func (r *Runner) blockALaterPlus(f *declareFlags) {
+	minus := strings.IndexByte(f.letterSigns, '-')
+	if minus < 0 || strings.LastIndexByte(f.letterSigns, '+') < minus {
+		return
+	}
+	if !r.ask(r.sem().EarlierDeclarationLetterBlocksALaterPlus,
+		"a plus word after a minus word taking nothing off") {
+		return
+	}
+	f.remove, f.integerOff, f.readonlyOff, f.functionOff = false, false, false, false
+	f.hide, f.matchNames = f.hideNamed, false
+	f.letterSigns = strings.ReplaceAll(f.letterSigns, "+", "-")
 }
 
 // numberEndsTheWord reports whether a letter just read is about to take the
@@ -1337,13 +1370,46 @@ func (r *Runner) exportLetterDeclaresAGlobal(name string, f declareFlags) bool {
 		"the export letter on a declaration reaching past the function")
 }
 
+// integerComesOff is whether this declaration's letters ask for the integer
+// attribute to come off.
+//
+// The sign of the last `i` *letter* rather than of the last option word, which
+// is the distinction readonlyOff already draws and for the same reason:
+// `typeset -i +x n` is a declaration of an integer that is not exported, and
+// reading the word's sign made it a request to stop being one.
+//
+// A `-i` before a `+i` is one dialect's exception and is asked of the dialect.
+// See Semantics.EarlierIntegerLetterKeepsTheAttribute, where the panel is.
+func (f declareFlags) integerComesOff(r *Runner) bool {
+	if f.signDecided {
+		return f.remove
+	}
+	first, last := byte(0), byte(0)
+	for i := 0; i < len(f.letters) && i < len(f.letterSigns); i++ {
+		if f.letters[i] != 'i' {
+			continue
+		}
+		if first == 0 {
+			first = f.letterSigns[i]
+		}
+		last = f.letterSigns[i]
+	}
+	if last == 0 {
+		// The letter rode in on a name rather than on a word — `integer +x n`
+		// — so there is no `i` to read a sign from and the word's is all
+		// there is.
+		return f.remove
+	}
+	return last == '+'
+}
+
 // applyAttributes records what a name has been declared to be.
 func (r *Runner) applyAttributes(name string, f declareFlags) {
 	if f.integer {
 		if r.integer == nil {
 			r.integer = map[string]bool{}
 		}
-		if f.remove && !f.integerForced {
+		if f.integerComesOff(r) && !f.integerForced {
 			delete(r.integer, name)
 			// The base goes with the attribute — measured, `typeset +i j`
 			// leaves the text the name is holding alone and a *later* `j=3`
@@ -1460,7 +1526,19 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 	// read agrees with the other two, and only its `typeset -p` betrays the
 	// difference by listing the raw value. That listing nuance is
 	// deliberately not modeled; the fold every script observes is.
-	if f.lower {
+	// A numeric letter on the *same* declaration beats a case letter, and
+	// beats it outright: the name is an integer and the case attribute is
+	// never set. Measured 2026-09-12 on ksh93u+, bash 5.3.15 and zsh 5.9.2,
+	// all three of which answer `typeset -li i=3+4` with `7` and
+	// `typeset -li v=AB` with `0`, in either order of the two letters.
+	//
+	// Not the same question as CaseAttributeReplacesTheNumericAttribute,
+	// which is about a *later* declaration and where the three disagree:
+	// `typeset -i i; typeset -l i` leaves `3+4` in ksh93 and `7` in the
+	// other two. One command is not two, and this shell was reading the
+	// axis for both — so `integer='typeset -li'`, this shell's own alias
+	// for its own builtin, stopped evaluating anything (#2345).
+	if numeric := f.integer || f.float; f.lower && !numeric {
 		if r.lowered == nil {
 			r.lowered = map[string]bool{}
 		}
@@ -1474,7 +1552,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			r.caseLetterReplacesTheNumeric(name)
 		}
 	}
-	if f.upper {
+	if numeric := f.integer || f.float; f.upper && !numeric {
 		if r.uppered == nil {
 			r.uppered = map[string]bool{}
 		}

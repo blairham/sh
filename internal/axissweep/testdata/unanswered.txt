@@ -67,6 +67,7 @@ ash   DisownRemovesTheJob
 ash   DollarSingleDigitlessEscapeIsAZeroByte
 ash   DollarSingleHexReadsEveryDigit
 ash   DollarSingleNulTruncates
+ash   EarlierDeclarationLetterBlocksALaterPlus
 ash   EmptyArithSubscript
 ash   EmptyAssociativeKeyIsAnError
 ash   EmptyAssociativeKeyIsReportedWhenRead
@@ -205,6 +206,7 @@ dash  DollarSingleDigitlessEscapeIsAZeroByte
 dash  DollarSingleHexReadsEveryDigit
 dash  DollarSingleNulTruncates
 dash  DollarSingleUnknownEscape
+dash  EarlierDeclarationLetterBlocksALaterPlus
 dash  EchoLastEscapeFlagWins
 dash  EmptyArithSubscript
 dash  EmptyAssociativeKeyIsAnError

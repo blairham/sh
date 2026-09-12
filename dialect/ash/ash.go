@@ -253,6 +253,9 @@ func Semantics() interp.Semantics {
 	s.BadNameToUnsetFatal = interp.Yes
 	s.UnsetReadonlyFatal = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.Yes
+	// `alias` is no more special here than POSIX makes it: the complaint is
+	// said and the next command runs. Measured with `alias -g x`.
+	s.AliasBadOptionFatal = interp.No
 	s.BadSetOptionNameFatal = interp.Yes
 	// `read` is not one of the three: `printf 'x\n' | read 1bad` reports at 1
 	// — not dash's 2 — and the script carries on.
@@ -670,6 +673,10 @@ func Semantics() interp.Semantics {
 	// dropped, and the octal and hex spellings agree. `Answer` has no room
 	// for it, so a value here would have to be one of the two wrong ones.
 	//
+	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
+	// declaration command to write the letter on. `typeset` is not a
+	// builtin here and `integer` is not a word, so neither sign of `-i`
+	// can be put to this shell at all (#2345).
 	// unanswered ReadonlyRecordsTheCompoundAttribute: this shell has no
 	// letter to ask it with (#2277). `readonly -a a` is `readonly: illegal
 	// option -a` and there is no `typeset` at all. The refusal our binary

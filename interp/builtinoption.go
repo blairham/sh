@@ -203,10 +203,20 @@ func isANumber(s string) bool { return s != "" && allDigits(s) }
 // path reachable at all.
 func (r *Runner) optionNeedsArgument(builtin string, letter byte) int {
 	d := r.diag()
-	r.diagf("%s\n", Wording(d.OptionNeedsArgument, "%[1]s: -%[2]s: option requires an argument",
+	r.complainAboutOption(builtin, "%s\n", Wording(d.OptionNeedsArgument, "%[1]s: -%[2]s: option requires an argument",
 		r.builtinComplaintName(builtin), string(letter)))
 	r.builtinUsageLine(builtin)
 	return orDefault(d.BuiltinBadOptionStatus, 2)
+}
+
+// complainAboutOption writes one line of an option refusal, located the way
+// the dialect locates this builtin's — see Diagnostics.BuiltinComplaintUnprefixed.
+func (r *Runner) complainAboutOption(builtin, format string, args ...any) {
+	if r.diag().BuiltinComplaintUnprefixed[builtin] {
+		r.errf(format, args...)
+		return
+	}
+	r.diagf(format, args...)
 }
 
 // badBuiltinOption reports it, and ends the script where the dialect says a
@@ -231,8 +241,18 @@ func (r *Runner) refuseOption(builtin, word, known string) int {
 		// named the way the dialect names a bad one, the letter rather than
 		// the bundle it rode in on: `read -ra` is about `-a`, because `-r`
 		// is not the missing half.
-		r.diagf("%s: %s is not implemented yet\n", r.builtinComplaintName(builtin), name)
+		r.complainAboutOption(builtin, "%s: %s is not implemented yet\n", r.builtinComplaintName(builtin), name)
 		return 2
+	}
+	// Asked only where a second bad letter exists to be named, because that
+	// is the only place the two answers differ: a bundle with one bad letter
+	// reads the same either way, and a dialect that has never been measured
+	// here should not be made to say so over a word where it does not matter.
+	if r.diag().BadOptionNaming != BadOptionWholeWord || !strings.HasPrefix(word, "--") {
+		if bad := r.everyBadOption(word, known); len(bad) > 1 &&
+			r.ask(r.sem().BuiltinReportsEveryBadOption, "a builtin naming every bad letter of a bundle") {
+			return r.badBuiltinOption(builtin, bad...)
+		}
 	}
 	return r.badBuiltinOption(builtin, name)
 }
@@ -281,10 +301,12 @@ func (r *Runner) badOption(word, known string) (byte, string) {
 	return letter, sign + string(letter)
 }
 
-func (r *Runner) badBuiltinOption(name, opt string) int {
+func (r *Runner) badBuiltinOption(name string, opts ...string) int {
 	d := r.diag()
-	r.diagf("%s\n", Wording(d.BuiltinBadOption, "%[1]s: %[2]s: invalid option",
-		r.builtinComplaintName(name), opt))
+	for _, opt := range opts {
+		r.complainAboutOption(name, "%s\n", Wording(d.BuiltinBadOption, "%[1]s: %[2]s: invalid option",
+			r.builtinComplaintName(name), opt))
+	}
 	r.builtinUsageLine(name)
 	status := orDefault(d.BuiltinBadOptionStatus, 2)
 	// Only for a builtin POSIX marks special, which is what the rule is
@@ -292,12 +314,52 @@ func (r *Runner) badBuiltinOption(name, opt string) int {
 	// `export -q` print the same complaint for `wait -x` and carry on. Every
 	// caller of this was special until `wait` was not, so the check had
 	// never been reached and was wrong the moment it was.
-	if specialBuiltins[name] &&
-		r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's bad option ending the script") {
+	if r.badOptionEndsTheScript(name) {
 		r.status = status
 		r.fatalQuiet()
 	}
 	return status
+}
+
+// badOptionEndsTheScript is whether this builtin's bad option is fatal here.
+//
+// Two axes rather than one, because two lists are involved: POSIX's special
+// builtins, which the substrate keeps, and the longer list one dialect has of
+// its own. See Semantics.AliasBadOptionFatal for why `alias` is not simply
+// added to the table.
+func (r *Runner) badOptionEndsTheScript(name string) bool {
+	if specialBuiltins[name] {
+		return r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's bad option ending the script")
+	}
+	if name == "alias" || name == "unalias" {
+		return r.ask(r.sem().AliasBadOptionFatal, "a bad `alias` option ending the script")
+	}
+	return false
+}
+
+// everyBadOption is the letters of a bundle the builtin does not have, in the
+// order they were written, spelled the way the dialect spells one.
+//
+// See Semantics.BuiltinReportsEveryBadOption. The walk ends at a letter the
+// builtin *does* have and that takes an argument, because what follows in the
+// word is that argument and not more letters.
+func (r *Runner) everyBadOption(word, known string) []string {
+	sign := "-"
+	if strings.HasPrefix(word, "+") {
+		sign = "+"
+	}
+	var bad []string
+	for i := 1; i < len(word); i++ {
+		takes, ok := optionLetter(known, word[i])
+		if !ok {
+			bad = append(bad, sign+string(word[i]))
+			continue
+		}
+		if takes != argNone {
+			break
+		}
+	}
+	return bad
 }
 
 // builtinUsageLine writes the usage line a refusal is followed by, where the

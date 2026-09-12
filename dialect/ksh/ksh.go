@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -688,6 +689,15 @@ func Semantics() interp.Semantics {
 	// fatality, since this shell's refusal is fatal too and it still prints
 	// both lines first (#1170).
 	s.SetReportsEveryBadOption = interp.Yes
+	// And not only `set`: every builtin here names each letter of a bundle
+	// it does not have, with one usage block under the lot. `typeset -Uz f`
+	// — which is what `autoload -Uz f` becomes through this shell's own
+	// alias — says `-U` and then `-z` (#2345).
+	s.BuiltinReportsEveryBadOption = interp.Yes
+	// `alias` and `unalias` end the script over an option they do not have,
+	// the way a special builtin does, though POSIX marks neither.
+	s.AliasBadOptionFatal = interp.Yes
+	s.EarlierDeclarationLetterBlocksALaterPlus = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
 	s.ArithInvalidOctalDigitIsError = interp.No
@@ -1810,6 +1820,13 @@ func Diagnostics() interp.Diagnostics {
 		},
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,
+		// Three of this shell's builtins write their complaint bare, where
+		// every other one of them carries the shell's name. Measured over
+		// the whole set on ksh93u+ 2012-08-01; nothing the three have in
+		// common explains it, so the list is the measurement (#2345).
+		BuiltinComplaintUnprefixed: map[string]bool{
+			"alias": true, "builtin": true, "pwd": true,
+		},
 		BuiltinUsage: map[string]string{
 			"set": "Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
 			// The same usage block under the array letter, which is what
@@ -1856,6 +1873,31 @@ func Diagnostics() interp.Diagnostics {
 			// letter each. Measured with `ulimit -Q`, which is the refusal
 			// that had been printing its complaint with no usage under it.
 			"ulimit": "Usage: ulimit [-HSalimits] [limit]",
+			// The rest of the table, harvested a builtin at a time with a
+			// letter none of them has. A builtin with no entry here printed
+			// its complaint with nothing under it, which is the shape 51
+			// corpus rows were failing on (#2345).
+			"alias":    "Usage: alias [-ptx] [name[=value]...]",
+			"unalias":  "Usage: unalias [-a] name...",
+			"command":  "Usage: command [-pvxV] [command [arg ...]]",
+			"builtin":  "Usage: builtin [-dls] [-f lib] [pathname ...]",
+			"whence":   "Usage: whence [-afpqv] name  ...",
+			"print":    "Usage: print [-enprsvC] [-f format] [-u fd] [string ...]",
+			"umask":    "Usage: umask [-S] [mask]",
+			"pwd":      "Usage: pwd [-LP]",
+			"let":      "Usage: let [ options ] [expr ...]",
+			"eval":     "Usage: eval [ options ] [arg...]",
+			"exec":     "Usage: exec [-c] [-a name] [command [arg ...]]",
+			"exit":     "Usage: exit [ options ] [n]",
+			"return":   "Usage: return [ options ] [n]",
+			"break":    "Usage: break [ options ] [n]",
+			"continue": "Usage: continue [ options ] [n]",
+			"getopts":  "Usage: getopts [-a name] opstring name [args...]",
+			"hist":     "Usage: hist [-lnprs] [-e editor] [-N num] [first [last] ]",
+			".":        "Usage: . [ options ] name [arg ...]",
+			"bg":       "Usage: bg [ options ] [job ...]",
+			"fg":       "Usage: fg [ options ] [job ...]",
+			"disown":   "Usage: disown [ options ] [job ...]",
 		},
 		// `ulimit -a`, row for row as the engine writes it. The rows this
 		// platform's engine calls unsupported, and the constant pipe and
@@ -2068,6 +2110,38 @@ func Apply(r *interp.Runner) {
 	// lists the table; each operand is a name to add, and one that is not
 	// already a builtin here is not found, at 1 — with the builtin's own
 	// name as the whole prefix, measured.
+	// `-t` is the *tracked* alias table, which is a command cache and not an
+	// alias table at all: `hash` is spelled `alias -t --` here, and this
+	// shell ships that spelling as one of its preset aliases. So the letter
+	// is answered by the builtin that already models the cache rather than
+	// by a second implementation of it — measured, `alias -t x` and
+	// `alias -t -- -r` are silent successes for any operand, which is what
+	// `hash` answers in this dialect.
+	//
+	// What is not modeled either way is the *population* of the table by
+	// running a command: real ksh93 lists `ls=/bin/ls` after `ls` has run
+	// and this shell lists nothing. That gap is the `hash` builtin's and
+	// predates the letter reaching it.
+	if alias, ok := r.Builtin("alias"); ok {
+		r.Register("alias", func(rr *interp.Runner, ctx context.Context, args []string) int {
+			for i, a := range args {
+				if a == "--" || !strings.HasPrefix(a, "-") || a == "-" {
+					break
+				}
+				if !strings.ContainsRune(a[1:], 't') {
+					continue
+				}
+				rest := append(append([]string{}, args[:i]...), args[i+1:]...)
+				rest = trimTrackedSeparator(rest, strings.Replace(a, "t", "", 1))
+				hash, ok := rr.Builtin("hash")
+				if !ok {
+					break
+				}
+				return hash(rr, ctx, rest)
+			}
+			return alias(rr, ctx, args)
+		})
+	}
 	r.Register("builtin", func(rr *interp.Runner, _ context.Context, args []string) int {
 		if len(args) == 0 {
 			for _, name := range rr.BuiltinNames() {
@@ -2127,4 +2201,23 @@ func Apply(r *interp.Runner) {
 	// put functions there at all and a second arrangement would be a claim
 	// about nothing.
 	r.SetFunctionLayout(FunctionLayout(), FunctionLayout())
+}
+
+// trimTrackedSeparator puts back the option word `-t` was taken out of, and
+// drops the `--` that `hash` has no letters to need.
+//
+// `hash` is `alias -t --` and `hash -r` is `alias -t -- -r`, so the operands
+// reaching the cache are everything after the separator — including a word
+// that looks like an option, which is why the separator goes rather than
+// being handed on.
+func trimTrackedSeparator(args []string, remainder string) []string {
+	if remainder != "-" && remainder != "+" {
+		args = append([]string{remainder}, args...)
+	}
+	for i, a := range args {
+		if a == "--" {
+			return args[i+1:]
+		}
+	}
+	return args
 }

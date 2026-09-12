@@ -1140,6 +1140,41 @@ func (p *Parser) parseStmt() *Stmt {
 	return st
 }
 
+// refusedFuncName is the word a definition's complaint names, for the dialects
+// that read it whole and refuse it when the definition runs.
+//
+// Two answers, and [Dialect.FunctionNameIsSourceText] tells them apart. bash
+// names the word **as written**, quotes and all: given a name spelled with
+// single quotes around it, its complaint carries those quotes. ksh93 takes
+// them off first and says `a$b: invalid function name`, and an empty quoted
+// name is a complaint naming nothing at all — measured 2026-09-12 on ksh93u+
+// 2012-08-01 across a dollar, a blank, a `;`, a `*` and the empty name
+// (#2345).
+//
+// What survives the second answer is an *expansion*: `_p_${w}` is written back
+// whole, because the quoting rule is about quote characters and `${w}` holds
+// none. So this is a span walk rather than either whole-token spelling — a
+// literal span contributes its value, which is the lexer's text with its own
+// quotes already gone, and every other span contributes its source.
+func (p *Parser) refusedFuncName(t Token) string {
+	if p.dialect.FunctionNameIsSourceText {
+		return p.textBetween(t.Pos, t.End)
+	}
+	var b strings.Builder
+	for i, sp := range t.Spans {
+		if sp.Kind == Literal {
+			b.WriteString(sp.Value)
+			continue
+		}
+		end := t.End
+		if i+1 < len(t.Spans) {
+			end = t.Spans[i+1].Pos
+		}
+		b.WriteString(p.textBetween(sp.Pos, end))
+	}
+	return b.String()
+}
+
 // textBetween is the input from one position up to another, trimmed.
 //
 // Bounds-checked rather than trusted: a Pos is only as good as whatever
@@ -2935,7 +2970,7 @@ func (p *Parser) parseFuncKeyword() Command {
 		// complaint quotes. The name list below is not entered: no dialect
 		// has both this and [Dialect.FunctionMultipleNames], and a list of
 		// names one of which is refused is a shape no shell in the panel has.
-		fn.RefusedName = p.textBetween(p.tok.Pos, p.tok.End)
+		fn.RefusedName = p.refusedFuncName(p.tok)
 		p.next()
 	default:
 		p.fail("expected a name after `function`")

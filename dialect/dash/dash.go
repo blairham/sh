@@ -227,6 +227,10 @@ func Semantics() interp.Semantics {
 	// counts, -d, -t, -u) is refused as unknown here.
 	s.ReadOptions = "rp:"
 	// dash has the two POSIX letters and calls anything else illegal.
+	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
+	// declaration command to write the letter on. `typeset` is not a
+	// builtin here and `integer` is not a word, so neither sign of `-i`
+	// can be put to this shell at all (#2345).
 	// unanswered UnsetReferenceLetterRemovesANonReference: this shell has no
 	// `-n` on `unset` to ask it with. Measured 2026-09-12, `unset -n x` is
 	// `unset: Illegal option -n` and the operand is never read, so there is no
@@ -408,6 +412,9 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.No
 	s.UlimitSetsBothLimits = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.Yes
+	// `alias` is no more special here than POSIX makes it: the complaint is
+	// said and the next command runs. Measured with `alias -g x`.
+	s.AliasBadOptionFatal = interp.No
 	// And so is a redirection that cannot be made, which is POSIX's rule
 	// verbatim: `exec 3>/nope/x` stops the script, at 2 like every other
 	// fatal error here.

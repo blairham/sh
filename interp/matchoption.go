@@ -87,6 +87,31 @@ const (
 	// crossing on for zsh needs this second question rather than one flag.
 	StarStarAloneCrossesDirectories
 
+	// StarStarSeesLinkedDirectories lets a symbolic link to a directory
+	// count as one of the levels a `**` component stands for, so `**/` names
+	// it with a trailing slash. It never makes the walk **enter** one: that
+	// is not a dialect's choice and is refused everywhere, which is what
+	// keeps `**` bounded on a tree holding a link to its own ancestor.
+	//
+	// On where `**` matches the entries beneath a directory and the trailing
+	// slash then keeps the ones that are directories; off where the
+	// component stands for the levels the walk crossed and nothing else.
+	//
+	// Measured 2026-09-12 in a directory holding `r/x` and a symlink `s` to
+	// `r`: `echo **/` is `r/ s/` in bash 5.3.15 under `shopt -s globstar`
+	// and in ksh93 under `set -o globstar`, and `r/` in zsh, which has the
+	// crossing with no option asked for. The same split is why bare `**`
+	// lists every entry in the first two and answers `*` in the third —
+	// see StarStarAloneCrossesDirectories — but the two cannot be one
+	// question here, because nothing in the panel holds one without the
+	// other and a probe that cannot separate them is evidence for neither.
+	//
+	// It is asked only where a `**` component is the last real one, since
+	// that is the only place the answer is visible: with a component behind
+	// it the set is a set of directories to descend, and a link is not
+	// descended whatever this says.
+	StarStarSeesLinkedDirectories
+
 	// ExtendedPatternOperators reads the pattern operators one shell keeps
 	// behind an option of its own: the parenthesized flag groups `(#…)`, the
 	// closures `#` and `##`, the negation `^pat` and the exclusion

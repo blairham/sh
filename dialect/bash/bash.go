@@ -1989,6 +1989,15 @@ func Apply(r *interp.Runner) {
 	// directory holding `ax`, `bx` and `cx/dx/ax` lists every level here and
 	// answers `ax bx cx` in zsh (#1339).
 	r.SetMatchOption(interp.StarStarAloneCrossesDirectories, true)
+	// A symbolic link to a directory is one of the levels `**/` lists here,
+	// even though the walk never goes inside one. Set for the same reason as
+	// the line above: `globstar` is the only name this shell has, and the
+	// walk asks this only where that option has already said `**` crosses.
+	// Measured 2026-09-12 against bash 5.3.15 in a directory holding `r/x`
+	// and a symlink `s` to `r`: `shopt -s globstar; echo **/` is `r/ s/`
+	// here and `r/` in zsh, while `echo **/x` is `r/x` in both — the link is
+	// named and not entered (#2360).
+	r.SetMatchOption(interp.StarStarSeesLinkedDirectories, true)
 	// An `&` in a `${v/pat/rep}` replacement is the text the pattern
 	// matched, which is this shell alone in the panel — bash 3.2, ksh93 and
 	// zsh all answer `a[&]c` for `v=abc; ${v/b/[&]}` where this one answers

@@ -992,16 +992,10 @@ var Corpus = []Case{
 		Why:     "the control for the row above, and the reason the operand is not trimmed before that reading where a plain numeral is: one blank in front of the quote makes the word an ordinary operand again and a bad number in six of the seven columns, each in its own wording. ksh93 alone reads through the blank and answers 65",
 	},
 	{
-		ID: "trap/listing-is-ordered-by-signal-number", Category: "traps and exit",
-		Script:  true,
-		Snippet: "trap 'echo x' TERM\ntrap 'echo x' HUP\ntrap 'echo x' ABRT\ntrap 'echo x' INT\ntrap 'echo x' EXIT\ntrap 'echo x' QUIT\ntrap\n",
-		Why:     "a bare listing is ordered by *signal number*, EXIT counting as 0: bash 5.3, bash-as-`sh`, bash 3.2, zsh, dash and BusyBox ash all print EXIT, HUP, INT, QUIT, ABRT, TERM whatever order the traps were set in, and ksh93 alone runs the sequence the other way with EXIT last. Set in a deliberately scrambled order so an implementation that printed them as they arrived is visible. Only signals numbered alike on every system the panel runs on — 1, 2, 3, 6 and 15 — because the order is the *host's* numbering and USR1 sits either side of TERM depending on the kernel, which would make the row a fact about the machine. This listed alphabetically, which is an order no column produces, and printed EXIT outside the ordering altogether — a listing is what a script parses to save and restore its traps, so its order is output rather than presentation",
-	},
-	{
 		ID: "axis/trap-body-line-debug", Category: "diagnostics",
 		Script:  true,
 		Snippet: "trap 'echo at=$LINENO\nnosuchcmd-xyz' DEBUG\necho two\necho three",
-		Why:     "the same two-line body on the condition that fires *at a command*, and the row that says the trap-body line question is two questions rather than one: every bash column counts a DEBUG body from the line the trap fired before — `at=2` and the failure on line 3 — where the signal row above has them counting the body's own lines. ksh93 counts every body from where it fired and zsh names only where it fired, so neither has a second answer to give and dash has no DEBUG condition at all. Written with two `echo`s after the trap so the second firing moves the number: a body that reported the same line twice would be a pin rather than an offset. The CommandTrapBodyLine axis",
+		Why:     "the same two-line body on the condition that fires *at a command*, and the row that says the trap-body line question is two questions rather than one: every bash column counts a DEBUG body from the line the trap fired before — `at=3` and the failure on line 4 — where the signal row above has them counting the body's own lines. ksh93 counts every body from where it fired and zsh names only where it fired, so neither has a second answer to give and dash has no DEBUG condition at all. Written with two `echo`s after the trap so the second firing moves the number: a body that reported the same line twice would be a pin rather than an offset. The CommandTrapBodyLine axis",
 	},
 	{
 		ID: "axis/trap-body-line-err", Category: "diagnostics",
@@ -3174,6 +3168,12 @@ echo "reached-after st=$?"`,
 		LayoutSensitive: true,
 		Snippet:         "trap 'echo \"in trap LINENO=$LINENO\"' USR1\necho one\nkill -USR1 $$\necho two\n",
 		Why:             "which line a trap action thinks it is on, and the panel gives two answers: bash 5.3 numbers the action's own text from 1, while bash 3.2, ksh93, dash and zsh report the line the signal was delivered on. So a trap body is a little program of its own in one shell and part of the script in four, and the split runs *through* bash rather than between bash and the rest — which is why the case is worth having over an assertion that names `bash`",
+	},
+	{
+		ID: "trap/listing-is-ordered-by-signal-number", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap 'echo x' TERM\ntrap 'echo x' HUP\ntrap 'echo x' ABRT\ntrap 'echo x' INT\ntrap 'echo x' EXIT\ntrap 'echo x' QUIT\ntrap\n",
+		Why:     "a bare listing is ordered by *signal number*, EXIT counting as 0: bash 5.3, bash-as-`sh`, bash 3.2, zsh, dash and BusyBox ash all print EXIT, HUP, INT, QUIT, ABRT, TERM whatever order the traps were set in, and ksh93 alone runs the sequence the other way with EXIT last. Set in a deliberately scrambled order so an implementation that printed them as they arrived is visible. Only signals numbered alike on every system the panel runs on — 1, 2, 3, 6 and 15 — because the order is the *host's* numbering and USR1 sits either side of TERM depending on the kernel, which would make the row a fact about the machine. This listed alphabetically, which is an order no column produces, and printed EXIT outside the ordering altogether — a listing is what a script parses to save and restore its traps, so its order is output rather than presentation",
 	},
 	{
 		ID: "trap/empty-handler-ignores", Category: "traps and exit",

@@ -279,6 +279,22 @@ type Error struct {
 	// that line anyway, so the two agree there and differ only when the text
 	// stops mid-line.
 	EndLine int
+	// HoldsProgram says the construct the input ran out inside holds a
+	// *program* rather than a parameter or an expression. Only one opener is
+	// written the same way for both — `${x}` and `${ cmd;}` — so it is the
+	// only construct that needs the fact carried rather than read off Token.
+	//
+	// One dialect blames the two forms at different lines. Measured
+	// 2026-09-12 on bash 5.3.15 over a two-line file:
+	//
+	//	echo ${ echo hi   line 3 — the line after the input's last
+	//	echo ${x          line 1 — the line the `${` is on
+	//
+	// which is the same split it draws between `$( )` and `$(( ))`, and the
+	// reason ParseFailureLine already keys the convention on the opener. The
+	// command form is a fifth member of the set that holds a program, and
+	// the brace is what hides it (#1425).
+	HoldsProgram bool
 	// EofLine is the line the input actually ran out on, in the lexer's
 	// own count — the same point EndLine names in the next-line
 	// convention. Two dialects report this one for an unmatched quote.

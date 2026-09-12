@@ -6823,6 +6823,29 @@ EOF
 		Why:     "the plainest unterminated quote, written across enough lines that the opener and the end of input are different places — which is the whole question, and the panel splits on it. bash 5.3, the same bash called `sh`, bash 3.2 and ksh93 blame **line 2**, where the quote opened; dash and zsh blame the last line, where the input ran out. So there is no single right location and a dialect that borrowed the other one is wrong for a reader trying to find the cause. This row exists because #1397's user-visible symptom was a location 214 lines from the fault, and it was worth pinning that the location rule itself is sound and only the misparse moved the blame: a fix to the parse that let this drift would put the confusing half of that bug back. `echo one` runs first in every column, which is what says the shells read and refuse rather than refusing before they start. Ours: all four agree with their shells. Our ksh accepted this file silently and ran to `one` with a status of 0 when this row was written — a separate defect, and #1424 is where it was fixed",
 	},
 	{
+		ID: "unterminated/a-dollar-single-quote-is-a-quote-that-never-closed", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo one\nx=$'never closed\necho three\n",
+		Why:     "the same unterminated quote written `$'…'`, and every shell in the panel that has the construct calls it a plain `'`: the `$` opens it and the quote is what never closed. bash and ksh93 blame the line it opened on and dash and zsh the line the input ran out on, exactly as they do for `'` — the row above, in the other spelling. The lexer wrote its own `unterminated $' quote` here instead, which is a sentence no shell in the panel says, at a line two of them do not name (#1468)",
+	},
+	{
+		ID: "unterminated/a-dollar-single-quote-at-the-end-of-a-command-string", Category: "syntax errors", SyntaxError: true,
+		Snippet: "echo one\nx=$'never closed\necho three",
+		Why:     "the same text through `-c`, which is the route where ksh93 **closes** what never closed and runs the file: `one` at status 0 there, against a refusal from every other column. It is the sixth caller of the rule #1424 folded into one place, and the one that did not ask it — the plain `'` and `$\"…\"` spellings of this row already answered ksh93's way. Also the control for the row above: the two differ only in how the text was read",
+	},
+	{
+		ID: "unterminated/a-brace-command-substitution-blamed-where-the-input-ran-out", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo ${ echo hi\necho after\n",
+		Why:     "`${ cmd;}` left open. bash 5.3 blames the line after the input's last, the way it blames `$( )` and unlike the `${x}` form below, which it blames at the brace — same two characters, same sentence, and only the line moves. bash 3.2 has the construct and blames the brace, a third answer with no dialect here to hold it; ksh93 reaches a different diagnosis and dash, which has no such form, reads the braces as an ordinary expansion. Ours blamed the brace for both forms (#1425)",
+	},
+	{
+		ID: "unterminated/a-parameter-expansion-blamed-at-the-brace", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo ${x\necho after\n",
+		Why:     "the control for the row above and the reason the difference belongs to the *form* rather than to the brace: the parameter spelling of the same unterminated `${` is blamed at the brace in every bash column, where the command form is blamed at the end of the input. dash and ksh93 answer this one differently again, which is recorded rather than modeled",
+	},
+	{
 		ID: "heredoc/a-delimiter-that-never-matches", Category: "redirection",
 		Snippet: `{ x=` + "`" + `cat <<EOF
 a)

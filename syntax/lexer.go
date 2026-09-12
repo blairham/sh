@@ -2193,7 +2193,21 @@ func (l *Lexer) scanDollarSingle() (Span, bool) {
 	for {
 		if l.eof() {
 			l.ranOut("$'")
-			l.fail(open, "unterminated $' quote")
+			if l.closesQuotesAtEOF() {
+				// The sixth caller of the rule the other quotes ask. ksh93
+				// closes an unterminated `$'…'` at the end of a command
+				// string exactly as it closes a plain one — measured
+				// 2026-09-12, `-c` over `echo one` and `x=$'never closed`
+				// prints `one` at status 0 there — and it was left out of
+				// #1424 on purpose, being a loosening (#1468).
+				return Span{Kind: Literal, Value: b.String(), Quoting: DollarSingleQuoted, Pos: open}, true
+			}
+			// Every shell in the panel that has the construct calls this a
+			// plain `'`: the `$` opens it and the quote is what never
+			// closed. So it reports the way scanSingle does and the sentence
+			// falls out of the dialect, rather than the lexer writing one
+			// nobody in the panel says at a line nobody names.
+			l.failUnmatched(open, "'", "'", "unterminated single quote")
 			return Span{Kind: Literal, Value: b.String(), Quoting: DollarSingleQuoted, Pos: open}, true
 		}
 		c := l.peek()
@@ -2665,6 +2679,14 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 				l.failUnmatched(open, "\"", "\"", "unterminated parameter expansion")
 			} else {
 				l.failUnmatched(open, "${", "}", "unterminated parameter expansion")
+			}
+			if se, ok := l.err.(*Error); ok && brace {
+				// Which form the braces held, for the dialect that blames
+				// the two at different lines. See Error.HoldsProgram. Read
+				// back off the recorded error rather than passed in, because
+				// failUnmatched may keep a report an inner construct already
+				// made — and that one is not this construct's form.
+				se.HoldsProgram = true
 			}
 			break
 		}

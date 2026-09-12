@@ -2615,6 +2615,42 @@ type Semantics struct {
 	// reproduced (#1738).
 	AnnouncesBackgroundJobWithoutTheMonitor Answer
 
+	// NextJobNumberRefillsAHole puts the next job in the lowest slot nobody
+	// holds rather than one past the highest occupied one. True in dash,
+	// ksh93, zsh and BusyBox ash; **false in bash**, which leaves a hole a
+	// hole and numbers on past it.
+	//
+	// Measured 2026-09-12 on a script, with the hole made the one way every
+	// shell in the panel will make one — a job killed and then reaped by name:
+	//
+	//	sleep 5 & sleep 5 & sleep 5 &
+	//	kill %2; wait %2
+	//	sleep 5 &
+	//
+	// bash 5.3.15 and bash 3.2.57 answer `jobs %2` with their no-such-job
+	// status and `jobs %4` with 0; dash, ksh93u+, zsh 5.9.2 and ash 1.37.0 all
+	// answer `jobs %2` with 0 and have no `%4`. Three runs each, identical.
+	//
+	// The probe asks `jobs %2` **before** the new job as well, which is what
+	// makes it discriminating rather than an inference from a listing: dash and
+	// ash still answer 0 there, so `wait %2` did not free the slot in them and
+	// the new job is reusing a slot a dead job still sat in. Without that
+	// column "it refilled the hole" and "there was never a hole" predict the
+	// same two statuses.
+	//
+	// Asked at the disagreement and nowhere else. Every table with no hole in
+	// it gets the same number from both rules, so an unanswered preset runs
+	// every script that never leaves one — which is nearly all of them. See
+	// Runner.nextJobNumber.
+	//
+	// The preset refills. XCU numbers jobs and says nothing about reuse, and
+	// where the text is silent the preset takes the answer that claims less: a
+	// table that hands out the lowest free number remembers nothing about the
+	// jobs that have left it, where bash's rule needs the highest number ever
+	// used to survive the job that used it. It is four of the six measured
+	// columns as well.
+	NextJobNumberRefillsAHole Answer
+
 	// UnsetFunctionChecksTheName judges the operand `unset -f` was given as
 	// a name, and refuses one that could not be a function name. True in
 	// ksh93 alone.
@@ -9450,6 +9486,10 @@ func PosixSemantics() Semantics {
 		// the other three are not, and a core made of what they all do is
 		// the quiet one.
 		InteractiveScriptAnnouncesJobs: No,
+		// A table that hands out the lowest free number remembers nothing
+		// about the jobs that have left it, which is the answer that claims
+		// less as well as four of the six measured columns.
+		NextJobNumberRefillsAHole: Yes,
 		// The same reading on the other interactive route, and the same two
 		// grounds: the standard says nothing about a notice on `-i -c`, and
 		// the panel does not agree — dash and ash are silent there — so the

@@ -8268,11 +8268,59 @@ Each ends in `:` so the case is about slots rather than about what `kill
 `jobs/slot-the-last-background-pid-outlives-a-bare-wait` asks the `$!`
 half as a yes/no, because the pid is different every run.
 
-### What is measurable this way and still not taken
+### Where the next job number goes when there is a hole
 
-Two lifecycle questions the probe reaches and this spec does not answer,
-recorded so the next attempt does not re-measure them. Both are stable
-across runs; neither is a race.
+`Semantics.NextJobNumberRefillsAHole`, and it is the whole of #969's
+second question.
+
+The measurement that could not be taken before failed on its **hole**,
+not on its reading: `sleep 0 & wait` frees a slot in some of the panel
+and not others, so three of the shells had no hole to allocate into and
+the probe faulted ksh93u+ outright. The hole every shell will make is a
+job **killed and reaped by name**:
+
+    sleep 5 & sleep 5 & sleep 5 &
+    kill %2 2>/dev/null; wait %2 2>/dev/null
+    jobs %2 >/dev/null 2>&1; echo "before=$?"
+    sleep 5 &
+    jobs %2 >/dev/null 2>&1; echo "two=$?"
+    jobs %4 >/dev/null 2>&1; echo "four=$?"
+
+Measured 2026-09-12, three runs each and identical:
+
+| shell | `before` | `two` | `four` | where the new job went |
+| --- | --- | --- | --- | --- |
+| bash 5.3.15 · 3.2.57 · as `sh` | 1 | 1 | **0** | after the highest |
+| dash | **0** | 0 | 2 | into `%2` |
+| ksh93u+ | 1 | 0 | 1 | into `%2` |
+| zsh 5.9.2 | 127 | 0 | 127 | into `%2` |
+| ash 1.37.0 | **0** | 0 | 2 | into `%2` |
+
+bash is alone, and the preset refills: a table that hands out the lowest
+free number remembers nothing about the jobs that have left it, where
+bash's rule needs the highest number ever used to survive the job that
+used it.
+
+**`before` is what makes this discriminating**, and it is the column the
+earlier attempts did not have. Without it, "the new job refilled the
+hole" and "there was never a hole" produce the same two statuses — and
+dash and ash are exactly that case: they answer 0 *before* the new job,
+so `wait %2` did not free the slot in them and the new job is reusing one
+a dead job still sat in.
+
+The axis is asked **at the disagreement and nowhere else**. Every table
+with no hole in it gets the same number from both rules, so a preset that
+has not chosen still runs every script that never leaves one — which is
+nearly all of them. See `Runner.nextJobNumber`.
+
+**Still no corpus row, and now for a measured reason rather than a
+suspected one.** The probe above runs cleanly from a terminal in all
+seven columns, and under the oracle harness the same snippet **segfaults
+ksh93u+** (signal 11) and **times out dash**. A row nobody can record in
+two of seven columns is not a row, so this family stays where #783 left
+it: driver and interpreter tests, and the grid above.
+
+### What is measurable this way and still not taken
 
 **Whether a bare `wait` frees the slots it waited for.** `sleep 0 & wait;
 jobs %1` — bash 1, dash 0, ksh93 0, zsh 127. So bash and zsh free the
@@ -8283,13 +8331,12 @@ does not hold still under the neighboring probes: **bash 5.3.15 and bash
 `wait` and `wait %1` differently — keeping the slot for the first and
 freeing it for the second.
 
-**Where the next job number goes when there is a hole.** bash allocates
-*after the highest occupied slot* rather than refilling; this
-implementation refills. The other three cannot be asked the same way,
-because they do not free the slot in the first place. And the obvious
-probe faults ksh93u+: `sleep 0 & wait; sleep 5 &; jobs %1; jobs %2` exits
-139 there, reproducibly — a segmentation fault, not an answer, so no
-corpus row can hold it.
+The `before` column above is a third reading of the same question and it
+does not settle it either: after `kill %2; wait %2`, bash, ksh93 and zsh
+have let the slot go and dash and ash have not. This shell lets it go in
+all five, so `cmd/dash` and `cmd/ash` answer `before` where the shells
+they stand for answer 0 — the one cell of the grid that is still wrong,
+and it is this question rather than the allocation one.
 
 ## A `wait` a trapped signal cuts short
 

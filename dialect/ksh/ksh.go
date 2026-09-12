@@ -1142,6 +1142,10 @@ func Semantics() interp.Semantics {
 	// And with the monitor off as well, as bash does — measured 2026-09-10,
 	// `[1]\t<pid>` with `set +m` in force (#1738).
 	s.AnnouncesBackgroundJobWithoutTheMonitor = interp.Yes
+	// The hole gets refilled, and here it is a real hole first: measured
+	// 2026-09-12, `jobs %2` is no-such-job after the middle job is killed and
+	// reaped, 0 once a fourth job is started, and there is no `%4`.
+	s.NextJobNumberRefillsAHole = interp.Yes
 	// The panel's dissenter, and the only cell of the interactive table that
 	// was measured and not reproduced: `monitor on` and `imBE` under
 	// `-i script.sh` with no terminal anywhere, announcing its background

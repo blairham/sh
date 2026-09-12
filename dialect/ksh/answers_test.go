@@ -96,6 +96,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"InteractiveMonitorNeedsATerminal", s.InteractiveMonitorNeedsATerminal, interp.No},
 		{"InteractiveScriptAnnouncesJobs", s.InteractiveScriptAnnouncesJobs, interp.Yes},
 		{"InteractiveCommandStringAnnouncesJobs", s.InteractiveCommandStringAnnouncesJobs, interp.Yes},
+		{"NextJobNumberRefillsAHole", s.NextJobNumberRefillsAHole, interp.Yes},
 		{"FinishedJobNoticeNeedsAPrompt", s.FinishedJobNoticeNeedsAPrompt, interp.No},
 		{"SubshellRunsOnAfterSignalingTheShell", s.SubshellRunsOnAfterSignalingTheShell, interp.No},
 		{"UnsetReadonlyFatal", s.UnsetReadonlyFatal, interp.No},

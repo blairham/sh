@@ -1377,23 +1377,56 @@ func (r *Runner) setLastJob(j *Job) {
 // was no such job and the process it meant ran to the end of its sleep. That
 // is #2295 in the bash suite's own `jobs` file, several times over.
 //
-// One past the highest in the table, rather than the lowest number free. Both
-// are measured: with `%2` gone from a table holding 1 and 3, the next job is
-// `%4` and not `%2`; and once the table empties, numbering begins again at 1.
-// The first rule gives the second for nothing — the highest of nothing is
-// zero.
+// Which number that is splits the panel, and it splits it only where the
+// table has a *hole* in it — see nextJobNumber.
 func (r *Runner) addJob(job *Job) {
 	job.num = r.nextJobNumber()
 	r.jobs = append(r.jobs, job)
 }
 
-// nextJobNumber is the number the next job entering the table takes.
+// nextJobNumber is the number the next job entering the table takes: one past
+// the highest occupied slot, or the lowest slot nobody holds.
+//
+// The two rules give the same answer for every table with no hole in it,
+// which is nearly every table there has ever been — jobs are numbered from
+// one and slots are freed from the top far more often than from the middle —
+// and once the table empties both begin again at 1, the highest of nothing
+// being zero. So the axis is asked **at the disagreement and nowhere else**:
+// a shell whose jobs are 1 and 2 is not made to answer a question about
+// holes, and a preset that has not chosen can run every script that never
+// makes one.
+//
+// Where they differ, the answer is Semantics.NextJobNumberRefillsAHole and
+// bash is alone in saying no. Measured 2026-09-12 on a script, three jobs
+// started and the middle one killed and reaped:
+//
+//	sleep 5 & sleep 5 & sleep 5 &
+//	kill %2; wait %2
+//	sleep 5 &
+//
+// bash 5.3.15 and 3.2.57 leave `%2` empty and put the new job at `%4`; dash,
+// ksh93u+, zsh 5.9.2 and BusyBox ash all put it back in `%2` and have no
+// `%4`. The reading is discriminating rather than inferred from a listing:
+// `jobs %2` is asked *before* the new job as well, so a shell that never
+// freed the slot is not counted as one that refilled it.
 func (r *Runner) nextJobNumber() int {
-	high := 0
+	high, taken := 0, make(map[int]bool, len(r.jobs))
 	for _, j := range r.jobs {
+		taken[j.num] = true
 		if j.num > high {
 			high = j.num
 		}
+	}
+	lowest := 1
+	for taken[lowest] {
+		lowest++
+	}
+	if lowest == high+1 {
+		// No hole, so the two rules agree and there is nothing to ask.
+		return lowest
+	}
+	if r.ask(r.sem().NextJobNumberRefillsAHole, "the number a job takes when the table has a hole in it") {
+		return lowest
 	}
 	return high + 1
 }

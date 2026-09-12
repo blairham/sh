@@ -488,6 +488,12 @@ func Semantics() interp.Semantics {
 	// reached twice: this shell announces neither end of a job in any state
 	// (#1738).
 	s.AnnouncesBackgroundJobWithoutTheMonitor = interp.No
+	// The hole gets refilled: measured 2026-09-12, three jobs with the middle
+	// one killed and reaped and then a fourth started, `jobs %2` answers 0 and
+	// there is no `%4`. `jobs %2` is 0 *before* the new job as well, so the
+	// dead job kept the slot here until something reused it — which is why the
+	// probe asks both and not only the second.
+	s.NextJobNumberRefillsAHole = interp.Yes
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.Yes
 	s.ChildInterruptEndsTheScript = interp.No

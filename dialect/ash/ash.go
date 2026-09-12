@@ -430,6 +430,12 @@ func Semantics() interp.Semantics {
 	s.JobsShowBackgroundCommand = interp.No
 	s.AnnouncesBackgroundJob = interp.No
 	s.AnnouncesBackgroundJobWithoutTheMonitor = interp.No
+	// The hole gets refilled: measured 2026-09-12 in the container, three jobs
+	// with the middle one killed and reaped and then a fourth started, `jobs
+	// %2` answers 0 and there is no `%4`. It shares dash's other half too —
+	// `jobs %2` is 0 *before* the new job as well, so the dead job kept the
+	// slot until something reused it.
+	s.NextJobNumberRefillsAHole = interp.Yes
 	// It has somebody to tell on the named-script route and tells them exactly
 	// one thing, which is dash's shape as well: measured 2026-09-12 in the
 	// container on `-i script.sh` with a job held open on a fifo, `[1]+  Done`

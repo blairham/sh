@@ -1137,6 +1137,11 @@ func Semantics() interp.Semantics {
 	// prints `[1] <pid>` here where zsh goes quiet. The other end of the job
 	// is silent in every column (#1738).
 	s.AnnouncesBackgroundJobWithoutTheMonitor = interp.Yes
+	// And bash alone leaves a hole a hole. Measured 2026-09-12 with three
+	// jobs started and the middle one killed and reaped, `jobs %2` is still
+	// no-such-job afterwards and the new job answers `%4` — where dash,
+	// ksh93, zsh and ash all put it back in `%2`.
+	s.NextJobNumberRefillsAHole = interp.No
 	// bash 5.3 leaves the monitor off under `-i script.sh` with no terminal,
 	// and says so twice — `cannot set terminal process group` and `no job
 	// control in this shell`. It grants an explicit `set -m` there all the

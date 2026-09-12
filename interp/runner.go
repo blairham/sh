@@ -2181,19 +2181,6 @@ func (r *Runner) builtinIsSpeaking() bool {
 	return r.speaking() != "" || r.redirectForBuiltin != ""
 }
 
-// locationPrefix is what goes in front of a diagnostic.
-//
-// The shell's name and the line, except in the dialect that names the
-// *function* a message came from and counts the line within it. There the
-// file is not mentioned at all, and the count is the offset from the line
-// the function was written on — so a body on the same line as its `f() {`
-// is offset zero and the number is left out entirely.
-//
-// Which of the two applies is the innermost *frame*'s to say and not
-// r.inFunc's — see [Runner.locationIsInsideAFunctionBody]. A function that
-// sources a file is still the innermost function while the file runs, so
-// asking the name gave that dialect's function rule to a line the function
-// never contained (#2037).
 // locationIsInsideEvalText reports whether the line a diagnostic is about was
 // read from text `eval` is running rather than from a file or a function body
 // below it. See Runner.evalTextFloor.
@@ -2206,50 +2193,79 @@ func (r *Runner) locationIsInsideEvalText() bool {
 	return r.evalTextFloor > 0 && r.evalTextFloor-1 == len(r.frames)-r.outsideCall
 }
 
-func (r *Runner) locationPrefix() string {
+// locationNameAndLine is the pair a location is written from: the name that
+// stands where the shell's own would, and the line counted the way that name
+// counts it.
+//
+// Three places a line can be read from, in the order they win. Text `eval`
+// is running is named for itself, over both the others. A function body is
+// named by the function and the line is the offset from the line the
+// function was written on. Everything else is the shell's name, or the file
+// the failing line was read from where the dialect names one — the sourced
+// file while it runs, and the defining file inside a function called later.
+//
+// Which of the three applies is the innermost *frame*'s to say and not
+// r.inFunc's — see [Runner.locationIsInsideAFunctionBody]. A function that
+// sources a file is still the innermost function while the file runs, so
+// asking the name gave that dialect's function rule to a line the function
+// never contained (#2037).
+//
+// **One reader, for the diagnostic and for the trace prefix alike**, because
+// in the dialect that has both they are the same location. Measured
+// 2026-09-12 on zsh 5.9.2: a trace from the second line of a function is
+// `+q:2>` where a diagnostic from it is `q:2:`, and a line read from a file
+// that function sourced is `+./x_inc:1>` where a second copy of the rule had
+// kept the trace on the function. That copy is what wrote `+q:0>` for every
+// line of every function and never named a sourced file at all (#2134).
+//
+// functionCounts is the caller saying whether the function rule applies. A
+// diagnostic a *builtin* is speaking is located at the call and never as a
+// function — the dialect that names a function in place of a file names the
+// builtin there instead, because to the script there is no function to name
+// — and no builtin is ever speaking in a trace prefix, so the one caller asks
+// and the other does not.
+//
+// inBody reports that the function rule is what answered, which the two
+// callers need for opposite reasons: only that offset can be nought, and only
+// the diagnostic leaves a nought out.
+func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int, inBody bool) {
 	d := r.diag()
 	if d.LocationNamesTheEvalText && d.EvalSourceName != "" && r.locationIsInsideEvalText() {
-		// Text `eval` is reading is named for itself, over both the file it
-		// was written in and the function it was called from — see
-		// Diagnostics.LocationNamesTheEvalText. The builtin and the line are
-		// unchanged: this replaces the name and nothing else.
-		line := r.line
-		if r.speaker != "" {
-			line = r.speakerLine
-		}
-		return d.prefix(d.EvalSourceName, r.speaking(), r.builtinIsSpeaking(), line)
+		return d.EvalSourceName, r.line, false
 	}
-	// The dialect's own function is located the way a builtin is: at the line
-	// the script called it on, and never as a function — the dialect that
-	// names a function in place of a file names the builtin there instead,
-	// because to the script there is no function to name.
-	if !r.locationIsInsideAFunctionBody() || r.speaker != "" || !d.LocationNamesTheFunction {
-		name := r.name()
-		if d.LocationNamesTheCurrentFile {
-			// The file the failing line was read from: the sourced file while
-			// it runs, and the defining file inside a function called later.
-			// At the top level of a script the current file is the script,
-			// and under `-c` or standard input there is no file at all — the
-			// stack answers the shell's own name for both, so neither route
-			// changes here.
-			//
-			// locationFile rather than currentFile: a message located at the
-			// call it came from is one frame further out than the shell is.
-			if f := r.locationFile(); f != "" {
-				name = f
-			}
-		}
-		line := r.line
-		if r.speaker != "" {
-			line = r.speakerLine
-		}
-		return d.prefix(name, r.speaking(), r.builtinIsSpeaking(), line)
+	if functionCounts && d.LocationNamesTheFunction && r.locationIsInsideAFunctionBody() {
+		return r.inFunc, r.line - r.funcLine, true
 	}
-	if n := r.line - r.funcLine; n > 0 {
-		return d.prefix(r.inFunc, r.inBuiltin, r.builtinIsSpeaking(), n)
+	name = r.name()
+	if d.LocationNamesTheCurrentFile {
+		// locationFile rather than currentFile: a message located at the call
+		// it came from is one frame further out than the shell is. At the top
+		// level of a script the current file is the script, and under `-c` or
+		// standard input there is no file at all — the stack answers the
+		// shell's own name for both, so neither route changes here.
+		if f := r.locationFile(); f != "" {
+			name = f
+		}
 	}
-	// Nothing to count, so nothing is written: `f: ` and not `f:0: `.
-	return d.prefixWithoutLine(r.inFunc, r.inBuiltin)
+	return name, r.line, false
+}
+
+// locationPrefix is what goes in front of a diagnostic: the location above,
+// with the builtin that is speaking where this dialect puts one.
+func (r *Runner) locationPrefix() string {
+	d := r.diag()
+	name, line, inBody := r.locationNameAndLine(r.speaker == "")
+	if inBody {
+		if line > 0 {
+			return d.prefix(name, r.inBuiltin, r.builtinIsSpeaking(), line)
+		}
+		// Nothing to count, so nothing is written: `f: ` and not `f:0: `.
+		return d.prefixWithoutLine(name, r.inBuiltin)
+	}
+	if r.speaker != "" {
+		line = r.speakerLine
+	}
+	return d.prefix(name, r.speaking(), r.builtinIsSpeaking(), line)
 }
 
 // fatalExpansion ends the script because a parameter could not be expanded —

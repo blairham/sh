@@ -549,12 +549,22 @@ func (r *Runner) tracePrefix() string {
 		return r.tracePrefixDepth(r.renderTracePrefix(v))
 	}
 	if r.diag().TraceStyle == TraceNameLine {
-		// Inside a function zsh names the function and reports line 0
-		// rather than the line the call was on.
-		if r.inFunc != "" {
-			return "+" + r.inFunc + ":0> "
+		// This dialect's prefix *is* a location, so it is the one a
+		// diagnostic from the same line carries — see
+		// [Runner.locationNameAndLine], which is the reader for both. No
+		// builtin is ever speaking in a trace prefix, so the function rule
+		// always applies here.
+		name, line, _ := r.locationNameAndLine(true)
+		if line < 0 {
+			// A body written above the line its `f() {` is on cannot happen
+			// from a parse, and a negative offset would read as a location.
+			line = 0
 		}
-		return "+" + r.name() + ":" + itoa(r.line) + "> "
+		// And the nought is written where a diagnostic leaves it out.
+		// Measured 2026-09-12, zsh 5.9.2: `f(){ echo in; }` traces
+		// `+f:0> echo in` and a diagnostic from that same line is `f: …`
+		// with no number at all.
+		return "+" + name + ":" + itoa(line) + "> "
 	}
 	return r.tracePrefixDepth("+ ")
 }

@@ -1871,6 +1871,11 @@ func Diagnostics() interp.Diagnostics {
 		// The `time` keyword's report: three decimals where ksh93 gives
 		// the same lines two.
 		TimeDecimals: 3,
+		// $TIMEFORMAT, read every time the keyword runs. The wording names
+		// the variable as well as the offending character, where ksh93
+		// names only the character.
+		TimeFormatVariable:     "TIMEFORMAT",
+		TimeFormatBadDirective: "%[1]s: `%[2]s': invalid format character",
 		// A path that is not there is the OS reason and does not name the
 		// builtin; a bare name off PATH does the reverse.
 		PathNotFound: "%[1]s: No such file or directory",

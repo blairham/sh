@@ -11718,6 +11718,18 @@ printf 'TWO=still-running\n'`,
 			"dash's /usr/bin/time prints one line whose words include `real`, so 1 — three shapes under one count",
 	},
 
+	{
+		ID: "time/format-variable-shapes-the-report", Category: "time",
+		Snippet: `TIMEFORMAT='|%R|%lR|%U|%P|%%|'; { time true; } 2>&1 | sed -e 's/[0-9][0-9]*/N/g'`,
+		Why: "$TIMEFORMAT, which is how a script asks for a report it can read rather than the three-line block. bash and ksh93 read the same variable in the same vocabulary and answer `|N.N|NmN.Ns|N.N|N.N|%|` alike; zsh has a variable for the same job under another name and a different vocabulary, so it ignores this one and prints nothing for a builtin that forked nothing; dash has none and prints its own fixed line. " +
+			"Every figure is reduced to `N` before it reaches the record, for the reason the two cases above give — the timings are nondeterministic and the *shape* is the whole of what is being pinned. This implementation did not read the variable at all, so a script asking for one machine-readable line got four lines of something else at status 0",
+	},
+	{
+		ID: "time/an-empty-format-prints-nothing", Category: "time",
+		Snippet: `TIMEFORMAT=''; { time true; } 2>&1 | grep -c .`,
+		Why:     "and the state that is not the unset one: a format set to the empty string silences the report entirely — not a blank line, nothing — where an unset variable leaves the dialect's default block. bash and ksh93 count 0, zsh counts 0 because it never had a line for a builtin, dash counts 1 because the variable is not its business. The pair with the row above is what says the variable is *read* rather than merely present",
+	},
+
 	// --- finding a command: the script's PATH, and why it will not run ---
 	{
 		ID: "path/script-path-governs-lookup", Category: "command lookup",

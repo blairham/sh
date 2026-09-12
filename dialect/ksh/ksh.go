@@ -1927,7 +1927,12 @@ func Diagnostics() interp.Diagnostics {
 		// and a bare `time` reports the shell's own user and sys, no real,
 		// where bash reports a run of nothing.
 		TimeDecimals: 2,
-		TimeBare:     interp.TimeBareShellUserSys,
+		// The same variable and the same vocabulary as bash, byte for
+		// byte; only the complaint about an unknown directive differs,
+		// and it names the character alone.
+		TimeFormatVariable:     "TIMEFORMAT",
+		TimeFormatBadDirective: "%[2]s: bad format character in time format",
+		TimeBare:               interp.TimeBareShellUserSys,
 	}
 	return withPromptWordings(d)
 }

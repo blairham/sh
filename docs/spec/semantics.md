@@ -8590,12 +8590,44 @@ there was no previous substitution (#1198). The byte was never lost from
 the tree, only from the joined text: a protected character is a span of
 its own, so the backslash is written back in front of it.
 
-**Quotes inside `${ }` are still not reproduced.** That shell reads the
-brace's text raw, so a quote there is an ordinary character:
-`${x:s/'.'/:/}` replaces a three-character `'.'` and leaves a plain `.`
-alone. This one's lexer removes the quotes, so the same modifier replaces
-the `.`. A backslash is enough to write any of these, and is what a
-script would ordinarily use.
+**Quotes inside `${ }` are not a quoting either**, and the same is true of
+a `$`. That shell reads the brace's text raw, so every byte between the
+delimiters is an ordinary character of the pattern. Measured on zsh 5.9.2,
+2026-09-12, from a script file so the quoting *around* the expansion is not
+what is being tested:
+
+| written | value | answer |
+| --- | --- | --- |
+| `${x:s/'.'/:/}` | `a'.'b` | `a:b` — the pattern is the three characters `'.'` |
+| `${y:s/'.'/:/}` | `a.b` | `a.b` — so it misses a bare dot |
+| `${w:s/'Q'/X/}` | `aQb` | `aQb` — with no metacharacter in sight |
+| `${u:s/\'/X/}` | `a'b` | `aXb` — one quote is one character |
+| `${v:s/'  '/_/}` | `a  b` | `a  b` — and blanks inside them are blanks |
+| `${x:s/$a/Q/}`, `a=X` | `aXb` | `aXb` — a `$` is text, not an expansion |
+| `${z:s/'$a'/Q/}`, `a=X` | `a$ab` | `a$ab` — and so is one between quotes |
+
+Rows one and two are each other's control: the pattern the quotes are part
+of matches the value that holds them and misses the one that does not.
+Rows six and seven are the sharper claim, and the reason this is answered
+from the **source** rather than by writing the delimiters back around each
+quoted span: a `$a` inside quotes has already been expanded by the time a
+word exists, and putting quotes back around the result would be a third
+string again. `ParamExpr.ArgText` and `Arg2Text` are the source, kept for
+the substring operator alone, and `interp/modifier.go` reads them.
+
+A backslash is still enough to write any of these, and is what a script
+would ordinarily use: `${x:s/\./:/}` agrees on both sides, as does a
+different delimiter.
+
+**What is not reproduced is where the brace *ends*.** Finding the closing
+`}` still honors a quote here and the panel divides over whether it
+should: `x=; echo "[${x:-'}'}]"` is `['}']` in bash 5.3.15 and here, and
+`[''}]` in zsh 5.9.2, dash and ksh93u+ — three columns closing the
+expansion at the first `}` and reading the quote as an ordinary character
+there too. So `${v:s/'/X/}`, a modifier whose pattern is one quote, parses
+in zsh and is `unmatched \"` here. That is a lexer question rather than a
+modifier's, it reaches every expansion in the grammar, and it wants an axis
+of its own.
 
 ### What "operand expected" means — two failures, not one
 

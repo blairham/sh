@@ -73,11 +73,17 @@ for the record. Nothing reconciles them, because nothing has to.
       index.jsonl                   append-only, one record per line
       body/2026/09/05/<id>.out      one file per block that kept output
 
-`SH_BLOCKS_DIR` names the store. **Empty turns it off**, exactly as an
-empty `HISTFILE` turns the history off — the same idiom, so there is one
-thing to learn. Unset falls back to `$XDG_STATE_HOME/sh/blocks`, and
-then to `$HOME/.local/state/sh/blocks`; with no home there is nowhere to
-put it and the store is off.
+`SH_BLOCKS_DIR` names the store, and **naming it is how a person turns
+it on**. Unset is off; empty is off, exactly as an empty `HISTFILE`
+turns the history off — the same idiom, so there is one thing to learn.
+There is no default location, so the one variable is both the switch and
+the address: nothing else to set, and no sentinel to learn.
+
+It used to fall back to `$XDG_STATE_HOME/sh/blocks` and then to
+`$HOME/.local/state/sh/blocks`, which meant the store was on for
+everybody who had a home and had history on. That was open question 1
+below, and #2274 answered it: **opt-in**. The argument is recorded there
+rather than repeated here.
 
 A state directory rather than `~/.sh_blocks`, and the reason is the
 output half: the index is small and the bodies are not, so this is a
@@ -269,6 +275,16 @@ That is not a rough edge to file and move on from; it is the shell
 becoming worse at being a shell, which is why output capture shipped
 opt-in and why #720 said it could not be on by default until a
 pseudo-terminal backed it.
+
+It is opt-in again, and for a different reason than the one #720 was
+about. #720 asked what capture *costs a child*; #2274 asked what it
+*writes down*. A body holds what the person was shown rather than what
+they typed, which is a different class of thing from a history file and
+the only part of this store whose harm a backup makes permanent. So a
+pseudo-terminal answers #720 and does not answer #2274, and the output
+half is asked for by name: `SH_BLOCKS_OUTPUT=terminal` keeps output
+where it is free, any other value keeps it whatever it costs, and unset
+or empty keeps none.
 
 **One does now.** `repl.ptyConduit` puts a pseudo-terminal between the
 shell's children and the terminal a person is looking at: the child's
@@ -608,11 +624,29 @@ substrate, the command belongs to that shell.
 These are defensible defaults chosen without an answer, and each is
 cheap to reverse.
 
-1. **The store is on by default**, where there is a home and history is
-   on. The command half writes one small line per command and the switch
-   to turn it off is the one people already know. The alternative —
-   opt-in — makes it a feature nobody meets, and the whole argument for
-   building the command half now is that it is free.
+1. ~~**The store is on by default**~~ — **answered: opt-in** (#2274).
+   Both halves. Unset `SH_BLOCKS_DIR` is no store and unset
+   `SH_BLOCKS_OUTPUT` keeps nothing; naming the directory is how a person
+   turns it on.
+
+   The case made here was written about the *command half* — one small
+   line per command, and free — and neither premise survived the output
+   half. Capture puts a pseudo-terminal in front of every child, so it is
+   not free; and it records what the person was **shown** rather than
+   what they typed, which is a different risk class from a history file
+   and the only harm here that a backup makes permanent.
+
+   Three things decided it. Nothing consumes the store yet — recall and
+   re-run are "deliberately not here" above — so on-by-default was
+   collecting what nobody was reading. Nothing trims it, and the index is
+   the one file the `rm`-based retention story below does not work on.
+   And a default is cheap to loosen later and a regression to tighten,
+   which is the argument for doing this before v0.0.0 rather than after.
+
+   The counter-argument stands and was not enough: opt-in does risk a
+   feature nobody meets. The answer is to turn it on **with** the
+   interactive surface that reads it, and with the trimming in #2275,
+   rather than to accumulate years of unread records first.
 2. **`$XDG_STATE_HOME/sh/blocks` rather than `~/.sh_blocks`.** Argued
    above from the size of the bodies. The counter-argument is
    consistency with `~/.sh_history`, which is real.

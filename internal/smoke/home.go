@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/blairham/sh/internal/blocks"
 )
 
 // The scratch home a session is given.
@@ -222,5 +224,32 @@ func environment(dir, path string, d Dialect) []string {
 		// store off as well, and unset is not empty — it leaves the session
 		// recording, which is the state these rows are about.
 		"SH_BLOCKS_DIR=" + blocksStoreDir(dir),
+		// And the output half, by name. Since #2274 neither half is something
+		// a session gets for saying nothing, so a suite that wants to grade
+		// the bodies has to ask for them — the `terminal` spelling, because
+		// these sessions are on a pseudo-terminal and that is the mode a
+		// person at one would choose.
+		//
+		// TestNoStoreUnlessOneWasAskedFor is the row that asks the opposite
+		// question, and it takes SH_BLOCKS_DIR back out of this list rather
+		// than reaching for a second environment.
+		blocks.OutputVar + "=" + blocks.CaptureTerminalValue,
 	}
+}
+
+// without is the environment with one variable taken out of it.
+//
+// Taken out rather than set to empty, and the two are not the same question:
+// an empty SH_BLOCKS_DIR is a session that was told "no store" and an absent
+// one is a session that was told nothing. Only the second can answer what a
+// person who has never heard of this feature gets.
+func without(env []string, name string) []string {
+	kept := make([]string, 0, len(env))
+	for _, entry := range env {
+		if strings.HasPrefix(entry, name+"=") {
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
 }

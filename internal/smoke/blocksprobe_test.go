@@ -5,12 +5,15 @@ package smoke
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/blairham/sh/internal/blocks"
 )
 
 // The block-store rows, asked of every shell rather than of the two the suite
@@ -254,6 +257,76 @@ func TestALineToldToBeForgottenIsNotKeptAsABlock(t *testing.T) {
 				strings.Contains(string(written), strings.TrimPrefix(hiddenProbe.line, " ")) {
 				t.Errorf("the history file kept the hidden line, so the rule was never on: %q",
 					Readable(string(written)))
+			}
+		})
+	}
+}
+
+// A session nobody told to keep blocks keeps none (#2274).
+//
+// The row the flip needed and did not have. Every other block row — these and
+// the two in the suite's own table — names SH_BLOCKS_DIR in the environment,
+// which is right for asking whether a session *records* and useless for asking
+// whether it records when unasked: they would all stay green if the default
+// came back, because none of them is ever in the state the default governs.
+//
+// So this one takes the variable out of the environment rather than emptying
+// it. Emptying it is a session that was told "no store"; removing it is a
+// session that was told nothing, and only the second is what a person who has
+// never heard of the feature is in. The old fallback resolved to
+// $XDG_STATE_HOME/sh/blocks and then $HOME/.local/state/sh/blocks, and HOME
+// here is the scratch directory — so if the fallback ever returns, an index
+// appears underneath it and this fails.
+//
+// The line is run and waited for first. A session that never reached a prompt
+// also writes no index, and that is the reading this has to be unable to
+// mistake for the finding.
+func TestNoStoreUnlessOneWasAskedFor(t *testing.T) {
+	for _, d := range []Dialect{shDialect(), Bash(), Zsh()} {
+		t.Run(d.Name, func(t *testing.T) {
+			ctx := context.Background()
+			dir, err := home(t.TempDir(), d)
+			if err != nil {
+				t.Fatalf("scratch home: %v", err)
+			}
+			s := &session{
+				dialect: d, home: dir, bin: probeShell(t, d.Name),
+				path: os.Getenv("PATH"), unnamedStore: true,
+			}
+			if err := s.start(ctx); err != nil {
+				t.Fatalf("no session: %v\nstartup drew: %s", err, s.startupDrawn())
+			}
+			defer s.stop()
+
+			// It ran, so silence below is a decision and not a dead shell.
+			if err := s.runProbe(blockProbe); err != nil {
+				t.Fatalf("the line did not run: %v\nscreen: %s", err, s.drawn())
+			}
+			// Ended cleanly, so anything written at exit has been written.
+			if err := s.recover(); err != nil {
+				t.Fatalf("back to a prompt: %v", err)
+			}
+			if err := s.typeLine("exit"); err != nil {
+				t.Fatalf("exit: %v", err)
+			}
+			if _, err := s.waitForExit(); err != nil {
+				t.Fatalf("the session did not end: %v", err)
+			}
+
+			var found []string
+			if err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if !entry.IsDir() && entry.Name() == blocks.IndexName {
+					found = append(found, path)
+				}
+				return nil
+			}); err != nil {
+				t.Fatalf("walking the scratch home: %v", err)
+			}
+			if len(found) > 0 {
+				t.Errorf("a session that was told nothing wrote a store: %v", found)
 			}
 		})
 	}

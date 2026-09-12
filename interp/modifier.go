@@ -6,6 +6,7 @@ package interp
 import (
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -278,7 +279,7 @@ func (r *Runner) applyModifierSegment(value, seg string, e *syntax.ParamExpr) (s
 			return "", false
 		}
 		if n == 0 {
-			return applyPureModifier(value, letter), true
+			return r.applyPureModifier(value, letter), true
 		}
 		if letter == 'h' {
 			return modifierHeadCount(value, n), true
@@ -424,12 +425,17 @@ func (r *Runner) applyModifier(value string, letter byte, e *syntax.ParamExpr) (
 	case 'Q':
 		return r.unquoteFlagged(value), true
 	}
-	return applyPureModifier(value, letter), true
+	return r.applyPureModifier(value, letter), true
 }
 
 // applyPureModifier performs one of the six that are a pure function of the
 // string, which is also the set a count may repeat.
-func applyPureModifier(value string, letter byte) string {
+//
+// A method for the sake of two of the six: `:l` and `:u` are case changes and
+// so ask the locale, which a string does not carry. Measured under LC_ALL=C
+// on zsh 5.9.2, `s=café; echo ${s:u}` is CAFé — the same narrowing `${(U)s}`
+// beside it already did, which this modifier did not. See #2027.
+func (r *Runner) applyPureModifier(value string, letter byte) string {
 	switch letter {
 	case 'h':
 		return modifierHead(value)
@@ -440,9 +446,9 @@ func applyPureModifier(value string, letter byte) string {
 	case 'e':
 		return modifierExtension(value)
 	case 'l':
-		return strings.ToLower(value)
+		return r.caseChanged(value, unicode.ToLower)
 	case 'u':
-		return strings.ToUpper(value)
+		return r.caseChanged(value, unicode.ToUpper)
 	}
 	return value
 }

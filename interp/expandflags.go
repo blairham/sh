@@ -1236,16 +1236,7 @@ func (r *Runner) convertCase(v string, upper bool) string {
 	if !upper {
 		convert = unicode.ToLower
 	}
-	if !isASCII(v) && r.localeIsC() {
-		wide := convert
-		convert = func(c rune) rune {
-			if c < 0x80 {
-				return wide(c)
-			}
-			return c
-		}
-	}
-	return strings.Map(convert, v)
+	return r.caseChanged(v, convert)
 }
 
 // PromptExpand is the prompt-escape language over one string, for a builtin

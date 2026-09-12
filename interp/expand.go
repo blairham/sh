@@ -2768,23 +2768,10 @@ func (r *Runner) changeCaseWith(value, pattern string, e *syntax.ParamExpr) stri
 	case syntax.ParamToggle, syntax.ParamToggleFirst:
 		convert = toggleCase
 	}
-	if !isASCII(value) && r.localeIsC() {
-		// In the C locale only ASCII letters are letters, so `${x^^}` on
-		// café is CAFé — measured, and the policy docs/spec/semantics.md
-		// records: an explicit C or POSIX locale narrows case to ASCII, and
-		// any other value is Unicode-aware. What an *unset* locale is
-		// splits the panel and is the dialect's answer, which localeIsC
-		// asks; the ASCII guard in front of it is what keeps the question
-		// unasked where the two readings agree, since case mapping below
-		// 0x80 is the same map in every locale.
-		ascii := convert
-		convert = func(c rune) rune {
-			if c < 0x80 {
-				return ascii(c)
-			}
-			return c
-		}
-	}
+	// In the C locale only ASCII letters are letters, so `${x^^}` on café is
+	// CAFé. What an *unset* locale is splits the panel and is the dialect's
+	// answer; caseMapper asks, and is the one place that narrowing lives.
+	convert = r.caseMapper(value, convert)
 	first := e.Op == syntax.ParamUpperFirst ||
 		e.Op == syntax.ParamLowerFirst ||
 		e.Op == syntax.ParamToggleFirst

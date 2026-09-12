@@ -100,7 +100,7 @@ func (r *Runner) applyGlobModifier(value, seg string) (result string, applied, o
 			n = 0
 		}
 		if n == 0 {
-			return applyPureModifier(value, letter), true, true
+			return r.applyPureModifier(value, letter), true, true
 		}
 		if letter == 'h' {
 			return modifierHeadCount(value, n), true, true

@@ -349,3 +349,38 @@ func characterCount(v string) int {
 	}
 	return n
 }
+
+// caseMapper is the case map to apply to a value, under the locale policy:
+// an explicit C or POSIX locale narrows a case change to ASCII, and any other
+// locale is Unicode-aware. docs/spec/semantics.md records the policy; the
+// panel agrees on it, so it is a correction rather than an axis.
+//
+// One helper rather than the same three lines repeated at each site. The
+// repetition is what let the sites drift: #367 brought the case-changing
+// *operators* — `${x^^}`, `${(U)x}` — under the policy and left the
+// case-changing *attribute* and the `:u`/`:l` modifier beside them still
+// calling strings.ToUpper directly, so `declare -u s=café` answered CAFÉ
+// under LC_ALL=C where all three reference shells answer CAFé. See #2027.
+// A narrowing every caller has to remember is one some caller will not.
+//
+// The ASCII guard in front of localeIsC keeps the question unasked for every
+// value a script usually holds, since case mapping below 0x80 is the same map
+// in every locale.
+func (r *Runner) caseMapper(value string, convert func(rune) rune) func(rune) rune {
+	if isASCII(value) || !r.localeIsC() {
+		return convert
+	}
+	wide := convert
+	return func(c rune) rune {
+		if c < 0x80 {
+			return wide(c)
+		}
+		return c
+	}
+}
+
+// caseChanged is caseMapper over a whole value, for the sites that convert
+// every character rather than the ones a pattern picks out.
+func (r *Runner) caseChanged(value string, convert func(rune) rune) string {
+	return strings.Map(r.caseMapper(value, convert), value)
+}

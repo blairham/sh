@@ -121,3 +121,48 @@ func findUse(uses []ValueUse, field string) *ValueUse {
 	}
 	return nil
 }
+
+// TestAnUnpinnedVerdictIsReadBackPerDialect. The flip half's verdicts are
+// per dialect — an axis bash never consults is one zsh may lean on — so the
+// parse has to keep them apart, and a reason written for every dialect has to
+// answer for the ones with no line of their own (#2057).
+func TestAnUnpinnedVerdictIsReadBackPerDialect(t *testing.T) {
+	t.Parallel()
+	got := parseNotes("unpinned zsh: the axis is never consulted there.\n" +
+		"unpinned: and this one answers for anybody else.\n")
+	if want := "the axis is never consulted there."; got.Unpinned["zsh"] != want {
+		t.Errorf("zsh verdict is %q, want %q", got.Unpinned["zsh"], want)
+	}
+	if want := "and this one answers for anybody else."; got.Unpinned[""] != want {
+		t.Errorf("the shared verdict is %q, want %q", got.Unpinned[""], want)
+	}
+	if got := verdict(got, "zsh"); got != "the axis is never consulted there." {
+		t.Errorf("zsh reads %q, want its own line rather than the shared one", got)
+	}
+	if got := verdict(got, "bash"); got != "and this one answers for anybody else." {
+		t.Errorf("bash reads %q, want the shared line", got)
+	}
+	if n := parseNotes("unpinned fish: not one of the four.\n"); len(n.Unpinned) != 0 {
+		t.Errorf("read a verdict for a dialect that does not exist: %v", n.Unpinned)
+	}
+}
+
+// TestTheFlipVerdictsAreOnTheAxesTheyAnswer is the same claim the preset one
+// makes, for the four triaged in #2057 that cannot be pinned by any row.
+func TestTheFlipVerdictsAreOnTheAxesTheyAnswer(t *testing.T) {
+	t.Parallel()
+	notes, err := FieldNotes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for field, dialect := range map[string]string{
+		"TypeNamesTheKindWithDashT":              "bash",
+		"PrintfEmptyIsNotANumber":                "zsh",
+		"SetBTurnsOffBraceExpansion":             "zsh",
+		"ValuelessDeclarationHidesTheOuterValue": "zsh",
+	} {
+		if verdict(notes[field], dialect) == "" {
+			t.Errorf("%s: nothing says why no corpus row objects in %s", field, dialect)
+		}
+	}
+}

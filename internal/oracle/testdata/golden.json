@@ -1434,6 +1434,50 @@
         "TimedOut": false
       }
     },
+    "alias/the-print-option": {
+      "bash": {
+        "Stdout": "alias a='1'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "alias a='1'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "alias a='1'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=1",
+        "Stderr": "alias: -p not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "alias a=1~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:alias:1: bad option: -p",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/the-status-may-count-what-was-missing": {
       "bash": {
         "Stdout": "st=1",
@@ -1605,6 +1649,50 @@
       "zsh": {
         "Stdout": "st=0~--plain--~--s--~t=z",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/unalias-all-with-a-name-after-it": {
+      "bash": {
+        "Stdout": "st=0~after=1",
+        "Stderr": "\u003cshell\u003e: line 1: alias: a: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~after=1",
+        "Stderr": "\u003cshell\u003e: line 1: alias: a: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~after=1",
+        "Stderr": "\u003cshell\u003e: line 0: alias: a: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0~after=1",
+        "Stderr": "alias: a not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~after=1",
+        "Stderr": "a: alias not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~a=1~after=0",
+        "Stderr": "\u003cshell\u003e:unalias:1: -a: too many arguments",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -44555,6 +44643,50 @@
         "TimedOut": false
       }
     },
+    "declare/listing-a-control-byte": {
+      "bash": {
+        "Stdout": "declare -- v=$'a\\001b'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -- v=$'a\\001b'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -- v=\"a\u0001\u0001b\"~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "v=$'a\\x01b'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset v=$'a\\C-Ab'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/local-bad-name": {
       "bash": {
         "Stdout": "in=ok~st=0",
@@ -55335,6 +55467,50 @@
         "TimedOut": false
       }
     },
+    "expand/equals-names-a-command": {
+      "bash": {
+        "Stdout": "=nosuchcmd_zz~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "=nosuchcmd_zz~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "=nosuchcmd_zz~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "=nosuchcmd_zz~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "=nosuchcmd_zz~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: nosuchcmd_zz not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "expand/glob-applies-to-expansion": {
       "bash": {
         "Stdout": "[etc]",
@@ -62062,6 +62238,50 @@
       "zsh": {
         "Stdout": "st=0 o=[?]",
         "Stderr": "\u003cshell\u003e:1: argument expected after -b option",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/optarg-after-a-bad-option": {
+      "bash": {
+        "Stdout": "o=[?] optarg=[UNSET]",
+        "Stderr": "\u003cshell\u003e: illegal option -- x",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "o=[?] optarg=[UNSET]",
+        "Stderr": "\u003cshell\u003e: illegal option -- x",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "o=[?] optarg=[UNSET]",
+        "Stderr": "\u003cshell\u003e: illegal option -- x",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "o=[?] optarg=[UNSET]",
+        "Stderr": "Illegal option -x",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "o=[?] optarg=[UNSET]",
+        "Stderr": "\u003cshell\u003e: -x: unknown option",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "o=[?] optarg=[]",
+        "Stderr": "\u003cshell\u003e:1: bad option: -x",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -72452,6 +72672,50 @@
       },
       "zsh": {
         "Stdout": "[setbyg]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "locale/an-unset-locale-and-a-multibyte-length": {
+      "bash": {
+        "Stdout": "len=5",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "len=5",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "len=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "len=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "len=6",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "len=6",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -82882,6 +83146,50 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: bad substitution",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/keyed-table-as-a-scalar": {
+      "bash": {
+        "Stdout": "[]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[2]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]~st=0",
+        "Stderr": "\u003cshell\u003e: 1: m[a]=1: not found~\u003cshell\u003e: 1: m[b]=2: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1]~st=0",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -131355,6 +131663,50 @@
         "TimedOut": false
       }
     },
+    "trap/capital-p-prints-the-action-alone": {
+      "bash": {
+        "Stdout": "echo hi~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "echo hi~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 0: trap: -P: invalid option~trap: usage: trap [-lp] [arg signal_spec ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: trap: Illegal option -P",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: trap: -P: unknown option~Usage: trap [-p] [action condition ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/debug-fires-before-each-command": {
       "bash": {
         "Stdout": "D~a~D~b",
@@ -131713,6 +132065,50 @@
         "TimedOut": false
       }
     },
+    "trap/l-lists-the-signals": {
+      "bash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: trap: Illegal option -l",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: trap: -l: unknown option~Usage: trap [-p] [action condition ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/lineno-inside-an-action": {
       "bash": {
         "Stdout": "one~in trap LINENO=1~two",
@@ -131927,6 +132323,50 @@
       },
       "zsh": {
         "Stdout": "caught~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/p-with-a-condition-named": {
+      "bash": {
+        "Stdout": "trap -- 'echo hi' SIGUSR1~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "trap -- 'echo hi' USR1~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "trap -- 'echo hi' SIGUSR1~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: trap: Illegal option -p",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "echo hi~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -132989,6 +133429,50 @@
       },
       "zsh": {
         "Stdout": "nosuchzz_qq not found~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "type/p-on-a-name-the-shell-answers-itself": {
+      "bash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "-p: not found~f is a shell function~st=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "f not found~st=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -134176,8 +134660,8 @@
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "022",
-        "Stderr": "\u003cshell\u003e:umask:1: bad symbolic mode operator: /",
+        "Stdout": "0555",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

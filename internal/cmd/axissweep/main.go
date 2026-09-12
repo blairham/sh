@@ -20,10 +20,11 @@
 // processes, and this repository already deleted a gate for costing every
 // commit too much. It runs on demand, and its output is a backlog.
 //
-// The exit status is 1 when anything came out unpinned, because "fail if
-// nothing fails" is the whole instrument. A clean struct exits 0. Under
-// -presets the same rule applies to the thing that half finds: an entry no
-// field comment has answered yet (#2060).
+// The exit status is 1 while anything is **untriaged** — a backlog entry no
+// field comment has answered — because "fail if nothing fails" is the whole
+// instrument and some entries can never be pinned at all. A struct whose
+// every entry carries either a row that catches it or a recorded reason it
+// cannot be caught exits 0 (#2057, #2060).
 package main
 
 import (
@@ -118,7 +119,12 @@ func main() {
 	res.Presets = uses
 	fmt.Print(res.Report())
 	fmt.Print(axissweep.PresetReport(uses))
-	if len(res.Unpinned()) > 0 {
+	// Nonzero while anything is *untriaged* rather than while anything is
+	// unpinned. Some pairs are permanent — an axis a dialect never consults
+	// cannot be pinned by any row — so "unpinned reaches zero" was never a
+	// state this could be in, and an exit status nobody can clear is one
+	// nobody reads. See #2057.
+	if res.Untriaged()+len(axissweep.Untriaged(uses)) > 0 {
 		os.Exit(1)
 	}
 }

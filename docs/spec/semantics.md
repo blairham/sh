@@ -8760,11 +8760,10 @@ contaminated probe, macOS ships /usr/bin/cd. Recorded as
 
 ### `umask`, and the symbolic form
 
-**`SymbolicMaskSetsWithoutAWho`** — bash yes · dash yes · ksh93 yes · zsh no
-
-Takes `umask -- =w`, where `=` has no who before it and means all three
-groups. Three of the four do; zsh wants one, and names a character that
-is not in the input when it does not get one.
+**An omitted who before `=` is not an axis.** `umask -- =w` means all
+three groups in every column of the panel, and `SymbolicMaskSetsWithoutAWho`
+recorded a disagreement that is not there. See *A probe that measured the
+wrong shell's feature* below for how it got in and how it came out (#2057).
 
 **`SymbolicMaskTakesMoreThanOneOperator`** — bash yes · dash yes · ksh93 yes · zsh no
 
@@ -13105,6 +13104,99 @@ say:
   preset holds bash 5's reading, which is right, and the older column is
   `PlainNamesOnly` — the exact trap the report's own header warns about,
   found by looking.
+
+### A probe that measured the wrong shell's feature
+
+The first full sweep left 111 axis/dialect pairs the corpus did not object
+to, and the rule above says the first thing to do with any of them is
+**re-measure**. One of them is why the rule is written that way.
+
+`SymbolicMaskSetsWithoutAWho` recorded that zsh, alone in the panel,
+refuses `umask -- =w` — and the field said so with a detail nobody would
+invent: the complaint names a `/` that is not in the input. There was a
+corpus row, `umask/symbolic-set-with-no-who`, and a Go test whose whole
+purpose was to pin the `/`. Two instruments agreeing, and both wrong.
+
+`=w` is not that operand in zsh. It is that shell's `=cmd` expansion, and
+it reaches `umask` as `/usr/bin/w`. The `/` was in the input all along —
+it arrived one expansion before the builtin. Quoted, or under `setopt
+noequals`, zsh gives `umask "=w"` the same 0555 the other five give it:
+
+    umask 022; umask -- "=w"; umask     0555 in all six columns
+    umask 022; umask -- =w;   umask     zsh: bad symbolic mode operator: /
+
+So the axis came out, the consult with it, and the corpus row now writes
+the operand quoted. What the unquoted spelling was really measuring keeps
+a row of its own — `expand/equals-names-a-command` — under the axis that
+owns it, `EqualsExpansion`. One cell of the golden record changed, and
+that cell was the whole of the evidence.
+
+This is the second time in two days that an unquoted metacharacter in a
+probe turned out to be measuring the shell's *word expansion* rather than
+the builtin under test; the first was `read ?`, where a leading `?` is a
+prompt in zsh and an unquoted one is a glob (#2060). **Quote the operand
+whenever the probe is about what a builtin does with a word.**
+
+### What the flip backlog is, once it is triaged
+
+The list `make axis-sweep` produces is not one kind of thing either, and
+the same reframing the preset lists needed applies here: **some of these
+pairs can never be pinned, so "unpinned reaches zero" was never a state
+the struct could be in.** An exit status nobody can clear is one nobody
+reads, so the sweep now counts the entries with no recorded verdict, and
+a verdict is a line on the axis — `unpinned zsh: why` — exactly as the
+preset lists record theirs.
+
+Four kinds, and the sweep can tell one of them apart by itself:
+
+1. **A missing corpus row.** The common case, and the one to act on.
+   Twelve rows landed with this triage — eleven new and one corrected —
+   each verified to move when its axis moves before it was written down.
+2. **The axis is never consulted in that dialect.** `make axis-sweep` now
+   asks this directly: after the sweep it moves each unpinned axis to its
+   "no answer" constant, which refuses *wherever the axis is consulted*,
+   and reports `never reached` for a dialect that does not notice. Two
+   flips tell three states apart, and it costs what the backlog costs.
+   `TypeNamesTheKindWithDashT` in bash is the clean example — the letter
+   is already in that dialect's `TypeOptions`, so the axis that predates
+   the optstring is dead there (#2180).
+3. **Reached, and both answers produce the same output anyway**, because
+   a second axis swallows the difference. `PrintfEmptyIsNotANumber` in
+   zsh: `Yes` sends an empty operand on to the bad-number complaint, and
+   that shell reports no bad numbers at all.
+4. **Every row that reaches it fails at baseline**, so none can pin it —
+   a flip can only be caught by a row that was passing.
+   `SetBTurnsOffBraceExpansion` in zsh is blocked behind the `B` letter
+   being refused as unimplemented (#1856).
+
+And a fifth, which is the one the rule at the top exists for: **the
+disagreement is not there**, as `SymbolicMaskSetsWithoutAWho` was not.
+
+This pass moved 21 of the 82 pairs: seventeen now have a row that catches
+them — `AliasHasPrintOption`, `UnaliasAllRefusesOperands`,
+`TypePSearchesPathPastTheShell`, `KeyedTableScalarIsTheFirstValue`,
+`ListingControlEscape`, `UnsetLocaleIsUnicodeAware` and
+`GetoptsClearsOptarg` in both dialects, and the three `trap` letters in
+bash — and four carry a verdict saying no row ever will. **The other 61
+are untriaged and the sweep says so**, which is the point of counting
+them separately: what is left is a number somebody can work down rather
+than a permanent property of the struct.
+
+Three candidate rows were written, measured, and **not** landed, because
+moving the axis under them changed nothing: a `type -t` probe against an
+axis bash never consults, a `printf '%d' ""` probe whose complaint zsh
+swallows, and a `local u` probe against an axis zsh never reaches. Each
+would have gone into the corpus reading as a measurement. Checking a row
+against the mutated shell before writing it down is what caught them, and
+it costs two processes:
+
+    SH_AXIS_MUTATION=Field=<value> build/axis-sh -dialect zsh -c '<probe>'
+
+A last trap belongs with these, because the instrument reported it with
+complete confidence: `-bin` given a path relative to the module root
+makes every row error, which leaves nothing passing, which makes **every
+axis unpinned and every one of them "never reached"**. A baseline of zero
+is now a hard error naming the likely cause.
 
 ### A flip to `Unspecified` asks a different question
 

@@ -301,7 +301,6 @@ func Semantics() interp.Semantics {
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
-	s.SymbolicMaskSetsWithoutAWho = interp.Yes
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes

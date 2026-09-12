@@ -268,20 +268,14 @@ func (r *Runner) parseSymbolicUmask(s string, current int) (mask int, fail maskF
 			if r.unspecified {
 				return 0, maskFailure{}, false
 			}
-			if op == '=' && !named {
-				// `umask -- =w` sets every group, in three of the four. zsh
-				// wants a who before `=` and names a character that is not
-				// in the input at all when it does not get one.
-				if !r.ask(r.sem().SymbolicMaskSetsWithoutAWho, "`umask =w` with no who before the `=`") {
-					if r.unspecified {
-						return 0, maskFailure{}, false
-					}
-					return 0, maskFailure{bad: '/', operator: true}, false
-				}
-				if r.unspecified {
-					return 0, maskFailure{}, false
-				}
-			}
+			// An omitted who before `=` means all three groups, and that
+			// is core rather than an axis. It was one — zsh was recorded
+			// wanting a who and naming a `/` that is not in the input —
+			// and the measurement behind that was `umask -- =w` written
+			// unquoted, which in zsh is not the operand it looks like:
+			// `=w` is that shell's `=cmd` expansion and reaches `umask` as
+			// `/usr/bin/w`. Quoted, or under `setopt noequals`, zsh gives
+			// `umask "=w"` the 0555 every other column gives it. See #2057.
 			i++
 			perms := 0
 			for ; i < len(clause); i++ {

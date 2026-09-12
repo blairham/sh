@@ -685,7 +685,6 @@ func Semantics() interp.Semantics {
 	// The strict end of the symbolic mask: one operator per clause, a who
 	// before `=`, and neither `s` nor `t`.
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.No
-	s.SymbolicMaskSetsWithoutAWho = interp.No
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.No
 	s.SymbolicMaskTakesTheStickyLetter = interp.No

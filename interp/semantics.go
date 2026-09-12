@@ -6802,10 +6802,10 @@ type Semantics struct {
 // StartupFileOptions are the invocation options that change which startup
 // files a shell reads: the escape hatches from a startup file that is wrong.
 //
-// Each field holds the spellings the dialect accepts, whitespace-separated and
-// exactly as they are written on a command line — `--norc`, `-f`. A
-// single-dash entry of one letter also matches inside a bundle, so `-if` is
-// `-i` and `-f`; a double-dash entry matches a whole word and nothing else.
+// Each field holds the spellings the preset accepts, whitespace-separated and
+// exactly as they are written on a command line — `--norc`, `-f`. A one-letter
+// entry with a single `-` also matches inside a bundle, so `-if` is `-i` and
+// `-f`; an entry with two matches a whole word and nothing else.
 // Empty means a shell with no such option, and the zero value is a shell with
 // none at all.
 //
@@ -6845,55 +6845,45 @@ type StartupFileOptions struct {
 	// cannot.
 	Login string
 
-	// SuppressLogin names the options that suppress the login profile and
-	// leave the rest. bash's `--noprofile`, and nobody else's.
+	// SuppressLogin names the options that suppress the login profile and leave
+	// the rest — `--noprofile`, where a preset has one.
 	//
-	// It beats Login above, which is measured: `bash --noprofile --login -i`
-	// reads no profile.
+	// It beats Login above, which is measured: `--noprofile --login -i` reads no
+	// profile.
 	SuppressLogin string
 
-	// SuppressInteractive names the options that suppress the interactive
-	// file and leave the rest. bash's `--norc`, and nobody else's.
+	// SuppressInteractive names the options that suppress the interactive file
+	// and leave the rest — `--norc`, where a preset has one.
 	//
-	// It suppresses the file the shell reads *of its own name* and not
-	// `$ENV`: measured, `bash --posix --norc -i` still reads `$ENV`, because
-	// in that mode the standard's file is the one it was going to read.
+	// It suppresses the file the shell reads *of its own name* and not `$ENV`:
+	// under a POSIX mode, `--norc -i` still reads `$ENV`, because in that mode
+	// the standard's file is the one it was going to read.
 	SuppressInteractive string
 
-	// NameInteractive names the options whose operand — the next word — is
-	// read in place of the interactive file. bash's `--rcfile` and its
-	// synonym `--init-file`.
+	// NameInteractive names the options whose operand — the next word — is read
+	// in place of the interactive file, `--rcfile` and any synonym of it.
 	//
 	// It replaces rather than adds, and it loses to everything that suppresses
-	// the file: measured, `bash --norc --rcfile f -i` reads neither, and so
-	// does `bash --rcfile f -l -i`, where a login shell was not going to read
-	// an interactive file at all.
+	// the file: `--norc --rcfile f -i` reads neither, and so does
+	// `--rcfile f -l -i`, where a login shell was not going to read an
+	// interactive file at all.
 	NameInteractive string
 }
 
 // VersionOption is what a shell does when its invocation asks for a version.
 //
-// Measured 2026-09-11 with `env -i <shell> --version`:
-//
-//	                  writes                                       on      exit
-//	bash 5.3.15       GNU bash, version 5.3.15(1)-release (…)      stdout  0
-//	bash 3.2.57       GNU bash, version 3.2.57(1)-release (…)      stdout  0
-//	zsh 5.9.2         zsh 5.9.2 (…)                                stdout  0
-//	ksh93u+           "  version         sh (AT&T Research) …"     stderr  2
-//	dash              /bin/dash: 0: Illegal option --              stderr  2
-//
 // Three facts, and none of them follows from the others: whether the shell
 // knows the option at all, which stream the answer goes to, and what it exits.
-// ksh93 is the reason all three are fields — it answers with its version and
-// still exits a failure, because the option reaches its generic option reader
-// rather than a case of its own.
+// That last is why all three are fields — an implementation can answer with its
+// version and still exit a failure, because the option reaches its generic
+// option reader rather than a case of its own.
 //
-// A dialect that names no spelling refuses the word the way any unknown long
-// option is refused, which is what dash does.
+// A preset that names no spelling refuses the word the way any unknown long
+// option is refused.
 //
 // Measured too: the answer *ends* the invocation. `--version -c 'echo hi'`
-// prints the version and does not run the command in bash, zsh and ksh93
-// alike, and a second `--version` changes nothing.
+// prints the version and does not run the command, and a second `--version`
+// changes nothing.
 type VersionOption struct {
 	// Spellings names the option, whitespace-separated and written exactly
 	// as a command line writes it — `--version`. Empty means the shell has
@@ -6904,17 +6894,17 @@ type VersionOption struct {
 	// uncomparable, and an option spelling has no whitespace to lose.
 	Spellings string
 
-	// Text is the line the shell writes, without its newline. It is the
-	// dialect's own — the version *this* shell implements, not the one a
-	// panel member on this machine reports.
+	// Text is the line the shell writes, without its newline. It belongs to the
+	// preset — the version *this* shell implements, not the one an installed
+	// binary on this machine reports.
 	Text string
 
-	// ToStandardError writes the answer on standard error rather than
-	// standard output, which one shell in the panel does.
+	// ToStandardError writes the answer on standard error rather than standard
+	// output.
 	ToStandardError bool
 
-	// Status is what the shell exits after answering. Zero for the three
-	// that treat the option as a request; ksh93 exits 2.
+	// Status is what the shell exits after answering. Zero where the option is
+	// treated as a request; non-zero where it reaches a generic option reader.
 	Status int
 }
 
@@ -6924,25 +6914,24 @@ type NameOperands int
 const (
 	// NameOperandsUnspecified is no answer, and is refused like any other.
 	NameOperandsUnspecified NameOperands = iota
-	// PlainNamesOnly takes a name and nothing else: bash, dash and ksh93,
-	// for all three builtins.
+	// PlainNamesOnly takes a name and nothing else.
 	PlainNamesOnly
-	// NamesAndSpecialParameters also takes `?`, `*`, `@`, `#`, `!`, `-`, `$`
-	// and `0`: zsh's `export` and `readonly`. Not the other digits — `export
-	// 0` is quiet there and `export 1` is "not an identifier", which is the
-	// difference between a special parameter and a positional one.
+	// NamesAndSpecialParameters also takes `?`, `*`, `@`, `#`, `!`, `-`, `$` and
+	// `0`. Not the other digits — `export 0` is quiet under it and `export 1` is
+	// "not an identifier", which is the difference between a special parameter
+	// and a positional one.
 	NamesAndSpecialParameters
-	// NamesAndPositionals also takes any all-digit operand: zsh's `unset`,
-	// where `unset 12` is quiet. `0` falls in here too, so both of zsh's
-	// answers take it and they agree on nothing else.
+	// NamesAndPositionals also takes any all-digit operand, so `unset 12` is
+	// quiet. `0` falls in here too, so it and NamesAndSpecialParameters both
+	// take that one and agree on nothing else.
 	NamesAndPositionals
-	// AnythingIsAName checks nothing at all: bash 5.3's bare `unset`, which
-	// is quiet about `unset 1x`, `unset "a b"` and `unset -- -` alike while
-	// its `export` refuses every one of them.
+	// AnythingIsAName checks nothing at all, so `unset 1x`, `unset "a b"` and
+	// `unset -- -` are alike quiet while the same preset's `export` refuses
+	// every one of them.
 	//
-	// A change within bash rather than a difference between shells — bash
-	// 3.2 refuses all three — so the `bash32` and `bash` columns of a corpus
-	// case here disagree on purpose.
+	// A change within one implementation rather than a difference between two —
+	// an earlier build refuses all three — so two columns of a corpus case here
+	// disagree on purpose.
 	AnythingIsAName
 )
 
@@ -6971,13 +6960,13 @@ const (
 	// where `read "v?p"` is the bad name `v?p` and nothing else.
 	ReadOperandIsAllName
 	// ReadPromptNeedsANameBeforeIt takes the part in front of the `?` as the
-	// name and the rest as a prompt, and still wants a name there: ksh93,
-	// where `read "?p"` is refused for the empty name it leaves.
+	// name and the rest as a prompt, and still wants a name there, so
+	// `read "?p"` is refused for the empty name it leaves.
 	ReadPromptNeedsANameBeforeIt
 	// ReadPromptAloneNamesTheDefault is the same split with nothing in front
-	// of the `?` meaning the default name: zsh, where `read "?Press enter"`
-	// prompts and reads into REPLY. Measured 2026-09-07 — it is the shape
-	// the idiom is usually written in, and it is the one ksh93 refuses.
+	// of the `?` meaning the default name, so `read "?Press enter"` prompts
+	// and reads into REPLY. It is the shape the idiom is usually written in,
+	// and the one the reading above refuses.
 	ReadPromptAloneNamesTheDefault
 )
 
@@ -6994,20 +6983,20 @@ func (p ReadPromptOperand) String() string {
 }
 
 // SelectMenuLayout is how a shell draws a `select` menu. The engines differ
-// enough that the same nine items are nine lines in two shells and one line in
-// the third, so this is a named choice rather than a flag.
+// enough that the same nine items are nine lines under one and one line under
+// another, so this is a named choice rather than a flag.
 type SelectMenuLayout int
 
 const (
-	// SelectMenuVertical is one item per line, always. ksh93's, whose column
+	// SelectMenuVertical is one item per line, always — the engine whose column
 	// mode is reached on the terminal's height rather than its width.
 	SelectMenuVertical SelectMenuLayout = iota
-	// SelectMenuVerticalThenColumns is bash's: one item per line while the
-	// list would fit on one line, and tab-separated columns once it would
-	// not — which is the opposite way round from how it sounds.
+	// SelectMenuVerticalThenColumns is one item per line while the list would
+	// fit on one line, and tab-separated columns once it would not — which is
+	// the opposite way round from how it sounds.
 	SelectMenuVerticalThenColumns
-	// SelectMenuColumns is zsh's: always packed into columns padded with
-	// spaces, so even three items share one line.
+	// SelectMenuColumns is always packed into columns padded with spaces, so
+	// even three items share one line.
 	SelectMenuColumns
 )
 
@@ -7019,103 +7008,90 @@ func PosixSemantics() Semantics {
 		SplitParamExpansion: Yes,
 		// 2.11 has the shell read its input and execute commands as it goes,
 		// and 2.14's `eval` "shall be read and executed by the shell" in the
-		// same way. So text that will not parse further stops the reading
-		// rather than unwinding what has already run, and dash — the shell in
-		// the panel that targets this text — complies for both. zsh's `eval`
-		// and ksh93 are the departures.
+		// same way. So text that will not parse further stops the reading rather
+		// than unwinding what has already run.
 		EvalRunsWhatItParsed:        Yes,
 		SourcedFileRunsWhatItParsed: Yes,
 		SplitCommandSubstitution:    Yes,
-		// 2.7.2 puts noclobber on `>` and says nothing about `>>`, so
-		// appending still creates. Four of the panel comply; zsh departs.
+		// 2.7.2 puts noclobber on `>` and says nothing about `>>`, so appending
+		// still creates.
 		NoclobberBlocksAppendCreate: No,
 		// A null field from an unquoted expansion is removed, which is the
-		// reading that takes the elements one at a time — and it is dash's,
-		// the shell in the panel that targets this text. bash's join is the
+		// reading that takes the elements one at a time. The join is the
 		// departure from it.
 		UnquotedListJoinsOnIFS: No,
-		// POSIX makes an unquoted `$@` in a context that does not split
-		// behave as `$*` does, which is the join on IFS; dash, the shell in
-		// the panel that targets this text, complies. bash and ksh93 are the
-		// departure.
+		// POSIX makes an unquoted `$@` in a context that does not split behave as
+		// `$*` does, which is the join on IFS.
 		UnsplitAtListJoinsOnIFS: Yes,
-		// 2.6.5 spells the tail out — "once the input is empty, the
-		// candidate shall become an output field if and only if it is not
-		// empty" — so a trailing separator is absorbed and opens nothing.
-		// dash, the shell in the panel that targets this text, complies, and
-		// so do bash and ksh93; zsh is the departure.
+		// 2.6.5 spells the tail out — "once the input is empty, the candidate
+		// shall become an output field if and only if it is not empty" — so a
+		// trailing separator is absorbed and opens nothing.
 		TrailingSeparatorEndsAField:              No,
 		GlobExpansionResults:                     Yes,
 		GlobNoMatchIsError:                       No,
 		AssignmentPrefixPersistsOnSpecialBuiltin: Yes,
 		EchoInterpretsEscapes:                    No,
-		// POSIX has `echo` and `printf` exit greater than zero when "an
-		// error occurred", and a write that went nowhere is one; dash
-		// complies. zsh is the holdout, keeping status 0.
+		// POSIX has `echo` and `printf` exit greater than zero when "an error
+		// occurred", and a write that went nowhere is one. Keeping status 0 is
+		// the departure.
 		BuiltinWriteErrorFailsTheCommand: Yes,
-		// The XSI echo: -n alone, no \x, no \e. The letters the dialects
-		// add are theirs to add.
+		// The XSI echo: -n alone, no \x, no \e. The letters a preset adds are
+		// its own to add.
 		EchoOptions:                 "n",
 		EchoExpandsHexEscapes:       No,
 		EchoExpandsUnicodeEscapes:   No,
 		EchoEmptyHexDigitRunIsNul:   No,
 		EchoExpandsEscEscape:        No,
 		EchoExpandsCapitalEscEscape: No,
-		// The POSIX read: -r alone. The counts, delimiters and descriptors
-		// the dialects add are theirs to add, and the two count axes are
-		// unreachable without the letters that raise them.
+		// The POSIX read: -r alone. The counts, delimiters and descriptors a
+		// preset adds are its own to add, and the two count axes are unreachable
+		// without the letters that raise them.
 		ReadOptions: "r",
 		// POSIX gives `unset` both letters and no others.
 		UnsetOptions: "vf",
-		// The POSIX jobs: -l and -p, and `-p` means the process ids alone.
-		// The state filters and the rest are the dialects' additions, and
-		// the two axes their letters raise are unreachable without them.
+		// The POSIX jobs: -l and -p, and `-p` means the process ids alone. The
+		// state filters and the rest are a preset's additions, and the two axes
+		// their letters raise are unreachable without them.
 		JobsOptions:             "lp",
 		JobsPidsOnlyOption:      Yes,
 		LengthOfSpecialIsCount:  Yes,
 		ArithLeadingZeroIsOctal: Yes,
-		// One reader: the value a name holds goes through the same octal
-		// rule the literal does, so `k=010; $((k))` is eight. ksh93 is the
-		// one shell whose two readers part.
+		// One reader: the value a name holds goes through the same octal rule the
+		// literal does, so `k=010; $((k))` is eight. Two readers that part is the
+		// departure.
 		ArithStoredValueReadsALeadingZeroAsDecimal: No,
 		// One reader for `let` too: the standard has no `let` and no integer
 		// attribute, so the preset keeps the arithmetic it does describe.
 		LetReadsALeadingZeroAsDecimal:         No,
 		ArithmeticAssignmentDeclaresAnInteger: No,
-		// dash is the panel's POSIX-faithful member and the only one
-		// exiting 2, so the POSIX preset follows it. The standard itself
-		// requires only "greater than zero", which decides nothing.
+		// The standard requires only "greater than zero", which decides nothing,
+		// so the preset follows the implementation that targets this text.
 		FatalErrorStatusIsOne:  No,
 		ArithNameValueRecurses: No,
 		// ArithRecursedNameMustBeSet is deliberately left unanswered: with
 		// no recursion there is no name below the top for it to be asked
 		// about, so an answer here would be a value nothing can measure.
-		// A login shell reads ~/.profile whether or not it is going to
-		// prompt: dash, ksh93 and zsh, with bash the holdout. POSIX names
-		// ~/.profile as the file a login shell reads and does not make it
-		// conditional on being interactive, so the standard and the
-		// majority agree here.
+		// A login shell reads ~/.profile whether or not it is going to prompt.
+		// POSIX names ~/.profile as the file a login shell reads and does not
+		// make it conditional on being interactive.
 		LoginProfileWhenNonInteractive: true,
-		// And the file it reads: the standard names ~/.profile, which is
-		// dash's and ksh93's name for it too. One entry rather than a
-		// fallback chain — bash is the only shell in the panel that tries
-		// more than one name.
+		// And the file it reads: the standard names ~/.profile. One entry rather
+		// than a fallback chain — trying more than one name is the departure.
 		//
-		// InteractiveStartupFile is deliberately left empty here, which is
-		// not an omission: the standard's interactive file is `$ENV`, and an
-		// empty name is how a dialect says so.
+		// InteractiveStartupFile is deliberately left empty here, which is not an
+		// omission: the standard's interactive file is `$ENV`, and an empty name
+		// is how a preset says so.
 		LoginStartupFiles: ".profile",
-		// The four brace-range axes are left unanswered: a brace that
-		// never expands never asks them.
+		// The four brace-range axes are left unanswered: a brace that never
+		// expands never asks them.
 		BraceExpansion:                 No,
 		BracketCaretNegates:            No,
 		ExitTrapIsFunctionLocal:        No,
 		FunctionLocalTraps:             TrapsSurviveTheFunction,
 		GetoptsPositionIsFunctionLocal: No,
-		// dash is the panel's POSIX-faithful member and it loses the
-		// intra-word half at the return, so the preset that follows it
-		// loses it too. The standard has nothing to say — `local` is not
-		// in it — so the measured member decides.
+		// The standard has nothing to say — `local` is not in it — so the preset
+		// follows the implementation that targets this text, which loses the
+		// intra-word half at the return.
 		GetoptsLocalOptindRestoresTheCursor: No,
 		SignalHandlerSeesEarlierStatus:      No,
 		// POSIX says a bare `exit` reports the status of the last command,

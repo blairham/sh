@@ -1,0 +1,165 @@
+{
+  "AliasQuoting": {
+    "unexhibited": {
+      "ListingQuoteAlwaysDouble": "DeclareValueQuoting holds it, for bash's `declare -p` — the engine that double-quotes its declarations single-quotes its aliases, which is the whole reason that field is separate. Re-measured 2026-09-12: `alias al=\"echo a'b\"` lists as `al='echo a'\\''b'` in the three bash columns and zsh 5.9.2, `al='echo a'\"'\"'b'` in dash and `al=$'echo a\\'b'` in ksh93u+ (#2060).",
+      "ListingQuoteWhenNeededPlain": "TrapQuoting holds it, for zsh, whose trap listing never reaches for `$'...'` where its alias listing does — the paragraph on TrapQuoting is the measurement (#2060)."
+    }
+  },
+  "ArithSubscriptSkippedWhenNameUnset": {
+    "unexhibited": {
+      "No": "bash 5.3.15, bash-as-`sh`, bash 3.2.57 and ksh93u+, re-measured 2026-09-12: `unset nodecl; $(( nodecl[1/0] ))` is a division by zero in all four and a quiet 0 in zsh 5.9.2, and `i=0; $(( nodecl2[i++] ))` leaves i at 1 in the four and 0 in zsh. dash has no subscript in arithmetic, so the question does not arise there. No preset writes it because the axis is read (`== Yes`) and not asked — silence and `No` reach the same code, so writing it down would add a line and no fact (#2060)."
+    }
+  },
+  "BareDeclarationListing": {
+    "unexhibited": {
+      "DeclareListingBareAssignments": "DeclareListing holds it, for ksh93. Re-measured 2026-09-12 over one exported and one readonly name: the bare `export` writes `V='a b'` in ksh93u+ and zsh 5.9.2, `export V='a b'` in dash, and `declare -x V=\"a b\"` in both bash builds — and `export V=\"a b\"` in bash under `set -o posix`, which is DeclareListingCommandWord and filed as #2154 (#2060).",
+      "DeclareListingExportSpelled": "ReadonlyListing holds it, for zsh. zsh spells the bare form as a plain assignment and the `-p` form as `typeset -r`, which is the split this field records (#2060)."
+    }
+  },
+  "BareSubscriptIsASubscript": {
+    "unexhibited": {
+      "No": "zsh under `setopt ksharrays`, at run time — the same shape FunctionLocalTraps has, and wired in dialect/zsh/ksharrays.go rather than in the preset. Measured 2026-09-12: `a=(x y z); echo \"$a[1]\"` is `x` in zsh 5.9.2 and `x[1]` under `ksharrays`. The other five columns print `x[1]` too and do *not* hold this value: with the grammar flag off the brackets were never part of the expansion, so they never answer the axis at all (#2060)."
+    }
+  },
+  "BareTypesetListing": {
+    "unexhibited": {
+      "BareLocalListsLocals": "BareLocalListing holds it, for bash's bare `local`. It is not this builtin's answer anywhere: measured 2026-09-12, bash's bare `declare` is every variable the shell holds *and then every function* — `f(){ :; }` lists as `f ()` — which is a fourth reading this form does not carry, and is why bash is unanswered here rather than approximated. Recorded as #1754 (#2060).",
+      "BareLocalListsNothing": "BareLocalListing holds it, for dash's and ksh93's bare `local`. Neither shell reaches this field: dash has no `typeset` and ksh93u+ has no `local`, so both are unanswered rather than silent-by-measurement (#2060)."
+    }
+  },
+  "DeclarationNameOperands": {
+    "unexhibited": {
+      "AnythingIsAName": "UnsetNameOperands holds it, for bash 5.3. The same quoted probe: `export 'a-b'` is refused everywhere, and zsh reaches no further than its special parameters — `export '?'` and `export '-'` are 0 there and 1 in the other five (#2060).",
+      "NamesAndPositionals": "UnsetNameOperands holds it, for zsh. Re-measured 2026-09-12 **with the operands quoted**, because an unquoted `?` is a glob in zsh and fails as `no matches found` before the builtin sees it: `export '1'` and `export '12'` are refused in all six columns, so nothing takes a positional where a declaration wants a name (#2060)."
+    }
+  },
+  "DeclareListing": {
+    "unexhibited": {
+      "DeclareListingCommandWord": "ExportListing and ReadonlyListing hold it, for dash, ksh93 and zsh. No `declare -p` or `typeset -p` in the panel repeats its own command word: re-measured 2026-09-12, the three shells that have the builtin write `declare -x V=\"a b\"`, `typeset -x V=E` and `export V='a b'`, and bash keeps the clustered form even under `set -o posix` where its `export -p` does not (#2154, #2060).",
+      "DeclareListingPlainAssignment": "BareDeclarationListing holds it, for ksh93 and zsh. The value's own comment is the measurement: no `-p` anywhere writes a bare assignment, because a listing with no command word could not be read back as a declaration (#2060)."
+    }
+  },
+  "DeclareValueQuoting": {
+    "unexhibited": {
+      "ListingQuoteAlwaysDoubled": "SetListingQuoting and AliasQuoting hold it, for dash — which has no `typeset` at all, so it never answers this field. Re-measured 2026-09-12: a bare `set` writes `Q='a'\"'\"'b'` there (#2060).",
+      "ListingQuoteWhenNeededPlain": "TrapQuoting holds it, for zsh. zsh's `typeset -p` reaches for `$'...'` where its `trap` listing never does, which is why the two are separate fields (#2060)."
+    }
+  },
+  "ExportListing": {
+    "unexhibited": {
+      "DeclareListingBareAssignments": "DeclareListing holds it, for ksh93. `export -p` in ksh93u+ repeats the command word (`export V='a b'`) where `typeset -p` drops it for an unattributed name (#2060).",
+      "DeclareListingExportSpelled": "ReadonlyListing holds it, for zsh — measured 2026-09-12, `readonly -p` writes `typeset -r R=2` there where `export -p` writes `export V='a b'`, which is why the two are separate fields (#2060).",
+      "DeclareListingPlainAssignment": "BareDeclarationListing holds it, for ksh93 and zsh, which drop the command word for the bare form alone. Note what is *not* a fifth reading: bash in POSIX mode writes `export V=\"a b\"`, which is DeclareListingCommandWord — a value this axis already carries, reached by a mode no preset holds and [Runner.SetPosixMode] does not move. Measured 2026-09-12 on both bash builds and filed as #2154 (#2060)."
+    }
+  },
+  "ForNameWhenTheLoopRuns": {
+    "unexhibited": {
+      "ForNameEndsTheScriptAsASyntaxError": "bash in POSIX mode, which is a panel column with no dialect preset — the reading is reached through [Runner.SetPosixMode] rather than by any vector, exactly as the grid above records. A mode a shell enters and leaves is not a fifth dialect, so no preset can exhibit it and the sweep's list cannot shrink here (#2060)."
+    }
+  },
+  "FunctionLocalTraps": {
+    "unanimous": "the four answer alike because zsh's other answer is an option and not a default. Re-measured 2026-09-12: `trap 'echo OUTER' USR1; f() { trap 'echo INNER' USR1; }; f; kill -USR1 $$` prints INNER in all six columns, and the same script under `setopt localtraps` prints OUTER in zsh 5.9.2. A preset is not the whole of a dialect (#2060).",
+    "unexhibited": {
+      "TrapsGoBackAtTheReturn": "zsh under `setopt localtraps`, at run time — the measurement above, wired in dialect/zsh/localtraps.go rather than in the preset. This is the standing example of a value no vector holds and a real shell exhibits (#2060)."
+    }
+  },
+  "FunctionNameWhenTheDefinitionRuns": {
+    "unexhibited": {
+      "FuncNameEndsTheScriptAsASyntaxError": "bash in POSIX mode, reached through [Runner.SetPosixMode] and held by no preset, for the reason ForNameWhenTheLoopRuns records (#2060)."
+    }
+  },
+  "ImmovableOptionsSetAtInvocation": {
+    "unexhibited": {
+      "No": "nobody, and nothing in the panel can reach it. Measured 2026-09-12: zsh 5.9.2 is the only column with an option a running script may not change, so it is the only one the axis is consulted in, and it answers Yes. bash's `-r` is not this shape — `set -r` is taken inside a script in all three bash columns and in ksh93u+, and only `set +r` is refused, which is a latch and not a fixed option. `No` is the other side of a binary Answer, read (`== Yes`) rather than asked (#2060)."
+    }
+  },
+  "PrintfBHexEscape": {
+    "unexhibited": {
+      "PrintfHexEscapeCodePoint": "PrintfHexEscape holds it, for ksh93 — which is why the two fields share an enumeration and why they are two fields. Re-measured 2026-09-12: `printf '%b\\n' 'a\\x41Z'` writes `a\\x41Z` in ksh93u+ and dash, so this site's ksh93 answer is Absent while the format's is the code point. Nothing in the panel reads a `%b` argument's `\\x` as a code point (#2060)."
+    }
+  },
+  "PrintfBUnicodeEscape": {
+    "unexhibited": {
+      "PrintfUnicodeEscapeCodePointOrTruncate": "PrintfUnicodeEscape holds it, for ksh93; at this site ksh93u+ is Absent. Re-measured 2026-09-12: `printf '%b\\n' 'a\\u0041Z'` writes the escape as written in dash, bash 3.2.57 and ksh93u+, and `aAZ` in bash 5.3.15 and zsh 5.9.2. Nothing truncates here (#2060)."
+    }
+  },
+  "PrintfEmptyIsNotANumber": {
+    "unpinned": {
+      "zsh": "reached, and both answers print the same thing there. Measured 2026-09-12: moving it to `Unspecified` in the zsh dialect *does* change `printf '%d' \"\"`, so the axis is consulted — but `Yes` only sends the empty operand on to the bad-number complaint, and zsh's `PrintfReportsBadNumber` is `No`, so the complaint is swallowed and the bare `0` comes out either way. `printf '%d' abc` is a silent `0` in real zsh too, which is the same fact from the other side. No row can separate the two until that second axis moves (#2057)."
+    }
+  },
+  "PrintfOutputPrecedesComplaint": {
+    "unexhibited": {
+      "No": "five of the six columns. Re-measured 2026-09-12 with both streams arriving at one place: `printf \"[%z]\"` writes the complaint and then `[` in dash, bash 5.3.15, bash-as-`sh`, bash 3.2.57 and zsh 5.9.2, and `[` and then the complaint in ksh93u+. No preset writes it because the axis is read (`== Yes`) and not asked, so `No` and silence reach the same code (#2060)."
+    }
+  },
+  "ReadNameOperands": {
+    "unexhibited": {
+      "AnythingIsAName": "UnsetNameOperands holds it, for bash 5.3. `read` reaches positionals and stops: `echo hello | read '1'` fills `$1` in zsh 5.9.2 and is refused in the other five columns, measured 2026-09-12 (#2060).",
+      "NamesAndSpecialParameters": "DeclarationNameOperands holds it, for zsh's `export`. `read` does not reach it: measured 2026-09-12, `read 'a-b'` is `not an identifier` in zsh 5.9.2 (#2060)."
+    }
+  },
+  "ReadonlyListing": {
+    "unexhibited": {
+      "DeclareListingBareAssignments": "DeclareListing holds it, for ksh93, whose `readonly -p` repeats the command word instead — `readonly R=2`, measured 2026-09-12 (#2060).",
+      "DeclareListingPlainAssignment": "BareDeclarationListing holds it, for ksh93 and zsh. bash in POSIX mode writes `readonly R=\"2\"` here, which is DeclareListingCommandWord and already carried; see #2154 (#2060)."
+    }
+  },
+  "ScalarUnderATableDeclaration": {
+    "unexhibited": {
+      "ScalarUnderACompoundStaysAScalar": "ScalarUnderAnArrayDeclaration holds it, for ksh93 — which is the whole reason these are two fields. Re-measured 2026-09-12: `a=1; typeset -A a` lists as `typeset -A a=([0]=1)` in ksh93u+ while `b=1; typeset -a b` leaves `b=1`. bash promotes under both letters and zsh discards under both; dash has no `typeset` and bash 3.2.57 has no `-A`, so no column answers *this* letter with the scalar (#2060)."
+    }
+  },
+  "SetArrayLetter": {
+    "unexhibited": {
+      "No": "nobody writes it, and the paragraph above is why: the axis is read (`== Yes`) rather than asked, so where the answer is not yes the letter is somebody else's invalid option and that shell's own refusal already stands. Measured 2026-09-12: `set -A arr x y` is `set: -A: invalid option` in bash 5.3.15, bash-as-`sh` and bash 3.2.57 and `set: Illegal option -A` in dash, each in the shell's own words, and is taken by ksh93u+ and zsh 5.9.2. Writing `No` into those two presets would record no fact the refusal does not already carry (#2060)."
+    }
+  },
+  "SetBTurnsOffBraceExpansion": {
+    "unpinned": {
+      "zsh": "every row that reaches it fails at baseline, so none can pin it. This dialect refuses the `B` letter as unimplemented — the bell it means there is not built (#1856) — while real zsh takes `set +B` silently and goes on expanding braces. Measured 2026-09-12: `set +B; echo {a,b}` is `a b` at 0 in zsh 5.9.2 and `+B is not implemented yet` at 1 here, so a corpus row would record a divergence this axis is not about. It pins in bash and ksh, where the letter is real (#2057)."
+    }
+  },
+  "SetListingQuoting": {
+    "unexhibited": {
+      "ListingQuoteAlwaysDouble": "DeclareValueQuoting holds it, for bash's `declare -p`, which is not the style its own `set` listing uses (#2060).",
+      "ListingQuoteAlwaysEscaped": "AliasQuoting holds it, for bash — whose bare `set` quotes only where it must, which is the split these two fields record. Re-measured 2026-09-12 over `Q=\"a'b\"`: a bare `set` writes `Q='a'\\''b'` in bash 5.3.15, bash- as-`sh`, bash 3.2.57 and zsh 5.9.2 (#2060).",
+      "ListingQuoteWhenNeededPlain": "TrapQuoting holds it, for zsh's `trap`. The bare `set` in zsh 5.9.2 reaches for the escaped style instead, measured with the same probe (#2060)."
+    }
+  },
+  "SplitCommandSubstitution": {
+    "unanimous": "the content of this axis is the *contrast* with SplitParamExpansion, not a split of its own, so the four answering alike is the measurement rather than the absence of one. Re-measured 2026-09-12 with `IFS` a space and a value of three blank-separated words, `set -- $v` beside `f() { echo \"$v\"; }; set -- $(f)`: the command substitution gives three fields in dash, bash 5.3.15, bash-as-`sh`, bash 3.2.57, ksh93u+ and zsh 5.9.2, and the parameter gives one in zsh alone. Delete this and that single measurement reads as \"zsh does not word-split\", which is the misreading the pair exists to prevent (#2060).",
+    "unexhibited": {
+      "No": "nobody, and nothing reaches it. The probe above is unanimous across all six columns and zsh has no option that turns the splitting off, so `No` is the other side of a binary Answer rather than a claim about a shell. It stays because this axis is asked rather than read: a dialect that did leave an unquoted substitution unsplit has somewhere to say so, and until one does the value is unheld on purpose (#2060)."
+    }
+  },
+  "TransformLetterCheckedOnlyWhenValued": {
+    "unexhibited": {
+      "No": "nobody in the panel, and kept deliberately — it is the null hypothesis this axis exists to make the odd shell argue against. Measured 2026-09-12: `${s@Q}` is a bad substitution in dash, bash 3.2.57, ksh93u+ and zsh 5.9.2, so bash 5.x is the only column whose grammar reaches the question, and it answers Yes. `No` is what a shell that checked the letter whatever the value would hold, which is what having a `@` family would otherwise imply (#2060)."
+    }
+  },
+  "TrapQuoting": {
+    "unexhibited": {
+      "ListingQuoteAlwaysDouble": "DeclareValueQuoting holds it, for bash's `declare -p`. bash's own `trap -p` uses the escaped single-quote style instead — measured 2026-09-12, `trap -- 'echo a'\\''b' SIGUSR2` (#2060).",
+      "ListingQuoteWhenNeededEscaped": "AliasQuoting and DeclareValueQuoting hold it, for zsh, which is the split this field exists to record: the same shell writes an alias holding a tab as `$'a\\tb'` and a trap holding one plainly (#2060)."
+    }
+  },
+  "TypeNamesTheKindWithDashT": {
+    "unpinned": {
+      "bash": "never reached, so no row could catch it however it was written. The letter is already in bash's `TypeOptions` (`afpPt`), and this axis — which predates the optstring — is consulted only where the optstring does *not* carry a `t`. Measured 2026-09-12 by moving it in the bash dialect: `type -t f`, `type -t while` and `type -t nosuch` answer the same under `Yes`, under `No` and under `Unspecified` alike. The three dialects that do reach it all answer `No`, so the `Yes` this one holds is a value nothing consults — see #2180 (#2057)."
+    }
+  },
+  "TypesetLocalNeedsKeywordFunction": {
+    "unanimous": "every shell that has it — all but ksh93, which does not — makes it local in a function defined either way."
+  },
+  "UnsetNameOperands": {
+    "unexhibited": {
+      "NamesAndSpecialParameters": "DeclarationNameOperands holds it, for zsh — and the disjointness is this field's reason to exist. Re-measured 2026-09-12 with the operands quoted (an unquoted `?` is a glob in zsh): `unset '?'` and `unset '-'` are refused in zsh 5.9.2 while `unset '1'` and `unset '12'` are taken, the mirror image of `export`. Worth knowing about the value this preset *does* hold: bash 3.2.57 refuses all four where bash 5.3.15 takes all four, so AnythingIsAName is bash 5's reading and the older build's column is PlainNamesOnly (#2060)."
+    }
+  },
+  "ValuelessDeclarationHidesTheOuterValue": {
+    "unpinned": {
+      "zsh": "never reached. It is asked only where `DeclaredNameWithoutValueIsEmpty` said no, and this dialect says yes — a `local u` there exists holding the empty string, so there is no outer value left to hide. Measured 2026-09-12: `u=out; f() { local u; echo \"[${u-UNSET}]\"; }; f` is `[]` in zsh 5.9.2 and here, and moving this axis to `Yes` or to `Unspecified` changes neither (#2057)."
+    }
+  }
+}

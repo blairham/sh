@@ -31,13 +31,12 @@ import (
 // unpinned list is: the shells have to be asked again before anything is
 // concluded about what they do.
 //
-// And the verdict, once measured, goes on the axis — `unexhibited Value:
-// who holds it` in the field's own doc comment, read back by FieldNotes.
-// Triaging the first 25 (#2060) found no fiction at all: every entry was a
-// reading reached by a run-time mode, a value the type shares with a sibling
-// axis, a reading the panel has at an axis that is read rather than asked, or
-// the null hypothesis of a one-sided question. So neither list shrinks, and
-// the number that means anything is Untriaged.
+// And the verdict, once measured, goes in triage.json beside this package,
+// read back by FieldNotes. Triaging the first 25 found no fiction at all:
+// every entry was a reading reached by a run-time mode, a value the type
+// shares with a sibling axis, a reading the panel has at an axis that is read
+// rather than asked, or the null hypothesis of a one-sided question. So
+// neither list shrinks, and the number that means anything is Untriaged.
 
 // ValueUse is what the presets do with one axis.
 type ValueUse struct {
@@ -220,8 +219,8 @@ func PresetReport(uses []ValueUse) string {
 		"  panel tells them apart: a reading reached by a run-time mode rather\n" +
 		"  than a preset, a value the type shares with a sibling axis that does\n" +
 		"  hold it, a reading the panel has that the axis is *read* rather than\n" +
-		"  asked for, or a fiction that should come out. The verdict goes in the\n" +
-		"  field's own comment — `unexhibited NAME: who holds it` — so the next\n" +
+		"  asked for, or a fiction that should come out. The verdict goes in\n" +
+		"  internal/axissweep/triage.json, under the field's name, so the next\n" +
 		"  sweep reports it rather than re-opening it. These have no verdict:\n")
 	for _, line := range untriaged {
 		fmt.Fprintf(&b, "  %s\n", line)

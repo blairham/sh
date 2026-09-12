@@ -1185,228 +1185,202 @@ type Semantics struct {
 	//	g() { echo "entry=$OPTIND"; OPTIND=7; }
 	//	OPTIND=3; g; echo "after=$OPTIND"
 	//
-	// answers entry=1 after=3 in zsh and entry=3 after=7 in bash, bash 3.2,
-	// dash and ksh93. The position *inside* a clustered word is saved with
-	// it, which a shared cursor cannot express: with `-ab` half read, a
-	// function scanning `-cd` of its own reads both `c` and `d` in zsh and
-	// only `d` everywhere else, and on return the caller still finds its
-	// `b`.
+	// answers entry=1 after=3 under Yes and entry=3 after=7 under No. The
+	// position *inside* a clustered word is saved with it, which a shared
+	// cursor cannot express: with `-ab` half read, a function scanning `-cd` of
+	// its own reads both `c` and `d` under Yes and only `d` under No, and on
+	// return the caller still finds its `b`.
 	//
-	// dash looks close and is not: it leaves OPTIND at 2 on the way out and
-	// starts the *next* scan at 1 because its `getopts` resets the cursor
-	// when it runs out of options. zsh shows 2 inside the function and 1
-	// outside, which is a restore rather than a reset.
+	// A `getopts` that resets its cursor when it runs out of options looks
+	// close and is not: that leaves OPTIND at 2 on the way out and starts the
+	// *next* scan at 1, where Yes shows 2 inside the function and 1 outside,
+	// which is a restore rather than a reset.
 	//
 	// What this does not cover is `unset OPTIND`, which takes the parameter
-	// away rather than giving the call a value of its own: the name stays
-	// gone after the function returns in every shell measured, so there is
-	// nothing for the return to put back. A function entered with OPTIND
-	// already unset is not handed a cursor at 1 either.
+	// away rather than giving the call a value of its own: the name stays gone
+	// after the function returns under every answer, so there is nothing for
+	// the return to put back. A function entered with OPTIND already unset is
+	// not handed a cursor at 1 either.
 	//
 	// Why it earns an axis rather than a note: a shell function that parses
-	// options is only reusable if the second call starts over, so zsh's own
-	// function library is written *without* the `local OPTIND=1` the others
-	// need. `add-zsh-hook -Uz precmd f` followed by any second
-	// `add-zsh-hook` had the second call reading its arguments from index 2
-	// and printing its usage — see #1392.
+	// options is only reusable if the second call starts over, so a function
+	// library written under Yes omits the `local OPTIND=1` the other answer
+	// needs — and under the wrong answer its second call reads its arguments
+	// from index 2 and prints its usage.
 	GetoptsPositionIsFunctionLocal Answer
 
 	// GetoptsLocalOptindRestoresTheCursor hands the caller back its position
 	// *inside* a clustered word when a call that declared a local `OPTIND`
 	// returns — not only the number the parameter held.
 	//
-	// The scan position has two halves: `OPTIND`, which counts words, and
-	// how far into a clustered word the letters have been read. Only the
-	// first is a parameter, so a shell that shadows the parameter and stops
+	// The scan position has two halves: `OPTIND`, which counts words, and how
+	// far into a clustered word the letters have been read. Only the first is a
+	// parameter, so an implementation that shadows the parameter and stops
 	// there hands the caller a cursor pointing at the start of a word it had
-	// already part-read. That is measurable with no `getopts` in the callee
-	// at all:
+	// already part-read. That is measurable with no `getopts` in the callee at
+	// all:
 	//
 	//	g() { local OPTIND=1; :; }
 	//	set -- -ab; getopts ab o; g; getopts ab o
 	//
-	// The second `getopts` reads `b` in bash, ksh93 and zsh, and reads `a` a
-	// second time in bash 3.2 and dash. Reading `a` again is not a wrong
-	// letter so much as a scan that cannot finish: a loop whose body calls a
-	// function that declares `local OPTIND` starts the same word over every
-	// time round and never runs out of options (#2226).
+	// The second `getopts` reads `b` under Yes and reads `a` a second time
+	// under No. Reading `a` again is not a wrong letter so much as a scan that
+	// cannot finish: a loop whose body calls a function that declares
+	// `local OPTIND` starts the same word over every time round and never runs
+	// out of options.
 	//
-	// Entering the call is *not* the disagreement and is not asked here:
-	// every shell in the panel that has a local scope at all hands the callee
-	// a cursor at the start of a word, so a callee scanning its own `-cd`
-	// reads both letters whether or not the declaration carried a value.
-	// What splits the panel is only the way back.
+	// Entering the call is *not* the disagreement and is not asked here: any
+	// implementation with a local scope at all hands the callee a cursor at the
+	// start of a word, so a callee scanning its own `-cd` reads both letters
+	// whether or not the declaration carried a value. What splits the answers
+	// is only the way back.
 	//
-	// zsh answers yes and reaches it by a different route — its cursor is
-	// local to every call whether or not anything was declared, which is
-	// GetoptsPositionIsFunctionLocal. ksh93 has no `local`, and answers this
-	// through `typeset` in a function defined with the `function` word.
+	// Yes is also reachable by a different route — a cursor local to every call
+	// whether or not anything was declared, which is
+	// GetoptsPositionIsFunctionLocal — and an implementation with no `local`
+	// may reach it through its own declaration keyword instead.
 	GetoptsLocalOptindRestoresTheCursor Answer
 
 	// GetoptsClearsOptarg empties OPTARG when `getopts` reports a bad option
-	// rather than leaving it unset. zsh alone, and a script testing
-	// `${OPTARG-}` can tell the two apart.
+	// rather than leaving it unset. A script testing `${OPTARG-}` can tell the
+	// two apart.
 	GetoptsClearsOptarg Answer
 
-	// CdWithoutHomeIsAnError makes `cd` with no operand and no HOME a
-	// failure. True in bash and ksh93; dash and zsh stay where they are and
-	// report success, which is the quieter answer and the surprising one.
-	// The same axis answers `cd -` with no OLDPWD.
+	// CdWithoutHomeIsAnError makes `cd` with no operand and no HOME a failure,
+	// rather than staying put and reporting success — which is the quieter
+	// answer and the surprising one. The same axis answers `cd -` with no
+	// OLDPWD.
 	CdWithoutHomeIsAnError Answer
 	// CdEmptyOperandIsAnError refuses `cd ""` instead of taking it as the
-	// directory the shell is already in. True in bash and ksh93.
+	// directory the shell is already in.
 	//
 	// An empty operand is not the same thing as no operand, and it is not
-	// nothing either: measured 2026-09-10, `cd /tmp; OLDPWD=MARK; cd ""`
-	// leaves OLDPWD as `/tmp` in dash, bash 3.2 and zsh, and zsh's `chpwd`
-	// fires — so it is a real move to the same place, which joining an empty
-	// operand against the working directory already is. bash 5.3 and bash
-	// called as `sh` say `cd: null directory` and ksh93 `cd: bad directory`,
-	// both at 1 and both staying put.
+	// nothing either: under No, `cd /tmp; OLDPWD=MARK; cd ""` leaves OLDPWD at
+	// `/tmp` and any change-of-directory hook fires — so it is a real move to
+	// the same place, which joining an empty operand against the working
+	// directory already is. Under Yes it is a refusal at status 1, staying put.
 	CdEmptyOperandIsAnError Answer
 
 	// CdEmptyHomeIsAnError refuses `cd` with HOME set to the empty string,
-	// rather than going where the shell already is. True in ksh93 alone.
+	// rather than going where the shell already is.
 	//
 	// A separate question from CdWithoutHomeIsAnError, which is about a HOME
 	// that is *absent*, and separate from the axis above, which is about an
-	// operand: bash answers yes to the first, no to this one and yes to the
-	// third, so no two of them can be one field. Measured: `HOME= cd` says
-	// nothing and reports 0 in dash, both bashes and zsh, and `cd: bad
-	// directory` at 1 in ksh93 — which is the same sentence it refuses an
-	// empty operand with.
+	// operand. An implementation can answer yes to the first, no to this one
+	// and yes to the third, so no two of them can be one field.
 	CdEmptyHomeIsAnError Answer
 
-	// CdSubstitutesTheOperands reads `cd old new` as a rewrite of the
-	// current directory — the first occurrence of old in `$PWD` replaced by
-	// new — rather than as too many operands. True in ksh93 and zsh.
+	// CdSubstitutesTheOperands reads `cd old new` as a rewrite of the current
+	// directory — the first occurrence of old in `$PWD` replaced by new —
+	// rather than as too many operands.
 	//
-	// Measured from `…/x/alpha`: `cd alpha beta` lands in `…/x/beta` in both,
-	// and `cd a Z` from `…/a/q/a/w` lands in `…/Z/q/a/w`, so it is the first
-	// occurrence in the string rather than the first path component. bash
-	// refuses the shape outright and dash and bash 3.2 ignore everything
-	// after the first operand.
+	// It is the first occurrence in the *string* rather than the first path
+	// component: from `…/a/q/a/w`, `cd a Z` lands in `…/Z/q/a/w`. Answering No
+	// either refuses the shape outright or ignores everything after the first
+	// operand, which CdRefusesExtraOperands decides.
 	CdSubstitutesTheOperands Answer
 
 	// CdSubstitutionPrintsTheDirectory writes where a `cd old new` went, the
-	// way `cd -` writes where it went. True in ksh93; zsh moves in silence.
+	// way `cd -` writes where it went, rather than moving in silence.
 	//
-	// Asked only on a substitution that arrived somewhere: a rewrite naming
-	// a directory that is not there prints nothing in either shell.
+	// Asked only on a substitution that arrived somewhere: a rewrite naming a
+	// directory that is not there prints nothing under either answer.
 	CdSubstitutionPrintsTheDirectory Answer
 
-	// CdRefusesExtraOperands refuses operands after the first instead of
-	// ignoring them, in a dialect that does not read two as a substitution.
-	// True in bash; false in dash and bash 3.2, which take the first and say
-	// nothing about the rest.
+	// CdRefusesExtraOperands refuses operands after the first instead of taking
+	// the first and saying nothing about the rest.
 	//
-	// Asked only where CdSubstitutesTheOperands said no, which is the point
-	// the two shells that have the form are no longer in the conversation.
+	// Asked only where CdSubstitutesTheOperands said no, which is the point an
+	// implementation that has that form is no longer in the conversation.
 	CdRefusesExtraOperands Answer
 
-	// CdDashPrintsTheDirectory writes the new directory when `cd -` moves.
-	// True in bash, dash and ksh93; zsh alone is silent.
+	// CdDashPrintsTheDirectory writes the new directory when `cd -` moves,
+	// rather than moving in silence.
 	CdDashPrintsTheDirectory Answer
 
 	// PrintfReportsBadNumber complains when a numeric conversion is given
-	// something that is not a number. True in bash and dash, false in ksh93
-	// and zsh — and all four print the zero either way, so the complaint sits
-	// beside the output rather than instead of it.
+	// something that is not a number.
+	//
+	// The zero is printed under either answer, so the complaint sits beside the
+	// output rather than instead of it.
 	PrintfReportsBadNumber Answer
 	// PrintfBackslashC is what `\c` means in a printf format, and it is three
 	// different things rather than a switch:
 	//
-	//	printf "a\cbZ"   bash, dash  a\cbZ      two literal characters
-	//	                 ksh93       a<0x02>Z   \cX is control-X
-	//	                 zsh         a          the output stops there
+	//	printf "a\cbZ"   a\cbZ      two literal characters
+	//	                 a<0x02>Z   `\cX` is control-X
+	//	                 a          the output stops there
 	//
-	// Measured by the bytes rather than by the display, which is the only way
-	// to tell the middle one from the last: ksh93's output *looks* truncated
-	// next to zsh's until the control character is read as a byte.
+	// Told apart by the bytes rather than by the display, which is the only way
+	// to separate the middle reading from the last: a control character *looks*
+	// like truncation until it is read as a byte.
 	PrintfBackslashC PrintfBackslashCPolicy
-	// PrintfUnfinishedConversionIsAPercent writes a bare `%` for a format
-	// that ended before its conversion character, and reports success,
-	// rather than complaining about a conversion it could not read.
-	//
-	//	printf 'a%'    bash  a, and `%': missing format character   st=1
-	//	printf 'a%5'   zsh   a, and %5: invalid directive           st=1
-	//	printf 'a%ll'  dash  a, and missing format character        st=2
-	//	printf 'a%5'   ksh93 a%                                     st=0
+	// PrintfUnfinishedConversionIsAPercent writes a bare `%` for a format that
+	// ended before its conversion character, and reports success, rather than
+	// complaining about a conversion it could not read.
 	//
 	// The whole unfinished conversion becomes the one character: `a%5` and
-	// `a%ll` are both `a%` there, so the prefix that was scanned is dropped
-	// rather than written back.
+	// `a%ll` are both `a%`, so the prefix that was scanned is dropped rather
+	// than written back. Answering No reports the unreadable conversion and
+	// fails.
 	//
 	// Asked only where a format actually ends inside a conversion.
 	PrintfUnfinishedConversionIsAPercent Answer
-	// PrintfHexEscape is how a printf format reads `\x`, and it is four
-	// answers rather than a presence:
+	// PrintfHexEscape is how a printf format reads `\x`, and it is four answers
+	// rather than a presence. The three questions that separate them are
+	// whether it is an escape at all, how many digits it takes, and what an
+	// empty digit run means:
 	//
-	//	printf 'a\x80Z'   bash, ksh93, zsh  a<0x80>Z    one raw byte
-	//	                  dash              a\x80Z      not an escape at all
-	//	printf 'a\x0ffZ'  bash, zsh         a<0x0f>ffZ  two digits, then text
-	//	                  ksh93             a<0xc3><0xbf>Z  every digit, a code point
-	//	printf 'a\xZ'     bash              a\xZ        and a complaint
-	//	                  ksh93, zsh        a<0x00>Z    an empty digit run is zero
-	//	                  dash              a\xZ        not an escape at all
+	//	printf 'a\x80Z'   a<0x80>Z        one raw byte
+	//	                  a\x80Z          not an escape at all
+	//	printf 'a\x0ffZ'  a<0x0f>ffZ      two digits, then text
+	//	                  a<0xc3><0xbf>Z  every digit, read as a code point
+	//	printf 'a\xZ'     a\xZ            and a complaint
+	//	                  a<0x00>Z        an empty digit run is zero
 	//
-	// Asked only where a `\x` is actually in the format. It is a question
-	// about the *format*, and never about a `%b` argument: that site has its
-	// own table and its own axis, PrintfBHexEscape below.
+	// Asked only where a `\x` is actually in the format. It is a question about
+	// the *format*, and never about a `%b` argument: that site has its own axis,
+	// PrintfBHexEscape below.
 	PrintfHexEscape PrintfHexEscapePolicy
-	// PrintfBHexEscape is how a `%b` argument reads `\x`, which is a
-	// different question from the one PrintfHexEscape answers: ksh93 reads
-	// `\x41` in a format and writes the four characters as they stand in a
-	// `%b`, so the site decides as much as the shell does.
+	// PrintfBHexEscape is how a `%b` argument reads `\x`, which is a different
+	// question from the one PrintfHexEscape answers: an implementation can read
+	// `\x41` in a format and write the four characters as they stand in a `%b`,
+	// so the site decides as much as the implementation does.
 	//
-	//	printf '%b' 'a\x41Z'  bash, zsh    aAZ
-	//	                      dash, ksh93  a\x41Z
-	//	printf '%b' 'a\xZ'    bash         a\xZ, and the same complaint a
-	//	                                   format's empty digit run draws
-	//	                      zsh          a<0x00>Z
-	//	                      dash, ksh93  a\xZ
-	//
-	// The readings themselves are the format's four, which is why this is
-	// the same enumeration: a shell that has the escape here reads its
-	// digits the way it reads a format's.
+	// The readings themselves are the format's four, which is why this shares
+	// that enumeration: an implementation that has the escape here reads its
+	// digits the way it reads a format's. Not every reading is reachable at
+	// this site — the code-point reading is held at the format and nowhere
+	// answers it here — which is exactly why these are two fields.
 	//
 	// Asked only where a `%b` argument actually carries a `\x`.
-	//
-	// unexhibited PrintfHexEscapeCodePoint: PrintfHexEscape holds it, for
-	// ksh93 — which is why the two fields share an enumeration and why
-	// they are two fields. Re-measured 2026-09-12: `printf '%b\n'
-	// 'a\x41Z'` writes `a\x41Z` in ksh93u+ and dash, so this site's ksh93
-	// answer is Absent while the format's is the code point. Nothing in
-	// the panel reads a `%b` argument's `\x` as a code point (#2060).
 	PrintfBHexEscape PrintfHexEscapePolicy
 	// PrintfUnicodeEscape is how a printf format reads `\uHHHH` and
 	// `\UHHHHHHHH`, and it is four answers rather than a presence — the same
 	// shape PrintfHexEscape has, arrived at from the same three questions and
 	// splitting in a different place:
 	//
-	//	printf 'a\u0041Z'  bash 5.3, ksh93, zsh  aAZ
-	//	                    bash 3.2, dash  a\u0041Z
-	//	printf 'a\uZ'      bash 5.3  a\uZ, and `printf: missing unicode digit
-	//	                              for \u` on standard error, status 0
-	//	                    zsh       a<0x00>Z
-	//	                    ksh93     a  — the rest of the format pass is
-	//	                              dropped, and the loop over the operands
-	//	                              goes on, so `printf '[%s]\uZ' x y` is
-	//	                              `[x][y]`
+	//	printf 'a\u0041Z'  aAZ          the code point
+	//	                   a\u0041Z     not an escape at all
+	//	printf 'a\uZ'      a\uZ         and a complaint, at status 0
+	//	                   a<0x00>Z     an empty digit run is zero
+	//	                   a            the rest of the format pass is dropped,
+	//	                                and the loop over the operands goes on,
+	//	                                so `printf '[%s]\uZ' x y` is `[x][y]`
 	//
 	// That fourth reading is why this is not PrintfHexEscapePolicy under
-	// another name: no `\x` anywhere in the panel drops what follows it.
+	// another name: no `\x` reading drops what follows it.
 	//
 	// Four digits after `\u` and eight after `\U`, and fewer are accepted:
-	// `a\u41Z` is `aAZ` in all three that have the escape, and `a\u00410` is
-	// an `A` followed by a zero. The value is a code point written in UTF-8
-	// rather than a byte, and it is the *original* UTF-8 rather than the
-	// range Unicode later kept — see EncodeCodePoint, which is the one
-	// encoder both escape sites and `echo` share.
+	// `a\u41Z` is `aAZ` wherever the escape is read, and `a\u00410` is an `A`
+	// followed by a zero. The value is a code point written in UTF-8 rather
+	// than a byte, and it is the *original* UTF-8 rather than the range Unicode
+	// later kept — see EncodeCodePoint, which is the one encoder both escape
+	// sites and `echo` share.
 	//
 	// Asked only where a `\u` or a `\U` is actually in the format. It is a
-	// question about the *format*, and never about a `%b` argument: that
-	// site has its own axis, PrintfBUnicodeEscape below.
+	// question about the *format*, and never about a `%b` argument: that site
+	// has its own axis, PrintfBUnicodeEscape below.
 	PrintfUnicodeEscape PrintfUnicodeEscapePolicy
 	// PrintfBUnicodeEscape is how a `%b` argument reads `\u` and `\U`, which
 	// is a different question from the one PrintfUnicodeEscape answers, and

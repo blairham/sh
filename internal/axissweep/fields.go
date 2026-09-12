@@ -30,6 +30,8 @@
 package axissweep
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -37,7 +39,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -359,33 +360,44 @@ func readConstants() {
 }
 
 var (
-	docOnce   sync.Once
-	docCache  map[string]string
+	docOnce  sync.Once
+	docCache map[string]string
+	docErr   error
+
+	noteOnce  sync.Once
 	noteCache map[string]Notes
-	docErr    error
+	noteErr   error
 )
 
-// Notes are the triage a field's own comment records, for #2060.
+// Notes are the triage recorded for one axis.
 //
 // The preset lists are not verdicts and never were — they are two questions
 // asked of the struct, and each entry has to be answered by measuring the
 // panel again. An answer that lives only in a pull request is one the next
-// sweep cannot see, so it is written where the axis is: a line in the field's
-// doc comment, which this reads back.
+// sweep cannot see, so it is written down where the sweep can read it back:
+// triage.json, keyed by field path.
 //
-//	// unanimous: why the axis records something even so.
-//	// unexhibited SomeConstant: who holds it, and what measured that.
-//	// unpinned zsh: why no corpus row objects when it moves (#2057).
+//	"SomeAxis": {
+//	  "unanimous":   "why the axis records something even so",
+//	  "unexhibited": {"SomeConstant": "who holds it, and what measured that"},
+//	  "unpinned":    {"zsh": "why no corpus row objects when it moves"}
+//	}
 //
-// A field with no such line is **untriaged**, which is the state worth
-// reporting: it separates the axes somebody has re-measured from the ones
-// nobody has looked at yet, and those two used to be spelled identically.
+// It is a file of its own rather than a line in the field's doc comment
+// because every one of these verdicts names a shell, and a comment under
+// interp or syntax may not: the core defines the questions and never says who
+// answers them which way. The names belong beside the instrument that needs
+// them, which is here.
+//
+// A field with no entry is **untriaged**, which is the state worth reporting:
+// it separates the axes somebody has re-measured from the ones nobody has
+// looked at yet, and those two used to be spelled identically.
 type Notes struct {
 	// Unanimous is why an axis every dialect answers alike is an axis
 	// anyway.
-	Unanimous string
+	Unanimous string `json:"unanimous,omitempty"`
 	// Value is, per legal value no dialect holds, who does hold it.
-	Value map[string]string
+	Value map[string]string `json:"unexhibited,omitempty"`
 	// Unpinned is, per dialect, why the graded corpus does not object when
 	// this axis moves — keyed by dialect name, or by "" for a reason that
 	// holds for every dialect.
@@ -397,7 +409,7 @@ type Notes struct {
 	// the pair disappear from the list; what stays needs a standing reason,
 	// and the reason worth writing is the one that says the corpus cannot
 	// reach it rather than that nobody has got to it.
-	Unpinned map[string]string
+	Unpinned map[string]string `json:"unpinned,omitempty"`
 }
 
 // fieldDocs is each field's leading comment, trimmed to its first sentence.
@@ -406,10 +418,50 @@ func fieldDocs() (map[string]string, error) {
 	return docCache, docErr
 }
 
-// FieldNotes is the triage each field's comment records, by field path.
+// FieldNotes is the triage recorded for each field, by field path.
+//
+// The triage lives in triage.json rather than in the field's own doc comment,
+// because what it records is *which shell holds a value no preset holds* — and
+// naming a shell is the one thing a comment in interp or syntax may not do.
+// The instrument that needs those names keeps them, next to itself.
 func FieldNotes() (map[string]Notes, error) {
-	docOnce.Do(readDocs)
-	return noteCache, docErr
+	noteOnce.Do(readNotes)
+	return noteCache, noteErr
+}
+
+//go:embed triage.json
+var triageJSON []byte
+
+func readNotes() {
+	var out map[string]Notes
+	if err := json.Unmarshal(triageJSON, &out); err != nil {
+		noteErr = fmt.Errorf("reading triage.json: %w", err)
+		return
+	}
+	// A verdict keyed by a dialect that does not exist answers for nobody,
+	// and silently reading it back would make the flip half report a
+	// reason no sweep can act on. The comment grammar this replaced could
+	// not express one; the file can, so it is refused here instead.
+	for field, n := range out {
+		for d := range n.Unpinned {
+			if d == "" {
+				continue
+			}
+			if !knownDialect(d) {
+				noteErr = fmt.Errorf("triage.json: %s: unpinned verdict for %q, which is not one of the dialects", field, d)
+				return
+			}
+		}
+	}
+	noteCache = out
+}
+
+// knownDialect reports whether a name is one the presets answer for. The
+// triage file names a dialect only in the unpinned half, where the question is
+// which shell's corpus rows fail to object.
+func knownDialect(name string) bool {
+	_, ok := dialectPresets()[name]
+	return ok
 }
 
 func readDocs() {
@@ -419,7 +471,6 @@ func readDocs() {
 		return
 	}
 	out := map[string]string{}
-	notes := map[string]Notes{}
 	for _, f := range files {
 		ast.Inspect(f, func(n ast.Node) bool {
 			ts, ok := n.(*ast.TypeSpec)
@@ -435,18 +486,14 @@ func readDocs() {
 				prefix = ts.Name.Name + "."
 			}
 			for _, field := range st.Fields.List {
-				text := field.Doc.Text()
-				doc := firstSentence(text)
-				note := parseNotes(text)
+				doc := firstSentence(field.Doc.Text())
 				for _, id := range field.Names {
 					out[prefix+id.Name] = doc
-					notes[prefix+id.Name] = note
 					// Nested structs are recorded under both the outer
 					// path and their own type name; the outer one wins
 					// because Fields asks for it.
 					if prefix == "" {
 						out[id.Name] = doc
-						notes[id.Name] = note
 					}
 				}
 			}
@@ -454,54 +501,6 @@ func readDocs() {
 		})
 	}
 	docCache = out
-	noteCache = notes
-}
-
-// markerLine matches the triage lines a field comment may carry. The value
-// name is required to look like a Go constant, and the dialect to be one of
-// the four, so that a sentence beginning with the word cannot be mistaken for
-// a marker.
-var markerLine = regexp.MustCompile(`^(?:(unanimous)|unexhibited ([A-Za-z_][A-Za-z0-9_]*)|unpinned(?: (bash|zsh|ksh|dash))?):[ \t]*(.*)$`)
-
-// parseNotes reads the triage lines out of one field's comment.
-//
-// A note runs to the end of its paragraph, so an explanation can be as long
-// as the measurement behind it needs — which is the point, since a one-line
-// "fine" is the thing this is meant to replace.
-func parseNotes(text string) Notes {
-	var out Notes
-	lines := strings.Split(text, "\n")
-	for i := 0; i < len(lines); i++ {
-		m := markerLine.FindStringSubmatch(strings.TrimSpace(lines[i]))
-		if m == nil {
-			continue
-		}
-		body := []string{m[4]}
-		for i+1 < len(lines) {
-			next := strings.TrimSpace(lines[i+1])
-			if next == "" || markerLine.MatchString(next) {
-				break
-			}
-			body = append(body, next)
-			i++
-		}
-		joined := strings.TrimSpace(strings.Join(body, " "))
-		switch {
-		case m[1] != "":
-			out.Unanimous = joined
-		case m[2] != "":
-			if out.Value == nil {
-				out.Value = map[string]string{}
-			}
-			out.Value[m[2]] = joined
-		default:
-			if out.Unpinned == nil {
-				out.Unpinned = map[string]string{}
-			}
-			out.Unpinned[m[3]] = joined
-		}
-	}
-	return out
 }
 
 func firstSentence(s string) string {

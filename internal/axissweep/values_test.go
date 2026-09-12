@@ -3,7 +3,13 @@
 
 package axissweep
 
-import "testing"
+import (
+	"encoding/json"
+	"reflect"
+	"testing"
+
+	"github.com/blairham/sh/interp"
+)
 
 // TestPresetUseAsksEveryAxis. The value of this check is that it is total and
 // costs no processes, so the thing to pin is that it really does cover the
@@ -90,26 +96,57 @@ func TestTheTriageIsReadBackFromTheFieldItAnswers(t *testing.T) {
 	}
 }
 
-// TestATriageLineIsOnlyReadWhereItIsWritten guards the parse against the two
-// ways it could be too loose: a sentence that merely begins with the word, and
-// a note that swallows the paragraph after it.
-func TestATriageLineIsOnlyReadWhereItIsWritten(t *testing.T) {
+// TestATriageEntryLandsInTheHalfItAnswers guards the decode against the way it
+// could be too loose: the three halves are three different questions, and a
+// verdict read back under the wrong one answers something nobody asked.
+func TestATriageEntryLandsInTheHalfItAnswers(t *testing.T) {
 	t.Parallel()
-	got := parseNotes("Unanimous answers are common here.\n" +
-		"unexhibited SomeValue: held by ksh93, measured.\n" +
-		"Still the same note.\n" +
-		"\n" +
-		"unanimous: because the pair is the measurement.\n" +
-		"\n" +
-		"A closing paragraph that answers nothing.\n")
-	if want := "held by ksh93, measured. Still the same note."; got.Value["SomeValue"] != want {
-		t.Errorf("value note is %q, want %q", got.Value["SomeValue"], want)
+	var got map[string]Notes
+	const in = `{"SomeAxis": {
+		"unanimous":   "because the pair is the measurement.",
+		"unexhibited": {"SomeValue": "held by one preset, measured."},
+		"unpinned":    {"zsh": "the axis is never consulted there."}
+	}}`
+	if err := json.Unmarshal([]byte(in), &got); err != nil {
+		t.Fatal(err)
 	}
-	if want := "because the pair is the measurement."; got.Unanimous != want {
-		t.Errorf("unanimous note is %q, want %q", got.Unanimous, want)
+	n := got["SomeAxis"]
+	if want := "held by one preset, measured."; n.Value["SomeValue"] != want {
+		t.Errorf("value note is %q, want %q", n.Value["SomeValue"], want)
 	}
-	if len(got.Value) != 1 {
-		t.Errorf("%d value notes, want the one that is written", len(got.Value))
+	if want := "because the pair is the measurement."; n.Unanimous != want {
+		t.Errorf("unanimous note is %q, want %q", n.Unanimous, want)
+	}
+	if want := "the axis is never consulted there."; n.Unpinned["zsh"] != want {
+		t.Errorf("unpinned note is %q, want %q", n.Unpinned["zsh"], want)
+	}
+	if len(n.Value) != 1 {
+		t.Errorf("%d value notes, want the one that is written", len(n.Value))
+	}
+}
+
+// TestEveryTriagedAxisIsAnAxis is the guard the comment grammar got for free
+// and a file of its own does not: a verdict filed under a name no field has
+// answers nothing, and reads as triaged from every angle but the one that
+// matters. Total by construction, like the rest of this package.
+func TestEveryTriagedAxisIsAnAxis(t *testing.T) {
+	t.Parallel()
+	notes, err := FieldNotes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields, err := Fields(reflect.TypeFor[interp.Semantics]())
+	if err != nil {
+		t.Fatal(err)
+	}
+	known := map[string]bool{}
+	for _, f := range fields {
+		known[f.Path] = true
+	}
+	for field := range notes {
+		if !known[field] {
+			t.Errorf("triage.json: %s is not a field of interp.Semantics", field)
+		}
 	}
 }
 
@@ -123,27 +160,36 @@ func findUse(uses []ValueUse, field string) *ValueUse {
 }
 
 // TestAnUnpinnedVerdictIsReadBackPerDialect. The flip half's verdicts are
-// per dialect — an axis bash never consults is one zsh may lean on — so the
-// parse has to keep them apart, and a reason written for every dialect has to
-// answer for the ones with no line of their own (#2057).
+// per dialect — an axis one preset never consults is one another may lean on —
+// so the decode has to keep them apart, and a reason written for every dialect
+// has to answer for the ones with no line of their own.
 func TestAnUnpinnedVerdictIsReadBackPerDialect(t *testing.T) {
 	t.Parallel()
-	got := parseNotes("unpinned zsh: the axis is never consulted there.\n" +
-		"unpinned: and this one answers for anybody else.\n")
-	if want := "the axis is never consulted there."; got.Unpinned["zsh"] != want {
-		t.Errorf("zsh verdict is %q, want %q", got.Unpinned["zsh"], want)
-	}
-	if want := "and this one answers for anybody else."; got.Unpinned[""] != want {
-		t.Errorf("the shared verdict is %q, want %q", got.Unpinned[""], want)
-	}
+	got := Notes{Unpinned: map[string]string{
+		"zsh": "the axis is never consulted there.",
+		"":    "and this one answers for anybody else.",
+	}}
 	if got := verdict(got, "zsh"); got != "the axis is never consulted there." {
 		t.Errorf("zsh reads %q, want its own line rather than the shared one", got)
 	}
 	if got := verdict(got, "bash"); got != "and this one answers for anybody else." {
 		t.Errorf("bash reads %q, want the shared line", got)
 	}
-	if n := parseNotes("unpinned fish: not one of the four.\n"); len(n.Unpinned) != 0 {
-		t.Errorf("read a verdict for a dialect that does not exist: %v", n.Unpinned)
+}
+
+// TestAVerdictForADialectThatDoesNotExistIsRefused. The comment grammar could
+// not express one, because the marker only matched the four names. A file can
+// write anything, so the loader refuses it rather than reading back a reason
+// no sweep can act on.
+func TestAVerdictForADialectThatDoesNotExistIsRefused(t *testing.T) {
+	t.Parallel()
+	if knownDialect("fish") {
+		t.Error("fish is not one of the dialects and knownDialect says it is")
+	}
+	for _, d := range []string{"bash", "zsh", "ksh", "dash"} {
+		if !knownDialect(d) {
+			t.Errorf("%s is a dialect and knownDialect says it is not", d)
+		}
 	}
 }
 

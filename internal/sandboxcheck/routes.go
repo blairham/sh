@@ -148,23 +148,37 @@ func coreRoutes() []Route {
 		Did:    made,
 		Why:    "one operator opening two files, so a gate that checked the first is past",
 	}, {
-		// The body of a `>(…)` runs beside the command that named it and the
-		// shell does not wait for it, so asking the filesystem what it did is
-		// asking a question whose answer is still being written: measured
-		// under load, the plain spelling reported the target missing on 3 runs
-		// in 30 and graded that row inert on one dialect and overblocked on
-		// another — from a gate that was working perfectly.
+		// The body of a `>(…)` runs beside the command that named it and
+		// nothing waits for it — not the command, not the shell on its way
+		// out, and not `wait`, which is true of the real shells too. So the
+		// body has to hand the shell a rendezvous of its own, and the row is
+		// only worth having if that rendezvous is *structural* rather than a
+		// race this platform happens to win.
 		//
-		// So the body is made to announce itself *after* the open, through a
-		// `<(…)` the shell does block on. `read` returns when the word
-		// arrives, which is after the open either happened or was refused, and
-		// the fixture is then a fact rather than a race. 30 runs out of 30 on
-		// all three dialects under the same load.
-		Name:   "write/procsub",
-		Only:   []string{"bash", "zsh", "ksh"},
-		Script: `read ok < <(echo x > >(echo written > {{target}}; echo done))`,
-		Did:    made,
-		Why:    "the substitution's child is a second place the gate has to reach",
+		// Two spellings that looked synchronous are not, and both were caught
+		// by giving the body a deliberate delay rather than by running it
+		// often: reading the body's output through an enclosing `<(…)` returns
+		// on end-of-file when the *outer* body exits, which does not wait for
+		// the inner one, and a command substitution around the whole thing
+		// ends with the command rather than with the body. Each of them
+		// graded this row green on macOS and then inert on one dialect and
+		// overblocked on two others on Linux — a gate that was working
+		// perfectly, reported as broken.
+		//
+		// What works is the body saying so itself, in the workspace, *after*
+		// the open it is being graded on. Every policy here permits the
+		// workspace, so the mark arrives in all three runs — including the
+		// denied one, where the open it follows was refused — and the shell
+		// is looking at a settled filesystem either way. The bound on the
+		// wait is a safety valve and nothing more: the mark lands in
+		// milliseconds, and a sweep that hangs is worse than one that is
+		// wrong out loud.
+		Name: "write/procsub",
+		Only: []string{"bash", "zsh", "ksh"},
+		Script: `echo x > >(echo written > {{target}}; echo done > sync)
+w=0; while [ ! -e sync ] && [ $w -lt 2000000 ]; do w=$((w+1)); done`,
+		Did: made,
+		Why: "the substitution's child is a second place the gate has to reach",
 	}, {
 		Name:   "read/redirect",
 		Script: `read L < {{secret}}; echo $L`,

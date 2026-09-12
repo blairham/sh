@@ -5743,6 +5743,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `special/dollar-dash-in-full` | `[]` | `[hBc]` | `[hBc]` | `[hBc]` | `[chsB]` | `[569X]` |
 | `special/dollar-dash-in-full-from-a-script` | `[]` | `[hB]` | `[hB]` | `[hB]` | `[hB]` | `[569X]` |
 | `special/dollar-dash-orders-the-letters-its-own-way` | `[ufe]` | `[efhuBc]` | `[efhuBc]` | `[efhuBc]` | `[cefhsuB]` | `[569Xefu]` |
+| `special/dollar-dash-places-a-capital-among-the-letters-it-started-with` | `[Ce]` | `[ehBCc]` | `[ehBCc]` | `[ehBCc]` | `[cehsBC]` | `[569CXe]` |
 | `special/lineno-is-where-you-are` | `1~1` | `1~1` | `1~1` | `0~0` | `1~1` | `1~1` |
 | `special/random-is-absent-from-dash` | `none` | `have` | `have` | `have` | `have` | `have` |
 | `special/uid-is-bash-and-zsh` | `none` | `have` | `have` | `have` | `none` | `have` |
@@ -5818,6 +5819,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `special/dollar-dash-orders-the-letters-its-own-way` — three options turned on in a written order, and no shell reports them in it. bash sorts the lowercase letters and keeps its own suffix (`efhuBc`); ksh93 sorts including the letters it already had (`cefhsuB`); zsh puts its digits first (`569Xefu`); dash answers `ufe`, which is neither the order they were set in nor alphabetical but its own option table's. The order is therefore a property of the shell and never a fact about `$-`, which is worth pinning because a reader of any one row would assume otherwise
   ```sh
   set -f; set -u; set -e; echo "[$-]"
+  ```
+- `special/dollar-dash-places-a-capital-among-the-letters-it-started-with` — the row above turns on three lowercase options; this one turns on a capital, which is where two of the four disciplines part company. bash keeps its startup letters together and puts the capital after them (`ehBCc`), ksh93 the same (`cehsBC`), and zsh sorts the capital in *front* of the startup letter it already held (`569CXe`) — so an implementation that appends capitals in the order they were set matches two shells and misses the third, which is exactly what a row of lowercase letters cannot show
+  ```sh
+  set -C; set -e; echo "[$-]"
   ```
 - `special/lineno-is-where-you-are` — produced when it is read rather than stored, which is the whole of the distinction: a stored copy would be the line the shell started on
   ```sh
@@ -9635,6 +9640,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/dollar-dash-shows-a-letter-the-script-set` | `has-e` | `has-e` | `has-e` | `has-e` | `has-e` | `has-e` |
 | `opt/dollar-dash-drops-a-letter-turned-back-off` | `no-e` | `no-e` | `no-e` | `no-e` | `no-e` | `no-e` |
 | `opt/dollar-dash-noglob-letter-diverges` | `lower` | `lower` | `lower` | `lower` | `lower` | `upper` |
+| `opt/set-f-writes-the-letter-in-the-shell-that-still-globs` | `letter~zz.*` | `letter~zz.*` | `letter~zz.*` | `letter~zz.*` | `letter~zz.*` | `letter~zz.txt` |
 | `shopt/histappend-is-accepted` | `st=127` **2>** `<shell>: 1: shopt: not found` | `st=0` | `st=0` | `st=0` | `st=127` **2>** `<shell>: shopt: not found` | `st=127` **2>** `<shell>:1: command not found: shopt` |
 | `shopt/cmdhist-and-lithist-read-as-on` | `st=127` **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` | `cmdhist             	on~lithist             	off~st=1` | `cmdhist             	on~lithist             	off~st=1` | `cmdhist        	on~lithist        	off~st=1` | `st=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found` | `st=127` **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` |
 | `shopt/turning-off-a-held-history-name` | `st=127` **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` *(status 127)* | `st=0~cmdhist             	off` *(status 1)* | `st=0~cmdhist             	off` *(status 1)* | `st=0~cmdhist        	off` *(status 1)* | `st=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found` *(status 127)* | `st=127` **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` *(status 127)* |
@@ -10252,6 +10258,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `opt/dollar-dash-noglob-letter-diverges` — the letter itself is an axis: POSIX names `f` and three of the four report it, while zsh reports the capital — `-F` being its own short spelling of noglob, the same split `set -f` measures from the writing side
   ```sh
   set -o noglob; case $- in *f*) echo lower;; *F*) echo upper;; *) echo neither;; esac
+  ```
+- `opt/set-f-writes-the-letter-in-the-shell-that-still-globs` — the letter and its effect asked in one breath, which is the only way this split shows. Five of the six spend `-f` on noglob and answer `letter` then the unexpanded pattern; zsh answers `letter` too and then *lists the file*, because its `-f` is about startup files and leaves globbing alone. So the letter is not evidence for the option, and a shell that took the letter to mean noglob — or that omitted it because it does not — would match half the panel either way (#1542)
+  ```sh
+  touch zz.txt; set -f; case $- in *f*) echo letter;; *) echo none;; esac; echo zz.*
   ```
 - `shopt/histappend-is-accepted` — the first line of an ordinary `~/.bashrc` and the first of the nine `shopt` names #1429 collected: the builtin belongs to one shell, so the other three record its absence, and the two bash columns accept the name because appending to the history file is what each of them already does
   ```sh

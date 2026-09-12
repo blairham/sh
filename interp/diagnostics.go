@@ -3115,53 +3115,52 @@ type Diagnostics struct {
 	BadPattern string
 	// CodePointOutsideTheLocale is a `\u` escape naming a code point the
 	// locale's encoding cannot hold, under a preset that refuses one. No
-	// verbs: the shell that says this names neither the escape nor the
-	// value, measured — `zsh:1: character not in range` and nothing else,
-	// once per command however many such escapes the word holds.
+	// verbs: a preset that says this names neither the escape nor the value —
+	// `<shell>:1: character not in range` and nothing else, once per command
+	// however many such escapes the word holds.
 	//
 	// Read only where Semantics.UnicodeEscapeOutsideTheLocale is
-	// OutsideLocaleEscapeRefused, so a dialect that writes the escape back
-	// needs no wording.
+	// OutsideLocaleEscapeRefused, so a preset that writes the escape back needs
+	// no wording.
 	CodePointOutsideTheLocale string
 	// CannotOpen is a redirection that could not be opened for reading. Two
-	// verbs, positional because the shells order them differently: %[1]s is
-	// the name as written and %[2]s the reason.
+	// verbs, positional because presets order them differently: %[1]s is the
+	// name as written and %[2]s the reason.
 	//
-	// All four word it differently, and only one of them puts a verb in it:
-	// bash says `f: No such file or directory`, dash `cannot open f: No such
-	// file`, ksh93 `f: cannot open [No such file or directory]` and zsh `no
-	// such file or directory: f` — the reason first.
+	// Every preset words it differently, and only one puts a verb in it:
+	// `f: No such file or directory`, `cannot open f: No such file`,
+	// `f: cannot open [No such file or directory]` and
+	// `no such file or directory: f` — the reason first.
 	CannotOpen string
 
 	// CannotCreate is the same failure for a redirection that was making the
 	// file rather than reading it. Same two verbs.
 	//
-	// A separate field because two of the four make the distinction: dash and
-	// ksh93 say "create" where they said "open", and bash and zsh say the
-	// same thing either way.
+	// A separate field because some presets make the distinction, saying
+	// "create" where they said "open", and others say the same thing either way.
 	CannotCreate string
 
-	// RedirectionWithNoCommand is a command that is only redirections, in a
-	// dialect that has the null-command hook and whose null-command
-	// parameter is empty. No verbs.
+	// RedirectionWithNoCommand is a command that is only redirections, under a
+	// preset that has the null-command hook and whose null-command parameter is
+	// empty. No verbs.
 	//
-	// Reached only through Semantics.NullCommandVariable, so a dialect
-	// without the hook never needs a wording: there a command that is only
-	// redirections opens its files, runs nothing and succeeds. The one shell
-	// that has it says `redirection with no command` and reports 1, and says
-	// it for an unset parameter and an emptied one alike.
+	// Reached only through Semantics.NullCommandVariable, so a preset without
+	// the hook never needs a wording: there a command that is only redirections
+	// opens its files, runs nothing and succeeds. A preset that has it says
+	// `redirection with no command` and reports 1, for an unset parameter and an
+	// emptied one alike.
 	RedirectionWithNoCommand string
 
 	// RedirectFailureLine is which line a redirect that could not be opened
 	// is reported at, when the redirect and the command it belongs to are on
 	// different lines.
 	//
-	// Measured on `while read x` … `done < missing`, and again on a brace
-	// group, and again on a command split by a backslash: three answers.
-	// bash names the redirect's own line. dash and zsh name the line the
-	// command began on. ksh93 names the line *before* the redirect's, in all
-	// three shapes, which reads as an off-by-one of its own and is recorded
-	// as what it does rather than as what it might mean.
+	// Measured on `while read x` … `done < missing`, and again on a brace group,
+	// and again on a command split by a backslash: three answers. One names the
+	// redirect's own line, one the line the command began on, and one the line
+	// *before* the redirect's in all three shapes, which reads as an off-by-one
+	// of its own and is recorded as what it does rather than as what it might
+	// mean.
 	//
 	// Zero is the substrate's own answer, which is the line the command
 	// began on: that is where a statement is already reported, and a shell
@@ -3171,76 +3170,75 @@ type Diagnostics struct {
 	// RedirectFailureStatus is what a command whose redirect could not be
 	// opened reports. Zero means the substrate's own, which is 1.
 	//
-	// dash alone says 2, for a read and a write alike and in a brace group
-	// and a subshell alike. Not fatal there — the script carries on — which
-	// is what makes this a different question from FatalErrorStatusIsOne.
+	// A preset may say 2, for a read and a write alike and in a brace group and
+	// a subshell alike. Not fatal there — the script carries on — which is what
+	// makes this a different question from FatalErrorStatusIsOne.
 	RedirectFailureStatus int
 
 	// BuiltinWriteError is a builtin whose output write failed — into a
 	// descriptor closed with `>&-`, most plainly. Two verbs, positional:
 	// %[1]s is the builtin's name and %[2]s the reason.
 	//
-	//	bash   echo: write error: Bad file descriptor
-	//	dash   echo: echo: I/O error
+	//	echo: write error: Bad file descriptor
+	//	echo: echo: I/O error
 	//
-	// dash opens with the name twice and fixes the reason as "I/O error"
-	// whatever the errno was, so its format uses %[1]s in both places and
-	// never mentions %[2]s. Empty means nothing is said, which is the other
-	// two and the substrate's own: ksh93 fails silently, and zsh does not
-	// fail at all — the status is the semantics axis's answer either way,
-	// so silence here is a wording rather than a behavior.
+	// The second opens with the name twice and fixes the reason as "I/O error"
+	// whatever the errno was, so its format uses %[1]s in both places and never
+	// mentions %[2]s. Empty means nothing is said, which is the substrate's own
+	// and what a preset that fails silently — or does not fail at all — wants:
+	// the status is the semantics axis's answer either way, so silence here is a
+	// wording rather than a behavior.
 	BuiltinWriteError string
 
 	// InheritedClosedStreamWriteError is a builtin's failed write to a stream
 	// that *this command's own redirection list* did not close — the sentence
 	// one shell has on a route where it says nothing about the other.
 	//
-	// Two verbs, positional and the same pair BuiltinWriteError takes: %[1]s
-	// is the builtin's name and %[2]s the reason. zsh names neither the
-	// builtin nor the number, so its format uses only the reason.
+	// Two verbs, positional and the same pair BuiltinWriteError takes: %[1]s is
+	// the builtin's name and %[2]s the reason. A preset that names neither the
+	// builtin nor the number uses only the reason.
 	//
-	// Measured 2026-09-12 through `-c`, zsh 5.9.2:
+	// Measured through `-c`:
 	//
 	//	echo hi >&-                 silent
-	//	exec 1>&-; echo hi          zsh:1: write error: bad file descriptor
+	//	exec 1>&-; echo hi          <shell>:1: write error: bad file descriptor
 	//	exec 1>&-; echo hi >&-      silent
 	//	{ echo a; echo b; } >&-     the sentence, twice
 	//	f(){ echo hi; }; f >&-      f: write error: bad file descriptor
 	//
-	// So the line is not `exec` against a per-command redirection, which is
-	// how #1363 read it from two probes: it is whether the *writing command*
-	// closed the stream itself. A close it restated silences the sentence
-	// even after `exec` parked one, and a close on a group or a function call
-	// does not silence the commands inside.
+	// So the line is not `exec` against a per-command redirection, which two
+	// probes alone suggest: it is whether the *writing command* closed the
+	// stream itself. A close it restated silences the sentence even after `exec`
+	// parked one, and a close on a group or a function call does not silence the
+	// commands inside.
 	//
 	// Emitted before BuiltinWriteErrorFailsTheCommand is asked, which is the
-	// whole reason it is a second field. zsh answers that axis No and returns
-	// before BuiltinWriteError is reached; moving the emission in front of
-	// the axis instead would make zsh speak on `echo hi >&-` as well, which
-	// is the row #770 recorded and which is right today.
+	// whole reason it is a second field. A preset that answers that axis No
+	// returns before BuiltinWriteError is reached; moving the emission in front
+	// of the axis instead would make it speak on `echo hi >&-` as well.
 	//
-	// Empty everywhere else, and it has to be: the three shells that word a
-	// failed write word both routes the same way through BuiltinWriteError,
-	// so a second sentence here would be a second copy of it.
+	// Empty everywhere else, and it has to be: a preset that words a failed
+	// write words both routes the same way through BuiltinWriteError, so a
+	// second sentence here would be a second copy of it.
 	InheritedClosedStreamWriteError string
 
 	// FileSubstitutionReadError is `$(<file)` whose read failed after the
 	// open worked, which a directory is the reachable shape of. Two verbs:
 	// %[1]s is the name as the script named it and %[2]s the reason.
 	//
-	//	zsh    error when reading dir: is a directory
+	//	error when reading dir: is a directory
 	//
-	// Empty in the other three that have the form — bash 5.3, bash 3.2 and
-	// ksh93 all read a directory in silence. The status is the separate
-	// question; see Semantics.ReadFailureInAFileSubstitutionFailsIt (#1778).
+	// Empty under a preset that reads a directory in silence. The status is the
+	// separate question; see
+	// Semantics.ReadFailureInAFileSubstitutionFailsIt.
 	FileSubstitutionReadError string
 
 	// DirectoryNotFound is FileNotFound for a write rather than a read.
 	//
-	// dash alone again, and a different string from its own FileNotFound:
-	// `cannot create a/b: Directory nonexistent` where a failed read of the
-	// same path is `cannot open a/b: No such file`. The OS says "No such file
-	// or directory" for both.
+	// A different string from the same preset's FileNotFound:
+	// `cannot create a/b: Directory nonexistent` where a failed read of the same
+	// path is `cannot open a/b: No such file`. The operating system says "No
+	// such file or directory" for both.
 	DirectoryNotFound string
 
 	// TraceStyle and TraceQuoting are how `set -x` prints. They are here

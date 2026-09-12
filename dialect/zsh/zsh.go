@@ -1127,6 +1127,15 @@ func Semantics() interp.Semantics {
 	// `${x//(ab|a)/X}` is `Xc`. See
 	// Semantics.LongestMatchTakesTheWrittenArm.
 	s.LongestMatchTakesTheWrittenArm = interp.Yes
+	// An empty pattern is an ordinary pattern that matches the empty string,
+	// which is this shell alone: measured 2026-09-12 on 5.9.2, `v=abc`,
+	// `${v///X}` is `XaXbXc` where bash and ksh93 leave the value alone.
+	// The end of the value is not one of the positions, which is the general
+	// rule below rather than anything about this pattern.
+	s.EmptyReplacementPattern = interp.EmptyReplacementPatternMatchesEveryPosition
+	// The same empty match bash refuses, measured the same way:
+	// `${v//(b|)/<>}` under extendedglob is `<>a<><>c`.
+	s.ReplacementEmptyMatchDeclined = interp.EmptyMatchDeclinedAtTheEnd
 	s.ExitTrapIsFunctionLocal = interp.Yes
 	s.SignalHandlerSeesEarlierStatus = interp.Yes
 	// The operand of `exit` and of `return` is an arithmetic expression here,

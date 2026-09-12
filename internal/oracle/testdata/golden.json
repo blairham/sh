@@ -59075,6 +59075,50 @@
         "TimedOut": false
       }
     },
+    "expansion/an-empty-replacement-pattern": {
+      "bash": {
+        "Stdout": "[abc][abc][][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[abc][abc][][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[abc][abc][][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[abc][abc][X][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[XaXbXc][XaXbXc][X][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "expansion/an-operator-where-the-name-belongs": {
       "bash": {
         "Stdout": "",
@@ -60169,6 +60213,94 @@
       },
       "zsh": {
         "Stdout": "[p q][r]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "expansion/which-empty-match-a-replacement-declines": {
+      "bash": {
+        "Stdout": "[\u003c\u003ea\u003c\u003e\u003c\u003ec][\u003c\u003ea\u003c\u003eb\u003c\u003e][\u003c\u003ea\u003c\u003eb\u003c\u003ec][\u003c\u003e\u003c\u003eb\u003c\u003ec]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[\u003c\u003ea\u003c\u003e\u003c\u003ec][\u003c\u003ea\u003c\u003eb\u003c\u003e][\u003c\u003ea\u003c\u003eb\u003c\u003ec][\u003c\u003e\u003c\u003eb\u003c\u003ec]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[\u003c\u003e\u003c\u003e\u003c\u003e][\u003c\u003e\u003c\u003e\u003c\u003e][\u003c\u003e\u003c\u003e\u003c\u003e][\u003c\u003e\u003c\u003e\u003c\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 2: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[\u003c\u003ea\u003c\u003ec\u003c\u003e][\u003c\u003ea\u003c\u003eb\u003c\u003e][\u003c\u003ea\u003c\u003eb\u003c\u003ec\u003c\u003e][\u003c\u003eb\u003c\u003ec\u003c\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[abc][abc][abc][abc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "expansion/which-empty-match-a-replacement-declines-under-a-quantifier": {
+      "bash": {
+        "Stdout": "[abc][abc][abc][abc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[abc][abc][abc][abc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[abc][abc][abc][abc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 2: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[abc][abc][abc][abc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[\u003c\u003ea\u003c\u003e\u003c\u003ec][\u003c\u003ea\u003c\u003eb\u003c\u003e][\u003c\u003ea\u003c\u003eb\u003c\u003ec][\u003c\u003e\u003c\u003eb\u003c\u003ec]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

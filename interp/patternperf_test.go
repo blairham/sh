@@ -41,6 +41,10 @@ const (
 		"{apo}`{cmd}lucid{apo}`{rst} "
 )
 
+// benchDeclined is the zsh reading of which empty match a replacement
+// declines, which is the shell these benchmarks are measured against.
+func benchDeclined() EmptyMatchDeclinedPolicy { return EmptyMatchDeclinedAtTheEnd }
+
 // BenchmarkReplaceExtendedGlob times the matcher alone: one `${msg//pat/X}`
 // with no shell around it, so a change inside the matcher is visible at the
 // size it is rather than buried in process start and an rc file — which is
@@ -56,7 +60,7 @@ func BenchmarkReplaceExtendedGlob(b *testing.B) {
 	var got string
 	for b.Loop() {
 		o := benchOpts(b, benchPattern, benchSubject)
-		got = replace(benchSubject, benchPattern, e, o, armOrder{}, with)
+		got = replace(benchSubject, benchPattern, e, o, armOrder{}, benchDeclined, with)
 	}
 	if len(got) != 9 {
 		b.Fatalf("result %q is %d bytes, want the 9 real zsh gives", got, len(got))
@@ -87,7 +91,7 @@ func BenchmarkReplaceExtendedGlobWithTheWrittenArmReading(b *testing.B) {
 	var got string
 	for b.Loop() {
 		o := benchOpts(b, benchPattern, benchSubject)
-		got = replace(benchSubject, benchPattern, e, o, arm, with)
+		got = replace(benchSubject, benchPattern, e, o, arm, benchDeclined, with)
 	}
 	if len(got) != 9 {
 		b.Fatalf("result %q is %d bytes, want the 9 real zsh gives", got, len(got))

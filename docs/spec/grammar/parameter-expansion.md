@@ -609,12 +609,10 @@ end was offered to the matcher again after `*` had consumed the whole of
 it and an empty match was found there (#1341).
 
 The panel does not agree about every empty match, only about this one.
-A pattern that can match empty *without* reaching the end parts them:
-with `v=abc`, the empty-or-`b` pattern (`@(b|)` in bash and ksh93,
-`(b|)` in zsh) is `<>a<><>c` in bash and zsh and `<>a<>c<>` in ksh93 —
-one declines every empty match at the end of the value and the other
-declines one adjacent to the match before it. Both agree on the rows
-above, which is the whole of what this section claims.
+A pattern that can match empty *without* reaching the end parts them, and
+that split is `Semantics.ReplacementEmptyMatchDeclined` — see **which
+empty match a replacement declines** below. Both readings agree on the
+rows above, which is the whole of what this section claims.
 
 ### The end of the value is a position, but not after an empty match
 
@@ -643,9 +641,80 @@ whichever way it is stated, and this implementation had the first: it left
 A value with no units at all has no preceding step, and keeps its one
 match: the empty string under `${e//x#/-}` is `-`.
 
-The other columns cannot ask the question — no grammar in the panel but
-zsh's has an end anchor — so this is one shell's answer rather than an axis,
-and the rows the rest *can* reach are the ones above.
+The `(#e)` row is one shell's answer, since no grammar in the panel but
+zsh's has an end anchor. The *step* rule it illustrates is not: an
+alternation with an empty arm reaches the same two positions in bash and
+ksh93, and those two shells answer them differently. That is the axis in
+the next section.
+
+### Which empty match a replacement declines
+
+Once a pattern can match empty at all, there are two positions the rules
+above leave open — the end of the value stepped onto after an empty match,
+and the position an earlier match ended at — and the panel splits two ways
+over them. `Semantics.ReplacementEmptyMatchDeclined` is the answer.
+
+Measured 2026-09-12 from a script file, `v=abc`, the replacement written
+`<>` so that a position matched twice is visible, and the pattern "empty
+or one letter" spelled `@(b|)` with `extglob` on and `b#` under
+`extended_glob`:
+
+    pattern      bash 5.3.15   zsh 5.9.2   ksh93u+
+    empty-or-b   <>a<><>c      <>a<><>c    <>a<>c<>
+    empty-or-x   <>a<>b<>c     <>a<>b<>c   <>a<>b<>c<>
+    empty-or-c   <>a<>b<>      <>a<>b<>    <>a<>b<>
+    empty-or-a   <><>b<>c      <><>b<>c    <>b<>c<>
+
+Row one is the discriminator: ksh93 has no `<>` between `b` and `c`, where
+the other two have one, and has one after `c`, where they have none. So
+bash and zsh **decline the empty match at the end of the value** and take
+one adjacent to the match before it; ksh93 does the opposite, which is the
+classic global-replace rule — a replacement never happens twice in the same
+place.
+
+Row three is the control both readings answer alike, and it must stay that
+way: `c` matches at the last unit, so the scan ends there under either rule.
+It is the unanimous rule above, reached from a third direction.
+
+The axis is asked at those two positions and nowhere else. A pattern that
+cannot match empty reaches neither, which is why `${v//b/X}` needs no answer
+from anyone (#1859).
+
+bash 3.2 answers all four rows `<><><>` and is a column of its own; there is
+no preset for it here.
+
+### An empty pattern
+
+A pattern that is *empty* is a separate question from an empty match, and
+the panel answers it three ways.
+`Semantics.EmptyReplacementPattern` carries them.
+
+Measured 2026-09-12 from a script file, `v=abc` and `e=`:
+
+                    bash 5.3.15   ksh93u+   zsh 5.9.2
+    ${v///X}        abc           abc       XaXbXc
+    ${v//$e/X}      abc           abc       XaXbXc
+    ${v/$e/X}       abc           abc       Xabc
+    ${e///X}        (empty)       X         X
+    ${e//x/X}       (empty)       (empty)   (empty)
+
+So bash declines the pattern outright, ksh93 takes it only where there is
+nothing left to scan, and zsh treats it as the ordinary pattern that matches
+the empty string. The second row says the answer does not depend on how the
+operand was written — a pattern that arrived from an expansion is the same
+pattern — and the last is the control that says the `X` above it is a match
+rather than something an empty value produces on its own.
+
+It is a question about the pattern's *text* and not about empty matches: with
+`extglob` on, `${v//@(|)/<>}` — a pattern with bytes in it that matches only
+the empty string — is `<>a<>b<>c` in bash and `<>a<>b<>c<>` in ksh93, so
+neither shell is refusing empty matches. Those two answers are the axis above,
+seen again.
+
+The anchored spellings are their own row and ask nothing: `${v/#/X}` is
+`Xabc` and `${v/%/X}` is `abcX` in bash and zsh alike, and ksh93 leaves both
+alone — that shell declining an anchor it takes everywhere else, which is
+recorded here and not yet answered (#1857).
 
 ## The `!` that lists names instead of following one
 

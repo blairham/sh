@@ -38,6 +38,13 @@ func trimArmRun(t *testing.T, src string, answer Answer) (string, int) {
 		r.Dialect = &d
 		sem := CoreSemantics()
 		sem.LongestMatchTakesTheWrittenArm = answer
+		// A second axis the substitution rows below reach the moment an arm
+		// is empty, and one this test is not about: `${x//(|a)/X}` has an
+		// empty match at the end of the value under one arm reading and one
+		// sitting where `a` matched under the other, which are exactly the
+		// two positions ReplacementEmptyMatchDeclined parts on. Answered so
+		// the rows measure the arm order and nothing else.
+		sem.ReplacementEmptyMatchDeclined = EmptyMatchDeclinedAtTheEnd
 		r.Semantics = &sem
 	})
 }

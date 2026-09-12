@@ -3209,6 +3209,15 @@ func (p *Parser) braceLoopBody() (body []*Stmt, stop Pos) {
 	if !ok {
 		return nil, p.tok.End
 	}
+	// A brace body is closed by its own `}` and takes no terminator with it,
+	// which is the rule bodyTookTerm's own doc states — so whatever a *inner*
+	// short form left there is not this construct's. Cleared rather than
+	// left, because the last thing read inside the braces may well have been
+	// one: `for i (a b) { for j (c d) echo $j; } echo end` is refused by the
+	// shell that has short loops, exactly as `for i (a b) { echo $i; } echo
+	// end` is, and without this line the inner loop's `;` terminated the
+	// outer one and the tail ran (measured on zsh 5.9.2, 2026-09-12).
+	p.bodyTookTerm = Pos{}
 	return g.List, g.Stop
 }
 
@@ -3380,7 +3389,19 @@ func (p *Parser) parseIf() Command {
 	p.opensClause("then")
 	p.expectWord("then")
 	c.Then = p.parseBody()
+	p.longIfTail(c)
+	return c
+}
 
+// longIfTail reads what is left of an `if` whose current arm was written the
+// long way: the `elif` chain, the `else` arm and the `fi` that ends them.
+//
+// It is a function rather than the tail of [Parser.parseIf] because the two
+// spellings compose in both directions and either one may hand over. A long
+// arm may be followed by a short one — [Parser.shortIf] inside the loop below
+// — and a short arm may be followed by a long one, which is
+// [Parser.shortElse] calling back here.
+func (p *Parser) longIfTail(c *IfClause) {
 	for p.atWord("elif") && p.err == nil {
 		e := &Elif{Start: p.tok.Pos}
 		p.opensClause("elif")
@@ -3398,7 +3419,7 @@ func (p *Parser) parseIf() Command {
 			e.Then, c.Stop = body, stop
 			c.Elifs = append(c.Elifs, e)
 			p.shortElse(c)
-			return c
+			return
 		}
 		p.requireSep("then")
 		p.expectWord("then")
@@ -3413,7 +3434,6 @@ func (p *Parser) parseIf() Command {
 	}
 	c.Stop = p.tok.End
 	p.expectWord("fi")
-	return c
 }
 
 // shortIf reads the body of an `if` whose condition ended itself, where the
@@ -3442,24 +3462,82 @@ func (p *Parser) shortIf(cond []*Stmt) (body []*Stmt, stop Pos, short bool) {
 
 // shortElse reads the `elif` and `else` arms of a short `if`, which take the
 // same body by the same rule and end where it ends: there is no `fi`.
+//
+// Each arm chooses its own form, and the first one not written the short way
+// puts the rest of the construct in the long one — where there *is* a `fi`,
+// and it is required. Measured on zsh 5.9.2 from a script file, 2026-09-12,
+// with `if (( 0 )) { echo A }` as the opening arm every time:
+//
+//	else echo B; fi                → B          the arm is a long else
+//	else echo B; echo tail; fi     → B, tail    so its body is a list
+//	else echo B                    → parse error near `\n`, wanting the `fi`
+//	else { echo B }                → B          the short arm, and no `fi`
+//	else { echo B } fi             → parse error near `fi`, there being none
+//	else ⏎ { echo B }              → B          a newline does not decide it
+//	elif true; then echo C; fi     → C          the arm is a long elif
+//	elif (( 1 )) ⏎ then echo C; fi → C          so is one whose body moved
+//	elif (( 1 )) { echo C } else echo D; fi → C   and the two mix either way
+//
+// So the `{` is what says short, an `else` that does not open one is the long
+// arm, and #1372's report — an `else` with nothing after it being accepted —
+// is that rule arriving at the end of the input with the `fi` still owed.
+// Written as "an empty short arm is an error" it would have taken the first
+// row above as an error too.
 func (p *Parser) shortElse(c *IfClause) {
+	if p.bodyTookTerm.IsValid() {
+		// The arm's body took the separator that would have ended the `if`,
+		// so the `if` ended with it and there is no arm left to write: `if
+		// (( 1 )) echo A; else echo B` is `parse error near \`else\`` on zsh
+		// 5.9.2 with or without a `fi` after it, and so is the same shape
+		// after an `elif`. It is the rule already stated in shortIf's doc —
+		// the `;` ends the whole command and leaves `else` nothing to attach
+		// to — read from the other side. A newline in place of the `;`
+		// arrives here too and needs no test: it is still in hand, so the
+		// `else` on the next line is not the token we are looking at.
+		return
+	}
 	for p.atWord("elif") && p.err == nil {
 		e := &Elif{Start: p.tok.Pos}
 		p.opensClause("elif")
 		p.next()
 		e.Cond = p.parseCondition()
-		if !condEndedItself(e.Cond) {
-			p.failUnexpected("")
+		body, stop, short := p.shortIf(e.Cond)
+		if !short {
+			// This arm is the long form: a condition that did not end
+			// itself, or one that did with the body on the next line. Either
+			// way a `then` is owed here and a `fi` at the end, so the rest of
+			// the chain belongs to longIfTail.
+			p.requireSep("then")
+			p.expectWord("then")
+			e.Then = p.parseBody()
+			c.Elifs = append(c.Elifs, e)
+			p.longIfTail(c)
 			return
 		}
-		e.Then, c.Stop = p.shortFormBody()
+		e.Then, c.Stop = body, stop
 		c.Elifs = append(c.Elifs, e)
+		if p.bodyTookTerm.IsValid() {
+			return
+		}
 	}
 	if p.atWord("else") && p.err == nil {
 		p.opensClause("else")
 		p.next()
 		c.HasElse = true
-		c.Else, c.Stop = p.shortFormBody()
+		// Past the newlines before asking, and only here: a newline between
+		// a *condition* and its body is what puts an `if` or an `elif` in the
+		// long form, but an `else` has no condition for one to end, and the
+		// shell reads `else` ⏎ `{ echo B }` as the short arm — no `fi` is
+		// owed and appending one is refused. So the brace decides the form
+		// and the newlines in front of it do not.
+		p.skipNewlines()
+		if p.braceBodyFollows() {
+			c.Else, c.Stop = p.shortFormBody()
+			return
+		}
+		c.Else = p.parseBody()
+		c.Stop = p.tok.End
+		p.expectWord("fi")
 	}
 }
 

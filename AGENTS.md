@@ -881,9 +881,20 @@ Mac, so it would have stayed green for the whole life of the bug.
 `make sandbox` tries every way a script has of reaching the filesystem —
 redirection in each of its forms, `source`, a glob, a probe, an exec, a
 signal, and every module builtin that opens or changes a file — against the
-binary that ships, and reports what the boundary stopped.
+binaries that ship, and reports what the boundary stopped.
 `internal/sandboxcheck` holds it and `internal/cmd/sandboxcheck` prints the
-table.
+tables.
+
+**Two tables, because there are two routes to the same shell.** The first is
+`sh -dialect X -policy p`, which grades the gate. The second is `bash
+--policy p` on each dialect binary, which grades whether the *flag* reaches
+that gate on the binary a shebang, `chsh` and `login` name. Only the first
+existed until #1826, and the second binary had no flag at all while the
+first table was green throughout — the same blind spot as the `-c` drift
+that had `make conformance-dialects` grading the drivers rather than the
+dialects. Deleting the flag reading today turns the second table to 116
+OVERBLOCKED and leaves the first untouched, which is that blind spot in one
+picture.
 
 It exists because **the gate's unit tests are written by somebody who
 already knows where the boundary is**, and every escape this repository has

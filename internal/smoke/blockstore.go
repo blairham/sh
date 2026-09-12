@@ -77,3 +77,27 @@ func (s *session) blockFor(ctx context.Context, line string) (blocks.Record, str
 		}
 	}
 }
+
+// noBlockFor reports that nothing in the store holds this line.
+//
+// Read once rather than polled, and the asymmetry with blockFor above is the
+// whole of what makes the answer worth anything. A poll cannot establish an
+// absence: it would report "not yet" and "never" as the same thing, so the
+// caller has to arrange that a record written *after* the one being asked
+// about has already arrived — the index is append-only and written in order,
+// so once a later line is there, an earlier one that is not was never written.
+//
+// Asking directly, without that arrangement, is a check that passes for the
+// wrong reason: a session that recorded nothing at all — because it crashed,
+// or because the store was never opened — answers exactly the way a session
+// that correctly declined to record one line does.
+func (s *session) noBlockFor(ctx context.Context, line string) error {
+	store := blocks.Open(blocksStoreDir(s.home), boundary.Boundary{}, "smoke")
+	for _, r := range store.Load(ctx, blocksRead) {
+		if r.Command == line {
+			return fmt.Errorf(
+				"the store kept a record of %s, which the session was told to forget", quote(line))
+		}
+	}
+	return nil
+}

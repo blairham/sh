@@ -2855,32 +2855,31 @@ type Diagnostics struct {
 	// ArithConditionalThen and ArithConditionalElse are a conditional missing
 	// one of the two values it chooses between: `$(( 1 ? ))` and
 	// `$(( 1 ? 2 : ))`. No verbs. Empty falls through to the ordinary
-	// end-of-input sentence, which is what two of the four answer with.
+	// end-of-input sentence, which is the common answer.
 	//
-	// Two fields because the panel cuts them two ways at once. Measured
-	// 2026-09-12:
+	// Two fields because the presets cut them two ways at once:
 	//
-	//	              1 ?                                1 ? 2 :
-	//	bash 5.3.15   expression expected                expression expected
-	//	ksh93u+       ':' expected for '?' operator      more tokens expected
-	//	zsh 5.9.2     operand expected at end of string  the same
-	//	dash          expecting primary                  expecting primary
+	//	1 ?                                1 ? 2 :
+	//	expression expected                expression expected
+	//	':' expected for '?' operator      more tokens expected
+	//	operand expected at end of string  the same
+	//	expecting primary                  expecting primary
 	//
-	// bash parts a conditional's missing value from an ordinary one and
-	// writes the same sentence in both positions; ksh93 does the opposite,
-	// reporting the colon it is still waiting for in the first and its
-	// ordinary end of input in the second. One field cannot hold both cuts.
+	// One preset parts a conditional's missing value from an ordinary one and
+	// writes the same sentence in both positions; another does the opposite,
+	// reporting the colon it is still waiting for in the first and its ordinary
+	// end of input in the second. One field cannot hold both cuts.
 	ArithConditionalThen string
 	ArithConditionalElse string
 	// ArithConditionalColon is a conditional whose two values are not parted
-	// by a `:`: `$(( 1 ? 2 ))`. No verbs. All four word it and no two agree
-	// — bash `` `:' expected for conditional expression ``, ksh93 `':'
-	// expected for '?' operator`, zsh `':' expected`, dash `expecting ':'`.
+	// by a `:`: `$(( 1 ? 2 ))`. No verbs. Every preset words it and no two agree
+	// — `` `:' expected for conditional expression ``,
+	// `':' expected for '?' operator`, `':' expected` and `expecting ':'` are
+	// all measured.
 	ArithConditionalColon string
 	// ArithColonWithoutQuestion is a `:` standing where no `?` opened a
-	// conditional, in the dialect that reads the byte as a math token
-	// wherever it is written: `$(( 1 : 2 ))` is `':' without '?'` in zsh.
-	// No verbs.
+	// conditional, under a preset that reads the byte as a math token wherever
+	// it is written: `$(( 1 : 2 ))` as `':' without '?'`. No verbs.
 	//
 	// Reachable only under syntax.Dialect.ArithColonIsAToken, which is what
 	// gets a reader far enough to know a second value was there. Everywhere
@@ -2889,75 +2888,72 @@ type Diagnostics struct {
 	// ArithCharacterMissing is the reason when the character-code operator
 	// has nothing after it to take the code of: `$((##))`.
 	//
-	// Only the dialect with the operator can reach it, and it words the
-	// failure as neither an operand nor an operator one — `character missing
-	// after ##`, naming the two-character spelling whichever was written.
+	// Only a preset with the operator can reach it, and it words the failure as
+	// neither an operand nor an operator one — `character missing after ##`,
+	// naming the two-character spelling whichever was written.
 	ArithCharacterMissing string
 	// ArithBadOutputFormat is the reason when a bracketed output-format
 	// specifier could not be read: `$(( [#] 1 ))`, `$(( [foo] 1 ))`,
 	// `$(( [# 16] 1 ))`. One verb: the specifier as written.
 	//
-	// Only the dialect with the construct can reach it, and it words the
-	// failure as being about the specifier rather than about an operand —
+	// Only a preset with the construct can reach it, and it words the failure as
+	// being about the specifier rather than about an operand —
 	// `bad output format specification`, which names nothing at all.
 	ArithBadOutputFormat string
 	// ArithBadBaseSyntax is the reason when the brackets held nothing but
-	// digits — `$(( [16] 255 ))` — which the same dialect words apart from
-	// the specifier it could not read: `bad base syntax`.
+	// digits — `$(( [16] 255 ))` — which the same preset words apart from the
+	// specifier it could not read: `bad base syntax`.
 	//
-	// Empty falls back to ArithBadOutputFormat, so a dialect that reached the
+	// Empty falls back to ArithBadOutputFormat, so a preset that reached the
 	// construct without making the distinction would say one thing for both.
 	ArithBadBaseSyntax string
 	// ArithOperatorExpected is the reason when an expression has something
-	// left over: `$((1 2))`. Same verb, and one shell puts it inside the
+	// left over: `$((1 2))`. Same verb, and a preset may put it inside the
 	// reason — "operator expected at `2'".
 	ArithOperatorExpected string
-	// DivisionByZero is the reason itself, which dash and ksh93 spell
-	// differently. No verbs.
+	// DivisionByZero is the reason itself, which presets spell differently. No
+	// verbs.
 	DivisionByZero string
-	// EmptyParamSubscript is what `${a[]}` says where the dialect refuses it
-	// with a sentence of its own rather than with its bad-substitution one.
-	// No verbs.
+	// EmptyParamSubscript is what `${a[]}` says where the preset refuses it with
+	// a sentence of its own rather than with its bad-substitution one. No verbs.
 	//
-	// Empty for four of the five refusing columns: bash 5.3, that binary as
-	// `sh`, bash 3.2 and dash all give the ordinary bad-substitution
-	// sentence, subject and all — `[${a[]}]: bad substitution` in bash,
-	// naming the quoting run, and a bare `Bad substitution` in dash. zsh
-	// alone has its own, `invalid subscript`, which is the subscript
-	// machinery's complaint and carries no name.
+	// Empty for most refusing presets, which give the ordinary bad-substitution
+	// sentence, subject and all — `[${a[]}]: bad substitution`, naming the
+	// quoting run, or a bare `Bad substitution`. A preset may have its own,
+	// `invalid subscript`, which is the subscript machinery's complaint and
+	// carries no name.
 	//
-	// Its own field rather than a reuse of ArithEmptySubscript, whose
-	// wording coincides in that shell and does not in bash: there the
-	// arithmetic site says `a[]: bad array subscript` and carries on, where
-	// this site refuses the expansion outright. Whether the sites agree is a
-	// fact about each dialect, and one field for both would tie a change on
-	// either to the other. See Semantics.EmptyParamSubscriptIsAnError.
+	// Its own field rather than a reuse of ArithEmptySubscript, whose wording
+	// coincides under one preset and not another: there the arithmetic site says
+	// `a[]: bad array subscript` and carries on, where this site refuses the
+	// expansion outright. Whether the sites agree is a fact about each preset,
+	// and one field for both would tie a change on either to the other. See
+	// Semantics.EmptyParamSubscriptIsAnError.
 	EmptyParamSubscript string
 	// SubscriptIsAnIndexAndARange is what a subscript says when one reading
 	// of it needs the single index it named and another makes it a span. No
-	// verbs: the one shell that has both constructs names neither the array
-	// nor the subscript.
+	// verbs: a preset with both constructs names neither the array nor the
+	// subscript.
 	//
-	// Two shapes reach it, and both are that collision. `${(k)x[1,2]}` asks
-	// for the index a subscript named and is handed a pair; `${a[(i)q,2]}`
-	// opens a pair with a group whose letter answers an index. Measured on
-	// zsh 5.9.2, both are `invalid subscript` at status 1 — the same
-	// sentence `${a[]}` gives there and a different construct, which is why
-	// this is its own field rather than a second use of EmptyParamSubscript.
-	// A dialect that had one of the two constructs and worded it otherwise
-	// would need them apart.
+	// Two shapes reach it, and both are that collision. `${(k)x[1,2]}` asks for
+	// the index a subscript named and is handed a pair; `${a[(i)q,2]}` opens a
+	// pair with a group whose letter answers an index. Both are `invalid
+	// subscript` at status 1 — the same sentence `${a[]}` gives there and a
+	// different construct, which is why this is its own field rather than a
+	// second use of EmptyParamSubscript. A preset with one of the two constructs
+	// that worded it otherwise would need them apart.
 	SubscriptIsAnIndexAndARange string
 	// ArithEmptySubscript is the complaint about a subscript written with
 	// nothing between the brackets where an expression reads it: `$(( a[] ))`,
 	// which is what `$(( a[$w] ))` is once an empty `$w` has gone in. One
-	// verb, the name — used by the dialect that names it and ignored by the
-	// one whose sentence is about the subscript rather than about the name.
+	// verb, the name — used by a preset that names it and ignored by one whose
+	// sentence is about the subscript rather than about the name.
 	//
-	// Two of the three shells that reach it write something, and they write
-	// different shapes: `m[]: bad array subscript` names the subscript back
-	// and `invalid subscript` names nothing at all. Which of them a dialect
-	// writes, and whether the expression survives it, is
-	// Semantics.EmptyArithSubscript; this is only the wording.
+	// Most presets that reach it write something, and they write different
+	// shapes: `m[]: bad array subscript` names the subscript back and `invalid
+	// subscript` names nothing at all. Which of them a preset writes, and
+	// whether the expression survives it, is Semantics.EmptyArithSubscript; this
+	// is only the wording.
 	ArithEmptySubscript string
 
 	// ArithWholeArraySubscript is the complaint about a `*` or `@` subscript
@@ -2965,26 +2961,26 @@ type Diagnostics struct {
 	// verbs: the name and the subscript.
 	//
 	// Its own field rather than ArithEmptySubscript's, which is the empty
-	// brackets one construct over: the sentences coincide in the column that
-	// writes both and the shapes do not, and a dialect that worded one
-	// differently would need them apart. Only a dialect answering
+	// brackets one construct over: the sentences coincide under the preset that
+	// writes both and the shapes do not, and a preset that worded one
+	// differently would need them apart. Only a preset answering
 	// Semantics.ArithWholeArraySubscriptIsReportedAsBad has anything to put
 	// here.
 	ArithWholeArraySubscript string
 	// EmptySubscriptTextExpanded is the complaint about a subscript whose
 	// *text* came out empty — `${a[$w]}` with an empty `$w` — where a
-	// parameter expansion or an assignment reads it. No verbs: the one shell
-	// that refuses it names neither the array nor the subscript, because
-	// there is no subscript text left to name.
+	// parameter expansion or an assignment reads it. No verbs: a preset that
+	// refuses it names neither the array nor the subscript, because there is no
+	// subscript text left to name.
 	//
 	// Its own field rather than ArithEmptySubscript's, which is the written
-	// `a[]` one construct over and a different sentence in the same shell:
+	// `a[]` one construct over and a different sentence under the same preset:
 	// `invalid subscript` there against `bad math expression: empty string`
 	// here. A subscript holding *blanks* is a third sentence again and needs
 	// no field, because it is the expression running out — see
 	// ArithExpressionRanOut, which words it already.
 	//
-	// Whether a dialect refuses at all is
+	// Whether a preset refuses at all is
 	// Semantics.EmptySubscriptTextIsAMathError; this is only the wording.
 	EmptySubscriptTextExpanded string
 

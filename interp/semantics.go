@@ -5325,27 +5325,24 @@ type Semantics struct {
 	//
 	// It is about login-ness **inferred from argv[0]** and not about being a
 	// login shell as such, which is measured: an explicit `-l` or `--login`
-	// makes bash read its profile with a script to run, so the option
-	// overrides this rather than setting the same bit. See
-	// StartupFileOptions.Login.
+	// makes the profile read even with a script to run, so the option overrides
+	// this rather than setting the same bit. See StartupFileOptions.Login.
 	LoginProfileWhenNonInteractive bool
 
-	// NonInteractiveStartupVariable names a variable whose value is expanded
-	// and sourced by a shell that is *not* going to prompt. Empty means the
-	// shell has no such file, which is three of the four.
+	// NonInteractiveStartupVariable names a variable whose value is expanded and
+	// sourced by a shell that is *not* going to prompt. Empty means there is no
+	// such file.
 	//
 	// A name rather than a bool, for the reason the profile's own filename is
-	// not modeled as an axis: what a shell calls the thing is a per-dialect
-	// fact and not a disagreement about behavior. One shell in the panel has
-	// it, under a name of its own, and the other three do nothing at all with
-	// that name — measured 2026-09-05 on a script operand, `-c` and a program
-	// on standard input alike.
+	// not modeled as an axis: what a shell calls the thing is a per-preset fact
+	// and not a disagreement about behavior. Where the name exists nothing else
+	// does anything at all with it — measured on a script operand, `-c` and a
+	// program on standard input alike.
 	//
-	// It is the exact counterpart of `$ENV`, which the front end reads for
-	// every dialect and reads *only* when interactive. The two never overlap:
-	// the shell that has this reads this and not `$ENV` when it is not
-	// interactive, and reads neither at a prompt, where it has a file of its
-	// own name instead.
+	// It is the exact counterpart of `$ENV`, which the front end reads for every
+	// preset and reads *only* when interactive. The two never overlap: a preset
+	// with this reads this and not `$ENV` when it is not interactive, and reads
+	// neither at a prompt, where it has a file of its own name instead.
 	//
 	// Two more measured properties, both shared with the profile and both the
 	// reason it is sourced where it is. The value is expanded before it is
@@ -5355,110 +5352,104 @@ type Semantics struct {
 	// with the script never run. A file that is not there is not a failure.
 	//
 	// **POSIX mode suppresses it**, which is measured and is why this is one
-	// field rather than two. The shell that has it reads nothing when started
-	// with the standard's own posix option, and nothing when invoked as `sh` —
-	// the two spellings of the same mode. So the absence in the `sh` column is
-	// the mode again rather than a second fact about a second name.
+	// field rather than two. Nothing is read under the standard's own posix
+	// option, and nothing when invoked as `sh` — the two spellings of the same
+	// mode. So the absence in the `sh` column is the mode again rather than a
+	// second fact about a second name.
 	NonInteractiveStartupVariable string
 
 	// StartupDirectoryVariable names a variable whose value replaces the home
-	// directory as the place the startup files below are looked for. Empty
-	// means the home directory, which is three of the four.
+	// directory as the place the startup files below are looked for. Empty means
+	// the home directory.
 	//
-	// zsh alone has one, `ZDOTDIR`, and it redirects *all* of its files
-	// rather than one of them — measured 2026-09-05, with every file under
-	// the named directory read and none of the same names under `$HOME`. It
-	// is read afresh for each file rather than once, which is also measured
-	// and is the reason a person's `~/.zshenv` setting `ZDOTDIR` works at
-	// all: the file that sets it is found under the home directory and every
+	// Where one exists it redirects *all* of the files rather than one of them —
+	// every file under the named directory read and none of the same names under
+	// `$HOME`. It is read afresh for each file rather than once, which is also
+	// measured and is the reason a person's first startup file setting it works
+	// at all: the file that sets it is found under the home directory and every
 	// file after it under the directory it named.
 	//
 	// A variable name rather than a path, for the reason
 	// NonInteractiveStartupVariable is one: what the shell calls the thing is
-	// the dialect's, and the value is the person's.
+	// the preset's, and the value is the person's.
 	StartupDirectoryVariable string
 
-	// UnconditionalStartupFile names a file read on *every* invocation —
-	// login or not, prompting or not, `-c` and a script alike. Empty means
-	// the shell has no such file, which is three of the four.
+	// UnconditionalStartupFile names a file read on *every* invocation — login
+	// or not, prompting or not, `-c` and a script alike. Empty means there is no
+	// such file.
 	//
-	// zsh alone has one, `.zshenv`, and it is the only startup file any shell
-	// in the panel reads for a plain `sh -c cmd`. Measured 2026-09-05 with a
-	// scratch home directory on all four routes.
+	// Where one exists it is the only startup file read for a plain `sh -c cmd`.
+	// Measured with a scratch home directory on all four routes.
 	//
-	// First of the files, before the profile: measured, `zsh -l -i` reads
-	// `.zshenv`, `.zprofile`, `.zshrc` and `.zlogin`, in that order.
+	// First of the files, before the profile: an interactive login shell reads
+	// this, then the profile, then the interactive file, then the late login
+	// file, in that order.
 	UnconditionalStartupFile string
 
 	// LoginStartupFiles names the profile a login shell reads, most preferred
-	// first, as whitespace-separated names. **The first one that can be read
-	// is the only one read**, which is bash's rule and reduces to "the file"
-	// for every shell with one name for it.
+	// first, as whitespace-separated names. **The first one that can be read is
+	// the only one read**, which reduces to "the file" for a preset with one
+	// name for it.
 	//
-	// Measured 2026-09-05 with a scratch home directory holding a marker for
-	// every name: bash reads `.bash_profile`, falls back to `.bash_login` when
-	// that is absent and to `.profile` when both are, and reads exactly one of
-	// the three. dash, ksh93 and the POSIX preset name `.profile`; zsh names
-	// `.zprofile`. Empty means the shell reads no profile, which is what a
-	// Semantics nobody has filled in should do — see
-	// LoginProfileWhenNonInteractive for why a default must not reach into a
-	// home directory.
+	// Measured with a scratch home directory holding a marker for every name: a
+	// preset naming three reads the first, falls back to the second when that is
+	// absent and to the third when both are, and reads exactly one of them.
 	//
-	// *Whether* a login shell reads it when there is a script to run rather
-	// than a person to prompt is the separate question
-	// LoginProfileWhenNonInteractive asks; this is only which file.
+	// Empty means no profile is read, which is what a Semantics nobody has
+	// filled in should do — see LoginProfileWhenNonInteractive for why a default
+	// must not reach into a home directory.
 	//
-	// One string rather than a slice, which is how EchoOptions, ReadOptions
-	// and JobsOptions already spell a list and is not only consistency: a
-	// slice anywhere in this struct makes the whole vector uncomparable, and
-	// `==` against another vector is something a test — and an embedder —
-	// may already be doing. No shell in the panel names a startup file with
-	// a space in it, so nothing is lost by the separator.
+	// *Whether* a login shell reads it when there is a script to run rather than
+	// a person to prompt is the separate question LoginProfileWhenNonInteractive
+	// asks; this is only which file.
+	//
+	// One string rather than a slice, which is how EchoOptions, ReadOptions and
+	// JobsOptions already spell a list and is not only consistency: a slice
+	// anywhere in this struct makes the whole vector uncomparable, and `==`
+	// against another vector is something a test — and an embedder — may already
+	// be doing. No startup file is named with a space in it, so nothing is lost
+	// by the separator.
 	LoginStartupFiles string
 
-	// LateLoginStartupFile names a login file read *after* the interactive
-	// file rather than before it. Empty for three of the four.
+	// LateLoginStartupFile names a login file read *after* the interactive file
+	// rather than before it. Empty where there is none.
 	//
-	// zsh alone has one, `.zlogin`, and the position is the whole of why it
-	// is a second field: measured, an interactive login zsh reads `.zprofile`,
-	// then `.zshrc`, then `.zlogin`, so a person's `.zlogin` sees what their
-	// `.zshrc` did. It is read for a non-interactive login shell too, in the
-	// dialects that read a profile there at all.
+	// The position is the whole of why it is a second field: an interactive
+	// login shell reads the profile, then the interactive file, then this, so a
+	// person's late file sees what their interactive one did. It is read for a
+	// non-interactive login shell too, wherever a profile is read there at all.
 	LateLoginStartupFile string
 
-	// InteractiveStartupFile names the file read when the shell is
-	// interactive, in the startup directory. Empty means the shell has no
-	// file of its own name and reads `$ENV` instead, which is dash, ksh93 and
-	// the standard.
+	// InteractiveStartupFile names the file read when the shell is interactive,
+	// in the startup directory. Empty means there is no file of the shell's own
+	// name and `$ENV` is read instead, which is what the standard specifies.
 	//
-	// bash names `.bashrc` and zsh names `.zshrc`. Measured 2026-09-05: both
-	// read theirs and neither reads `$ENV`, and the shell that reads `$ENV`
-	// reads nothing of its own name — the two are alternatives rather than a
-	// sequence.
+	// The two are alternatives rather than a sequence: a preset with a file of
+	// its own reads that and not `$ENV`, and one without reads `$ENV` and
+	// nothing of its own name.
 	//
 	// **POSIX mode replaces it with `$ENV`**, which is the interactive half of
 	// what NonInteractiveStartupVariable records and is measured the same way:
-	// bash invoked as `sh` reads `$ENV` at a prompt and does not read
-	// `.bashrc`, and so does zsh invoked as `sh`. So this is not suppressed in
-	// the mode the way the non-interactive file is — the standard has a file
-	// here and the shell reads the standard's one instead of its own.
+	// invoked as `sh`, the shell reads `$ENV` at a prompt and not its own file.
+	// So this is not suppressed in the mode the way the non-interactive file is
+	// — the standard has a file here and the shell reads the standard's one
+	// instead of its own.
 	InteractiveStartupFile string
 
-	// InteractiveStartupFileWhenLogin has an interactive *login* shell read
-	// the interactive file as well as its profile.
+	// InteractiveStartupFileWhenLogin has an interactive *login* shell read the
+	// interactive file as well as its profile.
 	//
-	// The panel's one disagreement about startup ordering, and it is why the
-	// four combinations of login and interactive are not four independent
-	// facts. Measured 2026-09-05 through a pseudo-terminal: zsh reads
-	// `.zshrc` for `zsh -l -i` and bash does *not* read `.bashrc` for `bash
-	// -l -i` — a person's `.bashrc` is reached from a login bash only because
-	// their `.bash_profile` sources it by hand, which is why every bash
-	// tutorial tells them to.
+	// The one disagreement about startup ordering, and it is why the four
+	// combinations of login and interactive are not four independent facts.
+	// Measured through a pseudo-terminal: Yes reads the interactive file for a
+	// login shell and No does not — under which a person's interactive file is
+	// reached from a login shell only because their profile sources it by hand,
+	// which is why so much documentation tells them to.
 	//
-	// Asked only where InteractiveStartupFile names something. A shell whose
-	// interactive file is `$ENV` reads it in both cases — measured, `-sh -i`
-	// reads `.profile` and then `$ENV` in dash, ksh93 and bash-as-`sh` alike —
-	// so there is nothing here to answer.
+	// Asked only where InteractiveStartupFile names something. A preset whose
+	// interactive file is `$ENV` reads it in both cases — a login interactive
+	// shell reads the profile and then `$ENV` — so there is nothing here to
+	// answer.
 	InteractiveStartupFileWhenLogin Answer
 
 	// StartupFileOptions names the invocation options that say which of the
@@ -5471,134 +5462,118 @@ type Semantics struct {
 	// shell a person cannot repair from.
 	StartupFileOptions StartupFileOptions
 
-	// VersionOption is how this shell answers an invocation option asking it
-	// to name its version — `--version`. The zero value is a shell with no
-	// such option, which is one of the four.
+	// VersionOption is how this shell answers an invocation option asking it to
+	// name its version — `--version`. The zero value is a shell with no such
+	// option.
 	//
-	// It is an invocation input like StartupFileOptions above, read by the
-	// front end rather than by the interpreter, and it is here for the same
-	// reason: the spelling is the dialect's, and a front end with an opinion
-	// about it would have to hold every dialect's at once.
+	// It is an invocation input like StartupFileOptions above, read by the front
+	// end rather than by the interpreter, and it is here for the same reason:
+	// the spelling belongs to the preset, and a front end with an opinion about
+	// it would have to hold every preset's at once.
 	VersionOption VersionOption
 
-	// FunctionSearchVariable names the scalar this shell searches for
-	// *function definition files* — the parameter an `autoload`d name is
-	// looked up on. Empty means the shell has no such search, which is three
-	// of the four; zsh names `FPATH`.
+	// FunctionSearchVariable names the scalar this shell searches for *function
+	// definition files* — the parameter an `autoload`d name is looked up on.
+	// Empty means there is no such search.
 	//
 	// It is here rather than in the builtin that reads it because the value is
-	// not the builtin's to invent. Measured 2026-09-07 against zsh 5.9.2 under
-	// `env -i` with a scratch HOME and `-f`, so no startup file is speaking:
-	// the shell arrives with three directories on it, all three of them that
-	// *installation's* — its own function library, plus the two site
-	// directories third-party packages install into. An `FPATH` in the
+	// not the builtin's to invent. Measured under `env -i` with a scratch HOME
+	// and no startup file speaking: a shell with the parameter arrives with that
+	// *installation's* directories on it — its own function library, plus the
+	// site directories third-party packages install into. A value in the
 	// environment **replaces** the lot rather than adding to it, and does so
-	// even when it is the empty string, so the default is a fallback for a
-	// name the environment does not mention rather than for one it leaves
-	// blank.
+	// even when it is the empty string, so the default is a fallback for a name
+	// the environment does not mention rather than for one it leaves blank.
 	//
 	// Which directories is a fact about where a shell was installed, and no
-	// dialect can hold one: a value written here would be the recording
+	// preset can hold one: a value written here would be the recording
 	// machine's. So this names the parameter and the front end supplies the
-	// value — the same split `StartupDirectoryVariable` above already makes,
-	// and the same one `$PATH` has. See driver.
+	// value — the same split StartupDirectoryVariable above already makes, and
+	// the same one `$PATH` has. See driver.
 	FunctionSearchVariable string
 
-	// ArrayLengthWithoutSubscriptIsCount makes `${#a}` of an array the
-	// number of elements, which is zsh's reading; bash and ksh93 measure
-	// the element the bare name yields. Asked only where the two answers
-	// differ.
+	// ArrayLengthWithoutSubscriptIsCount makes `${#a}` of an array the number of
+	// elements, rather than measuring the element the bare name yields. Asked
+	// only where the two answers differ.
 	ArrayLengthWithoutSubscriptIsCount Answer
 
-	// WholeSubscriptOnAScalarMeasuresIt makes `${#s[@]}` on a name holding
-	// one string the *width of that string* rather than the count of a list
-	// of one. Measured 2026-09-10:
+	// WholeSubscriptOnAScalarMeasuresIt makes `${#s[@]}` on a name holding one
+	// string the *width of that string* rather than the count of a list of one:
 	//
-	//	                  ${#a[@]} on a=""  on b=x  on h="a b"
-	//	bash 5.3.15       1                 1       1
-	//	bash as `sh`      1                 1       1
-	//	bash 3.2.57       1                 1       1
-	//	ksh93             1                 1       1
-	//	dash              bad substitution  —       —
-	//	zsh 5.9.2         0                 1       3
+	//	          on a=""  on b=x  on h="a b"
+	//	Yes       0        1       3
+	//	No        1        1       1
 	//
-	// The three-character row is what says which reading it is: an empty
-	// scalar answering 0 alone would be "no elements", and `a b` answering 3
-	// says the whole-array subscript on a scalar reaches the *value*. The
-	// panel is one answer against one, so it is a disagreement and not a
-	// majority.
+	// The three-character row is what says which reading it is: an empty scalar
+	// answering 0 alone would be "no elements", and `a b` answering 3 says the
+	// whole-array subscript on a scalar reaches the *value*. A grammar with no
+	// such expansion refuses it outright, which is the absence rather than a
+	// third answer.
 	//
-	// Asked of the length alone, because the length is where *this* split
-	// falls. The plain value is unanimous — `set -- "${h[@]}"` leaves one
-	// parameter holding `a b` in every column — so the fields ask nobody.
-	// The slice is not unanimous and is not this question either: it splits
-	// the panel a different way and has an axis of its own, immediately
-	// below. This comment used to say everything but the length agreed,
-	// which is what let the slice keep the count's reading (#1850).
+	// Asked of the length alone, because the length is where *this* split falls.
+	// The plain value is unanimous — `set -- "${h[@]}"` leaves one parameter
+	// holding `a b` under both — so the fields ask nobody. The slice is not
+	// unanimous and is not this question either: it splits a different way and
+	// has an axis of its own, immediately below.
 	//
 	// It is how a script asks "did I get anything?" after a parse:
-	// `local -a opts; zparseopts …; (( ${#opts[@]} ))` reads 1 here for a
-	// name that never became an array, which is a count agreeing with the
-	// wrong answer (#1553).
+	// `local -a opts; zparseopts …; (( ${#opts[@]} ))` reads 1 under No for a
+	// name that never became an array, which is a count agreeing with the wrong
+	// answer.
 	WholeSubscriptOnAScalarMeasuresIt Answer
 
-	// WholeSubscriptOnAScalarSlicesIt makes `${s[@]:off:len}` on a name
-	// holding one string a slice of *that string's characters* rather than
-	// of a list whose only element is the whole value. Measured 2026-09-11,
-	// on `h="a b"` and `h=abcdef`:
+	// WholeSubscriptOnAScalarSlicesIt makes `${s[@]:off:len}` on a name holding
+	// one string a slice of *that string's characters* rather than of a list
+	// whose only element is the whole value. On `h="a b"` and `h=abcdef`:
 	//
-	//	              ${h[@]:0:1}  ${h[*]:0:1}  ${h[@]:1}  ${h[@]:2:3}
-	//	bash 5.3.15   a            a            ` b`       cde
-	//	bash as `sh`  a            a            ` b`       cde
-	//	bash 3.2.57   a            a            ` b`       cde
-	//	zsh 5.9.2     a            a            ` b`       cde
-	//	ksh93         a b          a b          (no field) (empty)
-	//	dash          bad substitution
+	//	      ${h[@]:0:1}  ${h[*]:0:1}  ${h[@]:1}  ${h[@]:2:3}
+	//	Yes   a            a            ` b`       cde
+	//	No    a b          a b          (no field) (empty)
 	//
 	// A different split from the length above, which is why it is a second
-	// question and not a second reading of the first: bash counts a list of
-	// one for `${#h[@]}` and slices the characters here, so no single answer
-	// about "what a whole subscript on a scalar reaches" fits it. The
-	// offsets index the value exactly as `${h:off:len}` does — `${h:0:1}` is
-	// `a` in every column, which is the control that says the character
-	// reading is not new — and the list reading is what ksh93 keeps.
+	// question and not a second reading of the first: an implementation can
+	// count a list of one for `${#h[@]}` and slice the characters here, so no
+	// single answer about "what a whole subscript on a scalar reaches" fits it.
+	// The offsets index the value exactly as `${h:off:len}` does — `${h:0:1}` is
+	// `a` under both, which is the control that says the character reading is
+	// not new — and No is the list reading.
 	//
 	// Asked of the slice alone, and only of a name that is set and holds one
-	// string: an unset name is empty under both readings, and a real array
-	// is a list in every column.
+	// string: an unset name is empty under both readings, and a real array is a
+	// list under both.
 	//
 	// Its silence is the reason it is worth an axis rather than a default.
 	// `${line[@]:0:1}` reads as the first character to anyone writing it and
-	// came back as the whole line, and `${h[@]:1}` — drop the first
-	// character — came back as nothing at all, both at status 0 (#1850).
+	// comes back as the whole line under No, and `${h[@]:1}` — drop the first
+	// character — comes back as nothing at all, both at status 0.
 	WholeSubscriptOnAScalarSlicesIt Answer
 
-	// ArrayNameWithoutSubscriptIsTheList makes an unquoted bare array name
-	// the array itself — one field per element, a slice slicing the list and
-	// an element-wise operator applying to each — exactly as `${a[@]}` is:
-	// zsh. bash and ksh93 read the bare name as `${a[0]}`, one field, and
-	// dash has no arrays at all.
+	// ArrayNameWithoutSubscriptIsTheList makes an unquoted bare array name the
+	// array itself — one field per element, a slice slicing the list and an
+	// element-wise operator applying to each — exactly as `${a[@]}` is.
+	// Answering No reads the bare name as `${a[0]}`, one field.
 	//
 	// The field-count half of what ArrayScalarIsTheWholeArray answers for the
-	// value, and separate from it because the same shell answers the two
-	// differently by quoting: `"$a"` is one joined field in zsh as well, so
-	// the divergence is exactly the unquoted spelling in a context that
-	// splits. Its silence is the reason it is a P1 — `for f in $files` runs
-	// once over a joined string instead of once per element, every command
-	// inside gets one argument where it expected several, and the status is
-	// 0. The same join makes an element-wise operator a quiet no-op:
-	// `${a:#pattern}` matches the joined string, fails, and hands the whole
-	// array back looking like a filter that found nothing.
+	// value, and separate from it because the two can be answered differently by
+	// quoting: `"$a"` is one joined field under both, so the divergence is
+	// exactly the unquoted spelling in a context that splits.
 	//
-	// Asked only where the two readings differ, which is more than one
-	// element — or exactly one under an operator that reads the list even
-	// then, a slice or one of the element-selecting three.
+	// Its silence is the reason it is a P1 — `for f in $files` runs once over a
+	// joined string instead of once per element, every command inside gets one
+	// argument where it expected several, and the status is 0. The same join
+	// makes an element-wise operator a quiet no-op: `${a:#pattern}` matches the
+	// joined string, fails, and hands the whole array back looking like a filter
+	// that found nothing.
+	//
+	// Asked only where the two readings differ, which is more than one element —
+	// or exactly one under an operator that reads the list even then, a slice or
+	// one of the element-selecting three.
 	ArrayNameWithoutSubscriptIsTheList Answer
 
 	// UnsetNameAtIsOneEmptyField hands a quoted `"${a[@]}"` written on a name
-	// that holds nothing at all one empty field. zsh alone, where a name
-	// that is not a declared array reads as a scalar and an unset scalar
-	// under quotes is one empty field — the same field `"$a"` gives.
+	// that holds nothing at all one empty field — the reading under which a name
+	// that is not a declared array is a scalar, and an unset scalar under quotes
+	// is one empty field, the same field `"$a"` gives.
 	//
 	// It is a question about **existence** and not about emptiness. An array
 	// that exists and has no elements is no field in every column measured,

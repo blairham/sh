@@ -2332,140 +2332,138 @@ type Diagnostics struct {
 	// a preset that names that part and so has nothing to name: `for ((;))` is a
 	// bare `parse error` where `for ((;2))` is `parse error near `2'`. Empty
 	// means the preset says the same either
-	// way, which three of the four do.
+	// way, which is the common answer.
 	ForArithHeaderNoPart string
 	// ForArithSeparator is a C-style `for` header with *more* than two
-	// separators, in a dialect that refuses one — see
-	// syntax.Dialect.ForArithExtraSeparators for the two that do not. The
+	// separators, under a preset that refuses one — see
+	// syntax.Dialect.ForArithExtraSeparators for the presets that do not. The
 	// same three verbs.
 	//
-	// A field of its own rather than a shape of ForArithHeader because the
-	// one dialect that refuses both words them apart: `` `;' unexpected ``
-	// here against `arithmetic expression required` there.
+	// A field of its own rather than a shape of ForArithHeader because a preset
+	// that refuses both words them apart: `` `;' unexpected `` here against
+	// `arithmetic expression required` there.
 	ForArithSeparator string
-	// ForArithHeaderEcho is the second line written under either of those
-	// two, for the dialect that echoes something after a parse failure.
-	// One verb: %[1]s the header as written.
+	// ForArithHeaderEcho is the second line written under either of those two,
+	// for a preset that echoes something after a parse failure. One verb: %[1]s
+	// the header as written.
 	//
 	// Not the offending *line*, which is what EchoesTheOffendingLine writes
-	// everywhere else: bash answers `for ((;;;)); do :; done` with
-	// ``syntax error: `((;;;))'`` on its second line — the header alone,
-	// under a repeat of the sentence's opening words — and answers a header
-	// written over four lines with all four of them. Empty means no second
-	// line, which is what the other three write.
+	// everywhere else: `for ((;;;)); do :; done` is answered with
+	// ``syntax error: `((;;;))'`` on its second line — the header alone, under a
+	// repeat of the sentence's opening words — and a header written over four
+	// lines is answered with all four of them. Empty means no second line, the
+	// common answer.
 	ForArithHeaderEcho string
 
 	// Unterminated is input that ran out with a construct still open, and it
-	// is four verbs because the panel names four different parts of that one
-	// state rather than wording a shared diagnosis four ways:
+	// is several verbs because the presets name different parts of that one
+	// state rather than wording a shared diagnosis several ways:
 	//
 	//	%[1]s  the construct — `if`, `for`, `case`, `{`
 	//	%[2]d  the line the construct began on
 	//	%[3]s  the innermost unclosed keyword, `then` inside an `if`
 	//	%[4]s  the word that would have closed it, `fi`
 	//	%[5]s  the last token before the input ran out
-	//	%[6]d  the line the failure is on, for a dialect that has no location
+	//	%[6]d  the line the failure is on, for a preset that has no location
 	//	       of its own to put it in
 	//
-	// bash names the first two, ksh93 the third, dash the fourth and zsh the
-	// fifth. Empty means the substrate's own, which names the construct.
+	// Each preset names a different one of them. Empty means the substrate's
+	// own, which names the construct.
 	Unterminated string
 	// UnterminatedNoConstruct is the same state with *nothing* open to name:
 	// `f()` given no body at all, where the parens have already closed.
 	//
-	// Its own wording because the dialect that names the construct has to say
+	// Its own wording because a preset that names the construct has to say
 	// something when there is no construct, and what it says is a shorter
-	// sentence rather than the same one with a hole in it. The dialects whose
-	// wording never mentioned a construct leave this empty and keep the
-	// sentence they already have.
+	// sentence rather than the same one with a hole in it. A preset whose
+	// wording never mentioned a construct leaves this empty and keeps the
+	// sentence it already has.
 	UnterminatedNoConstruct string
 	// BadSubstitution replaces a parse failure inside `${ }` entirely. No
-	// verbs: no shell in the panel says which operator was wrong.
+	// verbs: no preset says which operator was wrong.
 	BadSubstitution string
 	// BadSubstitutionAtRun words the *deferred* report — an expansion the
 	// grammar marked bad and the run then reached. One verb: the inside of
 	// the braces as written. Only a dialect whose parse-time wording is not
-	// a runtime one needs it: ksh93 refuses `${x ~}` while reading with a
-	// syntax error and reports the `@` family it defers as
-	// `${x@j}: bad substitution` when reached. Empty falls back to
-	// BadSubstitution, which is a runtime wording everywhere else.
+	// a runtime one needs it — refusing `${x ~}` while reading with a syntax
+	// error and reporting the `@` family it defers as `${x@j}: bad substitution`
+	// when reached. Empty falls back to BadSubstitution, which is a runtime
+	// wording everywhere else.
 	BadSubstitutionAtRun string
-	// BadSubstitutionNames is what the verb above is filled with. The
-	// default names the expansion; two dialects name the *word* it sits in
-	// and do not agree on how much of a word counts, which is why this is
-	// three answers and not a flag.
+	// BadSubstitutionNames is what the verb above is filled with. The default
+	// names the expansion; some presets name the *word* it sits in and do not
+	// agree on how much of a word counts, which is why this is three answers and
+	// not a flag.
 	BadSubstitutionNames BadSubstitutionSubject
 	// ExpansionFlagsError is a character a parenthesized expansion-flag
 	// group could not carry, reported when the expansion is reached. Two
-	// verbs: the 1-based position counted from the `$`, and the whole
-	// `${…}` text. Only the dialect whose grammar has the group can reach
-	// it, and that dialect's own wording is the fallback.
+	// verbs: the 1-based position counted from the `$`, and the whole `${…}`
+	// text. Only a preset whose grammar has the group can reach it, and that
+	// preset's own wording is the fallback.
 	ExpansionFlagsError string
 	// NotFound is a command name that resolved to nothing. One verb: the
 	// name.
 	NotFound string
-	// SetArrayNeedsAName is what `set -A` with nothing after it says, where
-	// the dialect refuses it. One verb: the letter as written, `-A` or `+A`.
+	// SetArrayNeedsAName is what `set -A` with nothing after it says, where the
+	// preset refuses it. One verb: the letter as written, `-A` or `+A`.
 	//
-	// Empty means the dialect answers a missing name with a *listing* of the
-	// arrays it has — zsh, measured — which this engine does not build, so
-	// the listing is named as missing instead. The two are not one refusal
-	// with two wordings: one shell is telling the script it left an operand
-	// out and the other is being asked a question it would have answered.
+	// Empty means the preset answers a missing name with a *listing* of the
+	// arrays it has, which this engine does not build, so the listing is named
+	// as missing instead. The two are not one refusal with two wordings: one is
+	// telling the script it left an operand out and the other is being asked a
+	// question it would have answered.
 	SetArrayNeedsAName string
 
 	// BadNameRefusalHidesTheBuiltin names the builtins whose bad-name
-	// refusal does *not* carry the builtin in its location, in a dialect
-	// that otherwise puts it there.
+	// refusal does *not* carry the builtin in its location, under a preset that
+	// otherwise puts it there.
 	//
-	// zsh is the dialect and `set` is the builtin: `set -A 1v q` is
-	// `<script>:1: not an identifier: 1v` where `unset 1x` and `typeset 1w`
-	// from the same shell are `<script>:unset:1:` and `<script>:typeset:1:`.
-	// The same shape SubscriptRefusalNamesBuiltin has, and a set for the
-	// same reason — the sentence and the location are decided separately and
-	// this builtin is where they part.
+	// `set` is the builtin it is written for: `set -A 1v q` is
+	// `<script>:1: not an identifier: 1v` where `unset 1x` and `typeset 1w` from
+	// the same preset are `<script>:unset:1:` and `<script>:typeset:1:`. The
+	// same shape SubscriptRefusalNamesBuiltin has, and a set for the same reason
+	// — the sentence and the location are decided separately and this builtin is
+	// where they part.
 	BadNameRefusalHidesTheBuiltin map[string]bool
 
 	// InconsistentType is what a declaration says when the plain word it was
 	// given is assigned over a name whose cell is really holding an array or
 	// a keyed table. One verb: the name.
 	//
-	// The builtin is named in the *location* rather than in the sentence,
-	// which is where the one dialect with the refusal puts it:
-	// `zsh:typeset:1: b: inconsistent type for assignment`, and
+	// The builtin is named in the *location* rather than in the sentence, which
+	// is where a preset with the refusal puts it:
+	// `<shell>:typeset:1: b: inconsistent type for assignment`, and
 	// `f:readonly: b: …` from inside a function.
 	//
-	// Empty means the dialect does not refuse the line at all, which is what
-	// ScalarOverACompoundIsAnInconsistentType answers — the wording exists
-	// only for the dialect that says yes.
+	// Empty means the preset does not refuse the line at all, which is what
+	// ScalarOverACompoundIsAnInconsistentType answers — the wording exists only
+	// for a preset that says yes.
 	InconsistentType string
 
 	// ReadonlyVariableInDeclaration replaces it when the assignment was made
 	// through a declaration utility. Two verbs: the name and the builtin.
 	//
-	// dash alone puts the builtin in front — `export: x: is read only` —
-	// where its plain form says only the name. Empty leaves the wording
-	// below standing for both, which is what the other three want here.
+	// A preset may put the builtin in front — `export: x: is read only` — where
+	// its plain form says only the name. Empty leaves the wording below standing
+	// for both, the common answer.
 	ReadonlyVariableInDeclaration string
 	// ReadonlyRefusalNamesBuiltin is which declaration builtins use that
 	// wording. Empty means none, and the wording is then never reached.
 	//
-	// A set rather than a flag because one dialect answers it per builtin:
-	// bash writes `declare: r: readonly variable` and `typeset: …` and
-	// leaves the name out of `export: …` and `readonly: …`, which are the
-	// two spellings POSIX has. dash names both of the two it has. ksh93 and
-	// zsh name none, including ksh93's own `typeset`.
+	// A set rather than a flag because a preset may answer it per builtin:
+	// writing `declare: r: readonly variable` and `typeset: …` while leaving the
+	// name out of `export: …` and `readonly: …`, which are the two spellings
+	// POSIX has. Another names both of the two it has, and another names none.
 	ReadonlyRefusalNamesBuiltin map[string]bool
 	// ReadonlyRemovalNamesBuiltin is the same set for a *plus* form refused
 	// the attribute it asked to take off — `typeset +r x` on a frozen name.
-	// Nil falls back to ReadonlyRefusalNamesBuiltin, which is what every
-	// dialect but one wants.
+	// Nil falls back to ReadonlyRefusalNamesBuiltin, which is the common answer.
 	//
-	// A set of its own because one shell answers the two shapes differently
-	// through the identical word. Measured 2026-09-07:
+	// A set of its own because a preset may answer the two shapes differently
+	// through the identical word:
 	//
-	//	ksh93  typeset x=2    → <script>: line 2: x: is read only
-	//	       typeset +r x   → <script>[2]: typeset: x: is read only
+	//	typeset x=2    → <script>: line 2: x: is read only
+	//	typeset +r x   → <script>[2]: typeset: x: is read only
 	//
 	// One word, two sentences and two locations, so the builtin's name
 	// cannot decide it alone. The plus form there takes the shape `set -A`

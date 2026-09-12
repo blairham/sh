@@ -34,28 +34,22 @@ import (
 // `from zsh`. The fourth has no origin at all and drops the clause.
 
 func TestAFunctionDefinedInThisCommandStringComesFromTheShell(t *testing.T) {
-	for _, src := range []string{
-		`g(){ :; }; whence -v g`,
-		`g(){ :; }; type g`,
+	for _, c := range []struct{ src, want string }{
+		{`g(){ :; }; whence -v g`, "g is a shell function from zsh\n"},
+		{`g(){ :; }; type g`, "g is a shell function from zsh\n"},
 		// `eval` at the top level is still the shell defining it.
-		`eval 'e(){ :; }'; whence -v e`,
+		{`eval 'e(){ :; }'; whence -v e`, "e is a shell function from zsh\n"},
 		// And a function defined by *calling* one the command string
 		// defined: the origin follows the file the definition was read in,
 		// which here is none.
-		`outer(){ inner(){ :; }; }; outer; whence -v inner`,
+		{
+			`outer(){ inner(){ :; }; }; outer; whence -v inner`,
+			"inner is a shell function from zsh\n",
+		},
 	} {
-		out, st := runZsh(t, t.TempDir(), src)
-		var want string
-		switch {
-		case src == `eval 'e(){ :; }'; whence -v e`:
-			want = "e is a shell function from zsh\n"
-		case src == `outer(){ inner(){ :; }; }; outer; whence -v inner`:
-			want = "inner is a shell function from zsh\n"
-		default:
-			want = "g is a shell function from zsh\n"
-		}
-		if out != want || st != 0 {
-			t.Errorf("%s: out %q status %d, want %q at 0", src, out, st, want)
+		out, st := runZsh(t, t.TempDir(), c.src)
+		if out != c.want || st != 0 {
+			t.Errorf("%s: out %q status %d, want %q at 0", c.src, out, st, c.want)
 		}
 	}
 }

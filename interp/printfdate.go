@@ -37,7 +37,7 @@ import (
 // `touch` has, and a bare `-1`; those are its own legacy spellings rather
 // than anything a portable script writes, and they meet the warning here.
 // The warning is that shell's own answer for an operand it cannot read, so
-// what a script sees for one of them is a sentence it would recognise and a
+// what a script sees for one of them is a sentence it would recognize and a
 // status of 1 — not a wrong date presented as a right one.
 
 // kshDate reads one of the date strings above, or reports that it could not.

@@ -143,7 +143,65 @@ func Report(cols []Column, list int) string {
 		}
 		b.WriteString("\n")
 	}
+	b.WriteString(rollup(cols, list))
 	b.WriteString(caveat)
+	return b.String()
+}
+
+// rollup is the strongest finding in the report: an element no dialect's
+// cases mention at all.
+//
+// The per-dialect lists above are weaker than they look, because the operator
+// vocabulary is one table shared by every grammar. `${x^^}` is bash's, so the
+// case that pins it does not parse under zsh and the operator reads as never
+// mentioned *there* — which is right and is not a work item. An element
+// missing from every column has no such excuse.
+func rollup(cols []Column, list int) string {
+	if len(cols) == 0 {
+		return ""
+	}
+	mentioned := map[Element]bool{}
+	union := map[Element]bool{}
+	for _, c := range cols {
+		for _, e := range c.Surface {
+			union[e] = true
+			if c.Mentions[e] > 0 {
+				mentioned[e] = true
+			}
+		}
+	}
+	var never []Element
+	for e := range union {
+		if !mentioned[e] {
+			never = append(never, e)
+		}
+	}
+	byKindThenName(never)
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "  no dialect mentions these at all — %d of %d\n\n", len(never), len(union))
+	byKind := map[string][]string{}
+	for _, e := range never {
+		byKind[e.Kind] = append(byKind[e.Kind], e.Name)
+	}
+	kinds := make([]string, 0, len(byKind))
+	for k := range byKind {
+		kinds = append(kinds, k)
+	}
+	sort.Strings(kinds)
+	for _, k := range kinds {
+		names := byKind[k]
+		shown := names
+		if list > 0 && len(shown) > list {
+			shown = shown[:list]
+		}
+		fmt.Fprintf(&b, "    %s (%d)\n      %s", k, len(names), strings.Join(shown, " "))
+		if len(shown) < len(names) {
+			fmt.Fprintf(&b, " … and %d more", len(names)-len(shown))
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
 	return b.String()
 }
 
@@ -156,6 +214,12 @@ const caveat = `  What this counts, and what it does not
     nothing mentions is covered by nothing at all, and that half of this
     report is not a proxy. Read the never-mentioned lists as the work-list
     and the percentages as nothing at all.
+
+    A per-dialect zero is weaker than the roll-up above it. The operator
+    vocabulary is one table shared by every grammar, so an operator only
+    one shell has reads as never mentioned under the other five — which
+    is correct and is not a work item. An element no column mentions is
+    the one with no such excuse, which is why it is reported separately.
 
     The Semantics axes are deliberately absent. ` + "`make axis-sweep`" + ` already
     moves each one and reports what fails to object, which is a strictly

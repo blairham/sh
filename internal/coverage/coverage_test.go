@@ -222,3 +222,55 @@ func TestTheReportSaysWhatAMentionIsNot(t *testing.T) {
 		}
 	}
 }
+
+// TestTheRollupForgivesWhatOnlyOneGrammarHas. The operator vocabulary is one
+// table shared by every dialect, so an operator only one shell has reads as
+// never mentioned under the others. That per-column zero is not a work item;
+// the roll-up is what says nobody asked about it anywhere.
+func TestTheRollupForgivesWhatOnlyOneGrammarHas(t *testing.T) {
+	asks, err := coverage.Run("asks", syntax.Core(), []string{"echo", "read"}, []coverage.Source{
+		{Label: "a", Text: `read x`},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	silent, err := coverage.Run("silent", syntax.Core(), []string{"echo", "read"}, []coverage.Source{
+		{Label: "b", Text: `echo hi`},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// The column that never said `read` reports it, which is the context the
+	// roll-up is read against.
+	var silentMisses []string
+	for _, e := range silent.Unasked() {
+		if e.Kind == coverage.KindBuiltin {
+			silentMisses = append(silentMisses, e.Name)
+		}
+	}
+	if !slices.Contains(silentMisses, "read") {
+		t.Errorf("the silent column does not report `read` as unmentioned; it has %v", silentMisses)
+	}
+
+	out := coverage.Report([]coverage.Column{asks, silent}, 0)
+	roll := out[strings.Index(out, "no dialect mentions these at all"):]
+	names := rolledUp(t, roll, coverage.KindBuiltin)
+	if slices.Contains(names, "read") {
+		t.Errorf("a builtin one column mentioned is in the roll-up, which is the union of what was asked and not the intersection; it has %v", names)
+	}
+	if slices.Contains(names, "echo") {
+		t.Errorf("a builtin the other column mentioned is in the roll-up; it has %v", names)
+	}
+}
+
+// rolledUp reads one kind's names out of the roll-up section.
+func rolledUp(t *testing.T, roll, kind string) []string {
+	t.Helper()
+	lines := strings.Split(roll, "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(strings.TrimSpace(l), kind+" (") && i+1 < len(lines) {
+			return strings.Fields(lines[i+1])
+		}
+	}
+	return nil
+}

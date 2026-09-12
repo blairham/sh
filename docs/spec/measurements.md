@@ -3468,7 +3468,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   sleep 0.4 & jobs -p >p.txt; read x <p.txt; case $x in "$!") echo "the job's process id alone";; *"$!"*) echo "a listing with the id in it";; *) echo "neither: [$x]";; esac; wait
   ```
-- `jobs/a-pid-listing-and-a-job-that-has-finished` — which listings *finish* with a job, which is not the same question as which listings show one. dash and bash print the id and still report the job as Done to the next bare `jobs`; ksh93 forgets it there and shows nothing; zsh has no pid form for a job that is over and prints nothing either way. We followed the two that agree, which was defensible and unrecorded — an accident by appearance rather than a choice (#602). The ids go to /dev/null because a process id is not the same twice
+- `jobs/a-pid-listing-and-a-job-that-has-finished` — which listings *finish* with a job, which is not the same question as which listings show one. dash, bash 5.3 and bash-as-`sh` print the id and still report the job as Done to the next bare `jobs`; ksh93 forgets it there and the next listing is empty; zsh writes nothing for a job that is over, and bash 3.2 does not report a finished job in a non-interactive shell at all, so neither of those two has anything left to forget. We followed the two that agree and did not write down that we had picked, which made it read as an accident (#602). The ids go to /dev/null because a process id is not the same twice
   ```sh
   sleep 0.05 & sleep 0.4; jobs -p >/dev/null; echo "--"; jobs; echo "--"; jobs
   ```
@@ -7806,7 +7806,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/quote-diverges` | `[st=2` **2>** `<shell>: 1: printf: %q: invalid directive` | `[a\ b]~st=0` | `[a\ b]~st=0` | `[a\ b]~st=0` | `['a b']~st=0` | `[a\ b]~st=0` |
 | `printf/quoting-a-newline-has-to-round-trip` | `[st=2` **2>** `<shell>: 1: printf: %q: invalid directive` | `[$'a\nb']~st=0` | `[$'a\nb']~st=0` | `[$'a\nb']~st=0` | `[$'a\nb']~st=0` | `[a$'\n'b]~st=0` |
 | `printf/quoting-a-byte-each-shell-spells-differently` | `[st=2` **2>** `<shell>: 1: printf: %q: invalid directive` | `[$'a\Eb\vc']~st=0` | `[$'a\Eb\vc']~st=0` | `[$'a\Eb\vc']~st=0` | `[$'a\Eb\x0bc']~st=0` | `[a$'\033'b$'\v'c]~st=0` |
-| `printf/quoting-a-value-with-nothing-unwritable-in-it` | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected EOF while looking for matching `"'~<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | `['a b'][$'a\'"b a!b =ab; echo st=0'][][]` | **2>** `<shell>:1: unmatched "` *(status 1)* |
+| `printf/quoting-a-value-with-nothing-unwritable-in-it` | `[st=2` **2>** `<shell>: 1: printf: %q: invalid directive` | `[a\ b][a\'b][a\!b][=ab]~st=0` | `[a\ b][a\'b][a\!b][=ab]~st=0` | `[a\ b][a\'b][a\!b][=ab]~st=0` | `['a b'][$'a\'b'][a!b]['=ab']~st=0` | `[a\ b][a\'b][a!b][\=ab]~st=0` |
 | `printf/a-date-string-where-the-other-takes-an-epoch` | `st=2~no such conversion` | `st=1~some other date: 1970-01-01 00:00:00` | `st=1~some other date: 1970-01-01 00:00:00` | `st=1~no such conversion` | `st=0~the epoch behind a hash` | `st=1~no such conversion` |
 | `printf/a-date-string-that-is-not-one` | `st=2` **2>** `<shell>: 1: printf: %(: invalid directive` | `st=0` | `st=0` | `st=1` **2>** `<shell>: line 0: printf: `(': invalid format character` | `st=1` **2>** `<shell>: printf: warning: invalid argument of type T` | `st=1` **2>** `<shell>:printf:1: %(: invalid directive` |
 | `printf/the-bare-time-conversion` | `st=2~no such conversion` | `st=1~no such conversion` | `st=1~no such conversion` | `st=1~no such conversion` | `st=0~the full date line` | `st=1~no such conversion` |
@@ -7908,9 +7908,9 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   esc="$(printf "a\033b\vc.")"; esc="${esc%.}"; printf "[%q]\n" "$esc"; echo "st=$?"
   ```
-- `printf/quoting-a-value-with-nothing-unwritable-in-it` — the same conversion where every byte can be written as itself, which is where the three part company again: ksh93 quotes the whole value and the other two escape the byte, and the two that escape do not agree on which bytes — bash escapes `!` where zsh does not, and zsh escapes a leading `=` where bash does not. Four values in one row because a fix that borrowed one shell's table for another would pass on the first and fail on the last two (#1707)
+- `printf/quoting-a-value-with-nothing-unwritable-in-it` — the same conversion where every byte can be written as itself, which is where the three part company again: ksh93 quotes the whole value and the other two escape the byte, and the two that escape do not agree on which bytes — bash escapes `!` where zsh does not, and zsh escapes a leading `=` where bash does not. Four values in one row because a fix that borrowed one shell's table for another would pass on the first and fail on the last two. The quote is built with an octal escape rather than written, so the snippet has no quoting of its own to get wrong (#1707)
   ```sh
-  printf "[%q][%q][%q][%q]\n" "a b" "a'"'"'b" "a!b" "=ab"; echo "st=$?"
+  sq=$(printf "a\047b"); printf "[%q][%q][%q][%q]\n" "a b" "$sq" "a!b" "=ab"; echo "st=$?"
   ```
 - `printf/a-date-string-where-the-other-takes-an-epoch` — the same conversion letter under a different reading: ksh93's `%T` takes a date *string* and a `#` in front of a number is how an epoch is written there, where bash's operand is the number itself and a `#` is not a number at all. The one operand both readings can be asked about would be a bare integer, and that is exactly the one they answer differently — so this row pins the string reading and the epoch rows beside it pin the other (#602)
   ```sh

@@ -16307,6 +16307,12 @@ case $PWD in */sub) echo moved;; *) echo stayed;; esac`,
 		Why:      "the third answer to the same question, in the shell that keeps both ends: zsh takes nothing back, so the letter writes into a pipe with no reader and the shell dies on SIGPIPE at 141 with nothing printed — not the refusal bash and ksh93 give. The write's own death is #770 rather than this: a builtin's broken pipe is answered here with a status and not with the signal, so this column reports the write as 1 and reaches `done` until that lands. bash has neither the word in this shape nor `print`, and ksh93 and dash refuse the parenthesis",
 	},
 	{
+		ID:       "commands/reading-by-a-letter-from-a-coprocess-that-has-ended",
+		Category: "commands",
+		Snippet:  `coproc (print hi); wait; read -p a; print "1=$? a=[$a]"; print done`,
+		Why:      "the end zsh does *not* take back either, which is what separates its answer from bash's rather than from ksh93's: the coprocess has been reaped and the line it wrote is still there to be read, `1=0 a=[hi]`. A shell that dropped both ends at the reaping would answer the no-coprocess refusal here, and this is the row that says so in the column where the write side cannot yet say it — a write to the kept end is a SIGPIPE death, and this shell answers a builtin's broken pipe with a status until #770 lands",
+	},
+	{
 		ID:       "commands/the-coprocess-letters-once-its-output-has-ended",
 		Category: "commands",
 		Snippet:  `coproc (print hi); read -p a; print "1=$? a=[$a]"; read -p b; print "2=$? b=[$b]"; read -p c; print "3=$? c=[$c]"`,

@@ -4375,6 +4375,23 @@ type Semantics struct {
 	// zero value is therefore an answer, and it is the one this shell gave
 	// everywhere before the axis existed; every preset with a coprocess
 	// states its own anyway.
+	//
+	// unpinned zsh: half of this column is pinned and the other half cannot
+	// be yet. `commands/reading-by-a-letter-from-a-coprocess-that-has-ended`
+	// objects to the flip to CoprocEndsGoWithTheCoprocess, because the read
+	// end survives the reaping here and would not there. Nothing objects to
+	// the flip to CoprocWriteEndGoesWithTheCoprocess, and only one observable
+	// separates those two: a `print -p` into the kept write end, which real
+	// zsh answers by dying on SIGPIPE. This shell answers a builtin's broken
+	// pipe with a status instead, so the row that measures it
+	// (`commands/writing-by-a-letter-to-a-coprocess-that-has-ended`) is in
+	// the corpus and red, and a red row that stays red under a flip is not an
+	// objection. It becomes one the day #770 lands (#2411).
+	//
+	// unpinned: dash and ash have no coprocess of any spelling — no `coproc`
+	// word and no `|&` operator — so nothing in either dialect ever consults
+	// this axis and no row could object however it was written. bash 3.2 is
+	// the same and has no dialect of its own here (#2411).
 	ReapedCoprocessEnds CoprocEndDisposal
 
 	// BareDeclarationListing is the shape `export` and `readonly` write with

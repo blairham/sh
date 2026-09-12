@@ -120,6 +120,156 @@ attribute's assignment (#1270); the two are separate axes because a single
 answer routed through the evaluator would move `$((010))` with them, and
 that is 8 in the shell that splits.
 
+## The base the answer is *written* in
+
+Everything above is about the base a literal is *read* in. One shell in
+the panel also has a way to say the base its answer is written in, and it
+is the same characters read the other way round: `$(( [#16] 255 ))` is
+`16#FF`, which `$(( 16#FF ))` reads back as 255.
+
+Measured 2026-09-12 on zsh 5.9.2, against bash 5.3.15, bash 3.2.57, bash
+as `sh`, ksh93u+ and dash — every one of which reads the `[` as an operand
+it cannot have:
+
+| probe | zsh 5.9.2 | everything else |
+| --- | --- | --- |
+| `$(( [#16] 255 ))` | `16#FF` | arithmetic syntax error |
+| `$(( [##16] 255 ))` | `FF` | arithmetic syntax error |
+| `$(( [#2] 5 ))` | `2#101` | arithmetic syntax error |
+| `$(( [#36] 1295 ))` | `36#ZZ` | arithmetic syntax error |
+| `$(( [#10] 255 ))` | `255` | arithmetic syntax error |
+| `$(( [#16] -255 ))` | `-16#FF` | arithmetic syntax error |
+| `$(( [#16] ))` | `16#0` | arithmetic syntax error |
+
+One `#` writes the `base#` in front of the digits and two write the digits
+alone; that is the whole of the difference, and it is why both spellings
+exist. Base ten writes no mark under either spelling, which is the answer
+`typeset -i10` gives as well — a base a shell can spell and a base it
+marks are not the same question. A negative keeps its sign outside the
+mark, which is the same reading `IntegerBaseNegativeIsTwosComplement`
+already records for the integer attribute, and a literal written in one
+base is written back in another: `$(( [#16] 0x1f ))` is `16#1F`.
+
+An `_` groups the digits. A bare one is decimal in threes, a number after
+it is the group size counted from the right, and `_0` turns grouping off
+again:
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `$(( [#_] 1234567 ))` | `1_234_567` |
+| `$(( [#_5] 1234567 ))` | `12_34567` |
+| `$(( [#16_4] 1048575 ))` | `16#F_FFFF` |
+| `$(( [#16_] 1048575 ))` | `16#FF_FFF` |
+| `$(( [#16_0] 1048575 ))` | `16#FFFFF` |
+| `$(( [#_3] 1234567.5 ))` | `1_234_567.5` |
+
+The last row is the one that says a base and a grouping are separable
+questions rather than one: a specifier naming a base truncates a float
+(`$(( [#16] 3.5 ))` is `16#3`, and so is `$(( [#10] 3.5 ))` at `3`) where
+one naming only a grouping leaves it alone.
+
+### It is lexical, not a prefix operator
+
+The obvious reading — a unary operator over the expression beside it — is
+wrong, and three measurements say so independently:
+
+| probe | zsh 5.9.2 | what it rules out |
+| --- | --- | --- |
+| `$(( 2[#8] ))` | `8#2` | it has to precede its operand |
+| `$(( 0 ? [#16] 1 : 2 ))` | `16#2` | it is evaluated |
+| `$(( [#16] 255 + [#8] 1 ))` | `8#400` | the outermost one wins |
+
+So it is a token that produces no value, standing wherever a token may,
+and the **textually last** one decides. That is how it is implemented: the
+specifier is consumed where blanks are, and lifted to the top of the tree
+as a single node over the whole expression, rather than being a node where
+it was written. A node where it was written could not answer the second
+row at all, because nothing evaluates the branch that holds it.
+
+A subscript is untouched and could not collide: its bracket touches the
+name in front of it and is read by the name, where this one stands where a
+token begins. `$(( a[#8] ))` is the element of `a` under the subscript
+`#8` and `$(( a [#8] ))` is `8#0` — one space apart, measured.
+
+It reaches two texts and not three. The answer an expansion produces is
+the obvious one; an assignment *inside* the expression stores the
+formatted text as well, so `x=5; (( x = [#16] 255 ))` leaves x holding the
+six characters `16#FF` and `$(( x ))` reads them back as 255. The
+subscript of that same assignment is not formatted —
+`typeset -A m; (( [#16] m[255] = 1 ))` stores `16#1` under the key `255` —
+which is what tells the value apart from every other text the write
+touches.
+
+### And it teaches an integer name nothing
+
+The integer attribute writes a base with the same six characters, so the
+two constructs meet. Measured:
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `typeset -i i; (( i = [#16] 255 )); echo $i` | `255` |
+| `typeset -i i; (( i = [#16] 0x1f )); typeset -p i` | `typeset -i16 i=31` |
+| `typeset -i i; i=$(( [#16] 255 )); typeset -p i` | `typeset -i16 i=255` |
+| `typeset -i16 i; (( i = [#8] 255 )); echo $i` | `16#FF` |
+
+So `IntegerBaseComesFromTheValueAssigned` reads the **literal the script
+wrote** and not what a format rendered: the second row learns 16 from the
+`0x1f` beside it, and the first learns nothing at all. The third is the
+boundary — the same characters arriving as the text of an ordinary
+assignment do teach a base, because there they *are* the text the name was
+given. The fourth says a base the name already holds stands, which it does
+for every other route too.
+
+Getting this wrong is silent: reading the base back out of the rendered
+text answers `16#FF` for the first row, which is a base the script never
+wrote down.
+
+### The three refusals
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `$(( [#37] 5 ))` | `invalid base (must be 2 to 36 inclusive): 37` |
+| `$(( [#0] 5 ))` | `invalid base (must be 2 to 36 inclusive): 0` |
+| `$(( [# 16] 5 ))` | `bad output format specification` |
+| `$(( [#] 5 ))` | `bad output format specification` |
+| `$(( [foo] 5 ))` | `bad output format specification` |
+| `$(( [16] 255 ))` | `bad base syntax` |
+
+The last two are **one character apart and worded apart**, which is why
+the grammar tells them apart rather than calling both a bad specifier: a
+bracketed group holding nothing but digits is its own sentence. Neither
+opens with `bad math expression:` the way every other arithmetic failure
+in that shell does, and neither names the text it refused.
+
+Zero is a base and not the absence of one — `[#0]` is refused where `[#_]`
+is fine — so the node carries a flag beside the number rather than reading
+0 as "none".
+
+The range is checked **before the expression is evaluated**, which is a
+choice with one row against it. `$(( [#37] 1/0 ))` names the base in that
+shell and `$(( 1/0 + [#37] 1 ))` names the division, because it reads and
+evaluates in one pass and had already divided when it reached the
+specifier. Two failures in one expression is the only text that can tell
+the orderings apart, so the reading taken here is the one that is right
+for the three shapes a script can have, and the fourth is recorded rather
+than reproduced.
+
+Grammar flag: `ArithOutputFormat` — core: off; `zsh`: on.
+
+Not a semantics axis, and the range is not a constant in the parser
+either: which bases can be spelled is `IntegerBaseDigits`, shared with the
+integer attribute because the two write a base the same way and a script
+reads one back through the other. `typeset -i16 h=255` and
+`$(( [#16] 255 ))` are `16#FF` in the same shell, and they would not have
+to be if the two renderers were two.
+
+**Recorded and not reproduced**: `setopt c_bases` rewrites the mark for
+bases 8 and 16 — `$(( [#16] 255 ))` becomes `0xFF`, and with
+`octal_zeroes` as well `$(( [#8] 8 ))` becomes `010`. That is an option
+this implementation does not have, and it moves `typeset -i16` in the same
+shell by the same amount, so it belongs to whatever adds the option rather
+than here.
+
 ## Operators
 
 Precedence follows C, highest first. Measured spot-checks are unanimous:

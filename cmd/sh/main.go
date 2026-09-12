@@ -916,6 +916,8 @@ func arithString(e syntax.ArithExpr) string {
 			return x.Op + x.Name + "[…]"
 		}
 		return x.Op + x.Name + x.Char
+	case *syntax.ArithOutput:
+		return x.Text + " " + arithString(x.X)
 	case *syntax.ArithUnary:
 		if x.Postfix {
 			return "(" + arithString(x.X) + x.Op + ")"

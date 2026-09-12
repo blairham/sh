@@ -1830,6 +1830,50 @@
         "TimedOut": false
       }
     },
+    "arith/a-bracket-holding-only-digits": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [16] 255 : arithmetic syntax error: operand expected (error token is \"[16] 255 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [16] 255 : arithmetic syntax error: operand expected (error token is \"[16] 255 \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: [16] 255 : syntax error: operand expected (error token is \"[16] 255 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" [16] 255 \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:  [16] 255 : arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad base syntax",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arith/a-chained-assignment": {
       "bash": {
         "Stdout": "5 a=5 b=5",
@@ -4597,6 +4641,402 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: bad math expression: operand expected at end of string",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/an-output-base-of-ten-marks-nothing": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [#10] 255 : arithmetic syntax error: operand expected (error token is \"[#10] 255 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [#10] 255 : arithmetic syntax error: operand expected (error token is \"[#10] 255 \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: [#10] 255 : syntax error: operand expected (error token is \"[#10] 255 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" [#10] 255 \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:  [#10] 255 : arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[255][255][-16#FF][16#0][16#1F]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/an-output-base-of-zero-is-out-of-range": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [#0] 5 : arithmetic syntax error: operand expected (error token is \"[#0] 5 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [#0] 5 : arithmetic syntax error: operand expected (error token is \"[#0] 5 \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: [#0] 5 : syntax error: operand expected (error token is \"[#0] 5 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" [#0] 5 \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:  [#0] 5 : arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: invalid base (must be 2 to 36 inclusive): 0",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/an-output-base-outside-the-range": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [#37] 5 : arithmetic syntax error: operand expected (error token is \"[#37] 5 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [#37] 5 : arithmetic syntax error: operand expected (error token is \"[#37] 5 \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: [#37] 5 : syntax error: operand expected (error token is \"[#37] 5 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" [#37] 5 \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:  [#37] 5 : arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: invalid base (must be 2 to 36 inclusive): 37",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/an-output-base-writes-the-answer": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [#16] 255 : arithmetic syntax error: operand expected (error token is \"[#16] 255 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [#16] 255 : arithmetic syntax error: operand expected (error token is \"[#16] 255 \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: [#16] 255 : syntax error: operand expected (error token is \"[#16] 255 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" [#16] 255 \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:  [#16] 255 : arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[16#FF][FF][2#101][36#ZZ]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/an-output-format-groups-the-digits": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [#_] 1234567 : arithmetic syntax error: operand expected (error token is \"[#_] 1234567 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [#_] 1234567 : arithmetic syntax error: operand expected (error token is \"[#_] 1234567 \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: [#_] 1234567 : syntax error: operand expected (error token is \"[#_] 1234567 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" [#_] 1234567 \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:  [#_] 1234567 : arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1_234_567][12_34567][16#F_FFFF][16#FF_FFF][16#FFFFF]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/an-output-format-is-not-a-prefix-operator": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 2[#8] : arithmetic syntax error: invalid arithmetic operator (error token is \"[#8] \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 2[#8] : arithmetic syntax error: invalid arithmetic operator (error token is \"[#8] \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 2[#8] : syntax error: invalid arithmetic operator (error token is \"[#8] \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" 2[#8] \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:  2[#8] : arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[8#2][16#2][8#400][8#0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/an-output-format-reaches-an-assignment": {
+      "bash": {
+        "Stdout": "[5][5]",
+        "Stderr": "\u003cshell\u003e: line 1: ((: x = [#16] 255 : arithmetic syntax error: operand expected (error token is \"[#16] 255 \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[5][5]",
+        "Stderr": "\u003cshell\u003e: line 1: ((: x = [#16] 255 : arithmetic syntax error: operand expected (error token is \"[#16] 255 \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[5][5]",
+        "Stderr": "\u003cshell\u003e: ((: x = [#16] 255 : syntax error: operand expected (error token is \"[#16] 255 \")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[5][5]",
+        "Stderr": "\u003cshell\u003e: 1: x: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:  x = [#16] 255 : arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[16#FF][255]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/an-output-format-teaches-an-integer-name-nothing": {
+      "bash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 1: ((: i = [#16] 255 : arithmetic syntax error: operand expected (error token is \"[#16] 255 \")~\u003cshell\u003e: line 1: [#16] 255 : arithmetic syntax error: operand expected (error token is \"[#16] 255 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 1: ((: i = [#16] 255 : arithmetic syntax error: operand expected (error token is \"[#16] 255 \")~\u003cshell\u003e: line 1: [#16] 255 : arithmetic syntax error: operand expected (error token is \"[#16] 255 \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: ((: i = [#16] 255 : syntax error: operand expected (error token is \"[#16] 255 \")~\u003cshell\u003e: [#16] 255 : syntax error: operand expected (error token is \"[#16] 255 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: i: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" [#16] 255 \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:  i = [#16] 255 : arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[255]~[16#FF]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/an-output-format-that-will-not-read": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [#16 ] 255 : arithmetic syntax error: operand expected (error token is \"[#16 ] 255 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: [#16 ] 255 : arithmetic syntax error: operand expected (error token is \"[#16 ] 255 \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: [#16 ] 255 : syntax error: operand expected (error token is \"[#16 ] 255 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" [#16 ] 255 \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:  [#16 ] 255 : arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad output format specification",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false

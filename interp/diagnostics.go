@@ -2562,6 +2562,21 @@ type Diagnostics struct {
 	// failure as neither an operand nor an operator one — `character missing
 	// after ##`, naming the two-character spelling whichever was written.
 	ArithCharacterMissing string
+	// ArithBadOutputFormat is the reason when a bracketed output-format
+	// specifier could not be read: `$(( [#] 1 ))`, `$(( [foo] 1 ))`,
+	// `$(( [# 16] 1 ))`. One verb: the specifier as written.
+	//
+	// Only the dialect with the construct can reach it, and it words the
+	// failure as being about the specifier rather than about an operand —
+	// `bad output format specification`, which names nothing at all.
+	ArithBadOutputFormat string
+	// ArithBadBaseSyntax is the reason when the brackets held nothing but
+	// digits — `$(( [16] 255 ))` — which the same dialect words apart from
+	// the specifier it could not read: `bad base syntax`.
+	//
+	// Empty falls back to ArithBadOutputFormat, so a dialect that reached the
+	// construct without making the distinction would say one thing for both.
+	ArithBadBaseSyntax string
 	// ArithOperatorExpected is the reason when an expression has something
 	// left over: `$((1 2))`. Same verb, and one shell puts it inside the
 	// reason — "operator expected at `2'".
@@ -3193,6 +3208,13 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 		}
 	case syntax.ErrArithCharacterMissing:
 		reason, fallback = d.ArithCharacterMissing, "character missing after ##"
+	case syntax.ErrArithBadOutputFormat:
+		reason, fallback = d.ArithBadOutputFormat, "bad output format specification"
+	case syntax.ErrArithBadBaseSyntax:
+		reason, fallback = d.ArithBadBaseSyntax, "bad base syntax"
+		if reason == "" {
+			reason = d.ArithBadOutputFormat
+		}
 	case syntax.ErrArithOperator:
 		reason, fallback = d.ArithOperatorExpected, "operator expected"
 	case syntax.ErrArithBadOperator:
@@ -3301,7 +3323,8 @@ func (d Diagnostics) ParseFailure(err error) string {
 		return Wording(d.BadSubstitution, se.Msg, se.Token, se.Pos.Line)
 	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator,
 		syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing,
-		syntax.ErrArithIllegalByte:
+		syntax.ErrArithIllegalByte, syntax.ErrArithBadOutputFormat,
+		syntax.ErrArithBadBaseSyntax:
 		return d.arithParseFailure(se, se.Expr)
 	case syntax.ErrForName:
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)
@@ -3774,7 +3797,8 @@ func (d Diagnostics) runtimeRefusal(err error) (int, bool) {
 		}
 	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator,
 		syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing,
-		syntax.ErrArithIllegalByte:
+		syntax.ErrArithIllegalByte, syntax.ErrArithBadOutputFormat,
+		syntax.ErrArithBadBaseSyntax:
 		// A malformed expression is found while expanding in bash, so the
 		// command fails rather than the script failing to parse. The same
 		// three consequences follow as for `for` with a bad name, which is

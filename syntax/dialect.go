@@ -2228,6 +2228,41 @@ type Dialect struct {
 	// `$(( a (b) ))` means anywhere.
 	ArithFunctionCall bool
 
+	// ArithOutputFormat enables the bracketed output-format specifier inside
+	// an arithmetic expression: `$(( [#16] 255 ))` is `16#FF` and
+	// `$(( [##16] 255 ))` is `FF`. It says the base the *result is written
+	// in*, and a second `#` drops the `base#` in front of the digits.
+	//
+	// The rest of the specifier is measured rather than guessed: an `_`
+	// after the base groups the digits — `[#16_4] 1048575` is `16#F_FFFF`,
+	// and a bare `_` groups decimal in threes — and `_0` turns grouping off.
+	// What a base *means* is not here, because it decides nothing about the
+	// tree: see the ArithOutput node, and interp's IntegerBaseDigits for the
+	// alphabet and the range a base is checked against.
+	//
+	// It is **lexical rather than positional**, which is the part worth
+	// recording because the obvious reading is wrong. The specifier is not a
+	// prefix operator over the expression that follows it: it may stand
+	// anywhere a token may, including after a value — `$(( 2[#8] ))` is
+	// `8#2` — and it takes effect even where the expression it stands in is
+	// never evaluated: `$(( 0 ? [#16] 1 : 2 ))` is `16#2`. Several may
+	// appear, and the *textually last* one decides, which is what
+	// `$(( [#16] 255 + [#8] 1 ))` being `8#400` says. So it is read while
+	// skipping blanks and lifted to the top of the tree, rather than being a
+	// node where it was written.
+	//
+	// One shell in the panel. Measured 2026-09-12 on zsh 5.9.2, against
+	// bash 5.3.15, bash 3.2.57, bash as `sh`, ksh93u+ and dash — every one of
+	// which reads the `[` as an operand it cannot have and says so. An
+	// operator five shells refuse and one has is the additive kind of split,
+	// so it is a flag here rather than a value on the semantics vector.
+	//
+	// It does not disturb a subscript, and could not: a subscript's bracket
+	// touches the name in front of it and is read by the name, where this one
+	// stands where a token begins. `a[#8]` is the element of `a` under the
+	// subscript `#8`, measured in the same shell.
+	ArithOutputFormat bool
+
 	// DoubleBracket enables `[[ ... ]]`.
 	//
 	// Consumed by the *parser*, not the lexer, and the reason is worth

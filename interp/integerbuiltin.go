@@ -182,6 +182,25 @@ func (r *Runner) integerRendered(name string, v int) string {
 	if !r.spellsIntegerBase(base) {
 		return itoa(v)
 	}
+	text, ok := r.baseRendered(v, base, true, 0)
+	if !ok {
+		return itoa(v)
+	}
+	return text
+}
+
+// baseRendered writes a value in a base, with the `base#` in front where
+// prefixed and a `_` every group digits where grouping is on.
+//
+// One renderer for the two constructs that need it — the integer attribute
+// and an arithmetic expression's output format — because they are the same
+// spelling and disagreed when they were two: the attribute learns a base back
+// out of the text it stored, so `(( x = [#16] 255 ))` only reads as base 16
+// afterwards if the digits it wrote are the digits `typeset -i16` writes.
+//
+// A false means the dialect has no answer, which is the unspecified axis
+// coming back from the negative question; the caller writes plain decimal.
+func (r *Runner) baseRendered(v, base int, prefixed bool, group int) (string, bool) {
 	digits := r.sem().IntegerBaseDigits
 	sign := ""
 	u := uint64(v)
@@ -189,7 +208,7 @@ func (r *Runner) integerRendered(name string, v int) string {
 		if !r.ask(r.sem().IntegerBaseNegativeIsTwosComplement,
 			"a negative integer rendered in its output base as a bit pattern") {
 			if r.unspecified {
-				return itoa(v)
+				return "", false
 			}
 			// The sign in front of the magnitude, outside the base mark.
 			sign = "-"
@@ -204,7 +223,28 @@ func (r *Runner) integerRendered(name string, v int) string {
 			break
 		}
 	}
-	return sign + itoa(base) + "#" + string(out)
+	mark := ""
+	if prefixed {
+		mark = itoa(base) + "#"
+	}
+	return sign + mark + groupDigits(string(out), group), true
+}
+
+// groupDigits puts a `_` every group digits, counted from the right, which is
+// what `[#16_4] 1048575` being `16#F_FFFF` says. A group of zero is no
+// grouping at all, and is how a specifier turns it back off.
+func groupDigits(s string, group int) string {
+	if group <= 0 || len(s) <= group {
+		return s
+	}
+	var out []byte
+	for i, c := range []byte(s) {
+		if i > 0 && (len(s)-i)%group == 0 {
+			out = append(out, '_')
+		}
+		out = append(out, c)
+	}
+	return string(out)
 }
 
 // integerBaseOfLiteral is the base the text of an assignment names, for the
@@ -368,6 +408,20 @@ func (r *Runner) integerRenderedText(name, decimal string) string {
 // integer name never reaches the dialect — which matters, because that is
 // nearly every assignment there is.
 func (r *Runner) learnIntegerBase(name, text string) {
+	if r.arithOutput != nil {
+		// The text was *rendered* by an expression's output format rather
+		// than written by the script, so there is no literal here to learn a
+		// base from. Measured: `typeset -i i; (( i = [#16] 255 ))` leaves the
+		// name plain, where `(( i = [#16] 0x1f ))` takes 16 — from the `0x1f`
+		// and not from the specifier that spelled the answer.
+		//
+		// Only this route, and the boundary is the point: the same six
+		// characters arriving the ordinary way *do* teach a base, because
+		// there they are the text an assignment was given —
+		// `typeset -i i; i=$(( [#16] 255 ))` is `typeset -i16 i=255`. The
+		// field is nil by then, the expansion having finished.
+		return
+	}
 	if r.integerBase[name] != 0 {
 		// The name has one, from the letter or from an earlier assignment,
 		// and it sticks: measured, a name that learned 16 renders a later

@@ -13124,6 +13124,56 @@ echo "st=$? alive"`,
 		Why:     "the operator with nothing after it, worded by the shell that has it as neither of the two failures the rest of arithmetic has — `character missing after ##` — and fatal to the command. The shells without the operator reach a refusal too, by the ordinary route, which is what makes this a row about wording rather than about behavior",
 	},
 	{
+		ID: "arith/an-output-base-writes-the-answer", Category: "arithmetic",
+		Snippet: `echo "[$(( [#16] 255 ))][$(( [##16] 255 ))][$(( [#2] 5 ))][$(( [#36] 1295 ))]"`,
+		Why:     "`[#base]` says the base the *result is written in*, which is the same characters `base#digits` reads the other way round. One shell has it and five call the `[` an operand they cannot have. The two spellings are one `#` apart and that is the whole of the difference: one writes the `16#` in front of the digits and two write the digits alone, which is why both exist. Found on a real interactive start, where a prompt theme renders a color as hex — and the failure was a *parse* refusal, so the expression produced nothing at all rather than a wrong number (#2095)",
+	},
+	{
+		ID: "arith/an-output-base-of-ten-marks-nothing", Category: "arithmetic",
+		Snippet: `echo "[$(( [#10] 255 ))][$(( [##10] 255 ))][$(( [#16] -255 ))][$(( [#16] ))][$(( [#16] 0x1f ))]"`,
+		Why:     "the four edges of the format that an implementation gets wrong separately. Ten is a base every shell can spell and none marks, which is the answer `typeset -i10` gives as well — so a base a shell *takes* and a base it *writes a mark for* are two questions, and joining them made the one that refuses a bad base refuse ten. A negative keeps its sign outside the mark. A specifier with no expression after it is zero rather than a failure. And a literal read in one base is written back in another, which is what says the format is about the answer and not about the text",
+	},
+	{
+		ID: "arith/an-output-format-groups-the-digits", Category: "arithmetic",
+		Snippet: `echo "[$(( [#_] 1234567 ))][$(( [#_5] 1234567 ))][$(( [#16_4] 1048575 ))][$(( [#16_] 1048575 ))][$(( [#16_0] 1048575 ))]"`,
+		Why:     "the `_` half of the specifier, which is separable from the base and is measured with it: a bare one is decimal in threes, a number after it is the group size counted from the right, one after a base defaults to three, and `_0` turns grouping off again. The bare spelling is the row that says the two halves are separable at all — it names no base and changes none",
+	},
+	{
+		ID: "arith/an-output-format-is-not-a-prefix-operator", Category: "arithmetic",
+		Snippet: `echo "[$(( 2[#8] ))][$(( 0 ? [#16] 1 : 2 ))][$(( [#16] 255 + [#8] 1 ))][$(( a [#8] ))]"`,
+		Why:     "the three measurements that each rule out the obvious reading, which is a unary operator over the expression beside it. It stands *after* a value; it takes effect from a ternary branch that is never evaluated; and where two appear the textually last one wins rather than the outermost. So it is a token that produces no value, read where blanks are read and lifted to the top of the tree — a node built where the specifier stood could not answer the second probe at all. The fourth is the near miss: one space turns a subscript into a specifier, and `a[#8]` without it is the element under the key `#8`",
+	},
+	{
+		ID: "arith/an-output-format-reaches-an-assignment", Category: "arithmetic",
+		Snippet: `x=5; (( x = [#16] 255 )); echo "[$x][$(( x ))]"`,
+		Why:     "the second text the format reaches, which is not the one anybody expects: an assignment *inside* the expression stores the formatted characters, so the name holds `16#FF` and reads back as 255 through the based literal. An implementation that formatted only the expansion's result would answer `[255][255]` here and pass every probe written on `$(( ))` alone",
+	},
+	{
+		ID: "arith/an-output-format-teaches-an-integer-name-nothing", Category: "arithmetic",
+		Snippet: `typeset -i i; (( i = [#16] 255 )); echo "[$i]"; typeset -i j; j=$(( [#16] 255 )); echo "[$j]"`,
+		Why:     "the boundary between the output format and the integer attribute, which are the two constructs that spell a base the same way. A name that already has the attribute does *not* take its base from an expression's format — the first half is a plain `255` — where the same six characters arriving as the text of an ordinary assignment do, and the second half reads back `16#FF`. Ours learned from the rendered text and answered `16#FF` twice, which is a base the script never wrote down (#2095)",
+	},
+	{
+		ID: "arith/an-output-base-outside-the-range", Category: "arithmetic",
+		Snippet: `echo "[$(( [#37] 5 ))]"; echo after`,
+		Why:     "the range the one shell with the construct allows, and the sentence it refuses with — `invalid base (must be 2 to 36 inclusive)`, which is the same complaint `typeset -i37` makes without the builtin's name in front of it. One probe to a case rather than a pair, because a refused expansion gives up the input in that column and a second probe on the same line would never be reached — which is exactly how a half-measured case reads as a measured one",
+	},
+	{
+		ID: "arith/an-output-base-of-zero-is-out-of-range", Category: "arithmetic",
+		Snippet: `echo "[$(( [#0] 5 ))]"; echo after`,
+		Why:     "the half of the range worth pinning on its own: zero is a base *out of range* and not the absence of one, which `[#_]` is. An implementation reading 0 as `no base was named` answers `[5]` here and says nothing, and every probe written on a base too large would still pass",
+	},
+	{
+		ID: "arith/a-bracket-holding-only-digits", Category: "arithmetic",
+		Snippet: `echo "[$(( [16] 255 ))]"; echo after`,
+		Why:     "`bad base syntax` — the sentence for a bracketed group holding nothing but digits, which is one character away from an output format and worded apart from it. Neither opens with `bad math expression:` the way every other arithmetic failure in that shell does, and neither names the text it refused",
+	},
+	{
+		ID: "arith/an-output-format-that-will-not-read", Category: "arithmetic",
+		Snippet: `echo "[$(( [#16 ] 255 ))]"; echo after`,
+		Why:     "`bad output format specification` — the other half of the pair above, and the reason the grammar tells the two apart rather than calling both a bad specifier: a reading that folded them would word one of them wrongly with nothing else noticing, since both are failures either way. A blank is enough to reach it, which is what says the specifier is read as one token rather than scanned past",
+	},
+	{
 		ID: "arith/a-radix-literal-is-not-a-character-code", Category: "arithmetic",
 		Snippet: `echo "[$((16#ff))][$((2#101))]"`,
 		Why:     "the one place the two spellings of `#` could collide: `base#digits` is a literal in every shell with arithmetic and its `#` follows digits, where the character code stands where an operand belongs. Unanimous except in dash, which has no based literal — and the row exists so that adding the operator cannot quietly cost the literal",

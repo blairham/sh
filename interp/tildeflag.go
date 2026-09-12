@@ -108,11 +108,38 @@ func (r *Runner) tildeFlagElements(s syntax.Span, head bool, elems []string) []s
 // written because this package carries no user database, and anything past the
 // first slash is the tail.
 func (r *Runner) tildeValue(v string) string {
-	if !strings.HasPrefix(v, "~") {
+	dir, tail, ok := r.tildeSplit(v)
+	if !ok {
 		return v
 	}
+	return dir + tail
+}
+
+// tildeSplit is tildeValue with the seam still visible: the directory the
+// tilde named, and the text that followed it, rather than the two joined.
+//
+// A pattern needs the two apart, because they are worth different things in
+// it. Measured on zsh 5.9.2 with `HOME=/tmp/p78home/a*b`, both directories
+// present:
+//
+//	[[ '/tmp/p78home/a*b' == ~ ]]    true
+//	[[ '/tmp/p78home/axxb' == ~ ]]   false
+//	[[ "$HOME/abc" == ~/a* ]]        true
+//
+// So the directory is matched as text — its own metacharacters are not live —
+// while the tail after it is a pattern like any other. Joining them first and
+// escaping the result would lose the second row; not escaping at all would
+// lose the first.
+//
+// ok is false where nothing expanded, which leaves the caller the word as
+// written: a `~user` this package has no database for, a `~-` in a shell with
+// no $OLDPWD, and a `~` in a run with no $HOME.
+func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool) {
+	if !strings.HasPrefix(v, "~") {
+		return "", "", false
+	}
 	rest := v[1:]
-	name, tail := rest, ""
+	name := rest
 	if i := strings.IndexByte(rest, '/'); i >= 0 {
 		name, tail = rest[:i], rest[i:]
 	}
@@ -121,19 +148,19 @@ func (r *Runner) tildeValue(v string) string {
 		// `~+` is $PWD and `~-` is $OLDPWD in three of the four, and only
 		// when the variable is set: a fresh shell's `~-` stays literal.
 		if dir, ok := r.tildeDirVar(name); ok {
-			return dir + tail
+			return dir, tail, true
 		}
-		return v
+		return "", "", false
 	case "":
 		home, ok := r.getVar("HOME")
 		if !ok {
-			return v
+			return "", "", false
 		}
-		return home + tail
+		return home, tail, true
 	}
 	// `~user` needs a user database this package does not carry, so it is
 	// left alone rather than guessed at.
-	return v
+	return "", "", false
 }
 
 // tildeFlagFields applies the `${~spec}` flag to the fields a substituted

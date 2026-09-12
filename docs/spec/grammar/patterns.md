@@ -305,6 +305,58 @@ What it is never, anywhere, is the text *inside* the substitution. That
 reading made `case x in <(x))` match and `${v#<(x)}` trim a bare `x`,
 neither of which any column does, and both silently (#902).
 
+### A tilde at the front of a pattern is expanded
+
+    case $HOME in ~)                      →  matches   (all six)
+    x=$HOME/sub; echo "${x#~}"            →  /sub      (all six)
+    case $HOME/abc in ~/a*)               →  matches   (all six)
+    h=$HOME; [[ $h == ~ ]]                →  true      (the five with [[ ]])
+
+A tilde is expanded before the word becomes a pattern, which is the same
+statement as the section above — a pattern operand is a word — said about
+the one expansion that is not a substitution. It is unanimous, so it is
+core.
+
+Two limits, both unanimous as well. The **tail after the directory stays a
+pattern**: `~/a*` is the home directory followed by a live `*`, not a
+literal path. And **a tilde expands only where a tilde expands anywhere** —
+`case $HOME in ~*)` does not match, because `*` names no user and the
+segment stays as written, and `case a$HOME in a~)` does not match, because
+the tilde is not at the front of the word. A reading that expanded every
+tilde in a pattern gets the second wrong; one that only looked at the first
+character gets it wrong too.
+
+It is easy to leave out and the asymmetry is what hides it. The tilde
+expands in every *word* position — an operand, an assignment's value, a
+redirection target — and a condition's **left** side and every unary test
+are words. So `[[ ~ == $h ]]`, `[[ -n ~ ]]` and `[[ -d ~ ]]` were all
+right in a shell where `[[ $h == ~ ]]` was false, and the one wrong
+position is the one powerlevel10k uses: `prompt_asdf` tells a global tool
+version from a local override with `[[ ${files[1]:h} == ~ ]]`, so every
+version read as a local override and five prompt segments were drawn that
+the real shell does not draw (#2181, #2178).
+
+**What the directory is worth once it is in the pattern** is a second
+question, and here the panel divides. Measured with
+`HOME=/tmp/p78home/a*b`, both `a*b` and `axxb` present:
+
+| | `case '…/a*b' in ~)` | `case '…/axxb' in ~)` |
+| --- | --- | --- |
+| zsh, dash | matches | no |
+| bash 3.2, ksh93 | matches | matches |
+| bash 5.3 | no | no |
+
+So the directory is text in two, a pattern in two, and in bash 5.3 neither
+— it keeps the escape character itself in the pattern, which is the
+unbuilt question of #1367 rather than this one. This is **not** an axis
+yet: the core writes the directory escaped, which is zsh's and dash's
+answer, and the tail after it live. A home directory holding a
+metacharacter is the only thing that can tell the readings apart.
+
+A tilde that arrives as a *value* is not a written one and is left alone —
+`v='~'; [[ $h == $v ]]` is false in all five — which is the same split
+`${~spec}` exists for.
+
 ### A group is not a second language
 
 An expansion written **inside** a parenthesised group is the same expansion

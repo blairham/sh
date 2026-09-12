@@ -2075,25 +2075,23 @@ type Diagnostics struct {
 	UnmatchedCmdSubst string
 	// UnmatchedProcSubst is `<(` or `>(` the input ran out inside. Same
 	// verbs, and empty falls back to UnmatchedCmdSubst: the parentheses hold
-	// a program either way, and three of the four shells that have the
-	// construct say about it exactly what they say about `$(`. The fourth
-	// reaches a different diagnosis rather than a different sentence — it
-	// names the end of file where it names an unmatched parenthesis for
-	// `$(` — which is why this is a wording of its own and not an argument
-	// the other one takes.
+	// a program either way, and most presets with the construct say about it
+	// exactly what they say about `$(`. One reaches a different diagnosis rather
+	// than a different sentence — naming the end of file where it names an
+	// unmatched parenthesis for `$(` — which is why this is a wording of its own
+	// and not an argument the other one takes.
 	UnmatchedProcSubst string
 	// UnmatchedBraceSubst is `${` the input ran out inside. Same verbs.
 	UnmatchedBraceSubst string
 	// UnmatchedNearMaxBytes cuts the quoted text — %[3]s above, the word a
 	// construct ran out inside — to at most this many bytes, appending
-	// `...` where it is that long or longer. Zero prints the whole of it,
-	// which is what three of the four dialects want and is also right for
-	// the two that never render the text at all.
+	// `...` where it is that long or longer. Zero prints the whole of it, which
+	// is the common answer and is also right for a preset that never renders the
+	// text at all.
 	//
-	// Measured on the one dialect that elides, 2026-09-07, bisected by
-	// length: nineteen bytes come back whole, twenty come back with `...`
-	// after them although nothing was cut, and everything longer is cut to
-	// twenty and marked. So the ellipsis says "twenty or more" rather than
+	// Measured on the preset that elides, bisected by length: nineteen bytes come
+	// back whole, twenty come back with `...` after them although nothing was
+	// cut, and everything longer is cut to twenty and marked. So the ellipsis says "twenty or more" rather than
 	// "something was removed", and a limit that appended it only when it
 	// cut would be wrong on exactly the boundary case.
 	//
@@ -2111,97 +2109,95 @@ type Diagnostics struct {
 	// verbs, and both spellings take it: everything about them but the
 	// delimiters is one construct, and %[2]s carries which closer never
 	// came — `)` for the first and `]` for the second, which is what the
-	// dialect that echoes the closer prints for each.
+	// preset that echoes the closer prints for each.
 	//
 	// Empty falls back to the substrate's own sentence, deliberately not to
 	// UnmatchedQuote. An opener with no wording of its own gets the quote's
-	// sentence today, and for this one that would be a shell being made to
-	// say something about a quote where no quote was written. Every preset
-	// in the panel states an answer here, so the fallback is what the core
-	// and a new dialect get rather than what any measured shell relies on.
+	// sentence, and for this one that would be a shell being made to say
+	// something about a quote where no quote was written. Every preset states an
+	// answer here, so the fallback is what the core and a new preset get rather
+	// than what any measured one relies on.
 	UnmatchedArithSubst string
 	// UnmatchedReportedAtOpener puts an unmatched quote's diagnostic on
 	// the line the opener is on rather than the line the input ran out on.
 	UnmatchedReportedAtOpener bool
-	// CmdSubstUnmatchedAtEnd reports an unmatched `$(` at the line after
-	// the input's last, the way UnterminatedEndsOnNextLine does for an
-	// open `if` — one dialect answers the two constructs differently,
-	// which is why this is its own switch.
+	// CmdSubstUnmatchedAtEnd reports an unmatched `$(` at the line after the
+	// input's last, the way UnterminatedEndsOnNextLine does for an open `if` — a
+	// preset may answer the two constructs differently, which is why this is its
+	// own switch.
 	CmdSubstUnmatchedAtEnd bool
 
 	// NoclobberRefusal is the file `set -C` would not overwrite. Two
-	// verbs: %[1]s the name as written, %[2]s the errno reason. Empty
-	// where the dialect words it as any other failed create.
+	// verbs: %[1]s the name as written, %[2]s the errno reason. Empty where the
+	// preset words it as any other failed create.
 	NoclobberRefusal string
 	// NoclobberRefusalCoversAFailedOpen words an open that failed for a
 	// reason of its own as the option's refusal, where the name held
 	// something that is not a regular file: a directory, a socket, a
 	// dangling symlink, a `/dev/tty` in a session with no controlling
-	// terminal. bash, ksh93 and dash report what the open said — `Is a
-	// directory` — and zsh reports `file exists` for all of them.
+	// terminal. False reports what the open said — `Is a directory` — and true
+	// reports `file exists` for all of them.
 	//
-	// Reached only under `set -C`, and only after the exclusive create
-	// came back EEXIST and the file turned out not to be regular: see
-	// openThroughNoclobber, which is where the panel that settled this is
-	// written down. A gate's refusal is never reworded here.
+	// Reached only under `set -C`, and only after the exclusive create came back
+	// EEXIST and the file turned out not to be regular: see openThroughNoclobber,
+	// which is where the measurements that settled this are written down. A
+	// gate's refusal is never reworded here.
 	NoclobberRefusalCoversAFailedOpen bool
-	// NoclobberFallbackIsAnOpen words that same second open as an open
-	// rather than as a create: dash says `cannot open d: Is a directory`
-	// under `set -C` and `cannot create d: Is a directory` for the
-	// identical redirection with the option off, where ksh93 says `cannot
-	// create` both times. The two shells behave identically; only the verb
-	// moves. Reached only on the fallback, so it says nothing about any
-	// other failed open.
+	// NoclobberFallbackIsAnOpen words that same second open as an open rather
+	// than as a create: `cannot open d: Is a directory` under `set -C` against
+	// `cannot create d: Is a directory` for the identical redirection with the
+	// option off, where the other answer says `cannot create` both times. The
+	// behavior is identical; only the verb moves. Reached only on the fallback,
+	// so it says nothing about any other failed open.
 	NoclobberFallbackIsAnOpen bool
 
 	// SyntaxError wraps a parse failure's own text — the sentence the
 	// substrate wrote for a refusal that has no wording of its own. Two
 	// verbs: %[1]s the text, %[2]d the line it was refused on.
 	//
-	// The line is here because one shell carries it *inside* the sentence
-	// rather than in the location — `syntax error at line 1: invalid
-	// reference list` — which is the same split
-	// [Diagnostics.PromptSyntaxUnexpected] exists for, and the reason the
-	// verbs are indexed: a dialect that wants only the text writes `%[1]s`
-	// and the unused line is silently dropped.
+	// The line is here because a preset may carry it *inside* the sentence
+	// rather than in the location — `syntax error at line 1: invalid reference
+	// list` — which is the same split [Diagnostics.PromptSyntaxUnexpected]
+	// exists for, and the reason the verbs are indexed: a preset that wants only
+	// the text writes `%[1]s` and the unused line is silently dropped.
 	SyntaxError string
 
-	// PromptSyntaxError is SyntaxError for a line typed at a prompt, where
-	// the shell that names the line has none to name.
+	// PromptSyntaxError is SyntaxError for a line typed at a prompt, where a
+	// preset that names the line has none to name.
 	PromptSyntaxError string
 
 	// EvalNaming and SourceFileNaming are where the name of borrowed text
 	// goes in a diagnostic about it. Two fields because they are two
-	// questions, and one shell answers them differently: bash puts a sourced
-	// file's path where its own name goes — `./f.sh: line 3: …` — and labels
-	// `eval` after its name instead, `bash: eval: line 2: …`.
+	// questions, and a preset may answer them differently: putting a sourced
+	// file's path where its own name goes — `./f.sh: line 3: …` — and labelling
+	// `eval` after its name instead, `<shell>: eval: line 2: …`.
 	EvalNaming       SourceNaming
 	SourceFileNaming SourceNaming
 	// EvalSourceName is what `eval`'s text is called when it is named. Empty
-	// means "eval", which is three of the four; zsh calls it `(eval)`.
+	// means "eval", the common answer; `(eval)` is also measured.
 	EvalSourceName string
-	// SourceFileIsTheBuiltin names the builtin that read a file rather than
-	// the file: ksh93 reports `.` where the other three report the path.
+	// SourceFileIsTheBuiltin names the builtin that read a file rather than the
+	// file: `.` against the path.
 	SourceFileIsTheBuiltin bool
 	// UnterminatedEndsOnNextLine puts the end of input on the line after the
-	// text rather than on its last: `eval "if"` is line 2 in bash and line 1
-	// in the other three.
+	// text rather than on its last: `eval "if"` is line 2 under true and line 1
+	// under false.
 	UnterminatedEndsOnNextLine bool
 
 	// CondOperand is a token standing where a conditional operator wanted a
-	// word — `[[ $k == (a|b) ]]` in a dialect with no bare pattern groups,
+	// word — `[[ $k == (a|b) ]]` under a preset with no bare pattern groups,
 	// or `[[ -n ]]` with nothing after the operator at all. Four verbs:
 	// %[1]s the offending token, %[2]s `unary` or `binary`, %[3]s the
 	// operator that was waiting, and %[4]d the line.
 	//
-	// Empty means the dialect says what it says about any token the grammar
-	// did not want, which is three of the four: `\`(' unexpected`, with
-	// nothing about the condition. bash is the exception and words it as a
-	// statement about the operator rather than about the token.
+	// Empty means the preset says what it says about any token the grammar did
+	// not want, the common answer: `\`(' unexpected`, with nothing about the
+	// condition. A preset may instead word it as a statement about the operator
+	// rather than about the token.
 	CondOperand string
 
 	// CondSyntaxUnexpected is a token the grammar did not want *inside*
-	// `[[ ]]`, where the dialect words it differently from the same token
+	// `[[ ]]`, where the preset words it differently from the same token
 	// anywhere else. Three verbs, the same as SyntaxUnexpected: %[1]s the
 	// token, %[2]s what would have been valid, %[3]d the line.
 	//

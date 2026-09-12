@@ -1888,7 +1888,59 @@ type Dialect struct {
 	// group. The same rule is why `echo }` is a syntax error there and prints
 	// a brace in the other three, which is the half that shows it is one rule
 	// rather than a special case inside brace groups.
+	//
+	// **Reserved reaches into the word, which is the half that was missing.**
+	// A `}` that ends a word is the reserved word and not the word's last
+	// character, so no blank is needed in front of it either. Measured
+	// 2026-09-12 on zsh 5.9.2, each line its own `zsh -c`:
+	//
+	//	echo A}          parse error near `}'
+	//	echo A} B        parse error near `}'
+	//	echo A}|cat      parse error near `}'
+	//	echo "A"}        parse error near `}'
+	//	{ echo A}        A            — the group closes with no `;` and no blank
+	//	echo a}b         a}b          — not at the end of the word
+	//	echo }a          }a           — nor is this
+	//	echo A\}         A}           — quoting takes the reserved reading away
+	//	echo A"}"        A}
+	//
+	// A `{` earlier in the same word matches it and takes the reading away
+	// too, which is brace expansion's pairing seen from the lexer: `echo {a}`
+	// and `echo a{b}` both print their braces, `echo {a}}` and `echo a{b}c}`
+	// are both the parse error. Only bare text pairs — `echo ${x}}` is the
+	// parse error, the expansion's braces counting for nothing.
+	//
+	// The one carve-out is an assignment's value, where the brace is text to
+	// the end: `x=a}` and `x=}` both assign, where the same words as
+	// arguments — `echo x=}` — are the parse error.
 	CloseBraceAlwaysReserved bool
+
+	// OpenBraceNeedsNoBlank makes a bare `{` where a command may begin the
+	// reserved word on its own, however the text runs on after it.
+	//
+	// zsh alone, and it is the shortest spelling of a one-line function:
+	// `a(){print A}` defines `a` there and is `{print: command not found` in
+	// dash and ksh93 and `syntax error near unexpected token `{print'` in
+	// bash 5.3, bash 3.2 and bash-as-sh. Measured 2026-09-12 on zsh 5.9.2:
+	//
+	//	{print A}        A
+	//	{echo A; echo B} A then B
+	//	{a,b}            command not found: a,b   — no brace expansion: the
+	//	                                            `{` was the reserved word
+	//	echo {print A}   parse error near `}'     — argument position keeps
+	//	                                            the brace in the word
+	//	'{'print A}      parse error near `}'     — quoted, so no group opens
+	//	\{print A}       the same
+	//
+	// Command position is the whole of it, so a redirection's target, a
+	// `case` subject, a `for` list and a pattern all keep the brace: `echo hi
+	// > {a}` writes a file called `{a}` there, and `for i in {a,b}` expands
+	// to two words.
+	//
+	// The closing half is [Dialect.CloseBraceAlwaysReserved], which the same
+	// shell has and which the one-line spelling needs as well — `{print A}`
+	// is three tokens and this flag reads only the first of them.
+	OpenBraceNeedsNoBlank bool
 
 	// EmptyCompoundBody lets a compound command stand with nothing in it:
 	// `{ }`, `( )`, `while cond; do done`, `if cond; then fi`, and the

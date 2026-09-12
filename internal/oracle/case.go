@@ -7387,6 +7387,36 @@ echo "st=$?"`,
 		Why:     "the reading that must not be a definition, and the reason a `name()` taking any word still asks about `=`: an array assignment is a parenthesis after a word too, so a grammar that dropped the name test entirely reads `a=()` as defining a function called `a=`. The count and the elements are both on the line, and the elements are asked for with `[*]` rather than by index because the two array bases would part the columns on a question this row is not about — a shell that read the line as a definition leaves `a` unset and prints an empty pair either way",
 	},
 	{
+		ID: "cmd/function-body-brace-with-no-blank", Category: "command language",
+		Snippet: `a(){echo A}; a; echo st=$?`,
+		Why:     "the shortest spelling of a one-line function, and a token boundary rather than a definition: in the one shell where `{` and `}` are reserved words by their characters rather than by the blanks around them, this is `a() { echo A; }` and prints `A`. The other five read `{echo` as a command name — dash and ksh93 run it and answer `not found` at 127, the three bash spellings refuse to parse the line at all — so the row splits the panel one against five and does it twice over, once at each brace. It is the shape plugins are written in, and every differential probe written this way diverged on the parse rather than on what it meant to measure (#1788)",
+	},
+	{
+		ID: "cmd/brace-group-closing-with-no-blank", SyntaxError: true, Category: "command language",
+		Snippet: `{ echo A}; echo st=$?`,
+		Why:     "the closing half on its own, with a blank after the `{` so that only one brace is in question. The shell that reads `}` as reserved wherever a word ends closes the group and prints `A`; the rest take `A}` as one argument and run out of input looking for the group's terminator. Separate from the row above because a grammar that split the opening brace and not the closing one passes neither, and one that split the closing brace alone passes this and fails that. Marked a syntax error for the reason `cmd/brace-group-needs-terminator` is, and it is the same reading one blank tighter: the corpus grammar is dialect-neutral, and this pair of flags *narrows* a grammar rather than widening one — turning them on there makes `echo }` and `${x:-a}b}` stop parsing, which four other cases record as ordinary text",
+	},
+	{
+		ID: "cmd/close-brace-ends-the-word-it-ends", Category: "command language",
+		Snippet: `echo A}; echo st=$?`,
+		Why:     "the same reserved reading where no group is open, which is what says it is a rule about the *word* and not about brace groups: the shell that has it answers a parse error naming `}`, and the other five print `A}` and carry on. `echo }` — the brace as a word of its own — already splits the panel the same way, and this is the half that shows no blank is needed in front of it",
+	},
+	{
+		ID: "cmd/close-brace-paired-inside-the-word", Category: "command language",
+		Snippet: `echo {a} a}b`,
+		Why:     "the two ways a `}` stays text in the shell that reserves it: paired with a bare `{` earlier in the same word, and standing anywhere but the end of one. Both print in all six, which is the row's value — it is the control that keeps the rule above from being read as *any* `}` ending a word, and a lexer that did that would refuse a line every shell accepts",
+	},
+	{
+		ID: "cmd/close-brace-in-an-assignment-value", Category: "command language",
+		Snippet: `x=a}; printf '[%s]\n' "$x"; echo st=$?`,
+		Why:     "the one carve-out the reserved reading has: an assignment's value keeps its brace, so this assigns `a}` in all six where the same word written as an argument — `echo x=}` — is a parse error in the shell that reserves it. The value is printed with `printf` and in brackets because the difference between assigning `a}` and assigning `a` is one character at the end of a line",
+	},
+	{
+		ID: "cmd/open-brace-with-no-blank-is-not-a-brace-expansion", Category: "command language",
+		Snippet: `{a,b}; echo st=$?`,
+		Why:     "what the reserved `{` costs where a command may begin: the shell that reads it as a word of its own gets a brace group running a command called `a,b`, so no brace expansion happens there at all. The three bash spellings and ksh93 expand the word and look for a command called `a` with `b` as its argument; dash has no brace expansion and looks for one called `{a,b}`. Three readings of one line at the same status, which is why the row is graded on what each of them named — and the one that says the opening brace is a token boundary rather than a special case inside a definition",
+	},
+	{
 		ID: "cmd/function-keyword-form", Category: "command language",
 		Snippet: `function f { echo kw; }; f`,
 		Why:     "the ksh keyword form: core, absent from dash",

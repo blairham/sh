@@ -62,6 +62,12 @@ func Dialect() syntax.Dialect {
 	// brace group close without a terminator — and what makes `echo }` a
 	// syntax error rather than a brace on the output.
 	d.CloseBraceAlwaysReserved = true
+
+	// The other half of the same reserved-word rule: a bare `{` where a
+	// command may begin is the word by itself, so `a(){print A}` is a
+	// definition here and a command called `{print` everywhere else. See
+	// syntax.Dialect.OpenBraceNeedsNoBlank for the measurements (#1788).
+	d.OpenBraceNeedsNoBlank = true
 	// Short loops: a loop header that has ended may be followed straight by
 	// its body, and the body may be left out. Measured 2026-09-05, the other
 	// four panel shells refuse every shape — `for i (a b) { echo $i }`,

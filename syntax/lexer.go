@@ -1526,6 +1526,83 @@ func (l *Lexer) scanGroupSpans() []Span {
 	return spans
 }
 
+// atCommandWord reports whether the token being read stands where a *command*
+// may begin, rather than where an argument, a pattern, an operand, a
+// redirection's target or a body stands.
+//
+// The reserved words are what need it. A `{` is one only at the front of a
+// command, so `echo hi > {a}` writes a file with braces in its name and
+// `for i in {a,b}` expands to two words, in the shell where `{a,b}` written
+// first runs a command called `a,b`.
+//
+// It is the flag list [Lexer.atAssignValue] reads plus the two positions an
+// assignment does not care about — a pattern operand and a regular
+// expression's — since a word may not begin a command in either.
+func (l *Lexer) atCommandWord() bool {
+	return !l.inArgument && !l.inCondition && !l.inOperand && !l.inCaseArm &&
+		!l.inCaseParenList && !l.inRawBody && !l.noAssignment &&
+		!l.inPattern && !l.inRegex
+}
+
+// openBraceIsAWordOfItsOwn reports whether the `{` at the cursor is the
+// reserved word by itself, whatever follows it.
+//
+// See [Dialect.OpenBraceNeedsNoBlank]. Bare and at command position, which is
+// the whole of the rule: `'{'print` and `\{print` are ordinary words there,
+// and `echo {print A}` keeps the brace because an argument may not begin a
+// command.
+func (l *Lexer) openBraceIsAWordOfItsOwn() bool {
+	return l.dialect.OpenBraceNeedsNoBlank && l.peek() == '{' && l.atCommandWord()
+}
+
+// closeBraceIsAWordOfItsOwn reports whether the `}` at the cursor ends the
+// word being read, leaving the brace to be read as the reserved word it is.
+//
+// The caller owns the two questions this cannot see — whether the brace pairs
+// with a `{` already in the word, and whether anything has been read yet — and
+// this owns the two it can: whether the brace ends the word at all, and the
+// one position where it is text to the end.
+//
+// **An assignment's value is that position.** `x=a}` assigns `a}` in zsh
+// 5.9.2 where `echo x=a}` is a parse error, so the carve-out is the
+// assignment rather than the characters. Measured 2026-09-12; see
+// [Dialect.CloseBraceAlwaysReserved].
+func (l *Lexer) closeBraceIsAWordOfItsOwn() bool {
+	if !l.dialect.CloseBraceAlwaysReserved {
+		return false
+	}
+	if l.off+1 < len(l.src) && !l.isWordEnd(l.src[l.off+1]) {
+		return false
+	}
+	return !l.inAssignmentValue()
+}
+
+// inAssignmentValue reports whether the word being read is an assignment and
+// the cursor stands somewhere in its value.
+//
+// [Lexer.atAssignValue] answers the same question at the `=` itself and this
+// answers it for the rest of the word, so the two share their shape: a name,
+// an optional subscript and an optional `+`, in a position where an
+// assignment may be written at all.
+func (l *Lexer) inAssignmentValue() bool {
+	if l.inArgument || l.inCondition || l.inOperand || l.inCaseArm ||
+		l.inCaseParenList || l.inRawBody || l.noAssignment {
+		return false
+	}
+	head, _, ok := strings.Cut(l.src[l.wordStart.Offset:l.off], "=")
+	if !ok {
+		return false
+	}
+	head = strings.TrimSuffix(head, "+")
+	if i := strings.IndexByte(head, '['); i >= 0 {
+		if !strings.HasSuffix(head, "]") {
+			return false
+		}
+		head = head[:i]
+	}
+	return isName(head)
+}
+
 // scanWord reads a word as a sequence of spans, one per run of uniform
 // quoting. The spans are the point: a"b c"d is one word of three spans, and
 // only the unquoted ones are subject to splitting and globbing later.
@@ -1547,9 +1624,34 @@ func (l *Lexer) scanWord(start Pos) Token {
 		}
 	}
 
+	// braces counts the bare `{` this word has open, so that the `}` closing
+	// one is told from the `}` that closes nothing. Only literal text written
+	// by the default case below counts: a quoted or escaped brace is a
+	// character, and an expansion's braces are its own. See
+	// [Dialect.CloseBraceAlwaysReserved], where the pairing is measured.
+	braces := 0
+
+	if l.openBraceIsAWordOfItsOwn() {
+		lit.WriteByte(l.advance())
+		flush()
+		return Token{
+			Kind: TokWord, Pos: start, End: l.pos(),
+			Text: l.src[start.Offset:l.off], Spans: spans,
+		}
+	}
+
 	for !l.eof() {
 		c := l.peek()
 		if l.endsWord(c) {
+			break
+		}
+		if c == '}' && braces == 0 && (lit.Len() > 0 || len(spans) > 0) &&
+			l.closeBraceIsAWordOfItsOwn() {
+			// The reserved `}` reaching into the word: it ends this one and
+			// is read as the token it always is. Only where something has
+			// been read already — a word that *starts* with `}` is that token
+			// by the ordinary route, and stopping here would consume nothing
+			// and never move.
 			break
 		}
 		switch {
@@ -1669,6 +1771,14 @@ func (l *Lexer) scanWord(start Pos) Token {
 			}
 			if lit.Len() == 0 {
 				litPos = l.pos()
+			}
+			switch c {
+			case '{':
+				braces++
+			case '}':
+				if braces > 0 {
+					braces--
+				}
 			}
 			lit.WriteByte(l.advance())
 		}

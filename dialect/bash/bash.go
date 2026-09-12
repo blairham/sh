@@ -109,6 +109,17 @@ func Dialect() syntax.Dialect {
 	// its standard output. A bash 4 feature: bash 3.2 lexes the two bytes as
 	// a bar and an ampersand and refuses the line, which is why this is not
 	// core and why the three bash columns of a measurement do not agree.
+	// A `!` with no pipeline after it is a pipeline of its own here, and the
+	// negation of a success: `true; !` and `false; !` both answer 1. It
+	// reaches a statement terminator and nothing further — `{ ! ; echo x; }`
+	// runs where `{ ! }`, `( ! )` and `! && echo two` are all refused — which
+	// is what separates this value from ksh93's and zsh's. bash 3.2 refuses
+	// every one of them, and `bash --posix` on this build takes them, so it
+	// is the version and not POSIX mode (#948).
+	d.BareNegationReach = syntax.BareNegationBeforeATerminator
+	// And a second `!` inverts the first rather than being refused:
+	// `! ! true` answers 0 and `! ! false` answers 1.
+	d.RepeatedNegationToggles = true
 	d.PipeBothStreams = true
 	// A `for` or `select` whose variable is not a name parses here, and the
 	// complaint comes when the loop is reached — so `bash -n` accepts a

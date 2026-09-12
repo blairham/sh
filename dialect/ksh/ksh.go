@@ -27,6 +27,14 @@ func Dialect() syntax.Dialect {
 	d.DeclarationUtilities = map[string]bool{
 		"typeset": true, "export": true, "readonly": true,
 	}
+	// A `!` with no pipeline after it is a pipeline of its own here, and this
+	// shell is the union of the other two answers: it reaches a statement
+	// terminator and a `&` the way bash does, and every closer and an and-or
+	// operator the way zsh does. Measured 2026-09-12 over all ten positions
+	// (#948).
+	d.BareNegationReach = syntax.BareNegationAtEitherPlace
+	// And a second `!` inverts the first, as in bash: `! ! true` answers 0.
+	d.RepeatedNegationToggles = true
 	d.ParamIndirection = true
 	// A single `;` written where a command belongs is stepped over — `; b`,
 	// `a ; ; b`, `a & ; b`, `a |& ; b`, `a && ; b` and `a || ; b` all run —

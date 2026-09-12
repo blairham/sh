@@ -2708,7 +2708,13 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 		timing.grow(p.Cmds)
 	}
 	r.pipefailRaised = false
-	if len(p.Cmds) == 1 {
+	if len(p.Cmds) == 0 {
+		// A `!` written with no pipeline after it, which one grammar flag
+		// admits. Nothing runs, so the status the negation below inverts is
+		// a success — `true; !` and `false; !` both answer 1, measured, so
+		// what came before it is not carried through.
+		r.status = 0
+	} else if len(p.Cmds) == 1 {
 		if timing != nil {
 			// One element, run in the current shell like any other single
 			// command; the element's externals bill its slot for as long

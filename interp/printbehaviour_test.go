@@ -98,6 +98,12 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 func corpusGrammar() syntax.Dialect {
 	d := syntax.Core()
 	d.ArraySubscriptFlags = true
+	// A `!` with no pipeline after it, and a second `!` that toggles the
+	// first. An eleventh and twelfth thing the corpus cannot be read
+	// without: three cases write one, and the core drops the `!` outright
+	// rather than reading the line.
+	d.BareNegationReach = syntax.BareNegationBeforeATerminator
+	d.RepeatedNegationToggles = true
 	d.CaseContinue = true
 	// And zsh's spelling of the same terminator. No real shell has both —
 	// each refuses the other's — so this pair is a superset the printer is

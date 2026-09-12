@@ -328,12 +328,84 @@ in the panel writes, about a token already read — until this was fixed;
 
 The pipeline's status is `false`'s, which is 1; `!` inverts it to 0. If
 `!` bound to `true` alone the answer would be 1. It is a property of the
-pipeline, and it appears at most once, at the front.
+pipeline, and it stands at the front.
 
 A pipeline's status is its **last** command's:
 
     false | true ; echo $?  →  0
     true | false ; echo $?  →  1
+
+### A `!` may be the whole pipeline
+
+    true;  ! ; echo $?   →  1   bash 5.3, bash as sh, ksh93, zsh
+    false; ! ; echo $?   →  1   the same four
+
+So it is a pipeline with **no commands in it**: nothing runs, and the
+negation inverts a success. The pair is what pins that — a shell that
+carried `$?` through would print 0 on the first row, and one that
+inverted `$?` would print 0 on the second. #948 read it as "the `!`
+negates the *next line's* pipeline"; that would make
+`! ⏎ echo x; echo $?` print 1, and it prints **0** in all four.
+
+dash and bash 3.2 refuse it. bash-as-`sh` follows bash 5.3 and not bash
+3.2, which the issue suspected might be POSIX mode: it is the version,
+because `bash --posix -c '!'` answers 1 on the 5.3 build.
+
+**How far the `!` looks for its pipeline splits the four**, and this is
+the whole of the modeling. Measured 2026-09-12, `env -i
+PATH=/usr/bin:/bin` with a scratch `HOME`, over `-c` and a script file
+alike:
+
+| after the `!` | dash | bash 3.2 | bash 5 | bash as sh | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `;` | error | error | 1 | 1 | 1 | 1 |
+| a newline | error | error | 1 | 1 | 1 | 1 |
+| the end of input | error | error | 1 | 1 | 1 | 1 |
+| `&` | error | error | 0 | 0 | runs | error |
+| `)` of a subshell | error | error | error | error | 1 | 1 |
+| `}` of a group | error | error | error | error | runs | runs |
+| `;;` of a `case` arm | error | error | error | error | 1 | 1 |
+| `&&` | error | error | error | error | runs | runs |
+| `\|\|` | error | error | error | error | runs | runs |
+| `\|` | error | error | error | error | error | error |
+
+Three sets, so it is a **place** rather than a bool, for the reason
+`SeparatorWhereACommandBelongs` is one. Grammar flag:
+`BareNegationReach` — `NoBareNegation` in the core and in `dash`;
+`BareNegationBeforeATerminator` for `bash`, which reaches the first four
+rows; `BareNegationWhereAListEnds` for `zsh`, which reaches the list's
+end and the and-or but not the `&`; and `BareNegationAtEitherPlace` for
+`ksh`, which is the union of the two rather than a third rule.
+
+zsh's `&` exception is the boundary `OpenEndedAndOr` already has in that
+shell, where `true || & b` is a parse error and `( true || )` runs. The
+last row is the discriminating one: **no** column lets a bare `!` stand
+before a bar, so a reach written for control operators generally would
+take three lines every shell rejects.
+
+One ksh93 row is recorded and not modeled: `! & echo hi` on one line
+prints nothing there, while `! & ⏎ echo hi` prints `hi` and `! & wait;
+echo hi` prints `hi`. The output of the command after the `&` is lost on
+the one-line spelling only, which does not look like a grammar.
+
+### A second `!` toggles, in three of the six
+
+    ! ! true    →  0        ! ! false  →  1
+    ! ! !       →  1        ! !        →  0
+
+bash 5.3, that binary as `sh`, and ksh93. dash and zsh refuse a second
+`!` outright, so this is a question of its own rather than part of the
+reach above — zsh takes a bare `!` and refuses `! !`, and a single flag
+could not be given a value for it.
+
+Grammar flag: `RepeatedNegationToggles` — core off, `bash` and `ksh` on.
+The tree carries one flag rather than a count, which the toggle is what
+permits: an even number of them is no negation and an odd number is one,
+so `! ! !` and `!` are the same program and print back the same.
+
+`!` is a **reserved word**, which shows only where a refusal names it:
+dash says `` "!" unexpected `` for the second one, against `word
+unexpected` for a name.
 
 ## `time` prefixes a pipeline
 

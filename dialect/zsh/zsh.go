@@ -448,6 +448,15 @@ func Dialect() syntax.Dialect {
 	// the same two characters, which is a coprocess and a different slot in
 	// the grammar — measured, because ksh93 refuses `a | ; b` and accepts
 	// `a |& ; b`, so its `|&` ends a command where this one joins two.
+	// A `!` with no pipeline after it is a pipeline of its own here, and it
+	// reaches wherever the *list* ends — `( ! )`, `{ ! }`, `case x in x) ! ;;`
+	// and `! || echo two` all run — as well as a `;`, a newline and the end
+	// of input. Not a `&`: `! & echo x` is a parse error here where bash
+	// takes it, which is the same boundary OpenEndedAndOr has in this shell.
+	d.BareNegationReach = syntax.BareNegationWhereAListEnds
+	// And a second `!` is refused outright here, which is what makes the
+	// toggle a separate question from the reach: this shell has one and not
+	// the other (#948).
 	d.PipeBothStreams = true
 	// A coprocess, spelled with the same word as bash's and with no name
 	// before it: `coproc MY { cat; }` is `parse error near `}'` here, because

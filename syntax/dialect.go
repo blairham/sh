@@ -60,22 +60,20 @@ func (a ProgramRoutes) Has(route ProgramRoutes) bool { return a&route != 0 }
 type SeparatorSkip uint8
 
 const (
-	// NoSeparatorWhereACommandBelongs is the core answer: a `;` where a
-	// command belongs is a syntax error. dash, bash 5.3, bash 3.2 and
-	// bash-as-`sh`.
+	// NoSeparatorWhereACommandBelongs is the core answer: a `;` where a command
+	// belongs is a syntax error.
 	NoSeparatorWhereACommandBelongs SeparatorSkip = iota
 
 	// OneSeparatorExceptAfterABarOrBeforeACondition steps over a single `;`,
-	// and not at all after a `|` or where a *condition* begins. ksh93, and
-	// every part is measured rather than assumed: `a || ; ; b` is
-	// `` `;' unexpected `` there where `a || ; b` runs, and `a | ; b` is
-	// refused where `a || ; b` and `a |& ; b` are taken — the same asymmetry
-	// #1115 found for that shell's `|&`, and the probe that says the bar is a
-	// separate question from the and-or.
+	// and not at all after a `|` or where a *condition* begins. Every part is
+	// measured rather than assumed: `a || ; ; b` is `` `;' unexpected `` where
+	// `a || ; b` runs, and `a | ; b` is refused where `a || ; b` and `a |& ; b`
+	// are taken — the same asymmetry that preset's `|&` has, and the probe that
+	// says the bar is a separate question from the and-or.
 	//
-	// The condition is the third exception and was missing, so `if; then`
-	// parsed here and was blamed on the `then` where ksh93 blames the `;`.
-	// Measured 2026-09-12 over a script file:
+	// The condition is the third exception, and leaving it out parses `if; then`
+	// and blames the `then` where this reading blames the `;`. Measured over a
+	// script file:
 	//
 	//	if; then :; fi                 `;' unexpected
 	//	while; do :; done              `;' unexpected
@@ -89,105 +87,104 @@ const (
 	//	                               side belongs is still the and-or's
 	//	if :; then : ; ; fi            runs — a body is not a condition
 	//
-	// So it is the position where a *statement of a condition list* begins,
-	// and neither "anywhere in the header" nor "the token after the keyword".
-	// The wider value takes all nine: zsh parses every line above (#2023).
+	// So it is the position where a *statement of a condition list* begins, and
+	// neither "anywhere in the header" nor "the token after the keyword". The
+	// wider value below takes all nine.
 	OneSeparatorExceptAfterABarOrBeforeACondition
 
 	// AnySeparatorWhereACommandBelongs steps over as many as are written,
-	// anywhere, the bar included. zsh: `echo one | ; ; cat -n` numbers the
-	// line, and so does `echo one | ; ⏎ ; cat -n`.
+	// anywhere, the bar included: `echo one | ; ; cat -n` numbers the line, and
+	// so does `echo one | ; ⏎ ; cat -n`.
 	AnySeparatorWhereACommandBelongs
 )
 
 // CaseBraceSpelling is how a dialect writes a `case` header's second
 // spelling, `case x { … }`. See [Dialect.CaseBraceBody], where the rows are.
 //
-// A spelling rather than a bool because the two shells that have the
-// construct disagree about whether the opener and the closer are paired, and
-// a single yes/no could not be given a value for either without accepting
-// lines the other refuses.
+// A spelling rather than a bool because the presets that have the construct
+// disagree about whether the opener and the closer are paired, and a single
+// yes/no could not be given a value for either without accepting lines the
+// other refuses.
 type CaseBraceSpelling uint8
 
 const (
-	// NoCaseBraceBody is the core answer: a `case` header is `in` and the
-	// clause ends at `esac`. dash and every bash column.
+	// NoCaseBraceBody is the core answer: a `case` header is `in` and the clause
+	// ends at `esac`.
 	NoCaseBraceBody CaseBraceSpelling = iota
 
-	// CaseBraceBodyPairsWithItsOpener takes `case x { … }` and `case x in …
-	// esac` and neither of the mixtures. ksh93u+, where `case x { … esac`
-	// and `case x in … }` are both `` `case' unmatched ``.
+	// CaseBraceBodyPairsWithItsOpener takes `case x { … }` and
+	// `case x in … esac` and neither of the mixtures: `case x { … esac` and
+	// `case x in … }` are both `` `case' unmatched ``.
 	CaseBraceBodyPairsWithItsOpener
 
 	// CaseBraceBodyMixesWithTheKeyword takes all four combinations: either
-	// opener closes with either word. zsh 5.9.2.
+	// opener closes with either word.
 	CaseBraceBodyMixesWithTheKeyword
 )
 
 // BareNegationReach is how far a `!` written with no pipeline after it may
 // stand. See [Dialect.BareNegationReach].
 //
-// A place rather than a bool, for the reason [SeparatorSkip] is one: the three
-// shells that take a bare `!` draw its boundary in three different sets, and a
-// single yes/no could not be given a value for any of them without accepting
+// A place rather than a bool, for the reason [SeparatorSkip] is one: the
+// presets that take a bare `!` draw its boundary in three different sets, and
+// a single yes/no could not be given a value for any of them without accepting
 // lines another refuses.
 //
-// Measured 2026-09-12, `env -i PATH=/usr/bin:/bin` with a scratch HOME, over
-// `-c` and a script file alike. `st=` is what `echo "st=$?"` printed after it.
+// Measured under `env -i PATH=/usr/bin:/bin` with a scratch HOME, over `-c`
+// and a script file alike. `st=` is what `echo "st=$?"` printed after it.
 //
-//	after the `!`      dash   bash 3.2   bash 5.3   bash as sh   ksh93   zsh
-//	`;`                error  error      st=1       st=1         st=1    st=1
-//	a newline          error  error      st=1       st=1         st=1    st=1
-//	the end of input   error  error      st=1       st=1         st=1    st=1
-//	`&`                error  error      st=0       st=0         runs    error
-//	`)` of a subshell  error  error      error      error        st=1    st=1
-//	`}` of a group     error  error      error      error        runs    runs
-//	`;;` of a case arm error  error      error      error        st=1    st=1
-//	`&&`               error  error      error      error        runs    runs
-//	`||`               error  error      error      error        runs    runs
-//	`|`                error  error      error      error        error   error
+//	after the `!`      none   terminator  list-end  either
+//	`;`                error  st=1        st=1      st=1
+//	a newline          error  st=1        st=1      st=1
+//	the end of input   error  st=1        st=1      st=1
+//	`&`                error  st=0        error     runs
+//	`)` of a subshell  error  error       st=1      st=1
+//	`}` of a group     error  error       runs      runs
+//	`;;` of a case arm error  error       st=1      st=1
+//	`&&`               error  error       runs      runs
+//	`||`               error  error       runs      runs
+//	`|`                error  error       error     error
 //
-// bash-as-`sh` follows bash 5.3 and not bash 3.2, which #948 suspected might
-// be POSIX mode rather than the version. It is the version: `bash --posix -c
-// '!'` answers 1 on the same binary.
+// Builds of one implementation answer it differently, and it is the version
+// rather than a POSIX mode: the same binary under `--posix` answers as its own
+// version does.
 type BareNegationReach uint8
 
 const (
 	// NoBareNegation is the core answer: a `!` needs a pipeline after it.
-	// dash and bash 3.2.
 	NoBareNegation BareNegationReach = iota
 
 	// BareNegationBeforeATerminator takes a `!` that a statement terminator
-	// or the end of input follows — `;`, a newline, `&`, EOF — and nothing
-	// else. bash 5.3 and that binary as `sh`: `{ ! ; echo "st=$?"; }` prints
-	// `st=1` there where `{ ! }`, `( ! )` and `! && echo two` are all
-	// refused.
+	// or the end of input follows — `;`, a newline, `&`, EOF — and nothing else:
+	// `{ ! ; echo "st=$?"; }` prints `st=1` where `{ ! }`, `( ! )` and
+	// `! && echo two` are all refused.
 	BareNegationBeforeATerminator
 
 	// BareNegationWhereAListEnds takes it where the *list* ends instead —
 	// a closer, a `case` terminator, or an and-or operator whose right-hand
 	// side is where the `!` stood — as well as before `;`, a newline and the
 	// end of input. Not before `&`, which is the one row that separates this
-	// from the value below: zsh refuses `! & echo x` and takes `( ! )`,
-	// where bash 5.3 does the opposite of both.
+	// from the value above: this reading refuses `! & echo x` and takes `( ! )`,
+	// where that one does the opposite of both.
 	//
-	// The `&` exception is the same boundary [Dialect.OpenEndedAndOr] has in
-	// that shell, where `true || & b` is a parse error and `( true || )`
+	// The `&` exception is the same boundary [Dialect.OpenEndedAndOr] has under
+	// the same preset, where `true || & b` is a parse error and `( true || )`
 	// runs.
 	BareNegationWhereAListEnds
 
-	// BareNegationAtEitherPlace takes both sets, which is ksh93: it is the
-	// union rather than a third rule, and every row above says so.
+	// BareNegationAtEitherPlace takes both sets: it is the union rather than a
+	// third rule, and every row above says so.
 	BareNegationAtEitherPlace
 )
 
 // Dialect says which constructs the lexer accepts.
 //
-// Fields are named for the construct rather than for the shell that wants it,
-// which docs/spec/semantics.md requires and which the measurements insist on:
-// ksh93 accepts `&>` or does not depending on which build is installed, twelve
-// years apart under the same name, so a field called `Ksh` could not be given
-// a value. A field called [Dialect.AmpersandRedirect] can.
+// Fields are named for the construct rather than for the implementation that
+// wants it, which docs/spec/semantics.md requires and which the measurements
+// insist on: one implementation accepts `&>` or does not depending on which
+// build is installed, twelve years apart under the same name, so a name-shaped
+// field could not be given a value. A field called
+// [Dialect.AmpersandRedirect] can.
 //
 // Grammar differences are additive — a construct either parses or it does not
 // — which is why this is a set of flags. Semantic differences, where the same

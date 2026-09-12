@@ -2201,126 +2201,120 @@ type Diagnostics struct {
 	// anywhere else. Three verbs, the same as SyntaxUnexpected: %[1]s the
 	// token, %[2]s what would have been valid, %[3]d the line.
 	//
-	// Empty is "whatever it says about any such token", which is three of
-	// the four: ksh93's `` `-z' unexpected `` and zsh's ``parse error near
-	// `-z'`` are the sentences those shells give a stray token wherever it
-	// stands. bash is the exception and drops the words `unexpected token`
-	// here — `` syntax error near `-z' `` — which is measurable only
-	// because it keeps them everywhere else.
+	// Empty is "whatever it says about any such token", the common answer:
+	// `` `-z' unexpected `` and ``parse error near `-z'`` are the sentences a
+	// preset gives a stray token wherever it stands. A preset may instead drop
+	// the words `unexpected token` here — `` syntax error near `-z' `` — which
+	// is measurable only because it keeps them everywhere else.
 	CondSyntaxUnexpected string
 
 	// SyntaxUnexpectedNamesTheOpener writes the *operator* an unexpected
 	// token began with rather than the text it held, where the two differ.
 	//
 	// One construct differs at all: an arithmetic command standing where the
-	// grammar has no command. Measured 2026-09-11 on a script holding `x=1`
-	// and `(( 1 )) (( 2 ))`,
+	// grammar has no command. Measured on a script holding `x=1` and
+	// `(( 1 )) (( 2 ))`,
 	//
-	//	bash 5.3   syntax error near unexpected token ` 2 '
-	//	zsh 5.9.2  parse error near ` 2 '
-	//	ksh93u+    syntax error at line 2: `((' unexpected
+	//	syntax error near unexpected token ` 2 '
+	//	parse error near ` 2 '
+	//	syntax error at line 2: `((' unexpected
 	//
-	// so two of the three quote the expression with its blanks and ksh93
-	// names `((`. bash 3.2 names `(`, which is a third answer and has no
-	// dialect here to hold it.
+	// so most quote the expression with its blanks and one names `((`. Naming a
+	// single `(` is a third answer and no preset here holds it.
 	//
 	// A flag rather than a wording because the sentence around it is already
-	// SyntaxUnexpected's and only the verb changes; and on the Diagnostics
+	// SyntaxUnexpected's and only the verb changes; and on the [Diagnostics]
 	// rather than on the parser because both spellings are facts about the
-	// token, which is why [syntax.Error] carries both (#2013).
+	// token, which is why [syntax.Error] carries both.
 	SyntaxUnexpectedNamesTheOpener bool
 
-	// UnexpectedWordNaming is which spelling of a refused *word* this
-	// dialect echoes back — see [UnexpectedWordNaming], where the panel is.
-	// Zero is the word with its quoting off, which is what the core says and
-	// what the one dialect that never names a word here leaves it at.
+	// UnexpectedWordNaming is which spelling of a refused *word* this preset
+	// echoes back — see [UnexpectedWordNaming]. Zero is the word with its
+	// quoting off, which is what the core says and what a preset that never
+	// names a word here leaves it at.
 	UnexpectedWordNaming UnexpectedWordNaming
 
-	// CondSyntaxPreamble is a line one dialect writes *before* that one,
-	// naming the construct rather than the token: bash's `syntax error in
-	// conditional expression: unexpected token `-z'`. Two verbs: %[1]s the
-	// token and %[2]d the line — and the line is the `[[`'s, not the
-	// token's, which is why it is a second verb rather than the location
-	// the report already carries.
+	// CondSyntaxPreamble is a line a preset may write *before* that one, naming
+	// the construct rather than the token: `syntax error in conditional
+	// expression: unexpected token `-z'`. Two verbs: %[1]s the token and %[2]d
+	// the line — and the line is the `[[`'s, not the token's, which is why it is
+	// a second verb rather than the location the report already carries.
 	//
-	// Empty means no such line, which is every dialect but one.
+	// Empty means no such line, which is the common answer.
 	CondSyntaxPreamble string
 
 	// CondUnterminatedPreamble is the same idea for a `[[` the input ran
-	// out inside of, and the same dialect writes it: `unexpected EOF while
+	// out inside of, and the same preset writes it: `unexpected EOF while
 	// looking for `]]'`, again at the `[[`'s line and again in front of the
 	// ordinary sentence. Two verbs: %[1]s the closer it was waiting for and
 	// %[2]d the line.
 	//
-	// It is a *second* field rather than the one above because bash writes
-	// this line for `[[` and for nothing else: `if`, `for`, `case`, `{` and
-	// `(` left open all get one line and it is the ordinary one. Measured.
+	// It is a *second* field rather than the one above because such a preset
+	// writes this line for `[[` and for nothing else: `if`, `for`, `case`, `{`
+	// and `(` left open all get one line and it is the ordinary one. Measured.
 	CondUnterminatedPreamble string
 
 	// AnonymousFunctionName is what a function with no name is called where
-	// one is wanted — a frame, `$0`, a diagnostic. Empty means `(anon)`,
-	// which is what the one dialect with the construct says.
+	// one is wanted — a frame, `$0`, a diagnostic. Empty means `(anon)`, which
+	// is what the preset with the construct says.
 	AnonymousFunctionName string
 
 	// SyntaxUnexpected is a token the grammar did not want. Three verbs:
-	// %[1]s the token, %[2]s what would have been valid where the parser
-	// knows, and %[3]d the line, for the dialect that has no location of its
-	// own to put it in.
+	// %[1]s the token, %[2]s what would have been valid where the parser knows,
+	// and %[3]d the line, for a preset that has no location of its own to put it
+	// in.
 	SyntaxUnexpected string
-	// SyntaxUnexpectedWord is the same for an *ordinary* word, which one
-	// dialect refuses to quote: `word unexpected` where a reserved word or an
+	// SyntaxUnexpectedWord is the same for an *ordinary* word, which a preset
+	// may refuse to quote: `word unexpected` where a reserved word or an
 	// operator is `"fi" unexpected`. Empty means "the same as
-	// SyntaxUnexpected", which is three of the four.
+	// SyntaxUnexpected", the common answer.
 	SyntaxUnexpectedWord string
-	// SyntaxUnexpectedNewline is the same for the *newline*, which two
-	// dialects write differently again and for two different reasons. Same
-	// three verbs, and empty means "the same as SyntaxUnexpected", which is
-	// bash and ksh93.
+	// SyntaxUnexpectedNewline is the same for the *newline*, which some presets
+	// write differently again and for two different reasons. Same three verbs,
+	// and empty means "the same as SyntaxUnexpected".
 	//
-	// dash leaves it unquoted, the way it leaves an ordinary word unquoted —
-	// `newline unexpected` where an operator or a reserved word is `";;"
-	// unexpected` — and zsh spells the token `\n` rather than by name, so
-	// what it needs is the same sentence with a different word in it.
-	// Measured 2026-09-12 over a script holding `echo a`, `for` and `done`:
+	// One reading leaves it unquoted, the way it leaves an ordinary word
+	// unquoted — `newline unexpected` where an operator or a reserved word is
+	// `";;" unexpected` — and another spells the token `\n` rather than by name,
+	// so what it needs is the same sentence with a different word in it.
+	// Measured over a script holding `echo a`, `for` and `done`:
 	//
-	//	dash     <script>: 3: Syntax error: newline unexpected
-	//	bash 5.3 <script>: line 2: syntax error near unexpected token `newline'
-	//	ksh93    <script>: syntax error at line 3: `newline' unexpected
-	//	zsh      <script>:3: parse error near `\n'
+	//	<script>: 3: Syntax error: newline unexpected
+	//	<script>: line 2: syntax error near unexpected token `newline'
+	//	<script>: syntax error at line 3: `newline' unexpected
+	//	<script>:3: parse error near `\n'
 	//
-	// One field for both, because a sentence naming the token covers a
-	// dialect that only wanted to spell it differently (#1364).
+	// One field for both, because a sentence naming the token covers a preset
+	// that only wanted to spell it differently.
 	SyntaxUnexpectedNewline string
 	// UnexpectedNewlineIsOnTheNextLine puts a refused newline on the line it
 	// *ends* rather than on the line it was written at the end of.
 	//
-	// Three of the four, in the same measurement: dash, ksh93 and zsh answer
-	// the script above with 3 and bash with 2, and the split is the same on
-	// the `-c` route and wherever in a longer script the newline stands. It
-	// is a fact about the token rather than about the failure, so it holds
-	// for a `for` whose name is a newline as much as for a token the grammar
-	// simply did not want — dash reports `Bad for loop variable` at 3 there
-	// too.
+	// The common answer, in the same measurement: the script above is answered
+	// with 3 under true and 2 under false, and the split is the same on the `-c`
+	// route and wherever in a longer script the newline stands. It is a fact
+	// about the token rather than about the failure, so it holds for a `for`
+	// whose name is a newline as much as for a token the grammar simply did not
+	// want — a bad loop variable is reported at 3 there too.
 	UnexpectedNewlineIsOnTheNextLine bool
 	// SyntaxRedirectUnexpected replaces the message where the unexpected
 	// token is itself a redirection operator. No verbs.
 	//
-	// dash alone: `cat < < x` is `redirection unexpected` there and names the
-	// token in the other three. Empty means the dialect makes no distinction.
+	// `cat < < x` is `redirection unexpected` under one reading and names the
+	// token under the other. Empty means the preset makes no distinction.
 	SyntaxRedirectUnexpected string
 
 	// SyntaxExpecting is appended when the parser knows what would have been
-	// valid. One verb: that word. Empty means the dialect never says.
+	// valid. One verb: that word. Empty means the preset never says.
 	SyntaxExpecting string
 
-	// ForName is a `for` whose variable is not one. Two verbs: %[1]s the word
-	// as written and %[2]d the line, for the dialect that carries its own.
+	// ForName is a `for` whose variable is not one. Two verbs: %[1]s the word as
+	// written and %[2]d the line, for a preset that carries its own.
 	ForName string
-	// ForNameStatus is what that reports, where it is not this dialect's
-	// ordinary syntax-error status. Two of the four report 1 for it and
-	// their syntax errors are 2 and 3 — so a refusal that is a parse failure
-	// by every other measure carries a different number. Zero means the
-	// syntax-error status.
+	// ForNameStatus is what that reports, where it is not this preset's ordinary
+	// syntax-error status. Some presets report 1 for it while their syntax
+	// errors are 2 or 3 — so a refusal that is a parse failure by every other
+	// measure carries a different number. Zero means the syntax-error status.
 	ForNameStatus int
 
 	// ForArithHeader is a C-style `for` header that does not hold the two
@@ -2329,15 +2323,15 @@ type Diagnostics struct {
 	// part of the header trimmed, %[2]s the header as written with its
 	// parentheses, %[3]d the line the header opens on.
 	//
-	// Every shell in the panel refuses it and each says something different:
-	// a sentence about the expression that was not there, a complaint about
-	// the closer, or the text of the last part. Empty falls back to the
-	// substrate's own sentence (#2225).
+	// Every preset refuses it and each says something different: a sentence
+	// about the expression that was not there, a complaint about the closer, or
+	// the text of the last part. Empty falls back to the substrate's own
+	// sentence.
 	ForArithHeader string
-	// ForArithHeaderNoPart is the same refusal where the last part is empty,
-	// for the dialect that names that part and so has nothing to name:
-	// `for ((;))` is a bare `parse error` in zsh where `for ((;2))` is
-	// `parse error near `2'`. Empty means the dialect says the same either
+	// ForArithHeaderNoPart is the same refusal where the last part is empty, for
+	// a preset that names that part and so has nothing to name: `for ((;))` is a
+	// bare `parse error` where `for ((;2))` is `parse error near `2'`. Empty
+	// means the preset says the same either
 	// way, which three of the four do.
 	ForArithHeaderNoPart string
 	// ForArithSeparator is a C-style `for` header with *more* than two

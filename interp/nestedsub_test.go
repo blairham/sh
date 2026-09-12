@@ -359,34 +359,60 @@ bb"; printf "[%s]" "${${(f)v}[2]}"`, "[bb]"},
 	}
 }
 
-// The shapes this does not carry are refused **by name**, and each says which
-// one it met. A subscript answered out of the wrong reading is a plausible
-// value at status 0, which is the failure the whole surface is written
-// against.
-func TestTheNestedSubscriptShapesNotBuiltSayWhichTheyAre(t *testing.T) {
+// A command substitution and an arithmetic one stand in the same position,
+// and both are a **list** there even when they come to one word — which is
+// the half a field count cannot guess, and which needed the name position to
+// field-split before it could be read at all (#1394, behind #976).
+//
+// Measured on zsh 5.9.2, 2026-09-12. Rows two and six are the discriminating
+// ones: a source read as a *string* answers `b` and `2` there, which is a
+// plausible value at status 0 — the failure the refusal that used to stand
+// here existed to prevent.
+func TestASubscriptOnANestedSubstitution(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
-		{
-			// A command substitution is a list in that position even when it
-			// comes to one word, and this tree does not field-split an
-			// unquoted one in the name position yet (#976) — so the fields a
-			// subscript would count are not the shell's.
-			"a subscript on a command substitution",
-			`printf "[%s]" "${$(echo x y z)[2]}"`,
-			"${$(echo x y z)[2]}: a subscript on a nested command substitution is not implemented",
-		},
-		{
-			"a subscript on an arithmetic substitution",
-			`printf "[%s]" "${$((6*7))[1]}"`,
-			"${$((6*7))[1]}: a subscript on a nested arithmetic substitution is not implemented",
-		},
+		{"a list of three, the second", `printf "[%s]" ${$(echo a b c)[2]}`, "[b]"},
+		{"a list of one has no second", `printf "[%s]" ${$(echo abc)[2]}`, "[]"},
+		{"and its first is the whole word", `printf "[%s]" ${$(echo abc)[1]}`, "[abc]"},
+		{"an empty list, searched", `printf "[%s]" ${$(true)[(I)x]}`, "[0]"},
+		{"arithmetic is a list of one too", `printf "[%s]" ${$((6*7))[1]}`, "[42]"},
+		{"so it has no second either", `printf "[%s]" ${$((6*7))[2]}`, "[]"},
+		{"a range takes elements", `printf "[%s]" ${$(echo a b c)[2,3]}`, "[b][c]"},
+		{"counting from the end", `printf "[%s]" ${$(echo a b c)[-1]}`, "[c]"},
+		{"a search takes one", `printf "[%s]" ${$(echo a b c)[(r)b]}`, "[b]"},
+		{"and the whole of it", `printf "[%s]" ${$(echo a b c)[@]}`, "[a][b][c]"},
+		{"a length measures the element", `printf "[%s]" ${#$(echo a b c)[2]}`, "[1]"},
+		{"and counts them under [@]", `printf "[%s]" ${#$(echo a b c)[@]}`, "[3]"},
+		// Quoted it is a string, and that is the parameter inner's rule
+		// reached by the same route rather than one of its own: the quotes
+		// joined the fields before the subscript saw them.
+		{"quoted, the subscript counts characters", `printf "[%s]" "${$(echo a b c)[2]}"`, "[ ]"},
+		{"an inner quoted on its own, the same", `printf "[%s]" ${"$(echo abc)"[2]}`, "[b]"},
+		{"and an arithmetic one", `printf "[%s]" "${$((6*7))[1]}"`, "[4]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runNestedSubscript(t, tc.src)
-			if !strings.Contains(out, tc.want) {
-				t.Errorf("got %q, want a refusal naming %q", out, tc.want)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
 			}
-			if st == 0 {
-				t.Errorf("status 0, want the unbuilt shape refused")
+		})
+	}
+}
+
+// A substitution in that position that came to nothing is an **empty list**
+// and not one empty field, which only a count can see: measured on zsh 5.9.2,
+// `${#$(true)[@]}` and `${#$(true)}` are both 0, where one empty field would
+// have answered 1 to both.
+func TestAnEmptyNestedSubstitutionIsAnEmptyList(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"no element to count", `printf "[%s]" ${#$(true)[@]}`, "[0]"},
+		{"and none to measure", `printf "[%s]" ${#$(true)}`, "[0]"},
+		{"nor one to index", `printf "[%s]" ${$(true)[1]}`, "[]"},
+		{"while an empty scalar inner is still one field", `s=""; printf "[%s]" ${#${s}[@]}`, "[0]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runNestedSubscript(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
 			}
 		})
 	}

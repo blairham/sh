@@ -129,9 +129,22 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		// A character the group could not carry, deferred here by the
 		// parser: reached in a branch never taken, it is no error at all,
 		// which is measured. The position counts from the `$`.
+		//
+		// What is quoted is the rest of the *word* the group stands in and
+		// not the expansion alone (#1647) — see ParamExpr.FlagsErrTail for
+		// the measurements, and for the shapes where there is no word to
+		// recover and the expansion is all there is to say. A control
+		// character in that text is made visible rather than written into
+		// the diagnostic, which is measured on the same shell: a tab is
+		// `\t`, a newline `\n`, and a backslash is left alone — the same
+		// rendering `(V)` uses, so the two share one function.
+		text := e.FlagsErrTail
+		if text == "" {
+			text = "${" + e.Src + "}"
+		}
 		r.diagf("%s\n", Wording(r.diag().ExpansionFlagsError,
 			"error in flags near position %[1]d in '%[2]s'",
-			e.FlagsErrPos, "${"+e.Src+"}"))
+			e.FlagsErrPos, visibleText(text)))
 		r.expandErr = true
 		return nil, false, false, false
 	}
@@ -321,6 +334,20 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// here for the same reason `"${a[@]}"` does — the `@` is written, and
 	// the reference is that expansion. See referenceKeepsFields.
 	refFields := indirect != nil && r.referenceKeepsFields(indirectName(indirect.text))
+	// A context with room for exactly one word — an assignment's value, a
+	// `case` subject, a `[[ ]]` operand, a here-string — joins too, and
+	// **not here**: the join it does is rule 10's, below the operator. See
+	// there for the measurements that fix the position, and for #1705, which
+	// is what the join leaves the ordering flags nothing to order.
+	//
+	// The inner of a nesting arrives with the same policy and is not one of
+	// these contexts: what it comes to is read by the operator around it
+	// rather than by a command line, so its fields are values and not words
+	// — the same split expandingNestedInner already draws for the empty ones
+	// just below. Measured: `a=(one '' two)` and `"${(j:,:)${(@)${a[@]}}}"`
+	// is `one,,two`, three fields reaching the join, where a scalar context
+	// would have handed it one.
+	scalarContext := sp == splitNever && !r.expandingNestedInner
 	joined := false
 	if quoted && isList && !e.Length && !r.flagKeepsFields(e) && !markJoin && !refFields {
 		words = []string{strings.Join(words, r.flagJoinSep(e))}
@@ -356,7 +383,21 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// The two splits are kept apart because rule 10 below treats them
 	// differently: `(@)` exempts a letter split from the join ahead of it and
 	// leaves the `=` one joining. Only rule 11 wants them together.
-	letterSplit := strings.ContainsAny(e.Flags, splitFlagLetters)
+	// And never in a scalar context, which is the rule splitFlagInGroup
+	// already follows for the `=` spelling and which `f`, `s`, `0` and `p`
+	// follow with it. Measured on zsh 5.9.2, 2026-09-12, with `v=c,a,b` and
+	// `w=$'c\na\nb'`:
+	//
+	//	x=${(s:,:)v}                c,a,b      the assignment takes one word
+	//	printf '[%s]' ${(s:,:)v}    [c][a][b]
+	//	printf '[%s]' "${(s:,:)v}"  [c][a][b]  quoting is not what decides it
+	//	x=${(f)w}                   the three lines, unsplit
+	//	x=${(@s:,:)v}               c,a,b      nor does the `@` letter
+	//
+	// The second and third rows are the discriminating pair: a split the
+	// quoting turned off would have answered one field in the third, and a
+	// split nothing turns off would have answered three in the first.
+	letterSplit := !scalarContext && strings.ContainsAny(e.Flags, splitFlagLetters)
 	hasSplit := letterSplit || ifsSplit
 	// Rule 10: forced joining, ahead of a split — `${(s.:.)a}` on an array
 	// joins its elements with IFS's first character and splits the result.
@@ -387,7 +428,26 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// out: `a=(a '' '' b); "${(@)=a}"` is the two fields `a` and `b`, where
 	// splitting each element on its own would keep the two holes the way
 	// `"${(@s.:.)a}"` keeps them.
-	if (strings.ContainsRune(e.Flags, 'j') || ifsSplit ||
+	//
+	// A scalar context joins here whatever the group asked for, and this is
+	// the position rather than rule 5 — the operator above has already run
+	// on the elements. Measured on zsh 5.9.2, 2026-09-12, with `y=(ab ab)`,
+	// `z=(x y)` and `q=(one two)`:
+	//
+	//	x=${y#ab}          ` `      each element trimmed, then joined
+	//	x="${y#ab}"        ` ab`    where quoting joins first, at rule 5
+	//	x=${(j:+:)y#ab}    `+`      and the separator the group named
+	//	x=${(@)z:/x/Q}     `Q y`    the element operators run elementwise
+	//	x=${(o)q:#one}     `two`    all four of them
+	//	x=${(q)$(f)}       `b\ b\ a\ a\ c`  and the quoting sees one word
+	//	x=${(l:3::_:)$(h)} `1 2`    as does the pad, `3 1 2` clipped to three
+	//
+	// Rows one and two are each other's control: the same characters in the
+	// same assignment, parting on where the join sits. Rows six and seven
+	// are what fixes the *lower* bound — every step below this one has to
+	// see the joined word — and #1705 is the ordering step among them, which
+	// finds one word and leaves it alone.
+	if (strings.ContainsRune(e.Flags, 'j') || ifsSplit || scalarContext ||
 		(letterSplit && !strings.ContainsRune(e.Flags, '@'))) &&
 		!joined && isList && !markJoin {
 		words = []string{strings.Join(words, r.flagJoinSep(e))}
@@ -533,6 +593,22 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// read as a command line of its own.
 	if opts, ok := shellSplitOpts(e); ok {
 		words, isList = r.splitShellWordsAll(words, opts), true
+	}
+	// The shell split is the one step below rule 10 that can hand a scalar
+	// context more than one word, so the join is repeated here — and this is
+	// the last point that can see it, since the two steps below both read
+	// the words this leaves. Measured on zsh 5.9.2, 2026-09-12, `u='b a'`:
+	//
+	//	x=${(oZ+n+)u}          `b a`   the ordering finds one word
+	//	x=${(l:3::_:Z+n+)u}    `b a`   and so does the pad, `b a` being three
+	//	printf '[%s]' ${(oZ+n+)u}  [a][b]   where a list context sorts
+	//	IFS=: x=${(Z+n+)u}     `b:a`   joined on IFS
+	//	x=${(j:+:Z+n+)u}       `b a`   and on IFS even where `j` named one
+	//
+	// The last row is why this is not rule 10's join reached twice: that one
+	// honors the separator the group asked for and this one does not.
+	if scalarContext && isList {
+		words, isList = []string{strings.Join(words, ifsFirst(r.ifs()))}, false
 	}
 
 	// The ordering step is last of all, which is *later* than the rule

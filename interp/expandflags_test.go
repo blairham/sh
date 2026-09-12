@@ -255,7 +255,9 @@ func TestExpansionFlagFields(t *testing.T) {
 // wording and position — and no error at all in a branch never taken.
 func TestExpansionFlagErrors(t *testing.T) {
 	out, errs, st := flagsRun(t, `x=a; echo "${(!)x}"; echo after`)
-	if !strings.Contains(errs, "error in flags near position 4 in '${(!)x}'") {
+	// The rest of the word, which is the closing quote here — see
+	// ParamExpr.FlagsErrTail.
+	if !strings.Contains(errs, `error in flags near position 4 in '${(!)x}"'`) {
 		t.Errorf("stderr = %q, want the flags error with its position", errs)
 	}
 	if strings.Contains(out, "after") || st != 1 {
@@ -268,7 +270,7 @@ func TestExpansionFlagErrors(t *testing.T) {
 	}
 
 	out, errs, st = flagsRun(t, `x=a; echo "${(Ux}"; echo after`)
-	if !strings.Contains(errs, "error in flags near position 5 in '${(Ux}'") {
+	if !strings.Contains(errs, `error in flags near position 5 in '${(Ux}"'`) {
 		t.Errorf("stderr = %q, want the position just past the end", errs)
 	}
 	if strings.Contains(out, "after") || st != 1 {

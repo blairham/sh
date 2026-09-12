@@ -1845,16 +1845,11 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			// See referenceNode.
 			return r.expandParam(r.referenceNode(name, &syntax.ParamExpr{Length: true}, e.Src))
 		}
-		// Measured rather than used, which the inner has to know: a
-		// substitution in the name position is not field-split under a
-		// length. See nestedInnerSplit, and note that the flag has to reach
-		// the inner's *own* inner — `${#${(o)$(cmd)}}` measures a name
-		// position two levels down — which is why it is a runner flag and
-		// not an argument.
-		prev := r.nestedLength
-		r.nestedLength = true
+		// The inner is expanded exactly as it would be without the length —
+		// the split it is subject to is the one its quoting gives it, and
+		// not one a length turns off. See nestedInnerSplit for the
+		// measurement that took the claim back out.
 		words, _, isList := r.nestedWords(e)
-		r.nestedLength = prev
 		if isList {
 			return itoa(len(words))
 		}
@@ -4877,10 +4872,16 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set, isList b
 func (r *Runner) nestedInnerIsAList(e *syntax.ParamExpr, words []string) bool {
 	inner, _ := r.nestedInnerSpan(e)
 	if inner.Kind != syntax.ParamExp || inner.Param == nil {
-		// A command substitution or an arithmetic one in the name position.
-		// Neither is field-split here yet (#976), so the shape has to be read
-		// off what came out rather than off the node.
-		return len(words) > 1
+		// A command substitution or an arithmetic one in the name position
+		// is a *list* there, however few words it came to, and the field
+		// count cannot say so — which is the half #1394 turned on. Measured
+		// on zsh 5.9.2, 2026-09-12: `${#$(echo abc)}` is 1 and not 3, and
+		// `${#$((6*7))}` is 1 and not 2, so one word is a list of one and
+		// not a string.
+		//
+		// Quoted it is a string, because the quotes joined its fields before
+		// anything here saw them: `print -r -- "${#$(echo abc)}"` is 3.
+		return inner.Quoting == syntax.Unquoted
 	}
 	return r.nestedResultIsAList(inner.Param, words, inner.Quoting != syntax.Unquoted)
 }
@@ -5040,7 +5041,7 @@ func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 		words = parts
 	} else {
 		text, split := r.expandSpan(span, sp, true)
-		words = r.nestedInnerSplit(text, split)
+		words = r.nestedInnerSplit(span, text, split)
 	}
 	// The marks come off once, whichever half produced the fields. The inner
 	// is an operand rather than a field of the command line, so a `*` in its
@@ -5082,12 +5083,36 @@ func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 // command substitution and the axis for a parameter, asked where they
 // differ rather than assumed to agree.
 
-func (r *Runner) nestedInnerSplit(text string, split bool) []string {
-	if !split || r.nestedLength {
-		return []string{text}
+// A length does not change any of that, and the claim that it did was a
+// measurement taken in one context and written down as a rule (#1703). With
+// `f(){ printf "b  b\na a\nc\n"; }` — ten characters, five fields, nine
+// once joined — measured again on zsh 5.9.2, 2026-09-12:
+//
+//	print -r -- "${#${(o)$(f)}}"   10   quoted: unsplit, so `(o)` sorts one
+//	x=${#${(o)$(f)}}               5    unquoted: five fields, counted
+//	printf '[%s]' ${#$(f)}         [5]  and the plain shape agrees
+//
+// So the split follows the quoting under a length exactly as it does without
+// one, and there is nothing here for a length to say.
+func (r *Runner) nestedInnerSplit(span syntax.Span, text string, split bool) []string {
+	if split {
+		ifs, set := r.ifs()
+		return r.splitFieldsAsk(text, ifs, set)
 	}
-	ifs, set := r.ifs()
-	return r.splitFieldsAsk(text, ifs, set)
+	if text == "" && span.Quoting == syntax.Unquoted && span.Kind != syntax.ParamExp {
+		// An unquoted substitution that came to nothing is no field, the way
+		// one on a command line is — and `split` cannot say so, because a
+		// result with no separator in it is reported unsplit whether it is
+		// empty or a word. Measured on zsh 5.9.2, 2026-09-12:
+		// `printf '[%s]' ${#$(true)[@]}` is `[0]` and `${#$(true)}` is `[0]`,
+		// where one empty field would have answered 1 to both.
+		//
+		// A *parameter* inner is left alone: an empty scalar there is one
+		// field, and `s=''; ${#${s}[@]}` is 0 through the shape question
+		// rather than through the field count.
+		return nil
+	}
+	return []string{text}
 }
 
 // unescapeAll takes the glob marks off every field, for a caller that wants

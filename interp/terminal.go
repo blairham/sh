@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"errors"
 	"io"
 	"os"
 	"strconv"
@@ -119,11 +120,38 @@ func (r *Runner) descriptorIsTerminal(fd int) bool {
 // `[ -t ' 1 ' ]` on a pseudo-terminal is true in dash, bash 5.3, bash-as-sh,
 // bash 3.2 and zsh 5.9.2, and false in ksh93 alone.
 func (r *Runner) terminalTest(operand string) (answer, isNumber bool) {
-	fd, err := strconv.Atoi(strings.TrimSpace(operand))
-	if err != nil {
+	fd, err := strconv.ParseInt(strings.TrimSpace(operand), 10, 64)
+	if err != nil && !errors.Is(err, strconv.ErrRange) {
 		return false, false
 	}
-	return r.descriptorIsTerminal(fd), true
+	// How wide the descriptor is read at, which one dialect answers
+	// differently — see TerminalTestDescriptorNarrowsToThirtyTwoBits. Asked
+	// only where the two readings can differ: a number the whole panel holds
+	// is the same descriptor either way.
+	//
+	// ParseInt hands back the saturated value along with a range error, which
+	// is the value a C conversion of the same text stops at, so the two
+	// branches are one rule read at two widths rather than two rules.
+	if narrow := int64(int32(fd)); err != nil || narrow != fd {
+		if !r.ask(r.sem().TerminalTestDescriptorNarrowsToThirtyTwoBits,
+			"a `-t` descriptor read at the width of a machine int") {
+			// Nothing narrows it. A value too wide to convert at all is not a
+			// number, which is a question of its own; one that merely does not
+			// fit in 32 bits is a descriptor nothing is open at.
+			if err != nil {
+				return false, false
+			}
+			return r.descriptorIsTerminal(int(fd)), true
+		}
+		fd = narrow
+	}
+	if fd == -1 && r.ask(r.sem().TerminalTestMinusOneIsATerminal, "`[ -t -1 ]`") {
+		// The one value that answers on its own, in the one dialect that has
+		// it: true whatever the shell is holding, and where every conversion
+		// too wide to hold has just landed.
+		return true, true
+	}
+	return r.descriptorIsTerminal(int(fd)), true
 }
 
 // terminalSize is how big the terminal this shell holds is, or zeroes where

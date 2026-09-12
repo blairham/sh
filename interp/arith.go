@@ -1408,33 +1408,68 @@ func (r *Runner) arithValueAsExpression(value string) (arithNum, error) {
 	return n, nil
 }
 
-// decimalLeadingNumeral answers the leading numeral of a stored value in
-// decimal where the dialect reads one that way — see
-// Semantics.ArithStoredValueReadsALeadingZeroAsDecimal — by handing back the
-// value with that numeral rewritten. Everything else is returned unchanged.
+// decimalLeadingNumeral answers a stored value with its leading zeros taken
+// off, where the dialect reads one that way — see
+// Semantics.ArithStoredValueReadsALeadingZeroAsDecimal. Everything else is
+// returned unchanged.
 //
 // A rewrite rather than a number, because the value may be a whole expression
-// and only its first numeral is read this way: measured 2026-09-11 on ksh93u+,
-// `k=010+1` is 11 where the identical literal `$((010+1))` is 9.
+// and only what stands in front of it is read this way: measured 2026-09-11 on
+// ksh93u+, `k=010+1` is 11 where the identical literal `$((010+1))` is 9.
 //
 // Asked only where the two readings can differ: the value has to *begin* with
-// a zero in front of another digit, with nothing before it.
+// a zero that something follows, with nothing before it.
 //
-//	k=010     10   the digits, in decimal
-//	k=0010    10   however many zeros
-//	k=09       9   an invalid octal digit is just a digit
-//	k=010+1   11   the leading numeral only; `k=1+010` is 9
-//	k=010#5    5   the numeral is the base, and in decimal
-//	k=-010    -8   a sign is not part of it, so nothing is rewritten
-//	k=" 010"   8   nor is anything in front of it
-//	k=0x10    16   a prefix both readings agree about
+//	k=010      10   the digits, in decimal
+//	k=0010     10   however many zeros
+//	k=09        9   an invalid octal digit is just a digit
+//	k=010+1    11   the leading run only; `k=1+010` is 9
+//	k=010#5     5   the numeral is the base, and in decimal
+//	k=-010     -8   a sign is not part of it, so nothing is rewritten
+//	k=" 010"    8   nor is anything in front of it
+//	k=0abc      5   with abc=5: the zeros go in front of a name too
+//	k=0b101     9   with b101=9, which is why this is not a rule about digits
+//	k=0x10     16   one zero in front of an x is a hex prefix and survives
+//	k=00x10     7   with x10=7: two zeros are not a prefix, so both go
+//
+// The last two rows are the whole of what hexPrefixSurvives is for, and they
+// are the one thing this reader and a *condition operand's* disagree about —
+// see conditionLeadingNumeral.
 func (r *Runner) decimalLeadingNumeral(value string) string {
+	return r.leadingZerosOff(value, true)
+}
+
+// conditionLeadingNumeral is decimalLeadingNumeral at the other site: the
+// operand of a word-spelled comparison, where nothing survives the zeros.
+//
+// Measured 2026-09-12 on ksh93u+, which is the only column that takes any of
+// this — the reading is the same one, asked the same way, and only the hex
+// prefix parts company:
+//
+//	                      [ … -eq ]   k=…; $(( k ))
+//	0x10, with x10=7          7            16
+//	0x10, with x10 unset      0            16
+//	0xg, with xg=9            9            arithmetic syntax error
+//	00x10, with x10=7         7             7
+//	010                      10            10
+//
+// So a condition operand's `0x` is not a prefix at all: `[[ 0x10 -eq 16 ]]`
+// is false there while `[[ 1+0x10 -eq 17 ]]` holds, because the second has
+// nothing in front of the zero for the rewrite to reach (#1627).
+func (r *Runner) conditionLeadingNumeral(value string) string {
+	return r.leadingZerosOff(value, false)
+}
+
+// leadingZerosOff is the reading both sites share. hexPrefixSurvives keeps a
+// single leading zero in front of an `x` or `X`, which is what tells a stored
+// value's reader from a condition operand's.
+func (r *Runner) leadingZerosOff(value string, hexPrefixSurvives bool) string {
 	if r.sem().ArithLeadingZeroIsOctal != Yes {
 		// Nothing made the zero octal, so the two readings already agree and
 		// there is no choice to put to the dialect.
 		return value
 	}
-	n := leadingZeroPaddedRun(value)
+	n := leadingZeroRun(value, hexPrefixSurvives)
 	if n == 0 {
 		return value
 	}
@@ -1442,25 +1477,27 @@ func (r *Runner) decimalLeadingNumeral(value string) string {
 		"a zero-padded number read out of a variable") {
 		return value
 	}
-	digits := strings.TrimLeft(value[:n], "0")
-	if digits == "" {
-		digits = "0"
-	}
-	return digits + value[n:]
+	// A value that is nothing but zeros keeps them — leadingZeroRun says so
+	// by answering nothing to strip — so what is left here is never empty.
+	return value[n:]
 }
 
-// leadingZeroPaddedRun is how long the value's leading run of decimal digits
-// is, when that run starts with a zero standing in front of another digit —
-// the one shape the two readings answer differently. Zero means no such run.
-func leadingZeroPaddedRun(value string) int {
-	if len(value) < 2 || value[0] != '0' {
-		return 0
-	}
+// leadingZeroRun is how many leading `0` bytes the value opens with, when
+// something follows them — the one shape the two readings answer differently.
+// Zero means there is nothing to rewrite.
+//
+// hexPrefixSurvives excludes exactly one zero standing in front of an `x` or
+// an `X`, which is a radix prefix to the reader that keeps it. Two zeros are
+// not: `00x10` is the name `x10` in every reader measured.
+func leadingZeroRun(value string, hexPrefixSurvives bool) int {
 	n := 0
-	for n < len(value) && value[n] >= '0' && value[n] <= '9' {
+	for n < len(value) && value[n] == '0' {
 		n++
 	}
-	if n < 2 {
+	if n == 0 || n == len(value) {
+		return 0
+	}
+	if hexPrefixSurvives && n == 1 && (value[1] == 'x' || value[1] == 'X') {
 		return 0
 	}
 	return n

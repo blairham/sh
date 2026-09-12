@@ -6129,9 +6129,36 @@ type Semantics struct {
 	// zsh; bash and dash answer a script with silence at 0.
 	FcEmptyHistoryIsAnError Answer
 
-	// TestIntegerRefusalIsSilent has `[ a -eq 1 ]` fail with no sentence at
-	// status 1 — ksh93; the other three complain at 2.
-	TestIntegerRefusalIsSilent Answer
+	// TestBuiltinComparisonOperandsAreArithmetic reads the operands of
+	// `test`'s and `[`'s word-spelled comparisons as arithmetic
+	// expressions, the way `[[ ]]` reads its own. ksh93 alone; dash, bash
+	// 5.3, bash-as-sh, bash 3.2 and zsh want a numeral and say so.
+	//
+	// Measured 2026-09-12, `-c`, `env -i`:
+	//
+	//	                   n=5; [ n -eq 5 ]   [ 1+1 -eq 2 ]   [ "" -eq 0 ]
+	//	dash                 Illegal number    Illegal number   Illegal number
+	//	bash 5.3, 3.2        integer expected  integer expected integer expected
+	//	zsh 5.9.2            integer expected  integer expected true
+	//	ksh93u+              true              true             true
+	//
+	// It is the whole expression language and not a name lookup: `1+1` is
+	// two there, `n+1` is six with `n=5`, and an assignment written in an
+	// operand lands — `n=5; [ "n=9" -eq 9 ]` holds and leaves `n` at nine.
+	// A failure it cannot read is loud but *not* fatal and not the
+	// not-an-expression 2: `[ 1x1 -eq 0 ]` is `ksh: [: 1x1: arithmetic
+	// syntax error` at 1 and the script runs on, where the identical
+	// `[[ 1x1 -eq 0 ]]` in the same shell abandons the input.
+	//
+	// This is the single-bracket builtin only. `[[ ]]` reads its operands
+	// as arithmetic in every shell that has the construct, which is why
+	// there is nothing to ask there.
+	//
+	// It replaces an axis that recorded one symptom of it:
+	// `TestIntegerRefusalIsSilent` had `[ a -eq 1 ]` fail without a
+	// sentence, which is what an arithmetic reading does to an unset name
+	// — zero, unequal, quiet — and could not explain `[ 1+1 -eq 2 ]`.
+	TestBuiltinComparisonOperandsAreArithmetic Answer
 
 	// MissingFileIsOlder has `-nt` and `-ot` count a path that does not
 	// exist as older than any file that does, so `f -nt missing` and
@@ -6173,6 +6200,53 @@ type Semantics struct {
 	// Nothing is asked for `[[ -t ]]`: every shell in the panel that has the
 	// construct refuses it as a syntax error.
 	BareTerminalTestIsDescriptorOne Answer
+
+	// TerminalTestDescriptorNarrowsToThirtyTwoBits reads `-t`'s operand the
+	// width a C `int` is: a value too wide for the shell's own integer
+	// saturates, and what is left is then taken modulo 2**32 as a signed
+	// number. ksh93 alone; every other column answers a descriptor nothing
+	// is open at false whatever its spelling.
+	//
+	// Measured 2026-09-12 under a pseudo-terminal, with descriptors 0 and 1
+	// on the terminal and 2 redirected away:
+	//
+	//	operand                 narrows to   ksh93   bash 5.3
+	//	4294967296              0            true    false
+	//	4294967297              1            true    false
+	//	4294967298              2            false   false
+	//	9223372036854775807     -1           true    false
+	//	99999999999999999999    -1           true    2, integer expected
+	//
+	// The third row is the control and is what makes this a *narrowing*
+	// rather than "a big number is true": 4294967298 is descriptor 2, and
+	// descriptor 2 is not a terminal in that run. The same five operands
+	// with no terminal anywhere answer true for the two that narrow to -1
+	// and false for the three that narrow to 0, 1 and 2.
+	//
+	// Silent and wrong either way: a descriptor number that arrived from
+	// arithmetic and overflowed is answered about some other descriptor,
+	// with nothing said.
+	//
+	// unpinned zsh: the corpus runs with no terminal, so a narrowed
+	// descriptor and an un-narrowed one are both false — the only field
+	// that can tell them apart is one where the *conversion* fails, and
+	// the shells that refuse such an operand are bash and dash. zsh takes
+	// it quietly under either answer, so nothing a row can say moves that
+	// pair without a pseudo-terminal, which the harness has not got. The
+	// two sides are pinned in interp/terminaltest_test.go, which opens one.
+	TerminalTestDescriptorNarrowsToThirtyTwoBits Answer
+
+	// TerminalTestMinusOneIsATerminal has `[ -t -1 ]` hold whatever the
+	// shell is holding. ksh93 alone.
+	//
+	// Measured 2026-09-12 with every stream redirected to a file, so no
+	// descriptor of the run is a terminal: `[ -t -1 ]` is still true in
+	// ksh93 and false in dash, bash 5.3, bash-as-sh, bash 3.2 and zsh.
+	// `-2`, `-3` and `-100` are false in all six, which is what says this
+	// is the one value and not a rule about negative descriptors — and what
+	// makes it a second question beside the narrowing above, since every
+	// saturating conversion lands here.
+	TerminalTestMinusOneIsATerminal Answer
 
 	// ReadRequiresAVariableName refuses a bare `read`: dash's "arg count"
 	// at 2, where the other three read into REPLY.
@@ -8686,15 +8760,21 @@ func PosixSemantics() Semantics {
 		// through — which is also the majority, five of the six.
 		UnderscoreStartsAtTheInvocation:      No,
 		UnderscoreInheritsFromTheEnvironment: Yes,
-		// The majority answers: full bases, wrapping overflow, zero for an
-		// empty expression.
-		TestIntegerRefusalIsSilent: No,
+		// POSIX gives `test`'s `-eq` family two *integers* to compare, so
+		// the standard's reading is a numeral and not an expression. It is
+		// five of the six as well.
+		TestBuiltinComparisonOperandsAreArithmetic: No,
 		// POSIX has no -nt or -ot at all; dash, its closest reading, wants
 		// both files to exist.
 		MissingFileIsOlder: No,
 		// POSIX gives -t a file descriptor, and dash refuses anything that
 		// is not a number.
 		TerminalTestRequiresANumber: Yes,
+		// And a descriptor the shell has nothing open at is not a terminal,
+		// however the number was spelled: no narrowing, and no value that
+		// answers true on its own.
+		TerminalTestDescriptorNarrowsToThirtyTwoBits: No,
+		TerminalTestMinusOneIsATerminal:              No,
 		// POSIX gives the one-argument form of `test` to the string rule
 		// with no exception in it, which is dash's reading and bash's.
 		BareTerminalTestIsDescriptorOne:  No,

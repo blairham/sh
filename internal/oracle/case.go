@@ -9992,6 +9992,11 @@ echo unreachable`,
 		Why:     "how far the decimal reading reaches: on the shell that splits it is the value's *leading* numeral only, so `010+1` is 11 where `1+010` and the written literal are both 9. Without the second and third fields a rule that read every numeral in a value decimally would pass",
 	},
 	{
+		ID: "arith/a-values-leading-zeros-in-front-of-a-name", Category: "arithmetic",
+		Snippet: `abc=5; b101=9; x10=7; k=0abc; ( echo "name=$(( k ))" ); echo "s1=$?"; k=0b101; ( echo "bin=$(( k ))" ); echo "s2=$?"; k=0x10; ( echo "hex=$(( k ))" ); echo "s3=$?"; k=00x10; ( echo "two=$(( k ))" ); echo "s4=$?"`,
+		Why:     "what the same reading does when the zeros stand in front of something that is not a digit. ksh93 takes them off there too — `0abc` is the name `abc` and `0b101` the name `b101` — so this is not a rule about zero-padded numerals. The exception is the third field: one zero in front of an `x` is a radix prefix and survives, which is why `0x10` is sixteen while `00x10`, where two zeros cannot be a prefix, is the name `x10` again. Those last two are the pair that pins the rule; without them a reader that stripped every leading zero and one that stripped none both pass. Each field is run in a subshell because the failure is fatal in four columns. zsh answers the binary field 5, having no octal to fall back from (#1627)",
+	},
+	{
 		ID: "arith/a-zero-padded-numeral-in-a-let-word", Category: "arithmetic",
 		Snippet: `let "x=010"; (( y=010 )); echo "let=$x arith=$y"`,
 		Why:     "a third reader for a leading zero, and the pair is what makes it one: in ksh93 `let \"x=010\"` is 10 and `(( y=010 ))` is 8, in the same shell and the same line. bash is 8 twice and zsh 10 twice, so it is neither the lexer's answer nor the value's but `let`'s own — the documentation says the two constructs are the same evaluation and they are not (#1867). dash has no `let` at all",
@@ -10893,6 +10898,31 @@ printf 'TWO=still-running\n'`,
 		ID: "test/bare-terminal-test-is-descriptor-one", Category: "test",
 		Snippet: `[ -t ] >/dev/null; echo "bare=$?"; test -t >/dev/null; echo "tbare=$?"; [ ! -t ] >/dev/null; echo "not=$?"; [ -f ] >/dev/null; echo "f=$?"`,
 		Why:     "the BareTerminalTestIsDescriptorOne axis. With one argument POSIX gives `test` the string rule, and `-t` is a non-empty string: dash, bash, bash-as-sh and bash 3.2 answer 0, where ksh93 and zsh read it as `-t 1` and answer about the descriptor. Descriptor 1 is redirected to the null device so the split is a fact about the reading rather than about the run; `[ -f ]` is beside it because it is 0 in all six, which says the exception is the one word and not a general rule about an operator with no operand",
+	},
+	{
+		ID: "test/comparison-operands-are-arithmetic", Category: "test",
+		Snippet: `n=5; [ n -eq 5 ]; echo "name=$?"; [ 1+1 -eq 2 ]; echo "expr=$?"; [ 16#10 -eq 16 ]; echo "based=$?"; n=5; [ "n=9" -eq 9 ]; echo "assign=$? n=$n"`,
+		Why:     "the TestBuiltinComparisonOperandsAreArithmetic axis. ksh93 reads the operands of the word-spelled comparisons as arithmetic expressions, the way every shell reads `[[ ]]`'s: a bare name is its value, `1+1` is two, a based numeral is a number, and an assignment written in an operand *lands* — the last field is 9 there and 5 in the five columns that want a numeral and name the word that is not one. Recorded on `[` rather than `[[ ]]` because that construct is unanimous (#1626)",
+	},
+	{
+		ID: "test/a-comparison-operand-that-will-not-read", Category: "test",
+		Snippet: `[ 1x1 -eq 0 ]; echo "st=$?"; [ 3/0 -eq 0 ]; echo "div=$?"; echo after`,
+		Why:     "the other side of the same axis: what happens to text neither reading can use. Five columns say `integer expected` in their own words at 2, and ksh93 raises the *arithmetic's* complaint — `[: 1x1: arithmetic syntax error`, `[: 3/0: divide by zero` — at 1, behind the name the builtin was called by. The trailing `after` is the part worth pinning beside it: the refusal is loud in every column and fatal in none, where the identical words inside `[[ ]]` take ksh93's script with them (#1626)",
+	},
+	{
+		ID: "test/a-comparison-operands-leading-zeros", Category: "test",
+		Snippet: `x10=7; [ 010 -eq 10 ]; echo "dec=$?"; [ 0x10 -eq 16 ]; echo "hex=$?"; [ 0x10 -eq 7 ]; echo "name=$?"; [ 1+0x10 -eq 17 ]; echo "inner=$?"`,
+		Why:     "how far ksh93's leading-zero rewrite reaches in a comparison operand. `010` is ten there rather than the eight its own `$(( ))` reads, and the zeros come off in front of an `0x` prefix too, so `0x10` is the *name* `x10` — sixteen in the second field is false and seven in the third is true. The fourth is the control: with something in front of the zero there is nothing to take off, so `1+0x10` is seventeen and the reader plainly does have hex in it. The other five columns want a numeral and refuse every field but the first (#1627)",
+	},
+	{
+		ID: "test/a-terminal-test-descriptor-too-wide", Category: "test",
+		Snippet: `[ -t -1 ]; echo "m1=$?"; [ -t -2 ]; echo "m2=$?"; [ -t 4294967295 ]; echo "wrap=$?"; [ -t 4294967296 ] </dev/null; echo "zero=$?"; [ -t 9223372036854775807 ]; echo "max=$?"`,
+		Why:     "the two axes over what `-t`'s operand is converted to. ksh93 reads it at the width of a machine int, so 4294967295 and the largest integer it can hold both narrow to -1 — and -1 answers true whatever the shell is holding, which is what the first field shows with no terminal anywhere. `-2` is false in all six, so it is the one value and not a rule about negative descriptors, and 4294967296 narrows to descriptor 0, redirected here to the null device, which is what makes the reading a *narrowing* rather than `a big number is true`. Every other column answers a descriptor nothing is open at false however it was spelled (#2000)",
+	},
+	{
+		ID: "test/a-terminal-test-descriptor-past-the-integer", Category: "test",
+		Snippet: `[ -t 9223372036854775808 ]; echo "big=$?"; [ -t 99999999999999999999 ]; echo "wide=$?"`,
+		Why:     "an operand too wide for the shell's own integer, which is where the narrowing above becomes visible in a run with no terminal in it. bash and dash convert first and refuse what will not fit, at 2 with their integer wordings; ksh93 saturates and narrows to -1, which is true; bash 3.2 and zsh answer a quiet false. Ours owes zsh a warning here — that shell truncates *any* number past nineteen digits and says so, in arithmetic and `printf` as much as in `test`, which is a reader of its own and not this operand's question. Kept as a row because it is the only place a run without a terminal can tell a narrowed descriptor from a refused one (#2000)",
 	},
 
 	// --- times: the last special builtin, and the most divergent for its size

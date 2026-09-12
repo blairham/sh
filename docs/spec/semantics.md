@@ -9119,12 +9119,50 @@ letter never reach the question and answer the word the way they answer
 any other letter they do not have — `CdRefusesUnknownOption` above is the
 next question when this one says no.
 
-zsh has a fourth letter, `-s`, which refuses a path with a symlink
-component: `cd -s link` and `cd -s link/deep` are both `not a directory`
-there while `cd -s real` moves. It is not carried and reaches the
-unknown-letter question, so `cd -s dir` is read as a directory called
-`-s` in our zsh where the real one moves. Filed as #1569 rather than
-guessed at.
+**`CdHasSymlinkFreeOption`** — bash no · dash no · ksh93 no · zsh yes
+
+Gives `cd` the `-s` of zsh, the fourth option letter and the second that
+belongs to that shell alone. What it asks is that the *operand* cross no
+symbolic link. Measured 2026-09-12 on zsh 5.9.2, in a directory holding
+`real/deep` and a `link` pointing at `real`:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `cd -s real` | moves |
+| `cd -s link` | `not a directory: link`, 1 |
+| `cd -s link/deep` | `not a directory: link/deep`, 1 |
+| `cd -s link/../real` | `not a directory: link/../real`, 1 |
+| `cd -s real/../real` | moves |
+| `cd -s real/deep/..` | moves |
+| `cd -s nosuchdir` | `no such file or directory: nosuchdir`, 1 |
+
+Three of those rows are load-bearing and none of them is the obvious one.
+
+**It is the operand and not the place arrived at.** `cd link` and then
+`cd -s deep` *moves*, though the directory it lands in is reached through
+a link — the walk starts where the shell already is and looks only at what
+the operand itself names. An absolute operand is walked from the root
+instead, which is why `cd -s /tmp/x` is refused on a machine where `/tmp`
+is a link while `cd -s /private/tmp/x` is not.
+
+**The components are examined where they stand, not after cleaning.**
+`link/../real` names the same directory `real` does and is refused, because
+the walk meets `link` first; `real/deep/..` moves, because `..` is no link.
+The other direction matters as much: `cd -s ../cdtest/real` moves from a
+`/tmp/cdtest` whose `/tmp` is a link, and a lexical clean would make that
+operand `/tmp`, find the link and refuse a move the shell makes.
+
+**The refusal is `ENOTDIR` and comes before the operand's existence is
+asked about.** A path that is not there is the ordinary
+`no such file or directory`, and a path whose first component is a link is
+`not a directory` even when nothing further along exists. So the walk stops
+at the first link it meets and leaves a missing component to the failure
+every `cd` already has.
+
+Asked only when an `s` is actually seen, for `CdHasQuietOption`'s reason:
+the five columns without the letter reach `CdRefusesUnknownOption` instead.
+Before #1569 this shell had no letter either, so `cd -s dir` went looking
+for a directory called `-s` — the same shape `-q` had before #1558.
 
 **`DirectoryChangeHook`** — bash — · dash — · ksh93 — · zsh `chpwd`
 

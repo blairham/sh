@@ -204,6 +204,7 @@ func TestSemantics(t *testing.T) {
 		{"ChildInterruptEndsTheScript", s.ChildInterruptEndsTheScript, interp.No},
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.No},
 		{"CdHasQuietOption", s.CdHasQuietOption, interp.Yes},
+		{"CdHasSymlinkFreeOption", s.CdHasSymlinkFreeOption, interp.Yes},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.No},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
 		// The one shell that says anything about a `[[ -o ]]` name it does

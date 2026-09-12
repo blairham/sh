@@ -6,6 +6,7 @@ package interp
 import (
 	"context"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -2408,11 +2409,8 @@ func cont(u uint32, shift int) byte { return byte(0x80 | (u>>shift)&0x3F) }
 // where all four print the link's path for the first two and the real one for
 // the third.
 //
-// `-q` is a third, and belongs to one shell — see CdHasQuietOption. zsh has a
-// fourth, `-s`, which refuses a path with a symlink component (`cd -s link`
-// and `cd -s link/deep` are both `not a directory` there while `cd -s real`
-// moves); it is not carried yet and is filed as #1569 rather than guessed
-// at, so it still reaches the unknown-letter question below.
+// `-q` is a third and `-s` a fourth, and both belong to one shell — see
+// CdHasQuietOption and CdHasSymlinkFreeOption.
 //
 // A lone `-` is not an option — it is the previous directory — which the
 // length test leaves alone. `--` ends the options in all six, which is what
@@ -2484,6 +2482,25 @@ func (r *Runner) cdOptions(args []string) (rest []string, opts cdFlags, code int
 				// answers any other letter it does not have, which is the
 				// next question rather than a second rule.
 				fallthrough
+			case 's':
+				// zsh's other letter, and the same shape as `-q` down to the
+				// unanswered branch: carried to where there is something to
+				// do with it rather than swallowed here, because what it
+				// asks about is the *operand* and the operand has not been
+				// read yet. See Semantics.CdHasSymlinkFreeOption.
+				//
+				// The `q` case falls into this one, so the guard has to be
+				// on the letter as well as on the axis: a `q` in a shell
+				// without `-q` must reach the unknown-letter question below
+				// and not be read as an `s`.
+				if ans := r.sem().CdHasSymlinkFreeOption; a[i] == 's' && ans != No {
+					if r.ask(ans, "`cd -s`") {
+						opts.symlinkFree = true
+						continue
+					}
+					return nil, opts, r.status
+				}
+				fallthrough
 			default:
 				// The one place the panel splits: three of them refuse a
 				// letter `cd` does not have, and zsh reads the word as
@@ -2532,6 +2549,27 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	// rather than a second guard beside the first, because a second guard is
 	// what the spelling correction below would have had to add.
 	named := dir
+	// `cd -s` refuses an operand that crosses a symbolic link, and refuses it
+	// *here* — before CDPATH, before the join, and before the operand's
+	// existence is asked about. That order is measured: `cd -s /tmp/no/such`
+	// on a machine where `/tmp` is a link says `not a directory` while
+	// `cd -s real/nosuch` says `no such file or directory`, so the walk stops
+	// at the first link it meets and leaves a missing component to the
+	// ordinary failure below.
+	//
+	// ENOTDIR rather than a sentence of its own, because that is what the
+	// shell says and because the dialect already words it: the refusal is
+	// indistinguishable from the kernel's own, and a reader who does not know
+	// the letter reads it as the path not being a directory — which, for a
+	// `cd` that will not follow links, it is not. See
+	// Semantics.CdHasSymlinkFreeOption.
+	if opts.symlinkFree && r.operandCrossesASymlink(old, dir) {
+		notDir := &fs.PathError{Op: "chdir", Path: dir, Err: syscall.ENOTDIR}
+		r.NoteErrno(notDir)
+		r.diagf("%s\n", Wording(r.diag().CdCannotChange, "cd: %[1]s: %[2]s",
+			named, r.diag().reasonText(reason(notDir))))
+		return orDefault(r.diag().CdStatus, 1)
+	}
 	announced := false
 	if !filepath.IsAbs(dir) && !dash {
 		// CDPATH, searched for an operand that is not absolute and does not
@@ -2661,6 +2699,10 @@ type cdFlags struct {
 	// quiet suppresses the directory-change hook — zsh's `-q`, and nothing
 	// besides. See Semantics.CdHasQuietOption.
 	quiet bool
+
+	// symlinkFree refuses an operand that crosses a symbolic link — zsh's
+	// `-s`. See Semantics.CdHasSymlinkFreeOption.
+	symlinkFree bool
 }
 
 // searchCdpath walks CDPATH for a relative operand that does not lead with

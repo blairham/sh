@@ -42,6 +42,11 @@ func define(t *testing.T, r *interp.Runner, name, body string) {
 // here rather than imported: dialect/zsh imports this package, so a test in it
 // cannot import the dialect back. What the dialect's own table holds is
 // asserted in dialect/zsh, beside the measurement it came from.
+//
+// It has to keep matching that table, and the unfired list is the half that
+// moves: `chpwd` left it in #1775 and `zshexit` in #2111, each on gaining a
+// firing site of its own. A copy that still named one of those would have this
+// package's tests asserting a notice the shipped shell no longer gives.
 func hooksLikeZsh() HookStyle {
 	return HookStyle{
 		BeforePrompt:  "precmd",
@@ -52,7 +57,7 @@ func hooksLikeZsh() HookStyle {
 			DoAfterCommandOnItsOwnLine: true,
 			DoAfterWordsOnItsOwnLine:   true,
 		},
-		Unfired: []string{"periodic", "zshaddhistory", "zshexit"},
+		Unfired: []string{"periodic", "zshaddhistory"},
 	}
 }
 
@@ -205,11 +210,11 @@ func TestAnUnfiredHookIsNamedOnce(t *testing.T) {
 		t.Errorf("a session with no such hook said %q, want nothing", got)
 	}
 
-	define(t, s.Runner, "zshexit", `echo leaving`)
+	define(t, s.Runner, "periodic", `echo tick`)
 	s.reportUnfiredHooks()
 	s.reportUnfiredHooks()
 
-	const want = "sh: zshexit: hook not implemented yet\n"
+	const want = "sh: periodic: hook not implemented yet\n"
 	if got := out.String(); got != want {
 		t.Errorf("the session said %q, want %q exactly once", got, want)
 	}
@@ -224,13 +229,13 @@ func TestAnUnfiredHookIsNamedOnce(t *testing.T) {
 func TestAHookRegisteredOnlyThroughItsListIsNamed(t *testing.T) {
 	s, out := hookShell(t, hooksLikeZsh())
 	s.hooks = &hookState{reported: map[string]bool{}}
-	define(t, s.Runner, "on_exit", `echo leaving`)
-	s.Runner.SetArray("zshexit_functions", []string{"on_exit"})
+	define(t, s.Runner, "on_tick", `echo tick`)
+	s.Runner.SetArray("periodic_functions", []string{"on_tick"})
 
 	s.reportUnfiredHooks()
 
-	if got := out.String(); !strings.Contains(got, "zshexit: hook not implemented yet") {
-		t.Errorf("the session said %q, want it to name zshexit", got)
+	if got := out.String(); !strings.Contains(got, "periodic: hook not implemented yet") {
+		t.Errorf("the session said %q, want it to name periodic", got)
 	}
 }
 
@@ -343,13 +348,13 @@ func TestASessionNamesTheHooksItWillNotFire(t *testing.T) {
 	s := newSessionWith(t, func(sh *Shell) {
 		sh.Hooks = hooksLikeZsh()
 		sh.Runner.Semantics.HookListSuffix = "_functions"
-		define(t, sh.Runner, "on_exit", `echo leaving`)
-		sh.Runner.SetArray("zshexit_functions", []string{"on_exit"})
+		define(t, sh.Runner, "on_tick", `echo tick`)
+		sh.Runner.SetArray("periodic_functions", []string{"on_tick"})
 	})
 	s.typeLine("true\n")
 	s.end()
 
-	const want = "sh: zshexit: hook not implemented yet"
+	const want = "sh: periodic: hook not implemented yet"
 	switch got := strings.Count(s.errs.String(), want); got {
 	case 1:
 	case 0:
@@ -429,7 +434,7 @@ func TestACommandHookThatExitsEndsTheLine(t *testing.T) {
 // the loops set, and must not take the session down over it.
 func TestAHookOnAShellWithoutItsSessionStateDoesNothing(t *testing.T) {
 	s, out := hookShell(t, hooksLikeZsh())
-	define(t, s.Runner, "zshexit", `echo leaving`)
+	define(t, s.Runner, "periodic", `echo tick`)
 
 	s.reportUnfiredHooks()
 

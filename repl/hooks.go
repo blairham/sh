@@ -169,15 +169,20 @@ type HookStyle struct {
 	// zsh's siblings on the same *calling convention* are here because they
 	// do not share this *site*: `periodic` fires on a timer read from
 	// `$PERIOD`; `zshaddhistory` where a line is saved, with the power to
-	// reject it; `zshexit` on the way out. Measured, each takes the named
-	// function and the `_functions` array exactly as `precmd` does, so one
-	// implementation of the *chain* serves all of them — interp's FireHook is
-	// written for any name — and each still needs its own firing site.
+	// reject it. Measured, each takes the named function and the `_functions`
+	// array exactly as `precmd` does, so one implementation of the *chain*
+	// serves all of them — interp's FireHook is written for any name — and
+	// each still needs its own firing site.
 	//
-	// `chpwd` was the fourth and is no longer here. Its site is inside `cd`,
-	// which is a builtin, so it is fired from interp against
+	// Two names have left this list by acquiring one. `chpwd`'s site is inside
+	// `cd`, which is a builtin, so it is fired from interp against
 	// Semantics.DirectoryChangeHook — a name this loop never sees and could
-	// not have fired without missing every `cd` inside a function. #1775.
+	// not have fired without missing every `cd` inside a function (#1775).
+	// `zshexit`'s is the end of the session, which interp's Finish reaches on
+	// every route out of a shell and this loop reaches on none, so it is
+	// Semantics.ExitHook for the same reason (#2111). Both were announced here
+	// until they ran, and the direction of that move is the one this field
+	// expects: a name leaves when it gains a site, and never the other way.
 	Unfired []string
 }
 

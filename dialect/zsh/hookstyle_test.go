@@ -51,14 +51,14 @@ func TestTheDirectoryChangeHookIsNamed(t *testing.T) {
 //
 // Each is on the same *calling convention* — the named function, then the
 // `_functions` array, measured — and on a firing site this loop does not
-// reach: `periodic` on a timer, `zshaddhistory` where a line is saved,
-// `zshexit` on the way out.
+// reach: `periodic` on a timer, `zshaddhistory` where a line is saved.
 //
-// `chpwd` was the fourth until #1775 gave it its site inside `cd`. A hook that
-// fires must not also be announced as one that does not, which is what the
-// second loop below holds.
+// `chpwd` was the fourth until #1775 gave it its site inside `cd`, and
+// `zshexit` the third until #2111 gave it its site at the end of a session. A
+// hook that fires must not also be announced as one that does not, which is
+// what the second loop below holds and what the exit hook's own test holds.
 func TestTheHooksThisShellDoesNotFireAreNamed(t *testing.T) {
-	want := map[string]bool{"periodic": true, "zshaddhistory": true, "zshexit": true}
+	want := map[string]bool{"periodic": true, "zshaddhistory": true}
 	got := map[string]bool{}
 	for _, name := range zsh.HookStyle().Unfired {
 		got[name] = true
@@ -71,6 +71,25 @@ func TestTheHooksThisShellDoesNotFireAreNamed(t *testing.T) {
 	for name := range got {
 		if !want[name] {
 			t.Errorf("%s is named as unfired and is not one of this shell's hooks", name)
+		}
+	}
+}
+
+// The other hook whose site is not the prompt loop: the end of the session.
+//
+// On the semantics vector for the reason `chpwd` is — every route out of a
+// shell passes through interp's Finish and a script run with no prompt in
+// sight fires it too, so a prompt loop firing it would miss every session that
+// never had one. Announced as unfired until #2111, which is what a plugin
+// registering a cleanup hook found on every start.
+func TestTheExitHookIsNamedAndNoLongerAnnouncedAsUnfired(t *testing.T) {
+	if name := zsh.Semantics().ExitHook; name != "zshexit" {
+		t.Errorf("the exit hook is %q, want zshexit", name)
+	}
+	for _, name := range zsh.HookStyle().Unfired {
+		if name == "zshexit" {
+			t.Error("zshexit fires at the end of a session now, so a session must not " +
+				"also announce it as a hook it will not run")
 		}
 	}
 }

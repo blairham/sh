@@ -34,16 +34,24 @@ import "github.com/blairham/sh/repl"
 //
 // # What this shell does not fire, and says so
 //
-// `periodic`, `zshaddhistory` and `zshexit` take the named function and the
-// `_functions` array exactly as `precmd` does — measured, with
-// `precmd_functions=(pcA nosuchfn_zz pcB)` and the same shape for each: the
-// undefined name was passed over in silence and `pcB` still ran. So the
-// *chain* is one mechanism and interp's FireHook serves all five.
+// `periodic` and `zshaddhistory` take the named function and the `_functions`
+// array exactly as `precmd` does — measured, with `precmd_functions=(pcA
+// nosuchfn_zz pcB)` and the same shape for each: the undefined name was passed
+// over in silence and `pcB` still ran. So the *chain* is one mechanism and
+// interp's FireHook serves all of them.
 //
-// The *sites* are three more, and none of them is the prompt loop. `periodic`
-// fires on a timer read from `$PERIOD`. `zshaddhistory` fires where a line is
-// saved and is handed the raw line, newline included, with the power to reject
-// it by returning non-zero. `zshexit` fires on the way out.
+// The *sites* are two more, and neither is the prompt loop. `periodic` fires
+// on a timer read from `$PERIOD`. `zshaddhistory` fires where a line is saved
+// and is handed the raw line, newline included, with the power to reject it by
+// returning non-zero.
+//
+// `zshexit` was the third until #2111. Its site is the end of the session,
+// which every route out of a shell reaches through interp's Finish and no
+// prompt loop reaches at all — a script run with no prompt in sight fires it
+// too. So it is `Semantics.ExitHook` and it runs, for the same reason `chpwd`
+// is `Semantics.DirectoryChangeHook`: a hook whose site is not this loop
+// cannot be fired from this loop without missing every session that never had
+// one.
 //
 // Naming them is the point of listing them. A hook that is registered and
 // never called is the failure this file exists to fix; one that is registered
@@ -59,6 +67,6 @@ func HookStyle() repl.HookStyle {
 		BeforePrompt:  "precmd",
 		BeforeCommand: "preexec",
 		CommandLayout: FunctionLayout(),
-		Unfired:       []string{"periodic", "zshaddhistory", "zshexit"},
+		Unfired:       []string{"periodic", "zshaddhistory"},
 	}
 }

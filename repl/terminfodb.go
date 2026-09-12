@@ -377,6 +377,7 @@ func parseTerminalDescription(data []byte) ([]TerminalCapability, error) {
 		}
 		caps = append(caps, TerminalCapability{
 			Terminfo: name.terminfo, Termcap: name.termcap, Value: value,
+			Kind: BooleanCapability,
 		})
 	}
 	for i, v := range nums {
@@ -386,6 +387,7 @@ func parseTerminalDescription(data []byte) ([]TerminalCapability, error) {
 		name := terminfoNumberNames[i]
 		caps = append(caps, TerminalCapability{
 			Terminfo: name.terminfo, Termcap: name.termcap, Value: strconv.Itoa(v),
+			Kind: NumericCapability,
 		})
 	}
 	for i, off := range offsets {
@@ -402,6 +404,7 @@ func parseTerminalDescription(data []byte) ([]TerminalCapability, error) {
 		}
 		caps = append(caps, TerminalCapability{
 			Terminfo: name.terminfo, Termcap: name.termcap, Value: value,
+			Kind: StringCapability,
 		})
 	}
 	rd.align()
@@ -474,18 +477,18 @@ func appendExtendedCapabilities(caps []TerminalCapability, rd *terminfoReader, w
 		entry := TerminalCapability{Terminfo: name, Termcap: "", Value: ""}
 		switch {
 		case i < boolCount:
-			entry.Value = terminfoBoolean(bools[i])
+			entry.Value, entry.Kind = terminfoBoolean(bools[i]), BooleanCapability
 		case i < boolCount+numCount:
 			if nums[i-boolCount] <= terminfoAbsent {
 				continue
 			}
-			entry.Value = strconv.Itoa(nums[i-boolCount])
+			entry.Value, entry.Kind = strconv.Itoa(nums[i-boolCount]), NumericCapability
 		default:
 			value, ok := terminfoStringAt(table, values[i-boolCount-numCount])
 			if !ok {
 				continue
 			}
-			entry.Value = value
+			entry.Value, entry.Kind = value, StringCapability
 		}
 		caps = append(caps, entry)
 	}

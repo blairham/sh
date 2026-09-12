@@ -1992,10 +1992,21 @@ func echoLine(w io.Writer, text string) {
 }
 
 // source runs the prelude on an existing runner, which is how a prelude is
-// installed: no special entry point, just the same Run.
+// installed: no special entry point, just the same interpreter the script gets.
 //
 // A prelude that fails is the dialect being broken rather than the script, so
 // it is reported plainly and never through the dialect's script wording.
+//
+// **RunPart and not Run, because the prelude is a chunk and not a session.**
+// Run ends the shell — it calls Finish, which is where a shell's teardown
+// lives — so installing the dialect this way tore the shell down before the
+// script had run a line. Nothing showed it while the only two things Finish
+// did were the EXIT trap and the temporary directories: a prelude sets no
+// trap and makes no process substitution, so both were no-ops. The third
+// thing, zsh's `zshexit` hook, is not a no-op — it reads the control flag —
+// and it turned every `zsh -c` into a shell that had already exited before
+// its first command. That is exactly the split RunPart's own comment
+// describes, and this was the one caller on the wrong side of it. #2111.
 func (sh Shell) source(r *interp.Runner, name string) int {
 	// What follows is the dialect rather than a script, and the runner has to
 	// know: a function defined here speaks for the shell, so its refusals
@@ -2005,7 +2016,7 @@ func (sh Shell) source(r *interp.Runner, name string) int {
 	defer r.SourcingPrelude(false)
 	f, err := syntax.Parse(sh.Prelude, sh.Dialect)
 	if err == nil {
-		_, err = r.Run(context.Background(), f)
+		err = r.RunPart(context.Background(), f)
 		// The prelude is the dialect's plumbing and not a command the
 		// script ran, so what it leaves in `$_` is not an answer about the
 		// script. Without this the parameter arrived at the script's first

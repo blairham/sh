@@ -555,14 +555,69 @@ func zmodloadEnforce(r *interp.Runner, module string, selected []string) {
 // zsh/zutil` writes `+` against all four, so a whole load is not a no-op on a
 // module that is already loaded narrowed. An unload does not call this — see
 // zmodloadUnload for why one rule is enough.
-func zmodloadWiden(r *interp.Runner, module string) {
+func zmodloadWiden(r *interp.Runner, module string) int {
 	selected, ok := r.GetAssoc(zmodloadFeatureStore)
 	if !ok {
-		return
+		return 0
+	}
+	// A producer the script has taken the name of cannot go back, and the
+	// module stays narrowed by exactly that much — measured, `-lF` after a
+	// refused whole load still writes the one feature off. See
+	// zmodloadRestorable.
+	if kept, code := zmodloadRestorable(r, module, zmodloadFeatures[module]); code != 0 {
+		zmodloadNarrow(r, module, kept)
+		return code
 	}
 	delete(selected, module)
 	r.SetAssoc(zmodloadFeatureStore, selected)
 	zmodloadEnforce(r, module, zmodloadFeatures[module])
+	return 0
+}
+
+// zmodloadRestorable is the guard on putting a producer back: a `p:` feature
+// whose name the script has since assigned to cannot be re-selected, and the
+// module says so rather than standing over it.
+//
+// Measured 2026-09-11 on zsh 5.9.2, deselecting `p:parameters`, assigning
+// `parameters=(a b)` and selecting it again:
+//
+//	<file>:4: Can't add module parameter `parameters': parameter already exists
+//	<file>:zsh/parameter:4: error when adding parameter `parameters'
+//	status 2, and `-lF` still writes `-p:parameters`
+//
+// Four things in that, and each had to be measured rather than guessed:
+//
+//   - **The selection does not happen.** The listing afterwards still has the
+//     feature off, so this is a refusal and not a complaint about one that
+//     went through anyway.
+//   - **The rest of the line does.** `+p:parameters +p:functions` on one
+//     command leaves `functions` selected and reports 2, so the refusal is
+//     per feature.
+//   - **A plain load meets it too.** `zmodload zsh/parameter` widens a
+//     narrowed module, so it is the same restore and the same two lines —
+//     which is why this is here rather than in zmodloadSelect, and why both
+//     routes read it.
+//   - **Two sentences, and the second names the module.** The first is the
+//     shell's, with no name in the location; the second is the *module's*,
+//     which is a location this builtin writes nowhere else. See
+//     interp.Runner.DiagnoseAsf.
+//
+// A name the script has since `unset` is free again and restores in silence
+// at 0, measured — so the question is whether the name holds a value now and
+// not whether it ever did.
+func zmodloadRestorable(r *interp.Runner, module string, selected []string) ([]string, int) {
+	kept, status := make([]string, 0, len(selected)), 0
+	for _, f := range selected {
+		kind, name, ok := strings.Cut(f, ":")
+		if ok && kind == "p" && r.WithdrawnParameterTaken(name) {
+			r.DiagnoseAsTheShellf("Can't add module parameter `%s': parameter already exists\n", name)
+			r.DiagnoseAsf(module, "%s: error when adding parameter `%s'\n", module, name)
+			status = 2
+			continue
+		}
+		kept = append(kept, f)
+	}
+	return kept, status
 }
 
 // zmodloadSpec reads one `[+-]feature` operand: the feature it names and
@@ -682,8 +737,8 @@ func zmodloadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	// status 1 for the one that failed.
 	status := 0
 	for _, m := range rest {
-		if !zmodloadLoad(r, opts, m) {
-			status = 1
+		if code := zmodloadLoad(r, opts, m); code != 0 {
+			status = code
 		}
 	}
 	return status
@@ -744,7 +799,7 @@ func setZmodloadLetter(opts *zmodloadOpts, letter byte) {
 // It is not *without work*, which is what a first reading had: a whole load
 // puts back every feature `-F` had switched off, so it is the one command
 // that widens a narrowed module. See zmodloadWiden.
-func zmodloadLoad(r *interp.Runner, opts zmodloadOpts, module string) bool {
+func zmodloadLoad(r *interp.Runner, opts zmodloadOpts, module string) int {
 	features, known := zmodloadFeatures[module]
 	if !known {
 		// A module this shell has no part of. Not worded as though the
@@ -753,18 +808,22 @@ func zmodloadLoad(r *interp.Runner, opts zmodloadOpts, module string) bool {
 		if !opts.silent {
 			r.DiagnoseAsTheShellf("failed to load module `%s': not implemented yet\n", module)
 		}
-		return false
+		return 1
 	}
 	if missing := zmodloadMissing(r, features, nil); len(missing) > 0 {
 		if !opts.silent {
 			r.DiagnoseAsTheShellf("failed to load module `%s': %s\n",
 				module, zmodloadShortfall(missing, len(features)))
 		}
-		return false
+		return 1
 	}
-	zmodloadWiden(r, module)
+	// The widening is where a whole load can fail for a reason of its own,
+	// and its status is this command's: measured, `zmodload zsh/parameter`
+	// over a name the script has taken is 2 rather than 0. The module is
+	// still loaded, and still narrowed by the feature that would not go back.
+	code := zmodloadWiden(r, module)
 	zmodloadSetLoaded(r, module, true)
-	return true
+	return code
 }
 
 // zmodloadUnload is `-u`: forget that a module was loaded.
@@ -951,9 +1010,12 @@ func zmodloadSelect(r *interp.Runner, opts zmodloadOpts, module string, specs []
 		}
 		return 1
 	}
+	// A `p:` feature the script has since taken the name of will not go
+	// back, and the rest of the line still does. See zmodloadRestorable.
+	selected, code := zmodloadRestorable(r, module, selected)
 	zmodloadNarrow(r, module, selected)
 	zmodloadSetLoaded(r, module, true)
-	return 0
+	return code
 }
 
 // zmodloadFeatureListing is `-lF` and `-LF`: what a module exposes now, as a

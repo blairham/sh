@@ -184,6 +184,28 @@ func (r *Runner) DiagnoseAsTheShellf(format string, args ...any) {
 	r.diagf(format, args...)
 }
 
+// DiagnoseAsf is the third of the same three: a complaint from machinery the
+// builtin asked for that has a *name* of its own, which is neither the
+// builtin's nor the bare shell's.
+//
+// One command writes all three kinds. Measured on zsh 5.9.2, 2026-09-11,
+// re-selecting a module parameter over a name a script has since assigned:
+//
+//	<file>:zmodload:4:        bad option: -Q             the builtin
+//	<file>:4:                 Can't add module parameter …   the shell
+//	<file>:zsh/parameter:4:   error when adding parameter …  the module
+//
+// The name goes where the dialect puts a builtin's — in the location for the
+// shell that words it that way, at the front of the sentence for the shells
+// that do not — so a caller writes it as a prefix on the message exactly as
+// it would write a builtin's, and this decides where it lands.
+func (r *Runner) DiagnoseAsf(name, format string, args ...any) {
+	outer := r.inBuiltin
+	r.inBuiltin = name
+	defer func() { r.inBuiltin = outer }()
+	r.diagf(format, args...)
+}
+
 // DynamicParameter reports whether a name is a parameter this shell
 // *produces* — one whose value is generated when it is read, registered
 // through SetDynamic or SetDynamicArray — rather than one a script assigned.

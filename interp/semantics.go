@@ -3298,296 +3298,260 @@ type Semantics struct {
 	//     n=255` with no number behind it exports like any other word. See
 	//     declarebuiltin.go's numberEndsTheWord, which is where that lives.
 	//
-	// This is zsh's arrangement throughout. ksh93 has the same letters and
-	// spells their number *attached only* — `-F[n]` in its own usage — so
-	// `typeset -Fx 3 a=1.5` is `3: is not an identifier` there where zsh
-	// reads the precision. The field has no per-spelling half because only
-	// zsh sets it; #1461 is where that would be needed.
+	// The detached spelling is not universal: an implementation may have the
+	// same letters and spell their number *attached only* — `-F[n]` in its own
+	// usage — so `typeset -Fx 3 a=1.5` is a bad identifier there where the
+	// detached reading takes the precision. The field has no per-spelling half,
+	// because only the detached arrangement is modeled.
 	//
-	// `-i` is not named here and is not an omission: whether it takes a base
-	// is IntegerAttributeTakesABase, which the `integer` builtin asks too and
-	// which also decides whether the base is *recorded*. Two fields both
-	// claiming `-i` takes a number could disagree, so the parse asks one
-	// helper — declareOptionTakesANumber — and that helper reads the axis for
-	// `i` and this list for every other letter.
+	// `-i` is not named here and is not an omission: whether it takes a base is
+	// IntegerAttributeTakesABase, which the `integer` builtin asks too and which
+	// also decides whether the base is *recorded*. Two fields both claiming `-i`
+	// takes a number could disagree, so the parse asks one helper —
+	// declareOptionTakesANumber — and that helper reads the axis for `i` and
+	// this list for every other letter.
 	//
-	// Only letters this engine both spells and acts on belong here. zsh's
-	// `-E`, `-L`, `-R` and `-Z` take a number in the real shell and are
-	// refused by name before it is ever read, so an entry for them would be
-	// consulted by nothing — see Diagnostics.UnimplementedOptionLetters, and
-	// #1461 for implementing them.
+	// Only letters this engine both spells and acts on belong here. A letter
+	// that takes a number in the real shell but is refused by name before it is
+	// ever read would have an entry nothing consults — see
+	// Diagnostics.UnimplementedOptionLetters.
 	DeclareOptionsTakingANumber string
 
-	// TypesetBadOptionFatal ends the script over an option `typeset` does
-	// not have. ksh93 counts `typeset` among its special builtins and stops
-	// there; bash and zsh report it and carry on. Asked only when the
-	// refusal has happened, so a shell with no `typeset` never meets it.
+	// TypesetBadOptionFatal ends the script over an option `typeset` does not
+	// have, which is what counting `typeset` among the special builtins gets.
+	// Answering No reports it and carries on.
+	//
+	// Asked only when the refusal has happened, so a preset with no `typeset`
+	// never meets it.
 	TypesetBadOptionFatal Answer
 
-	// SignAloneIsAnOptionWord reads a declaration's `-` or `+` written with
-	// no letters after it as an option word rather than as an operand.
+	// SignAloneIsAnOptionWord reads a declaration's `-` or `+` written with no
+	// letters after it as an option word rather than as an operand.
 	//
-	// A real disagreement and not a missing feature, which is why it is a
-	// field: measured 2026-09-10, `typeset +` writes the whole parameter
-	// table's attribute words and names in zsh 5.9.2 and its own name
-	// listing in ksh93, while bash 5.3 answers ``typeset: `+': not a valid
-	// identifier`` at 1 — the sign is a *name* there, and not one a script
-	// may declare. Both readings are complete and neither is a superset of
+	// A real disagreement and not a missing feature, which is why it is a field:
+	// under Yes, `typeset +` writes a listing — the whole parameter table's
+	// attribute words and names, or a name listing — and under No the sign is a
+	// *name*, and not one a script may declare, so the line is `not a valid
+	// identifier` at 1. Both readings are complete and neither is a superset of
 	// the other, so the sign cannot simply be swallowed.
 	//
 	// The sign means what it means everywhere else on the builtin once it is
-	// read: a minus adds nothing to the bare listing and a plus turns it
-	// into the names-only shape. `functions +` is the same word reaching the
-	// function table, and is how a shell snapshot asks for a name list
-	// (#1576).
+	// read: a minus adds nothing to the bare listing and a plus turns it into
+	// the names-only shape. `functions +` is the same word reaching the function
+	// table, and is how a shell snapshot asks for a name list.
 	//
-	// Asked only where a script really wrote one, so a dialect that never
-	// meets the shape is never asked for an answer.
+	// Asked only where a script really wrote one, so a preset that never meets
+	// the shape is never asked for an answer.
 	SignAloneIsAnOptionWord Answer
 
-	// SignAloneIsAnOptionWordToExport is the same reading asked of `export`
-	// and `readonly`, which have an option parse of their own.
+	// SignAloneIsAnOptionWordToExport is the same reading asked of `export` and
+	// `readonly`, which have an option parse of their own.
 	//
-	// A second field rather than the one above because the two questions
-	// have different answers in the same shell. Measured 2026-09-12 with
-	// `env -i` and no startup files: ksh93u+ lists for `typeset +` and
-	// answers `export: +: is not an identifier` at 1 for `export +`, and
-	// `readonly: +: invalid variable name` for `readonly +` — so a dialect
+	// A second field rather than the one above because the two questions can
+	// have different answers in the same implementation: one may list for
+	// `typeset +` and refuse `export +` and `readonly +` as names. A preset
 	// reading one field for both would have to be wrong about one of them.
-	// zsh 5.9.2 takes the sign in all three; bash 5.3, bash 3.2 and dash
-	// refuse it as a name in all three.
 	//
 	// The listing it reaches is the *builtin's own* attribute, names only:
 	// `export +` writes the exported names and `readonly +` the frozen ones,
 	// which is `typeset +x` and `typeset +r` under a second word. The minus
 	// spelling needs no field — a lone `-` is already LoneDashIsAnOption's
-	// question, and once it is eaten `export -` is the bare listing, which
-	// is what zsh writes for it (#1756).
+	// question, and once it is eaten `export -` is the bare listing.
 	//
-	// One field for the two builtins because no column separates them: each
-	// shell answers `export +` and `readonly +` the same way. Asked only
-	// where a script really wrote the sign.
+	// One field for the two builtins because nothing separates them: `export +`
+	// and `readonly +` are answered the same way. Asked only where a script
+	// really wrote the sign.
 	SignAloneIsAnOptionWordToExport Answer
 
-	// FunctionNamesUnderPlus reads the *plus* spelling of the function
-	// letter as a request for the names alone — `typeset +f` against
-	// `typeset -f`.
+	// FunctionNamesUnderPlus reads the *plus* spelling of the function letter as
+	// a request for the names alone — `typeset +f` against `typeset -f`.
 	//
-	// The two shells that spell the letter disagree about what the sign
-	// means, which is why this is a field rather than the substrate's
-	// assumption. Measured 2026-09-10:
+	// The implementations that spell the letter disagree about what the sign
+	// means, which is why this is a field rather than an assumption:
 	//
-	//   - zsh 5.9.2 writes one bare name a line, with an operand and
-	//     without one alike, and the last `f` letter's sign decides —
-	//     `typeset -f +f f` is the name and `typeset +f -f f` is the body.
-	//   - bash 5.3 has no names-only spelling under this sign at all. Its
-	//     `+f` takes the function attribute *off*, leaving the bare
-	//     `declare`, which writes every variable and then every function.
-	//     That listing is BareDeclarationListing's unanswered row for that
-	//     shell, so `No` here leaves the letter writing bodies: the row is
-	//     as wrong as it was rather than wrong in a new way (#1754).
+	//   - Yes writes one bare name a line, with an operand and without one
+	//     alike, and the last `f` letter's sign decides — `typeset -f +f f` is
+	//     the name and `typeset +f -f f` is the body.
+	//   - No has no names-only spelling under this sign at all: `+f` takes the
+	//     function attribute *off*, leaving the bare `declare`, which writes
+	//     every variable and then every function. That listing is
+	//     BareDeclarationListing's row, so No here leaves the letter writing
+	//     bodies — as wrong as it was rather than wrong in a new way.
 	//
-	// ksh93 is a third answer again — `f()` for a function declared with
-	// parentheses and the bare name for one declared with the keyword — and
-	// is not asked, because that dialect refuses the `f` letter outright
-	// while its body listing is a verbatim copy of the source text this
-	// engine does not keep (#1494).
+	// A third reading exists and is not asked for: a name listing that renders
+	// the definition form as well. That belongs to an implementation which
+	// refuses the `f` letter outright, and whose body listing is a verbatim copy
+	// of the source text this engine does not keep.
 	//
 	// Asked only where a plus-signed `f` was really written.
 	FunctionNamesUnderPlus Answer
 
 	// FunctionLettersThatMarkUndefined names the letters that turn a `-f`
 	// declaration with operands from a *listing* into a marking: the name
-	// becomes a function at once whose body is read the first time it is
-	// called.
+	// becomes a function at once whose body is read the first time it is called.
 	//
-	// Both shells with the notion spell it on `typeset` as well as under
-	// their own word, and they do not spell it alike, which is why this is a
-	// letter set rather than a fixed reading. Measured 2026-09-12, `env -i`
-	// and no startup files:
+	// An implementation with the notion spells it on `typeset` as well as under
+	// its own word, and they are not spelled alike, which is why this is a
+	// letter set rather than a fixed reading. One may take `u` and `U`, where a
+	// further letter rides along and is recorded without being one of these —
+	// a letter that only *decorates* the marking cannot start one. Another may
+	// take `u` alone, listing the result straight back as its whole rendering of
+	// an undefined function.
 	//
-	//   - zsh 5.9.2 takes `u` and `U`. `typeset -fu nm` leaves the stub
-	//     `autoload nm` leaves and `typeset -fUz nm` the one `autoload -Uz
-	//     nm` leaves, letters and all — the `z` rides along and is recorded
-	//     without being one of these, because a letter that only *decorates*
-	//     the marking cannot start one: `typeset -fz nm` marks nothing.
-	//   - ksh93u+ takes `u` alone and has no `U`. `typeset -fu nm` there
-	//     lists back as `typeset -fu nm`, which is that shell's whole
-	//     rendering of an undefined function.
-	//
-	// Empty in a shell with no such notion, where every `-f` line is a
-	// listing. What the letters *do* is [Runner.SetFunctionMarkedUndefined],
-	// which is where the dialect's own vocabulary lives; this field only
-	// says which lines are not listings.
+	// Empty where there is no such notion and every `-f` line is a listing. What
+	// the letters *do* is [Runner.SetFunctionMarkedUndefined], which is where a
+	// preset's own vocabulary lives; this field only says which lines are not
+	// listings.
 	FunctionLettersThatMarkUndefined string
 
-	// IntegerOptions is the set of letters the `integer` builtin takes,
-	// spelled the way DeclareOptions is. It is a separate field rather than
-	// DeclareOptions over again because the two shells that have the word
-	// give it a *narrower* set than their own `typeset`, and they narrow it
-	// differently: measured 2026-09-06, zsh's `integer` refuses `-a`, `-A`,
-	// `-f`, `-F`, `-T` and `-U` as bad options where its `typeset` takes
-	// every one of them, and ksh93's refuses `-E`, `-H`, `-L`, `-R`, `-T`
-	// and `-Z` — the float and justification letters — where its `typeset`
-	// spells them all. So a shell whose `integer` simply reused the
-	// declaration's letters would accept `integer -A m`, which is an
-	// associative array in neither shell.
+	// IntegerOptions is the set of letters the `integer` builtin takes, spelled
+	// the way DeclareOptions is.
 	//
-	// Empty means the builtin is not registered at all, which is the answer
-	// for bash and dash: the word is a command that was not found there,
-	// which is what those two really do with it.
+	// A separate field rather than DeclareOptions over again because an
+	// implementation with the word gives it a *narrower* set than its own
+	// `typeset`, and they narrow it differently — one dropping the array and
+	// function letters, another the float and justification ones. A preset whose
+	// `integer` simply reused the declaration's letters would accept
+	// `integer -A m`, which is an associative array under neither.
+	//
+	// Empty means the builtin is not registered at all, which is what a preset
+	// where the word is simply a command that was not found holds.
 	IntegerOptions string
 
 	// FunctionsOptions is the set of letters the `functions` builtin takes,
 	// spelled the way DeclareOptions is.
 	//
-	// A separate field rather than DeclareOptions over again, because the
-	// name that means `typeset -f` does not take `typeset`'s letters:
-	// measured 2026-09-08, zsh 5.9.2 refuses `functions -f`, `-F` and `-p`
-	// as bad options though its `typeset` spells all three, and takes `-c`,
-	// `-k`, `-m`, `-s`, `-t`, `-u`, `-x`, `-z`, `-M`, `-T`, `-U` and `-W`,
-	// which its `typeset` does not. So a shell that reused the declaration's
-	// set would accept `functions -a`, which is an array attribute in
-	// neither shell, and refuse `functions -m`, which is a listing in one.
+	// A separate field rather than DeclareOptions over again, because the name
+	// that means `typeset -f` does not take `typeset`'s letters: it may refuse
+	// letters its own `typeset` spells and take a dozen its `typeset` does not.
+	// A preset that reused the declaration's set would accept an array attribute
+	// here and refuse a listing letter that really exists.
 	//
-	// Only the letters this engine both spells and acts on belong here; the
-	// rest are Diagnostics.UnimplementedOptionLetters, so a script meets
-	// "not implemented yet" for a letter zsh really has and "bad option" for
-	// one it does not. Empty means the builtin takes no letters at all,
-	// which is a real answer — whether the word exists is Register's, not
-	// this field's.
+	// Only the letters this engine both spells and acts on belong here; the rest
+	// are Diagnostics.UnimplementedOptionLetters, so a script meets "not
+	// implemented yet" for a letter the real shell has and "bad option" for one
+	// it does not. Empty means the builtin takes no letters at all, which is a
+	// real answer — whether the word exists is Register's, not this field's.
 	FunctionsOptions string
 
-	// UnfunctionOptions is the same for `unfunction`, whose set is one
-	// letter: measured, zsh takes `-m` and refuses every other letter of the
-	// alphabet in both cases as a bad option — including the `-f` that is
-	// the option this name stands for.
+	// UnfunctionOptions is the same for `unfunction`, whose set is one letter:
+	// `-m`, with every other letter of the alphabet refused in both cases as a
+	// bad option — including the `-f` that is the option this name stands for.
 	UnfunctionOptions string
 
-	// IntegerAttributeTakesABase is `-i` reading an output base — `typeset
-	// -i 16 n=255` and its attached spelling `-i16` — so that the name
-	// prints in that base afterwards rather than in decimal.
+	// IntegerAttributeTakesABase is `-i` reading an output base — `typeset -i 16
+	// n=255` and its attached spelling `-i16` — so that the name prints in that
+	// base afterwards rather than in decimal. Answering No makes `-i16` an
+	// invalid option and a bare `16` an invalid identifier.
 	//
-	// ksh93 and zsh answer yes and store `16#ff` and `16#FF`; bash answers
-	// no, where `-i16` is an invalid option and a bare `16` is not a valid
-	// identifier.
-	//
-	// The base is a property of the *name* and not of the assignment that
-	// met it, so it is recorded like the attribute itself and consulted by
-	// every store afterwards: `typeset -i8 c; c=64` is `8#100`, and a second
-	// declaration with a different base re-renders what the name already
-	// holds — `typeset -i16 h=255; typeset -i8 h` is `8#377`.
+	// The base is a property of the *name* and not of the assignment that met
+	// it, so it is recorded like the attribute itself and consulted by every
+	// store afterwards: `typeset -i8 c; c=64` is `8#100`, and a second
+	// declaration with a different base re-renders what the name already holds.
 	//
 	// What is stored is the *rendered text*, which is what every read sees:
-	// `${#h}` is 5 for `16#ff`, `g=$h` copies those five characters, a child
-	// is told `h=16#ff`, and arithmetic parses it back — `$(( h + 1 ))` is
-	// 256. So it is a change to the value and not a way of printing it, and
-	// modeling it as a rendering would answer every one of those rows wrong.
+	// `${#h}` is 5 for `16#ff`, `g=$h` copies those five characters, a child is
+	// told `h=16#ff`, and arithmetic parses it back — `$(( h + 1 ))` is 256. So
+	// it is a change to the value and not a way of printing it, and modeling it
+	// as a rendering would answer every one of those rows wrong.
 	//
-	// Base 10 and any base outside what the dialect can spell render plain —
-	// measured, ksh93 takes `-i1` and `-i0` in silence and prints `5` for
-	// both. Which bases a dialect *can* spell is IntegerBaseDigits, whose
-	// length is the largest, and whether it complains about the rest is
+	// Base 10 and any base outside what the preset can spell render plain.
+	// Which bases it *can* spell is IntegerBaseDigits, whose length is the
+	// largest, and whether it complains about the rest is
 	// Diagnostics.IntegerBadBase.
 	//
 	// Asked only when a base is actually written, so the ordinary `-i` never
-	// reaches it and a dialect that has no `typeset` never meets the
-	// question at all.
+	// reaches it and a preset with no `typeset` never meets the question at all.
 	IntegerAttributeTakesABase Answer
-	// IntegerBaseDigits is the alphabet a dialect renders an output base in,
-	// and its length is the largest base it can spell.
+	// IntegerBaseDigits is the alphabet a preset renders an output base in, and
+	// its length is the largest base it can spell.
 	//
-	// Two facts in one string, because they are one fact about the shell:
-	// ksh93 counts in lower case and carries on into upper — `16#ff`,
-	// `36#2s`, `64#1A` for 100 — so its alphabet is 62 long, and zsh counts
-	// in upper case and stops at 36, `16#FF` and `36#2S`. A dialect with no
-	// alphabet renders every base plain, which is what a shell without the
-	// feature does.
+	// Two facts in one string, because they are one fact about the
+	// implementation: counting in lower case and carrying on into upper gives an
+	// alphabet 62 long — `16#ff`, `36#2s`, `64#1A` for 100 — where counting in
+	// upper case stops at 36, `16#FF` and `36#2S`. An empty alphabet renders
+	// every base plain, which is what a preset without the feature does.
 	IntegerBaseDigits string
-	// IntegerBaseComesFromTheValueAssigned learns a name's output base from
-	// the radix prefix of the text assigned to it, where no base was named.
+	// IntegerBaseComesFromTheValueAssigned learns a name's output base from the
+	// radix prefix of the text assigned to it, where no base was named:
 	//
-	//	typeset -i b; b=0x10; echo "$b"     ksh93 `16`   zsh `16#10`
-	//	typeset -i d; d=8#7;  d=99          ksh93 `99`   zsh `8#143`
-	//	a=0x10; typeset -i a                ksh93 `16`   zsh `16#10`
+	//	typeset -i b; b=0x10; echo "$b"     Yes `16#10`   No `16`
+	//	typeset -i d; d=8#7;  d=99          Yes `8#143`   No `99`
+	//	a=0x10; typeset -i a                Yes `16#10`   No `16`
 	//
-	// zsh alone, and it is the half of #1130 that is not about the letter:
-	// the base is remembered on the name either way, and what differs is
-	// only where the default comes from. It sticks — a later plain `5` under
-	// a name that learned 16 is `16#5` — which is what makes it the name's
-	// and not the assignment's.
+	// The base is remembered on the name under either answer, and what differs
+	// is only where the default comes from. It sticks — a later plain `5` under
+	// a name that learned 16 is `16#5` — which is what makes it the name's and
+	// not the assignment's.
 	//
-	// Only a *radix* prefix teaches it. A leading zero does not (`016` is
-	// `16` in both), and neither does a value that arrived already evaluated:
-	// `f=$((0x10))` is `16` in zsh too, the expansion having handed the
+	// Only a *radix* prefix teaches it. A leading zero does not (`016` is `16`
+	// under both), and neither does a value that arrived already evaluated:
+	// `f=$((0x10))` is `16` under both, the expansion having handed the
 	// assignment the four decimal characters.
 	IntegerBaseComesFromTheValueAssigned Answer
 	// IntegerBaseNegativeIsTwosComplement renders a negative integer in its
-	// output base as the bit pattern rather than as a sign and a magnitude.
+	// output base as the bit pattern rather than as a sign and a magnitude:
 	//
-	//	typeset -i16 h; h=-255    ksh93 `16#ffffffffffffff01`   zsh `-16#FF`
-	//	typeset -i2 c=-5          ksh93 sixty-four binary digits   zsh `-2#101`
+	//	typeset -i16 h; h=-255    Yes `16#ffffffffffffff01`   No `-16#FF`
+	//	typeset -i2 c=-5          Yes sixty-four binary digits  No `-2#101`
 	//
-	// ksh93 prints the sixty-four-bit two's complement and zsh puts the sign
-	// in front of the magnitude. Asked only for a negative value in a base
-	// that renders at all, so nothing else meets it.
+	// Asked only for a negative value in a base that renders at all, so nothing
+	// else meets it.
 	IntegerBaseNegativeIsTwosComplement Answer
 	// IntegerBaseTenIsNoBase makes ten the *default* of the integer letter
-	// rather than a base like any other, so that naming it records nothing
-	// and writing the letter with no base at all takes off the base a name
-	// already has. Measured 2026-09-07:
+	// rather than a base like any other, so that naming it records nothing and
+	// writing the letter with no base at all takes off the base a name already
+	// has:
 	//
-	//	typeset -i10 d=255; typeset -p d      ksh93 `typeset -i d=255`
-	//	                                      zsh   `typeset -i10 d=255`
-	//	typeset -i16 a=255; typeset -i a      ksh93 `255`   zsh `16#FF`
-	//	typeset -i16 b=255; integer b         ksh93 `255`   zsh `16#FF`
-	//	typeset -i16 c=255; typeset -x c      ksh93 `16#ff` zsh `16#FF`
+	//	typeset -i10 d=255; typeset -p d      Yes `typeset -i d=255`
+	//	                                      No  `typeset -i10 d=255`
+	//	typeset -i16 a=255; typeset -i a      Yes `255`   No `16#FF`
+	//	typeset -i16 b=255; integer b         Yes `255`   No `16#FF`
+	//	typeset -i16 c=255; typeset -x c      `16#ff` either way
 	//
-	// The two rows are one answer. ksh93's letter always names a base and
-	// ten is what it names when nothing is written, so a bare `-i` is `-i10`
-	// and ten is the absence of one — which is what #1130 asked when it
-	// asked whether "no base" is a state or just base ten, and the two
-	// shells answer it differently. In zsh ten is a state: it is recorded,
-	// its listing says `-i10` back, and a later bare `-i` leaves it alone.
+	// The rows are one answer. Under Yes the letter always names a base and ten
+	// is what it names when nothing is written, so a bare `-i` is `-i10` and ten
+	// is the absence of one. Under No ten is a state: it is recorded, its
+	// listing says `-i10` back, and a later bare `-i` leaves it alone. Whether
+	// "no base" is a state or just base ten is exactly what the two answer
+	// differently.
 	//
-	// The value reads the same either way — `typeset -i10 e=255` is `255` in
+	// The value reads the same either way — `typeset -i10 e=255` is `255` under
 	// both, ten being the base nothing is written in — so this is not
-	// IntegerBaseDigits asked twice. What it changes is the *listing* and
-	// what a second declaration does to a base already there.
+	// IntegerBaseDigits asked twice. What it changes is the *listing* and what a
+	// second declaration does to a base already there.
 	//
-	// Asked only where the answer changes something: where ten is written,
-	// and where the letter arrives bare over a name that has a base. An
-	// ordinary `typeset -i n` on a name with no base never meets it, which
-	// is nearly every declaration there is.
+	// Asked only where the answer changes something: where ten is written, and
+	// where the letter arrives bare over a name that has a base. An ordinary
+	// `typeset -i n` on a name with no base never meets it, which is nearly
+	// every declaration there is.
 	//
-	// The other letter is the control and needs no answer: `typeset -x` over
-	// a based name leaves the base alone in both.
+	// The other letter is the control and needs no answer: `typeset -x` over a
+	// based name leaves the base alone under both.
 	IntegerBaseTenIsNoBase Answer
 
-	// IntegerPlusFormTakesAttributesOff decides whether a plus word on
-	// `integer` removes anything at all.
+	// IntegerPlusFormTakesAttributesOff decides whether a plus word on `integer`
+	// removes anything at all.
 	//
-	// The two shells that have the word disagree about what the word *is*,
-	// and the disagreement is not confined to `+i`. Measured 2026-09-06:
+	// The implementations that have the word disagree about what the word *is*,
+	// and the disagreement is not confined to `+i`:
 	//
-	//	integer n=5; integer +i n; n=3+4    zsh 3+4    ksh93 7
-	//	integer -x e=1; integer +x e        zsh gone   ksh93 still exported
+	//	integer n=5; integer +i n; n=3+4    Yes `3+4`   No `7`
+	//	integer -x e=1; integer +x e        Yes gone    No still exported
 	//
-	// zsh prepends the letter to an ordinary declaration, so every plus form
-	// means there what it means on `typeset`. ksh93 has a declaration
-	// command of its own whose type is fixed, and a plus form on it removes
-	// nothing — `typeset -p n` says `typeset -l -i n=5` there against zsh's
-	// plain `typeset n=5`, which is the same finding read from the value
-	// side. Its own `typeset +x` does unexport, so this is about the second
-	// name and not about the letter.
+	// Yes prepends the letter to an ordinary declaration, so every plus form
+	// means what it means on `typeset`. No has a declaration command of its own
+	// whose type is fixed, and a plus form on it removes nothing — its listing
+	// keeps the letters where Yes lists a plain name, which is the same finding
+	// read from the value side. That its own `typeset +x` does unexport is what
+	// says this is about the second name and not about the letter.
 	//
-	// Yes is zsh's answer. No is ksh93's, and it is why the field is not
-	// spelled per letter: one reading of the word covers `+i` and `+x`
-	// alike, and a field per letter would have been two questions whose
-	// answers can only ever agree.
+	// It is not spelled per letter: one reading of the word covers `+i` and `+x`
+	// alike, and a field per letter would have been two questions whose answers
+	// can only ever agree.
 	//
-	// Asked only for a plus word on `integer`, which is the only place the
-	// two readings differ — every other spelling is parsed identically.
+	// Asked only for a plus word on `integer`, which is the only place the two
+	// readings differ — every other spelling is parsed identically.
 	IntegerPlusFormTakesAttributesOff Answer
 
 	// SetArrayLetter is `set -A name value …`, which assigns an array through

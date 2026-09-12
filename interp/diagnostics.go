@@ -1955,56 +1955,55 @@ type Diagnostics struct {
 	// this is the route that one does not cover.
 	StdinProgramSurvivesAParseFailure bool
 	// NamesTheInputInLocation puts *where the script came from* between the
-	// shell's name and the line, for a parse failure only: bash writes
-	// `bash: -c: line 1:` when it read the script from -c and plain
-	// `bash: line 1:` for a runtime diagnostic on the same input. What the
-	// input is called is the front end's to say — nothing here knows that a
-	// shell has a -c at all — so this is only whether it is said.
+	// shell's name and the line, for a parse failure only: `<shell>: -c: line 1:`
+	// when the script was read from `-c`, against a plain `<shell>: line 1:` for
+	// a runtime diagnostic on the same input. What the input is called is the
+	// front end's to say — nothing here knows that a shell has a `-c` at all —
+	// so this is only whether it is said.
 	NamesTheInputInLocation bool
-	// EchoesTheOffendingLine repeats the source line after a parse failure,
-	// as bash's second line: "bash: -c: line 1: `{ fi; }'". Only after a token
-	// the grammar did not want; an input that simply ran out gets no echo,
-	// which EchoesLine decides.
+	// EchoesTheOffendingLine repeats the source line after a parse failure, as a
+	// second line: "<shell>: -c: line 1: `{ fi; }'". Only after a token the
+	// grammar did not want; an input that simply ran out gets no echo, which
+	// EchoesLine decides.
 	EchoesTheOffendingLine bool
 
 	// ScriptNotFound is what a shell says when the script operand names
-	// nothing at all. Two verbs, positional because the shells order them
-	// differently and two do not use the second: %[1]s is the path as the
+	// nothing at all. Two verbs, positional because presets order them
+	// differently and some do not use the second: %[1]s is the path as the
 	// operand wrote it and %[2]s the reason.
 	//
-	//	bash   <shell>: nosuch.sh: No such file or directory
-	//	dash   <shell>: 0: cannot open nosuch.sh: No such file
-	//	ksh93  <shell>: nosuch.sh: not found
-	//	zsh    <shell>: can't open input file: nosuch.sh
+	//	<shell>: nosuch.sh: No such file or directory
+	//	<shell>: 0: cannot open nosuch.sh: No such file
+	//	<shell>: nosuch.sh: not found
+	//	<shell>: can't open input file: nosuch.sh
 	//
 	// Empty means the substrate's own, `%[1]s: %[2]s`.
 	ScriptNotFound string
 
-	// ScriptNotFoundStatus is what that reports. Zero means the substrate's
-	// own, which is 127 — the number a command that is not there carries, and
-	// what bash, ksh93 and zsh answer. dash alone says 2, treating an operand
-	// it could not open as a usage error rather than as a program it could
-	// not run.
+	// ScriptNotFoundStatus is what that reports. Zero means the substrate's own,
+	// which is 127 — the number a command that is not there carries, and the
+	// common answer. A preset may say 2 instead, treating an operand it could
+	// not open as a usage error rather than as a program it could not run.
 	ScriptNotFoundStatus int
 
 	// ScriptNotReadable is the same for a script that *is* there and would
 	// not open: no read permission, or a path that is not a file at all.
 	// Same two verbs.
 	//
-	//	bash   <shell>: unread.sh: Permission denied
-	//	dash   <shell>: 0: cannot open unread.sh: Permission denied
-	//	ksh93  <shell>: unread.sh: cannot open [Permission denied]
-	//	zsh    <shell>: can't open input file: unread.sh
+	//	<shell>: unread.sh: Permission denied
+	//	<shell>: 0: cannot open unread.sh: Permission denied
+	//	<shell>: unread.sh: cannot open [Permission denied]
+	//	<shell>: can't open input file: unread.sh
 	//
-	// Empty means "the same as ScriptNotFound", which is what dash and zsh
-	// want — neither tells the two failures apart in words, and zsh does not
-	// tell them apart in the status either.
+	// Empty means "the same as ScriptNotFound", which is what a preset that does
+	// not tell the two failures apart in words wants; one may not tell them
+	// apart in the status either.
 	ScriptNotReadable string
 
-	// ScriptNotReadableStatus is what that reports. Zero means the
-	// substrate's own, which is 126 — the number a command that exists and
-	// will not run carries, and what bash and ksh93 answer. zsh reports 127
-	// for this as well as for a missing file, and dash 2 for both.
+	// ScriptNotReadableStatus is what that reports. Zero means the substrate's
+	// own, which is 126 — the number a command that exists and will not run
+	// carries, and the common answer. A preset may report 127 for this as well
+	// as for a missing file, or 2 for both.
 	//
 	// Measured on a mode-000 file and on a directory, which are the two ways
 	// a path that is there refuses to be read. A file whose *contents* are
@@ -2015,20 +2014,19 @@ type Diagnostics struct {
 	// about the invocation itself — the script operand that would not open,
 	// reported before any line has been read.
 	//
-	// dash alone: `<shell>: 0: cannot open …`, where bash, ksh93 and zsh
-	// print their name and nothing else. The number is always nought, which
-	// is what "no line yet" is in a shell that counts from one, so this is a
-	// switch rather than a verb.
+	// `<shell>: 0: cannot open …`, where the other answer prints the name and
+	// nothing else. The number is always nought, which is what "no line yet" is
+	// in a shell that counts from one, so this is a switch rather than a verb.
 	InvocationNamesTheUnreadLine bool
 
 	// InvocationUsage is the shell's own usage block, written under a `set`
 	// option the invocation was refused. Two verbs: the name the shell was
 	// invoked by, and that name's last path element.
 	//
-	// Two verbs because the panel's two shells that print one disagree about
-	// which they write. Measured 2026-09-05 through a symbolic link named
-	// `myksh`: bash spells the whole word it was invoked by — a path, when
-	// that is what was typed — and ksh93 spells only the last element of it.
+	// Two verbs because the presets that print one disagree about which they
+	// write. Measured through a symbolic link: one spells the whole word it was
+	// invoked by — a path, when that is what was typed — and another spells only
+	// the last element of it.
 	//
 	// Distinct from BuiltinUsage["set"], which is what the *builtin* prints:
 	// at an invocation these two shells print their own usage instead, and
@@ -2041,41 +2039,37 @@ type Diagnostics struct {
 	//
 	//	<shell>: line 0: <shell>: zzznosuch: invalid option name
 	//
-	// bash alone, and only for the long spelling — its refused *letter* is
-	// its command-line parser speaking, with no location and no second name.
-	// dash, ksh93 and zsh word both spellings the same way at an invocation:
-	// the sentence with nothing naming `set`, after the plain invocation
-	// prefix. Measured 2026-09-05.
+	// True only for the long spelling — a refused *letter* is the command-line
+	// parser speaking, with no location and no second name. False words both
+	// spellings the same way at an invocation: the sentence with nothing naming
+	// `set`, after the plain invocation prefix.
 	InvocationNameRefusalNamesTheShell bool
 
 	// ScriptLocation is Location for a script read from a file, when the two
-	// differ. ksh93 is the only shell in the panel where they do: `ksh -c`
-	// names no location at all, and `ksh script` says "line 2". Zero means
-	// "the same as Location", which is true of the other three.
+	// differ — a preset may name no location at all for `-c` and say "line 2"
+	// for a script. Zero means "the same as Location".
 	ScriptLocation LocationStyle
 
 	// The wording of individual failures. Each is a format string, and empty
 	// means the substrate's own — so a dialect states only where it differs,
 	// the same way a semantics preset does.
 	//
-	// These are the failures the panel words differently *for the same
-	// diagnosis*. Where a shell reaches a different diagnosis — dash calling
-	// `[[ ( x ) ]]` "word unexpected (expecting \")\")" where we say the
-	// paren is unexpected — no wording can close the gap, and none is
-	// offered here.
+	// These are the failures the presets word differently *for the same
+	// diagnosis*. Where a preset reaches a different diagnosis — calling
+	// `[[ ( x ) ]]` "word unexpected (expecting \")\")" where we say the paren
+	// is unexpected — no wording can close the gap, and none is offered here.
 
-	// UnmatchedQuote is a quote the input ran out inside — five verbs,
-	// because each dialect names a different part of the same end of file:
-	// %[1]s the opener as written, %[2]s the closer that never came,
-	// %[3]s the text from the opener to the end of its line, %[4]d the
-	// line the opener is on, and %[5]d the line the input ran out on.
-	// Empty keeps the substrate's own sentence. The dialect that closes a
-	// quote at end of input and runs never reaches this — that is a
-	// grammar flag, not a wording.
+	// UnmatchedQuote is a quote the input ran out inside — five verbs, because
+	// each preset names a different part of the same end of file: %[1]s the
+	// opener as written, %[2]s the closer that never came, %[3]s the text from
+	// the opener to the end of its line, %[4]d the line the opener is on, and
+	// %[5]d the line the input ran out on. Empty keeps the substrate's own
+	// sentence. A preset that closes a quote at end of input and runs never
+	// reaches this — that is a grammar flag, not a wording.
 	UnmatchedQuote string
-	// UnmatchedBackquote is the same failure inside `` ` ``, for the one
-	// dialect that words the old substitution differently from a quote.
-	// Empty falls back to UnmatchedQuote.
+	// UnmatchedBackquote is the same failure inside `` ` ``, for a preset that
+	// words the old substitution differently from a quote. Empty falls back to
+	// UnmatchedQuote.
 	UnmatchedBackquote string
 	// UnmatchedCmdSubst is `$(` the input ran out inside. Same verbs.
 	UnmatchedCmdSubst string

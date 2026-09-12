@@ -31,143 +31,127 @@ func (a Answer) String() string {
 	return "unspecified"
 }
 
-// Semantics is where the shells disagree about what identical syntax *means*.
+// Semantics is where implementations disagree about what identical syntax
+// *means*.
 //
-// This is the structure docs/spec/semantics.md argued for, and the argument
-// is worth restating because the obvious alternative looks fine. Grammar
+// This is the structure docs/spec/semantics.md argues for, and the argument is
+// worth restating because the obvious alternative looks fine. Grammar
 // differences are additive — a construct either parses or it does not — and
-// syntax.Dialect models those. Semantic differences are conflicts: the same
+// [syntax.Dialect] models those. Semantic differences are conflicts: the same
 // text means different things, and no amount of adding or removing features
 // produces one from another. They need switches.
 //
-// Every field is named for the behavior rather than for the shell that wants
-// it, which the spec requires and the measurements insist on: ksh93 accepts
-// `&>` or does not depending on which build is installed, twelve years apart
-// under the same name, so a field called `Ksh` could not be given a value.
+// Every field is named for the behavior rather than for the implementation
+// that wants it. A name-shaped field could not be given a value in the first
+// place: one implementation accepts `&>` or refuses it depending on which
+// build is installed, twelve years apart under the same name, so the behavior
+// is the only thing stable enough to name.
 //
-// The axes were measured across four shells and produced groupings that
-// overlap and contradict — no ordering of the shells explains the data,
-// which is why this is a vector and not a level.
+// The axes produce groupings that overlap and contradict — no ordering of the
+// implementations explains the data, which is why this is a vector and not a
+// level.
+//
+// This package defines the questions and never the answers. A comment here
+// says what an axis decides, what each value means, where it is asked and what
+// keeps it from being asked elsewhere. Which preset answers it which way, and
+// the measurement behind that answer, are recorded in docs/spec/semantics.md
+// and held in the preset itself.
 type Semantics struct {
 	// SplitParamExpansion field-splits the result of an unquoted parameter
-	// expansion. False in zsh, and narrower than "word splitting": zsh still
-	// splits an unquoted *command* substitution, so this is two fields and
-	// not one.
+	// expansion.
+	//
+	// Narrower than "word splitting", and paired with
+	// SplitCommandSubstitution: an implementation may split an unquoted
+	// command substitution while leaving a parameter expansion whole, so this
+	// is two axes and not one.
 	SplitParamExpansion Answer
-	// SplitCommandSubstitution field-splits an unquoted command
-	// substitution. True everywhere measured, including zsh.
+	// SplitCommandSubstitution field-splits an unquoted command substitution.
 	//
-	// unanimous: the content of this axis is the *contrast* with
-	// SplitParamExpansion, not a split of its own, so the four answering
-	// alike is the measurement rather than the absence of one. Re-measured
-	// 2026-09-12 with `IFS` a space and a value of three blank-separated
-	// words, `set -- $v` beside `f() { echo "$v"; }; set -- $(f)`: the
-	// command substitution gives three fields in dash, bash 5.3.15,
-	// bash-as-`sh`, bash 3.2.57, ksh93u+ and zsh 5.9.2, and the parameter
-	// gives one in zsh alone. Delete this and
-	// that single measurement reads as "zsh does not word-split", which is
-	// the misreading the pair exists to prevent (#2060).
+	// The content of this axis is the *contrast* with SplitParamExpansion
+	// rather than a split of its own: every preset answers it the same way,
+	// and it exists so that the one axis they differ on cannot be read as
+	// "this implementation does not word-split at all". Fold the two together
+	// and that misreading is the only one left.
 	//
-	// unexhibited No: nobody, and nothing reaches it. The probe above is
-	// unanimous across all six columns and zsh has no option that turns
-	// the splitting off, so `No` is the other side of a binary Answer
-	// rather than a claim about a shell. It stays because this axis is
-	// asked rather than read: a dialect that did leave an unquoted
-	// substitution unsplit has somewhere to say so, and until one does the
-	// value is unheld on purpose (#2060).
+	// So this axis is asked rather than read. An implementation that did
+	// leave an unquoted substitution unsplit has somewhere to say so, and
+	// until one does, No is the other side of a binary [Answer] rather than a
+	// value any preset holds.
 	SplitCommandSubstitution Answer
 	// UnquotedListJoinsOnIFS makes an unquoted list expansion one string —
 	// the elements joined on the first character of IFS — before the split
 	// above runs on it, rather than splitting each element on its own.
 	//
-	// True in bash, bash 3.2 and bash as `sh`; false in zsh, ksh93 and dash.
-	// It is one question wearing two faces, and both were being answered
-	// without asking: `$@` and `${a[@]}` never joined, which is right for
-	// three of the six, and `$*` and `${a[*]}` always did, which is right for
-	// the other three.
+	// One question wearing two faces, and the reason it is a question at all
+	// is that both faces were being answered without asking: `$@` and
+	// `${a[@]}` never joined, and `$*` and `${a[*]}` always did, each of which
+	// is right for some presets and wrong for the rest.
 	//
 	// The join is what decides the fate of an *empty* element, which is where
-	// it shows. Under a non-whitespace IFS, `set -- x "" y` is `x::y` joined
-	// and splits back to three fields in bash, where splitting each element
-	// on its own drops the empty one and leaves two. The same join is why
-	// bash then *loses* a trailing empty element — `set -- x y ""` is `x:y:`,
-	// and a trailing separator makes no field — while zsh, which does not
-	// join, keeps it. No arrangement of the splitting answer alone reaches
-	// either reading, which is why this is a question of its own.
+	// it shows. Under a non-whitespace IFS, joining makes `set -- x "" y` into
+	// `x::y`, which splits back to three fields; splitting each element on its
+	// own drops the empty one and leaves two. The same join is why joining
+	// then *loses* a trailing empty element — `set -- x y ""` is `x:y:`, and a
+	// trailing separator makes no field — where not joining keeps it. No
+	// arrangement of the splitting answer alone reaches either reading, which
+	// is why this is an axis of its own.
 	//
 	// Asked only at the disagreement: the two readings coincide under a
-	// whitespace IFS, which is why `a=("" x)` is `[x]` in every shell
-	// measured and needs no answer, and there is nothing to join with when
-	// IFS is set and empty. See Runner.elementFields, which computes both and
-	// asks only when they differ.
+	// whitespace IFS, which is why `a=("" x)` is `[x]` under every answer and
+	// needs none, and there is nothing to join with when IFS is set and empty.
+	// See Runner.elementFields, which computes both and asks only when they
+	// differ.
 	//
 	// The *quoted* spellings are not this question and must not reach it:
-	// `"$*"` and `"${a[*]}"` join on the first character of IFS in every
-	// shell measured, and `"$@"` and `"${a[@]}"` keep one field per element
-	// in every shell measured. Both are core.
+	// `"$*"` and `"${a[*]}"` join on the first character of IFS, and `"$@"`
+	// and `"${a[@]}"` keep one field per element. Both are unanimous, so both
+	// are core.
 	UnquotedListJoinsOnIFS Answer
 
 	// UnsplitAtListJoinsOnIFS decides the character an unquoted list spelled
 	// `@` is joined with when it reaches a context that keeps no fields: the
 	// first character of IFS, or a hard space.
 	//
-	// True in zsh and dash; false in bash, bash 3.2, bash as `sh` and ksh93.
-	// Measured 2026-09-06 in the four contexts that never split — an
-	// assignment's value, a `case` subject, a `[[ ]]` operand and a
-	// here-document body — with `IFS=-` and a three-element list:
-	//
-	//	IFS=-; a=(x y z); v=${a[@]}   zsh x-y-z · bash, ksh93 x y z
-	//	IFS=-; set -- x y z; v=${@}   zsh, dash x-y-z · bash, ksh93 x y z
-	//
-	// All four contexts answer alike within each shell, which is what makes
-	// this one axis rather than one per context.
+	// The four contexts that never split — an assignment's value, a `case`
+	// subject, a `[[ ]]` operand and a here-document body — answer this alike
+	// within any one preset, which is what makes it one axis rather than one
+	// per context.
 	//
 	// The `*` spelling is **not** this question and must not reach it. `$*`,
-	// `${a[*]}` and a range subscript join on the first character of IFS in
-	// every graded dialect's shell, so that half is core — see
-	// Runner.unsplitJoinSeparator, which answers the star before it asks.
+	// `${a[*]}` and a range subscript join on the first character of IFS under
+	// every answer, so that half is core — see Runner.unsplitJoinSeparator,
+	// which answers the star before it asks.
 	//
 	// Asked only at the disagreement, and the guard is not the one
 	// UnquotedListJoinsOnIFS uses. Here the join happens either way and only
 	// its character is in question, so an IFS that is *set and empty* is a
-	// live answer rather than a reason not to ask: `IFS=""; a=(x y); v=$a`
-	// is `xy` in zsh against `x y` in bash, and joining with nothing is
-	// exactly what zsh does. What does make the readings coincide is an IFS
-	// whose first character is already a space — which is every script that
-	// leaves IFS alone, and the reason this is silent — and a list of fewer
-	// than two elements, which uses no separator at all.
+	// live answer rather than a reason not to ask: joining with nothing is a
+	// real answer, and `IFS=""; a=(x y); v=$a` separates the two readings as
+	// `xy` against `x y`. What does make them coincide is an IFS whose first
+	// character is already a space — which is every script that leaves IFS
+	// alone, and the reason this is silent — and a list of fewer than two
+	// elements, which uses no separator at all.
 	UnsplitAtListJoinsOnIFS Answer
 
 	// TrailingSeparatorEndsAField makes the non-whitespace IFS separator that
 	// closes a value open one last empty field, rather than being absorbed.
 	//
-	// False in bash, bash 3.2, bash as `sh`, dash and ksh93, and true in zsh
-	// — the one axis in this neighborhood where the panel splits five to one.
-	// Measured 2026-09-07 with `IFS=:` and an unquoted `$v` (zsh under
-	// `setopt shwordsplit`, the only way to ask it there):
+	// A *leading* separator opens a field under every answer, so the asymmetry
+	// is at the tail alone and this axis is the whole of it. POSIX.1-2024
+	// 2.6.5 settles it for the standard — "once the input is empty, the
+	// candidate shall become an output field if and only if it is not empty" —
+	// which is the absorbing reading, so PosixSemantics says No.
 	//
-	//	v='a:'    five shells [a]        · zsh [a][]
-	//	v='a::'   five shells [a][]      · zsh [a][][]
-	//	v='a:b:'  five shells [a][b]     · zsh [a][b][]
-	//	v=':a:'   five shells [][a]      · zsh [][a][]
-	//	v=':'     five shells []         · zsh [][]
-	//
-	// A *leading* separator opens a field in all six, so the asymmetry is at
-	// the tail alone and this axis is the whole of it. POSIX.1-2024 2.6.5
-	// answers it too — "once the input is empty, the candidate shall become
-	// an output field if and only if it is not empty" — which is the
-	// absorbing reading, so PosixSemantics says No and zsh is the departure.
-	//
-	// Asked only at the disagreement, and the guard is what keeps it off
-	// every ordinary script: it is the closing *run* of separators that
-	// decides, and only a non-whitespace one in that run makes the two
-	// readings differ. `' a '` under the default IFS is one field in all six,
-	// because whitespace is absorbed at both ends in zsh as well; `'a: '`
-	// with `IFS=' :'` is the case that shows it is the run rather than the
-	// last byte, since the trailing space does not hide the colon in front of
-	// it. An escaped separator is data and not part of the run at all, which
-	// is why the mask `read` carries has to reach this question: `read -A` on
-	// `a\:` is one field `a:` in zsh where `a:` is two.
+	// Asked only at the disagreement, and the guard is what keeps it off every
+	// ordinary script: it is the closing *run* of separators that decides, and
+	// only a non-whitespace one in that run makes the two readings differ.
+	// `' a '` under the default IFS is one field either way, because
+	// whitespace is absorbed at both ends under both answers; `'a: '` with
+	// `IFS=' :'` is the case that shows it is the run rather than the last
+	// byte, since the trailing space does not hide the colon in front of it.
+	// An escaped separator is data and not part of the run at all, which is
+	// why the mask `read` carries has to reach this question: `read -A` on
+	// `a\:` is the one field `a:` where `a:` unescaped is two.
 	//
 	// It is not [Semantics] alone that answers a split — an unquoted
 	// `${=spec}` keeps the fields at *both* edges unconditionally, which is a
@@ -223,300 +207,240 @@ type Semantics struct {
 	ReadNoFieldsIsOneEmptyElement Answer
 
 	// ReadTrailingEscapedSeparator is what `read` does with an IFS
-	// *whitespace* character the line escaped at the very end of the value
-	// its last name takes. Without `-r` a backslash makes the character
-	// after it data, and `read` carries that as a mask into the splitter;
-	// the trim at the tail does not agree across the panel about whether the
-	// mask reaches it.
+	// *whitespace* character the line escaped at the very end of the value its
+	// last name takes. Without `-r` a backslash makes the character after it
+	// data, and `read` carries that as a mask into the splitter; whether that
+	// mask reaches the trim at the tail is the question, and it takes three
+	// values rather than two.
 	//
-	// Measured 2026-09-12 from a script file, default IFS, each row a `read`
-	// of its own over one printed line:
+	// The third value is needed because one reading trims the escaped
+	// character only from a value that took a *remainder* — the last name
+	// swallowing more fields than it was given — and keeps it when the line
+	// held exactly one field per name. A line whose escape joins two fields
+	// into one, `a b\\ c\\ ` read into two names, is what separates that
+	// reading from the one that trims however the value was reached.
 	//
-	//	          `a b c\ `   `a b\ `   `a\ `    `a b\ c\ `
-	//	          read x y    read x y  read x   read x y
-	//	          the last name's value
-	//	dash      b c         b         a        b c
-	//	                      ^ keeps          all four keep the space
-	//	bash      b c         b         a        b c
-	//	ksh93     b c         b         a        b c
+	// Two questions this axis does *not* have to carry, both unanimous:
 	//
-	// — with the trailing space shown by the brackets in the corpus row
-	// rather than here. Three columns and three answers:
-	//
-	//	dash    keeps the escaped space everywhere: the mask reaches the trim
-	//	bash    trims it, but only from a value that took a *remainder*
-	//	ksh93   trims it from the last name's value however it was reached
-	//	zsh     ksh93's answer
-	//
-	// The bash column is the one that needs the third value, and the row
-	// that says so is `a b\ c\ `: the escaped space in the middle joins `b`
-	// and `c` into one field, so the line holds exactly one field per name
-	// and the last name takes its own field rather than a remainder — bash
-	// keeps the closing space there and trims it in the first column, where
-	// there are three fields for two names.
-	//
-	// Two questions the axis does *not* have to carry, both measured the
-	// same day and both unanimous:
-	//
-	//   - a **non-whitespace** separator. The trim only ever takes
-	//     whitespace, so the mask cannot be seen through it: with `IFS=:`,
-	//     `a:b:c\:` gives `b:c:` in all six, and so does the unescaped
-	//     `a:b:c:`.
+	//   - a **non-whitespace** separator. The trim only ever takes whitespace,
+	//     so the mask cannot be seen through it: with `IFS=:`, an escaped `\\:`
+	//     at the tail lands exactly where an unescaped one does.
 	//   - a non-default **whitespace** IFS. With `IFS` a tab and tabs for
-	//     separators the rows split exactly as above, so the answer is about
-	//     the trim and not about which character it is trimming.
+	//     separators the readings split as they do under the default, so the
+	//     answer is about the trim and not about which character it trims.
 	//
-	// Asked where the readings land differently and nowhere else: a value
-	// whose closing IFS whitespace was escaped. `-r` never reaches it,
-	// because there is no mask for the trim to disagree about (#1360).
+	// Asked where the readings land differently and nowhere else: a value whose
+	// closing IFS whitespace was escaped. `-r` never reaches it, because there
+	// is no mask for the trim to disagree about.
 	ReadTrailingEscapedSeparator ReadTrailingEscapedSeparatorPolicy
 
 	// GlobExpansionResults matches the *result* of an expansion against the
-	// filesystem. False in zsh, where only a pattern written literally in the
-	// source is expanded. The same rule decides whether `[[ abc == $p ]]`
-	// treats $p as a pattern, which is one behavior observed twice rather
-	// than two quirks.
+	// filesystem, rather than expanding only a pattern written literally in the
+	// source. The same rule decides whether `[[ abc == $p ]]` treats `$p` as a
+	// pattern, which is one behavior observed twice rather than two quirks.
 	//
-	// It is the one axis in this vector with a *run-time* name over it: the
-	// shell that answers `No` gives a script `setopt globsubst` to say
-	// otherwise, so the dialect moves this answer rather than carrying a bit
-	// of its own. The per-expansion spelling `${~spec}` overrides it for one
-	// expansion and is not an option — see interp/tildeflag.go, where the two
-	// meet.
+	// It is the one axis in this vector with a *run-time* name over it: where
+	// the answer is No a script can say otherwise through a shell option, so
+	// the preset moves this answer rather than carrying a bit of its own. The
+	// per-expansion spelling `${~spec}` overrides it for one expansion and is
+	// not an option — see interp/tildeflag.go, where the two meet.
 	GlobExpansionResults Answer
 	// ValueBackslashInAPattern is what a backslash that arrived in a **value**
 	// does to the character behind it when the field is then matched as a
-	// pattern. Three readings, and no two of them can stand in for each other.
+	// pattern. Three readings, and no two of them can stand in for each other:
 	//
-	// Measured 2026-09-12 from a script file, in directories holding exactly
-	// the names either reading would find -- a directory holding neither
-	// prints the same word whichever rule is in force, which is what makes
-	// these arrangements discriminating rather than merely plausible.
+	//	quoting   the backslash quotes the next character and is **not itself
+	//	          matched**, so a value `a\\b*` matches as the pattern `ab*`
+	//	data      the backslash is data and the character behind it stays live,
+	//	          so `a\\b*` matches a name with a backslash in it and globs
+	//	disarmed  the backslash is data and the character behind it is
+	//	          **disarmed**, the same match a wholly literal `a\\b*` makes
 	//
-	// With `a\\b` and `a*` present:
+	// It takes a pattern with a live metacharacter *behind* the backslash to
+	// tell the three apart. A value whose only backslash disarms a `*` cannot
+	// separate quoting from disarmed, because a quoted `*` and a disarmed one
+	// both leave nothing to glob.
 	//
-	//	v='a\\*'; set -- $v
+	// No live reading removes the backslash from the *text*: no quote removal
+	// is performed on the result of an expansion, so a failed match restores
+	// the word with the backslash still in it.
 	//
-	//	dash, bash 5.3.15, bash-as-`sh`, bash 3.2.57, zsh 5.9.2   [a\\*]
-	//	ksh93u+                                                  [a\\b]
-	//
-	// With `a\\bc` and `ab` present:
-	//
-	//	v='a\\b*'; set -- $v
-	//
-	//	dash, bash 5.3.15, bash-as-`sh`, bash 3.2.57   [ab]
-	//	ksh93u+                                       [a\\bc]
-	//	zsh 5.9.2                                     [a\\b*]
-	//
-	// The second probe is what makes it three answers. bash reads the
-	// backslash as a quote that is **not itself matched**, so the pattern is
-	// `ab*`; ksh93 reads it as data with the `b` live; and zsh -- reached
-	// through `${~spec}`, since it globs no expansion result otherwise --
-	// reads it as data with the `b` *disarmed*, which is the same match a
-	// literal `a\\b*` makes. The first probe cannot tell bash from zsh, because a
-	// disarmed `*` and a quoted one both leave nothing to glob.
-	//
-	// Neither live reading removes the backslash from the *text*: a shell
-	// performs no quote removal on the result of an expansion, so a failed
-	// match restores the word with the backslash in it. `v='a\\b[c]'` is
-	// `a\\b[c]` in bash and dash for that reason and `a\\bc` in ksh93, which
-	// found a name.
-	//
-	// The doubled backslash is the row that says a quoting backslash needs a
+	// A **doubled** backslash is the case that says a quoting backslash needs a
 	// symbol of its own rather than the marked-backslash-plus-marked-character
-	// the escaped form already had: `v='a\\\\*'` is `a\\b` in bash -- the first
-	// backslash quoting the second and vanishing from the pattern -- and
-	// `a\\\\*` in ksh93 and zsh. The same four characters written *literally*,
-	// `'a\\\\b'*`, match the two-backslash name in every column, so the two
-	// provenances are told apart and one alphabet cannot carry both.
+	// an escaped form already had. Under the quoting reading the first
+	// backslash quotes the second and vanishes from the pattern; under the
+	// other two both survive. The same characters written *literally* match
+	// alike under all three, so the two provenances must be told apart and one
+	// alphabet cannot carry both.
 	//
 	// **Asked only where the three encodings put different fields on the
-	// wire**, and only in a dialect that globs the result of an expansion at
-	// all. valueBackslashReadingsDiffer computes that rather than describing
-	// it: a value with a backslash but nothing live beside it encodes three
-	// ways and restores one text, which is why `v='a\\b'; echo $v` demands no
-	// dialect. GlobExpansionResults is *read* rather than asked for the same
-	// reason -- where nothing is globbed the three readings agree -- and that
-	// is not the shell without it having no answer: `${~spec}` globs one
-	// expansion there and has the third reading (#1367, #1370).
+	// wire**, and only where the result of an expansion is globbed at all.
+	// valueBackslashReadingsDiffer computes that rather than describing it: a
+	// value with a backslash but nothing live beside it encodes three ways and
+	// restores one text, which is why `v='a\\b'; echo $v` demands no answer.
+	// GlobExpansionResults is *read* rather than asked for the same reason —
+	// where nothing is globbed the three readings agree — and answering it No
+	// is not the same as having no reading here: `${~spec}` globs one expansion
+	// regardless, and it takes the disarmed reading.
 	ValueBackslashInAPattern ValueBackslashPolicy
 
 	// GlobNoMatchIsError makes a pattern matching nothing an error instead of
-	// passing it through. True only in zsh.
+	// passing the pattern through unchanged.
 	GlobNoMatchIsError Answer
 
 	// AssignmentPrefixPersistsOnSpecialBuiltin keeps `x=1 shift` set
-	// afterwards. POSIX requires it; dash and ksh93 comply and bash and zsh
-	// do not.
+	// afterwards. POSIX requires it, and the presets part over whether they
+	// follow the standard here.
 	AssignmentPrefixPersistsOnSpecialBuiltin Answer
 
 	// PrefixToARegularBuiltinIsRefused applies the readonly refusal to an
 	// assignment written in front of a *regular builtin* — `readonly x=1;
-	// x=2 true`.
+	// x=2 true`. Answering No says nothing at all, runs the builtin and
+	// reports 0, and does the same for an alias naming a regular builtin and
+	// for `command` naming one.
 	//
-	// No in ksh93 alone, where that line says nothing at all, runs the
-	// builtin and reports 0 — and so do `x=2 echo E`, an alias naming a
-	// regular builtin, and `command` naming one. Yes everywhere else.
-	// Measured 2026-09-11 from a script file.
-	//
-	// Asked only in front of a regular builtin, which is the only position
-	// the panel parts at: an external command, a special builtin and a
-	// function are all refused in all six columns. See #1219.
+	// Asked only in front of a regular builtin, which is the only position the
+	// answers part at: an external command, a special builtin and a function
+	// are refused under every answer.
 	PrefixToARegularBuiltinIsRefused Answer
 	// PrefixRefusalFatality is what a *reported* refusal of an assignment
 	// prefix costs the script. Four answers, two of them keyed on the kind of
 	// command the prefix stood in front of and keyed on different lines. See
 	// PrefixRefusalFatalityPolicy.
 	PrefixRefusalFatality PrefixRefusalFatalityPolicy
-	// PrefixRefusalCostsTheCommand leaves the command the prefix stood in
-	// front of unrun, at status 1. Yes in ksh93 and zsh — `readonly x=1;
-	// x=2 /bin/echo RAN; echo after` prints the complaint and `after` and
-	// never `RAN` — and No in bash, which reports the refusal, runs the
-	// command with the name still holding its old value, and reports 0.
+	// PrefixRefusalCostsTheCommand leaves the command the prefix stood in front
+	// of unrun, at status 1. Answering No reports the refusal, runs the command
+	// with the name still holding its old value, and reports 0.
 	//
-	// Asked only where the refusal is reported and is not fatal, which is
-	// the only place the two readings differ: a script that ends has not run
-	// the command either.
+	// Asked only where the refusal is reported and is not fatal, which is the
+	// only place the two readings differ: a script that ends has not run the
+	// command either.
 	//
-	// A separate axis from the fatality because the two are independent in
-	// both directions across the panel — ksh93 is fatal on a function and
-	// not on an external and skips the command in both non-fatal positions,
-	// where bash is fatal nowhere and skips nothing. See #1219.
+	// A separate axis from the fatality because the two are independent in both
+	// directions — an implementation may be fatal on a function and not on an
+	// external while skipping the command in both non-fatal positions, or fatal
+	// nowhere and skipping nothing.
 	PrefixRefusalCostsTheCommand Answer
 
 	// PrefixToAFrozenNameIsCheckedFirst refuses the prefix **before** the
 	// command's values are expanded and before its redirections are opened.
-	// `No` does the other things first, so a value that will not expand and
-	// a file that will not open each report on their own and the frozen name
-	// is never mentioned.
+	// `No` does the other things first, so a value that will not expand and a
+	// file that will not open each report on their own and the frozen name is
+	// never mentioned.
 	//
-	// Measured 2026-09-07 and again 2026-09-12, script file, `readonly x=1`
-	// in front of each line:
+	// Two independent probes agree on the one boundary, which is what makes it
+	// a boundary rather than a quirk of arithmetic: a prefix whose value cannot
+	// be evaluated, and a redirection that cannot be opened, reach the same
+	// order with no expression involved in the second. The first also says the
+	// value is not merely reported later but **never evaluated** — where the
+	// check comes first, the evaluation is silent.
 	//
-	//	                              bash 5.3, as-`sh`, 3.2   dash, ksh93u+, zsh
-	//	x=$((1/0)) /bin/echo RAN      `x: readonly variable`,   the division, and
-	//	                              `RAN`, and no division    no `RAN`
-	//	x=$((1/0)) f                  the same, and the body    the division, and
-	//	                              runs                      no body
-	//	x=2 /bin/echo RAN >/nope/f    `x: readonly variable`,   the file only
-	//	                              then the file
-	//
-	// Two probes agreeing on one boundary is what makes it a boundary rather
-	// than a quirk of arithmetic: a redirection that cannot be opened reaches
-	// the same order with no expression in it at all. The first row also says
-	// the value is not merely reported later but **never evaluated** — the
-	// division is silent in the column that checks first.
-	//
-	// The other three prefix axes are asked at the same point and for the
-	// same reason: a command with a prefix is a minority of a script's lines
-	// and one with a frozen name in the prefix is a minority of those, so
-	// four questions sit off the common path entirely. This one is asked
-	// there too, once a name in the prefix is actually frozen (#1943).
+	// The other three prefix axes are asked at the same point and for the same
+	// reason: a command with a prefix is a minority of a script's lines and one
+	// with a frozen name in the prefix is a minority of those, so four
+	// questions sit off the common path entirely. This one is asked there too,
+	// once a name in the prefix is actually frozen.
 	//
 	// It is the order and not the refusal. What a reported refusal costs is
 	// PrefixRefusalCostsTheCommand and PrefixRefusalFatality, and those are
-	// answered the same way whichever order the two happen in — bash runs
-	// the command in both rows above, exactly as it does with a prefix that
-	// expands.
+	// answered the same way whichever order the two happen in.
 	PrefixToAFrozenNameIsCheckedFirst Answer
 
-	// EchoOptions is the set of letters `echo` reads as options: `n` for
-	// every shell measured, `e` everywhere but dash, `E` in bash and zsh
-	// alone. A word carrying any other letter is not an option at all — the
-	// whole word becomes an operand, which is unanimous and is why `echo
-	// -nq hi` prints `-nq hi` in all four. Empty means `n`.
+	// EchoOptions is the set of letters `echo` reads as options. Empty means
+	// `n` alone.
+	//
+	// A word carrying any letter outside the set is not an option at all — the
+	// whole word becomes an operand, which is unanimous and is why `echo -nq
+	// hi` prints `-nq hi` under every answer.
 	EchoOptions string
-	// EchoLastEscapeFlagWins decides `echo -e -E`: bash lets the last flag
-	// win and prints the backslashes, zsh lets -e win whatever the order.
-	// Reached only when -e came first — the other order agrees everywhere —
-	// and only in a dialect whose EchoOptions has both letters.
+	// EchoLastEscapeFlagWins decides `echo -e -E`: the last flag wins and the
+	// backslashes are printed, rather than `-e` winning whatever the order.
+	//
+	// Reached only when `-e` came first — the other order agrees under both
+	// answers — and only where EchoOptions holds both letters.
 	EchoLastEscapeFlagWins Answer
-	// EchoExpandsHexEscapes admits `\xHH` alongside the XSI set: bash and
-	// zsh do, dash and ksh93 print it as written.
+	// EchoExpandsHexEscapes admits `\xHH` alongside the XSI set, rather than
+	// printing it as written.
 	EchoExpandsHexEscapes Answer
 	// EchoExpandsEscEscape admits `\e` for the escape character in an `echo`
-	// argument: bash 5.3 and zsh do, dash bash 3.2 and ksh93 write the two
-	// characters.
+	// argument, rather than writing the two characters.
 	//
-	// It is a separate axis from EchoExpandsCapitalEscEscape below because
-	// the two shells that split the letters split them in *opposite*
-	// directions, so no single answer describes either one — ksh93 has `\E`
-	// and not `\e`, zsh has `\e` and not `\E` (#908). It is the same
+	// A separate axis from EchoExpandsCapitalEscEscape below because the
+	// implementations that split the two letters split them in *opposite*
+	// directions, so no single answer describes either one. It is the same
 	// asymmetry the `%b` site has, and it is asked separately there: see
 	// PrintfBEscEscape.
 	//
 	// Asked only where an `echo` argument actually carries a `\e`.
 	EchoExpandsEscEscape Answer
-	// EchoExpandsCapitalEscEscape admits `\E` in an `echo` argument: bash 5.3
-	// and ksh93 do, dash bash 3.2 and zsh write the two characters. See
-	// EchoExpandsEscEscape for why the two letters are two questions.
+	// EchoExpandsCapitalEscEscape admits `\E` in an `echo` argument, rather
+	// than writing the two characters. See EchoExpandsEscEscape for why the two
+	// letters are two questions.
 	//
 	// Asked only where an `echo` argument actually carries a `\E`.
 	EchoExpandsCapitalEscEscape Answer
 	// EchoExpandsUnicodeEscapes admits `\uHHHH` and `\UHHHHHHHH` in an `echo`
-	// argument, each read as a code point and written in UTF-8: bash 5.3 and
-	// zsh do, bash 3.2, that binary as `sh`, dash and ksh93 write the
-	// characters as they stand.
+	// argument, each read as a code point and written in UTF-8, rather than
+	// writing the characters as they stand.
 	//
 	// One axis for both letters, unlike `\e` and `\E` above, because the
-	// panel does not split them: measured 2026-09-10, every shell that reads
-	// one reads the other, and with the same rules — at most four hex digits
-	// after `\u` and at most eight after `\U`, fewer accepted (`\u41` is `A`
-	// in both), and the value written as UTF-8 rather than as a byte, so
-	// `\u00e9` is two bytes and `\u20ac` three.
+	// answers do not split them: an implementation that reads one reads the
+	// other, and with the same rules — at most four hex digits after `\u` and
+	// at most eight after `\U`, fewer accepted (`\u41` is `A`), and the value
+	// written as UTF-8 rather than as a byte, so `\u00e9` is two bytes and
+	// `\u20ac` three.
 	//
 	// It is the *original* UTF-8 and not the range it was later narrowed to,
 	// which is measured rather than assumed: a surrogate and a value past the
 	// last code point are encoded rather than replaced — `\ud800` is three
 	// bytes and `\U110000` four — and the five- and six-byte forms are
-	// reachable, `\U200000` being five and `\U4000000` six, in both shells
-	// that have the escape.
+	// reachable, `\U200000` being five and `\U4000000` six.
 	//
 	// Asked only where an `echo` argument actually carries one.
 	EchoExpandsUnicodeEscapes Answer
 	// UnicodeEscapeOutsideTheLocale is what becomes of a `\u` or `\U` escape
 	// naming a code point the locale's encoding cannot hold — see
-	// OutsideLocaleEscapePolicy, and interp/localeescape.go for the
-	// measurements and for what "cannot hold" is read off.
+	// OutsideLocaleEscapePolicy, and interp/localeescape.go for what "cannot
+	// hold" is read off.
 	//
 	// One axis for every site that reads the escape — `echo`, `print`, a
 	// `printf` format, a `%b` argument, `$'...'`, and the `(g)` and `(p)`
-	// expansion flags — because each shell answers the same at every site it
-	// reads the escape at, measured one site at a time. It is a question
-	// *after* the escape has been read, so it is separate from
-	// EchoExpandsUnicodeEscapes above and from the printf policies: a dialect
-	// that does not read the escape at a site never reaches it there, which is
-	// why ksh93's answer is reachable at two sites and not at five.
+	// expansion flags — because an implementation answers the same at every
+	// site it reads the escape at. It is a question *after* the escape has been
+	// read, so it is separate from EchoExpandsUnicodeEscapes above and from the
+	// printf policies: an implementation that does not read the escape at a
+	// site never reaches this axis there, so how many sites can reach it varies
+	// with the answers above.
 	//
-	// `$'...'` is a **core** construct, and the axis is three-valued because
-	// of it: ksh93 has no `\u` in `echo`, in `print` or in a `%b`, and writes
-	// the character regardless of the locale in the two places it does read
-	// one. So a core script with `$'\u00e9'` in it under a non-UTF-8 locale
-	// is an unanswered axis rather than a value — which is the core refusing
-	// what the panel disagrees about, in the one place that disagreement
-	// reaches the common denominator (#2021).
+	// `$'...'` is a **core** construct, and the axis is three-valued because of
+	// it. An implementation may read the escape at only some of those sites and
+	// write the character regardless of the locale where it does, which is
+	// neither of the two straight answers. So a core script with `$'\u00e9'`
+	// in it under a non-UTF-8 locale is an unanswered axis rather than a value
+	// — the core refusing what is disagreed about, in the one place that
+	// disagreement reaches the common denominator.
 	//
 	// Asked only where such an escape actually names a code point the locale
 	// refuses, so an ASCII one needs no answer from anybody and neither does
 	// any escape at all in a UTF-8 locale.
 	UnicodeEscapeOutsideTheLocale OutsideLocaleEscapePolicy
-	// EchoEmptyHexDigitRunIsNul reads a hexadecimal escape with no digit
-	// after it as a zero rather than leaving it as written: `echo '\xZ'`,
-	// `echo '\uZ'` and `echo '\x'` are a NUL byte followed by what was
-	// there in zsh, and the two characters as written in bash 5.3.
+	// EchoEmptyHexDigitRunIsNul reads a hexadecimal escape with no digit after
+	// it as a zero rather than leaving it as written, so `echo '\xZ'`,
+	// `echo '\uZ'` and `echo '\x'` are a NUL byte followed by whatever was
+	// there.
 	//
-	// One question for `\x`, `\u` and `\U` together, because the shell that
-	// answers it answers the same for all three and the shells that leave one
-	// as written leave all of them. It is the same split
-	// PrintfHexEscapePolicy records at the two `printf` sites, where it is one
-	// of the three details that made a policy out of a bool.
+	// One question for `\x`, `\u` and `\U` together, because an
+	// implementation that answers it one way answers the same for all three. It
+	// is the same split PrintfHexEscapePolicy records at the two `printf`
+	// sites, where it is one of the three details that made a policy out of a
+	// bool.
 	//
 	// Asked only where such an escape actually runs out of digits, so
 	// `echo '\x41'` needs no answer to it.
 	EchoEmptyHexDigitRunIsNul Answer
-	// EchoInterpretsEscapes expands backslash escapes in `echo` without -e.
-	// True in dash and zsh, false in bash and ksh93 — a grouping no other
-	// axis produces.
+	// EchoInterpretsEscapes expands backslash escapes in `echo` without `-e`.
+	// The answers group in a way no other axis reproduces, which is why it
+	// cannot ride on any of them.
 	EchoInterpretsEscapes Answer
 
 	// DollarSingleBackslashC is what `\c` means inside `$'…'`, and like the
@@ -528,103 +452,87 @@ type Semantics struct {
 	// character no escape claims — `$'\q'` — see DollarSingleUnknownPolicy.
 	// Asked only when such an escape is actually there.
 	DollarSingleUnknownEscape DollarSingleUnknownPolicy
-	// DollarSingleNulTruncates ends the decoded text at the first NUL an
-	// escape produces, which is C-string semantics: `$'a\0b'` is `a` in
-	// bash and ksh93 and the three bytes `a`, NUL, `b` in zsh.
+	// DollarSingleNulTruncates ends the decoded text at the first NUL an escape
+	// produces, which is C-string semantics: `$'a\0b'` is `a` rather than the
+	// three bytes `a`, NUL, `b`.
 	//
 	// The truncation is the *span's*, not the word's: `$'a\0b'ccc` is `accc`
-	// in the shells that truncate, so what is lost is the remainder of the
-	// quoted text and nothing else. Reached only where a decoded escape
-	// actually yields a zero byte — `\0`, an octal or hex escape that comes
-	// to zero, and `\c@`, which is the same zero by another road.
+	// where it truncates, so what is lost is the remainder of the quoted text
+	// and nothing else. Reached only where a decoded escape actually yields a
+	// zero byte — `\0`, an octal or hex escape that comes to zero, and `\c@`,
+	// which is the same zero by another road.
 	DollarSingleNulTruncates Answer
-	// DollarSingleCaretMeta reads `\C-X` inside `$'…'` as a control
-	// character and `\M-X` as the same byte with the high bit set. The
-	// separating `-` is optional in both, so `\CA` and `\C-A` are one byte
-	// apiece, and either may take the other as its argument.
+	// DollarSingleCaretMeta reads `\C-X` inside `$'…'` as a control character
+	// and `\M-X` as the same byte with the high bit set. The separating `-` is
+	// optional in both, so `\CA` and `\C-A` are one byte apiece, and either may
+	// take the other as its argument.
 	//
-	// Yes in zsh alone. Measured 2026-09-08 from `$'\C-A'`, `$'\M-x'`,
-	// `$'\M-\C-?'` and `$'\cA'` in each shell:
-	//
-	//	bash 5.3, bash 3.2, bash as sh   \C-A and \M-x kept as written,
-	//	                                 and `\cA` is the control escape
-	//	dash                             no `$'…'` at all
-	//	ksh93                            `\C` is a control escape of its own,
-	//	                                 spelled without the dash, so
-	//	                                 `$'\C-A'` is control-`-` then `A`,
-	//	                                 and `\M-x` is ESC then `x`
-	//	zsh                              01, f8, ff, and `\c` is nothing
-	//
-	// So it is No in bash and unspecified in ksh93, whose two escapes are a
-	// different reading rather than this one turned off — and refusing it
-	// there is the point: `$'\C-A'` answered as `C-A` would be off by a
-	// byte and silent about it.
+	// Three-valued rather than two, because an implementation may give `\C` a
+	// different meaning of its own — a control escape spelled without the dash,
+	// which reads `$'\C-A'` as control-`-` followed by `A` — and that is a
+	// different reading rather than this one turned off. Refusing it there is
+	// the point: answering `$'\C-A'` as `C-A` would be off by a byte and
+	// silent about it.
 	//
 	// Asked only for a `$'…'` that has a `\C` or an `\M` in it. This is the
-	// reading side of what the `q+` expansion flag writes, and the two are
-	// the same table seen from its two ends: a `q+` whose spelling the shell
-	// cannot read back is not a quoting flag at all.
+	// reading side of what the `q+` expansion flag writes, and the two are the
+	// same table seen from its two ends: a `q+` whose spelling cannot be read
+	// back is not a quoting flag at all.
 	DollarSingleCaretMeta Answer
 
 	// ReadOptions is the set of letters `read` takes, a `:` after a letter
-	// marking one whose argument follows it — the getopts convention, the
-	// same one the shared option reader speaks. The letters are the
-	// dialect's own: bash spells the array option `-a` and takes the array's
-	// name as the option's argument, ksh93 and zsh spell it `-A` and take
-	// the name as the first operand, and zsh reads `-n` as a flag where bash
-	// and ksh93 read a count after it. `-p` splits the same way: `p:` takes
-	// a prompt for the terminal in bash and dash, a bare `p` names the
-	// coprocess as the source in ksh93 and zsh. Empty means `r`, the one
-	// letter POSIX gives the builtin.
+	// marking one whose argument follows it — the getopts convention, the same
+	// one the shared option reader speaks. Empty means `r`, the one letter
+	// POSIX gives the builtin.
+	//
+	// The letters belong to the preset, and so does their *shape*: the same
+	// capability is spelled with different letters, and a letter that takes an
+	// argument in one preset is a bare flag in another. The array option is
+	// spelled one way with the array's name as the option's argument and
+	// another with the name as the first operand; `-n` is a flag in one preset
+	// and a count in others; `-p` takes a prompt for the terminal in some and
+	// names the coprocess as the source in others. That is why this is a string
+	// of letters rather than a set of booleans.
 	ReadOptions string
-	// UnsetOptions is the same question asked of `unset`, spelled the same
-	// way. The letters split three ways and no two dialects have the same
-	// set: `-v` and `-f` are unanimous, `-n` is bash 5.3's and ksh93's — and
-	// is refused by bash 3.2, dash and zsh — and `-m`, which reads its
-	// operands as *patterns* and unsets every parameter whose name matches
-	// one, is zsh's alone. Measured 2026-09-05 across the panel. Empty means
-	// `vf`, which is what POSIX gives the builtin.
+	// UnsetOptions is the same question asked of `unset`, spelled the same way.
+	// Empty means `vf`, which is what POSIX gives the builtin.
+	//
+	// The letters split three ways and no two presets have the same set: `-v`
+	// and `-f` are unanimous, `-n` is held by some and refused by the rest, and
+	// `-m`, which reads its operands as *patterns* and unsets every parameter
+	// whose name matches one, is held by a single preset.
 	UnsetOptions string
-	// ReadZeroTimeout is what `read -t 0` asks of the stream — a poll, a
-	// read of what is already waiting, or a read that commits once it has
-	// begun. Asked only where `-t 0` is actually written; every other
-	// timeout is a deadline and needs no answer. See ReadZeroTimeoutStyle
-	// for the measurements.
+	// ReadZeroTimeout is what `read -t 0` asks of the stream — a poll, a read
+	// of what is already waiting, or a read that commits once it has begun.
+	// Asked only where `-t 0` is actually written; every other timeout is a
+	// deadline and needs no answer. See ReadZeroTimeoutStyle.
 	ReadZeroTimeout ReadZeroTimeoutStyle
-	// ReadPartialCountSucceeds decides `read -n N` when the input ends
-	// after some but fewer than N characters: ksh93 calls the read a
-	// success and bash reports 1, both keeping what arrived. Asked only
-	// there — a full count, a delimiter, or a wholly empty input answers
-	// the same way everywhere.
+	// ReadPartialCountSucceeds decides `read -n N` when the input ends after
+	// some but fewer than N characters: the read is a success rather than a
+	// report of 1. What arrived is kept under either answer.
+	//
+	// Asked only there — a full count, a delimiter, or a wholly empty input
+	// answers the same way under both.
 	ReadPartialCountSucceeds Answer
-	// ReadExactCountKeepsPartial decides what `read -N N` leaves behind
-	// when the input ends short: bash assigns the partial text and ksh93
-	// assigns nothing, both reporting 1. Asked only on that partial text.
+	// ReadExactCountKeepsPartial decides what `read -N N` leaves behind when
+	// the input ends short: the partial text is assigned rather than nothing.
+	// The status is 1 under either answer. Asked only on that partial text.
 	ReadExactCountKeepsPartial Answer
 	// ReadTimeoutKeepsWhatArrived decides what an expired `read -t` leaves
-	// behind: bash assigns whatever had arrived before the deadline and
-	// ksh93 and zsh touch no name at all, leaving the variable's earlier
-	// value. Asked only on the timeout, never at end of input, where all
-	// three assign.
+	// behind: whatever had arrived before the deadline is assigned, rather than
+	// no name being touched and the variable keeping its earlier value. Asked
+	// only on the timeout, never at end of input, where both answers assign.
 	//
-	// The distinction the wording is careful about is that bash does not
-	// *clear* the variable — it assigns a short read, and clearing is only
-	// what that looks like when nothing had arrived. Measured with a stream
-	// that delivers half a line and then stalls:
+	// The distinction the wording is careful about is that Yes does not
+	// *clear* the variable — it assigns a short read, and clearing is only what
+	// that looks like when nothing had arrived.
 	//
-	//	{ printf part; sleep 0.5; printf 'ial\n'; } |
-	//	  sh -c 'v=old; read -t 0.2 v; echo "$? [$v]"'
-	//
-	//	bash 5.3  142 [part]      ksh93  1 [old]      zsh  0 [partial]
-	//
-	// zsh's row is not this axis and is why the axis is worded around the
-	// timeout rather than around the partial text: its `-t` bounds the wait
-	// for the stream to become readable and nothing after that, so once a
-	// byte has arrived it reads the line to the end however long that takes
-	// and reports success. A zsh timeout therefore only ever happens with
-	// nothing to assign, which is the same observable as leaving the name
-	// alone; the two are told apart by how long the read takes, not by what
-	// it assigns.
+	// The axis is worded around the timeout rather than around the partial text
+	// because of ReadTimeoutBoundsReadability below. Where `-t` bounds only the
+	// wait for the stream to become readable, a timeout can only ever happen
+	// with nothing to assign, which is the same observable as leaving the name
+	// alone; the two are told apart by how long the read takes, not by what it
+	// assigns.
 	ReadTimeoutKeepsWhatArrived Answer
 
 	// ReadTimeoutBoundsReadability makes `read -t` bound the wait for the
@@ -632,90 +540,85 @@ type Semantics struct {
 	// arrived the line is read to its end however long that takes, and the
 	// answer is 0.
 	//
-	// zsh alone. Measured with a byte dripping every 0.1s under `-t 0.25`:
-	// zsh returns 0 with the whole line after 0.6s, and a whole-read deadline
-	// returns 1 with a partial one. The two agree for every timeout a normal
-	// script writes and disagree about *when* it expires, which is why this
-	// was recorded as a divergence rather than noticed as a bug (#644).
+	// The two answers agree for every timeout a normal script writes and
+	// disagree about *when* it expires, which is why this is a divergence to be
+	// recorded rather than a bug to be noticed: under a byte dripping slower
+	// than the deadline, one answer returns 0 with the whole line and the other
+	// returns 1 with a partial one.
 	//
-	// It is also the axis behind a fifo that holds an unterminated line: zsh
-	// never returns there, because the first byte arrived and the delimiter
-	// never does. That is the same rule and not a second one (#784).
+	// It is also the axis behind a fifo that holds an unterminated line: under
+	// Yes the read never returns there, because the first byte arrived and the
+	// delimiter never does. That is the same rule and not a second one.
 	//
-	// Asked only where a timeout was written and is not zero — a `read` with
-	// no `-t` has no deadline to place, and `-t 0` is a question about the
-	// stream rather than a deadline at all (ReadZeroTimeout).
+	// Asked only where a timeout was written and is not zero — a `read` with no
+	// `-t` has no deadline to place, and `-t 0` is a question about the stream
+	// rather than a deadline at all (ReadZeroTimeout).
 	ReadTimeoutBoundsReadability Answer
 
 	// BuiltinWriteErrorFailsTheCommand makes a builtin whose output write
 	// failed — into a descriptor closed with `>&-`, most plainly — report
-	// status 1. True in bash, dash and ksh93; zsh keeps the builtin's own
-	// status and quietly loses the text.
+	// status 1, rather than keeping the builtin's own status and quietly losing
+	// the text.
 	//
-	// Whether anything is *said* about it is the dialect's wording —
-	// Diagnostics.BuiltinWriteError — not a second axis: bash and dash
-	// complain, ksh93 fails silently, and zsh has nothing to word because it
-	// does not fail. Asked only when a write has actually failed, so `echo
-	// hi` on an open stream needs no dialect.
+	// Whether anything is *said* about it is a matter of wording —
+	// Diagnostics.BuiltinWriteError — and not a second axis: an implementation
+	// may complain or fail silently, and one that answers No has nothing to
+	// word because it does not fail. Asked only when a write has actually
+	// failed, so `echo hi` on an open stream needs no answer.
 	BuiltinWriteErrorFailsTheCommand Answer
 
-	// LengthOfSpecialIsCount makes `${#@}` the number of positional
-	// parameters. False in dash, which gives the length of the joined
-	// string. The first axis measured where dash stands alone, and a silent
-	// one: both answers are plausible numbers.
+	// LengthOfSpecialIsCount makes `${#@}` the number of positional parameters
+	// rather than the length of the joined string.
+	//
+	// A silent axis: both answers are plausible numbers and nothing says which
+	// rule produced one.
 	LengthOfSpecialIsCount Answer
 
-	// TransformLetterCheckedOnlyWhenValued delays the check of a `@`
-	// operator's letter until the name has a value. Yes makes `${u@QQ}` on
-	// an unset name empty at status 0 while the identical spelling on a set
-	// one is a bad substitution — the same word meaning two different things
-	// depending on what a variable happens to hold.
+	// TransformLetterCheckedOnlyWhenValued delays the check of a `@` operator's
+	// letter until the name has a value. Yes makes `${u@QQ}` on an unset name
+	// empty at status 0 while the identical spelling on a set one is a bad
+	// substitution — the same word meaning two different things depending on
+	// what a variable happens to hold.
 	//
-	// Reached only by a grammar that *has* the family, which is one shell;
-	// to the rest `${u@QQ}` is an unknown operator whatever the value, and
-	// nothing here is asked. So this is an axis with one measured answer,
-	// deliberately: making an operator's validity depend on a value is not a
-	// rule anything should inherit by having a `@` family, and the shell
-	// that does it should have to say so. An empty array counts as no value,
-	// measured — `a=(); ${a[@]@Z}` is quiet and `a=(x); ${a[@]@Z}` is not.
+	// Reached only by a grammar that *has* the family; without it `${u@QQ}` is
+	// an unknown operator whatever the value and nothing here is asked. So this
+	// is an axis with a single reachable answer, deliberately: making an
+	// operator's validity depend on a value is not a rule anything should
+	// inherit by having a `@` family, and an implementation that does it should
+	// have to say so. An empty array counts as no value — `a=(); ${a[@]@Z}` is
+	// quiet where `a=(x); ${a[@]@Z}` is not.
 	//
-	// unexhibited No: nobody in the panel, and kept deliberately — it is
-	// the null hypothesis this axis exists to make the odd shell argue
-	// against. Measured 2026-09-12: `${s@Q}` is a bad substitution in
-	// dash, bash 3.2.57, ksh93u+ and zsh 5.9.2, so bash 5.x is the only
-	// column whose grammar reaches the question, and it answers Yes. `No`
-	// is what a shell that checked the letter whatever the value would
-	// hold, which is what having a `@` family would otherwise imply
-	// (#2060).
+	// No is the null hypothesis this axis exists to make the odd answer argue
+	// against: it is what an implementation that checked the letter whatever
+	// the value would hold, which is what having a `@` family would otherwise
+	// imply. It stays unheld rather than unwritten.
 	TransformLetterCheckedOnlyWhenValued Answer
 
-	// ArithLeadingZeroIsOctal reads `0100` as sixty-four. False in zsh, where
-	// it is one hundred. The quietest divergence measured — nothing warns,
-	// both are plausible numbers, and file modes are written this way.
+	// ArithLeadingZeroIsOctal reads `0100` as sixty-four rather than as one
+	// hundred.
+	//
+	// The quietest divergence in the vector — nothing warns, both are plausible
+	// numbers, and file modes are written this way.
 	ArithLeadingZeroIsOctal Answer
 	// HeredocExpandsInTheCommandsProcess confines what a here-document body's
-	// expansion writes to the command the body feeds, where that command is
-	// one the shell runs as a process of its own.
-	//
-	// True in bash, ksh93 and zsh; dash alone lets the write escape.
-	// Measured with `unset u` and a body of `${u:=zz}` fed to `cat`: `u` is
-	// unset afterwards in the three, and holds `zz` in dash. With `$(( n++ ))`
-	// instead — which dash has not got — the three are unanimous again.
+	// expansion writes to the command the body feeds, where that command is one
+	// the shell runs as a process of its own. Answering No lets the write
+	// escape into the shell, so a body of `${u:=zz}` leaves `u` set afterwards.
 	//
 	// It is one axis rather than one per construct because the split is a
-	// property of *where the shell expands a body*, and every construct
-	// downstream of that follows: a builtin, a function, a compound command,
-	// `exec`, `eval` and `.` all leave the write behind in all four shells,
-	// because the shell runs them itself and there is no other process for
-	// it to land in. Nothing is asked for those.
+	// property of *where a body is expanded*, and every construct downstream of
+	// that follows: a builtin, a function, a compound command, `exec`, `eval`
+	// and `.` all leave the write behind under either answer, because the shell
+	// runs them itself and there is no other process for it to land in. Nothing
+	// is asked for those.
 	//
 	// Silent either way, which is the reason it is here: a counter advanced
 	// inside a template's here-document reads one too high on the next line
 	// under the wrong answer, and nothing about the output says so.
 	//
-	// Asked only when the body actually wrote something. A here-document
-	// with no side effect is every other here-document and the shells agree
-	// about it, so an unanswered dialect must still be able to run one.
+	// Asked only when the body actually wrote something. A here-document with
+	// no side effect is every other here-document and is unanimous, so an
+	// unanswered preset must still be able to run one.
 	HeredocExpandsInTheCommandsProcess Answer
 
 	// RedirectTargetExpandsInTheCommandsProcess is the same claim for a
@@ -723,108 +626,93 @@ type Semantics struct {
 	// as a process of its own leaves `u` unset afterwards, and `> "$NOPE"`
 	// under `set -u` costs that command rather than the script.
 	//
-	// True in bash, ksh93 and zsh; dash alone keeps the write and stops the
-	// script. One answer for both consequences, because they are one fact
-	// about where the word was expanded — and a second axis rather than a
-	// widening of the body's, because dash splits the other way there: a
-	// here-document body's failed expansion costs dash the command and not
-	// the script, where a target's ends it (#1228).
+	// One answer for both consequences, because they are one fact about where
+	// the word was expanded — and a second axis rather than a widening of the
+	// body's, because an implementation may split the other way there: a
+	// here-document body's failed expansion may cost the command and not the
+	// script where a target's ends it.
 	//
-	// Asked only where the command is one the shell runs as a process of
-	// its own *and* the expansion either wrote something or failed. A target
-	// that expands to a name is every other redirection, the shells agree
-	// about it, and an unanswered dialect must still be able to open a file.
+	// Asked only where the command is one the shell runs as a process of its
+	// own *and* the expansion either wrote something or failed. A target that
+	// expands to a name is every other redirection, is unanimous, and an
+	// unanswered preset must still be able to open a file.
 	//
 	// What is not asked anywhere is whether the open happens: a target whose
 	// expansion failed is not opened, unanimously. Diagnosing the unset name
-	// and then reporting that `` could not be created is two complaints for
-	// one mistake, and the second names a file nobody wrote.
+	// and then reporting that `` could not be created is two complaints for one
+	// mistake, and the second names a file nobody wrote.
 	RedirectTargetExpandsInTheCommandsProcess Answer
 	// ForNameWhenTheLoopRuns is what a `for` or `select` does when it is
-	// reached and the word standing where its variable belongs is not a
-	// name. Asked only where the grammar carried the word this far —
-	// syntax.Dialect.ForNameCheckedWhenTheLoopRuns — which is bash and
-	// ksh93; the other four refuse it while parsing and build no clause to
-	// run. Three answers among those two, and POSIX mode is the third; see
-	// ForNameRunForm (#1110).
+	// reached and the word standing where its variable belongs is not a name.
 	//
-	// unexhibited ForNameEndsTheScriptAsASyntaxError: bash in POSIX mode,
-	// which is a panel column with no dialect preset — the reading is
-	// reached through [Runner.SetPosixMode] rather than by any vector,
-	// exactly as the grid above records. A mode a shell enters and leaves
-	// is not a fifth dialect, so no preset can exhibit it and the sweep's
-	// list cannot shrink here (#2060).
+	// Asked only where the grammar carried the word this far —
+	// syntax.Dialect.ForNameCheckedWhenTheLoopRuns. A grammar that refuses the
+	// word while parsing builds no clause to run and never reaches this. See
+	// ForNameRunForm for the three answers.
+	//
+	// One of those answers is reachable only through [Runner.SetPosixMode]
+	// rather than through any vector. A mode entered and left at run time is
+	// not a preset, so no preset holds that value and it stays unheld on
+	// purpose.
 	ForNameWhenTheLoopRuns ForNameRunForm
 
 	// FunctionNameWhenTheDefinitionRuns is what a `function` definition does
-	// when it is reached and the word standing where its name belongs is not
-	// a name. Asked only where the grammar carried the word this far —
-	// syntax.Dialect.FunctionNameCheckedWhenTheDefinitionRuns — which is bash
-	// and ksh93; zsh reads such a name as a word and defines what it comes
-	// to, and dash has no keyword to reach the question with. Three answers
-	// among those two, and POSIX mode is the third; see FuncNameRunForm
-	// (#1296).
+	// when it is reached and the word standing where its name belongs is not a
+	// name.
 	//
-	// unexhibited FuncNameEndsTheScriptAsASyntaxError: bash in POSIX mode,
-	// reached through [Runner.SetPosixMode] and held by no preset, for the
-	// reason ForNameWhenTheLoopRuns records (#2060).
+	// Asked only where the grammar carried the word this far —
+	// syntax.Dialect.FunctionNameCheckedWhenTheDefinitionRuns. A grammar that
+	// reads such a name as a word and defines what it comes to never reaches
+	// the question, and neither does one with no keyword to reach it with. See
+	// FuncNameRunForm for the three answers.
+	//
+	// As with ForNameWhenTheLoopRuns, one answer is reachable only through
+	// [Runner.SetPosixMode] and is held by no preset.
 	FunctionNameWhenTheDefinitionRuns FuncNameRunForm
 
-	// FatalErrorStatusIsOne is the status a fatal shell error carries.
-	// True in bash, ksh93 and zsh; dash alone exits 2.
+	// FatalErrorStatusIsOne is the status a fatal shell error carries, as
+	// against a 2.
 	//
-	// It began as an arithmetic-only axis and was generalized on evidence:
-	// a failed arithmetic expansion, a readonly reassignment and a `shift`
-	// past the end are three unrelated errors, and every shell gives all
-	// three the same status. The split is a property of the shell, not of
-	// the error, so it is one axis rather than three.
+	// It is one axis rather than one per error, on evidence: a failed
+	// arithmetic expansion, a readonly reassignment and a `shift` past the end
+	// are three unrelated errors, and any one implementation gives all three
+	// the same status. The split is a property of the implementation, not of
+	// the error.
 	//
 	// *Which* errors are fatal is a separate question and stays per-error —
 	// ReadonlyReassignmentFatal and ShiftPastEndFatal answer it, and the
-	// shells genuinely disagree there. A silent axis either way: scripts
-	// that branch on `$?` rather than on truthiness read the failure
-	// correctly under one group and misread it under the other.
+	// answers genuinely disagree there. A silent axis either way: scripts that
+	// branch on `$?` rather than on truthiness read the failure correctly under
+	// one answer and misread it under the other.
 	FatalErrorStatusIsOne Answer
-	// ArithNameValueRecurses re-evaluates a name-shaped value as an
-	// expression: with `y=5; x=y`, `$((x+1))` is 6 because `y` is looked up
-	// in turn, and it recurses as far as the values lead — `y=z; z=7; x=y`
-	// is 8. Yes in bash, zsh and ksh93; **dash alone** reads the value as a
-	// literal and refuses it, `Illegal number: y`.
+	// ArithNameValueRecurses re-evaluates a name-shaped value as an expression:
+	// with `y=5; x=y`, `$((x+1))` is 6 because `y` is looked up in turn, and it
+	// recurses as far as the values lead — `y=z; z=7; x=y` is 8. Answering No
+	// reads the value as a literal and refuses it as an illegal number.
 	//
-	// The interpreter once followed the shells that agree and said so in a
-	// comment, which is the shape of a guess rather than a measurement; it
-	// asks here now, and arithValueOf is where the ask is made.
+	// Asked rather than assumed, and arithValueOf is where the ask is made.
 	//
-	// This comment said "dash and ksh93 error instead" until #1629, and the
-	// preset it contradicted was the right one: measured 2026-09-11, ksh93
-	// recurses exactly as bash and zsh do. What it does differently is one
-	// step further in — see ArithRecursedNameMustBeSet, which is the axis
-	// that mistake was really about.
+	// What an implementation does one step further in is a different question:
+	// see ArithRecursedNameMustBeSet, which recursion reaching an unset name
+	// answers and this axis does not.
 	ArithNameValueRecurses Answer
 	// ArithRecursedNameMustBeSet makes an unset name *reached through another
-	// name's value* an error rather than a zero. Asked only where
-	// ArithNameValueRecurses says the lookup happens at all, and only below
-	// the top: a name written in the expression itself is zero when it is
-	// unset in every shell in the panel, `$((nosuch+1))` being 1 everywhere.
+	// name's value* an error rather than a zero.
 	//
-	// Measured 2026-09-11, `x=abc` with `abc` unset:
+	// Asked only where ArithNameValueRecurses says the lookup happens at all,
+	// and only below the top: a name written in the expression itself is zero
+	// when it is unset under every answer, `$((nosuch+1))` being 1 throughout.
 	//
-	//	bash 5.3.15   $((x+1)) is 1, the script runs on
-	//	bash 3.2.57   $((x+1)) is 1, the script runs on
-	//	zsh 5.9.2     $((x+1)) is 1, the script runs on
-	//	ksh93u+       abc: parameter not set, status 1, the script stops
-	//	dash          never gets here: it does not recurse
+	// Where it is Yes the refusal is the `set -u` sentence word for word, with
+	// nounset off — a name arrived at this way is read as a *parameter
+	// reference* rather than as text that might be a number — and it is fatal
+	// the way an unset parameter under nounset is: `||` does not catch it, and
+	// a subshell dies alone.
 	//
-	// The refusal is the shell's `set -u` sentence word for word, with
-	// nounset off — ksh93 reads a name arrived at this way as a *parameter
-	// reference* rather than as text that might be a number. It is fatal the
-	// way an unset parameter under nounset is: `||` does not catch it, and a
-	// subshell dies alone.
-	//
-	// Silent when it is wrong, which is why it is worth an axis rather than
-	// a wording: `x=abc; $((x+1))` answered 1 and carried on, so a ksh script
-	// whose variable held a stale name got a plausible number where the real
-	// shell had stopped.
+	// Silent when it is wrong, which is why it is worth an axis rather than a
+	// wording: answering `x=abc; $((x+1))` as 1 and carrying on gives a script
+	// whose variable held a stale name a plausible number where it should have
+	// stopped.
 	ArithRecursedNameMustBeSet Answer
 	// ArithSubscriptSkippedWhenNameUnset looks the name up before it reads
 	// the brackets, and answers zero for a name that is not there without

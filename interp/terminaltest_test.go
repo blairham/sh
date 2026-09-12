@@ -8,6 +8,7 @@ package interp_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/internal/pty"
@@ -194,4 +195,80 @@ func TestBareTerminalTestIsDescriptorOneIsAnAxis(t *testing.T) {
 			}
 		}
 	}
+}
+
+// What width the `-t` operand is read at, and the one value that answers on
+// its own (#2000).
+//
+// Two axes, and each is asked at the disagreement: a descriptor number that
+// fits in the 32 bits is the same descriptor either way, and every value but
+// -1 answers from the shell's own table.
+func TestTerminalDescriptorWidth(t *testing.T) {
+	control, terminal, err := pty.Open()
+	if err != nil {
+		t.Skipf("no pseudo-terminal: %v", err)
+	}
+	defer func() { _ = control.Close() }()
+	defer func() { _ = terminal.Close() }()
+
+	widthRun := func(t *testing.T, src string, narrows, minusOne Answer, tty bool) string {
+		t.Helper()
+		out, _ := run(t, src, func(r *Runner) {
+			s := *r.Semantics
+			s.TerminalTestDescriptorNarrowsToThirtyTwoBits = narrows
+			s.TerminalTestMinusOneIsATerminal = minusOne
+			r.Semantics = &s
+			if tty {
+				r.Stdin = terminal
+			}
+		})
+		return out
+	}
+
+	// The narrowing, proved where it can be told from "a big number is true":
+	// 4294967296 is descriptor 0, which is the terminal here, and 4294967298
+	// is descriptor 2, which is not. A reading that answered true to anything
+	// too wide would fail the second.
+	t.Run("a value past 32 bits is a descriptor again", func(t *testing.T) {
+		const src = `[ -t 4294967296 ]; echo "zero=$?"; [ -t 4294967298 ]; echo "two=$?"`
+		if got := widthRun(t, src, Yes, No, true); got != "zero=0\ntwo=1\n" {
+			t.Errorf("narrowing at a terminal = %q, want the terminal on descriptor 0 alone", got)
+		}
+		if got := widthRun(t, src, No, No, true); got != "zero=1\ntwo=1\n" {
+			t.Errorf("not narrowing = %q, want two descriptors nothing is open at", got)
+		}
+	})
+
+	// A value too wide for the shell's own integer saturates, and what is
+	// left after narrowing is -1. Where nothing narrows, the same word is not
+	// a number at all — which is the other axis's question and is why this
+	// one is asked before it.
+	t.Run("a value too wide to hold", func(t *testing.T) {
+		const src = `[ -t 99999999999999999999 ]; echo "st=$?"`
+		if got := widthRun(t, src, Yes, Yes, false); got != "st=0\n" {
+			t.Errorf("saturating = %q, want the -1 it lands on", got)
+		}
+		out, _ := run(t, src, func(r *Runner) {
+			s := *r.Semantics
+			s.TerminalTestDescriptorNarrowsToThirtyTwoBits = No
+			s.TerminalTestMinusOneIsATerminal = No
+			s.TerminalTestRequiresANumber = Yes
+			r.Semantics = &s
+		})
+		if !strings.Contains(out, "st=2") {
+			t.Errorf("not narrowing = %q, want the not-a-number refusal at 2", out)
+		}
+	})
+
+	// And -1 on its own, which needs no terminal anywhere: the buffers this
+	// runs on hold none, and the answer is still true.
+	t.Run("minus one", func(t *testing.T) {
+		const src = `[ -t -1 ]; echo "one=$?"; [ -t -2 ]; echo "two=$?"`
+		if got := widthRun(t, src, No, Yes, false); got != "one=0\ntwo=1\n" {
+			t.Errorf("with the value = %q, want -1 alone true", got)
+		}
+		if got := widthRun(t, src, No, No, false); got != "one=1\ntwo=1\n" {
+			t.Errorf("without it = %q, want both false", got)
+		}
+	})
 }

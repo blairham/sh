@@ -352,8 +352,24 @@ func (r *Runner) condOperand(w *syntax.Word) string {
 // the expression parser has no primary to offer for nothing at all, so the
 // case is answered before it is asked.
 func (r *Runner) condArith(text string) (int, error) {
+	v, msg := r.conditionOperand(text)
+	if msg != "" {
+		return 0, r.condArithFailed(r.diag().arithConstructFailure("[[", msg))
+	}
+	return v, nil
+}
+
+// conditionOperand is the reading itself: the value, or the dialect's worded
+// complaint about text that would not read as an expression.
+//
+// Split from condArith because `[[ ]]` is not the only construct that reads an
+// operand this way. One dialect's `test` and `[` do too, and they answer a
+// failure differently — status 1 with the builtin's name in front of the same
+// sentence, and the script runs on. See
+// Semantics.TestBuiltinComparisonOperandsAreArithmetic.
+func (r *Runner) conditionOperand(text string) (value int, failure string) {
 	if strings.TrimSpace(text) == "" {
-		return 0, nil
+		return 0, ""
 	}
 	// Asked of the trimmed text and read from the untrimmed one: the answer
 	// for an all-blank operand is zero, and everything else is an expression
@@ -365,20 +381,22 @@ func (r *Runner) condArith(text string) (int, error) {
 	// lexer read — which is the shape one shell reads in decimal. Measured
 	// 2026-09-12 on ksh93u+: `[[ 010 -eq 10 ]]` holds and `(( 010 == 10 ))`
 	// does not, and `[[ 1+010 -eq 9 ]]` holds too, so it is the *leading*
-	// numeral alone and not the whole operand. That is exactly the stored
-	// value's reader, which is why this is the same axis read at a site that
-	// was missing it rather than one of its own (#1867).
-	text = r.decimalLeadingNumeral(text)
+	// numeral alone and not the whole operand. That is the stored value's
+	// reader, which is why this is the same axis read at a site that was
+	// missing it rather than one of its own (#1867) — with the one difference
+	// conditionLeadingNumeral records: here the zeros go in front of an `0x`
+	// prefix as well, so `[[ 0x10 -eq 16 ]]` is false in that shell (#1627).
+	text = r.conditionLeadingNumeral(text)
 	p := syntax.NewParser("", r.dialect())
 	tree := p.ParseArithFor(text, syntax.Pos{})
 	if perr := p.Err(); perr != nil {
-		return 0, r.condArithFailed(r.diag().arithConstructFailure("[[", r.diag().ParseFailure(perr)))
+		return 0, r.diag().ParseFailure(perr)
 	}
 	v, err := r.evalArith(tree)
 	if err != nil {
-		return 0, r.condArithFailed(r.diag().arithConstructFailure("[[", r.arithFailure(text, err)))
+		return 0, r.arithFailure(text, err)
 	}
-	return v, nil
+	return v, ""
 }
 
 // condArithFailed reports an unreadable condition operand and says how the

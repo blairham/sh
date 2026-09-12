@@ -60,11 +60,14 @@ func (r *Runner) runTest(name string, args []string) int {
 	if err != nil {
 		var te *testError
 		if errors.As(err, &te) {
-			if te.kind == errIntegerExpected && !te.decided &&
-				r.ask(r.sem().TestIntegerRefusalIsSilent, "`[ a -eq 1 ]` failing in silence") {
-				// One dialect answers a non-number where a number belongs
-				// with a plain false — no sentence, and 1 rather than the
-				// not-an-expression 2.
+			if te.kind == errArithmeticOperand {
+				// An operand the arithmetic could not read, in the dialect
+				// that reads one that way. It is loud and it is *not* the
+				// not-an-expression 2: `[ 1x1 -eq 0 ]` is 1 and the script
+				// runs on, where the same words inside `[[ ]]` abandon the
+				// input. The complaint is already worded; all that is added
+				// here is the name the builtin was called by.
+				r.diagf("%s\n", Wording(te.format(r.diag()), te.fallback(), te.operand, name))
 				return 1
 			}
 			if r.unspecified {
@@ -107,12 +110,13 @@ func (r *Runner) runTest(name string, args []string) int {
 type testError struct {
 	kind    testErrorKind
 	operand string
-	// decided marks an error an axis has already chosen to raise, so the
-	// silence gate below must not ask a second axis whether to voice it.
-	// The `-t` refusal is the case: it exists only where
-	// TerminalTestRequiresANumber said yes, and routing it through
-	// TestIntegerRefusalIsSilent would ask about a sentence no shell that
-	// answers the first axis loudly ever silences.
+	// decided marks an error an axis has already chosen to raise. The `-t`
+	// refusal is the case: it exists only where TerminalTestRequiresANumber
+	// said yes, so nothing downstream may put the same sentence to a second
+	// axis. Nothing reads it today — the gate it was written for went with
+	// TestIntegerRefusalIsSilent, whose one dialect now reads the operand as
+	// arithmetic instead — and it is kept because the fact it records is
+	// about the error and not about the gate that happened to read it.
 	decided bool
 }
 
@@ -132,6 +136,12 @@ const (
 	errTooManyArguments
 	// errIntegerExpected is a non-numeric operand to a numeric comparison.
 	errIntegerExpected
+	// errArithmeticOperand is an operand of a numeric comparison that would
+	// not read as an arithmetic expression, in a dialect that reads one that
+	// way. The operand field carries the whole worded math complaint rather
+	// than the text, because the arithmetic has already blamed the part of
+	// it that failed and said why.
+	errArithmeticOperand
 )
 
 func (e *testError) Error() string { return e.fallback() }
@@ -144,6 +154,10 @@ func (e *testError) fallback() string {
 		return "%[2]s: too many arguments"
 	case errIntegerExpected:
 		return "%[2]s: %[1]s: integer expected"
+	case errArithmeticOperand:
+		// The math complaint as the arithmetic worded it, behind the name
+		// the builtin was called by: `[: 1x1: arithmetic syntax error`.
+		return "%[2]s: %[1]s"
 	case errBinaryExpected:
 		return "%[2]s: %[1]s: binary operator expected"
 	}
@@ -158,6 +172,10 @@ func (e *testError) format(d Diagnostics) string {
 		return d.TestTooManyArguments
 	case errIntegerExpected:
 		return d.TestIntegerExpected
+	case errArithmeticOperand:
+		// No dialect wording: the sentence is the arithmetic's, which each
+		// dialect has already worded through its own math diagnostics.
+		return ""
 	case errBinaryExpected:
 		return d.TestBinaryExpected
 	}
@@ -620,13 +638,9 @@ func (r *Runner) binaryTest(left, op, right string) (bool, error, bool) {
 		ok, err := r.compareFiles(op, left, right)
 		return ok, err, true
 	case "-eq", "-ne", "-lt", "-le", "-gt", "-ge":
-		l, lerr := strconv.Atoi(strings.TrimSpace(left))
-		rv, rerr := strconv.Atoi(strings.TrimSpace(right))
-		if lerr != nil {
-			return false, &testError{kind: errIntegerExpected, operand: left}, true
-		}
-		if rerr != nil {
-			return false, &testError{kind: errIntegerExpected, operand: right}, true
+		l, rv, err := r.testComparisonOperands(left, right)
+		if err != nil {
+			return false, err, true
 		}
 		switch op {
 		case "-eq":
@@ -643,4 +657,76 @@ func (r *Runner) binaryTest(left, op, right string) (bool, error, bool) {
 		return l >= rv, nil, true
 	}
 	return false, nil, false
+}
+
+// testComparisonOperands reads the two operands of a word-spelled comparison.
+//
+// Two readings, and they are a conflict rather than a subset: one dialect
+// reads each operand as an arithmetic *expression*, the way every shell with
+// `[[ ]]` reads that construct's operands, and the rest want a numeral and
+// name the word that is not one. See
+// Semantics.TestBuiltinComparisonOperandsAreArithmetic, where the measurement
+// is.
+//
+// The arithmetic reading is the whole language and not a name lookup, so the
+// failures it has are the arithmetic's: a text that will not parse, a name
+// whose value will not, a division by zero. Each arrives already worded, and
+// the caller puts the builtin's name in front of it.
+//
+// Asked at the disagreement and nowhere else: two plain numerals are the same
+// two numbers under either reading, so `[ 2 -eq 2 ]` puts no question to the
+// dialect. A leading zero is not plain — it is eight to the expression and ten
+// to the numeral — and neither is anything the numeral reader would refuse.
+func (r *Runner) testComparisonOperands(left, right string) (int, int, error) {
+	if !plainNumeral(left) || !plainNumeral(right) {
+		if r.ask(r.sem().TestBuiltinComparisonOperandsAreArithmetic,
+			"`[ n -eq 5 ]` reading its operands as arithmetic") {
+			l, failure := r.conditionOperand(left)
+			if failure != "" {
+				return 0, 0, &testError{kind: errArithmeticOperand, operand: failure}
+			}
+			rv, failure := r.conditionOperand(right)
+			if failure != "" {
+				return 0, 0, &testError{kind: errArithmeticOperand, operand: failure}
+			}
+			return l, rv, nil
+		}
+	}
+	l, lerr := strconv.Atoi(strings.TrimSpace(left))
+	rv, rerr := strconv.Atoi(strings.TrimSpace(right))
+	if lerr != nil {
+		return 0, 0, &testError{kind: errIntegerExpected, operand: left}
+	}
+	if rerr != nil {
+		return 0, 0, &testError{kind: errIntegerExpected, operand: right}
+	}
+	return l, rv, nil
+}
+
+// plainNumeral reports whether the text is a decimal numeral both readings
+// answer with the same number: an optional sign, then digits, with no leading
+// zero in front of another digit and nothing too wide to hold.
+//
+// The leading zero is the reason this is not simply "does it parse as a
+// number": `[ 010 -eq 10 ]` and `[ 010 -eq 8 ]` are both written by somebody,
+// and which holds is exactly the question the arithmetic reading answers
+// differently.
+func plainNumeral(text string) bool {
+	s := strings.TrimSpace(text)
+	if s == "" {
+		return false
+	}
+	if s[0] == '+' || s[0] == '-' {
+		s = s[1:]
+	}
+	if s == "" || (s[0] == '0' && len(s) > 1) {
+		return false
+	}
+	for i := range len(s) {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	_, err := strconv.Atoi(strings.TrimSpace(text))
+	return err == nil
 }

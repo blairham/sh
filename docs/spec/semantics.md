@@ -10122,10 +10122,47 @@ come before the comparison, not after it.
 This is only about `test` and `[`. Inside `[[ ]]` the same spelling is a
 pattern match, which is a different question entirely.
 
-**`TestIntegerRefusalIsSilent`** — bash no · dash no · ksh93 yes · zsh no
+**`TestBuiltinComparisonOperandsAreArithmetic`** — bash no · dash no ·
+ksh93 yes · zsh no
 
-Has `[ a -eq 1 ]` fail with no sentence at status 1 — ksh93; the other
-three complain at 2.
+Reads the operands of `test`'s and `[`'s word-spelled comparisons as
+arithmetic expressions, the way `[[ ]]` reads its own. Measured
+2026-09-12: with `n=5`, `[ n -eq 5 ]` holds in ksh93 alone, and so do
+`[ 1+1 -eq 2 ]` and `[ "" -eq 0 ]`. It is the whole expression language
+and not a name lookup — an assignment written in an operand lands, so
+`[ "n=9" -eq 9 ]` leaves `n` at nine.
+
+A refusal on that side is the arithmetic's, behind the name the builtin
+was called by, at status 1 and not fatal: `[ 1x1 -eq 0 ]` is
+`ksh: [: 1x1: arithmetic syntax error` and the script runs on, where the
+identical words inside `[[ ]]` abandon the input in the same shell.
+
+This replaces `TestIntegerRefusalIsSilent`, which recorded one symptom of
+it: `[ a -eq 1 ]` failing without a sentence is what the arithmetic
+reading does to an unset name — zero, unequal, quiet — and that axis
+could not explain `[ 1+1 -eq 2 ]`.
+
+**`TerminalTestDescriptorNarrowsToThirtyTwoBits`** — bash no · dash no ·
+ksh93 yes · zsh no
+
+Reads `-t`'s operand at the width of a machine `int`: a value too wide
+for the shell's own integer saturates, and what is left is taken modulo
+2**32 as a signed number. Measured 2026-09-12 under a pseudo-terminal
+with descriptors 0 and 1 on the terminal and 2 redirected away,
+`[ -t 4294967296 ]` and `[ -t 4294967297 ]` are true in ksh93 and
+`[ -t 4294967298 ]` is false — descriptors 0, 1 and 2. That third
+operand is what makes it a narrowing rather than "a big number is true".
+
+**`TerminalTestMinusOneIsATerminal`** — bash no · dash no · ksh93 yes ·
+zsh no
+
+Has `[ -t -1 ]` hold whatever the shell is holding. Measured with every
+stream redirected to a file, so that no descriptor of the run is a
+terminal: still true in ksh93 and false everywhere else. `-2`, `-3` and
+`-100` are false in all six columns, which is what makes it the one
+value rather than a rule about negative descriptors — and a second
+question beside the narrowing above, since every saturating conversion
+lands here.
 
 
 ### the names a builtin will and will not take

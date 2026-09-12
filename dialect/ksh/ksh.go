@@ -429,12 +429,20 @@ func Semantics() interp.Semantics {
 	// and in both bashes, and 3 only in zsh — which is why the two are
 	// separate axes.
 	s.WholeSubscriptOnAScalarSlicesIt = interp.No
-	// [ a -eq 1 ] is a plain false here, no sentence, status 1.
-	s.TestIntegerRefusalIsSilent = interp.Yes
+	// `[ n -eq 5 ]` holds with `n=5` here, and so does `[ 1+1 -eq 2 ]`: the
+	// single-bracket builtin reads its comparison operands as arithmetic the
+	// way `[[ ]]` does, which is what makes `[ a -eq 1 ]` a silent false
+	// rather than an integer complaint — the name is zero.
+	s.TestBuiltinComparisonOperandsAreArithmetic = interp.Yes
 	// `f -nt missing` holds when f exists, and `-t x` is a plain false
 	// rather than dash's and bash's integer complaint.
 	s.MissingFileIsOlder = interp.Yes
 	s.TerminalTestRequiresANumber = interp.No
+	// A `-t` descriptor is read at the width of a C `int` — `[ -t 4294967296 ]`
+	// asks about descriptor 0 — and -1, which is where every conversion too
+	// wide to hold lands, holds whatever the shell is holding.
+	s.TerminalTestDescriptorNarrowsToThirtyTwoBits = interp.Yes
+	s.TerminalTestMinusOneIsATerminal = interp.Yes
 	// And a lone `-t` is `-t 1` rather than a non-empty string: `[ -t ]
 	// >/dev/null` is 1 here and 0 in dash and bash, while the same line on a
 	// pseudo-terminal is 0 in all six.

@@ -263,6 +263,60 @@ spelled with words:
 
 `=` and `==` are both accepted and mean the same thing.
 
+### What a numeric operand is read as
+
+Inside `[[ ]]` it is an **arithmetic expression** in every shell that has
+the construct, so `[[ n -eq 5 ]]` holds with `n=5`. The single-bracket
+`test` and `[` are where the panel splits. Measured 2026-09-12, `-c`
+under `env -i`:
+
+| probe | dash | bash 5.3 | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| `n=5; [ n -eq 5 ]` | refuses | refuses | refuses | **true** | refuses |
+| `[ 1+1 -eq 2 ]` | refuses | refuses | refuses | **true** | refuses |
+| `[ 16#10 -eq 16 ]` | refuses | refuses | refuses | **true** | refuses |
+| `n=5; [ "n=9" -eq 9 ]` | refuses | refuses | refuses | **true, and `n` is 9** | refuses |
+
+The last row is what says ksh93 reads the whole expression language
+there rather than looking a name up: an assignment written in an operand
+lands. A refusal on that side is the arithmetic's complaint behind the
+name the builtin was called by, at status 1 and **not** fatal —
+`[ 1x1 -eq 0 ]` is `ksh: [: 1x1: arithmetic syntax error` and the script
+runs on, where `[[ 1x1 -eq 0 ]]` in the same shell abandons the input.
+
+Semantics axis: `TestBuiltinComparisonOperandsAreArithmetic` (ksh93 yes,
+the other five no; the core's preset is no, POSIX giving `-eq` two
+integers to compare).
+
+### A condition operand's leading zeros come off in front of a prefix
+
+The shell that reads an operand as arithmetic also reads a leading zero
+in it in **decimal** rather than as an octal prefix — the same rewrite
+`ArithStoredValueReadsALeadingZeroAsDecimal` records for a value read out
+of a variable. At a condition operand it reaches one step further.
+Measured 2026-09-12 on ksh93u+ 2012-08-01:
+
+| written | as a condition operand | as `k=…; $(( k ))` |
+| --- | --- | --- |
+| `010` | 10 | 10 |
+| `0x10`, with `x10=7` | 7 | 16 |
+| `0x10`, with `x10` unset | 0 | 16 |
+| `0xg`, with `xg=9` | 9 | arithmetic syntax error |
+| `00x10`, with `x10=7` | 7 | 7 |
+| `1+0x10` | 17 | 17 |
+
+So the zeros are taken off the front of the text and what follows is
+read as an expression; a single zero in front of an `x` survives that in
+a *value* and does not in a condition operand, which is why
+`[[ 0x10 -eq 16 ]]` is false in ksh93 while `$(( 0x10 ))` is sixteen. The
+last row is the control: with something in front of the zero there is
+nothing to take off, and the reader plainly does have hex in it.
+
+Corpus: `test/comparison-operands-are-arithmetic`,
+`test/a-comparison-operand-that-will-not-read`,
+`test/a-comparison-operands-leading-zeros`,
+`arith/a-values-leading-zeros-in-front-of-a-name`.
+
 ## `=~` matches a regular expression
 
     [[ abc =~ ^a.c$ ]]  →  matches
@@ -470,7 +524,36 @@ through `test`, refuses too with its `Illegal number` wording.
 Semantics axis: `TerminalTestRequiresANumber` (bash and dash yes, ksh93
 and zsh no; unanswered in the core), asked only for such an operand.
 
-Corpus: `cond/terminal-test-closed-descriptors`,
+A number too wide for the descriptor is a second question, and one shell
+answers it. Measured 2026-09-12 under a pseudo-terminal with descriptors
+0 and 1 on the terminal and 2 redirected away:
+
+| operand | narrows to | ksh93 | bash 5.3 |
+| --- | --- | --- | --- |
+| `-1` | -1 | **true** | false |
+| `-2` | -2 | false | false |
+| `4294967296` | 0 | **true** | false |
+| `4294967297` | 1 | **true** | false |
+| `4294967298` | 2 | false | false |
+| `9223372036854775807` | -1 | **true** | false |
+| `99999999999999999999` | -1 | **true** | `integer expected`, 2 |
+
+ksh93 reads the operand at the width of a machine `int`: a value too
+wide for the shell's own integer saturates, and what is left is taken
+modulo 2**32 as a signed number. The `4294967298` row is the control
+that makes it a narrowing rather than "a big number is true" — it is
+descriptor 2, and descriptor 2 is not a terminal in that run. Repeating
+the whole table with every stream redirected to a file answers true only
+for the operands that narrow to -1, so -1 holds whatever the shell is
+holding, and `-2`, `-3` and `-100` are false in all six columns.
+
+Semantics axes: `TerminalTestDescriptorNarrowsToThirtyTwoBits` and
+`TerminalTestMinusOneIsATerminal` (ksh93 yes, the other five no; the
+core's preset is no for both), each asked only where it can change the
+answer.
+
+Corpus: `test/a-terminal-test-descriptor-too-wide`,
+`cond/terminal-test-closed-descriptors`,
 `cond/terminal-test-redirected-descriptors`,
 `cond/terminal-test-non-number-diverges`,
 `test/terminal-test-redirected-descriptors`,

@@ -203,7 +203,7 @@ func TestTheCommandModeTheThreeShellsAgreeAbout(t *testing.T) {
 
 // zshAnswers is the other shell's side of every editing question, so that a
 // row above is checked against both dialects' answers rather than against the
-// zero value alone. A key whose behaviour one of these fields changes belongs
+// zero value alone. A key whose behavior one of these fields changes belongs
 // in the disagreement test below and not in the table.
 func zshAnswers() EditorStyle {
 	return EditorStyle{

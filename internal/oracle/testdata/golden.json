@@ -1000,6 +1000,13 @@
       }
     },
     "alias/a-trap-body-under-a-command-string-expands-too": {
+      "ash": {
+        "Stdout": "end~TRAP",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "end",
         "Stderr": "\u003cshell\u003e: line 1: t: command not found",
@@ -87541,6 +87548,13 @@
       }
     },
     "invoke/standard-input-follows-only-where-the-option-said-so": {
+      "ash": {
+        "Stdout": "FROM-C",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "FROM-C",
         "Stderr": "",
@@ -87585,6 +87599,13 @@
       }
     },
     "invoke/standard-input-still-follows-the-command-string": {
+      "ash": {
+        "Stdout": "FROM-C",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "FROM-C",
         "Stderr": "",
@@ -87680,6 +87701,13 @@
       }
     },
     "invoke/the-command-string-and-what-follows-it-are-one-shell": {
+      "ash": {
+        "Stdout": "c=[1] 0=NAME 1=a~BYE",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "c=[1] 0=NAME 1=a~BYE",
         "Stderr": "",
@@ -168348,6 +168376,13 @@
       }
     },
     "unterminated/a-parameter-expansion-a-space-stopped": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: syntax error: missing '}'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 1: unexpected EOF while looking for matching `}'",
@@ -168392,6 +168427,13 @@
       }
     },
     "unterminated/a-parameter-expansion-behind-a-length-prefix": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: syntax error: missing '}'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 1: unexpected EOF while looking for matching `}'",
@@ -168487,6 +168529,13 @@
       }
     },
     "unterminated/a-parameter-expansion-whose-name-is-the-hash": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 3: syntax error: missing '}'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 1: unexpected EOF while looking for matching `}'",
@@ -168531,6 +168580,13 @@
       }
     },
     "unterminated/a-parameter-expansion-whose-operator-was-read": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: syntax error: missing '}'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 1: unexpected EOF while looking for matching `}'",

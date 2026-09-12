@@ -7797,6 +7797,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `unterminated/a-dollar-single-quote-at-the-end-of-a-command-string` | `one` **2>** `<shell>: 3: Syntax error: Unterminated quoted string` *(status 2)* | `one` **2>** `<shell>: -c: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<shell>: -c: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `''~<shell>: -c: line 3: syntax error: unexpected end of file` *(status 2)* | `one` | **2>** `<shell>:3: unmatched '` *(status 1)* | `one` **2>** `<shell>: syntax error: unterminated quoted string` *(status 2)* |
 | `unterminated/a-brace-command-substitution-blamed-where-the-input-ran-out` | **2>** `<script>: 4: Syntax error: Missing '}'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `{' unmatched` *(status 3)* | **2>** `<script>:4: closing brace expected` *(status 1)* | **2>** `<script>: line 4: syntax error: missing '}'` *(status 2)* |
 | `unterminated/a-parameter-expansion-blamed-at-the-brace` | **2>** `<script>: 3: Syntax error: Missing '}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `newline' unexpected` *(status 3)* | **2>** `<script>:4: closing brace expected` *(status 1)* | **2>** `<script>: line 3: syntax error: missing '}'` *(status 2)* |
+| `unterminated/a-parameter-expansion-whose-operator-was-read` | **2>** `<script>: 4: Syntax error: Missing '}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `{' unmatched` *(status 3)* | **2>** `<script>:4: closing brace expected` *(status 1)* | **2>** `<script>: line 4: syntax error: missing '}'` *(status 2)* |
+| `unterminated/a-parameter-expansion-behind-a-length-prefix` | **2>** `<script>: 4: Syntax error: Missing '}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `newline' unexpected` *(status 3)* | **2>** `<script>:4: closing brace expected` *(status 1)* | **2>** `<script>: line 4: syntax error: missing '}'` *(status 2)* |
+| `unterminated/a-parameter-expansion-whose-name-is-the-hash` | **2>** `<script>: 3: Syntax error: Missing '}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `newline' unexpected` *(status 3)* | **2>** `<script>:4: closing brace expected` *(status 1)* | **2>** `<script>: line 3: syntax error: missing '}'` *(status 2)* |
+| `unterminated/a-parameter-expansion-a-space-stopped` | **2>** `<script>: 4: Syntax error: Missing '}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: ` ' unexpected` *(status 3)* | **2>** `<script>:4: closing brace expected` *(status 1)* | **2>** `<script>: line 4: syntax error: missing '}'` *(status 2)* |
 
 - `unterminated/a-stepped-over-separator-is-what-ran-out` — an input that ran out after a `;` the dialect stepped over. ksh93 is the shell that names an *innermost keyword* when a construct is left open, and after such a separator the thing it names is the separator: `` `;' unmatched `` where `{ echo a` alone is `` `{' unmatched ``. Ours named the brace. Filed as the `;` that admitted an empty and-or operand, and measured wider — `{ ;` with no and-or in it answers the same, so it is the step-over (#1207)
   ```sh
@@ -7867,9 +7871,29 @@ grades it and nothing drift-checks it either, for the same reason.
   echo ${ echo hi
   echo after
   ```
-- `unterminated/a-parameter-expansion-blamed-at-the-brace` — the control for the row above and the reason the difference belongs to the *form* rather than to the brace: the parameter spelling of the same unterminated `${` is blamed at the brace in every bash column, where the command form is blamed at the end of the input. dash and ksh93 answer this one differently again, which is recorded rather than modeled
+- `unterminated/a-parameter-expansion-blamed-at-the-brace` — the control for the row above and the reason the difference belongs to the *form* rather than to the brace: the parameter spelling of the same unterminated `${` is blamed at the brace in every bash column, where the command form is blamed at the end of the input. dash and ksh93 answer this one differently again and both are now modeled — dash blames line 2 where the command form is line 3, leaving out the newline the name stopped at, and ksh93 calls it a newline standing where it should not rather than the unmatched brace it calls the command form (#2232)
   ```sh
   echo ${x
+  echo after
+  ```
+- `unterminated/a-parameter-expansion-whose-operator-was-read` — the discriminating half of the row above: once the expansion has read an operator, what follows is a word, and both shells that answer `${x` specially stop doing so. dash comes back to line 3 — the end of the input, where the command form is — and ksh93 back to the unmatched brace. A row that measured only `${x` could not tell a shell that treats every unterminated `${` alike from one that treats only the bare name that way (#2232)
+  ```sh
+  echo ${x:-a
+  echo after
+  ```
+- `unterminated/a-parameter-expansion-behind-a-length-prefix` — the same unterminated name with the length operator in front of it, and it is where the two shells part: ksh93 still names the newline, and dash counts the newline after all and blames line 3. So dash's rule is about a *bare* name and ksh93's is about the character the expansion stopped at, which one probe on `${x` alone would have called a single rule (#2232)
+  ```sh
+  echo ${#x
+  echo after
+  ```
+- `unterminated/a-parameter-expansion-whose-name-is-the-hash` — the control for the row above, and the reason the prefix has to be told from the name rather than counted as a character: `${#}` is the count of the positional parameters, so a lone `#` is the parameter and dash is back to blaming line 2. The two rows differ by one letter and by a whole rule (#2232)
+  ```sh
+  echo ${#
+  echo after
+  ```
+- `unterminated/a-parameter-expansion-a-space-stopped` — a space rather than a newline where the name stopped, which separates the two shells' rules from the other side: ksh93 names the space exactly as it names the newline, and dash counts every newline and blames line 3, so its answer is about the newline and not about the name being cut short. bash and zsh word this one as they word every `${` the input ran out inside (#2232)
+  ```sh
+  echo ${x 
   echo after
   ```
 
@@ -17998,6 +18022,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/a-substitution-uses-the-shells-aliases` | `v=SUB~w=BACK` | `v=~w=` **2>** `<script>: line 2: t: command not found~<script>: line 4: t: command not found` | `v=SUB~w=BACK` | `v=~w=` **2>** `<script>: line 2: t: command not found~<script>: line 4: t: command not found` | `v=SUB~w=BACK` | `v=SUB~w=BACK` | `v=SUB~w=BACK` |
 | `alias/a-trap-body-uses-the-shells-aliases` | `end~TRAP` | `end` **2>** `<script>: line 1: t: command not found` | `end~TRAP` | `end` **2>** `<script>: line 4: t: command not found` | `end~TRAP` | `end~TRAP` | `end~TRAP` |
 | `alias/nested-text-expands-where-the-command-string-did-not` | `E~v=` **2>** `<shell>: 1: t: not found` | `v=` **2>** `<shell>: line 1: t: command not found~<shell>: line 1: t: command not found` | `E~v=` **2>** `<shell>: line 1: t: command not found` | `v=` **2>** `<shell>: t: command not found~<shell>: t: command not found` | `E~v=S` | `E~v=S` | `E~v=` **2>** `<shell>: t: not found` |
+| `alias/a-trap-body-under-a-command-string-expands-too` | `end~TRAP` | `end` **2>** `<shell>: line 1: t: command not found` | `end~TRAP` | `end` **2>** `<shell>: t: command not found` | `end~TRAP` | `end~TRAP` | `end~TRAP` |
 | `alias/neither-kind-is-accepted-where-the-shell-has-not-got-it` | `ag=1~as=1~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=0~as=0~us=1` | `ag=1~as=1~us=2` |
 | `alias/the-letters-alias-still-has-not-got` | `L=1~r=1~m=1` **2>** `alias: -L not found~alias: -r not found~alias: -m not found~alias: z* not found` | `L=2~r=2~m=2` **2>** `<shell>: line 1: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `L=2~r=2~m=2` **2>** `<shell>: line 1: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `L=2~r=2~m=2` **2>** `<shell>: line 0: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 0: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 0: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | **2>** `alias: -L: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `L=0~r=0~m=0` | `L=1~r=1~m=1` **2>** `alias: -L not found~alias: -r not found~alias: -m not found~alias: z* not found` |
 
@@ -18245,9 +18270,15 @@ grades it and nothing drift-checks it either, for the same reason.
   trap 't' EXIT
   echo end
   ```
-- `alias/nested-text-expands-where-the-command-string-did-not` — the row this shell does not pass yet, kept because it is the evidence: zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases — the option is the only gate, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. `Dialect.ExpandAliases` records the symptom; #2109 is the model
+- `alias/nested-text-expands-where-the-command-string-did-not` — zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases: the option is the only gate on a nested text, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. This is the row #2109 split `Dialect.ExpandAliases` in two for — one field held both the option's default and the route rule, and the front end derived the nested texts' answer from the route, which turned the table off for every `eval` and `$( )` under a zsh command string. The dash column is a *different* fault and still misses: that shell parses a substitution with the line that holds it, so its `$( )` here is read before the `alias` beside it has run — #2357
   ```sh
   alias t=echo; eval "t E"; v=$(t S); echo "v=$v"
+  ```
+- `alias/a-trap-body-under-a-command-string-expands-too` — the third door into the room the row above opens, and the one furthest from the `-c` string's own text: a trap action is read when it fires, so the table it reads is the shell's and not the route's. zsh writes TRAP here while refusing to expand the two lines that set it up, which is the whole of #2109 in one case — the route governs the program text and nothing nested inside it. `alias/a-trap-body-uses-the-shells-aliases` asks the same thing from a script file, where the route agrees with the option and so cannot tell them apart
+  ```sh
+  alias t=echo
+  trap 't TRAP' EXIT
+  echo end
   ```
 - `alias/neither-kind-is-accepted-where-the-shell-has-not-got-it` — the three refusals as a status each — the complaint discarded and the call in a subshell, so the one column where a bad option to a special builtin is fatal loses only the subshell. Written that way because it is the only shape that can grade the *letters* in the four columns that do not have them: the wording and the usage line under it are measured elsewhere and differ from ours in one column, so any row carrying that text disagrees there whatever the letters do, and could never notice one being wrongly accepted. Three statuses and three answers — 2, 1 and 0 — which is `alias` reading options at all, then reading them and having none, then having both
   ```sh
@@ -18284,6 +18315,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `invoke/c-with-s-unbundled` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `<shell>\|2\|name a` | `<shell>\|2\|name a` | `name\|1\|a` |
 | `invoke/c-before-s-names-the-operands` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `<shell>\|2\|name a` | `<shell>\|2\|name a` | `name\|1\|a` |
 | `invoke/c-with-s-and-no-operands` | `<shell>\|0\|` | `<shell>\|0\|` | `sh\|0\|` | `<shell>\|0\|` | `<shell>\|0\|` | `<shell>\|0\|` | `<shell>\|0\|` |
+| `invoke/standard-input-still-follows-the-command-string` | `FROM-C~LINE1~LINE2` | `FROM-C` | `FROM-C` | `FROM-C` | `FROM-C` | `FROM-C` | `FROM-C` |
+| `invoke/standard-input-follows-only-where-the-option-said-so` | `FROM-C` | `FROM-C` | `FROM-C` | `FROM-C` | `FROM-C` | `FROM-C` | `FROM-C` |
+| `invoke/the-command-string-and-what-follows-it-are-one-shell` | `c=[1] 0=NAME 1=a~in=[1] 0=NAME 1=a~BYE` | `c=[1] 0=NAME 1=a~BYE` | `c=[1] 0=NAME 1=a~BYE` | `c=[1] 0=NAME 1=a~BYE` | `c=[1] 0=<shell> 1=NAME~BYE` | `c=[1] 0=<shell> 1=NAME~BYE` | `c=[1] 0=NAME 1=a~BYE` |
 | `invoke/standard-input-that-is-not-a-terminal` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `invoke/the-program-arrives-on-standard-input` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[sh]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` |
 | `invoke/dash-s-makes-every-operand-a-parameter` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[sh]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` |
@@ -18394,7 +18428,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   echo hi
   ```
-- `invoke/c-outranks-standard-input` — -s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0
+- `invoke/c-outranks-standard-input` — -s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0. It is the *first* program that is unanimous, and only because this case leaves standard input closed — `invoke/standard-input-still-follows-the-command-string` gives it something to read and one shell goes on to read it (#625)
   ```sh
   echo "hi|$#"
   ```
@@ -18425,6 +18459,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `invoke/c-with-s-and-no-operands` — the same invocation with nothing for the two rules to disagree about: with no operand past the command string all four keep the shell's own name and no parameters, which is why the question is only asked where an operand follows
   ```sh
   echo "$0|$#|$*"
+  ```
+- `invoke/standard-input-still-follows-the-command-string` — the half of `-sc` that is not unanimous, and it read as unanimous because every case before this one left standard input closed. dash reads `-s` as still meaning *and then read standard input*, so it writes FROM-C and then LINE1 and LINE2 where the other five stop after the command string. The order the two letters are written in makes no difference to it — `-cs`, `-sc` and `-s -c` all go on (#625)
+  ```sh
+  echo FROM-C
+  ```
+- `invoke/standard-input-follows-only-where-the-option-said-so` — the control for the row above, and the reason this is the two options together rather than a rule about `-c`: with the same program waiting on standard input and no `-s`, every shell in the panel — dash included — stops after the command string
+  ```sh
+  echo FROM-C
+  ```
+- `invoke/the-command-string-and-what-follows-it-are-one-shell` — what the shell that goes on carries with it, which is everything: the variable the command string set, the `$0` and the parameters the invocation named, and one EXIT trap that fires once at the end of both halves rather than once per program. Five of the six never reach the second line at all, so their column is the command string alone and the trap firing after it — which is what makes the one that does reach it legible (#625)
+  ```sh
+  x=1; trap 'echo BYE' EXIT; echo "c=[$x] 0=$0 1=$1"
   ```
 - `invoke/standard-input-that-is-not-a-terminal` — the harness gives every child the null device for standard input, and the null device is a character device — which is exactly what made the prompt decision say terminal, ask it for raw mode, and exit 2 with `operation not supported by device` (#509). No shell in the panel prompts here: -s says read standard input, standard input ends at once, and the shell exits 0 having said nothing. Deliberately no placeholder — what is pinned is what a shell does before it reads anything, and the snippet is written down as the thing that would have run
   ```sh
@@ -18892,7 +18938,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   autoload -Uz add-zsh-hook 2>/dev/null; f1() { :; }; add-zsh-hook precmd f1; add-zsh-hook -L precmd; echo "L=$?"; add-zsh-hook -L zshexit; echo "unset=$?"; add-zsh-hook -L nosuchhook; echo "unknown=$?"
   ```
-- `fnlib/add-zsh-hook-autoload-letters` — the letters are handed to `autoload` rather than interpreted here, so what they answer is the *builtin's* answer arriving through the function. `-k` alone is accepted and `-Uzk` is not, because `-z` and `-k` name two different autoload styles and asking for both is a refusal at status 1 — and the hook is still installed either way, which is the part that makes the status the only thing to measure. Standard error is suppressed on purpose: the diagnostic names a line number in the function file, which is a fact about whose file it is rather than about the behavior. `-q` is the unknown letter, refused by `getopts` before anything is installed. This shell answers 0 for `-Uzk`, because its `autoload` has no `-k` to conflict with `-z` (#2149)
+- `fnlib/add-zsh-hook-autoload-letters` — the letters are handed to `autoload` rather than interpreted here, so what they answer is the *builtin's* answer arriving through the function. `-k` alone is accepted and `-Uzk` is not, because `-z` and `-k` name two different autoload styles and asking for both is a refusal at status 1 — and the hook is still installed either way, which is the part that makes the status the only thing to measure. Standard error is suppressed on purpose: the diagnostic names a line number in the function file, which is a fact about whose file it is rather than about the behavior. `-q` is the unknown letter, refused by `getopts` before anything is installed. This shell refuses the pair too now, and in zsh's own wording rather than by naming `-k` as missing; what it still does not do is accept `-k` alone, which is the honest answer for a shell carrying the one autoload style and is the column this row goes on disagreeing in (#2149)
   ```sh
   autoload -Uz add-zsh-hook 2>/dev/null; { add-zsh-hook -k precmd kf; } 2>/dev/null; echo "k=$? [${precmd_functions[*]}]"; { add-zsh-hook -Uzk precmd kf2; } 2>/dev/null; echo "Uzk=$? [${precmd_functions[*]}]"; { add-zsh-hook -q precmd kf3; } 2>/dev/null; echo "q=$?"
   ```

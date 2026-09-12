@@ -8760,6 +8760,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `exit-hook/runs-after-the-exit-trap` | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap~hook` *(status 3)* | `trap` *(status 3)* |
 | `exit-hook/an-exit-inside-it-wins-and-stops-nothing` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | `a~b` *(status 9)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `exit-hook/a-return-cannot-change-the-status` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | `a st=4~b st=4` *(status 4)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `exit-hook/a-subshell-that-exits-fires-it` | `out=2` | `out=2` | `out=2` | `out=2` | `out=2` | `hook=2~out=2~hook=0` | `out=2` |
+| `exit-hook/a-subshell-that-falls-through-does-not` | `out=3` | `out=3` | `out=3` | `out=3` | `out=3` | `out=3~hook` | `out=3` |
+| `exit-hook/a-pipeline-element-that-exits-fires-it` | `out=0` | `out=0` | `out=0` | `out=0` | `out=0` | `hook~out=0~hook` | `out=0` |
+| `exit-hook/a-subshell-trap-that-exits-fires-it` | `a=5~T~b=0` | `a=5~T~b=0` | `a=5~T~b=0` | `a=5~T~b=0` | `a=5~T~b=0` | `hook~a=5~T~b=0~hook` | `a=5~T~b=0` |
 | `trap/second-trap-replaces` | `body~two` | `body~two` | `body~two` | `body~two` | `body~two` | `body~two` | `body~two` |
 | `trap/err-fires-on-failure` | `after=1` **2>** `trap: ERR: bad trap` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` |
 | `trap/err-under-errexit` | **2>** `trap: ERR: bad trap` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* |
@@ -9067,6 +9071,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `exit-hook/a-return-cannot-change-the-status` — the counter-case to the row above, and what makes it mean something: a hook that merely *fails* changes neither the status the shell leaves with nor the status the next item is told. Both items read 4, a `false` at the end of one is not carried, and the shell still exits 4 — where a chain that let the last command's status through would exit 1
   ```sh
   zshexit() { echo "a st=$?"; return 5; }; zshexit_functions=(z2); z2() { echo "b st=$?"; false; }; exit 4
+  ```
+- `exit-hook/a-subshell-that-exits-fires-it` — the hook fires at a subshell boundary as well as at the shell's own end, and the one shell that has it fires it twice here — once inside the parentheses and once at the end. `$?` is what makes the row say which is which: the first reads 2, the status the subshell is leaving with, and the second reads 0. The row below is its counter-case, and the pair is the whole rule: the hook wants an `exit`, where the EXIT trap wants only a boundary
+  ```sh
+  zshexit() { echo "hook=$?"; }; ( exit 2 ); echo out=$?
+  ```
+- `exit-hook/a-subshell-that-falls-through-does-not` — the counter-case: a subshell that merely runs off its end fires nothing, and neither does a command substitution that calls `exit` — so the hook's rule is narrower than the EXIT trap's on both counts, and an implementation that hung it on the boundary would print `hook` three times here instead of once
+  ```sh
+  zshexit() { echo hook; }; ( true ); v=$(exit 3); echo out=$?
+  ```
+- `exit-hook/a-pipeline-element-that-exits-fires-it` — a pipeline element is a subshell too, so the same rule reaches it — the element's `exit` fires the hook inside the element, while the pipeline still reports `cat`'s 0. Worth a row of its own because parentheses and a pipe are different code paths, and because the hook runs while the element's end of the pipe is still open: `hook` arrives here by way of `cat` rather than straight from the shell, and a tail of `:` would swallow it and leave the row passing for the wrong reason
+  ```sh
+  zshexit() { echo hook; }; { exit 2; } | cat; echo out=$?
+  ```
+- `exit-hook/a-subshell-trap-that-exits-fires-it` — an EXIT trap that exits counts as the subshell exiting and one that merely prints does not, which is the pair that says the rule is about how the subshell *left* rather than about what ran in it. Both subshells fall off their own ends, so a reading that asked only what the body did would answer alike for the two
+  ```sh
+  zshexit() { echo hook; }; ( trap "exit 5" EXIT; true ); echo a=$?; ( trap "echo T" EXIT; true ); echo b=$?
   ```
 - `trap/second-trap-replaces` — traps are set rather than accumulated, and `trap -` removes
   ```sh

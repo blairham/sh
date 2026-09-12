@@ -488,6 +488,40 @@ or the machine: `${x@P}` on `\t` is the time of day and on `\w` the
 working directory, so the row that pins prompt expansion probes `\n` and
 `\\` only.
 
+### A cell that is not UTF-8 does not survive the record
+
+**A corpus row whose output holds a raw byte that is not valid UTF-8 — a
+`0xff`, say — will fail `make oracle-check` forever, and regenerating does not
+fix it.** The two artifacts are written from different things and only one of
+them is lossy:
+
+- `measurements.md` is rendered from the live `Run`, so the raw byte lands in
+  the document exactly as the shell wrote it.
+- `golden.json` is written with `encoding/json`, which replaces every invalid
+  UTF-8 byte with U+FFFD rather than failing. `"a\xffb"` marshals as
+  `"a\ufffdb"` and comes back as `a\ufffdb`.
+
+So `make oracle` leaves a document holding `0xff` beside a record holding
+U+FFFD, and the next `-check` re-renders the document *from the record*, gets
+U+FFFD, and reports `DocDiffers` against the committed file. Regenerate and it
+happens again, with the same two bytes, which is what makes it read as a
+harness fault rather than as a row's.
+
+Nothing detects it for you: JSON encoding is silent, the diff is one
+replacement character deep in a table, and every other row is fine.
+
+**The fix belongs in the row, not in the harness.** Write the snippet so the
+bytes never reach a cell — pipe the output through `od -An -c`, or `od -An
+-t x1`, and record the octal or hex instead:
+
+    printf 'a\377b' | od -An -c
+
+That is a stable ASCII cell, it says more about what the shell produced than a
+mangled character does, and it is the same choice the corpus makes elsewhere
+for an answer that is not text. A row that must show the byte itself does not
+belong in the corpus, for the reason the locale rows above do not: the record
+cannot hold it.
+
 ## Third-party suites
 
 bash's own `tests/` directory is a useful denominator and is **GPLv3**.

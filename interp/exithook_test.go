@@ -175,3 +175,75 @@ echo body
 		t.Error("a run that was never told to exit came out of the exit hook exited")
 	}
 }
+
+// A subshell ends by a **narrower** rule than the EXIT trap does: the hook
+// fires there only when the subshell left through `exit`, and it is told the
+// status the subshell is leaving with.
+func TestTheExitHookFiresWhenASubshellExits(t *testing.T) {
+	var out strings.Builder
+	r := exitHookRunner(t, &out)
+	runToTheEnd(t, r, `leaving() { echo "EXITMARK-HOOK st=$?"; }
+( exit 2 )
+echo out
+`)
+	want := "EXITMARK-HOOK st=2\nout\nEXITMARK-HOOK st=0\n"
+	if out.String() != want {
+		t.Errorf("the exiting subshell wrote %q, want %q", out.String(), want)
+	}
+}
+
+// The counter-case, and the half that makes the rule mean something: a
+// subshell that runs off its end fires nothing, and neither does a command
+// substitution that calls `exit`. Only the end of the shell does.
+func TestTheExitHookDoesNotFireWhenASubshellFallsThrough(t *testing.T) {
+	var out strings.Builder
+	r := exitHookRunner(t, &out)
+	runToTheEnd(t, r, `leaving() { echo EXITMARK-HOOK; }
+( true )
+v=$(exit 3)
+echo out
+`)
+	want := "out\nEXITMARK-HOOK\n"
+	if out.String() != want {
+		t.Errorf("the falling-through subshells wrote %q, want %q", out.String(), want)
+	}
+}
+
+// A pipeline element is a subshell too, and the same rule reaches it.
+//
+// The element's hook writes down the *pipe*, not to the shell's output — it
+// runs while the element's end of the pipe is still open, which is the whole
+// reason endSubshell is called where it is. So the tail reads the marker back
+// rather than the test seeing it directly, and a tail of `:` would swallow it
+// and make this row pass for the wrong reason.
+func TestTheExitHookFiresWhenAPipelineElementExits(t *testing.T) {
+	var out strings.Builder
+	r := exitHookRunner(t, &out)
+	runToTheEnd(t, r, `leaving() { echo EXITMARK-HOOK; }
+{ exit 2; } | { read v; echo "tail=$v"; }
+echo out
+`)
+	want := "tail=EXITMARK-HOOK\nout\nEXITMARK-HOOK\n"
+	if out.String() != want {
+		t.Errorf("the exiting pipeline element wrote %q, want %q", out.String(), want)
+	}
+}
+
+// How the subshell *left* is the question, not what ran in it: both of these
+// fall off their own ends, and only the one whose EXIT trap exits fires the
+// hook. This is the pair Runner.runExitTrap reports its return value for —
+// the control flag reads the same on both sides of the trap either way.
+func TestASubshellExitTrapThatExitsFiresTheExitHook(t *testing.T) {
+	var out strings.Builder
+	r := exitHookRunner(t, &out)
+	runToTheEnd(t, r, `leaving() { echo EXITMARK-HOOK; }
+( trap 'exit 5' EXIT; true )
+echo a=$?
+( trap 'echo EXITMARK-TRAP' EXIT; true )
+echo b=$?
+`)
+	want := "EXITMARK-HOOK\na=5\nEXITMARK-TRAP\nb=0\nEXITMARK-HOOK\n"
+	if out.String() != want {
+		t.Errorf("the two subshell traps wrote %q, want %q", out.String(), want)
+	}
+}

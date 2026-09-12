@@ -3006,13 +3006,15 @@ type Semantics struct {
 	// only shell in the panel with the hook at all, there is no disagreement
 	// to make an axis of.
 	//
-	// **The subshell case is not this site.** A subshell that calls `exit`
-	// explicitly fires the hook in there — measured, `(exit 7)` ran
-	// `zshexit` with `$ZSH_SUBSHELL` of 1 — while a subshell that merely
-	// falls off its end does not. That is a firing at a subshell's own exit
-	// and not at the shell's, and this shell's subshells do not pass through
-	// Finish at all, so it is written down here rather than modeled: nothing
-	// reaches it, and a guess about it would be a plausible wrong answer.
+	// **The subshell case is a second site, with a narrower rule.** A
+	// subshell that leaves through `exit` fires the hook in there — measured,
+	// `(exit 7)` ran `zshexit` with `$ZSH_SUBSHELL` of 1 — while a subshell
+	// that merely falls off its end does not, and neither does a command
+	// substitution that calls `exit`. So the hook and the EXIT trap do not
+	// fire at the same boundaries: the trap fires at every one of them in
+	// every shell, and the hook wants an `exit`. That site is
+	// Runner.endSubshell, which holds the rest of what was measured; this
+	// one is Runner.runExitHook, at the end of the shell itself.
 	ExitHook string
 
 	// ChildInterruptEndsTheScript stops the script when a child was ended by

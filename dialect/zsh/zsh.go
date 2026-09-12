@@ -2039,7 +2039,10 @@ func Semantics() interp.Semantics {
 	// and stay reachable by their letters. Measured 2026-09-12 — a `print -p`
 	// after the coprocess has gone writes into a pipe with no reader and the
 	// shell dies on SIGPIPE at 141, where the other two shells with a
-	// coprocess refuse the write instead (#2411).
+	// coprocess refuse the write instead. The death itself is #770's, not
+	// this axis's: a builtin's broken-pipe write is answered here with the
+	// status rather than the signal, so this column reports 1 where zsh
+	// reports 141 until that lands (#2411).
 	s.ReapedCoprocessEnds = interp.CoprocEndsSurviveTheCoprocess
 	s.SetListingQuoting = interp.ListingQuoteWhenNeededRuns
 

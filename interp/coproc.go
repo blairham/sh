@@ -234,7 +234,8 @@ func (r *Runner) retireCoproc() {
 	case CoprocWriteEndGoesWithTheCoprocess:
 		// The read end stays: what the coprocess wrote before it ended is
 		// still in the pipe, and a script still reads it. It goes when that
-		// read finds nothing left — see coprocReadEnded.
+		// read finds nothing left — see coprocReadEnded, which is not this
+		// axis's to decide.
 		r.forgetCoprocFd(c.write)
 		c.write = -1
 	case CoprocEndsGoWithTheCoprocess:
@@ -249,22 +250,34 @@ func (r *Runner) retireCoproc() {
 }
 
 // coprocReadEnded is the end-of-file a read of the coprocess's near end found,
-// for the dialect that keeps that end past the reaping and lets go of it here.
+// and it is the whole coprocess that goes there rather than only that end.
+//
+// **Shared ground rather than an axis**, measured 2026-09-12 on both shells
+// that have the letters, with a coprocess writing one line and exiting. The
+// first `read -p` answers the line, the second is a silent end-of-file at 1,
+// and the *third* is `-p: no coprocess` in zsh 5.9.2 and `read: no query
+// process` in ksh93 — and so is a `print -p` after it, which is what says the
+// write end went with the read one rather than the read end alone. Neither
+// shell needs the coprocess reaped first: the same three answers come back
+// with no `wait` anywhere and the reaping unobserved.
+//
+// bash never reaches this, and that is measured too rather than assumed: it
+// spells `-p` as a prompt and reads its coprocess through the array, and two
+// reads that both find end-of-file leave `${#CP[@]}` at 2. So the array is
+// taken back by the reaping alone — see Semantics.ReapedCoprocessEnds — and
+// nothing here has to ask which dialect it is in.
 //
 // Reported by the read rather than noticed here, because end-of-file is not a
-// state a descriptor is in: it is what a read returned, and nothing else in
-// this shell is reading that pipe.
+// state a descriptor is in: it is what a read came back with, and nothing else
+// in this shell is reading that pipe.
 func (r *Runner) coprocReadEnded() {
 	c := r.coproc
-	if c == nil || c.owner != r || c.readEnded || !c.retired {
-		return
-	}
-	if r.sem().ReapedCoprocessEnds != CoprocWriteEndGoesWithTheCoprocess {
+	if c == nil || c.owner != r || c.readEnded {
 		return
 	}
 	c.readEnded = true
 	r.forgetCoprocFd(c.read)
-	c.read = -1
+	r.forgetCoprocFd(c.write)
 	r.coproc = nil
 }
 
@@ -346,8 +359,10 @@ type coprocEnds struct {
 	retired bool
 
 	// readEnded records that a read of the near end has reached end-of-file,
-	// which is when the one dialect that keeps the read end past the reaping
-	// finally lets go of it. See CoprocWriteEndGoesWithTheCoprocess.
+	// which is when both dialects with the coprocess letters let go of the
+	// whole coprocess. See coprocReadEnded, and note that this is not the
+	// reaping: it happens with the coprocess still unreaped and it happens
+	// whatever ReapedCoprocessEnds says.
 	readEnded bool
 }
 

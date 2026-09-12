@@ -690,6 +690,21 @@ var Corpus = []Case{
 		Why:     "an alternative may itself be a brace expansion, and a prefix and suffix distribute over the flattened result — {a,{b,c}} is three words, not a word containing braces",
 	},
 	{
+		ID: "expand/brace-after-a-group-that-did-not-expand", Category: "expansion",
+		Snippet: `printf "[%s]" @{x}{a,b}@; echo; printf "[%s]" {a}{b}{c,d}; echo`,
+		Why:     "a group with no comma and no range is literal text, and the list behind it is still a list: every shell that expands braces carries the scan past a group that produced nothing rather than abandoning the word. Ours gave up at the first `{` and wrote the word back whole (#1693)",
+	},
+	{
+		ID: "expand/brace-inside-a-group-that-did-not-expand", Category: "expansion",
+		Snippet: `printf "[%s]" {a{b,c}}; echo; printf "[%s]" {a}{b{c,d}}; echo; printf "[%s]" {a{b,c}}{d,e}; echo`,
+		Why:     "how far the scan steps past a group that did not expand, which is where the panel parts: bash and zsh resume one byte past its open brace and find the list nested inside it, ksh93 resumes past its close brace and leaves the first two whole while still expanding the third, whose list is outside the failed group. BraceRescanEntersFailedGroup",
+	},
+	{
+		ID: "expand/brace-inside-an-unclosed-group", Category: "expansion",
+		Snippet: `printf "[%s]" {a{b,c}; echo`,
+		Why:     "the same axis where there is no close brace to step over: bash and zsh still enter and write `{ab {ac`, ksh93 has nowhere to resume and ends the scan. The pair matters because a rule written as \"skip to the close brace\" has to say what it does without one",
+	},
+	{
 		ID: "expand/brace-before-param", Category: "expansion",
 		Snippet: `a=1; echo {$a,2}`,
 		Why:     "braces resolve before parameter expansion, so variable ranges cannot work",
@@ -10586,6 +10601,16 @@ echo unreachable`,
 		ID: "cond/quoted-regex-diverges", Category: "conditions",
 		Snippet: `[[ abc =~ "^a.c$" ]] && echo still-regex || echo literal`,
 		Why:     "bash treats a quoted right operand as a literal string where ksh93 and zsh keep it a regex, so quoting a regex is not portable in either direction",
+	},
+	{
+		ID: "cond/regex-empty-operand", Category: "conditions",
+		Snippet: `[[ abc =~ "" ]]; echo "quoted=$?"; p=; [[ abc =~ $p ]]; echo "unquoted=$?"`,
+		Why:     "whether an empty right operand is a regular expression at all. POSIX ERE has no empty expression and two of the three refuse it — bash names an empty subexpression and exits 2, zsh names it and exits 1 — while ksh93 accepts it and reports a match. The quoted and unquoted spellings are one row because bash's quoting rule turns the operand literal and cannot make it non-empty, so both reach the same refusal. Go's regexp compiles the empty pattern and matches at every position, so without the axis a snippet two of the three refuse succeeded here (#2043)",
+	},
+	{
+		ID: "cond/regex-that-will-not-compile", Category: "conditions",
+		Snippet: `p='['; [[ 'a[' =~ $p ]]; echo "st=$?"`,
+		Why:     "the control beside the empty-operand row, and the reason ksh93's answer there is not \"a regex that will not compile is quietly a non-match\": an unbalanced bracket does fail in ksh93, silently, at status 1. bash diagnoses and exits 2, zsh diagnoses and exits 1 — so the three differ on the wording and the status of a refusal as well as on whether the empty pattern is one, and the empty operand is the only one of the two the panel disagrees about at all",
 	},
 	{
 		ID: "cond/regex-captures-are-recorded", Category: "conditions",

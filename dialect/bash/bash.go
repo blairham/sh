@@ -512,6 +512,11 @@ func Semantics() interp.Semantics {
 	s.ArithNegativeExponentIsError = interp.Yes
 	s.IndirectionYieldsName = interp.No
 	s.BraceExpansion = interp.Yes
+	// A group that does not expand does not end the word, and the scan
+	// resumes one byte past its open brace rather than past its close, so a
+	// list nested inside it is still found: `@{x}{a,b}@` is `@{x}a@ @{x}b@`,
+	// `{a{b,c}}` is `{ab} {ac}`, and the unclosed `{a{b,c}` is `{ab} {ac`.
+	s.BraceRescanEntersFailedGroup = interp.Yes
 	// `{01..3}` is `01 02 03`; `{10..1..3}` is `10 7 4 1` and `{1..10..-3}`
 	// climbs anyway — the endpoints decide the direction and a step
 	// contributes magnitude alone, so `{3..1..-1}` stays `3 2 1`.
@@ -529,6 +534,11 @@ func Semantics() interp.Semantics {
 	// this shell does with any other name outside the roster.
 	s.PatternClasses = "ascii"
 	s.RegexQuotingMakesLiteral = interp.Yes
+	// An empty right operand is refused rather than matched: `[[ abc =~ "" ]]`
+	// names an empty subexpression and exits 2, where Go's engine would
+	// compile it and match at every position. bash 3.2 refuses it too, with
+	// the same status and no diagnostic.
+	s.EmptyRegexOperandIsAnError = interp.Yes
 	// A process substitution may stand as a condition's operand here, and is
 	// performed there: `[[ $v == <(cmd) ]]` runs cmd and matches against the
 	// path, which is false for anything a script would have written down.

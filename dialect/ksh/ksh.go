@@ -247,6 +247,13 @@ func Semantics() interp.Semantics {
 	// refused, exactly as `${@:=abc}` is, so the positional is not a name
 	// an assignment through an expansion may reach (#1541).
 	s.AssignThroughExpansionMayNameAPositional = interp.No
+	// The one shell with `=~` that takes an empty right operand: `[[ abc =~
+	// "" ]]` reports a match and exits 0, where bash and zsh both refuse it
+	// as an empty subexpression. It is not that a regex which will not
+	// compile is quietly a non-match here — `[[ "a[" =~ [ ]]` is status 1
+	// and no match, so an unbalanced bracket does fail — the empty pattern
+	// simply is not one of the failures (#2043).
+	s.EmptyRegexOperandIsAnError = interp.No
 	// An associative array's subscript is a quoting context here, as it is
 	// in bash: `m["k"]=W` stores under `k`.
 	s.SubscriptIsAQuotingContext = interp.Yes
@@ -702,6 +709,14 @@ func Semantics() interp.Semantics {
 	s.ArithmeticAssignmentDeclaresAnInteger = interp.No
 	s.IndirectionYieldsName = interp.Yes
 	s.BraceExpansion = interp.Yes
+	// A group that does not expand does not end the word — `@{x}{a,b}@` is
+	// `@{x}a@ @{x}b@` here too — but the scan resumes past that group's
+	// *close* brace rather than past its open, so a list nested inside a
+	// failed group is never reached: `{a{b,c}}` and `{a}{b{c,d}}` are left
+	// whole where bash and zsh expand them, while `{a{b,c}}{d,e}`, whose
+	// list is outside the failed group, still gives `{a{b,c}}d {a{b,c}}e`.
+	// An unclosed `{` has no close to step over and ends the scan.
+	s.BraceRescanEntersFailedGroup = interp.No
 	// The one shell that strips a range endpoint's zeros — `{01..3}` is
 	// `1 2 3` — and takes a written step's sign at its word, so `{10..1..3}`
 	// is `10` alone and `{1..10..-3}` is `1`. A negative step that agrees

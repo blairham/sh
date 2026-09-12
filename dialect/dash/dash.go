@@ -294,6 +294,13 @@ func Semantics() interp.Semantics {
 	s.PrintfTimeConversion = interp.No
 	s.PrintfTimeOperandIsADateString = interp.No
 	s.PrintfQuote = interp.PrintfQuoteAbsent
+	// unanswered BraceRescanEntersFailedGroup: dash has no brace expansion,
+	// so there is no scan to resume. `@{x}{a,b}@` is the one word it was
+	// written as, and the question of how far past a group that did not
+	// expand the scan steps cannot be put to a shell that never steps at
+	// all. The four `BraceRange…` axes are unanswered here for the same
+	// reason.
+	//
 	// The three `$'…'` axes are left unanswered on purpose: dash has no
 	// `$'…'` at all — `$'a\tb'` is the six characters it was written as,
 	// dollar included — so the grammar refuses the form before any of them

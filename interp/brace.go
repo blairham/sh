@@ -57,19 +57,47 @@ func (r *Runner) braceWords(w *syntax.Word, endpoints bool) []*syntax.Word {
 	if w == nil {
 		return nil
 	}
-	open, ok := findBraceByte(w.Spans, 0, '{')
-	if !ok {
-		return []*syntax.Word{w}
+	// A group that does not expand does not end the word. `{x}` has no comma
+	// and is literal text in every shell, and the `{a,b}` behind it is still
+	// a list: `@{x}{a,b}@` is two words everywhere braces expand at all. The
+	// scan therefore carries on past a failed group rather than abandoning
+	// the word, and how far it carries is the one thing the panel disagrees
+	// about — BraceRescanEntersFailedGroup.
+	from := cursor{0, 0}
+	for {
+		open, ok := findBraceFrom(w.Spans, from, '{')
+		if !ok {
+			return []*syntax.Word{w}
+		}
+		close, matched := matchBraceAcross(w.Spans, open)
+		if matched {
+			if alts, ok := r.alternativesAcross(w, open, close, endpoints); ok {
+				return r.braceProduct(w, open, close, alts, endpoints)
+			}
+		}
+		enter := r.askBrace(r.sem().BraceRescanEntersFailedGroup,
+			"the scan entering a brace group that did not expand")
+		if r.unspecified {
+			return []*syntax.Word{w}
+		}
+		if enter {
+			// bash and zsh resume one byte past the open brace, so a list
+			// nested inside the failed group is still found.
+			from = next(open)
+			continue
+		}
+		// ksh93 steps over the whole group instead, and has nowhere to
+		// resume when the group was never closed.
+		if !matched {
+			return []*syntax.Word{w}
+		}
+		from = next(close)
 	}
-	close, ok := matchBraceAcross(w.Spans, open)
-	if !ok {
-		return []*syntax.Word{w}
-	}
-	alts, ok := r.alternativesAcross(w, open, close, endpoints)
-	if !ok {
-		return []*syntax.Word{w}
-	}
+}
 
+// braceProduct substitutes each alternative of the group between open and
+// close back into the word, and expands what comes out.
+func (r *Runner) braceProduct(w *syntax.Word, open, close cursor, alts [][]syntax.Span, endpoints bool) []*syntax.Word {
 	before := sliceSpans(w.Spans, cursor{0, 0}, open)
 	after := sliceSpans(w.Spans, next(close), cursor{len(w.Spans), 0})
 
@@ -102,14 +130,26 @@ func braceable(s syntax.Span) bool {
 	return s.Kind == syntax.Literal && s.Quoting == syntax.Unquoted
 }
 
-// findBraceByte finds the next occurrence of c at or after from.
-func findBraceByte(spans []syntax.Span, fromSpan int, c byte) (cursor, bool) {
-	for i := fromSpan; i < len(spans); i++ {
+// findBraceFrom finds the next occurrence of c at or after the cursor from.
+//
+// It takes a cursor rather than a span index because resuming after a group
+// that did not expand can land in the middle of a span: `{x}{a,b}` is one
+// literal, and a scan that could only resume at the next span would find
+// nothing after the first `{`.
+func findBraceFrom(spans []syntax.Span, from cursor, c byte) (cursor, bool) {
+	for i := from.span; i < len(spans); i++ {
 		if !braceable(spans[i]) {
 			continue
 		}
-		if j := strings.IndexByte(spans[i].Value, c); j >= 0 {
-			return cursor{i, j}, true
+		off := 0
+		if i == from.span {
+			off = from.off
+		}
+		if off > len(spans[i].Value) {
+			continue
+		}
+		if j := strings.IndexByte(spans[i].Value[off:], c); j >= 0 {
+			return cursor{i, off + j}, true
 		}
 	}
 	return cursor{}, false
@@ -205,7 +245,7 @@ func (r *Runner) rangeAcross(w *syntax.Word, open, close cursor, endpoints bool)
 	if !endpoints || !rangeShaped(body) {
 		return nil, false
 	}
-	if !r.askRange(r.sem().BraceRangeEndpointsExpanded,
+	if !r.askBrace(r.sem().BraceRangeEndpointsExpanded,
 		"a brace range's endpoints expanding before the range is read") {
 		return nil, false
 	}
@@ -368,7 +408,7 @@ func (r *Runner) braceRange(body string) ([]string, bool) {
 	}
 	width := 0
 	if paddedEndpoint(lo) || paddedEndpoint(hi) {
-		if r.askRange(r.sem().BraceRangePadsToEndpointWidth, "an endpoint's leading zeros padding the range") {
+		if r.askBrace(r.sem().BraceRangePadsToEndpointWidth, "an endpoint's leading zeros padding the range") {
 			width = max(len(lo), len(hi))
 		} else if r.unspecified {
 			return nil, false
@@ -385,7 +425,7 @@ func (r *Runner) braceRange(body string) ([]string, bool) {
 func (r *Runner) walkRange(from, to, step int, hasStep, negStep bool, render func(int) string) ([]string, bool) {
 	desc := to < from
 	if hasStep && negStep != desc &&
-		r.askRange(r.sem().BraceRangeStepSignHonored, "a step's sign overriding the endpoints' direction") {
+		r.askBrace(r.sem().BraceRangeStepSignHonored, "a step's sign overriding the endpoints' direction") {
 		// The walk leaves the first endpoint the way the sign says, which
 		// here is away from the far one, so the range holds one element.
 		return []string{render(from)}, true
@@ -406,7 +446,7 @@ func (r *Runner) walkRange(from, to, step int, hasStep, negStep bool, render fun
 		}
 	}
 	if hasStep && negStep &&
-		r.askRange(r.sem().BraceRangeNegativeStepReverses, "a negative step reversing the range") {
+		r.askBrace(r.sem().BraceRangeNegativeStepReverses, "a negative step reversing the range") {
 		slices.Reverse(out)
 	}
 	if r.unspecified {
@@ -415,12 +455,12 @@ func (r *Runner) walkRange(from, to, step int, hasStep, negStep bool, render fun
 	return out, true
 }
 
-// askRange asks a brace-range axis, but only in a dialect whose braces
-// expand at all. When BraceExpansion is off or unanswered, whatever a range
-// produced is put back or refused by that outer axis, so a range that will
-// never be used must not be the thing that refuses the script — dash prints
-// `{01..3}` as written and is never asked what the zeros mean.
-func (r *Runner) askRange(a Answer, axis string) bool {
+// askBrace asks a brace axis, but only in a dialect whose braces expand at
+// all. When BraceExpansion is off or unanswered, whatever brace expansion
+// produced is put back or refused by that outer axis, so a question that will
+// never change an answer must not be the thing that refuses the script — dash
+// prints `{01..3}` as written and is never asked what the zeros mean.
+func (r *Runner) askBrace(a Answer, axis string) bool {
 	// And the same for a shell whose braces are switched off at run time:
 	// what the range came to is put back by the caller, so a range that will
 	// never be used must not be the thing that refuses the script.

@@ -1061,6 +1061,23 @@ type Semantics struct {
 	// silent in the `&>` sense — `echo {1..3}` prints something either way,
 	// and nothing reports that one of them is not what was meant.
 	BraceExpansion Answer
+	// BraceRescanEntersFailedGroup decides where the scan resumes after a
+	// brace group that does not expand — `{x}`, which has no comma and no
+	// range, or a `{` that is never closed. Every shell with braces carries
+	// on rather than abandoning the word, so `@{x}{a,b}@` is two words in
+	// bash, ksh93 and zsh alike; the axis is only how far the scan steps.
+	//
+	// bash and zsh resume one byte past the failed group's *open* brace, so
+	// a list nested inside it is still found: `{a{b,c}}` is `{ab} {ac}` and
+	// the unclosed `{a{b,c}` is `{ab} {ac`. ksh93 resumes past the group's
+	// *close* brace instead and leaves both of those alone, while still
+	// expanding a group that sits outside the failed one — its
+	// `{a{b,c}}{d,e}` is `{a{b,c}}d {a{b,c}}e`. With no close brace to step
+	// over, ksh93 gives up on the word.
+	//
+	// Asked only in a dialect whose braces expand at all, and only once a
+	// group has already failed to produce alternatives.
+	BraceRescanEntersFailedGroup Answer
 	// BraceRangePadsToEndpointWidth keeps the leading zeros of a range
 	// endpoint and pads every element to the widest endpoint, zeros after
 	// the sign: `{01..3}` is `01 02 03` and `{-03..3..3}` is `-03 000 003`.
@@ -2387,6 +2404,25 @@ type Semantics struct {
 	// literal string. True in bash alone; ksh93 and zsh keep it a regex, so
 	// quoting a regex is unportable in either direction.
 	RegexQuotingMakesLiteral Answer
+	// EmptyRegexOperandIsAnError refuses `[[ x =~ "" ]]` rather than
+	// matching with it. The three shells with the operator split two to
+	// one: bash refuses with `invalid regular expression \`\': empty
+	// (sub)expression` and status 2, zsh refuses with `failed to compile
+	// regex: empty (sub)expression` and status 1, and ksh93 accepts it and
+	// reports a match. Both refusals are POSIX ERE showing through — the
+	// grammar has no empty expression — while ksh93 takes the empty pattern
+	// as one that matches everywhere.
+	//
+	// It is an axis rather than a property of the engine because the engine
+	// this shell is built on has the third opinion: Go's regexp compiles
+	// the empty pattern and matches the empty string at every position, so
+	// without the axis a snippet two of the three shells refuse succeeds
+	// here — and a global replace over it writes between every pair of
+	// characters instead of doing nothing (#2043).
+	//
+	// Asked only for an operand that is actually empty, and only in a
+	// dialect that has `=~` at all.
+	EmptyRegexOperandIsAnError Answer
 
 	// LastPipelineElementInCurrentShell runs the last command of a pipeline
 	// in this shell, so `echo x | read v` sets v. True in ksh93 and zsh.
@@ -8942,7 +8978,14 @@ func PosixSemantics() Semantics {
 		CommandStringShowsSInDollarDash: No,
 		ArithInvalidOctalDigitIsError:   Yes,
 		RegexQuotingMakesLiteral:        No,
-		ProcessSubstitutionInCondition:  No,
+		// POSIX has no `[[ ]]` and so no `=~`, but it does define the ERE
+		// the operator's two refusers use, and that grammar has no empty
+		// expression: `[[:alpha:]]*` and every other ERE is built from at
+		// least one branch. So the base reads the text rather than taking
+		// a vote, and reads it the way bash and zsh do. dash and ash never
+		// reach it — neither has the operator.
+		EmptyRegexOperandIsAnError:     Yes,
+		ProcessSubstitutionInCondition: No,
 		// POSIX has no process substitution, so there is no text to read
 		// here either: the base takes the answer every panel member but one
 		// gives, which is that the body reads the input of the command the

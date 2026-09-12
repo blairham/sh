@@ -70411,6 +70411,50 @@
         "TimedOut": false
       }
     },
+    "expand/brace-after-a-group-that-did-not-expand": {
+      "bash": {
+        "Stdout": "[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[@{x}{a,b}@]~[{a}{b}{c,d}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "expand/brace-before-param": {
       "ash": {
         "Stdout": "{1,2}",
@@ -70456,6 +70500,94 @@
       },
       "zsh": {
         "Stdout": "1 2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/brace-inside-a-group-that-did-not-expand": {
+      "bash": {
+        "Stdout": "[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[{a{b,c}}]~[{a}{b{c,d}}]~[{a{b,c}}{d,e}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[{a{b,c}}]~[{a}{b{c,d}}]~[{a{b,c}}d][{a{b,c}}e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/brace-inside-an-unclosed-group": {
+      "bash": {
+        "Stdout": "[{ab][{ac]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[{ab][{ac]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[{ab][{ac]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[{a{b,c}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[{a{b,c}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[{ab][{ac]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

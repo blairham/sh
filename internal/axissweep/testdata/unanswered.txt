@@ -50,6 +50,7 @@ ash   BraceRangeEndpointsExpanded
 ash   BraceRangeNegativeStepReverses
 ash   BraceRangePadsToEndpointWidth
 ash   BraceRangeStepSignHonored
+ash   BraceRescanEntersFailedGroup
 ash   CaseAttributeFoldsWhenRead
 ash   CaseAttributeReplacesTheNumericAttribute
 ash   CompoundAttribute
@@ -183,6 +184,7 @@ dash  BraceRangeEndpointsExpanded
 dash  BraceRangeNegativeStepReverses
 dash  BraceRangePadsToEndpointWidth
 dash  BraceRangeStepSignHonored
+dash  BraceRescanEntersFailedGroup
 dash  CaseAttributeFoldsWhenRead
 dash  CaseAttributeReplacesTheNumericAttribute
 dash  CompoundAttribute

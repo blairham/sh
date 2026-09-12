@@ -629,6 +629,11 @@ func Semantics() interp.Semantics {
 	// value quietly appearing for one of them, copied from a neighbor to
 	// quiet the refusal, fails that check instead of passing quietly.
 	//
+	// unanswered BraceRescanEntersFailedGroup: this shell has no brace
+	// expansion either, so nothing ever resumes a scan — `@{x}{a,b}@` is
+	// one word, and the four `BraceRange…` axes are unanswered beside it
+	// for the same reason.
+	//
 	// unanswered DollarSingleNulTruncates: a *third* reading (#2276).
 	// `x=$'a\0b'` leaves `ab` at length 2: the NUL is neither kept (zsh,
 	// length 3) nor the end of the span (bash and ksh93, length 1) but

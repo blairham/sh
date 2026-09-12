@@ -293,15 +293,64 @@ print -r -- "5 Q st=$?"`)
 	}
 }
 
-// A name with a directory in it is looked for where it says and nowhere
-// else, so `$fpath` plays no part.
-func TestAnAutoloadNameWithAPathIsReadFromIt(t *testing.T) {
+// A name with a separator in it is not looked for anywhere — not on
+// `$fpath`, and not at the place it spells either. Measured 2026-09-12 on
+// zsh 5.9.2 with the file right there and `$fpath` emptied: all three
+// spellings refuse, `-Uz` and `-rUz` at the call and `-RUz` at the
+// declaration, so the file being on disk changes nothing (#1999).
+func TestAnAutoloadNameWithAPathIsRefused(t *testing.T) {
 	fp := fpathDir(t, map[string]string{"direct": `print -r -- BYPATH`})
+	path := filepath.Join(fp, "direct")
+	for _, tc := range []struct {
+		name    string
+		letters string
+	}{
+		{"the ordinary declaration", "-Uz"},
+		{"a fixed path recorded at the declaration", "-rUz"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), `fpath=()
+autoload `+tc.letters+` `+path+`
+`+path)
+			if !strings.Contains(out, "function definition file not found") || st == 0 {
+				t.Errorf("a path operand = %q (status %d), want the refusal at a nonzero status", out, st)
+			}
+			if strings.Contains(out, "BYPATH") {
+				t.Errorf("a path operand ran the file at %q", path)
+			}
+		})
+	}
+	// `-R` refuses at the declaration rather than at the call, so there is
+	// nothing after it to run.
 	out, st := runZsh(t, t.TempDir(), `fpath=()
-autoload -Uz `+filepath.Join(fp, "direct")+`
-`+filepath.Join(fp, "direct"))
-	if out != "BYPATH\n" || st != 0 {
-		t.Errorf("a path operand = %q (status %d), want %q", out, st, "BYPATH\n")
+autoload -RUz `+path)
+	if !strings.Contains(out, "function definition file not found") || st == 0 {
+		t.Errorf("-R with a path operand = %q (status %d), want the refusal at a nonzero status", out, st)
+	}
+}
+
+// The two autoload *styles* on one line. `-z` is zsh's and `-k` is ksh's, and
+// zsh refuses the pair before it says anything about either letter — which is
+// what a caller sees, because `add-zsh-hook` hands its letters straight to
+// `autoload`. Measured 2026-09-12 on zsh 5.9.2 (#2149).
+func TestAutoloadRefusesTheTwoStylesTogether(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), `autoload -k kf 2>&1
+print -r -- "1 k st=$?"
+autoload -Uzk kf 2>&1
+print -r -- "2 Uzk st=$?"
+autoload -zk kf 2>&1
+print -r -- "3 zk st=$?"
+autoload -kz kf 2>&1
+print -r -- "4 kz st=$?"
+autoload -kU kf 2>&1
+print -r -- "5 kU st=$?"`)
+	want := "zsh:autoload:1: -k is not implemented yet\n1 k st=1\n" +
+		"zsh:autoload:3: invalid option(s)\n2 Uzk st=1\n" +
+		"zsh:autoload:5: invalid option(s)\n3 zk st=1\n" +
+		"zsh:autoload:7: invalid option(s)\n4 kz st=1\n" +
+		"zsh:autoload:9: -k is not implemented yet\n5 kU st=1\n"
+	if out != want {
+		t.Errorf("the two styles = %q, want %q", out, want)
 	}
 }
 

@@ -1550,10 +1550,9 @@ func Diagnostics() interp.Diagnostics {
 		FunctionNameDiscipline:        "%[1]s: invalid discipline function",
 		// A parse failure by every other measure, and 1 rather than this
 		// dialect's syntax-error status.
-		ForNameStatus:       1,
-		ForName:             "%[1]s: invalid variable name",
-		UnmatchedBraceSubst: "%[3]s{: bad substitution",
-		SyntaxErrorStatus:   3,
+		ForNameStatus:     1,
+		ForName:           "%[1]s: invalid variable name",
+		SyntaxErrorStatus: 3,
 		// The status is never reached — a file `.` cannot open ends the script
 		// here — but the wording is, and it names the operand and the reason in
 		// brackets rather than after a colon.
@@ -1940,6 +1939,18 @@ func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	// as its own call rather than shared with UnmatchedCmdSubst so that a
 	// later change to one cannot silently move the other.
 	d.UnmatchedArithSubst, d.PromptUnmatchedArithSubst = parseWording(4, "`(' unmatched")
+	// An expansion the input ran out inside is the brace unmatched, and it is
+	// the brace for the command form `${ echo hi` as much as for a `${x` the
+	// input simply stopped after. It said `${x{: bad substitution` until
+	// #2232 — a runtime sentence borrowed for a parse failure, with the
+	// opener's line missing and the next construct's brace stuck on the end
+	// of the quoted text.
+	d.UnmatchedBraceSubst, d.PromptUnmatchedBraceSubst = parseWording(4, "`{' unmatched")
+	// A parameter form a character stopped is that character standing where
+	// it should not, at the line the `${` is on: `echo ${x` and a newline is
+	// ``syntax error at line 1: `newline' unexpected``, and `echo ${x ` names
+	// the space. See Diagnostics.UnmatchedBraceSubstAtStop.
+	d.UnmatchedBraceSubstAtStop, d.PromptUnmatchedBraceSubstAtStop = parseWording(4, "`%[6]s' unexpected")
 	// ksh93 does not call this a bad substitution: it is a syntax error
 	// naming the character it could not read.
 	d.BadSubstitution, d.PromptBadSubstitution = parseWording(2, "`%[1]s' unexpected")

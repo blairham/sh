@@ -2230,6 +2230,50 @@ type Diagnostics struct {
 	UnmatchedProcSubst string
 	// UnmatchedBraceSubst is `${` the input ran out inside. Same verbs.
 	UnmatchedBraceSubst string
+	// UnmatchedBraceSubstAtStop is the same failure where the parameter form
+	// stopped at a character rather than simply running out — a newline
+	// after `${x`, a space after `${x ` — and it takes a sixth verb the
+	// others do not: %[6]s is that token, `newline` or the character itself.
+	// Empty falls back to UnmatchedBraceSubst.
+	//
+	// One dialect reaches a different *diagnosis* for the two, which is why
+	// this is a wording of its own rather than an argument to the one above.
+	// Measured 2026-09-12, `-n` over a two-line script, `env -i` with a
+	// scratch HOME:
+	//
+	//	echo ${ echo hi   ksh93 ``syntax error at line 1: `{' unmatched``
+	//	echo ${x          ksh93 ``syntax error at line 1: `newline' unexpected``
+	//
+	// so the command form and the input simply ending are the unmatched
+	// brace, and a parameter form a character stopped is that character
+	// standing where it should not. See syntax.Error.BraceNameStop.
+	UnmatchedBraceSubstAtStop string
+	// UnmatchedBraceSubstDropsTheNameNewline reports an unterminated `${x`
+	// one line earlier than the input ran out: the newline the parameter
+	// name stopped at is not counted.
+	//
+	// dash alone, and it is the parameter form alone — measured 2026-09-12
+	// over a two-line script file whose second line is `echo after`:
+	//
+	//	echo ${ echo hi   `3: Syntax error: Missing '}'`  — the end of input
+	//	echo ${x          `2: Syntax error: Missing '}'`  — a line earlier
+	//	echo ${x:-a       `3: Syntax error: Missing '}'`
+	//	echo ${#x         `3: Syntax error: Missing '}'`  — the prefix, not
+	//	                  the name, so the newline counts
+	//	echo ${#          `2: Syntax error: Missing '}'`  — `#` is the name
+	//
+	// Written without a trailing newline the whole file is a line shorter
+	// and so is the answer, which is the same rule seen from the other side:
+	// there is no newline after the name to leave out.
+	//
+	// **Two neighbors are measured and not modeled.** `echo ${x:` is a line
+	// early there as well — the colon is an operator the shell has not
+	// finished reading, and this counts an operator as read the moment it
+	// begins. And the shortening compounds with nesting: `echo ${x` on one
+	// line and `echo ${y` on the next is two lines early, so each such
+	// newline goes uncounted rather than one of them, where the parser
+	// records only the innermost construct's stop.
+	UnmatchedBraceSubstDropsTheNameNewline bool
 	// UnmatchedNearMaxBytes cuts the quoted text — %[3]s above, the word a
 	// construct ran out inside — to at most this many bytes, appending
 	// `...` where it is that long or longer. Zero prints the whole of it,
@@ -3636,15 +3680,17 @@ type Diagnostics struct {
 	// this package rewrote would be a wording no dialect wrote, and the
 	// dialect that needs these builds both halves of each pair from one call
 	// so the two cannot drift.
-	PromptSyntaxUnexpected        string
-	PromptUnterminated            string
-	PromptUnterminatedNoConstruct string
-	PromptUnmatchedQuote          string
-	PromptUnmatchedCmdSubst       string
-	PromptUnmatchedArithSubst     string
-	PromptUnmatchedProcSubst      string
-	PromptBadSubstitution         string
-	PromptForArithHeader          string
+	PromptSyntaxUnexpected          string
+	PromptUnterminated              string
+	PromptUnterminatedNoConstruct   string
+	PromptUnmatchedQuote            string
+	PromptUnmatchedCmdSubst         string
+	PromptUnmatchedArithSubst       string
+	PromptUnmatchedBraceSubst       string
+	PromptUnmatchedBraceSubstAtStop string
+	PromptUnmatchedProcSubst        string
+	PromptBadSubstitution           string
+	PromptForArithHeader            string
 }
 
 // LocationStyle is one shell's way of saying where a diagnostic happened.
@@ -3888,6 +3934,10 @@ func (d Diagnostics) ParseFailureLine(err error) int {
 			return int(se.Pos.Line)
 		}
 		if se.EofLine > 0 {
+			if d.UnmatchedBraceSubstDropsTheNameNewline && se.Token == "${" &&
+				se.BraceNameStop == "newline" && !se.BraceNameStopFollowsAPrefix {
+				return max(se.EofLine-1, 1)
+			}
 			return se.EofLine
 		}
 		return int(se.Pos.Line)
@@ -4192,6 +4242,9 @@ func (d Diagnostics) ParseFailure(err error) string {
 			}
 		case "${":
 			form = d.UnmatchedBraceSubst
+			if se.BraceNameStop != "" && d.UnmatchedBraceSubstAtStop != "" {
+				form = d.UnmatchedBraceSubstAtStop
+			}
 		case "$((", "$[":
 			// Assigned whatever the dialect says, empty included, because
 			// empty here must *not* leave form as UnmatchedQuote — a shell
@@ -4204,7 +4257,8 @@ func (d Diagnostics) ParseFailure(err error) string {
 			form = d.UnmatchedArithSubst
 		}
 		return Wording(form, se.Msg,
-			se.Token, se.Expected, d.nearText(se.LastToken), se.Pos.Line, se.EofLine)
+			se.Token, se.Expected, d.nearText(se.LastToken), se.Pos.Line, se.EofLine,
+			se.BraceNameStop)
 	case syntax.ErrUnterminated:
 		form := d.Unterminated
 		if se.Construct == "" && d.UnterminatedNoConstruct != "" {
@@ -4310,6 +4364,8 @@ func (d Diagnostics) ForPrompt() Diagnostics {
 		{&d.UnmatchedQuote, d.PromptUnmatchedQuote},
 		{&d.UnmatchedCmdSubst, d.PromptUnmatchedCmdSubst},
 		{&d.UnmatchedArithSubst, d.PromptUnmatchedArithSubst},
+		{&d.UnmatchedBraceSubst, d.PromptUnmatchedBraceSubst},
+		{&d.UnmatchedBraceSubstAtStop, d.PromptUnmatchedBraceSubstAtStop},
 		{&d.UnmatchedProcSubst, d.PromptUnmatchedProcSubst},
 		{&d.BadSubstitution, d.PromptBadSubstitution},
 		{&d.SyntaxError, d.PromptSyntaxError},

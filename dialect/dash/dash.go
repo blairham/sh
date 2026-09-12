@@ -667,6 +667,12 @@ func Diagnostics() interp.Diagnostics {
 		UnmatchedBackquote:      "Syntax error: EOF in backquote substitution",
 		UnmatchedCmdSubst:       "Syntax error: end of file unexpected (expecting \")\")",
 		UnmatchedBraceSubst:     "Syntax error: Missing '}'",
+		// `echo ${x` with the input running out at the newline after the
+		// name is a line earlier here than `echo ${ echo hi` is, although
+		// this shell has no command form and reads both as an ordinary
+		// expansion. See UnmatchedBraceSubstDropsTheNameNewline for the
+		// rows (#2232).
+		UnmatchedBraceSubstDropsTheNameNewline: true,
 		// This shell names the two characters that never came rather than
 		// the one the other dialect echoes, so the closer is written in
 		// rather than taken from the construct. It has no `$[` at all —

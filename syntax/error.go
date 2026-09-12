@@ -370,6 +370,41 @@ type Error struct {
 	// command form is a fifth member of the set that holds a program, and
 	// the brace is what hides it (#1425).
 	HoldsProgram bool
+	// BraceNameStop is the token that stood where an unterminated `${…}` in
+	// the *parameter* form could read no further — `newline` for a newline,
+	// and the character itself for a space or a tab, spelled the way
+	// [Kind.String] spells a token. Empty where the input simply ended, where
+	// an operator had already been read and the rest of the braces is a word,
+	// or where the braces held a program.
+	//
+	// Two dialects answer an unterminated `${x` differently from an
+	// unterminated `${x:-a}`, and neither difference can be read off the
+	// opener: both are `${`. Measured 2026-09-12 over a two-line file,
+	// `-n`, `env -i` with a scratch HOME:
+	//
+	//	echo ${x        ksh93 ``syntax error at line 1: `newline' unexpected``
+	//	echo ${x        dash  `2: Syntax error: Missing '}'` — a line early
+	//	echo ${x:-a     ksh93 ``syntax error at line 1: `{' unmatched``
+	//	echo ${x:-a     dash  `3: Syntax error: Missing '}'`
+	//	echo ${x        ksh93 ``syntax error at line 1: `' unexpected`` — the
+	//	                space, for a name a space stopped
+	//
+	// A `${` whose name never began takes it too: `echo ${` and a newline is
+	// dash's line-early answer as well, so the stop is about what stood
+	// where the expansion stopped rather than about a name being there.
+	BraceNameStop string
+	// BraceNameStopFollowsAPrefix says that stop came after a `#`, `##` or
+	// `!` written in front of the name, or after an `@` the expansion was
+	// still reading an operator letter for, rather than after a bare
+	// parameter name.
+	//
+	// The two dialects that read BraceNameStop want different sets, which is
+	// why the fact is carried apart from the stop rather than folded into it.
+	// Measured beside the rows above: `echo ${#x` is dash's *ordinary* line
+	// — no line early — where `echo ${#` is a line early, because a bare `#`
+	// is the parameter and a `#` in front of a name is the length operator.
+	// ksh93 says ``newline' unexpected`` for both.
+	BraceNameStopFollowsAPrefix bool
 	// EofLine is the line the input actually ran out on, in the lexer's
 	// own count — the same point EndLine names in the next-line
 	// convention. Two dialects report this one for an unmatched quote.

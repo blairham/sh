@@ -2988,8 +2988,18 @@ func edgeByLength(value, pattern string, op syntax.ParamOp, o patternOpts) (int,
 			idx[l], idx[r] = idx[r], idx[l]
 		}
 	}
+
+	// What each end of the pattern requires of a piece, so that a candidate
+	// the pattern could not match whatever the subject holds is skipped
+	// rather than handed to the matcher. See interp/patternspan.go for why
+	// this is allowed to ask too little and never too much.
+	head, tail, edges := patternEdgeLiterals(pattern, o)
+
 	for _, i := range idx {
 		if prefix {
+			if !edgeLiteralsFit(value[:i], head, tail, edges) {
+				continue
+			}
 			// The piece is a prefix of value, so the matcher is told where
 			// it sits: a trial is at the start of the subject and reaches
 			// its end only when it is the whole of it. Measured on zsh
@@ -2998,6 +3008,9 @@ func edgeByLength(value, pattern string, op syntax.ParamOp, o patternOpts) (int,
 			if ok, m := matchPatternIn(pattern, value[:i], value, 0, o); ok {
 				return i, m, true
 			}
+			continue
+		}
+		if !edgeLiteralsFit(value[i:], head, tail, edges) {
 			continue
 		}
 		if ok, m := matchPatternIn(pattern, value[i:], value, i, o); ok {

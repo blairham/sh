@@ -95,6 +95,8 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"DuplicationTargetErrorOnABuiltinIsFatal", s.DuplicationTargetErrorOnABuiltinIsFatal, interp.No},
 		{"InteractiveMonitorNeedsATerminal", s.InteractiveMonitorNeedsATerminal, interp.Yes},
 		{"InteractiveScriptAnnouncesJobs", s.InteractiveScriptAnnouncesJobs, interp.No},
+		{"InteractiveCommandStringAnnouncesJobs", s.InteractiveCommandStringAnnouncesJobs, interp.Yes},
+		{"FinishedJobNoticeNeedsAPrompt", s.FinishedJobNoticeNeedsAPrompt, interp.Yes},
 		{"SubshellRunsOnAfterSignalingTheShell", s.SubshellRunsOnAfterSignalingTheShell, interp.Yes},
 		{"UnsetReadonlyFatal", s.UnsetReadonlyFatal, interp.No},
 		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.No},

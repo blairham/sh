@@ -1082,21 +1082,21 @@ type Diagnostics struct {
 	// where the id goes is not one rule. Measured to the byte, with a
 	// five-digit id:
 	//
-	//	bash   [1]+ 41293 Running                    sleep 0.4 &
-	//	dash   [1] + 41293 Running
-	//	ksh93  [1] + 41293\t Running                 <command unknown>
-	//	zsh    [1]  + 41293 running    sleep 0.4
+	//	[1]+ 41293 Running                    sleep 0.4 &
+	//	[1] + 41293 Running
+	//	[1] + 41293\t Running                 <command unknown>
+	//	[1]  + 41293 running    sleep 0.4
 	//
-	// bash spends one of the two spaces after its marker on the id; the
-	// other three insert the id and keep the spacing they had. ksh93 puts a
-	// tab after it. And dash narrows its state column by exactly what the id
-	// took, so that the command column stays where it was — the only shell
-	// in the panel that does, and invisible in practice, because dash keeps
-	// no command text and what moves is trailing whitespace. The width here
-	// is the measured one for a five-digit id rather than that arithmetic.
+	// One reading spends one of the two spaces after its marker on the id; the
+	// rest insert the id and keep the spacing they had, and one puts a tab after
+	// it. Another narrows its state column by exactly what the id took, so that
+	// the command column stays where it was — the only one that does, and
+	// invisible in practice, because that preset keeps no command text and what
+	// moves is trailing whitespace. The width here is the measured one for a
+	// five-digit id rather than that arithmetic.
 	//
-	// Empty means JobLine with the id and a space in front of the state,
-	// which no dialect in the panel relies on.
+	// Empty means JobLine with the id and a space in front of the state, which
+	// no preset relies on.
 	JobLineLong string
 
 	// JobRunning, JobStopped and JobDone are the states a job is listed in.
@@ -1110,61 +1110,60 @@ type Diagnostics struct {
 
 	// JobDoneNotice replaces JobDone when the shell is *reporting* that a job
 	// ended, rather than listing one that has. Empty uses JobDone for both,
-	// which is what three of the four want. No verbs.
+	// which is the common answer. No verbs.
 	//
-	// ksh93 needs the two: it announces `Done` and then lists the same job
-	// as `Running`, because its listing has not noticed what its reaper
-	// already said. Two statements about one job, and both are ksh's.
+	// A preset needs the two where it announces `Done` and then lists the same
+	// job as `Running`, its listing not having noticed what its reaper already
+	// said. Two statements about one job, and both are that preset's.
 	JobDoneNotice string
 
 	// JobExited replaces JobDone where the job ended with a non-zero status.
 	// One verb: the status. Empty leaves JobDone standing for both, which is
-	// what a dialect that does not distinguish them wants.
+	// what a preset that does not distinguish them wants.
 	//
-	//	bash   Exit 1
-	//	dash   Done(1)
+	//	Exit 1
+	//	Done(1)
 	JobExited string
 
 	// JobUnknownCommand is printed in the command column of a job whose text
 	// the shell did not keep. No verbs.
 	//
-	// ksh93 alone: `<command unknown>`, where dash leaves the column empty.
-	// Whether the text was kept is the semantics question — this is only
-	// what to print in its place.
+	// `<command unknown>` and an empty column are both measured. Whether the
+	// text was kept is the semantics question — this is only what to print in
+	// its place.
 	JobUnknownCommand string
 
 	// JobStoppedNotice is what an interactive shell says when the job in
 	// front of it stopped — what ^Z prints. Four verbs: the job number, the
 	// marker, the shell's own name and the command.
 	//
-	// Empty prints the `jobs` listing's own row, which is what three of the
-	// four do: `[1]+  Stopped   sleep 40` in bash, and the same shape in
-	// dash and ksh93 with each one's own state word. zsh writes a sentence
-	// instead and names itself in it, which no listing row does.
+	// Empty prints the `jobs` listing's own row, which is the common answer:
+	// `[1]+  Stopped   sleep 40`, with each preset's own state word. A preset
+	// may write a sentence instead and name itself in it, which no listing row
+	// does.
 	JobStoppedNotice string
 
 	// JobStoppedNoticeOnANewLine starts that notice on a line of its own.
 	//
-	// The terminal echoed `^Z` where the cursor was and left it there. bash
-	// and zsh write a newline before the notice, so it lands under the echo;
-	// dash and ksh93 write it straight after, on the same line. Measured
-	// through a pseudo-terminal, which is the only place the difference
-	// exists.
+	// The terminal echoed `^Z` where the cursor was and left it there. True
+	// writes a newline before the notice, so it lands under the echo; false
+	// writes it straight after, on the same line. Measured through a
+	// pseudo-terminal, which is the only place the difference exists.
 	JobStoppedNoticeOnANewLine bool
 
 	// JobResumedInForeground is how `fg` names the job it put back in front.
 	// Three verbs: the number, the marker and the command.
 	//
-	// Empty prints the command alone, which is what three of the four do.
-	// zsh prints a listing row with a state of its own — `[1]  + continued
-	// sleep 3` — and that word appears nowhere else, which is why this is a
-	// format rather than a fourth entry beside JobRunning and JobStopped.
+	// Empty prints the command alone, which is the common answer. A preset may
+	// print a listing row with a state of its own — `[1]  + continued sleep 3` —
+	// and that word appears nowhere else, which is why this is a format rather
+	// than a fourth entry beside JobRunning and JobStopped.
 	JobResumedInForeground string
 
-	// JobResumedInBackground is the same for `bg`, and here all four differ:
-	// bash writes the row's head and the command with an `&` after it, dash
-	// the number and the command, ksh93 a tab between them and no space
-	// before the `&`, and zsh the same `continued` row it prints for `fg`.
+	// JobResumedInBackground is the same for `bg`, and here every preset
+	// differs: the row's head and the command with an `&` after it; the number
+	// and the command; a tab between them and no space before the `&`; or the
+	// same `continued` row printed for `fg`.
 	//
 	// Empty prints the command with ` &` after it.
 	JobResumedInBackground string
@@ -1174,35 +1173,35 @@ type Diagnostics struct {
 	// Semantics.StoppedJobsHoldTheExit, which is what decides whether it
 	// stays at all. One verb: the shell's own name.
 	//
-	// It wins over RunningJobsAtExit where there is one of each: measured,
-	// a session holding a suspended job and a `sleep 40 &` is told about the
-	// suspended one in both shells that say anything.
+	// It wins over RunningJobsAtExit where there is one of each: a session
+	// holding a suspended job and a `sleep 40 &` is told about the suspended one
+	// wherever anything is said.
 	//
-	// Written without the location prefix every other diagnostic carries:
-	// one of the two shells that says this names itself in the sentence and
-	// the other names nobody, and neither writes a line number.
+	// Written without the location prefix every other diagnostic carries: one
+	// wording names the shell in the sentence and another names nobody, and
+	// neither writes a line number.
 	StoppedJobsAtExit string
 
 	// RunningJobsAtExit is the same warning for a job that is still running,
 	// which a shell gives only where the session has asked it to — see
 	// Runner.ChecksRunningJobsAtExit. Measured through a pseudo-terminal:
-	// bash 5.3.15 with `shopt -s checkjobs` says `There are running jobs.`
-	// and zsh 5.9.2 says `zsh: you have running jobs.`, each the same shape
-	// as its own stopped-job sentence with one word changed.
+	// `There are running jobs.` and `<shell>: you have running jobs.` are both
+	// measured, each the same shape as its own stopped-job sentence with one
+	// word changed.
 	//
-	// A second wording rather than a parameter of the first, because the two
-	// shells do not build it the same way: one says `stopped`/`running` where
-	// the other says `suspended`/`running`, so there is no shared sentence
-	// with a word in it.
+	// A second wording rather than a parameter of the first, because the presets
+	// do not build it the same way: one says `stopped`/`running` where another
+	// says `suspended`/`running`, so there is no shared sentence with a word in
+	// it.
 	RunningJobsAtExit string
 
 	// StoppedJobsAtExitStatus is what the `exit` that was held back reports.
-	// Zero is what zsh answers, which is also the shape of a dialect that
-	// never holds an exit at all; bash answers 1, a builtin that failed.
+	// Zero is one measured answer, and also the shape of a preset that never
+	// holds an exit at all; 1 — a builtin that failed — is the other.
 	//
-	// One number for both kinds of job, which is measured and not assumed:
-	// `exit` held back by a *running* job reports 1 in bash and 0 in zsh,
-	// exactly as the stopped one does.
+	// One number for both kinds of job, which is measured and not assumed: an
+	// `exit` held back by a *running* job reports the same number the stopped
+	// one does.
 	StoppedJobsAtExitStatus int
 
 	// EmptyRedirectTarget replaces CannotOpen and CannotCreate where the
@@ -1210,17 +1209,17 @@ type Diagnostics struct {
 	// there so the shape matches the other two rather than because it says
 	// anything.
 	//
-	// ksh93 alone, and it is two departures at once: no bracketed reason,
-	// and "open" even where the redirection was creating. Empty leaves the
-	// ordinary wordings standing, which is what the other three want.
+	// Two departures at once where a preset has it: no bracketed reason, and
+	// "open" even where the redirection was creating. Empty leaves the ordinary
+	// wordings standing.
 	EmptyRedirectTarget string
 
 	// AmbiguousRedirect is a redirection whose target did not expand to
-	// exactly one word. One verb: the target *as it was written*, which is
-	// what bash names — `$e`, not what `$e` came to.
+	// exactly one word. One verb: the target *as it was written* — `$e`, not
+	// what `$e` came to.
 	//
-	// Only the dialect that expands a target as an ordinary word has one,
-	// because only there can the result be a number of words other than one.
+	// Only a preset that expands a target as an ordinary word has one, because
+	// only there can the result be a number of words other than one.
 	AmbiguousRedirect string
 
 	// DuplicationTargetIsNotADescriptor is `>&word` or `<&word` where the
@@ -1228,67 +1227,63 @@ type Diagnostics struct {
 	// number. Two verbs: the target *as it was written*, and what it
 	// expanded to.
 	//
-	// The verbs are two because the shells name two different things. bash
-	// calls it an ambiguous redirect and names the expansion; ksh93 says the
-	// file unit number is bad and names the expansion too; zsh names nobody
-	// at all and says only that a file number was expected, which is why a
-	// wording here may use neither verb.
+	// The verbs are two because the presets name two different things. One calls
+	// it an ambiguous redirect and names the expansion; another says the file
+	// unit number is bad and names the expansion too; a third names nobody at
+	// all and says only that a file number was expected, which is why a wording
+	// here may use neither verb.
 	DuplicationTargetIsNotADescriptor string
 
 	// EmptyDuplicationTarget replaces it where the word expanded to nothing.
-	// The same two verbs, and here the first earns its place: bash writes
+	// The same two verbs, and here the first earns its place: a preset may write
 	// `"": Bad file descriptor` for `<&""`, quotation marks and all, which is
 	// the target as it was written and not the empty string it came to.
 	//
-	// Empty leaves DuplicationTargetIsNotADescriptor standing, which is what
-	// zsh wants — it says the same thing either way — and what the core
-	// wants, which has nothing else to say.
+	// Empty leaves DuplicationTargetIsNotADescriptor standing, which is what a
+	// preset that says the same thing either way wants, and what the core wants,
+	// which has nothing else to say.
 	EmptyDuplicationTarget string
 
 	// ExportNotAFunction is `export -f` given a name that is not one. One
 	// verb: the name.
 	ExportNotAFunction string
 
-	// ExportFunctionOptionRefused is `export -f` in a dialect that knows the
+	// ExportFunctionOptionRefused is `export -f` under a preset that knows the
 	// letter and will not carry a function. No verbs.
 	//
-	// One shell needs it, and needing it is the measurement: it answers
-	// `export -q` with `bad option: -q` and `export -f` with `invalid
-	// option(s)`, naming the letter in one and not the other. `-f` is not
-	// unknown to it — it means functions to that shell's `typeset` — so what
-	// it refuses is the combination rather than the letter, and it says so
-	// differently. Empty leaves `-f` to the ordinary unknown-option path,
-	// which is what the other two want.
+	// A preset needs it where it answers `export -q` with `bad option: -q` and
+	// `export -f` with `invalid option(s)`, naming the letter in one and not the
+	// other. `-f` is not unknown to it — it means functions to its declaration
+	// builtin — so what it refuses is the combination rather than the letter,
+	// and it says so differently. Empty leaves `-f` to the ordinary
+	// unknown-option path.
 	ExportFunctionOptionRefused string
 
 	// ReturnOutsideAFunction is a `return` with nothing to return from —
 	// neither a function nor a sourced file. No verbs.
 	//
-	// Only one shell in the panel says anything at all: the other three obey
-	// it and end the script, so there is nothing for them to word.
+	// Only a preset that refuses it says anything at all: one that obeys it ends
+	// the script, so there is nothing to word.
 	ReturnOutsideAFunction string
 
 	// LoopControlOutsideALoop is a `break` or a `continue` with no loop
 	// around it. One verb: the builtin's own name.
 	//
-	// The panel divides three ways and the wording carries only the first
-	// two. dash and bash called as `sh` say nothing at all, so their answer
-	// is the empty string; bash names the three loops POSIX has, and zsh
-	// names the four it has. Whether the misuse also stops the script is a
-	// separate question — see Semantics.LoopControlOutsideALoopIsFatal —
-	// because bash says this and carries on.
+	// The answers divide three ways and the wording carries only two of them.
+	// Saying nothing at all is the empty string; the rest name the loops they
+	// have. Whether the misuse also stops the script is a separate question —
+	// see Semantics.LoopControlOutsideALoopIsFatal — because a preset may say
+	// this and carry on.
 	//
-	// Measured 2026-09-10 with `echo t; break; echo after`:
+	// Measured with `echo t; break; echo after`:
 	//
-	//	dash        nothing, `after` runs, status 0
-	//	bash 5.3    break: only meaningful in a `for', `while', or `until' loop
-	//	bash-as-sh  nothing, `after` runs, status 0
-	//	bash 3.2    the same as bash 5.3, at its own line number
-	//	zsh         break: not in while, until, select, or repeat loop
+	//	nothing, `after` runs, status 0
+	//	break: only meaningful in a `for', `while', or `until' loop
+	//	break: not in while, until, select, or repeat loop
 	//
-	// The name is written into the message here and stripped again by the
-	// dialect that puts a builtin's name in the location instead, which is
-	// how `zsh:break:1: not in while, …` comes out without saying `break`
+	// The name is written into the message here and stripped again by a preset
+	// that puts a builtin's name in the location instead, which is how
+	// `<shell>:break:1: not in while, …` comes out without saying `break`
 	// twice.
 	LoopControlOutsideALoop string
 
@@ -1297,47 +1292,47 @@ type Diagnostics struct {
 	UnsetBadFunctionName string
 
 	// UnsetFunctionNotFound is what `unset -f` says about a name no function
-	// has. One verb: the name. zsh words it about its table rather than
-	// about the function, and puts the builtin in the location as it does
-	// with every message.
+	// has. One verb: the name. A preset may word it about its table rather than
+	// about the function, and put the builtin in the location as it does with
+	// every message.
 	UnsetFunctionNotFound string
 
 	// BadArraySubscript is what an assignment says about a subscript that
 	// lands before the array's first element. Two verbs: the name, and the
-	// subscript *as written* — bash names `a[x-2]`, not the `-1` it evaluated
-	// to, where ksh93 and zsh name the array alone.
+	// subscript *as written* — a preset may name `a[x-2]` rather than the `-1`
+	// it evaluated to, where another names the array alone.
 	BadArraySubscript string
 
 	// EmptyAssociativeKeyRead is what a *read* of a keyed table says when the
-	// key came out empty. One verb: the name, without the subscript — bash
-	// writes `m: bad array subscript` here, where the same column's *store*
-	// names the subscript as written and this one does not.
+	// key came out empty. One verb: the name, without the subscript —
+	// `m: bad array subscript`, where the same preset's *store* names the
+	// subscript as written and this one does not.
 	//
-	// Only a dialect answering Semantics.EmptyAssociativeKeyIsReportedWhenRead
+	// Only a preset answering Semantics.EmptyAssociativeKeyIsReportedWhenRead
 	// has anything to put here.
 	EmptyAssociativeKeyRead string
 
 	// BadArrayLiteralSubscript is the same refusal reached through an array
-	// literal, `a=([0]=p)`, which two of the three word differently from the
-	// plain form. Three verbs: the name, the subscript as written, and the
-	// value — bash names the element as it stands in the parentheses,
-	// `[-1]=p`, and zsh names the subscript alone. Empty falls back to
-	// BadArraySubscript, which is the honest answer for a dialect that has
-	// not been measured to word the two apart.
+	// literal, `a=([0]=p)`, which most presets word differently from the plain
+	// form. Three verbs: the name, the subscript as written, and the value — one
+	// names the element as it stands in the parentheses, `[-1]=p`, and another
+	// names the subscript alone. Empty falls back to BadArraySubscript, which is
+	// the honest answer for a preset that has not been measured to word the two
+	// apart.
 	BadArrayLiteralSubscript string
 
-	// ArrayLiteralThroughASubscript is what the refusing shell says about
+	// ArrayLiteralThroughASubscript is what a refusing preset says about
 	// `a[i]=(p q)`. Two verbs: the name, and the subscript *as written* —
-	// `a[$i]`, not the 1 it evaluated to, which is measured rather than
-	// assumed: bash quotes the text back in both builds. One sentence covers
-	// every target, an array, a scalar, a declared table and an unset name
-	// alike, because what it objects to is the list and not the name.
+	// `a[$i]`, not the 1 it evaluated to, which is measured rather than assumed.
+	// One sentence covers every target, an array, a scalar, a declared table and
+	// an unset name alike, because what it objects to is the list and not the
+	// name.
 	//
-	// Only a dialect answering SubscriptedArrayLiteralRefused has anything to
-	// put here.
+	// Only a preset answering SubscriptedArrayLiteralRefused has anything to put
+	// here.
 	ArrayLiteralThroughASubscript string
 
-	// ArrayValueToNonArray is what the splicing shell says when the name a
+	// ArrayValueToNonArray is what a splicing preset says when the name a
 	// subscripted literal writes through holds a plain string. One verb: the
 	// name, without the subscript. An *unset* name is not this — it becomes
 	// an array — so what it reports is a name already holding something that

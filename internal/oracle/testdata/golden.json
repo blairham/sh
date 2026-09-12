@@ -121777,6 +121777,13 @@
       }
     },
     "pat/what-a-refused-leading-group-does-not-reach": {
+      "ash": {
+        "Stdout": "[aXb]~[aXb]~[aXb]~[(a)]~[(a)]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "[aXb]~[aXb]~[aXb]~[(a)]~[(a)]",
         "Stderr": "",

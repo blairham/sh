@@ -1528,6 +1528,10 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			return 1
 		}
 	}
+	if code, answered := r.namesUnderAPlus(args,
+		func(d declaration) bool { return d.exported }); answered {
+		return code
+	}
 	args, opts, code := r.builtinOptions("export", args, letters)
 	if code != 0 {
 		return code
@@ -3702,6 +3706,36 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 // bareOrDashP picks the listing shape for `export` and `readonly`: the one
 // `-p` writes when `-p` was written, and BareDeclarationListing when nothing
 // was. Two shells answer the two differently — see that field.
+// namesUnderAPlus answers `export +` and `readonly +`: a lone plus sign as
+// the whole of the line, which is the builtin's own listing with the values
+// left off.
+//
+// The sign is `typeset`'s reading arriving under a second word — see
+// Semantics.SignAloneIsAnOptionWordToExport, and the field for why those two
+// builtins ask a question of their own rather than `typeset`'s. The filter is
+// the caller's, so `export +` writes the exported names and `readonly +` the
+// frozen ones.
+//
+// Only the sign on its own, with nothing else on the line. `export + q` is a
+// silent 0 in the one shell that takes the sign at all — it neither lists the
+// name nor takes the attribute off it — and that is a corner deliberately not
+// followed: an operand here keeps the refusal every other column gives it.
+// Measured 2026-09-12 on zsh 5.9.2.
+//
+// The bool is whether this was that shape, so a caller can go on with the
+// line it really has.
+func (r *Runner) namesUnderAPlus(args []string, keep func(declaration) bool) (int, bool) {
+	if len(args) != 1 || args[0] != "+" {
+		return 0, false
+	}
+	if !r.ask(r.sem().SignAloneIsAnOptionWordToExport, "a bare `+` given to `export` or `readonly`") {
+		// A name, and one no script may declare — which is the refusal the
+		// operand path already gives it.
+		return r.status, r.unspecified
+	}
+	return r.declarationFilteredNameListing(r.declarableNames(), keep), true
+}
+
 func (r *Runner) bareOrDashP(opts string, dashP DeclarationListingForm) DeclarationListingForm {
 	if strings.ContainsRune(opts, 'p') {
 		return dashP
@@ -3723,6 +3757,10 @@ func (r *Runner) readonlyRecordsTheCompound() bool {
 
 // biReadonly marks variables immutable.
 func biReadonly(r *Runner, _ context.Context, args []string) int {
+	if code, answered := r.namesUnderAPlus(args,
+		func(d declaration) bool { return d.readonly }); answered {
+		return code
+	}
 	args, opts, code := r.builtinOptions("readonly", args, "paAf")
 	if code != 0 {
 		return code

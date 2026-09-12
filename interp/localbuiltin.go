@@ -278,6 +278,30 @@ func (r *Runner) innermostLocalNames() map[string]bool {
 	return names
 }
 
+// localInTheInnermostScope reports whether the running function shadowed this
+// name itself — the same question innermostLocalNames answers for a whole
+// listing, asked of one name so that a walk over every declarable name does
+// not rebuild the set once per row.
+//
+// Deliberately the innermost scope alone: a name a *calling* function made
+// local is not this one's, and a declaration written here would shadow it
+// rather than reach it. See declaration.localHere, whose listing turns on
+// exactly this.
+func (r *Runner) localInTheInnermostScope(name string) bool {
+	if len(r.scopes) == 0 {
+		return false
+	}
+	sc := r.scopes[len(r.scopes)-1]
+	if _, ok := sc.saved[name]; ok {
+		return true
+	}
+	if _, ok := sc.savedArrays[name]; ok {
+		return true
+	}
+	_, ok := sc.savedAssoc[name]
+	return ok
+}
+
 // bareLocalListing answers `local` with no operands, inside a function.
 func (r *Runner) bareLocalListing() int {
 	switch r.sem().BareLocalListing {

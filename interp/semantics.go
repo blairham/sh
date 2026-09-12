@@ -3222,6 +3222,30 @@ type Semantics struct {
 	// meets the shape is never asked for an answer.
 	SignAloneIsAnOptionWord Answer
 
+	// SignAloneIsAnOptionWordToExport is the same reading asked of `export`
+	// and `readonly`, which have an option parse of their own.
+	//
+	// A second field rather than the one above because the two questions
+	// have different answers in the same shell. Measured 2026-09-12 with
+	// `env -i` and no startup files: ksh93u+ lists for `typeset +` and
+	// answers `export: +: is not an identifier` at 1 for `export +`, and
+	// `readonly: +: invalid variable name` for `readonly +` — so a dialect
+	// reading one field for both would have to be wrong about one of them.
+	// zsh 5.9.2 takes the sign in all three; bash 5.3, bash 3.2 and dash
+	// refuse it as a name in all three.
+	//
+	// The listing it reaches is the *builtin's own* attribute, names only:
+	// `export +` writes the exported names and `readonly +` the frozen ones,
+	// which is `typeset +x` and `typeset +r` under a second word. The minus
+	// spelling needs no field — a lone `-` is already LoneDashIsAnOption's
+	// question, and once it is eaten `export -` is the bare listing, which
+	// is what zsh writes for it (#1756).
+	//
+	// One field for the two builtins because no column separates them: each
+	// shell answers `export +` and `readonly +` the same way. Asked only
+	// where a script really wrote the sign.
+	SignAloneIsAnOptionWordToExport Answer
+
 	// FunctionNamesUnderPlus reads the *plus* spelling of the function
 	// letter as a request for the names alone — `typeset +f` against
 	// `typeset -f`.

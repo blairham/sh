@@ -9002,6 +9002,50 @@
         "TimedOut": false
       }
     },
+    "array/a-range-end-that-will-not-evaluate-is-reported": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: b c,2: arithmetic syntax error in expression (error token is \"c,2\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: b c,2: arithmetic syntax error in expression (error token is \"c,2\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: b c,2: syntax error in expression (error token is \"c,2\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: b c,2: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operator expected at `c'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/a-range-starting-outside-the-array-names-one-empty-element": {
       "bash": {
         "Stdout": "",
@@ -9524,6 +9568,50 @@
       },
       "zsh": {
         "Stdout": "[beta][][beta]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/a-subscript-flag-group-in-each-end-of-a-range": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: (r)l,(r)o: arithmetic syntax error in expression (error token is \"l,(r)o\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: (r)l,(r)o: arithmetic syntax error in expression (error token is \"l,(r)o\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: (r)l,(r)o: syntax error in expression (error token is \"l,(r)o\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: (r)l,(r)o: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[llo][llo][world][][hello world][]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -11862,6 +11950,50 @@
         "TimedOut": false
       }
     },
+    "array/an-index-flag-in-the-first-end-of-a-range": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1,(i)r: arithmetic syntax error in expression (error token is \"r\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1,(i)r: arithmetic syntax error in expression (error token is \"r\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1,(i)r: syntax error in expression (error token is \"r\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1,(i)r: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[p q r][q r][p q r][q]",
+        "Stderr": "\u003cshell\u003e:1: invalid subscript",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/an-operator-over-a-range-joins-in-quotes-and-distributes-outside": {
       "bash": {
         "Stdout": "[][a b c][a][b][c][n=0][]",
@@ -13528,6 +13660,50 @@
       },
       "zsh": {
         "Stdout": "[] n=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/the-key-flag-on-an-ordinary-array-is-the-index": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(k)x[2]}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(k)x[2]}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: ${(k)x[2]}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `x[2]}\"\"' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[2][2][3][-5][9][2][0][2][p][q][r][e]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

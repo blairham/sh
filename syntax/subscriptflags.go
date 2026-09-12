@@ -136,6 +136,76 @@ func scanSubscriptFlags(text string) (g *SubscriptFlags, rest string, ok bool) {
 	return nil, text, false
 }
 
+// SubscriptEnd is one end of a subscript written as a pair: the flag group
+// that end opened with, and the text behind it.
+type SubscriptEnd struct {
+	// Flags is the group this end opened with, nil where it opened with
+	// none.
+	Flags *SubscriptFlags
+	// Text is the end behind that group, and the whole of the end where
+	// there was no group — the same word as Flags.Arg when Flags is set, so
+	// a reading needs only this one.
+	Text *Word
+}
+
+// SubscriptRange is a subscript written as a pair where at least one end
+// opens with a flag group of its own: `${s[(r)l,(r)o]}` searches twice, and
+// `${s[3,(r)o]}` searches once.
+//
+// It exists because the two ends are not one operand. scanSubscriptFlags
+// takes the group off the front and hands everything after it on, so the
+// second group ended up inside the first one's operand and the search looked
+// for a literal comma and a parenthesis — a miss, and an empty answer that
+// reads as "nothing matched" (#1533).
+//
+// **Where the comma is decides this, and the comma has to be written.**
+// Measured on zsh 5.9.2: `i="1,2"; ${a[$i]}` is the *first* element there and
+// not the range `1,2`, so a comma that arrives through a substitution never
+// separates a pair, and a comma written inside an operand always does —
+// `a=(p q,r s); ${a[(r)q,r]}` is empty, the search for `q` and the arithmetic
+// `r` read as two ends, rather than the element whose value holds the comma.
+// So the split is the parser's and not the run's.
+//
+// Only where the grammar has flag groups at all, and only where one of the
+// ends carries one: a pair of plain arithmetic ends has always been read from
+// the subscript's text and reads identically, and leaving it there keeps this
+// additive.
+type SubscriptRange struct {
+	// Lo and Hi are the two ends, in written order.
+	Lo, Hi SubscriptEnd
+}
+
+// SubscriptComma reports where the first comma outside any nesting in a
+// subscript's text is, and whether another follows it.
+//
+// Nested parentheses and brackets hold their own commas, so `f(1,2),3` has
+// two halves and not three, and a flag group's own `(rn:1,2:)` argument holds
+// none at all. Exported because the split is asked in two places — here,
+// where a written pair with a flag group in it becomes two ends, and at the
+// run, where a pair of plain ends is separated out of the subscript's
+// expanded text — and two copies of it would be two answers to one question.
+func SubscriptComma(text string) (at int, extra bool) {
+	depth := 0
+	at = -1
+	for i := range len(text) {
+		switch text[i] {
+		case '(', '[':
+			depth++
+		case ')', ']':
+			depth--
+		case ',':
+			if depth != 0 {
+				continue
+			}
+			if at >= 0 {
+				return at, true
+			}
+			at = i
+		}
+	}
+	return at, false
+}
+
 // LeadingIndex is one subscript of a chain: everything ParamExpr.Index and
 // ParamExpr.IndexFlags hold for the last one, for one of the ones before it.
 //
@@ -147,4 +217,37 @@ type LeadingIndex struct {
 	Index *Word
 	// Flags is the group it opened with, nil when there was none.
 	Flags *SubscriptFlags
+}
+
+// subscriptRange reads a subscript written as a pair whose ends each carry a
+// flag group of their own, and reports whether it is one.
+//
+// Two conditions, and both keep the reading additive. A *third* top-level
+// comma is no pair at all — the shell with the construct calls `[1,2,3]` a
+// bad substitution — and a pair whose ends are both plain arithmetic is left
+// to the reading that already separates it out of the subscript's expanded
+// text, so nothing that parses today parses differently.
+func (p *Parser) subscriptRange(inner string, start Pos) (*SubscriptRange, bool) {
+	at, extra := SubscriptComma(inner)
+	if at < 0 || extra {
+		return nil, false
+	}
+	lo := p.subscriptEnd(inner[:at], start)
+	hi := p.subscriptEnd(inner[at+1:], start)
+	if lo.Flags == nil && hi.Flags == nil {
+		return nil, false
+	}
+	return &SubscriptRange{Lo: lo, Hi: hi}, true
+}
+
+// subscriptEnd reads one end of such a pair: the group it opens with, where
+// it opens with one, and the text behind it lexed as a word of its own — so
+// that a substitution in an end is performed exactly as one anywhere else in
+// a subscript is.
+func (p *Parser) subscriptEnd(text string, start Pos) SubscriptEnd {
+	if g, rest, ok := scanSubscriptFlags(text); ok {
+		g.Arg = p.wordFrom(rest, start, Unquoted)
+		return SubscriptEnd{Flags: g, Text: g.Arg}
+	}
+	return SubscriptEnd{Text: p.wordFrom(text, start, Unquoted)}
 }

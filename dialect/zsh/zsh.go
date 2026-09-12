@@ -1797,6 +1797,10 @@ func Diagnostics() interp.Diagnostics {
 		// The same sentence at the parameter site, and its own field because
 		// the two coincide here and do not in bash — see the field.
 		EmptyParamSubscript: "invalid subscript",
+		// The subscript machinery's other complaint with the same words and
+		// a different construct: `${(k)x[1,2]}` and `${a[(i)q,2]}` are each
+		// a reading that needs one index over a subscript that names a span.
+		SubscriptIsAnIndexAndARange: "invalid subscript",
 		// And the sentence for a subscript that expanded to nothing, which
 		// is the arithmetic reader's rather than the subscript machinery's:
 		// measured, `zsh:1: bad math expression: empty string`, where the

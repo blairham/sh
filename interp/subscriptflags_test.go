@@ -807,3 +807,121 @@ func TestTheKeyAndValueLettersReachASubscriptedAssociation(t *testing.T) {
 		})
 	}
 }
+
+// The same letter on an *ordinary* array reads the subscript's **index**
+// rather than the element it selected — a different question from the
+// association's key, with a different source, and left out of the change that
+// answered that one (#1515).
+//
+// Measured on zsh 5.9.2, 2026-09-12. What each row would answer without the
+// reading is the element, which is a plausible word at status 0: a script
+// asking `${(k)x[2]}` for a position was handed `q`.
+func TestTheKeyLetterOnAnOrdinaryArrayIsTheIndex(t *testing.T) {
+	const x = `x=(p q r); `
+	for _, tc := range []struct{ name, src, want string }{
+		{"a numeral is itself", `${(k)x[2]}`, "2"},
+		{"an expression is evaluated", `${(k)x[1+1]}`, "2"},
+		{"a negative counts forward from the end", `${(k)x[-1]}`, "3"},
+		{"and is not clamped when it reaches past the first", `${(k)x[-9]}`, "-5"},
+		{"nor when it reaches past the last", `${(k)x[9]}`, "9"},
+		{"the subscript no element has is itself", `${(k)x[0]}`, "0"},
+		{"a search is where it matched", `${(k)x[(r)q]}`, "2"},
+		{"a reverse search likewise", `${(k)x[(R)q]}`, "2"},
+		{"a missed search is one past the last", `${(k)x[(r)zz]}`, "4"},
+		{"and a missed reverse one is one before the first", `${(k)x[(R)zz]}`, "0"},
+		{"the index letters are unchanged by it", `${(k)x[(i)q]}`, "2"},
+		{"a group that selects nothing leaves the arithmetic", `${(k)x[(e)2]}`, "2"},
+		{"and an unset name in one is zero", `${(k)x[(e)nosuch]}`, "0"},
+		{"an array with no elements still has the index", `${(k)y[2]}`, "2"},
+		{"v beside it puts the element back", `${(kv)x[2]}`, "q"},
+		{"whichever order the two are written in", `${(vk)x[2]}`, "q"},
+		{"and v alone was never this", `${(v)x[2]}`, "q"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runAssoc(t, x+`y=(); printf "[%s]" "`+tc.src+`"`)
+			if want := "[" + tc.want + "]"; out != want || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, want)
+			}
+		})
+	}
+}
+
+// The shapes the index reading does not reach, each measured and each one a
+// reading that would be wrong if it did.
+func TestTheKeyLetterOnAnOrdinaryArrayLeavesTheOtherShapes(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the whole-array subscript is the elements", `x=(p q r); printf "[%s]" ${(k)x[@]}`, "[p][q][r]"},
+		{"and so is the joining spelling", `x=(p q r); printf "[%s]" ${(k)x[*]}`, "[p][q][r]"},
+		{"a scalar's subscript is still a character", `s=hello; printf "[%s]" "${(k)s[2]}"`, "[e]"},
+		{"a name holding nothing is nothing, not an index", `printf "[%s]" "${(k)nosuch[2]}"`, "[]"},
+		{
+			// The positional parameters are a list like any other, and the
+			// row is here because they reach the reading by a different
+			// door than a named array does.
+			"the positional parameters take it too",
+			`set -- a b c; printf "[%s]" "${(k)@[2]}" "${(k)*[2]}"`, "[2][2]",
+		},
+		{
+			// A chain answers nothing coherent in the shell — `a=(pqrs t)`
+			// gives empty for `[1][2]`, 2 for `[2][1]` and 1 for `[1][-1]` —
+			// so it keeps the element reading rather than an invented rule.
+			"a chain keeps the element reading",
+			`a=(pqrs t); printf "[%s]" "${(k)a[1][2]}"`, "[q]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runGrammar(t, tc.src, func(d *syntax.Dialect) {
+				subGrammar(d)
+				d.ParamExpansionFlags = true
+				d.ParamElementSelection = true
+				d.ArrayLiteral = true
+				// The two shapes this file's other runners have no need of:
+				// a subscript written on a special parameter, and a second
+				// one written after the first.
+				d.SpecialParamSubscript = true
+				d.ChainedSubscript = true
+			}, func(r *Runner) {
+				sem := *r.Semantics
+				sem.ArrayBaseIsZero = No
+				sem.GlobExpansionResults = No
+				sem.SplitParamExpansion = No
+				sem.GlobNoMatchIsError = Yes
+				sem.SubscriptIsAQuotingContext = No
+				// A scalar's subscript is a character here, which is the
+				// answer the row asserting that `(k)` leaves a scalar alone
+				// needs in order to be asserting anything.
+				sem.ScalarSubscriptIsACharacter = Yes
+				r.Semantics = &sem
+			})
+			if out != tc.want || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, tc.want)
+			}
+		})
+	}
+}
+
+// A range names a span and the index reading wants the one subscript a
+// subscript named, so the two collide and the shell refuses the whole
+// expansion — the same `invalid subscript` an index-answering flag group at
+// the front of a pair earns.
+func TestTheKeyLetterOverARangeIsRefused(t *testing.T) {
+	out, status := runGrammar(t, `x=(p q r); printf "[%s]" "${(k)x[1,2]}"`, func(d *syntax.Dialect) {
+		subGrammar(d)
+		d.ParamExpansionFlags = true
+		d.ParamElementSelection = true
+		d.ArrayLiteral = true
+	}, func(r *Runner) {
+		sem := *r.Semantics
+		sem.ArrayBaseIsZero = No
+		sem.GlobExpansionResults = No
+		sem.SplitParamExpansion = No
+		sem.SubscriptCommaIsARange = Yes
+		r.Semantics = &sem
+	})
+	if status == 0 {
+		t.Errorf("got %q at status 0, want the range refused", out)
+	}
+	if !strings.Contains(out, "invalid subscript") {
+		t.Errorf("got %q, want it named an invalid subscript", out)
+	}
+}

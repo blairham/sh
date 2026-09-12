@@ -361,6 +361,16 @@ type ParamExpr struct {
 	// what a reading should use.
 	IndexFlags *SubscriptFlags
 
+	// IndexRange is the subscript read as a *pair* whose ends each carry a
+	// flag group of their own, and nil for every other subscript — including
+	// a pair of plain arithmetic ends, which is read from the subscript's
+	// text at the run as it always was. IndexFlags is nil where this is set,
+	// because the group at the front belongs to the pair's first end rather
+	// than to the subscript as a whole.
+	//
+	// Index still keeps the whole subscript as written. See SubscriptRange.
+	IndexRange *SubscriptRange
+
 	// Leading holds the subscripts written *before* Index, in written order,
 	// where the grammar lets several be chained: `${m[k][2]}` carries `k`
 	// here and `2` in Index.
@@ -689,8 +699,15 @@ scan:
 			inner := s[1:i]
 			idx := p.wordFrom(inner, start, Unquoted)
 			var g *SubscriptFlags
+			var rng *SubscriptRange
 			if p.dialect.ArraySubscriptFlags {
-				if group, rest, isGroup := scanSubscriptFlags(inner); isGroup {
+				// The pair is asked about first, because the group at the
+				// front of `(r)l,(r)o` is the *first end's* and reading it
+				// as the whole subscript's is what left the second one
+				// inside its operand.
+				if pair, isPair := p.subscriptRange(inner, start); isPair {
+					rng = pair
+				} else if group, rest, isGroup := scanSubscriptFlags(inner); isGroup {
 					// The operand is lexed as a word of its own, so a
 					// substitution inside it is performed exactly as one in
 					// the subscript would be: `${path[(re)${ZPFX}/bin]}` is
@@ -705,7 +722,7 @@ scan:
 				// goes.
 				e.Leading = append(e.Leading, LeadingIndex{Index: e.Index, Flags: e.IndexFlags})
 			}
-			e.Index, e.IndexFlags = idx, g
+			e.Index, e.IndexFlags, e.IndexRange = idx, g, rng
 			if bare {
 				// The same brackets read the other way: as the text they
 				// would be if nothing here had taken them for a subscript.

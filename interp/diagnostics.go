@@ -2663,6 +2663,20 @@ type Diagnostics struct {
 	// fact about each dialect, and one field for both would tie a change on
 	// either to the other. See Semantics.EmptyParamSubscriptIsAnError.
 	EmptyParamSubscript string
+	// SubscriptIsAnIndexAndARange is what a subscript says when one reading
+	// of it needs the single index it named and another makes it a span. No
+	// verbs: the one shell that has both constructs names neither the array
+	// nor the subscript.
+	//
+	// Two shapes reach it, and both are that collision. `${(k)x[1,2]}` asks
+	// for the index a subscript named and is handed a pair; `${a[(i)q,2]}`
+	// opens a pair with a group whose letter answers an index. Measured on
+	// zsh 5.9.2, both are `invalid subscript` at status 1 — the same
+	// sentence `${a[]}` gives there and a different construct, which is why
+	// this is its own field rather than a second use of EmptyParamSubscript.
+	// A dialect that had one of the two constructs and worded it otherwise
+	// would need them apart.
+	SubscriptIsAnIndexAndARange string
 	// ArithEmptySubscript is the complaint about a subscript written with
 	// nothing between the brackets where an expression reads it: `$(( a[] ))`,
 	// which is what `$(( a[$w] ))` is once an empty `$w` has gone in. One

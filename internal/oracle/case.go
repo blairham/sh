@@ -17686,6 +17686,26 @@ echo "st=$?"`,
 		Why:     "the three ways zsh's print outruns its own echo and ksh93's print alike: a bare octal escape with no leading zero, an escape nobody knows losing its backslash rather than keeping it, and `\\1` as one byte. ksh93 prints all three as written",
 	},
 	{
+		ID: "print/a-meta-prefix-with-nothing-after-it", Category: "builtins",
+		Snippet: `print 'X\M-' 'X\C-' 'X\M' 'X\M-\M-' | od -An -c | tr -s " "`,
+		Why:     "a `\\M-` or `\\C-` the text ended before produces no byte at all: zsh writes the `X` alone in all four, where a decoder that wrote the prefix back when it found no target answers `X\\M-` and looks right on every operand that has one. The doubled prefix is the row that says it is the whole chain that goes and not the last letter of it. ksh93's print has neither escape and writes the characters as written",
+	},
+	{
+		ID: "print/a-meta-prefix-takes-the-next-escape", Category: "builtins",
+		Snippet: `print 'X\M-\xffY' 'X\C-\x41Y' 'X\M-\tY' 'X\M-\qY' 'X\C-\M-?Y' | od -An -c | tr -s " "`,
+		Why:     "what a `\\M-` or `\\C-` applies to is *any* escape the reading has and not one raw byte: zsh answers 0xff, 0x01, 0x89 and 0xf1, where a decoder that took a byte takes the backslash itself and leaves `xff` as text — 0xdc followed by three characters, which is a plausible-looking four bytes rather than one. The last operand is the composition: the mask keeps the high bit it finds, so `\\C-\\M-?` is 0x9f rather than the 0xff a delete-then-metafy reading gives",
+	},
+	{
+		ID: "print/a-code-point-escape-is-not-a-meta-target", Category: "builtins",
+		Snippet: `print 'X\M-\u0041\tZ' 'X\M-\u0041' | od -An -c | tr -s " "`,
+		Why:     "the one escape a `\\M-` does not spend itself on. `\\u0041` is text rather than a byte, so zsh writes the `A` unchanged and the meta bit goes on to the *next* byte — 0x89 for the tab that follows — and is dropped where nothing follows. A decoder that treats every escape alike metafies the `A` to 0xc1 and answers the second operand plausibly",
+	},
+	{
+		ID: "param/the-escape-flag-reads-the-meta-prefixes-too", Category: "parameter expansion",
+		Snippet: `v='X\M-'; w='X\M-\xffY'; printf "[%s][%s]" "${(g:e:)v}" "${(g:e:)w}"; echo`,
+		Why:     "the same two edges reached through the `(g:e:)` flag rather than through `print`, which is what says the decoder is one and not two: zsh answers `X` and `X` 0xff `Y`. A second copy of the escape set behind the flag would have to be fixed twice and is the shape this tree has been bitten by before",
+	},
+	{
 		ID: "print/capital-r-changes-the-option-parser", Category: "builtins",
 		Snippet: `print -Rl a b; print -R -l c d`,
 		Why:     "`-R` is raw in both shells and stops reading options in neither the same way: zsh reads the rest of the bundle as its own letters, so `-Rl` still lists one per line, while a later `-l` word is an operand. ksh93 reads no more letters at all and prints `a b`",

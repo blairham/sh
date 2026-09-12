@@ -2598,327 +2598,243 @@ type Semantics struct {
 	// about the attribute.
 	ReadonlyAttributeCanBeRemoved Answer
 
-	// DeclaredNameWithoutValueIsEmpty gives a name a value when it is
-	// declared without one: `local u` or `typeset u`. zsh alone says yes, so
-	// `${u-UNSET}` is empty there and UNSET in bash and ksh93 — the name
-	// exists in all three, but only zsh considers it set.
+	// DeclaredNameWithoutValueIsEmpty gives a name a value when it is declared
+	// without one: `local u` or `typeset u`. Under Yes `${u-UNSET}` is empty and
+	// under No it is UNSET — the name exists either way, and only Yes considers
+	// it set.
 	DeclaredNameWithoutValueIsEmpty Answer
-	// ExportLetterDeclaresAGlobal makes the `x` letter on a declaration ask
-	// for `-g` as well, so `typeset -x v=1` written inside a function
-	// declares no local and the name outlives the call.
-	//
-	// Measured 2026-09-10, `-f` / `--norc --noprofile`:
+	// ExportLetterDeclaresAGlobal makes the `x` letter on a declaration ask for
+	// `-g` as well, so `typeset -x v=1` written inside a function declares no
+	// local and the name outlives the call:
 	//
 	//	f(){ typeset -x lxx=1; }; f; echo "[$lxx]"
 	//
-	//	zsh 5.9.2    [1]   the name is global and exported
-	//	bash 5.3.15  []    an ordinary local
+	// is `[1]` under Yes and `[]` under No.
 	//
-	// `local -x` is the control and both shells agree on it — `[]` — so the
-	// question is about the letter under the *other* words and not about
-	// `-x` in general. The same holds for `declare`, and for the words that
-	// carry an attribute in their own name: `readonly -x`, `integer -x` and
-	// `float -x` all reach past the function in the shell that answers yes.
+	// `local -x` is the control and both answers agree on it — `[]` — so the
+	// question is about the letter under the *other* words and not about `-x` in
+	// general. The same holds for `declare`, and for the words that carry an
+	// attribute in their own name: `readonly -x`, `integer -x` and `float -x`
+	// all reach past the function under Yes.
 	//
-	// The exemption is measured too: a name this scope has *already* made
-	// local stays local, so `f(){ local m=1; typeset -x m; }` leaves the
-	// caller's m alone. So the letter decides where a declaration lands
-	// rather than what it does to a name that is already here.
+	// The exemption is measured too: a name this scope has *already* made local
+	// stays local, so `f(){ local m=1; typeset -x m; }` leaves the caller's m
+	// alone. So the letter decides where a declaration lands rather than what it
+	// does to a name that is already here.
 	//
-	// Asked only inside a function, only under a word that is not `local`,
-	// and only where the name is not already local — outside that shape the
-	// two answers do the same thing.
+	// Asked only inside a function, only under a word that is not `local`, and
+	// only where the name is not already local — outside that shape the two
+	// answers do the same thing.
 	//
-	// Silent: a script that exports a working name inside a function leaves
-	// it behind in one shell and not in the other, and nothing is said
-	// either way.
+	// Silent: a script that exports a working name inside a function leaves it
+	// behind under one answer and not the other, and nothing is said either way.
 	ExportLetterDeclaresAGlobal Answer
 	// ValuelessDeclarationOfAHeldNameListsIt writes the name back when a
 	// declaration names it, assigns nothing, and carries no letters at all —
-	// provided the name already holds something in the cell being declared.
-	//
-	// Measured 2026-09-10, `-f` / `--norc --noprofile`:
+	// provided the name already holds something in the cell being declared:
 	//
 	//	a=(x y); typeset a; s=str; typeset s; unset u; typeset u; echo done
 	//
-	//	zsh 5.9.2    a=( x y ) · s=str · done
-	//	bash 5.3.15  done
+	// is `a=( x y )`, `s=str`, `done` under Yes and `done` alone under No.
 	//
-	// Three facts in the one line, and each is a limit on the rule rather
-	// than a special case. A name holding **nothing** prints nothing, which
-	// is why this is not "a declaration with one operand lists". The value
-	// is unchanged either way, so the listing is all that happens. And the
-	// spelling is the bare assignment — `a=( x y )`, not `typeset -a a=…` —
-	// which is BareDeclarationListing's row and not `-p`'s.
+	// Three facts in the one line, and each is a limit on the rule rather than a
+	// special case. A name holding **nothing** prints nothing, which is why this
+	// is not "a declaration with one operand lists". The value is unchanged
+	// either way, so the listing is all that happens. And the spelling is the
+	// bare assignment — `a=( x y )`, not `typeset -a a=…` — which is
+	// BareDeclarationListing's row and not `-p`'s.
 	//
 	// A **letter** suppresses it: `n=5; typeset -i n` and `typeset -g s` are
-	// both silent in the shell that lists, which is what makes the rule "no
-	// options at all" and also why `readonly`, `export`, `integer` and
-	// `float` never do it — each of those words is an attribute already.
-	// `local` does, on a name its own scope has already declared:
-	// `f(){ local s=1; local s; }` writes `s=1` there.
+	// both silent under Yes, which is what makes the rule "no options at all"
+	// and also why `readonly`, `export`, `integer` and `float` never do it —
+	// each of those words is an attribute already. `local` does, on a name its
+	// own scope has already declared: `f(){ local s=1; local s; }` writes `s=1`.
 	//
-	// Inside a function a declaration that takes a *fresh* cell finds
-	// nothing standing in it, so nothing is listed — which is the answer
-	// that keeps a shell from narrating every `local` in every function.
+	// Inside a function a declaration that takes a *fresh* cell finds nothing
+	// standing in it, so nothing is listed — which is the answer that keeps a
+	// shell from narrating every `local` in every function.
 	//
-	// We are the quiet one where this is answered wrongly, so a script whose
-	// output matches today diverges the moment it is run under the shell
-	// that speaks.
+	// The quiet answer is the one to get wrong carefully: a script whose output
+	// matches under No diverges the moment it is run under Yes.
 	ValuelessDeclarationOfAHeldNameListsIt Answer
-	// ScalarOverACompoundIsAnInconsistentType refuses a declaration that
-	// assigns a plain word to a name whose cell is really holding an array
-	// or a keyed table, and ends the script over it.
-	//
-	// Measured 2026-09-10, `-f` / `--norc --noprofile`:
+	// ScalarOverACompoundIsAnInconsistentType refuses a declaration that assigns
+	// a plain word to a name whose cell is really holding an array or a keyed
+	// table, and ends the script over it:
 	//
 	//	b=(x y); typeset b=q; echo "st=$? [${b[*]}]"; echo tail
 	//
-	//	zsh 5.9.2    typeset: b: inconsistent type for assignment, status 1,
-	//	             and the script ends
-	//	bash 5.3.15  st=0 [q] · tail
+	// Yes is `typeset: b: inconsistent type for assignment` at status 1 and the
+	// script ends; No is `st=0 [q]` and `tail`.
 	//
-	// It is the **declaration** that refuses and not the store: `b=(x y);
-	// b=q` is taken in both shells and leaves a scalar, which is
-	// ScalarAssignedOverACompoundReplacesTheName's question and a different
-	// one. Nor is it the fresh cell — `f(){ local b=q; }` over a caller's
-	// array is taken in the shell that refuses, because the cell that
-	// declaration writes is new and holds nothing. What is refused is a
-	// declaration reaching a cell that is *really* compound, which is what
-	// the top level and `-g` have in common.
+	// It is the **declaration** that refuses and not the store: `b=(x y); b=q`
+	// is taken under both answers and leaves a scalar, which is
+	// ScalarAssignedOverACompoundReplacesTheName's question and a different one.
+	// Nor is it the fresh cell — `f(){ local b=q; }` over a caller's array is
+	// taken under Yes, because the cell that declaration writes is new and holds
+	// nothing. What is refused is a declaration reaching a cell that is *really*
+	// compound, which is what the top level and `-g` have in common.
 	//
-	// The refusal has a direction, and that asymmetry is the measurement
-	// that pins it: the mirror image is **taken**. `b=1; typeset -a b` is a
-	// silent empty array in the same shell, so a name is not simply frozen
-	// in its kind.
+	// The refusal has a direction, and that asymmetry is the measurement that
+	// pins it: the mirror image is **taken**. `b=1; typeset -a b` is a silent
+	// empty array under Yes too, so a name is not simply frozen in its kind.
 	//
-	// `readonly b=q` and `export b=q` refuse it in the same words with their
-	// own name in the sentence, so the rule belongs to the declaration
-	// utilities rather than to one word.
+	// `readonly b=q` and `export b=q` refuse it in the same words with their own
+	// name in the sentence, so the rule belongs to the declaration utilities
+	// rather than to one word.
 	//
 	// Silent where it is answered wrongly, and worse than a wrong value: the
-	// script that should have stopped carries on, so everything downstream
-	// of the line runs here and never runs there.
+	// script that should have stopped carries on, so everything downstream of
+	// the line runs under one answer and never runs under the other.
 	ScalarOverACompoundIsAnInconsistentType Answer
-	// ReadonlyRecordsTheCompoundAttribute makes `readonly -a` and
-	// `readonly -A` declare an array and a table the way `typeset -a` and
-	// `typeset -A` do, rather than freezing a name and saying nothing about
-	// its kind.
-	//
-	// Measured 2026-09-10:
+	// ReadonlyRecordsTheCompoundAttribute makes `readonly -a` and `readonly -A`
+	// declare an array and a table the way `typeset -a` and `typeset -A` do,
+	// rather than freezing a name and saying nothing about its kind:
 	//
 	//	f() { readonly -a a; typeset -p a; }; f
 	//
-	//	zsh 5.9.2    typeset -ar a=(  )
-	//	bash 5.3.15  declare -r a
+	// is `typeset -ar a=(  )` under Yes and `declare -r a` under No.
 	//
-	// The keyed half moves with it — `typeset -Ar m=( )` against
-	// `declare -r m` — so it is one question and not two. ksh93 has no such
-	// letter on the word at all and refuses the option, so the panel that
-	// answers this is two shells and they disagree.
+	// The keyed half moves with it, so it is one question and not two. An
+	// implementation with no such letter on the word refuses the option and
+	// cannot ask the question at all.
 	//
-	// Only the listing observes it in the shell that says no: a frozen name
-	// cannot then be assigned an array to tell the two apart.
+	// Only the listing observes it under No: a frozen name cannot then be
+	// assigned an array to tell the two apart.
 	ReadonlyRecordsTheCompoundAttribute Answer
-	// TypeLetterAndAnArrayLiteralIsAnInconsistentType refuses a declaration
-	// that names a *type* — the integer or the float letter — and assigns an
-	// array literal to the same name, and ends the script over it.
-	//
-	// Measured 2026-09-12, from a script file with `env -i` and a scratch
-	// HOME:
+	// TypeLetterAndAnArrayLiteralIsAnInconsistentType refuses a declaration that
+	// names a *type* — the integer or the float letter — and assigns an array
+	// literal to the same name, and ends the script over it:
 	//
 	//	typeset -ia z=(1 2); echo "st=$?"; typeset -p z; echo tail
 	//
-	//	zsh 5.9.2    typeset: z: inconsistent type for assignment, status 1,
-	//	             and the script ends
-	//	bash 5.3.15  st=0 · declare -ai z=([0]="1" [1]="2") · tail
-	//	ksh93u+      st=0 · typeset -a -i z=(1 2) · tail
+	// Yes is `typeset: z: inconsistent type for assignment` at status 1 and the
+	// script ends; No takes it and lists the array.
 	//
-	// The array letter is not what triggers it, which is the measurement
-	// that says this is about the *type* and not about a pairing: `typeset
-	// -i z=(1 2)` with no `-a` is the same refusal, `typeset -F 3 z=(1 2)`
-	// and `typeset -E 3 z=(1 2)` are too, and `typeset -ua q=(ab cd)` is
-	// taken and lists as `typeset -au q=( ab cd )`. The case letters name
-	// what happens *to* a value and the numeric ones name what the value
-	// *is*, so only the second kind is two things at once with an array.
-	// The width letters side with the case ones — `typeset -Z 4 z=(1 2)`
-	// lists as `typeset -aZ4 z=( 1 2 )` and `typeset -L 4 z=(ab cd)` as
-	// `typeset -aL4 z=( ab cd )`.
+	// The array letter is not what triggers it, which is the measurement that
+	// says this is about the *type* and not about a pairing: `typeset -i z=(1
+	// 2)` with no `-a` is the same refusal, `typeset -F 3 z=(1 2)` and
+	// `typeset -E 3 z=(1 2)` are too, and `typeset -ua q=(ab cd)` is taken. The
+	// case letters name what happens *to* a value and the numeric ones name what
+	// the value *is*, so only the second kind is two things at once with an
+	// array. The width letters side with the case ones.
 	//
 	// It is the **letter on this line** and not the attribute the name is
-	// carrying, which is the second discriminating row: `typeset -i z;
-	// typeset z=(1 2)` is taken in the same shell and leaves `typeset -a z=(
-	// 1 2 )`, the integer letter simply lost. So the question is asked of a
-	// declaration and never of a store.
+	// carrying, which is the second discriminating row: `typeset -i z; typeset
+	// z=(1 2)` is taken under Yes and leaves `typeset -a z=( 1 2 )`, the integer
+	// letter simply lost. So the question is asked of a declaration and never of
+	// a store.
 	//
-	// All four declaration utilities refuse it, each naming itself:
-	// `readonly -i z=(1 2)` is `readonly: z: inconsistent type for
-	// assignment`, `export -i z=(1 2)` is `export:`, and `local -i z=(1 2)`
-	// inside a function is `f:local:`. The wording is
-	// Diagnostics.InconsistentType, shared with
-	// ScalarOverACompoundIsAnInconsistentType — one sentence, two questions
-	// that reach it.
+	// All four declaration utilities refuse it, each naming itself, and the
+	// wording is Diagnostics.InconsistentType, shared with
+	// ScalarOverACompoundIsAnInconsistentType — one sentence, two questions that
+	// reach it.
 	//
 	// Silent where it is answered wrongly, and in the worse direction: the
-	// script that should have stopped carries on holding an array of the
-	// type it was refused.
+	// script that should have stopped carries on holding an array of the type it
+	// was refused.
 	TypeLetterAndAnArrayLiteralIsAnInconsistentType Answer
 	// NumericTypeWithNoValueReachesAChildAsZero hands a child `0` for an
-	// exported name whose declaration named a numeric type — the integer or
-	// the float letter — and which holds no value at all.
-	//
-	// Measured 2026-09-12 from a script file, `env -i` with a scratch
-	// `HOME`, reading a real child's environment:
+	// exported name whose declaration named a numeric type — the integer or the
+	// float letter — and which holds no value at all:
 	//
 	//	typeset -ix Z; env | grep '^Z='
 	//
-	//	ksh93u+      Z=0
-	//	bash 5.3.15  nothing
-	//	zsh 5.9.2    nothing
-	//
-	// The name really is unset in the shell that answers yes: `${Z+set}` is
-	// empty there and `typeset -p Z` writes `typeset -x -i Z` with no value.
-	// So the zero is not a value the store holds and cannot come from it —
-	// it is what the *type* makes of nothing, produced for the child alone.
-	// The float letter does the same and does not carry its precision:
-	// `typeset -F 3 F; export F` hands over `F=0` and not `0.000`.
+	// is `Z=0` under Yes and nothing under No. The name really is unset under
+	// Yes: `${Z+set}` is empty and `typeset -p Z` writes the declaration with no
+	// value.
 	//
 	// It is the numeric letters and no others. `typeset -u U; export U`,
-	// `typeset -a A; export A` and a plain `typeset P; export P` tell that
-	// child nothing.
+	// `typeset -a A; export A` and a plain `typeset P; export P` tell that child
+	// nothing.
 	//
-	// The shell that answers no for the one-command form still tells a child
-	// about the name when a *second* declaration names it — `typeset -i Z;
-	// export Z` is `Z=0` in zsh — but that is the ordinary store being
-	// exported once the name owns its value, and not this. See
-	// Runner.declarationOwnsTheStandingEmpty, which is where the two part.
+	// A No for the one-command form still tells a child about the name when a
+	// *second* declaration names it — `typeset -i Z; export Z` — but that is the
+	// ordinary store being exported once the name owns its value, and not this.
+	// See Runner.declarationOwnsTheStandingEmpty, which is where the two part.
 	//
 	// Silent where it is answered wrongly, and only a real child can see it.
 	NumericTypeWithNoValueReachesAChildAsZero Answer
 	// NumericAttributeReplacesTheArrayAttribute makes the integer and float
-	// letters take the *array* letter off a declaration that writes both, so
-	// the name is a scalar of that type rather than an array of it.
+	// letters take the *array* letter off a declaration that writes both, so the
+	// name is a scalar of that type rather than an array of it: `typeset -ia z`
+	// lists as `typeset -i z=0` under Yes and keeps both letters under No.
 	//
-	// Measured 2026-09-12 from a script file:
-	//
-	//	typeset -ia z; typeset -p z
-	//
-	//	zsh 5.9.2    typeset -i z=0        the array letter is gone
-	//	ksh93u+      typeset -a -i z       both stand
-	//	bash 5.3.15  declare -ai z         both stand
-	//
-	// Within one word the numeric letter wins whichever order it is written
-	// in — `typeset -ai z` is the same `typeset -i z=0` — so this is not the
-	// last-one-speaks rule the case letters follow. Across two words it is:
-	// `typeset -a z; typeset -i z` is `typeset -i z=0` there and `typeset -i
-	// z; typeset -a z` is `typeset -a z=(  )`, which the compound axes
-	// already answer from the other side.
+	// Within one word the numeric letter wins whichever order it is written in,
+	// so this is not the last-one-speaks rule the case letters follow. Across
+	// two words it is: `typeset -a z; typeset -i z` collapses and
+	// `typeset -i z; typeset -a z` is an array, which the compound axes already
+	// answer from the other side.
 	//
 	// The *valued* form of the same combination is a refusal rather than a
 	// collapse — see TypeLetterAndAnArrayLiteralIsAnInconsistentType — so the
-	// two together are the whole of what the shell that says yes does with
-	// the pairing.
+	// two together are the whole of what Yes does with the pairing.
 	//
-	// It is also what makes the array letter worth recording at all: a name
-	// this answer left a scalar must not count as declared-an-array when a
-	// later array literal decides whether to start it over.
+	// It is also what makes the array letter worth recording at all: a name this
+	// answer left a scalar must not count as declared-an-array when a later
+	// array literal decides whether to start it over.
 	NumericAttributeReplacesTheArrayAttribute Answer
 	// ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver makes `a=(x y)`
-	// re-create a name whose declaration never wrote the array letter,
-	// dropping the letters that say what its values are — where a name the
-	// letter *was* written for keeps them and the literal simply fills it.
+	// re-create a name whose declaration never wrote the array letter, dropping
+	// the letters that say what its values are — where a name the letter *was*
+	// written for keeps them and the literal simply fills it.
 	//
-	// Measured 2026-09-12 from a script file, with `typeset -p` after each:
+	// The `-l` pair is the discriminating one, because it is the same two lines
+	// differing only in the array letter:
 	//
-	//	                                        ksh93u+           zsh 5.9.2
-	//	typeset -i a;    a=(5+5 6+6)   the letter goes       the letter goes
-	//	typeset -ia b;   b=(5+5 6+6)   -a -i, values 10 12   (b is a scalar
-	//	                                                     there; see
-	//	                                                     the axis above)
-	//	typeset -a -i c; c=(5+5 6+6)   -a -i, values 10 12   the letter goes
-	//	typeset -l e;    e=(AB Cd)     the letter goes       the letter goes
-	//	typeset -la f;   f=(AB Cd)     -a -l, folded         -al, kept
+	//	typeset -l e;    e=(AB Cd)     the letter goes
+	//	typeset -la f;   f=(AB Cd)     the letter is kept
 	//
-	// bash keeps the letter under every one of those and evaluates through
-	// it: `declare -ai a=([0]="10" [1]="12")`.
-	//
-	// The `-l` pair is the discriminating one, because it is the same two
-	// lines differing only in the array letter: whether the name was
-	// *declared* an array is the whole of what it turns on, and neither the
-	// value the name holds nor the kind it currently is can answer it. That
-	// is why the letter has to be recorded — and it already is: markIndexed
-	// puts an empty array under the name, which is exactly the state
+	// So whether the name was *declared* an array is the whole of what it turns
+	// on, and neither the value the name holds nor the kind it currently is can
+	// answer it. That is why the letter has to be recorded — and it already is:
+	// markIndexed puts an empty array under the name, which is exactly the state
 	// compoundNameHolds documents its `len(a) > 0` guard against. See
-	// Runner.nameIsAnArray and #1264, whose "recorded nowhere" is out of
-	// date rather than wrong.
+	// Runner.nameIsAnArray.
 	//
-	// Distinct from ArrayLiteralAssignmentStartsTheNameOver, which asks the
-	// same thing of a name that is *already holding* an array. A name may be
-	// one and not the other in either direction, and the panel answers them
-	// differently: zsh says yes here and no there.
+	// Distinct from ArrayLiteralAssignmentStartsTheNameOver, which asks the same
+	// thing of a name that is *already holding* an array. A name may be one and
+	// not the other in either direction, and the two are answered differently.
 	ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver Answer
 	// AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver is the same
-	// question asked of `a+=(x y)`, and it is a second axis because one shell
-	// answers the two differently.
-	//
-	// Measured 2026-09-12 from a script file:
+	// question asked of `a+=(x y)`, and it is a second axis because the two can
+	// be answered differently:
 	//
 	//	typeset -i p=3; p+=(5+5); typeset -p p
 	//
-	//	ksh93u+      typeset -a -i p=(3 10)   kept, and the append evaluated
-	//	zsh 5.9.2    typeset -a p=( 3 5+5 )   the letter goes with the store
-	//	bash 5.3.15  declare -ai p=([0]="3" [1]="10")
+	// keeps the letter and evaluates the append under one answer, and lets the
+	// letter go with the store under the other. `typeset -l t=A; t+=(B)` is the
+	// same split, so it is the operator and not the letter that parts them.
 	//
-	// `typeset -l t=A; t+=(B)` is the same split — `typeset -a -l t=(a b)` in
-	// ksh93 — so it is the operator and not the letter that parts them. The
-	// assign form is unanimous between those two shells and the append form
-	// is not, which is exactly the shape #1755 warned about: an attribute's
-	// answer on the way in is not its answer on a join.
+	// Where the assign form is unanimous and the append form is not, that is the
+	// whole point of the second field: an attribute's answer on the way in is
+	// not its answer on a join.
 	AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver Answer
 	// NumericAttributeReplacesTheCaseAttribute makes the integer and float
 	// letters take a case attribute off the name they are given, rather than
-	// standing beside it.
+	// standing beside it: `typeset z=1; typeset -l z; typeset -i z` lists
+	// without the `-l` under Yes and with both under No.
 	//
-	// Measured 2026-09-12, from a script file:
+	// `-F` is the same letter's family and behaves the same way.
 	//
-	//	typeset z=1; typeset -l z; typeset -i z; typeset -p z
-	//
-	//	ksh93u+      typeset -i z=1     the `-l` is gone
-	//	zsh 5.9.2    typeset -i z=1     the same
-	//	bash 5.3.15  declare -il z="1"  both stand
-	//
-	// `-F` is the same letter's family and behaves the same way: `typeset
-	// -l z; typeset -F z` is `typeset -F z=1.0000000000` in both shells that
-	// answer yes.
-	//
-	// The converse is a separate question and the panel splits differently
-	// on it — see CaseAttributeReplacesTheNumericAttribute, which is what
-	// makes this a direction rather than a set.
+	// The converse is a separate question and is answered differently — see
+	// CaseAttributeReplacesTheNumericAttribute, which is what makes this a
+	// direction rather than a set.
 	//
 	// Only a listing observes it, so the whole cost of the wrong answer is a
 	// `typeset -p` that says more than the shell would.
 	NumericAttributeReplacesTheCaseAttribute Answer
-	// CaseAttributeReplacesTheNumericAttribute is the other direction: `-l`
-	// and `-u` take the integer or float letter off the name they are given.
+	// CaseAttributeReplacesTheNumericAttribute is the other direction: `-l` and
+	// `-u` take the integer or float letter off the name they are given.
 	//
-	// Measured 2026-09-12, from a script file:
+	// Yes holds one family — a name carries one letter saying what its values
+	// are, and the last one written speaks. No may replace in the other
+	// direction only, or in neither. Two axes rather than one three-valued
+	// answer because the two directions were measured separately and can be
+	// answered differently.
 	//
-	//	typeset y=1; typeset -i y; typeset -l y; typeset -p y
-	//
-	//	ksh93u+      typeset -l y=1      the `-i` is gone
-	//	zsh 5.9.2    typeset -il y=1     both stand
-	//	bash 5.3.15  declare -il y="1"   both stand
-	//
-	// So ksh93 holds one family — a name carries one letter saying what its
-	// values are, and the last one written speaks — where zsh replaces in
-	// one direction only and bash in neither. Two axes rather than one
-	// three-valued answer because the two directions were measured
-	// separately and one shell answers them differently.
-	//
-	// The value the earlier letter produced stays: `typeset -F z; typeset -l
-	// z` is `typeset -l z=1.0000000000` in ksh93, so what goes is the
-	// rendering of what comes next and not what is already there — the same
-	// reading `+i` and `+F` already have.
+	// The value the earlier letter produced stays: `typeset -F z; typeset -l z`
+	// keeps the rendered float, so what goes is the rendering of what comes next
+	// and not what is already there — the same reading `+i` and `+F` have.
 	CaseAttributeReplacesTheNumericAttribute Answer
 	// AttributeRereadsTheValueItFinds makes an attribute a declaration adds
 	// re-read the value the name already holds, on the spot, rather than

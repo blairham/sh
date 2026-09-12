@@ -5085,7 +5085,7 @@ echo "st=$?"`,
 	{
 		ID: "arithmetic/a-float-whose-exponent-is-not-a-number", Category: "arithmetic",
 		Snippet: `echo "[$(( 1.e ))]"; echo "st=$?"`,
-		Why:     "the control: `1.` reads as a float and the token left standing is `e`, which does *not* begin with a point — so zsh gives its ordinary operator complaint here and the float sentence never appears. Without it, `a token beginning with a point` and `the float reader was entered` are the same rule, and only one of them is what was measured",
+		Why:     "the control: `1.` reads as a float and the token left standing is `e`, which does *not* begin with a point — so zsh gives its ordinary operator complaint here and the float sentence never appears. Without it, `a token beginning with a point` and `the float reader was entered` are the same rule, and only one of them is what was measured. ksh93 reads the whole thing as 1 and stops, which is the other shell with floats declining to have an opinion",
 	},
 	{
 		ID: "arith/an-arithmetic-command-where-none-may-stand", Category: "arithmetic",

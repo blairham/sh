@@ -4426,6 +4426,50 @@
         "TimedOut": false
       }
     },
+    "arith/an-arithmetic-command-where-none-may-stand": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token ` 2 '~\u003cscript\u003e: line 2: `(( 1 )) (( 2 ))'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token ` 2 '~\u003cscript\u003e: line 2: `(( 1 )) (( 2 ))'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `('~\u003cscript\u003e: line 2: `(( 1 )) (( 2 ))'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 2: `((' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:2: parse error near ` 2 '",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arith/an-array-element-in-an-expression": {
       "bash": {
         "Stdout": "4",
@@ -7242,6 +7286,50 @@
         "TimedOut": false
       }
     },
+    "arithmetic/a-float-whose-exponent-is-not-a-number": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1.e : arithmetic syntax error: invalid arithmetic operator (error token is \".e \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1.e : arithmetic syntax error: invalid arithmetic operator (error token is \".e \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1.e : syntax error: invalid arithmetic operator (error token is \".e \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" 1.e \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operator expected at `e '",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arithmetic/a-key-arriving-from-a-parameter": {
       "bash": {
         "Stdout": "7~after",
@@ -7418,6 +7506,50 @@
         "TimedOut": false
       }
     },
+    "arithmetic/a-point-where-an-operator-belonged": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1..2 : arithmetic syntax error: invalid arithmetic operator (error token is \"..2 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1..2 : arithmetic syntax error: invalid arithmetic operator (error token is \"..2 \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1..2 : syntax error: invalid arithmetic operator (error token is \"..2 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" 1..2 \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: .: invalid character in expression -  1..2 ",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad floating point constant",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arithmetic/a-subscript-of-an-unset-name-that-would-fail": {
       "bash": {
         "Stdout": "",
@@ -7589,6 +7721,50 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: invalid subscript",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arithmetic/an-operand-that-opens-with-a-point": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: .foo : arithmetic syntax error: operand expected (error token is \".foo \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: .foo : arithmetic syntax error: operand expected (error token is \".foo \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: .foo : syntax error: operand expected (error token is \".foo \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" .foo \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[0]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad floating point constant",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false

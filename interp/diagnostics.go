@@ -3247,137 +3247,128 @@ type Diagnostics struct {
 	TraceStyle   TraceStyle
 	TraceQuoting TraceQuoting
 	// TraceForHeader is what a `for` loop prints at each iteration. Zero is
-	// TraceForNone, which is dash's and ksh93's answer and the substrate's
-	// own.
+	// TraceForNone, a measured answer and the substrate's own.
 	TraceForHeader TraceForHeader
-	// TraceCaseHeader is what `case` prints. Zero is TraceCaseNone, which is
-	// dash's and ksh93's answer and the substrate's own; bash prints the
-	// header as written once and zsh prints the subject and one arm's
-	// patterns each time it tries an arm.
+	// TraceCaseHeader is what `case` prints. Zero is TraceCaseNone, a measured
+	// answer and the substrate's own; another prints the header as written once,
+	// and another the subject and one arm's patterns each time it tries an arm.
 	TraceCaseHeader TraceCaseHeader
 	// TraceCondition is how many lines one `[[ … ]]` is worth. Zero is
-	// TraceCondPrimary — a line per primary — which is bash's and ksh93's
-	// answer and the substrate's own; zsh writes one line for the condition.
+	// TraceCondPrimary — a line per primary — a measured answer and the
+	// substrate's own; one line for the whole condition is the other.
 	TraceCondition TraceCondition
 	// TraceConditionQuoting is how a condition operand that needs quoting is
-	// rendered, which is not the same question as TraceQuoting: bash quotes a
-	// command's word and leaves a condition's operand bare, where ksh93 and
-	// zsh quote in both places. Zero is QuoteNever, bash's answer and the
+	// rendered, which is not the same question as TraceQuoting: a preset may
+	// quote a command's word and leave a condition's operand bare, where another
+	// quotes in both places. Zero is QuoteNever, a measured answer and the
 	// substrate's own.
 	TraceConditionQuoting TraceQuoting
-	// TraceArithCommand is how `(( … ))` is wrapped when it is traced. Zero
-	// is TraceArithSpaced, which is bash's and zsh's answer and the
-	// substrate's own; ksh93 adds nothing to the text.
+	// TraceArithCommand is how `(( … ))` is wrapped when it is traced. Zero is
+	// TraceArithSpaced, the common answer and the substrate's own; adding
+	// nothing to the text is the other.
 	TraceArithCommand TraceArithSpelling
 	// TraceArithForPart is the same question for the three parts of
-	// `for ((init; cond; post))`, which is a separate field because zsh
-	// answers the two differently: it wraps a `(( ))` command in spaced
-	// parentheses and writes a loop header's parts with none at all.
+	// `for ((init; cond; post))`, which is a separate field because a preset may
+	// answer the two differently: wrapping a `(( ))` command in spaced
+	// parentheses and writing a loop header's parts with none at all.
 	TraceArithForPart TraceArithSpelling
-	// TraceArrayLiteral is how the parenthesized list of `a=(1 2)` is
-	// rendered. Zero is TraceArrayTight, which is bash's answer and the
-	// substrate's own; ksh93 and zsh write a space inside each parenthesis.
+	// TraceArrayLiteral is how the parenthesized list of `a=(1 2)` is rendered.
+	// Zero is TraceArrayTight, a measured answer and the substrate's own; a space
+	// inside each parenthesis is the other.
 	TraceArrayLiteral TraceArrayLiteral
 	// TracePrefixRepeatsAtIndirection repeats the trace prefix's first
 	// character once per level of indirection — an `eval`, a sourced file or
 	// a command substitution the traced command is inside.
 	//
-	// bash alone, measured 2026-09-11: `set -x; eval :` traces `+ eval :`
-	// then `++ :`, and `eval "eval :"` reaches `+++ :`. A function call and a
-	// subshell add nothing, so the count is of text being read again rather
-	// than of the stack. dash, ksh93 and zsh leave the prefix alone at every
-	// depth.
+	// Under true, `set -x; eval :` traces `+ eval :` then `++ :`, and
+	// `eval "eval :"` reaches `+++ :`. A function call and a subshell add
+	// nothing, so the count is of text being read again rather than of the
+	// stack. False leaves the prefix alone at every depth.
 	//
 	// The *first character* rather than the whole prefix, which is what makes
 	// it a rule about the prefix rather than about the plus sign:
 	// `PS4='XY '` traces `XY eval :` and then `XXY :`.
 	TracePrefixRepeatsAtIndirection bool
 
-	// Location is how the shell prefixes a diagnostic with where it
-	// happened. Measured, and all four differ:
+	// Location is how the shell prefixes a diagnostic with where it happened.
+	// Every preset differs:
 	//
-	//	dash    dash: 1: [[: not found
-	//	bash    bash: line 1: [[: not found
-	//	ksh93   ksh: [[: not found
-	//	zsh     zsh:1: [[: not found
+	//	<shell>: 1: [[: not found
+	//	<shell>: line 1: [[: not found
+	//	<shell>: [[: not found
+	//	<shell>:1: [[: not found
 	//
-	// Zero is LocationNone, the substrate's own — the shell's name and
-	// nothing else, which is what this printed before any of it was a
-	// dialect's answer.
+	// Zero is LocationNone, the substrate's own — the shell's name and nothing
+	// else.
 	Location LocationStyle
-	// BuiltinLocation is Location for a message a *builtin* is speaking,
-	// in a dialect that names the place two ways in the one script.
+	// BuiltinLocation is Location for a message a *builtin* is speaking, under a
+	// preset that names the place two ways in the one script:
+	// `script[1]: cd: ...` from a builtin against
+	// `script: line 1: nosuchcmd: not found` from everything else. The two are
+	// the same question asked about different speakers rather than one answer,
+	// which is why it is a second field and not another style.
 	//
-	// ksh93 is the dialect: `script[1]: cd: ...` from a builtin against
-	// `script: line 1: nosuchcmd: not found` from everything else. The two
-	// are the same question asked about different speakers rather than one
-	// answer, which is why it is a second field and not a fifth style.
-	//
-	// LocationNone means the dialect names the place one way, which is every
-	// other dialect. A dialect wanting a builtin to name no place at all has
-	// never been measured and would need more than this field.
+	// LocationNone means the preset names the place one way. A preset wanting a
+	// builtin to name no place at all has never been measured and would need
+	// more than this field.
 	BuiltinLocation LocationStyle
-	// StdinLocation is Location for a script arriving on standard input,
-	// where there is no $0 to name — zsh drops the line and keeps only its
-	// name there. Zero means "the same as Location".
+	// StdinLocation is Location for a script arriving on standard input, where
+	// there is no $0 to name — a preset may drop the line and keep only its name
+	// there. Zero means "the same as Location".
 	StdinLocation LocationStyle
-	// StdinBuiltinLocation is BuiltinLocation for the same route: zsh
-	// drops the prefix down to the builtin's own name, and ksh93 moves to
+	// StdinBuiltinLocation is BuiltinLocation for the same route: a preset may
+	// drop the prefix down to the builtin's own name, and another move to
 	// `name[line]:` — a shape it uses nowhere else on this route.
 	StdinBuiltinLocation LocationStyle
 
-	// ScriptBuiltinLocation is BuiltinLocation for a script read from a
-	// file, the way ScriptLocation is Location for one. ksh93 names line 1
-	// in a file and not under `-c`, in both of its styles.
+	// ScriptBuiltinLocation is BuiltinLocation for a script read from a file,
+	// the way ScriptLocation is Location for one. A preset may name line 1 in a
+	// file and not under `-c`, in both of its styles.
 	ScriptBuiltinLocation LocationStyle
 
-	// PromptLocation is Location for a line typed at a prompt, where three
-	// of the four panel shells name **no line at all**.
+	// PromptLocation is Location for a line typed at a prompt, where most
+	// presets name **no line at all**.
 	//
-	// Measured 2026-09-11, `printf 'echo one\nif; then\n'` into each shell
-	// under `-i`, the shell's own path normalized:
+	// Measured with `printf 'echo one\nif; then\n'` under `-i`:
 	//
-	//	bash 5.3.15  bash: syntax error near unexpected token `;'
-	//	ksh93u+      ksh: syntax error: `;' unexpected
-	//	zsh 5.9.2    zsh: parse error near `\n'
-	//	dash         dash: 2: Syntax error: ";" unexpected
+	//	<shell>: syntax error near unexpected token `;'
+	//	<shell>: syntax error: `;' unexpected
+	//	<shell>: parse error near `\n'
+	//	<shell>: 2: Syntax error: ";" unexpected
 	//
-	// Each of the first three writes a line for the same failure in a script
-	// and in `-c`, so this is the route's answer and not the dialect's whole
-	// answer. dash keeps its line, and what it counts is
-	// PromptCountsTheSessionsLines below.
+	// The first three write a line for the same failure in a script and in `-c`,
+	// so this is the route's answer and not a preset's whole answer. The last
+	// keeps its line, and what it counts is PromptCountsTheSessionsLines below.
 	//
-	// Zero means "the same as Location". The prompt borrowed the general
-	// answer before this existed, so every dialect wrote a line no shell
-	// writes there (#1892).
+	// Zero means "the same as Location". A prompt that borrows the general
+	// answer writes a line nothing writes there.
 	PromptLocation LocationStyle
 	// PromptCountsTheSessionsLines numbers a line typed at a prompt by how
 	// many the **session** has read, rather than restarting at 1 for every
 	// construct.
 	//
-	// dash alone, and only because it is the only one of the four that names
-	// a line at a prompt at all — the other three name none, for a parse
-	// failure and for a command that was not found alike, so nothing they
-	// write could show a number either way. Measured 2026-09-12, three lines
-	// piped into each shell under `-i` with a scratch HOME:
+	// Only reachable under the one preset that names a line at a prompt at all —
+	// the rest name none, for a parse failure and for a command that was not
+	// found alike, so nothing they write could show a number either way.
+	// Measured with three lines piped in under `-i` with a scratch HOME:
 	//
 	//	echo one / if; then / echo three
-	//	  dash  dash: 2: Syntax error: ";" unexpected
-	//	  ours  dash: 1: Syntax error: ";" unexpected
+	//	  true   <shell>: 2: Syntax error: ";" unexpected
+	//	  false  <shell>: 1: Syntax error: ";" unexpected
 	//
 	//	nosuchcmd_zz / nosuchcmd_zz
-	//	  dash  dash: 1: … not found   then   dash: 2: … not found
-	//	  ours  dash: 1: … not found   twice
+	//	  true   <shell>: 1: … not found   then   <shell>: 2: … not found
+	//	  false  <shell>: 1: … not found   twice
 	//
 	// The run-time route is the second half and is what says this cannot be
 	// a wording: the two must agree with each other on one screen, so what
 	// carries the number is the position the *parser* was given for the line
-	// — see repl.Shell.CountSessionLines, which is where the front end keeps
-	// the count (#2022).
+	// — see repl.Shell.CountSessionLines, which is where the front end keeps the
+	// count.
 	PromptCountsTheSessionsLines bool
-	// PromptBuiltinLocation is BuiltinLocation for the same route, for the
-	// dialect that names the place two ways in one session. Zero means "the
-	// same as BuiltinLocation".
+	// PromptBuiltinLocation is BuiltinLocation for the same route, for a preset
+	// that names the place two ways in one session. Zero means "the same as
+	// BuiltinLocation".
 	PromptBuiltinLocation LocationStyle
 
 	// The wordings below replace their unprefixed namesakes for a line typed

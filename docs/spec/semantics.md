@@ -10536,6 +10536,47 @@ answer. The endpoints, and the one asymmetry between an array and a
 string, are in
 `docs/spec/grammar/parameter-expansion.md`.
 
+**The comma has to have been *written*.** Where the pair is separated is
+a question about the source and not about the text the subscript came
+to: measured 2026-09-12, `a=(p q r); i="1,2"; ${a[$i]}` is the **first
+element** on zsh 5.9.2 and not the range `1,2`, and `a=(p q,r s);
+${a[(r)q,r]}` is empty because the written comma separates a search from
+an arithmetic end. So the parser separates every written pair and the
+run never splits an expanded text.
+
+**`SubscriptExpressionStopsAtASeparator`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+The other half of that rule: a subscript's expression ends at the first
+top-level `,` or `;` and the rest of the text is **discarded**, rather
+than the comma being the operator it is everywhere else.
+
+    a=(p q r s)
+    i="2,3";   ${a[$i]}   zsh → q       the operator would give r
+    i="1+1,3"; ${a[$i]}   zsh → q       so it is not a numeral rule either
+    i="2,";    ${a[$i]}   zsh → q       and the tail need not be an expression
+    i="2;3";   ${a[$i]}   zsh → q       nor is the comma the only separator
+    i="2,3,4"; ${a[$i]}   zsh → q
+    i="2,n=9"; ${a[$i]}   zsh → q, and `n` is still 0
+    i="(1,2)"; ${a[$i]}   zsh → r       nested, so the operator applies
+
+The sixth row is the discriminator: a reading that evaluated the tail and
+threw the value away would leave `n` at 9. The seventh says it is the
+*top level of a subscript* rather than the character.
+
+**And it is the subscript alone.** `$(( 1,2 ))` is 2 in every column, zsh
+included, and a substring's offset takes the operator too — `x=abcdef;
+${x:1,2:2}` is `cd` there, which is offset 2.
+
+**A comma the source wrote is still the operator**, which is what makes
+this one rule with the pair split rather than two: `a=(1 2 3);
+a[1,2,3]=(x y)` is the span 1 through the arithmetic `2,3`, which is 3.
+The pair is separated at the first *written* comma and the arithmetic
+gets the rest. A `;` ends the expression either way, being no part of any
+arithmetic, which is what gives `${a[2,3;5]}` its second end of 3.
+
+Pinned by `array/a-comma-that-arrives-through-a-substitution` and
+`array/a-substituted-comma-on-the-left-of-an-assignment` (#2160).
+
 **`ScalarSubscriptIsACharacter`** — bash no · dash no · ksh93 no · zsh yes
 
 Reads `${s[2]}` on a plain string as its second character rather than as
@@ -12013,10 +12054,55 @@ why `${b[0]}` and `${#b[@]}` cannot tell it from bash's promotion.
 
 Asked only where the name is holding a scalar in the cell being declared.
 An unset name is unanimous — `unset b; typeset -a b` is an array of no
-elements in all three — and so is a name already holding an array, which
-every column leaves standing. A declaration carrying its own value is not
-this question either: `b=1; typeset -a b=(9)` is the one element `9`
-everywhere.
+elements in all three — and a name already holding *the other kind of
+compound* is the pair of axes below. A declaration carrying its own value
+is not this question either: `b=1; typeset -a b=(9)` is the one element
+`9` everywhere.
+
+**`TableUnderAnArrayDeclaration`** — bash refused · dash unspecified · ksh93 refused, and the script ends · zsh empties the name
+
+**`ArrayUnderATableDeclaration`** — bash refused · dash unspecified · ksh93 keeps the elements · zsh empties the name
+
+What one array *letter* makes of a name that is already the **other kind**
+of array. A name is one kind at a time in every shell measured; what they
+disagree about is what happens to the elements and to the script.
+
+    typeset -A h; h[k]=v; typeset -a h
+      bash 5.3.15  `typeset: h: cannot convert associative to indexed array`
+                   table intact, status 1, the next command runs
+      ksh93u+      `typeset: cannot change associative array h to index array`
+                   and the script **ends**
+      zsh 5.9.2    `typeset -a h=(  )` — converted and emptied, status 0
+
+    typeset -a a=(x y); typeset -A a
+      bash 5.3.15  `typeset: a: cannot convert indexed to associative array`
+                   array intact, status 1
+      ksh93u+      `typeset -A a=([0]=x [1]=y)` — converted, and `${a[0]}`
+                   still reads `x`, so the values are really there
+      zsh 5.9.2    `typeset -A a=( )` — converted and emptied
+
+Measured 2026-09-12 from a script file, panel and machine as `oracle.md`.
+dash has neither letter; bash 3.2.57 has no `-A` to reach either row.
+
+**Two fields because ksh93 answers the two directions differently**, and
+again that is the whole of why: it refuses one fatally and converts the
+other without losing anything. The two refusals are two answers rather
+than one wording, because what a refusal *costs* differs — bash runs the
+next command and ksh93 does not.
+
+bash names the builtin as it was **invoked**: `declare:`, `typeset:` and
+`local:` all appear in front of the same sentence, so the builtin is a
+verb of the wording rather than a prefix.
+
+**Asked only where the declaration carries no value of its own.** A
+declaration *with* one is a second question the panel splits differently
+again: `typeset -A h; h[k]=v; typeset -a h=(x)` ends the script in bash —
+and the sentence has no builtin in front of it there, because it comes
+from the assignment rather than from the builtin — where ksh93 and zsh
+both convert and keep the one element.
+
+Pinned by `decl/an-array-letter-over-a-declared-table` and
+`decl/a-table-letter-over-a-declared-array`.
 
 **A local declaration builds the array cell rather than converting one**,
 and that is core rather than a fourth answer. bash promotes at the top

@@ -731,7 +731,10 @@ scan:
 				// The one already read is not the last after all — see
 				// Leading, which is where every subscript but the final one
 				// goes.
-				e.Leading = append(e.Leading, LeadingIndex{Index: e.Index, Flags: e.IndexFlags})
+				e.Leading = append(e.Leading, LeadingIndex{
+					Index: e.Index, Flags: e.IndexFlags,
+					Range: e.IndexRange, Text: e.IndexText,
+				})
 			}
 			e.Index, e.IndexFlags, e.IndexRange, e.IndexText = idx, g, rng, inner
 			if bare {

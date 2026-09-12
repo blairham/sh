@@ -52,7 +52,12 @@ func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows
 	// `arr=(a b c); f(){ local arr[1]=z; }` lists `([1]="z")` and the same
 	// line at the top level lists all three with `b` replaced. See
 	// freshcell.go.
-	r.markDeclaredCompound(base, fresh, f)
+	// hasValue is true so the kind-change axis is not asked here: a
+	// subscripted operand always carries one, and what a declaration with a
+	// value does to a name already the *other* kind of compound is a
+	// question of its own that the panel splits differently — see
+	// compoundKindChanged.
+	r.markDeclaredCompound(base, fresh, f, true)
 	if r.refuseReadonly(base, assignedByDeclaration) {
 		// A name already frozen refuses the element as it refuses the
 		// variable, and by the base's name: `readonly a; typeset a[1]=v`

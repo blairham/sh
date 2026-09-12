@@ -3739,6 +3739,52 @@ type Semantics struct {
 	// `-A`, so no column answers *this* letter with the scalar (#2060).
 	ScalarUnderATableDeclaration ScalarUnderACompoundPolicy
 
+	// TableUnderAnArrayDeclaration is what `typeset -a` makes of a name
+	// already declared a **table** — see CompoundKindChangePolicy, where the
+	// four answers are.
+	//
+	// Measured 2026-09-12 from a script file, with `typeset -A h; h[k]=v`
+	// in front of it:
+	//
+	//	shell        `typeset -a h`
+	//	bash 5.3.15  `typeset: h: cannot convert associative to indexed array`, status 1, table intact, the list runs on
+	//	bash 3.2.57  no `-A` to begin with
+	//	ksh93u+      `typeset: cannot change associative array h to index array`, and the script **ends**
+	//	zsh 5.9.2    converted and emptied: `typeset -a h=(  )`, status 0
+	//
+	// Three answers, and the two refusals part over what the refusal costs —
+	// bash runs the next command and ksh93 does not — which is why the
+	// refusals are two values of the policy rather than one.
+	//
+	// The builtin names itself, and it is the builtin as *invoked*: bash
+	// writes `declare:`, `typeset:` and `local:` for the same refusal
+	// (#1375).
+	TableUnderAnArrayDeclaration CompoundKindChangePolicy
+	// ArrayUnderATableDeclaration is the same question asked of `typeset -A`
+	// over a name already holding an **indexed array**.
+	//
+	// A second field and not a widening of the one above, because one shell
+	// answers the two directions differently. Measured 2026-09-12 with
+	// `typeset -a a=(x y)` in front of it:
+	//
+	//	shell        `typeset -A a`
+	//	bash 5.3.15  `typeset: a: cannot convert indexed to associative array`, status 1, array intact
+	//	ksh93u+      converted, **keeping the elements as keys**: `typeset -A a=([0]=x [1]=y)`, status 0
+	//	zsh 5.9.2    converted and emptied: `typeset -A a=( )`, status 0
+	//
+	// So ksh93 refuses one direction fatally and converts the other without
+	// losing anything, and one field for both would have had to give it an
+	// answer that is wrong for one of its letters whichever way it was set.
+	//
+	// The keys ksh93 writes are the subscripts as decimal text — `0`, `1` —
+	// and `${a[0]}` reads `x` afterwards, which is what says the elements
+	// survived rather than the listing merely looking as though they had.
+	//
+	// unexhibited CompoundKindChangeEndsTheScript: TableUnderAnArrayDeclaration
+	// holds it, for ksh93, and no column ends the script over this direction
+	// (#1375).
+	ArrayUnderATableDeclaration CompoundKindChangePolicy
+
 	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function
 	// hide any outer `u` — the local exists unset, so `${u-UNSET}` fires the
 	// default even when the caller had a value. Reached only when
@@ -8033,6 +8079,46 @@ type Semantics struct {
 	// Diagnostics.ArithExpressionRanOut, which already words `$(( a[ ] ))`.
 	EmptySubscriptTextIsAMathError Answer
 
+	// SubscriptExpressionStopsAtASeparator ends a subscript's expression at
+	// the first top-level `,` or `;` and discards the rest of the text,
+	// rather than reading the comma as the arithmetic operator it is
+	// everywhere else.
+	//
+	// It is the other half of "a comma has to have been *written* to
+	// separate a range". The parser separates a written pair, so what
+	// reaches an expression with a separator still in it is a separator that
+	// arrived through a substitution — and the shell with ranges does not
+	// take it as an operator there either. Measured on zsh 5.9.2,
+	// 2026-09-12, with `a=(p q r s)`:
+	//
+	//	probe                        zsh 5.9.2   the comma operator would give
+	//	i="2,3";   ${a[$i]}          `q`         `r`
+	//	i="1+1,3"; ${a[$i]}          `q`         `r`
+	//	i="2,";    ${a[$i]}          `q`         a complaint
+	//	i="2;3";   ${a[$i]}          `q`         a complaint
+	//	i="2,3,4"; ${a[$i]}          `q`         `s`
+	//	i="2,n=9"; ${a[$i]}          `q`, and `n` is still 0
+	//	i="(1,2)"; ${a[$i]}          `r`         `r` — nested, so it applies
+	//	${a[2,3;5]}                  `q r`       the pair, second end `3`
+	//
+	// So the tail is not evaluated at all — the sixth row is the
+	// discriminator, since a reading that evaluated it and threw the value
+	// away would leave `n` at 9 — and the seventh says it is the *top level*
+	// of a subscript rather than the character: inside parentheses the
+	// operator applies.
+	//
+	// And it is the **subscript** and nowhere else. `$(( 1,2 ))` is 2 in
+	// every column, zsh included, and a substring's offset takes the
+	// operator too: measured, `x=abcdef; ${x:1,2:2}` is `cd` there, which is
+	// offset 2. So this is asked where a subscript is read as a number and
+	// not in the arithmetic the two sites share.
+	//
+	// A separator standing *first* is not truncated to nothing: `i=",3"` is
+	// `operand expected at ,3` there, so the text is left whole for the
+	// arithmetic to complain about rather than made into the empty
+	// expression, which is a different answer again (#2160).
+	SubscriptExpressionStopsAtASeparator Answer
+
 	// BlankArithSubscriptIsTheEmptyExpression reads a subscript holding
 	// whitespace and nothing else — `$(( a[ ] ))` — as the blank expression,
 	// which is zero, so the operand is the *element that subscript names*
@@ -9752,6 +9838,68 @@ func (p ScalarUnderACompoundPolicy) String() string {
 		return "stays a scalar"
 	case ScalarUnderACompoundDiscardsIt:
 		return "discards it"
+	}
+	return "unspecified"
+}
+
+// CompoundKindChangePolicy is what a declaration makes of a name that is
+// already the *other* kind of compound — `typeset -a` over a declared table,
+// and `typeset -A` over a declared array.
+//
+// A name is one kind of array at a time in every shell measured; what they
+// disagree about is what happens to the elements and to the script. Four
+// answers, and each of them is somebody's:
+//
+//	bash        refuses, keeps everything, reports 1 and runs the next command
+//	ksh93 `-a`  refuses and ends the script
+//	ksh93 `-A`  converts, and the elements become the keys `0`, `1`, …
+//	zsh         converts, and the elements are gone
+//
+// Asked only where the name is *already declared* the other kind in the cell
+// being declared. An unset name, a name holding a scalar — which is
+// ScalarUnderAnArrayDeclaration — and a redeclaration of the kind the name
+// already is all raise no question between the columns.
+//
+// It was unanswered in one direction and wrong in the other. `typeset -a`
+// over a table left the table standing and said nothing, so the elements
+// survived under the old reading and no column agreed; `typeset -A` over an
+// array emptied it in every dialect, which is right for one column of three
+// (#1375).
+type CompoundKindChangePolicy int
+
+const (
+	// CompoundKindChangeUnspecified is no answer, and it is refused rather
+	// than guessed at: one answer keeps the elements, one takes them away
+	// and one will not do it at all, and no later command can tell which was
+	// meant.
+	CompoundKindChangeUnspecified CompoundKindChangePolicy = iota
+	// CompoundKindChangeRefused declines: the name keeps the kind and the
+	// elements it had, the declaration reports and the status is 1, and the
+	// rest of the command list runs. bash, in both directions.
+	CompoundKindChangeRefused
+	// CompoundKindChangeEndsTheScript is the same refusal costing the input:
+	// nothing after it runs. ksh93, for the array letter over a table.
+	CompoundKindChangeEndsTheScript
+	// CompoundKindChangeKeepsTheElements converts and carries the values
+	// over — an array's elements become the keys `0`, `1`, … of the table.
+	// ksh93, for the table letter over an array.
+	CompoundKindChangeKeepsTheElements
+	// CompoundKindChangeEmptiesTheName converts and takes the elements away,
+	// leaving the name an empty compound of the new kind. zsh, in both
+	// directions.
+	CompoundKindChangeEmptiesTheName
+)
+
+func (p CompoundKindChangePolicy) String() string {
+	switch p {
+	case CompoundKindChangeRefused:
+		return "refused"
+	case CompoundKindChangeEndsTheScript:
+		return "refused, and the script ends"
+	case CompoundKindChangeKeepsTheElements:
+		return "keeps the elements"
+	case CompoundKindChangeEmptiesTheName:
+		return "empties the name"
 	}
 	return "unspecified"
 }

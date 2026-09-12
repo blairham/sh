@@ -955,7 +955,11 @@ func (r *Runner) rangeEnd(e *syntax.ParamExpr, end syntax.SubscriptEnd, src subs
 // reporting a failed expression the way every other subscript does.
 func (r *Runner) endSubscriptValue(w *syntax.Word) (int, bool) {
 	text := r.subscriptText(w)
-	n, err := r.subscriptValue(text)
+	// No written separator, whatever the text came to: the parser has
+	// already taken the pair apart at the comma the source spelled, and a
+	// *third* one is refused before this, so anything left in an end arrived
+	// through a substitution. See Runner.subscriptExpression (#2160).
+	n, err := r.subscriptValueAsWritten("", text)
 	if err != nil {
 		r.diagf("%s\n", r.subscriptFailure(text, err))
 		r.expandErr = true

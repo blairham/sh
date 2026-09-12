@@ -928,6 +928,14 @@ func Semantics() interp.Semantics {
 	// one space in every column, so this is emptiness and not blankness
 	// (#1938).
 	s.EmptyAssociativeKeyIsAnError = interp.Yes
+	// Neither array letter may take a name that is already the other kind:
+	// measured 2026-09-12, `typeset -A h; h[k]=v; typeset -a h` is
+	// `typeset: h: cannot convert associative to indexed array`, the table
+	// is untouched, the status is 1 and the next command runs — and the
+	// reverse direction is the same refusal in the other words. Identical
+	// under argv[0] `sh`; 3.2.57 has no `-A` to reach it (#1375).
+	s.TableUnderAnArrayDeclaration = interp.CompoundKindChangeRefused
+	s.ArrayUnderATableDeclaration = interp.CompoundKindChangeRefused
 	// And a *read* whose key comes out empty is reported too, with a
 	// different subject and a different outcome: measured 2026-09-12,
 	// `typeset -A m; m[k]=v; w=; ${m[$w]}` writes `m: bad array subscript` —
@@ -964,6 +972,12 @@ func Semantics() interp.Semantics {
 	// on 5.3.15, `a=(5 6 7); w=; ${a[$w]}` is `5` at status 0, and `${a[ ]}`
 	// beside it is too.
 	s.EmptySubscriptTextIsAMathError = interp.No
+	// The comma inside a subscript is the arithmetic operator here, as it is
+	// everywhere else: measured 2026-09-12, `a=(p q r s); i="2,3";
+	// ${a[$i]}` is the *third* element, which is the operator's right
+	// operand. This dialect has no ranges for the question to be about
+	// (#2160).
+	s.SubscriptExpressionStopsAtASeparator = interp.No
 	// Whitespace between the brackets is not that text and is not answered
 	// by it: measured 2026-09-10 in 5.3.15 and in 3.2.57, `a=(1 2 3); echo
 	// $(( a[ ] ))` is `1` with a clean stream — the blank expression is
@@ -1363,6 +1377,8 @@ func Diagnostics() interp.Diagnostics {
 		// A subscript before the first element, named as it was written:
 		// `a[x-2]`, not the -1 it evaluated to. Identical in bash 3.2.
 		BadArraySubscript:             "%[1]s[%[2]s]: bad array subscript",
+		CannotConvertTableToArray:     "%[2]s: %[1]s: cannot convert associative to indexed array",
+		CannotConvertArrayToTable:     "%[2]s: %[1]s: cannot convert indexed to associative array",
 		EmptyAssociativeKeyRead:       "%[1]s: bad array subscript",
 		ArithEmptySubscript:           "%[1]s[]: bad array subscript",
 		ArithWholeArraySubscript:      "%[1]s[%[2]s]: bad array subscript",

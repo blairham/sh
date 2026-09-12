@@ -5717,6 +5717,16 @@ echo "st=$?"`,
 		Why:     "`n` asks for the nth match rather than the first and `b` moves where the search starts, forwards for `r` and backwards for `R`. The last of the four is the one worth a row of its own: a start past the end is *not* clamped to the end, so a reverse search from 6 over five elements finds nothing rather than finding the fifth",
 	},
 	{
+		ID: "array/a-comma-that-arrives-through-a-substitution", Category: "expansion",
+		Snippet: `a=(p q r s); i="2,3"; printf "[%s]" "${a[$i]}" "${a[2,3]}" "${a[$i,4]}"; echo`,
+		Why:     "where a subscript's pair is separated, which is at a comma the **source** wrote and not at one a substitution brought in. The one shell with ranges reads the first field as a single subscript whose expression stops at the comma -- the second element -- and the second as the pair it was typed as; the third has both in one subscript, so the written comma separates and the substituted one stops the first end. A reading that split the expanded text answers a two-element range to the first field, which is a plausible list at status 0. The other columns have no ranges and read the comma as the arithmetic operator, so the first two fields are their third element and the third field is a bad subscript in some and the fourth element in others -- all of which is what makes the pair a dialect question rather than a fault (#2160)",
+	},
+	{
+		ID: "array/a-substituted-comma-on-the-left-of-an-assignment", Category: "expansion",
+		Snippet: `a=(p q r s); i="1,2"; a[$i]=Z; printf "[%s]" "${a[@]}"; b=(1 2 3); b[1,2,3]=Z; printf "[%s]" "${b[@]}"; echo`,
+		Why:     "the same rule on the left, and the pair of shapes that says it is about where the comma came from rather than about the character. The shell with ranges writes the *first element* of `a` and leaves the other three, because nothing separated a pair; and it replaces the whole span 1 through 3 of `b`, because the first comma was written and the arithmetic gets the `2,3` behind it, which is 3. Splitting the expanded text answers a two-element span to the first and a two-element span to the second, and both come back as plausible arrays at status 0. The columns without ranges write one element in both, at the subscript the comma operator names (#2160)",
+	},
+	{
 		ID: "array/a-subscript-flag-group-in-each-end-of-a-range", Category: "expansion",
 		Snippet: `s="hello world"; printf "[%s]" "${s[(r)l,(r)o]}" "${s[3,(r)o]}" "${s[(r)w,-1]}" "${s[(r)zz,-1]}" "${s[(R)zz,-1]}"; a=(p "q,r" s); printf "[%s]" "${a[(r)q,r]}"; echo`,
 		Why:     "each end of a range carries a flag group of its own, and a search in one answers with the *index* it matched at rather than with the element — so `${s[(r)l,(r)o]}` is `${s[3,5]}`. The two misses are the two out-of-range indices and not `no match`, which is what the fourth and fifth fields separate: a missed forward search starts one past the last character and bounds nothing, a missed reverse one starts one before the first and bounds everything. The last field is the discriminating one and the reason the split cannot wait for the run — an element whose *value* holds a comma is not what the search finds, so the pair is separated in the text as written and `(r)q` is the whole operand. Ours read the group at the front as the whole subscript's, left the second inside its operand, and answered empty at status 0 to every one of them (#1533)",
@@ -9334,6 +9344,11 @@ echo "st=$?"`,
 		Why:     "the one subscript on the *base* that is not read as an index. Every other one naming nothing is no name — `[4]` and `[-4]` are empty — and the index before the first resolves the base's whole value as though none had been written, which is `p q` and not the empty `${n[0]}` beside it. The second bracket says it is the value the expression comes to rather than the numeral, since `1-1` answers alike. A corner no script can depend on, recorded because the alternative answer is an empty at status 0 (#1852)",
 	},
 	{
+		ID: "expansion/a-write-through-a-reference-reaches-every-subscript", Category: "expansion",
+		Snippet: `a=(p q); v='a[(r)q]'; : ${(P)v::=Z}; printf "[%s]" "${a[@]}"; x=(p q r); w='x[1,2]'; : ${(P)w::=Y}; printf "[%s]" "${x[@]}"; echo`,
+		Why:     "an assignment through the indirection flag, where the resolved text is read as the parameter expansion it spells rather than taken apart by hand into a name and one arithmetic subscript. The search writes the element it found; the range replaces the **span**, so the array comes back shorter. The second is the one that was silent -- `1,2` reaching the arithmetic as one expression makes the comma operator answer 2, and the write lands on that element instead, which is a plausible array at status 0. Only one shell in the panel has the flag; the rest read the same characters as a substring and fail in arithmetic, each in its own words (#2169)",
+	},
+	{
 		ID: "unset/a-subscript-flag-group-names-the-element", Category: "expansion",
 		Snippet: `b=(x y z); w=y; unset "b[(r)$w]"; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`,
 		Why:     "`unset` is the third side of the subscript flag group, and the one where the subscript arrives as a runtime *string* rather than as a word the parser lexed — so the group had nowhere to hang its operand and the whole of `(r)y` went to the arithmetic as `bad math expression`. zsh finds the element whose value matched and removes it, leaving the array three long with an empty one in the middle, which is that shell's answer for `unset a[i]` generally and already an axis here; all the group decides is which element. The operand is written through a parameter on purpose: it is the half a scan-the-text fix gets wrong, since the value has to be substituted before the search runs. The other five have no flag group in a subscript and read the brackets as arithmetic (#1275)",
@@ -9506,6 +9521,18 @@ echo "st=$?"`,
 		Snippet: `[[ -n x
  ; ]]; echo "st=$?"`,
 		Why: "and the reason bash's extra line carries a location of its own: the construct is named at the `[[`'s line and the token at the token's, so a condition opened on line 1 and refused on line 2 names both. One line would have looked right in every single-line case above",
+	},
+	{
+		ID: "decl/an-array-letter-over-a-declared-table", Category: "parameter expansion",
+		Snippet: "typeset -A h 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`h[k]=v; typeset -a h; echo "st=$?"; typeset -p h; echo after`,
+		Why: "one kind of array declared over the other, which the three columns with both attributes answer three ways. bash refuses, names the builtin as it was invoked and the name after it, leaves the table exactly as it was, reports 1 and runs the next command. ksh93 refuses too and **ends the script**, so neither the status nor the listing nor the `after` is reached -- which is what makes the two refusals two answers rather than one wording. zsh converts and the element is gone, at status 0. Every one of the four things printed is load-bearing: the status separates the refusal from the conversion, the listing separates a table that survived from one that did not, and `after` separates the two refusals from each other. bash 3.2 has no `-A` and dash no `typeset` (#1375)",
+	},
+	{
+		ID: "decl/a-table-letter-over-a-declared-array", Category: "parameter expansion",
+		Snippet: "typeset -A junk 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`typeset -a a=(x y); typeset -A a; echo "st=$?"; printf "[%s][%s]" "${a[0]}" "${a[1]}"; echo " after"`,
+		Why: "the same collision from the other side, and the row that says it is two questions and not one: ksh93 refuses the direction above fatally and **converts** this one without losing anything, carrying the elements over as the keys `0` and `1`. bash refuses in the other direction's words and keeps the array; zsh converts and takes the values away. The elements are read back by subscript rather than listed, because that is what separates ksh93's answer from zsh's -- both list a table, and only one of them still has the values in it. The `-A` probe on a throwaway name is what keeps the columns without the attribute out (#1375)",
 	},
 	{
 		ID: "decl/an-array-assignment-as-an-operand", Category: "parameter expansion",

@@ -1376,6 +1376,23 @@ type Diagnostics struct {
 	// put here.
 	ArrayLiteralThroughASubscript string
 
+	// CannotConvertTableToArray is what a declaration says when `-a` names a
+	// name already declared a **table**. Two verbs: the name, and the
+	// builtin as it was invoked — bash writes `declare:`, `typeset:` and
+	// `local:` for the same refusal, so the builtin is a verb rather than a
+	// prefix this package adds.
+	//
+	// Only a dialect answering Semantics.TableUnderAnArrayDeclaration with
+	// one of the two refusals has anything to put here.
+	CannotConvertTableToArray string
+
+	// CannotConvertArrayToTable is the same sentence for the other
+	// direction, `-A` over a name holding an indexed array. Two verbs, the
+	// same two — a field of its own because the shells that word one word
+	// the other differently, and because a shell may refuse one direction
+	// and convert the other, which ksh93 does.
+	CannotConvertArrayToTable string
+
 	// ArrayValueToNonArray is what the splicing shell says when the name a
 	// subscripted literal writes through holds a plain string. One verb: the
 	// name, without the subscript. An *unset* name is not this — it becomes

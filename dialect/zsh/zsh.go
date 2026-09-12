@@ -1511,6 +1511,13 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-12, both store and the table ends with two elements
 	// (#1938).
 	s.EmptyAssociativeKeyIsAnError = interp.No
+	// Either letter takes a name that is already the other kind, and the
+	// elements are gone: measured 2026-09-12, `typeset -A h; h[k]=v;
+	// typeset -a h` is `typeset -a h=(  )` at status 0 and the reverse is
+	// `typeset -A a=( )`. The one column that converts in both directions,
+	// and the only one that loses the values doing it (#1375).
+	s.TableUnderAnArrayDeclaration = interp.CompoundKindChangeEmptiesTheName
+	s.ArrayUnderATableDeclaration = interp.CompoundKindChangeEmptiesTheName
 	// Nor is reading one reported: measured 2026-09-12, `typeset -A m;
 	// m[k]=v; w=; ${m[$w]}` is the empty string at status 0 and silent
 	// (#1972).
@@ -1536,6 +1543,14 @@ func Semantics() interp.Semantics {
 	// where `${a[ ]}` is the expression running out. The written `${a[]}`
 	// above is a third sentence again, which is why they are two axes.
 	s.EmptySubscriptTextIsAMathError = interp.Yes
+	// A subscript's expression stops at the first top-level `,` or `;` and
+	// the rest of the text is discarded, unevaluated: measured 2026-09-12,
+	// `a=(p q r s); i="2,3"; ${a[$i]}` is `q` where the comma operator would
+	// give `r`, and `i="2,n=9"` leaves `n` at 0. The other half of the rule
+	// that a comma has to have been *written* to separate a range: what
+	// reaches an expression with one still in it arrived through a
+	// substitution, and it separates nothing (#2160).
+	s.SubscriptExpressionStopsAtASeparator = interp.Yes
 	// Whitespace between the brackets is refused too, and by a different
 	// part of the shell: measured 2026-09-10, `a=(1 2 3); echo $(( a[ ] ))`
 	// is `bad math expression: operand expected at end of string` — the

@@ -1101,22 +1101,21 @@ type Dialect struct {
 	// **The parenthesis spelling takes a name list too**, and this flag is
 	// read there as well — `clipcopy clippaste() { … }` defines both, and so
 	// does `echo hi () { … }`, which makes *any* word list followed by `()` a
-	// definition rather than only a word the grammar already liked. Measured
-	// 2026-09-10, all three at status 0 in zsh 5.9.2 and a syntax error at
-	// the `(` in the other five. Two shapes bound it, measured with them:
+	// definition rather than only a word the grammar already liked. All three
+	// are status 0 under a true preset and a syntax error at the `(` under a
+	// false one. Two shapes bound it, measured with them:
 	//
 	//	x=1 a b () { … }    `parse error near `()`` — an assignment ends it
 	//	a b ()              `parse error near `()`` — the body is not optional
 	//	                    in this spelling, unlike the keyword one above
 	//	a b >out () { … }   defines both, and the redirection is the body's
 	//
-	// So the names are read where a command's *arguments* are read, and the
-	// two things that are not names — an assignment before them, and a
-	// missing body after them — are refusals rather than readings (#1685).
+	// So the names are read where a command's *arguments* are read, and the two
+	// things that are not names — an assignment before them, and a missing body
+	// after them — are refusals rather than readings.
 	//
-	// **The redirection is the body's**, which is where a definition's
-	// written one goes everywhere else. Measured 2026-09-12 on zsh 5.9.2,
-	// each in a scratch directory:
+	// **The redirection is the body's**, which is where a definition's written
+	// one goes everywhere else. Measured in a scratch directory:
 	//
 	//	a b >o1 () { echo "[$0]"; }; a; b; cat o1     `[b]`, nothing on the
 	//	                                              terminal — one body,
@@ -1134,17 +1133,17 @@ type Dialect struct {
 	// hand to announce the reading — see
 	// [Parser.parseFuncPosixNamesAtParen]. And it reaches the *formatter*,
 	// which copies a declaration's header from the source: the redirection
-	// lies inside that span and the body writes it again, so the header
-	// leaves it out. Printed twice, a formatted file redirects twice (#1838).
+	// lies inside that span and the body writes it again, so the header leaves
+	// it out. Printed twice, a formatted file redirects twice.
 	FunctionMultipleNames bool
 
 	// FunctionKeywordReferenceList lets the `function` keyword's name be
 	// followed by more words, which are **taken and discarded**: only the
 	// first word is a function, and the rest name nothing.
 	//
-	// ksh93 alone, where they are a list of name references the body may
-	// bind. Measured 2026-09-11 and 2026-09-12 from a script file on
-	// ksh93u+, because the blame lands on a later line and `-c` has none:
+	// Where the flag is on they are a list of name references the body may bind.
+	// Measured from a script file, because the blame lands on a later line and
+	// `-c` has none:
 	//
 	//	function a b { print hi; } ⏎ a ⏎ b
 	//	    `hi`, then `b: not found` at 127 — `a` is defined and `b` is not
@@ -1163,42 +1162,42 @@ type Dialect struct {
 	// [Dialect.FunctionNameIsSourceText].
 	//
 	// It is **not** [Dialect.FunctionMultipleNames], and the pair of them is
-	// what says so: zsh defines every name in its list and answers each call
-	// with its own `$0`, where here `b` is not found. No dialect sets both.
+	// what says so: that one defines every name in its list and answers each
+	// call with its own `$0`, where here the later names are not found. No
+	// preset sets both.
 	//
 	// The list stops at the end of the line, and that is where the rule is
-	// visible from the outside. This shell wants a brace group after the
-	// keyword ([Dialect.FunctionKeywordBodyMustBeBraceGroup]), so
+	// visible from the outside. A preset with this also wants a brace group
+	// after the keyword ([Dialect.FunctionKeywordBodyMustBeBraceGroup]), so
 	// `function a echo B` ⏎ `a` blames the `a` on **line 2** — `echo` and `B`
 	// were eaten as header words and the body never started — where
 	// `function a echo` ⏎ `{ print hi; }` is status 0.
 	//
-	// Discarded by the *grammar* and not quite by the shell: `typeset -f`
-	// writes the declaration back with its list, `function a b { print hi;
-	// }`. That is a listing question rather than a parsing one (#1494), and
-	// nothing about `b` is reachable from a script.
+	// Discarded by the *grammar* and not quite by the shell: the function
+	// listing writes the declaration back with its list. That is a listing
+	// question rather than a parsing one, and nothing about the extra names is
+	// reachable from a script.
 	FunctionKeywordReferenceList bool
 
 	// FunctionKeywordBodyIsOptional lets a `function` keyword's name list be
 	// followed by a separator, and lets it end with no body at all. Each name
-	// is then defined with an **empty** body, which is what the shell reports
-	// for it — measured 2026-09-10 on zsh 5.9.2, `eval "function a b"` leaves
-	// `typeset +f` listing `a` and `b`, `functions a` printing `a () { }`,
-	// and a call to either printing nothing at status 0.
+	// is then defined with an **empty** body, which is what the preset reports
+	// for it — `eval "function a b"` leaves the names-only listing showing `a`
+	// and `b`, the body listing printing `a () { }`, and a call to either
+	// printing nothing at status 0.
 	//
-	// It is not an autoload stub, which #1686 recorded it as and which the
-	// same run disproves: `fpath=(dir); autoload af1; functions af1` prints
-	// `# undefined` and `builtin autoload -X`, and a call to it reads the
-	// file, where `fpath=(dir); eval "function af1"; af1` prints nothing.
-	// The transcript that suggested otherwise was `function af1; af1`, and
-	// the `af1` after the `;` is the *body* rather than a call — which is
-	// the other half of this flag.
+	// It is not an autoload stub, which the same run disproves: a marked-
+	// undefined name lists as `# undefined` with the autoload builtin under it,
+	// and a call to it reads the file, where a bodyless declaration prints
+	// nothing. A transcript of `function af1; af1` suggests otherwise, and the
+	// `af1` after the `;` is the *body* rather than a call — which is the other
+	// half of this flag.
 	//
 	// **The separator half is why the two are one flag.** A `;` between the
-	// names and the body is taken there — `function a; echo B` defines `a`
-	// with body `echo B`, so `echo B` never runs where it stands — and
-	// without reading it, a bodyless declaration would swallow the separator
-	// and run the next command instead of binding it. Newlines already stand
+	// names and the body is taken — `function a; echo B` defines `a` with body
+	// `echo B`, so `echo B` never runs where it stands — and without reading it,
+	// a bodyless declaration would swallow the separator and run the next
+	// command instead of binding it. Newlines already stand
 	// there in every dialect, and the `;` joins them. The body is absent
 	// exactly when no command follows: `function a b` at the end of the
 	// input, before a `}`, a `fi` or a `done`, before `&&` and before a `|`.
@@ -1212,9 +1211,8 @@ type Dialect struct {
 	// group. The brace group is the one shape that ends the declaration at
 	// its `}`; everything else takes the `&&` and `||` after it.
 	//
-	// zsh alone, and measured 2026-09-12 on zsh 5.9.2 by the **order** the
-	// two commands come out in, which is the only thing that parts the two
-	// readings — both print `X` and `Y` at status 0:
+	// Measured by the **order** the two commands come out in, which is the only
+	// thing that parts the two readings — both print `X` and `Y` at status 0:
 	//
 	//	function a; echo X && echo Y  ⏎ a     X then Y — one body
 	//	function a { echo X; } && echo Y ⏎ a  Y then X — `&&` is the

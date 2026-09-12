@@ -142,6 +142,9 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// last command a signal killed is a signal death out here too, and
 		// a pipeline substituting the status has to know that.
 		r.status, r.diedOfSig = sub.status, sub.diedOfSig
+		// A fork this shell just waited for, which is where a coprocess that
+		// ended is noticed. See Runner.retireCoproc for the measurements.
+		r.retireCoproc()
 		return err
 	})
 }

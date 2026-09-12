@@ -4450,6 +4450,73 @@ type Semantics struct {
 	// dialect without the word never meets it.
 	CoprocEndsInAnArray Answer
 
+	// ReapedCoprocessEnds is what becomes of those near ends when the
+	// coprocess itself has been reaped, which is a separate question from how
+	// a script reached them and is answered three ways by the three shells
+	// that have a coprocess at all.
+	//
+	// Measured 2026-09-12, with the coprocess ended and the shell given a
+	// reason to notice — a `wait`, or anything else that makes it reap a
+	// child; see Runner.retireCoproc for what does and does not count:
+	//
+	//	bash 5.3.15, bash-as-sh   both ends go, and the array with them.
+	//	                          `echo x >&${CP[1]}` is `${CP[1]}:
+	//	                          ambiguous redirect` at 1 and the script
+	//	                          carries on; `declare -p CP` and `declare
+	//	                          -p CP_PID` both answer `not found`; and a
+	//	                          number saved out of the array beforehand
+	//	                          is `Bad file descriptor` on either end.
+	//	ksh93 (AJM 93u+ 2012)     the write end goes and the read end stays.
+	//	                          `print -p x` is `print: no query process
+	//	                          [Bad file descriptor]` at 1, while a
+	//	                          `read -p v` still answers what the
+	//	                          coprocess left in the pipe.
+	//	zsh 5.9.2                 neither goes. `print -p x` writes into a
+	//	                          pipe with no reader and the shell dies on
+	//	                          SIGPIPE, status 141 — which is why this
+	//	                          axis's zsh value is the one this shell
+	//	                          held everywhere before the axis existed.
+	//	bash 3.2, dash, ash       no coprocess of any spelling, so the
+	//	                          question never arises.
+	//
+	// The array is not a fourth answer and does not need a field of its own:
+	// it only publishes the ends, so where the ends go the array goes with
+	// them. That is why this is asked of the shell that has no array too.
+	//
+	// **What a `read -p` finding end-of-file does is not this axis**, and the
+	// panel is what says so: both shells with the letters forget the whole
+	// coprocess there — the write end along with the read one — and neither
+	// needs it reaped first, so the same three answers come back with no
+	// `wait` anywhere. See Runner.coprocReadEnded, which is unconditional for
+	// that reason. bash never reaches it, spelling `-p` as a prompt, and two
+	// reads that both find end-of-file leave `${#CP[@]}` at 2.
+	//
+	// **There is no unanswered state, and that is measured rather than an
+	// omission.** Reaping is not a construct a script asked for — it is the
+	// shell noticing that a child it started has ended — so a refusal would
+	// have nothing to attach itself to and no status to report through. The
+	// zero value is therefore an answer, and it is the one this shell gave
+	// everywhere before the axis existed; every preset with a coprocess
+	// states its own anyway.
+	//
+	// unpinned zsh: half of this column is pinned and the other half cannot
+	// be yet. `commands/reading-by-a-letter-from-a-coprocess-that-has-ended`
+	// objects to the flip to CoprocEndsGoWithTheCoprocess, because the read
+	// end survives the reaping here and would not there. Nothing objects to
+	// the flip to CoprocWriteEndGoesWithTheCoprocess, and only one observable
+	// separates those two: a `print -p` into the kept write end, which real
+	// zsh answers by dying on SIGPIPE. This shell answers a builtin's broken
+	// pipe with a status instead, so the row that measures it
+	// (`commands/writing-by-a-letter-to-a-coprocess-that-has-ended`) is in
+	// the corpus and red, and a red row that stays red under a flip is not an
+	// objection. It becomes one the day #770 lands (#2411).
+	//
+	// unpinned: dash and ash have no coprocess of any spelling — no `coproc`
+	// word and no `|&` operator — so nothing in either dialect ever consults
+	// this axis and no row could object however it was written. bash 3.2 is
+	// the same and has no dialect of its own here (#2411).
+	ReapedCoprocessEnds CoprocEndDisposal
+
 	// BareDeclarationListing is the shape `export` and `readonly` write with
 	// no operands and no `-p` — which is not always the shape `-p` writes.
 	// dash and both bash builds answer the bare form exactly as they answer
@@ -11262,6 +11329,49 @@ func (b DescriptorAllocationBase) number() int {
 
 func (b DescriptorAllocationBase) String() string {
 	return "from " + itoa(b.number())
+}
+
+// CoprocEndDisposal is what a shell does with a coprocess's near ends once
+// the coprocess has been reaped. See Semantics.ReapedCoprocessEnds, which is
+// the only reader and which records the measurements and why this type has no
+// unanswered value.
+type CoprocEndDisposal uint8
+
+const (
+	// CoprocEndsSurviveTheCoprocess takes back neither end, so a script may
+	// still write to one that nothing is reading. That write ends the shell
+	// on SIGPIPE — itself shared ground rather than a disposition of this
+	// axis, since `exec 3> >(exec true)` and a later write does the same
+	// everywhere.
+	//
+	// zsh 5.9.2, and the zero value because it is what this shell did
+	// everywhere before the axis existed.
+	CoprocEndsSurviveTheCoprocess CoprocEndDisposal = iota
+
+	// CoprocWriteEndGoesWithTheCoprocess lets go of the end the shell writes
+	// and keeps the end it reads, so what the coprocess left in the pipe is
+	// still there to be read and only a write is refused.
+	//
+	// ksh93 (AJM 93u+ 2012-08-01).
+	CoprocWriteEndGoesWithTheCoprocess
+
+	// CoprocEndsGoWithTheCoprocess lets go of both ends at once, and with
+	// them whatever published them: the array and its _PID companion are
+	// unset rather than emptied, so `${CP[1]}` expands to nothing and the
+	// redirection that names it is ambiguous.
+	//
+	// bash 5.3.15, and bash invoked as sh.
+	CoprocEndsGoWithTheCoprocess
+)
+
+func (d CoprocEndDisposal) String() string {
+	switch d {
+	case CoprocWriteEndGoesWithTheCoprocess:
+		return "the write end goes"
+	case CoprocEndsGoWithTheCoprocess:
+		return "both ends go"
+	}
+	return "both ends survive"
 }
 
 type ReadTrailingEscapedSeparatorPolicy int

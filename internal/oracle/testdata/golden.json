@@ -37006,6 +37006,108 @@
         "TimedOut": false
       }
     },
+    "commands/a-command-substitution-does-not-notice-a-coprocess-has-ended": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"}\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "n=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `}'~\u003cshell\u003e: -c: line 0: `coproc CP { echo hi; }; v=$( : ); echo \"n=${#CP[@]}\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `}'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "commands/a-coprocess-s-array-outlives-the-builtins-after-it": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"}\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "n=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `}'~\u003cshell\u003e: -c: line 0: `coproc CP { echo hi; }; :; :; :; echo \"n=${#CP[@]}\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `}'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "commands/a-coprocess-whose-body-reads-does-not-block-the-shell": {
       "ash": {
         "Stdout": "AFTER",
@@ -37210,6 +37312,108 @@
         "TimedOut": false
       }
     },
+    "commands/a-reaped-coprocess-s-array-goes-with-it": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"}\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "n=0 pid=[]~w=1~done",
+        "Stderr": "\u003cshell\u003e: line 1: ${CP[1]}: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n=0 pid=[]~w=1~done",
+        "Stderr": "\u003cshell\u003e: line 1: ${CP[1]}: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `}'~\u003cshell\u003e: -c: line 0: `coproc CP { echo hi; }; wait; echo \"n=${#CP[@]} pid=[${CP_PID}]\"; echo two \u003e\u0026${CP[1]}; echo \"w=$?\"; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `}'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "commands/a-reaped-coprocess-s-descriptors-go-with-it": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"}\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "read=1 a=[]~write=1",
+        "Stderr": "\u003cshell\u003e: line 1: $r: Bad file descriptor~\u003cshell\u003e: line 1: $w: Bad file descriptor",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "read=1 a=[]~write=1",
+        "Stderr": "\u003cshell\u003e: line 1: $r: Bad file descriptor~\u003cshell\u003e: line 1: $w: Bad file descriptor",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `}'~\u003cshell\u003e: -c: line 0: `coproc CP { echo hi; }; r=${CP[0]}; w=${CP[1]}; wait; read -r a \u003c\u0026$r; echo \"read=$? a=[$a]\"; echo x \u003e\u0026$w; echo \"write=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `}'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "commands/a-second-separator-where-a-command-belongs": {
       "ash": {
         "Stdout": "",
@@ -37359,6 +37563,57 @@
         "Stdout": "two",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "commands/a-subshell-is-what-notices-a-coprocess-has-ended": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"}\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `}'~\u003cshell\u003e: -c: line 0: `coproc CP { echo hi; }; ( : ); echo \"n=${#CP[@]}\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `}'",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -38179,6 +38434,210 @@
         "TimedOut": false
       }
     },
+    "commands/end-of-file-does-not-take-back-a-coprocess-array": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"}\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "b=1 n=2~c=1 n=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "b=1 n=2~c=1 n=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `}'~\u003cshell\u003e: -c: line 0: `coproc CP { echo hi; }; read -r a \u003c\u0026${CP[0]}; read -r b \u003c\u0026${CP[0]}; echo \"b=$? n=${#CP[@]}\"; read -r c \u003c\u0026${CP[0]}; echo \"c=$? n=${#CP[@]}\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `}'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "commands/reading-a-coprocess-that-has-just-ended": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"}\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "a=hi n=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=hi n=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `}'~\u003cshell\u003e: -c: line 0: `coproc CP { echo hi; }; read -r a \u003c\u0026${CP[0]}; echo \"a=$a n=${#CP[@]}\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `}'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "commands/reading-by-a-letter-from-a-coprocess-that-has-ended": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected word (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `print'~\u003cshell\u003e: -c: line 0: `coproc (print hi); wait; read -p a; print \"1=$? a=[$a]\"; print done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1=0 a=[hi]~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "commands/the-coprocess-letters-once-its-output-has-ended": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected word (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `print'~\u003cshell\u003e: -c: line 0: `coproc (print hi); read -p a; print \"1=$? a=[$a]\"; read -p b; print \"2=$? b=[$b]\"; read -p c; print \"3=$? c=[$c]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1=0 a=[hi]~2=1 b=[]~3=1 c=[]",
+        "Stderr": "\u003cshell\u003e:read:1: -p: no coprocess",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "commands/the-coprocess-letters-with-nothing-started": {
       "ash": {
         "Stdout": "p=127~r=1",
@@ -38278,6 +38737,58 @@
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "commands/writing-by-a-letter-to-a-coprocess-that-has-ended": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected word (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `print'~\u003cshell\u003e: -c: line 0: `coproc (print hi); wait; print -p x; print \"w=$?\"; print done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 13,
+        "SignalName": "broken pipe",
         "TimedOut": false
       }
     },
@@ -128657,6 +129168,108 @@
         "Stdout": "",
         "Stderr": "\u003cscript\u003e:1: parse error near `\u0026'",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pipe/reading-a-coprocess-operator-s-process-that-has-ended": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"\u0026\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 0: `print hi |\u0026 wait; read -p a; print \"1=$? a=[$a]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"\u0026\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1=0 a=[hi]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1=1 a=[]",
+        "Stderr": "\u003cshell\u003e:read:1: -p: no coprocess",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pipe/writing-to-a-coprocess-operator-s-process-that-has-ended": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"\u0026\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 0: `print hi |\u0026 wait; print -p x; print \"w=$?\"; print done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"\u0026\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "w=1~done",
+        "Stderr": "\u003cshell\u003e: print: no query process [Bad file descriptor]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "w=1~done",
+        "Stderr": "\u003cshell\u003e:print:1: -p: no coprocess",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }

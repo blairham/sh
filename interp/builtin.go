@@ -3092,7 +3092,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	in := r.In()
 	if coprocSource >= 0 {
 		if rd, open := r.readerForFd(coprocSource); open {
-			in = rd
+			// Wrapped so the end of the coprocess's output is noticed where
+			// it happens. One dialect keeps the read end past the reaping and
+			// lets go of it exactly here — see
+			// Semantics.ReapedCoprocessEnds — and end-of-file is not a state
+			// the descriptor is in, only something a read came back with.
+			in = &coprocReader{Reader: rd, r: r}
 		}
 	}
 	if word, ok := optArg['u']; ok {

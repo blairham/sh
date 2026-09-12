@@ -1544,7 +1544,18 @@ func Diagnostics() interp.Diagnostics {
 		ScriptNotReadableStatus: 126,
 		Location:                interp.LocationLineWordAfterFirst,
 		TraceQuoting:            interp.QuoteDollar,
-		TraceArrayLiteral:       interp.TraceArraySpaced,
+		// The tilde and the hash count anywhere here rather than only at the
+		// front, `=` counts only at the front, and `^` and `!` do not count
+		// at all — three splits from bash in one set. Measured 2026-09-12.
+		TraceMetacharacters: interp.TraceMetacharacters{
+			Anywhere: "*?[]{}~#",
+			Leading:  "=",
+		},
+		// Both ends of a test are printed bare: `[ 1 -lt 2 ]`, where bash
+		// quotes both and zsh quotes the closer. Only the final operand —
+		// `[ -n "]" ]` is `[ -n ']' ]`.
+		TraceBareBracket:  interp.TraceBracketPairBare,
+		TraceArrayLiteral: interp.TraceArraySpaced,
 		// The same quoting inside a condition as outside it, which is where
 		// this shell parts from bash: `[[ "a b" == "a b" ]]` traces
 		// `[[ 'a b' == 'a b' ]]` here and `[[ a b == a b ]]` there.

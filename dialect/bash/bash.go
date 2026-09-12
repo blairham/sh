@@ -1584,7 +1584,18 @@ func Diagnostics() interp.Diagnostics {
 		OptionListingTabbed: true,
 		KillListing:         interp.KillListingNumbered,
 		TraceQuoting:        interp.QuoteShell,
-		TraceForHeader:      interp.TraceForSource,
+		// And the widest character set of the three, with a position rule
+		// the other two do not have: `~a` and `#a` are quoted and `a~b` and
+		// `a#b` are not, so the tilde and the hash count only where they
+		// would have started an expansion or a comment. `^` and `!` are
+		// quoted anywhere, which is bash alone, and `=` is quoted nowhere,
+		// which is also bash alone. bash 3.2.57 agrees on every row, so this
+		// is not a version split. Measured 2026-09-12 over 36 words.
+		TraceMetacharacters: interp.TraceMetacharacters{
+			Anywhere: "*?[]{}^!",
+			Leading:  "~#",
+		},
+		TraceForHeader: interp.TraceForSource,
 		// The header as written, once, before the subject is expanded — the
 		// same reading the `for` header gets, and from the same field the
 		// parser keeps for it.

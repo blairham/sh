@@ -597,3 +597,62 @@ function call and a subshell add none, so it counts **text being read again**
 rather than the depth of the stack. dash, ksh93 and zsh draw the same prefix at
 every depth. `Diagnostics.TracePrefixRepeatsAtIndirection` is the answer, and
 `Runner.indirection` is the count.
+
+### Which words the trace quotes
+
+`Diagnostics.TraceQuoting` says *how* a word that needs quoting is spelled.
+**Which** words need it is a second question with a second answer, and the
+panel does not split the same way on the two: bash and zsh share a
+`TraceQuoting` value and disagree about three characters and one position
+rule. `Diagnostics.TraceMetacharacters` is the field.
+
+Every quoting shell agrees on whitespace, the quote characters, `$`, a
+backquote, a backslash and the operators `| & ; < > ( )`. Past that, measured
+2026-09-12 over 36 words handed to `echo` under `set -x`, from a script file,
+`env -i PATH=/usr/bin:/bin`. Q means the shell single-quoted it; dash prints
+every row bare and is left out. bash 3.2.57 agrees with 5.3.15 on every row.
+
+| word | bash | ksh93 | zsh |
+| --- | --- | --- | --- |
+| `a*b`, `a?b`, `a[b`, `a]b`, `[1]`, `a{b`, `a}b`, `{a,b}` | Q | Q | Q |
+| `~a`, `#a` | Q | Q | Q |
+| `a~b`, `a#b` | — | Q | Q |
+| `^ab`, `ab^` | Q | — | Q |
+| `!ab`, `ab!`, `a!b` | Q | — | — |
+| `=ab` | — | Q | Q |
+| `ab=`, `a=b` | — | — | Q |
+| `a@b`, `a%b`, `a+b`, `a-b`, `a,b`, `a/b`, `a:b`, `-ab`, `a-` | — | — | — |
+
+Three facts come out of that, and the first is why one character set cannot
+hold it:
+
+- **`~` and `#` are positional in bash and not in the other two.** bash quotes
+  them where they would have begun an expansion or a comment and nowhere else.
+  So bash's answer is not a smaller alphabet, it is the same characters under a
+  leading-only rule — which is why the field is two strings, `Anywhere` and
+  `Leading`, rather than one.
+- **`=` is three different answers**: never in bash, leading only in ksh93,
+  anywhere in zsh.
+- **`^` and `!` split the panel again**, and differently: bash quotes both, zsh
+  quotes `^` and not `!`, ksh93 quotes neither.
+
+### The brackets of a test are the one exemption
+
+`[ 1 -lt 2 ]` traces as `'[' 1 -lt 2 ']'` in bash, `[ 1 -lt 2 ]` in ksh93 and
+`[ 1 -lt 2 ']'` in zsh. `Diagnostics.TraceBareBracket` is the answer.
+
+It is **not** "a command word is never quoted", and the rows that say so are
+worth keeping because each rules out a simpler rule that fits some of the
+evidence:
+
+| written | ksh93 | zsh | what it rules out |
+| --- | --- | --- | --- |
+| `'a[b' x` | `'a[b' x` | `'a[b' x` | a command word is not exempt as such |
+| `']' z` | `']' z` | `']' z` | the character is not exempt as such |
+| `'[' 1 -lt 2 x` | `[ 1 -lt 2 x` | `[ 1 -lt 2 x` | the `[` is bare with no closer in sight, so it is the word and not the construct |
+| `[ -n "]" ]` | `[ -n ']' ]` | `[ -n ']' ']'` | ksh93 exempts only the **final** operand |
+| `v='['; $v 1 -lt 2 ']'` | `[ 1 -lt 2 ]` | `[ 1 -lt 2 ']'` | it is the expanded word, not the source |
+
+Writing the brackets already quoted in the source changes nothing in any of the
+three, which is the same fact from the other side: the trace is rendered from
+the word the shell arrived at.

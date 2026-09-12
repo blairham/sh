@@ -171,6 +171,17 @@ func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 	if got, want := d.TraceQuoting, interp.QuoteShell; got != want {
 		t.Errorf("TraceQuoting = %v, want %v", got, want)
 	}
+	// The character sets are the whole of #2141: which words the quoting
+	// above is applied to, measured over 36 words on 2026-09-12.
+	if got, want := d.TraceMetacharacters.Anywhere, "*?[]{}^!"; got != want {
+		t.Errorf("TraceMetacharacters.Anywhere = %q, want %q", got, want)
+	}
+	if got, want := d.TraceMetacharacters.Leading, "~#"; got != want {
+		t.Errorf("TraceMetacharacters.Leading = %q, want %q", got, want)
+	}
+	if got, want := d.TraceBareBracket, interp.TraceBracketQuotedLikeAnyWord; got != want {
+		t.Errorf("TraceBareBracket = %v, want %v", got, want)
+	}
 	if got, want := d.TraceStyle, interp.TracePlain; got != want {
 		t.Errorf("TraceStyle = %v, want %v", got, want)
 	}

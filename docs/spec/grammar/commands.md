@@ -772,6 +772,41 @@ produces; the zsh dialect turns it on and gets both halves. The full
 account, including how the wrong model was caught, is in
 `../semantics.md`.
 
+### Neither brace needs a blank in zsh, which is a third half
+
+"Wherever a word may stand" reaches *inside* the word, and the blanks go
+with it. Measured 2026-09-12 on zsh 5.9.2, each line its own `zsh -c`:
+
+| probe | dash | bash 5.3 | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| `echo A}` | `A}` | `A}` | `A}` | `A}` | **error** |
+| `echo A} B` | `A} B` | `A} B` | `A} B` | `A} B` | **error** |
+| `{ echo A}` | error | error | error | error | **`A`** |
+| `a(){echo A}; a` | `{echo` not found | error | error | `{echo` not found | **`A`** |
+| `{a,b}` | `{a,b}` not found | `a` not found | `a` not found | `a` not found | **`a,b` not found** |
+
+The last row is the opening brace on its own: read as the reserved word,
+the brace expansion never happens, so zsh looks for a command called
+`a,b` where bash and ksh93 expand the word and look for `a`. Grammar
+flag: `OpenBraceNeedsNoBlank`, and it is command position only — `echo
+hi > {a}` writes a file with braces in its name there, and `for i in
+{a,b}` still expands to two words.
+
+The closing brace ends the word it stands at the **end** of, and only
+that one. Two things take the reading away, both measured on the same
+binary:
+
+    echo a}b       a}b       the brace is not at the end of the word
+    echo {a}       {a}       a bare `{` earlier in the word pairs with it
+    echo a{b}c}    error     …and the pairing is exact: this `}` is spare
+    echo ${x}}     error     an expansion's braces pair with nothing
+    echo A\}       A}        quoting takes the reserved reading away
+    x=a}           assigns   an assignment's value is text to its end
+    echo x=}       error     …which is the assignment and not the shape
+
+The last pair is the whole of the carve-out: the same characters are a
+value in one position and a refusal one word later.
+
 ## Compound commands take redirections
 
 A redirection after a compound command applies to everything inside it:

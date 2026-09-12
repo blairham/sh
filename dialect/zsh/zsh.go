@@ -2070,6 +2070,10 @@ func Diagnostics() interp.Diagnostics {
 		// The same sentence at the parameter site, and its own field because
 		// the two coincide here and do not in bash — see the field.
 		EmptyParamSubscript: "invalid subscript",
+		// And the same sentence for a `[` the word never closed, which is a
+		// different construct wearing this shell's one complaint. See
+		// interp.Diagnostics.BareSubscriptUnclosed.
+		BareSubscriptUnclosed: "invalid subscript",
 		// The subscript machinery's other complaint with the same words and
 		// a different construct: `${(k)x[1,2]}` and `${a[(i)q,2]}` are each
 		// a reading that needs one index over a subscript that names a span.

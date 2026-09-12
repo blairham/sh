@@ -430,3 +430,58 @@ func TestAnEmptyParameterSubscriptIsInvalid(t *testing.T) {
 		}
 	}
 }
+
+// TestAnUnclosedBareSubscriptIsInvalid is #1757.
+//
+// A `[` directly behind an unbraced `$name` that the word never closes is
+// refused, with the subscript machinery's own sentence and no name in it, and
+// the input ends. Measured 2026-09-12 on 5.9.2 with `setopt noglob`, so a
+// pattern that matches nothing cannot be what is being reported:
+//
+//	$a[1 2]     invalid subscript      the word ends at the blank
+//	$a[         invalid subscript      and at the end of the word
+//	x$a[1       invalid subscript      not only at the head of one
+//	"$a[1"      invalid subscript      nor is it about quoting
+//	$nosuch[1   invalid subscript      nor about the value
+//
+// The rest of the panel has no such construct and prints the brackets as
+// text at 0, which is `array/a-subscript-without-braces-the-word-never-closes`
+// and its pair. What is asserted here is this dialect's half: the wording,
+// and that the shell stops.
+func TestAnUnclosedBareSubscriptIsInvalid(t *testing.T) {
+	for _, src := range []string{
+		`a=(xx yy zz); printf "<%s>" $a[1 2]`,
+		`a=(xx yy zz); printf "<%s>" $a[`,
+		`a=(xx yy zz); printf "<%s>" x$a[1`,
+		`a=(xx yy zz); printf "<%s>" "$a[1"`,
+		`printf "<%s>" $nosuch[1`,
+	} {
+		out, st := answersRun(t, "setopt noglob\n"+src+"\necho AFTER")
+		if !strings.Contains(out, "invalid subscript") || strings.Contains(out, "bad substitution") {
+			t.Errorf("%s = %q, want `invalid subscript` and no substitution wording", src, out)
+		}
+		if strings.Contains(out, "AFTER") || st == 0 {
+			t.Errorf("%s = %q (status %d), want the shell ended", src, out, st)
+		}
+	}
+}
+
+// And the three shapes that are not it, in the same dialect and on the same
+// line — a refusal that fired on any of these would be a shell that cannot
+// print a bracket.
+func TestWhatIsNotAnUnclosedBareSubscript(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`a=(xx yy zz); printf "<%s>" "${a}[1"`, "<xx yy zz[1>"},
+		{`a=(xx yy zz); printf "<%s>" "$a]1["`, "<xx yy zz]1[>"},
+		{`a=(xx yy zz); printf "<%s>" $a[1]`, "<xx>"},
+		// The brackets are not a subscript here, so text with a `[` in it is
+		// a word like any other — the other side of the axis, which is what
+		// says the refusal above is the axis's answer and not the word's.
+		{`a=(xx yy zz); setopt ksharrays; printf "<%s>" $a[`, "<xx[>"},
+	} {
+		out, st := answersRun(t, "setopt noglob\n"+tc.src)
+		if st != 0 || out != tc.want {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+}

@@ -3087,6 +3087,24 @@ type Diagnostics struct {
 	// DivisionByZero is the reason itself, which dash and ksh93 spell
 	// differently. No verbs.
 	DivisionByZero string
+	// BareSubscriptUnclosed is what an unbraced `$name` says when the `[`
+	// behind it is never closed inside the word — `$a[1 2]`, where the blank
+	// ends the word and the subscript with it. No verbs: the one shell that
+	// refuses it names neither the parameter nor the brackets.
+	//
+	// Only a dialect whose grammar has the unbraced subscript can reach it,
+	// and only where the run reads those brackets as a subscript at all —
+	// see interp.Semantics.BareSubscriptIsASubscript, which is what the same
+	// line answers differently under `setopt ksharrays`.
+	//
+	// Its own field rather than a reuse of EmptyParamSubscript, whose
+	// wording coincides in that shell for the reason the two constructs
+	// share a complaint there and not because they are one question: that
+	// one is a subscript that was *written* and came out empty, this one is
+	// a subscript that was never finished. A dialect that told them apart
+	// would need them apart, and tying them together is how a change to one
+	// site silently moves the other.
+	BareSubscriptUnclosed string
 	// EmptyParamSubscript is what `${a[]}` says where the dialect refuses it
 	// with a sentence of its own rather than with its bad-substitution one.
 	// No verbs.

@@ -13886,6 +13886,94 @@
         "TimedOut": false
       }
     },
+    "array/a-subscript-without-braces-open-at-the-end-of-the-word": {
+      "bash": {
+        "Stdout": "\u003cxx[\u003est=0~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cxx[\u003est=0~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cxx[\u003est=0~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cxx[\u003est=0~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "\u003cxx[\u003est=0~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: invalid subscript",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/a-subscript-without-braces-the-word-never-closes": {
+      "bash": {
+        "Stdout": "\u003cxx[1\u003e\u003c2]\u003est=0~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cxx[1\u003e\u003c2]\u003est=0~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cxx[1\u003e\u003c2]\u003est=0~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cxx[1\u003e\u003c2]\u003est=0~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "\u003cxx[1\u003e\u003c2]\u003est=0~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: invalid subscript",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/a-substituted-comma-on-the-left-of-an-assignment": {
       "bash": {
         "Stdout": "[p][q][Z][s][1][2][3][Z]",

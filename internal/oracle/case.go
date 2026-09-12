@@ -5648,6 +5648,16 @@ echo "st=$?"`,
 		Why:     "the parameters that take a bare subscript are not simply all of them: zsh subscripts a name and a scalar alike but reads `$1[2]` as the positional and then two literal characters, so this is unanimous across the panel — dash included, which has no arrays at all. It is the row that keeps a dialect from granting the form to every `$`",
 	},
 	{
+		ID: "array/a-subscript-without-braces-the-word-never-closes", Category: "expansion",
+		Snippet: `a=xx; printf "<%s>" $a[1 2]; echo "st=$?"; echo alive`,
+		Why:     "a `[` behind an unbraced `$name` that the word ends before closing, which is the one shape of the construct that is not a wrong answer everywhere but a *refusal* in the shell whose construct it is: zsh says `invalid subscript` and the input stops, where the other five read `[1` as text glued to the value and `2]` as a second field and go on at 0. A scalar rather than an array so that dash reaches the question at all — the refusal has nothing to do with the value, and `$nosuch[1` is refused the same way. `printf` with a repeating format prints one bracket pair per field, because `echo` cannot tell one field holding a blank from two",
+	},
+	{
+		ID: "array/a-subscript-without-braces-open-at-the-end-of-the-word", Category: "expansion",
+		Snippet: `a=xx; printf "<%s>" $a[; echo "st=$?"; echo alive`,
+		Why:     "the same refusal with nothing between the bracket and the end of the word, which is what says the blank is not what decides it — the word ending is. Its pair above has a character after the `[` and this one has none, and zsh refuses both while the other five print the bracket as text",
+	},
+	{
 		ID: "array/a-subscript-without-braces-is-read-once", Category: "expansion",
 		Snippet: `a=(x y z); echo "[$a[1][1]]"`,
 		Why:     "one subscript and no more: zsh reads `[1]` and leaves the second bracket group as text, so the answer is `x[1]` rather than a character of `x`. The braced form has the same rule and no way to show it, since `${a[1][1]}` is a bad substitution",

@@ -10513,6 +10513,40 @@ word around them would be. `b=2; $a[$b]` is `xx[2]`, and an unquoted
 `$a[1]` is the pattern `xx[1]`, which is what leaves a `$dir[0-9]*`
 written for another shell the glob its author meant.
 
+The same axis decides a `[` the word never **closes**, and there the two
+answers are further apart than anywhere else: one of them is a refusal.
+Measured 2026-09-12 on zsh 5.9.2, `setopt noglob` so a bad pattern cannot
+be what is reported, `a=(xx yy zz)`, printed with `printf '<%s>'` so one
+field holding a blank is distinguishable from two:
+
+    $a[1 2]             invalid subscript, and the input ends
+    $a[                 invalid subscript — the blank is not what decides
+    x$a[1               invalid subscript — nor is being at the head
+    "$a[1"              nor quoting
+    $nosuch[1           nor the value; a name nothing declared is refused too
+    ${a}[1              xx yy zz[1     braced, so not this construct
+    $a]1[               xx yy zz]1[    nothing directly behind the name
+    setopt ksharrays
+    $a[                 xx[            the brackets are not a subscript
+
+The last row is the axis and the rest of the table is the word: what
+"unclosed" is measured against is where the **word** ends, not where the
+lexer gave the characters back. `$a[$(: ]; echo 2)]` is text in that
+shell, and the lexer hands those characters back too.
+
+The rest of the panel has no such construct and no such refusal — the
+three bash columns, ksh93 and dash all read `$a[1 2]` as the value with
+`[1` glued to it and `2]` as a second field, at 0, and carry on. So the
+one shell that has the grammar is the one shell that can refuse, which is
+what makes it the axis's answer rather than an error everybody agrees on.
+Pinned by `array/a-subscript-without-braces-the-word-never-closes` and
+the row beside it.
+
+The wording is a dialect's — `Diagnostics.BareSubscriptUnclosed` — and it
+coincides with `EmptyParamSubscript` in zsh without being the same
+question: that one is a subscript that was *written* and came out empty,
+this one is a subscript that was never finished.
+
 **`KeyedTableScalarIsTheFirstValue`** — bash no · dash unspecified · ksh93 no · zsh yes
 
 Says *which* element a plain `$m` gives when `m` is a keyed table and

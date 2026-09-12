@@ -31,7 +31,48 @@ import (
 // has it with the answer left as it comes.
 func (r *Runner) unreadBareSubscript(s syntax.Span) (syntax.Span, *syntax.Word) {
 	e := s.Param
-	if s.Kind != syntax.ParamExp || e == nil || e.BareIndexText == nil {
+	if s.Kind != syntax.ParamExp || e == nil {
+		return s, nil
+	}
+	if e.BareIndexUnclosed {
+		// A `[` the word never closed. There is no subscript here and no
+		// bracket text either — the lexer gave the characters back and they
+		// are a literal span of the word — so the reading that takes the
+		// brackets for a subscript has nothing left to take, and says so
+		// (#1757).
+		//
+		// The same axis decides it, because it is the same question: where
+		// the brackets are not a subscript they are text, and text with an
+		// unclosed `[` in it is a word like any other. Measured on zsh
+		// 5.9.2, 2026-09-12, `setopt noglob` so a bad pattern cannot be what
+		// is reported, `a=(xx yy zz)`: `$a[1 2]` is `invalid subscript` and
+		// the same line under `setopt ksharrays` prints `xx[` and `2]`.
+		//
+		// Asked here rather than at the three callers for the reason the
+		// file's own note gives: every span that expands or matches comes
+		// through one of them, and a fourth would get none of this.
+		//
+		// Once per command, not once per reading of the span: expandAt asks
+		// the list shapes first and falls through to expandSpan for a span
+		// that is not one of them, so a quoted `"$a[1"` and an unset
+		// `$nosuch[1` come through here twice and said it twice.
+		//
+		// expandErr is what says one has already been said, rather than a
+		// marker of this seam's own. It is the same fact — an expansion this
+		// command cannot perform — it is already reset per command, and it is
+		// what the *first* of the two reports sets. A marker keyed on the node
+		// would have needed clearing somewhere and nothing could observe
+		// whether the clearing happened, because a refusal here ends the
+		// input: measured, the second call of a function holding one is never
+		// reached, and neither is the second turn of a loop.
+		if !r.expandErr && r.ask(r.sem().BareSubscriptIsASubscript,
+			"the `[…]` after an unbraced `$name` being a subscript") {
+			r.diagf("%s\n", Wording(r.diag().BareSubscriptUnclosed, "invalid subscript"))
+			r.expandErr = true
+		}
+		return s, nil
+	}
+	if e.BareIndexText == nil {
 		return s, nil
 	}
 	if r.ask(r.sem().BareSubscriptIsASubscript,

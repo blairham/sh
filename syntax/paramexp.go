@@ -384,6 +384,38 @@ type ParamExpr struct {
 	// node carries the position and Src carries the text.
 	FlagsErrPos int
 
+	// BareIndexUnclosed says an unbraced `$name` was written with a `[`
+	// directly behind it that the word never closes, so the lexer gave the
+	// brackets back as text. Set only where the dialect has the construct
+	// and the name could carry one.
+	//
+	// It is a fact about the *word*, not about the expansion, which is why
+	// the parser fills it rather than the lexer: a `[` is unclosed only once
+	// the word has ended, and scanBareParam has not seen the end of the word
+	// when it gives the characters back.
+	//
+	// The run decides what it means, because the run decides whether the
+	// brackets were a subscript at all — see interp.Semantics's
+	// BareSubscriptIsASubscript. Measured on zsh 5.9.2, 2026-09-12, with
+	// `setopt noglob` so a bad pattern cannot be what is reported, and
+	// `a=(xx yy zz)`:
+	//
+	//	$a[1 2]      invalid subscript   the word ends at the blank
+	//	$a[          invalid subscript
+	//	x$a[1        invalid subscript   mid-word, so not about the head
+	//	"$a[1"       invalid subscript   nor about quoting
+	//	$nosuch[1    invalid subscript   nor about the value
+	//	${a}[1       `xx yy zz[1`        braced, so not this construct
+	//	$a]1[        `xx yy zz]1[`       nothing directly behind the name
+	//	$a[$(: ]; echo 2)]  text         a `]` later in the word closes it
+	//	setopt ksharrays; $a[   `xx[`    the brackets are not a subscript
+	//
+	// Rows one to five and row nine are the pair that says it is the axis
+	// and the word between them, and row eight is why the test is "the word
+	// closes it" rather than "the lexer took it": the lexer gives those
+	// characters back too, and that one is not an error in any column.
+	BareIndexUnclosed bool
+
 	// FlagsErrTail is the source of the *word* the group stands in, from
 	// this expansion's `$` to the end of that word, and is set only where
 	// FlagsErrPos is. It is what the report quotes.

@@ -1603,6 +1603,27 @@ func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
 			out[i].Arith = p.parseArithLater(out[i].Value, out[i].Pos)
 		}
 	}
+	// An unbraced `$name` with a `[` behind it that the word never closes.
+	// Here rather than in the lexer for the reason the field carries: the
+	// question is about where the *word* ends, which scanBareParam does not
+	// know when it gives the brackets back. See ParamExpr.BareIndexUnclosed.
+	if p.dialect.BareSubscript {
+		for i := range out {
+			e := out[i].Param
+			if out[i].Kind != ParamExp || e == nil || !out[i].Bare ||
+				e.Index != nil || e.BareIndexText != nil ||
+				!takesBareSubscript(out[i].Value) {
+				continue
+			}
+			from := stop
+			if i+1 < len(out) {
+				from = out[i+1].Pos
+			}
+			rest := p.sourceBetween(from, stop)
+			e.BareIndexUnclosed = strings.HasPrefix(rest, "[") &&
+				!strings.ContainsRune(rest, ']')
+		}
+	}
 	// A flag group the parser could not read reports the rest of the word it
 	// stands in, and this is the one place that knows where the word ends —
 	// scanParamFlags is called with the braces alone, halfway through.

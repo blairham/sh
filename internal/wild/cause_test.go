@@ -18,13 +18,20 @@ func TestCausesGroupsAndRanks(t *testing.T) {
 	dir := t.TempDir()
 	// Three scripts sharing one gap, and one with a different gap.
 	for _, name := range []string{"a", "b", "c"} {
-		// A construct this parser does not have and is not about to: the
-		// completion-context conditions are recorded in
-		// docs/spec/grammar/conditions.md as a decision rather than a gap.
-		// It was `[[ $k == (x|y) ]]` until that was implemented (#826),
-		// which is the hazard a fixture like this has: it has to be
-		// something the parser still refuses.
-		write(t, dir, name, "#!/bin/zsh\n[[ -prefix - ]]\n")
+		// A construct this parser does not have: that shell parses **any**
+		// `-word` with an operand as a unary condition and refuses an
+		// unknown one when it runs, which is the rule
+		// docs/spec/grammar/conditions.md declines to adopt — it is #965,
+		// and it is open.
+		//
+		// It was `[[ $k == (x|y) ]]` until #826 implemented that, and
+		// `[[ -prefix - ]]` until #1879 added that operator by name — the
+		// same hazard the second fixture's comment is about, reached from
+		// the other side. Whatever replaces this one has to be something
+		// real zsh reads and this parser still refuses **at an ordinary
+		// word**, so that its reason does not collapse onto the reserved
+		// word the second fixture is refused at.
+		write(t, dir, name, "#!/bin/zsh\n[[ -nosuch - ]]\n")
 	}
 	// A different gap: a short `if` with no `else` may be closed with one
 	// redundant `fi` in that shell, and this grammar has nothing left to

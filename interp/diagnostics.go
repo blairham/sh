@@ -1637,6 +1637,18 @@ type Diagnostics struct {
 	// the whole of how the third value is visible from outside.
 	UnknownConditionOptionStatus int
 
+	// CompletionConditionOutsideCompletion is `[[ -prefix … ]]` or
+	// `[[ -suffix … ]]` reached anywhere but a completion function, for the
+	// one dialect whose grammar has them (syntax.Dialect.CompletionConditions).
+	// No verbs: the sentence names neither the operator nor the operand.
+	//
+	//	zsh    condition can only be used in completion function
+	//
+	// zsh's location prefix comes from the location, as everywhere else, and
+	// the refusal is **fatal** — measured 2026-09-12 over a script file, the
+	// line after it does not run and the status is 1.
+	CompletionConditionOutsideCompletion string
+
 	// KilledCommandNotice is what a shell says when a signal ended a
 	// command. Three verbs: the process id, the words for the signal, and
 	// the command written back out.

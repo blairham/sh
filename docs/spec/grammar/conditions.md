@@ -154,8 +154,73 @@ source; only the first of the three is written here.
 zsh's `[[ -prefix - ]]` and `[[ -after x ]]` come from the same sweep and
 are **not** this code path: they are unary operator *names*, read from
 the operator table, where this is about how a pattern operand is lexed.
-They are recorded in "What this does not cover" below rather than folded
-in here.
+Two of them are now in that table — see the next section — and the rest
+are recorded in "What this does not cover" below.
+
+## `-prefix` and `-suffix` are conditions in one dialect
+
+    [[ -prefix : ]]                  parses in zsh, and in nothing else
+    [[ -prefix //(a|b)/ ]]           the same
+    [[ -suffix : ]]                  the same
+
+They are in that shell's condition **grammar** unconditionally, and the
+restriction is on where they may *run*. Measured 2026-09-12 on zsh 5.9.2,
+`env -i PATH=/usr/bin:/bin` with a scratch `HOME`:
+
+    $ zsh -n s.zsh          # [[ -prefix : ]]
+    (nothing)
+    $ zsh s.zsh
+    s.zsh:1: condition can only be used in completion function
+    $ echo $?
+    1
+
+The refusal is **fatal** — a line after it does not run — and the
+sentence names neither the operator nor the operand, so all three operand
+shapes get the same one. Grammar flag: `CompletionConditions` — core off,
+`zsh` on. Diagnostic:
+`Diagnostics.CompletionConditionOutsideCompletion`.
+
+That is the split this substrate draws everywhere else, and it is what
+makes the gap a *parser* one: a completion function is a file, and a file
+that will not parse never gets as far as the restriction. Two files in an
+ordinary `~/.zi` tree reach it, both completions shipped by
+`zsh-users/zsh-completions` (#1879).
+
+**The operand is a pattern**, read the way `==`'s right-hand side is
+rather than the way `-o`'s option name is. `//(127.0.0.1|localhost)/` is
+one of the two real occurrences.
+
+**With no operand the word is ordinary**, and that row is the one that
+had to be measured before the flag could be added at all:
+
+| probe | dash | bash 3.2 | bash 5 | bash as sh | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `[[ -prefix ]]` | `[[: not found`, 127 | error | 0 | 0 | 0 | **0** |
+| `[[ -prefix && -n x ]]` | the same | error | 0 | 0 | 0 | **0** |
+| `[[ ( -prefix ) ]]` | the same | error | 0 | 0 | 0 | **0** |
+| `[[ -n ]]` | the same | error | error | error | error | `unknown condition: -n` |
+
+Every other one-operand test in the table demands its operand and says so
+when it is missing. These two do not: with nothing after them the
+condition is the bare-word test for non-emptiness, and `-prefix` is not
+empty. bash 5.3, that binary as `sh` and ksh93 answer 0 because they have
+no such operator to demand anything; zsh answers 0 with the operator, and
+that is the row this carve-out is for — **without it, adding the pair
+would have made this dialect refuse a line three other columns run.**
+
+The two columns that do not answer 0 are not counter-examples. dash has
+no `[[ ]]` at all, so `[[` is a command it cannot find. And bash 3.2 is
+the odd one out even against bash 5.3: it reads `-prefix` as *a*
+conditional unary operator and complains that `]]` is an unexpected
+argument to it, where 5.3 reads the same word as an ordinary one.
+
+The look for an operand is at the source rather than at a token, because
+reading the token would consume it.
+
+**Three or more words is a different question and is not this flag.**
+`[[ -prefix -foo : ]]` parses in zsh and is refused here, and so is
+`[[ -nosuch x ]]`; both are the arity rule in "What this does not cover"
+below, which is #965.
 
 ## A process substitution as an operand — bash only
 
@@ -646,8 +711,8 @@ which is the rule: an operator is either implemented or refused at parse,
 never parsed and then refused at run time. Recorded so their absence is a
 decision.
 
-zsh's completion conditions, which are the same gap reached from the
-other end. Measured 2026-09-05 on zsh 5.9.2, with `-n` for the parse and
+zsh's completion conditions **other than `-prefix` and `-suffix`**,
+which are the same gap reached from the other end. Measured 2026-09-05 on zsh 5.9.2, with `-n` for the parse and
 a run for the rest:
 
 | probe | parses | run |
@@ -661,7 +726,10 @@ a run for the rest:
 So the general rule in that shell is that **any** `-word` followed by an
 operand parses as a unary condition and an unknown one is refused when it
 runs — which is precisely the shape the rule above forbids, and adopting
-it would be a decision to change the rule rather than a gap to fill. The
+it would be a decision to change the rule rather than a gap to fill. That
+question is #965 and is still open; `-prefix` and `-suffix` were taken
+*as named operators* instead, which keeps the rule — see the section
+above — and leaves `-after`, `-before`, `-between` and the rest here. The
 other four disagree with it and with each other: bash 5 and ksh93 make
 `[[ -nosuch x ]]` a syntax error, and bash 3.2 accepts it.
 

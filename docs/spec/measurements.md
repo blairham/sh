@@ -14690,6 +14690,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cond/nested-groups-in-a-regex` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `y` | `y` |
 | `cond/escaped-parens-in-a-regex` | `n` **2>** `<shell>: 1: [[: not found` | `y` | `y` | `y` | `y` | `y` |
 | `cond/a-subshell-is-still-a-subshell` | `subshell` | `subshell` | `subshell` | `subshell` | `subshell` | `subshell` |
+| `cond/a-completion-condition` | `after` **2>** `<shell>: 1: [[: not found` | **2>** `<shell>: -c: line 1: unexpected token `:', conditional binary operator expected~<shell>: -c: line 1: syntax error near `:'~<shell>: -c: line 1: `[[ -prefix : ]]; echo after'` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected token `:', conditional binary operator expected~<shell>: -c: line 1: syntax error near `:'~<shell>: -c: line 1: `[[ -prefix : ]]; echo after'` *(status 2)* | `after` | **2>** `<shell>: syntax error at line 1: `:' unexpected` *(status 3)* | **2>** `<shell>:1: condition can only be used in completion function` *(status 1)* |
+| `cond/a-completion-condition-with-a-pattern-operand` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected token `//', conditional binary operator expected~<shell>: -c: line 1: syntax error near `//('~<shell>: -c: line 1: `[[ -prefix //(a\|b)/ ]]; echo after'` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected token `//', conditional binary operator expected~<shell>: -c: line 1: syntax error near `//('~<shell>: -c: line 1: `[[ -prefix //(a\|b)/ ]]; echo after'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 0: syntax error near `//(a'~<shell>: -c: line 0: `[[ -prefix //(a\|b)/ ]]; echo after'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `//' unexpected` *(status 3)* | **2>** `<shell>:1: condition can only be used in completion function` *(status 1)* |
+| `cond/a-completion-condition-with-no-operand` | `st=127` **2>** `<shell>: 1: [[: not found` | `st=0` | `st=0` | **2>** `<shell>: -c: line 0: unexpected argument `]]' to conditional unary operator~<shell>: -c: line 0: syntax error near `;'~<shell>: -c: line 0: `[[ -prefix ]]; echo "st=$?"'` *(status 2)* | `st=0` | `st=0` |
 
 - `cond/no-field-splitting-inside` — [[ ]] is parsed rather than executed, so the words never become arguments and are never split
   ```sh
@@ -14866,6 +14869,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cond/a-subshell-is-still-a-subshell` — the counter-case for the lexer change: a `(` outside a regex operand still opens a subshell, which is what it would stop doing if the rule were not scoped to the operand
   ```sh
   ( echo subshell )
+  ```
+- `cond/a-completion-condition` — one shell has the completion-context tests in its condition grammar unconditionally and restricts where they may *run*: the line parses there and answers `condition can only be used in completion function` at status 1, fatally, so `after` never prints. The other five have no such operator — `-prefix` is the completion system's — so this is additive grammar for one dialect, and it is the shape two completions in an ordinary plugin tree are written with
+  ```sh
+  [[ -prefix : ]]; echo after
+  ```
+- `cond/a-completion-condition-with-a-pattern-operand` — the operand is read the way a *pattern* is rather than the way an option name is, which is the shape the real occurrence has — `[[ -prefix //(127.0.0.1|localhost)/ ]]` in a shipped completion. Same sentence and same status, so nothing about the word decides the refusal
+  ```sh
+  [[ -prefix //(a|b)/ ]]; echo after
+  ```
+- `cond/a-completion-condition-with-no-operand` — the boundary, and the row that says the pair falls back to being ordinary words: with nothing after it the condition is the bare-word test for non-emptiness and answers 0 — in the shell that *has* the operator as well as in the three that read the word as an ordinary one. Every other one-operand test demands its operand and complains without one, so adding these two without this row would have made one dialect refuse a line three other columns run. The two that do not answer 0 are not counter-examples: dash has no `[[ ]]` to put it in, and bash 3.2 is the odd one out against bash 5.3, reading `-prefix` as a conditional unary operator and calling the `]]` an unexpected argument to it
+  ```sh
+  [[ -prefix ]]; echo "st=$?"
   ```
 
 ## eval and dot

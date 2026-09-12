@@ -296,3 +296,61 @@ print -r -- $line`, zsh.Dialect())
 			aimed, os.Getpid())
 	}
 }
+
+// TestTheColonDefaultReachesTheCallersNumber is the limit of the empty
+// answer, pinned because the test above does not reach it.
+//
+// `${x-d}` and `${x:-d}` ask different questions, and the key is *set* — so
+// `-` does not reach its default and `:-` does. The tests above assert the
+// `-` form, which is the one that makes the deviation look self-evidently
+// safe; `:-` is the form the program in the wild actually writes:
+//
+//	typeset -gi GITSTATUS_DAEMON_PID_$name="${sysparams[procsubstpid]:--1}"
+//	                                   — gitstatus.plugin.zsh:640
+//
+// That program survives because it *also* guards with `[[ $daemon_pid ==
+// <1-> ]]` before `kill -- -$daemon_pid`. One without that second guard
+// would ask to signal every process it can reach, since `kill -- -1` means
+// that in every POSIX shell.
+//
+// The hazard is the caller's rather than this deviation's — real zsh's `0`
+// is worse, and reaches `kill -- -0` through a guard that passes. But the
+// row is pinned so that nobody reads the `-` test as covering both, and so
+// that a future change to the empty answer has to look at this line. See
+// docs/spec/semantics.md, *What a shell with no child subshells reports for
+// a pid* (#2125).
+func TestTheColonDefaultReachesTheCallersNumber(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			// The key is set, so `-` keeps the empty value.
+			name: "a plain dash keeps the empty value",
+			src:  `print -r -- "[${sysparams[procsubstpid]-none}]"`,
+			want: "[]\n",
+		},
+		{
+			// The value is empty, so `:-` takes the default.
+			name: "a colon dash takes the caller's default",
+			src:  `print -r -- "[${sysparams[procsubstpid]:-none}]"`,
+			want: "[none]\n",
+		},
+		{
+			name: "the number the program in the wild chose",
+			src:  `print -r -- "[${sysparams[procsubstpid]:--1}]"`,
+			want: "[-1]\n",
+		},
+		{
+			// And the second guard, which is what makes that program safe.
+			name: "the range guard the caller pairs it with rejects it",
+			src: `pid=${sysparams[procsubstpid]:--1}
+[[ $pid == <1-> ]] && print -r -- "WOULD KILL -$pid"
+print -r -- "carried on"`,
+			want: "carried on\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sysParam(t, tc.src); got != tc.want {
+				t.Errorf("output = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

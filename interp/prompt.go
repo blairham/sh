@@ -672,11 +672,23 @@ type PromptResolver func(f PromptField, arg string, braced bool) (string, bool)
 // quantity answers the conditional's tests and may be nil for a reader with
 // no answers to them; a style with no [PromptStyle.Conditional] never asks it.
 func ExpandPromptStyle(st PromptStyle, text string, field PromptResolver, quantity PromptQuantityResolver) (string, string, bool) {
+	var visual promptVisualState
+	return expandPromptStyle(st, text, field, quantity, &visual)
+}
+
+// expandPromptStyle is [ExpandPromptStyle] over a visual state the caller
+// keeps, which is every caller inside this package: the state is the shell's
+// and outlives one rendering. See [promptVisualState].
+func expandPromptStyle(st PromptStyle, text string, field PromptResolver, quantity PromptQuantityResolver, visual *promptVisualState) (string, string, bool) {
 	if st.Escape == 0 || text == "" {
 		return text, "", true
 	}
-	w := promptWalk{st: st, field: field, quantity: quantity, width: unaskedWidth}
+	w := promptWalk{st: st, field: field, quantity: quantity, width: unaskedWidth, visual: *visual}
 	w.walk([]rune(text))
+	// Written back whether or not the walk was refused: what it drew before
+	// the refusal has reached the terminal, so the sequences it wrote are in
+	// effect either way.
+	*visual = w.visual
 	return w.b.String(), w.refused, w.refused == ""
 }
 
@@ -721,7 +733,11 @@ func RenderPromptValue(st PromptStyle, r *Runner, text string, field PromptResol
 		return r.expandPromptText(v)
 	}
 	escapes := func(v string) (string, string, bool) {
-		return ExpandPromptStyle(st, v, field, quantity)
+		visual := &promptVisualState{}
+		if r != nil {
+			visual = &r.promptVisual
+		}
+		return expandPromptStyle(st, v, field, quantity, visual)
 	}
 	if st.ExpandBeforeEscapes {
 		return escapes(expand(text))
@@ -759,19 +775,45 @@ type promptWalk struct {
 	// column: measured, `%{XY%}ab` has drawn two columns and not four.
 	hidden int
 
-	// visual is the terminal's visual state as this walk has set it: the
-	// sequence currently in effect for each [PromptAttribute], empty where
-	// nothing is. It is what a restoring code writes back — see
-	// [PromptVisual.Restores] — and it starts empty at every walk, which is
-	// measured: `${(%%)'%b%k%F{242}x%f'}` writes the reset and restores
-	// nothing, where the same text after a `%F{031}` restores the color.
-	visual [AttributeBackground + 1]string
+	// visual is the terminal's visual state as the shell has set it — see
+	// [promptVisualState], which this walk is handed and hands back.
+	visual promptVisualState
 
 	// refused is the escape this reader had no answer for, empty until one is
 	// met. It stops the walk: there is no drawing on past an escape whose
 	// value is unknown, because whatever follows would be in the wrong place.
 	refused string
 }
+
+// promptVisualState is the sequence currently in effect for each
+// [PromptAttribute], empty where nothing is. It is what a restoring code
+// writes back — see [PromptVisual.Restores].
+//
+// **It belongs to the shell and not to the walk.** A rendering leaves the
+// terminal however its last code left it, and the next rendering restores
+// from there, which is measured on zsh 5.9.2 under `TERM=xterm-256color`:
+//
+//	v=%F{070}; w=%b
+//	print -rn -- "${(%%)v}"; print -rn -- "${(%%)w}"
+//	\e[38;5;70m  \e[0m\e[38;5;70m
+//
+// The `%b` is alone in its own rendering and still writes the color back,
+// because the `%F{070}` of the rendering before it is still in effect. Two
+// separate walks each starting empty answer `\e[0m` and lose the color — and
+// that is not an edge: powerlevel10k measures its own width through
+// `${(%%)…}` many times per prompt, so by the time the prompt itself is drawn
+// the state is never empty, and every `%b%k%F{…}` between its segments came
+// out one escape short (#2113).
+//
+// It accumulates rather than being replaced: `%U` in one rendering and
+// `%K{021}` in another are both written back by a `%b` in a third. What
+// clears an entry is a code that turns that attribute off — zsh's `%f` is
+// `\e[39m` and leaves the foreground with nothing to restore.
+//
+// A subshell's renderings do not reach the parent, which is [Runner.clone]'s
+// answer already: this is a value in the struct the clone copies, so
+// `(print -rn -- "${(%%)v}")` leaves the parent's state alone, as measured.
+type promptVisualState [AttributeBackground + 1]string
 
 // unaskedWidth is a width no terminal has, so that nought — which is a width
 // a reader really does report, and which zsh treats as its own case — is not

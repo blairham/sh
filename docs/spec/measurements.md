@@ -14769,6 +14769,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/a-plus-signed-f-with-an-operand` | `st=127` **2>** `<shell>: 1: typeset: not found` | `st=0` | `st=0` | `st=0` | `f()~st=0` | `f~st=0` |
 | `declare/a-plus-signed-f-with-no-operand-reaches-the-bare-listing` | **2>** `<shell>: 1: typeset: not found` *(status 1)* | `zv=1~f () ` | `zv=1` | `zv=1~f () ` | `f()` | `f` |
 | `declare/a-plus-signed-F-reaches-the-same-listing` | **2>** `<shell>: 1: typeset: not found` *(status 1)* | `zv=1~f () ` | `zv=1` | `zv=1~f () ` | *(no output, status 1)* | *(no output, status 1)* |
+| `declare/when-the-case-attribute-folds` | `[][]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `declare -l lo="ab"~declare -u up="AB"~[ab][AB]` | `declare -l lo="ab"~declare -u up="AB"~[ab][AB]` | `[][]` **2>** `<shell>: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 0: typeset: lo: not found~<shell>: line 0: typeset: up: not found` | `typeset -l lo=ab~typeset -u up=AB~[ab][AB]` | `typeset -l lo=AB~typeset -u up=ab~[ab][AB]` |
+| `declare/taking-the-case-letter-off-shows-the-store` | `[]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `[ab]` | `[ab]` | `[]` **2>** `<shell>: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 0: typeset: +l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[ab]` | `[AB]` |
+| `declare/an-append-joins-the-stored-text` | `[]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: lo+=CD: not found~<shell>: 1: typeset: not found` | `declare -l lo="abcd"~[abcd]` | `declare -l lo="abcd"~[abcd]` | `declare -- lo="CD"~[CD]` **2>** `<shell>: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -l lo=abcd~[abcd]` | `typeset -l lo=ABCD~[abcd]` |
+| `declare/every-read-of-a-folded-name-is-folded` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: Bad substitution` *(status 2)* | `2[b][ab][xb]` | `2[b][ab][xb]` | `0[][][]` **2>** `<shell>: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `2[b][ab][xb]` | `2[b][ab][xb]` |
+| `declare/a-child-is-told-the-folded-value` | `[]` **2>** `<shell>: 1: typeset: not found` *(status 1)* | `[ab]~v=ab` | `[ab]~v=ab` | `[]` **2>** `<shell>: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` *(status 1)* | `[ab]~v=ab` | `[ab]~v=ab` |
 | `declare/listing-a-control-byte` | `st=127` **2>** `<shell>: 1: typeset: not found` | `declare -- v=$'a\001b'~st=0` | `declare -- v=$'a\001b'~st=0` | `declare -- v="ab"~st=0` | `v=$'a\x01b'~st=0` | `typeset v=$'a\C-Ab'~st=0` |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
@@ -16068,6 +16073,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/a-plus-signed-F-reaches-the-same-listing` — the other function letter under the same sign, and it lands in the same place: bash's `declare +F` is the bare listing again. That is what says the reading is about the *sign* rather than about which letter carries it -- a fix that special-cased `+f` alone would pass the row above and leave this one writing bodies. In the two shells where `F` is a float's precision instead the line is a listing narrowed to a letter no name here carries, which is empty; dash has no `typeset`
   ```sh
   zv=1; f() { :; }; typeset +F | grep -E "^(zv=1|f)"
+  ```
+- `declare/when-the-case-attribute-folds` — *when* the case letters act. The value is `ab` and `AB` in every column that has the letters, and the listing is where they part: bash 5.3 and ksh93 fold the value being stored and write it back folded, while zsh keeps what the assignment carried and folds every read of it -- `typeset -l lo=AB`. So the shell that folds on the way in cannot write back the declaration it read, which is what makes this a listing bug rather than a spelling (#1755). bash 3.2 has neither letter and dash has no `typeset`
+  ```sh
+  typeset -l lo=AB; typeset -u up=ab; typeset -p lo up; echo "[$lo][$up]"
+  ```
+- `declare/taking-the-case-letter-off-shows-the-store` — the same question asked of the store directly, and the sharper way to ask it: with the attribute gone, what is left is what was really being kept. zsh answers `AB` and bash 5.3 and ksh93 answer `ab`. A row about the *value* under the attribute cannot separate those two -- both read `ab` -- so this is the discriminating one, and a shell that folded on the way in and kept a copy for the listing would fail it while passing the row above
+  ```sh
+  typeset -l v=AB; typeset +l v; echo "[$v]"
+  ```
+- `declare/an-append-joins-the-stored-text` — which text `+=` joins, in the shell where the store and the read are two different things. zsh lists `ABCD` and reads `abcd`: the append took what was *assigned* and not what a read answers. There is a third answer available and it is the one this engine gave while the append went through the ordinary read -- `abCD`, a text no shell in the panel has. bash 5.3 and ksh93 hold `abcd` because they folded on the way in, and bash 3.2 has no letter so its `lo` is only the `CD`
+  ```sh
+  typeset -l lo=AB; lo+=CD; typeset -p lo; echo "[$lo]"
+  ```
+- `declare/every-read-of-a-folded-name-is-folded` — the fold is not something one expansion route knows and another does not: a length, a trim and both directions of a pattern substitution agree across every column that has the letter. The third field is the interesting one -- `${v/A/x}` matches nothing, and it matches nothing for two different reasons: the storing shells never had an `A` to match, and the reading shell hands the operator text that is already lower case. A fold applied at the wrong layer shows up here as `xb` in one column and `ab` in another
+  ```sh
+  typeset -l v=AB; echo "${#v}[${v#?}][${v/A/x}][${v/a/x}]"
+  ```
+- `declare/a-child-is-told-the-folded-value` — the environment is a read like any other, so the child sees `v=ab` under both answers -- the shell that keeps `AB` in its own store still hands the folded text over. It is the row that says the store is not simply copied outward, and it is the one place where the two readings have to agree while the listing beside them does not. dash has no `typeset` and bash 3.2 has no letter
+  ```sh
+  typeset -l v=AB; export v; echo "[$v]"; env | grep "^v="
   ```
 - `declare/listing-a-control-byte` — how a listing spells a byte below 0x20 inside `$'...'`: an octal escape, a hex one, and a caret pair are three answers from three columns that otherwise quote alike, which is why the control escape is a field of its own rather than part of the quoting style. The fourth has no such builtin (#2057)
   ```sh

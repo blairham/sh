@@ -98,7 +98,9 @@ func (r *Runner) appendOverCompound(name, value string) bool {
 func (r *Runner) appendedScalar(name, value string, fresh bool) (string, bool) {
 	old := ""
 	if !fresh {
-		old, _ = r.getVar(name)
+		// storedVar and not getVar: an append joins what the name was
+		// assigned, which in one shell is not what a read of it answers.
+		old, _ = r.storedVar(name)
 	}
 	return r.appendedValue(name, old, value)
 }

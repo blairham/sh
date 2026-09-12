@@ -39011,6 +39011,50 @@
         "TimedOut": false
       }
     },
+    "declare/a-child-is-told-the-folded-value": {
+      "bash": {
+        "Stdout": "[ab]~v=ab",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[ab]~v=ab",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[ab]~v=ab",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[ab]~v=ab",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-declaration-without-a-value-exports-nothing": {
       "bash": {
         "Stdout": "(none)~BAR=",
@@ -41651,6 +41695,50 @@
         "TimedOut": false
       }
     },
+    "declare/an-append-joins-the-stored-text": {
+      "bash": {
+        "Stdout": "declare -l lo=\"abcd\"~[abcd]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -l lo=\"abcd\"~[abcd]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -- lo=\"CD\"~[CD]",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: lo+=CD: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -l lo=abcd~[abcd]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -l lo=ABCD~[abcd]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/an-array-assigned-after-an-unset-lists-again": {
       "bash": {
         "Stdout": "declare -a a=([0]=\"3\" [1]=\"4\")~1 st=0~declare -A m=([j]=\"w\" )~2 st=0",
@@ -43317,6 +43405,50 @@
       },
       "zsh": {
         "Stdout": "[1]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/every-read-of-a-folded-name-is-folded": {
+      "bash": {
+        "Stdout": "2[b][ab][xb]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "2[b][ab][xb]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "0[][][]",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "2[b][ab][xb]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "2[b][ab][xb]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -46359,6 +46491,50 @@
         "TimedOut": false
       }
     },
+    "declare/taking-the-case-letter-off-shows-the-store": {
+      "bash": {
+        "Stdout": "[ab]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[ab]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: +l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[ab]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[AB]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/the-case-letters-do-not-outlive-the-declaration": {
       "bash": {
         "Stdout": "in=[mixed]~after=[ABC]~later=[StillMixed]",
@@ -48333,6 +48509,50 @@
       },
       "zsh": {
         "Stdout": "1[q] st=0~2[q]~3[x y]~4[] st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/when-the-case-attribute-folds": {
+      "bash": {
+        "Stdout": "declare -l lo=\"ab\"~declare -u up=\"AB\"~[ab][AB]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -l lo=\"ab\"~declare -u up=\"AB\"~[ab][AB]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[][]",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: lo: not found~\u003cshell\u003e: line 0: typeset: up: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[][]",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -l lo=ab~typeset -u up=AB~[ab][AB]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -l lo=AB~typeset -u up=ab~[ab][AB]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

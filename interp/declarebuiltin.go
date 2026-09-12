@@ -2098,6 +2098,14 @@ func (r *Runner) attributeWouldChange(name, value string) bool {
 			return true
 		}
 	}
+	if r.caseFoldsOnRead() {
+		// The case letters cannot change what is *stored* in this shell —
+		// they act on every read instead — so there is nothing here for them
+		// to say. Without this the two callers ask their dialect a question
+		// whose answer can only be "store the value you already have". See
+		// Semantics.CaseAttributeFoldsWhenRead.
+		return false
+	}
 	switch {
 	case r.lowered[name]:
 		return strings.ToLower(value) != value

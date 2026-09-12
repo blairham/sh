@@ -471,6 +471,10 @@ func Semantics() interp.Semantics {
 	s.AttributeRereadsTheValueItFinds = interp.Yes
 	s.InheritedValueSurvivesADeclaredType = interp.No
 	s.CompoundElementsGoThroughTheAttribute = interp.Yes
+	// The case attributes fold on the way in here as they do in bash, and
+	// the listing writes what the store holds: `typeset -l lo=AB` is
+	// `typeset -l lo=ab`.
+	s.CaseAttributeFoldsWhenRead = interp.No
 	s.CompoundAttribute = interp.CompoundAttributeFoldsEveryElement
 	// The two array letters answer the converse differently here, which is
 	// the whole reason it is two axes. `b=1; typeset -a b` converts nothing

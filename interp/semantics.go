@@ -2968,6 +2968,45 @@ type Semantics struct {
 	// Asked only where a name with one of these attributes has an element
 	// written to it, so an array with no attribute needs no dialect.
 	CompoundElementsGoThroughTheAttribute Answer
+
+	// CaseAttributeFoldsWhenRead decides *when* the case attributes act:
+	// once, on the value being stored, or on every read of it.
+	//
+	// The difference is invisible in the value — `$v` is `ab` under both —
+	// and shows in the two places that see the store itself. Measured
+	// 2026-09-12, `env -i` with a scratch HOME and no startup files, over
+	// `typeset -l lo=AB`:
+	//
+	//	           $lo   typeset -p lo        typeset +l lo; $lo
+	//	bash 5.3   ab    declare -l lo="ab"   ab
+	//	ksh93u+    ab    typeset -l lo=ab     ab
+	//	zsh 5.9.2  ab    typeset -l lo=AB     AB
+	//
+	// So the third column is the discriminating one: taking the attribute
+	// off reveals what the store really holds, and only one of these shells
+	// has anything left to reveal. The listing is what #1755 is about — a
+	// shell that folds on the way in has no way back to the text the
+	// assignment carried, and its `-p` cannot write the declaration it read.
+	//
+	// Two consequences of folding on the read, both measured on the same
+	// day and neither derivable from the row above:
+	//
+	//   - An append joins the *stored* text. `typeset -l lo=AB; lo+=CD`
+	//     lists as `ABCD` and reads as `abcd`.
+	//   - A pattern operator matches the *folded* text, because it is a read
+	//     like any other: `${v/A/x}` leaves `ab` alone where the shell that
+	//     stores `ab` never had an `A` to match either. The two answers agree
+	//     here and differ on `${v/a/x}`, which is `xb` in the storing shell.
+	//
+	// Arrays are outside this on both answers and for different reasons, so
+	// it is not asked of one: the shell that folds on the read does not fold
+	// an array's elements at all — `typeset -al arr=(AB Cd)` reads back `AB
+	// Cd` — and the shell that folds on the way in has
+	// CompoundElementsGoThroughTheAttribute for the same question.
+	//
+	// Asked only where a name carries `-l` or `-u`, which is where the two
+	// answers can be told apart.
+	CaseAttributeFoldsWhenRead Answer
 	// ArrayLiteralAssignmentStartsTheNameOver makes `a=(x y)` *re-create* the
 	// name — the attributes it carries and all — rather than replacing only
 	// its elements.

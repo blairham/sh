@@ -17883,6 +17883,31 @@ echo "st=$?"`,
 		Why:     "the other function letter under the same sign, and it lands in the same place: bash's `declare +F` is the bare listing again. That is what says the reading is about the *sign* rather than about which letter carries it -- a fix that special-cased `+f` alone would pass the row above and leave this one writing bodies. In the two shells where `F` is a float's precision instead the line is a listing narrowed to a letter no name here carries, which is empty; dash has no `typeset`",
 	},
 	{
+		ID: "declare/when-the-case-attribute-folds", Category: "declarations",
+		Snippet: `typeset -l lo=AB; typeset -u up=ab; typeset -p lo up; echo "[$lo][$up]"`,
+		Why:     "*when* the case letters act. The value is `ab` and `AB` in every column that has the letters, and the listing is where they part: bash 5.3 and ksh93 fold the value being stored and write it back folded, while zsh keeps what the assignment carried and folds every read of it -- `typeset -l lo=AB`. So the shell that folds on the way in cannot write back the declaration it read, which is what makes this a listing bug rather than a spelling (#1755). bash 3.2 has neither letter and dash has no `typeset`",
+	},
+	{
+		ID: "declare/taking-the-case-letter-off-shows-the-store", Category: "declarations",
+		Snippet: `typeset -l v=AB; typeset +l v; echo "[$v]"`,
+		Why:     "the same question asked of the store directly, and the sharper way to ask it: with the attribute gone, what is left is what was really being kept. zsh answers `AB` and bash 5.3 and ksh93 answer `ab`. A row about the *value* under the attribute cannot separate those two -- both read `ab` -- so this is the discriminating one, and a shell that folded on the way in and kept a copy for the listing would fail it while passing the row above",
+	},
+	{
+		ID: "declare/an-append-joins-the-stored-text", Category: "declarations",
+		Snippet: `typeset -l lo=AB; lo+=CD; typeset -p lo; echo "[$lo]"`,
+		Why:     "which text `+=` joins, in the shell where the store and the read are two different things. zsh lists `ABCD` and reads `abcd`: the append took what was *assigned* and not what a read answers. There is a third answer available and it is the one this engine gave while the append went through the ordinary read -- `abCD`, a text no shell in the panel has. bash 5.3 and ksh93 hold `abcd` because they folded on the way in, and bash 3.2 has no letter so its `lo` is only the `CD`",
+	},
+	{
+		ID: "declare/every-read-of-a-folded-name-is-folded", Category: "declarations",
+		Snippet: `typeset -l v=AB; echo "${#v}[${v#?}][${v/A/x}][${v/a/x}]"`,
+		Why:     "the fold is not something one expansion route knows and another does not: a length, a trim and both directions of a pattern substitution agree across every column that has the letter. The third field is the interesting one -- `${v/A/x}` matches nothing, and it matches nothing for two different reasons: the storing shells never had an `A` to match, and the reading shell hands the operator text that is already lower case. A fold applied at the wrong layer shows up here as `xb` in one column and `ab` in another",
+	},
+	{
+		ID: "declare/a-child-is-told-the-folded-value", Category: "declarations",
+		Snippet: `typeset -l v=AB; export v; echo "[$v]"; env | grep "^v="`,
+		Why:     "the environment is a read like any other, so the child sees `v=ab` under both answers -- the shell that keeps `AB` in its own store still hands the folded text over. It is the row that says the store is not simply copied outward, and it is the one place where the two readings have to agree while the listing beside them does not. dash has no `typeset` and bash 3.2 has no letter",
+	},
+	{
 		ID: "shopt/patsub-replacement-reports-on", Category: "shell options",
 		Snippet: `shopt -p patsub_replacement 2>/dev/null; echo s=$?`,
 		Why:     "the reissuable line for the option that gates the ampersand reading, and its status. bash 5.3 writes `shopt -s patsub_replacement` at 0 because the option is on with nothing said; bash 3.2 has no such name and answers 1 with its complaint suppressed, and the three shells without the builtin answer 127. It is a capture surface -- a harness snapshots a shell with `shopt -p` and sources the result back -- so a shell reporting the wrong state here re-applies it to every later command (#1712, #1862)",

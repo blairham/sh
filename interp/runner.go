@@ -3573,7 +3573,11 @@ func (r *Runner) environ() []string {
 			// makes the shell itself read it as empty.
 			continue
 		}
-		out = append(out, k+"="+v)
+		// A child is told the folded value, not the text the assignment
+		// carried: measured, `typeset -l v=AB; export v` puts `v=ab` in the
+		// environment in every shell with the letter. So the environment is
+		// a read like any other.
+		out = append(out, k+"="+r.readCaseFolded(k, v))
 	}
 	for k, v := range r.hiddenExports {
 		out = append(out, k+"="+v)
@@ -4155,22 +4159,75 @@ func (r *Runner) attributeFolded(name, value string) (string, bool) {
 			return "", false
 		}
 	}
-	// The case attributes, folded at assignment the way the integer
-	// attribute evaluates there: `declare -l v; v=ABC` stores `abc` in both
-	// shells that spell the letter.
+	// The case attributes, folded here or on the way *out* — see
+	// Semantics.CaseAttributeFoldsWhenRead, which is the whole of the
+	// difference. Where the fold happens at assignment, `declare -l v;
+	// v=ABC` stores `abc` and there is no way back to what was written;
+	// where it happens on the read, the store keeps `ABC` and every read
+	// answers `abc`.
 	//
 	// Under the same locale policy as the case-changing operators, which this
 	// site did not follow until #2027: measured under LC_ALL=C, all three of
 	// bash 5.3.15, ksh93u+ and zsh 5.9.2 answer CAFé for `declare -u s=café`
 	// and we answered CAFÉ. caseChanged is the one place that narrowing is
-	// decided, so the attribute cannot drift from the operator again.
-	switch {
-	case r.lowered[name]:
-		value = r.caseChanged(value, unicode.ToLower)
-	case r.uppered[name]:
-		value = r.caseChanged(value, unicode.ToUpper)
+	// decided, so the attribute cannot drift from the operator again — and
+	// caseFolded is the one place the *letters* are read, so the two sites
+	// cannot drift from each other either.
+	if !r.caseFoldsOnRead() {
+		value = r.caseFolded(name, value)
 	}
 	return value, true
+}
+
+// caseFolded is what the case attributes make of one value: the whole of what
+// `-l` and `-u` do, in one place, so that the assignment site and the read
+// site cannot come to disagree about which letter wins or about the locale.
+//
+// A name never carries both — applyAttributes takes one off when the other
+// arrives — so there is no order to decide here.
+func (r *Runner) caseFolded(name, value string) string {
+	switch {
+	case r.lowered[name]:
+		return r.caseChanged(value, unicode.ToLower)
+	case r.uppered[name]:
+		return r.caseChanged(value, unicode.ToUpper)
+	}
+	return value
+}
+
+// caseFoldsOnRead reports whether this shell keeps what was assigned and
+// folds every read of it, rather than folding once on the way in.
+//
+// Asked wherever a case-attributed scalar is stored or read, and nowhere
+// else: a name with neither letter reads the same under both answers, so the
+// question never arises for it. Measured 2026-09-12 with `env -i`, a scratch
+// HOME and no startup files, over `typeset -l lo=AB`:
+//
+//	           $lo   typeset -p lo      typeset +l lo; $lo
+//	bash 5.3   ab    declare -l lo="ab"  ab
+//	ksh93u+    ab    typeset -l lo=ab    ab
+//	zsh 5.9.2  ab    typeset -l lo=AB    AB
+//
+// The middle column is the listing #1755 is about — a shell that folds on
+// the way in has no way back to the text the assignment carried, so its
+// listing writes the folded value and the third column proves the store
+// really holds it.
+func (r *Runner) caseFoldsOnRead() bool {
+	return r.sem().CaseAttributeFoldsWhenRead == Yes
+}
+
+// readCaseFolded is a scalar on its way out of the store, folded where this
+// shell folds on the read. The guard is the attribute rather than the axis,
+// so the ordinary name — which is nearly every name — costs one map lookup
+// that every read already makes.
+func (r *Runner) readCaseFolded(name, value string) string {
+	if !r.lowered[name] && !r.uppered[name] {
+		return value
+	}
+	if !r.caseFoldsOnRead() {
+		return value
+	}
+	return r.caseFolded(name, value)
 }
 
 // appendedValue is what `+=` puts together: the value a name already holds
@@ -4460,7 +4517,22 @@ func (r *Runner) ensurePWD() {
 	r.setVar("PWD", r.workDir())
 }
 
-func (r *Runner) getVar(name string) (string, bool) {
+func (r *Runner) getVar(name string) (string, bool) { return r.varValue(name, true) }
+
+// storedVar is getVar with the read fold left off: the text the store really
+// holds, in the shell where those are two different things.
+//
+// One caller, and it is `+=`. Measured 2026-09-12 on zsh 5.9.2, `typeset -l
+// lo=AB; lo+=CD` lists back as `ABCD` and reads as `abcd` — so the append
+// joins what was *assigned*, not what a read of it answers. Reading through
+// getVar there stored `abCD`, which is a third text neither shell has.
+//
+// Deliberately narrow. Everything else that wants the store rather than the
+// value already has it: a listing gathers from the tables directly, and the
+// attribute letters are their own question.
+func (r *Runner) storedVar(name string) (string, bool) { return r.varValue(name, false) }
+
+func (r *Runner) varValue(name string, folded bool) (string, bool) {
 	// A produced array answers a plain `$name` too, and what it answers with
 	// is an axis: the whole array in one shell and its first element in the
 	// others.
@@ -4518,7 +4590,15 @@ func (r *Runner) getVar(name string) (string, bool) {
 		return r.assocScalar(a)
 	}
 	if v, ok := r.Vars[name]; ok {
-		return v, true
+		// Folded here rather than when it was stored, in the shell that
+		// keeps what was assigned — see caseFoldsOnRead. This is the one
+		// place a stored scalar becomes a value, so `$v`, `${#v}`,
+		// `${v:0:1}`, `${v/A/x}`, a `case` subject and a `[[ ]]` operand all
+		// see the fold without any of them knowing about it.
+		if !folded {
+			return v, true
+		}
+		return r.readCaseFolded(name, v), true
 	}
 	if r.removed[name] {
 		// `unset` took it away, and neither the environment nor a dynamic
@@ -4526,7 +4606,11 @@ func (r *Runner) getVar(name string) (string, bool) {
 		return "", false
 	}
 
-	return r.inheritedValue(name)
+	v, ok := r.inheritedValue(name)
+	if !folded {
+		return v, ok
+	}
+	return r.readCaseFolded(name, v), ok
 }
 
 // assignOperands applies the array assignments a declaration utility was given
@@ -4844,7 +4928,10 @@ func (r *Runner) assign(a *syntax.Assign) {
 			return
 		}
 		if a.Append {
-			old, _ := r.getVar(a.Name)
+			// The *stored* text, which is what an append joins — see
+			// storedVar, and Semantics.CaseAttributeFoldsWhenRead for the
+			// shell where that is not what a read answers.
+			old, _ := r.storedVar(a.Name)
 			// The operator is not the whole of what `+=` means — see
 			// appendedValue. An attributed name adds here, and the string
 			// join is what is left when the name carries no attribute.

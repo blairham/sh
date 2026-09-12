@@ -773,6 +773,11 @@ func Semantics() interp.Semantics {
 	s.AttributeRereadsTheValueItFinds = interp.Yes
 	s.InheritedValueSurvivesADeclaredType = interp.Yes
 	s.CompoundElementsGoThroughTheAttribute = interp.No
+	// The case attributes fold on every *read* here and never touch the
+	// store: `typeset -l lo=AB` lists back as `typeset -l lo=AB`, and
+	// `typeset +l lo` reveals `AB`. See Semantics.CaseAttributeFoldsWhenRead
+	// for the panel (#1755).
+	s.CaseAttributeFoldsWhenRead = interp.Yes
 	s.CompoundAttribute = interp.CompoundAttributeReplacesItWithAScalar
 	// And the converse discards under both letters: `b=1; typeset -a b` is
 	// `typeset -a b=( )` with `${#b[@]}` 0 and `$b` empty, and `a=1;

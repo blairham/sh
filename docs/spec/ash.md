@@ -124,6 +124,29 @@ worked out again.
 Until then, treat this package the way the repository treats a gate that
 is inert on one platform: a green `make check` is not evidence about ash.
 
+### The first time that cost something
+
+Not theoretical any more. `Semantics.ReadTimeoutBoundsReadability` landed
+(#2252, for #644) within an hour of `dialect/ash` itself, from another
+session. Neither change was wrong; the axis simply had no ash value, and
+**an unanswered axis refuses at run time** — so the shipped `ash` binary
+started rejecting `read -t 1 x`, at status 2, with `go test ./...` green.
+Nothing in `make check` could have seen it. That is #2272, and it is the
+first concrete evidence that an ungraded dialect is a live risk rather
+than a tidiness complaint.
+
+The fix was not one value. Running every `oracle.Corpus` snippet through
+the `ash` binary and collecting each `no dialect was chosen` found
+**nineteen** unanswered axes reachable in this shell, not one — and
+answering them uncovered a twentieth, because a refusal early on a path
+hides the next question along it. Sixteen are answered in
+`dialect/ash/ash.go`, each against a BusyBox probe; the remaining three
+are items 4, 5 and 6 under *What could not be said*.
+
+That sweep is worth re-running whenever an axis is added, and it is three
+lines over `oracle.Corpus` and a built binary. It does not need a
+container: the *refusals* are our own, and only the answers need BusyBox.
+
 ### Where it stood when it landed
 
 Graded against the container recording — our `cmd/ash` run over the same
@@ -139,7 +162,7 @@ quoting it.
 
 ## What could not be said
 
-Three measured behaviors have no value on any existing axis. They are
+Six measured behaviors have no value on any existing axis. They are
 recorded here rather than approximated in code, because an invented
 answer in a dialect nothing grades is indistinguishable from a measured
 one.
@@ -168,7 +191,29 @@ substrate's own string (`division by zero`); this shell writes `divide by
 zero`. There is no `Diagnostics` field for it, and adding one for a
 single word was not worth a substrate edit.
 
-A fourth is a difference in kind rather than in wording: **`[[ ]]` here is
+**4. A NUL inside `$'…'`.** `x=$'a\0b'` leaves `ab` at length 2 — the
+byte is neither the end of the span (bash and ksh93, length 1) nor a
+character of it (zsh, length 3) but **dropped**, and the octal and hex
+spellings agree. `Semantics.DollarSingleNulTruncates` is an `Answer` and
+has no room for a third reading, so the axis is left unanswered here
+rather than set to one of the two wrong values. #2276.
+
+**5. `readonly -a`.** `readonly: illegal option -a`, and there is no
+`typeset` at all. Our binary accepts the letter because `readonly`'s
+option set is fixed in the interpreter rather than taken from the vector
+the way `ReadOptions` and `EchoOptions` are, and then walks into
+`ReadonlyRecordsTheCompoundAttribute`, which this shell cannot answer
+because it cannot be asked. ksh93 has the same hole today and for the
+same reason. #2277.
+
+**6. `ulimit -a`.** Measured in full — fifteen rows, `core file size
+(blocks)         (-c) unlimited` and its fellows, the letter in its own
+parenthesis at the end. Five of them (`-e`, `-i`, `-q`, `-r`, `-x`) name
+resources no `interp.Resource` constant does, and they were measured on
+Linux, where those limits exist; what a macOS build of this shell should
+print for them is a second measurement and not this one. #2278.
+
+A seventh is a difference in kind rather than in wording: **`[[ ]]` here is
 a builtin, not a keyword.** `type '[['` answers `[[ is a shell builtin`,
 and it does not suppress word splitting — `v="a b"; [[ $v == "a b" ]]` is
 `b: unknown operand`. The parser still has to know the construct, because

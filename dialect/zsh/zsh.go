@@ -1446,6 +1446,10 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-12, both store and the table ends with two elements
 	// (#1938).
 	s.EmptyAssociativeKeyIsAnError = interp.No
+	// Nor is reading one reported: measured 2026-09-12, `typeset -A m;
+	// m[k]=v; w=; ${m[$w]}` is the empty string at status 0 and silent
+	// (#1972).
+	s.EmptyAssociativeKeyIsReportedWhenRead = interp.No
 	// An empty positional list is a **set** parameter here, with dash and
 	// against the four bash-and-ksh columns: measured 2026-09-12, `set --;
 	// "${@-word}"` is empty and `"${@+word}"` is `word` (#1941).

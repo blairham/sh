@@ -4170,9 +4170,28 @@ The blank row is the control that says this is emptiness and not
 whitespace: one space is an ordinary key wherever the brackets hold a key
 at all.
 
-**Reading an empty key is a fourth question** and is not this axis: bash
-writes `m: bad array subscript` there — a different subject — and still
-answers with the empty string at status 0, which is #1972.
+**Reading an empty key is a fourth question** and is not this axis. It is
+`Semantics.EmptyAssociativeKeyIsReportedWhenRead`, measured 2026-09-12
+with `typeset -A m; m[k]=v` and `w=`:
+
+| probe | bash 5.3.15 | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `${m[$w]}` | `m: bad array subscript`, then `` at 0 | `` at 0 | `` at 0 |
+| `${m[$w]-none}` | the same sentence, then `none` | `none` | `none` |
+| `${m[ ]}` | nothing at all | `` at 0 | `` at 0 |
+
+One column says the subscript is bad and two say nothing, and all three
+answer the same empty string at the same status — so this is a report and
+not a value. The subject is the **name alone**, where the store one
+paragraph up names the subscript as it was written, and the status stays
+0: the sentence is written once per read and the word is finished rather
+than abandoned, which is why the default in `${m[$w]-none}` still fires.
+
+The blank row is again the control. `${m[]}` — nothing between the
+brackets as written — is refused one construct earlier by
+`EmptyParamSubscriptIsAnError` and never reaches this, and an indexed
+name reads its subscript as an expression and asks
+`EmptySubscriptTextIsAMathError` instead (#1972).
 
 This needed the parser before it needed an axis. `m[""]=4` parsed with no
 subscript at all, because the empty quoted span between the brackets was

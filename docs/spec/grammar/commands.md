@@ -773,6 +773,46 @@ name rather than by an assignment prefix (`DeclarationUtilities`;
 measured: `decl/an-array-assignment-as-an-operand`,
 `decl/a-local-array-stays-local`, `decl/readonly-takes-its-array-first`).
 
+#### What a refusal calls the subscript
+
+A refusal that quotes a subscript back quotes what was **written**, not
+what the text evaluated to. Measured 2026-09-07 and again 2026-09-12 in
+bash 5.3.15 and 3.2.57:
+
+| written | bash | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `i=-9; a=(x); a[$i]=q` | `a[$i]: bad array subscript` | `a: subscript out of range` | silent |
+| `i=1; a=(x y); a[$i]=(p q)` | `a[$i]: cannot assign list to array member` | takes the value | splices |
+| `i=1; a=(x y); a[$i+0]=(p q)` | `a[$i+0]: cannot assign list…` | takes the value | splices |
+| `x=1; a[x-2]=v` | `a[x-2]: bad array subscript` | `a: subscript out of range` | silent |
+
+Only a subscript holding an **expansion** can tell the two readings
+apart. An expression like `x-2` is never touched by the interpreter, so
+it reads back as written whichever text a refusal is handed — which is
+why a case written with one passed while the same shape with `$i` did
+not.
+
+Nothing an expanded word carries remembers its spelling, so the source
+text is kept on the node: `syntax.Assign.IndexText`, and
+`syntax.ParamExpr.IndexText` for the `${a[$i]:=v}` route that writes
+through a subscript too. That is the same argument `syntax.Redirect.Text`
+is kept on, and the two fields are spelling rather than program — a
+printer that re-spells `${i}` as `$i` re-spells them with it.
+
+Two boundaries on it, both measured:
+
+- A subscript that reached the store as a **string** — `typeset
+  "a[$i]"=q`, `read "a[$i]"`, `unset "a[$i]"` — is named by its value
+  (`a[-9]`) in the same shell, because the operand was expanded by the
+  caller before any of it was source text.
+- An expression that will not **evaluate** is quoted back expanded
+  everywhere: `i=1; a[$i/0]=x` is `1/0: division by 0`. The written text
+  reaches the boundary refusals and stops there.
+
+Corpus: `array/a-refused-subscript-is-named-as-written`,
+`array/a-refused-subscript-holding-an-expansion`,
+`array/a-refused-subscripted-literal-holding-an-expansion` (#1373).
+
 A subscript a script assigns **through** is an arithmetic expression and
 not only a numeral, wherever it is written: `a[1+1]=v`, `a[i]=v` and
 `a=([1+1]=v)` all name the element a bare `2` names, in bash and zsh.

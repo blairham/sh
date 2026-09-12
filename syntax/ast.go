@@ -257,6 +257,18 @@ type Assign struct {
 	// still holds the whole subscript as written, so a reader that does not
 	// know about groups sees what the source said.
 	IndexFlags *SubscriptFlags
+	// IndexText is the subscript as it was written, before any expansion —
+	// the text between the brackets, and empty where none were.
+	//
+	// A diagnostic that quotes a subscript back quotes what was *typed*:
+	// `i=-9; a[$i]=q` is `a[$i]: bad array subscript` in the column that
+	// reports it, not `a[-9]`. By the time that is known the word has been
+	// expanded and nothing left in the tree remembers the spelling — the
+	// same reason Redirect.Text exists, and the same shape.
+	//
+	// Only what stands between the brackets, so a reader adds the name and
+	// the brackets itself, exactly as it does for the expanded reading.
+	IndexText string
 	// Append is `name+=value`, which adds to what is there rather than
 	// replacing it — and adds to the *end* of an array rather than to its
 	// first element.

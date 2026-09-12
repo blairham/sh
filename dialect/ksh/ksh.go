@@ -929,6 +929,10 @@ func Semantics() interp.Semantics {
 	// leaves one element under the empty key here and is refused in bash
 	// (#1938).
 	s.EmptyAssociativeKeyIsAnError = interp.No
+	// And reading one says nothing either: measured 2026-09-12, `typeset -A
+	// m; m[k]=v; w=; ${m[$w]}` is the empty string at status 0 with no
+	// diagnostic, where bash names the table (#1972).
+	s.EmptyAssociativeKeyIsReportedWhenRead = interp.No
 	// The bash column's answer for whether an empty positional list is a set
 	// parameter: measured 2026-09-12, `set --; "${@-word}"` is `word` here
 	// and `${@=abc}` is `${@=abc}: bad substitution` because the operator

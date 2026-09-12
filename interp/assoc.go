@@ -169,10 +169,36 @@ func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
 		return a.values()
 	}
 	key := r.assocKey(e.Subscript())
+	r.reportEmptyAssocKeyRead(e.Name, key)
 	if v, ok := a[key]; ok {
 		return []string{v}
 	}
 	return r.absentAssocElement(e, key)
+}
+
+// reportEmptyAssocKeyRead says that a read's key came out empty, where the
+// dialect says so, and leaves the read to answer as it would have.
+//
+// The other face of assocAssignKey, and deliberately not the same code: the
+// store refuses, names the subscript as it was *written* and reports 1, while
+// this reports the **name** alone and the expansion carries on with the empty
+// string at status 0. One column does both and words them differently, which
+// is what says they are two questions — see
+// Semantics.EmptyAssociativeKeyIsReportedWhenRead.
+//
+// Nothing here sets the failed-expansion flag. Measured 2026-09-12,
+// `"[${m[$w]}]${m[$w]}"` writes the sentence once per read and still prints
+// `[]`, so the word is completed rather than abandoned.
+func (r *Runner) reportEmptyAssocKeyRead(name, key string) {
+	if key != "" {
+		return
+	}
+	if !r.ask(r.sem().EmptyAssociativeKeyIsReportedWhenRead,
+		"a read whose key on a keyed table came out empty") {
+		return
+	}
+	r.diagf("%s\n", Wording(r.diag().EmptyAssociativeKeyRead,
+		"%[1]s: bad array subscript", name))
 }
 
 // assocSubscriptOfTheName is a subscript on a name that reads as an
@@ -193,6 +219,7 @@ func (r *Runner) assocSubscriptOfTheName(e *syntax.ParamExpr) []string {
 		// the two spellings into one.
 		if w := r.searchOperand(e.Subscript()); w != "@" && w != "*" {
 			key := r.assocKey(e.Subscript())
+			r.reportEmptyAssocKeyRead(e.Name, key)
 			if v, ok := produce(r, key); ok {
 				return []string{v}
 			}

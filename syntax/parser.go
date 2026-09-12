@@ -1087,6 +1087,15 @@ func (p *Parser) parseStmt() *Stmt {
 //
 // Bounds-checked rather than trusted: a Pos is only as good as whatever
 // produced it, and this is on the path a `jobs` listing prints from.
+// offsetBy is a position n bytes further along the same line, which is what a
+// byte offset inside a span's value means for a span whose value is its
+// source.
+func offsetBy(pos Pos, n int) Pos {
+	pos.Offset += int32(n)
+	pos.Col += int32(n)
+	return pos
+}
+
 func (p *Parser) textBetween(from, to Pos) string {
 	src := p.lex.src
 	if from.Offset < 0 || int(to.Offset) > len(src) || from.Offset >= to.Offset {
@@ -1610,6 +1619,10 @@ type assignHead struct {
 	append bool
 	span   int // the span holding the `=`
 	off    int // byte offset just past the `=`, within that span's value
+	// from and to bracket the subscript in the input, just inside the
+	// brackets: the source text a diagnostic quotes back. Zero when no
+	// subscript was written. See Assign.IndexText.
+	from, to Pos
 }
 
 // isAssign reports whether a word is `name=…` written so the name is unquoted.
@@ -1719,6 +1732,14 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 			h.name = name
 			h.append = appends
 			h.index = spanRange(t.Spans, 0, open+1, i, j)
+			// Just inside the brackets, in the input. Both ends land in an
+			// *unquoted literal* span — the `[` in the first one and the `]`
+			// in this one, which the loop above has already required — and
+			// such a span's value is its source byte for byte, which is the
+			// same assumption spanRange makes when it slides a clipped
+			// span's position along.
+			h.from = offsetBy(t.Spans[0].Pos, open+1)
+			h.to = offsetBy(s.Pos, j)
 			h.span = i
 			h.off = j + 1
 			if appends {
@@ -1812,8 +1833,7 @@ func spanRange(spans []Span, from, fromOff, to, toOff int) []Span {
 			}
 			continue
 		}
-		s.Pos.Offset += int32(lo)
-		s.Pos.Col += int32(lo)
+		s.Pos = offsetBy(s.Pos, lo)
 		s.Value = s.Value[lo:hi]
 		out = append(out, s)
 	}
@@ -2145,6 +2165,7 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 	if h.index != nil {
 		a.Index = p.newWord(h.index, h.index[0].Pos, p.tok.End)
 		a.IndexFlags = p.assignIndexFlags(h.index)
+		a.IndexText = p.textBetween(h.from, h.to)
 	}
 	// The value is what is left of the span holding the `=`, plus every span
 	// after it — which is why the head reports a position rather than a count.

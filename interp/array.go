@@ -2026,6 +2026,36 @@ func (r *Runner) elemAt(name string, elems []string, n int) (string, bool) {
 	return elems[pos], true
 }
 
+// subscriptSubject is the subscript a refusal quotes back: the text as it was
+// **written**, before any expansion, falling back to the text the caller has
+// where the source is not available.
+//
+// One dialect names what was typed rather than what the text came to —
+// measured 2026-09-07 and again 2026-09-12, `i=-9; a=(x); a[$i]=q` is
+// `a[$i]: bad array subscript` in bash 5.3.15 and 3.2.57, and `a[$i]=(p q)`
+// is `a[$i]: cannot assign list to array member` — and nothing the
+// interpreter holds could say so, because a word that has been expanded no
+// longer remembers its spelling. syntax.Assign.IndexText and
+// syntax.ParamExpr.IndexText are that memory, on the same argument
+// syntax.Redirect.Text is kept on.
+//
+// The fallback is not a nicety. A subscript that reached the store as a
+// *string* — `typeset "a[$i]"=q`, `read "a[$i]"`, `unset "a[$i]"` — was
+// expanded by the caller before any of it was source text, and the same
+// column names the number there: `a[-9]`, measured. So those routes have no
+// written text to offer and are right not to.
+//
+// It is the boundary refusals alone. An expression that will not *evaluate*
+// is quoted back as the expanded text in every column — `i=1; a[$i/0]=x` is
+// `1/0: division by 0` in bash — so subscriptFailure keeps what it was given
+// (#1373).
+func subscriptSubject(written, expanded string) string {
+	if written != "" {
+		return written
+	}
+	return expanded
+}
+
 // subscriptText reads a subscript without letting it expand as a pattern.
 //
 // `${a[*]}` is the whole array and `${a[@]}` is its elements, and the two were

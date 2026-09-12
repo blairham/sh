@@ -5061,7 +5061,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 		if !ok {
 			return
 		}
-		text := r.subscriptAsWritten(a.Index)
+		text := subscriptSubject(a.IndexText, r.subscriptAsWritten(a.Index))
 		if a.Append {
 			r.appendArrayElem(a.Name, idx, text, r.assignValue(a))
 			return
@@ -5074,6 +5074,12 @@ func (r *Runner) assign(a *syntax.Assign) {
 		// wording of our own that named the array rather than the expression,
 		// and it carried on to the next command.
 		text := r.joinWord(a.Index)
+		// What a refusal quotes back is the subscript as it was *written*,
+		// which is not the text the arithmetic reads: `i=-9; a[$i]=q` is
+		// `a[$i]: bad array subscript` in the column that names it. Only the
+		// boundary refusals take it — an expression that will not evaluate is
+		// quoted back expanded in every column (#1373).
+		subject := subscriptSubject(a.IndexText, text)
 		// A range on the left names a span of elements rather than one, and
 		// the value is the single word that replaces the whole span:
 		// `a=(1 2 3); a[2,3]=x` is `[1][x]`. Ahead of the single-subscript
@@ -5086,7 +5092,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 			return
 		case outcome == spanResolved && r.spanReplacesElements(a.Name):
 			elems, _ := r.arrayElemsOfTheName(a.Name)
-			r.spliceElementSpan(a.Name, text, elems, from, to,
+			r.spliceElementSpan(a.Name, subject, elems, from, to,
 				[]string{r.assignValue(a)})
 			return
 		case outcome == spanResolved && r.subscriptSplicesCharacters(a.Name):
@@ -5098,7 +5104,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 			// answer at status 0 — see spliceCharacterSpan for the ends.
 			if r.spanIsBelowTheFirstElement(from, to) {
 				r.fatal("%s\n", Wording(r.diag().BadArraySubscript,
-					"%[1]s[%[2]s]: bad array subscript", a.Name, text))
+					"%[1]s[%[2]s]: bad array subscript", a.Name, subject))
 				return
 			}
 			r.spliceCharacterSpan(a.Name, from, to,
@@ -5114,10 +5120,10 @@ func (r *Runner) assign(a *syntax.Assign) {
 			// `a[0]+=Q` appends to element 0. Distinct from `a+=(Q)`, which
 			// adds an element after the last: the subscript is what says
 			// which of the two `+=` means.
-			r.appendArrayElem(a.Name, idx, text, r.assignValue(a))
+			r.appendArrayElem(a.Name, idx, subject, r.assignValue(a))
 			return
 		}
-		r.setArrayElem(a.Name, idx, text, r.assignValue(a))
+		r.setArrayElem(a.Name, idx, subject, r.assignValue(a))
 	default:
 		value := r.assignValue(a)
 		if r.assocDeclared(a.Name) && a.Append {

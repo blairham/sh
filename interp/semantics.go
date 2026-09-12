@@ -7584,6 +7584,48 @@ type Semantics struct {
 	// that is #1972 (#1938).
 	EmptyAssociativeKeyIsAnError Answer
 
+	// EmptyAssociativeKeyIsReportedWhenRead reports a *read* whose key came
+	// out empty — `typeset -A m; w=; ${m[$w]}` — and answers with the empty
+	// string anyway.
+	//
+	// The other face of EmptyAssociativeKeyIsAnError, and a different
+	// question rather than the same one seen from the read side: the store
+	// refuses and the read does not, the subject is the name alone rather
+	// than the subscript as written, and the status stays 0.
+	//
+	// Measured 2026-09-12, `-c`, with `typeset -A m; m[k]=v` and `w=`:
+	//
+	//	probe             bash 5.3.15                      ksh93u+   zsh 5.9.2
+	//	${m[$w]}          `m: bad array subscript`, ``, 0  ``, 0     ``, 0
+	//	${m[""]}          the same sentence                ``, 0     a two-character key
+	//	${m[$w]-none}     the same sentence, then `none`   `none`    `none`
+	//	${m[ ]}           nothing at all                   ``, 0     ``, 0
+	//
+	// So one column says the subscript is bad and two say nothing, and all
+	// three answer the same empty string at the same status — which is why
+	// this is a report and not a value. bash 3.2 has no such attribute to
+	// ask about, and dash reaches no subscript in an expansion at all.
+	//
+	// The blank row is the control that says this is emptiness and not
+	// whitespace: `${m[ ]}` looks up a one-space key and finds nothing,
+	// silently, in every column. `${m[]}` — nothing between the brackets as
+	// written — is refused one construct earlier by
+	// EmptyParamSubscriptIsAnError and never reaches this.
+	//
+	// It is the **key** and not the subscript, so an indexed name asks
+	// nothing here: `a=(1 2); ${a[$w]}` is the first element and silent
+	// everywhere, and the refusal an indexed name can earn from the same
+	// emptiness is EmptySubscriptTextIsAMathError, in another column again.
+	//
+	// Reported once per read, and the expansion carries on: measured,
+	// `"[${m[$w]}]${m[$w]}"` writes the sentence twice and prints `[]`, and
+	// a word that goes on to a conditional still gets its empty value. So
+	// nothing here sets the failed-expansion flag.
+	//
+	// The wording is Diagnostics.EmptyAssociativeKeyRead, whose one verb is
+	// the name (#1972).
+	EmptyAssociativeKeyIsReportedWhenRead Answer
+
 	// EmptyParamSubscriptIsAnError refuses `${a[]}` — a subscript written
 	// with nothing at all between the brackets — where a *parameter
 	// expansion* reads it. The same text one level over from

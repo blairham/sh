@@ -371,6 +371,17 @@ type ParamExpr struct {
 	// Index still keeps the whole subscript as written. See SubscriptRange.
 	IndexRange *SubscriptRange
 
+	// IndexText is the subscript as it was written, before any expansion —
+	// the text between the brackets, and empty where there were none.
+	//
+	// The same field Assign carries and for the same reason: a refusal that
+	// quotes a subscript back quotes what was *typed*, and by the time it is
+	// known the word has been expanded. See Assign.IndexText.
+	//
+	// The last subscript's, as Index is. A chain's earlier links are in
+	// Leading and none of them reaches a refusal that names one.
+	IndexText string
+
 	// Leading holds the subscripts written *before* Index, in written order,
 	// where the grammar lets several be chained: `${m[k][2]}` carries `k`
 	// here and `2` in Index.
@@ -722,7 +733,7 @@ scan:
 				// goes.
 				e.Leading = append(e.Leading, LeadingIndex{Index: e.Index, Flags: e.IndexFlags})
 			}
-			e.Index, e.IndexFlags, e.IndexRange = idx, g, rng
+			e.Index, e.IndexFlags, e.IndexRange, e.IndexText = idx, g, rng, inner
 			if bare {
 				// The same brackets read the other way: as the text they
 				// would be if nothing here had taken them for a subscript.

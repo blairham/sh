@@ -23,6 +23,10 @@ func emptySubText(a Answer) func(*Runner) {
 			s = *r.Semantics
 		}
 		s.EmptySubscriptTextIsAMathError = a
+		// A key that comes out empty is a report of its own, one branch over,
+		// and this file is not about it: the association row below is here to
+		// say that *this* axis does not reach a key (#1972).
+		s.EmptyAssociativeKeyIsReportedWhenRead = No
 		r.Semantics = &s
 		d := CoreDiagnostics()
 		if r.Diagnostics != nil {

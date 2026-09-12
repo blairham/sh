@@ -5131,6 +5131,16 @@ echo "st=$?"`,
 		Why:     "what the refusal names, which is three answers: bash quotes the subscript back as it was written — `a[x-2]`, not the -1 it came to — ksh93 names the array alone, and zsh has nothing to refuse here because a negative subscript counts back from the last element there. The expression is what tells the written text from the evaluated number; a bare `-2` could not",
 	},
 	{
+		ID: "array/a-refused-subscript-holding-an-expansion", Category: "expansion",
+		Snippet: `i=-9; a=(x); a[$i]=q; echo "st=$?"`,
+		Why:     "the row above with an *expansion* in the subscript, which is the only spelling that can tell the source text from the value: bash quotes back `a[$i]`, what was typed, and not the `-9` the word came to. `a[x-2]` one row up passes under either reading, because an expression with no expansion in it is never touched, and that is why it took this shape to find that nothing in the tree remembered the spelling -- syntax.Assign.IndexText is where it lives now, on the same argument syntax.Redirect.Text is kept on. ksh93 names the array alone and zsh has nothing to refuse, a negative subscript counting back from the last element there (#1373)",
+	},
+	{
+		ID: "array/a-refused-subscripted-literal-holding-an-expansion", Category: "expansion",
+		Snippet: `i=1; a=(x y); a[$i]=(p q); echo "st=$?"; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "the same written-text question on the second sentence that quotes a subscript back, and the one that refuses *before* evaluating it: bash names `a[$i]` and not the 1 it came to. The three columns split as they do for the construct itself -- bash refuses the list, ksh93 takes the parentheses as an ordinary value and zsh splices the words into the array -- so the array is read back to say which happened, and only the refusing column has a subject at all (#1373)",
+	},
+	{
 		ID: "array/a-literal-subscript-below-the-first-element", Category: "expansion",
 		Snippet: `a=([0]=p); printf "[%s]" "${a[@]}"; echo " ok"`,
 		Why:     "the same refusal reached through a literal, which the shell that refuses it words differently from the plain form — naming the subscript and the kind of assignment rather than the array. Two spellings of one rule needing two sentences is why the wording is a field of its own rather than the plain one used twice",
@@ -6645,6 +6655,12 @@ echo "st=$?"`,
 		ID: "assoc/a-quoted-key-keeps-its-quotes-or-does-not", Category: "expansion",
 		Snippet: `typeset -A m; m["k"]=W; kk='"k"'; printf '[%s]' "${m[$kk]}" "${m[k]}"; echo`,
 		Why:     "the two readings of a quoted subscript, told apart by storing under one spelling and reading with the other — a key that is one string under both would hide it. bash and ksh93 run the subscript through quote removal, so the key is `k` and the second read finds `W`; zsh takes it as written, so the key is the three characters and the *first* read finds it. dash has no attribute and refuses the line",
+	},
+	{
+		ID: "assoc/reading-an-empty-key", Category: "expansion",
+		Snippet: "typeset -A m 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`m[k]=v; w=; echo "[${m[$w]}]"; echo "after=$?"; echo "[${m[ ]}]"; echo "[${m[$w]-none}]"`,
+		Why: "reading a key that came out empty, which is the other face of the store one row down and a different question: bash writes `m: bad array subscript` -- the table alone, where the store names the subscript as written -- and then answers the empty string at status 0, once per read and with the word finished, so the default in the last field still fires. ksh93 and zsh say nothing at all and answer the same empty string at the same status, which is what makes this a report rather than a value. The blank field is the control that says this is emptiness and not whitespace: a one-space key is looked up and missed silently everywhere. bash 3.2 has no such attribute and dash reaches no subscript in an expansion at all. Answered by Semantics.EmptyAssociativeKeyIsReportedWhenRead (#1972)",
 	},
 	{
 		ID: "assoc/an-empty-key", Category: "expansion",

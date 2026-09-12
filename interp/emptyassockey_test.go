@@ -57,6 +57,9 @@ func TestAnEmptyKeyIsAKey(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := testSemantics()
 			sem.EmptyAssociativeKeyIsAnError = No
+			// Reading one is a question of its own, and this file is about
+			// the store — see TestAnEmptyKeyReadMayBeReported (#1972).
+			sem.EmptyAssociativeKeyIsReportedWhenRead = No
 			sem.SubscriptIsAQuotingContext = Yes
 			out, st := run(t, tc.src, withSem(sem))
 			if out != tc.want || st != 0 {
@@ -75,6 +78,7 @@ func TestAnEmptyQuotationIsAKeyOfItsOwnWhereQuotesStay(t *testing.T) {
 	const src = `typeset -A m; w=; m[""]=4; m[$w]=5; printf '[%s][%s][%s]' "${#m[@]}" "${m[""]}" "${m[$w]}"`
 	sem := testSemantics()
 	sem.EmptyAssociativeKeyIsAnError = No
+	sem.EmptyAssociativeKeyIsReportedWhenRead = No
 	sem.SubscriptIsAQuotingContext = No
 	out, st := run(t, src, withSem(sem))
 	if want := `[2][4][5]`; out != want || st != 0 {
@@ -132,6 +136,7 @@ func TestTheEmptyKeyAxisIsAskedOnlyOverAnEmptyKey(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := testSemantics()
 			sem.EmptyAssociativeKeyIsAnError = Unspecified
+			sem.EmptyAssociativeKeyIsReportedWhenRead = No
 			sem.SubscriptIsAQuotingContext = Yes
 			out, _ := run(t, tc.src, withSem(sem))
 			said := strings.Contains(out, "empty key on a keyed table")

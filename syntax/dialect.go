@@ -1541,19 +1541,18 @@ type Dialect struct {
 	// measured under `RC_EXPAND_PARAM` both ways, one `^` distributes and
 	// two do not, from either starting point.
 	//
-	// It cannot collide with anything else this grammar spells with a `^`.
-	// bash's case-conversion `^` follows the name — `${x^}` — and this one
-	// precedes it, and the pattern-negation `^` of `EXTENDED_GLOB` is not
-	// inside a `${`.
+	// It cannot collide with anything else this grammar spells with a `^`. The
+	// case-conversion `^` follows the name — `${x^}` — and this one precedes it,
+	// and the pattern-negation `^` of an extended-glob mode is not inside a
+	// `${`.
 	ParamRcExpandFlag bool
 
 	// ParamSetTestFlag enables a `+` written between the `${` and the
 	// parameter: `${+name}`, which substitutes `1` when the parameter is set
-	// and `0` when it is not, and never fails. zsh alone has it; to the
-	// other four a leading `+` is not a name and the whole expansion is
-	// unreadable, which BadSubstitutionAtParseTime already splits into a
-	// parse-time refusal for ksh93 (`` `+' unexpected ``) and a deferred
-	// runtime error for the rest.
+	// and `0` when it is not, and never fails. One preset has it; to the rest a
+	// leading `+` is not a name and the whole expansion is unreadable, which
+	// BadSubstitutionAtParseTime already splits into a parse-time refusal
+	// (`` `+' unexpected ``) and a deferred runtime error.
 	//
 	// A grammar flag rather than a semantics axis, for the reason
 	// ParamTildeFlag is one: without it there is no parameter at the front
@@ -1576,19 +1575,19 @@ type Dialect struct {
 	// ParamElementSelection enables the three operators that choose which
 	// *elements* of a value survive: `${a:#pattern}` drops the ones a
 	// pattern matches, `${a:|other}` the ones another array holds, and
-	// `${a:*other}` keeps only those. One shell in the panel has them.
+	// `${a:*other}` keeps only those. One preset has them.
 	//
-	// A grammar flag rather than a semantics axis, for the reason
-	// BareSubscript is one: the panel does not disagree about what these
-	// characters *mean*, it cuts the word in different places. `${a:#two}`
-	// is an exclusion in zsh, an offset whose arithmetic begins `#two` in
-	// bash — which is a refusal, `operand expected` — and in ksh93 it is
-	// `${a#two}`, prefix removal, the colon simply ignored. Three readings,
-	// no shared syntax for a value to switch between, so the flag decides
-	// which grammar is being read and nothing downstream has to ask.
+	// A grammar flag rather than a semantics axis, for the reason BareSubscript
+	// is one: the presets do not disagree about what these characters *mean*,
+	// they cut the word in different places. `${a:#two}` is an exclusion under
+	// one, an offset whose arithmetic begins `#two` under another — which is a
+	// refusal, `operand expected` — and under a third it is `${a#two}`, prefix
+	// removal, the colon simply ignored. Three readings, no shared syntax for a
+	// value to switch between, so the flag decides which grammar is being read
+	// and nothing downstream has to ask.
 	//
-	// It is only about the colon. `${a:1}` is still an offset with the flag
-	// on, because the disambiguation is the single character after it, and
+	// It is only about the colon. `${a:1}` is still an offset with the flag on,
+	// because the disambiguation is the single character after it, and
 	// `${a:-x}` is still a default for the same reason.
 	ParamElementSelection bool
 
@@ -1596,10 +1595,9 @@ type Dialect struct {
 	// the array the operand names, one element from each in turn. `:^` stops
 	// when the shorter runs out, `:^^` cycles it.
 	//
-	// zsh alone. Without the flag the colon opens a substring and `^b` is
-	// handed to arithmetic, which refuses it — that refusal is what a real
-	// startup file produced, from `FG=( ${codes:^fg} )` in Oh My Zsh's
-	// spectrum library (#2112).
+	// Without the flag the colon opens a substring and `^b` is handed to
+	// arithmetic, which refuses it — and that refusal is what a real startup
+	// file produces, from a colour-table library writing `FG=( ${codes:^fg} )`.
 	ParamArrayZip bool
 
 	// ParamWholeElementReplace enables `${a:/pattern/replacement}`, the
@@ -1609,16 +1607,16 @@ type Dialect struct {
 	//
 	// A flag of its own rather than a fourth character in the set above,
 	// because it is a different *shape* — two operands split on an unquoted
-	// slash where those three take one — and a dialect may have the family
-	// without it. Set together in the one shell that has either, which is
-	// where the sameness ends.
+	// slash where those three take one — and a preset may have the family
+	// without it. Set together in the one preset that has either, which is where
+	// the sameness ends.
 	//
 	// The disambiguation is the same one character, and it can be read
 	// before the substring without taking anything from it: no arithmetic
 	// expression begins with a division, so `${x:/p/r}` is unreadable as an
-	// offset in the grammars without the flag — `bad math expression:
-	// operand expected at \`/p/r'` — where `${x:3/2}` keeps its offset of
-	// `3/2` under the flag. Measured on zsh 5.9.2 and bash 5.3.
+	// offset in the grammars without the flag — `bad math expression: operand
+	// expected at \`/p/r'` — where `${x:3/2}` keeps its offset of `3/2` under
+	// the flag.
 	//
 	// It is not ParamReplace with a colon in front. That one substitutes a
 	// matching *span* inside the value; this one tests the whole of it.
@@ -1629,16 +1627,15 @@ type Dialect struct {
 
 	// ParamColonBeforeTrimIsIgnored reads a colon written before a trim as
 	// nothing at all: `${v:#p}` is `${v#p}`, and so are `${v:##p}`,
-	// `${v:%p}` and `${v:%%p}`. One shell in the panel does this.
+	// `${v:%p}` and `${v:%%p}`. One preset does this.
 	//
-	// The third of the three readings ParamElementSelection's note names,
-	// and the one that had no answer behind it: those six characters are an
-	// exclusion in zsh, an arithmetic offset beginning `#p` in bash — a
-	// refusal — and the plain trim in ksh93. So this is the flag that says
-	// which grammar is being read, exactly as that one is, and for the same
-	// reason it is a grammar flag rather than a semantics axis: the shells
-	// do not disagree about what the characters mean, they cut the word in
-	// different places.
+	// The third of the three readings ParamElementSelection's note names: those
+	// six characters are an exclusion under one preset, an arithmetic offset
+	// beginning `#p` under another — a refusal — and the plain trim under a
+	// third. So this is the flag that says which grammar is being read, exactly
+	// as that one is, and for the same reason it is a grammar flag rather than a
+	// semantics axis: the presets do not disagree about what the characters
+	// mean, they cut the word in different places.
 	//
 	// The colon is *ignored* rather than recorded, so the node is the trim
 	// it would have been without it and everything downstream — the
@@ -1648,14 +1645,14 @@ type Dialect struct {
 	// would put a flag on the node that nothing reads and that a later
 	// reader would have to guess the meaning of.
 	//
-	// Only the four trims. Measured on ksh93u+ 2012-08-01: `${v:/l/L}`,
-	// `${v:^^}` and a colon with a space after it stay arithmetic errors
-	// there, `${v:2}` is still an offset, and `${v:#}` is `${v#}` — an
-	// empty pattern that trims nothing rather than a special case.
+	// Only the four trims. Measured: `${v:/l/L}`, `${v:^^}` and a colon with a
+	// space after it stay arithmetic errors under the flag, `${v:2}` is still an
+	// offset, and `${v:#}` is `${v#}` — an empty pattern that trims nothing
+	// rather than a special case.
 	//
-	// No shell in the panel sets this and ParamElementSelection together,
-	// and the parser takes them in that order so the pair has a defined
-	// reading rather than depending on which case came first in the file.
+	// No preset sets this and ParamElementSelection together, and the parser
+	// takes them in that order so the pair has a defined reading rather than
+	// depending on which case came first in the file.
 	ParamColonBeforeTrimIsIgnored bool
 
 	// ParamLengthTakesAnOperator lets `${#name}` carry an operator as well:

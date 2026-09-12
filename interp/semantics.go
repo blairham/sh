@@ -3996,208 +3996,186 @@ type Semantics struct {
 	// it could not find.
 	WaitReadsOptions Answer
 
-	// CommandRejectsUnknownOption refuses a leading `-` word that is not one
-	// of `command`'s own options, rather than taking it as the command.
+	// CommandRejectsUnknownOption refuses a leading `-` word that is not one of
+	// `command`'s own options, rather than taking it as the command.
 	//
-	// All four read `-v` and `-p`. bash, dash and ksh93 refuse anything
-	// else; zsh alone stops reading options there, so `command -q ls` is
-	// `command not found: -q` in zsh and a refused option in the other
-	// three. The same shape printf already has. Recorded as
-	// `cmd/command-with-an-option-nobody-has`, with a letter no panel shell
-	// owns: the first probe used -x, which is a real ksh93 option, and read
-	// ksh93 as tolerant off ksh93's own feature.
+	// `-v` and `-p` are read everywhere. Answering No stops reading options
+	// there, so `command -q ls` is `command not found: -q` rather than a refused
+	// option. The same shape `printf` already has. Recorded as
+	// `cmd/command-with-an-option-nobody-has`, with a letter no preset owns: a
+	// first probe using a letter that is a real option somewhere read that
+	// implementation as tolerant off its own feature.
 	CommandRejectsUnknownOption Answer
 
-	// GetoptsRejectsUnknownOption is the same question for `getopts`, which
-	// has no options at all here — so any leading `-` word is the one being
-	// asked about, and it would otherwise be the optstring.
+	// GetoptsRejectsUnknownOption is the same question for `getopts`, which has
+	// no options at all here — so any leading `-` word is the one being asked
+	// about, and it would otherwise be the optstring.
 	//
-	// bash and ksh93 refuse it: `getopts -q o` is an unknown option there
-	// and an optstring of `-q` in dash and zsh. Recorded as
-	// `getopts/a-dash-word-where-the-optstring-belongs`, with a letter no
-	// panel shell owns: ksh93 has `-a` for real, and the first probe used
-	// it — ksh93's answer stood, wrongly, at No until the probe was rerun
-	// with -q.
+	// Yes makes `getopts -q o` an unknown option; No makes `-q` the optstring.
+	// Recorded as `getopts/a-dash-word-where-the-optstring-belongs`, with a
+	// letter no preset owns: a first probe using a letter that is a real option
+	// somewhere left that implementation's answer standing wrongly at No.
 	GetoptsRejectsUnknownOption Answer
 
 	// ShiftCountIsArithmetic reads `shift`'s operand as an expression rather
-	// than as a plain number: `shift 1+1` moves two and `shift n` moves
-	// whatever n holds.
+	// than as a plain number: `shift 1+1` moves two and `shift n` moves whatever
+	// n holds.
 	//
-	// ksh93 and zsh do. An unset name is zero in an expression, so
-	// `shift abc` shifts nothing and succeeds there, where bash and dash
-	// call it a number they cannot read.
+	// An unset name is zero in an expression, so under Yes `shift abc` shifts
+	// nothing and succeeds, where No calls it a number it cannot read.
 	ShiftCountIsArithmetic Answer
 
-	// ReportsAKilledCommandInACommandSubstitution remarks on a command that
-	// a signal ended inside `$(…)`.
+	// ReportsAKilledCommandInACommandSubstitution remarks on a command that a
+	// signal ended inside `$(…)`.
 	//
-	// bash does not, and does remark on the same command inside `( … )`, so
-	// this is not the subshell question in another spelling. dash and ksh93
-	// report it wherever it happened; zsh remarks on none of them and never
-	// reaches this.
+	// An implementation may answer No here and still remark on the same command
+	// inside `( … )`, so this is not the subshell question in another spelling.
 	//
-	// Asked only inside a substitution, so the three dialects that answer
-	// the wider question the same way everywhere are not asked twice.
+	// Asked only inside a substitution, so a preset that answers the wider
+	// question the same way everywhere is not asked twice, and one that remarks
+	// on no killed command at all never reaches it.
 	ReportsAKilledCommandInACommandSubstitution Answer
 
 	// TrapBodyLine is which lines a diagnostic from inside a trap's body
 	// names. See TrapBodyLineStyle.
 	TrapBodyLine TrapBodyLineStyle
 
-	// ExitTrapFiresPastTheEnd counts the EXIT trap as having fired on the
-	// line after the script's last, rather than on its first.
+	// ExitTrapFiresPastTheEnd counts the EXIT trap as having fired on the line
+	// after the script's last, rather than on its first.
 	//
-	// Only asked by a dialect whose TrapBodyLine needs a firing line at all,
-	// and only for EXIT, which has no line of its own. zsh says yes: its
-	// EXIT trap reports the line the parser stopped at. ksh93 says no, which
-	// makes an EXIT body read like a small script of its own.
+	// Asked only by a preset whose TrapBodyLine needs a firing line at all, and
+	// only for EXIT, which has no line of its own. Yes reports the line the
+	// parser stopped at; No makes an EXIT body read like a small script of its
+	// own.
 	ExitTrapFiresPastTheEnd Answer
-	// SelectPromptNeedsTerminal withholds PS3 unless the input is a terminal.
-	// ksh93 alone says yes, which is why a ksh93 script's transcript has the
-	// menu in it and no prompt.
+	// SelectPromptNeedsTerminal withholds PS3 unless the input is a terminal,
+	// which is why a transcript can have the menu in it and no prompt.
 	SelectPromptNeedsTerminal Answer
 	// SelectTakesUnterminatedReply counts a final reply that has no trailing
-	// newline. zsh alone: `printf 2 | sh -c 'select x in a b; do ...'` picks
-	// `b` there, and bash and ksh93 ignore the line and end the loop with 1.
+	// newline, so `printf 2 | sh -c 'select x in a b; do ...'` picks `b`.
+	// Answering No ignores the line and ends the loop with 1.
 	//
-	// The same question `read` answers, and the opposite outcome — the panel
-	// is unanimous for `read` and split here, so that one is the core's
-	// behavior and this one is an axis. Reachable only from a pipe or a file,
-	// since a terminal ends every line.
+	// The same question `read` answers, and the opposite outcome — `read` is
+	// unanimous and this is split, so that one is the core's behavior and this
+	// one is an axis. Reachable only from a pipe or a file, since a terminal
+	// ends every line.
 	SelectTakesUnterminatedReply Answer
 
-	// SelectEofIsSuccess makes the input running out a success. zsh alone
-	// says yes; the other two report 1.
+	// SelectEofIsSuccess makes the input running out a success rather than a
+	// report of 1.
 	SelectEofIsSuccess Answer
 	// SelectAssumesUnboundedWidth treats an unset COLUMNS as no limit rather
-	// than as 80. zsh says yes — with no terminal to ask it puts forty items
-	// on one line — and bash says no. It does not arise for a menu that is
-	// always vertical, which is why ksh93 leaves it unanswered.
+	// than as 80 — with no terminal to ask, Yes puts forty items on one line. It
+	// does not arise for a menu that is always vertical, which leaves such a
+	// preset unanswered.
 	SelectAssumesUnboundedWidth Answer
-	// SelectEofEndsPromptLine writes a newline to standard error when the
-	// input runs out, closing the line the prompt left open. zsh alone does;
-	// bash closes the line on standard *output* instead, which is a different
-	// question and the field below.
+	// SelectEofEndsPromptLine writes a newline to standard error when the input
+	// runs out, closing the line the prompt left open. Closing the line on
+	// standard *output* instead is a different question and the field below.
 	SelectEofEndsPromptLine Answer
 	// SelectEofPrintsNewline writes a newline to standard *output* when the
 	// input runs out — the one thing this loop prints that does not go to
-	// standard error. bash alone does it.
+	// standard error.
 	SelectEofPrintsNewline Answer
 
-	// AssignmentUpdatesPipelineStatus counts a bare assignment as a command
-	// for the pipeline-status record. bash says yes, so `false | true; x=1`
-	// replaces the two elements with one holding 0; zsh says no and leaves
-	// them.
+	// AssignmentUpdatesPipelineStatus counts a bare assignment as a command for
+	// the pipeline-status record, so `false | true; x=1` replaces the two
+	// elements with one holding 0. Answering No leaves them.
 	//
 	// A bare assignment is one with no command name *and no redirection*:
-	// `false | true; x=1 >/dev/null` replaces the elements in zsh too,
-	// because the redirection is what makes it a job. Negation does the
-	// same, and for the same reason — see recordSingleStatus.
+	// `false | true; x=1 >/dev/null` replaces the elements under both answers,
+	// because the redirection is what makes it a job. Negation does the same,
+	// and for the same reason — see recordSingleStatus.
 	AssignmentUpdatesPipelineStatus Answer
-	// TestAndArithmeticUpdatePipelineStatus counts `[[ … ]]` and `(( … ))`
-	// as commands for the pipeline-status record. bash says yes; zsh says no
-	// and leaves the elements the last pipeline left, which is what makes
-	// the shape real code uses work:
+	// TestAndArithmeticUpdatePipelineStatus counts `[[ … ]]` and `(( … ))` as
+	// commands for the pipeline-status record. Answering No leaves the elements
+	// the last pipeline left, which is what makes the shape real code uses work:
 	//
 	//	cmd | filter
 	//	if (( pipestatus[1] == 141 )); then …
 	//	elif (( pipestatus[1] )); then print "failed ($pipestatus[1])"
 	//	fi
 	//
-	// With yes, the first `(( … ))` overwrites the array it just read, the
-	// `elif` reads that instead, and the message reports the status of the
-	// test rather than of the pipeline — a genuine failure printed as 0.
+	// Under Yes the first `(( … ))` overwrites the array it just read, the
+	// `elif` reads that instead, and the message reports the status of the test
+	// rather than of the pipeline — a genuine failure printed as 0.
 	//
-	// One axis for the two constructs because no shell separates them: every
-	// panel member that has the record answers both the same way. The two
-	// are grouped with the bare assignment above by what they are not — zsh
-	// runs all three without making a job, and a job is what writes the
-	// record.
+	// One axis for the two constructs because nothing separates them: a preset
+	// with the record answers both the same way. The two are grouped with the
+	// bare assignment above by what they are not — running all three without
+	// making a job, and a job is what writes the record.
 	TestAndArithmeticUpdatePipelineStatus Answer
-	// NegatedTestRecordsThePostNegationStatus writes the status a `!` in
-	// front of `[[ … ]]` or `(( … ))` produced, rather than the one the
-	// construct itself reported.
+	// NegatedTestRecordsThePostNegationStatus writes the status a `!` in front
+	// of `[[ … ]]` or `(( … ))` produced, rather than the one the construct
+	// itself reported. After `false | true`, so a replaced record is visible:
 	//
-	// Measured 2026-09-11, after `false | true` so the record is visibly
-	// replaced:
+	//	                 ! [[ a = a ]]   ! [[ a = b ]]   ! false
+	//	Yes              1               0               1
+	//	No               0               1               1
 	//
-	//	                       ! [[ a = a ]]   ! [[ a = b ]]   ! false
-	//	bash 5.3.15            1               0               1
-	//	bash 3.2.57            1               0               1
-	//	zsh 5.9.2              0               1               1
+	// The first two columns are the axis and the third is why it is confined to
+	// these two constructs: an ordinary command records what *it* reported under
+	// both answers, so `!` is not a rule about negation in general.
+	// `! { [[ a = a ]]; }` and `! ( [[ a = a ]] )` record 0 under Yes as well —
+	// the compound reports its own status and the `!` does not reach the record
+	// — which is what says this is about the construct and not about the shape
+	// of the line.
 	//
-	// The first two columns are the axis and the third is why it is confined
-	// to these two constructs: an ordinary command records what *it*
-	// reported in both shells, so `!` is not a rule about negation in
-	// general. `! { [[ a = a ]]; }` and `! ( [[ a = a ]] )` record 0 in bash
-	// as well — the compound reports its own status and the `!` does not
-	// reach the record — which is what says this is about the construct and
-	// not about the shape of the line.
-	//
-	// A redirection does not move it: `! [[ a = a ]] >/dev/null` is 1 in
-	// bash, the same as without one, where a redirection *does* move the
-	// axis above. So the two are asked separately even though they name the
-	// same two constructs.
+	// A redirection does not move it: `! [[ a = a ]] >/dev/null` is the same as
+	// without one, where a redirection *does* move the axis above. So the two
+	// are asked separately even though they name the same two constructs.
 	//
 	// Silent when it is wrong: a plausible one-element record, no diagnostic,
 	// and a script branching on `${PIPESTATUS[0]}` after a negated test reads
-	// the opposite of what the shell it was written for reports (#1513).
+	// the opposite of what it was written against.
 	NegatedTestRecordsThePostNegationStatus Answer
 	// PromptAsksAgainAfterARefusedToken draws the continuation prompt for a
 	// construct the parser has **refused**, rather than refusing it where it
 	// stands.
 	//
 	// Read by the front end rather than by the interpreter: it is about what a
-	// prompt does with a line, which is `repl`'s to do and `driver`'s to carry
-	// — the same shape as PlusSignedCommandStringIsDollarZero, and a plain
-	// bool for the same reason, since a prompt has no way to refuse to run
-	// over an unanswered axis.
+	// prompt does with a line, which is `repl`'s to do and `driver`'s to carry —
+	// the same shape as PlusSignedCommandStringIsDollarZero, and a plain bool
+	// for the same reason, since a prompt has no way to refuse to run over an
+	// unanswered axis.
 	//
-	// Measured 2026-09-11, `printf 'echo one\nif; then\necho three\n'` into
-	// each shell under `-i` with PS1 and PS2 set:
-	//
-	//	bash 5.3.15  refuses at once, no PS2, and then runs `echo three`
-	//	ksh93u+      the same
-	//	dash         the same
-	//	zsh 5.9.2    draws PS2 and waits
-	//
-	// `while; do` splits the panel the same way, and `for do` and `case in`
-	// split it *neither* way — every shell prompts for those, because they
-	// are input that has not finished rather than input that is wrong.
+	// Feeding `echo one`, `if; then`, `echo three` to an interactive shell, No
+	// refuses at once, draws no PS2, and then runs `echo three`; Yes draws PS2
+	// and waits. `while; do` splits the same way, and `for do` and `case in`
+	// split *neither* way — every reading prompts for those, because they are
+	// input that has not finished rather than input that is wrong.
 	//
 	// The cost of answering yes where the shell answers no is a command
-	// disappearing: the next line typed is read as part of the construct
-	// already refused, so `echo three` above never runs (#1893).
+	// disappearing: the next line typed is read as part of the construct already
+	// refused, so `echo three` never runs.
 	PromptAsksAgainAfterARefusedToken bool
 
 	// CompoundPipelineStatusRecord is what a compound command does to the
 	// pipeline-status record — see CompoundPipelineStatusPolicy, whose two
 	// answers are two *mechanisms* rather than two values for one rule.
 	//
-	// The first is a question about the **parse** and not about what ran,
-	// which is what makes it worth an axis at all. Measured 2026-09-11,
-	// zsh 5.9.2,
-	// each line after `false | true` so a replaced record is visible:
+	// The first is a question about the **parse** and not about what ran, which
+	// is what makes it worth an axis at all. Each line after `false | true`, so
+	// a replaced record is visible:
 	//
 	//	false | true; if [[ a = b ]]; then :; fi              0
 	//	false | true; if [[ a = b ]]; then [[ b = b ]]; fi    1 0
 	//
 	// Neither body runs — the condition is false both times — and the only
-	// difference is the text inside `then`. An **unexecuted** `:` is enough
-	// to make the compound count as a command.
+	// difference is the text inside `then`. An **unexecuted** `:` is enough to
+	// make the compound count as a command.
 	//
-	// So the rule composes: a compound counts where its body holds anything
-	// that would count on its own, by the two axes above, and nothing else.
+	// So the rule composes: a compound counts where its body holds anything that
+	// would count on its own, by the two axes above, and nothing else.
 	//
 	//	{ :; }                       0      { [[ a = a ]]; }        1 0
 	//	{ [[ a = a ]]; :; }          0      { x=1; }                1 0
 	//	{ { :; } }                   0      { { [[ a = a ]]; } }    1 0
 	//	while false; do [[ a=a ]]; done  0  while [[ a = b ]]; do [[ a=a ]]; done  1 0
 	//
-	// The `while` pair is the one that says the condition is body too, and
-	// the nested pair is the recursion. Four shapes answer for themselves
-	// whatever they hold, and each is measured:
+	// The `while` pair is the one that says the condition is body too, and the
+	// nested pair is the recursion. Four shapes answer for themselves whatever
+	// they hold:
 	//
 	//	( [[ a = a ]] )       0     a subshell is a job however it ends
 	//	{ coproc cat; }       0     and so is a coprocess
@@ -4206,23 +4184,22 @@ type Semantics struct {
 	//	{ f() { :; }; }       1 0   a *definition* runs nothing
 	//	select … do :; done   0     counts with a body that would not
 	//
-	// A redirection on the compound writes the record whatever the body says
-	// — `{ [[ a = a ]]; } >/dev/null` and `if … fi >/dev/null` are both one
+	// A redirection on the compound writes the record whatever the body says —
+	// `{ [[ a = a ]]; } >/dev/null` and `if … fi >/dev/null` are both one
 	// element — which is the same rule the two axes above follow, and for the
 	// same reason: the redirection is what makes the job. That is this
-	// mechanism's rule and not the other's; see the table below.
+	// mechanism's rule and not the other's.
 	//
-	// The second mechanism is bash's, and it is not this one's opposite: the
-	// compound writes **nothing**, and the record it leaves is whatever the
-	// last pipeline that actually ran inside it wrote. Measured 2026-09-11 on
-	// bash 5.3.15 and 3.2.57 alike, each line after `false | true`:
+	// The second mechanism is not this one's opposite: the compound writes
+	// **nothing**, and the record it leaves is whatever the last pipeline that
+	// actually ran inside it wrote. Each line after `false | true`:
 	//
 	//	if false; then :; fi              1     the condition ran and wrote it
 	//	if [[ a = b ]]; then :; fi        1     and so did this one
 	//	while false; do :; done           1
 	//	case a in b) :;; esac             1 0   nothing ran: the record stands
 	//	for i in ; do :; done             1 0
-	//	{ [[ a = a ]] & }                 1 0   a background job writes nothing here
+	//	{ [[ a = a ]] & }                 1 0   a background job writes nothing
 	//	{ [[ a = a ]] | [[ b = b ]]; }    0 0   two elements survive the braces
 	//	{ :; }                            0     the `:` inside wrote it
 	//	if false; then :; fi >/dev/null   1     a redirection does not change it
@@ -4236,27 +4213,27 @@ type Semantics struct {
 	// `1` after a record of `1 0`.
 	//
 	// Silent when it is wrong, both ways: a plausible one-element record where
-	// the pipeline's elements should still be there (#1931, #2016).
+	// the pipeline's elements should still be there.
 	CompoundPipelineStatusRecord CompoundPipelineStatusPolicy
-	// UnsetEndsTheProducedPipelineStatus makes `unset` permanent. zsh says
-	// yes and the name never fills again; in bash the producer outlives it.
-	// It is the opposite of what a produced *scalar* does, where unset ends
-	// it in both — `unset RANDOM` leaves an ordinary empty name everywhere.
+	// UnsetEndsTheProducedPipelineStatus makes `unset` permanent, so the name
+	// never fills again; answering No lets the producer outlive it.
+	//
+	// It is the opposite of what a produced *scalar* does, where unset ends it
+	// under both answers — `unset RANDOM` leaves an ordinary empty name.
 	UnsetEndsTheProducedPipelineStatus Answer
 
-	// ArrayScalarIsTheWholeArray decides what a plain `$a` gives when `a` is
-	// an array: zsh says every element joined by a space, and bash and ksh93
-	// say the first element alone. dash has no arrays, which is why the axis
-	// is absent rather than false there.
+	// ArrayScalarIsTheWholeArray decides what a plain `$a` gives when `a` is an
+	// array: every element joined by a space, or the first element alone. A
+	// preset with no arrays leaves the axis absent rather than false.
 	ArrayScalarIsTheWholeArray Answer
 
-	// KeyedTableScalarIsTheFirstValue says *which* element a plain `$m`
-	// gives when `m` is a keyed table and the axis above has answered "one
-	// element". Two readings, and they are the same disagreement about
-	// whether such a table has an order at all: bash and ksh93 look up the
-	// key `0` and hand back nothing when there is no such key, while the
-	// shell that reads a table as an ordered list hands back the first value
-	// in whatever order it lists.
+	// KeyedTableScalarIsTheFirstValue says *which* element a plain `$m` gives
+	// when `m` is a keyed table and the axis above has answered "one element".
+	//
+	// Two readings, and they are the same disagreement about whether such a
+	// table has an order at all: looking up the key `0` and handing back nothing
+	// when there is no such key, or reading the table as an ordered list and
+	// handing back the first value in whatever order it lists.
 	//
 	// A second axis rather than a widening of the first, because the shells
 	// that share the first answer do not share this one, and because it is

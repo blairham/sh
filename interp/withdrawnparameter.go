@@ -178,3 +178,26 @@ func (r *Runner) ParameterWithdrawn(name string) bool {
 	_, ok := r.withdrawnParams[name]
 	return ok
 }
+
+// WithdrawnParameterTaken reports whether a withdrawn name has since been
+// given a value of the script's, so that putting the producer back would
+// stand it over a parameter that already exists.
+//
+// [Runner.SetParameterWithdrawn] restores unconditionally on purpose, and
+// this is the other half of that decision rather than a softening of it:
+// whether a restore is *allowed* is the module loader's question, because
+// only the loader knows what a module is and how its shell words the refusal.
+// This answers the one part of it that is this package's — is the name free —
+// and the set-ness is [Runner.parameterIsSet], the same call `${name+word}`
+// makes, so a name holding the empty string counts as taken exactly as it
+// does everywhere else.
+//
+// False for a name that was never withdrawn, which is not the same question:
+// a producer that is still in the tables is not being put back.
+func (r *Runner) WithdrawnParameterTaken(name string) bool {
+	if !r.ParameterWithdrawn(name) {
+		return false
+	}
+	set, err := r.parameterIsSet(name)
+	return err == nil && set
+}

@@ -133,7 +133,7 @@ func withoutMatching(f declareFlags) declareFlags {
 	// input rather than a thing the line asked for, and leaving it in would
 	// make every lettered line look like one that said something more. See
 	// declareFlags.letters.
-	f.letters = ""
+	f.letters, f.letterSigns = "", ""
 	return f
 }
 

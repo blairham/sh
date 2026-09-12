@@ -127,6 +127,64 @@ func registerAutoload(r *interp.Runner) {
 		indent := FunctionLayout().Indent
 		return "{\n" + indent + "# undefined\n" + indent + line + "\n}", true
 	})
+	// The reading half of the same declaration: `functions -u` and
+	// `typeset -fu` with no operands are the *listing* a bare `autoload`
+	// writes, narrowed by which letters were asked for. See autoloadMarked,
+	// which is the one population both routes walk.
+	r.SetMarkedFunctions(func(_ *interp.Runner, letters string) []string {
+		return autoloadMarked(r, letters)
+	})
+}
+
+// autoloadMarked is the names a listing narrowed by the marking letters asks
+// for: the functions still waiting to be defined, and for `U` only those
+// whose stub carries that letter.
+//
+// It is the population a bare `autoload` writes out and the population
+// `functions -u` writes out, because they are the same listing — measured
+// 2026-09-12 on zsh 5.9.2, byte for byte — and the issue that asked for the
+// letter (#1996) asked for exactly that rather than for a second walk. A
+// second helper omitting what the first one carries is the failure this tree
+// keeps making, so `autoloadListing` reads this too.
+//
+// The letters are a union: `functions -uU` writes what `functions -u` writes,
+// not what `functions -U` writes.
+func autoloadMarked(r *interp.Runner, letters string) []string {
+	var names []string
+	for _, name := range r.FuncNames() {
+		line, ok := autoloadStubLine(r, name)
+		if !ok {
+			continue
+		}
+		if !autoloadStubHoldsAny(line, letters) {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// autoloadStubHoldsAny reports whether a stub holds any of the marks the
+// letters name.
+//
+// `u` is the mark every stub holds — it is what "waiting to be defined"
+// *is*, and reaching here at all has already established it. `U` is recorded
+// on the stub, so it is read back off the stub rather than kept a second
+// time: two records of one fact is how they come to disagree, which is the
+// argument autoloadMark already makes for writing the stub in one place.
+func autoloadStubHoldsAny(line, letters string) bool {
+	for _, c := range letters {
+		switch c {
+		case 'u':
+			return true
+		case 'U':
+			if strings.HasPrefix(line, autoloadStubPrefix+"U") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // autoloadOpts is what the letters asked for.
@@ -1058,14 +1116,9 @@ func autoloadSearch(r *interp.Runner, name string) (string, bool) {
 // from the listing, because it is an ordinary function now and this builtin
 // has nothing left to say about it.
 func autoloadListing(r *interp.Runner) int {
-	var pending []string
-	for _, name := range r.FuncNames() {
-		if autoloadPending(r, name) {
-			pending = append(pending, name)
-		}
-	}
-	sort.Strings(pending)
-	for _, name := range pending {
+	// `u` because that is the letter this listing is: `functions -u` prints
+	// these same bytes, and autoloadMarked is what both of them walk.
+	for _, name := range autoloadMarked(r, "u") {
 		if text, ok := r.FunctionText(name); ok {
 			_, _ = fmt.Fprintf(r.Out(), "%s\n", strings.TrimRight(text, "\n"))
 		}

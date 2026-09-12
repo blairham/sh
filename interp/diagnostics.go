@@ -718,6 +718,37 @@ type Diagnostics struct {
 	// which of the two happened.
 	UnimplementedOptionLetters map[string]string
 
+	// MarkingLettersUnderPlus and MarkingUnderPlusRefusal are a pair, and
+	// both or neither: letters with no wording say nothing, and a wording
+	// with no letters reaches nothing.
+	//
+	// MarkingLettersUnderPlus names the letters out of
+	// [Semantics.FunctionLettersThatMarkUndefined] that a `-f` declaration
+	// refuses outright when the letter's own last sign is a plus. It is
+	// **strictly narrower** than that field rather than derived from it, and
+	// that is the whole reason it exists — measured 2026-09-12 on zsh 5.9.2,
+	// with `f1` waiting to be defined:
+	//
+	//	functions +u      invalid option(s), 1
+	//	typeset +fu       invalid option(s), 1
+	//	typeset -fu +u    invalid option(s), 1 — the letter's last sign
+	//	typeset +fu -u    0, and the marking happens as usual
+	//	functions +U      0, and it is a listing narrowed to the U-marked
+	//
+	// So `u` is refused under the sign and `U` is not, though both mark.
+	// A letter belongs to the accepted set or to the refused one, per sign,
+	// and never by inference from the other list.
+	//
+	// ksh93 answers neither — its `typeset +fu` is a listing at 0 — so this
+	// is one shell's refusal rather than a rule about the notion, which is
+	// why it is a diagnostic and not an axis five dialects would answer.
+	MarkingLettersUnderPlus string
+	// MarkingUnderPlusRefusal is the sentence, which is the *listing*
+	// builtin's own wording rather than `autoload`'s `bad option: -Q`: the
+	// line never reached a marking, so it is the declaration that complains.
+	// The status is 1.
+	MarkingUnderPlusRefusal string
+
 	// ReadBadNumber is a count, timeout or descriptor argument to `read`
 	// that is not a number, taking the word. The panel has a wording per
 	// shell per letter; this is one for all of them, and a dialect that

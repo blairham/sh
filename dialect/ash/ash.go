@@ -302,6 +302,10 @@ func Semantics() interp.Semantics {
 	s.PrintfRejectsUnknownOption = interp.No
 	// `cd ""` and `HOME=; cd` both say nothing and report 0; `cd alpha beta`
 	// goes to alpha and says nothing; `cd -` prints where it went.
+	// Measured 2026-09-12 on BusyBox v1.37.0: `OLDPWD=/nonexistent ash -c 'echo
+	// $OLDPWD'` answers the path it was given, and `cd -` then answers `can't cd
+	// to /nonexistent: No such file or directory` at 2.
+	s.InheritedOldpwd = interp.InheritedOldpwdTaken
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdEmptyOperandIsAnError = interp.No
 	s.CdEmptyHomeIsAnError = interp.No

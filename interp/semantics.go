@@ -1530,6 +1530,11 @@ type Semantics struct {
 	// `${OPTARG-}` can tell the two apart.
 	GetoptsClearsOptarg Answer
 
+	// InheritedOldpwd is what becomes of an `OLDPWD` the shell was handed in
+	// its environment: taken as it stands, taken only when it names a
+	// directory, or not read at all. See InheritedOldpwdPolicy, which carries
+	// the measurements and the reason this is not a question about `cd`.
+	InheritedOldpwd InheritedOldpwdPolicy
 	// CdWithoutHomeIsAnError makes `cd` with no operand and no HOME a
 	// failure. True in bash and ksh93; dash and zsh stay where they are and
 	// report success, which is the quieter answer and the surprising one.

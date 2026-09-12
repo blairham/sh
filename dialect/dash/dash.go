@@ -300,6 +300,9 @@ func Semantics() interp.Semantics {
 	// can be asked. An answer here would be an invention.
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
+	// Measured 2026-09-12: `OLDPWD=/nonexistent dash -c 'echo $OLDPWD'` answers
+	// the path it was given, and `cd -` then answers `can't cd to` it at 2.
+	s.InheritedOldpwd = interp.InheritedOldpwdTaken
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.No

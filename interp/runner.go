@@ -1262,6 +1262,14 @@ type Runner struct {
 	// wrong.
 	toldOfJobsAtExit    bool
 	tellingOfJobsAtExit bool
+	// oldpwdSettled says the inherited OLDPWD has already been read and
+	// judged, which happens once however many chunks a session runs.
+	//
+	// A flag rather than the presence of the name, because two of the three
+	// answers leave nothing behind to look at: a value that is kept stays in
+	// the environment where it arrived, and re-deciding per chunk would stat
+	// it again on every line a person types. See settleInheritedOldpwd.
+	oldpwdSettled bool
 	// bg is set on the runner *inside* a background job, so the process it
 	// starts can be recorded against the job.
 	bg *Job

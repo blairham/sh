@@ -895,6 +895,10 @@ func Semantics() interp.Semantics {
 	// word, this shell having no `local`: the caller's position inside a
 	// clustered word comes back with the number.
 	s.GetoptsLocalOptindRestoresTheCursor = interp.Yes
+	// Measured 2026-09-12: `OLDPWD=/nonexistent ksh -c 'echo $OLDPWD'` answers
+	// the path it was given, and `cd -` then names it — this shell judges the
+	// value when something tries to use it and not before.
+	s.InheritedOldpwd = interp.InheritedOldpwdTaken
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.No

@@ -71,6 +71,9 @@ func (r *Runner) ensureSpecials() {
 		// inherited value must not show through.
 		r.setVarQuietly("OPTIND", "1")
 	}
+	// OLDPWD is the one parameter here the panel disagrees about *inheriting*
+	// rather than providing, so it is a policy rather than a starting value.
+	r.settleInheritedOldpwd()
 	if _, ok := r.Dynamic["LINENO"]; !ok {
 		r.Dynamic["LINENO"] = func(r *Runner) string {
 			// One dialect numbers lines inside a function from the line the

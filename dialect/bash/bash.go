@@ -821,6 +821,12 @@ func Semantics() interp.Semantics {
 	// the newer answer and the one `getopts ab o; g; getopts ab o` reads `b`
 	// from (#2226).
 	s.GetoptsLocalOptindRestoresTheCursor = interp.Yes
+	// Measured 2026-09-12: `OLDPWD=/nonexistent bash -c 'echo ${OLDPWD-UNSET}'`
+	// answers UNSET, and the same with a directory answers the directory. A
+	// plain file is dropped and a mode-000 directory is kept, so the test is a
+	// stat rather than the one `cd` makes. bash 3.2 drops an inherited OLDPWD
+	// whatever it names, which is a fourth answer and not this dialect's.
+	s.InheritedOldpwd = interp.InheritedOldpwdTakenIfADirectory
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.Yes

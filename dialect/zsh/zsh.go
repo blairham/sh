@@ -1413,6 +1413,12 @@ func Semantics() interp.Semantics {
 	// thing that loses the caller's place.
 	s.GetoptsLocalOptindRestoresTheCursor = interp.Yes
 	s.GetoptsClearsOptarg = interp.Yes
+	// Measured 2026-09-12: `OLDPWD=/usr zsh -c 'echo $OLDPWD'` answers `$PWD`,
+	// so an inherited value never arrives at all — the name is this shell's own
+	// record of where it has been, and it starts where the shell started. That
+	// is why `OLDPWD=/nonexistent zsh -c 'cd -'` says nothing and reports 0:
+	// there is no unusable value to refuse.
+	s.InheritedOldpwd = interp.InheritedOldpwdIgnored
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.No
 	s.PrintfAssignsWithV = interp.Yes

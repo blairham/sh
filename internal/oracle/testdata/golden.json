@@ -107347,47 +107347,47 @@
       "ash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: syntax error: bad substitution",
-        "Status": 2,
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: ${(g:e:)v}: bad substitution",
-        "Status": 1,
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: ${(g:e:)v}: bad substitution",
-        "Status": 127,
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: ${(g:e:)v}: bad substitution",
-        "Status": 1,
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "dash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: 1: Bad substitution",
-        "Status": 2,
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: syntax error at line 1: `v}' unexpected",
-        "Status": 3,
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "[X][X\ufffdY]",
+        "Stdout": " [ X ] [ X 377 Y ] ",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

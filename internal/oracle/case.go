@@ -17702,8 +17702,8 @@ echo "st=$?"`,
 	},
 	{
 		ID: "param/the-escape-flag-reads-the-meta-prefixes-too", Category: "parameter expansion",
-		Snippet: `v='X\M-'; w='X\M-\xffY'; printf "[%s][%s]" "${(g:e:)v}" "${(g:e:)w}"; echo`,
-		Why:     "the same two edges reached through the `(g:e:)` flag rather than through `print`, which is what says the decoder is one and not two: zsh answers `X` and `X` 0xff `Y`. A second copy of the escape set behind the flag would have to be fixed twice and is the shape this tree has been bitten by before",
+		Snippet: `v='X\M-'; w='X\M-\xffY'; printf "[%s][%s]" "${(g:e:)v}" "${(g:e:)w}" | od -An -c | tr -s " "`,
+		Why:     "the same two edges reached through the `(g:e:)` flag rather than through `print`, which is what says the decoder is one and not two: zsh answers `[X][X` 0xff `Y]`, read through `od` because a raw 0xff is not text and a record has to be. A second copy of the escape set behind the flag would have to be fixed twice and is the shape this tree has been bitten by before",
 	},
 	{
 		ID: "print/capital-r-changes-the-option-parser", Category: "builtins",

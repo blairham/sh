@@ -10984,7 +10984,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/the-names-with-a-prefix-joined` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ZQ_a ZQ_b]` | `[ZQ_a ZQ_b]` | `[ZQ_a ZQ_b]` | `[ZQ_a ZQ_b]` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
 | `param/no-names-with-that-prefix` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
 | `param/the-names-with-a-prefix-are-sorted` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `ZQ_a ZQ_b` | `ZQ_a ZQ_b` | `ZQ_a ZQ_b` | `ZQ_a ZQ_b` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
-| `param/the-escape-flag-reads-the-meta-prefixes-too` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(g:e:)v}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(g:e:)v}: bad substitution` *(status 127)* | **2>** `<shell>: ${(g:e:)v}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `v}' unexpected` *(status 3)* | `[X][X�Y]` | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
+| `param/the-escape-flag-reads-the-meta-prefixes-too` | **2>** `<shell>: 1: Bad substitution` | **2>** `<shell>: line 1: ${(g:e:)v}: bad substitution` | **2>** `<shell>: line 1: ${(g:e:)v}: bad substitution` | **2>** `<shell>: ${(g:e:)v}: bad substitution` | **2>** `<shell>: syntax error at line 1: `v}' unexpected` | ` [ X ] [ X 377 Y ] ` | **2>** `<shell>: syntax error: bad substitution` |
 
 - `param/unset-positional-takes-a-default` — an out-of-range positional is unset rather than empty, so the plain default form fires for it
   ```sh
@@ -12111,9 +12111,9 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   ZQ_b=2; ZQ_a=1; echo ${!ZQ_@}
   ```
-- `param/the-escape-flag-reads-the-meta-prefixes-too` — the same two edges reached through the `(g:e:)` flag rather than through `print`, which is what says the decoder is one and not two: zsh answers `X` and `X` 0xff `Y`. A second copy of the escape set behind the flag would have to be fixed twice and is the shape this tree has been bitten by before
+- `param/the-escape-flag-reads-the-meta-prefixes-too` — the same two edges reached through the `(g:e:)` flag rather than through `print`, which is what says the decoder is one and not two: zsh answers `[X][X` 0xff `Y]`, read through `od` because a raw 0xff is not text and a record has to be. A second copy of the escape set behind the flag would have to be fixed twice and is the shape this tree has been bitten by before
   ```sh
-  v='X\M-'; w='X\M-\xffY'; printf "[%s][%s]" "${(g:e:)v}" "${(g:e:)w}"; echo
+  v='X\M-'; w='X\M-\xffY'; printf "[%s][%s]" "${(g:e:)v}" "${(g:e:)w}" | od -An -c | tr -s " "
   ```
 
 ## redirection

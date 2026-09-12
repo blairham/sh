@@ -175,14 +175,14 @@ func printReport(w *os.File, rep suite.Report) {
 	}
 	fmt.Fprintln(w)
 
-	fmt.Fprintf(w, "  parsed           %4d/%-4d  %5.1f%%   our parser read the whole file\n",
-		rep.Parsed, rep.Files, 100*rep.ParseRate())
-	fmt.Fprintf(w, "  strict           %4d/%-4d  %5.1f%%   every byte and the status identical\n",
-		rep.Strict, rep.Scored, 100*rep.StrictRate())
-	fmt.Fprintf(w, "  line agreement             %5.1f%%   longest common subsequence, by line\n",
-		100*rep.LineRate())
-	fmt.Fprintf(w, "                             %5.1f%%   the same, unweighted per file\n",
-		100*rep.MeanFile)
+	fmt.Fprintf(w, "  parsed          %-9s %5.1f%%   our parser read the whole file\n",
+		fmt.Sprintf("%d/%d", rep.Parsed, rep.Files), 100*rep.ParseRate())
+	fmt.Fprintf(w, "  strict          %-9s %5.1f%%   every byte and the status identical\n",
+		fmt.Sprintf("%d/%d", rep.Strict, rep.Scored), 100*rep.StrictRate())
+	fmt.Fprintf(w, "  line agreement  %-9s %5.1f%%   longest common subsequence, by line\n",
+		"", 100*rep.LineRate())
+	fmt.Fprintf(w, "                  %-9s %5.1f%%   the same, unweighted per file\n",
+		"", 100*rep.MeanFile)
 	fmt.Fprintln(w)
 
 	fmt.Fprintf(w, "  not scored       %d unstable · %d oracle hung · %d dialect hung\n",
@@ -219,9 +219,10 @@ func printReport(w *os.File, rep suite.Report) {
 
 	if len(rep.StatusPairs) > 0 {
 		fmt.Fprintln(w, "  exit status of the files that ran and disagreed  (ours / oracle)")
-		fmt.Fprintln(w, "  (numbers, because our runtime diagnostics would quote the file back)")
+		fmt.Fprintln(w, "  (numbers, because our runtime diagnostics would quote the file back;")
+		fmt.Fprintln(w, "   -1 is a run that ended on a signal or never started)")
 		for _, p := range rep.StatusPairs {
-			fmt.Fprintf(w, "    %4d  %3d / %-3d\n", p.Files, p.Ours, p.Reference)
+			fmt.Fprintf(w, "    %4d  %d / %d\n", p.Files, p.Ours, p.Reference)
 		}
 		fmt.Fprintln(w)
 	}

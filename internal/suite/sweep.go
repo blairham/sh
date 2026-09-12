@@ -344,6 +344,13 @@ func repeats(ctx context.Context, s Suite, tests, name, reference string, timeou
 // fixtures and pieces the files source, which are needed on disk and are not
 // runs of their own; running one would report a failure for a file nobody
 // meant to start.
+//
+// The test directory's own files and not its subdirectories, for the same
+// reason one step out: a subdirectory of a suite is a group with an
+// arrangement of its own, and folding it into the top level would start files
+// on terms that were never theirs. The count in the report is of what was
+// run, so a group left out is visible as a smaller population rather than as
+// a silent pass.
 func Files(tests, ext string) ([]string, error) {
 	entries, err := os.ReadDir(tests)
 	if err != nil {

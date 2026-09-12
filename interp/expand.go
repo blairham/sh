@@ -413,28 +413,38 @@ func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(string, syntax.Quotin
 }
 
 // expandRedirectTargetViews expands a redirection's target once and returns
-// both readings of it: the fields an ordinary word would have become, and the
-// text it comes to when nothing is split or matched.
+// the three readings of it: the fields an ordinary word would have become,
+// the words it comes to when nothing is *split* but everything else happens,
+// and the text it comes to when nothing is split or matched at all.
 //
-// One pass, because the two readings must not each run the command
-// substitutions in `> $(f)`. And a pass of its own rather than two calls,
-// because splitting is quoting-aware — `"$e"` with a space in it is one field
-// and `$e` is two — so the unsplit text cannot be recovered by joining the
+// One pass, because the readings must not each run the command substitutions
+// in `> $(f)`. And a pass of its own rather than three calls, because
+// splitting is quoting-aware — `"$e"` with a space in it is one field and
+// `$e` is two — so the unsplit text cannot be recovered by joining the
 // fields, and the fields cannot be recovered by splitting the text.
 //
 // The fields view splits without consulting the splitting axis: it exists to
 // show what the ordinary-word reading *would* be, and whether that reading
 // applies is the redirection's own axis, asked by the caller exactly where
-// the two views differ. Asking here as well made the bare core refuse
+// the views differ. Asking here as well made the bare core refuse
 // `> $two` for splitting — the wrong axis, and asked even when the target
 // was one word under both readings.
-func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, plain string) {
+//
+// The **words** view is the middle one, and it is the reading of the dialect
+// that does not split a target: an array is still several words there, a
+// pattern is still matched, and a scalar holding a space is still one name.
+// `v=(f g); cat <$v` is two words and `e="f g"; cat <$e` is one, which is
+// exactly the difference the text view cannot express — it joins both to
+// `f g`. See redirectTarget, which is the only caller and which decides what
+// several words mean (#1792).
+func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []string, plain string) {
 	if w == nil {
-		return nil, ""
+		return nil, nil, ""
 	}
 	r.expandTilde(w)
 
 	f := newWordFields()
+	u := newWordFields()
 	var b strings.Builder
 
 	for _, s := range w.Spans {
@@ -454,10 +464,18 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 			// and the shape this repository keeps finding is the second
 			// copy that did not get the change.
 			f.add(s, parts)
+			// The words view takes the same parts: an array is several words
+			// however the splitting axis is answered, which is the half of
+			// this reading that is not the text view.
+			u.add(s, parts)
 			continue
 		}
 		text, split := r.expandSpan(s, splitAlways, head)
 		b.WriteString(text)
+		// And never splits, whatever the span asked for. That is the whole
+		// of the difference from the fields view below.
+		u.text(text)
+		u.any = u.any || text != "" || s.Quoting != syntax.Unquoted
 		if !split {
 			f.text(text)
 			f.any = f.any || text != "" || s.Quoting != syntax.Unquoted
@@ -468,11 +486,15 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 	}
 	plain = globUnescape(b.String())
 
+	words = u.result()
+	if words != nil {
+		words = r.globFields(words)
+	}
 	fields = f.result()
 	if fields == nil {
-		return nil, plain
+		return nil, words, plain
 	}
-	return r.globFields(fields), plain
+	return r.globFields(fields), words, plain
 }
 
 // substitutedWordFields expands the word a `-` or `+` substituted, keeping the

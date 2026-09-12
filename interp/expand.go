@@ -1777,7 +1777,11 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			// The same split the subscript path already makes: a `(P)` inner
 			// is a parameter reference and every other inner is a value. See
 			// interp/nestedsub.go.
-			return r.expandParam(&syntax.ParamExpr{Name: name, Length: true, Src: e.Src})
+			// The resolved text may be a *reference* rather than a name —
+			// `v='x[@]'` measures the array and not a parameter called
+			// `x[@]`, which holds nothing — so the node is built from it.
+			// See referenceNode.
+			return r.expandParam(r.referenceNode(name, &syntax.ParamExpr{Length: true}, e.Src))
 		}
 		// Measured rather than used, which the inner has to know: a
 		// substitution in the name position is not field-split under a

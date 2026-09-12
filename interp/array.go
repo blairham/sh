@@ -2476,3 +2476,47 @@ func (r *Runner) refusesEmptyParamSubscript(e *syntax.ParamExpr) bool {
 func writtenEmptySubscript(w *syntax.Word) bool {
 	return w == nil || len(w.Spans) == 0
 }
+
+// unsetFlaggedSubscript is `unset 'a[(r)y]'`, where the operand's subscript
+// opens with a flag group and names its element by *searching*.
+//
+// handled is false where there is no group, which is every other operand and
+// every grammar without them.
+//
+// The operand arrives as a **runtime string** rather than as a parsed word,
+// which is why this was left out of the change that answered the same group
+// on the left of an assignment (#1102): the group could be scanned off the
+// text, but its operand had never been lexed and so had nowhere to hang. It
+// is read as the reference it is instead — one parse, from which the group,
+// its operand and the plain arithmetic reading all come — so `unset 'b[(r)y]'`
+// searches and `unset 'b[(r)$w]'` searches for what `$w` holds. Measured on
+// zsh 5.9.2, the one shell with the construct, with `b=(x y z)`:
+//
+//	unset 'b[(r)y]'         x  z   the element whose value matched
+//	unset 'b[(re)y]'        x  z   and exact matching finds the same one
+//	unset 'b[(r)y*]'        x  z   the operand is a pattern
+//	unset 'b[(i)y]'         x  z   the index form names the same element
+//	unset 'b[(R)x]' on (x y x)  x y   the reverse search takes the last
+//	unset 'b[(r)nomatch]'   x y z  a miss is one past the last, so nothing
+//	unset 'b[(e)2]'         x  z   no search flag, so an ordinary subscript
+//	unset 's[(r)l]' on hello   helo   a search over a string is a character
+//
+// What is left behind is the dialect's answer and not this one's — three
+// elements with an empty one in the middle, which is
+// UnsetArraySpanLeavesOneEmptyElement — so all this decides is *which*
+// element, exactly as the assignment's group does.
+//
+// An association is answered before this is reached, and is measured to want
+// that: `unset 'm[(r)v]'` changes nothing there, the brackets being a key.
+func (r *Runner) unsetFlaggedSubscript(base, operand, sub string) (handled bool, code int) {
+	e, ok := r.reference(operand)
+	if !ok || e.IndexFlags == nil {
+		return false, 0
+	}
+	idx, named := r.flaggedTargetIndex(e, false)
+	if !named {
+		// Refused by name, and the refusal has already been written.
+		return true, 1
+	}
+	return true, r.unsetArrayElem(base, idx, sub)
+}

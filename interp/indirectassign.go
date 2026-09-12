@@ -76,53 +76,154 @@ func (r *Runner) indirectElement(name string) (base, sub string, ok bool) {
 	return base, sub, true
 }
 
-// indirectElementValue reads the element a resolved name points at, so that
-// the `:=` and `=` tests ask about the parameter the assignment would write.
-//
-// Measured on zsh 5.9.2: with `typeset -A M`, `x="M[k]"` and `M[k]=old`,
-// `${(P)x}` is `old`, `${(P)+x}` is 1 and `${(P)x:=new}` leaves `old`; with
-// the key absent the same three are empty, 0 and `new`. The array spelling
-// answers alike — `a=(p q); x="a[2]"` reads `q`.
-//
-// handled is false where the head names neither an association nor an array.
-// zsh reads a subscript on a scalar as a character and a subscript flag as a
-// search, and this shell answers neither yet; falling through leaves those
-// texts to the plain-name lookup they already got rather than putting a
-// second answer in front of it.
-func (r *Runner) indirectElementValue(base, sub string) (value string, set, handled bool) {
-	if a, ok := r.assocFor(base); ok {
-		v, held := a[sub]
-		return v, held, true
-	}
-	arr, ok := r.Arrays[base]
-	if !ok {
-		return "", false, false
-	}
-	idx, err := r.subscriptValue(sub)
-	if err != nil {
-		// The subscript is not arithmetic — a flag group or a range. Left to
-		// the fall-through above rather than reported, because a *read* of
-		// one is not this change's question and a diagnostic here would fire
-		// on a line the shell answers.
-		return "", false, false
-	}
-	pos, within := r.elemPos(arr, idx)
-	if !within {
-		return "", false, true
-	}
-	v, held := arr[pos]
-	return v, held, true
-}
-
 // indirectBase is namedBase with the one extra shape a `(P)` can hand it: a
-// resolved text that names an element rather than a whole parameter.
+// resolved text that is a **reference** rather than a name.
+//
+// The resolved text is read as the parameter expansion it spells, so every
+// subscript this shell answers anywhere it answers here. It used to be taken
+// apart by hand into a name and one arithmetic index, and everything else
+// fell through to the plain-name lookup and found nothing — silently, at
+// status 0. Measured on zsh 5.9.2, 2026-09-12:
+//
+//	x=(p q);   v='x[@]'      p q   a whole-array subscript, was empty
+//	x=(p q);   v='x[*]'      p q   likewise, was empty
+//	x=(p q r); v='x[1,2]'    p q   a range, was the *second element*
+//	s=abc;     v='s[2]'      b     a character of a scalar, was empty
+//	a=(p q);   v='a[(r)q]'   q     a search, was empty
+//	a=(p q);   v='a[(i)q]'   2     and its index form, was empty
+//	x=(p q);   v='x[1]'      p     the control: one element already worked
+//
+// The subscript is *live* text and not a literal, which the parse is what
+// makes true: measured, `i=2; v='x[$i]'` and `v='x[$(echo 2)]'` both read the
+// second element, so a substitution written into a resolved reference is
+// performed when the reference is read (#1852).
 func (r *Runner) indirectBase(name, flags string) (words []string, set, isList bool) {
-	if base, sub, ok := r.indirectElement(name); ok {
-		if v, held, handled := r.indirectElementValue(base, sub); handled {
-			return []string{v}, held, false
-		}
+	if e, ok := r.reference(name); ok {
+		return r.referenceBase(e, flags)
 	}
 	return r.namedBase(name, flags)
+}
+
+// lookupFlags is the part of a `(P)` group that belongs to the *second*
+// lookup: `k` and `v`, and nothing else.
+//
+// It is baseFlags read the other way round. Those two letters are answered by
+// whichever lookup the substituted value is finally taken from, baseFlags
+// keeps them out of the one that produced the name, and this is the lookup
+// they were being kept for — so a reference has to be read with them.
+// Measured on zsh 5.9.2 with `typeset -A tab=(k1 v1 k2 v2)` and `x=(p q)`:
+// `v='tab[k1]'; ${(kP)v}` is `k1` where `${(P)v}` is `v1`, `v='tab[@]';
+// ${(kP)v}` is the keys, and `v='x[2]'; ${(kP)v}` is `2`, the index an
+// ordinary array reads that letter as.
+//
+// The rest of the group is left behind because it acts on the words *below*
+// this step — `(U)` cases what came out, `(j)` joins it — and handing it to
+// the lookup would run it twice.
+func lookupFlags(flags string) string {
+	return strings.Map(func(c rune) rune {
+		if c == 'k' || c == 'v' {
+			return c
+		}
+		return -1
+	}, flags)
+}
+
+// reference reads a resolved text that carries a subscript as the parameter
+// expansion it spells, and reports whether it is one.
+//
+// False for a plain name, which is every caller's common case, and for a
+// bracketed text whose head is not a name: a resolved text is a value and may
+// hold anything, so `a b` and `#` reach here as readily as a name does.
+func (r *Runner) reference(text string) (*syntax.ParamExpr, bool) {
+	base, _, ok := r.subscriptOperand(text)
+	if !ok || !isNameLike(base) {
+		return nil, false
+	}
+	e := syntax.NewParser("", r.dialect()).ParseReference(text, syntax.Pos{})
+	if e == nil || e.Bad || e.Index == nil || e.Name != base {
+		// A grammar without subscripts, or a text the reader would call a
+		// bad substitution. Left to the plain-name lookup, which is what it
+		// got before there was a parse here at all.
+		return nil, false
+	}
+	return e, true
+}
+
+// referenceBase is what such a reference comes to, in the three parts a base
+// is: the words, whether the parameter was set, and whether it is a list.
+//
+// flagBase is what answers it, which is the point: the reference *is* a
+// parameter expansion with a subscript, so the whole of that reading — the
+// association's key, the whole-array forms, a range's list-ness, the
+// set-ness of an element that is not there — comes from the one function
+// that already has it rather than from a second copy that would drift.
+//
+// The set-ness it reports is what keeps `${(P)+v}` and `${(P)v:=w}` asking
+// about the element the reference names rather than about the name that
+// spelled it: measured on zsh 5.9.2, with `typeset -A M`, `x="M[k]"` and
+// `M[k]=old`, `${(P)x}` is `old`, `${(P)+x}` is 1 and `${(P)x:=new}` leaves
+// `old`, while with the key absent the same three are empty, 0 and `new`.
+func (r *Runner) referenceBase(e *syntax.ParamExpr, flags string) (words []string, set, isList bool) {
+	ref := *e
+	ref.Flags = lookupFlags(flags)
+	ref.HasFlags = ref.Flags != ""
+	return r.flagBase(&ref)
+}
+
+// referenceKeepsFields reports whether a resolved text names the whole of an
+// array with `[@]`, whose fields survive the quoted join exactly as
+// `"${a[@]}"`'s do.
+//
+// The written `@` is what carries it and not the list-ness, which is measured
+// rather than derived: on zsh 5.9.2 with `x=(p q)`, `"${(P)v}"` is two fields
+// for `v='x[@]'` and one joined field for `v='x[*]'`, for `v='x[1,2]'` and
+// for a `v` naming the array outright — the same three-way split `"${a[@]}"`,
+// `"${a[*]}"` and `"$a"` make on a name.
+//
+// Asked of the text rather than of the parsed node so that nothing is
+// expanded twice: a subscript holding a command substitution would run it
+// here and again where the reference is read.
+func (r *Runner) referenceKeepsFields(text string) bool {
+	base, sub, ok := r.subscriptOperand(text)
+	return ok && isNameLike(base) && sub == "@"
+}
+
+// referenceNode is the node a reading builds over a resolved text, with the
+// subscript the *outer* expansion wrote — if it wrote one — reading what the
+// reference named.
+//
+// Two callers, and both are the nested spelling of the same question:
+// `${#${(P)v}}` measures the parameter the text refers to, and
+// `${${(P)v}[2]}` subscripts it. Where the text carries a subscript of its
+// own the two are chained, which is what makes `v='x[@]'` name the array and
+// the `[2]` name an element of it rather than of nothing — measured on zsh
+// 5.9.2 with `x=(p q r)`, `${#${(P)v}}` is 3 and `${${(P)v}[2]}` is `q`.
+func (r *Runner) referenceNode(text string, outer *syntax.ParamExpr, src string) *syntax.ParamExpr {
+	e, ok := r.reference(text)
+	if !ok {
+		e = &syntax.ParamExpr{Name: text}
+	} else {
+		ref := *e
+		e = &ref
+	}
+	if outer != nil && outer.Index != nil {
+		if ok {
+			// The reference's own subscript is the link *before* the outer
+			// one rather than something the outer replaces: with `v='x[@]'`,
+			// `${${(P)v}[2]}` reads the second element of `x` and not the
+			// second of a name that holds nothing. Overwriting it instead
+			// threw the reference's half away, which is the whole of what
+			// the text said.
+			e.Leading = append(append([]syntax.LeadingIndex(nil), e.Leading...),
+				syntax.LeadingIndex{Index: e.Index, Flags: e.IndexFlags})
+		}
+		e.Index, e.IndexFlags = outer.Index, outer.IndexFlags
+	}
+	if outer != nil {
+		e.Length = outer.Length
+	}
+	e.Src = src
+	return e
 }
 
 // assignIndirect writes the parameter a `(P)` group's base named.
@@ -266,8 +367,36 @@ func subscriptSpan(s string) int {
 // else. Taking the selected elements instead answered `r s` for the two rows
 // that start at the second element — a plausible value at status 0.
 func (r *Runner) indirectSourceText(e *syntax.ParamExpr, words []string, set bool) (string, bool) {
-	if e.Inner == nil && e.Index != nil && r.subscriptYieldsAList(e) {
+	if e.Inner == nil && e.Index != nil &&
+		(r.subscriptYieldsAList(e) || r.subscriptNamesNoElementAtAll(e)) {
 		words, set, _ = r.namedBase(e.Name, baseFlags(e.Flags))
 	}
 	return strings.Join(words, " "), set
+}
+
+// subscriptNamesNoElementAtAll is the one index that is not read as an index
+// here: the one before the first, which no element has.
+//
+// Every other subscript naming nothing is *no name* — `${(P)n[4]}` on three
+// elements is empty — and this one resolves the base's first element as
+// though no subscript had been written. Measured on zsh 5.9.2, 2026-09-12
+// with `n=(x y z)` and `x=(p q)`: `${(P)n[0]}` is `p q`, and so is
+// `${(P)n[1-1]}`, so it is the value the expression comes to and not the
+// numeral. `${(P)n[-4]}` is empty, which says it is that index and not
+// "out of range below".
+//
+// An **association** is outside it: `[0]` is a key there like any other, and
+// `${(P)nt[0]}` on a table with no such key is empty.
+//
+// A corner no script can depend on, and reproduced rather than left because
+// the alternative is a plausible empty at status 0 (#1852).
+func (r *Runner) subscriptNamesNoElementAtAll(e *syntax.ParamExpr) bool {
+	if len(e.Leading) > 0 || e.IndexFlags != nil {
+		return false
+	}
+	if _, isAssoc := r.assocFor(e.Name); isAssoc {
+		return false
+	}
+	n, err := r.subscriptValue(r.subscriptText(e.Subscript()))
+	return err == nil && n == r.arrayBase()-1
 }

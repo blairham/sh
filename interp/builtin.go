@@ -1355,6 +1355,19 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 			if r.unspecified {
 				return r.status
 			}
+			if handled, code := r.unsetFlaggedSubscript(base, name, sub); handled {
+				// A subscript flag group — `unset 'a[(r)y]'` — which names
+				// its element by searching rather than by counting. Ahead of
+				// the arithmetic below, which is what the whole operand went
+				// to before and what made it `bad math expression`.
+				if code != 0 {
+					status = code
+				}
+				if r.ctl == controlExit {
+					return status
+				}
+				continue
+			}
 			idx, err := r.subscriptValue(sub)
 			if err != nil {
 				// Reported by every shell in the panel, and silent here: the

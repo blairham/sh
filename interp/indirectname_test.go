@@ -223,3 +223,178 @@ func TestTheIndirectionFlagKeepsTheResolvedShape(t *testing.T) {
 		})
 	}
 }
+
+// referenceRun is indirectNameRun with the two grammars a *reference* needs
+// beyond a plain name: a flag group inside a subscript, and a subscript read
+// over a scalar as a character.
+//
+// Named for the constructs, not for a shell. Both exist wherever `(P)` does,
+// which is what makes them the right grammar for these rows rather than an
+// extra this file's other tests happen not to need.
+func referenceRun(t *testing.T, src string) (string, int) {
+	t.Helper()
+	d := syntax.Core()
+	d.ParamExpansionFlags = true
+	d.NestedParamExpansion = true
+	d.ArraySubscriptFlags = true
+	f, err := syntax.Parse(src, d)
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	sem := permissive()
+	sem.SplitParamExpansion = No
+	sem.GlobExpansionResults = No
+	sem.GlobNoMatchIsError = Yes
+	sem.FatalErrorStatusIsOne = Yes
+	sem.DeclaredNameWithoutValueIsEmpty = Yes
+	sem.ArrayBaseIsZero = No
+	sem.SubscriptCommaIsARange = Yes
+	sem.ArrayLengthWithoutSubscriptIsCount = Yes
+	sem.ArrayScalarIsTheWholeArray = Yes
+	sem.ScalarSubscriptIsACharacter = Yes
+	var buf bytes.Buffer
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Dialect: &d, Semantics: &sem, Name: "testsh"})
+	st, rerr := r.Run(context.Background(), f)
+	if rerr != nil {
+		t.Fatalf("run %q: %v", src, rerr)
+	}
+	return buf.String(), st
+}
+
+// The resolved text is a parameter **reference** and not only a name, so
+// every subscript this shell answers on a name it answers here.
+//
+// It was taken apart by hand into a name plus one arithmetic index, and
+// everything else fell through to the plain-name lookup and found nothing —
+// empty, at status 0, which is a plausible value for a real element. The
+// first row of each pair is what moved; the `[1]` row is the control that
+// already worked and is what says the shape was the problem and not the
+// indirection (#1852).
+//
+// Measured on zsh 5.9.2, 2026-09-12.
+func TestTheIndirectionReadsItsTextAsAReference(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a whole-array subscript", `x=(p q); v='x[@]'; printf "[%s]" "${(P)v}"`, "[p][q]"},
+		{"and the joining spelling", `x=(p q); v='x[*]'; printf "[%s]" "${(P)v}"`, "[p q]"},
+		{"one element, the control", `x=(p q); v='x[1]'; printf "[%s]" "${(P)v}"`, "[p]"},
+		{"a range", `x=(p q r); v='x[1,2]'; printf "[%s]" "${(P)v}"`, "[p q]"},
+		{"a character of a scalar", `s=abc; v='s[2]'; printf "[%s]" "${(P)v}"`, "[b]"},
+		{"and a range of one", `s=abcdef; v='s[2,4]'; printf "[%s]" "${(P)v}"`, "[bcd]"},
+		{"a search", `a=(p q); v='a[(r)q]'; printf "[%s]" "${(P)v}"`, "[q]"},
+		{"and its index form", `a=(p q); v='a[(i)q]'; printf "[%s]" "${(P)v}"`, "[2]"},
+		{
+			// The subscript is live text and not a literal, which is what
+			// the parse buys: a substitution written into a resolved
+			// reference is performed when the reference is read.
+			"a substitution inside the subscript",
+			`x=(p q r); i=2; v='x[$i]'; printf "[%s]" "${(P)v}"`, "[q]",
+		},
+		{
+			"and one inside a search's operand",
+			`a=(p q); w=q; v='a[(r)$w]'; printf "[%s]" "${(P)v}"`, "[q]",
+		},
+		{
+			// The whole-array subscript makes a *list*, which is the half a
+			// join would hide: three fields, not one word of three.
+			"a whole-array reference keeps its fields",
+			`x=(p q r); v='x[@]'; set -- ${(P)v}; printf "[n=%s]" "$#"`, "[n=3]",
+		},
+		{
+			// The first row keeps its two fields **in quotes**, which is
+			// the written `@` and not the list-ness. This is the sibling
+			// that says so: a reference to the array itself joins, as the
+			// `[*]` and range rows above already do.
+			"a reference to the array itself joins in quotes",
+			`x=(p q); n=(x y); printf "[%s]" "${(P)n}"`, "[p q]",
+		},
+		{
+			// `k` and `v` are the letters the *second* lookup answers, and
+			// a reference is that lookup — so they have to reach it. Over
+			// an ordinary array `k` is the index the subscript named.
+			"the key letter reaches the reference",
+			`x=(p q); v='x[2]'; printf "[%s]" "${(kP)v}"`, "[2]",
+		},
+		{
+			"and over a table it is the key",
+			`typeset -A tab=(k1 v1); v='tab[k1]'; printf "[%s]" "${(kP)v}" "${(P)v}"`, "[k1][v1]",
+		},
+		{
+			"over a whole table it is the keys",
+			`typeset -A tab=(k1 v1); v='tab[@]'; printf "[%s]" "${(kP)v}" "${(vP)v}"`, "[k1][v1]",
+		},
+		{
+			// The rest of the group is not the lookup's: it acts on what
+			// came out, once.
+			"and the other letters still act on the result",
+			`x=(p q); v='x[2]'; printf "[%s]" "${(UP)v}"`, "[Q]",
+		},
+		{
+			"and its length is the element count",
+			`x=(p q r); v='x[@]'; printf "[%s]" "${#${(P)v}}"`, "[3]",
+		},
+		{
+			// The nested subscript reaches the same reference: the text's
+			// own subscript is the link *before* the outer one rather than
+			// something it replaces.
+			"a subscript on a reference reads what it named",
+			`x=(p q r); v='x[@]'; printf "[%s]" "${${(P)v}[2]}"`, "[q]",
+		},
+		{
+			"and the length of a reference naming one element is a width",
+			`x=(p q r); v='x[1]'; printf "[%s]" "${#${(P)v}}"`, "[1]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := referenceRun(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// An element that is not there is still *unset*, which is what keeps the
+// reference reading from making every miss look like an empty value.
+func TestAReferenceThatNamesNothingIsUnset(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"an index past the last element", `x=(p q); v='x[9]'; printf "[%s]" "${(P)v-D}"`, "[D]"},
+		{"an absent key", `typeset -A m=(k v1); v='m[zz]'; printf "[%s]" "${(P)v-D}"`, "[D]"},
+		{"where a key that is there is set", `typeset -A m=(k v1); v='m[k]'; printf "[%s]" "${(P)v-D}"`, "[v1]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := referenceRun(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The base's *own* subscript has one index that is not read as an index: the
+// one before the first, which no element has. Every other subscript naming
+// nothing is no name at all, and this one resolves the base's first element
+// as though none had been written.
+//
+// A corner no script can depend on, reproduced rather than left because the
+// alternative is a plausible empty at status 0 (#1852).
+func TestTheIndexNoElementHasResolvesTheWholeBase(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the index before the first", `n=(x y z); x=(p q); printf "[%s]" "${(P)n[0]}"`, "[p q]"},
+		{"which is the value and not the numeral", `n=(x y z); x=(p q); printf "[%s]" "${(P)n[1-1]}"`, "[p q]"},
+		{"an index past the last is no name", `n=(x y z); x=(p q); printf "[%s]" "${(P)n[4]}"`, "[]"},
+		{"and one below the first is no name either", `n=(x y z); x=(p q); printf "[%s]" "${(P)n[-4]}"`, "[]"},
+		{
+			// An association's `[0]` is a key like any other, so the corner
+			// is the indexed array's alone.
+			"a table's key of that spelling is a key",
+			`typeset -A nt=(a tab); typeset -A tab=(k1 v1); printf "[%s]" "${(P)nt[0]}"`, "[]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := referenceRun(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

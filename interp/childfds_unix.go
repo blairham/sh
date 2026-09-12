@@ -73,11 +73,42 @@ func (r *Runner) childFiles() []*os.File {
 			highest = fd
 		}
 	}
-	for fd, v := range r.fds {
+	// Every number this shell knows about, and *not* only the ones it is
+	// handing over. A number the table means to close in the child is only
+	// closed if the slice reaches it: below `highest` a nil is a close, and
+	// above it there is no entry at all and the child keeps whatever this
+	// process happens to have on that raw number.
+	//
+	// That is the whole of #1917, and it is a hole rather than a race. A
+	// coprocess parks its near ends on 10 and 11 as descriptors the shell
+	// owns; `tableFile` answers nil for them, so on the old reading a shell
+	// whose table held nothing else computed `highest` as 0, handed os/exec
+	// no ExtraFiles at all, and closed nothing. `coproc cat; sh -c 'echo
+	// leaked >&11'` then failed with `Bad file descriptor` only because raw
+	// 11 in this process is usually shut — put anything inheritable there and
+	// the child writes straight through it, which is the containment property
+	// that test asserts, held by luck. Reproduced by hand with a `dup2` onto
+	// 11: `child=0`, and the bytes came out of the pipe.
+	//
+	// So the number is what counts, whatever the entry turns out to be worth.
+	// A descriptor this shell inherited and has since closed already reached
+	// as high as one it opened, for the sake of the nil rather than the file
+	// — this is the same rule, applied to the entries a *view* of the table
+	// cannot turn into a file: a coprocess's own ends, an embedder's buffer,
+	// a here-document's text.
+	for fd := range r.fds {
 		if fd < firstExtraFd || fd > maxInheritedFd {
 			continue
 		}
-		if tableFile(v) != nil && fd > highest {
+		if fd > highest {
+			highest = fd
+		}
+	}
+	// And the ones a builtin was told to keep from a child, for the same
+	// reason: `dropCloseOnExec` writes a nil at the number and a nil only
+	// closes it if the slice is long enough to hold one.
+	for fd := range r.cloexecFds {
+		if fd >= firstExtraFd && fd <= maxInheritedFd && fd > highest {
 			highest = fd
 		}
 	}

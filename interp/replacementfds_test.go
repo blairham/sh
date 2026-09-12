@@ -84,9 +84,19 @@ func TestACoprocessOnANamedStreamStillCrossesToAReplacement(t *testing.T) {
 	if files[1] != f {
 		t.Errorf("descriptor 1 = %v, want the file behind the coprocess's feed", files[1])
 	}
-	if len(files) > firstExtraFd {
-		t.Errorf("the table reaches descriptor %d, want the mark to hold above the named streams",
-			len(files)-1)
+	// And the mark still holds at 3, where the table proper begins. What
+	// changed with #1917 is how that is *said*: the number is reached and
+	// left nil, which is this file's own rule that a nil is a number which
+	// must not be open there. It used to be said by not reaching the number
+	// at all, and a number nothing reaches is not closed — it is whatever
+	// this process happens to have on it, which is the hole that issue was.
+	if len(files) <= firstExtraFd {
+		t.Fatalf("the table stops at %d, so descriptor %d is never closed in the replacement",
+			len(files)-1, firstExtraFd)
+	}
+	if files[firstExtraFd] != nil {
+		t.Errorf("descriptor %d = %v, want nothing: the coprocess's own end does not cross",
+			firstExtraFd, files[firstExtraFd])
 	}
 }
 

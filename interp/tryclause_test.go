@@ -478,3 +478,121 @@ func TestErrexitFiringSkipsACleanupHalfWhereAnExitRunsIt(t *testing.T) {
 		}
 	}
 }
+
+// The two parameters a try-always block reports through, and recovers
+// through (#1234).
+//
+// The names are the caller's — Runner.SetAlwaysBlockStatus takes them — so
+// these are spelled neutrally here and the shell's own spelling is asserted
+// in dialect/zsh. Every row was measured against zsh 5.9.2 on 2026-09-12 with
+// that shell's names; see alwaysstatus.go for the table.
+func alwaysStatus(r *Runner) { r.SetAlwaysBlockStatus("BLOCK_ERROR", "BLOCK_INTERRUPT") }
+
+func runTryStatus(t *testing.T, src string) (string, int) {
+	t.Helper()
+	out, st := runGrammar(t, src, tryAlways, alwaysStatus)
+	return strings.TrimSpace(out), st
+}
+
+// What the pair reads, which is a question about *error conditions* and not
+// about the status.
+func TestTheAlwaysBlockParametersReportAnErrorCondition(t *testing.T) {
+	for _, tc := range []struct {
+		src, want string
+		status    int
+	}{
+		// Outside a half they are an ordinary integer parameter at -1 — a
+		// value rather than an absence, which is what the `:-` row says.
+		{`echo "[$BLOCK_ERROR][$BLOCK_INTERRUPT]"`, "[-1][-1]", 0},
+		{`echo "${BLOCK_ERROR:-UNSET}"`, "-1", 0},
+		// A nonzero status is not an error condition, and neither is a
+		// `return`. These two are the rows a reading built on `$?` gets
+		// wrong, and it gets them wrong in the quiet direction.
+		{`f(){ { false; } always { echo "E=$BLOCK_ERROR"; }; }; f`, "E=0", 1},
+		{`f(){ { return 3; } always { echo "E=$BLOCK_ERROR"; }; }; f`, "E=0", 3},
+		// An error the shell reported and gave up over is. `break` with no
+		// loop around it is one too in the shell that has the construct, and
+		// it is not a row here: the core leaves that axis unanswered and
+		// refuses the line by name instead, so what it reports is a
+		// different question. dialect/zsh has that row.
+		{
+			`f(){ { echo $((1/0)); } always { echo "E=$BLOCK_ERROR"; }; }; f`,
+			"sh: division by zero\nE=1", 2,
+		},
+		// The interrupt is 0 inside a half however the try half ended: it
+		// reports an interrupt, and an error is not one.
+		{
+			`f(){ { echo $((1/0)); } always { echo "I=$BLOCK_INTERRUPT"; }; }; f`,
+			"sh: division by zero\nI=0", 2,
+		},
+		// The half's value is one it takes on for the length of the half.
+		// Both rows are needed: the first says it goes back, the second says
+		// it goes back to what a script put there rather than to -1.
+		{`f(){ { true; } always { :; }; echo "post=$BLOCK_ERROR"; }; f`, "post=-1", 0},
+		{`BLOCK_ERROR=5; f(){ { true; } always { echo "in=$BLOCK_ERROR"; }; }; f; ` +
+			`echo "post=$BLOCK_ERROR"`, "in=0\npost=5", 0},
+		// Nested halves each report their own try half, and an error raised
+		// inside the inner one is the outer one's too.
+		{
+			`f(){ { { echo $((1/0)); } always { echo "in=$BLOCK_ERROR"; }; } ` +
+				`always { echo "out=$BLOCK_ERROR"; }; }; f`,
+			"sh: division by zero\nin=1\nout=1", 2,
+		},
+	} {
+		out, st := runTryStatus(t, tc.src)
+		if out != tc.want || st != tc.status {
+			t.Errorf("%s: said %q status %d, want %q status %d", tc.src, out, st, tc.want, tc.status)
+		}
+	}
+}
+
+// Writing the pair is how a script recovers from an error condition and how it
+// raises one, which is the half the parameters exist for.
+func TestWritingTheAlwaysBlockParametersDecidesTheOutcome(t *testing.T) {
+	for _, tc := range []struct {
+		src, want string
+		status    int
+	}{
+		// Cleared: the function carries on from the statement after the
+		// construct, and the complaint the try half already printed stays
+		// printed. `$?` there is still the try half's, which the second row
+		// reads before anything else can overwrite it.
+		{
+			`f(){ { echo $((1/0)); } always { BLOCK_ERROR=0; }; echo after-f; }; f; echo "?=$?"`,
+			"sh: division by zero\nafter-f\n?=0", 0,
+		},
+		{
+			`f(){ { echo $((1/0)); } always { BLOCK_ERROR=0; }; echo "after=$?"; }; f`,
+			"sh: division by zero\nafter=2", 0,
+		},
+		// Raised where there was nothing: the status is 1 rather than the
+		// number written, and it is an error condition rather than a
+		// failure — an `||` does not catch it.
+		{`f(){ { true; } always { BLOCK_ERROR=1; }; echo after-f; }; f; echo "?=$?"`, "", 1},
+		{`f(){ { true; } always { BLOCK_ERROR=7; }; echo after-f; }; f; echo "?=$?"`, "", 1},
+		{`f(){ { true; } always { BLOCK_ERROR=1; }; echo after-f; }; f || echo caught`, "", 1},
+		// The other name raises the same way, from either starting point.
+		{`f(){ { true; } always { BLOCK_INTERRUPT=1; }; echo after-f; }; f`, "", 1},
+		{
+			`f(){ { echo $((1/0)); } always { BLOCK_INTERRUPT=1; }; echo after-f; }; f`,
+			"sh: division by zero", 2,
+		},
+		// The controls. A half that writes nothing changes nothing, in both
+		// directions — without these the rule could be "an always half always
+		// clears" or "always raises" and match half the rows above.
+		{
+			`f(){ { echo $((1/0)); } always { echo A; }; echo after-f; }; f; echo "?=$?"`,
+			"sh: division by zero\nA", 2,
+		},
+		{`f(){ { true; } always { echo A; }; echo after-f; }; f; echo "?=$?"`, "A\nafter-f\n?=0", 0},
+		{`f(){ { false; } always { echo A; }; echo after-f; }; f; echo "?=$?"`, "A\nafter-f\n?=0", 0},
+		// Writing 0 where there was no error condition is not a rewrite
+		// either, so a `return` still returns.
+		{`f(){ { return 3; } always { BLOCK_ERROR=0; }; echo after-f; }; f; echo "?=$?"`, "?=3", 0},
+	} {
+		out, st := runTryStatus(t, tc.src)
+		if out != tc.want || st != tc.status {
+			t.Errorf("%s: said %q status %d, want %q status %d", tc.src, out, st, tc.want, tc.status)
+		}
+	}
+}

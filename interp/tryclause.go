@@ -63,10 +63,24 @@ func (r *Runner) tryClause(ctx context.Context, c *syntax.TryClause) error {
 		// *errored* would otherwise look like an error condition and have
 		// its status thrown away. Measured — `{ readonly q=1; q=2; } always
 		// { exit 9; }` exits 9, not 1.
+		tryErrored := r.errorConditionIn(ctl, abandon)
 		r.ctl, r.ctlDepth, r.abandon, r.abandonLine = controlNone, 0, abandonRequested, 0
 		r.errexitStopped = false
-		if err := r.runList(ctx, c.Always); err != nil {
+		saved := r.enterAlwaysHalf(tryErrored)
+		err := r.runList(ctx, c.Always)
+		// Read back before anything else, so the half's own transfer cannot
+		// change what it wrote — and unconditionally, since the parameters
+		// have to be put back however the half ended.
+		wantsError := r.leaveAlwaysHalf(saved)
+		if err != nil {
 			return err
+		}
+		if tryErrored != wantsError {
+			// The half rewrote the answer, which is how a script recovers
+			// from an error condition and how it raises one. Measured, and
+			// both directions are needed — see alwaysstatus.go.
+			ctl, abandon, status = reportedError(wantsError, status)
+			errexitStopped = false
 		}
 		if r.ctl == controlExit && !r.errorCondition() {
 			// A hard exit from the second half wins outright, and takes its
@@ -263,6 +277,34 @@ func (r *Runner) transferEndsTheShell(ctl control, abandon abandonKind) bool {
 	return false
 }
 
+// errorConditionIn is errorCondition asked of a transfer that has been set
+// aside rather than of the one in hand.
+//
+// The pair is one predicate written twice over different storage on purpose:
+// the try half's transfer is in local variables by the time the always half
+// runs, and a second reading of "what counts as an error condition" is exactly
+// the divergence this file cannot afford.
+func (r *Runner) errorConditionIn(ctl control, abandon abandonKind) bool {
+	return ctl == controlAbandon || (ctl == controlExit && abandon == abandonError)
+}
+
+// reportedError is the transfer the construct ends with once the always half
+// has rewritten the error condition through the two parameters.
+//
+// Raising one takes the shape the shell's own reported errors take, and the
+// status is **1** rather than the number that was written: measured,
+// `f(){ { true; } always { TRY_BLOCK_ERROR=7; }; print after; }; f` prints
+// nothing and leaves 1, and `f || print caught` does not catch it. Clearing
+// one drops the transfer and keeps the try half's status, so the function
+// carries on from the statement after the construct — `after` runs and the
+// complaint the try half already printed stays printed.
+func reportedError(wanted bool, status int) (control, abandonKind, int) {
+	if wanted {
+		return controlExit, abandonError, 1
+	}
+	return controlNone, abandonRequested, status
+}
+
 // errorCondition reports whether what the runner is carrying is an error it
 // reported and gave up over, rather than a request to stop.
 //
@@ -277,8 +319,7 @@ func (r *Runner) transferEndsTheShell(ctl control, abandon abandonKind) bool {
 // way has to get the same rule. Naming only the fatal shape would have made
 // the behavior depend on an axis nobody asked about here.
 func (r *Runner) errorCondition() bool {
-	return r.ctl == controlAbandon ||
-		(r.ctl == controlExit && r.abandon == abandonError)
+	return r.errorConditionIn(r.ctl, r.abandon)
 }
 
 // hasSomethingToReturnFrom reports whether a `return` has a frame to leave: a

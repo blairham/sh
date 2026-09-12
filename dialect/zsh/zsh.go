@@ -2802,6 +2802,10 @@ func Apply(r *interp.Runner) {
 	// the path came out at full length. See interp.Runner.ProvideWindowSize,
 	// which holds the four answers and the rule about assignment.
 	r.ProvideWindowSize()
+	// The two integers the try-always block reports through, and recovers
+	// through. The mechanism is the core's and only the spelling is here —
+	// see interp.Runner.SetAlwaysBlockStatus for the measurements (#1234).
+	r.SetAlwaysBlockStatus("TRY_BLOCK_ERROR", "TRY_BLOCK_INTERRUPT")
 	// A job still running holds the exit here, where bash needs to be asked:
 	// measured, zsh 5.9.2 started with `-f` answers `sleep 40 &` then `exit`
 	// with `you have running jobs.` and stays, and bash 5.3.15 leaves. Both

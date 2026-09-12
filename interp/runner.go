@@ -1118,6 +1118,15 @@ type Runner struct {
 	// asked without a number to compare against. See windowSizeValue.
 	windowRows, windowCols int
 	windowSettled          bool
+	// alwaysErrName and alwaysInterruptName are what the dialect spells the
+	// two try-always parameters, empty where it has none. alwaysDepth is how
+	// many always halves execution is inside, and the two values are what
+	// those parameters read there. See alwaysstatus.go.
+	alwaysErrName        string
+	alwaysInterruptName  string
+	alwaysDepth          int
+	alwaysErrValue       int
+	alwaysInterruptValue int
 	// providesWindowSize says this shell has $COLUMNS and $LINES as
 	// parameters of its own rather than as variables something assigns. See
 	// ProvideWindowSize, and Runner.TracksWindowSize for the other reading.

@@ -4300,6 +4300,31 @@ echo "st=$?"`,
 		Why: "the shape people meet the problem in rather than the minimal one: `cmd | while read; do …; done` losing the body's assignments at the pipe is the most cited surprise in shell scripting, and it is the same axis as the `read` above rather than anything about loops. bash 5.3 and bash-as-sh count 3 with the option, zsh and ksh93 count 3 without one, and bash 3.2, dash and ash count nothing",
 	},
 	{
+		ID: "opt/set-o-functrace-carries-the-debug-trap-into-a-call", Category: "shell options",
+		Snippet: "printf 'echo S1\n' > lib.sh; set -o functrace; trap 'echo D' DEBUG; . ./lib.sh; echo after",
+		Why:     "what the option is *for*, asked through the trap rather than through a status: without it a DEBUG trap sees the `.` and nothing the dotted file does, so a tracing or debugging script watches its own call and none of the work. The three bash columns take the name at 0 and write a D for the source, one for each line inside it and one for the command after; dash and ksh93 have no such name and each ends the shell on the `set`, and zsh refuses it with `no such option` and carries on. Ours refused the name as `not implemented`, left the option off and traced nothing inside the file (#2426)",
+	},
+	{
+		ID: "opt/set-o-functrace-carries-the-debug-trap-into-a-subshell", Category: "shell options",
+		Snippet: `set -o functrace; trap 'echo D' DEBUG; (echo s); echo after`,
+		Why:     "the other boundary the same option crosses, and the half a function-only implementation passes the row above without: a subshell group fires nothing of its own — with the trap set and the option off the bash columns write `s` and then a single D for the command after — and with the option on a D arrives ahead of the `echo s` inside. dash and ksh93 stop on the `set` and zsh refuses the name",
+	},
+	{
+		ID: "opt/set-o-errtrace-carries-the-err-trap-into-a-function", Category: "shell options",
+		Snippet: `set -o errtrace; trap 'echo E' ERR; f() { false; }; f; echo done`,
+		Why:     "the ERR half of the same pair, and it is a pair rather than one option with two names: this one says nothing about DEBUG and moves a trap the bash columns otherwise bound to the frame that set it. With it on the failure inside `f` and the failing call itself each fire, so two E lines arrive where the option off gives one. The refusals are the same three: dash and ksh93 end the shell on the `set`, zsh says `no such option`",
+	},
+	{
+		ID: "shopt/extdebug-is-taken-and-reads-back", Category: "shell options",
+		Snippet: `shopt -s extdebug; echo "st=$?"; shopt -p extdebug; shopt -u extdebug; shopt -p extdebug`,
+		Why:     "the name a debugger's preamble sets, and it has to survive the round trip a capture depends on: all three bash columns take it at 0, write `shopt -s extdebug` back, take the unset and write `shopt -u extdebug` — the closing query answering 1 because the name is off, which is what makes the status a reading rather than a formality. Ours said `not implemented` at 1 and omitted the name from what it wrote back",
+	},
+	{
+		ID: "shopt/extdebug-turns-on-function-tracing", Category: "shell options",
+		Snippet: "printf 'echo S1\n' > lib.sh; shopt -s extdebug; trap 'echo D' DEBUG; . ./lib.sh; echo after",
+		Why:     "the name is not only an indicator: in bash 5.3 — under either argv[0] — it turns both trap-carriage options on with it, so this traces the dotted file exactly as `set -o functrace` does above. bash 3.2 moves the indicator alone and traces nothing inside the file, which is a change within bash rather than a difference between shells and the reason the `bash32` column is one D short here on purpose. The other three have no `shopt` at all, and two of them run the DEBUG trap inside a sourced file with nothing asked",
+	},
+	{
 		ID: "readonly/reassignment-by-a-declaration", Category: "builtins",
 		Snippet: "readonly x=1; export x=2; echo after",
 		Why:     "the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one",

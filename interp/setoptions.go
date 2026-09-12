@@ -262,8 +262,27 @@ var extraSetOptions = map[string]setOption{
 		apply: func(r *Runner, on bool) { r.SetPosixMode(on) },
 		get:   func(r *Runner) bool { return r.posixMode },
 	},
-	"errtrace":   {},
-	"functrace":  {},
+	// The two trap-carriage options under their long names. The letters
+	// already wrote these fields — see the `E`, `T` case in the `set`
+	// builtin — and the names sat here refused, so a script reaching the
+	// state the long way was told `not implemented` and left with a DEBUG
+	// trap that never fired inside the call it was set to watch (#2426).
+	// One state behind the letter and the name, which is the rule `hashall`
+	// and `set -h` already follow: two spellings of one question cannot be
+	// allowed to answer differently.
+	//
+	// Whether the shell *has* the names stays the dialect's, and it is the
+	// same shell whose `$-` shows `E` and `T` — the other three have neither
+	// spelling. What the state then does is read at the firing sites in
+	// pseudotrap.go, which is where the carriage is decided.
+	"errtrace": {
+		apply: func(r *Runner, on bool) { r.errtrace = on },
+		get:   func(r *Runner) bool { return r.errtrace },
+	},
+	"functrace": {
+		apply: func(r *Runner, on bool) { r.functrace = on },
+		get:   func(r *Runner) bool { return r.functrace },
+	},
 	"history":    {},
 	"histexpand": {},
 	"keyword":    {},

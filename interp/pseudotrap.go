@@ -151,7 +151,13 @@ func (r *Runner) runErrTrap(ctx context.Context) {
 	// Inherited, not merely inside a subshell: a trap the subshell set for
 	// itself fires everywhere — measured, `(trap 'echo err' ERR; false)`
 	// prints err in every shell that has the condition.
-	if r.errTrapInherited &&
+	//
+	// errtrace carries it across this boundary as well as the function one,
+	// which is the whole of what the option's own shell promises by it:
+	// measured in bash 5.3.15, `trap 'echo E' ERR; (false)` writes one E and
+	// `set -E` in front of it writes two — the subshell's failure and then
+	// the subshell command's.
+	if r.errTrapInherited && !r.errtrace &&
 		!r.ask(r.sem().ErrTrapRunsInSubshells, "the ERR trap inside a subshell") {
 		return
 	}
@@ -180,7 +186,11 @@ func (r *Runner) runDebugTrap(ctx context.Context) {
 		!r.ask(r.sem().DebugTrapRunsInsideCalls, "the DEBUG trap inside a call it was not set in") {
 		return
 	}
-	if r.debugTrapInherited &&
+	// And functrace carries it into a subshell for the same reason errtrace
+	// does above: measured, `trap 'echo D' DEBUG; (echo s)` writes `s` and
+	// then one D — the subshell group fires nothing of its own — where
+	// `set -T` in front of it writes a D before the `echo s` inside.
+	if r.debugTrapInherited && !r.functrace &&
 		!r.ask(r.sem().DebugTrapRunsInSubshells, "the DEBUG trap inside a subshell") {
 		return
 	}
@@ -246,3 +256,26 @@ func (r *Runner) currentFunctionFrameSerial() int {
 	}
 	return 0
 }
+
+// ErrorTracing reports whether the ERR trap is carried into the calls and
+// subshells the dialect would otherwise bound it out of — `set -E` and
+// `set -o errtrace`, which are two spellings of this one bit.
+//
+// Exported for a dialect that names the state under something that is not
+// either of those: bash's `shopt -s extdebug` turns this and FunctionTracing
+// on together, and `shopt -u extdebug` turns both off. A dialect reaching the
+// field through the option table instead would have to spell a `set` call,
+// and the state and the option's name are two questions.
+func (r *Runner) ErrorTracing() bool { return r.errtrace }
+
+// SetErrorTracing moves it.
+func (r *Runner) SetErrorTracing(on bool) { r.errtrace = on }
+
+// FunctionTracing reports the same carriage for the DEBUG and RETURN traps —
+// `set -T` and `set -o functrace`. It is what makes a tracing or debugging
+// trap see the commands *inside* a call rather than only the call itself
+// (#2426), and the RETURN trap fire for a function whose body did not set it.
+func (r *Runner) FunctionTracing() bool { return r.functrace }
+
+// SetFunctionTracing moves it.
+func (r *Runner) SetFunctionTracing(on bool) { r.functrace = on }

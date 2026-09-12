@@ -1865,3 +1865,57 @@ the sake of a diagnostic that names it as a file, and then handed the
 statements to the entry point for a *script's own top level* — so there was
 nothing to return from, and the refusal that belongs to the third row fired in
 the first. `interp.Runner.RunStartupFile` is the entry point that does not.
+
+## The two options no shell has: `--policy` and `--audit`
+
+**The rule.** The shared front end reads two long options that belong to
+this implementation rather than to any shell it models: `--policy FILE`
+installs a policy as the gate, and `--audit FILE` writes the event stream.
+Both take their value attached with `=` or as the next word, both are
+refused when they name no path, and both are read on **every** binary
+built on `driver` — `sh`, `bash`, `zsh`, `ksh` and `dash`.
+
+Long form only. The substrate driver `sh` additionally keeps its own
+single-dash spellings — `-policy`, `-audit`, `-deny`, `-trace-events` —
+because its whole flag namespace is already its own; the dialect binaries
+get `--policy` and `--audit` and nothing else.
+
+They are installed **before the operands are read**, because a script
+operand is opened through the gate: `bash --policy p script.sh` is a
+policy that decides whether the shell may read the program it was pointed
+at. A policy that will not load ends the invocation with the usage status
+rather than leaving a shell that quietly runs unsandboxed.
+
+### Measured
+
+Adding an option no shell has is normally the thing this front end refuses
+to do — a `./bash` that accepts a flag bash rejects is not evidence that
+the core is a library. What makes these two safe is that every shell in
+the panel **rejects them outright**, so the spelling shadows nothing.
+
+Panel: bash 5.3.15, bash 3.2.57, zsh 5.9.2, ksh93u+ 2012-08-01 and dash,
+on macOS 25.5 — measured 2026-09-12. Invoked
+`<shell> --policy /tmp/p.policy -c 'echo RAN'`, and again as
+`<shell> --policy -c 'echo RAN'`:
+
+| shell | what it said | status | ran the command |
+| --- | --- | --- | --- |
+| bash 5.3.15 | `--policy: invalid option` + usage | 2 | no |
+| bash 3.2.57 | `--policy: invalid option` + usage | 2 | no |
+| zsh 5.9.2 | `no such option: policy` | 1 | no |
+| ksh93u+ | `policy: bad option(s)` + usage | 2 | no |
+| dash | `Illegal option --` | 2 | no |
+
+`--audit` is refused identically by all five, in the same words with the
+name changed. Neither form — with a value or without — ran the command in
+any shell, so there is no invocation of a real shell whose meaning either
+spelling could change.
+
+**The single-dash spelling is ruled out by the same instrument.** Real
+bash *accepts* `-acp` as the bundle `-a -c -p` and sets `allexport`, so a
+one-dash word here would shadow working behavior rather than add a flag.
+That is why the dialect binaries take the long form only.
+
+The decision and the rest of its reasoning are in
+`docs/design/sandboxing.md` under *The flags live in `driver`, so every
+binary has them* (#1826, #1334).

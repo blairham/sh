@@ -11,7 +11,6 @@ import (
 	"sync"
 
 	"github.com/blairham/sh/driver"
-	"github.com/blairham/sh/internal/event"
 	"github.com/blairham/sh/internal/policy"
 	"github.com/blairham/sh/interp"
 )
@@ -46,29 +45,36 @@ import (
 // precisely like a shell that was never asked to gate anything, which is the
 // failure mode this whole change is about.
 //
+// The composing, the policy reading and the audit file are driver's rather
+// than this binary's, and that is the whole of #1826: `--policy` and
+// `--audit` are on every binary the front end makes, so a second copy of the
+// wiring here would be a second answer to the same question — and the one
+// nobody exercises is the one that is wrong. What stays is what is genuinely
+// this binary's: `-deny` and `-trace-events`, which are a debug surface, and
+// the single-dash spellings of all four, which no dialect binary has.
+//
 // The closer is the audit file, when there is one, and it is returned rather
 // than deferred here because main ends with os.Exit and a defer would never
 // run. Nothing is lost when it is skipped — a record is written straight
 // through — but a file left open by a process that is exiting anyway is
 // untidy in exactly the way that later reads as a leak.
 func installSeams(sh driver.Shell, own ownFlags, w io.Writer) (driver.Shell, io.Closer, error) {
-	var g gates
-	var normalized []*policy.Policy
+	var normalized []string
 	if len(own.deny) > 0 {
 		d, err := denyRules(own.deny)
 		if err != nil {
 			return sh, nil, err
 		}
-		g = append(g, d)
-		normalized = append(normalized, d)
+		sh = driver.AddGate(sh, d)
+		normalized = append(normalized, d.NormalizedText()...)
 	}
 	if own.policy != "" {
-		p, err := loadPolicy(own.policy)
+		g, rules, err := driver.LoadPolicy(own.policy)
 		if err != nil {
 			return sh, nil, err
 		}
-		g = append(g, p)
-		normalized = append(normalized, p)
+		sh = driver.AddGate(sh, g)
+		normalized = append(normalized, rules...)
 	}
 	if own.traceEvents {
 		// Under the flag whose whole job is showing what the boundary is
@@ -79,44 +85,16 @@ func installSeams(sh driver.Shell, own ownFlags, w io.Writer) (driver.Shell, io.
 		// printing it anywhere would be a policy that means something the
 		// person cannot read back.
 		reportNormalized(w, normalized)
-	}
-	var s sinks
-	if own.traceEvents {
-		s = append(s, &traceSink{w: w})
+		sh = driver.AddSink(sh, &traceSink{w: w})
 	}
 	var closer io.Closer
 	if own.audit != "" {
-		aw, c, err := openAudit(own.audit, w)
+		s, c, err := driver.OpenAudit(own.audit, w)
 		if err != nil {
 			return sh, nil, err
 		}
 		closer = c
-		s = append(s, event.NewEncoder(aw))
-	}
-	// One of a kind is installed as itself rather than as a list of one, so
-	// the common case pays nothing for the composition and a stack trace names
-	// what is actually deciding.
-	switch len(g) {
-	case 0:
-	case 1:
-		sh.Gate = g[0]
-	default:
-		sh.Gate = g
-	}
-	switch len(s) {
-	case 0:
-	case 1:
-		sh.Events = s[0]
-	default:
-		sh.Events = s
-	}
-	if sh.Gate != nil {
-		// A gated session says so at its prompt. Keyed on the gate rather
-		// than on the flags, so a route that installs one some other way is
-		// marked too and a route that installs none is not — see
-		// sandboxprompt.go. An event sink alone is not a sandbox and is not
-		// marked: watching a shell does not change what it may do.
-		sh.PromptProviders = append(sh.PromptProviders, sandboxMarker{})
+		sh = driver.AddSink(sh, s)
 	}
 	return sh, closer, nil
 }
@@ -127,14 +105,12 @@ func installSeams(sh driver.Shell, own ownFlags, w io.Writer) (driver.Shell, io.
 // Silent for a policy that named no platform alias, which is every policy on a
 // system that has none — so this is a line an operator sees exactly when there
 // is something about their own file they could not have known from reading it.
-func reportNormalized(w io.Writer, ps []*policy.Policy) {
-	for _, p := range ps {
-		for _, r := range p.Normalized() {
-			// Not prefixed "trace:", because it is not an event: an event is
-			// something the shell did, and this is something the policy is.
-			// The prefix is what a consumer filters on.
-			_, _ = fmt.Fprintf(w, "policy: %s\n", r)
-		}
+func reportNormalized(w io.Writer, rules []string) {
+	for _, r := range rules {
+		// Not prefixed "trace:", because it is not an event: an event is
+		// something the shell did, and this is something the policy is.
+		// The prefix is what a consumer filters on.
+		_, _ = fmt.Fprintf(w, "policy: %s\n", r)
 	}
 }
 
@@ -255,7 +231,7 @@ func denyRules(values []string) (*policy.Policy, error) {
 	// Allow-everything with holes cut in it, which is what a debug surface is:
 	// a way to watch the gate refuse something rather than a sandbox. A policy
 	// file is how a sandbox is written, and composing the two intersects them —
-	// see gates in sandbox.go.
+	// see driver.Gates.
 	return policy.New(interp.Allow, rules...), nil
 }
 

@@ -16,7 +16,8 @@ import (
 // The wiring rather than the drawing, because the wiring is what is invisible:
 // a provider dropped between installSeams and driver.Shell looks exactly like
 // a binary that never had one, and the prompt is drawn only where there is a
-// terminal.
+// terminal. What it draws is driver's to grade, since the mark travels with
+// the gate now that every binary can install one — see driver's own test.
 func TestOnlyAGatedSessionCarriesTheSandboxMark(t *testing.T) {
 	for _, c := range []struct {
 		name string
@@ -28,6 +29,9 @@ func TestOnlyAGatedSessionCarriesTheSandboxMark(t *testing.T) {
 		// Watching a shell is not constraining it, so a sink alone is not a
 		// sandbox and does not say it is one.
 		{"-trace-events alone", ownFlags{traceEvents: true}, false},
+		// Both halves of the debug surface at once still mark exactly once.
+		// Two gates composed is one sandboxed session, not two.
+		{"-deny with -trace-events", ownFlags{deny: []string{"/etc", "/var"}, traceEvents: true}, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			sh, _, err := installSeams(driver.Shell{}, c.own, &bytes.Buffer{})
@@ -40,20 +44,12 @@ func TestOnlyAGatedSessionCarriesTheSandboxMark(t *testing.T) {
 			if !c.want {
 				return
 			}
-			if _, ok := sh.PromptProviders[0].(sandboxMarker); !ok {
-				t.Errorf("the provider is %T, want sandboxMarker", sh.PromptProviders[0])
+			if n := len(sh.PromptProviders); n != 1 {
+				t.Fatalf("%d providers, want exactly one", n)
+			}
+			if got := sh.PromptProviders[0].Prompt(repl.PromptInfo{}); got != "(sandboxed) " {
+				t.Errorf("the provider draws %q, want %q", got, "(sandboxed) ")
 			}
 		})
-	}
-}
-
-// What the mark draws: before a new command and not in the middle of an
-// unfinished one.
-func TestTheSandboxMarkDrawsOncePerCommand(t *testing.T) {
-	if got := (sandboxMarker{}).Prompt(repl.PromptInfo{}); got != "(sandboxed) " {
-		t.Errorf("the mark is %q, want %q", got, "(sandboxed) ")
-	}
-	if got := (sandboxMarker{}).Prompt(repl.PromptInfo{Continued: true}); got != "" {
-		t.Errorf("the continuation prompt is marked %q, want nothing", got)
 	}
 }

@@ -338,6 +338,24 @@ func (p *Policy) Normalized() []Rule {
 	return out
 }
 
+// NormalizedText is Normalized as the lines a front end prints.
+//
+// Here rather than at each caller because there is more than one now — a
+// binary with a flag for showing what the boundary is doing, and the shared
+// front end that reads the policy file for every binary — and two renderings
+// of the same rule is two answers to "what did my file turn into".
+func (p *Policy) NormalizedText() []string {
+	rules := p.Normalized()
+	if len(rules) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(rules))
+	for _, r := range rules {
+		out = append(out, r.String())
+	}
+	return out
+}
+
 func (p *Policy) execAllows(path string) bool {
 	for _, r := range p.rules {
 		if r.Decision == interp.Allow && r.Sel == SelExec && r.matches(path) {

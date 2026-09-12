@@ -156,7 +156,7 @@ var exempt = map[string]string{
 		"on, through a temporary in the same directory. The shell's own scaffolding, which " +
 		"ActionOpen's rule places outside the boundary.",
 	"internal/acp.newSession": "os.DevNull, so an agent this client starts does not inherit a terminal.",
-	"cmd/sh.openAudit": "the audit stream's own file. The apparatus is outside the boundary it " +
+	"driver.OpenAudit": "the audit stream's own file. The apparatus is outside the boundary it " +
 		"enforces — a policy that could hide its own log would be a policy nobody could check, " +
 		"which docs/design/sandboxing.md states under `The apparatus is outside the boundary`.",
 

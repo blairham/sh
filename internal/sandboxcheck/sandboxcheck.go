@@ -52,6 +52,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -238,15 +239,59 @@ func (r Report) Failed() bool {
 }
 
 // AllDialects is every shell the core can be, as -dialect takes them.
-//
-// The dialect binaries are not driven directly because they have no -policy
-// flag of their own: the sandbox is reachable through `sh -dialect X`, and
-// that asymmetry is worth knowing about but is not what this grades.
 var AllDialects = []string{"posix", "bash", "zsh", "ksh"}
 
-// Run grades every route on every dialect it applies to.
+// column is one shell the sweep grades: a binary, the dialect it is being,
+// the words that select that dialect, and how a policy is named on it.
+//
+// Two routes reach the same shell and both are swept, which is the point.
+// `sh -dialect bash -policy p` is the substrate driver being bash; `bash
+// --policy p` is the binary `make install` puts on disk under the name a
+// shebang, `chsh` and `login` use. They were not the same before #1826 —
+// the second had no flag at all — and a sweep that only ever took the first
+// is how that stayed invisible, in the same shape as the `-c` drift the
+// shared front end exists to prevent.
+type column struct {
+	dialect    string
+	bin        string
+	args       []string
+	policyFlag string
+}
+
+// Run grades every route on every dialect it applies to, through the
+// substrate driver's `-dialect` and `-policy`.
 func Run(shell, root, only string) (Report, error) {
-	rep := Report{Shell: shell}
+	cols := make([]column, 0, len(AllDialects))
+	for _, d := range AllDialects {
+		cols = append(cols, column{
+			dialect: d, bin: shell,
+			args: []string{"-dialect", d}, policyFlag: "-policy",
+		})
+	}
+	return run(cols, shell, root, only)
+}
+
+// RunBinaries grades the same routes against the dialect binaries themselves,
+// through the `--policy` each one carries since #1826. bins maps a name in
+// AllDialects to the binary that claims to be that shell; a dialect with no
+// binary named is left out of the sweep rather than silently graded some
+// other way.
+func RunBinaries(bins map[string]string, root, only string) (Report, error) {
+	var cols []column
+	var named []string
+	for _, d := range AllDialects {
+		bin, ok := bins[d]
+		if !ok {
+			continue
+		}
+		named = append(named, bin)
+		cols = append(cols, column{dialect: d, bin: bin, policyFlag: "--policy"})
+	}
+	return run(cols, strings.Join(named, " "), root, only)
+}
+
+func run(cols []column, label, root, only string) (Report, error) {
+	rep := Report{Shell: label}
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return rep, err
 	}
@@ -255,8 +300,11 @@ func Run(shell, root, only string) (Report, error) {
 		if only != "" && !strings.Contains(rt.Name, only) {
 			continue
 		}
-		for _, d := range rt.dialects() {
-			res := Result{Route: rt.Name, Dialect: d}
+		for _, col := range cols {
+			if !slices.Contains(rt.dialects(), col.dialect) {
+				continue
+			}
+			res := Result{Route: rt.Name, Dialect: col.dialect}
 			var did [3]bool
 			for _, mode := range []Mode{Ungated, Denied, Allowed} {
 				n++
@@ -264,7 +312,7 @@ func Run(shell, root, only string) (Report, error) {
 				if err != nil {
 					return rep, err
 				}
-				res.Runs[mode] = rt.run(shell, d, f, mode)
+				res.Runs[mode] = rt.run(col, f, mode)
 				// Whether the route did its work is asked of the fixture
 				// while it is still there, because most of the answers are
 				// facts about the filesystem.
@@ -397,24 +445,24 @@ func policy(f Fixture, mode Mode) (string, error) {
 	// Beside the run rather than inside the workspace, so that a route which
 	// enumerates or writes the workspace cannot see the file deciding its own
 	// fate. The policy is apparatus rather than subject and never passes the
-	// gate — see cmd/sh/sandbox.go — but it should not be in the frame
+	// gate — see driver/sandbox.go — but it should not be in the frame
 	// either.
 	at := filepath.Join(f.Root, "rules.policy")
 	return at, os.WriteFile(at, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
 }
 
 // run executes one route once.
-func (rt Route) run(shell, dialect string, f Fixture, mode Mode) Outcome {
+func (rt Route) run(col column, f Fixture, mode Mode) Outcome {
 	p, err := policy(f, mode)
 	if err != nil {
 		return Outcome{Err: err.Error(), Code: -1}
 	}
-	args := []string{"-dialect", dialect}
+	args := slices.Clone(col.args)
 	if p != "" {
-		args = append(args, "-policy", p)
+		args = append(args, col.policyFlag, p)
 	}
 	args = append(args, "-c", rt.script(f))
-	cmd := exec.Command(shell, args...)
+	cmd := exec.Command(col.bin, args...)
 	// From inside the workspace, because that is where a caller puts a
 	// script it is sandboxing, and because it makes a relative `../` route
 	// mean what it means in the wild.
@@ -423,7 +471,7 @@ func (rt Route) run(shell, dialect string, f Fixture, mode Mode) Outcome {
 	// HOME or PATH and read a startup file or find a program that happens to
 	// be installed on the machine running this. PATH is named explicitly so
 	// the exec route is asking about a program that exists everywhere.
-	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + f.Root, "SHELL=" + shell}
+	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + f.Root, "SHELL=" + col.bin}
 	var out, errs strings.Builder
 	cmd.Stdout = &out
 	cmd.Stderr = &errs

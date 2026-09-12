@@ -156,6 +156,75 @@ The three routes that need no `chsh`, in increasing order of commitment:
    it, every other window and every non-interactive use of a shell is
    untouched, and reverting is a checkbox rather than a rescue.
 
+## Using this as a coding agent's shell
+
+A coding agent runs the commands it wants run as `$SHELL -c '<command>'`,
+after sourcing a snapshot of your shell. That is the case with the
+strongest reason to want a policy under it, and it is also the case with
+**nowhere to put a flag** — there is no argument vector you control.
+
+There are two steps and neither needs a wrapper script.
+
+**Point `$SHELL` at one of these binaries.**
+
+    export SHELL=/usr/local/libexec/sh/bash
+
+That much works on its own. Measured against realistic agent input —
+pipelines, loops, `${PATH%%:*}`, `cd && pwd` — our bash matched real bash
+on every one.
+
+**Put the policy in `$SHELL` itself.** `--policy` is read by all five
+binaries, so the path can carry it:
+
+    export SHELL="/usr/local/libexec/sh/bash --policy $HOME/.config/agent.policy"
+
+If whatever starts the agent will not accept arguments in `$SHELL` — some
+launchers exec the value directly — write a two-line script and point
+`$SHELL` at that instead:
+
+    #!/bin/sh
+    exec /usr/local/libexec/sh/bash --policy "$HOME/.config/agent.policy" "$@"
+
+`--audit FILE` beside it writes every action the shell took as JSON, one
+record per line, appended.
+
+### What it refuses, measured
+
+With a policy denying `/usr/bin/curl`, every way of spelling the command
+name is refused identically, because the gate is asked about the
+**resolved exec** rather than about the text you typed. Measured through
+`bash --policy` on macOS 25.5, 2026-09-12; each refusal exits 126:
+
+| what the agent runs | result |
+| --- | --- |
+| `echo works` | `works` |
+| `echo ${BASH_VERSINFO+is-bash}` | `is-bash` — the dialect is really in effect |
+| `/usr/bin/curl --version` | `exec: refused: /usr/bin/curl` |
+| `echo x \| /usr/bin/curl …` | refused |
+| `$(echo /usr/bin/curl) …` | refused |
+| `c=/usr/bin/curl; $c …` | refused |
+| `/bin/echo control-ok` (control) | `control-ok` |
+
+The last row is the control, and it is the row that makes the others mean
+something: a shell that refused everything would produce the same six
+refusals and be useless.
+
+### What this does not contain
+
+**The boundary is around the shell, not around the process tree.** A
+policy decides what the *shell* opens, stats, runs and signals. A command
+the shell was allowed to start then makes its own accesses, and nothing
+here sees them — `allow exec /bin/cat` is `allow read /**` spelled less
+obviously. Containing a running child needs an OS sandbox, which sits
+above this; `docs/design/sandboxing.md` has the argument and the policy
+file's grammar.
+
+**A policy is never discovered.** No environment variable, no dotfile. It
+comes from `--policy` and from nowhere else, because a policy that could
+be named by the environment could be replaced by anything that can set the
+environment — including the script being sandboxed, on its way to
+invoking a nested shell.
+
 ## Making it a login shell: `/etc/shells` and `chsh`
 
 `chsh` will only give a non-root user a shell that is listed in

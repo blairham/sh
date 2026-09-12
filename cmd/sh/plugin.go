@@ -124,7 +124,7 @@ func launchPlugins(sh driver.Shell, paths []string, stderr io.Writer) (driver.Sh
 			h.Register(r)
 		}
 	}
-	sh.Events = watched(sh.Events, hosts.hosts)
+	sh = watched(sh, hosts.hosts)
 	return sh, hosts, nil
 }
 
@@ -135,30 +135,18 @@ func launchPlugins(sh driver.Shell, paths []string, stderr io.Writer) (driver.Sh
 // -audit writes a file and -trace-events writes to the terminal, and a person
 // who added a plugin to a shell that was already keeping a record did not ask
 // for the record to stop — an audit trail that a plugin can silence is not one.
-// So this is the same list-of-one-or-many shape installSeams uses, for the same
-// reason: one of a kind is installed as itself so the common case pays nothing
-// for the composition.
+// So it is driver.AddSink, which is the one place that composition is written:
+// one of a kind is installed as itself, so the common case pays nothing for the
+// composition.
 //
 // A plugin that did not declare the observer role contributes nothing, and its
 // Sink is nil rather than a discard, so a shell running only command plugins
 // goes on emitting no events at all — which is what it did before any of this.
-func watched(already interp.Sink, hosts []*plugin.Host) interp.Sink {
-	var s sinks
-	if already != nil {
-		s = append(s, already)
-	}
+func watched(sh driver.Shell, hosts []*plugin.Host) driver.Shell {
 	for _, h := range hosts {
-		if sink := h.Sink(); sink != nil {
-			s = append(s, sink)
-		}
+		sh = driver.AddSink(sh, h.Sink())
 	}
-	switch len(s) {
-	case 0:
-		return nil
-	case 1:
-		return s[0]
-	}
-	return s
+	return sh
 }
 
 // plugins is every plugin an invocation started, closed as one.

@@ -2424,6 +2424,27 @@ type Diagnostics struct {
 	// token, which is why [syntax.Error] carries both (#2013).
 	SyntaxUnexpectedNamesTheOpener bool
 
+	// FlagGroupNamesTheWordTail writes the rest of the word a refused
+	// expansion flag group stands in, rather than the `(` that opened it.
+	//
+	// One dialect does. It has no flag groups, so `${(U)x}` is a parse-time
+	// refusal there, and what it quotes back is everything from the `)` to
+	// the end of the *word* — see [syntax.Error.FlagGroupWordTail], where
+	// the measurement is. Measured 2026-09-12 on ksh93u+:
+	//
+	//	ksh   -c 'echo ${(U)x} after'   syntax error at line 1: `x}' unexpected
+	//	ksh   -c 'echo ${~x} after'     syntax error at line 1: `~' unexpected
+	//
+	// The second row is why this is a flag of its own rather than a rule
+	// over every `${…}` that shell refuses: `~`, `=`, `^` and `+` each get
+	// the one character, and only the group gets the tail.
+	//
+	// A flag rather than a wording because BadSubstitution's sentence does
+	// not change, only which text fills it — the same shape
+	// SyntaxUnexpectedNamesTheOpener has. Falls back to the `(` where the
+	// word could not be recovered, which is what it said before.
+	FlagGroupNamesTheWordTail bool
+
 	// UnexpectedWordNaming is which spelling of a refused *word* this
 	// dialect echoes back — see [UnexpectedWordNaming], where the panel is.
 	// Zero is the word with its quoting off, which is what the core says and
@@ -4190,7 +4211,13 @@ func (d Diagnostics) ParseFailure(err error) string {
 		// Two verbs for the dialect that words this as a syntax error rather
 		// than as a substitution that was bad: %[1]s the operator it could
 		// not read, %[2]d the line.
-		return Wording(d.BadSubstitution, se.Msg, se.Token, se.Pos.Line)
+		token := se.Token
+		if d.FlagGroupNamesTheWordTail && se.FlagGroupWordTail != "" {
+			// And in that dialect a refused flag group names the rest of
+			// the word instead of the `(` — see FlagGroupNamesTheWordTail.
+			token = se.FlagGroupWordTail
+		}
+		return Wording(d.BadSubstitution, se.Msg, token, se.Pos.Line)
 	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator,
 		syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing,
 		syntax.ErrArithIllegalByte, syntax.ErrArithBadOutputFormat,

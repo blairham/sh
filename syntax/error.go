@@ -405,6 +405,41 @@ type Error struct {
 	// is the parameter and a `#` in front of a name is the length operator.
 	// ksh93 says ``newline' unexpected`` for both.
 	BraceNameStopFollowsAPrefix bool
+	// FlagGroupWordTail is the rest of the *word* a refused expansion flag
+	// group stands in: the source from the character after the group's
+	// closing `)` to the end of the word, the expansion's own `}` and any
+	// text written after it included.
+	//
+	// One dialect quotes that text back instead of the `(` it refused.
+	// Measured on ksh93u+ 2012-08-01, 2026-09-12, `env -i` with a scratch
+	// HOME, `-c`:
+	//
+	//	echo ${(U)x}                  x}                 the brace as well
+	//	echo ${(U)x} after            x}                 and no further
+	//	echo a${(U)x}b c              x}b                through the literal
+	//	echo ${(@f)"$(printf ab)"}    "$(printf ab)"}    quotes and all
+	//
+	// Row two is the discriminating one: to the end of the *line* would have
+	// carried ` after` with it, and the expansion alone would have carried
+	// nothing in rows three and four.
+	//
+	// It is the flag group alone and not every `${…}` that dialect refuses:
+	// `echo ${~x} after`, `${=x}`, `${^x}` and `${+x}` each name the one
+	// character, measured in the same run.
+	//
+	// Two neighbours are measured and *not* modeled. Quotes are dropped from
+	// the tail — `${(U)"x"}` gives `x}` and `"[${(U)x}]"` gives `x}]` —
+	// which is what flagGroupTail does, but only where the tail holds no
+	// expansion: with one in it the shell keeps the quotes it was written
+	// with and then writes a second `"` where the word's closing quote
+	// stood, so `"${(U)x}$w"` gives `x}$w""` where this writes `x}$w"`. And
+	// a flag group holding a nested `(` — `${(l(3))x}` — goes back to
+	// naming the `(`, which is where the `)` search stops.
+	//
+	// Empty where the word could not be recovered, for the reasons
+	// ParamExpr.FlagsErrTail is: the report then names the `(` as it always
+	// did.
+	FlagGroupWordTail string
 	// EofLine is the line the input actually ran out on, in the lexer's
 	// own count — the same point EndLine names in the next-line
 	// convention. Two dialects report this one for an unmatched quote.

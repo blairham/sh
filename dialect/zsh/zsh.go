@@ -575,6 +575,13 @@ func Semantics() interp.Semantics {
 	// `-i script.sh` through a pseudo-terminal, `[1] <pid>` as the job
 	// starts and `[1]  + done       sleep 0.3` as it ends.
 	s.InteractiveScriptAnnouncesJobs = interp.Yes
+	// And on the other route too: measured 2026-09-12 on `-i -c` through a
+	// pseudo-terminal, `[1] <pid>` as the job starts and `[1]  + done` after the
+	// `wait` that reaps it.
+	s.InteractiveCommandStringAnnouncesJobs = interp.Yes
+	// Written where the job ended rather than where a prompt is drawn, which
+	// the same run says: `-i -c` never draws one and zsh writes the row.
+	s.FinishedJobNoticeNeedsAPrompt = interp.No
 	// A job started with `&` reads the shell's own standard input here, where
 	// the other five hand it an empty one — measured 2026-09-07,
 	// `sh -c '/bin/cat & wait; echo ---; /bin/cat' < f` writes the file's line

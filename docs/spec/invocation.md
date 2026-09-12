@@ -527,11 +527,64 @@ and bash announces the start there too. bash is quiet on exactly one
 interactive route, the one whose program is a **named file**, which is why the
 axis names the route rather than the terminal.
 
-The `-i -c` column is a different split — bash, ksh93 and zsh announce and dash
-does not — and so it is a different axis, deliberately not taken here. The zsh
-`-i < script` cell is empty because that invocation does not finish: zsh draws
-its prompt and waits, and nothing was measured rather than something guessed
-at.
+The `-i -c` column is a different split, and it is a different axis: see
+*The command-string column is the other axis* below. The zsh `-i < script` cell
+is empty because that invocation does not finish: zsh draws its prompt and
+waits, and nothing was measured rather than something guessed at.
+
+#### The command-string column is the other axis
+
+Re-measured 2026-09-12 on an idle machine, through a pseudo-terminal with a
+scratch `HOME` and a scratch `HISTFILE`. The 2026-09-05 probe above used a
+`sleep`, which is what left the `-i -c` end column in doubt; this one holds the
+job open on a **fifo the string itself releases** and then reaps it with
+`wait`, so there is no clock in it anywhere:
+
+```
+echo A
+{ read x < $f; } &
+echo release > $f
+wait
+echo B
+```
+
+| shell | the job starting | the job ending | `$-` |
+| --- | --- | --- | --- |
+| bash 5.3.15 | `[1] <pid>` | — | `himBHc` |
+| bash 3.2.57 | `[1] <pid>` | `[1]+  Done  { … }` | `himBHc` |
+| bash 5.3.15 as `sh` | `[1] <pid>` | — | `himBHc` |
+| dash | — | — | `mi` |
+| ksh93u+ | `[1]	<pid>` | `[1] +  Done  { … } &` | `icmsBE` |
+| zsh 5.9.2 | `[1] <pid>` | `[1]  + done  { … }` | `569XZim` |
+| ash 1.37.0 | — | — | `cmi` |
+
+Two answers come out of it, and they are two fields.
+
+**Whether there is anybody to tell at all** is
+`Semantics.InteractiveCommandStringAnnouncesJobs` — bash yes · dash **no** ·
+ksh93 yes · zsh yes · ash **no**. It is the mirror image of the named-script
+column, where bash is the only shell that says nothing, so neither column
+predicts the other and a shell reading one field on both routes would be wrong
+about three of the five whichever way it read it. dash's and ash's silence is a
+real answer rather than an absent one: `$-` is `mi` and `cmi`, so both are
+interactive with the monitor running and still write neither line.
+
+**Whether the `Done` row waits for a prompt** is
+`Semantics.FinishedJobNoticeNeedsAPrompt` — bash **yes**, everyone else no.
+bash 5.3.15's missing end notice survived every attempt to make it a race:
+`wait`, `wait %1` and a whole second of `sleep` after the job had died all
+produce the start line and no `Done` row. It is not a version split either,
+though bash 3.2.57 writes the row here. The discriminating probe is the *pipe*
+route in the grid above — `bash -i` with the program on standard input, where
+`-i` draws a prompt between the lines — and 5.3.15 writes `[1]+  Done` there at
+the prompt after `wait`. So bash is waiting for a prompt, and `-i -c` never
+draws one.
+
+Without that second field "bash" would have no single answer to give a dialect
+table, which is the shape #969 records for the slot questions and is why this
+one is a field rather than a footnote. It is read by the **front end** and not
+by the runner, for the reason `Runner.FinishedJobNotices` gives: it renders the
+lines and deliberately does not choose the moment.
 
 #### The notice rides on the monitor
 

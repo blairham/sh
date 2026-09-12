@@ -109,6 +109,17 @@ func Semantics() interp.Semantics {
 	// start is AnnouncesBackgroundJob, which dash answers No, and the two
 	// fields are separate because of exactly this shell.
 	s.InteractiveScriptAnnouncesJobs = interp.Yes
+	// And nothing whatever on the other one. Measured 2026-09-12 on `-i -c`
+	// through a pseudo-terminal, with the job held open on a fifo the string
+	// releases and then reaps: no start line and no `Done` row, where bash,
+	// ksh93 and zsh all write at least the start. It is a real answer and not
+	// an absent one — `$-` on that route is `mi`, so the shell is interactive
+	// with the monitor running and still says nothing.
+	s.InteractiveCommandStringAnnouncesJobs = interp.No
+	// And where it does speak it speaks at once: the `Done` row on
+	// `-i script.sh` is written between the commands, on a route that draws no
+	// prompt at all.
+	s.FinishedJobNoticeNeedsAPrompt = interp.No
 	// And `$!` before any background command is unset here as it is in bash,
 	// in its own words and with its own status: measured,
 	// `set -u; echo "[$!]"` writes `!: parameter not set` — the name without

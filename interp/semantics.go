@@ -7469,8 +7469,73 @@ type Semantics struct {
 	// `-i -c` is a separate question and is deliberately not this one. On
 	// that route bash, ksh93 and zsh announce and dash does not, which is a
 	// different split and therefore a different axis; `docs/spec/invocation.md`
-	// has the grid.
+	// has the grid. See InteractiveCommandStringAnnouncesJobs.
 	InteractiveScriptAnnouncesJobs Answer
+
+	// InteractiveCommandStringAnnouncesJobs is the same question on the other
+	// route an interactive shell can be handed a program: `-i -c`. True in
+	// bash, ksh93 and zsh; false in dash and BusyBox ash.
+	//
+	// A second axis rather than the same one read twice, and the grid is what
+	// says so: bash is the only shell quiet on `-i script.sh` and dash and ash
+	// are the only two quiet here, so neither column predicts the other. A
+	// shell that read one field on both routes would be wrong about three of
+	// the five whichever answer it took.
+	//
+	// Measured 2026-09-12 through a pseudo-terminal, scratch HOME and scratch
+	// HISTFILE, on `-i -c` running a job held open on a fifo the script itself
+	// releases and then reaps with `wait` — no sleep anywhere, so nothing here
+	// is a race with the scheduler:
+	//
+	//	bash 5.3.15   the start, no `Done`   bash 3.2.57  both
+	//	bash as `sh`  the start, no `Done`   dash         nothing at all
+	//	ksh93u+       both                   zsh 5.9.2    both
+	//	ash 1.37.0    nothing at all
+	//
+	// dash's silence is a real answer and not an absent one: `$-` there is
+	// `mi`, so the shell is interactive with the monitor running and still
+	// says nothing. ash reads `cmi` and is the same.
+	//
+	// bash's missing `Done` row is not this axis and is not a version split
+	// either — it is FinishedJobNoticeNeedsAPrompt, measured below.
+	//
+	// Read rather than `ask`ed, for the reason its sibling above is: the
+	// answer is wanted once at startup, so an unanswered field would put "the
+	// shells disagree here" ahead of every `-i -c`, including the strings that
+	// never mention a job.
+	//
+	// The preset says no, on the same two grounds: XCU has nothing to say
+	// about a notice on this route, and a core made of what the panel agrees
+	// on is the quiet one.
+	InteractiveCommandStringAnnouncesJobs Answer
+
+	// FinishedJobNoticeNeedsAPrompt holds back the `Done` row until there is a
+	// prompt to write it before, which leaves it unwritten on a route that
+	// never draws one. bash alone; dash, ash, ksh93 and zsh write it at the
+	// next command boundary whether or not a prompt follows.
+	//
+	// Not a question about which route the program came from, which is the
+	// reading the measurement rules out. bash 5.3.15 under `-i -c` announces
+	// the job's *start* and never its end, however long the shell then runs —
+	// the same string with `wait`, with `wait %1` and with a whole second of
+	// `sleep` after the job died all write the start and no `Done`. The same
+	// bash handed the same program on a *pipe*, where `-i` draws a prompt
+	// between the lines, writes `[1]+ Done` at the prompt after `wait`. So the
+	// notice is waiting for the prompt, not for the route.
+	//
+	// bash 3.2.57 writes it on both routes, which is what makes this worth a
+	// field rather than a note: without it "bash" would have no single answer
+	// to give a dialect table, and the panel's bash is 5.3.
+	//
+	// Read by the front end rather than by the runner, and read rather than
+	// `ask`ed, because *when* a notice is written is the shell around interp's
+	// to decide — see Runner.FinishedJobNotices, which renders the lines and
+	// deliberately does not choose the moment.
+	//
+	// The preset says yes, which is the answer that claims less: a shell that
+	// has not been asked for a job report does not write one where nobody is
+	// waiting at a prompt to read it.
+	FinishedJobNoticeNeedsAPrompt Answer
 
 	// PunctuatedFunctionNameIsRefused stops the script when a function
 	// whose name carries `-` or `.` is defined. ksh93 alone: bash and zsh
@@ -9347,7 +9412,16 @@ func PosixSemantics() Semantics {
 		// nothing. It is the intersection as well: bash is silent here and
 		// the other three are not, and a core made of what they all do is
 		// the quiet one.
-		InteractiveScriptAnnouncesJobs:  No,
+		InteractiveScriptAnnouncesJobs: No,
+		// The same reading on the other interactive route, and the same two
+		// grounds: the standard says nothing about a notice on `-i -c`, and
+		// the panel does not agree — dash and ash are silent there — so the
+		// intersection is silence.
+		InteractiveCommandStringAnnouncesJobs: No,
+		// And where a notice is written at all, the preset writes it only
+		// where somebody is at a prompt to read it, which is again the answer
+		// that claims less.
+		FinishedJobNoticeNeedsAPrompt:   Yes,
 		TildePlusMinusExpands:           No,
 		UnderscoreTracksTheLastArgument: No,
 		// POSIX has no `$_`, so nothing is written at startup and a name

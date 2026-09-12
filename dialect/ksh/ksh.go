@@ -1156,6 +1156,14 @@ func Semantics() interp.Semantics {
 	// `-i script.sh` through a pseudo-terminal, `[1]\t<pid>` as the job
 	// starts and `[1] +  Done  sleep 0.3 &` as it ends.
 	s.InteractiveScriptAnnouncesJobs = interp.Yes
+	// And on the other route too: measured 2026-09-12 on `-i -c` through a
+	// pseudo-terminal, `[1]\t<pid>` as the job starts and the `Done` row after
+	// the `wait` that reaps it.
+	s.InteractiveCommandStringAnnouncesJobs = interp.Yes
+	// The row is written where the job ended and not where a prompt is drawn,
+	// which the `-i -c` run above is the whole evidence for: there is no prompt
+	// on that route and ksh93 writes it anyway.
+	s.FinishedJobNoticeNeedsAPrompt = interp.No
 	// `$!` before any background command is set and empty here, so `set -u`
 	// has nothing to say about it: measured, `set -u; echo "[$!]"; echo
 	// "st=$?"` writes `[]` and then `st=0`. Stated rather than left

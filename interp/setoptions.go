@@ -465,8 +465,11 @@ func (r *Runner) SetInteractiveMonitor() {
 //
 // Call it after SetInteractiveMonitor, which is what settles the gate.
 //
-// Whether `-i -c` announces is a separate question with a different split and
-// is not decided here — see Semantics.InteractiveScriptAnnouncesJobs.
+// Both interactive routes reach it and each reads its own axis: `-i script.sh`
+// is Semantics.InteractiveScriptAnnouncesJobs and `-i -c` is
+// Semantics.InteractiveCommandStringAnnouncesJobs. Two fields rather than one,
+// because the columns disagree — bash is the only shell quiet on the first and
+// dash and ash the only two quiet on the second.
 func (r *Runner) SetInteractiveJobNotices() {
 	// Read rather than `ask`ed, for the reason the monitor's answer is read:
 	// this runs once at startup, so an unanswered axis would complain ahead
@@ -482,8 +485,21 @@ func (r *Runner) SetInteractiveJobNotices() {
 	if !r.monitor {
 		return
 	}
-	if r.Route == RouteScriptFile && r.sem().InteractiveScriptAnnouncesJobs == Yes {
-		r.JobControl = true
+	switch r.Route {
+	case RouteScriptFile:
+		if r.sem().InteractiveScriptAnnouncesJobs == Yes {
+			r.JobControl = true
+		}
+	case RouteCommandString:
+		if r.sem().InteractiveCommandStringAnnouncesJobs == Yes {
+			r.JobControl = true
+		}
+	case RouteUnspecified, RouteStandardInput:
+		// Neither is a route this was measured on. `-i` with the program on
+		// standard input draws a prompt in every shell in the panel, so the
+		// prompt sets JobControl outright and never reaches here, and an
+		// embedder that has not said which route it is has not said it is
+		// interactive either.
 	}
 }
 

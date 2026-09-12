@@ -10039,9 +10039,77 @@ unanswered field would put "the shells disagree here" ahead of every
 `-i script.sh` under a preset that has not chosen, including the scripts
 that never start a job.
 
-`-i -c` is a different split — bash, ksh93 and zsh announce there and dash
-does not — and is therefore a different axis, not yet taken. See
+ash answers yes with dash's exact shape: measured 2026-09-12 in the
+container on `-i script.sh`, `[1]+  Done` as the job ends and nothing at
+all as it starts.
+
+`-i -c` is a different split and is a different axis — see
+`InteractiveCommandStringAnnouncesJobs` below, and
 docs/spec/invocation.md for the whole grid.
+
+
+**`InteractiveCommandStringAnnouncesJobs`** — bash yes · dash no · ksh93
+yes · zsh yes · ash no
+
+The same question on the other route an interactive shell can be handed a
+program: `-i -c`.
+
+Measured 2026-09-12 through a pseudo-terminal, scratch `HOME` and scratch
+`HISTFILE`, on a job held open on a **fifo the string itself releases**
+and then reaps with `wait` — no sleep anywhere, which is what the
+2026-09-05 reading of this column was missing. bash 5.3.15 and bash
+5.3.15 run as `sh` write the start and no `Done` row; bash 3.2.57, ksh93u+
+and zsh 5.9.2 write both; dash and ash write neither.
+
+**A second field rather than the first one read twice.** The two columns
+are opposites: bash is the only shell quiet on a named script and dash and
+ash are the only two quiet here, so neither predicts the other, and a
+shell that read one field on both routes would be wrong about three of the
+five whichever answer it took.
+
+dash's and ash's silence is a real answer and not an absent one. `$-` on
+that route is `mi` in dash and `cmi` in ash, so both are interactive with
+the monitor running and still write neither line.
+
+bash's missing `Done` row is not this axis and not a version split either:
+it is `FinishedJobNoticeNeedsAPrompt`, below.
+
+The preset says no, on the two usual grounds — XCU has nothing to say
+about a notice on this route, and a core made of what the panel agrees on
+is the quiet one. Read rather than `ask`ed, as its sibling above is: the
+answer is wanted once at startup, so an unanswered field would put "the
+shells disagree here" ahead of every `-i -c`, including the strings that
+never mention a job.
+
+
+**`FinishedJobNoticeNeedsAPrompt`** — bash yes · dash no · ksh93 no · zsh
+no · ash no
+
+Holds the `Done` row back until there is a prompt to write it before,
+which leaves it unwritten on a route that never draws one.
+
+**Not a question about the route**, which is the reading the measurement
+rules out. bash 5.3.15 under `-i -c` announces the job's start and never
+its end, however long the shell then runs: `wait`, `wait %1` and a whole
+second of `sleep` after the job had died all give the start line and no
+`Done` row. The same bash handed the same program on a **pipe**, where
+`-i` draws a prompt between the lines, writes `[1]+  Done` at the prompt
+after `wait`. So the notice is waiting for the prompt, not for the route.
+
+bash 3.2.57 writes the row on both, and that is what makes this a field
+rather than a note: without it "bash" would have no single answer to give
+a dialect table — the shape #969 records for the slot questions — and the
+panel's bash is 5.3.
+
+**Read by the front end**, not by the runner, and read rather than
+`ask`ed. *When* a notice is written is the shell around `interp`'s to
+decide: `Runner.FinishedJobNotices` renders the lines and deliberately
+does not choose the moment, so the one place that can hold them back is
+the loop that would have printed them.
+
+The preset says yes, the answer that claims less: a shell that has not
+been asked for a job report does not write one where nobody is at a prompt
+to read it.
 
 
 **`WaitReadsOptions`** — bash yes · dash yes · ksh93 yes · zsh no

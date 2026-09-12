@@ -89,10 +89,18 @@ func interactiveJobs(
 
 // announcing is the semantics vector of a dialect that says both things about
 // a job it runs from a named script: ksh93's and zsh's answers.
+//
+// FinishedJobNoticeNeedsAPrompt is part of those answers and is set here
+// rather than left at the preset's, which says the opposite. Both shells write
+// the `Done` row on a route that draws no prompt, so a vector standing in for
+// them has to say so; the preset claims less because bash is the one shell
+// that waits for a prompt and a core made of what the panel agrees on cannot
+// write a row bash would not.
 func announcing() interp.Semantics {
 	sem := interp.PosixSemantics()
 	sem.AnnouncesBackgroundJob = interp.Yes
 	sem.InteractiveScriptAnnouncesJobs = interp.Yes
+	sem.FinishedJobNoticeNeedsAPrompt = interp.No
 	return sem
 }
 
@@ -214,18 +222,137 @@ func TestAScriptThatIsNotInteractiveIsToldNothing(t *testing.T) {
 	}
 }
 
-// The route is the whole of what the axis names, and `-i -c` is not it: the
-// same program, the same vector, the same terminal, and nothing is said.
+// The route is the whole of what the first axis names, and `-i -c` is not it:
+// the same program, the same vector, the same terminal, and nothing is said
+// until the *second* axis is answered.
 //
 // Measured, and it is the reason the axis names the route rather than the
 // terminal: `bash -i -c` announces a job starting while `bash -i script.sh`
-// announces nothing, so a shell that read this axis on both routes would be
-// wrong about one of them. That column is a different split — bash, ksh93 and
-// zsh announce there and dash does not — and is deliberately not this axis.
-func TestACommandStringIsNotTheRouteThisAxisNames(t *testing.T) {
+// announces nothing, so a shell that read one axis on both routes would be
+// wrong about one of them. The columns are opposites — bash alone is quiet on
+// a named script, dash and ash alone are quiet here — so neither predicts the
+// other.
+func TestACommandStringReadsItsOwnAxisAndNotTheScriptOne(t *testing.T) {
+	// The script route's answer is Yes throughout, which is what makes this a
+	// test of the second field rather than of silence: everything below holds
+	// with the first axis saying announce.
 	errs, out, _ := interactiveJobs(t, announcing(), true, "-i", "-c", "@SOURCE@")
 	if errs != "" {
-		t.Errorf("wrote %q to the error stream, want nothing — `-i -c` is not `-i script.sh`", errs)
+		t.Errorf("wrote %q to the error stream, want nothing — `-i script.sh` is not `-i -c`", errs)
+	}
+	if out != "end\n" {
+		t.Errorf("wrote %q to the output stream, want %q", out, "end\n")
+	}
+}
+
+// And with its own axis answered it announces, on the route the first axis
+// does not name.
+//
+// ksh93's and zsh's shape: measured 2026-09-12 through a pseudo-terminal, on
+// `-i -c` running a job held open on a fifo the string releases and then reaps
+// with `wait`. ksh93 writes `[1]\t<pid>` and then `[1] +  Done  { … } &`; zsh
+// writes `[1] <pid>` and then `[1]  + done  { … }`. No sleep in the probe, so
+// neither line is racing the scheduler.
+func TestAnInteractiveCommandStringAnnouncesItsJobs(t *testing.T) {
+	sem := announcing()
+	sem.InteractiveCommandStringAnnouncesJobs = interp.Yes
+	errs, out, pid := interactiveJobs(t, sem, true, "-i", "-c", "@SOURCE@")
+	want := fmt.Sprintf("[1] %s\n[1]+  Done                    sleep 0\n", pid)
+	if errs != want {
+		t.Errorf("wrote %q to the error stream, want %q", errs, want)
+	}
+	if out != "end\n" {
+		t.Errorf("wrote %q to the output stream, want %q — the string did not run", out, "end\n")
+	}
+}
+
+// bash's shape, which is the whole reason the finished notice is a field of
+// its own: the start and never the end.
+//
+// Measured 2026-09-12, bash 5.3.15 under `-i -c` writes `[1] <pid>` and no
+// `Done` row — with `wait`, with `wait %1`, and with a whole second of `sleep`
+// after the job had died. The same bash handed the same program on a pipe,
+// where `-i` draws a prompt between the lines, writes `[1]+  Done` at the
+// prompt after `wait`. So it is the prompt it is waiting for, not the route,
+// and bash 3.2.57 writes the row on both — which is why "bash" needs a field
+// here to have one answer at all.
+func TestAFinishedJobNoticeMayWaitForAPromptThatNeverComes(t *testing.T) {
+	sem := announcing()
+	sem.InteractiveCommandStringAnnouncesJobs = interp.Yes
+	sem.FinishedJobNoticeNeedsAPrompt = interp.Yes
+	errs, out, pid := interactiveJobs(t, sem, true, "-i", "-c", "@SOURCE@")
+	want := fmt.Sprintf("[1] %s\n", pid)
+	if errs != want {
+		t.Errorf("wrote %q to the error stream, want %q — the start and no `Done` row", errs, want)
+	}
+	if out != "end\n" {
+		t.Errorf("wrote %q to the output stream, want %q", out, "end\n")
+	}
+}
+
+// The same field on the other route, because it is a fact about the notice
+// and not about how the program arrived: a dialect that waits for a prompt
+// writes no `Done` row from a named script either.
+//
+// No shell in the panel is in this corner — bash is the only Yes and it is
+// also the only shell that announces nothing at all on the script route — so
+// this is the field being read where it is reachable rather than a column
+// being reproduced. It is worth pinning because the alternative implementation
+// is a check on the route, and a check on the route would pass every test
+// above and answer this one wrongly.
+func TestAScriptRouteObeysTheSameFinishedNoticeAxis(t *testing.T) {
+	sem := announcing()
+	sem.FinishedJobNoticeNeedsAPrompt = interp.Yes
+	errs, _, pid := interactiveJobs(t, sem, true, "-i", "@SCRIPT@")
+	want := fmt.Sprintf("[1] %s\n", pid)
+	if errs != want {
+		t.Errorf("wrote %q to the error stream, want %q", errs, want)
+	}
+}
+
+// dash's and ash's shape, and the half of the grid that makes the new axis
+// necessary rather than convenient: they announce on the script route and say
+// nothing whatever here.
+//
+// Measured 2026-09-12 through a pseudo-terminal on `-i -c`, and the silence is
+// a real answer rather than an absent one — `$-` is `mi` in dash and `cmi` in
+// ash, so both are interactive with the monitor running and still write
+// neither line.
+func TestACommandStringMayAnnounceNothing(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer interp.Answer
+	}{
+		{name: "a dialect that says nothing", answer: interp.No},
+		// Decided once at startup, so an unanswered axis reads as the quiet
+		// answer rather than refusing ahead of every `-i -c` under a preset
+		// that has not chosen.
+		{name: "and an unanswered axis is quiet", answer: interp.Unspecified},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := announcing()
+			sem.AnnouncesBackgroundJob = interp.No // dash and ash both
+			sem.InteractiveCommandStringAnnouncesJobs = tc.answer
+			errs, out, _ := interactiveJobs(t, sem, true, "-i", "-c", "@SOURCE@")
+			if errs != "" {
+				t.Errorf("wrote %q to the error stream, want nothing", errs)
+			}
+			if out != "end\n" {
+				t.Errorf("wrote %q to the output stream, want %q", out, "end\n")
+			}
+		})
+	}
+}
+
+// And a command string that is not interactive is told nothing, whatever
+// either axis says. Unanimous: no shell in the panel announces a job to a
+// plain `-c`, with a terminal or without one.
+func TestACommandStringThatIsNotInteractiveIsToldNothing(t *testing.T) {
+	sem := announcing()
+	sem.InteractiveCommandStringAnnouncesJobs = interp.Yes
+	errs, out, _ := interactiveJobs(t, sem, true, "-c", "@SOURCE@")
+	if errs != "" {
+		t.Errorf("wrote %q to the error stream, want nothing", errs)
 	}
 	if out != "end\n" {
 		t.Errorf("wrote %q to the output stream, want %q", out, "end\n")

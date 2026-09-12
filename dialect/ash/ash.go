@@ -429,6 +429,20 @@ func Semantics() interp.Semantics {
 	s.JobsShowBackgroundCommand = interp.No
 	s.AnnouncesBackgroundJob = interp.No
 	s.AnnouncesBackgroundJobWithoutTheMonitor = interp.No
+	// It has somebody to tell on the named-script route and tells them exactly
+	// one thing, which is dash's shape as well: measured 2026-09-12 in the
+	// container on `-i script.sh` with a job held open on a fifo, `[1]+  Done`
+	// as it ends and nothing at all as it starts. The start is
+	// AnnouncesBackgroundJob, answered No just above.
+	s.InteractiveScriptAnnouncesJobs = interp.Yes
+	// And nothing whatever on the other interactive route. The same program
+	// under `-i -c` writes neither line, where bash, ksh93 and zsh all write at
+	// least the start — and it is a real answer rather than an absent one,
+	// since `$-` there is `cmi`, interactive with the monitor running.
+	s.InteractiveCommandStringAnnouncesJobs = interp.No
+	// Where it does speak it speaks at once: the `Done` row above is written
+	// between the commands of a script, on a route that draws no prompt.
+	s.FinishedJobNoticeNeedsAPrompt = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.Yes
 	s.ReportsAKilledCommandInACommandSubstitution = interp.Yes

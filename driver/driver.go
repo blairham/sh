@@ -499,7 +499,18 @@ func RunScript(sh Shell, src, path string) int {
 // `-i script.sh` with the two writable streams separated, dash and ksh93 both
 // write the `Done` row to standard error and neither writes anything to
 // standard output. The same stream the prompt route already uses.
+//
+// Nothing at all in the dialect that keeps the row back until there is a
+// prompt to write it before, which is Semantics.FinishedJobNoticeNeedsAPrompt
+// and is bash alone. This loop is the routes that never draw one — `-i -c` and
+// `-i script.sh` — so a shell that answers Yes there says nothing about a job
+// ending, and the notices stay owed rather than being written to nobody. The
+// question is the front end's because *when* a notice is written is, which is
+// the rule Runner.FinishedJobNotices is built on.
 func (sh Shell) reportFinishedJobs(r *interp.Runner) {
+	if sh.Semantics.FinishedJobNoticeNeedsAPrompt == interp.Yes {
+		return
+	}
 	for _, line := range r.FinishedJobNotices() {
 		sh.errf("%s\n", line)
 	}
@@ -1551,6 +1562,11 @@ func (sh Shell) runInput(in source) int {
 		// `bash -i < script`, with the program on a pipe and no terminal to
 		// read commands from, announces both. Only a named script file is
 		// quiet.
+		//
+		// `-i -c` reaches the same call and reads a *second* axis,
+		// Semantics.InteractiveCommandStringAnnouncesJobs, because the two
+		// columns disagree: bash is the only shell quiet on a named script
+		// and dash and ash are the only two quiet on a command string.
 		r.SetInteractiveJobNotices()
 	}
 	r.SetScriptFile(in.file)
@@ -1912,6 +1928,10 @@ func (sh Shell) executeLines(
 		// a plain script takes as well, and FinishedJobNotices answers with
 		// nothing while JobControl is off — which is every route but the
 		// interactive one, in every dialect but the three that announce.
+		//
+		// And nothing for the one dialect that has somebody to tell and
+		// waits for a prompt to tell them: bash under `-i -c` announces the
+		// job's start and never its end. See reportFinishedJobs.
 		sh.reportFinishedJobs(r)
 		if r.Exited() {
 			break

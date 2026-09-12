@@ -1153,6 +1153,19 @@ func Semantics() interp.Semantics {
 	// the `Done` row, where the other three print at least one. It is the
 	// route and not the terminal — `bash -i < script` announces both.
 	s.InteractiveScriptAnnouncesJobs = interp.No
+	// The other route is the other way round. Measured 2026-09-12 on `-i -c`
+	// through a pseudo-terminal, with the job held open on a fifo the string
+	// releases and then reaps: bash writes `[1] <pid>` where dash and ash write
+	// nothing at all. So the two columns disagree and this is a second field.
+	s.InteractiveCommandStringAnnouncesJobs = interp.Yes
+	// And bash alone keeps the `Done` row back for a prompt. On that same
+	// `-i -c` run 5.3.15 writes the start and never the end — with `wait`, with
+	// `wait %1`, and with a whole second of `sleep` after the job died — while
+	// the same program on a pipe, where `-i` draws a prompt between the lines,
+	// writes `[1]+  Done` at the prompt after `wait`. It is the prompt and not
+	// the route. 3.2.57 writes the row on both, which is why this is a field:
+	// without it bash would have no single answer to give.
+	s.FinishedJobNoticeNeedsAPrompt = interp.Yes
 	// `$!` before any background command is *unset*, not set and empty:
 	// measured, `set -u; echo "[$!]"` writes `$!: unbound variable` and stops
 	// at 127 in 5.3.15, in 3.2.57 and in 3.2 run as `sh`. Without `set -u` it

@@ -399,6 +399,13 @@ type counts struct {
 	// command is how many commands this session has run, which does not.
 	command int
 
+	// line is how many physical lines this session has read, and pendingLine
+	// is the session line the text now accumulating began on. Only the
+	// dialect that numbers a prompt's diagnostics by the session reads them
+	// — see Shell.CountSessionLines.
+	line        int
+	pendingLine int
+
 	// last is what the previous command was, for a prompt provider that draws
 	// something about it. Recorded by closeBlock, which is also where the
 	// block store's record of the same command is written — one place and one

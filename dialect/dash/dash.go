@@ -595,6 +595,10 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxUnexpectedWord:  "Syntax error: word unexpected",
 		// And the newline is unquoted with it — `newline unexpected` beside
 		// `";;" unexpected` — and blamed on the line it ends (#1364).
+		// A line typed at a prompt is numbered by the session: the second
+		// line typed is line 2, for a parse failure and for a command that
+		// was not found alike (#2022).
+		PromptCountsTheSessionsLines:     true,
 		SyntaxUnexpectedNewline:          "Syntax error: newline unexpected",
 		UnexpectedNewlineIsOnTheNextLine: true,
 		SyntaxExpecting:                  " (expecting \"%[1]s\")",

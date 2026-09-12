@@ -336,9 +336,14 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// decided here: the prompt is where the difference shows and the
 		// dialect is where the answer lives.
 		AskAgainAfterARefusedToken: sh.Semantics.PromptAsksAgainAfterARefusedToken,
-		Style:                      sh.PromptStyle,
-		Editor:                     sh.EditorStyle,
-		History:                    sh.HistoryStyle,
+		// And whether the line a diagnostic names is counted from the start
+		// of the *session* rather than from the start of the construct being
+		// typed, which is the one dialect that names a line at a prompt at
+		// all. See Diagnostics.PromptCountsTheSessionsLines.
+		CountSessionLines: dg.PromptCountsTheSessionsLines,
+		Style:             sh.PromptStyle,
+		Editor:            sh.EditorStyle,
+		History:           sh.HistoryStyle,
 		// And what it runs between commands, which is one dialect's `precmd`
 		// and `preexec` and nothing at all for the other three.
 		Hooks: sh.HookStyle,

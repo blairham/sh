@@ -7098,6 +7098,52 @@ declared with — `f()` for the parenthesised form and the bare name for
 the keyword one; dash has no `typeset`.
 
 
+## When the case attributes act
+
+Measured 2026-09-12, `env -i` with a scratch `HOME`, zsh 5.9.2 `-f`, bash
+5.3.15 and 3.2.57 `--norc --noprofile`, ksh93u+, over `typeset -l lo=AB`.
+
+`-l` and `-u` fold a name's value. **Where** the fold happens is the
+disagreement, and it is invisible in the value:
+
+    shell      $lo   typeset -p lo        typeset +l lo; $lo
+    bash 5.3   ab    declare -l lo="ab"   ab
+    ksh93u+    ab    typeset -l lo=ab     ab
+    zsh 5.9.2  ab    typeset -l lo=AB     AB
+
+bash 3.2 has neither letter and dash has no `typeset`, so neither is in
+the row.
+
+The third column is the discriminating one: taking the attribute off asks
+the store directly, and only one of these shells has anything left to
+reveal. A shell that folded on the way in and kept a private copy for the
+listing would match column two and fail column three.
+
+Two consequences of folding on the read, both measured and neither
+derivable from the table:
+
+- **An append joins the stored text.** `typeset -l lo=AB; lo+=CD` lists
+  back as `ABCD` and reads as `abcd`. There is a third answer available
+  and it is the one an implementation reaches by routing the append
+  through an ordinary read — `abCD`, which no shell in the panel writes.
+- **A pattern operator sees the folded text**, because it is a read like
+  any other: `${v/A/x}` leaves `ab` alone. The storing shells answer the
+  same thing for a different reason — they never had an `A` — and the two
+  readings part on `${v/a/x}`, which is `xb` everywhere.
+
+**The environment is a read.** `typeset -l v=AB; export v` puts `v=ab` in
+a child's environment under both answers, so the store is not simply
+copied outward. (ksh93 has a corner of its own here that is not this
+question: `typeset -lx v=AB`, with both letters on one line, does not fold
+at all there, while `typeset -l v=AB; export v` does.)
+
+**Arrays are outside this on both answers**, and for different reasons, so
+the question is not asked of one. The shell that folds on the read does
+not fold an array's elements at all — `typeset -al arr=(AB Cd)` reads back
+`AB Cd` — and for the shells that fold on the way in, whether an element
+goes through the attribute is its own measured question.
+
+
 ## The job and lookup long tail: type's letters, job specs, wait -n, disown, ulimit -a, the directory stack
 
 Oracle runs, 2026-09-04, bash 5.3, dash, ksh93u+, zsh 5.9.2. Corpus rows

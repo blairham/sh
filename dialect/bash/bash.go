@@ -507,6 +507,9 @@ func Semantics() interp.Semantics {
 	s.AttributeRereadsTheValueItFinds = interp.No
 	s.InheritedValueSurvivesADeclaredType = interp.Yes
 	s.CompoundElementsGoThroughTheAttribute = interp.Yes
+	// The case attributes fold once, on the value being stored: `declare -l
+	// v=AB` holds `ab`, and taking the letter off leaves `ab` behind.
+	s.CaseAttributeFoldsWhenRead = interp.No
 	s.CompoundAttribute = interp.CompoundAttributeKeepsTheElements
 	// The converse: an array or table letter given to a name already holding
 	// a scalar promotes that value to the first element. Measured 2026-09-08,

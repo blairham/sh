@@ -3,7 +3,10 @@
 
 package syntax
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // The condition tree for `[[ … ]]`, from docs/spec/grammar/conditions.md.
 //
@@ -99,10 +102,19 @@ func (c *TestClause) commandNode() {}
 // same name as `[[ -o aliases ]]`, and `v=errexit; [[ -o $v ]]` reads it out
 // of the variable — and a missing one is a syntax error in all three.
 // condUnaryOp reports whether a word is a one-operand test in this dialect.
-// All but one are core; `-v` is the exception and says why in dialect.go.
+//
+// Most are core. Three are not, and each says why in dialect.go: `-v` behind
+// [Dialect.ParameterIsSetTest], and `-prefix` and `-suffix` behind
+// [Dialect.CompletionConditions].
 func (p *Parser) condUnaryOp(s string) bool {
-	if s == "-v" {
+	switch s {
+	case "-v":
 		return p.dialect.ParameterIsSetTest
+	case "-prefix", "-suffix":
+		// The completion-context tests, which one shell has in the grammar
+		// unconditionally and refuses when they *run*. See
+		// Dialect.CompletionConditions.
+		return p.dialect.CompletionConditions
 	}
 	return condUnaryOps[s]
 }
@@ -198,6 +210,45 @@ func (p *Parser) condWord() *Word {
 		return nil
 	}
 	return p.word()
+}
+
+// condOperatorHasItsOperand reports whether a one-operand test really has one
+// after it, for the two operators that fall back to being ordinary words when
+// it does not.
+//
+// Every other unary operator in the table *demands* its operand and says so:
+// `[[ -n ]]` is “ unknown condition: -n “ in the shell this is about, and
+// `unexpected argument `]]'` in bash. The completion-context pair does not —
+// measured 2026-09-12 on zsh 5.9.2, `[[ -prefix ]]`, `[[ -suffix ]]`,
+// `[[ -prefix && -n x ]]`, `[[ -prefix || -n x ]]` and `[[ ( -prefix ) ]]` all
+// answer 0 with nothing said, which is the bare-word reading: a word on its
+// own is a test for non-emptiness, and `-prefix` is not empty.
+//
+// bash 5.3, that binary as `sh` and ksh93 answer 0 for the same line because
+// they read the word as an ordinary one, having no such operator — so
+// **adding it without this would have made one dialect refuse a line three
+// other columns run**. The two that answer otherwise are not counter-examples:
+// dash has no `[[ ]]` at all, and bash 3.2 alone reads `-prefix` as *a*
+// conditional unary operator and calls the `]]` an unexpected argument to it.
+//
+// The look is at the source rather than at a token, the way peekIsAnonBody's
+// is: reading the next token would consume it, and there is nothing to put it
+// back into.
+func (p *Parser) condOperatorHasItsOperand(op string) bool {
+	if op != "-prefix" && op != "-suffix" {
+		return true
+	}
+	i := p.lex.off
+	for i < len(p.lex.src) && isBlank(p.lex.src[i]) {
+		i++
+	}
+	rest := p.lex.src[i:]
+	for _, end := range []string{"]]", "&&", "||", ")"} {
+		if strings.HasPrefix(rest, end) {
+			return false
+		}
+	}
+	return rest != ""
 }
 
 // blameCondition marks the failure just recorded as one the `[[` was open
@@ -311,7 +362,8 @@ func (p *Parser) condPrimary() CondExpr {
 		p.next()
 		return &CondGroup{X: x, Start: start, Stop: stop}
 
-	case p.tok.Kind == TokWord && !p.tok.IsQuoted() && p.condUnaryOp(p.tok.Literal()):
+	case p.tok.Kind == TokWord && !p.tok.IsQuoted() && p.condUnaryOp(p.tok.Literal()) &&
+		p.condOperatorHasItsOperand(p.tok.Literal()):
 		op, start := p.tok.Literal(), p.tok.Pos
 		p.next()
 		x := p.condWord()

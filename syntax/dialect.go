@@ -2013,6 +2013,35 @@ type Dialect struct {
 	// with neither leaves both false.
 	ExtendedPatternInCondition bool
 
+	// CompletionConditions enables `[[ -prefix … ]]` and `[[ -suffix … ]]`,
+	// the two completion-context tests, as one-operand conditions.
+	//
+	// zsh alone, and the other four have no such operator at all — `-prefix`
+	// is the completion system's, and dash has no `[[ ]]` — so this is
+	// additive grammar for one dialect rather than a divergence.
+	//
+	// They are in the **grammar** unconditionally there and the restriction
+	// is on where they may *run*. Measured 2026-09-11 and again 2026-09-12
+	// with `-n` against a script file, zsh 5.9.2: `[[ -prefix : ]]`,
+	// `[[ -prefix 'ab' ]]`, `[[ -prefix //(a|b)/ ]]` and `[[ -suffix : ]]`
+	// all parse, and running any of them answers `condition can only be used
+	// in completion function` at status 1. That split is the one this
+	// substrate draws everywhere, and it is what makes the gap a parser's: a
+	// completion function is a file, and a file that will not parse never
+	// gets as far as the restriction. Two files in an ordinary plugin tree
+	// reach it, both completions from `zsh-users/zsh-completions` (#1879).
+	//
+	// The operand is read the way a pattern operand is rather than the way
+	// `-o`'s option name is: `//(127.0.0.1|localhost)/` is one of the two
+	// real occurrences, and it is a pattern with a group in it.
+	//
+	// Deliberately **only these two**. The same shell parses `[[ -nosuch x
+	// ]]` as well and refuses it at run time with a different sentence, which
+	// is a decision to change the rule that an operator is either implemented
+	// or refused while reading — see docs/spec/grammar/conditions.md, and
+	// #965, which is that question and not this one.
+	CompletionConditions bool
+
 	// ParameterIsSetTest enables `[[ -v name ]]`, which asks whether a
 	// parameter is set rather than anything about its value.
 	//

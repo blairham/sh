@@ -232,6 +232,14 @@ func Dialect() syntax.Dialect {
 	// 5.9.2, which reads more kinds of name through it than the other two that
 	// have it; see interp.Semantics.ParameterIsSetSeesSpecials.
 	d.ParameterIsSetTest = true
+	// `[[ -prefix … ]]` and `[[ -suffix … ]]`, the completion-context tests.
+	// They are in the grammar unconditionally here and the restriction is on
+	// where they may *run* — `condition can only be used in completion
+	// function`, status 1, and fatal — which is why this is a parser flag and
+	// not a builtin's refusal: a completion function is a file, and a file
+	// that will not parse never gets as far as the restriction. Two files in
+	// an ordinary `~/.zi` tree reach it (#1879).
+	d.CompletionConditions = true
 	// A function definition's name is a *word*, so an expansion in one names
 	// the function the expansion produces: `w=foo; _p_${w}() { … }` defines
 	// `_p_foo`. This shell's alone — the other five refuse both spellings,
@@ -1991,6 +1999,10 @@ func Diagnostics() interp.Diagnostics {
 		// neither of the two a condition otherwise gives.
 		UnknownConditionOption:       "no such option: %[1]s",
 		UnknownConditionOptionStatus: 3,
+		// `[[ -prefix … ]]` and `[[ -suffix … ]]` reached outside a
+		// completion function. No verbs: the sentence names neither the
+		// operator nor the operand, measured over all three operand shapes.
+		CompletionConditionOutsideCompletion: "condition can only be used in completion function",
 		// zsh knows `-f` — it means functions to its own typeset — so what
 		// it refuses is the combination, and it says so without naming the
 		// letter it names in every other refusal.

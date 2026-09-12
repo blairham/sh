@@ -176,6 +176,21 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		// == 1 ]]` is 0 in zsh with the complaint already written.
 		r.diagf("%s\n", Wording(d.UnknownConditionOption, "no such option: %s", s))
 		return false, condStatus{code: d.UnknownConditionOptionStatus}
+	case "-prefix", "-suffix":
+		// The completion-context tests. One dialect's grammar has them
+		// unconditionally and the restriction is on where they may run, so
+		// reaching one anywhere else is a refusal rather than an answer —
+		// and a fatal one: measured 2026-09-12 over a script file, the line
+		// after it does not run.
+		//
+		// The operand is read and then dropped, which is what the trace
+		// above already did with it. Nothing about the word decides this:
+		// `[[ -prefix : ]]`, `[[ -prefix 'ab' ]]` and `[[ -prefix
+		// //(a|b)/ ]]` all answer the same sentence.
+		r.diagf("%s\n", Wording(r.diag().CompletionConditionOutsideCompletion,
+			"condition can only be used in completion function"))
+		r.ctl = controlExit
+		return false, condStatus{code: 1}
 	case "-e", "-f", "-d", "-s", "-r", "-w", "-x",
 		"-b", "-c", "-p", "-S", "-g", "-u", "-k", "-L", "-h":
 		// The file questions are `test`'s, answered by the same code: the

@@ -14137,6 +14137,23 @@ echo "st=$? alive"`,
 		Why:     "the counter-case for the lexer change: a `(` outside a regex operand still opens a subshell, which is what it would stop doing if the rule were not scoped to the operand",
 	},
 	{
+		ID: "cond/a-completion-condition", Category: "conditions",
+		Snippet:     `[[ -prefix : ]]; echo after`,
+		SyntaxError: true,
+		Why:         "one shell has the completion-context tests in its condition grammar unconditionally and restricts where they may *run*: the line parses there and answers `condition can only be used in completion function` at status 1, fatally, so `after` never prints. The other five have no such operator — `-prefix` is the completion system's — so this is additive grammar for one dialect, and it is the shape two completions in an ordinary plugin tree are written with",
+	},
+	{
+		ID: "cond/a-completion-condition-with-a-pattern-operand", Category: "conditions",
+		Snippet:     `[[ -prefix //(a|b)/ ]]; echo after`,
+		SyntaxError: true,
+		Why:         "the operand is read the way a *pattern* is rather than the way an option name is, which is the shape the real occurrence has — `[[ -prefix //(127.0.0.1|localhost)/ ]]` in a shipped completion. Same sentence and same status, so nothing about the word decides the refusal",
+	},
+	{
+		ID: "cond/a-completion-condition-with-no-operand", Category: "conditions",
+		Snippet: `[[ -prefix ]]; echo "st=$?"`,
+		Why:     "the boundary, and the row that says the pair falls back to being ordinary words: with nothing after it the condition is the bare-word test for non-emptiness and answers 0 — in the shell that *has* the operator as well as in the three that read the word as an ordinary one. Every other one-operand test demands its operand and complains without one, so adding these two without this row would have made one dialect refuse a line three other columns run. The two that do not answer 0 are not counter-examples: dash has no `[[ ]]` to put it in, and bash 3.2 is the odd one out against bash 5.3, reading `-prefix` as a conditional unary operator and calling the `]]` an unexpected argument to it",
+	},
+	{
 		ID: "param/the-names-with-a-prefix", Category: "parameter expansion",
 		Snippet: `ZQ_a=1; ZQ_b=2; echo ${!ZQ_@}`,
 		Why:     "yields the *names* rather than any value, sorted — bash and ksh93 have it and the other two call it a bad substitution, which is the same flag that governs `${!x}`",

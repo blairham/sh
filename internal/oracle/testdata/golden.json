@@ -2974,6 +2974,226 @@
         "TimedOut": false
       }
     },
+    "arith/a-failed-expansion-abandons-the-rest-of-the-line": {
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 1: 1/0: division by 0 (error token is \"0\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 1: 1/0: division by 0 (error token is \"0\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 1: 1/0: division by 0 (error token is \"0\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 1: arithmetic expression: division by zero: \"1/0\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 1: 1/0: divide by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:1: division by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-failed-expansion-in-a-for-list": {
+      "bash": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: arithmetic expression: division by zero: \"1/0\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: divide by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:2: division by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-failed-expansion-in-a-test-operand": {
+      "bash": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: arithmetic expression: division by zero: \"1/0\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: divide by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:2: division by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-failed-expansion-in-a-word": {
+      "bash": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: arithmetic expression: division by zero: \"1/0\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: divide by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:2: division by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-failed-expansion-in-an-assignment": {
+      "bash": {
+        "Stdout": "one~two st=1 x=[]",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two st=1 x=[]",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: arithmetic expression: division by zero: \"1/0\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: divide by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:2: division by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arith/a-failure-inside-a-value": {
       "bash": {
         "Stdout": "",

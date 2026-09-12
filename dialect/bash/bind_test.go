@@ -398,3 +398,84 @@ func bindActionNames() map[repl.Widget]bool {
 	}
 	return out
 }
+
+// TestTheCommandKeymapIsReadWhenTheEditorIsInIt closes the hole #1427 was
+// filed for: `bind -m vi-command` was stored and the map was never current, so
+// the binding could not fire.
+//
+// Measured under a pty against bash 5.3.15, with `set -o vi` and `bind -m
+// vi-command '"\C-xz": beginning-of-line'`: in command mode the key moves the
+// cursor to the start of the line, and in insert mode the same key does
+// nothing at all.
+func TestTheCommandKeymapIsReadWhenTheEditorIsInIt(t *testing.T) {
+	var buf strings.Builder
+	r := preset.Runner(dialecttest.Base{Stdout: &buf, Stderr: &buf})
+	r.Interactive = true
+	src := "set -o vi\n" +
+		`bind -m vi-command '"\C-xz": beginning-of-line'` + "\n" +
+		`bind -m vi-insert '"\C-xy": end-of-line'`
+	if _, err := r.Run(t.Context(), preset.Parse(t, src)); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	command := bash.KeyBindings(r, repl.KeymapViCommand)
+	if got, want := command["\x18z"], (repl.Binding{Widget: repl.WidgetBeginningOfLine}); got != want {
+		t.Errorf("^Xz in the command keymap = %v, want %v", got, want)
+	}
+	if _, present := command["\x18y"]; present {
+		t.Errorf("the insert map's key is in the command map: %v", command)
+	}
+	typing := bash.KeyBindings(r, repl.KeymapMain)
+	if got, want := typing["\x18y"], (repl.Binding{Widget: repl.WidgetEndOfLine}); got != want {
+		t.Errorf("^Xy in the typing keymap = %v, want %v", got, want)
+	}
+	if _, present := typing["\x18z"]; present {
+		t.Errorf("the command map's key is in the typing map: %v", typing)
+	}
+}
+
+// TestACommandKeyBoundToItsEmacsDefaultIsStillReported is the narrow case the
+// override filter used to swallow.
+//
+// The filter exists so that a key nobody touched reaches the editor's own
+// dispatch, and it compares against what the editor does *while typing*. In
+// command mode the same key means something else, so a person who writes
+// `bind -m vi-command '"\C-a": beginning-of-line'` has rebound something — and
+// dropping it as "already the default" would leave the key dead.
+func TestACommandKeyBoundToItsEmacsDefaultIsStillReported(t *testing.T) {
+	var buf strings.Builder
+	r := preset.Runner(dialecttest.Base{Stdout: &buf, Stderr: &buf})
+	r.Interactive = true
+	src := `bind -m vi-command '"\C-a": beginning-of-line'`
+	if _, err := r.Run(t.Context(), preset.Parse(t, src)); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	got, bound := bash.KeyBindings(r, repl.KeymapViCommand)["\x01"]
+	if !bound || got != (repl.Binding{Widget: repl.WidgetBeginningOfLine}) {
+		t.Errorf("^A in the command keymap = %v, %v, want the binding that was written", got, bound)
+	}
+}
+
+// TestViEditingIsTheOption — in this shell there is one way to ask for a
+// command mode and it is the editing mode, which is not true of the other
+// shell with an editor.
+func TestViEditingIsTheOption(t *testing.T) {
+	for _, c := range []struct {
+		src  string
+		want bool
+	}{
+		{src: "set -o vi", want: true},
+		{src: "set -o vi; set +o vi", want: false},
+		{src: "set -o vi; set -o emacs", want: false},
+		{src: ":", want: false},
+	} {
+		var buf strings.Builder
+		r := preset.Runner(dialecttest.Base{Stdout: &buf, Stderr: &buf})
+		r.Interactive = true
+		if _, err := r.Run(t.Context(), preset.Parse(t, c.src)); err != nil {
+			t.Fatalf("run %q: %v", c.src, err)
+		}
+		if got := bash.ViEditing(r); got != c.want {
+			t.Errorf("after %q, ViEditing = %v, want %v", c.src, got, c.want)
+		}
+	}
+}

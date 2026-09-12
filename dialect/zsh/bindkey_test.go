@@ -290,3 +290,67 @@ func bindkeyRunner(t *testing.T, src string) *interp.Runner {
 	}
 	return r
 }
+
+// TestTheCommandKeymapIsReadWhenTheEditorIsInIt closes the hole #1427 was
+// filed for: `bindkey -M vicmd` was stored and `vicmd` was never current, so
+// the binding could not fire.
+//
+// Measured under a pty against zsh 5.9.2, with `bindkey -v` and `bindkey -M
+// vicmd '^Xz' beginning-of-line`: in command mode the key moves the cursor to
+// the start of the line, and in insert mode the same key does nothing.
+func TestTheCommandKeymapIsReadWhenTheEditorIsInIt(t *testing.T) {
+	r := bindkeyRunner(t, "bindkey -v\n"+
+		"bindkey -M vicmd '^Xz' beginning-of-line\n"+
+		"bindkey -M viins '^Xy' end-of-line\n")
+	command := zsh.KeyBindings(r, repl.KeymapViCommand)
+	if got, want := command["\x18z"], (repl.Binding{Widget: repl.WidgetBeginningOfLine}); got != want {
+		t.Errorf("^Xz in vicmd = %v, want %v", got, want)
+	}
+	if _, present := command["\x18y"]; present {
+		t.Errorf("the viins key is in vicmd: %v", command)
+	}
+	typing := zsh.KeyBindings(r, repl.KeymapMain)
+	if got, want := typing["\x18y"], (repl.Binding{Widget: repl.WidgetEndOfLine}); got != want {
+		t.Errorf("^Xy in viins = %v, want %v", got, want)
+	}
+	if _, present := typing["\x18z"]; present {
+		t.Errorf("the vicmd key is in viins: %v", typing)
+	}
+}
+
+// TestACommandKeyBoundToItsEmacsDefaultIsStillReported is the narrow case the
+// override filter used to swallow: the filter compares against what this
+// editor does *while typing*, and in command mode the same key means something
+// else, so dropping it as "already the default" would leave the key dead.
+func TestACommandKeyBoundToItsEmacsDefaultIsStillReported(t *testing.T) {
+	r := bindkeyRunner(t, "bindkey -M vicmd '^A' beginning-of-line\n")
+	got, bound := zsh.KeyBindings(r, repl.KeymapViCommand)["\x01"]
+	if !bound || got != (repl.Binding{Widget: repl.WidgetBeginningOfLine}) {
+		t.Errorf("^A in vicmd = %v, %v, want the binding that was written", got, bound)
+	}
+}
+
+// TestViEditingIsAskedOfTwoCommands is the measurement that decided the seam's
+// shape.
+//
+// Under a pty against zsh 5.9.2: `bindkey -v` gives a working command mode and
+// leaves `set -o` reporting `emacs off` and `vi off`, while `set -o vi` gives
+// the same command mode and reports `vi on`. So the option cannot be read for
+// the answer and neither can the keymap alone — which is why repl asks the
+// dialect rather than reading interp's editing mode itself.
+func TestViEditingIsAskedOfTwoCommands(t *testing.T) {
+	for _, c := range []struct {
+		src  string
+		want bool
+	}{
+		{src: "bindkey -v\n", want: true},
+		{src: "set -o vi\n", want: true},
+		{src: "bindkey -v\nbindkey -e\n", want: false},
+		{src: "bindkey -e\n", want: false},
+		{src: ":\n", want: false},
+	} {
+		if got := zsh.ViEditing(bindkeyRunner(t, c.src)); got != c.want {
+			t.Errorf("after %q, ViEditing = %v, want %v", c.src, got, c.want)
+		}
+	}
+}

@@ -15,6 +15,11 @@ func Dialect() syntax.Dialect {
 	d := syntax.POSIX()
 	// dash expands aliases in a script, with no option to turn on, and by
 	// every route: `-c`, a file and standard input all expand.
+	// A here-document body line that joined *before* any text of it was
+	// written still reaches the delimiter — `\` alone over `ABC` ends an
+	// `ABC` document — and one that joined after text does not. bash and zsh
+	// take both and ksh93 neither (#2430).
+	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterAfterALeadingContinuation
 	d.AliasesExpandUnlessTold = true
 	d.ExpandAliasesInProgramText = syntax.RouteOnEveryRoute
 	// And it splices the body's text, so a newline in one is a line of the

@@ -101,6 +101,11 @@ func Dialect() syntax.Dialect {
 	// dash and zsh read the body from the whole input instead, so the `)`
 	// goes into it and the construct is never closed (#963).
 	d.HeredocEndsAtClosingParen = true
+	// A body line joined out of two physical ones is compared against the
+	// delimiter whole, so `A\` over `BC` ends an `ABC` document. dash and
+	// BusyBox ash take only a join that began at the start of a line and
+	// ksh93 takes neither (#2430).
+	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterOnTheJoinedLine
 	d.FunctionKeywordParens = true
 	// A name followed by `(` is a function definition here, whether or not
 	// the `)` comes next.

@@ -2688,6 +2688,11 @@ func Apply(r *interp.Runner) {
 	// Not removed but replaced: zsh has an `enable`, and it is a different
 	// builtin from the one the core carries. See enable.go.
 	registerEnable(r)
+	// `log` is in the table for `disable log` to reach: macOS's `/etc/zshrc`
+	// writes that line to keep the builtin out of the way of `/usr/bin/log`,
+	// and a shell that reads the system-wide files meets it before the first
+	// prompt (#2325). See log.go for what it does and does not do.
+	r.Register("log", logBuiltin)
 	// How zsh scripts actually change options, and how they change shells.
 	// See setopt.go and emulate.go.
 	registerSetopt(r)

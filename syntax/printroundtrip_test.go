@@ -96,7 +96,13 @@ import (
 // back: one row reading the two header spellings out of the same script and
 // one taking the keyword definition out through `functions` and back in
 // through `eval`. Both are ordinary keyword definitions here too.
-const keywordFunctionsInTheCorpus = 33
+//
+// Thirty-four since #2226, which needed the keyword to reach a question at
+// all: only a keyword-defined body has a local scope in the shell with no
+// `local`, so the row that asks what a declaration of `OPTIND` does to the
+// `getopts` cursor there is written with the word. Here it is one more
+// ordinary keyword definition.
+const keywordFunctionsInTheCorpus = 34
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 	// The arrangement a formatter asks for, alongside the zero value that a

@@ -76,6 +76,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"BracketCaretNegates", s.BracketCaretNegates, interp.Yes},
 		{"EqualsExpansion", s.EqualsExpansion, interp.Yes},
 		{"LastPipelineElementInCurrentShell", s.LastPipelineElementInCurrentShell, interp.Yes},
+		{"ProcessSubstitutionBodyReadsTheShellsInput", s.ProcessSubstitutionBodyReadsTheShellsInput, interp.Yes},
 		{"UnsetPositionalIsAllowed", s.UnsetPositionalIsAllowed, interp.No},
 		{"LastBackgroundPidIsUnsetBeforeAnyJob", s.LastBackgroundPidIsUnsetBeforeAnyJob, interp.No},
 		{"LastBackgroundPidIsZeroBeforeAnyJob", s.LastBackgroundPidIsZeroBeforeAnyJob, interp.Yes},

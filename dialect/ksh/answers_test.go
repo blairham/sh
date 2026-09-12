@@ -69,6 +69,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"BraceExpansion", s.BraceExpansion, interp.Yes},
 		{"BracketCaretNegates", s.BracketCaretNegates, interp.Yes},
 		{"EqualsExpansion", s.EqualsExpansion, interp.No},
+		{"ProcessSubstitutionBodyReadsTheShellsInput", s.ProcessSubstitutionBodyReadsTheShellsInput, interp.No},
 		{"UnsetPositionalIsAllowed", s.UnsetPositionalIsAllowed, interp.Yes},
 		{"LastBackgroundPidIsUnsetBeforeAnyJob", s.LastBackgroundPidIsUnsetBeforeAnyJob, interp.No},
 		{"LastBackgroundPidIsZeroBeforeAnyJob", s.LastBackgroundPidIsZeroBeforeAnyJob, interp.No},

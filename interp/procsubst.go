@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -90,7 +91,7 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 	// this path can happen consult.
 	action := r.act(Action{Kind: ActionOpen, Path: path, Write: kind != syntax.ProcSubstOut})
 
-	sub := r.substRunner()
+	sub := r.substRunner(kind)
 	if kind == syntax.ProcSubstOut {
 		sub.Stdout = r.Stdout
 	}
@@ -143,19 +144,10 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 			keep.letGo()
 		})
 	} else {
-		// The substituted command keeps the shell's own input here — only
-		// the writing direction replaces it — so the shell and the command
-		// it named may read that stream at the same time. That is the third
-		// stream and it needed the same guard as the other two, for the
-		// reason given for them: os/exec copies from a reader that is not a
-		// file on a goroutine of its own, so `cat <(exec /bin/echo sub)`
-		// with a caller-supplied reader had two of those copying out of one
-		// io.Reader, which the race detector reports inside strings.Reader.
-		// Both sides again, and again because a lock one party takes and the
-		// other does not excludes nothing.
-		sub.Stdin = r.lockedStdin()
-		r.Stdin = sub.Stdin
-
+		// What this direction's body *reads* was chosen in substRunner,
+		// where all three spellings are prepared — see substStdin for which
+		// stream that is and why. What is left here is the writing.
+		//
 		// `<(cmd)` writes cmd's output into the pipe, so this end is the
 		// writer — and a writer has to wait for its reader, which is why
 		// this half is on a goroutine and the other half is not. The wait
@@ -220,9 +212,22 @@ func (r *Runner) substBody(src string) (*syntax.File, bool) {
 // is the sharpest of them — #1830 is three weeks old — and a file-writing
 // body that had been given its own clone would have taken the terminal again
 // with nothing to say so.
-func (r *Runner) substRunner() *Runner {
+func (r *Runner) substRunner(kind syntax.SpanKind) *Runner {
 	sub := r.clone()
 	sub.inheritJobs(jobBoundarySubstitution)
+	// **Which input the body reads is one question, asked once.** `<(cmd)`
+	// and `=(cmd)` keep what this chooses; `>(cmd)` replaces it in procSub
+	// with the reading end of its own pipe, which is what that spelling *is*
+	// and is why it cannot observe the axis. Deciding it here rather than in
+	// each branch is the point of this helper — #1933 was filed before the
+	// file form landed precisely so the two could not be fixed apart.
+	if kind != syntax.ProcSubstOut {
+		sub.Stdin = r.substStdin()
+	}
+	// And the record itself does not cross: the body is a shell of its own,
+	// whose Stdin is now whatever it is going to read, so nothing inside it
+	// is still waiting for a pipe to be installed.
+	sub.shellStdin = nil
 	// **A substitution's body never takes the terminal.** The shell hands the
 	// terminal to a command it is *waiting for*, so that ^C and ^Z reach the
 	// command rather than the shell — see runWatched. A substitution's body
@@ -291,6 +296,44 @@ func (r *Runner) substRunner() *Runner {
 	return sub
 }
 
+// substStdin is the stream a substitution's body reads, guarded.
+//
+// Two questions in one place. **Which stream**: the input of the command the
+// word stands in, or the input of the *shell*. They are the same stream
+// everywhere but one — inside a pipeline element, whose input is the pipe —
+// which is why `cat <(cat)` cannot tell them apart and
+// `printf "PIPE\n" | cat <(cat)` can. The panel splits there, so it is an
+// axis and not a correction; see
+// Semantics.ProcessSubstitutionBodyReadsTheShellsInput for the measurements
+// and for what bounds it.
+//
+// Asked only where the two differ, which is what shellStdin being nil says.
+// An axis asked on the common path is an axis every script pays for and that
+// no dialect can leave unanswered — and here it would refuse `cat <(cat)` in
+// a Runner built without a preset, for a disagreement that snippet is not in.
+//
+// **Guarded**: the shell and the command it named may read one stream at the
+// same time, which is the third stream needing what the other two have — and
+// it needs it in both directions, because a lock one party takes and the
+// other does not excludes nothing. os/exec copies from a reader that is not a
+// file on a goroutine of its own, so `cat <(exec /bin/echo sub)` with a
+// caller-supplied reader had two of those copying out of one io.Reader, which
+// the race detector reports inside strings.Reader.
+//
+// The guard is written back where it came from, so that the shell's own reads
+// take it too and a second substitution in the same command finds it already
+// there rather than wrapping it again — `cat <(cat) <(cat)` is what a second
+// wrapper over one mutex would stop on, since a sync.Mutex is not reentrant.
+func (r *Runner) substStdin() io.Reader {
+	if r.shellStdin != nil && r.ask(r.sem().ProcessSubstitutionBodyReadsTheShellsInput,
+		"a process substitution's body reading the shell's input rather than the command's") {
+		r.shellStdin = r.lockReader(r.shellStdin)
+		return r.shellStdin
+	}
+	r.Stdin = r.lockedStdin()
+	return r.Stdin
+}
+
 // procSubToFile runs the body to completion with its output in a regular
 // file, and returns that file's path.
 //
@@ -321,7 +364,7 @@ func (r *Runner) procSubToFile(ctx context.Context, body *syntax.File) (string, 
 	r.procSubs = append(r.procSubs, procSubPipe{path: path})
 	action := r.act(Action{Kind: ActionOpen, Path: path, Write: true})
 
-	sub := r.substRunner()
+	sub := r.substRunner(syntax.ProcSubstFile)
 	sub.Stdout = f
 	sub.emit(ctx, Event{Kind: EventAccess, Action: action})
 	if _, err := sub.Run(ctx, body); err != nil {

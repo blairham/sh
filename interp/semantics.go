@@ -1736,6 +1736,50 @@ type Semantics struct {
 	// observable: the command has side effects.
 	ProcessSubstitutionInCondition Answer
 
+	// ProcessSubstitutionBodyReadsTheShellsInput hands a process
+	// substitution's body the standard input the *shell* has, rather than
+	// the standard input of the command whose word the substitution stands
+	// in.
+	//
+	// The two are the same stream almost everywhere, which is what makes the
+	// axis narrow and is why the obvious control row cannot see it: `cat
+	// <(cat)` reads the shell's input in every shell that has the construct,
+	// because the command's input *is* the shell's. They part inside a
+	// pipeline element, whose input is the pipe:
+	//
+	//	printf "PIPE\n" | cat <(cat)      with the shell's input a file
+	//	                                  holding OUTER
+	//
+	// zsh answers OUTER and is alone in it; bash 5.3, bash 3.2, bash as `sh`
+	// and ksh93 all answer PIPE, and dash has no such construct. Measured
+	// 2026-09-11 and again on the panel for #1933.
+	//
+	// The reading behind zsh's answer is that a pipeline element's pipe is
+	// one of that element's *redirections*, and a redirection is applied
+	// after the command's words have been expanded — so a substitution
+	// performed while expanding them is still looking at the shell's own
+	// input. That reading is what bounds the axis, and every boundary below
+	// is measured rather than inferred, because zsh agrees with the rest of
+	// the panel at each of them:
+	//
+	//	printf "PIPE\n" | { cat <(cat); }        PIPE everywhere
+	//	f() { cat <(cat); }; printf … | f        PIPE everywhere
+	//	printf "PIPE\n" | eval "cat <(cat)"      PIPE everywhere
+	//	printf "PIPE\n" | cat < <(cat)           PIPE everywhere
+	//
+	// A compound command's body, a function's body and an `eval`'s program
+	// all run after the element's redirections are in place, and a
+	// substitution written as a *redirection operand* is expanded with them
+	// rather than before them. So the answer reaches one simple command's
+	// words and stops there.
+	//
+	// `>(cmd)` does not observe it: that spelling gives the body the reading
+	// end of its own pipe, which replaces whatever it would otherwise have
+	// read. The axis is still asked for it through the one place all three
+	// spellings are prepared, so the file form `=(cmd)` — which only zsh has
+	// — cannot drift away from `<(cmd)`.
+	ProcessSubstitutionBodyReadsTheShellsInput Answer
+
 	// ConditionArithmeticErrorIsFatal abandons the input when an operand of a
 	// word-spelled comparison — `[[ 1+ -eq 0 ]]` — is not an expression the
 	// arithmetic parser can read.
@@ -6928,6 +6972,11 @@ func PosixSemantics() Semantics {
 		ArithInvalidOctalDigitIsError:   Yes,
 		RegexQuotingMakesLiteral:        No,
 		ProcessSubstitutionInCondition:  No,
+		// POSIX has no process substitution, so there is no text to read
+		// here either: the base takes the answer every panel member but one
+		// gives, which is that the body reads the input of the command the
+		// word stands in like any other child of it.
+		ProcessSubstitutionBodyReadsTheShellsInput: No,
 		// POSIX has no `[[ ]]` to fail in, so this is the substrate's floor
 		// rather than a reading of the text: an error is diagnosed and the
 		// shell goes on, which is what POSIX asks of every failure that is

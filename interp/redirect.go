@@ -47,6 +47,15 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	r.redirErr = false
 	r.badDupTarget = false
 	r.redirFds = nil
+	// This is where a pipeline element's pipe counts as installed, so the
+	// input it replaced stops being available to anything from here on —
+	// including a process substitution written as a redirection *operand*,
+	// which is measured: `printf "PIPE\n" | cat < <(cat)` reads the pipe in
+	// every shell that has the construct, where the same substitution as an
+	// argument reads the shell's input in one of them. Before the length
+	// check, because a command with no redirections has still reached the
+	// point its words are behind it. See Runner.shellStdin.
+	r.shellStdin = nil
 	if len(rs) == 0 {
 		return nil, nil
 	}

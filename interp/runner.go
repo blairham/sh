@@ -803,6 +803,22 @@ type Runner struct {
 	// apart from custom so that switching one on again gets back whatever
 	// was registered rather than the core's.
 	disabledBuiltins map[string]bool
+	// shellStdin is the standard input the shell had before this command's
+	// redirections were applied, where that differs from Stdin. Nil is the
+	// common case and means the two are the same stream.
+	//
+	// It exists for one reader: a process substitution's body, which one
+	// dialect hands the shell's own input rather than the input of the
+	// command the word stands in. The only place the two part is a pipeline
+	// element, whose input is the pipe — and a pipe is a redirection of that
+	// element, applied after its words are expanded. So runPipeline records
+	// what the pipe replaced here, `command` carries it across exactly one
+	// simple command, and applyRedirs clears it because that is the moment
+	// the pipe is, in the reading this implements, installed.
+	//
+	// See Semantics.ProcessSubstitutionBodyReadsTheShellsInput, which is
+	// where the panel split is written down, and procSub, which reads it.
+	shellStdin io.Reader
 	// midPipeline says this runner is an element of a pipeline whose status
 	// it does not decide — everything but the last. Kept because a signal
 	// that ends such an element is announced by one dialect and passed over
@@ -2681,6 +2697,16 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		if !r.inSubshell {
 			r.killed = c
 		}
+	}
+	// The input a pipeline's pipe replaced reaches this command's *words*
+	// and no further. A compound command's body, a function's body and an
+	// `eval`'s program all run after the element's redirections are in
+	// place, and the shell that parts from the panel here agrees with it at
+	// every one of them — `printf "PIPE\n" | { cat <(cat); }` reads the
+	// pipe in all five. So anything that is not one simple command drops it
+	// on the way in. See Runner.shellStdin.
+	if _, simple := c.(*syntax.SimpleCmd); !simple {
+		r.shellStdin = nil
 	}
 	switch x := c.(type) {
 	case *syntax.SimpleCmd:

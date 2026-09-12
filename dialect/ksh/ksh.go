@@ -576,6 +576,10 @@ func Semantics() interp.Semantics {
 	// only the moment differs. What this dialect does not yet reproduce is
 	// that moment: it reads the word and refuses it at the run.
 	s.ProcessSubstitutionInCondition = interp.No
+	// With bash and not with zsh on where a substitution's body reads from:
+	// `printf "PIPE\n" | cat <(cat)` prints the pipe's PIPE here, not the
+	// OUTER the shell itself is reading.
+	s.ProcessSubstitutionBodyReadsTheShellsInput = interp.No
 	// As zsh: `more tokens expected` and the input is abandoned.
 	s.ConditionArithmeticErrorIsFatal = interp.Yes
 	// And the parenthesized spelling is fatal too, which is the half the

@@ -455,6 +455,11 @@ func Semantics() interp.Semantics {
 	// path, which is false for anything a script would have written down.
 	// This shell alone — zsh refuses the word and ksh93 will not read it.
 	s.ProcessSubstitutionInCondition = interp.Yes
+	// And a substitution's body reads the input of the command it stands in,
+	// which inside a pipeline element is that element's pipe: `printf
+	// "PIPE\n" | cat <(cat)` with the shell reading a file of OUTER prints
+	// PIPE here, in bash 3.2, and under `sh`. zsh is the one that parts.
+	s.ProcessSubstitutionBodyReadsTheShellsInput = interp.No
 	// bash diagnoses an unreadable condition operand and carries on: the
 	// condition is false at status 1 and the next command runs. zsh and
 	// ksh93 abandon the input there.

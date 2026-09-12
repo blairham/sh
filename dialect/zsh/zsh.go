@@ -1308,6 +1308,7 @@ func Semantics() interp.Semantics {
 	// Alone in refusing an argument to `times`; dash and bash ignore it.
 	s.TimesRejectsArguments = interp.Yes
 	s.UnterminatedBracket = interp.BracketBadPattern
+	s.UnknownCharacterClass = interp.UnknownClassIsInert
 	// This shell does not glob the result of an expansion, so the axis is
 	// reached only through `${~spec}` and `setopt globsubst` — and it has an
 	// answer there rather than no answer at all. Measured 2026-09-12 in a

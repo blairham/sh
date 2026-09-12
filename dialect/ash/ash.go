@@ -152,6 +152,7 @@ func Semantics() interp.Semantics {
 	// read as a literal: `case a in [a) echo one;; *) echo def;; esac`
 	// reaches the default arm.
 	s.UnterminatedBracket = interp.BracketNoMatch
+	s.UnknownCharacterClass = interp.UnknownClassIsInert
 	// `$(( ))` with nothing in it is 0 at status 0, where dash wants a
 	// primary and stops the script.
 	s.EmptyArithExpressionIsAnError = interp.No

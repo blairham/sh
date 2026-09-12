@@ -445,6 +445,11 @@ func (r *Runner) patternMetaSet() string {
 type patternOpts struct {
 	caret   bool
 	bracket BracketPolicy
+	// unknownClass is what a `[:name:]` the shell has never heard of does to
+	// the bracket around it — see Semantics.UnknownCharacterClass. Read only
+	// when a pattern actually holds one, so the zero value here is "no
+	// bracket in this pattern asked".
+	unknownClass UnknownClassPolicy
 	// group says a parenthesised group in the pattern is a group rather than
 	// literal parentheses, and quantified says a `@?+*!` in front of one is
 	// its quantifier rather than an ordinary character.
@@ -1398,10 +1403,24 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 		i++
 	}
 	matched := false
+	// frozen is a bracket whose scan gave up part-way, which is what a class
+	// name the shell has not got does in two of the three readings. Nothing
+	// after it counts, and the *negation* does not survive it either: see the
+	// `]` below and Semantics.UnknownCharacterClass.
+	frozen := false
 	first := true
 	for i < len(p) {
 		if p[i] == ']' && !first {
 			i++
+			if frozen && !matched {
+				// The scan gave up before anything matched, and there is
+				// nothing for a `!` to invert: measured, `[!a[:nope:]b]`
+				// matches `q` where the name is inert and matches nothing
+				// where the scan stops. A match found *before* the name was
+				// reached still goes through the negation, which is the
+				// other half — `[!a[:nope:]b]` matches no `a` anywhere.
+				return p[i:], false
+			}
 			if negate {
 				return p[i:], !matched
 			}
@@ -1422,11 +1441,29 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 		if strings.HasPrefix(p[i:], "[:") {
 			if end := strings.Index(p[i+2:], ":]"); end >= 0 {
 				name := p[i+2 : i+2+end]
-				if inClass(name, c, o.classes) ||
-					(o.fold && inClass(name, swapUnitCase(c), o.classes)) {
+				i += 2 + end + 2
+				if !classKnown(name, o.classes) {
+					// A name this shell has not got — `[[:nope:]]`, and the
+					// empty `[[::]]` with it, which every column answers the
+					// same way. Three readings, measured 2026-09-12 with
+					// `[a[:nope:]b]`: `a` and `b` both match, only `a`
+					// matches, or neither does.
+					switch o.unknownClass {
+					case UnknownClassEndsTheScan:
+						frozen = true
+					case UnknownClassEmptiesTheBracket:
+						frozen, matched = true, false
+					}
+					// UnknownClassIsInert is the third, and it is the one
+					// with nothing to do: the name holds no character and
+					// the scan carries on past it.
+					continue
+				}
+				if !frozen &&
+					(inClass(name, c, o.classes) ||
+						(o.fold && inClass(name, swapUnitCase(c), o.classes))) {
 					matched = true
 				}
-				i += 2 + end + 2
 				continue
 			}
 		}
@@ -1445,14 +1482,14 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 			// which is between them by code point and is not between them
 			// byte for byte.
 			from, to := ordOf(lo), ordOf(hi)
-			if inRange(ordOf(c), from, to) ||
-				(o.fold && inRange(ordOf(swapUnitCase(c)), from, to)) {
+			if !frozen && (inRange(ordOf(c), from, to) ||
+				(o.fold && inRange(ordOf(swapUnitCase(c)), from, to))) {
 				matched = true
 			}
 			i = after
 			continue
 		}
-		if eqUnit(lo, c, o.fold) {
+		if !frozen && eqUnit(lo, c, o.fold) {
 			matched = true
 		}
 		i = next
@@ -1531,6 +1568,30 @@ func hasUnterminatedBracket(p string) bool {
 // and the ones nearly every pattern uses; then whatever else the dialect
 // declared. A name in neither set matches nothing and says nothing, at status
 // 0, which is measured across the whole panel — see [Semantics.PatternClasses].
+// classKnown reports whether the shell has a character class of this name at
+// all, which is a different question from whether a character is in it: an
+// unknown name is the axis Semantics.UnknownCharacterClass answers, and a
+// known one that simply does not hold this character is nothing at all.
+//
+// The empty name counts as unknown, which is measured: `[a[::]b]` answers
+// exactly as `[a[:nope:]b]` does in every column.
+func classKnown(name string, extra patternClasses) bool {
+	return posixClassName(name) || classDeclared(extra.names, name)
+}
+
+// posixClassName is the roster inPosixClass answers, as names. Written out
+// beside it rather than derived from it, because "is this a class" and "is
+// this character in it" are different questions and only the first can be
+// asked without a character to ask it about.
+func posixClassName(name string) bool {
+	switch name {
+	case "alnum", "alpha", "blank", "cntrl", "digit", "graph",
+		"lower", "print", "punct", "space", "upper", "xdigit":
+		return true
+	}
+	return false
+}
+
 func inClass(name string, unit string, extra patternClasses) bool {
 	if inPosixClass(name, unit) {
 		return true
@@ -1775,6 +1836,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 	return r.extendedPatternOpts(patternOpts{
 		caret:        r.caretNegates(pattern),
 		bracket:      BracketLiteral,
+		unknownClass: r.unknownClassPolicy(pattern),
 		chars:        r.patternCountsCharacters(append([]string{pattern}, subjects...)...),
 		group:        r.dialect().PatternAlternation,
 		topGroup:     r.dialect().PatternTopLevelAlternation,
@@ -1817,4 +1879,43 @@ func (r *Runner) patternClasses(pattern string) patternClasses {
 		c.word, _ = r.getVar("WORDCHARS")
 	}
 	return c
+}
+
+// unknownClassPolicy resolves Semantics.UnknownCharacterClass, and asks the
+// axis only where the pattern actually holds a class name this shell has not
+// got — the shape caretNegates uses, and for the same reason: a shell with no
+// answer must not be refused over a question the pattern never poses.
+//
+// The roster is the dialect's, so the same name can be known in one shell and
+// unknown in another. That is what makes this a question about the *pair* and
+// not about a fixed list of names.
+func (r *Runner) unknownClassPolicy(pattern string) UnknownClassPolicy {
+	if !patternHasAnUnknownClass(pattern, r.patternClasses(pattern)) {
+		return r.sem().UnknownCharacterClass
+	}
+	return r.unknownCharacterClass()
+}
+
+// patternHasAnUnknownClass reports whether pattern holds a closed `[:name:]`
+// whose name is not one this shell has.
+//
+// The `:]` is looked for after the opening `[:`, which is matchBracket's own
+// rule and has to be, or the two would disagree about which text is a name —
+// see the comment there and #1431, which is the unterminated case this
+// deliberately does not reach.
+func patternHasAnUnknownClass(pattern string, classes patternClasses) bool {
+	for i := 0; i+1 < len(pattern); i++ {
+		if pattern[i] != '[' || pattern[i+1] != ':' {
+			continue
+		}
+		end := strings.Index(pattern[i+2:], ":]")
+		if end < 0 {
+			continue
+		}
+		if !classKnown(pattern[i+2:i+2+end], classes) {
+			return true
+		}
+		i += 2 + end + 1
+	}
+	return false
 }

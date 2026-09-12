@@ -13981,6 +13981,21 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the same fault reached by three more routes, which is what says it was in the *item* and not in how `#` was read. The shell with them prints `[X]`, `[]`, `[bX]` and `[X]`: `(#c2)` is a count and never touches the `#` scan at all, a single `#` is zero-or-more, and `[a-z]##` is the control that always worked — a range has no inner `]`. Ours printed `[abX]`, `[abX]`, `[bX]` and `[X]`, so the two class spellings failed to match anything while the range matched correctly. The third field is a **second** non-discriminating form worth recording beside the `//` one: the *shortest* match of one-or-more is one character, which is exactly what the bug produced, so `#` and `%` are as blind to this as `//` is",
 	},
 	{
+		ID: "pat/a-class-name-this-shell-has-not-got", Category: "pattern matching",
+		Snippet: `t() { eval "case \"\$2\" in ($1) printf Y;; *) printf n;; esac"; }; for s in a b q; do printf "%s=" "$s"; t "[a[:nope:]b]" "$s"; printf " "; done; echo`,
+		Why:     "a character class that is *properly closed* and simply has a name the shell does not know, which is three readings and not one: bash and zsh leave it inert and answer `a=Y b=Y`, dash stops the bracket's scan where the name stands and answers `a=Y b=n`, and ksh93 empties the whole bracket and answers `a=n b=n`. bash 3.2 answers with dash. A single-member probe cannot see any of it — `[[:nope:]]` alone is a miss in every column, because there is no other member for the unknown name to have an effect on",
+	},
+	{
+		ID: "pat/an-unknown-class-name-after-a-known-one", Category: "pattern matching",
+		Snippet: `t() { eval "case \"\$2\" in ($1) printf Y;; *) printf n;; esac"; }; for s in a A b; do printf "%s=" "$s"; t "[a[:upper:][:nope:]b]" "$s"; printf " "; done; for s in a q; do printf "%s=" "$s"; t "[[:nope:]a]" "$s"; printf " "; done; for s in a q; do printf "%s=" "$s"; t "[!a[:nope:]b]" "$s"; printf " "; done; echo`,
+		Why:     "the three rows that separate the two shells the row above puts together. A *known* class in front of the unknown one still matches in dash (`A=Y`) and does not in ksh93, which is what says dash gives up at the name where ksh93 empties the bracket whatever its position. `[[:nope:]a]` is the same statement from the other side: nothing written after the name counts in dash. And the negation does not survive the give-up either — `[!a[:nope:]b]` matches `q` where the name is inert and matches nothing in dash, though a set of just `a` negated would hold it",
+	},
+	{
+		ID: "pat/an-empty-class-name-is-an-unknown-one", Category: "pattern matching",
+		Snippet: `t() { eval "case \"\$2\" in ($1) printf Y;; *) printf n;; esac"; }; for s in a b; do printf "%s=" "$s"; t "[a[::]b]" "$s"; printf " "; done; for s in a b; do printf "%s=" "$s"; t "[a[:nope:]b]" "$s"; printf " "; done; echo`,
+		Why:     "`[::]` is a class whose name is nothing at all, and every column answers it exactly as it answers a name it does not recognize — the two halves are side by side so the record shows the agreement rather than asserting it. Worth pinning because the empty name is the spelling a reader would expect to be a special case, and it is not one anywhere",
+	},
+	{
 		ID: "pat/a-class-that-never-closes-is-not-one", Category: "pattern matching",
 		Snippet: `setopt extendedglob 2>/dev/null; v="cape[X"; echo "[${v##[[:space]##}]"`,
 		Why:     "the other end of the same scan: `[:` with no `:]` after it is not a class, so the bracket is the ordinary one holding `[`, `:`, `s`, `p`, `a`, `c` and `e` — and the closure repeats *that*. The shell with closures prints `[X]`, having taken all six of `cape[`; the rest leave the value alone, having no closure to read. It is the row that says the class case is a special reading and not the only reading, which a scan that swallowed the rest of the pattern on a missing `:]` would fail while every well-formed class still passed",

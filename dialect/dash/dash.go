@@ -248,6 +248,7 @@ func Semantics() interp.Semantics {
 	s.EchoExpandsCapitalEscEscape = interp.No
 	s.LengthOfSpecialIsCount = interp.No
 	s.UnterminatedBracket = interp.BracketNoMatch
+	s.UnknownCharacterClass = interp.UnknownClassEndsTheScan
 	// The bash column's reading of a value's backslash, measured the same
 	// way and on the same day: `v='a\*'; set -- $v` is `a\*` here, so the
 	// `*` behind the backslash is not a metacharacter (#1367).

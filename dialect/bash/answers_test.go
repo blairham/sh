@@ -137,6 +137,9 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnterminatedBracket, interp.BracketLiteral; got != want {
 		t.Errorf("UnterminatedBracket = %v, want %v", got, want)
 	}
+	if got, want := s.UnknownCharacterClass, interp.UnknownClassIsInert; got != want {
+		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
+	}
 	// The answer that needed a third value: an escaped separator is trimmed
 	// off a `read` value that took a remainder and left alone on one that was
 	// its own field (#1360).

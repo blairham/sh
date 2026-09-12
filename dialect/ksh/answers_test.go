@@ -131,6 +131,9 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnterminatedBracket, interp.BracketLiteral; got != want {
 		t.Errorf("UnterminatedBracket = %v, want %v", got, want)
 	}
+	if got, want := s.UnknownCharacterClass, interp.UnknownClassEmptiesTheBracket; got != want {
+		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
+	}
 	if got, want := s.BackgroundJobInput, interp.BackgroundJobInputEmptyUnlessClosed; got != want {
 		t.Errorf("BackgroundJobInput = %v, want %v", got, want)
 	}

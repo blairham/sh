@@ -474,7 +474,9 @@ func Semantics() interp.Semantics {
 	// green, so the whole set is swept rather than the one that was
 	// noticed: every corpus snippet was run through this shell's binary and
 	// every "no dialect was chosen" collected, which found nineteen sites
-	// and not one.
+	// and not one — and then twenty, because answering one uncovers the
+	// next question on the same path, so the sweep was re-run until it
+	// stopped moving.
 	//
 	// Measured the same way the rest of this file was: BusyBox v1.37.0's
 	// `/bin/ash` in the `alpine:3` image, 2026-09-12, each probe being the
@@ -501,6 +503,14 @@ func Semantics() interp.Semantics {
 	// -t 0.1`, is status 1 with the variable left alone — where zsh answers
 	// 0 with the whole line. This is the row #2272 was filed on (#644).
 	s.ReadTimeoutBoundsReadability = interp.No
+	// An expired `-t` touches no name, so the variable keeps what it held —
+	// and this axis only became reachable once the one above was answered,
+	// which is the layering the sweep had to be re-run to see. Measured with
+	// the probe ReadTimeoutKeepsWhatArrived documents, half a line and then a
+	// stall: `{ printf part; sleep 0.5; printf 'ial\n'; } | { v=old; read -t
+	// 0.2 v; echo "$? [$v]"; }` is `1 [old]` here, against bash 5.3's `142
+	// [part]`. ksh93's row (#2272).
+	s.ReadTimeoutKeepsWhatArrived = interp.No
 	// A count does not stop `read` judging the names after the first:
 	// `printf 'XYZW\n' | read -n 3 a 1bad b` complains `read: '1bad': bad
 	// variable name` at 1, exactly as it does without the count, and `-n 3`
@@ -573,21 +583,21 @@ func Semantics() interp.Semantics {
 	// it down. None is a guess deferred; each is a measurement the vector
 	// cannot yet hold.
 	//
-	//   DollarSingleNulTruncates — a *third* reading. `x=$'a\0b'` leaves
+	//   DollarSingleNulTruncates — a *third* reading (#2276). `x=$'a\0b'` leaves
 	//   `ab` at length 2: the NUL is neither kept (zsh, length 3) nor the
 	//   end of the span (bash and ksh93, length 1) but dropped, and the
 	//   octal and hex spellings agree. `Answer` has no room for it, so a
 	//   value here would have to be one of the two wrong ones.
 	//
 	//   ReadonlyRecordsTheCompoundAttribute — this shell has no letter to
-	//   ask it with. `readonly -a a` is `readonly: illegal option -a` and
+	//   ask it with (#2277). `readonly -a a` is `readonly: illegal option -a` and
 	//   there is no `typeset` at all. The refusal our binary reaches is
 	//   `readonly`'s option set being fixed in the interpreter rather than
 	//   the dialect's, which is a gap ksh93 has today for the same reason —
 	//   it refuses the same corpus row, on `main`, for want of the same
 	//   letter.
 	//
-	//   Diagnostics.UlimitListing — measured in full (fifteen rows, `core
+	//   Diagnostics.UlimitListing — measured in full (#2278: fifteen rows, `core
 	//   file size (blocks)         (-c) unlimited` and its fellows), and
 	//   five of them — `-e`, `-i`, `-q`, `-r`, `-x` — name resources no
 	//   [interp.Resource] constant does. It was also measured on Linux,

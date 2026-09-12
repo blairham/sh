@@ -272,13 +272,13 @@ const (
 // costs whatever filling in a struct costs, and having both in the table is
 // what makes that visible rather than assumed.
 func Ours(dir string) []Subject {
-	ours := func(name, bin, rc, work string) Subject {
+	ours := func(name, bin, rc, work string, args ...string) Subject {
 		return Subject{
 			Name:         name,
 			Path:         filepath.Join(dir, bin),
 			CommandArgs:  []string{"-c"},
-			PromptArgs:   []string{"-i"},
-			RCPromptArgs: []string{"-i"},
+			PromptArgs:   append(append([]string{}, args...), "-i"),
+			RCPromptArgs: append(append([]string{}, args...), "-i"),
 			PatternWork:  work,
 			// A home directory of its own with the file in it, which is how
 			// a person's shell finds theirs and how the reference shells are
@@ -291,7 +291,13 @@ func Ours(dir string) []Subject {
 	}
 	return []Subject{
 		ours("ours-bash", "our-bash", ".bashrc", bashPatternWork),
-		ours("ours-zsh", "our-zsh", ".zshrc", zshPatternWork),
+		// `-d` for the same reason the reference zsh above is given it, and
+		// it became necessary here for the same reason: since #1717 this
+		// shell reads the machine's `/etc/zshrc` too, and on macOS that file
+		// sets a prompt of its own, which replaced the sentinel and left the
+		// read waiting for a mark that was never coming. The reference had
+		// the flag from the start; ours only now has one to give.
+		ours("ours-zsh", "our-zsh", ".zshrc", zshPatternWork, "-d"),
 	}
 }
 

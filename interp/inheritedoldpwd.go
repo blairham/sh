@@ -105,10 +105,17 @@ func (r *Runner) settleInheritedOldpwd() {
 		if !ok {
 			return
 		}
-		// Through the gate like every other stat, so a policy sees the one
-		// probe the shell makes on the caller's behalf at startup.
-		if fi, err := r.stat(r.absolute(v)); err == nil && fi.IsDir() {
-			return
+		// The empty value is decided before the stat, because resolving it
+		// against the shell's directory would answer the wrong question:
+		// filepath.Abs("") is the directory itself, which is a directory, so
+		// `OLDPWD= sh -c 'echo ${OLDPWD-UNSET}'` would keep an empty value
+		// where the shell measured drops it.
+		if v != "" {
+			// Through the gate like every other stat, so a policy sees the
+			// one probe the shell makes on the caller's behalf at startup.
+			if fi, err := r.stat(r.absolute(v)); err == nil && fi.IsDir() {
+				return
+			}
 		}
 		r.unsetOneName("OLDPWD")
 	case InheritedOldpwdTaken, InheritedOldpwdUnspecified:

@@ -2455,6 +2455,37 @@ echo "reached-after st=$?"`,
 		Why:     "bash and ksh93 call this an error and dash and zsh stay where they are and report success, which is the quieter answer and the surprising one",
 	},
 	{
+		ID: "cd/an-inherited-oldpwd-that-is-not-a-directory", Category: "cd",
+		Env: []string{"OLDPWD=/nonexistent-oldpwd"},
+		// The variable rather than a `cd`, which is the whole finding:
+		// reading this through `cd -` cannot tell a value that was dropped
+		// from a `cd` that refused it, and #1490 read the second where the
+		// first is what happens. Classified rather than printed, so no row
+		// depends on where the scratch directory is.
+		Snippet: `case ${OLDPWD-UNSET} in UNSET) echo unset;; /nonexistent-oldpwd) echo kept;; "$PWD") echo pwd;; *) echo other;; esac`,
+		Why:     "an OLDPWD handed to the shell in its environment is judged before the first command runs, and the panel gives three answers: dash and ksh93 keep whatever they were given, bash drops a value that does not name a directory, and zsh reads none of it and starts the name at $PWD",
+	},
+	{
+		ID: "cd/an-inherited-oldpwd-that-is-a-directory", Category: "cd",
+		Env:     []string{"OLDPWD=/"},
+		Snippet: `case ${OLDPWD-UNSET} in UNSET) echo unset;; /) echo kept;; "$PWD") echo pwd;; *) echo other;; esac`,
+		Why:     "the other half, and the one that separates the two bashes: 5.3 honors an inherited OLDPWD that names a directory and 3.2 ignores an inherited one whatever it names, which is a dated answer rather than a disputed one. zsh still reads none of it",
+	},
+	{
+		ID: "cd/dash-with-an-inherited-oldpwd-that-is-not-a-directory", Category: "cd",
+		Env: []string{"OLDPWD=/nonexistent-oldpwd"},
+		// No `pwd` after it: whether the shell moved is already carried by
+		// the status and the diagnostic, and printing the directory would
+		// make the row depend on the machine.
+		Snippet: `cd -; echo "st=$?"`,
+		Why:     "the row #1490 was filed from, and it follows from the case above rather than from anything in `cd`: bash says `OLDPWD not set` because by now it is unset, zsh has nothing unusable to refuse and reports 0, and dash and ksh93 name the path they kept",
+	},
+	{
+		ID: "cd/an-oldpwd-set-in-the-shell-that-is-not-a-directory", Category: "cd",
+		Snippet: `cd /; OLDPWD=/nonexistent-oldpwd; cd -; echo "st=$?"`,
+		Why:     "the contrast that shows the case above is not a branch in `cd`: given the same value by an assignment rather than by the environment, all three bash columns name the path exactly as dash and ksh93 do. zsh is the one column that differs from its own row above, because its `cd -` follows the shell's own directory history rather than the variable",
+	},
+	{
 		ID: "cd/dash-announces-where-it-went", Category: "cd",
 		// Whether anything was printed rather than what it was: the path
 		// itself would measure symlink resolution instead, which is a

@@ -129,7 +129,7 @@ type guarded struct {
 
 func (g guarded) Run() int {
 	code := g.m.Run()
-	left, err := waitForStrays(os.Getpid(), g.marker, g.grace)
+	left, dead, err := waitForLeaks(os.Getpid(), g.marker, g.grace)
 	if err != nil {
 		// A census that cannot be taken is reported and not enforced.
 		// Refusing to report the tests over a missing `ps` would trade a real
@@ -137,17 +137,30 @@ func (g guarded) Run() int {
 		fmt.Fprintf(os.Stderr, "childguard: %v — not guarding\n", err)
 		return code
 	}
-	if len(left) == 0 {
+	if len(left) == 0 && len(dead) == 0 {
 		return code
 	}
-	fmt.Fprintf(os.Stderr, "\nchildguard: the tests left %d process(es) whose command line names %q:\n", len(left), g.marker)
-	for _, p := range left {
-		fmt.Fprintf(os.Stderr, "\t%d (parent %d)\t%s\n", p.PID, p.PPID, p.Command)
+	if len(left) > 0 {
+		fmt.Fprintf(os.Stderr, "\nchildguard: the tests left %d process(es) whose command line names %q:\n", len(left), g.marker)
+		for _, p := range left {
+			fmt.Fprintf(os.Stderr, "\t%d (parent %d)\t%s\n", p.PID, p.PPID, p.Command)
+		}
+		fmt.Fprint(os.Stderr, "Each of these is a process this run started and did not "+
+			"wait for, or that was never told there was nothing left for it to do. "+
+			"They reparent to init when this binary exits and stay until something "+
+			"kills them.\n")
 	}
-	fmt.Fprint(os.Stderr, "Each of these is a process this run started and did not "+
-		"wait for, or that was never told there was nothing left for it to do. "+
-		"They reparent to init when this binary exits and stay until something "+
-		"kills them.\n")
+	if len(dead) > 0 {
+		fmt.Fprintf(os.Stderr, "\nchildguard: the tests left %d process(es) exited and unreaped:\n", len(dead))
+		for _, p := range dead {
+			fmt.Fprintf(os.Stderr, "\t%d (parent %d)\t%s\n", p.PID, p.PPID, p.Command)
+		}
+		fmt.Fprint(os.Stderr, "Each of these is a child this binary started and never "+
+			"called wait on. The kernel clears them when the binary exits, so this "+
+			"is bounded where a stray above is not — but \"started and never waited "+
+			"for\" is the same sentence, one step short of the same consequence, and "+
+			"a shell that does it in a long session accumulates them for real.\n")
+	}
 	if code == 0 {
 		return 1
 	}
@@ -168,14 +181,50 @@ func Holding(root int, marker string) ([]Process, error) {
 	return strays(all, root, marker), nil
 }
 
-// waitForStrays polls until nothing is left or the grace period is up.
-func waitForStrays(root int, marker string, grace time.Duration) ([]Process, error) {
+// Unreaped is the descendants of root that have exited and that nobody has
+// called wait on — zombies.
+//
+// A separate question from Holding and deliberately not folded into it. A
+// stray holds a descriptor, a pipe and memory, and lasts until something kills
+// it; a zombie holds a process-table slot and is cleared by the kernel when
+// this binary exits. The second is bounded where the first is not, which is
+// why #972 shipped the marker census without this one.
+//
+// It is here now because the bound is not the whole story. "Started and never
+// waited for" is the same sentence as a stray's, and a shell that does it at a
+// prompt rather than in a test accumulates zombies over a session. Measured on
+// interp's suite, a clean run ended with 55 of them — every one from a test
+// fake standing in for the front end's waitpid and doing none of the waiting,
+// and none of them the shell's (#1006). At zero it is worth keeping at zero,
+// which a census can say and a review cannot.
+//
+// No marker, unlike Holding, and it needs none: a marker exists to tell a leak
+// from a background job that was the point, and a *live* background job is not
+// defunct. A zombie is unambiguous.
+func Unreaped(root int) ([]Process, error) {
+	all, err := census()
+	if err != nil {
+		return nil, err
+	}
+	return unreaped(all, root), nil
+}
+
+// waitForLeaks polls until nothing is left or the grace period is up.
+//
+// Both questions on one clock. Asking them in sequence would make a run that
+// leaks neither pay the grace period twice, and a run that leaks one of them
+// wait out the other's.
+func waitForLeaks(root int, marker string, grace time.Duration) (left, dead []Process, err error) {
 	const step = 100 * time.Millisecond
 	deadline := time.Now().Add(grace)
 	for {
-		left, err := Holding(root, marker)
-		if err != nil || len(left) == 0 || !time.Now().Before(deadline) {
-			return left, err
+		all, cerr := census()
+		if cerr != nil {
+			return nil, nil, cerr
+		}
+		left, dead = strays(all, root, marker), unreaped(all, root)
+		if (len(left) == 0 && len(dead) == 0) || !time.Now().Before(deadline) {
+			return left, dead, nil
 		}
 		time.Sleep(step)
 	}
@@ -223,6 +272,23 @@ func census() ([]Process, error) {
 // a subshell, and a process one generation further down is no less this run's
 // to have left behind.
 func strays(all []Process, root int, marker string) []Process {
+	return below(all, root, func(p Process) bool { return strings.Contains(p.Command, marker) })
+}
+
+// defunctMark is how `ps` renders a process that has exited and not been
+// waited for. Darwin prints it alone and Linux prints it after the command in
+// brackets, so the test is containment rather than equality.
+const defunctMark = "<defunct>"
+
+// unreaped is the descendants of root that `ps` calls defunct. Children only
+// in practice — a zombie's children are reparented, so it has none — but the
+// walk is the same one, since the question is still "is this ours".
+func unreaped(all []Process, root int) []Process {
+	return below(all, root, func(p Process) bool { return strings.Contains(p.Command, defunctMark) })
+}
+
+// below is the descendants of root, other than root, that want reports.
+func below(all []Process, root int, want func(Process) bool) []Process {
 	mine := map[int]bool{root: true}
 	// Repeated until it stops growing, because `ps` orders by pid and a child
 	// can be listed before its parent — a single pass would miss a
@@ -238,7 +304,7 @@ func strays(all []Process, root int, marker string) []Process {
 	}
 	var found []Process
 	for _, p := range all {
-		if p.PID != root && mine[p.PID] && strings.Contains(p.Command, marker) {
+		if p.PID != root && mine[p.PID] && want(p) {
 			found = append(found, p)
 		}
 	}

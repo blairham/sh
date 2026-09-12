@@ -1757,155 +1757,134 @@ type Semantics struct {
 	LoginShowsLInDollarDash Answer
 
 	// ArithIntegerOperatorRefusesFloat rejects a float where only an integer
-	// will do — `7 % 2.5`, `1.5 & 1`, a shift. ksh93 says yes and refuses;
-	// zsh says no and truncates. It does not arise in a shell without floats,
-	// which is why bash and dash leave it unanswered.
+	// will do — `7 % 2.5`, `1.5 & 1`, a shift — rather than truncating it. It
+	// does not arise without floats, which is why a preset with no float
+	// arithmetic leaves it unanswered.
 	ArithIntegerOperatorRefusesFloat Answer
 
-	// ArithNegativeExponentIsError refuses `2**-1` rather than answering
-	// with a float. bash says yes and stops the expression; ksh93 and zsh
-	// say no and answer 0.5. It does not arise where the grammar has no
-	// `**`, which is why dash leaves it unanswered.
+	// ArithNegativeExponentIsError refuses `2**-1` and stops the expression,
+	// rather than answering 0.5. It does not arise where the grammar has no
+	// `**`, which is why such a preset leaves it unanswered.
 	ArithNegativeExponentIsError Answer
 
 	// ProcessSubstitutionInCondition lets `<(cmd)` stand as a condition's
 	// operand — `[[ $v == <(cmd) ]]` — and be performed there.
 	//
-	// bash alone. zsh reads the word and then refuses it, at status 2 and in
-	// a sentence of its own; ksh93 refuses earlier still, while reading, and
-	// dash has no `[[ ]]` to refuse it in. So the answer is no for three of
-	// the four, and what differs between them is only when and in what words
-	// — which is exactly the split between this axis and Diagnostics.
+	// A No may be reached at different moments: the word can be read and then
+	// refused in a sentence of its own, or refused earlier still while reading,
+	// and a grammar with no `[[ ]]` never reaches the question. What differs
+	// between those is only when and in what words — which is exactly the split
+	// between this axis and [Diagnostics].
 	//
-	// It is asked *before* the substitution is performed. A shell that
-	// refuses the word must not have started the command first, and that is
-	// observable: the command has side effects.
+	// It is asked *before* the substitution is performed. Refusing the word must
+	// not have started the command first, and that is observable: the command
+	// has side effects.
 	ProcessSubstitutionInCondition Answer
 
-	// ProcessSubstitutionBodyReadsTheShellsInput hands a process
-	// substitution's body the standard input the *shell* has, rather than
-	// the standard input of the command whose word the substitution stands
-	// in.
+	// ProcessSubstitutionBodyReadsTheShellsInput hands a process substitution's
+	// body the standard input the *shell* has, rather than the standard input of
+	// the command whose word the substitution stands in.
 	//
 	// The two are the same stream almost everywhere, which is what makes the
-	// axis narrow and is why the obvious control row cannot see it: `cat
-	// <(cat)` reads the shell's input in every shell that has the construct,
-	// because the command's input *is* the shell's. They part inside a
-	// pipeline element, whose input is the pipe:
+	// axis narrow and is why the obvious control row cannot see it: `cat <(cat)`
+	// reads the shell's input under either answer, because the command's input
+	// *is* the shell's. They part inside a pipeline element, whose input is the
+	// pipe:
 	//
 	//	printf "PIPE\n" | cat <(cat)      with the shell's input a file
 	//	                                  holding OUTER
 	//
-	// zsh answers OUTER and is alone in it; bash 5.3, bash 3.2, bash as `sh`
-	// and ksh93 all answer PIPE, and dash has no such construct. Measured
-	// 2026-09-11 and again on the panel for #1933.
+	// Yes answers OUTER and No answers PIPE.
 	//
-	// The reading behind zsh's answer is that a pipeline element's pipe is
-	// one of that element's *redirections*, and a redirection is applied
-	// after the command's words have been expanded — so a substitution
-	// performed while expanding them is still looking at the shell's own
-	// input. That reading is what bounds the axis, and every boundary below
-	// is measured rather than inferred, because zsh agrees with the rest of
-	// the panel at each of them:
+	// The reading behind Yes is that a pipeline element's pipe is one of that
+	// element's *redirections*, and a redirection is applied after the command's
+	// words have been expanded — so a substitution performed while expanding
+	// them is still looking at the shell's own input. That reading is what
+	// bounds the axis, and every boundary below is measured rather than
+	// inferred, because both answers agree at each of them:
 	//
-	//	printf "PIPE\n" | { cat <(cat); }        PIPE everywhere
-	//	f() { cat <(cat); }; printf … | f        PIPE everywhere
-	//	printf "PIPE\n" | eval "cat <(cat)"      PIPE everywhere
-	//	printf "PIPE\n" | cat < <(cat)           PIPE everywhere
+	//	printf "PIPE\n" | { cat <(cat); }        PIPE either way
+	//	f() { cat <(cat); }; printf … | f        PIPE either way
+	//	printf "PIPE\n" | eval "cat <(cat)"      PIPE either way
+	//	printf "PIPE\n" | cat < <(cat)           PIPE either way
 	//
-	// A compound command's body, a function's body and an `eval`'s program
-	// all run after the element's redirections are in place, and a
-	// substitution written as a *redirection operand* is expanded with them
-	// rather than before them. So the answer reaches one simple command's
-	// words and stops there.
+	// A compound command's body, a function's body and an `eval`'s program all
+	// run after the element's redirections are in place, and a substitution
+	// written as a *redirection operand* is expanded with them rather than
+	// before them. So the answer reaches one simple command's words and stops
+	// there.
 	//
-	// `>(cmd)` does not observe it: that spelling gives the body the reading
-	// end of its own pipe, which replaces whatever it would otherwise have
-	// read. The axis is still asked for it through the one place all three
-	// spellings are prepared, so the file form `=(cmd)` — which only zsh has
-	// — cannot drift away from `<(cmd)`.
+	// `>(cmd)` does not observe it: that spelling gives the body the reading end
+	// of its own pipe, which replaces whatever it would otherwise have read. The
+	// axis is still asked for it through the one place all three spellings are
+	// prepared, so the file form `=(cmd)` cannot drift away from `<(cmd)`.
 	ProcessSubstitutionBodyReadsTheShellsInput Answer
 
 	// ConditionArithmeticErrorIsFatal abandons the input when an operand of a
 	// word-spelled comparison — `[[ 1+ -eq 0 ]]` — is not an expression the
 	// arithmetic parser can read.
 	//
-	// The operands themselves are core: every shell in the panel that has
-	// `[[ ]]` evaluates them as arithmetic, so `n=5; [[ n -eq 5 ]]` holds in
-	// all three and there is nothing to switch on. What they disagree about
-	// is the *failure*. Measured from a script file, `echo one; [[ 1+ -eq 0
-	// ]]; echo two`:
+	// The operands themselves are core: a grammar with `[[ ]]` evaluates them as
+	// arithmetic, so `n=5; [[ n -eq 5 ]]` holds throughout and there is nothing
+	// to switch on. What is disagreed about is the *failure*, from
+	// `echo one; [[ 1+ -eq 0 ]]; echo two`:
 	//
-	//	zsh   	complains, `two` never runs, exit 1
-	//	ksh93 	complains, `two` never runs, exit 1
-	//	bash  	complains, the condition is false, `two` runs at status 1
+	//	Yes  complains, `two` never runs, exit 1
+	//	No   complains, the condition is false, `two` runs at status 1
 	//
-	// So two abandon and one carries on, which is a conflict and not a
-	// wording difference — a script that guards with `[[ n -eq 0 ]]` over a
-	// name it did not set runs to the end under one group and stops at that
-	// line under the other.
+	// A conflict and not a wording difference — a script that guards with
+	// `[[ n -eq 0 ]]` over a name it did not set runs to the end under one
+	// answer and stops at that line under the other.
 	//
-	// It is asked only on the error path. A condition whose operands read
-	// cleanly never reaches it.
+	// Asked only on the error path. A condition whose operands read cleanly
+	// never reaches it.
 	ConditionArithmeticErrorIsFatal Answer
 
-	// ArithCommandErrorStatusIsTwo is what `(( expr ))` leaves behind when
-	// the expression could not be evaluated: 2 where this is Yes, 1 where it
-	// is No.
+	// ArithCommandErrorStatusIsTwo is what `(( expr ))` leaves behind when the
+	// expression could not be evaluated: 2 where this is Yes, 1 where it is No.
 	//
-	// The sentence is not the question — that is Diagnostics, and the two
-	// shells measured here already word it their own way. What differs is
-	// what the construct leaves for the next line to read. Measured
-	// 2026-09-10, `(( 1+ )); echo $?`:
+	// The sentence is not the question — that is [Diagnostics]. What differs
+	// here is what the construct leaves for the next line to read.
 	//
-	//	zsh   	bad math expression: operand expected at end of string, 2
-	//	bash  	arithmetic syntax error: operand expected, 1
-	//
-	// It is the *construct* and not the evaluator: `let "1+"` is 1 in both,
-	// and in ksh93 too, so a status hung on the arithmetic error itself
-	// would have moved `let` with it. That is the discriminating pair, and
-	// it is why this is asked here and nowhere else.
+	// It is the *construct* and not the evaluator: `let "1+"` is 1 under both
+	// answers, so a status hung on the arithmetic error itself would have moved
+	// `let` with it. That is the discriminating pair, and it is why this is
+	// asked here and nowhere else.
 	//
 	// The value is a status and not a truth, so it is reached the same way
-	// through `if (( 1+ ))` — the condition is false, and the status behind
-	// it is the dialect's.
+	// through `if (( 1+ ))` — the condition is false, and the status behind it
+	// is this answer.
 	//
-	// Asked only on the error path. An expression that reads cleanly leaves
-	// 0 or 1 for its own value, which is unanimous and not a question.
+	// Asked only on the error path. An expression that reads cleanly leaves 0 or
+	// 1 for its own value, which is unanimous and not a question.
 	ArithCommandErrorStatusIsTwo Answer
 
-	// ArithCommandErrorIsFatal abandons the input when `(( expr ))` could not
-	// be evaluated, instead of leaving the status above for the next line to
-	// read. True in ksh93 alone.
+	// ArithCommandErrorIsFatal abandons the input when `(( expr ))` could not be
+	// evaluated, instead of leaving the status above for the next line to read.
 	//
-	// Measured 2026-09-10 and again 2026-09-11, `echo one; (( 1+ )); echo
-	// two`: bash 5.3, bash 3.2 and zsh all print `two` and end at 0, and
-	// ksh93 prints the complaint and nothing after it, ending at 1. So the
-	// construct is fatal there and a reporting statement everywhere else,
-	// which is a conflict rather than a wording difference — a script that
-	// tests a counter with `(( n ))` over a name it did not set runs to the
-	// end under one group and stops at that line under the other.
+	// A conflict rather than a wording difference — under Yes the construct is
+	// fatal, under No it is a reporting statement, and a script that tests a
+	// counter with `(( n ))` over a name it did not set runs to the end under
+	// one answer and stops at that line under the other.
 	//
-	// The same question for *both* ways the expression can fail, which is
-	// what ArithCommandErrorStatusIsTwo already found: `(( 1+ ))` never
-	// reaches the evaluator and `(( 1/0 ))` does, and ksh93 abandons the
-	// input for both.
+	// The same question for *both* ways the expression can fail, which is what
+	// ArithCommandErrorStatusIsTwo already found: `(( 1+ ))` never reaches the
+	// evaluator and `(( 1/0 ))` does, and Yes abandons the input for both.
 	//
 	// It is not the same question as the construct standing as a condition:
-	// `(( 1+ )) && echo yes` and `if (( 1+ ))` are fatal there too, so this
+	// `(( 1+ )) && echo yes` and `if (( 1+ ))` are fatal under Yes too, so this
 	// is about the expression and not about what the status is read for.
 	//
-	// Nor does it group with the word-spelled comparison. This is the other
-	// half of the question ConditionArithmeticErrorIsFatal asks about
-	// `[[ 1+ -eq 0 ]]`, and the two do not cut the panel the same way: zsh
-	// abandons the condition and stays for `(( ))`, which is why a single
-	// field could not carry both. See that one for the condition's measured
-	// answers.
+	// Nor does it group with the word-spelled comparison. This is the other half
+	// of the question ConditionArithmeticErrorIsFatal asks about
+	// `[[ 1+ -eq 0 ]]`, and the two do not cut the same way: an implementation
+	// may abandon the condition and stay for `(( ))`, which is why a single
+	// field could not carry both.
 	//
 	// The reach is the ordinary one for a fatal error rather than anything of
-	// this construct's: measured, ksh93 gives up a *sourced file* alone —
-	// `. ./s.sh; echo after` still prints `after` — and a subshell alone,
-	// which is the same boundary its `[[ ]]` failure stops at.
+	// this construct's: a *sourced file* alone is given up — `. ./s.sh; echo
+	// after` still prints `after` — and a subshell alone, which is the same
+	// boundary the `[[ ]]` failure stops at.
 	//
 	// Asked only on the error path. An expression that reads cleanly never
 	// reaches it.
@@ -1913,235 +1892,214 @@ type Semantics struct {
 
 	// LetKeepsTheValueBeforeAnIllegalByte leaves `let` with the value its
 	// expression had reached when the arithmetic reader met a byte it refuses,
-	// instead of leaving it with nothing. True in zsh alone.
+	// instead of leaving it with nothing.
 	//
 	// `let` reports *false* for an expression that came out zero, which is
-	// unanimous and not a question — `let "x=5"` is 0 and `let "x=0"` is 1
-	// everywhere. What this decides is the value that rule is then applied to.
-	// Measured 2026-09-11, zsh 5.9.2 against bash 5.3, bash 3.2 and ksh93:
+	// unanimous and not a question — `let "x=5"` is 0 and `let "x=0"` is 1. What
+	// this decides is the value that rule is then applied to:
 	//
-	//	let '1 @'  	zsh 0, the others 1
-	//	let '0 @'  	1 everywhere
-	//	let '1+2 @'	zsh 0, the others 1
-	//	let '@'    	1 everywhere
+	//	let '1 @'  	0 under Yes, 1 under No
+	//	let '0 @'  	1 either way
+	//	let '1+2 @'	0 under Yes, 1 under No
+	//	let '@'    	1 either way
 	//
-	// So it is not "a failure is success there": the value before the byte is
-	// what decides, and where nothing stood before it the answer is the same
-	// as everybody's.
+	// So Yes is not "a failure is success": the value before the byte is what
+	// decides, and where nothing stood before it both answers agree.
 	//
 	// Only the byte the reader refuses outright, which is the discriminating
 	// half and the reason this is not a statement about arithmetic failure at
-	// large: `let '1+'` and `let '5 5'` are 1 in that shell too, though a
-	// value stood before those failures as well. The reader gave up
-	// mid-stream in one case and the grammar rejected the whole expression in
-	// the others.
+	// large: `let '1+'` and `let '5 5'` are 1 under both answers, though a value
+	// stood before those failures as well. The reader gave up mid-stream in one
+	// case and the grammar rejected the whole expression in the others.
 	//
-	// Asked in `let` and nowhere else, because nowhere else can it be seen:
-	// the same text inside `$(( ))` or `(( ))` abandons the line in that shell
-	// whatever value stood, at 1 and at 2 respectively. #1191 recorded those
-	// three statuses and warned against copying one of them to the others;
-	// this is the narrow field that does not.
+	// Asked in `let` and nowhere else, because nowhere else can it be seen: the
+	// same text inside `$(( ))` or `(( ))` abandons the line under Yes whatever
+	// value stood, at 1 and at 2 respectively. Those three statuses are
+	// deliberately not shared, and this is the narrow field that keeps them
+	// apart.
 	LetKeepsTheValueBeforeAnIllegalByte Answer
 
 	// RegexQuotingMakesLiteral treats a quoted right operand of `=~` as a
-	// literal string. True in bash alone; ksh93 and zsh keep it a regex, so
-	// quoting a regex is unportable in either direction.
+	// literal string rather than keeping it a regex, so quoting a regex is
+	// unportable in either direction.
 	RegexQuotingMakesLiteral Answer
 
-	// LastPipelineElementInCurrentShell runs the last command of a pipeline
-	// in this shell, so `echo x | read v` sets v. True in ksh93 and zsh.
+	// LastPipelineElementInCurrentShell runs the last command of a pipeline in
+	// this shell, so `echo x | read v` sets v.
 	LastPipelineElementInCurrentShell Answer
 
-	// RedirectTargetIsAnOrdinaryWord expands a redirection's target the way
-	// an argument is expanded — split into fields and matched as a pattern —
-	// and requires the result to be exactly one word. True in bash alone:
+	// RedirectTargetIsAnOrdinaryWord expands a redirection's target the way an
+	// argument is expanded — split into fields and matched as a pattern — and
+	// requires the result to be exactly one word:
 	//
-	//	e="a b"; echo hi > $e      bash refuses; the rest write to `a b`
-	//	e="x*";  echo hi > $e      bash refuses where two files match, and
-	//	                           writes to the match where one does; the
-	//	                           rest create a file named `x*`
+	//	e="a b"; echo hi > $e      Yes refuses; No writes to `a b`
+	//	e="x*";  echo hi > $e      Yes refuses where two files match and writes
+	//	                           to the match where one does; No creates a
+	//	                           file named `x*`
 	//
-	// The other three expand it and stop there: no splitting, no matching,
-	// whatever it came to is the name. A tilde expands either way.
+	// No expands it and stops there: no splitting, no matching, whatever it came
+	// to is the name. A tilde expands under both.
 	//
-	// Doing bash's expansion and then quietly taking the first field is the
-	// answer no shell gives, and it is the one this had: `> $e` wrote to `a`,
-	// and `> $e` with a pattern truncated whichever file happened to match.
+	// Doing the Yes expansion and then quietly taking the first field is an
+	// answer nothing gives, and it is the trap this axis exists to keep out:
+	// `> $e` writing to `a`, and `> $e` with a pattern truncating whichever file
+	// happened to match.
 	RedirectTargetIsAnOrdinaryWord Answer
 
-	// TypePrintsFunctionBody makes `type name` follow "name is a function"
-	// with the function itself, reformatted. True in bash alone; the other
-	// three stop at the sentence.
+	// TypePrintsFunctionBody makes `type name` follow "name is a function" with
+	// the function itself, reformatted, rather than stopping at the sentence.
 	TypePrintsFunctionBody Answer
 
-	// TypeEndsOptionsWithDashDash makes `type -- name` skip the `--`. True
-	// in bash, ksh93 and zsh; dash has no options for it at all, so `--` is
-	// a name there and gets answered as one before the real names are.
+	// TypeEndsOptionsWithDashDash makes `type -- name` skip the `--`. Answering
+	// No gives the builtin no options at all, so `--` is a name and gets
+	// answered as one before the real names are.
 	TypeEndsOptionsWithDashDash Answer
 
-	// TypeNamesTheKindWithDashT gives `type` its `-t`, which answers one
-	// bare word per name — keyword, function, builtin or file — and prints
-	// nothing at all for a name it cannot account for, only the failing
-	// status. The scripted form of the question: a word to compare against
-	// rather than a sentence to parse. True in bash alone; ksh93 and zsh
-	// refuse the letter the way they refuse any option they do not have,
-	// and dash reads it as a name like the rest of its operands.
+	// TypeNamesTheKindWithDashT gives `type` its `-t`, which answers one bare
+	// word per name — keyword, function, builtin or file — and prints nothing at
+	// all for a name it cannot account for, only the failing status. The
+	// scripted form of the question: a word to compare against rather than a
+	// sentence to parse.
+	//
+	// Answering No either refuses the letter as an option that does not exist or
+	// reads it as a name like the rest of the operands.
 	TypeNamesTheKindWithDashT Answer
 
-	// TypeOptions is the rest of `type`'s letters, in the getopts spelling
-	// the other optstrings use — `-a` for every resolution a name has, `-p`
-	// and `-P` for the path alone, `-f` to leave the functions out. Empty
-	// means none beyond what the two axes above already give, which is
-	// dash's answer: its `type` has no options at all, and
+	// TypeOptions is the rest of `type`'s letters, in the getopts spelling the
+	// other optstrings use — `-a` for every resolution a name has, `-p` and `-P`
+	// for the path alone, `-f` to leave the functions out.
+	//
+	// Empty means none beyond what the two axes above already give, which is
+	// what a `type` with no options at all holds;
 	// TypeEndsOptionsWithDashDash already says so.
 	TypeOptions string
 
 	// TypePSearchesPathPastTheShell is what `type -p` does about a name the
-	// shell would answer itself: ksh93 and zsh search PATH anyway and name
-	// the file, bash prints nothing at all and reports 0 — its `-p` speaks
-	// only when the plain answer would have been a file. Asked only with
-	// the letter, so a dialect without it never meets the question.
+	// shell would answer itself: Yes searches PATH anyway and names the file,
+	// No prints nothing at all and reports 0, so its `-p` speaks only when the
+	// plain answer would have been a file.
+	//
+	// Asked only with the letter, so a preset without it never meets the
+	// question.
 	TypePSearchesPathPastTheShell Answer
 
-	// TypePathAnswerIsASentence is the shape of `-p`'s answer: zsh words it
-	// the way its plain `type` does — `echo is /bin/echo`, and the not-found
-	// complaint for a miss — where bash and ksh93 print the bare path and
-	// meet a miss with silence and the failing status.
+	// TypePathAnswerIsASentence is the shape of `-p`'s answer: Yes words it the
+	// way the plain `type` does — `echo is /bin/echo`, and the not-found
+	// complaint for a miss — where No prints the bare path and meets a miss with
+	// silence and the failing status.
 	TypePathAnswerIsASentence Answer
 
-	// TypeFSaysTheFunctionBack turns `-f` around: in zsh the letter *prints*
-	// a function — the definition, laid out, nothing else — where bash and
-	// ksh93 use it to leave functions out of the search.
+	// TypeFSaysTheFunctionBack turns `-f` around: under Yes the letter *prints*
+	// a function — the definition, laid out, nothing else — where under No it
+	// leaves functions out of the search.
 	TypeFSaysTheFunctionBack Answer
 
 	// ArraysAreSparse makes an unassigned subscript no element at all, so
-	// `a=(x); a[5]=y` is an array of two. True in bash and ksh93; zsh reads
-	// the whole extent and finds the gap empty, giving five.
+	// `a=(x); a[5]=y` is an array of two. Answering No reads the whole extent
+	// and finds the gap empty, giving five.
 	//
 	// The store is sparse either way — only the reading differs — so this is
-	// asked when an array *has* a gap and never otherwise, which is almost
-	// every array there is.
+	// asked when an array *has* a gap and never otherwise, which is almost every
+	// array there is.
 	ArraysAreSparse Answer
 
 	// OperatorDistributesOverStarSubscript applies an operator written on
-	// `${a[*]}` — a trim, a replacement, a case change — to each element
-	// before the join, so `${a[*]#a}` on `(aa ab)` is `a b`. True in bash and
-	// ksh93; zsh joins first and applies the operator to the joined string
-	// once, giving `a ab`.
+	// `${a[*]}` — a trim, a replacement, a case change — to each element before
+	// the join, so `${a[*]#a}` on `(aa ab)` is `a b`. Answering No joins first
+	// and applies the operator to the joined string once, giving `a ab`.
 	//
-	// Only the star form is an axis. On `${a[@]}` every shell with arrays
-	// applies the operator to each element, and the two readings of `[*]`
-	// often agree — a suffix trim that stops at the last element, most
-	// patterns that match nothing — so this is asked only when they differ.
+	// Only the star form is an axis. On `${a[@]}` the operator is applied to
+	// each element wherever arrays exist, and the two readings of `[*]` often
+	// agree — a suffix trim that stops at the last element, most patterns that
+	// match nothing — so this is asked only when they differ.
 	OperatorDistributesOverStarSubscript Answer
 
-	// ExportCarriesFunctions gives `export` its `-f`, which writes a
-	// function into a child's environment. True in bash alone: the other
-	// three have no way to carry a function at all, and each rejects the
-	// option as an option — two of them fatally.
+	// ExportCarriesFunctions gives `export` its `-f`, which writes a function
+	// into a child's environment. Answering No has no way to carry a function at
+	// all, and rejects the option as an option.
 	ExportCarriesFunctions Answer
 
-	// ExportTakesTheAttributeOff gives `export` its `-n`, which takes the
-	// export attribute off a name and leaves the name itself alone. True in
-	// bash alone; the other three refuse the letter as an option, two of
-	// them fatally.
+	// ExportTakesTheAttributeOff gives `export` its `-n`, which takes the export
+	// attribute off a name and leaves the name itself alone.
 	//
-	// The same shape as ExportCarriesFunctions and for the same reason: what
-	// the letter *means* is not in question anywhere it exists — the name
-	// stays set and stops reaching a child — only whether the dialect has it
-	// at all. So there is no wording here, and a dialect that says no sends
-	// `-n` down the ordinary unknown-option path to collect its own refusal.
-	// Measured 2026-09-05: `dash: 1: export: Illegal option -n` and the
-	// script ends, `ksh: export: -n: unknown option` with a usage line and
-	// the script ends, `zsh:export:1: bad option: -n` with `export` failing
-	// at 1 and the script carrying on.
+	// The same shape as ExportCarriesFunctions and for the same reason: what the
+	// letter *means* is not in question anywhere it exists — the name stays set
+	// and stops reaching a child — only whether the preset has it at all. So
+	// there is no wording here, and a preset that says no sends `-n` down the
+	// ordinary unknown-option path to collect its own refusal, which may or may
+	// not be fatal.
 	//
-	// A wording field would be the wrong tool even for the one shell that
-	// carries on: unlike `-f`, which zsh knows and refuses in words of its
-	// own, `-n` is simply not a letter any of the three has.
+	// A wording field would be the wrong tool even where the refusal is not
+	// fatal: unlike `-f`, which an implementation may know and refuse in words
+	// of its own, `-n` is simply not a letter a preset that says no has.
 	ExportTakesTheAttributeOff Answer
 
-	// AnnouncesBackgroundJob prints the job number and the process id when a
-	// job is backgrounded, before the next prompt. True in bash, ksh93 and
-	// zsh; dash says nothing at all.
+	// AnnouncesBackgroundJob prints the job number and the process id when a job
+	// is backgrounded, before the next prompt.
 	//
-	// Only ever at a prompt: no shell announces one to a script.
+	// Only ever at a prompt: the announcement never reaches a script.
 	AnnouncesBackgroundJob Answer
 
-	// AnnouncesBackgroundJobWithoutTheMonitor keeps that announcement when
-	// the monitor has been turned *off* — `set +m`, `unsetopt monitor` — at a
-	// prompt where there is still somebody to tell.
+	// AnnouncesBackgroundJobWithoutTheMonitor keeps that announcement when the
+	// monitor has been turned *off* — `set +m`, `unsetopt monitor` — at a prompt
+	// where there is still somebody to tell.
 	//
-	// Measured 2026-09-10 on a pseudo-terminal, with the monitor off:
+	// A *second* question and not a consequence of the first: an implementation
+	// may announce nothing either way, announce with the monitor on and stop
+	// when it is off, or carry on announcing — which is announcing something the
+	// option says it is not managing. Asked only when the monitor is off and
+	// there is somebody to tell, which is the one place the two answers differ.
 	//
-	//	bash 5.3.15   [1] <pid>      bash 3.2.57   [1] <pid>
-	//	ksh93u+       [1]	<pid>     zsh 5.9.2     nothing
-	//	dash          nothing
-	//
-	// So the start notice is a *second* question and not a consequence of the
-	// first: dash answers no to both, zsh announces a job with the monitor on
-	// and stops when it is off, and the two shells that carry on announcing
-	// are announcing something the option says they are not managing. It is
-	// asked only when the monitor is off and there is somebody to tell, which
-	// is the one place the two answers differ.
-	//
-	// **The other end of the job is not an axis.** With the monitor off no
-	// shell in the panel says anything when the job *finishes* — measured the
-	// same day, against the same jobs — so that is shared ground and
-	// FinishedJobNotices simply stays quiet. dash's late report of a finished
-	// job with an empty command is its own oddity, measured and not
-	// reproduced (#1738).
+	// **The other end of the job is not an axis.** With the monitor off nothing
+	// is said when the job *finishes*, so that is shared ground and
+	// FinishedJobNotices simply stays quiet.
 	AnnouncesBackgroundJobWithoutTheMonitor Answer
 
-	// UnsetFunctionChecksTheName judges the operand `unset -f` was given as
-	// a name, and refuses one that could not be a function name. True in
-	// ksh93 alone.
+	// UnsetFunctionChecksTheName judges the operand `unset -f` was given as a
+	// name, and refuses one that could not be a function name.
 	//
-	// Not the same question as the one below, and measured to be: ksh93
-	// refuses `1x` and is quiet about a well formed name that is not
-	// defined, where zsh is the other way round.
+	// Not the same question as the one below, and the two are independent: an
+	// implementation may refuse `1x` while staying quiet about a well formed
+	// name that is not defined, or the other way round.
 	UnsetFunctionChecksTheName Answer
 
 	// UnsetFunctionReportsMissing complains when `unset -f` names a function
-	// that is not defined. True in zsh alone, which reports it about any
-	// name it does not hold, well formed or not.
+	// that is not defined — about any name it does not hold, well formed or not.
 	//
-	// Unsetting a function that *is* there is quiet in all four.
+	// Unsetting a function that *is* there is quiet under both answers.
 	UnsetFunctionReportsMissing Answer
 
 	// LoneDashIsAnOption eats a `-` given to a builtin on its own instead of
-	// passing it on as an operand. True in zsh alone.
+	// passing it on as an operand.
 	//
 	// Only visible once something looks at the operands. `unset -` is quiet
-	// in bash because its bare form validates nothing, not because the dash
-	// was eaten — `unset -v -`, which does validate, names the dash there.
-	// zsh reports `not enough arguments` instead, because after the dash is
-	// eaten there is nothing left to unset. Recorded as
+	// under No because its bare form validates nothing, not because the dash was
+	// eaten — `unset -v -`, which does validate, names the dash there. Under Yes
+	// it is `not enough arguments` instead, because after the dash is eaten
+	// there is nothing left to unset. Recorded as
 	// `name/a-lone-dash-given-to-a-builtin` and
 	// `name/unset-v-validates-the-lone-dash`.
 	LoneDashIsAnOption Answer
 
-	// LoopControlOutsideALoopIsFatal ends the script when `break` or
-	// `continue` is run with no loop around it, instead of reporting it (or
-	// not) and running the next command. True in zsh alone.
+	// LoopControlOutsideALoopIsFatal ends the script when `break` or `continue`
+	// is run with no loop around it, instead of reporting it (or not) and
+	// running the next command.
 	//
-	// Measured 2026-09-10, `-c`, with `echo t; break; echo after`: dash,
-	// bash 5.3, bash called as `sh` and bash 3.2 all print `after` and end
-	// at 0, and zsh prints neither `after` nor anything after it on a later
-	// *line* either — so it is the script that stops and not the line, which
-	// is why this reaches fatalQuiet rather than controlAbandon. The status
-	// is then the dialect's own for a fatal error, which is 1 there.
+	// With `echo t; break; echo after`, No prints `after` and ends at 0, and Yes
+	// prints neither `after` nor anything on a later *line* either — so it is
+	// the script that stops and not the line, which is why this reaches
+	// fatalQuiet rather than controlAbandon. The status is then the preset's own
+	// for a fatal error.
 	//
-	// The question is only about the misuse. A `break` with a loop around it
-	// is ordinary control flow in every shell in the panel, and the count it
-	// is asked against is the dynamic one a cloned Runner carries with it —
-	// which of those loops the word can actually see is the pair of axes
-	// below.
+	// The question is only about the misuse. A `break` with a loop around it is
+	// ordinary control flow, and the count it is asked against is the dynamic
+	// one a cloned Runner carries with it — which of those loops the word can
+	// actually see is the pair of axes below.
 	//
-	// Separate from the wording, because the two questions cut the panel
-	// differently: bash reports and carries on, zsh reports and stops, and
-	// dash says nothing and carries on. One field could not express the
-	// first of those three — see Diagnostics.LoopControlOutsideALoop.
+	// Separate from the wording, because the two questions cut differently: an
+	// implementation may report and carry on, report and stop, or say nothing
+	// and carry on. One field could not express the first of those three — see
+	// Diagnostics.LoopControlOutsideALoop.
 	LoopControlOutsideALoopIsFatal Answer
 
 	// FunctionCallIsALoopControlBoundary stops a `break` or `continue` in a

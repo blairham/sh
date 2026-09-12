@@ -4,6 +4,8 @@
 package bash_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -111,6 +113,74 @@ func TestAnArrayLiteralSyntaxErrorEndsTheLineAndNotTheFile(t *testing.T) {
 			}
 			if !c.quiet && errs == "" {
 				t.Errorf("ran %q: said nothing, want a complaint", c.src)
+			}
+		})
+	}
+}
+
+// TestEveryRouteThatReadsGivesUpTheSameLine covers the four readers this shell
+// has, because the shell answers all four the same way and a rule that reached
+// only the top level would look right in most tests.
+//
+// The three below the top level each have a reader of their own —
+// `runSourced`'s by-line loop, its whole-text branch, and the trap body's —
+// and each of them would otherwise have run the line's *other* statements in
+// silence, which is the plausible wrong answer at status 0 this codebase minds
+// most. Measured against bash 5.3.15 on 2026-09-12.
+func TestEveryRouteThatReadsGivesUpTheSameLine(t *testing.T) {
+	dir := t.TempDir()
+	inc := filepath.Join(dir, "inc.sh")
+	if err := os.WriteFile(inc, []byte("echo in-one\na=(p & q)\necho in-two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	only := filepath.Join(dir, "only.sh")
+	if err := os.WriteFile(only, []byte("a=(p & q)\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name, src, out string
+	}{
+		{
+			"a sourced file read a line at a time",
+			"echo one\n. " + inc + "\necho \"st=$?\"\necho two\n",
+			"one\nin-one\nin-two\nst=0\ntwo\n",
+		},
+		{
+			// One line, so there is no later line for the by-line reader to
+			// be about and the whole-text branch takes it. `$?` is 1 there —
+			// a failed command's status, not the syntax-error status this
+			// builtin reports for text it could not read at all.
+			"a sourced file of one line",
+			"echo one\n. " + only + "\necho \"st=$?\"\n",
+			"one\nst=1\n",
+		},
+		{
+			"eval over more than one line",
+			"echo one\neval \"a=(p & q)\necho in-two\"\necho \"st=$?\"\n",
+			"one\nin-two\nst=0\n",
+		},
+		{
+			"eval over one line",
+			"echo one\neval \"a=(p & q)\"\necho \"st=$?\"\n",
+			"one\nst=1\n",
+		},
+		{
+			// The body is read as the shell reads any program, so the line
+			// after the bad one still runs when the trap fires.
+			"a trap body",
+			"echo one\ntrap \"a=(p & q)\necho in-trap\" EXIT\necho two\n",
+			"one\ntwo\nin-trap\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, errs, status := runScript(t, scriptFile(t, c.src))
+			if out != c.out {
+				t.Errorf("ran %q: out %q, want %q (errs %q, status %d)",
+					c.src, out, c.out, errs, status)
+			}
+			if !strings.Contains(errs, "syntax error near unexpected token `&'") {
+				t.Errorf("ran %q: said %q, want the refusal named — a route that "+
+					"swallows it runs the rest of the line in silence", c.src, errs)
 			}
 		})
 	}

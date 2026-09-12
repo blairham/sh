@@ -2687,6 +2687,15 @@ func (r *Runner) runTrapBody(ctx context.Context, body string) {
 func (r *Runner) runTrapBodyByLine(ctx context.Context, p *syntax.Parser, body string) {
 	for {
 		f, ok := p.NextLine()
+		if f != nil && f.Refused != nil {
+			// A line of the body the reader could not finish, where only
+			// that line goes — see syntax.File.Refused. Reported where this
+			// body's other parse failures are reported, and then the next
+			// line of the body runs, which is what the shell does with a
+			// trap whose text holds one.
+			r.reportTrapParseFailure(f.Refused, body)
+			continue
+		}
 		if f != nil && !r.runTrapStmts(ctx, f) {
 			return
 		}

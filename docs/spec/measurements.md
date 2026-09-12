@@ -5917,7 +5917,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf '[%s]' "${x:-'a$(b'}"; echo
   ```
-- `core/an-unreadable-operand-a-branch-does-not-take` — the row above asked whether the operand reads; this asks **when** it is read, by setting the parameter so the branch holding it is never taken. bash 5.3 and bash 3.2 answer `SET` and say nothing at all, so the second read happens where the expansion reaches the operand and not where the file is read; zsh, ksh93 and dash refuse the line, for a reason upstream of any operand — their scan for the closing brace does not honour the quotes either, so the expansion ends at the first `}` and what is left is a stray quote. Three lines rather than one because the whole of the difference is what runs after, and `-c` puts everything in one list where a failed expansion ends the list (#2380)
+- `core/an-unreadable-operand-a-branch-does-not-take` — the row above asked whether the operand reads; this asks **when** it is read, by setting the parameter so the branch holding it is never taken. bash 5.3 and bash 3.2 answer `SET` and say nothing at all, so the second read happens where the expansion reaches the operand and not where the file is read; zsh, ksh93 and dash refuse the line, for a reason upstream of any operand — their scan for the closing brace does not honor the quotes either, so the expansion ends at the first `}` and what is left is a stray quote. Three lines rather than one because the whole of the difference is what runs after, and `-c` puts everything in one list where a failed expansion ends the list (#2380)
   ```sh
   echo one
   v=SET
@@ -5930,7 +5930,7 @@ grades it and nothing drift-checks it either, for the same reason.
   echo "${v-'$('}"
   echo two
   ```
-- `core/an-unreadable-operand-with-nothing-to-defer-behind` — the control that keeps the deferral from being read as a licence. Here the quote is not balanced *inside* the braces either, so the scan for the closing brace runs off the end and there is no operand to defer: every column refuses the file and `two` is never printed. A shell that answered this one by carrying on would have widened the rule rather than moved it
+- `core/an-unreadable-operand-with-nothing-to-defer-behind` — the control that keeps the deferral from being read as a license. Here the quote is not balanced *inside* the braces either, so the scan for the closing brace runs off the end and there is no operand to defer: every column refuses the file and `two` is never printed. A shell that answered this one by carrying on would have widened the rule rather than moved it
   ```sh
   echo one
   echo "${v+'bar}"

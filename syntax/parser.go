@@ -771,10 +771,17 @@ func (p *Parser) Parse() *File {
 		if !ok {
 			break
 		}
-		f.Stmts = append(f.Stmts, line.Stmts...)
-		if f.Refused == nil {
-			f.Refused = line.Refused
+		if line.Refused != nil {
+			// The line is thrown away unrun, here as everywhere: what was
+			// read of it is not appended. Reading carries on so that the
+			// lines after it are still read — this is the route `-n` takes —
+			// and the refusal is kept for the end.
+			if f.Refused == nil {
+				f.Refused = line.Refused
+			}
+			continue
 		}
+		f.Stmts = append(f.Stmts, line.Stmts...)
 	}
 	f.Last = p.tok.Pos
 	if p.err == nil && f.Refused != nil {

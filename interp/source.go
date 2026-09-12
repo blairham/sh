@@ -195,6 +195,24 @@ func nextBorrowedLine(p *syntax.Parser, whole **syntax.File) (*syntax.File, bool
 // borrowedTextFailed reports a parse failure in borrowed text and says what
 // the builtin leaves behind.
 func (r *Runner) borrowedTextFailed(err error, s sourced, src string) int {
+	r.reportBorrowedParseFailure(err, s, src)
+	// POSIX makes a special builtin's failure fatal to a non-interactive
+	// shell. dash is the only member of the panel that does it here; the
+	// other three report the error and carry on.
+	if r.ask(r.sem().BuiltinSyntaxErrorFatal, "a parse failure inside a special builtin being fatal") {
+		r.fatalQuiet()
+		return r.status
+	}
+	return s.syntaxStatus
+}
+
+// reportBorrowedParseFailure writes the diagnostic and nothing else, for the
+// two callers that differ only in what they do next: the reader that has
+// stopped, above, and the one that gave up a single line and is about to read
+// the one after it. Split rather than written twice, because the line number,
+// the naming and the echo are three rules and a second copy of them is how one
+// of the two ends up saying something slightly different.
+func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 	// The failure's own line, not the caller's. `.` on line 1 of a script
 	// that sources a file whose `if` never closes is reported at the
 	// line in *that file* by every shell in the panel, and this reported
@@ -213,14 +231,6 @@ func (r *Runner) borrowedTextFailed(err error, s sourced, src string) int {
 	if own > 0 {
 		r.errf("%s", d.SourceEcho(s.naming(d), r.name(), s.sourceName(d), own, err, src))
 	}
-	// POSIX makes a special builtin's failure fatal to a non-interactive
-	// shell. dash is the only member of the panel that does it here; the
-	// other three report the error and carry on.
-	if r.ask(r.sem().BuiltinSyntaxErrorFatal, "a parse failure inside a special builtin being fatal") {
-		r.fatalQuiet()
-		return r.status
-	}
-	return s.syntaxStatus
 }
 
 // runSourced parses src and runs it on this runner.
@@ -285,6 +295,15 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	if !byLine {
 		whole = p.Parse()
 		if err := p.Err(); err != nil {
+			if whole != nil && err == whole.Refused {
+				// A line the reader gave up rather than the text — see
+				// syntax.File.Refused. A whole-text read has no next line to
+				// go on to, so what is left is the status the line left: 1,
+				// a failed command's, and not the syntax-error status a text
+				// this builtin could not read at all reports.
+				r.reportBorrowedParseFailure(err, s, src)
+				return 1
+			}
 			return r.borrowedTextFailed(err, s, src)
 		}
 	}
@@ -330,6 +349,18 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		f, ok := nextBorrowedLine(p, &whole)
 		if !ok {
 			break
+		}
+		if f.Refused != nil {
+			// A construct in the line did not read and only the line goes
+			// with it — see syntax.File.Refused. Borrowed text is read the
+			// same way the top level is, so it says so and goes on, leaving
+			// the status a failed command leaves. Measured: `. f.sh` and
+			// `eval` over a file whose second line holds one both print the
+			// first line, complain, run the third, and answer `$?` of 1 when
+			// the bad line is the last.
+			r.reportBorrowedParseFailure(f.Refused, s, src)
+			ran, r.status = true, 1
+			continue
 		}
 		for _, st := range f.Stmts {
 			ran = true

@@ -25,8 +25,12 @@ import (
 //     "what is this builtin reading". `-u` is the one thing that overrides it,
 //     and that is also what makes every fact here testable without a
 //     pseudo-terminal.
-//   - **It counts characters, not bytes.** `read -k 2 -u 3 v` over `héllo`
-//     gives `hé` with `${#v}` of 2, from three bytes.
+//   - **It counts what the locale calls a character.** `read -k 2 -u 3 v` over
+//     `héllo` gives `hé` under a UTF-8 locale, three bytes for two characters,
+//     and `h` plus one byte of the accented letter under `LC_ALL=C` — measured
+//     both ways, and it is the same split `${#s}` and `${s:off:len}` already
+//     answer through countsTheLocalesCharacters. A reader that always decoded
+//     would disagree with the panel in the locale the corpus harness runs in.
 //   - **Nothing is a terminator.** `read -k 3 -u 3 v` over `a\nb` gives all
 //     three, newline included, and `${#v}` is 3.
 //
@@ -65,11 +69,17 @@ func readKeyCount(opts string, optArg map[byte]string) (count int, asked bool) {
 // readKeysFrom reads count characters from a stream, and is the whole of the
 // read once the source has been settled.
 //
-// Characters and not bytes, so a rune is completed before it counts — the
-// measurement above is what requires it, and a byte count would split `é` and
-// hand back half of one. ok is false for a read that ended early, which the
-// caller reports as status 1 with what arrived still assigned.
-func readKeysFrom(next func() (byte, int), count int) (text string, ok bool) {
+// `chars` is asked whether a character is the locale's or a byte, and it is a
+// function rather than a flag so that it is asked **only when a byte above
+// ASCII actually arrives**. That is the discipline countsCharacters keeps for
+// a length — a value whose bytes are all ASCII is the same either way, so the
+// axis goes unasked — and keeping it here is what stops every `read -k` in the
+// corpus from putting a locale question to a core whose answer is
+// "unanswered".
+//
+// ok is false for a read that ended early, which the caller reports as status
+// 1 with what arrived still assigned.
+func readKeysFrom(next func() (byte, int), count int, chars func() bool) (text string, ok bool) {
 	var buf []byte
 	var out []byte
 	// A count of nought reads nothing and is still a failure: measured,
@@ -84,11 +94,12 @@ func readKeysFrom(next func() (byte, int), count int) (text string, ok bool) {
 			return string(out), false
 		}
 		buf = append(buf, c)
-		if !utf8.FullRune(buf) && len(buf) < utf8.UTFMax {
+		if !utf8.FullRune(buf) && len(buf) < utf8.UTFMax && chars() {
 			// The rest of a character that has begun to arrive. A terminal
 			// delivers bytes and a character outside ASCII is several of
 			// them; counting the first as a character would end the read in
-			// the middle of one.
+			// the middle of one. FullRune is true of every ASCII byte, so
+			// this is the only place the locale is asked at all.
 			continue
 		}
 		out = append(out, buf...)
@@ -167,7 +178,18 @@ func (r *Runner) readNoTerminal() int {
 // the same fact from the other side and is what a widget reading a keystroke
 // needs, since a space is a key somebody pressed.
 func (r *Runner) readKeysInto(next func() (byte, int), count int, args []string) int {
-	text, whole := readKeysFrom(next, count)
+	// Memoized: a read of many characters must not put the same locale
+	// question to the axis machinery once per character.
+	locale, asked := false, false
+	text, whole := readKeysFrom(next, count, func() bool {
+		if !asked {
+			locale, asked = r.countsTheLocalesCharacters(), true
+		}
+		return locale
+	})
+	if r.unspecified {
+		return 2
+	}
 	name := "REPLY"
 	if len(args) > 0 {
 		name = args[0]

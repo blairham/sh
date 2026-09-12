@@ -4437,9 +4437,9 @@ echo "st=$?"`,
 		Why:     "the count is optional and defaults to one, which is the spelling a plugin waiting for a keystroke uses. It is also the shape that tells this letter from every other count in the panel: bash's -n and ksh93's -N refuse to be given without a number",
 	},
 	{
-		ID: "read/keys-counts-characters-not-bytes", Category: "builtins",
-		Snippet: `printf 'h\303\251llo' | { read -k 2 -u 0 v; echo "st=$? [$v] len=${#v}"; }`,
-		Why:     "two characters and not two bytes: the accented letter arrives as two bytes and counts as one, so the read ends after three. A byte count would hand back half a character",
+		ID: "read/keys-count-what-the-locale-calls-a-character", Category: "builtins",
+		Snippet: `printf 'h\303\251llo' | { read -k 2 -u 0 v; read -k 2 -u 0 w; printf '%s' "$v$w" | od -An -tx1; }`,
+		Why:     "the count is in whatever the locale calls a character, which is the same split `${#s}` answers rather than a decision this letter makes. The harness pins LC_ALL=C, so the shell with the letter takes `h` and the accented letter's lead byte and then its tail and an `l` — four bytes across two reads. Under a UTF-8 locale the first read would take all three bytes of `hé`, which is why the bytes are dumped rather than printed: the value is not text in one of the two readings",
 	},
 	{
 		ID: "read/keys-do-not-stop-at-a-newline", Category: "builtins",

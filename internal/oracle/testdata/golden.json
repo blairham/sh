@@ -116282,44 +116282,44 @@
         "TimedOut": false
       }
     },
-    "read/keys-counts-characters-not-bytes": {
+    "read/keys-count-what-the-locale-calls-a-character": {
       "bash": {
-        "Stdout": "st=2 [] len=0",
-        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "st=2 [] len=0",
-        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "st=2 [] len=0",
-        "Stderr": "\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]~\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "dash": {
-        "Stdout": "st=2 [] len=0",
-        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -k",
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -k~\u003cshell\u003e: 1: read: Illegal option -k",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
-        "Stdout": "st=2 [] len=0",
-        "Stderr": "\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]~\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "st=0 [h\ufffd] len=2",
+        "Stdout": "           68  c3  a9  6c                                                ",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -106,26 +106,38 @@ func TestANumericOptionalOptionTakesTheWholeAttachedWord(t *testing.T) {
 	}
 }
 
-// The count is in characters. A character outside ASCII arrives as several
-// bytes and is one of them, so a byte count would hand back half of one.
+// The count is in whatever the locale calls a character, which is the same
+// split `${#s}` answers and not a decision this letter makes on its own.
 //
 // Two reads rather than one, and a second variable rather than a length:
-// whether `${#v}` counts characters or bytes is a different question with its
-// own answer per dialect, so asserting on it here would be asserting on
-// something else. Reading *again* asks this question and only this one — if
-// the first read had taken two bytes, the second would start inside the
-// accented letter and answer with its tail.
-func TestKeysAreCountedAsCharacters(t *testing.T) {
+// whether `${#v}` counts characters or bytes is the same question asked of a
+// different construct, so asserting on it here would be asserting twice on one
+// axis and proving neither. Reading *again* asks only this one — if the first
+// read had taken two bytes under a UTF-8 locale, the second would start inside
+// the accented letter and answer with its tail.
+func TestKeysAreCountedTheLocalesWay(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "in.txt")
-	if err := os.WriteFile(path, []byte("héllo"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("h\u00e9llo"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out, _ := run(t,
-		`exec 5<`+path+`; read -k 2 -u 5 v; read -k 2 -u 5 w; echo "[$v][$w]"`, readsKeys)
-	if want := "[hé][ll]"; !strings.Contains(out, want) {
-		t.Errorf("got %q, want %q — a byte count would have split the character", out, want)
-	}
+	// The locale is named by a plain assignment, with no export: measured,
+	// that is enough for every panel member to change what a character is.
+	src := `exec 5<` + path + `; read -k 2 -u 5 v; read -k 2 -u 5 w; echo "[$v][$w]"`
+	t.Run("a UTF-8 locale counts characters", func(t *testing.T) {
+		out, _ := run(t, `LC_ALL=en_US.UTF-8; `+src, readsKeys)
+		if want := "[h\u00e9][ll]"; !strings.Contains(out, want) {
+			t.Errorf("got %q, want %q — a byte count would have split the character", out, want)
+		}
+	})
+	t.Run("a single-byte locale counts bytes", func(t *testing.T) {
+		out, _ := run(t, `LC_ALL=C; `+src, readsKeys)
+		// The first read takes `h` and the accented letter's lead byte; the
+		// second takes its tail byte and the first `l`.
+		if want := "[h\xc3][\xa9l]"; !strings.Contains(out, want) {
+			t.Errorf("got %q, want %q — the locale names no multibyte encoding", out, want)
+		}
+	})
 }
 
 // Nothing is a terminator, a newline included, and the text goes into one name

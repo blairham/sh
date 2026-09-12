@@ -9917,6 +9917,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shopt/expand-aliases-is-off-until-it-is-asked-for` | `hit~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `hit~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `hit~st=0` | `hit~st=0` | `hit~st=0` |
 | `shopt/posix-mode-turns-alias-expansion-on` | *(no output, status 2)* | `hit~st=0` | `hit~st=0` | `hit~st=0` | *(no output, status 2)* | *(no output, status 1)* | `hit~st=0` |
 | `shopt/leaving-posix-mode-drops-alias-expansion-again` | *(no output, status 2)* | `st=127` **2>** `<script>: line 5: a: command not found` | `st=127` **2>** `<script>: line 5: a: command not found` | `st=127` **2>** `<script>: line 5: a: command not found` | *(no output, status 2)* | *(no output, status 1)* | `hit~st=0` |
+| `shopt/lastpipe-runs-the-last-element-here` | `[]` | `[hi]` | `[hi]` | `[]` | `[hi]` | `[hi]` | `[]` |
+| `shopt/lastpipe-is-a-live-switch` | `[]` | `[]` | `[]` | `[]` | `[hi]` | `[hi]` | `[]` |
+| `shopt/lastpipe-yields-to-the-monitor` | `[]` | `[]` | `[]` | `[]` | `[hi]` | *(no output, status 1)* | `[]` |
+| `shopt/lastpipe-reaches-only-the-last-element` | `[]` | `[]` | `[]` | `[]` | `[]` | `[]` | `[]` |
+| `shopt/lastpipe-lets-an-exit-end-the-shell` | `after=3` | *(no output, status 3)* | *(no output, status 3)* | `after=3` | *(no output, status 3)* | *(no output, status 3)* | `after=3` |
+| `shopt/lastpipe-keeps-a-read-loops-count` | `n=[]` | `n=[3]` | `n=[3]` | `n=[]` | `n=[3]` | `n=[3]` | `n=[]` |
 | `nounset/defaults-are-exempt` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` |
 | `nounset/empty-is-not-unset` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` |
 | `nounset/no-parameters-is-not-unset` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` |
@@ -10260,6 +10266,32 @@ grades it and nothing drift-checks it either, for the same reason.
   alias a='echo hit'
   a
   echo "st=$?"
+  ```
+- `shopt/lastpipe-runs-the-last-element-here` — the option's whole reason for being, and a three-way split rather than a two-way one: bash 5.3 and bash-as-sh answer `[hi]` because the name moved the pipeline, zsh and ksh93 answer `[hi]` because they run the last element in the shell with nothing said and have no such name, and bash 3.2, dash and ash answer `[]` with no way to ask. So the row separates a shell that *granted* the request from one that never needed it, which a single column could not. `set +m` is written out because bash ties the option to the monitor being off
+  ```sh
+  shopt -s lastpipe 2>/dev/null; set +m 2>/dev/null; echo hi | read x; echo "[$x]"
+  ```
+- `shopt/lastpipe-is-a-live-switch` — a switch rather than a door, the same shape `expand_aliases` is pinned in above: bash turns it back off mid-script and answers `[]`, while the two shells that keep the last element here anyway ignore the missing builtin twice and still answer `[hi]`. Without this half, a shell that accepted `-s` and never read `-u` would pass the row above
+  ```sh
+  shopt -s lastpipe 2>/dev/null; shopt -u lastpipe 2>/dev/null; echo hi | read x; echo "[$x]"
+  ```
+- `shopt/lastpipe-yields-to-the-monitor` — bash honors the option only while job control is off, which is the half an implementation is most likely to skip and the reason the option looks like a no-op in an interactive session: bash 5.3 answers `[]` here where it answered `[hi]` with `set +m`. ksh93 keeps the last element under a monitor as readily as without one, and zsh refuses `set -m` outright with no terminal — a failing special builtin ends the shell there, so that column is the empty output and status 1 rather than a third reading of the option
+  ```sh
+  shopt -s lastpipe 2>/dev/null; set -m 2>/dev/null; echo hi | read x; echo "[$x]"
+  ```
+- `shopt/lastpipe-reaches-only-the-last-element` — every element but the last is a subshell in all six columns whatever the option says, so `read` one place from the end loses its assignment everywhere and the row is `[]` across the panel. Unanimous on purpose: it is what parts an option that moved one element from a shell that stopped putting elements in subshells at all
+  ```sh
+  shopt -s lastpipe 2>/dev/null; echo hi | read x | :; echo "[$x]"
+  ```
+- `shopt/lastpipe-lets-an-exit-end-the-shell` — the sharpest consequence of the last element being *this* shell, and the one a script can be surprised by: the `exit` ends the shell instead of a subshell, so bash 5.3, bash-as-sh, zsh and ksh93 print nothing and exit 3 where bash 3.2, dash and ash print `after=3` and exit 0. It is also the strongest evidence the element really is running here, since a status is easier to fake than a shell that stopped
+  ```sh
+  shopt -s lastpipe 2>/dev/null; echo a | exit 3; echo "after=$?"
+  ```
+- `shopt/lastpipe-keeps-a-read-loops-count` — the shape people meet the problem in rather than the minimal one: `cmd | while read; do …; done` losing the body's assignments at the pipe is the most cited surprise in shell scripting, and it is the same axis as the `read` above rather than anything about loops. bash 5.3 and bash-as-sh count 3 with the option, zsh and ksh93 count 3 without one, and bash 3.2, dash and ash count nothing
+  ```sh
+  shopt -s lastpipe 2>/dev/null
+  printf "a\nb\nc\n" | while read l; do n=$((n+1)); done
+  echo "n=[$n]"
   ```
 - `nounset/defaults-are-exempt` — a form that supplies a value, or asks whether one is set, is not a use of an unset one
   ```sh

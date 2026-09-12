@@ -56,7 +56,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `unset` ends it | *n/a* | no | *n/a* | **yes** |
 | `echo` expands backslashes | **yes** | no | no | **yes** |
 | glob with no match | passes pattern | passes pattern | passes pattern | **error** |
-| last pipeline element runs in | subshell | subshell | **current shell** | **current shell** |
+| last pipeline element runs in | subshell | subshell *(current shell under `shopt -s lastpipe`, monitor off)* | **current shell** | **current shell** |
 | `$0` inside a function | shell name | shell name | shell name | **function name** |
 | `local` builtin | yes | yes | **absent** | yes |
 | `select` menu layout | *n/a* | vertical, then tabs | vertical | **columns** |
@@ -1747,6 +1747,35 @@ the core useless. So the axis is asked only when the last element is a
 builtin, a function, or a group — something that can touch the shell.
 That is the rule `BracketCaretNegates` already uses: ask about the
 construct in front of you, not about every construct sharing a code path.
+
+A session can move this one, and it is the only axis in the table a script
+can move by name. bash calls it `shopt -s lastpipe`, and measured on
+bash 5.3.15 on 2026-09-12 it is honored only while job control is off:
+
+    shopt -s lastpipe; set +m; echo hi | read x; echo "[$x]"   [hi]
+    shopt -s lastpipe; set -m;  echo hi | read x; echo "[$x]"   []
+    shopt -s lastpipe; set -m; set +m; …                        [hi]
+
+The third line is the one that says where the condition is read. The option
+was written once and never again, so what decided the last row is the
+monitor's state **at the pipeline** — which is also why the option looks
+like a no-op typed at a prompt, where the monitor is on with nothing said.
+
+It stays an axis with a switch over it rather than becoming two axes. Where
+the shell stands is the disagreement — zsh and ksh93 keep the last element
+with no option to set, dash and bash 3.2 give it a subshell with no option
+either — and only one shell in the panel has a name for moving it, so there
+is nobody to disagree with about the move. The switch is
+`interp.Runner.KeepsLastPipelineElement`, the core's, and `lastpipe` is the
+bash dialect's spelling of it; `runPipeline` reads the switch first and falls
+through to the axis, so a shell nobody has spoken to answers exactly as it
+did before (#2361).
+
+**Accepting the name without moving the pipeline would have been worse than
+refusing it.** A script sets `lastpipe` because the next line depends on the
+assignment surviving, so a quiet `shopt` over an unmoved pipeline reads an
+empty variable and says nothing — which is why the name could not be closed
+by widening the table of options this shell merely records.
 
 Which builtins a shell *has* is not on this list and should not be. It is
 neither grammar nor a conflict of meaning: ksh93 simply lacks `local` and

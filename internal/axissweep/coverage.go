@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/blairham/sh/interp"
 )
@@ -247,9 +248,15 @@ func unspecifiedConstant(consts map[string][]Value, typeName string) *Value {
 // with the word cannot be mistaken for a marker.
 var unansweredLine = regexp.MustCompile(`^unanswered ([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*):[ \t]*(.*)$`)
 
+// The scan is done once for the whole roster and shared, behind a sync.Once
+// for the reason fields.go gives about its three: the callers are tests that
+// run in parallel, and a lazily filled package-level map is a data race
+// however obviously idempotent the work is. Filling it per dialect on demand
+// was written first and the race detector caught it in one run.
 var (
-	dialectNoteCache = map[string]map[string]string{}
-	dialectNoteErr   = map[string]error{}
+	noteOnce       sync.Once
+	dialectNotes   map[string]map[string]string
+	dialectNoteErr error
 )
 
 // DialectNotes is what one dialect's source says about the axes it does not
@@ -260,12 +267,27 @@ var (
 // the axis is simply not assigned, and the natural place to say why is beside
 // the assignments that are there.
 func DialectNotes(name string) (map[string]string, error) {
-	if out, ok := dialectNoteCache[name]; ok {
-		return out, dialectNoteErr[name]
+	noteOnce.Do(readAllDialectNotes)
+	if dialectNoteErr != nil {
+		return nil, dialectNoteErr
 	}
-	out, err := readDialectNotes(name)
-	dialectNoteCache[name], dialectNoteErr[name] = out, err
-	return out, err
+	out, ok := dialectNotes[name]
+	if !ok {
+		return nil, fmt.Errorf("no dialect named %q is in the roster; see Presets", name)
+	}
+	return out, nil
+}
+
+func readAllDialectNotes() {
+	dialectNotes = map[string]map[string]string{}
+	for _, p := range Presets() {
+		notes, err := readDialectNotes(p.Name)
+		if err != nil {
+			dialectNotes, dialectNoteErr = nil, err
+			return
+		}
+		dialectNotes[p.Name] = notes
+	}
 }
 
 func readDialectNotes(name string) (map[string]string, error) {

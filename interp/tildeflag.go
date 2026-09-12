@@ -210,3 +210,50 @@ func (r *Runner) tildeFlagFields(s syntax.Span, head bool, fields []string) []st
 	}
 	return plain
 }
+
+// substitutedColonTildes expands the tilde after each colon inside one
+// substituted value, which is the half of an assignment's colon rule that
+// expandColonTildes cannot reach: that one walks the word's *literal* spans,
+// so a colon and a tilde that arrived together out of a parameter were never
+// looked at.
+//
+// Only a tilde-flagged expansion's text comes here. A plain one's does not,
+// and that is the measured difference rather than an economy — on zsh 5.9.2
+// with `u='a:~/zz'`, `q=${~u}` is the home directory and `q=${u}` is the two
+// characters as written. Set against the flag's other half in tildeFlagHead,
+// which answers for the tilde at the front of the value, this answers for the
+// ones a colon put at the front of a segment.
+//
+// The segment runs to the next colon, since a colon both ends one and begins
+// the next, and a segment that runs to the end of the text is expanded rather
+// than held: what follows in the word is a slash or a colon or nothing in
+// every shape that has an answer here. `a:${~y}abc` with `y='~'` is the
+// exception and it is not one we can serve — zsh reads it as `~abc` and dies
+// on a user it has no entry for, and `~user` is left as written throughout
+// this package for want of a user database.
+func (r *Runner) substitutedColonTildes(v string) string {
+	if !strings.Contains(v, ":~") {
+		return v
+	}
+	var b strings.Builder
+	for i := 0; i < len(v); i++ {
+		if v[i] != ':' || i+1 >= len(v) || v[i+1] != '~' {
+			b.WriteByte(v[i])
+			continue
+		}
+		b.WriteByte(':')
+		end := len(v)
+		if j := strings.IndexByte(v[i+1:], ':'); j >= 0 {
+			end = i + 1 + j
+		}
+		seg := v[i+1 : end]
+		if dir, tail, ok := r.tildeSplit(seg); ok {
+			b.WriteString(dir)
+			b.WriteString(tail)
+		} else {
+			b.WriteString(seg)
+		}
+		i = end - 1
+	}
+	return b.String()
+}

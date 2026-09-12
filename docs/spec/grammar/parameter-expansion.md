@@ -3453,6 +3453,40 @@ made are the heads, so the two spellings of a list agree.
 implementation leaves `~user` as written, the same limit its literal tilde
 expansion already has, and has no named directories at all.
 
+#### An assignment's colon is a head as well
+
+The `a:~/zz` row above is measured in an *ordinary* word. In the value of an
+**assignment** it is the other answer, and for the reason a written tilde has
+one there: a colon begins a tilde segment, which is what makes `PATH=~/bin:~/sbin`
+name two directories. The flag's tilde half follows the same rule, so the
+segment after each colon is a head too. Measured on zsh 5.9.2 with
+`HOME=/H`, `t='~/zz'`, `p='~/x:~/y'`, `u='a:~/zz'`:
+
+| written | value | why |
+| --- | --- | --- |
+| `print -r -- x:${~t}` | `x:~/zz` | not an assignment; the colon does nothing |
+| `q=x:${~t}` | `x:/H/zz` | the colon put the substituted tilde at a head |
+| `q=x:${t}` | `x:~/zz` | and without the flag the colon does nothing either |
+| `q=x:"${~t}"` | `x:~/zz` | quoting suppresses the flag, here as everywhere |
+| `q=${~u}` | `a:/H/zz` | the colon inside the substituted text counts too |
+| `q=a${~p}` | `a~/x:/H/y` | and it counts with no head: the first tilde is not at one, the second follows a colon |
+| `c=':'; q=a$c${~t}` | `a:/H/zz` | the colon may come from another expansion |
+| `q="a:"${~t}` | `a:/H/zz` | or from inside quotes — it is the character that counts, not how it was written |
+| `y='~'; q=a:${~y}/b` | `a:/H/b` | the segment may be finished by what follows the expansion |
+| `q=a:${~t}${~t}` | `a:/H/zz~/zz` | only the one the colon precedes; the second starts mid-segment |
+| `export`, `typeset`, `declare`, `local`, `+=` | as `q=` | every spelling of a scalar assignment |
+
+`a=(x:${~t})` is `x:/H/zz` in zsh as well, and is **not** done here: an array
+element is an ordinary word in this implementation and the colon rule does not
+reach it — nor does it reach a *written* tilde there, `a=(x:~/zz)`, which bash
+and ksh93 leave alone and zsh expands. That is a disagreement rather than a
+gap, so it wants an axis of its own rather than being folded in here.
+
+`q=a:${empty}~/z` is `a:/H/z` in zsh and `a:~/z` here, which is the literal
+path's existing limit rather than the flag's: `expandColonTildes` walks one
+span at a time, so a colon and the tilde it governs that land in different
+spans are never seen together.
+
 ### The other half is the pattern half
 
 Marking the value a pattern is the same question `GlobExpansionResults`

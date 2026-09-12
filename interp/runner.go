@@ -3645,12 +3645,32 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 			defer func() { _ = r.Foreground(0) }()
 		}
 	}
-	w, err := r.WaitForCommand(pid)
-	if err != nil {
-		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-		r.diagf("%s: %v\n", argv[0], err)
-		r.status = 126
-		return nil
+	var w Wait
+	for {
+		var err error
+		w, err = r.WaitForCommand(pid)
+		if err != nil {
+			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
+			r.diagf("%s: %v\n", argv[0], err)
+			r.status = 126
+			return nil
+		}
+		if !stoppedWait(w) || r.monitor {
+			break
+		}
+		// Stopped, and this shell is not watching jobs — so it waits the
+		// command out rather than answering with it. Unanimous: measured
+		// 2026-09-12 with a script whose background job stops its own
+		// foreground command and lets it go again half a second later, bash
+		// 5.3.15, bash 3.2.57, ksh93u+ and zsh 5.9.2 all report the
+		// command's own 0 when it finally ends, for SIGSTOP and SIGTSTP
+		// alike. With `set -m` bash 5.3 answers with the stop instead, which
+		// is the branch below and what an interactive shell always reaches:
+		// a shell with a terminal runs the monitor.
+		//
+		// There is nobody to tell either — a job the script cannot see is a
+		// job it cannot resume — so waiting again is also the only ending
+		// that does not strand the process.
 	}
 	if !stoppedWait(w) {
 		// The command has ended, so os/exec's own bookkeeping can be closed

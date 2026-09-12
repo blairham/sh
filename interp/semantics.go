@@ -5971,6 +5971,29 @@ type Semantics struct {
 	// times slower here than under bash, and the whole of the difference was
 	// one wait for a job this shell had no way of knowing had stopped.
 	WaitGivesUpOnAStoppedJob Answer
+	// KillReadsASignalJoinedToItsOption takes `kill -n9` and `kill -sKILL`,
+	// where the signal is written onto the option with no space between.
+	//
+	// bash 5.x and ksh93; bash 3.2 and zsh refuse both, reading the whole
+	// word as a signal called `n9` or `SIGN9`. Measured 2026-09-12 against a
+	// background `sleep`: `kill -n9 $!` and `kill -sKILL $!` kill it at
+	// status 0 in bash 5.3.15, in that binary as `sh` and in ksh93u+, and
+	// are `kill: n9: invalid signal specification` at status 1 in bash
+	// 3.2.57 and `unknown signal: SIGN9` in zsh 5.9.2.
+	//
+	// Which way round the digits go is part of the answer rather than a
+	// detail of it, and joinedKillSignal has the measurement: `-n` joins a
+	// number and `-s` joins a name, so `kill -nKILL` and `kill -s9` are
+	// refused by the shells that read the other two. ksh93 is looser — it
+	// takes `-s9` as well — and that remains a divergence rather than
+	// something this answer claims, because every word the rule here accepts
+	// ksh93 accepts too.
+	//
+	// It is what #2227 was. A script that kills a job it is about to wait
+	// for wrote `kill -n9`; the kill was refused into a stderr the script
+	// had redirected, nothing died, and the `wait` after it then ran for as
+	// long as the job would have.
+	KillReadsASignalJoinedToItsOption Answer
 
 	// HeldExitListsTheJobs follows that warning with the job table — the
 	// same rows `jobs` writes. bash does and zsh does not: measured through a
@@ -8507,9 +8530,13 @@ func PosixSemantics() Semantics {
 		// The standard has `wait` wait, and says nothing about a job that
 		// stopped; bash 5.x alone gives up on one, so the base goes on
 		// waiting and that dialect overrides.
-		WaitGivesUpOnAStoppedJob:     No,
-		CdpathAnnouncesTheDirectory:  Yes,
-		FdVariableOutlivesTheCommand: Yes,
+		WaitGivesUpOnAStoppedJob: No,
+		// POSIX gives `kill` only `-s signal` with the signal as a separate
+		// operand, so the base reads nothing joined to the option; bash 5.x
+		// and ksh93 override.
+		KillReadsASignalJoinedToItsOption: No,
+		CdpathAnnouncesTheDirectory:       Yes,
+		FdVariableOutlivesTheCommand:      Yes,
 		// The standard has the here-document end at the delimiter and says
 		// nothing about a body the input cut short, so this follows the
 		// panel: three of the five leave the last line as it was written and

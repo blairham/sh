@@ -66,11 +66,12 @@ func wait(pid, flags int) (interp.Wait, bool, error) {
 			// exited since it was last asked about.
 			return interp.Wait{}, false, nil
 		}
-		switch {
-		case ws.Stopped():
+		if sig, stopped := stoppedBy(ws); stopped {
 			// Still there: nothing has been reaped, so there is no usage to
 			// report yet.
-			return interp.Wait{Signal: ws.StopSignal(), Stopped: true}, true, nil
+			return interp.Wait{Signal: sig, Stopped: true}, true, nil
+		}
+		switch {
 		case ws.Signaled():
 			return interp.Wait{
 				Signal: ws.Signal(), Killed: true,
@@ -83,4 +84,48 @@ func wait(pid, flags int) (interp.Wait, bool, error) {
 			}, true, nil
 		}
 	}
+}
+
+// stoppedBy is the signal that stopped a child, and whether one did.
+//
+// This is decoded here rather than taken from syscall.WaitStatus.Stopped,
+// which answers it for every stop signal *except the one a script is most
+// likely to send*:
+//
+//	func (w WaitStatus) Stopped() bool { return w&mask == stopped && Signal(w>>shift) != SIGSTOP }
+//
+// The exclusion is deliberate on the standard library's side — on the BSDs a
+// continued child is reported through the same encoding, so the package
+// reads a wait status carrying SIGSTOP as Continued and not as Stopped —
+// and for a shell it is simply the wrong answer. `kill -STOP` is how a
+// script stops a job; ^Z sends SIGTSTP and was therefore the only stop this
+// shell ever saw.
+//
+// What it cost is #2227. A foreground command a script stopped came back as
+// neither stopped nor exited nor signaled, so the wait fell through to "it
+// ended", os/exec's own Wait was called on a process that was still there,
+// and the shell sat in it for as long as something outside took to resume or
+// kill the job. A `wait` for a background job in the same state waited just
+// as long. Neither is a loop and neither leaves a frame of ours on a CPU,
+// which is why the instrument that found it recorded a shell idle in
+// __wait4_nocancel with nothing running.
+//
+// The test is the C macro's — WIFSTOPPED is `(status & 0xff) == 0x7f` — and
+// it is unambiguous here because this package never asks for WCONTINUED: a
+// continued child is only ever reported to a wait that requested it, and
+// neither of the two calls above does. The one encoding that could collide
+// is Linux's WIFCONTINUED, 0xFFFF, which is excluded rather than reasoned
+// about.
+func stoppedBy(ws syscall.WaitStatus) (syscall.Signal, bool) {
+	if ws.Stopped() {
+		return ws.StopSignal(), true
+	}
+	const (
+		stopped   = 0x7f
+		continued = 0xffff
+	)
+	if ws == continued || ws&stopped != stopped {
+		return 0, false
+	}
+	return syscall.Signal(ws>>8) & 0xff, true
 }

@@ -419,6 +419,10 @@ func Semantics() interp.Semantics {
 	// reports 145 — 128 plus SIGSTOP. See the axis for what the rest of the
 	// panel does, and for why the monitor is the condition (#2227).
 	s.WaitGivesUpOnAStoppedJob = interp.Yes
+	// And `kill` reads a signal written onto its option with no space:
+	// `kill -n9` and `kill -sKILL` both send. Measured 2026-09-12; bash 3.2
+	// refuses both, which is why this is an axis and not the engine (#2227).
+	s.KillReadsASignalJoinedToItsOption = interp.Yes
 	// And writes the job table under the sentence while `checkjobs` is on —
 	// measured, `[1]+  Stopped ./ticker` and `[2]-  Running sleep 40 &`
 	// below `There are stopped jobs.`, and nothing below it with the option

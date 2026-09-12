@@ -4779,305 +4779,261 @@ type Semantics struct {
 	// a typo on the last line leaves six names set under Yes and none under No.
 	SourcedFileRunsWhatItParsed Answer
 
-	// FatalErrorEndsBorrowedTextOnly makes an error that would end a script
-	// end only the text a special builtin is running — a file `.` read, or
-	// `eval`'s argument — handing the builtin a status and letting the script
-	// around it carry on.
+	// FatalErrorEndsBorrowedTextOnly makes an error that would end a script end
+	// only the text a special builtin is running — a file `.` read, or `eval`'s
+	// argument — handing the builtin a status and letting the script around it
+	// carry on. Answering No ends the shell: nothing after the `.` runs, in the
+	// sourcing file or any file above it.
 	//
-	// Measured with an error every shell in the panel words identically, so
-	// that the row is about the abandonment and not about the operator — a
-	// file whose third line is `echo X${NOPE}` under `set -u`, sourced by a
-	// file that prints afterwards:
-	//
-	//	dash, bash, bash-as-sh, bash32   the shell ends; nothing after the `.`
-	//	                                 runs, in the sourcing file or any
-	//	                                 file above it
-	//	ksh93                            `.` reports 1 and the sourcing file
-	//	                                 carries on
-	//	zsh                              `.` reports 126 and the sourcing file
-	//	                                 carries on
+	// Measured with an error worded identically under every answer, so that the
+	// row is about the abandonment and not about the operator — a file whose
+	// third line reads an unset name under `set -u`, sourced by a file that
+	// prints afterwards.
 	//
 	// Four measured facts make this one axis rather than several:
 	//
-	//	*Every* error that would end a script behaves this way in the two
-	//	shells that catch anything — a readonly assignment they call fatal, a
-	//	division by zero, a bad substitution, an unset parameter. So the axis
-	//	is about what a fatal error costs and not about expansion.
+	//	*Every* error that would end a script behaves this way wherever
+	//	anything is caught at all — a readonly assignment, a division by zero,
+	//	a bad substitution, an unset parameter. So the axis is about what a
+	//	fatal error costs and not about expansion.
 	//
 	//	Only one file is given up. A file sourced from a file sourced from a
 	//	script loses the innermost file alone, and the middle one prints the
 	//	line after its own `.`.
 	//
-	//	It is the *running* `.` and not the file the text came from: a
-	//	function defined in a sourced file and called later from the script
-	//	ends the shell in every member of the panel, ksh93 and zsh included.
-	//	A `.` inside a function is the boundary, and the function body
-	//	resumes after it.
+	//	It is the *running* `.` and not the file the text came from: a function
+	//	defined in a sourced file and called later from the script ends the
+	//	shell under every answer. A `.` inside a function is the boundary, and
+	//	the function body resumes after it.
 	//
 	//	`exit`, and errexit firing, are not errors and are never caught —
-	//	unanimous. That is what separates this from the neighboring rule
-	//	that `exit` in a startup file ends the shell and the files after it
-	//	are not read.
+	//	unanimous. That is what separates this from the neighboring rule that
+	//	`exit` in a startup file ends the shell and the files after it are not
+	//	read.
 	//
-	// One axis covers `eval` and `.` because the answers are the same for
-	// both in every shell measured — the same four fatal, the same two
-	// catching, the same `exit` uncaught — which is the arrangement
-	// BuiltinSyntaxErrorFatal already has for the same pair. The *status* is
-	// not the same for both, and that is Diagnostics.SourcedFatalStatus,
-	// which the file route passes and `eval` does not: measured, an error
-	// caught at an `eval` reports 1 in ksh93 and in zsh, where the same
-	// failure caught at a `.` reports 1 in ksh93 and 126 in zsh.
+	// One axis covers `eval` and `.` because they are answered the same way —
+	// the same errors fatal, the same ones caught, `exit` uncaught — which is
+	// the arrangement BuiltinSyntaxErrorFatal already has for the same pair. The
+	// *status* is not the same for both, and that is
+	// Diagnostics.SourcedFatalStatus, which the file route passes and `eval`
+	// does not.
 	FatalErrorEndsBorrowedTextOnly Answer
 
-	// ParamErrorIsAnExitRequest makes `${x?word}` and `${x:?word}` a request
-	// to stop rather than an error, so no boundary catches it.
+	// ParamErrorIsAnExitRequest makes `${x?word}` and `${x:?word}` a request to
+	// stop rather than an error, so no boundary catches it.
 	//
-	// Asked only where the answers differ, which is at a boundary that gives
-	// up one file: measured, the same `${NOPE?msg}` inside a file `.` read
-	// reports and lets the sourcing file carry on in ksh93 and ends the whole
-	// shell in zsh, where an unset parameter under `set -u` two lines away is
-	// caught by both. The startup-file boundary splits the same way — at the
-	// top of a `$BASH_ENV` the operator stops that file and the script still
-	// runs, and at the top of a `~/.zshenv` it ends the shell before the
-	// script. At the top level of a script both operators end the shell in
-	// every member of the panel, so nothing there has a question to ask.
+	// Asked only where the answers differ, which is at a boundary that gives up
+	// one file: the same `${NOPE?msg}` inside a file `.` read reports and lets
+	// the sourcing file carry on under No and ends the whole shell under Yes,
+	// where an unset parameter under `set -u` two lines away is caught by both.
+	// The startup-file boundary splits the same way. At the top level of a
+	// script both operators end the shell under every answer, so nothing there
+	// has a question to ask.
 	//
-	// zsh's own manual is the reason it reads as a request rather than as an
-	// inconsistency: the `?` form is documented to print the word and *exit
-	// the shell*, which is the same family as the `exit` builtin and not the
-	// family of a diagnostic.
+	// Yes is a documented reading rather than an inconsistency: the `?` form is
+	// specified to print the word and *exit the shell*, which is the same family
+	// as the `exit` builtin and not the family of a diagnostic.
 	ParamErrorIsAnExitRequest Answer
 
 	// DotWithNoOperandIsAnError decides whether `.` with no filename is a
-	// failure at all. False in dash, which does nothing and reports success;
-	// true in bash, ksh93 and zsh.
+	// failure at all. Answering No does nothing and reports success.
 	//
-	// Separate from the status and from the fatality because the panel splits
-	// four ways on `.` alone — dash 0, bash 2 surviving, ksh93 2 fatal, zsh 1
-	// surviving — and one field with four answers would have to invent a type
-	// to hold what is really three independent questions.
+	// Separate from the status and from the fatality because `.` alone splits
+	// four ways — 0; 2 surviving; 2 fatal; 1 surviving — and one field with four
+	// answers would have to invent a type to hold what is really three
+	// independent questions.
 	DotWithNoOperandIsAnError Answer
 
-	// DotDirectoryOperandIsAnError decides whether `.` naming a **directory**
-	// is a failure at all, which the panel is split down the middle on.
-	// Measured 2026-09-08, `. ./` from a script file in a scratch directory:
+	// DotDirectoryOperandIsAnError decides whether `.` naming a **directory** is
+	// a failure at all, with `. ./` from a script file in a scratch directory:
 	//
-	//	zsh 5.9.2   silent, status 0
-	//	dash        silent, status 0
-	//	bash 5.3.15 `.: ./: is a directory`, status 1, and the script carries on
-	//	bash as sh  the same
-	//	bash 3.2.57 the same
-	//	ksh93u+     `.: ./: cannot open [Is a directory]`, and the script ends
+	//	No   silent, status 0
+	//	Yes  `.: ./: is a directory`, status 1, and the script carries on —
+	//	     or `cannot open [Is a directory]`, and the script ends
 	//
-	// Two shells open the directory, read no commands out of it and call that
-	// a script that did nothing; four call it an error. So it is an axis and
-	// not a wording fix — a fix that answered only the sentence would leave the
-	// status wrong for two columns and invent a diagnostic for them.
+	// A No opens the directory, reads no commands out of it and calls that a
+	// script that did nothing. So it is an axis and not a wording fix — a fix
+	// that answered only the sentence would leave the status wrong and invent a
+	// diagnostic for the presets that report nothing.
 	//
 	// Separate from DotMissingFileFatal, which decides what an error here
-	// *costs* and already splits the four that report one the right way: ksh93
-	// ends the script and bash reports and carries on. Separate from
-	// DotWithNoOperandIsAnError for the same reason that one is separate from
-	// the status — three independent questions about one builtin.
+	// *costs*. Separate from DotWithNoOperandIsAnError for the same reason that
+	// one is separate from the status — three independent questions about one
+	// builtin.
 	//
-	// A path that does not exist is not this axis. Every column reports that
-	// one, and we already match each of them; the tell that this was a
-	// different question was our answering `no such file or directory` at 127
-	// for a path that does exist (#1577).
+	// A path that does not exist is not this axis: that one is reported under
+	// every answer, and the tell that this was a different question was
+	// answering `no such file or directory` at 127 for a path that does exist.
 	DotDirectoryOperandIsAnError Answer
 
-	// DotMissingFileFatal ends the script when `.` cannot read its file.
-	// True in dash and ksh93, false in bash and zsh — the same split as
-	// ShiftPastEndFatal, and for the same POSIX reason.
+	// DotMissingFileFatal ends the script when `.` cannot read its file — the
+	// same split as ShiftPastEndFatal, and for the same POSIX reason.
 	DotMissingFileFatal Answer
 
-	// DotPassesArguments gives a sourced file its own positional parameters
-	// from the words after the filename, restoring the caller's afterwards.
+	// DotPassesArguments gives a sourced file its own positional parameters from
+	// the words after the filename, restoring the caller's afterwards. Answering
+	// No ignores them, so `. f.sh ARG` leaves `$1` as the caller's.
 	//
-	// False in dash, which ignores them, so `. f.sh ARG` leaves `$1` as the
-	// caller's; true in bash, ksh93 and zsh. With no words after the filename
-	// every shell leaves the parameters alone, so the axis only speaks when
-	// there are some.
+	// With no words after the filename the parameters are left alone under both,
+	// so the axis only speaks when there are some.
 	DotPassesArguments Answer
 
-	// ExecFailureRunsExitTrap runs a `trap … EXIT` handler when `exec` could
-	// not run the command it was given. True in dash and bash, false in ksh93
-	// and zsh.
+	// ExecFailureRunsExitTrap runs a `trap … EXIT` handler when `exec` could not
+	// run the command it was given.
 	//
-	// A *successful* exec runs no handler anywhere, and that is not an axis:
-	// the trap died with the process the exec replaced. Only the failure has
-	// a shell left to decide anything, and the panel splits on it.
+	// A *successful* exec runs no handler anywhere, and that is not an axis: the
+	// trap died with the process the exec replaced. Only the failure has a shell
+	// left to decide anything.
 	ExecFailureRunsExitTrap Answer
 
-	// TimesRejectsArguments makes `times` refuse an argument rather than
-	// ignore it. True in zsh, false in dash and bash.
+	// TimesRejectsArguments makes `times` refuse an argument rather than ignore
+	// it.
 	//
-	// ksh93 answers neither: `times` is a reserved word there, so `times foo`
-	// is a *syntax* error and no builtin ever runs. That is a grammar question
-	// rather than this one, and it is recorded in the corpus rather than
-	// modeled here.
+	// A preset where `times` is a reserved word answers neither: `times foo` is
+	// a *syntax* error there and no builtin ever runs. That is a grammar
+	// question rather than this one, and it is recorded in the corpus rather
+	// than modeled here.
 	TimesRejectsArguments Answer
 
-	// EmptyPathIsTheCurrentDirectory searches the current directory when PATH
-	// is set and empty.
+	// EmptyPathIsTheCurrentDirectory searches the current directory when PATH is
+	// set and empty.
 	//
-	// True in dash, bash and zsh; false in ksh93. `PATH=` reads like "nowhere"
-	// and is not: an empty PATH is one *empty element*, and an empty element
-	// means the current directory, so three of the four will still run a
-	// command sitting next to the script. Measured with the command in the
-	// current directory, which is the only arrangement that tells the two
-	// answers apart — with it anywhere else all four report not-found and the
-	// axis is invisible.
+	// `PATH=` reads like "nowhere" and is not: an empty PATH is one *empty
+	// element*, and an empty element means the current directory, so Yes will
+	// still run a command sitting next to the script. Measured with the command
+	// in the current directory, which is the only arrangement that tells the two
+	// answers apart — with it anywhere else both report not-found and the axis
+	// is invisible.
 	//
 	// `PATH=:` is not this question. Two empty elements is unanimous: every
 	// shell searches the current directory for it.
 	EmptyPathIsTheCurrentDirectory Answer
 
-	// HashReportsAMissingName has `hash name` complain and answer 1 when
-	// the name resolves to nothing. bash, dash and zsh do; ksh93 — whose
-	// hash is an alias for `alias -t` — says nothing and reports success.
+	// HashReportsAMissingName has `hash name` complain and answer 1 when the
+	// name resolves to nothing. Answering No — which is what a `hash` that is
+	// really an alias table under another name does — says nothing and reports
+	// success.
 	HashReportsAMissingName Answer
 
-	// HashSearchesPathAlone counts only what PATH holds: zsh answers
-	// `hash shift` with "no such command" where the other three accept a
-	// builtin or a function as hashable. Measured with `shift`, which no
-	// PATH carries — `cd` was the contaminated probe, macOS ships
-	// /usr/bin/cd. Recorded as `hash/a-builtin-counts-except-in-zsh`.
+	// HashSearchesPathAlone counts only what PATH holds, answering `hash shift`
+	// with "no such command" where No accepts a builtin or a function as
+	// hashable.
+	//
+	// Measured with `shift`, which no PATH carries — `cd` is a contaminated
+	// probe, since some systems ship a `/usr/bin/cd`. Recorded as
+	// `hash/a-builtin-counts-except-in-zsh`.
 	HashSearchesPathAlone Answer
 
 	// UnderscoreTracksTheLastArgument moves `$_` to the previous simple
-	// command's last expanded argument — the command word itself when it
-	// had none, and empty after a bare assignment. bash and zsh; dash and
-	// ksh93 keep no such parameter at all.
+	// command's last expanded argument — the command word itself when it had
+	// none, and empty after a bare assignment. Answering No keeps no such
+	// parameter at all.
 	//
-	// What the two that do not keep it hold instead was recorded here as
-	// the shell's own path, forever, and that was measured false: they
-	// hold whatever the environment brought and nothing when it brought
-	// nothing, because `_` is an ordinary name there. The claim survived
-	// because the harness writes a shell's path as `<shell>` and the cells
-	// were empty either way — a real path would have shown. Re-measured
-	// with `_` scrubbed from the environment and again with `_=X` in it,
-	// on both the `-c` and the script route.
+	// What a No holds instead is whatever the environment brought, and nothing
+	// when it brought nothing, because `_` is an ordinary name there. That is
+	// measured rather than assumed: a claim that it holds the shell's own path
+	// survives any probe whose cells are empty either way, so it has to be asked
+	// with `_` scrubbed from the environment and again with `_=X` in it, on both
+	// the `-c` and the script route.
 	UnderscoreTracksTheLastArgument Answer
 
-	// UnderscoreStartsAtTheInvocation writes argv[0] into `$_` before the
-	// first command runs, so a script reading it at the top finds how the
-	// shell was started. bash alone, in both builds and under either
-	// argv[0]; dash, ksh93 and zsh leave it as it was.
+	// UnderscoreStartsAtTheInvocation writes argv[0] into `$_` before the first
+	// command runs, so a script reading it at the top finds how the shell was
+	// started. Answering No leaves it as it was.
 	//
-	// Not the same question as UnderscoreTracksTheLastArgument, which is
-	// why it is its own axis rather than a consequence of that one: zsh
-	// answers yes to tracking and still starts empty, so a startup write
-	// gated on tracking would give zsh a value no zsh has.
+	// Not the same question as UnderscoreTracksTheLastArgument, which is why it
+	// is its own axis rather than a consequence of that one: a preset can answer
+	// yes to tracking and still start empty, so a startup write gated on
+	// tracking would give it a value it does not have.
 	//
-	// The value is the *invocation* rather than the executable — the same
-	// binary reached through a symlink named `sh` writes `sh` — and rather
-	// than `$0`, which a `-c` invocation takes from its first operand.
+	// The value is the *invocation* rather than the executable — the same binary
+	// reached through a symlink named `sh` writes `sh` — and rather than `$0`,
+	// which a `-c` invocation takes from its first operand.
 	UnderscoreStartsAtTheInvocation Answer
 
-	// UnderscoreInheritsFromTheEnvironment lets an `_` the shell was handed
-	// in its environment show through. Everywhere but zsh, which discards
-	// it and starts empty however it was invoked.
+	// UnderscoreInheritsFromTheEnvironment lets an `_` the shell was handed in
+	// its environment show through. Answering No discards it and starts empty
+	// however the shell was invoked.
 	//
-	// It is the other half of the startup value and it decides what the
-	// half above means: bash writes argv[0] only when the environment said
-	// nothing, so an exported `_` wins over the invocation in every shell
-	// that reads one. Only reachable with an environment, which is why the
-	// case that pins it carries one — no snippet can put a name in the
-	// environment of the shell already running it.
+	// It is the other half of the startup value and it decides what the half
+	// above means: argv[0] is written only when the environment said nothing, so
+	// an exported `_` wins over the invocation wherever one is read at all. Only
+	// reachable with an environment, which is why the case that pins it carries
+	// one — no snippet can put a name in the environment of the shell already
+	// running it.
 	//
-	// `_` is exported by some shells as the command they are about to run,
-	// so this is not a hypothetical: it is what a shell started by another
-	// shell actually finds.
+	// `_` is exported by some shells as the command they are about to run, so
+	// this is not a hypothetical: it is what a shell started by another shell
+	// actually finds.
 	UnderscoreInheritsFromTheEnvironment Answer
 
-	// FdVariableOutlivesTheCommand keeps a `{name}>f` descriptor open past
-	// the simple command that carried it — two of the three that have the
-	// grammar; ksh93 takes it back with the command's other redirections,
-	// so the number the variable holds is already dead.
+	// FdVariableOutlivesTheCommand keeps a `{name}>f` descriptor open past the
+	// simple command that carried it. Answering No takes it back with the
+	// command's other redirections, so the number the variable holds is already
+	// dead.
 	FdVariableOutlivesTheCommand Answer
 
 	// FirstAllocatedDescriptor is the number the shell counts up from when it
-	// picks a descriptor for itself — `exec {fd}< file`, and the two zsh
-	// builtins that hand a number back the same way.
+	// picks a descriptor for itself — `exec {fd}< file`, and the builtins that
+	// hand a number back the same way.
 	//
-	// Measured 2026-09-12, `<shell> -c 'exec {fd}< /etc/hosts; echo $fd'`:
-	// bash 5.3.15 and ksh93 (AJM 93u+) say 10, zsh 5.9.2 says 11. dash and
-	// bash 3.2 have no such grammar. The same number is what `zsocket`
-	// reports in `$REPLY` and what `sysopen -u name` writes, so a corpus row
-	// about either builtin either avoids printing the number or is wrong in
-	// one column (#1752).
+	// The same number is what a socket builtin reports in `$REPLY` and what an
+	// open-by-name builtin writes, so a corpus row about either either avoids
+	// printing the number or is wrong under some preset.
 	//
 	// **The one axis with no unanswered state**, and that is measured rather
 	// than an omission: there is no shape in which a shell declines to pick a
-	// number. A `{name}<file` that reached the allocation is going to be
-	// given one, and so is an embedder calling Runner.OpenDescriptor, so
-	// there is nothing for a refusal to protect and a zero value that refused
-	// would refuse a construct every shell performs. The zero value is
-	// therefore an answer — the one four of the five shells with the
-	// construct give — and every preset states it anyway.
+	// number. A `{name}<file` that reached the allocation is going to be given
+	// one, and so is an embedder calling Runner.OpenDescriptor, so there is
+	// nothing for a refusal to protect and a zero value that refused would
+	// refuse a construct every implementation performs. The zero value is
+	// therefore an answer — the common one — and every preset states it anyway.
 	FirstAllocatedDescriptor DescriptorAllocationBase
 
-	// UnterminatedHeredocGainsATrailingNewline adds the newline a
-	// here-document body never got, where the delimiter never arrived and
-	// the input ended mid-line.
+	// UnterminatedHeredocGainsATrailingNewline adds the newline a here-document
+	// body never got, where the delimiter never arrived and the input ended
+	// mid-line. With `printf 'cat <<X\nbody'`, Yes is `body\n` at five bytes
+	// and No is `body` at four.
 	//
-	// Measured 2026-09-12, `printf 'cat <<X\nbody' > u.sh` read back with
-	// `od -c`, and again through `-c` with the same two lines:
-	//
-	//	bash 5.3, bash 3.2, bash-as-sh   body\n   5 bytes
-	//	dash, ksh93, zsh                 body     4 bytes
-	//
-	// An earlier reading of #1020 put bash 3.2 with the four; it is not, and
-	// the two bash builds agree.
-	//
-	// It is reachable no other way, which is why it is worth a field at all:
-	// a here-document closed by its delimiter always has a body ending in a
+	// It is reachable no other way, which is why it is worth a field at all: a
+	// here-document closed by its delimiter always has a body ending in a
 	// newline, so this is the only shape in which the question exists. The
 	// corpus cannot see it either — `$( )` strips trailing newlines and the
-	// harness trims them — so it is checked by a Go test on the runner's
-	// bytes.
+	// harness trims them — so it is checked by a Go test on the runner's bytes.
 	//
 	// Asked only where the two answers differ, which is what
 	// syntax.Redirect.HeredocAtEOF marks: an ordinary here-document never
 	// reaches the question.
 	UnterminatedHeredocGainsATrailingNewline Answer
 
-	// ReadFailureInAFileSubstitutionFailsIt is `$(<file)` where the *read*
-	// fails after the open worked — a directory is the shape that reaches it.
+	// ReadFailureInAFileSubstitutionFailsIt is `$(<file)` where the *read* fails
+	// after the open worked — a directory is the shape that reaches it. Yes is
+	// status 1, No is status 0.
 	//
-	// Measured 2026-09-12, `mkdir dir; v=$(<dir); echo "st=$? v=[$v]"`:
-	//
-	//	zsh 5.9.2   st=1, and `error when reading dir: is a directory`
-	//	bash 3.2    st=1, silent
-	//	bash 5.3    st=0, silent
-	//	ksh93       st=0, silent
-	//	dash        no such form
-	//
-	// The status and the sentence are separate questions and the panel is
-	// what separates them: bash 3.2 fails the substitution and says nothing,
-	// so a dialect could hold either answer with either wording. The sentence
-	// is Diagnostics.FileSubstitutionReadError.
+	// The status and the sentence are separate questions, and that separation is
+	// measured: an implementation may fail the substitution and say nothing, so
+	// a preset could hold either answer with either wording. The sentence is
+	// Diagnostics.FileSubstitutionReadError.
 	//
 	// An open that fails is a different event and is already answered by
-	// redirectFailureStatus. This one is the read after a successful open,
-	// which is why it cannot ride on that: `$(<nosuch)` and `$(<dir)` are
-	// status 1 and status 0 in the same shell (#1778).
+	// redirectFailureStatus. This one is the read after a successful open, which
+	// is why it cannot ride on that: `$(<nosuch)` and `$(<dir)` can be status 1
+	// and status 0 in the same implementation.
 	ReadFailureInAFileSubstitutionFailsIt Answer
 
 	// ExecOpenedFdReachesACommand hands a descriptor that `exec`'s own
-	// redirection list opened to whatever the shell runs next — the flock
-	// and shared-log idioms, and every script that gives a child a logging
-	// descriptor. Four of the five say yes; ksh93 alone closes anything
-	// above 2 that `exec` opened when it invokes another program, which its
-	// manual states as the rule rather than leaving it to be discovered.
+	// redirection list opened to whatever the shell runs next — the flock and
+	// shared-log idioms, and every script that gives a child a logging
+	// descriptor. Answering No closes anything above 2 that `exec` opened when
+	// another program is invoked, which an implementation that does it states in
+	// its manual rather than leaving it to be discovered.
 	//
 	// POSIX decides nothing here: the Shell Command Language says whether
 	// standard input, output and error are open for a utility and is silent
-	// about the rest, so both answers conform and there is no majority to
-	// defer to on the standard's authority.
+	// about the rest, so both answers conform and there is no majority to defer
+	// to on the standard's authority.
 	//
-	// It is narrower than "that shell hands nothing over", and the boundary
+	// It is narrower than "the shell hands nothing over", and the boundary
 	// is measured. A descriptor the *caller* opened crosses in every shell,
 	// this one included, and closing it closes it for the child everywhere.
 	// A command's own redirection crosses everywhere too — `sh -c '… >&3'

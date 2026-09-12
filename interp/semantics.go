@@ -2361,102 +2361,89 @@ type Semantics struct {
 	ReportsACommandKilledBySignal Answer
 
 	// JobsShowBackgroundCommand puts the command of a `&` job in a `jobs`
-	// listing. True in bash and zsh; dash prints an empty column there and
-	// ksh93 a placeholder.
+	// listing, rather than an empty column or a placeholder.
 	//
-	// Only for a `&` job, which is the whole reason this is not a question
-	// about rendering a command at all: both of the shells that leave it out
-	// here *do* print the command of a job they stopped themselves. They
-	// kept nothing for this kind of job, and the listing is where that shows.
+	// Only for a `&` job, which is the whole reason this is not a question about
+	// rendering a command at all: an implementation that leaves it out here
+	// still prints the command of a job it stopped itself. It kept nothing for
+	// this kind of job, and the listing is where that shows.
 	JobsShowBackgroundCommand Answer
 
 	// JobsListNewestFirst puts the most recent job at the top of a `jobs`
-	// listing. True in dash and ksh93; bash and zsh list oldest first.
+	// listing, rather than listing oldest first.
 	//
-	// A two-two split, which is the usual shape here and the reason this is
-	// a field rather than a choice: there is no ordering of the shells that
-	// explains it.
+	// An even split, which is the usual shape here and the reason this is a
+	// field rather than a choice: there is no ordering of the implementations
+	// that explains it.
 	JobsListNewestFirst Answer
 
 	// JobsListFinishedJobs includes a job that has already ended in a `jobs`
-	// listing, once, before forgetting it. True in bash, dash and ksh93; zsh
-	// drops a finished job without ever mentioning it.
+	// listing, once, before forgetting it. Answering No drops a finished job
+	// without ever mentioning it.
 	//
-	// The forgetting is not the axis and is not optional: every shell in the
-	// panel reports a finished job at most once, so a second `jobs` shows
-	// nothing. A shell that kept them would grow a listing for the length of
-	// the session.
+	// The forgetting is not the axis and is not optional: a finished job is
+	// reported at most once under either answer, so a second `jobs` shows
+	// nothing. Keeping them would grow a listing for the length of the session.
 	JobsListFinishedJobs Answer
 
-	// SetReportsEveryBadOption makes `set` report every option word it
-	// cannot use before it gives up, rather than stopping at the first.
+	// SetReportsEveryBadOption makes `set` report every option word it cannot
+	// use before it gives up, rather than stopping at the first.
 	//
-	// True in ksh93 alone, which is why it went unnoticed: three of the five
-	// columns print one line because the refusal is *fatal* there and the
-	// loop never reaches the second word, and the fourth prints one because
-	// it stops too. ksh93's refusal is fatal as well and it still prints
-	// every line first.
+	// Easy to miss, because a single line is what No produces for two different
+	// reasons: the refusal may be *fatal*, so the loop never reaches the second
+	// word, or the loop may simply stop. Yes is fatal as well and still prints
+	// every line first, which is what separates it from both.
 	//
-	// Measured 2026-09-06 and again 2026-09-07, over a script file and over
-	// `-c`, which answer alike:
-	//
-	//	set -q -z        two lines, then one usage block, status 2
-	//	set -q -z -y     three lines, then one usage block
-	//	set -qz          two lines — a bundle is one word and several letters
+	//	set -q -z             two lines, then one usage block, status 2
+	//	set -q -z -y          three lines, then one usage block
+	//	set -qz               two lines — a bundle is one word, several letters
 	//	set -q -o nosuch -z   three lines, in the order written
 	//
-	// So the unit is the **letter**, not the word: a bundle is not one
-	// refusal, which was the open question. Long names count too and
-	// interleave with letters in argument order.
+	// So the unit is the **letter**, not the word: a bundle is not one refusal,
+	// which was the open question. Long names count too and interleave with
+	// letters in argument order.
 	//
-	// The usage block is printed **once**, after all of them, and not one
-	// per word — which is what makes this more than "keep looping", since
-	// the block is written by the same helper that writes each sentence.
-	// The fatality is applied after them as well, so it ends the script
-	// *after* the reports rather than instead of them.
+	// The usage block is printed **once**, after all of them, and not one per
+	// word — which is what makes this more than "keep looping", since the block
+	// is written by the same helper that writes each sentence. The fatality is
+	// applied after them as well, so it ends the script *after* the reports
+	// rather than instead of them.
 	//
-	// This is the rule Runner.builtinNames already follows for bad
-	// *operands*, where bash is the shell that reports each one. Two
-	// different shells answer yes to the two questions, which is what keeps
-	// them separate fields: bash reports every bad name to `export` and
-	// stops at the first bad option to `set`, and ksh93 does the reverse.
+	// This is the rule Runner.builtinNames already follows for bad *operands*.
+	// The two questions are answered by different presets, which is what keeps
+	// them separate fields: one may report every bad name to `export` and stop
+	// at the first bad option to `set`, and another do the reverse.
 	//
 	// Asked for the builtin only. The front end's own option parse is a
-	// different surface with its own measured quirks — ksh93 answers
-	// `ksh -q -z` with a spurious `- : unknown option` between the two, and
-	// folds the whole of the rest of argv into a `-o` complaint — so it
-	// keeps stopping at the first until those are settled.
+	// different surface with its own quirks, so it keeps stopping at the first
+	// until those are settled.
 	SetReportsEveryBadOption Answer
 
-	// ShiftPastEndFatal ends a non-interactive shell when `shift` runs off
-	// the end. True in dash and ksh93.
+	// ShiftPastEndFatal ends a non-interactive shell when `shift` runs off the
+	// end.
 	ShiftPastEndFatal Answer
-	// ReadonlyReassignmentByDeclarationFatal ends the script when a
-	// declaration utility assigns to a readonly name — `export x=2`,
-	// `typeset x=2`. True in dash, ksh93 and zsh; bash reports it and
-	// carries on.
+	// ReadonlyReassignmentByDeclarationFatal ends the script when a declaration
+	// utility assigns to a readonly name — `export x=2`, `typeset x=2` — rather
+	// than reporting it and carrying on.
 	//
-	// A different set of shells from the plain assignment above, which is
-	// what makes it a question of its own: bash stops for `x=2` given as an
-	// argument and never stops for this one.
+	// A different set of answers from the plain assignment above, which is what
+	// makes it a question of its own: an implementation can stop for `x=2` given
+	// as an argument and never stop for this one.
 	ReadonlyReassignmentByDeclarationFatal Answer
 
-	// SetArrayBadNameLeavesZeroFromCommandString makes `set -A` refuse a
-	// name that is not one and leave the shell exiting **0**, where the same
-	// refusal from a script file leaves 1.
+	// SetArrayBadNameLeavesZeroFromCommandString makes `set -A` refuse a name
+	// that is not one and leave the shell exiting **0**, where the same refusal
+	// from a script file leaves 1.
 	//
-	// True in zsh, false in ksh93, and unreachable in the two shells without
-	// the letter — SetArrayLetter is read rather than asked, so a dialect
-	// whose `set` has no `-A` never arrives here.
+	// Unreachable without the letter — SetArrayLetter is read rather than asked,
+	// so a preset whose `set` has no `-A` never arrives here.
 	//
-	// Measured 2026-09-06 and again 2026-09-07 with `>/dev/null 2>&1`, so
-	// the number is the shell's own. The stderr is byte-identical on both
-	// routes — `<shell>:1: not an identifier: 1bad` — and `after` runs on
-	// neither, so the refusal is fatal either way and only the status moves.
+	// The complaint is byte-identical on both routes and the next command runs
+	// on neither, so the refusal is fatal either way and only the status moves.
 	//
-	// It is this refusal and no other, which is what makes it a field of its
-	// own rather than a route rule about bad names or about `set`. Every
-	// neighbor was measured from `-c` in zsh and every one of them leaves 1:
+	// It is this refusal and no other, which is what makes it a field of its own
+	// rather than a route rule about bad names or about `set`. Every neighbor
+	// leaves 1 from the same route:
 	//
 	//	set -A 1bad v      0      set -q             1
 	//	set +A 1bad v      0      set -o nosuch      1
@@ -2468,175 +2455,147 @@ type Semantics struct {
 	// `-c 'false; set -A 1bad v'` exits 0 too.
 	SetArrayBadNameLeavesZeroFromCommandString Answer
 
-	// FailedExpansionAbandonsTheLine ends the *line* a failed expansion
-	// happened on and carries on at the next one, rather than ending the
-	// shell. A bad substitution, a division by zero, a bad subscript and an
-	// arithmetic expression the parser refused are all this failure.
+	// FailedExpansionAbandonsTheLine ends the *line* a failed expansion happened
+	// on and carries on at the next one, rather than ending the shell. A bad
+	// substitution, a division by zero, a bad subscript and an arithmetic
+	// expression the parser refused are all this failure.
 	//
-	// True in bash and false in dash, ksh93 and zsh. Measured 2026-09-07
-	// over both invocation routes and both statement separators, which is
-	// the pairing this axis has to be measured on and the reason it was
-	// missed:
+	// It has to be measured over both statement separators, which is the pairing
+	// that makes it visible and the reason it was missed:
 	//
-	//	echo pre; echo "${(P)x}"; echo after     no `after`, status 1
-	//	echo pre / echo "${(P)x}" / echo after   `after` runs, status 0
+	//	echo pre; echo "${bad}"; echo after     no `after`, status 1
+	//	echo pre / echo "${bad}" / echo after   `after` runs, status 0
 	//
-	// The same 2x2 by `-c` and by a script file, so the *route* has nothing
-	// to do with it. What ends is the command list, and a list ends at a
-	// newline — so `;` between the two commands puts them in the same unit
-	// and a newline does not. Every enclosing shape gives up the same way and
-	// the shell carries on at the next top-level statement: measured in a
-	// loop, a function body, an `if`, a group and a sourced file, where the
-	// commands after the `.` still run.
+	// The same 2x2 by `-c` and by a script file, so the *route* has nothing to
+	// do with it. What ends is the command list, and a list ends at a newline —
+	// so `;` between the two commands puts them in the same unit and a newline
+	// does not. Every enclosing shape gives up the same way and the shell
+	// carries on at the next top-level statement: in a loop, a function body, an
+	// `if`, a group and a sourced file, where the commands after the `.` still
+	// run.
 	//
-	// It is controlAbandon, which is exactly this and was already in the
-	// tree for a readonly reassignment. Before this axis existed the failure
-	// was controlExit in every dialect, so one unreadable expansion ended
-	// the whole file — which is the shape that makes a diagnostic useless,
-	// since the point of naming a construct is that the next line still runs
-	// and the next gate becomes visible.
+	// It is controlAbandon, which is exactly this and is what a readonly
+	// reassignment already uses. Treating the failure as controlExit instead
+	// ends the whole file over one unreadable expansion — the shape that makes a
+	// diagnostic useless, since the point of naming a construct is that the next
+	// line still runs and the next gate becomes visible.
 	//
 	// Not the two parameter failures that look like it. `set -u` on an unset
-	// name and `${x?word}` end the *shell* in all four, by both routes and
-	// with either separator, so they are fatalExpansion's and stay there.
+	// name and `${x?word}` end the *shell* under every answer, by both routes
+	// and with either separator, so they are fatalExpansion's and stay there.
 	//
-	// The core leaves it unanswered: one shell against three is a
-	// disagreement, and this path already asks an unanswered axis there —
-	// FatalErrorStatusIsOne — so a core run says which dialect it needs
-	// rather than picking one.
+	// The core leaves it unanswered: this is a genuine disagreement, and the
+	// path already asks an unanswered axis there — FatalErrorStatusIsOne — so a
+	// core run says which preset it needs rather than picking one.
 	FailedExpansionAbandonsTheLine Answer
 
 	// AssignThroughExpansionMayNameAPositional lets `${1:=word}` assign to a
-	// positional parameter. zsh alone, and it is a real disagreement rather
-	// than a wording one — the other five refuse the expansion fatally.
+	// positional parameter, rather than refusing the expansion fatally. A real
+	// disagreement and not a wording one.
 	//
-	// Measured 2026-09-11 on the six columns, after `set --` so the
-	// conditional fires:
+	// `${@:=word}` and `${*:=word}` are refused unanimously and are **not** this
+	// axis; only the positional splits. `${2:=abc}` and `${10:=abc}` answer with
+	// their own row, so it is the *shape* of the name and not the number.
 	//
-	//	probe          bash 5.3 / as-sh / 3.2      dash                 ksh93                        zsh 5.9.2
-	//	${@:=abc}      $@: cannot assign this way  @: bad variable name ${@:=abc}: bad substitution  not an identifier: @
-	//	${*:=abc}      the same with *             the same with *      the same                     not an identifier: *
-	//	${1:=abc}      $1: cannot assign this way  1: bad variable name ${1:=abc}: bad substitution  assigns, `abc`, status 0
+	// The core leaves it unanswered: a preset that has chosen nothing is told
+	// which one it needs rather than being given one reading of an operator
+	// every preset has.
 	//
-	// So `@` and `*` are refused unanimously and are not this axis; only the
-	// positional splits, and it splits five to one. `${2:=abc}` and
-	// `${10:=abc}` answer with their own row, so it is the *shape* of the
-	// name and not the number.
-	//
-	// Yes in zsh, No everywhere else, and the core leaves it unanswered: a
-	// shell that has chosen nothing is told which dialect it needs rather
-	// than being given one shell's reading of an operator every dialect has.
-	//
-	// It is a run-time question and is asked only when the operator fires:
-	// `set -- p; ${@:=abc}` is `p` at status 0 in all six, and
-	// `if false; then echo ${@:=abc}; fi` is silent in all six.
+	// A run-time question, asked only when the operator fires: `set -- p;
+	// ${@:=abc}` is `p` at status 0 under every answer, and
+	// `if false; then echo ${@:=abc}; fi` is silent under every answer.
 	AssignThroughExpansionMayNameAPositional Answer
 
 	// ReadonlyReassignmentFatal ends the script when a readonly variable is
-	// assigned. True everywhere but bash, measured with a plain assignment in
-	// a script file — adding a redirect makes it a command and reverses the
-	// answer, which is the contaminated-probe trap docs/spec/oracle.md
-	// records.
+	// assigned.
+	//
+	// Measured with a plain assignment in a script file — adding a redirect
+	// makes it a command and reverses the answer, which is the
+	// contaminated-probe trap docs/spec/oracle.md records.
 	ReadonlyReassignmentFatal Answer
 
-	// DeclarationMayShadowAReadonly lets a declaration inside a function
-	// make a local of a name the shell has frozen.
-	//
-	// Measured 2026-09-06, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
-	// ZDOTDIR and HISTFILE, over a script file:
+	// DeclarationMayShadowAReadonly lets a declaration inside a function make a
+	// local of a name the shell has frozen:
 	//
 	//	typeset -r x=1
 	//	f() { local x=2; echo "in=[$x]"; echo running; }
 	//	f; echo "st=$? out=[$x]"
 	//
-	// zsh answers `in=[2]`, `running`, `st=0 out=[1]` — the local shadows
-	// the frozen name, the shadow is an ordinary local, and the outer value
-	// is untouched when the function returns. bash answers `local: x:
-	// readonly variable`, then `in=[1]` and `running` — it refuses the
-	// declaration, leaves the *outer* value in view, and **carries on**.
-	// All four members answer, each asked in the words it has — which is
-	// what makes this a four-shell question rather than the two-shell one it
-	// looks like from `typeset -r` and `local` alone (#1168):
+	// Yes answers `in=[2]`, `running`, `st=0 out=[1]` — the local shadows the
+	// frozen name, the shadow is an ordinary local, and the outer value is
+	// untouched when the function returns. No refuses the declaration, leaves
+	// the *outer* value in view, and **carries on**.
 	//
-	//	zsh    typeset -r x=1; f() { local x=2; …; }; f      → in=[2]
-	//	bash   the same three words                          → refused
-	//	ksh93  typeset -r x=1; function f { typeset x=2; }   → in=[2]
-	//	dash   readonly x=1; f() { local x=2; …; }; f        → refused
-	//
-	// ksh93 has no `local` and answers through `typeset` in a keyword
-	// function, which is a local there — see
-	// TypesetLocalNeedsKeywordFunction. Asked through `f() { … }` instead it
-	// has no scope to shadow into and the declaration is the ordinary
+	// Every preset answers, each asked in the words it has, which is what makes
+	// this a question for all of them rather than the two-way one it looks like
+	// from `typeset -r` and `local` alone. An implementation with no `local`
+	// answers through its declaration keyword in a keyword function — see
+	// TypesetLocalNeedsKeywordFunction — and asked through `f() { … }` instead
+	// it has no scope to shadow into, so the declaration is the ordinary
 	// refusal, which is that field and ReadonlyReassignmentFatal rather than
-	// this one; reading that fatality as this axis's answer had ksh93 down
-	// as a `No`. dash has no `typeset -r` and answers through `readonly`,
-	// which is the freeze POSIX spells.
+	// this one. Reading that fatality as this axis's answer is the mistake to
+	// avoid. One with no `typeset -r` answers through `readonly`, the freeze
+	// POSIX spells.
 	//
-	// Two each way, so it stays an axis — and a different split from
-	// ReadonlyAttributeCanBeRemoved below, where ksh93 crosses to bash's
-	// side. That the two questions divide the panel differently is what
-	// makes them two questions.
+	// A different split from ReadonlyAttributeCanBeRemoved below. That the two
+	// questions divide the presets differently is what makes them two questions.
 	//
-	// It is one field for the whole family and not one per spelling: zsh
-	// takes `local x=2`, `local x`, `typeset x=3`, `local -r x=4` and
-	// `local y=1 x=5 z=2` alike, and bash refuses every one of them and
-	// reports 1 from the builtin each time. Splitting them would have been
-	// five fields whose answers can only ever agree.
+	// It is one field for the whole family and not one per spelling: `local
+	// x=2`, `local x`, `typeset x=3`, `local -r x=4` and `local y=1 x=5 z=2` are
+	// all taken alike under Yes and all refused under No, with the builtin
+	// reporting 1 each time. Splitting them would have been five fields whose
+	// answers can only ever agree.
 	//
-	// Where the answer is **no**, three things follow and all three were
-	// wrong here. The refusal names the builtin — `local: x: readonly
-	// variable`, which is ReadonlyVariableInDeclaration and the reason
-	// ReadonlyRefusalNamesBuiltin has entries for the declaration words. The
-	// builtin reports 1 and the *function* runs on, so `local x=2 || …`
-	// fires its right-hand side and the next line still runs. And the
-	// remaining operands are still declared: bash's `local y=1 x=5 z=2`
-	// leaves `y` and `z` local and only `x` refused.
+	// Where the answer is **no**, three things follow. The refusal names the
+	// builtin — `local: x: readonly variable`, which is
+	// ReadonlyVariableInDeclaration and the reason ReadonlyRefusalNamesBuiltin
+	// has entries for the declaration words. The builtin reports 1 and the
+	// *function* runs on, so `local x=2 || …` fires its right-hand side and the
+	// next line still runs. And the remaining operands are still declared:
+	// `local y=1 x=5 z=2` leaves `y` and `z` local and only `x` refused.
 	//
-	// Where it is **yes** the shadow takes the attribute with it: the local
-	// cell is writable and the outer name is frozen again when the function
-	// returns. Asked only when a declaration meets a name that is already
-	// frozen, so nothing else reaches the question.
+	// Where it is **yes** the shadow takes the attribute with it: the local cell
+	// is writable and the outer name is frozen again when the function returns.
+	// Asked only when a declaration meets a name that is already frozen, so
+	// nothing else reaches the question.
 	DeclarationMayShadowAReadonly Answer
 
-	// ReadonlyAttributeCanBeRemoved lets a plus form take the readonly
-	// attribute off a name — `typeset +r x` — leaving it writable again.
-	//
-	// Measured 2026-09-07, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
-	// ZDOTDIR and HISTFILE, over a script file:
+	// ReadonlyAttributeCanBeRemoved lets a plus form take the readonly attribute
+	// off a name — `typeset +r x` — leaving it writable again:
 	//
 	//	typeset -r s=1; typeset +r s; s=9; echo "st=$? s=[$s]"
 	//
-	//	zsh    silent, status 0, then s=[9] — the attribute is gone
-	//	bash   typeset: s: readonly variable, status 1, and carries on
-	//	ksh93  typeset: s: is read only, and the script ends
-	//	dash   no `typeset` or `declare`, so nothing here can ask
+	// Yes is silent at status 0 and then `s=[9]`, the attribute gone. No refuses
+	// through the declaration, and whether that ends the script is a separate
+	// question.
 	//
 	// `declare +r` is the same word under its other spelling wherever both
-	// exist, and zsh's `export +r` is too — `export` is `typeset -gx` there.
-	// `readonly +r` is not: that builtin takes no `r` in any shell, since
-	// the attribute is the whole of what it means.
+	// exist, and so is an `export +r` where `export` is the declaration builtin
+	// with an export flag. `readonly +r` is not: that builtin takes no `r`,
+	// since the attribute is the whole of what it means. An implementation with
+	// no declaration builtin at all cannot ask the question.
 	//
-	// zsh alone allows it, so this splits the panel differently from
-	// DeclarationMayShadowAReadonly above, where ksh93 is on zsh's side.
-	// Two questions rather than one, and the ksh93 row is what proves it.
+	// This splits the presets differently from DeclarationMayShadowAReadonly
+	// above. Two questions rather than one, and that difference is what proves
+	// it.
 	//
-	// A shell that says no still has to say *which* no, and it already
-	// does: the refusal is the ordinary readonly refusal through a
-	// declaration, so the wording and the fatality come from
-	// ReadonlyReassignmentByDeclarationFatal and the diagnostics beside it
-	// rather than from anything of this field's own. That is measured and
-	// not an economy — ksh93 ends the script over `typeset +r` exactly as it
-	// ends one over `export x=2`, and bash carries on from both.
+	// A preset that says no still has to say *which* no, and it already does:
+	// the refusal is the ordinary readonly refusal through a declaration, so the
+	// wording and the fatality come from ReadonlyReassignmentByDeclarationFatal
+	// and the diagnostics beside it rather than from anything of this field's
+	// own. That is measured and not an economy — an implementation that ends the
+	// script over `typeset +r` ends one over `export x=2`, and one that carries
+	// on carries on from both.
 	//
 	// Asked only for a plus form on a name that is *already* frozen. A
-	// `typeset +r` on a free name reports 0 and says nothing in all three
-	// shells that spell it, which is the shape a script actually writes —
-	// making sure a name is writable — and it must not reach an axis.
+	// `typeset +r` on a free name reports 0 and says nothing wherever the word
+	// is spelled at all, which is the shape a script actually writes — making
+	// sure a name is writable — and it must not reach an axis.
 	//
-	// zsh's yes has one limit that is not an axis: a *special* parameter
-	// refuses the change there whatever this says — `typeset +r
-	// EPOCHSECONDS` is `can't change type of a special parameter` — which is
-	// a fact about specials rather than about the attribute.
+	// A Yes has one limit that is not an axis: a *special* parameter refuses the
+	// change whatever this says, `typeset +r EPOCHSECONDS` being `can't change
+	// type of a special parameter`. That is a fact about specials rather than
+	// about the attribute.
 	ReadonlyAttributeCanBeRemoved Answer
 
 	// DeclaredNameWithoutValueIsEmpty gives a name a value when it is

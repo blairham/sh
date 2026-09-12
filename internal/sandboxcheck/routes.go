@@ -148,9 +148,21 @@ func coreRoutes() []Route {
 		Did:    made,
 		Why:    "one operator opening two files, so a gate that checked the first is past",
 	}, {
+		// The body of a `>(…)` runs beside the command that named it and the
+		// shell does not wait for it, so asking the filesystem what it did is
+		// asking a question whose answer is still being written: measured
+		// under load, the plain spelling reported the target missing on 3 runs
+		// in 30 and graded that row inert on one dialect and overblocked on
+		// another — from a gate that was working perfectly.
+		//
+		// So the body is made to announce itself *after* the open, through a
+		// `<(…)` the shell does block on. `read` returns when the word
+		// arrives, which is after the open either happened or was refused, and
+		// the fixture is then a fact rather than a race. 30 runs out of 30 on
+		// all three dialects under the same load.
 		Name:   "write/procsub",
 		Only:   []string{"bash", "zsh", "ksh"},
-		Script: `echo x > >(echo written > {{target}})`,
+		Script: `read ok < <(echo x > >(echo written > {{target}}; echo done))`,
 		Did:    made,
 		Why:    "the substitution's child is a second place the gate has to reach",
 	}, {

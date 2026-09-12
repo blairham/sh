@@ -1577,14 +1577,14 @@ func Semantics() interp.Semantics {
 	// listing as itself.
 	//
 	// The one spelling where the letter is not inert is `typeset -fu`, which
-	// is that shell's second name for `autoload` — there `-z` picks the
+	// is that shell's second name for `autoload`: there `-z` picks the
 	// autoloaded file's syntax and is recorded on the stub, `typeset -fuz n`
 	// listing as `builtin autoload -Xz` exactly as `autoload -z n` does.
-	// This engine's `typeset -fu` does not autoload at all yet (#1753), so
-	// there is nothing for the letter to be recorded on and inert is the
-	// whole truth for every spelling that works here. `autoload -z` itself
-	// is unaffected: that word has its own table and already keeps the
-	// letter.
+	// That spelling is built now (#1753), and the letter reaches the stub
+	// through declareFlags.letters rather than through this table — being
+	// listed here means "no attribute", not "unread", which is why the two
+	// can both be true of one letter. `autoload -z` itself has always been
+	// unaffected: that word has its own table and keeps the letter.
 	//
 	// Refusing it was worth 68 diagnostics in one shell snapshot — a
 	// completion loader's functions are named `+zi-log` and the like, so a
@@ -1607,6 +1607,11 @@ func Semantics() interp.Semantics {
 	// quoting — the shape a shell snapshot reads to find what to capture.
 	// See Semantics.FunctionNamesUnderPlus for the two other answers.
 	s.FunctionNamesUnderPlus = interp.Yes
+	// `typeset -f` written with `-u` or `-U` and names is not a listing: it
+	// is `autoload` under a second word. `z` rides along and is recorded on
+	// the stub without being one of these — `typeset -fz nm` marks nobody.
+	// See dialect/zsh's autoloadFromDeclaration for the measurements (#1753).
+	s.FunctionLettersThatMarkUndefined = "uU"
 	// `-F` is a float's precision here rather than bash's function listing,
 	// and the number behind it is the letter's argument and not a name:
 	// `typeset -F 3 x=1.5` declares one name at three places and reads back

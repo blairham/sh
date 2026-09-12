@@ -17970,6 +17970,21 @@ echo "st=$?"`,
 		Why:     "the environment is a read like any other, so the child sees `v=ab` under both answers -- the shell that keeps `AB` in its own store still hands the folded text over. It is the row that says the store is not simply copied outward, and it is the one place where the two readings have to agree while the listing beside them does not. dash has no `typeset` and bash 3.2 has no letter",
 	},
 	{
+		ID: "declare/the-f-letter-with-u-marks-rather-than-lists", Category: "declarations",
+		Snippet: `typeset -fu nm; echo "st=$?"; functions nm 2>/dev/null; echo "then=$?"`,
+		Why:     "a `-f` declaration that is not a listing at all: with `-u` and operands it *makes* nm a function whose body is read the first time it is called. zsh leaves the stub `autoload nm` leaves, so `functions nm` writes a body with `# undefined` and `builtin autoload -X` in it at 0, where this engine marked nothing and answered a silent 1 (#1753). ksh93 has the same spelling and its own rendering -- `typeset -fu nm`, a declaration and no body. The two bashes have no `-u` on `declare` and refuse the letter, and dash has no `typeset`. The `then=` is what makes the row discriminating: a shell that read the line as a listing is silent at 1 there, which is exactly what a shell that marked nothing looks like from the outside",
+	},
+	{
+		ID: "declare/the-decorating-letter-does-not-mark-on-its-own", Category: "declarations",
+		Snippet: `typeset -fz nm; echo "st=$?"; functions nm 2>/dev/null; echo "then=$?"; typeset -fuz nm; functions nm 2>/dev/null`,
+		Why:     "the letter that rides along with a marking cannot begin one. zsh takes `-z` on `typeset` and does nothing with it, so `typeset -fz nm` marks nobody and the `functions` after it is 1 -- and the same letter written *with* `-u` reaches the stub and is recorded on it, `builtin autoload -Xz`. Both halves in one row because either alone reads as a fixed answer about the letter, where the fact is that its meaning depends on the company it keeps",
+	},
+	{
+		ID: "declare/marking-a-name-that-is-already-a-function", Category: "declarations",
+		Snippet: `f(){ echo body; }; typeset -fu f; f; functions f`,
+		Why:     "a declaration does not replace a definition. The body still runs and still lists, which matters more than the corner suggests: a real startup file declares a name it may already have -- a plugin manager writes the same marking on every reload -- and a shell that wrote a stub over the definition would turn a working function into a file that cannot be found at the next call",
+	},
+	{
 		ID: "shopt/patsub-replacement-reports-on", Category: "shell options",
 		Snippet: `shopt -p patsub_replacement 2>/dev/null; echo s=$?`,
 		Why:     "the reissuable line for the option that gates the ampersand reading, and its status. bash 5.3 writes `shopt -s patsub_replacement` at 0 because the option is on with nothing said; bash 3.2 has no such name and answers 1 with its complaint suppressed, and the three shells without the builtin answer 127. It is a capture surface -- a harness snapshots a shell with `shopt -p` and sources the result back -- so a shell reporting the wrong state here re-applies it to every later command (#1712, #1862)",

@@ -129,6 +129,11 @@ func patternHalves(operands []string) []string {
 // attribute would silently fall off the end of.
 func withoutMatching(f declareFlags) declareFlags {
 	f.matching, f.matchNames, f.remove, f.added = false, false, false, false
+	// The record of which letters were written goes with them: it is a seam's
+	// input rather than a thing the line asked for, and leaving it in would
+	// make every lettered line look like one that said something more. See
+	// declareFlags.letters.
+	f.letters = ""
 	return f
 }
 

@@ -386,6 +386,10 @@ type Runner struct {
 	// SetUndefinedFunctions. Nil in a shell with no such thing, which is two
 	// of the four.
 	undefinedFunctions func(name string) (string, bool)
+	// markUndefinedFunctions is the write half of the same seam: how this
+	// shell marks a name to be defined later. Nil in a shell with no such
+	// thing — see SetFunctionMarkedUndefined.
+	markUndefinedFunctions func(r *Runner, names []string, letters string) int
 
 	// InheritedFiles are the descriptors this shell was *started* with beyond
 	// the three named streams — what `sh 3<&0 script` puts on 3 — laid out

@@ -3591,6 +3591,31 @@ type Semantics struct {
 	// Asked only where a plus-signed `f` was really written.
 	FunctionNamesUnderPlus Answer
 
+	// FunctionLettersThatMarkUndefined names the letters that turn a `-f`
+	// declaration with operands from a *listing* into a marking: the name
+	// becomes a function at once whose body is read the first time it is
+	// called.
+	//
+	// Both shells with the notion spell it on `typeset` as well as under
+	// their own word, and they do not spell it alike, which is why this is a
+	// letter set rather than a fixed reading. Measured 2026-09-12, `env -i`
+	// and no startup files:
+	//
+	//   - zsh 5.9.2 takes `u` and `U`. `typeset -fu nm` leaves the stub
+	//     `autoload nm` leaves and `typeset -fUz nm` the one `autoload -Uz
+	//     nm` leaves, letters and all — the `z` rides along and is recorded
+	//     without being one of these, because a letter that only *decorates*
+	//     the marking cannot start one: `typeset -fz nm` marks nothing.
+	//   - ksh93u+ takes `u` alone and has no `U`. `typeset -fu nm` there
+	//     lists back as `typeset -fu nm`, which is that shell's whole
+	//     rendering of an undefined function.
+	//
+	// Empty in a shell with no such notion, where every `-f` line is a
+	// listing. What the letters *do* is [Runner.SetFunctionMarkedUndefined],
+	// which is where the dialect's own vocabulary lives; this field only
+	// says which lines are not listings.
+	FunctionLettersThatMarkUndefined string
+
 	// IntegerOptions is the set of letters the `integer` builtin takes,
 	// spelled the way DeclareOptions is. It is a separate field rather than
 	// DeclareOptions over again because the two shells that have the word

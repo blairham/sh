@@ -393,6 +393,21 @@ func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest
 		for i := 0; i < len(letters); i++ {
 			letter := letters[i]
 			switch {
+			case letter == '-':
+				// A dash inside a bundle is an option letter this builtin
+				// accepts and does nothing with, which is not the same rule
+				// as the lone `-` word above: that word ends the options.
+				//
+				// The two are told apart by `print - -n x`, which prints
+				// `-n x` — so the word really did end the options rather
+				// than being an inert letter with `-n` still an option after
+				// it — while `print -n-r x` prints `x` with no newline, so
+				// `-n` and `-r` both applied around a dash that did nothing.
+				// Measured 2026-09-12 on zsh 5.9.2.
+				//
+				// Without it a heading like `print "--- x ---"` stopped on
+				// the dash and named it, where the shell reads both dashes
+				// as letters and stops on the space after them (#1708).
 			case letter == 'e' && echoWord:
 				opts.raw = false
 			case letter == 'f' || letter == 'u':

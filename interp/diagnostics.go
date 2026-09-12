@@ -281,6 +281,23 @@ type Diagnostics struct {
 	// operator — in the other three.
 	TestNamesFirstOperand bool
 
+	// TestUnknownLongOperator is how `test` reads a word spelled like an
+	// operator this shell does not have — a dash and at least one character
+	// after it — when it stands at the head of a primary in an expression
+	// too long for the argument-count rules to decide.
+	//
+	// The short forms already name it, because they never reach a grammar:
+	// two words go straight to the unary evaluation and three to the binary
+	// one. A longer expression is parsed, and a word the operator table does
+	// not hold simply becomes an operand there — so the expression runs out
+	// with words left over and the count is what gets reported, which sends
+	// the reader to count words in an expression whose word count is fine.
+	//
+	// Measured 2026-09-12 with `[ -Q x -a -n x ]`, and the panel gives three
+	// answers rather than two, which is why this is an enumeration and not a
+	// bool. See the constants.
+	TestUnknownLongOperator TestUnknownOperatorReport
+
 	// TestUnaryExpected is what `test` says about a word where a unary
 	// operator belonged. One verb: the word.
 	TestUnaryExpected string
@@ -3342,6 +3359,56 @@ func (b BadOptionName) String() string {
 		return "BadOptionFirstUnknownLetter"
 	}
 	return "BadOptionFirstCharacter"
+}
+
+// TestUnknownOperatorReport is what a long `test` expression says about a
+// word spelled like an operator the shell does not have.
+//
+// Measured 2026-09-12 against `[ -Q x -a -n x ]`, with `-Q` chosen because no
+// dialect has it, so the answer is about the *spelling* rather than about one
+// missing operator:
+//
+//	dash    [: -Q: unexpected operator
+//	bash    [: too many arguments
+//	bash32  [: -Q: unary operator expected
+//	ksh93   [: x: unknown operator
+//	zsh     zsh:[:1: unknown condition: -Q
+//
+// A bare `-` is not such a word in any of them — `[ - x -a -n x ]` falls back
+// to each shell's plain-word complaint — and the spelling rule is nothing
+// narrower than "a dash with something after it": `-QQ`, `-1`, `--f`, `-+`
+// and `-Q=` are all named the same way.
+type TestUnknownOperatorReport int
+
+const (
+	// TestUnknownOperatorCounted reads the word as an ordinary operand and
+	// reports the argument count when the expression runs out with words
+	// left over: bash 5.3, and the substrate's own. It is the answer that
+	// hides which word was the problem, and it is bash's, so it must not be
+	// swept up by a fix aimed at the other three.
+	TestUnknownOperatorCounted TestUnknownOperatorReport = iota
+	// TestUnknownOperatorLeavesAnOperand also declines to read the word as
+	// an operator, but complains about the *primary* rather than the count:
+	// the word and the one after it are two operands with no operator
+	// between them, which is the three-word complaint's shape and takes the
+	// three-word complaint's wording and blame. dash names the first of the
+	// two and ksh93 the second, which is exactly what TestNamesFirstOperand
+	// already decides, so nothing further is needed here.
+	TestUnknownOperatorLeavesAnOperand
+	// TestUnknownOperatorNamed reads it as an operator and says it has never
+	// heard of it, which is the only answer that names the word the reader
+	// has to change: zsh.
+	TestUnknownOperatorNamed
+)
+
+func (t TestUnknownOperatorReport) String() string {
+	switch t {
+	case TestUnknownOperatorLeavesAnOperand:
+		return "TestUnknownOperatorLeavesAnOperand"
+	case TestUnknownOperatorNamed:
+		return "TestUnknownOperatorNamed"
+	}
+	return "TestUnknownOperatorCounted"
 }
 
 // Wording renders one failure, using the dialect's format when it has one.

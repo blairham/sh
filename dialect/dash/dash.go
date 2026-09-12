@@ -781,15 +781,18 @@ func Diagnostics() interp.Diagnostics {
 			"kill -l [exitstatus]",
 		// dash answers every complaint about its arguments with 2, which is the
 		// one dialect where the option and the operand are not two questions.
-		KillUsageStatus:      2,
-		KillBadOptionStatus:  2,
-		KillArgumentStatus:   2,
-		TestUnaryExpected:    "%[2]s: %[1]s: unexpected operator",
-		TestBinaryExpected:   "%[2]s: %[1]s: unexpected operator",
-		TestIntegerExpected:  "%[2]s: Illegal number: %[1]s",
-		TestTooManyArguments: "%[2]s: too many arguments",
-		TestOperandExpected:  "%[2]s: argument expected",
-		TestMissingBracket:   "[: missing ]",
+		KillUsageStatus:     2,
+		KillBadOptionStatus: 2,
+		KillArgumentStatus:  2,
+		// `[ -Q x -a -n x ]` is `[: -Q: unexpected operator` here, naming the
+		// first of the two operands the primary is left with (#1290).
+		TestUnknownLongOperator: interp.TestUnknownOperatorLeavesAnOperand,
+		TestUnaryExpected:       "%[2]s: %[1]s: unexpected operator",
+		TestBinaryExpected:      "%[2]s: %[1]s: unexpected operator",
+		TestIntegerExpected:     "%[2]s: Illegal number: %[1]s",
+		TestTooManyArguments:    "%[2]s: too many arguments",
+		TestOperandExpected:     "%[2]s: argument expected",
+		TestMissingBracket:      "[: missing ]",
 		// Six decimal places, the most of any shell in the panel.
 		TimesDecimals: 6,
 		// dash hands the path to execve rather than checking first, so a

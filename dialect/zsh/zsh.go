@@ -2392,10 +2392,13 @@ func Diagnostics() interp.Diagnostics {
 		KillUnknownSignalHint: "type kill -L for a list of signals",
 		// zsh is the one dialect that does not treat "nothing to signal" as a
 		// usage error worth a different number from any other failure.
-		KillUsageStatus:     1,
-		TestUnaryExpected:   "unknown condition: %[1]s",
-		TestBinaryExpected:  "condition expected: %[1]s",
-		TestIntegerExpected: "integer expression expected: %[1]s",
+		KillUsageStatus: 1,
+		// The only dialect that reads the word as an operator and says so:
+		// `[ -Q x -a -n x ]` is `zsh:[:1: unknown condition: -Q` (#1290).
+		TestUnknownLongOperator: interp.TestUnknownOperatorNamed,
+		TestUnaryExpected:       "unknown condition: %[1]s",
+		TestBinaryExpected:      "condition expected: %[1]s",
+		TestIntegerExpected:     "integer expression expected: %[1]s",
 		// The whole substitution as it was written, not its inside.
 		ProcessSubstitutionNotInCondition: "process substitution %[1]s cannot be used here",
 		TestTooManyArguments:              "too many arguments",

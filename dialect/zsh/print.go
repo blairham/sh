@@ -704,77 +704,107 @@ type escapeReading struct {
 // measurement behind each.
 func expandEscapes(s string, how escapeReading) (text string, truncated, refused bool) {
 	var b strings.Builder
+	// The `\M-` and `\C-` prefixes read so far with no target yet. They are
+	// what makes this one loop rather than a reader and a second reader for
+	// the target: the target is *any* escape this reading has, so the way to
+	// read it is to go round again.
+	var pfx escapePrefixes
+	// emit writes the byte an escape came to, through whatever prefixes are
+	// waiting in front of it, and clears them.
+	emit := func(base byte) {
+		b.WriteByte(pfx.apply(base))
+		pfx = pfx[:0]
+	}
+	// unknown is a backslash this reading cannot use: the letter alone where
+	// the `\M-x` family is read — and there a prefix reaches it, measured —
+	// and both characters where it is not, which is a reading with no
+	// prefixes to reach anything.
+	unknown := func(c byte) {
+		if !how.printEscapes {
+			b.WriteByte('\\')
+			b.WriteByte(c)
+			return
+		}
+		emit(c)
+	}
 	for i := 0; i < len(s); i++ {
-		if s[i] == '^' && how.caret && i+1 < len(s) {
+		if s[i] == '^' && how.caret && pfx.caretIsATarget() && i+1 < len(s) {
 			// `^X` is the control character, and it is read where the
 			// character is rather than behind a backslash. Measured:
 			// `X^^^AY` under `c` is 0x1e then 0x01, so a `^` is as good a
 			// target as a letter, and a trailing `^` with nothing after it
 			// is a `^`.
-			b.WriteByte(controlByte(s[i+1]))
+			emit(controlByte(s[i+1]))
 			i++
 			continue
 		}
 		if s[i] != '\\' {
-			b.WriteByte(s[i])
+			emit(s[i])
 			continue
 		}
 		if i+1 == len(s) {
-			// A trailing backslash is a backslash.
-			b.WriteByte('\\')
+			// A trailing backslash is a backslash — and a prefix in front of
+			// one reaches it: measured, `print 'X\M-\'` is 0xdc.
+			emit('\\')
 			continue
 		}
 		i++
 		switch c := s[i]; c {
 		case 'a':
-			b.WriteByte('\a')
+			emit('\a')
 		case 'b':
-			b.WriteByte('\b')
+			emit('\b')
 		case 'c':
 			if how.cTruncates {
+				// The output ends here whatever was in front of it: measured,
+				// `print 'X\M-\cY'` writes `X` and stops.
 				return b.String(), true, false
 			}
 			// Not an escape here, so it falls to whichever rule the reading
 			// has for one it does not know.
-			writeUnknownEscape(&b, c, how)
+			unknown(c)
 		case 'e':
-			b.WriteByte(0x1b)
+			emit(0x1b)
 		case 'E':
 			// The capitalized spelling is `print`'s and not `echo`'s, so it
 			// is text in a reading without the family. Measured: `X\EY`
 			// under `${(g::)v}` is `X\EY` and under `${(g:e:)v}` is the
 			// escape character.
 			if !how.printEscapes {
-				writeUnknownEscape(&b, c, how)
+				unknown(c)
 				break
 			}
-			b.WriteByte(0x1b)
+			emit(0x1b)
 		case 'f':
-			b.WriteByte('\f')
+			emit('\f')
 		case 'n':
-			b.WriteByte('\n')
+			emit('\n')
 		case 'r':
-			b.WriteByte('\r')
+			emit('\r')
 		case 't':
-			b.WriteByte('\t')
+			emit('\t')
 		case 'v':
-			b.WriteByte('\v')
+			emit('\v')
 		case '\\':
-			b.WriteByte('\\')
+			emit('\\')
 		case '0', '1', '2', '3', '4', '5', '6', '7':
 			if !how.bareOctal {
 				if c != '0' {
 					// Without the zero it is not an escape at all.
-					writeUnknownEscape(&b, c, how)
+					unknown(c)
 					break
 				}
 				// The zero introduces the escape and is not one of the three
 				// digits, which is what makes `\0101` an `A` here and a
 				// backspace followed by `1` under `o`.
-				i = writeOctal(&b, s, i+1)
+				v, at := readOctal(s, i+1)
+				emit(v)
+				i = at
 				break
 			}
-			i = writeOctal(&b, s, i)
+			v, at := readOctal(s, i)
+			emit(v)
+			i = at
 		case 'x':
 			n, j := 0, i+1
 			for j < len(s) && j <= i+2 && isPrintHexDigit(s[j]) {
@@ -782,7 +812,7 @@ func expandEscapes(s string, how escapeReading) (text string, truncated, refused
 				j++
 			}
 			// `\x` with no digit after it is a NUL, measured.
-			b.WriteByte(byte(n))
+			emit(byte(n))
 			i = j - 1
 		case 'u', 'U':
 			width := 4
@@ -809,100 +839,93 @@ func expandEscapes(s string, how escapeReading) (text string, truncated, refused
 				// an expansion flag's word never reaches a command.
 				return b.String(), false, true
 			}
+			// Written as it stands, and a prefix waiting in front of it is
+			// *not* spent on it: this escape is text rather than a byte, so
+			// the prefix goes on to whatever comes next. Measured on zsh
+			// 5.9.2, `print 'X\M-\u0041\tZ'` is `X`, `A`, 0x89, `Z` — the
+			// meta bit reached the tab and not the `A` (#1643).
 			b.WriteString(text)
 			i = j - 1
 		case 'M', 'C':
 			if !how.printEscapes {
-				writeUnknownEscape(&b, c, how)
+				unknown(c)
 				break
 			}
 			// `\M-x` sets the high bit and `\C-x` takes the control
-			// character; the dash is optional, so `\MY` is `\M-Y`.
-			j := i + 1
-			if j < len(s) && s[j] == '-' {
-				j++
+			// character; the dash is optional, so `\MY` is `\M-Y`. What the
+			// prefix applies to is read by going round the loop again, so it
+			// is any escape rather than one raw byte.
+			pfx = append(pfx, c)
+			if i+1 < len(s) && s[i+1] == '-' {
+				i++
 			}
-			if j >= len(s) {
-				b.WriteByte('\\')
-				b.WriteByte(c)
-				break
-			}
-			base, width := metaControlTarget(s[j:], how, c == 'M')
-			if c == 'M' {
-				b.WriteByte(base | 0x80)
-			} else {
-				b.WriteByte(controlByte(base))
-			}
-			i = j + width - 1
 		default:
-			writeUnknownEscape(&b, c, how)
+			unknown(c)
 		}
 	}
+	// A prefix the text ended before is dropped rather than written back.
+	// Measured on zsh 5.9.2: `print 'X\M-'`, `print 'X\C-'`, `print 'X\M'`
+	// and `print 'X\M-\M-'` all write `X` alone (#1643).
 	return b.String(), false, false
 }
 
-// writeUnknownEscape is what becomes of a backslash this reading cannot use:
-// the letter alone where the `\M-x` family is read, and both characters where
-// it is not. Measured on `X\qY`, which is `XqY` under `${(g:e:)v}` and `X\qY`
-// under the other three readings — the same split `print` and this shell's
-// `echo` have, which is why the two travel with the family rather than being
-// a fifth switch.
-func writeUnknownEscape(b *strings.Builder, c byte, how escapeReading) {
-	if !how.printEscapes {
-		b.WriteByte('\\')
+// escapePrefixes is the `\M-` and `\C-` prefixes standing in front of one
+// escape, outermost first.
+//
+// A chain rather than a recursion because `\C-` does not undo `\M-`: measured
+// on zsh 5.9.2, `\C-\M-A` and `\M-\C-A` are both 0x81, and `\C-\M-?` is 0x9f
+// rather than the 0xff a control read as "delete, then set the high bit"
+// would give. The bits are taken in turn, innermost first, and the control
+// step keeps the high bit it finds.
+type escapePrefixes []byte
+
+// apply turns the byte an escape came to into the byte the prefixes in front
+// of it make of it.
+func (p escapePrefixes) apply(base byte) byte {
+	for i := len(p) - 1; i >= 0; i-- {
+		if p[i] == 'M' {
+			base |= 0x80
+		} else {
+			base = controlByte(base)
+		}
 	}
-	b.WriteByte(c)
+	return base
 }
 
-// writeOctal reads up to three octal digits from at and writes the byte they
-// come to, returning the index of the last one consumed. A value above 255 is
+// caretIsATarget says whether a `^X` in front of these prefixes is read as the
+// control character it is elsewhere.
+//
+// It is, except directly behind a `\C-`, which takes the `^` itself: measured
+// under `${(g:ec:)v}`, `X\M-^AY` is 0x81 while `X\C-^AY` is 0x1e followed by
+// an `A`. Reading the caret on both sides would answer the second row 0x01
+// and look right on the first.
+func (p escapePrefixes) caretIsATarget() bool {
+	return len(p) == 0 || p[len(p)-1] == 'M'
+}
+
+// readOctal reads up to three octal digits from at, returning the byte they
+// come to and the index of the last one consumed. A value above 255 is
 // truncated to a byte, measured: `\400` under `o` is a NUL and `\777` is 0xff.
-func writeOctal(b *strings.Builder, s string, at int) int {
+func readOctal(s string, at int) (byte, int) {
 	n, j := 0, at
 	for j < len(s) && j <= at+2 && s[j] >= '0' && s[j] <= '7' {
 		n = n*8 + int(s[j]-'0')
 		j++
 	}
-	b.WriteByte(byte(n))
-	return j - 1
-}
-
-// metaControlTarget reads the byte `\M-` or `\C-` applies to, which may itself
-// be one of the two — `\M-\C-a` is 0x81, the pair applied in turn — and
-// reports how much of the text it took.
-//
-// A `^X` is a target too, but only where the reading has the caret and only
-// behind `\M-`: measured under `${(g:ec:)v}`, `X\M-^AY` is 0x81 while
-// `X\C-^AY` is 0x1e followed by an `A`, so `\C-` takes the `^` itself as its
-// character. Reading the caret on both sides would answer the second row 0x01
-// and look right on the first.
-func metaControlTarget(s string, how escapeReading, meta bool) (byte, int) {
-	if len(s) >= 2 && s[0] == '\\' && (s[1] == 'M' || s[1] == 'C') {
-		j := 2
-		if j < len(s) && s[j] == '-' {
-			j++
-		}
-		if j < len(s) {
-			base, width := metaControlTarget(s[j:], how, s[1] == 'M')
-			if s[1] == 'M' {
-				return base | 0x80, j + width
-			}
-			return controlByte(base), j + width
-		}
-	}
-	if meta && how.caret && len(s) >= 2 && s[0] == '^' {
-		return controlByte(s[1]), 2
-	}
-	return s[0], 1
+	return byte(n), j - 1
 }
 
 // controlByte is `\C-x`: `?` is delete and everything else keeps its low five
 // bits, so `\C-@` is NUL and `\C-a` and `\C-A` are both 1.
+//
+// The high bit survives, which is what makes `\C-\M-A` 0x81 rather than 0x01 —
+// and the `?` rule reads the character itself, so a `?` that already carries
+// the high bit is not delete: measured, `\C-\M-?` is 0x9f.
 func controlByte(c byte) byte {
 	if c == '?' {
 		return 0x7f
 	}
-	return c & 0x1f
+	return c&0x1f | c&0x80
 }
 
 func isPrintHexDigit(c byte) bool {

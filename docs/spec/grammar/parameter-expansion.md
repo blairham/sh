@@ -2887,6 +2887,37 @@ every other target keeps its low five bits, so `\C-@` is NUL and `\C-a` and
 value above 255 is truncated to a byte; and a trailing backslash is a
 backslash.
 
+Three edges of the two prefixes were measured on zsh 5.9.2 on 2026-09-12
+and are the whole of #1643. All three are the same statement — a prefix is
+read *with* what follows it and not by a reader of its own — so the
+decoder here reads a prefix by going round its own loop again rather than
+by calling a second function that takes one byte.
+
+- **A prefix with nothing after it produces no byte at all.** `X\M-`,
+  `X\C-`, `X\M` and `X\M-\M-` are all `X` alone. Writing the characters
+  back is the plausible reading, and it is right nowhere.
+- **The target is any escape the reading has**, not one raw byte. `X\M-\xffY`
+  is 0xff and a `Y`; a reader taking a byte takes the *backslash* of `\xff`
+  and answers 0xdc with `xff` left as text — four bytes that look like a
+  measurement. `\M-\q` is 0xf1, so even an escape this shell does not know
+  is read first and its surviving letter is the target, and `\M-\c` under
+  `print` ends the output where it stands.
+- **`\u` and `\U` are the exception**, because they are text rather than a
+  byte: the character is written unchanged and the prefix carries on to
+  whatever comes next. `X\M-\u0041\tZ` is `X`, `A`, 0x89, `Z` — the meta
+  bit reached the tab — and `X\M-\u0041` is `XA`, the prefix dropped.
+
+Composition is the fourth, and it is what says the prefixes are bits taken
+in turn rather than a lookup: the control mask **keeps the high bit it
+finds**, so `\C-\M-A` and `\M-\C-A` are both 0x81, and `\C-\M-?` is 0x9f
+rather than the 0xff a "resolve `?` to delete, then set the high bit"
+reading gives — the `?` case is on the character written and a metafied `?`
+is not it.
+
+The same four hold for `print`, which is the same decoder; the `$'…'`
+reader already answered them, which is why this was a divergence between two
+copies of one measurement rather than a gap in the record.
+
 The **argument's letters are the grammar's**, exactly as `(Z)`'s are: a
 letter outside `oec` is `error in flags near position N` at the letter
 rather than a refusal when the expansion is reached, and the flag with no

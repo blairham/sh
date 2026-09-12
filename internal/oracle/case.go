@@ -7302,7 +7302,31 @@ EOF
 		ID: "unterminated/a-parameter-expansion-blamed-at-the-brace", Category: "syntax errors", SyntaxError: true,
 		Script:  true,
 		Snippet: "echo ${x\necho after\n",
-		Why:     "the control for the row above and the reason the difference belongs to the *form* rather than to the brace: the parameter spelling of the same unterminated `${` is blamed at the brace in every bash column, where the command form is blamed at the end of the input. dash and ksh93 answer this one differently again, which is recorded rather than modeled",
+		Why:     "the control for the row above and the reason the difference belongs to the *form* rather than to the brace: the parameter spelling of the same unterminated `${` is blamed at the brace in every bash column, where the command form is blamed at the end of the input. dash and ksh93 answer this one differently again and both are now modeled — dash blames line 2 where the command form is line 3, leaving out the newline the name stopped at, and ksh93 calls it a newline standing where it should not rather than the unmatched brace it calls the command form (#2232)",
+	},
+	{
+		ID: "unterminated/a-parameter-expansion-whose-operator-was-read", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo ${x:-a\necho after\n",
+		Why:     "the discriminating half of the row above: once the expansion has read an operator, what follows is a word, and both shells that answer `${x` specially stop doing so. dash comes back to line 3 — the end of the input, where the command form is — and ksh93 back to the unmatched brace. A row that measured only `${x` could not tell a shell that treats every unterminated `${` alike from one that treats only the bare name that way (#2232)",
+	},
+	{
+		ID: "unterminated/a-parameter-expansion-behind-a-length-prefix", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo ${#x\necho after\n",
+		Why:     "the same unterminated name with the length operator in front of it, and it is where the two shells part: ksh93 still names the newline, and dash counts the newline after all and blames line 3. So dash's rule is about a *bare* name and ksh93's is about the character the expansion stopped at, which one probe on `${x` alone would have called a single rule (#2232)",
+	},
+	{
+		ID: "unterminated/a-parameter-expansion-whose-name-is-the-hash", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo ${#\necho after\n",
+		Why:     "the control for the row above, and the reason the prefix has to be told from the name rather than counted as a character: `${#}` is the count of the positional parameters, so a lone `#` is the parameter and dash is back to blaming line 2. The two rows differ by one letter and by a whole rule (#2232)",
+	},
+	{
+		ID: "unterminated/a-parameter-expansion-a-space-stopped", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo ${x \necho after\n",
+		Why:     "a space rather than a newline where the name stopped, which separates the two shells' rules from the other side: ksh93 names the space exactly as it names the newline, and dash counts every newline and blames line 3, so its answer is about the newline and not about the name being cut short. bash and zsh word this one as they word every `${` the input ran out inside (#2232)",
 	},
 	{
 		ID: "heredoc/a-delimiter-that-never-matches", Category: "redirection",

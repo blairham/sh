@@ -47,6 +47,25 @@ import "os"
 // kernel, behind the table's back: `exec 3<&-` then an external command found
 // 3 still readable there, where all four shells find it closed. Reaching the
 // number puts a nil at it, and a nil is a close.
+// tableFile is the descriptor a table entry stands for, and nil where there
+// is none — an embedder's buffer, a here-document's text, a coprocess's near
+// end that childFiles is not to rebuild.
+//
+// A fan of several targets or sources answers with the *last* of them, which
+// is what the number held before the fan existed. See fanSource for why that
+// is the right wrong answer rather than closing the number in the child.
+func tableFile(v any) *os.File {
+	switch f := v.(type) {
+	case *os.File:
+		return f
+	case multiTarget:
+		return f.last
+	case fanSource:
+		return f.last
+	}
+	return nil
+}
+
 func (r *Runner) childFiles() []*os.File {
 	highest := 0
 	for i, f := range r.InheritedFiles {
@@ -58,7 +77,7 @@ func (r *Runner) childFiles() []*os.File {
 		if fd < firstExtraFd || fd > maxInheritedFd {
 			continue
 		}
-		if _, ok := v.(*os.File); ok && fd > highest {
+		if tableFile(v) != nil && fd > highest {
 			highest = fd
 		}
 	}
@@ -70,7 +89,7 @@ func (r *Runner) childFiles() []*os.File {
 		if fd < firstExtraFd || fd > highest {
 			continue
 		}
-		if f, ok := v.(*os.File); ok {
+		if f := tableFile(v); f != nil {
 			files[fd-firstExtraFd] = f
 		}
 	}

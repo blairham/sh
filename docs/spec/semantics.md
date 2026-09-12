@@ -1370,18 +1370,31 @@ process replacement, where a concatenation does.
 the recorded names until #1779 — so `(unsetopt multios; …)` stays inside the
 subshell the way every axis-backed option does.
 
-**Not implemented, and measured rather than assumed:** the fan-in reaches
-standard input and not a numbered descriptor. `exec 3<f 3<g; cat <&3` reads
-both files in zsh and reads `g` alone here, because a number in the
-descriptor table has to be a real file for a child to inherit — a
-concatenation is not one, and giving the table a stream that is not a file is
-a change to how every external command is started rather than to this
-option. The writing side has the same gap for the same reason: `exec 4>a 4>b`
-writes `b` alone. Both are the numbered-descriptor case, which no startup in
-the wild sweep uses; standard input, standard output and standard error, which
-they all use, are the fan-out and fan-in above. An earlier revision of this paragraph called it deliberately
-unbuilt, and the paragraph outlived the decision: the failure mode this
-file records about the interpreter's comments applies to its own.
+**A numbered descriptor is fanned too, and half of one shape is not.**
+`exec 3<f 3<g; cat <&3` reads both files in order and `exec 3>a 3>b; echo
+hi >&3` fills both, under the same axis and measured the same way
+(2026-09-12). Until #734 the fan-out was written where the switch over
+the *named* streams happened to land, so one script said different
+things about 1 and about 3.
+
+What is still missing is a **child naming the number itself**. The shell
+that has the option forks a process to join the files, so `exec 3<f 3<g;
+sh -c 'cat <&3'` sees both there; here the table is rebuilt by
+descriptor number for a child, and a concatenation has no number. The
+child is handed the *last* file — which is what the number held before
+the fan existed, so it is the old answer rather than a new one; closing
+3 in the child would be the new wrong answer. Reaching the rest means
+building a pipe and a copier per extra descriptor, with a lifetime tied
+to a child the table rebuild does not start.
+
+`<>` is left out on purpose: one descriptor that both reads and writes
+cannot join a set on one side without modeling half of the pair, so
+`exec 3<>a 3<>b` keeps `b` under either answer.
+
+Two earlier revisions of this paragraph called the whole thing
+deliberately unbuilt and outlived the decision each time; the failure
+mode this file records about the interpreter's comments applies to its
+own.
 
 It also demonstrates the blind spot recorded above, on a case chosen for
 something else. The two answers differ in *output* and agree on the exit

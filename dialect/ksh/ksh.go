@@ -1297,6 +1297,12 @@ func Diagnostics() interp.Diagnostics {
 		// it — the same shape ksh93 uses for `.`, which DotCannotOpen
 		// already says.
 		CannotOpen: "%[1]s: cannot open [%[2]s]",
+		// A duplication whose source is not open takes the same shape as an
+		// open that failed here — `cat <&10` is `10: cannot open [Bad file
+		// descriptor]`, measured 2026-09-12 — but it cannot share the field:
+		// CannotOpen is worded reason-first in one of the other dialects
+		// (#734).
+		DuplicationSourceNotOpen: "%[1]s: cannot open [%[2]s]",
 		// No BuiltinWriteError: `echo hi >&-` reports 1 here and says
 		// nothing, which is the semantics axis answering and the wording
 		// staying empty.

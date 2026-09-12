@@ -158,3 +158,124 @@ func TestTheFanOutAxisIsNamedForTargetsNotFiles(t *testing.T) {
 		t.Errorf("refusal = %q, want it to contain %q", out, want)
 	}
 }
+
+// The same rule for a number the script parked, which is where it was
+// missing: the fan-out was written where the switch over the *named* streams
+// happened to land, so `exec 3>a 3>b` kept only `b` while `echo x >a >b`
+// wrote both — one script saying different things about 1 and about 3 (#734).
+//
+// Measured 2026-09-12: `exec 3>a 3>b; echo hi >&3` fills both files in zsh
+// 5.9.2 and only `b` in dash, bash 5.3, bash 3.2 and ksh93.
+func TestANumberedDescriptorJoinsItsOwnFanOut(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		wantA  string
+	}{
+		{"every target", Yes, "hi\n"},
+		{"only the last", No, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			sem := CoreSemantics()
+			sem.RedirectsUseEveryTarget = tc.answer
+			// Through `exec` so the descriptor is one the script parked
+			// rather than one the command carried, which is the shape a
+			// script uses a number for at all.
+			sem.RedirectErrorOnSpecialBuiltinFatal = No
+			out, st := run(t, "exec 3>a 3>b; echo hi >&3; exec 3>&-", func(r *Runner) {
+				r.Semantics, r.Dir = &sem, dir
+			})
+			if st != 0 {
+				t.Fatalf("status %d, output %q", st, out)
+			}
+			if got := readFile(t, dir, "a"); got != tc.wantA {
+				t.Errorf("a = %q, want %q", got, tc.wantA)
+			}
+			if got := readFile(t, dir, "b"); got != "hi\n" {
+				t.Errorf("b = %q, want the last target written either way", got)
+			}
+		})
+	}
+}
+
+// And the reading half of the same number, which is the direction eachSource
+// answers: two sources arrive one after the other rather than the last one
+// replacing the first.
+func TestANumberedDescriptorReadsFromEverySource(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"every source", Yes, "[A\nB]"},
+		{"only the last", No, "[B]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			sem := CoreSemantics()
+			sem.RedirectsUseEveryTarget = tc.answer
+			sem.RedirectErrorOnSpecialBuiltinFatal = No
+			// `cat` is an external command, so the descriptor `exec` parked
+			// has to be allowed to reach it — a different axis, and not the
+			// one this row is about. The substitution strips the last
+			// newline, as it does for every command substitution.
+			sem.ExecOpenedFdReachesACommand = Yes
+			out, st := run(t,
+				`printf 'A\n' > f; printf 'B\n' > g; exec 3<f 3<g; printf "[%s]" "$(cat <&3)"`,
+				func(r *Runner) { r.Semantics, r.Dir = &sem, dir })
+			if st != 0 {
+				t.Fatalf("status %d, output %q", st, out)
+			}
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// `<>` is left out of it deliberately, and both answers have to agree: one
+// descriptor that reads *and* writes cannot join a set on one side without
+// modeling half the pair. The second open wins, as it does everywhere.
+func TestAReadWriteDescriptorIsNotJoined(t *testing.T) {
+	for _, answer := range []Answer{Yes, No} {
+		dir := t.TempDir()
+		sem := CoreSemantics()
+		sem.RedirectsUseEveryTarget = answer
+		sem.RedirectErrorOnSpecialBuiltinFatal = No
+		sem.ExecOpenedFdReachesACommand = Yes
+		out, st := run(t, `exec 3<>a 3<>b; echo hi >&3; exec 3>&-; printf "[a=%s][b=%s]" "$(cat a)" "$(cat b)"`,
+			func(r *Runner) { r.Semantics, r.Dir = &sem, dir })
+		if want := "[a=][b=hi]"; out != want || st != 0 {
+			t.Errorf("%v: got %q (status %d), want %q at 0", answer, out, st, want)
+		}
+	}
+}
+
+// What a *child naming the number itself* is handed, which is the half this
+// does not fully model and must therefore not make worse.
+//
+// The shell that has the option forks a process to join the files, so its
+// child sees a pipe carrying both. Here the table is rebuilt by descriptor
+// number and a concatenation has no number, so the child is given the last
+// file — which is what the number held before the fan-in existed. The
+// alternative is closing 3 in the child, a new wrong answer where there was
+// an old one.
+//
+// Both answers to the axis, because the row is about the child and not about
+// the fan: it must read `B` either way.
+func TestAChildNamingAFannedDescriptorGetsTheLastFile(t *testing.T) {
+	for _, answer := range []Answer{Yes, No} {
+		dir := t.TempDir()
+		sem := CoreSemantics()
+		sem.RedirectsUseEveryTarget = answer
+		sem.RedirectErrorOnSpecialBuiltinFatal = No
+		sem.ExecOpenedFdReachesACommand = Yes
+		out, st := run(t,
+			`printf 'A\n' > f; printf 'B\n' > g; exec 3<f 3<g; /bin/sh -c 'cat <&3'`,
+			func(r *Runner) { r.Semantics, r.Dir = &sem, dir })
+		if want := "B\n"; out != want || st != 0 {
+			t.Errorf("%v: got %q (status %d), want %q at 0", answer, out, st, want)
+		}
+	}
+}

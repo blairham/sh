@@ -279,7 +279,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			if fd > 2 && !persists {
 				saveFds()
 			}
-			if err := r.dupFd(fd, name, opened); err != nil {
+			if err := r.dupFd(fd, name, rd.Text, opened); err != nil {
 				r.diagf("%v\n", err)
 				// A duplication that fails is a redirection that failed, and
 				// carries the same number as one whose file would not open.
@@ -524,7 +524,30 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			if !persists {
 				saveFds()
 			}
-			r.setFd(fd, f)
+			// And a number repeated in one redirection list joins its
+			// targets exactly as a named stream does, under the dialect that
+			// joins them: `exec 3>a 3>b; echo hi >&3` fills both files in zsh
+			// 5.9.2 and only `b` in the other five, and `exec 3<fa 3<fb;
+			// cat <&3` reads both in order there. Measured 2026-09-12.
+			//
+			// The named streams have had this since #1261 and a numbered one
+			// had not, which is #734's third residue: the fan-out was written
+			// where the switch happened to land rather than for every
+			// descriptor, so the same script said different things about 1
+			// and about 3.
+			//
+			// Which direction to join is the open's own flags. `<>` is left
+			// alone deliberately: it is one descriptor that both reads and
+			// writes, and joining one half of it would model half of the
+			// pair.
+			var held any = f
+			switch {
+			case flags == os.O_RDONLY:
+				held = r.eachSource(fd, f, sources)
+			case flags&os.O_RDWR == 0:
+				held = r.eachTarget(fd, f, opened)
+			}
+			r.setFd(fd, held)
 			r.redirWrote(fd)
 			if fdVar != "" {
 				r.setFdVar(fdVar, itoa(fd))
@@ -545,9 +568,19 @@ func (r *Runner) eachTarget(fd int, f io.Writer, opened map[int]io.Writer) io.Wr
 		// built it is the only thing that knows; inferring it from "not an
 		// *os.File" would sweep in an embedder's buffer, which is a different
 		// case with a different answer. See namedStreamsCanBePlaced.
-		f = multiTarget{io.MultiWriter(prev, f)}
+		f = multiTarget{Writer: io.MultiWriter(prev, f), last: fileOrNil(f)}
 	}
 	opened[fd] = f
+	return f
+}
+
+// fileOrNil is the real file behind a target, where there is one.
+//
+// It is what a *child* is given for a numbered descriptor the shell fanned
+// out, and it is the last target named rather than all of them — see
+// multiTarget.last.
+func fileOrNil(w any) *os.File {
+	f, _ := w.(*os.File)
 	return f
 }
 
@@ -563,10 +596,44 @@ func (r *Runner) eachTarget(fd int, f io.Writer, opened map[int]io.Writer) io.Wr
 func (r *Runner) eachSource(fd int, in io.Reader, sources map[int]io.Reader) io.Reader {
 	if prev, ok := sources[fd]; ok &&
 		r.ask(r.sem().RedirectsUseEveryTarget, "a command reading one stream from several sources") {
-		in = io.MultiReader(prev, in)
+		joined := io.MultiReader(prev, in)
+		if fd > 2 {
+			// A number the *table* holds, which is the one direction that
+			// needs a marker: standard input is handed to a child as a
+			// stream and os/exec makes the pipe, where a number above two
+			// has to be a real descriptor. See fanSource.
+			in = fanSource{Reader: joined, last: fileOrNil(in)}
+		} else {
+			in = joined
+		}
 	}
 	sources[fd] = in
 	return in
+}
+
+// fanSource is a numbered descriptor read from several files at once, and the
+// last of those files.
+//
+// The concatenation is what *this shell* reads through — `cat <&3` after
+// `exec 3<f 3<g` is both files in order, which is the whole of #734's third
+// residue. The file is what a **child naming the number itself** is handed,
+// and it is the last one because that is what the number held before the
+// fan-in existed: `childFiles` rebuilds the table by descriptor number and a
+// concatenation has no number, so the alternative to naming one file is
+// naming none and closing 3 in the child — which would be a new wrong answer
+// where there was an old one.
+//
+// The shell that has this forks a process to do the joining, so its child
+// sees a pipe carrying both files. Reaching that from here means building the
+// pipe and a copier per extra descriptor, with a lifetime tied to a child
+// this function does not start; it is the remaining half and it is written
+// down in docs/spec/semantics.md rather than guessed at.
+//
+// multiTarget.last is the same thing on the writing side, for the same
+// reason.
+type fanSource struct {
+	io.Reader
+	last *os.File
 }
 
 // multiTarget is a stream the shell built out of more than one target, under
@@ -575,7 +642,14 @@ func (r *Runner) eachSource(fd int, in io.Reader, sources map[int]io.Reader) io.
 // It is a marker before it is a writer: the io.Writer inside is an ordinary
 // multi-writer and does the work, and the type exists so that `exec cmd` can
 // tell this stream from a file without guessing.
-type multiTarget struct{ io.Writer }
+type multiTarget struct {
+	io.Writer
+	// last is the newest of the targets, where it is a real file, and it is
+	// what a child naming the descriptor *number* is handed. Nil for the
+	// named streams, which reach a child as streams and need no number. See
+	// fanSource for the whole of the argument.
+	last *os.File
+}
 
 type closerFunc func() error
 
@@ -849,8 +923,19 @@ func (r *Runner) refuseWideDupTarget(target string) bool {
 // same wording as every other strerror a redirection quotes: the substrate
 // capitalizes it and the dialect that lowercases everything gets to. Written
 // out here in lowercase, it matched that one dialect and nobody else.
-func (r *Runner) errBadFd(fd int) error {
-	return fmt.Errorf("%d: %s", fd, r.diag().reasonText(reason(syscall.EBADF)))
+//
+// The sentence around it is the dialect's too — ksh93 puts the errno in a
+// bracket after a verb — and so is *which spelling of the target* it names:
+// bash quotes the word the script wrote where the other two print the number
+// it came to. written is that word, empty where there is none to quote. See
+// Diagnostics.DuplicationSourceNotOpen and NamesTheDuplicationTargetAsWritten.
+func (r *Runner) errBadFd(fd int, written string) error {
+	name := itoa(fd)
+	if written != "" && r.diag().NamesTheDuplicationTargetAsWritten {
+		name = written
+	}
+	return errors.New(Wording(r.diag().DuplicationSourceNotOpen, "%[1]s: %[2]s",
+		name, r.diag().reasonText(reason(syscall.EBADF))))
 }
 
 // dupFd points one descriptor at another, or closes it.
@@ -880,7 +965,7 @@ func (r *Runner) errBadFd(fd int) error {
 // dialect — `cat <a <b` reads both files in order — and this shell has none,
 // for either operator, so joining `<&` to a set nothing else fills would
 // model half of a feature.
-func (r *Runner) dupFd(fd int, target string, opened map[int]io.Writer) error {
+func (r *Runner) dupFd(fd int, target, written string, opened map[int]io.Writer) error {
 	if target == "-" {
 		// Whatever this command had aimed at the number, it no longer has.
 		delete(opened, fd)
@@ -917,7 +1002,7 @@ func (r *Runner) dupFd(fd int, target string, opened map[int]io.Writer) error {
 	default:
 		v, held := r.fds[m]
 		if !held {
-			return r.errBadFd(m)
+			return r.errBadFd(m, written)
 		}
 		src = v
 	}
@@ -938,19 +1023,19 @@ func (r *Runner) dupFd(fd int, target string, opened map[int]io.Writer) error {
 	// *present and closed*, which is the whole of why the check is here and
 	// not there.
 	if _, closed := src.(closedFd); closed {
-		return r.errBadFd(m)
+		return r.errBadFd(m, written)
 	}
 	switch fd {
 	case 0:
 		rd, ok := src.(io.Reader)
 		if !ok {
-			return r.errBadFd(m)
+			return r.errBadFd(m, written)
 		}
 		r.Stdin = rd
 	case 2, 1:
 		w, ok := src.(io.Writer)
 		if !ok {
-			return r.errBadFd(m)
+			return r.errBadFd(m, written)
 		}
 		// A target like any other, so a second one joins the first where the
 		// dialect joins them and replaces it everywhere else.

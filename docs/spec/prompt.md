@@ -328,6 +328,61 @@ Three shells, three answers, which is why it is asked rather than assumed:
 bash drew `\q` for `\q`, ksh93 drew `q`, and zsh drew nothing at all for
 `%q`.
 
+## What a failed expansion pass costs
+
+**Measured** 2026-09-12 against zsh 5.9.2 and bash 5.3.15, with a math
+function nobody registered as the operand — `$((nofunc()))`, which both
+shells call a failure at expansion time and neither refuses at parse time.
+
+A prompt rendering is a **boundary**. An error inside the expansion pass
+costs the rendering and nothing else: the diagnostic is written, the command
+holding the expansion still runs, the command after it runs, and the shell
+exits 0.
+
+```
+s='PRE-$((nofunc()))-POST'      v='PRE-$((nofunc()))-POST'
+${(%%)s}   (zsh, PROMPT_SUBST)  ${v@P}     (bash)
+```
+
+| | zsh | bash |
+| --- | --- | --- |
+| diagnostic | `<file>:N: unknown function: nofunc` | `<file>: line N: nofunc(): arithmetic syntax error …` |
+| the rendering is worth | `PRE-` | `PRE-$((nofunc()))-POST` |
+| the command runs | yes | yes |
+| the next command runs | yes | yes |
+| status | 0 | 0 |
+
+So the boundary is unanimous and only **what a given-up pass hands back**
+divides them. zsh keeps what it drew; bash keeps the text it was handed,
+with the substitutions simply not performed. That is
+`interp.PromptStyle.FailedExpansionKeepsWhatItDrew`.
+
+"What it drew" is the text in front of the **first** substitution, not
+everything that had succeeded. With `V=MID` and
+`s='PRE-${V}-$((nofunc()))-POST'`, zsh still draws `PRE-`: the `${V}` that
+expanded is thrown away with the rest.
+
+The **escape pass is not given up with it.** `s='PRE-%%-$((nofunc()))-POST'`
+draws `PRE-%-`, so the table reads what the abandoned expansion left exactly
+as it would read a finished one. The same holds for a visual code: with `%B`
+in the same position the bold sequence is drawn and then the rendering stops.
+
+`${x?word}` is the one operand that is not caught, and it splits the panel
+the way it splits at a sourced file: with `s='PRE-${NOPEV?gone}-POST'`, zsh
+reports and **ends the shell** before the command runs, where bash reports,
+renders and carries on. That is `interp.Semantics.ParamErrorIsAnExitRequest`,
+asked here for the same reason it is asked at a startup file.
+
+`print -P` is the same rendering under another spelling and reaches the same
+boundary: `print -P 'PRE-$((nofunc()))-POST'` writes `PRE-`, the line after
+it runs, and the status is 0.
+
+Why it is worth a section: a prompt theme's whole `PROMPT` is parameters, and
+powerlevel10k's opens with `${$((_p9k_on_expand()))+}` — a math function that
+is not resolvable until the theme's own `functions -M` has run. Without the
+boundary, "one segment came out empty" is "nothing after this point runs"
+(#2053).
+
 ## The default is a parameter, not only a fallback
 
 **Measured** 2026-09-07 through a pseudo-terminal — no `-c`, no `-i`, `$-`

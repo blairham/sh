@@ -2768,23 +2768,10 @@ func (r *Runner) changeCaseWith(value, pattern string, e *syntax.ParamExpr) stri
 	case syntax.ParamToggle, syntax.ParamToggleFirst:
 		convert = toggleCase
 	}
-	if !isASCII(value) && r.localeIsC() {
-		// In the C locale only ASCII letters are letters, so `${x^^}` on
-		// café is CAFé — measured, and the policy docs/spec/semantics.md
-		// records: an explicit C or POSIX locale narrows case to ASCII, and
-		// any other value is Unicode-aware. What an *unset* locale is
-		// splits the panel and is the dialect's answer, which localeIsC
-		// asks; the ASCII guard in front of it is what keeps the question
-		// unasked where the two readings agree, since case mapping below
-		// 0x80 is the same map in every locale.
-		ascii := convert
-		convert = func(c rune) rune {
-			if c < 0x80 {
-				return ascii(c)
-			}
-			return c
-		}
-	}
+	// In the C locale only ASCII letters are letters, so `${x^^}` on café is
+	// CAFé. What an *unset* locale is splits the panel and is the dialect's
+	// answer; caseMapper asks, and is the one place that narrowing lives.
+	convert = r.caseMapper(value, convert)
 	first := e.Op == syntax.ParamUpperFirst ||
 		e.Op == syntax.ParamLowerFirst ||
 		e.Op == syntax.ParamToggleFirst
@@ -3001,8 +2988,18 @@ func edgeByLength(value, pattern string, op syntax.ParamOp, o patternOpts) (int,
 			idx[l], idx[r] = idx[r], idx[l]
 		}
 	}
+
+	// What each end of the pattern requires of a piece, so that a candidate
+	// the pattern could not match whatever the subject holds is skipped
+	// rather than handed to the matcher. See interp/patternspan.go for why
+	// this is allowed to ask too little and never too much.
+	head, tail, edges := patternEdgeLiterals(pattern, o)
+
 	for _, i := range idx {
 		if prefix {
+			if !edgeLiteralsFit(value[:i], head, tail, edges) {
+				continue
+			}
 			// The piece is a prefix of value, so the matcher is told where
 			// it sits: a trial is at the start of the subject and reaches
 			// its end only when it is the whole of it. Measured on zsh
@@ -3011,6 +3008,9 @@ func edgeByLength(value, pattern string, op syntax.ParamOp, o patternOpts) (int,
 			if ok, m := matchPatternIn(pattern, value[:i], value, 0, o); ok {
 				return i, m, true
 			}
+			continue
+		}
+		if !edgeLiteralsFit(value[i:], head, tail, edges) {
 			continue
 		}
 		if ok, m := matchPatternIn(pattern, value[i:], value, i, o); ok {
@@ -3655,29 +3655,68 @@ func (r *Runner) specialLength() int {
 // Newlines are preserved, because the text is input to a command rather than
 // a word: lexing alone would drop them as token separators.
 func (r *Runner) expandRawText(text string) string {
-	var b strings.Builder
+	out, _, _ := r.expandRawSpans(text)
+	return out
+}
+
+// expandRawSpans is that expansion with the two facts a *boundary* needs: how
+// far it got, and whether it got there.
+//
+// Three results rather than one, and each is read by somebody. The text is
+// what every caller wanted. ok is false where a span failed, which is what
+// lets a caller stop rather than ask the runner. head is the literal text in
+// front of the **first** substitution — what a prompt expansion hands back
+// when the pass it is running gives up partway; see expandPromptText, which is
+// the only reader of it.
+//
+// The loop abandons the text at its first failure, which is the rule
+// expandWord and wordTextNoSplit already follow and which this one did not:
+// measured, a here-document body holding `$((nofunc()))` twice is one
+// diagnostic in zsh and was two here, because nothing stopped the walk.
+func (r *Runner) expandRawSpans(text string) (out, head string, ok bool) {
+	var b, h strings.Builder
 	spans, ok := r.rawSpans(text)
 	if !ok {
-		return ""
+		return "", "", false
 	}
+	// Whether an expansion had already failed before this text, which is not
+	// this text's doing — the same comparison expandWord makes, and for the
+	// same reason.
+	failed := r.expandErr
+	stopped := func() bool { return (r.expandErr && !failed) || r.ctl == controlExit }
+	// literal is whether everything so far has been literal text, which is
+	// what head is accumulating: the first substitution closes it, whether
+	// that substitution succeeds or not.
+	literal := true
 	// The lexer leaves an expansion's inside raw, so parseSpans fills it in —
 	// the same handoff a word goes through. splitNever: a here-document's
 	// body is one blob of input rather than fields, in every shell in the
 	// panel, so the splitting axis has nothing to ask.
 	for _, s := range spans {
+		if stopped() {
+			return b.String(), h.String(), false
+		}
 		// head is false, and it is the belt to the quoting's braces: a
 		// here-document's spans are marked double-quoted — which is what
 		// stops the body being split — so `${~t}` in one is suppressed by
 		// the quoting before the head is consulted. Measured, a `${~t}` in a
 		// body is the value unchanged, and a mutant passing true here is
 		// unobservable for that reason.
-		out, _ := r.expandSpan(s, splitNever, false)
+		part, _ := r.expandSpan(s, splitNever, false)
 		// expandSpan marks a literal's metacharacters for the glob stage,
 		// and a here-document has no glob stage — the text is input, not a
 		// pattern. Without this a backslash in the body came out doubled.
-		b.WriteString(globUnescape(out))
+		part = globUnescape(part)
+		b.WriteString(part)
+		switch {
+		case !literal:
+		case s.Kind == syntax.Literal:
+			h.WriteString(part)
+		default:
+			literal = false
+		}
 	}
-	return b.String()
+	return b.String(), h.String(), !stopped()
 }
 
 // rawSpans reads raw text back into spans, refusing text that ran out inside

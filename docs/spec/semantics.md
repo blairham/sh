@@ -4877,6 +4877,33 @@ that *"how much of a locale this shell has is a larger question than the
 escape"*, which had already been settled here. A policy decided in one
 place is only useful if the next operator looks for it.
 
+**"And family" was doing real work in that sentence, and it was not true.**
+#367 brought the case-changing *operators* — `${x^^}`, `${(U)x}` — under
+this policy and left the two sites beside them still calling
+`strings.ToUpper` directly: the case-changing **attribute** (`declare -u`,
+`typeset -l`) and zsh's **`:u`/`:l` modifier**. Measured 2026-09-11 under
+`LC_ALL=C`, uppercasing `café`:
+
+|  | bash 5.3.15 | ksh93u+ | zsh 5.9.2 | ours, before #2027 |
+| --- | --- | --- | --- | --- |
+| `declare -u s=café` | `CAFé` | `CAFé` | `CAFé` | **`CAFÉ`** |
+| `s=café; ${s:u}` | *n/a* | *n/a* | `CAFé` | **`CAFÉ`** |
+| `s=café; ${s^^}` | `CAFé` | *n/a* | *n/a* | `CAFé` — right |
+| `s=café; ${(U)s}` | *n/a* | *n/a* | `CAFé` | `CAFé` — right |
+
+The panel agrees at every site, so this was a **correction** rather than an
+axis: the policy above already answered it and two more operators simply had
+to ask. What let them not ask is that the narrowing was three lines each site
+repeated, so a site could be added — or left behind — without anything
+noticing. It is now one helper, `Runner.caseMapper`, and the four sites call
+it; a narrowing every caller has to remember is one some caller will not.
+
+The **test shape** is the other half of the lesson. Each of the four sites
+already had its own test and each test agreed with its own site, which is
+precisely the arrangement that cannot see drift *between* sites. The pinning
+is now one table run over all four spellings, so a fifth site that does not
+ask is a failing row rather than a silent one (#2027).
+
 The corpus cannot catch this class of difference — `internal/oracle` pins
 `LC_ALL=C` for every run so the record does not depend on the developer's
 environment — so the pinning lives in unit tests that set the variables

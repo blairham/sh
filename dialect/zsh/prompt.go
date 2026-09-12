@@ -37,6 +37,10 @@ func PromptStyle() interp.PromptStyle {
 		// And the expansion runs before the table, which is this shell's
 		// order and not bash's. Measured both ways; see the field.
 		ExpandBeforeEscapes: true,
+		// And a pass that gives up partway is worth what it drew, not the
+		// text it was handed. Measured against bash, which keeps the text;
+		// see the field.
+		FailedExpansionKeepsWhatItDrew: true,
 		// Measured, one code per prompt, through a pty against zsh 5.9.2.
 		Escape: '%',
 		// A count in front of a code — `%2~` is the last two components. See

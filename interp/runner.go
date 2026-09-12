@@ -1122,6 +1122,19 @@ type Runner struct {
 	// Semantics.StoppedJobsHoldTheExit already describes, and only a session
 	// that has said `unsetopt checkjobs` is departing from it.
 	stoppedJobExitCheckOff bool
+	// keepsLastPipelineElement is a session asking for the last element of a
+	// pipeline to run in this shell rather than in a subshell, overriding
+	// Semantics.LastPipelineElementInCurrentShell for as long as it is set.
+	//
+	// A switch as well as an axis, for the reason stoppedJobExitCheckOff is:
+	// one shell in the panel lets a script move the answer and the rest hold
+	// it fixed. The zero value is "nobody has asked", so a Runner that has
+	// never seen the option follows the axis — which is what keeps the two
+	// shells that run the last element there anyway from needing it.
+	//
+	// See Runner.KeepsLastPipelineElement for the measurements, including the
+	// monitor's part in it.
+	keepsLastPipelineElement bool
 	// editingMode is which of the two `set -o` editing modes is selected,
 	// and it is one field because the two names are one state: `set -o vi`
 	// in bash 5.3 and in ksh93 turns `emacs` off in the same breath.

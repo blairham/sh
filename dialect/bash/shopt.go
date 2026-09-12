@@ -146,6 +146,11 @@ var shoptModes = map[string]interp.MatchOption{
 //     into a table. The core switch is positive
 //     (interp.Runner.CompletesEmptyCommandWord) and the inversion happens
 //     here, in the one place the name's sense is decided.
+//
+// `lastpipe` is the ninth entry and belongs to neither group above. It is not
+// interactive-only — it is the one name here a *script* sets and immediately
+// depends on — and what it moves is a semantics axis rather than a capability.
+// Its own comment on the entry carries the measurement; #2361 is the issue.
 var shoptSwitches = map[string]struct {
 	get func(*interp.Runner) bool
 	set func(*interp.Runner, bool)
@@ -186,6 +191,25 @@ var shoptSwitches = map[string]struct {
 	"no_empty_cmd_completion": {
 		get: func(r *interp.Runner) bool { return !r.CompletesEmptyCommandWord() },
 		set: func(r *interp.Runner, on bool) { r.SetCompletesEmptyCommandWord(!on) },
+	},
+	// The one name in this table that moves a *semantics axis* rather than a
+	// capability, and the reason it is a switch at all: where the last element
+	// of a pipeline runs is
+	// interp.Semantics.LastPipelineElementInCurrentShell, answered `No` by
+	// this preset and by dash and `Yes` by ksh93 and zsh — and this is the
+	// only shell in the panel that lets a script move it. So the axis says
+	// where the shell stands and the switch says whether the script asked for
+	// the other side; nothing here is a second implementation of the pipeline.
+	//
+	// It sat in shoptStates refusing the write until #2361, which is the one
+	// refusal in that table that could actively mislead: a script sets the
+	// option precisely so that `cmd | read v` and `cmd | while read; do …;
+	// done` leave something behind, and a quiet `shopt` over an unmoved
+	// pipeline would have read an empty variable with nothing on standard
+	// error. That is why the name could not be closed by widening a table.
+	"lastpipe": {
+		get: (*interp.Runner).KeepsLastPipelineElement,
+		set: (*interp.Runner).SetKeepsLastPipelineElement,
 	},
 }
 
@@ -378,7 +402,6 @@ var shoptStates = map[string]bool{
 	"huponexit":            false,
 	"inherit_errexit":      false,
 	"interactive_comments": true,
-	"lastpipe":             false,
 	"lithist":              true,
 	"localvar_inherit":     false,
 	"localvar_unset":       false,

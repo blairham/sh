@@ -269,3 +269,105 @@ func TestPipefailSubstitutesFromAWatchedWait(t *testing.T) {
 		t.Errorf("got %q, want %q — the caller's own wait carries the signal too", out.String(), want)
 	}
 }
+
+// The axis says where a shell stands; this says whether the session moved it.
+//
+// One shell in the panel has a name for the move — `shopt -s lastpipe` — and
+// that name is its dialect's, so what the core owns is the switch and not the
+// spelling. Both directions are asserted for the reason the axis test above
+// asserts both: a switch that only ever reads on is indistinguishable from an
+// implementation that ignores it.
+func TestTheSessionCanKeepTheLastPipelineElement(t *testing.T) {
+	const src = `echo x | read v; echo "[$v]"`
+	keep := func(on bool) func(*Runner) {
+		return func(r *Runner) {
+			s := pipelineSem(No)
+			r.Semantics = &s
+			r.SetKeepsLastPipelineElement(on)
+		}
+	}
+	if got, _ := run(t, src, keep(true)); got != "[x]\n" {
+		t.Errorf("switch on over a subshell axis: got %q, want %q", got, "[x]\n")
+	}
+	if got, _ := run(t, src, keep(false)); got != "[]\n" {
+		t.Errorf("switch off: got %q, want %q", got, "[]\n")
+	}
+	// And the getter reads back what was written, which is what the dialect's
+	// query prints. The zero value is the subject here — a Runner nobody has
+	// spoken to has to follow the axis — so it runs nothing and needs no
+	// directory. testrunner:bare
+	r := &Runner{}
+	if r.KeepsLastPipelineElement() {
+		t.Error("a Runner nobody has spoken to keeps the last element")
+	}
+	r.SetKeepsLastPipelineElement(true)
+	if !r.KeepsLastPipelineElement() {
+		t.Error("the switch did not read back on")
+	}
+}
+
+// The monitor overrules the switch, and that is the half an implementation is
+// most likely to skip. Measured in bash 5.3.15 on 2026-09-12: with the option
+// set, `set -m` in front of the pipeline answers `[]` and `set -m; set +m`
+// answers `[hi]`, so it is the monitor's state *at the pipeline* that decides.
+func TestTheMonitorOverrulesTheKeptLastElement(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`set +m; echo x | read v; echo "[$v]"`, "[x]\n"},
+		{`set -m; echo x | read v; echo "[$v]"`, "[]\n"},
+		// Turned on and off again: the option was never rewritten, so a
+		// reading taken when the option was set would answer the first row.
+		{`set -m; set +m; echo x | read v; echo "[$v]"`, "[x]\n"},
+	} {
+		got, _ := run(t, tc.src, func(r *Runner) {
+			s := pipelineSem(No)
+			s.MonitorNeedsATerminal = No
+			r.Semantics = &s
+			r.SetKeepsLastPipelineElement(true)
+		})
+		if got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}
+
+// A shell the switch has moved must not report an unanswered axis, which is
+// the shape that would make the core refuse a pipeline it was about to run in
+// line. The axis is left Unspecified on purpose: the switch is the answer.
+func TestTheKeptLastElementNeedsNoAxis(t *testing.T) {
+	got, st := run(t, `echo x | read v; echo "[$v]"`, func(r *Runner) {
+		s := CoreSemantics()
+		r.Semantics = &s
+		r.SetKeepsLastPipelineElement(true)
+	})
+	if got != "[x]\n" || st != 0 {
+		t.Errorf("got %q status %d, want %q status 0", got, st, "[x]\n")
+	}
+}
+
+// The switch reaches the last element and no other. Every element but the last
+// is a subshell in every shell in the panel, with or without the name, so this
+// is what parts an option from a shell that stopped piping.
+func TestTheKeptElementIsOnlyTheLastOne(t *testing.T) {
+	got, _ := run(t, `echo x | read v | cat; echo "[$v]"`, func(r *Runner) {
+		s := pipelineSem(No)
+		r.Semantics = &s
+		r.SetKeepsLastPipelineElement(true)
+	})
+	// `read` in the middle eats the line, so `cat` has nothing to write and
+	// the whole of the output is the empty variable.
+	if got != "[]\n" {
+		t.Errorf("got %q, want %q", got, "[]\n")
+	}
+}
+
+// A subshell carries its own copy, so `( … )` turning it on stays inside.
+func TestTheKeptLastElementDoesNotEscapeASubshell(t *testing.T) {
+	got, _ := run(t, `( echo x | read v; echo "in[$v]" ); echo "out[$v]"`, func(r *Runner) {
+		s := pipelineSem(No)
+		r.Semantics = &s
+		r.SetKeepsLastPipelineElement(true)
+	})
+	if got != "in[x]\nout[]\n" {
+		t.Errorf("got %q, want %q", got, "in[x]\nout[]\n")
+	}
+}

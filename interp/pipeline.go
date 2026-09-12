@@ -250,7 +250,8 @@ func (r *Runner) lockReader(in io.Reader) io.Reader {
 // Every element but the last runs on a copy of the shell's state. Whether the
 // *last* one does is the LastPipelineElementInCurrentShell axis: dash and bash
 // give it a subshell, ksh93 and zsh run it in the current shell so
-// `echo x | read v` sets v.
+// `echo x | read v` sets v. A session can move that answer where its dialect
+// has a name for the move — see Runner.lastElementRunsHere.
 //
 // The axis is asked only when the answer could be observed — when the last
 // element is a builtin, a function, or a brace group, all of which can touch
@@ -293,8 +294,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 
 	// Decided before anything starts, because asking from inside a goroutine
 	// would interleave the diagnostic with the pipeline's output.
-	inCurrent := r.lastElementIsObservable(p.Cmds[n-1]) &&
-		r.ask(r.sem().LastPipelineElementInCurrentShell, "the last pipeline element running in the current shell")
+	inCurrent := r.lastElementIsObservable(p.Cmds[n-1]) && r.lastElementRunsHere()
 	if r.unspecified {
 		// No dialect answered, so the pipeline does not run at all. Running
 		// it and reporting afterwards would pick a side and say it had not.
@@ -547,6 +547,28 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		}
 	}
 	return nil
+}
+
+// lastElementRunsHere answers where the last element of a pipeline goes: the
+// dialect's standing answer, unless this session asked for the other one.
+//
+// The switch is checked first and short-circuits the question, so a shell
+// whose dialect keeps the last element in a subshell — which is the only shell
+// in the panel that has a name for asking — does not report an unanswered axis
+// for a pipeline it is about to run in line. See
+// Runner.KeepsLastPipelineElement for what the name is and what it measures.
+//
+// The monitor is read here rather than at the setter because the two arrive in
+// either order. Measured in bash 5.3.15: `shopt -s lastpipe; set -m` answers
+// `[]` and `shopt -s lastpipe; set -m; set +m` answers `[hi]`, so it is the
+// monitor's state at the pipeline that decides and not its state when the
+// option was written.
+func (r *Runner) lastElementRunsHere() bool {
+	if r.keepsLastPipelineElement && !r.monitor {
+		return true
+	}
+	return r.ask(r.sem().LastPipelineElementInCurrentShell,
+		"the last pipeline element running in the current shell")
 }
 
 // lastElementIsObservable reports whether running a command in the current

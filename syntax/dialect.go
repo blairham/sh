@@ -977,8 +977,8 @@ type Dialect struct {
 	// are taken: `function 'a*b' { :; }` defines it and `functions` writes it
 	// back as `'a*b'`.
 	//
-	// The neighboring readings, all measured on zsh 5.9.2, because they are
-	// what says this is a *name* rather than a hole in a check:
+	// The neighboring readings, all measured under a true preset, because they
+	// are what says this is a *name* rather than a hole in a check:
 	//
 	//	function "" { echo b; }   the same definition, either spelling
 	//	function '' () { … }      the hybrid form takes it too
@@ -995,9 +995,9 @@ type Dialect struct {
 	// a third thing again, which this parser does not read.
 	//
 	// The keyword form only. The POSIX `name()` form refuses a quoted word
-	// before any name test is reached, and its panel is a different one —
-	// ksh93 reads `'q'() { … }` as a definition too and then refuses the
-	// empty name where zsh takes it (#1561).
+	// before any name test is reached, and the presets split differently there —
+	// one reads `'q'() { … }` as a definition too and then refuses the empty
+	// name where another takes it.
 	FunctionKeywordNameIsAnyWord bool
 
 	// FunctionNameIsAnyWord is that flag for the POSIX `name()` form:
@@ -1005,48 +1005,47 @@ type Dialect struct {
 	// definitions, callable by those names, listed by `functions` and
 	// `typeset -f` and removed by `unfunction`.
 	//
-	// Separate from the keyword flag because the panel is a different one and
-	// the two came apart in this parser: the keyword form has taken any word
-	// since #1548, and `name()` refused a quoted word before any name test
-	// was reached — so `function a\ b { … }` defined a function here and
-	// `a\ b() { … }`, the same name, was `` parse error near `(' ``. One
-	// shell writing both spellings could not be read.
+	// Separate from the keyword flag because the presets split differently and
+	// the two can come apart in a parser: a keyword form that takes any word
+	// beside a `name()` that refuses a quoted one before any name test is
+	// reached means `function a\ b { … }` defines and `a\ b() { … }`, the same
+	// name, is `` parse error near `(' ``. One preset writing both spellings
+	// could not be read.
 	//
-	// Measured 2026-09-10 from a script file under `env -i`, `a\ b() { echo
-	// b; }; echo after`:
+	// Measured from a script file under `env -i`, `a\ b() { echo b; }; echo
+	// after`:
 	//
-	//	zsh 5.9.2   `after`, status 0, nothing on stderr, and `typeset -f`
-	//	            lists the body under `'a b'`
-	//	bash 5.3    `` `a\ b': not a valid identifier `` on stderr, then
-	//	            `after` — refused where it runs, script carries on at 0
-	//	bash 3.2    the same two lines
-	//	bash-as-sh  the same diagnostic and nothing after: fatal, status 2
-	//	ksh93       `a b: invalid function name`, status 1, nothing after
-	//	dash        `Syntax error: Bad function name`, status 2 — the only
-	//	            column that refuses to *parse* it
+	//	true    `after`, status 0, nothing on stderr, and the function
+	//	        listing shows the body under `'a b'`
+	//	false   `` `a\ b': not a valid identifier `` on stderr, then
+	//	        `after` — refused where it runs, script carries on at 0
+	//	false   the same diagnostic and nothing after: fatal, status 2
+	//	false   `a b: invalid function name`, status 1, nothing after
+	//	false   `Syntax error: Bad function name`, status 2 — the only
+	//	        reading that refuses to *parse* it
 	//
-	// So five of the six read the definition and four of those refuse the
-	// *name* where it runs. This parser has no definition-time name check and
-	// [Dialect.FunctionKeywordNameIsAnyWord] records why one is not being
-	// built for the sake of a diagnostic those four already print: the flag
-	// says whether the word is a name, and the five that decline it keep
-	// declining it at their own wording, where they declined it before.
+	// So most presets read the definition and refuse the *name* where it runs.
+	// This parser has no definition-time name check and
+	// [Dialect.FunctionKeywordNameIsAnyWord] records why one is not being built
+	// for the sake of a diagnostic they already print: the flag says whether the
+	// word is a name, and a preset that declines it keeps declining it at its
+	// own wording.
 	//
 	// The quoting is the whole of it, which one control says and no character
 	// class could: `'a;b'()` and `'a|b'()` are names here, and bare those
 	// characters would have ended the word before the parenthesis. The
-	// neighboring control is `'q'()` — an ordinary name in quotes — where
-	// the panel splits *two against four* rather than one against five,
-	// because ksh93 removes the quotes and defines `q`. That is what says the
-	// quoted rows measure the quoting rather than a wider set of characters,
-	// and it is the same #1566 gap the keyword form has.
+	// neighboring control is `'q'()` — an ordinary name in quotes — where the
+	// presets split differently again, because one removes the quotes and
+	// defines `q`. That is what says the quoted rows measure the quoting rather
+	// than a wider set of characters, and it is the same gap the keyword form
+	// has.
 	//
 	// The one exception the keyword flag keeps, this one keeps for the same
 	// reason: a name whose *unquoted* literal text holds `*`, `?` or `[` is
-	// still refused, because that shell matches such a word against the
-	// filesystem — `a*b() { :; }` defines nothing and is `no matches found:
-	// a*b` — and a function literally called `a*b` would be a plausible wrong
-	// answer where a refusal is a visible one. Quoted, they are ordinary
+	// still refused, because such a preset matches the word against the
+	// filesystem — `a*b() { :; }` defines nothing and is
+	// `no matches found: a*b` — and a function literally called `a*b` would be a
+	// plausible wrong answer where a refusal is a visible one. Quoted, they are ordinary
 	// text: `'a*b'() { :; }` defines it.
 	//
 	// An assignment is still an assignment. `a=()` is an empty array and not
@@ -1059,34 +1058,31 @@ type Dialect struct {
 	// FunctionMultipleNames lets the `function` keyword take more than one
 	// name for one body: `function clipcopy clippaste { … }` defines both,
 	// and `$0` inside the body is the name that was called, which is what
-	// makes the construct more than two definitions written once. zsh alone
-	// in the panel — measured 2026-09-10, `function f1 f2 f3 { echo "$0"; }`:
+	// makes the construct more than two definitions written once. Measured with
+	// `function f1 f2 f3 { echo "$0"; }`:
 	//
-	//	zsh 5.9.2   all three defined, each `$0` its own name, status 0
-	//	bash 5.3    `syntax error near unexpected token `f2'`, status 2
-	//	bash 3.2    the same sentence, status 2
-	//	bash-as-sh  the same sentence, status 2
-	//	dash        no keyword at all: `function: not found`, then the
-	//	            brace group runs and the closing `}` is unexpected
-	//	ksh93       parses it and defines **only the first** — `f2` and
-	//	            `f3` are `not found`, and `functions f1` says the whole
-	//	            header, names and all, back
+	//	true    all three defined, each `$0` its own name, status 0
+	//	false   `syntax error near unexpected token `f2'`, status 2
+	//	false   no keyword at all: `function: not found`, then the brace
+	//	        group runs and the closing `}` is unexpected
+	//	false   parses it and defines **only the first** — the rest are
+	//	        `not found`, and the function listing says the whole header,
+	//	        names and all, back
 	//
-	// So five of the six part company with zsh and the sixth reads the same
-	// text as a different program. ksh93's reading is not modeled: it defines
-	// a function whose extra names went nowhere, which is a lenience rather
-	// than a construct, and the ksh dialect keeps refusing the line here.
+	// That last reading is not modeled: it defines a function whose extra names
+	// went nowhere, which is a lenience rather than a construct, and the preset
+	// that would hold it keeps refusing the line here.
 	//
 	// **Names are taken greedily**, exactly as [Dialect.ForMultipleNames]
 	// takes a loop's: every word after the first is another name until the
 	// body begins at `{` or at the `()` of the hybrid form, and a reserved
-	// word is a name like any other. Measured: `function a while { … }`
-	// defines `a` *and* `while` in zsh, so calling `while` afterwards runs
-	// the body rather than opening a loop. A stop word is not taken —
-	// `function a } { … }` is a parse error on the `}` — and neither is a
-	// compound command: `function a b if true; then …` is a parse error at
-	// `then` there, because `if` and `true` were read as two more names and
-	// the `;` ended a definition with no body at all.
+	// word is a name like any other. Measured: `function a while { … }` defines
+	// `a` *and* `while`, so calling `while` afterwards runs the body rather than
+	// opening a loop. A stop word is not taken — `function a } { … }` is a parse
+	// error on the `}` — and neither is a compound command:
+	// `function a b if true; then …` is a parse error at `then`, because `if`
+	// and `true` were read as two more names and the `;` ended a definition with
+	// no body at all.
 	//
 	// That last reading is [Dialect.FunctionKeywordBodyIsOptional], which
 	// says what a name list with no body after it declares. What the list

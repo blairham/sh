@@ -43381,6 +43381,108 @@
         "TimedOut": false
       }
     },
+    "core/a-cleanup-half-reports-an-error-condition-as-one": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error: unexpected word (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { echo $((1/0)); } always { echo \"E=$TRY_BLOCK_ERROR\"; }; }; f'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { echo $((1/0)); } always { echo \"E=$TRY_BLOCK_ERROR\"; }; }; f'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { echo $((1/0)); } always { echo \"E=$TRY_BLOCK_ERROR\"; }; }; f'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "E=1",
+        "Stderr": "f: division by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-cleanup-half-reports-whether-the-try-half-errored": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error: unexpected word (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { false; } always { echo \"E=$TRY_BLOCK_ERROR\"; }; }; f'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { false; } always { echo \"E=$TRY_BLOCK_ERROR\"; }; }; f'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { false; } always { echo \"E=$TRY_BLOCK_ERROR\"; }; }; f'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "E=0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/a-cleanup-halfs-continue-count-decides-too": {
       "ash": {
         "Stdout": "",
@@ -48838,6 +48940,57 @@
         "TimedOut": false
       }
     },
+    "core/clearing-the-try-block-error-recovers": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error: unexpected word (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { readonly r=1; r=2; } always { TRY_BLOCK_ERROR=0; echo cleared; }; echo after-f; }; f; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { readonly r=1; r=2; } always { TRY_BLOCK_ERROR=0; echo cleared; }; echo after-f; }; f; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { readonly r=1; r=2; } always { TRY_BLOCK_ERROR=0; echo cleared; }; echo after-f; }; f; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "cleared~after-f~st=0",
+        "Stderr": "f: read-only variable: r",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/continue-ness-is-sticky-across-the-halves": {
       "ash": {
         "Stdout": "",
@@ -50062,6 +50215,57 @@
         "TimedOut": false
       }
     },
+    "core/setting-the-try-block-error-raises-one": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error: unexpected word (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { true; } always { TRY_BLOCK_ERROR=7; }; echo after-f; }; f; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { true; } always { TRY_BLOCK_ERROR=7; }; echo after-f; }; f; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { true; } always { TRY_BLOCK_ERROR=7; }; echo after-f; }; f; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/single-quotes-in-a-heredoc-expansion-body": {
       "ash": {
         "Stdout": "['VAL']",
@@ -50617,6 +50821,57 @@
       },
       "zsh": {
         "Stdout": "it=1~it=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/the-try-block-parameters-outside-a-block": {
+      "ash": {
+        "Stdout": "[][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[-1][-1]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

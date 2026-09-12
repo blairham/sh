@@ -2062,6 +2062,65 @@ a field of its own beside it (#1238).
 propagating `return` carried. Real code depends on this: gitstatus opens
 its cleanup half with `local -i ret=$?`.
 
+### The two integers beside the construct
+
+That shell keeps two parameters for it, `TRY_BLOCK_ERROR` and
+`TRY_BLOCK_INTERRUPT`, and reading them is only half of what they are
+for. Measured 2026-09-12 on zsh 5.9.2 from a script file:
+
+| probe | zsh 5.9 | the other six |
+| --- | --- | --- |
+| `print "[$TRY_BLOCK_ERROR][$TRY_BLOCK_INTERRUPT]"` | `[-1][-1]` | `[][]` |
+| `print ${(t)TRY_BLOCK_ERROR}` | `integer-special` | — |
+| `typeset -p TRY_BLOCK_ERROR` | `typeset -i10 TRY_BLOCK_ERROR=-1` | no such variable |
+| `f(){ { false; } always { print $TRY_BLOCK_ERROR; }; }; f` | `0` | error |
+| `f(){ { return 3; } always { print $TRY_BLOCK_ERROR; }; }; f` | `0` | error |
+| `f(){ { print $((1/0)); } always { print $TRY_BLOCK_ERROR; }; }; f` | `1` | error |
+| `f(){ { readonly r=1; r=2; } always { print $TRY_BLOCK_ERROR; }; }; f` | `1` | error |
+| `f(){ { break; } always { print $TRY_BLOCK_ERROR; }; }; f` | `1` | error |
+| `f(){ { print $((1/0)); } always { print $TRY_BLOCK_INTERRUPT; }; }; f` | `0` | error |
+| `f(){ { true; } always { :; }; print $TRY_BLOCK_ERROR; }; f` | `-1` | error |
+| `TRY_BLOCK_ERROR=5; f(){ { true; } always { print $TRY_BLOCK_ERROR; }; }; f; print $TRY_BLOCK_ERROR` | `0`, then `5` | error |
+
+**A nonzero status is not an error condition.** Rows 4 and 5 are the ones
+a reading built on `$?` gets wrong, and it gets them wrong quietly: the
+try half *failed*, and the answer is still 0. What counts is an error the
+shell reported and gave up over — rows 6 to 8, a division by zero, a
+readonly reassignment, a `break` with no loop to leave.
+
+**The interrupt is 0 inside a half however the try half ended** (row 9).
+It reports an interrupt, and an error is not one.
+
+**The value is one the name takes on for the length of the half**, not
+one it has. Rows 10 and 11 are the pair that says so: outside a half the
+parameter is an ordinary integer at `-1` that a script may assign to and
+read back, and entering a half puts any such assignment aside and
+restores it on the way out.
+
+**Writing them is how a script recovers, and how it raises.** This is the
+half the parameters exist for, and it is what makes them not readonly:
+
+| probe | zsh 5.9 |
+| --- | --- |
+| `f(){ { readonly r=1; r=2; } always { TRY_BLOCK_ERROR=0; }; print after; }; f; print $?` | the complaint, `after`, `0` |
+| `f(){ { readonly r=1; r=2; } always { : ; }; print after; }; f` | the complaint alone — status 1 |
+| `f(){ { true; } always { TRY_BLOCK_ERROR=1; }; print after; }; f` | nothing — status 1 |
+| `f(){ { true; } always { TRY_BLOCK_ERROR=7; }; print after; }; f` | the same, and the status is **1** |
+| `f(){ { true; } always { TRY_BLOCK_ERROR=1; }; }; f \|\| print caught` | nothing — an `\|\|` does not catch it |
+| `f(){ { true; } always { TRY_BLOCK_INTERRUPT=1; }; print after; }; f` | nothing — status 1 |
+| `f(){ { print $((1/0)); } always { TRY_BLOCK_ERROR=0; }; print "after=$?"; }; f` | the complaint, `after=1` |
+
+So the value the half leaves behind is what the construct acts on: zero
+in both names means no error condition, and either being nonzero means
+one. Row 4 is what says the value is a **flag** rather than a status —
+7 is written and 1 comes out — and row 5 that what is raised is an error
+condition rather than a failure. Row 7 is the guard on the other side of
+a recovery: `$?` after the block is still the try half's.
+
+Reading these as **empty** was the failure mode worth a number of its
+own. `$TRY_BLOCK_ERROR` empty is a plausible answer to a different
+question, at status 0 and with no diagnostic (#1234).
+
 **What `$?` is afterwards.** The try half's again — the second half's own
 status is discarded. `{ false; } always { true; }` leaves 1 and
 `{ true; } always { false; }` leaves 0, and both diagonals are needed:

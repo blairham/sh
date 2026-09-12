@@ -192,3 +192,97 @@ func TestErrexitStoppingIsNotAnExit(t *testing.T) {
 		}
 	}
 }
+
+// `$TRY_BLOCK_ERROR` and `$TRY_BLOCK_INTERRUPT`, this shell's two integers
+// beside the construct (#1234).
+//
+// Measured 2026-09-12 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a scratch
+// `HOME` and `ZDOTDIR`, from a script file. Reading them as **empty** was the
+// failure mode this repository cares about most: `$TRY_BLOCK_ERROR` is a
+// plausible answer to a different question at status 0 with no diagnostic.
+func TestTheTryBlockParametersAreReadAndWritten(t *testing.T) {
+	for _, tc := range []struct {
+		src, want string
+		status    int
+	}{
+		// The name is always there, and it is an integer with a base rather
+		// than a scalar — `typeset -p` is what says so.
+		{"echo ${+TRY_BLOCK_ERROR}${+TRY_BLOCK_INTERRUPT}", "11", 0},
+		{"typeset -p TRY_BLOCK_ERROR", "typeset -i10 TRY_BLOCK_ERROR=-1", 0},
+		{"typeset -p TRY_BLOCK_INTERRUPT", "typeset -i10 TRY_BLOCK_INTERRUPT=-1", 0},
+		{"echo \"t=${(t)TRY_BLOCK_ERROR}\"", "t=integer-special", 0},
+		{"echo \"[$TRY_BLOCK_ERROR][$TRY_BLOCK_INTERRUPT]\"", "[-1][-1]", 0},
+		// Inside a half it is whether the try half raised an error
+		// condition, which is not whether it failed.
+		{"f(){ { false; } always { echo E=$TRY_BLOCK_ERROR; }; }; f", "E=0", 1},
+		{"f(){ { return 3; } always { echo E=$TRY_BLOCK_ERROR; }; }; f", "E=0", 3},
+		{
+			"f(){ { echo $((1/0)); } always { echo E=$TRY_BLOCK_ERROR; }; }; f",
+			"f: division by zero\nE=1", 1,
+		},
+		{
+			"f(){ { readonly r=1; r=2; } always { echo E=$TRY_BLOCK_ERROR; }; }; f",
+			"f: read-only variable: r\nE=1", 1,
+		},
+		// A `break` with no loop to leave is one of them here, which is the
+		// row the core cannot have: it leaves that axis unanswered.
+		{
+			"f(){ { break; } always { echo E=$TRY_BLOCK_ERROR; }; }; f",
+			"f:break: not in while, until, select, or repeat loop\nE=1", 1,
+		},
+		// The interrupt is 0 inside a half however the try half ended.
+		{"f(){ { false; } always { echo \"TBI=[$TRY_BLOCK_INTERRUPT]\"; }; }; f", "TBI=[0]", 1},
+		{
+			"f(){ { echo $((1/0)); } always { echo I=$TRY_BLOCK_INTERRUPT; }; }; f",
+			"f: division by zero\nI=0", 1,
+		},
+		// `typeset -p` inside a half writes it as a global.
+		{
+			"f(){ { false; } always { typeset -p TRY_BLOCK_ERROR; }; }; f",
+			"typeset -g -i10 TRY_BLOCK_ERROR=0", 1,
+		},
+		// The value is one the name takes on for the length of the half, and
+		// the second row is what says it goes back to a script's own value
+		// rather than to -1.
+		{"f(){ { true; } always { :; }; echo post=$TRY_BLOCK_ERROR; }; f", "post=-1", 0},
+		{"TRY_BLOCK_ERROR=5; f(){ { true; } always { echo in=$TRY_BLOCK_ERROR; }; }; f; " +
+			"echo post=$TRY_BLOCK_ERROR", "in=0\npost=5", 0},
+		// Nested halves each report their own try half.
+		{
+			"f(){ { { echo $((1/0)); } always { echo in=$TRY_BLOCK_ERROR; }; } " +
+				"always { echo out=$TRY_BLOCK_ERROR; }; }; f",
+			"f: division by zero\nin=1\nout=1", 1,
+		},
+		// Writing it is how a script recovers. The complaint the try half
+		// printed stays printed, and the function carries on.
+		{"f(){ { readonly r=1; r=2; } always { TRY_BLOCK_ERROR=0; echo cleared; }; echo after-f; }; " +
+			"f; echo \"?=$?\"", "f: read-only variable: r\ncleared\nafter-f\n?=0", 0},
+		{
+			"f(){ { readonly r=1; r=2; } always { echo notcleared; }; echo after-f; }; f; echo \"?=$?\"",
+			"f: read-only variable: r\nnotcleared", 1,
+		},
+		// And how it raises one: the status is 1 rather than the number
+		// written, and an `||` does not catch it.
+		{"f(){ { true; } always { TRY_BLOCK_ERROR=1; }; echo after-f; }; f; echo \"?=$?\"", "", 1},
+		{"f(){ { true; } always { TRY_BLOCK_ERROR=7; }; echo after-f; }; f; echo \"?=$?\"", "", 1},
+		{"f(){ { true; } always { TRY_BLOCK_ERROR=1; }; echo after-f; }; f || echo caught", "", 1},
+		{"f(){ { true; } always { TRY_BLOCK_INTERRUPT=1; }; echo after-f; }; f", "", 1},
+		{"{ true; } always { TRY_BLOCK_ERROR=1; }; echo after", "", 1},
+		// `$?` after a cleared block is still the try half's.
+		{
+			"f(){ { echo $((1/0)); } always { TRY_BLOCK_ERROR=0; echo \"in?=$?\"; }; " +
+				"echo \"after=$?\"; }; f; echo \"?=$?\"",
+			"f: division by zero\nin?=0\nafter=1\n?=0", 0,
+		},
+		// The name is an ordinary parameter otherwise: assignable, readable,
+		// and unsettable.
+		{"TRY_BLOCK_ERROR=5; echo $TRY_BLOCK_ERROR", "5", 0},
+		{"unset TRY_BLOCK_ERROR; echo \"[${(t)TRY_BLOCK_ERROR}][$TRY_BLOCK_ERROR]" +
+			"[${+TRY_BLOCK_ERROR}]\"", "[][][0]", 0},
+	} {
+		out, st := answersRun(t, tc.src)
+		if got := strings.TrimSpace(out); got != tc.want || st != tc.status {
+			t.Errorf("%s: said %q status %d, want %q status %d", tc.src, got, st, tc.want, tc.status)
+		}
+	}
+}

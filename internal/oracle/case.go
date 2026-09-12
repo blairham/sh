@@ -2169,6 +2169,35 @@ var Corpus = []Case{
 		Why:     "the neighbor #1220 left: a failed expansion in a *heading* inside the try half stops the loop before its body, the cleanup half still runs, and its own expansion is not poisoned by the flag the failure left — `A2` rather than a second complaint. The construct has no heading of its own, so this is the row that says it needs none",
 	},
 	{
+		ID: "core/the-try-block-parameters-outside-a-block", Category: "command language",
+		Snippet: `echo "[$TRY_BLOCK_ERROR][$TRY_BLOCK_INTERRUPT]"`,
+		Why:     "the shell with the try-always construct keeps two integers beside it, and they exist whether or not one is running — `-1` there, where the other six have no such names and read them as empty. The row is here because empty is the failure this repository cares about most: it is a plausible answer to a different question, at status 0 and with nothing said. Nothing about the construct is exercised, which is the point — the names are the parameter table's rather than the block's",
+	},
+	{
+		ID: "core/a-cleanup-half-reports-whether-the-try-half-errored", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `f(){ { false; } always { echo "E=$TRY_BLOCK_ERROR"; }; }; f`,
+		Why:     "inside a cleanup half the same name is 0 or 1, and this is the row that says which question it answers: the try half *failed* and the answer is still 0, so it is not a reading of `$?`. Paired with the case below, where an error the shell reported and gave up over gives 1",
+	},
+	{
+		ID: "core/a-cleanup-half-reports-an-error-condition-as-one", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `f(){ { echo $((1/0)); } always { echo "E=$TRY_BLOCK_ERROR"; }; }; f`,
+		Why:     "the other half of the pair: a division by zero is an error the shell reported and gave up over, and that is what the parameter counts. The two rows together are the whole definition — a shell answering 1 to both has read it as a failure and a shell answering 0 to both has read it as nothing",
+	},
+	{
+		ID: "core/clearing-the-try-block-error-recovers", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `f(){ { readonly r=1; r=2; } always { TRY_BLOCK_ERROR=0; echo cleared; }; echo after-f; }; f; echo "st=$?"`,
+		Why:     "the parameter is writable, and writing it is what the construct acts on: the error condition the try half raised is gone, so the function carries on from the statement after the block and leaves 0. The complaint the try half already printed stays printed — recovering from an error is not un-reporting it. The same function without the assignment stops at the block and leaves 1, which is what dialect/zsh asserts beside this row",
+	},
+	{
+		ID: "core/setting-the-try-block-error-raises-one", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `f(){ { true; } always { TRY_BLOCK_ERROR=7; }; echo after-f; }; f; echo "st=$?"`,
+		Why:     "the other direction, and the one that fixes the status: a cleanup half after a try half that raised nothing writes 7 and the shell stops with **1** rather than with 7, so the value is a flag and not a status. Nothing after the call runs either — it is an error condition rather than a failure, and an `||` does not catch it",
+	},
+	{
 		ID: "core/errexit-firing-skips-a-cleanup-half", Category: "command language",
 		Script: true, SyntaxError: true,
 		Snippet: `set -e; f(){ { echo t; false; } always { echo A; }; echo after-f; }; f; echo tail`,

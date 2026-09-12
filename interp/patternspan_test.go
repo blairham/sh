@@ -164,7 +164,9 @@ func replaceForTest(pattern, subject string, anchor byte, all, bound bool) strin
 	o := spanOptsForTest()
 	o.where = &matchWhere{}
 	e := replaceExprForTest(anchor, all)
-	return replace(subject, pattern, e, o, armOrder{}, func(matchReport, string) string { return "<>" })
+	return replace(subject, pattern, e, o, armOrder{},
+		func() EmptyMatchDeclinedPolicy { return EmptyMatchDeclinedAtTheEnd },
+		func(matchReport, string) string { return "<>" })
 }
 
 func TestSpanStoppersCoversEveryMetacharacterTheMatcherKnows(t *testing.T) {

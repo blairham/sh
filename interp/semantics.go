@@ -4679,6 +4679,65 @@ type Semantics struct {
 	// operators ask it, and interp/trimarm.go for the search.
 	LongestMatchTakesTheWrittenArm Answer
 
+	// EmptyReplacementPattern is what `${v//\/X}` — a span replacement whose
+	// pattern is empty — matches in the unanchored spellings.
+	//
+	// Measured 2026-09-12 from a script file, `v=abc` and `e=`:
+	//
+	//	                  bash 5.3.15  ksh93u+  zsh 5.9.2
+	//	${v///X}          abc          abc      XaXbXc
+	//	${v/$e/X}         abc          abc      Xabc
+	//	${e///X}          (empty)      X        X
+	//	${e//x/X}         (empty)      (empty)  (empty)
+	//
+	// Three answers and not two, which the empty *value* row is the whole of:
+	// bash declines the pattern outright and ksh93 takes it where there is
+	// nothing to scan. The last row is the control that says the `X` is a
+	// match and not something an empty value produces on its own.
+	//
+	// It is a question about the pattern's *text* rather than about empty
+	// matches in general, and the discriminating probe is a non-empty pattern
+	// that matches only the empty string: with extglob on, `${v//@(|)/<>}` is
+	// `<>a<>b<>c` in bash and `<>a<>b<>c<>` in ksh93, so neither shell is
+	// refusing empty matches — see ReplacementEmptyMatchDeclined, which is
+	// where those two columns then part.
+	//
+	// Asked only where the pattern is empty and the spelling unanchored. A
+	// pattern with anything in it never reaches it, and the anchored forms
+	// are their own row: `${v/#/X}` is `Xabc` in bash and zsh and `abc` in
+	// ksh93, which is that shell declining an *anchor* it takes nowhere else
+	// (#1857).
+	EmptyReplacementPattern EmptyReplacementPatternPolicy
+
+	// ReplacementEmptyMatchDeclined is which empty match a global replacement
+	// refuses to take, once the pattern is one that can match empty at all.
+	//
+	// Every column agrees that a match reaching the end of the value ends the
+	// scan — `${v//*/X}` is one `X` — and they part over an empty match that
+	// does not. Measured 2026-09-12, `v=abc`, the replacement written `<>` so
+	// each match shows, the pattern "empty or one letter" spelled `@(b|)`
+	// under extglob and `(b|)` under extendedglob:
+	//
+	//	          bash 5.3.15  zsh 5.9.2  ksh93u+
+	//	@(b|)     <>a<><>c     <>a<><>c   <>a<>c<>
+	//	@(x|)     <>a<>b<>c    <>a<>b<>c  <>a<>b<>c<>
+	//	@(c|)     <>a<>b<>     <>a<>b<>   <>a<>b<>
+	//	@(a|)     <><>b<>c     <><>b<>c   <>b<>c<>
+	//
+	// Row one is the discriminator: ksh93 has no `<>` between `b` and `c`,
+	// where the other two do, and has one after `c`, where they do not.
+	//
+	// Row three is the control both readings answer the same way and both
+	// must keep, because it is the rule nobody disputes reached from a third
+	// direction — `c` matches at the last unit, so the scan ends there under
+	// either policy.
+	//
+	// Asked at the two positions the readings land differently on, and
+	// nowhere else: an empty match where the match before it ended, and the
+	// end of the value stepped onto after an empty match. A pattern that
+	// cannot match empty reaches neither.
+	ReplacementEmptyMatchDeclined EmptyMatchDeclinedPolicy
+
 	// ParameterIsSetSeesPositionals lets `-v 1` ask about a positional
 	// parameter, and `-v 0` about the shell's name.
 	//
@@ -8665,6 +8724,95 @@ func (r *Runner) unsetArraySpan() UnsetArraySpanPolicy {
 // no answer at all means removal too.
 func (r *Runner) unsetBlanksInPlace() bool {
 	return r.sem().UnsetArraySpan == UnsetArraySpanLeavesOneEmptyElement
+}
+
+// EmptyReplacementPatternPolicy is what an empty pattern matches in an
+// unanchored span replacement. See Semantics.EmptyReplacementPattern for the
+// measurements.
+type EmptyReplacementPatternPolicy int
+
+const (
+	// EmptyReplacementPatternUnspecified is no answer, and is refused: the
+	// three below leave three different values behind.
+	EmptyReplacementPatternUnspecified EmptyReplacementPatternPolicy = iota
+	// EmptyReplacementPatternMatchesNothing declines the pattern outright,
+	// so the operator is a no-op whatever the value holds: bash, in every
+	// build measured and as `sh`.
+	EmptyReplacementPatternMatchesNothing
+	// EmptyReplacementPatternMatchesAnEmptyValue takes it only where there
+	// is nothing to scan, so an empty value becomes the replacement and any
+	// other value is left alone: ksh93.
+	EmptyReplacementPatternMatchesAnEmptyValue
+	// EmptyReplacementPatternMatchesEveryPosition treats it as the ordinary
+	// pattern that matches the empty string, so it fires wherever any such
+	// pattern would: zsh.
+	EmptyReplacementPatternMatchesEveryPosition
+)
+
+func (p EmptyReplacementPatternPolicy) String() string {
+	switch p {
+	case EmptyReplacementPatternMatchesNothing:
+		return "nothing"
+	case EmptyReplacementPatternMatchesAnEmptyValue:
+		return "an empty value"
+	case EmptyReplacementPatternMatchesEveryPosition:
+		return "every position"
+	}
+	return "unspecified"
+}
+
+// emptyReplacementPattern resolves the axis, and is reached only where the
+// pattern of an unanchored span replacement is empty.
+func (r *Runner) emptyReplacementPattern() EmptyReplacementPatternPolicy {
+	p := r.sem().EmptyReplacementPattern
+	if p == EmptyReplacementPatternUnspecified {
+		r.diagf("%s\n", r.unanswered("what an empty pattern in `${v///X}` matches"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// EmptyMatchDeclinedPolicy is which empty match a global replacement refuses.
+// See Semantics.ReplacementEmptyMatchDeclined for the measurements.
+type EmptyMatchDeclinedPolicy int
+
+const (
+	// EmptyMatchDeclinedUnspecified is no answer, and reads as
+	// EmptyMatchDeclinedAtTheEnd after the refusal — the same shape ask()
+	// has, where an unanswered axis is reported and then does not fire.
+	EmptyMatchDeclinedUnspecified EmptyMatchDeclinedPolicy = iota
+	// EmptyMatchDeclinedAtTheEnd refuses an empty match at the end of the
+	// value reached by stepping over the last unit, and takes one adjacent
+	// to the match before it: bash and zsh.
+	EmptyMatchDeclinedAtTheEnd
+	// EmptyMatchDeclinedAfterAMatch refuses an empty match at the position
+	// the match before it ended, and takes one at the end: ksh93. The
+	// classic global-replace rule, where a replacement never happens twice
+	// in the same place.
+	EmptyMatchDeclinedAfterAMatch
+)
+
+func (p EmptyMatchDeclinedPolicy) String() string {
+	switch p {
+	case EmptyMatchDeclinedAtTheEnd:
+		return "at the end of the value"
+	case EmptyMatchDeclinedAfterAMatch:
+		return "where the match before it ended"
+	}
+	return "unspecified"
+}
+
+// emptyMatchDeclined resolves the axis, and is reached only at the two
+// positions the two readings land differently on.
+func (r *Runner) emptyMatchDeclined() EmptyMatchDeclinedPolicy {
+	p := r.sem().ReplacementEmptyMatchDeclined
+	if p == EmptyMatchDeclinedUnspecified {
+		r.diagf("%s\n", r.unanswered("which empty match a replacement declines"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
 }
 
 // PrefixRefusalFatalityPolicy is what a refused assignment prefix — `x=2 cmd`

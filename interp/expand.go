@@ -2881,6 +2881,9 @@ func (r *Runner) matchedWith(value, pattern string, e *syntax.ParamExpr) string 
 // count, and cost four times the run time of a substitution over a long
 // value for the trouble.
 func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string {
+	if pattern == "" && e.Anchor == 0 && !r.emptyPatternFires(value) {
+		return value
+	}
 	o := r.replacementPatternOpts(pattern, value)
 	// One spelling of "read the replacement", used by both branches. It is
 	// `replacementOf` and not `joinWord` because a replacement is **text**
@@ -2890,14 +2893,37 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 	repl := r.replacementWord(e)
 	if !reportsAMatch(o) {
 		with := r.replacementFor(repl)
-		return replace(value, pattern, e, o, r.armOrder(), func(_ matchReport, matched string) string {
-			return with(matched)
-		})
+		return replace(value, pattern, e, o, r.armOrder(), r.emptyMatchDeclined,
+			func(_ matchReport, matched string) string {
+				return with(matched)
+			})
 	}
-	return replace(value, pattern, e, o, r.armOrder(), func(m matchReport, matched string) string {
+	return replace(value, pattern, e, o, r.armOrder(), r.emptyMatchDeclined, func(m matchReport, matched string) string {
 		r.publishMatch(m)
 		return r.replacementFor(repl)(matched)
 	})
+}
+
+// emptyPatternFires is whether an unanchored span replacement whose pattern
+// is empty gets as far as matching at all.
+//
+// The three readings are Semantics.EmptyReplacementPattern, and this is the
+// only place the axis is asked: a pattern with a byte in it never reaches
+// here, so the common path answers no question. Where it says yes, the
+// ordinary matcher takes over and the empty pattern behaves as any other
+// pattern that matches the empty string — including the end-of-value rule,
+// which is why `${v///X}` on `abc` is `XaXbXc` and not `XaXbXcX`.
+func (r *Runner) emptyPatternFires(value string) bool {
+	switch r.emptyReplacementPattern() {
+	case EmptyReplacementPatternMatchesEveryPosition:
+		return true
+	case EmptyReplacementPatternMatchesAnEmptyValue:
+		// The one position such a value has is also its end, and a value
+		// with no units has no preceding step to have consumed it.
+		return value == ""
+	}
+	// Nothing, and an unanswered axis, which is reported and then declines.
+	return false
 }
 
 // replacementPatternOpts is patternOpts for the pattern of a **span
@@ -3216,10 +3242,16 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 //	${(S)w//(a|ab)/X}  Xbc    shortest first, in either written order
 //	${(S)w//(ab|a)/X}  Xbc
 //
+// declined resolves Semantics.ReplacementEmptyMatchDeclined, and is a
+// function rather than a value because an unanswered axis is *reported* when
+// it is read: calling it at the top would refuse every substitution instead
+// of the two shapes the readings disagree about. Both call sites below are
+// reached only by a pattern that matched empty.
+//
 // See armEnd, which is the whole of the rule, and interp/trimarm.go for the
 // search behind it.
 func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armOrder,
-	with func(matchReport, string) string,
+	declined func() EmptyMatchDeclinedPolicy, with func(matchReport, string) string,
 ) string {
 	// Every position a match may start or end at, in order, and there is one
 	// more of them than there are units. They are unit boundaries rather than
@@ -3295,6 +3327,9 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armO
 	}
 
 	var b strings.Builder
+	// Where the match before this one ended, so that an empty match sitting
+	// on it can be recognized. -1 until something has matched.
+	lastEnd := -1
 	for k := 0; k < len(stops); {
 		i := stops[k]
 		// The match at this position the operator asked for, so `*` behaves
@@ -3338,6 +3373,14 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armO
 			// and differ only about how much of one to take.
 			end, rep = armEnd(value, pattern, o, arms, arm, i, end, rep)
 		}
+		if end == i && lastEnd == i && declined() == EmptyMatchDeclinedAfterAMatch {
+			// An empty match where the match before it ended. One reading
+			// takes it and the other refuses to replace twice in the same
+			// place, and this is one of the two positions they part on:
+			// `v=abc` under `@(b|)` is `<>a<><>c` where it is taken and
+			// `<>a<>c<>` where it is not.
+			end = -1
+		}
 		if end < 0 || end == i && pattern != "" && !matchPattern(pattern, "", o) {
 			if i < len(value) {
 				b.WriteString(value[i:stops[k+1]])
@@ -3346,6 +3389,7 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armO
 			continue
 		}
 		b.WriteString(with(rep, value[i:end]))
+		lastEnd = end
 		if !e.All {
 			b.WriteString(value[end:])
 			return b.String()
@@ -3383,7 +3427,7 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armO
 				b.WriteString(value[i:stops[k+1]])
 			}
 			k++
-			if k < len(stops) && stops[k] == len(value) {
+			if k < len(stops) && stops[k] == len(value) && endOfValueDeclined(value, pattern, o, declined) {
 				return b.String()
 			}
 			continue
@@ -3393,6 +3437,21 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armO
 		}
 	}
 	return b.String()
+}
+
+// endOfValueDeclined is whether the scan stops at the end of the value it has
+// just stepped onto after an empty match, which is the second of the two
+// positions Semantics.ReplacementEmptyMatchDeclined parts the panel on.
+//
+// The match is tried before the axis is read, and that order is the point: a
+// pattern that cannot match there produces the same result under either
+// reading, so asking would refuse a substitution over a question that could
+// not have changed its answer.
+func endOfValueDeclined(value, pattern string, o patternOpts, declined func() EmptyMatchDeclinedPolicy) bool {
+	if ok, _ := matchPatternIn(pattern, "", value, len(value), o); !ok {
+		return true
+	}
+	return declined() != EmptyMatchDeclinedAfterAMatch
 }
 
 // unitStops is every position a match may begin or end at: each unit boundary

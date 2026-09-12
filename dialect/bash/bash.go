@@ -595,6 +595,16 @@ func Semantics() interp.Semantics {
 	// in 5.3.15 and in 3.2.57, and 2026-09-12 for the substitution the axis
 	// also governs — `${x//@(a|ab)/X}` and `${x//@(ab|a)/X}` are both `Xc`.
 	s.LongestMatchTakesTheWrittenArm = interp.No
+	// An empty pattern is declined outright, whatever the value: measured
+	// 2026-09-12 on 5.3.15, on 3.2.57 and as `sh`, `v=abc` and `e=`,
+	// `${v///X}` and `${v/$e/X}` are both `abc`, and `${e///X}` is empty
+	// where the control `${e//*/X}` is `X`. Not a rule about empty matches —
+	// with extglob on, `${v//@(|)/<>}` is `<>a<>b<>c` in the same build.
+	s.EmptyReplacementPattern = interp.EmptyReplacementPatternMatchesNothing
+	// And the empty match a global replacement refuses is the one at the end
+	// of the value: `${v//@(b|)/<>}` is `<>a<><>c`, which takes the empty
+	// match sitting where `b` ended and leaves the end alone.
+	s.ReplacementEmptyMatchDeclined = interp.EmptyMatchDeclinedAtTheEnd
 	s.StatusArgument = interp.StatusArgNumeric
 	s.TraceAssignmentsSeparately = interp.Yes
 	// bash reports success if it signaled anything at all, where the others

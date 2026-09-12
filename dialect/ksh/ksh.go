@@ -595,6 +595,17 @@ func Semantics() interp.Semantics {
 	// The longest arm, as in the bash column: measured 2026-09-11 on
 	// ksh93u+, `x=abc`, `${x##@(a|ab)}` and `${x##@(ab|a)}` are both `c`.
 	s.LongestMatchTakesTheWrittenArm = interp.No
+	// An empty pattern matches only where there is nothing to scan: measured
+	// 2026-09-12 on ksh93u+, `v=abc` and `e=`, `${v///X}` is `abc` and
+	// `${e///X}` is `X`, against a control `${e//x/X}` that stays empty. This
+	// is the one column of the three that neither declines the pattern nor
+	// treats it as an ordinary one.
+	s.EmptyReplacementPattern = interp.EmptyReplacementPatternMatchesAnEmptyValue
+	// And the empty match it refuses is the one where the match before it
+	// ended, which is the classic global-replace rule: `${v//@(b|)/<>}` is
+	// `<>a<>c<>` here against `<>a<><>c` in the other two — no replacement
+	// between `b` and `c`, and one after the last unit.
+	s.ReplacementEmptyMatchDeclined = interp.EmptyMatchDeclinedAfterAMatch
 	// Leading digits and no further: `return 3abc` is 3 and `return r` is 0
 	// whatever `r` holds. Not arithmetic, which the leading zero settles —
 	// `return 010` is 10 here while `$((010))` is 8, so the operand is plainly

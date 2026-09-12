@@ -1405,10 +1405,31 @@ type Semantics struct {
 	// process, bash 5.3 and zsh survive that too.
 	//
 	// What `trap - QUIT` then means is a further question this does not
-	// answer, and the panel splits differently on it: after a handler is
-	// installed and removed again, bash 5.3 still ignores the signal and zsh
-	// dies by it.
+	// answer, and the panel splits differently on it — see
+	// QuitResetRestoresTheDefault.
 	QuitIgnoredWhenNotInteractive Answer
+
+	// QuitResetRestoresTheDefault makes `trap - QUIT` hand the signal back
+	// its default action, rather than the ignore the shell started with.
+	//
+	//	trap - QUIT; kill -QUIT $$; echo after
+	//
+	// prints after and exits 0 in bash 5.3 and BusyBox ash, and is killed by
+	// SIGQUIT in zsh 5.9.2. Asked only where QuitIgnoredWhenNotInteractive
+	// says yes and only after a reset, because it is the *ignore* that a
+	// reset can take away: a shell that dies of an untrapped QUIT anyway
+	// answers the same way whichever reading is taken, which is why dash,
+	// ksh93 and bash 3.2 leave it unanswered.
+	//
+	// The issue that filed this (#645) framed it as what happens after a
+	// handler is installed and removed again, and re-measuring says the
+	// handler is not part of it. `trap - QUIT` on its own, with no trap ever
+	// set, kills zsh just as surely; `trap - INT` leaves QUIT alone; and a
+	// later `trap '' QUIT` brings the ignore back. So this is a plain
+	// disposition — `trap -` means SIG_DFL in one shell and "the disposition
+	// this shell was born with" in the other — and not a record of what the
+	// script did earlier.
+	QuitResetRestoresTheDefault Answer
 
 	// SubshellRunsOnAfterSignalingTheShell lets the rest of a subshell's
 	// body run after something inside it has sent the whole shell a fatal

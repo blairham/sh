@@ -1373,6 +1373,13 @@ func Semantics() interp.Semantics {
 	// is 2.
 	s.ExitTrapRunsOnSignalDeath = interp.No
 	s.QuitIgnoredWhenNotInteractive = interp.Yes
+	// And zsh alone parts from bash on what `trap -` then means: it hands
+	// SIGQUIT back its default action, so `trap - QUIT; kill -QUIT $$` kills
+	// this shell where bash prints the next command. Measured without any
+	// handler ever having been installed, so it is a disposition and not a
+	// memory of what the script did — and `trap '' QUIT` afterwards brings
+	// the ignore back.
+	s.QuitResetRestoresTheDefault = interp.Yes
 	// This shell alone: an untrapped SIGHUP ends the shell with 1 and runs
 	// the EXIT trap, rather than killing it with 128 plus the number. The
 	// EXIT trap is why it is not simply a different number — the line above

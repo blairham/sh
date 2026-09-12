@@ -976,11 +976,21 @@ our shell was hanging.
 
     bash 5.3  → after, exit 0        dash   → killed by SIGQUIT
     bash 3.2  → killed by SIGQUIT    ksh93  → killed by SIGQUIT
-    zsh       → after, exit 0
+    zsh       → after, exit 0        ash    → after, exit 0
 
-bash 5.3 and zsh take SIGQUIT's default action away and put nothing in
-its place; dash, ksh93 and bash 3.2 leave it alone. `Semantics.
-QuitIgnoredWhenNotInteractive`.
+bash 5.3, zsh and BusyBox ash take SIGQUIT's default action away and put
+nothing in its place; dash, ksh93 and bash 3.2 leave it alone.
+`Semantics.QuitIgnoredWhenNotInteractive`.
+
+**ash sides with bash here and not with dash**, which is worth saying
+plainly because the preset said the opposite until #645. The golden
+record had the right cell from the day the ash column existed and nothing
+read it: `make check` grades the *record* against the shells and never
+against a preset, so a preset that contradicts a row it has no case for
+is invisible. Re-measured with an external SIGQUIT as well as a
+self-signal, and with `kill -TERM $$` beside it dying at 143, so it is
+this signal's disposition rather than a `kill` builtin that delivers
+nothing.
 
 Three things pin it down as an axis rather than an accident. It holds for
 a signal sent from *another process*, so it is a disposition and not a
@@ -994,11 +1004,36 @@ name: 3.2 and 5.3 disagree here under one word, which is why the corpus
 records both builds and why `Semantics` fields are never named after a
 shell.
 
-Removing the handler again is a further question, and the two shells that
-ignore QUIT answer it differently: after `trap 'x' QUIT; trap - QUIT`,
-bash 5.3 still ignores the signal and zsh dies by it. Not modeled — POSIX
-says `trap -` restores the disposition the shell *inherited*, which makes
-both defensible, and nothing in the corpus asks yet.
+### And what `trap -` then means
+
+    trap - QUIT; kill -QUIT $$; echo after
+
+    bash 5.3  → after, exit 0        dash   → killed by SIGQUIT
+    bash 3.2  → killed by SIGQUIT    ksh93  → killed by SIGQUIT
+    zsh       → killed by SIGQUIT    ash    → after, exit 0
+
+`Semantics.QuitResetRestoresTheDefault` — bash no · zsh yes · ash no,
+preset no. The three that die on the row above die here too, so they are
+asked nothing and leave it unanswered.
+
+POSIX makes both readings defensible: `trap -` restores the disposition
+the shell *inherited*, and the two sides disagree about what that was for
+a signal they were born ignoring. One reads it as SIG_DFL and the other
+as "whatever this shell started with".
+
+**The handler is no part of it.** #645 filed this as `trap 'x' QUIT; trap
+- QUIT`, and a probe in that shape cannot tell a disposition from a
+memory of what the script did earlier. Three measurements separate them:
+
+    trap - QUIT; kill -QUIT $$        zsh dies with no trap ever installed
+    trap - INT;  kill -QUIT $$        zsh prints after — it is per-signal
+    trap - QUIT; trap '' QUIT; …      zsh prints after — the ignore comes back
+
+So it is a plain disposition, and the axis is read from the signal's
+current state rather than from a record of what the script has done. It
+is reached only through `QuitIgnoredWhenNotInteractive` and only after a
+reset, which is what lets three of the six presets leave it unanswered
+without changing how they run any script.
 
 ## A subshell that kills the shell, and where the process went
 

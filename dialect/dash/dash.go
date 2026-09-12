@@ -290,6 +290,11 @@ func Semantics() interp.Semantics {
 	s.DotDirectoryOperandIsAnError = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.No
 	s.QuitIgnoredWhenNotInteractive = interp.No
+	// unanswered QuitResetRestoresTheDefault: that axis is what a reset does
+	// to the *ignore* above, and this shell has no ignore to take away — an
+	// untrapped QUIT kills it whether or not `trap - QUIT` has been run, so
+	// both readings run every script identically and there is nothing to
+	// measure a preference from.
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.No

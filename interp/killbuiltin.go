@@ -512,6 +512,14 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 // only where the panel disagrees about it. Interactive is unanimous — all five
 // ignore an untrapped QUIT with `-i` — and so is every other fatal signal, so
 // the axis is consulted for one signal in one mode and nowhere else.
+//
+// A second axis sits behind the first and is reached only through it. `trap -
+// QUIT` gives the signal back its default action in zsh and leaves the ignore
+// standing in bash and ash, so a shell that has been asked to restore the
+// default is no longer ignoring anything. Asking it here rather than beside
+// the first keeps it out of the shells the first has already answered no for:
+// they are killed by an untrapped QUIT with or without the reset, so both
+// readings run their scripts the same way and neither has to answer.
 func (r *Runner) untrappedSignalIgnored(name string) bool {
 	if name != "QUIT" {
 		return false
@@ -519,8 +527,24 @@ func (r *Runner) untrappedSignalIgnored(name string) bool {
 	if r.Interactive {
 		return true
 	}
-	return r.ask(r.sem().QuitIgnoredWhenNotInteractive,
-		"whether an untrapped QUIT ends a shell that is not interactive")
+	if !r.ask(r.sem().QuitIgnoredWhenNotInteractive,
+		"whether an untrapped QUIT ends a shell that is not interactive") {
+		return false
+	}
+	if !r.defaultRestored(name) {
+		return true
+	}
+	restores := r.ask(r.sem().QuitResetRestoresTheDefault,
+		"whether `trap -` on an ignored signal restores its default action")
+	if r.unspecified {
+		// Refused rather than answered. Saying "still ignored" here would
+		// swallow the refusal and run the next command, which is the one
+		// thing an unanswered axis must not do; saying "not ignored" hands
+		// the caller back to the path that reads r.unspecified and reports
+		// it, which is where the axis above already lands.
+		return false
+	}
+	return !restores
 }
 
 // fatalSignal reports whether a signal with no handler ends the process.

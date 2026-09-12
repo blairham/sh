@@ -101,6 +101,12 @@ type signalState struct {
 	// parent blocked in wait would be ended by the kernel.
 	died    string
 	diedSig syscall.Signal
+	// defaultRestored names the signals `trap -` has explicitly handed back
+	// to their default action. It is not the complement of traps: a signal
+	// nobody has ever mentioned is absent from both, and the difference
+	// between the two matters for the one signal a shell may have been born
+	// ignoring — see Semantics.QuitResetRestoresTheDefault.
+	defaultRestored map[string]bool
 }
 
 // sigs returns the shared state, creating it on first use.
@@ -266,14 +272,34 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 	switch {
 	case body == nil:
 		delete(s.traps, name)
+		if s.defaultRestored == nil {
+			s.defaultRestored = map[string]bool{}
+		}
+		s.defaultRestored[name] = true
 		signal.Reset(sig)
 	case *body == "":
 		s.traps[name] = ""
+		delete(s.defaultRestored, name)
 		signal.Ignore(sig)
 	default:
 		s.traps[name] = *body
+		delete(s.defaultRestored, name)
 		signal.Notify(s.ch, sig)
 	}
+}
+
+// defaultRestored reports whether `trap -` has named this signal, so that a
+// shell which would otherwise be ignoring it has been asked to stop.
+//
+// Read from the shared state rather than from a subshell's own table, which
+// is the same boundary sendSignal draws when it asks whether a signal is
+// trapped: the disposition belongs to the process, and a subshell here is a
+// pretend child of it.
+func (r *Runner) defaultRestored(name string) bool {
+	s := r.sigs()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.defaultRestored[name]
 }
 
 // signalDisposition is what the shell has arranged for a signal, and it is

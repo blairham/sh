@@ -19257,6 +19257,57 @@
         "TimedOut": false
       }
     },
+    "array/unsetting-a-reversed-range-of-characters-more-than-one-step": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: unset: line 0: a[2,0]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "1[]~2[hello]~3[]~4[hello]",
+        "Stderr": "\u003cshell\u003e: line 1: unset: a: not an array variable~\u003cshell\u003e: line 1: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1[]~2[hello]~3[]~4[hello]",
+        "Stderr": "\u003cshell\u003e: line 1: unset: a: not an array variable~\u003cshell\u003e: line 1: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1[hello]~2[hello]~3[hello]~4[hello]",
+        "Stderr": "\u003cshell\u003e: line 0: unset: a: not an array variable~\u003cshell\u003e: line 0: unset: a: not an array variable~\u003cshell\u003e: line 0: unset: a: not an array variable~\u003cshell\u003e: line 0: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: a[2,0]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1[]~2[hello]~3[]~4[hello]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1[hhello]~2[helllo]~3[hellohello]~4[hellello]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/unsetting-a-subscript-of-a-name-holding-nothing": {
       "ash": {
         "Stdout": "",

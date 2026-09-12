@@ -831,52 +831,50 @@ type Dialect struct {
 	// compound command is enough for the dialect that wants one, and this one
 	// wants the braces.
 	//
-	// Measured 2026-09-11 over a file holding `function a`, the body, and a
-	// call, ksh93u+ against the three bash columns:
+	// Measured over a file holding `function a`, the body, and a call:
 	//
-	//	body            bash              ksh93
-	//	echo B          at `echo', st 2   at `echo', st 3
-	//	(( 1 ))         runs              at `((', st 3
-	//	( echo B )      runs              at `(', st 3
-	//	for … done      runs              at `for', st 3
+	//	body            false             true
+	//	echo B          at `echo'         at `echo'
+	//	(( 1 ))         runs              at `(('
+	//	( echo B )      runs              at `('
+	//	for … done      runs              at `for'
 	//	{ echo B; }     runs              runs
 	//
-	// It is the keyword's question alone. The same shell takes `f() echo hi`
-	// through the parenthesized form and refuses only what that body
-	// redirects, which is [Dialect.FuncBodyTakesNoRedirection] — so the two
-	// spellings of a definition are not one rule there, and a flag that tried
-	// to be both would have to pick one of the two answers and be wrong about
-	// the other.
+	// It is the keyword's question alone. A true preset takes `f() echo hi`
+	// through the parenthesized form and refuses only what that body redirects,
+	// which is [Dialect.FuncBodyTakesNoRedirection] — so the two spellings of a
+	// definition are not one rule there, and a flag that tried to be both would
+	// have to pick one of the two answers and be wrong about the other.
 	FunctionKeywordBodyMustBeBraceGroup bool
 
-	// FuncBodyTakesNoRedirection refuses a redirection in a function body
-	// that is not compound: ksh93 takes `f() echo hi` and refuses `f() >out`,
+	// FuncBodyTakesNoRedirection refuses a redirection in a function body that
+	// is not compound: a true preset takes `f() echo hi` and refuses `f() >out`,
 	// `f() echo hi >out` and `f() x=1 >out`, blaming the operator itself —
-	// `` `>' unexpected ``, and `` `>&' `` for `2>&1`. A braced body is not
-	// this rule and `f() { :; } >out` is accepted there.
+	// `` `>' unexpected ``, and `` `>&' `` for `2>&1`. A braced body is not this
+	// rule and `f() { :; } >out` is accepted there.
 	//
 	// It is narrower than FuncBodyMustBeCompound rather than a weaker form of
-	// it, which is what makes it a second flag: the shell that wants a
-	// compound body refuses the simple command outright, and this one takes
-	// the command and refuses only what it redirects. Two of the four accept
-	// both, so the panel is three ways here and not two.
+	// it, which is what makes it a second flag: a preset that wants a compound
+	// body refuses the simple command outright, and this one takes the command
+	// and refuses only what it redirects. Some presets accept both, so the
+	// answers are three ways here and not two.
 	FuncBodyTakesNoRedirection bool
 
-	// EmptyParensAreOneToken lexes `()` as a single token where the rest of
-	// the panel reads two, which is visible only when a diagnostic names the
-	// last token it read: zsh answers `f()` with ``parse error near `()' ``
-	// where naming the closing paren alone would say `` `)' ``.
+	// EmptyParensAreOneToken lexes `()` as a single token where a false preset
+	// reads two, which is visible only when a diagnostic names the last token it
+	// read: `f()` answered with ``parse error near `()' `` where naming the
+	// closing paren alone would say `` `)' ``.
 	//
-	// A granularity fact rather than a wording one, which is why it is here
-	// and not in Diagnostics — the two halves of `f( )` are not this token in
-	// that shell either, and it declines to read that as a definition at all.
+	// A granularity fact rather than a wording one, which is why it is here and
+	// not in Diagnostics — the two halves of `f( )` are not this token under a
+	// true preset either, and it declines to read that as a definition at all.
 	//
 	// **It is the pair wherever a refusal falls on the first of them**, and
 	// not only inside the production that consumes them. An assignment in
 	// front of the name puts the parenthesis outside the definition path —
-	// the word list is read as a command's arguments and the `(` after them
-	// is refused by the ordinary rule — and the pair is still named there.
-	// Measured 2026-09-12 on zsh 5.9.2:
+	// the word list is read as a command's arguments and the `(` after them is
+	// refused by the ordinary rule — and the pair is still named there.
+	// Measured:
 	//
 	//	x=1 f () { echo X; }     parse error near `()'
 	//	x=1 a b () { echo X; }   parse error near `()'
@@ -885,25 +883,23 @@ type Dialect struct {
 	//	                                                   a subshell
 	//
 	// The third row is why the join reads the source for an *adjacent* `)`
-	// rather than skipping blanks the way the definition path's lookahead
-	// does: one blank and the two characters are not this token (#1846).
+	// rather than skipping blanks the way the definition path's lookahead does:
+	// one blank and the two characters are not this token.
 	EmptyParensAreOneToken bool
 
-	// FunctionNamePunctuation lets a POSIX-form or keyword-form function
-	// name carry punctuation — `f-g()`, `a.b()`, `:zi-reload-and-run()` —
-	// which every panel shell but dash parses. dash refuses the name
-	// outright (`Bad function name`), and what a shell that parsed one
-	// *does* with it is the interpreter's question: ksh93 parses every name
-	// below and stops the script at the definition.
+	// FunctionNamePunctuation lets a POSIX-form or keyword-form function name
+	// carry punctuation — `f-g()`, `a.b()`, `:reload-and-run()`. A false preset
+	// refuses the name outright (`Bad function name`), and what a preset that
+	// parsed one *does* with it is the interpreter's question: one parses every
+	// name below and stops the script at the definition.
 	//
-	// The characters are `!#%+,-./:@]^`, plus every byte above ASCII, and
-	// the set is measured rather than chosen. Each of the ninety-three
-	// printable ASCII punctuation marks was put at the front, the middle and
-	// the end of a name, in both definition forms, in a *file* read with
-	// `-n` — a command string is the wrong instrument here, because a `-c`
-	// argument that begins with `-` never reaches the grammar at all. Those
-	// twelve are the ones all five of bash 5.3, bash 3.2, bash-as-sh, ksh93
-	// and zsh accept in every position.
+	// The characters are `!#%+,-./:@]^`, plus every byte above ASCII, and the
+	// set is measured rather than chosen. Each of the ninety-three printable
+	// ASCII punctuation marks was put at the front, the middle and the end of a
+	// name, in both definition forms, in a *file* read with `-n` — a command
+	// string is the wrong instrument here, because a `-c` argument that begins
+	// with `-` never reaches the grammar at all. Those twelve are the ones every
+	// preset with the flag accepts in every position.
 	//
 	// What was left out, and why, because the omissions are the interesting
 	// half:
@@ -912,22 +908,22 @@ type Dialect struct {
 	//   - `$`, `\`, `'`, `"` and a backquote are quoting or expansion
 	//     operators, so the word they appear in is not one literal span and
 	//     never reaches this test.
-	//   - `*`, `?`, `[`, `{` and `~` split the panel: bash and zsh parse
-	//     them and ksh93 refuses. `]` does not split, which is the shape of
-	//     the disagreement — it is the *opening* of a pattern that ksh93
-	//     will not have in a name. They are not in the corpus either,
-	//     because the case that would record them cannot be run: zsh parses
-	//     `f*g(){ :; }` and then expands the word, so what it reports is
+	//   - `*`, `?`, `[`, `{` and `~` split the presets: some parse them and
+	//     others refuse. `]` does not split, which is the shape of the
+	//     disagreement — it is the *opening* of a pattern that a refusing
+	//     preset will not have in a name. They are not in the corpus either,
+	//     because the case that would record them cannot be run: a preset that
+	//     parses `f*g(){ :; }` then expands the word, so what it reports is
 	//     `no matches found` rather than anything about a name.
-	//   - `}` splits the other way: zsh alone refuses `f}`, because a close
+	//   - `}` splits the other way: one preset refuses `f}`, because a close
 	//     brace is reserved wherever a word may stand there — the same fact
 	//     [Dialect.CloseBraceAlwaysReserved] records.
 	//   - A leading `#` never arrives, being a comment, though `f#g` is
 	//     unanimous and is in the set.
 	//
-	// Position turned out not to matter to any shell once the invocation
-	// artifact above was removed, so this is a character class and not a
-	// grammar of names.
+	// Position turned out not to matter to any preset once the invocation
+	// artifact above was removed, so this is a character class and not a grammar
+	// of names.
 	FunctionNamePunctuation bool
 
 	// FunctionKeywordNameIsAnyWord makes the word after the `function`
@@ -936,28 +932,27 @@ type Dialect struct {
 	// are all definitions, callable by those names, listed by `functions`
 	// and `typeset -f` and removed by `unfunction`.
 	//
-	// One shell in the panel does this and no other, and the split is not
-	// only over whether it works — it is over *when* they say so, which is
-	// why the answer is here rather than in Diagnostics. Measured 2026-09-08,
-	// `sh -c "function '' { echo b; }; echo done"`, and the same six answers
-	// come back for every name below:
+	// One preset does this and no other, and the split is not only over whether
+	// it works — it is over *when* they say so, which is why the answer is here
+	// rather than in Diagnostics. Measured with
+	// `sh -c "function '' { echo b; }; echo done"`, and the same answers come
+	// back for every name below:
 	//
-	//	zsh 5.9.2   done, status 0, nothing on stderr, and `functions`
-	//	            lists the definition under that name
-	//	bash 5.3    `not a valid identifier` on stderr naming the quoted
-	//	            word, then `done` — refused where it runs, and the
-	//	            script carries on at status 0
-	//	bash 3.2    the same two lines
-	//	bash-as-sh  the same diagnostic, then nothing: fatal, status 2
-	//	ksh93       `: invalid function name`, status 1, nothing after
-	//	dash        `Syntax error: "}" unexpected` — no `function` keyword
-	//	            at all, so the refusal is about the brace
+	//	true    done, status 0, nothing on stderr, and the function listing
+	//	        shows the definition under that name
+	//	false   `not a valid identifier` on stderr naming the quoted word,
+	//	        then `done` — refused where it runs, and the script carries
+	//	        on at status 0
+	//	false   the same diagnostic, then nothing: fatal, status 2
+	//	false   `: invalid function name`, status 1, nothing after
+	//	false   `Syntax error: "}" unexpected` — no `function` keyword at
+	//	        all, so the refusal is about the brace
 	//
-	// So four of the six parse the construct and refuse the *name*, and only
-	// dash refuses to parse it. This parser has no separate definition-time
-	// name check, and building one for a construct four shells refuse and one
-	// accepts would be a lot of machinery to arrive at the same diagnostic
-	// those four already print. The flag says whether the word is a name; the
+	// So most presets parse the construct and refuse the *name*, and only one
+	// refuses to parse it. This parser has no separate definition-time name
+	// check, and building one for a construct most presets refuse and one
+	// accepts would be a lot of machinery to arrive at the same diagnostic they
+	// already print. The flag says whether the word is a name; the
 	// four that refuse it keep refusing it here, at their own wording, which
 	// is where they refused it before this flag existed.
 	//

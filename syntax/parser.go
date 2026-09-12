@@ -531,13 +531,37 @@ func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 		p.err = p.unterminated(expected)
 		return
 	}
+	literal, text := tokenLiteral(tok), tokenText(tok)
+	if p.emptyParensStartAt(tok) {
+		// The dialect that reads `()` as one token names the pair wherever a
+		// refusal falls on the first of them, and not only inside the
+		// definition production that consumes them. See
+		// [Dialect.EmptyParensAreOneToken].
+		literal, text = "()", `"()"`
+	}
 	p.err = &Error{
 		Pos: tok.Pos, Kind: ErrUnexpected,
-		Token: tokenLiteral(tok), TokenOpener: tokenOpener(tok),
+		Token: literal, TokenOpener: tokenOpener(tok),
 		Class: tokenClass(tok, plain), Expected: expected,
 		Redirect: tok.Kind.IsRedirect(),
-		Msg:      tokenText(tok) + " unexpected",
+		Msg:      text + " unexpected",
 	}
+}
+
+// emptyParensStartAt reports whether tok is the `(` of an adjacent `()`, in a
+// dialect that reads the pair as one token.
+//
+// Adjacency is the rule and it is measured: `x=1 f () { … }` is a parse
+// error naming `()` on zsh 5.9.2, and `x=1 f ( ) { … }` — the same
+// line with one blank inside the parentheses — is blamed at the `}` instead,
+// the two characters then being a subshell. So this reads the source rather
+// than skipping blanks the way the definition path's lookahead does.
+func (p *Parser) emptyParensStartAt(tok Token) bool {
+	if !p.dialect.EmptyParensAreOneToken || tok.Kind != TokLeftParen {
+		return false
+	}
+	i := tok.End.Offset
+	return i >= 0 && i < len(p.lex.src) && p.lex.src[i] == ')'
 }
 
 // tokenLiteral is the token as a diagnostic writes it, without the quotes a
@@ -1913,6 +1937,15 @@ func (p *Parser) parseSimple() Command {
 			// part of a word; everywhere else the flag changes nothing.
 			p.lex.inArgument = true
 			c.Args = append(c.Args, p.word())
+		case p.at(TokLeftParen) && len(c.Assigns) == 0 && len(c.Redirs) > 0 &&
+			p.dialect.FunctionMultipleNames && p.argsCanBeFuncNames(c.Args) &&
+			p.lex.peekIsRightParen():
+			// A redirection written *between* the names and the parentheses,
+			// which is a definition too and whose redirection is the body's:
+			// `a b >out () { echo "[$0]"; }` sends both calls to the file.
+			// The `(` is recognized from the inside here, no word standing in
+			// front of it to announce the reading.
+			return p.parseFuncPosixNamesAtParen(c)
 		case p.at(TokLeftParen) && (seenArg || len(c.Assigns) > 0 || len(c.Redirs) > 0):
 			// A `(` in command position opens a subshell; one *after* a word
 			// opens nothing. All four shells call it a syntax error, so this
@@ -2270,10 +2303,9 @@ func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
 //
 // A redirection written *between* the names and the parentheses is a
 // definition there too — `a b >out () { echo "$0"; }` sends both calls to the
-// file — and is not read here: the parentheses then follow the redirection's
-// target rather than a name, and the redirection is inside the header text a
-// formatter copies, so writing the body after it would emit the redirection
-// twice. See #1838; the refusal is the visible answer in the meantime.
+// file — and is not read here, because the parentheses then follow the
+// redirection's target rather than a name and there is no word in hand when
+// the `(` arrives. [Parser.parseFuncPosixNamesAtParen] is that route.
 func (p *Parser) parseFuncPosixNames(c *SimpleCmd) Command {
 	cmd := p.parseFuncPosix()
 	fn, ok := cmd.(*FuncDecl)
@@ -2289,7 +2321,44 @@ func (p *Parser) parseFuncPosixNames(c *SimpleCmd) Command {
 	fn.Name, fn.NameWord = first.Name, first.Word
 	fn.AlsoNamed = append(names, append(fn.AlsoNamed, last)...)
 	fn.Start = c.Start
+	// A redirection read before the names is the body's too, and it arrives
+	// the same way: `>out a b () { … }` writes the file in the shell that has
+	// the list. Attached once the body exists, for the reason
+	// [Parser.parseFuncPosixNamesAtParen] gives.
+	for _, r := range c.Redirs {
+		fn.addRedir(r)
+	}
 	return fn
+}
+
+// parseFuncPosixNamesAtParen is parseFuncPosixNames where a *redirection*
+// stands between the names and the parentheses, so the parser reaches the `(`
+// with no word in front of it and the whole name list already read.
+//
+// The redirection is the **body's**, which is where a definition's written
+// one goes everywhere else — `f() { :; } 2>&1` reads it that way — so it is
+// attached once the body exists rather than kept on the declaration. Measured
+// 2026-09-12 on zsh 5.9.2: `a b >out () { echo "[$0]"; }; a; b; cat out`
+// prints nothing at the terminal and leaves `[b]` in the file, so both names
+// share one redirected body. Several are taken and so is a leading one:
+// `a b >o1 >o2 ()` writes both files and `>o1 a b ()` writes the one.
+//
+// See #1838; the formatter is the other half, and `printer.funcDecl` has it.
+func (p *Parser) parseFuncPosixNamesAtParen(c *SimpleCmd) Command {
+	fn := &FuncDecl{Start: c.Start}
+	first := p.funcNameFromWord(c.Args[0])
+	fn.Name, fn.NameWord = first.Name, first.Word
+	for _, w := range c.Args[1:] {
+		fn.AlsoNamed = append(fn.AlsoNamed, p.funcNameFromWord(w))
+	}
+	cmd := p.parseFuncParensAndBody(fn)
+	if p.err != nil {
+		return cmd
+	}
+	for _, r := range c.Redirs {
+		fn.addRedir(r)
+	}
+	return cmd
 }
 
 // funcNameFromWord reads a word already parsed as one name of a definition.

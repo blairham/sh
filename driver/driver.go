@@ -1482,7 +1482,7 @@ func (sh Shell) runInput(in source) int {
 			// can accompany a fatal failure, which is measured — a here
 			// document with neither its delimiter nor its enclosing `}`
 			// produces both, warning first.
-			sh.sayRemarks(dg, said, p.Remarks(), 0)
+			sh.sayRemarks(dg, said, p.Remarks(), 0, true)
 			sh.errf("%s", dg.ParseDiagnostic(said, input, err, src))
 			return dg.StatusForParseError(err)
 		}
@@ -1767,7 +1767,7 @@ func (sh Shell) executeLines(
 		} else {
 			echoed = sh.sayVerbose(r.Err(), pr.text(), upTo, echoed, r.Verbose())
 		}
-		shown = sh.sayRemarks(in.dg, in.diagName(), pr.remarks(), shown)
+		shown = sh.sayRemarks(in.dg, in.diagName(), pr.remarks(), shown, !r.NoExec())
 	}
 	// A builtin can change the grammar for the lines after it — a run-time
 	// option can decide whether a quantified group is a group. The runner
@@ -2076,10 +2076,23 @@ func (sh Shell) source(r *interp.Runner, name string) int {
 // The count is carried because a parser produces these as it reads, and the
 // loop asks after every line: without it the first remark would be repeated
 // for every line after the one that raised it.
-func (sh Shell) sayRemarks(dg interp.Diagnostics, name string, rs []syntax.Remark, shown int) int {
+func (sh Shell) sayRemarks(dg interp.Diagnostics, name string, rs []syntax.Remark, shown int, running bool) int {
 	for _, rk := range rs[min(shown, len(rs)):] {
+		if running && interp.RemarkOnlyWhenNotRunning(rk.Kind) {
+			// A remark the shell keeps to itself once it is going to run the
+			// program. The count still advances, so a line read again is not
+			// remarked on twice if the option changes under it.
+			continue
+		}
 		if msg := dg.Remark(rk); msg != "" {
-			sh.errf("%s", dg.Report(name, int(rk.Pos.Line), msg+"\n"))
+			loc := dg
+			if dg.RemarkNamesItsOwnLine {
+				// The wording says where it was, so the location says only
+				// who — the same split ParseDiagnostic makes for a parse
+				// failure in the one dialect that words it that way.
+				loc.Location = interp.LocationNone
+			}
+			sh.errf("%s", loc.Report(name, int(rk.Pos.Line), msg+"\n"))
 		}
 	}
 	return len(rs)

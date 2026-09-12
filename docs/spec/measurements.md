@@ -6604,6 +6604,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/a-for-over-a-parenthesized-list` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `a~b~p~q` |
 | `core/a-for-name-that-is-an-expansion` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | **2>** `<shell>: line 1: `$n': not a valid identifier` *(status 1)* | **2>** `<shell>: line 1: `$n': not a valid identifier` *(status 2)* | **2>** `<shell>: `$n': not a valid identifier` *(status 1)* | **2>** `<shell>: $n: invalid variable name` *(status 1)* | **2>** `<shell>:1: parse error near `$n'` *(status 1)* |
 | `core/a-refused-loop-name-still-parses-in-four-columns` | **2>** `<script>: 2: Syntax error: Bad for loop variable` *(status 2)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | **2>** `<script>:2: parse error near `$n'` *(status 1)* |
+| `core/a-backquote-substitution-under-a-syntax-check` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | **2>** `<script>: warning: line 1: `...` obsolete, use $(...)~<script>: warning: line 2: `...` obsolete, use $(...)` | *(no output, status 0)* |
+| `core/a-backquote-substitution-when-it-runs` | `hithereb` | `hithereb` | `hithereb` | `hithereb` | `hithereb` | `hithereb` |
 | `core/a-refused-loop-name-costs-the-loop-or-the-script` | **2>** `<script>: 2: Syntax error: Bad for loop variable` *(status 2)* | `reached-after st=1` **2>** `<script>: line 2: `$n': not a valid identifier` | **2>** `<script>: line 2: `$n': not a valid identifier` *(status 2)* | `reached-after st=1` **2>** `<script>: line 2: `$n': not a valid identifier` | **2>** `<script>: line 2: $n: invalid variable name` *(status 1)* | **2>** `<script>:2: parse error near `$n'` *(status 1)* |
 | `core/a-redirection-on-a-refused-loop-is-not-fatal-in-one-shell` | **2>** `<script>: 1: Syntax error: Bad for loop variable` *(status 2)* | `reached-after st=1` **2>** `<script>: line 1: `1x': not a valid identifier` | **2>** `<script>: line 1: `1x': not a valid identifier` *(status 2)* | `reached-after st=1` **2>** `<script>: line 1: `1x': not a valid identifier` | `reached-after st=1` **2>** `<script>: line 1: 1x: invalid variable name` | **2>** `<script>:1: parse error near `1x'` *(status 1)* |
 | `core/a-refused-select-name-answers-as-the-loop-does` | **2>** `<script>: 2: Syntax error: "do" unexpected` *(status 2)* | `reached-after st=1` **2>** `<script>: line 2: `$n': not a valid identifier` | **2>** `<script>: line 2: `$n': not a valid identifier` *(status 2)* | `reached-after st=1` **2>** `<script>: line 2: `$n': not a valid identifier` | **2>** `<script>: line 2: $n: invalid variable name` *(status 1)* | **2>** `<script>:2: parse error near `$n'` *(status 1)* |
@@ -7066,6 +7068,18 @@ grades it and nothing drift-checks it either, for the same reason.
   n=x
   for $n in a b; do echo body; done
   echo "reached-after st=$?"
+  ```
+- `core/a-backquote-substitution-under-a-syntax-check` — the older command substitution, and the one shell that remarks on every one it reads: ksh93 writes `` warning: line N: `...` obsolete, use $(...) `` once per backquote and dash, bash 5.3, bash as `sh`, bash 3.2 and zsh read one without a word. The second line has both spellings on it, so the row also says the remark is the backquote's and not the substitution's. Nothing is wrong with the file — it is accepted at 0 in every column — which is what makes this a *remark* rather than a diagnostic (#1466)
+  ```sh
+  x=`echo hi`
+  y=$(echo there)`echo b`
+  echo "$x$y"
+  ```
+- `core/a-backquote-substitution-when-it-runs` — the same file run instead of checked, which is the half of the answer an implementation gets wrong by reading only the row above: ksh93 says **nothing** here. The remark belongs to a shell that is not going to execute — `ksh -n` writes two lines and `ksh` writes none, on the same bytes — so a front end that said it whenever the parse produced it would put two warnings in front of every script this dialect runs (#1466)
+  ```sh
+  x=`echo hi`
+  y=$(echo there)`echo b`
+  echo "$x$y"
   ```
 - `core/a-refused-loop-name-costs-the-loop-or-the-script` — and what happens when the loop *is* reached, which is three answers among the four columns that get there. bash under its own name reports the complaint, gives the loop 1 and runs the line after it, so the script exits 0; bash as `sh` reports the same sentence and stops at 2, which is POSIX mode and not the build — `set -o posix` in bash 5.3 answers the same way; ksh93 reports its own sentence and stops at 1. dash and zsh never run any of it. `body` is in the loop so a column that ran it would be caught by the output rather than only by the number
   ```sh

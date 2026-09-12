@@ -1938,6 +1938,15 @@ func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body fun
 // Verbose reports `set -v`, for the front end that holds the raw lines.
 func (r *Runner) Verbose() bool { return r.verbose }
 
+// NoExec reports `set -n`: the program is read and never run.
+//
+// Exported for the front end, which has one thing to decide by it that the
+// interpreter cannot — whether to say a remark the parse produced. One shell
+// remarks on every backquote substitution it reads and does so only when it
+// is not going to execute, so the answer belongs to the place that both holds
+// the remarks and knows the option. See interp.RemarkOnlyWhenNotRunning.
+func (r *Runner) NoExec() bool { return r.noexec }
+
 // ExitStatus reports the status of the last command.
 func (r *Runner) ExitStatus() int { return r.status }
 

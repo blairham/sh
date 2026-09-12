@@ -1337,6 +1337,15 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 
 func Diagnostics() interp.Diagnostics {
 	d := interp.Diagnostics{
+		// Every backquote substitution this shell reads draws a remark, and
+		// it draws it only when the shell is not going to run the program:
+		// `ksh -n bq.sh` writes one line per backquote and `ksh bq.sh`
+		// writes nothing, measured 2026-09-12 on 93u+ 2012-08-01 over the
+		// same file. It accompanies a refusal too, warning first.
+		BackquoteObsolete: "warning: line %[1]d: `...` obsolete, use $(...)",
+		// And the line is inside that sentence rather than in the location,
+		// which is the same shape this shell's syntax errors take.
+		RemarkNamesItsOwnLine: true,
 		// A math complaint raised by a builtin names it, as bash's does:
 		// `let '1+'` is `ksh: let: 1+: more tokens expected`.
 		ArithErrorNamesTheBuiltin: true,

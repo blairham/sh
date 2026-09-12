@@ -627,6 +627,37 @@ type Diagnostics struct {
 	// inside itself, which is why it takes a line as a verb at all.
 	HereDocumentAtEOF string
 
+	// BackquoteObsolete is what a shell says about the older command
+	// substitution, `` `…` ``. Empty means nothing is said, which is five of
+	// the six columns.
+	//
+	// Measured 2026-09-12 from a script file: ksh93u+ writes `warning: line
+	// 1: ` + "`" + `...` + "`" + ` obsolete, use $(...)` for every backquote it reads, and
+	// dash, bash 5.3, bash-as-sh, bash 3.2 and zsh 5.9.2 read one without a
+	// word. It accompanies a refusal as well, warning first: a backquote
+	// that never closes draws both.
+	//
+	// **Only where the shell is not going to run the program**, which is
+	// measured rather than assumed and is the half the issue that asked for
+	// this had wrong. `ksh -n bq.sh` writes it and `ksh bq.sh` writes
+	// nothing at all, on the same file; a backquote typed at an interactive
+	// prompt is silent too. See RemarkOnlyWhenNotRunning, which is how the
+	// front end knows to hold it back.
+	// It takes the line the backquote stands on, because this dialect
+	// carries the line inside the sentence rather than in the location in
+	// front of it — see RemarkNamesItsOwnLine.
+	BackquoteObsolete string
+
+	// RemarkNamesItsOwnLine has a remark's wording carry the line it is
+	// about, so the location in front of it says only who is speaking.
+	//
+	// ksh93 writes `<script>: warning: line 1: ` + "`" + `...` + "`" + ` obsolete, use
+	// $(...)` where bash writes `<script>: line 2: warning: here-document at
+	// line 1 …` — the same split its syntax errors make, which
+	// ParseFailureNamesItsOwnLine already records for those. Measured
+	// 2026-09-12 from a script file.
+	RemarkNamesItsOwnLine bool
+
 	// WaitBadJob is an operand to `wait` that names neither a process nor a
 	// job, taking the word. Four wordings across the panel and no two alike:
 	// one quotes it and names both things it could have been, one calls it an
@@ -4159,10 +4190,29 @@ func (d Diagnostics) ParseFailure(err error) string {
 // parse time and only about one thing. Silence is expressed by having no
 // wording rather than by the front end knowing which shells are quiet.
 func (d Diagnostics) Remark(r syntax.Remark) string {
-	if r.Kind != syntax.RemarkHeredocAtEOF || d.HereDocumentAtEOF == "" {
-		return ""
+	switch r.Kind {
+	case syntax.RemarkHeredocAtEOF:
+		if d.HereDocumentAtEOF == "" {
+			return ""
+		}
+		return Wording(d.HereDocumentAtEOF, "", r.At.Line, r.Token)
+	case syntax.RemarkBackquoteSubstitution:
+		return Wording(d.BackquoteObsolete, "", r.Pos.Line)
 	}
-	return Wording(d.HereDocumentAtEOF, "", r.At.Line, r.Token)
+	return ""
+}
+
+// RemarkOnlyWhenNotRunning reports whether this remark is one the shell keeps
+// to itself once it is going to execute the program.
+//
+// A property of the *remark* rather than of a dialect, which is what the
+// measurement says: the one shell that remarks on a backquote writes it under
+// `-n` and never otherwise, on the same file, and no shell in the panel has a
+// second answer to compare. A here-document that ran to the end of the input
+// is the other way and is said either way, which is why this is a question at
+// all and not a rule about remarks.
+func RemarkOnlyWhenNotRunning(k syntax.RemarkKind) bool {
+	return k == syntax.RemarkBackquoteSubstitution
 }
 
 // ForScript returns the diagnostics a script read from a file should use.

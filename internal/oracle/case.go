@@ -2114,6 +2114,22 @@ echo "reached-after st=$?"`,
 		Why: "the **stage**, asked with the shell's own syntax check and nothing else running. bash 5.3, bash as `sh`, bash 3.2 and ksh93 accept this file silently at 0 — they parse the loop and check the name when they reach it — where dash and zsh refuse it while parsing. So `-n` is what makes the difference observable, and it is the difference that matters most: a syntax check is what a CI job runs, so refusing the parse reported a working script as broken (#1110)",
 	},
 	{
+		ID: "core/a-backquote-substitution-under-a-syntax-check", Category: "command language",
+		Args: []string{"-n", ArgScript},
+		Snippet: `x=` + "`" + `echo hi` + "`" + `
+y=$(echo there)` + "`" + `echo b` + "`" + `
+echo "$x$y"`,
+		Why: "the older command substitution, and the one shell that remarks on every one it reads: ksh93 writes `` warning: line N: `...` obsolete, use $(...) `` once per backquote and dash, bash 5.3, bash as `sh`, bash 3.2 and zsh read one without a word. The second line has both spellings on it, so the row also says the remark is the backquote's and not the substitution's. Nothing is wrong with the file — it is accepted at 0 in every column — which is what makes this a *remark* rather than a diagnostic (#1466)",
+	},
+	{
+		ID: "core/a-backquote-substitution-when-it-runs", Category: "command language",
+		Script: true,
+		Snippet: `x=` + "`" + `echo hi` + "`" + `
+y=$(echo there)` + "`" + `echo b` + "`" + `
+echo "$x$y"`,
+		Why: "the same file run instead of checked, which is the half of the answer an implementation gets wrong by reading only the row above: ksh93 says **nothing** here. The remark belongs to a shell that is not going to execute — `ksh -n` writes two lines and `ksh` writes none, on the same bytes — so a front end that said it whenever the parse produced it would put two warnings in front of every script this dialect runs (#1466)",
+	},
+	{
 		ID: "core/a-refused-loop-name-costs-the-loop-or-the-script", Category: "command language", SyntaxError: true,
 		Script: true,
 		Snippet: `n=x

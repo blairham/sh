@@ -743,6 +743,20 @@ scan:
 	if e.Inner == nil {
 		e.Name, s = scanParamName(s)
 	}
+
+	// A length over `$!` is a shape one dialect will not have, even though
+	// `$!` reads there and every other special name behind the same `${#`
+	// does too. Checked here rather than in hashIsTheParameter because there
+	// is no second reading to choose between: the `#` is the length prefix
+	// under both values of the flag, and what the flag decides is whether the
+	// expansion exists at all. Deferred to the run like every other
+	// unreadable expansion in this grammar — measured, `${#!}` inside a
+	// branch never taken is no error at all in the shell that refuses it.
+	// See [Dialect.ParamLengthRefusesTheBangName].
+	if p.dialect.ParamLengthRefusesTheBangName && e.Length && e.Name == "!" {
+		e.Bad, e.Src = true, src
+		return e
+	}
 	if e.Name == "" && !e.HasFlags && e.TildeFlags == 0 && e.SplitFlags == 0 &&
 		e.RcExpandFlags == 0 && e.Inner == nil && !p.dialect.NamelessParamExpansion {
 		if !p.dialect.BadSubstitutionAtParseTime {

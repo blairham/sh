@@ -1972,6 +1972,38 @@ type Dialect struct {
 	// entries missing from it because they can begin a name as well (#1242).
 	ParamLengthOverASpecialNameIsFinal bool
 
+	// ParamLengthRefusesTheBangName makes a length over the special name `!`
+	// unreadable, so `${#!}` is a bad substitution rather than the length of
+	// `$!`.
+	//
+	// zsh alone, and it is a rule about that one name behind a `${#` rather
+	// than about `$!` or about lengths. Measured 2026-09-12 from a script
+	// file under `env -i` with a scratch HOME and ZDOTDIR, `set -- p q r`,
+	// across the seven-column panel:
+	//
+	//	probe     bash 5.3   bash 3.2   bash-as-sh   dash   ksh93   ash   zsh 5.9.2
+	//	${!}      (empty)    (empty)    (empty)      ""     ""      ""    0
+	//	${#!}     0          0          0            0      0       0     bad substitution
+	//	${#$}     5          5          5            5      5       5     5
+	//	${#?}     1          1          1            1      1       1     1
+	//
+	// The first row is what makes the second a fact about the shape rather
+	// than about the value: `$!` reads perfectly well in zsh — with no
+	// background job it is `0` there where the other six leave it empty — so
+	// the refusal is not "there is nothing to measure". The third and fourth
+	// rows are the boundary: `$` and `?` behind the same `${#` are lengths in
+	// all seven, so it is not a rule about special names either.
+	//
+	// Deferred rather than fatal at parse time, which is measured too: with
+	// `${#!}` inside an `if false` branch, zsh runs the script to the end and
+	// exits 0, and `zsh -n` accepts the file.
+	//
+	// Distinct from ParamIndirection, which is about a `!` at the *front* of
+	// an expansion. Here the `!` stands behind a length prefix, where no
+	// dialect reads it as indirection: the length case is taken first and the
+	// `!` is scanned as an ordinary name (#2415).
+	ParamLengthRefusesTheBangName bool
+
 	// BareBraceNestsInExpansion makes an unquoted `{` inside `${…}` open a
 	// nesting level, so the expansion ends at the brace that *balances* it
 	// rather than at the first `}`.

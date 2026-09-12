@@ -95817,6 +95817,57 @@
         "TimedOut": false
       }
     },
+    "length/a-bare-hash-then-the-bang-name": {
+      "ash": {
+        "Stdout": "[][0]after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[][0]after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[][0]after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[][0]after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[][0]after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[][0]after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "length/a-hash-in-the-name-position-of-an-operator": {
       "ash": {
         "Stdout": "[2][2][w][w][2]",

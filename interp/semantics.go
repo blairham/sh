@@ -4235,143 +4235,131 @@ type Semantics struct {
 	// when there is no such key, or reading the table as an ordered list and
 	// handing back the first value in whatever order it lists.
 	//
-	// A second axis rather than a widening of the first, because the shells
-	// that share the first answer do not share this one, and because it is
-	// reachable only after the first has been answered — a dialect where a
-	// bare name is the whole table never asks it.
+	// A second axis rather than a widening of the first, because presets that
+	// share the first answer need not share this one, and because it is
+	// reachable only after the first has been answered — where a bare name is
+	// the whole table it is never asked.
 	//
-	// Measured 2026-09-10 on zsh 5.9.2 under the option that moves the array
-	// axes, against bash 5.3.15 and ksh93u+ with the same table:
+	// With the table `m=(a 1 b 2)`, one reading gives `1` and the other gives
+	// nothing. `m=(z 9 a 1)` giving `9` is what says it is the order and not a
+	// sort, and `m=(a 1 0 x)` giving `1` is what says it is not the key `0`
+	// under another name.
 	//
-	//	m=(a 1 b 2)   $m   zsh 1      bash, ksh93 empty
-	//	m=(z 9 a 1)   $m   zsh 9      so it is the order and not the sort
-	//	m=(a 1 0 x)   $m   zsh 1      and not the key `0` under another name
-	//
-	// "First" is whatever order `${m[@]}` yields, which is a separate
-	// question from this one — the axis says which end of the order to read
-	// and not what the order is. That order is **this implementation's own**,
-	// and deliberately: see KeyedTableOrder in docs/spec/semantics.md, where
-	// the panel is measured. It is not insertion order in any shell measured,
-	// so this axis agrees with the shell it was taken from exactly when the
-	// two orders happen to coincide — which is a table of one, and a table
-	// whose keys hash into their sorted order (#1758).
+	// "First" is whatever order `${m[@]}` yields, which is a separate question
+	// from this one — the axis says which end of the order to read and not what
+	// the order is. That order is **this implementation's own**, and
+	// deliberately: see KeyedTableOrder in docs/spec/semantics.md. It is not
+	// insertion order anywhere measured, so this axis agrees with what it was
+	// taken from exactly when the two orders happen to coincide — a table of
+	// one, and a table whose keys hash into their sorted order.
 	KeyedTableScalarIsTheFirstValue Answer
 
-	// ArrayBaseIsZero indexes arrays from 0. True in bash and ksh93, false in
-	// zsh, which counts from 1. dash has no arrays at all, which is why the
-	// axis is absent rather than false there.
+	// ArrayBaseIsZero indexes arrays from 0 rather than counting from 1. A
+	// preset with no arrays at all leaves the axis absent rather than false.
 	ArrayBaseIsZero Answer
 
-	// BareSubscriptIsASubscript reads the `[…]` an *unbraced* `$name`
-	// carries as a subscript, rather than as three ordinary characters
-	// behind the parameter. `$a[1]` is an element where it says yes and
-	// `${a[0]}` followed by `[1]` where it says no; `${a[1]}` is unaffected
-	// either way, because the braces settle where the expansion ends.
+	// BareSubscriptIsASubscript reads the `[…]` an *unbraced* `$name` carries as
+	// a subscript, rather than as three ordinary characters behind the
+	// parameter. `$a[1]` is an element where it says yes and `${a[0]}` followed
+	// by `[1]` where it says no; `${a[1]}` is unaffected either way, because the
+	// braces settle where the expansion ends.
 	//
 	// An axis rather than a grammar flag, and the difference from
-	// syntax.Dialect.BareSubscript is the whole point. That flag decides
-	// whether a grammar has the construct at all — whether the brackets
-	// belong to the expansion or are the next thing in the word — and it is
-	// answered when the word is read. This decides what the construct
-	// *means*, and it is answered when the word is expanded: the one shell
-	// with the grammar moves this at run time, and a function body written
-	// under one answer and called under the other takes the caller's.
-	// Deciding it while reading gives a shell that is right in a script and
-	// wrong in `eval`, or the reverse.
+	// syntax.Dialect.BareSubscript is the whole point. That flag decides whether
+	// a grammar has the construct at all — whether the brackets belong to the
+	// expansion or are the next thing in the word — and it is answered when the
+	// word is read. This decides what the construct *means*, and it is answered
+	// when the word is expanded: the answer moves at run time, and a function
+	// body written under one answer and called under the other takes the
+	// caller's. Deciding it while reading gives a shell that is right in a
+	// script and wrong in `eval`, or the reverse.
 	//
-	// Only reachable where the grammar flag is on, which is why the presets
-	// that have no such construct leave it unanswered rather than false: a
-	// dialect that turns the grammar on and does not answer this is a gap,
-	// and should say so out loud rather than pick a side.
+	// Only reachable where the grammar flag is on, which is why a preset with no
+	// such construct leaves it unanswered rather than false: turning the grammar
+	// on without answering this is a gap, and should say so out loud rather than
+	// pick a side.
 	//
-	// The two halves of the no answer are one answer. The parameter loses
-	// the subscript *and* the brackets become text, and the text is the
-	// word's like any other — expanded, split and read as a pattern where
-	// the word around it would be. Measured on the shell with the
-	// construct: `a=(x y z)` and the option that says no gives `x[1]` for
-	// `$a[1]`, `b=2` makes `$a[$b]` into `x[2]`, and an unquoted `$a[1]` is
-	// the pattern `x[1]` — which is the point of saying no at all, since it
-	// is what leaves a `$dir[0-9]*` written in a script for another shell
-	// the glob its author meant.
+	// The two halves of the no answer are one answer. The parameter loses the
+	// subscript *and* the brackets become text, and the text is the word's like
+	// any other — expanded, split and read as a pattern where the word around it
+	// would be. With `a=(x y z)`, No gives `x[1]` for `$a[1]`, `b=2` makes
+	// `$a[$b]` into `x[2]`, and an unquoted `$a[1]` is the pattern `x[1]` —
+	// which is the point of saying no at all, since it is what leaves a
+	// `$dir[0-9]*` written in a script for another shell the glob its author
+	// meant.
 	BareSubscriptIsASubscript Answer
 
-	// SubscriptCommaIsARange reads the comma in `${a[1,3]}` as the separator
-	// of a range — elements 1 through 3 — rather than as the arithmetic comma
+	// SubscriptCommaIsARange reads the comma in `${a[1,3]}` as the separator of
+	// a range — elements 1 through 3 — rather than as the arithmetic comma
 	// operator, whose value is its right operand and names element 3 alone.
 	//
-	// The same characters with two meanings, which is what puts it here
-	// rather than in a grammar flag: `${a[1,3]}` is one subscript in every
-	// shell that has subscripts at all, and they disagree about what it
-	// says. Measured on `a=(w x y z)`: zsh 5.9.2 gives `w x y`, and bash
-	// 5.3.15, bash 3.2.57, bash as `sh` and ksh93 all give `z`. dash has no
-	// subscript to read.
+	// The same characters with two meanings, which is what puts it here rather
+	// than in a grammar flag: `${a[1,3]}` is one subscript wherever subscripts
+	// exist, and what it says is disagreed about. On `a=(w x y z)`, Yes gives
+	// `w x y` and No gives `z`.
 	//
-	// Asked only where the two readings differ, which is what keeps
-	// `${a[2,2]}` — one element under either — from needing an answer.
+	// Asked only where the two readings differ, which is what keeps `${a[2,2]}`
+	// — one element under either — from needing an answer.
 	SubscriptCommaIsARange Answer
 
-	// SubscriptIsAQuotingContext runs an associative array's subscript
-	// through quote removal, so the key is the text *inside* its quotes and
-	// escapes. True in bash and ksh93; false in zsh, where the subscript is
-	// taken exactly as written — substitutions performed, and every other
-	// character, quotes and backslashes included, kept.
+	// SubscriptIsAQuotingContext runs an associative array's subscript through
+	// quote removal, so the key is the text *inside* its quotes and escapes.
+	// Answering No takes the subscript exactly as written — substitutions
+	// performed, and every other character, quotes and backslashes included,
+	// kept.
 	//
-	// Measured 2026-09-07. Storing under one spelling and reading with the
-	// other is what makes it visible, because a key that is one string in
-	// both shells hides it:
+	// Storing under one spelling and reading with the other is what makes it
+	// visible, because a key that is one string under both answers hides it:
 	//
-	//	m["k"]=W; kk='"k"'   ${m[$kk]}  bash, ksh93 ""    zsh W
-	//	                     ${m[k]}    bash, ksh93 W     zsh ""
-	//	v=k; q[k]=K          ${q["$v"]} bash, ksh93 K     zsh ""
-	//	                     ${q[$v]}   bash, ksh93 K     zsh K
+	//	m["k"]=W; kk='"k"'   ${m[$kk]}  Yes ""    No W
+	//	                     ${m[k]}    Yes W     No ""
+	//	v=k; q[k]=K          ${q["$v"]} Yes K     No ""
+	//	                     ${q[$v]}   Yes K     No K
 	//
-	// The last pair is the crisp form of it: the substitution is performed
-	// under both answers and only the quote characters around it differ, so
-	// this is a rule about *quoting* and not about expansion.
+	// The last pair is the crisp form of it: the substitution is performed under
+	// both answers and only the quote characters around it differ, so this is a
+	// rule about *quoting* and not about expansion.
 	//
-	// It is one rule with the search operand PR #1101 landed, reached from
-	// the other side — `${b[(r)"beta"]}` finds an element whose value is the
-	// six characters `"beta"` — which is why the two share
-	// Runner.searchOperand rather than reconstructing the text twice.
+	// It is one rule with the search operand, reached from the other side —
+	// `${b[(r)"beta"]}` finds an element whose value is the six characters
+	// `"beta"` — which is why the two share Runner.searchOperand rather than
+	// reconstructing the text twice.
 	//
-	// Two things stay unanimous and must not move with it. A bare `@` or `*`
-	// is still the whole array in all three; *quoted*, it is a key, so
-	// `${n["@"]}` looks one up and finds nothing. And no shell in the panel
-	// space-trims an associative key: `${p[ s ]}` looks up three characters
-	// in all three, so a key stored under `s` is not found by it. dash has no
-	// arrays, which is why the axis is absent there rather than false.
+	// Two things stay unanimous and must not move with it. A bare `@` or `*` is
+	// still the whole array; *quoted*, it is a key, so `${n["@"]}` looks one up
+	// and finds nothing. And an associative key is never space-trimmed:
+	// `${p[ s ]}` looks up three characters, so a key stored under `s` is not
+	// found by it. A preset with no arrays leaves the axis absent rather than
+	// false.
 	SubscriptIsAQuotingContext Answer
 
-	// PatternEscapeReaches is the set of characters a backslash escapes
-	// inside a pattern. Empty means **every** character, which is bash's
-	// answer, bash 3.2's, bash as `sh`'s, dash's and ksh93's: `bet\a` matches
-	// `beta` there, the backslash spent on a character that needed none.
+	// PatternEscapeReaches is the set of characters a backslash escapes inside a
+	// pattern. Empty means **every** character, so `bet\a` matches `beta`, the
+	// backslash spent on a character that needed none.
 	//
-	// zsh names a set instead, and it is exactly its pattern
-	// metacharacters — a backslash before anything else is a literal
+	// A preset may name a set instead, and where it does the set is exactly its
+	// pattern metacharacters — a backslash before anything else is a literal
 	// backslash *and* the character after it, so `bet\a` matches the five
 	// characters `bet\a` and matches `beta` not at all.
 	//
-	// Measured 2026-09-07 by handing the matcher a raw backslash, which is
-	// the only way to ask: quote removal takes an escape off a pattern
-	// written in the source before the matcher ever sees it, so a `case`
-	// pattern spelled `bet\a` is `beta` in all six and says nothing about
-	// this. What does ask it is a *substituted* pattern — `p='bet\a'; case
-	// beta in $p)` in the five shells that match the result of an expansion,
-	// and `setopt globsubst` with the same two lines in zsh, which does not.
+	// Measured by handing the matcher a raw backslash, which is the only way to
+	// ask: quote removal takes an escape off a pattern written in the source
+	// before the matcher ever sees it, so a `case` pattern spelled `bet\a` is
+	// `beta` everywhere and says nothing about this. What does ask it is a
+	// *substituted* pattern — `p='bet\a'; case beta in $p)` — wherever the
+	// result of an expansion is matched at all.
 	//
-	//	escaped in zsh:      - = ! * ? [ ] ( ) | ^ ~ # < >
-	//	not escaped in zsh:  letters, digits, _ . / + : % & @ , " ' space { } $
+	//	a named set is typically:  - = ! * ? [ ] ( ) | ^ ~ # < >
+	//	and typically excludes:    letters, digits, _ . / + : % & @ , " ' space { } $
 	//
-	// The set is written down rather than derived from the other pattern
-	// answers because it is not the same set: `-`, `=`, `!`, `^`, `~` and `#`
-	// are in it, and this matcher gives none of the six a meaning of its own
-	// in a pattern.
+	// The set is written down rather than derived from the other pattern answers
+	// because it is not the same set: `-`, `=`, `!`, `^`, `~` and `#` are in it,
+	// and this matcher gives none of the six a meaning of its own in a pattern.
 	//
-	// One row is deliberately not modeled. dash escapes every character but
-	// `^`: a pattern `x\^y` does not match `x^y` there, where `x\.y` matches
-	// `x.y`. One character of one shell, recorded in the corpus and filed
-	// rather than given a value here.
+	// One row is deliberately not modeled: escaping every character *but* `^`,
+	// so a pattern `x\^y` does not match `x^y` where `x\.y` matches `x.y`. One
+	// character of one implementation, recorded in the corpus and filed rather
+	// than given a value here.
 	PatternEscapeReaches string
 
 	// PatternClasses is the character-class names a dialect answers **beyond
@@ -4380,148 +4368,125 @@ type Semantics struct {
 	// upper and xdigit, which every shell in the panel answers alike.
 	//
 	// A roster rather than a flag per name, and a roster rather than an
-	// enumeration, for the reason EchoOptions and ReadOptions are strings:
-	// what differs between shells is **which names exist**, and that is data.
-	// What each name *means* is not in dispute — no shell disagrees with
-	// another about `ascii` — so there is no axis to switch, only a set to
-	// declare. A dialect that leaves it empty is not unanswered; it is saying
-	// the twelve and nothing else, which is the measured answer for two of
-	// the five.
+	// enumeration, for the reason EchoOptions and ReadOptions are strings: what
+	// differs is **which names exist**, and that is data. What each name *means*
+	// is not in dispute — nothing disagrees about `ascii` — so there is no axis
+	// to switch, only a set to declare. A preset that leaves it empty is not
+	// unanswered; it is saying the twelve and nothing else, which is a measured
+	// answer.
 	//
-	// Measured 2026-09-10, `[[ $c = [[:NAME:]] ]]` a character at a time:
-	//
-	//	ascii       zsh, bash 5.3, bash 3.2 — not ksh93, not dash
-	//	IDENT       zsh alone
-	//	IFS         zsh alone
-	//	IFSSPACE    zsh alone
-	//	INCOMPLETE  zsh alone
-	//	INVALID     zsh alone
-	//	WORD        zsh alone
+	// Measured with `[[ $c = [[:NAME:]] ]]` a character at a time. Beyond the
+	// twelve, `ascii` is the one several presets share; the rest — `IDENT`,
+	// `IFS`, `IFSSPACE`, `INCOMPLETE`, `INVALID`, `WORD` — belong to a single
+	// preset.
 	//
 	// A name outside the twelve **and** outside this roster matches nothing,
-	// silently, at status 0 — and that is not a gap: it is what every shell
-	// in the panel does with `[[:nosuchclass:]]`, bash 3.2 included, and it
-	// is measured rather than assumed. So the defect this was written for was
-	// never generic. `[[:IDENT:]]` came back empty because the *name* was
-	// missing, and only the names go here.
+	// silently, at status 0 — and that is not a gap: it is what every preset
+	// does with `[[:nosuchclass:]]`, measured rather than assumed. So the defect
+	// this was written for was never generic. A class came back empty because
+	// the *name* was missing, and only the names go here.
 	//
-	// The names are case-sensitive in the shell that has them: `[[:ident:]]`
-	// and `[[:ASCII:]]` both match nothing.
+	// The names are case-sensitive where they exist: `[[:ident:]]` and
+	// `[[:ASCII:]]` both match nothing.
 	//
-	// Two of the seven read shell state rather than a fixed set of
-	// characters — `IFS` is the field separators as they stand and `WORD` is
-	// the letters and digits together with `$WORDCHARS` — which is why they
-	// are resolved where a Runner can be asked and not in a table.
+	// Two of them read shell state rather than a fixed set of characters —
+	// `IFS` is the field separators as they stand and `WORD` is the letters and
+	// digits together with `$WORDCHARS` — which is why they are resolved where a
+	// Runner can be asked and not in a table.
 	PatternClasses string
 
-	// BracketEscapeIsAlsoAMember says a backslash that protects a member of
-	// a bracket expression is a member of the set itself.
+	// BracketEscapeIsAlsoAMember says a backslash that protects a member of a
+	// bracket expression is a member of the set itself.
 	//
-	// False is five columns' answer: `[\)]` handed to the matcher with the
-	// backslash still in it is the one-character set `)` in bash, bash 3.2,
-	// bash as `sh`, dash and ksh93. True is zsh's, where the same set holds
-	// the backslash as well.
+	// Under False, `[\)]` handed to the matcher with the backslash still in it
+	// is the one-character set `)`. Under True the same set holds the backslash
+	// as well.
 	//
-	// Measured 2026-09-07 through `${~p}`, which is the only construct that
-	// hands this matcher a bracket expression holding a raw backslash — a
-	// pattern *written* in the source has had its escapes spent by quote
-	// removal long before, which is why the two routes can disagree at all
-	// and why the source route is unanimous. Four values, four exact hits:
+	// Measured through `${~p}`, which is the only construct that hands this
+	// matcher a bracket expression holding a raw backslash — a pattern *written*
+	// in the source has had its escapes spent by quote removal long before,
+	// which is why the two routes can disagree at all and why the source route
+	// is unanimous. Four values, four exact hits:
 	//
 	//	p='[\)]'   matches `)` and `\`, not `a`
 	//	p='[\-z]'  matches `-`, `z` and `\`, not `y` — no range is formed
 	//	p='[\a]'   matches `a` and `\`
 	//	p='[\]]'   matches `]` and `\`
 	//
-	// The second row is what says the answer is *also a member* rather than
-	// *not an escape*: the `-` behind the backslash stays a member instead of
+	// The second row is what says the answer is *also a member* rather than *not
+	// an escape*: the `-` behind the backslash stays a member instead of
 	// becoming the range operator, so the protection happens there too. Both
 	// halves are true at once, which is exactly what this field turns on.
 	//
 	// It reaches only the results of expansions, in expansionPattern, because
 	// that is the only place a backslash arrives inside a bracket expression
-	// without having been put there to say "the source quoted this". Reading
-	// it in the matcher instead would have taken the source route with it and
-	// broken the unanimous half (#1407).
+	// without having been put there to say "the source quoted this". Reading it
+	// in the matcher instead would take the source route with it and break the
+	// unanimous half.
 	BracketEscapeIsAlsoAMember bool
 
 	// LongestMatchTakesTheWrittenArm decides which match `${x##pat}` removes,
 	// and which one `${x//pat/rep}` replaces, when `pat` holds an alternation
-	// whose arms take different lengths: the arm that was written first, or
-	// the longest of them.
+	// whose arms take different lengths: the arm that was written first, or the
+	// longest of them.
 	//
-	// Measured 2026-09-11, `x=abc`, each probe in a `-c` of its own. The
-	// spelling differs by column because the group does — one shell reads a
-	// bare `(a|ab)` and the others want `@(a|ab)` with their extended
-	// patterns switched on — and the answer does not:
+	// With `x=abc`, `${x##(a|ab)}` is `bc` under Yes and `c` under No, so the
+	// two spellings disagree about which of `a` and `ab` came off. The group's
+	// spelling differs by preset — a bare `(a|ab)` under one, `@(a|ab)` with
+	// extended patterns switched on under another — and the answer does not.
 	//
-	//	${x##(a|ab)}    zsh 5.9.2   `bc`, the first arm
-	//	${x##(ab|a)}    zsh 5.9.2   `c`
-	//	${x##@(a|ab)}   bash 5.3    `c`, the longest arm
-	//	${x##@(ab|a)}   bash 5.3    `c`
-	//	${x##@(a|ab)}   bash 3.2    `c`
-	//	${x##@(a|ab)}   ksh93u+     `c`
-	//
-	// Yes is one shell's and No is the rest of the panel's, so the two
-	// spellings of `abc` disagree about which of `a` and `ab` came off.
-	//
-	// Yes is not "the shortest arm", and that is what makes it a search
-	// order rather than a second length rule: `${x##(a*|ab)}` empties the
-	// value in the shell that answers Yes, because the first arm is tried
-	// first and then matches as much as it can. `${x##(a|ab)c}` empties it
-	// too — the first arm is a preference and not a refusal, so the search
-	// falls back to a later arm where the rest of the pattern needs it. An
-	// empty arm is an arm: `${x##(|a)}` removes nothing there and removes
-	// `a` under No.
+	// Yes is not "the shortest arm", and that is what makes it a search order
+	// rather than a second length rule: `${x##(a*|ab)}` empties the value under
+	// Yes, because the first arm is tried first and then matches as much as it
+	// can. `${x##(a|ab)c}` empties it too — the first arm is a preference and
+	// not a refusal, so the search falls back to a later arm where the rest of
+	// the pattern needs it. An empty arm is an arm: `${x##(|a)}` removes nothing
+	// under Yes and removes `a` under No.
 	//
 	// **Asked where the longest match is wanted and the end of that match is
-	// free to move**, which is where the panel actually splits, and which is
+	// free to move**, which is where the answers actually split, and which is
 	// two operators rather than one. The single `#` takes the shortest match
-	// in every column, arms or no arms — `${x#(ab|a)}` is `bc` in all of them
-	// — and the unflagged suffix trims take the longest: `${x%%(|bc)}` is `a`
-	// in the shell that answers Yes, where a written-arm search would have
-	// taken the empty arm and removed nothing. So an axis worded for trims in
-	// general would have moved three rows the panel agrees about.
+	// under both, arms or no arms — `${x#(ab|a)}` is `bc` either way — and the
+	// unflagged suffix trims take the longest: `${x%%(|bc)}` is `a` under Yes,
+	// where a written-arm search would have taken the empty arm and removed
+	// nothing. So an axis worded for trims in general would have moved three
+	// rows that are agreed about.
 	//
-	// The *substitution* is the second operator and was missing for a long
-	// time, which is what the field's old name — `LongestPrefixTrimTakes…` —
-	// recorded rather than caused. `${x//(a|ab)/X}` on `abc` is `Xbc` in the
-	// shell that answers Yes and `Xc` in the rest, exactly as the trim
-	// splits, and every unanchored spelling goes the same way: `${x/(|a)/X}`
-	// is `Xabc` there and `Xbc` elsewhere, and `/#` follows because its end
-	// is still free. `/%` does not, because pinning the end leaves the arms
-	// no length to disagree about — measured, `${x/%(c|bc)/X}` and
-	// `${x/%(bc|c)/X}` are both `aX` in every column (#2152).
+	// The *substitution* is the second operator. `${x//(a|ab)/X}` on `abc` is
+	// `Xbc` under Yes and `Xc` under No, exactly as the trim splits, and every
+	// unanchored spelling goes the same way: `${x/(|a)/X}` is `Xabc` under Yes
+	// and `Xbc` under No, and `/#` follows because its end is still free. `/%`
+	// does not, because pinning the end leaves the arms no length to disagree
+	// about — `${x/%(c|bc)/X}` and `${x/%(bc|c)/X}` are both `aX` either way.
 	//
-	// Under zsh's `(S)` flag the shortest match is wanted, which is the
-	// minimum over every arm, so the arms cannot disagree there either.
+	// Under a shortest-match flag the minimum over every arm is wanted, so the
+	// arms cannot disagree there either.
 	//
-	// It reaches the `(M)` flag and the `(#b)` captures with the same
+	// It reaches the match-returning flag and the capture flags with the same
 	// answer, because they are the same match seen from the other side:
 	// `${(M)x##(a|ab)}` is `a` where the trim leaves `bc`, and
-	// `${x##(#b)(a|ab)}` reports `a` in `$match[1]`.
+	// `${x##(#b)(a|ab)}` reports `a` in the first capture.
 	//
-	// Asked only where the two readings land in different places, which is
-	// why an ordinary pattern never reaches it: a pattern with no
-	// alternation has one reading, and `(ab|a)` — the arms in decreasing
-	// length — has two that agree. See armEnd, which is the one place both
-	// operators ask it, and interp/trimarm.go for the search.
+	// Asked only where the two readings land in different places, which is why
+	// an ordinary pattern never reaches it: a pattern with no alternation has
+	// one reading, and `(ab|a)` — the arms in decreasing length — has two that
+	// agree. See armEnd, which is the one place both operators ask it, and
+	// interp/trimarm.go for the search.
 	LongestMatchTakesTheWrittenArm Answer
 
 	// EmptyReplacementPattern is what `${v//\/X}` — a span replacement whose
-	// pattern is empty — matches in the unanchored spellings.
+	// pattern is empty — matches in the unanchored spellings. With `v=abc` and
+	// `e=`:
 	//
-	// Measured 2026-09-12 from a script file, `v=abc` and `e=`:
-	//
-	//	                  bash 5.3.15  ksh93u+  zsh 5.9.2
-	//	${v///X}          abc          abc      XaXbXc
-	//	${v/$e/X}         abc          abc      Xabc
-	//	${e///X}          (empty)      X        X
-	//	${e//x/X}         (empty)      (empty)  (empty)
+	//	                  decline  take-when-empty  match-everywhere
+	//	${v///X}          abc      abc              XaXbXc
+	//	${v/$e/X}         abc      abc              Xabc
+	//	${e///X}          (empty)  X                X
+	//	${e//x/X}         (empty)  (empty)          (empty)
 	//
 	// Three answers and not two, which the empty *value* row is the whole of:
-	// bash declines the pattern outright and ksh93 takes it where there is
-	// nothing to scan. The last row is the control that says the `X` is a
+	// one reading declines the pattern outright and another takes it where there
+	// is nothing to scan. The last row is the control that says the `X` is a
 	// match and not something an empty value produces on its own.
 	//
 	// It is a question about the pattern's *text* rather than about empty

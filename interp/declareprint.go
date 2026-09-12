@@ -336,6 +336,17 @@ func (r *Runner) declarableNames() []string {
 			seen[k] = true
 		}
 	}
+	for name := range r.absentParams {
+		// A parameter the dialect names and this shell has not got is not a
+		// declaration this shell can list, whatever attribute record it
+		// carries. It has one now — the absent names are frozen against a
+		// write, which is what the shell being modeled does (#1604) — and
+		// the readonly table is one of the tables this walk collects from,
+		// so without this the bare `readonly` listing would have grown
+		// fifteen rows naming parameters that are not there. Measured: zsh's
+		// own `readonly` writes none of them.
+		delete(seen, name)
+	}
 	for name := range seen {
 		// A name whose value was taken away is a row only where something of
 		// the declaration outlived it. Asked of declarationOf rather than of

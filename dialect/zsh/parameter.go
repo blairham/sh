@@ -280,7 +280,24 @@ var zshAbsentParams = []string{
 	"patchars", "reswords", "userdirs", "usergroups",
 }
 
-// registerAbsentParameters makes each of them refuse by name when it is read.
+// zshWritableAbsentParams are the ones a script may assign to even though
+// this shell has not built them, so they are absent without being frozen.
+//
+// Measured 2026-09-12 against zsh 5.9.2 under `-f`, one `name=(a b c)` per
+// entry from a script file: fifteen of the sixteen above answer `read-only
+// variable: name` at status 1 and end the script, whether or not the module
+// has been loaded. `dirstack` is the one that does not — it is the directory
+// stack and assigning it is how a script sets one, so it takes the array in
+// silence at 0.
+//
+// A set rather than a flag on the list, because the list is what a reader
+// checks against the module roster and an exception marked in place would
+// read as a typo.
+var zshWritableAbsentParams = map[string]bool{"dirstack": true}
+
+// registerAbsentParameters makes each of them refuse by name when it is read,
+// and all but one of them refuse an assignment as the read-only names they
+// are.
 //
 // The parameter's own call site, which is what a builtin has had all along —
 // see [interp.Runner.SetAbsentParameter]. `zregexparse` is the shape: nothing
@@ -288,9 +305,25 @@ var zshAbsentParams = []string{
 // line that calls it is where a script finds out. A parameter had no such
 // line until this, which is why one absent parameter used to hold thirty-two
 // others shut.
+//
+// **The freeze is the other half of the same fact** and was missing: a name
+// this shell has not got was one a script could take over — `jobstates=(a b
+// c)` made an ordinary array here and is `read-only variable: jobstates` at
+// status 1, fatally, in the shell being modeled. So a script probing for the
+// module by writing the name got a value where it should have been stopped,
+// and a test in this package asserted that (#1604). The element spelling
+// refuses too: `jobstates[1]=q` is the same sentence naming the table.
+//
+// `unset` of one is still allowed, which is measured rather than tidy: zsh
+// answers `unset jobstates` with a silent 0 while refusing the assignment on
+// the line before. See interp's unsetReadonly, which exempts an absent
+// parameter for that reason.
 func registerAbsentParameters(r *interp.Runner) {
 	for _, name := range zshAbsentParams {
 		r.SetAbsentParameter(name, "parameter not implemented yet")
+		if !zshWritableAbsentParams[name] {
+			r.MarkReadonly(name)
+		}
 	}
 }
 

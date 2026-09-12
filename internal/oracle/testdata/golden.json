@@ -140783,6 +140783,50 @@
         "TimedOut": false
       }
     },
+    "variable/a-module-parameter-a-script-may-not-own": {
+      "bash": {
+        "Stdout": "st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:1: read-only variable: jobstates",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "variable/a-shell-tie-keeps-its-pairing-across-an-unset": {
       "bash": {
         "Stdout": "1[]~2[/a:/b]",
@@ -140821,6 +140865,50 @@
       },
       "zsh": {
         "Stdout": "1[/a /b]~2[/q:/r]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "variable/the-module-parameter-a-script-may-own": {
+      "bash": {
+        "Stdout": "st=0 [a b c]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 [a b c]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0 [a b c]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 [a b c]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [a b c]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -394,11 +394,42 @@ func TestArithmeticReadsAnAbsentParameterAsZeroLikeTheRealThing(t *testing.T) {
 func TestAnAbsentParameterYieldsToTheScriptsOwnAnswer(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `print -r -- "default=[${jobstates-d}]"
 print -r -- "alternate=[${jobstates+set}]"
-jobstates=(a b)
-print -r -- "own=[$jobstates] [${jobstates[1]}] [${#jobstates}]"`)
+dirstack=(a b)
+print -r -- "own=[$dirstack] [${dirstack[1]}] [${#dirstack}]"`)
 	want := "default=[d]\nalternate=[]\nown=[a b] [a] [2]\n"
 	if out != want || st != 0 {
 		t.Errorf("a script's own answers = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `dirstack` rather than `jobstates` for the owning half, because owning is
+// exactly what the rest of them no longer allow: fifteen of the sixteen
+// absent names are frozen against a write here as they are in zsh, and
+// `dirstack` is the one the shell being modeled lets a script assign — it is
+// the directory stack, and setting one is what the assignment is for. So the
+// exemption is still reachable and this is where it is reached.
+func TestAnAbsentParameterRefusesAWriteAsAReadOnlyName(t *testing.T) {
+	for _, src := range []string{
+		`jobstates=(a b c)`,
+		`jobstates[1]=q`,
+		`typeset -g jobstates=(a)`,
+	} {
+		out, st := runZsh(t, t.TempDir(), src+"\necho unreached")
+		if st == 0 || !strings.Contains(out, "read-only variable: jobstates") ||
+			strings.Contains(out, "unreached") {
+			t.Errorf("%s = %q (status %d), want the read-only refusal and the script ended", src, out, st)
+		}
+	}
+}
+
+// And `unset` of one is *not* refused, which is measured rather than tidy:
+// the shell being modeled answers `unset jobstates` with a silent 0 on the
+// line after refusing `jobstates=(a b c)` as read-only. Two answers from one
+// attribute, so the exemption is written down where the difference is.
+func TestAnAbsentParameterMayStillBeUnset(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), "unset jobstates\necho \"st=$?\"")
+	if out != "st=0\n" || st != 0 {
+		t.Errorf("unsetting an absent parameter = %q (status %d), want a silent 0", out, st)
 	}
 }
 
@@ -751,17 +782,22 @@ echo "other=$?"`)
 // as on the read: the refusal is about reading something absent, not about
 // owning a spelling.
 //
-// `jobstates` rather than `parameters`, which this used to use: that one is a
-// live read-only table now (#1599) and a script cannot own it here any more
-// than in zsh. The name that stands in for it can still be owned here and
-// cannot in zsh, which refuses every one of the module's names as read-only
-// whether the module is loaded or not — #1604, filed rather than folded in,
-// because the refusal it needs has to be ordered against the one #1152 gives
-// an unimplemented parameter.
+// `dirstack` rather than `jobstates`, which this used to use, and rather than
+// `parameters` before that. Each move is the same correction one step
+// further: a script cannot own a name the shell being modeled freezes, and
+// since #1604 that is fifteen of the sixteen absent names here too. What is
+// left is the one absent name zsh lets a script assign, which is where the
+// exemption is still reachable.
+//
+// The element `unset` is this shell's answer and not zsh's, and there is
+// nothing to compare it against: `unset "dirstack[2]"` takes zsh 5.9.2 down
+// with SIGSEGV. absentparam.go records that these names have no coherent
+// panel answer for an element write, which is why the rule here is the
+// mechanism's own rather than a copy.
 func TestUnsettingAnAbsentNameTheScriptOwnsIsTheScriptsArray(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `jobstates=(a b c)
-unset "jobstates[2]" 2>&1
-echo "st=$? v=[${jobstates[*]}]"`)
+	out, st := runZsh(t, t.TempDir(), `dirstack=(a b c)
+unset "dirstack[2]" 2>&1
+echo "st=$? v=[${dirstack[*]}]"`)
 	want := "st=0 v=[a  c]\n"
 	if out != want || st != 0 {
 		t.Errorf("unsetting an owned name's element = %q (status %d), want %q", out, st, want)

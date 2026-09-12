@@ -18491,6 +18491,18 @@ echo "st=$?"`,
 		Why:     "the append half of the row above, and a second answer rather than the same one: ksh93 *keeps* the letter on a join — `typeset -a -i p=(3 10)`, the scalar promoted to the first element and the joined word evaluated — where it drops it on a store, and zsh drops it either way and leaves `5+5` unread. bash keeps and folds as it does everywhere. An attribute's answer on the way in is not its answer on a join, which is the shape #1755 recorded from the other side",
 	},
 	{
+		ID: "variable/a-module-parameter-a-script-may-not-own", Category: "variables",
+		Script:  true,
+		Snippet: "jobstates=(a b c)\necho \"st=$?\"\necho tail\n",
+		Why:     "a name one shell's module owns, written by a script that has not loaded the module. zsh refuses it as `read-only variable: jobstates` at status 1 and ends the script, whether or not `zsh/parameter` was ever loaded -- the freeze is a property of the name and not of the module being there. Every shell without the module takes the assignment and makes an ordinary array, which is also what this engine did: a script probing for the module by writing the name got a value where it should have been stopped (#1604). `dirstack` is the one name in the same set that zsh does let a script assign, which is the row below",
+	},
+	{
+		ID: "variable/the-module-parameter-a-script-may-own", Category: "variables",
+		Script:  true,
+		Snippet: "dirstack=(a b c)\necho \"st=$? [${dirstack[*]}]\"\n",
+		Why:     "the control for the row above, and the reason the freeze is a list rather than a rule about the module: `dirstack` is the directory stack and assigning it is how a script sets one, so zsh takes it in silence at 0 where it refuses the fifteen names beside it. Every other shell takes it too, for the different reason that the name means nothing to them",
+	},
+	{
 		ID: "shopt/patsub-replacement-reports-on", Category: "shell options",
 		Snippet: `shopt -p patsub_replacement 2>/dev/null; echo s=$?`,
 		Why:     "the reissuable line for the option that gates the ampersand reading, and its status. bash 5.3 writes `shopt -s patsub_replacement` at 0 because the option is on with nothing said; bash 3.2 has no such name and answers 1 with its complaint suppressed, and the three shells without the builtin answer 127. It is a capture surface -- a harness snapshots a shell with `shopt -p` and sources the result back -- so a shell reporting the wrong state here re-applies it to every later command (#1712, #1862)",

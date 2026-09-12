@@ -52,7 +52,7 @@ func main() {
 	flag.Parse()
 
 	if *panel {
-		printPanel(os.Stdout)
+		printPanel()
 		return
 	}
 
@@ -76,7 +76,7 @@ func run(ctx context.Context, dialect, bin, buildDir string, timeout time.Durati
 		// are rows at all: a missing column that says nothing reads as a
 		// column that passed.
 		fmt.Printf("%s: not yet a column of this instrument.\n\n  %s\n\n", s.Name, wrap(s.NotYet, "  "))
-		printPanel(os.Stdout)
+		printPanel()
 		return 0
 	}
 	if bin == "" {
@@ -133,8 +133,8 @@ func run(ctx context.Context, dialect, bin, buildDir string, timeout time.Durati
 	}
 	rep.ReferenceVersion = suite.Version(ctx, reference)
 	rep.Helpers = helpers
-	printReport(os.Stdout, rep)
-	printPanel(os.Stdout)
+	printReport(rep)
+	printPanel()
 	return 0
 }
 
@@ -165,66 +165,66 @@ func skip(what, why string) {
 	fmt.Printf("SKIPPED — %s\n\n  %s\n\n", what, wrap(why, "  "))
 }
 
-func printReport(w *os.File, rep suite.Report) {
+func printReport(rep suite.Report) {
 	s := rep.Suite
-	fmt.Fprintf(w, "%s's own suite, %s — %d files (%s)\n", s.Name, s.Version, rep.Files, s.Ext)
-	fmt.Fprintf(w, "  oracle   %s — %s\n", rep.Reference, rep.ReferenceVersion)
-	fmt.Fprintf(w, "  ours     %s\n", rep.Ours)
+	fmt.Printf("%s's own suite, %s — %d files (%s)\n", s.Name, s.Version, rep.Files, s.Ext)
+	fmt.Printf("  oracle   %s — %s\n", rep.Reference, rep.ReferenceVersion)
+	fmt.Printf("  ours     %s\n", rep.Ours)
 	if len(rep.Helpers) > 0 {
-		fmt.Fprintf(w, "  helpers  %s, built from the suite's own C\n", strings.Join(rep.Helpers, ", "))
+		fmt.Printf("  helpers  %s, built from the suite's own C\n", strings.Join(rep.Helpers, ", "))
 	}
-	fmt.Fprintln(w)
+	fmt.Println()
 
-	fmt.Fprintf(w, "  parsed          %-9s %5.1f%%   our parser read the whole file\n",
+	fmt.Printf("  parsed          %-9s %5.1f%%   our parser read the whole file\n",
 		fmt.Sprintf("%d/%d", rep.Parsed, rep.Files), 100*rep.ParseRate())
-	fmt.Fprintf(w, "  strict          %-9s %5.1f%%   every byte and the status identical\n",
+	fmt.Printf("  strict          %-9s %5.1f%%   every byte and the status identical\n",
 		fmt.Sprintf("%d/%d", rep.Strict, rep.Scored), 100*rep.StrictRate())
-	fmt.Fprintf(w, "  line agreement  %-9s %5.1f%%   longest common subsequence, by line\n",
+	fmt.Printf("  line agreement  %-9s %5.1f%%   longest common subsequence, by line\n",
 		"", 100*rep.LineRate())
-	fmt.Fprintf(w, "                  %-9s %5.1f%%   the same, unweighted per file\n",
+	fmt.Printf("                  %-9s %5.1f%%   the same, unweighted per file\n",
 		"", 100*rep.MeanFile)
-	fmt.Fprintln(w)
+	fmt.Println()
 
-	fmt.Fprintf(w, "  not scored       %d unstable · %d oracle hung · %d dialect hung\n",
+	fmt.Printf("  not scored       %d unstable · %d oracle hung · %d dialect hung\n",
 		rep.Unstable, rep.OracleHung, rep.DialectHung)
-	fmt.Fprintln(w, "                   unstable: the oracle did not repeat itself, so the file is")
-	fmt.Fprintln(w, "                     evidence about neither shell — a pid, a clock, an order.")
-	fmt.Fprintln(w, "                   oracle hung: a harness fault. The shell that wrote the file")
-	fmt.Fprintln(w, "                     does not hang on it, so this is load or too tight a bound.")
-	fmt.Fprintln(w, "                   dialect hung: a hang we published. Different finding, kept apart.")
+	fmt.Println("                   unstable: the oracle did not repeat itself, so the file is")
+	fmt.Println("                     evidence about neither shell — a pid, a clock, an order.")
+	fmt.Println("                   oracle hung: a harness fault. The shell that wrote the file")
+	fmt.Println("                     does not hang on it, so this is load or too tight a bound.")
+	fmt.Println("                   dialect hung: a hang we published. Different finding, kept apart.")
 	if rep.LineCapped > 0 {
-		fmt.Fprintf(w, "  capped           %d files printed more lines than the comparison's bound\n", rep.LineCapped)
+		fmt.Printf("  capped           %d files printed more lines than the comparison's bound\n", rep.LineCapped)
 	}
-	fmt.Fprintln(w)
+	fmt.Println()
 
-	fmt.Fprintln(w, "  The three numbers are three because each lies alone. Strict reads as")
-	fmt.Fprintln(w, "  catastrophe — one disagreement forfeits a file of hundreds of assertions.")
-	fmt.Fprintln(w, "  Line agreement reads as triumph — most lines are text a shell echoed back.")
-	fmt.Fprintln(w, "  Parsed explains both: this parser reads a file whole before running any of")
-	fmt.Fprintln(w, "  it, so one refused construct forfeits a file that might have agreed line")
-	fmt.Fprintln(w, "  for line.")
-	fmt.Fprintln(w)
+	fmt.Println("  The three numbers are three because each lies alone. Strict reads as")
+	fmt.Println("  catastrophe — one disagreement forfeits a file of hundreds of assertions.")
+	fmt.Println("  Line agreement reads as triumph — most lines are text a shell echoed back.")
+	fmt.Println("  Parsed explains both: this parser reads a file whole before running any of")
+	fmt.Println("  it, so one refused construct forfeits a file that might have agreed line")
+	fmt.Println("  for line.")
+	fmt.Println()
 
 	if len(rep.Causes) == 0 {
-		fmt.Fprintln(w, "  nothing was refused by the parser")
+		fmt.Println("  nothing was refused by the parser")
 	} else {
-		fmt.Fprintln(w, "  file-stopping constructs, by files forfeited")
-		fmt.Fprintln(w, "  (this parser's own diagnostic, with the position and any word from the")
-		fmt.Fprintln(w, "   file removed — the fetched text that provoked it is never printed)")
+		fmt.Println("  file-stopping constructs, by files forfeited")
+		fmt.Println("  (this parser's own diagnostic, with the position and any word from the")
+		fmt.Println("   file removed — the fetched text that provoked it is never printed)")
 		for _, c := range rep.Causes {
-			fmt.Fprintf(w, "    %4d  %s\n", c.Files, c.Reason)
+			fmt.Printf("    %4d  %s\n", c.Files, c.Reason)
 		}
 	}
-	fmt.Fprintln(w)
+	fmt.Println()
 
 	if len(rep.StatusPairs) > 0 {
-		fmt.Fprintln(w, "  exit status of the files that ran and disagreed  (ours / oracle)")
-		fmt.Fprintln(w, "  (numbers, because our runtime diagnostics would quote the file back;")
-		fmt.Fprintln(w, "   -1 is a run that ended on a signal or never started)")
+		fmt.Println("  exit status of the files that ran and disagreed  (ours / oracle)")
+		fmt.Println("  (numbers, because our runtime diagnostics would quote the file back;")
+		fmt.Println("   -1 is a run that ended on a signal or never started)")
 		for _, p := range rep.StatusPairs {
-			fmt.Fprintf(w, "    %4d  %d / %d\n", p.Files, p.Ours, p.Reference)
+			fmt.Printf("    %4d  %d / %d\n", p.Files, p.Ours, p.Reference)
 		}
-		fmt.Fprintln(w)
+		fmt.Println()
 	}
 }
 
@@ -234,8 +234,8 @@ func printReport(w *os.File, rep suite.Report) {
 // point of this instrument — a bash-only one would bend the substrate toward
 // bash, which is what this project's premise forbids — and a column that is
 // not built has to be visible as a column rather than as a silence.
-func printPanel(w *os.File) {
-	fmt.Fprintln(w, "  columns")
+func printPanel() {
+	fmt.Println("  columns")
 	for _, s := range suite.Panel {
 		state := "ready"
 		if s.NotYet != "" {
@@ -245,16 +245,16 @@ func printPanel(w *os.File) {
 		if version == "" {
 			version = "—"
 		}
-		fmt.Fprintf(w, "    %-7s %-8s %-8s make %s-suite\n", s.Name, version, state, s.Dialect)
+		fmt.Printf("    %-7s %-8s %-8s make %s-suite\n", s.Name, version, state, s.Dialect)
 		if s.NotYet != "" {
-			fmt.Fprintf(w, "      %s\n", wrap(s.NotYet, "      "))
+			fmt.Printf("      %s\n", wrap(s.NotYet, "      "))
 		}
 	}
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  Nothing fetched here is ever committed. It lands under the gitignored build")
-	fmt.Fprintln(w, "  directory, in a tree named for the distribution so that `make wild` refuses")
-	fmt.Fprintln(w, "  to open it, and only the suite is unpacked — the shell's own source streams")
-	fmt.Fprintln(w, "  past without reaching the disk, and neither does the suite's expected output.")
+	fmt.Println()
+	fmt.Println("  Nothing fetched here is ever committed. It lands under the gitignored build")
+	fmt.Println("  directory, in a tree named for the distribution so that `make wild` refuses")
+	fmt.Println("  to open it, and only the suite is unpacked — the shell's own source streams")
+	fmt.Println("  past without reaching the disk, and neither does the suite's expected output.")
 }
 
 // wrap folds a reason to a readable width at the given indent.

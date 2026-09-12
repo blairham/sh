@@ -23,6 +23,28 @@ repos:
     rev: v1.0.0-rc.4
     hooks:
       - id: go-mod-tidy-repo
+      # gofumpt, back on the commit path. #1495 removed `golangci-lint-fmt`,
+      # which was what applied it, and said `go-fumpt-repo` would carry it —
+      # and no such hook had ever been in this file, so from that commit until
+      # #1903 there was no formatter here at all.
+      #
+      # `my-cmd-repo` and not `go-fumpt-repo`, because that hook shells out to
+      # a `gofumpt` on PATH and this repository does not have one: the
+      # formatter is pinned in go.mod's `tool` block and run as `go tool
+      # gofumpt`, which is the only way the hook, `make fmt` and the Lint job
+      # are guaranteed to be the same gofumpt. A system install would be some
+      # other version, and a formatter that disagrees with CI is worse than
+      # none.
+      #
+      # `-l -d` and not `-w`: it reports, it does not rewrite. An autofixing
+      # hook reopens the window #1267 is about — a file changing between the
+      # `make check` that was run and the commit object that lands — and the
+      # fix here is cheap, since `make fmt` is the first thing `make check`
+      # does.
+      - id: my-cmd-repo
+        alias: gofumpt
+        name: gofumpt
+        args: [--hook:error-on-output, go, tool, gofumpt, -l, -d, .]
 
   # golangci-lint is NOT run here. It type-checks the whole module on every
   # commit -- measured on this repository, ~3GB resident and 300% CPU per run,
@@ -34,18 +56,46 @@ repos:
   # AGENTS.md already said so -- "it runs in CI, not pre-commit -- it's too slow
   # for every commit" -- and this file disagreed with it.
   #
-  # **The formatters it used to apply are not covered here, and this file said
-  # they were.** `golangci-lint-fmt` applied gofumpt and goimports, the change
-  # that removed it said they would go on running "through go-fumpt-repo
-  # above", and no such hook has ever been in this file. So since #1495 there
-  # has been no formatter on the commit path at all — `make fmt` (which
-  # `make check` runs first) and the Lint job are what keep the tree formatted,
-  # which is why nothing has drifted. #1903 is the hook itself.
+  # **The formatters it used to apply are covered above, and were not for a
+  # year.** `golangci-lint-fmt` applied gofumpt and goimports, the change that
+  # removed it said they would go on running "through go-fumpt-repo above",
+  # and no such hook had ever been in this file — so from #1495 until #1903
+  # there was no formatter on the commit path at all. The gofumpt hook in the
+  # block above is that hook; goimports is not separately covered, because
+  # gofumpt is a superset of gofmt and the import *grouping* rule is a
+  # golangci-lint formatter setting the Lint job applies.
   #
-  # CI runs it instead, in the Lint job, diffing from the merge base. That is
-  # also the only place it can say anything useful: `--new-from-rev HEAD` on a
-  # clean checkout reports nothing at all, so the hook that used to run here was
-  # silent on a runner while being expensive on a laptop.
+  # CI runs golangci-lint instead, in the Lint job, over the whole tree. It
+  # used to diff from the merge base there, which meant `main` — where the
+  # merge base is HEAD — was never linted at all; see the job's own comment
+  # for why that is now a full-tree run (#1302, #1640).
+
+  # US English over prose, which is where most of this repository is.
+  # `.golangci.yml` sets `locale: US` and AGENTS.md cites it as enforced, but
+  # golangci-lint reaches Go files and nothing else, so every `.md` under
+  # docs/ was outside the rule it is cited for — #541 found British spellings
+  # sitting in the spec with the linter green. The Go half stays where it is;
+  # this is the other half.
+  #
+  # Report-only — no `-w`. Unlike gofumpt above, misspell *can* reach the
+  # inside of a string, so an autofixing pass here could rewrite the text of a
+  # recorded measurement or a corpus snippet, which is exactly the class of
+  # change #1267 is about. The generated record is held out as well, for the
+  # same reason the two rewriting hooks above hold it out.
+  #
+  # Two words are exempt, and neither is prose. `colour` is one shell's
+  # parameter *name* — `.golangci.yml` says why at more length — and
+  # `cancelled` is the Agent Client Protocol's spelling of a `stopReason`,
+  # already carrying a `//nolint:misspell` at each of its five sites in Go.
+  # The prose in docs/design/acp.md is about that value, and a corrected
+  # sentence beside an uncorrected literal reads worse than either.
+  - repo: https://github.com/golangci/misspell
+    rev: v0.8.0
+    hooks:
+      - id: misspell
+        args: [-locale, US, -i, "colour,cancelled", -error]
+        files: \.(md|ya?ml)$
+        exclude: ^docs/spec/measurements\.md$
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0

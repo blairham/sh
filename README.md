@@ -96,7 +96,7 @@ needs no Go at all.
       grammar/                per-construct specs
     cmd/shfmt                 the formatter — every dialect the parser reads
 
-## Licence
+## License
 
 Apache-2.0. See `LICENSE` and `NOTICE`.
 

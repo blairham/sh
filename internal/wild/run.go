@@ -88,7 +88,7 @@ func containmentPolicy(dir string) string {
 type RunResult struct {
 	Path string
 	Args []string
-	// Ours and Theirs are what each shell produced, already normalised.
+	// Ours and Theirs are what each shell produced, already normalized.
 	Ours, Theirs string
 	// Status is each shell's exit status.
 	OurStatus, TheirStatus int
@@ -132,7 +132,7 @@ func RunSweep(ctx context.Context, paths []string, ours UnderTest, reference str
 			rep.Ran++
 			res := RunResult{
 				Path: path, Args: args,
-				Ours: normalise(a.out, ours.Path, path), Theirs: normalise(b.out, reference, path),
+				Ours: normalize(a.out, ours.Path, path), Theirs: normalize(b.out, reference, path),
 				OurStatus: a.status, TheirStatus: b.status,
 			}
 			if res.Match() {
@@ -176,7 +176,7 @@ func repeats(ctx context.Context, reference, path string, args []string, timeout
 	if timedOut {
 		return false
 	}
-	return normalise(again.out, reference, path) == res.Theirs && again.status == res.TheirStatus
+	return normalize(again.out, reference, path) == res.Theirs && again.status == res.TheirStatus
 }
 
 type outcome struct {
@@ -261,12 +261,12 @@ func asExitError(err error, target **exec.ExitError) bool {
 	return ok
 }
 
-// normalise removes what is true of the machine rather than of the shell.
+// normalize removes what is true of the machine rather than of the shell.
 //
 // The shell's own path appears in its diagnostics, and the two shells have
 // different ones — comparing those would report a difference on every script
 // that fails, which is most of the interesting ones.
-func normalise(out, shell, script string) string {
+func normalize(out, shell, script string) string {
 	// The full path only. Replacing the base name as well was too eager: it
 	// turned `GNU bashbug` into `GNU <shell>bug` and reported a difference
 	// between two identical outputs.

@@ -15,7 +15,7 @@ run:
   # directory, so pointing GOLANGCI_LINT_CACHE somewhere per-worktree does not
   # move it and does not help. Two runs with private cold caches still collide.
   #
-  # The lock exists to serialise writers to the shared cache, and the cache no
+  # The lock exists to serialize writers to the shared cache, and the cache no
   # longer needs it. Its keys are hashed over module-relative paths and the
   # issues it stores carry module-relative positions that are re-anchored on
   # read, so an entry written by one checkout is correct for another; the store

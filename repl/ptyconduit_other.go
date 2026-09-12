@@ -15,7 +15,7 @@ import (
 //
 // The default is "capture where a terminal can be put behind it", so a
 // platform that cannot put one behind it captures nothing — which is the
-// behaviour every platform had before the conduit existed, kept here rather
+// behavior every platform had before the conduit existed, kept here rather
 // than degraded into the pipe-wrapping capture that costs a child its
 // terminal. A session that wants that anyway still asks for it by name.
 type ptyConduit struct{}

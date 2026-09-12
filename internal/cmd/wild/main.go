@@ -73,7 +73,7 @@ func main() {
 		*reference = byDefault
 	}
 	// Resolved to a path before it is used, so a diagnostic naming the shell
-	// can be recognized and so normalise is never handed a bare word. A name
+	// can be recognized and so normalize is never handed a bare word. A name
 	// that is not on PATH is left as it was and fails where it is used, which
 	// says more than a failure here would.
 	if p, err := exec.LookPath(*reference); err == nil {

@@ -197,7 +197,7 @@ only the status is contested — the useful reminder being that a probe
 written to measure one axis reported on two, and the universal half was
 the half the interpreter had wrong.
 
-It was then measured a second time and generalised. A readonly
+It was then measured a second time and generalized. A readonly
 reassignment and a `shift` past the end are unrelated to arithmetic and
 to each other, and every shell gives all three failures the *same*
 status — dash 2, the rest 1. The split belongs to the shell, not to the
@@ -1823,7 +1823,7 @@ a deliberate divergence, since all four accept `trap … KILL` and then
 never fire it, and it keeps its own wording rather than borrowing the
 dialect's complaint about a word that names nothing.
 
-## A measured non-conflict, recorded so it is not over-generalised
+## A measured non-conflict, recorded so it is not over-generalized
 
 **zsh splits an unquoted command substitution**, exactly like the other
 three, even though it does not split a parameter expansion:
@@ -2592,7 +2592,7 @@ through `os/exec` would carry it either, because `ExtraFiles` is files.
 `ExecOpenedFdReachesACommand`. Four of the five hand it over and ksh93
 keeps it, which is the shape of a conflict rather than a subset: there is
 no reading under which one answer contains the other, so it is a field on
-the vector rather than a core answer with a dialect apologising for it.
+the vector rather than a core answer with a dialect apologizing for it.
 
 **POSIX decides nothing.** The Shell Command Language says which of the
 standard descriptors a utility is entered with and is silent about the
@@ -3085,8 +3085,8 @@ begin. A `}` cannot be an argument there, so the only thing it can be doing
 after `echo hi` is closing the group — and after `echo` on its own it is
 closing nothing.
 
-Modelled as `CloseBraceAlwaysReserved`, a grammar flag, it gets both halves.
-Modelled as "brace groups may omit their terminator" it would have got the
+Modeled as `CloseBraceAlwaysReserved`, a grammar flag, it gets both halves.
+Modeled as "brace groups may omit their terminator" it would have got the
 first and left `echo }` printing a brace. This one was in the axes table as
 measured and had never been built: the parser rejected `{ echo hi }`, which
 is a valid zsh script.
@@ -4022,7 +4022,7 @@ of `localoptions` — measured, that option leaves a function's trap installed,
 and the save this one takes is per condition and taken at the modification
 rather than at the call. `multios`, `cshnullcmd` and `shnullcmd` are the
 eighth, ninth and tenth (#1779), and they left together because they are two
-questions in one neighbourhood: `multios` is zsh's name for the axis that
+questions in one neighborhood: `multios` is zsh's name for the axis that
 sends a stream to every target it names and reads it from every source, and
 the other two are what a command that is only redirections runs — csh's
 reading refuses it, sh's runs `:`, and both are reached by pointing the
@@ -4343,7 +4343,7 @@ the three shells that have it — bash says "syntax error in conditional
 expression" or "unexpected EOF", ksh93 names either `[[` or the token, zsh
 names the token — and we say "expected ]]" to all of them. That gap predates
 this change and is only visible through it in one case: where zsh refuses a
-bare `|`, we refuse it too and say something else. The behaviour matches; the
+bare `|`, we refuse it too and say something else. The behavior matches; the
 wording does not.
 
 ## What `=~` captured
@@ -6352,7 +6352,7 @@ ksh93 has the same letter for a different attribute: file name mapping,
 which does *not* hide. `typeset -H h=hid` there lists back as
 `typeset -H h=hid` — the value **and** the flag — and a bare listing
 calls the attribute `filename`. That letter stays refused by name; it is
-not the zsh one under another spelling, and modelling the two as one
+not the zsh one under another spelling, and modeling the two as one
 attribute with two renderings would be inventing a shared thing that is
 not there. bash refuses `-H` outright, under `declare` and `typeset`
 alike, with its usage line and 2; dash has no such builtin. There is
@@ -6443,7 +6443,7 @@ line and 2. **ksh93 is the column that makes this a letter rather than an
 attribute**: `typeset -T tname` declares a *type* there, so it takes
 `typeset -T TS ts` without a word and leaves `ts` empty — the same letter,
 silently doing something else, which is why it stays refused by name there
-rather than being modelled as one attribute with two readings. So the
+rather than being modeled as one attribute with two readings. So the
 letter lives in `Semantics.DeclareOptions` and `LocalOptions`, and the
 mechanism is `interp/tiedscalar.go`: a pair recorded under both names, and
 each of the two choke points — `setVarAs` and `storeArray` — mirroring

@@ -293,4 +293,4 @@ meaning of its own: measured,
 `HISTIGNORE=&` drops a line identical to the one before it, exactly as
 `ignoredups` does. That is not implemented — a pattern of `&` is matched
 literally here — because it is a second spelling of a rule the same
-variable's neighbour already has.
+variable's neighbor already has.

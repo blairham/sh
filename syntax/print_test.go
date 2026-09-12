@@ -209,7 +209,7 @@ func TestABackgroundStatementBeforeAClosingWord(t *testing.T) {
 // anything and the one that says it back: `function f { echo hi; }` listed
 // with `typeset -f` there is `function f { echo hi; };` and `f() { echo hi;
 // }` is `f() { echo hi; };`. Measured 2026-09-08 on ksh93u+ 2012-08-01. bash
-// 5.3, bash 3.2 and zsh 5.9.2 all normalise both to `f () `, which they may:
+// 5.3, bash 3.2 and zsh 5.9.2 all normalize both to `f () `, which they may:
 // `typeset` declares a local in either body there, so nothing distinguishes
 // them to be lost. dash has no `function` keyword at all and no tree here
 // can carry the flag under its grammar.

@@ -48,7 +48,7 @@ A spec entry with no citation is a guess and does not belong here.
 
 ## The two kinds of difference
 
-This distinction drives the whole architecture and is worth internalising
+This distinction drives the whole architecture and is worth internalizing
 before writing any spec entry:
 
 - **Grammar differences are additive.** A construct either parses in a

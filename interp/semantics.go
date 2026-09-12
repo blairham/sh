@@ -572,7 +572,7 @@ type Semantics struct {
 	// FatalErrorStatusIsOne is the status a fatal shell error carries.
 	// True in bash, ksh93 and zsh; dash alone exits 2.
 	//
-	// It began as an arithmetic-only axis and was generalised on evidence:
+	// It began as an arithmetic-only axis and was generalized on evidence:
 	// a failed arithmetic expansion, a readonly reassignment and a `shift`
 	// past the end are three unrelated errors, and every shell gives all
 	// three the same status. The split is a property of the shell, not of

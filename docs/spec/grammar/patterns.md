@@ -878,7 +878,7 @@ a word, and the token after the array is an argument in neither case.
 
 Nothing about matching changes with it: `files=( (#i)a )` parses and the
 flag is then an unimplemented one, so the pattern reaches the filesystem
-as written and misses. `(#i)` and its neighbours are the `(#q…)` form
+as written and misses. `(#i)` and its neighbors are the `(#q…)` form
 listed under "read and not implemented" below (#1053); this was only ever
 about the parse (#1149).
 

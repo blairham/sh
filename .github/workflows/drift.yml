@@ -2,7 +2,7 @@ name: Drift
 
 # The panel is real shell binaries, and they change without anyone here
 # touching a file: a runner image ships a new bash, a distribution patches
-# dash, and behaviour this project recorded as fact quietly stops being one.
+# dash, and behavior this project recorded as fact quietly stops being one.
 #
 # The pull-request oracle job cannot catch that. It only runs when code
 # changes, which is the wrong clock — drift happens on the shells' timetable,

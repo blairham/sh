@@ -11,7 +11,7 @@ Read it before writing code. It is short on purpose.
 ## Why this exists
 
 There is a mature incumbent in this space (`mvdan.cc/sh`, BSD-3-Clause).
-Its licence is permissive and using it would have been legal and cheap —
+Its license is permissive and using it would have been legal and cheap —
 the obligation is a retained notice. **We are not writing this to escape
 that notice.** We are writing it because we want a substrate whose core
 is the common denominator of real shells and whose dialects are

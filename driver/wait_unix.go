@@ -88,34 +88,37 @@ func wait(pid, flags int) (interp.Wait, bool, error) {
 
 // stoppedBy is the signal that stopped a child, and whether one did.
 //
-// This is decoded here rather than taken from syscall.WaitStatus.Stopped,
-// which answers it for every stop signal *except the one a script is most
-// likely to send*:
+// This is decoded here rather than taken from syscall.WaitStatus.Stopped
+// because that call answers it differently on the two platforms this runs on,
+// and one of the two answers is no use to a shell. syscall_linux.go has
+//
+//	func (w WaitStatus) Stopped() bool { return w&0xFF == stopped }
+//
+// and syscall_bsd.go — macOS included — has
 //
 //	func (w WaitStatus) Stopped() bool { return w&mask == stopped && Signal(w>>shift) != SIGSTOP }
 //
-// The exclusion is deliberate on the standard library's side — on the BSDs a
-// continued child is reported through the same encoding, so the package
-// reads a wait status carrying SIGSTOP as Continued and not as Stopped —
-// and for a shell it is simply the wrong answer. `kill -STOP` is how a
-// script stops a job; ^Z sends SIGTSTP and was therefore the only stop this
-// shell ever saw.
+// The BSD exclusion is deliberate on that side: those kernels report a
+// *continued* child through the same encoding, so the package reads a status
+// carrying SIGSTOP as Continued rather than as Stopped. For a shell it is the
+// wrong answer, because `kill -STOP` is how a script stops a job — and ^Z
+// sends SIGTSTP, which is why this shell only ever saw the stop it was not
+// going to be asked about.
 //
-// What it cost is #2227. A foreground command a script stopped came back as
-// neither stopped nor exited nor signaled, so the wait fell through to "it
-// ended", os/exec's own Wait was called on a process that was still there,
+// What it cost is #2227, on macOS. A foreground command a script stopped came
+// back as neither stopped nor exited nor signaled, so the wait fell through to
+// "it ended", os/exec's own Wait was called on a process that was still there,
 // and the shell sat in it for as long as something outside took to resume or
-// kill the job. A `wait` for a background job in the same state waited just
-// as long. Neither is a loop and neither leaves a frame of ours on a CPU,
-// which is why the instrument that found it recorded a shell idle in
+// kill the job. A `wait` for a background job in the same state waited just as
+// long. Neither is a loop and neither leaves a frame of ours on a CPU, which
+// is why the instrument that found it recorded a shell idle in
 // __wait4_nocancel with nothing running.
 //
-// The test is the C macro's — WIFSTOPPED is `(status & 0xff) == 0x7f` — and
-// it is unambiguous here because this package never asks for WCONTINUED: a
+// The test is the C macro's — WIFSTOPPED is `(status & 0xff) == 0x7f` — which
+// is what Linux already does and what the BSDs do apart from the one signal.
+// It is unambiguous here because this package never asks for WCONTINUED: a
 // continued child is only ever reported to a wait that requested it, and
-// neither of the two calls above does. The one encoding that could collide
-// is Linux's WIFCONTINUED, 0xFFFF, which is excluded rather than reasoned
-// about.
+// neither of the two calls above does.
 func stoppedBy(ws syscall.WaitStatus) (syscall.Signal, bool) {
 	const (
 		stopped   = 0x7f

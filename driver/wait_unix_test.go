@@ -6,6 +6,7 @@
 package driver
 
 import (
+	"runtime"
 	"syscall"
 	"testing"
 )
@@ -37,26 +38,31 @@ func TestAStoppedChildIsSeenWhateverStoppedIt(t *testing.T) {
 	}
 }
 
-// TestTheStandardLibraryAnswersThisWrongForSIGSTOP is the witness for why the
-// function above exists at all, and it is a test of the standard library
-// rather than of us:
+// TestTheStandardLibraryIsWhyThisExists is a test of the standard library
+// rather than of us, and it is where the platform split is written down.
 //
-//	func (w WaitStatus) Stopped() bool { return w&mask == stopped && Signal(w>>shift) != SIGSTOP }
+//	linux:  func (w WaitStatus) Stopped() bool { return w&0xFF == stopped }
+//	bsd:    func (w WaitStatus) Stopped() bool { return w&mask == stopped && Signal(w>>shift) != SIGSTOP }
 //
-// The exclusion is deliberate on that side — on the BSDs a *continued* child
-// is reported through the same encoding, so the package reads a status
-// carrying SIGSTOP as Continued — and for a shell it is the wrong answer:
-// `kill -STOP` is how a script stops a job. ^Z sends SIGTSTP, which is why
-// this went unnoticed, and why a test of that signal alone would have gone on
-// saying nothing.
-//
-// If a future Go changes its mind here this fails, and that is the point: the
-// day it does, stoppedBy is dead weight rather than a fix.
-func TestTheStandardLibraryAnswersThisWrongForSIGSTOP(t *testing.T) {
+// So SIGSTOP is answered on Linux and excluded on the BSDs, macOS included —
+// which is a fact this first got wrong in the other direction, claiming the
+// exclusion was Go-wide until the Linux runner said otherwise. Both halves are
+// asserted, so the day either platform changes its mind this fails: if the
+// BSDs start answering it, stoppedBy is dead weight; if Linux stops, the
+// comment above it is wrong.
+func TestTheStandardLibraryIsWhyThisExists(t *testing.T) {
 	stop := syscall.WaitStatus(int(syscall.SIGSTOP)<<8 | 0x7f)
-	if stop.Stopped() {
-		t.Error("syscall.WaitStatus.Stopped now reports a SIGSTOP stop; stoppedBy can go")
+	switch runtime.GOOS {
+	case "linux":
+		if !stop.Stopped() {
+			t.Error("Linux's syscall.WaitStatus.Stopped now excludes SIGSTOP too")
+		}
+	default:
+		if stop.Stopped() {
+			t.Error("this platform's syscall.WaitStatus.Stopped now reports a SIGSTOP stop; stoppedBy can go")
+		}
 	}
+	// Unanimous, and the reason a test of ^Z's signal alone said nothing.
 	tstp := syscall.WaitStatus(int(syscall.SIGTSTP)<<8 | 0x7f)
 	if !tstp.Stopped() {
 		t.Error("syscall.WaitStatus.Stopped no longer reports a SIGTSTP stop, which it always has")

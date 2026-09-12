@@ -176,3 +176,131 @@ func TestAnASCIIValueNeverAsksTheUnsetLocaleAxis(t *testing.T) {
 		t.Errorf("got %q, want %q with no question asked", got, "ABC")
 	}
 }
+
+// TestEverySiteThatChangesCaseAsksTheSameLocale is the whole of #2027: four
+// sites change case, and all four narrow to ASCII in the C locale.
+//
+// It is one table over four spellings rather than four tests, because the
+// defect was **drift between the sites**, not any one of them being wrong on
+// its own. #367 brought the two operators under the locale policy and left
+// the attribute and the `:u`/`:l` modifier beside them calling
+// strings.ToUpper directly, and nothing failed for it — each site had its own
+// test and each test agreed with its own site. A test per site is exactly the
+// shape that cannot see this class of bug.
+//
+// Measured 2026-09-11 under LC_ALL=C, uppercasing `café`: bash 5.3.15 gives
+// `CAFé` for `declare -u`, ksh93u+ gives `CAFé` for `typeset -u`, and zsh
+// 5.9.2 gives `CAFé` for both `typeset -u` and `${s:u}`. The panel agrees, so
+// this is a correction and not an axis.
+func TestEverySiteThatChangesCaseAsksTheSameLocale(t *testing.T) {
+	sites := []struct {
+		name   string
+		src    string
+		enable func(*syntax.Dialect)
+		before func(*Runner)
+	}{{
+		name:   "the operator",
+		src:    `x=café; echo "${x^^}"`,
+		enable: func(d *syntax.Dialect) { d.ParamCaseChange = true },
+	}, {
+		name:   "the expansion flag",
+		src:    `x=café; echo "${(U)x}"`,
+		enable: func(d *syntax.Dialect) { d.ParamExpansionFlags = true },
+	}, {
+		name: "the attribute, folded at assignment",
+		src:  `typeset -u x=café; echo "$x"`,
+		before: func(r *Runner) {
+			sem := *r.Semantics
+			sem.DeclareOptions = "aAilprux"
+			r.Semantics = &sem
+		},
+	}, {
+		name: "the modifier",
+		src:  `x=café; echo "${x:u}"`,
+		before: func(r *Runner) {
+			sem := *r.Semantics
+			sem.SubstringRangeReadsModifiers = Yes
+			r.Semantics = &sem
+		},
+	}}
+	locales := []struct {
+		name string
+		vars map[string]string
+		want string
+	}{
+		{"C narrows to ASCII", map[string]string{"LC_ALL": "C"}, "CAFé"},
+		{"POSIX is the same narrowing", map[string]string{"LANG": "POSIX"}, "CAFé"},
+		{"UTF-8 cases beyond it", map[string]string{"LC_ALL": "en_US.UTF-8"}, "CAFÉ"},
+	}
+	for _, site := range sites {
+		for _, loc := range locales {
+			t.Run(site.name+", "+loc.name, func(t *testing.T) {
+				d := syntax.Core()
+				if site.enable != nil {
+					site.enable(&d)
+				}
+				f, err := syntax.Parse(site.src, d)
+				if err != nil {
+					t.Fatalf("parse %q: %v", site.src, err)
+				}
+				var buf bytes.Buffer
+				sem := permissive()
+				vars := map[string]string{}
+				for k, v := range loc.vars {
+					vars[k] = v
+				}
+				r := newTestRunner(t, &Runner{
+					Stdout: &buf, Stderr: &buf, Semantics: &sem,
+					Vars: vars, Env: []string{},
+				})
+				if site.before != nil {
+					site.before(r)
+				}
+				if _, rerr := r.Run(context.Background(), f); rerr != nil {
+					t.Fatal(rerr)
+				}
+				if got := strings.TrimSpace(buf.String()); got != loc.want {
+					t.Errorf("%s: got %q, want %q", site.src, got, loc.want)
+				}
+			})
+		}
+	}
+}
+
+// The lower-case half, so the narrowing is not read as a property of the
+// upper-case direction alone — `unicode.ToLower` is the other call each of
+// these sites was making bare.
+func TestLowerCaseNarrowsAtEverySiteToo(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the operator", `x=CAFÉ; echo "${x,,}"`, "cafÉ"},
+		{"the attribute", `typeset -l x=CAFÉ; echo "$x"`, "cafÉ"},
+		{"the modifier", `x=CAFÉ; echo "${x:l}"`, "cafÉ"},
+		// No array row: measured under LC_ALL=C, `typeset -la a=(CAFÉ)` is
+		// `CAFÉ` in zsh 5.9.2 and here, because whether the attribute reaches
+		// an element at all is a separate unanswered axis. This is about
+		// which case map applies once it does.
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := syntax.Core()
+			d.ParamCaseChange = true
+			f, err := syntax.Parse(tc.src, d)
+			if err != nil {
+				t.Fatalf("parse %q: %v", tc.src, err)
+			}
+			var buf bytes.Buffer
+			sem := permissive()
+			sem.SubstringRangeReadsModifiers = Yes
+			sem.DeclareOptions = "aAilprux"
+			r := newTestRunner(t, &Runner{
+				Stdout: &buf, Stderr: &buf, Semantics: &sem,
+				Vars: map[string]string{"LC_ALL": "C"}, Env: []string{},
+			})
+			if _, rerr := r.Run(context.Background(), f); rerr != nil {
+				t.Fatal(rerr)
+			}
+			if got := strings.TrimSpace(buf.String()); got != tc.want {
+				t.Errorf("%s: got %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}

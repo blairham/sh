@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -4107,11 +4108,17 @@ func (r *Runner) attributeFolded(name, value string) (string, bool) {
 	// The case attributes, folded at assignment the way the integer
 	// attribute evaluates there: `declare -l v; v=ABC` stores `abc` in both
 	// shells that spell the letter.
+	//
+	// Under the same locale policy as the case-changing operators, which this
+	// site did not follow until #2027: measured under LC_ALL=C, all three of
+	// bash 5.3.15, ksh93u+ and zsh 5.9.2 answer CAFé for `declare -u s=café`
+	// and we answered CAFÉ. caseChanged is the one place that narrowing is
+	// decided, so the attribute cannot drift from the operator again.
 	switch {
 	case r.lowered[name]:
-		value = strings.ToLower(value)
+		value = r.caseChanged(value, unicode.ToLower)
 	case r.uppered[name]:
-		value = strings.ToUpper(value)
+		value = r.caseChanged(value, unicode.ToUpper)
 	}
 	return value, true
 }

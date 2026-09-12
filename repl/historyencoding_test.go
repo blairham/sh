@@ -4,6 +4,8 @@
 package repl
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 )
@@ -62,12 +64,21 @@ func TestDecodingAHistoryFile(t *testing.T) {
 		{
 			// A command that merely looks like a header is not one. Each of
 			// these fails a different part of the match, which is why they are
-			// one row: no `: ` at all, a non-numeric field, an empty field, and
-			// no `;` to end it.
+			// one row: no `: ` at all, a non-numeric first field, an empty
+			// first field, no `;` to end it, a non-numeric second field, and an
+			// empty second field. Both numbers are checked, and a mutation run
+			// is what asked — nothing here separated the two until the last
+			// two entries were added.
 			"a command that resembles a header is left alone",
 			zshLikeFile,
-			[]string{":100:0;x", ": abc:0;x", ": :0;x", ": 100:0 no semicolon"},
-			[]string{":100:0;x", ": abc:0;x", ": :0;x", ": 100:0 no semicolon"},
+			[]string{
+				":100:0;x", ": abc:0;x", ": :0;x",
+				": 100:0 no semicolon", ": 100:abc;x", ": 100:;x",
+			},
+			[]string{
+				":100:0;x", ": abc:0;x", ": :0;x",
+				": 100:0 no semicolon", ": 100:abc;x", ": 100:;x",
+			},
 		},
 		{
 			// The fact that is *not* the option's: a multi-line command is
@@ -147,5 +158,29 @@ func TestABlankLineInsideAnEntrySurvives(t *testing.T) {
 	if got, want := nonBlank([]string{"echo one", "", "   ", "echo two"}),
 		[]string{"echo one", "echo two"}; !slices.Equal(got, want) {
 		t.Errorf("nonBlank = %q, want %q", got, want)
+	}
+}
+
+// The blanks are dropped after the decoding, and that ordering is a property
+// of load rather than of decodeEntries — so it is asserted through a file.
+//
+// A mutation run asked for this one: swapping the two in load broke nothing,
+// because every other test here calls the decoder directly.
+func TestLoadDropsBlanksAfterDecodingAndNotBefore(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hist")
+	// A `for` loop with an empty line inside it. Dropping blanks first would
+	// join `for i in 1 2` to `done` and hand back a line nobody typed.
+	if err := os.WriteFile(path, []byte("echo one\nfor i in 1 2\\\n\\\ndone\n\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := historyFile{
+		path: path, size: 50, file: 50,
+		encoding: historyEncoding{continuesOnABackslash: true},
+	}
+	got := h.load(t.Context())
+	want := []string{"echo one", "for i in 1 2\n\ndone"}
+	if !slices.Equal(got, want) {
+		t.Errorf("load = %q, want %q", got, want)
 	}
 }

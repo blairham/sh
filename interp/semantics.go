@@ -7985,6 +7985,36 @@ type Semantics struct {
 	// reaches it, and sixteen corpus rows did (#2345).
 	AliasBadOptionFatal Answer
 
+	// EarlierDeclarationLetterBlocksALaterPlus makes a plus word that follows
+	// a minus word on one declaration take nothing off: `typeset -i +x e`
+	// leaves `e` exported and `typeset -i +i n` leaves `n` an integer. True
+	// in ksh93 alone.
+	//
+	// The order is the field's name because the order is the rule. Measured
+	// 2026-09-12 on ksh93u+ 2012-08-01, where `typeset +x -i e` *does*
+	// unexport and `typeset +i -i n` *does* leave the attribute off — so it
+	// is a minus **before** a plus, not both being present. A `+x` with no
+	// minus beside it unexports there as it does everywhere.
+	//
+	// Asked only where both signs were written and in that order, which is
+	// the only shape the panel splits on — and it splits three ways over the
+	// integer letter:
+	//
+	//	              typeset -i +i n     typeset +i -i n
+	//	ksh93u+       integer            not
+	//	bash 5.3.15   not                not
+	//	zsh 5.9.2     not                integer
+	//
+	// So ksh93 takes the first occurrence, zsh the last, and bash removes
+	// whichever way round they are written. This field answers the first
+	// column; the second is left to the ordinary last-sign rule, which is
+	// zsh's exactly and bash's in one of the two orders. That disagreement is
+	// recorded rather than modeled: no script writes both signs of one
+	// letter, and the shape a real script reaches is the first column —
+	// `integer` is `typeset -li` in ksh93, so `integer +i n` *is*
+	// `typeset -li +i n` there (#2345).
+	EarlierDeclarationLetterBlocksALaterPlus Answer
+
 	// BuiltinReportsEveryBadOption reports every letter of a bundle the
 	// builtin does not have, rather than stopping at the first. True in
 	// ksh93 alone: `typeset -Uz f` says `-U` and then `-z`, and `cd -dash`

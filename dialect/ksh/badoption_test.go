@@ -143,3 +143,57 @@ func TestARefusedFunctionNameLosesItsQuotes(t *testing.T) {
 		}
 	}
 }
+
+// The three names that reach a *builtin* through the preset table, each of
+// which was answering something other than what ksh93 answers once the alias
+// put the word in front of it. All three are gaps the aliases exposed rather
+// than caused: nothing else in the tree spelled `typeset -li`, `whence -v -p`
+// or `alias -t` (#2345).
+func TestThePresetAliasesReachTheRightBuiltin(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		// `integer` is `typeset -li`, and `-l` beside `-i` is a *size*
+		// rather than a case attribute: the name is an integer and the
+		// assignment evaluates. bash 5.3.15 and zsh 5.9.2 answer the same.
+		{"integer evaluates", `typeset -li i=3+4; echo "[$i]"`, "[7]\n"},
+		{"integer over text", `typeset -li v=AB; echo "[$v]"`, "[0]\n"},
+		// And a *later* declaration is the other question, where the three
+		// disagree: the case letter wins here, which is the axis this one
+		// must not be folded into.
+		{"a later case letter still wins", `typeset -i i; typeset -l i; i=3+4; echo "[$i]"`, "[3+4]\n"},
+		// `type` is `whence -v`, so `type -p` is `whence -v -p`: the later
+		// of the two letters decides the wording, and `-p` last is silent.
+		{"the later letter words it", "whence -vp nosuchzz-qq; echo st=$?", "st=1\n"},
+		{"and the other way round", "whence -pv nosuchzz-qq; echo st=$?", "ksh: whence: nosuchzz-qq: not found\nst=1\n"},
+		// `hash` is `alias -t --`, and the tracked table is the command
+		// cache: any operand is a silent success here.
+		{"hash bare", "alias -t --; echo st=$?", "st=0\n"},
+		{"hash of a builtin", "alias -t -- shift; echo st=$?", "st=0\n"},
+		{"hash of nothing", "alias -t -- nosuchcmd-xyz; echo st=$?", "st=0\n"},
+		{"hash -r", "alias -t -- -r; echo st=$?", "st=0\n"},
+	} {
+		out, _ := runKshWithPrelude(t, c.src)
+		if out != c.want {
+			t.Errorf("%s: %s = %q, want %q", c.name, c.src, out, c.want)
+		}
+	}
+}
+
+// A plus word that follows a minus word on one declaration takes nothing off.
+// The order is the rule: a plus word *first* removes as it does everywhere.
+//
+// Measured 2026-09-12 on ksh93u+ 2012-08-01. It is reachable because `integer`
+// is `typeset -li` here, so `integer +i n` is a mixed-sign declaration whether
+// or not anybody wrote one (#2345).
+func TestAPlusWordAfterAMinusWordTakesNothingOff(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{"the integer letter", `typeset -li n=5; typeset -li +i n; n=3+4; echo "[$n]"`, "[7]\n"},
+		{"a plus word alone still removes", `typeset -i n=5; typeset +i n; n=3+4; echo "[$n]"`, "[3+4]\n"},
+		{"the export letter", `typeset -li -x e=1; typeset -li +x e; export -p`, "export e=1\n"},
+		{"and alone it unexports", `typeset -x e=1; typeset +x e; export -p`, ""},
+	} {
+		out, _ := runKshWithPrelude(t, c.src)
+		if out != c.want {
+			t.Errorf("%s: %s = %q, want %q", c.name, c.src, out, c.want)
+		}
+	}
+}

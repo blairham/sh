@@ -673,6 +673,10 @@ func Semantics() interp.Semantics {
 	// dropped, and the octal and hex spellings agree. `Answer` has no room
 	// for it, so a value here would have to be one of the two wrong ones.
 	//
+	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
+	// declaration command to write the letter on. `typeset` is not a
+	// builtin here and `integer` is not a word, so neither sign of `-i`
+	// can be put to this shell at all (#2345).
 	// unanswered ReadonlyRecordsTheCompoundAttribute: this shell has no
 	// letter to ask it with (#2277). `readonly -a a` is `readonly: illegal
 	// option -a` and there is no `typeset` at all. The refusal our binary

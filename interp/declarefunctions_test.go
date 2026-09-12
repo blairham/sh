@@ -68,6 +68,9 @@ func declRunWith(t *testing.T, src string, set func(*Semantics), dg Diagnostics,
 	sem.TypeLetterAndAnArrayLiteralIsAnInconsistentType = No
 	sem.NumericAttributeReplacesTheCaseAttribute = No
 	sem.CaseAttributeReplacesTheNumericAttribute = No
+	// The plus word takes its letters off, which is three of the four —
+	// the exception is one dialect and its own suite says so.
+	sem.EarlierDeclarationLetterBlocksALaterPlus = No
 	sem.NumericAttributeReplacesTheArrayAttribute = No
 	sem.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = No
 	sem.AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = No

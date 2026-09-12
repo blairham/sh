@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -696,6 +697,7 @@ func Semantics() interp.Semantics {
 	// `alias` and `unalias` end the script over an option they do not have,
 	// the way a special builtin does, though POSIX marks neither.
 	s.AliasBadOptionFatal = interp.Yes
+	s.EarlierDeclarationLetterBlocksALaterPlus = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
 	s.ArithInvalidOctalDigitIsError = interp.No
@@ -2108,6 +2110,38 @@ func Apply(r *interp.Runner) {
 	// lists the table; each operand is a name to add, and one that is not
 	// already a builtin here is not found, at 1 — with the builtin's own
 	// name as the whole prefix, measured.
+	// `-t` is the *tracked* alias table, which is a command cache and not an
+	// alias table at all: `hash` is spelled `alias -t --` here, and this
+	// shell ships that spelling as one of its preset aliases. So the letter
+	// is answered by the builtin that already models the cache rather than
+	// by a second implementation of it — measured, `alias -t x` and
+	// `alias -t -- -r` are silent successes for any operand, which is what
+	// `hash` answers in this dialect.
+	//
+	// What is not modeled either way is the *population* of the table by
+	// running a command: real ksh93 lists `ls=/bin/ls` after `ls` has run
+	// and this shell lists nothing. That gap is the `hash` builtin's and
+	// predates the letter reaching it.
+	if alias, ok := r.Builtin("alias"); ok {
+		r.Register("alias", func(rr *interp.Runner, ctx context.Context, args []string) int {
+			for i, a := range args {
+				if a == "--" || !strings.HasPrefix(a, "-") || a == "-" {
+					break
+				}
+				if !strings.ContainsRune(a[1:], 't') {
+					continue
+				}
+				rest := append(append([]string{}, args[:i]...), args[i+1:]...)
+				rest = trimTrackedSeparator(rest, strings.Replace(a, "t", "", 1))
+				hash, ok := rr.Builtin("hash")
+				if !ok {
+					break
+				}
+				return hash(rr, ctx, rest)
+			}
+			return alias(rr, ctx, args)
+		})
+	}
 	r.Register("builtin", func(rr *interp.Runner, _ context.Context, args []string) int {
 		if len(args) == 0 {
 			for _, name := range rr.BuiltinNames() {
@@ -2167,4 +2201,23 @@ func Apply(r *interp.Runner) {
 	// put functions there at all and a second arrangement would be a claim
 	// about nothing.
 	r.SetFunctionLayout(FunctionLayout(), FunctionLayout())
+}
+
+// trimTrackedSeparator puts back the option word `-t` was taken out of, and
+// drops the `--` that `hash` has no letters to need.
+//
+// `hash` is `alias -t --` and `hash -r` is `alias -t -- -r`, so the operands
+// reaching the cache are everything after the separator — including a word
+// that looks like an option, which is why the separator goes rather than
+// being handed on.
+func trimTrackedSeparator(args []string, remainder string) []string {
+	if remainder != "-" && remainder != "+" {
+		args = append([]string{remainder}, args...)
+	}
+	for i, a := range args {
+		if a == "--" {
+			return args[i+1:]
+		}
+	}
+	return args
 }

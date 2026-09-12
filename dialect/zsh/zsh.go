@@ -1479,6 +1479,7 @@ func Semantics() interp.Semantics {
 	// `alias` is no more special here than POSIX makes it: the complaint is
 	// said and the next command runs. Measured with `alias -g x`.
 	s.AliasBadOptionFatal = interp.No
+	s.EarlierDeclarationLetterBlocksALaterPlus = interp.No
 	// Nor does a redirection that cannot be made end anything: the message
 	// is printed and the script runs on. The starting value only — `emulate
 	// sh` and `emulate ksh` move it to the POSIX answer, and `emulate zsh`

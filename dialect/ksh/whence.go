@@ -119,8 +119,17 @@ func whenceOptions(r *interp.Runner, args []string) (names []string, opts string
 func whenceOne(r *interp.Runner, ctx context.Context, name, opts string) int {
 	quiet := strings.ContainsRune(opts, 'q')
 	verbose := strings.ContainsRune(opts, 'v')
-	if strings.ContainsRune(opts, 'p') {
-		return whencePath(r, name, verbose, quiet)
+	if lastP := strings.LastIndexByte(opts, 'p'); lastP >= 0 {
+		// `-p` always restricts the answer to the PATH search. What the
+		// *later* of the two letters decides is only the wording, and it
+		// decides it both ways: measured 2026-09-12 on ksh93u+ 2012-08-01,
+		// `whence -pv ls` is the tracked-alias sentence and `whence -vp ls`
+		// is the bare path, and on a name PATH does not hold `-pv` says
+		// `not found` where `-vp` says nothing at all. The comment this
+		// replaces had measured `-pv` alone and read it as "`-v` wins",
+		// which made `type -p`, an alias for `whence -v -p`, speak where
+		// this shell is silent (#2345).
+		return whencePath(r, name, strings.LastIndexByte(opts, 'v') > lastP, quiet)
 	}
 	if strings.ContainsRune(opts, 'a') {
 		// `-a` speaks in the sentences whether or not `-v` was written:
@@ -218,8 +227,9 @@ func whencePath(r *interp.Runner, name string, verbose, quiet bool) int {
 	path, ok := r.LookPath(name)
 	if !ok {
 		if verbose && !quiet {
-			// Measured: `-pv` on a name PATH does not hold says what `-v`
-			// says, where plain `-p` says nothing.
+			// The later letter's wording again: `whence -pv` on a name PATH
+			// does not hold says what `-v` says, where plain `-p` and
+			// `whence -vp` say nothing.
 			r.Diagnosef("whence: %s: not found\n", name)
 		}
 		return 1

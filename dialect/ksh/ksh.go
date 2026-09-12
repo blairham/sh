@@ -105,6 +105,12 @@ func Dialect() syntax.Dialect {
 	// parenthesized form is the rule above and is *wider* than this one, so
 	// the two spellings need two flags.
 	d.FunctionKeywordBodyMustBeBraceGroup = true
+
+	// Words after the keyword's name are a list of name references: they are
+	// read and discarded, so `function a b { … }` defines `a` alone and
+	// leaves `b` not found. See
+	// syntax.Dialect.FunctionKeywordReferenceList (#2014).
+	d.FunctionKeywordReferenceList = true
 	// `$"..."`, the locale-translatable string: with no catalog it is a
 	// plain double-quoted string with the `$` stripped. Not core, because
 	// dash and zsh keep the `$` as a literal.
@@ -1577,6 +1583,11 @@ func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	// ksh93 does not call this a bad substitution: it is a syntax error
 	// naming the character it could not read.
 	d.BadSubstitution, d.PromptBadSubstitution = parseWording(2, "`%[1]s' unexpected")
+	// A refusal with no wording of its own — the substrate's own sentence,
+	// which this shell still puts its line in front of. Measured from a
+	// script: `function a 1b { :; }` is `syntax error at line 1: invalid
+	// reference list`, where the other three print the sentence alone.
+	d.SyntaxError, d.PromptSyntaxError = parseWording(2, "%[1]s")
 	return d
 }
 

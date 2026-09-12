@@ -2023,6 +2023,39 @@ acceptable in every shell, which says the rule is about the body rather
 than about redirecting a function. Grammar flag:
 `FuncBodyTakesNoRedirection`, on for `ksh` alone.
 
+### How far a keyword body reaches
+
+**In zsh a body that is not a brace group takes the whole and-or list.**
+The brace group is the one shape that ends the declaration at its `}`;
+everything else swallows the `&&` and `||` after it. Measured 2026-09-12
+on zsh 5.9.2, and the *order* the two commands print in is the only
+thing that parts the two readings — both print `X` and `Y` at status 0:
+
+    function a; echo X && echo Y ⏎ a          X then Y   one body
+    function a { echo X; } && echo Y ⏎ a      Y then X   a continuation
+    function a; echo X | cat && echo Y ⏎ a    X then Y   one body
+    function a; if true; then echo X; fi && echo Y ⏎ a
+                                              X then Y   one body
+
+The `if` row is what says "compound" is not the rule: the brace group is
+special and nothing else is. The **hybrid** spelling goes with the
+keyword rather than with the parentheses — `function a() echo X && echo
+Y` prints X then Y, where the bare `a() echo X && echo Y` prints Y then
+X — so this is asked where the keyword was written.
+
+A `&` ends the list as it ends any and-or, and then backgrounds the whole
+declaration: `function a; echo X &` leaves `a` undefined in the shell
+that ran it, the definition having happened in the subshell.
+
+Grammar flag: `FunctionKeywordBodyIsAnAndOrList`, zsh alone. `FuncDecl`'s
+body is a command and an and-or list is not one, so a list of more than
+one pipeline is wrapped in a brace group — the same program written back,
+since `function a { echo X && echo Y; }` reads to the same tree. A body
+of exactly one command is left bare, because it already was one and
+wrapping it would change what every existing definition prints back as.
+Corpus: `cmd/function-keyword-body-takes-the-and-or-list` and
+`cmd/function-keyword-brace-body-ends-the-declaration` (#1832).
+
 ### A body that never began
 
     f() ;     dash   Syntax error: ";" unexpected
@@ -2126,10 +2159,16 @@ which remove the quotes before reading the name, and is
 `` `'f'': not a valid identifier `` in every bash, which takes the word
 as its source text. So the panel splits two against three there where
 the punctuated names split it one against four, and no set of name
-characters can be what bash objected to — `f` is in every set. This
-parser removes the quotes in all of its dialects, which is right for
-zsh and ksh and wrong for bash and sh; that is #1566, measured as
-`cmd/function-keyword-with-a-quoted-ordinary-name`.
+characters can be what bash objected to — `f` is in every set.
+
+Grammar flag: `FunctionNameIsSourceText`, bash alone. It is not a set of
+names and not a stage: it says what the *name* is, and the word it
+refuses then travels on `FuncDecl.RefusedName` as it always did, which
+is why the wording is already right. Every other spelling of the same
+fact answers the same way — `function "f"`, `function f""` and
+`function \f` are all `not a valid identifier` naming the source text,
+and `function f` and `function :f` are still definitions. Measured
+2026-09-12 as `cmd/function-keyword-with-a-quoted-ordinary-name` (#1566).
 
 **The POSIX `name()` form takes any word too**, and it is a second site
 with its own panel. `'a b'() { … }`, `a\ b() { … }`, `''() { … }`,
@@ -2143,8 +2182,17 @@ name`; **dash alone refuses to parse it**, `Bad function name` at 2. So
 five of the six read the definition and four of those refuse the name
 where it runs. Grammar flag `FunctionNameIsAnyWord`, on for `zsh` and
 for `ksh` — see the quoting control below for why the second one is
-there. The three bash columns keep declining while parsing, at their own
-wording, which is #1566.
+there.
+
+The three bash columns reach the same place by the other route:
+`FunctionNameIsSourceText` above is asked of this spelling too, so a
+quoted word before `()` is a definition there whose *name* is the word as
+written, and `'q'() { … }`, `a\ b() { … }`, `''() { … }` and
+`"a b"() { … }` are all read and then refused where they run. Which
+requires `FuncDefAtParen` alongside it, and that is the shell's own
+combination rather than a coincidence: nothing about the word says it is
+a name, so nothing about the word can decide the reading — the
+parentheses are the whole announcement (#1566).
 
 The two spellings had come apart inside this parser, which is what made
 it an issue: the keyword form took the name and `name()` refused a quoted
@@ -2194,10 +2242,37 @@ which of its names ran. Measured 2026-09-10 with
 | dash | no keyword at all, so the brace is blamed, status 2 |
 | ksh93 | parses it and defines **only the first** — `[a]`, then `b: not found` at 127 |
 
-Grammar flag: `FunctionMultipleNames`, zsh alone. ksh93's reading is not
-modeled: it defines a function whose extra names went nowhere, which is a
-lenience rather than a construct, and it is the one column that fails
-without saying anything about the second name.
+Grammar flag: `FunctionMultipleNames`, zsh alone.
+
+**ksh93's reading is a construct of its own**, and a second flag rather
+than a weaker version of zsh's: the words after the name are a list of
+name *references*, read and then discarded, so only the first word names
+a function. Measured 2026-09-12 from a file, because the blame lands on
+a later line than the words do:
+
+    function a b c d { print hi; } ⏎ a        hi
+    function a "b" { print hi; } ⏎ a          hi — the quotes come off
+    function a 1b { print hi; }               invalid reference list
+    function a b=c { print hi; }              invalid reference list
+    function a $foo { print hi; }             invalid reference list
+    function a if { print hi; }               `if' unexpected
+    function a b; { print hi; }               `;' unexpected
+    function a b > out { print hi; }          `>' unexpected
+
+So the words are **names and nothing else**: a word that is not an
+identifier, an assignment and an expansion are one refusal between them,
+a reserved word is refused as the token it is, and quoting comes off
+before the test. The list stops at the end of the line, which is the rule
+seen from outside — this shell wants a brace group after the keyword, so
+`function a echo B` ⏎ `a` blames the **`a` on line 2** where `function a
+echo` ⏎ `{ print hi; }` is status 0.
+
+Grammar flag: `FunctionKeywordReferenceList`, ksh alone, and no dialect
+sets it alongside `FunctionMultipleNames` — zsh defines every name in its
+list and ksh93 defines none of them, which is what makes them two
+constructs. `typeset -f` writes the list back with the declaration, which
+is a listing question rather than a parsing one (#1494); nothing about
+those words is reachable from a script (#2014).
 
 **Names are taken greedily**, exactly as `ForMultipleNames` takes a
 loop's. Every word after the first is another name until the body begins

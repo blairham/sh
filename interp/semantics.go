@@ -821,6 +821,54 @@ type Semantics struct {
 	// said, and under the octal reading `09` is an invalid digit as well as
 	// a wrong number.
 	ArithStoredValueReadsALeadingZeroAsDecimal Answer
+	// LetReadsALeadingZeroAsDecimal gives the `let` builtin a reader of its
+	// own, in which `010` is ten and not eight.
+	//
+	// ksh93 alone, and it is a third site rather than either of the two
+	// above. Measured 2026-09-12:
+	//
+	//	                    let "x=010"  (( y=010 ))  let "x=1+010"  k=1+010; $((k))
+	//	bash 5.3.15              8            8             9               9
+	//	ksh93u+                 10            8            11               9
+	//	zsh 5.9.2               10           10            11              11
+	//
+	// The third and fourth columns are what make it a site and not a reuse
+	// of ArithStoredValueReadsALeadingZeroAsDecimal: that one rewrites the
+	// *leading* numeral of a value and leaves the rest octal, so `k=1+010`
+	// is 9 there — where `let "x=1+010"` is 11, every numeral in the word
+	// having been read in decimal. So `let`'s words are evaluated with the
+	// octal rule off rather than with one numeral rewritten.
+	//
+	// Answered No where nothing makes a leading zero octal in the first
+	// place, which is zsh: the two readings coincide there and the column
+	// above says so.
+	//
+	// Silent and arithmetically wrong, the way its two neighbors are:
+	// `let "n=010"` is a plausible number, eight where the shell says ten.
+	LetReadsALeadingZeroAsDecimal Answer
+	// ArithmeticAssignmentDeclaresAnInteger gives a name assigned inside an
+	// arithmetic context the integer attribute, which outlives the
+	// expression. zsh alone.
+	//
+	// Measured 2026-09-12 against `typeset -p`, with bash as the control:
+	//
+	//	                                  zsh 5.9.2         bash 5.3.15   ksh93u+
+	//	(( x = 5 ))                       typeset -i x=5    declare -- x  x=5
+	//	(( x = 5 )); x=7                  typeset -i x=7    declare -- x  x=7
+	//	(( y = 0x1f ))                    typeset -i16 y=31 declare -- y  y=31
+	//	for (( i=0; i<2; i++ )); do :; done  typeset -i i=2 declare -- i  i=2
+	//	let "z = 3"                       typeset -i z=3    declare -- z  z=3
+	//
+	// It is not only a listing difference, which is the reason it is an axis
+	// rather than a note: the attribute changes what a *later* assignment
+	// means. `(( x = 5 )); x=2+3` is 5 in zsh and the three characters
+	// `2+3` everywhere else, and with the attribute comes the output base,
+	// so a name that learned 16 renders a later plain `5` as `16#5`.
+	//
+	// Every construct that assigns inside arithmetic is the same answer —
+	// `(( ))`, `let` and a C-style `for` header alike — so it is asked where
+	// the assignment operator is applied rather than at each of them.
+	ArithmeticAssignmentDeclaresAnInteger Answer
 	// IndirectionYieldsName makes `${!x}` the *name* rather than the value it
 	// names: with `x=y`, ksh93 gives `x` and bash gives the value of `y`.
 	//
@@ -7497,6 +7545,10 @@ func PosixSemantics() Semantics {
 		// rule the literal does, so `k=010; $((k))` is eight. ksh93 is the
 		// one shell whose two readers part.
 		ArithStoredValueReadsALeadingZeroAsDecimal: No,
+		// One reader for `let` too: the standard has no `let` and no integer
+		// attribute, so the preset keeps the arithmetic it does describe.
+		LetReadsALeadingZeroAsDecimal:         No,
+		ArithmeticAssignmentDeclaresAnInteger: No,
 		// dash is the panel's POSIX-faithful member and the only one
 		// exiting 2, so the POSIX preset follows it. The standard itself
 		// requires only "greater than zero", which decides nothing.

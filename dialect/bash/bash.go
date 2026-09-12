@@ -510,6 +510,12 @@ func Semantics() interp.Semantics {
 	// A radix prefix with nothing after it is a finished number worth zero:
 	// `$(( 0x ))` is 0 and `$(( 0x+1 ))` is 1, in 5.3 and 3.2 alike.
 	s.ArithEmptyRadixDigitsAreZero = interp.Yes
+	// And for `let`: `let "x=010"` is eight, the same as `(( ))`.
+	s.LetReadsALeadingZeroAsDecimal = interp.No
+	// An arithmetic assignment leaves an ordinary scalar: `(( x = 5 ));
+	// declare -p x` is `declare -- x="5"`, and a later `x=2+3` is the three
+	// characters.
+	s.ArithmeticAssignmentDeclaresAnInteger = interp.No
 	// An attribute added to a name that already holds a value waits for the
 	// next assignment: `FOO=bar; typeset -i FOO` still reads `bar`, and
 	// `d=MiXeD; typeset -u d` still reads `MiXeD`. ksh93 and zsh re-read on

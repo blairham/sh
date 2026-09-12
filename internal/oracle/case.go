@@ -9621,6 +9621,41 @@ echo unreachable`,
 		Why:     "how far the decimal reading reaches: on the shell that splits it is the value's *leading* numeral only, so `010+1` is 11 where `1+010` and the written literal are both 9. Without the second and third fields a rule that read every numeral in a value decimally would pass",
 	},
 	{
+		ID: "arith/a-zero-padded-numeral-in-a-let-word", Category: "arithmetic",
+		Snippet: `let "x=010"; (( y=010 )); echo "let=$x arith=$y"`,
+		Why:     "a third reader for a leading zero, and the pair is what makes it one: in ksh93 `let \"x=010\"` is 10 and `(( y=010 ))` is 8, in the same shell and the same line. bash is 8 twice and zsh 10 twice, so it is neither the lexer's answer nor the value's but `let`'s own — the documentation says the two constructs are the same evaluation and they are not (#1867). dash has no `let` at all",
+	},
+	{
+		ID: "arith/a-zero-padded-numeral-a-let-word-carries-along", Category: "arithmetic",
+		Snippet: `let "x=1+010"; let "y=010+1"; k=1+010; echo "$x $y $((k))"`,
+		Why:     "how far `let`'s reading reaches, and it is further than the value's: 11 and 11 on the shell that splits, where the same text stored in a name is 9. So every numeral in the word goes decimal rather than only the leading one — which is what says the fix is the octal rule turned off for the word and not the stored value's rewrite reused. bash answers 9 9 9 and zsh 11 11 11",
+	},
+	{
+		ID: "arith/a-zero-padded-operand-in-a-word-comparison", Category: "arithmetic",
+		Snippet: `[[ 010 -eq 10 ]] && echo ten; [[ 010 -eq 8 ]] && echo eight; [[ 1+010 -eq 9 ]] && echo nine`,
+		Why:     "the fourth site, and it turns out to be the value's reader rather than a fourth answer: ksh93 prints `ten` and `nine`, so a bare operand is read in decimal and a numeral standing later in an expression is not. That is exactly the leading-numeral rewrite a stored value gets, which is why this is the same axis at a site that was missing it. bash prints `eight` and `nine`, zsh `ten` and nothing — its `1+010` is 11",
+	},
+	{
+		ID: "arith/an-arithmetic-assignment-declares-an-integer", Category: "arithmetic",
+		Snippet: `(( x = 5 )); typeset -p x; x=2+3; echo "[$x]"`,
+		Why:     "what an arithmetic assignment leaves behind on the name, which zsh alone makes an integer: `typeset -i x=5` there against bash's `declare -- x=\"5\"` and ksh93's bare `x=5`. The second half is why it is not a listing difference — the attribute changes what a *later* plain assignment means, so `x=2+3` is 5 in zsh and the three characters everywhere else (#2139)",
+	},
+	{
+		ID: "arith/an-arithmetic-assignment-over-a-name-that-exists", Category: "arithmetic",
+		Snippet: `x=3; (( x = 5 )); typeset -p x; x=2+3; echo "[$x]"`,
+		Why:     "the control, and the half of the rule a fresh-shell probe cannot see: the same assignment over a name that already exists leaves an ordinary scalar in every column, zsh included — so it is a *declaration* the arithmetic makes and not an attribute the operator applies. Without this row a fix that marked the name on every write would pass",
+	},
+	{
+		ID: "arith/an-arithmetic-assignment-learns-a-base", Category: "arithmetic",
+		Snippet: `(( y = 0x1f )); typeset -p y; echo "v=$y"; (( z = 1 + 0x1f )); typeset -p z`,
+		Why:     "and the base comes with the attribute, from a radix literal the *expression* was written with rather than from the answer, which is decimal by the time it is stored: zsh lists `typeset -i16 y=31` and reads it back as `16#1F`. The third field says the literal need not stand alone — `1 + 0x1f` teaches 16 too. bash and ksh93 have neither the attribute nor the base",
+	},
+	{
+		ID: "arith/an-arithmetic-assignment-through-a-value-learns-no-base", Category: "arithmetic",
+		Snippet: `y=0x1f; (( z = y )); typeset -p z`,
+		Why:     "the boundary of the row above: the same prefix arriving through a *value* teaches nothing, so zsh leaves `typeset -i z=31` with the attribute and no base. It is the same line #2095 drew for the ordinary assignment, and a rule that searched the stored text rather than the expression would cross it",
+	},
+	{
 		ID: "arith/an-operand-the-expression-ran-out-of", Category: "arithmetic",
 		Snippet: `echo "[$((1+))]"; echo "st=$?"`,
 		Why:     "an operand was wanted and the text ended, which two of the panel word apart from an operand that was wanted and found: ksh93 says more tokens expected and zsh names the end of the string. The pair with `arith/an-operand-the-expression-found` is the whole of it — either row alone passes under one wording for both, which is what let the end-of-input sentence stand for every operand failure in two dialects",

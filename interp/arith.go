@@ -519,6 +519,97 @@ type arithPlace struct {
 	subscripted bool
 }
 
+// arithAssignmentDeclaresAnInteger reports whether writing this name from
+// inside arithmetic gives it the integer attribute.
+//
+// Only a name the assignment *creates*, which is the half of the rule the
+// issue's table could not show and a probe on a fresh shell cannot see:
+// measured 2026-09-12 on zsh 5.9.2, `(( x = 5 ))` leaves `typeset -i x=5`
+// where `x=3; (( x = 5 ))` and even `typeset x; (( x = 5 ))` leave an
+// ordinary scalar. So it is a declaration and not an attribute the operator
+// applies.
+//
+// The axis is **read** rather than asked, which is the reason
+// Semantics.FailedExpansionAbandonsTheLine gives one file over: where the
+// answer is not yes, leaving an ordinary scalar is what three of the four
+// shells do and what this path already did, so an unanswered axis has a
+// correct answer to fall back on rather than a missing one to complain about.
+// Asking would refuse `for (( i=0; i<3; i++ ))` in a run with no dialect,
+// which is a construct the core has and a question the script never posed.
+func (r *Runner) arithAssignmentDeclaresAnInteger(name string) bool {
+	if r.sem().ArithmeticAssignmentDeclaresAnInteger != Yes {
+		return false
+	}
+	_, set := r.getVar(name)
+	return !set
+}
+
+// declareIntegerFromArithmetic gives a name the arithmetic just created the
+// integer attribute, and the output base a radix literal in the expression
+// wrote.
+//
+// The base comes from the *expression* rather than from the text stored,
+// which is the only place it survives: the answer is a decimal number by the
+// time it is written down. Measured, `(( y = 0x1f ))` is `typeset -i16 y=31`
+// and `(( y = 1 + 0x1f ))` is `typeset -i16 y=32`, so it is any radix literal
+// the expression holds and not only one standing alone — while `y=0x1f; ((
+// z = y ))` is a plain `typeset -i z=31`, the prefix having arrived through a
+// value rather than been written here.
+func (r *Runner) declareIntegerFromArithmetic(name string, from syntax.ArithExpr) {
+	if r.integer == nil {
+		r.integer = map[string]bool{}
+	}
+	r.integer[name] = true
+	// The expression's own output specifier first, which is a base the script
+	// wrote as squarely as a literal is: `(( i = [#16] 255 ))` on an unset
+	// name is `typeset -i16 i=255`. It is not a base a name that *already*
+	// had the attribute learns — `typeset -i i; (( i = [#16] 255 ))` stays
+	// plain — but that route never reaches here, this being a declaration.
+	base := 0
+	if f := r.arithOutput; f != nil && f.Based {
+		base = f.Base
+	}
+	if base == 0 {
+		base = radixBaseWritten(from)
+	}
+	if base == 0 || !r.validIntegerBase(base) {
+		return
+	}
+	if base == 10 && r.integerBaseTenIsNone() {
+		return
+	}
+	if r.integerBase == nil {
+		r.integerBase = map[string]int{}
+	}
+	r.integerBase[name] = base
+}
+
+// radixBaseWritten is the base named by the first radix literal in an
+// expression, or 0 where it holds none.
+func radixBaseWritten(e syntax.ArithExpr) int {
+	switch x := e.(type) {
+	case nil:
+		return 0
+	case *syntax.ArithNum:
+		return integerBaseOfLiteral(x.Text)
+	case *syntax.ArithUnary:
+		return radixBaseWritten(x.X)
+	case *syntax.ArithCond:
+		if b := radixBaseWritten(x.Then); b != 0 {
+			return b
+		}
+		return radixBaseWritten(x.Else)
+	case *syntax.ArithBinary:
+		if b := radixBaseWritten(x.X); b != 0 {
+			return b
+		}
+		return radixBaseWritten(x.Y)
+	case *syntax.ArithAssign:
+		return radixBaseWritten(x.Value)
+	}
+	return 0
+}
+
 // arithPlaceOf is the target an operator can write through, and false for an
 // expression that names no storage — `(( 1++ ))`, `(( (a)++ ))`.
 func arithPlaceOf(e syntax.ArithExpr) (arithPlace, bool) {
@@ -544,7 +635,7 @@ func (r *Runner) readPlace(p arithPlace) (arithNum, error) {
 
 // writePlace stores a value back through a target, written the way the
 // dialect writes a number — so `i+=1.5` leaves 1.5 behind and not 1.
-func (r *Runner) writePlace(p arithPlace, v arithNum) error {
+func (r *Runner) writePlace(p arithPlace, v arithNum, from syntax.ArithExpr) error {
 	// The expression's output format reaches the value an assignment stores,
 	// not only the answer an expansion produces: measured, `x=5; (( x = [#16]
 	// 255 ))` leaves x holding the six characters `16#FF`.
@@ -574,6 +665,19 @@ func (r *Runner) writePlace(p arithPlace, v arithNum) error {
 		// empty expression and did not answer it above writes through the
 		// name. Only the two of them — a target with a subscript in it is an
 		// element, and stops being one the moment this condition widens.
+		if r.arithAssignmentDeclaresAnInteger(p.name) {
+			// A name the arithmetic itself created carries the base on the
+			// *name* rather than in the characters it holds, which is the
+			// other half of the note above: `x=5; (( x = [#16] 255 ))` leaves
+			// the six characters `16#FF` in an ordinary scalar, and the same
+			// expression on an unset name is `typeset -i16 x=255` reading
+			// back as `16#FF`. So the plain number is stored and the
+			// declaration renders it.
+			r.setVar(p.name, r.formatNum(v))
+			r.declareIntegerFromArithmetic(p.name, from)
+			r.rerenderInTheNewBase(p.name)
+			return nil
+		}
 		r.setVar(p.name, text)
 		return nil
 	}
@@ -675,7 +779,7 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 			step = -1
 		}
 		next := r.addNum(old, step)
-		if err := r.writePlace(place, next); err != nil {
+		if err := r.writePlace(place, next, nil); err != nil {
 			return intNum(0), err
 		}
 		if x.Postfix {
@@ -741,7 +845,7 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 		}
 	}
 	// The side effect that outlives the expression.
-	if err := r.writePlace(place, v); err != nil {
+	if err := r.writePlace(place, v, x.Value); err != nil {
 		return intNum(0), err
 	}
 	return v, nil

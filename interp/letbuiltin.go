@@ -38,6 +38,28 @@ func biLet(r *Runner, _ context.Context, args []string) int {
 		}
 		return orDefault(d.LetNoExpressionStatus, 1)
 	}
+	if r.sem().LetReadsALeadingZeroAsDecimal == Yes {
+		// One shell's `let` is not the same reader as its `(( ))`: `let
+		// "x=010"` is ten there and `(( y=010 ))` is eight. Every numeral in
+		// the word goes decimal rather than only the leading one — `let
+		// "x=1+010"` is 11 — so the octal rule is turned off for the
+		// evaluation rather than one numeral being rewritten, which is what
+		// the stored-value reader beside it does. See
+		// Semantics.LetReadsALeadingZeroAsDecimal.
+		//
+		// On a copy of the vector, so it lasts exactly as long as the
+		// builtin: a Runner is shared and the arithmetic after this one is
+		// read the ordinary way.
+		//
+		// Read rather than asked, and the reason is that the question is
+		// still put where it can be seen: leaving this alone gives `let` the
+		// same reader `(( ))` has, which is what three of the four do, and
+		// the leading zero itself still meets ArithLeadingZeroIsOctal at the
+		// literal. Asking here would put a dialect question to every `let`
+		// in a run with no dialect, including the ones with no zero in them.
+		defer func(was *Semantics) { r.Semantics = was }(r.Semantics)
+		r.swapSemantics(func(s *Semantics) { s.ArithLeadingZeroIsOctal = No })
+	}
 	last := 0
 	for _, expr := range args {
 		r.unspecified = false

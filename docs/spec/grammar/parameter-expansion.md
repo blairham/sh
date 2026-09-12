@@ -2168,10 +2168,42 @@ form, which is measured rather than tidy:
     ${(v)m[b]}    →  2         the value
     ${(k)m[zz]}   →  ``        an absent key is nothing at all
 
-An **ordinary** array reads the same letter as its *index* —
-`${(k)x[2]}` is `2` there and `${(k)x[-1]}` is the subscript counted
-forward — which is a different question with a different source and is
-not built. It is recorded in #1515 rather than guessed at.
+An **ordinary** array reads the same letter as its *index*, which is a
+different question with a different source and was recorded separately
+(#1515). Measured 2026-09-12 on zsh 5.9.2 with `x=(p q r)`:
+
+    ${(k)x[2]}      →  2      the subscript itself
+    ${(k)x[1+1]}    →  2      evaluated, not the text
+    ${(k)x[-1]}     →  3      a negative counted forward from the end
+    ${(k)x[-9]}     →  -5     and not clamped when it reaches past the first
+    ${(k)x[9]}      →  9      nor when it reaches past the last
+    ${(k)x[0]}      →  0      the subscript no element has is itself
+    ${(k)x[(r)q]}   →  2      a search is where it matched
+    ${(k)x[(R)zz]}  →  0      and a miss is that letter's out-of-range index
+    ${(k)x[(e)2]}   →  2      a group that selects nothing is still the index
+    ${(k)x[1,2]}    →  `invalid subscript`, and the line ends at 1
+
+So the reading is the subscript arithmetic-evaluated and normalized to a
+forward index, and a range — which names a span rather than one
+subscript — is refused outright. The wrong answer in every row is the
+*element*, which is a plausible word at status 0.
+
+Five shapes are outside it, each measured:
+
+- `[@]` and `[*]` are the elements, unchanged.
+- a **scalar** ignores the letter: `s=hello; ${(k)s[2]}` is `e`.
+- a name holding nothing is nothing rather than an index —
+  `${(k)nosuch[2]}` is empty, where `x=(); ${(k)x[2]}` is `2`.
+- `v` beside `k` puts the element back, as it does over a table, and a
+  `(P)` moves both letters to the indirection.
+- a **chain** is left alone. With `a=(pqrs t)` the shell answers empty
+  for `${(k)a[1][2]}`, `2` for `${(k)a[2][1]}` and `1` for
+  `${(k)a[1][-1]}`, which is not monotonic in anything and so is an
+  artifact rather than a rule to write down.
+
+`${(kP)v}` with `v="x[2]"` is `2` there and the element here, because the
+indirection does not yet take the resolved text apart as the reference it
+is. That is #1852's, which the same paragraph's other two rows belong to.
 
 ### The `(A)` flag is two halves
 
@@ -4050,9 +4082,56 @@ refusing by name (#1536).
 as a *runtime string* rather than as a parsed word, so the group has
 nowhere to hang its operand. Filed rather than guessed (#1275).
 
-A flag group inside a **range endpoint** — `${s[(r)l,(r)o]}`, which is
-`${s[3,5]}` there — is read as part of the first group's operand and
-answers empty. Filed as #1533.
+### A flag group in each end of a range
+
+Each end of a range carries a group of its own, and a search in one
+answers with the **index** it matched at rather than with the element,
+which is the rule `(i)` and `(I)` follow anywhere. Measured 2026-09-12 on
+zsh 5.9.2 with `s="hello world"` and `a=(p q r)`:
+
+| probe | is |
+| --- | --- |
+| `${s[(r)l,(r)o]}` | `llo` — the same as `${s[3,5]}` |
+| `${s[3,(r)o]}` | `llo` — only the second end searches |
+| `${s[(r)w,-1]}` | `world` — only the first |
+| `${a[(r)q,(r)r]}` | `q r` |
+| `${a[(R)p,3]}` | `p q r` — a reverse search is where it matched last |
+| `${s[(r)zz,-1]}` | empty — that miss starts one past the last |
+| `${s[(R)zz,-1]}` | the whole string — and that one, one before the first |
+| `${a[(rn:2:)*a,-1]}` | the modifiers are read in an end too |
+| `${a[(e)1,(e)2]}` | `p q` — a group that selects nothing leaves the end arithmetic |
+
+**The four selecting letters are not interchangeable between the two
+ends.** `i` and `I` are read in the second one and refused in the first:
+
+| probe, `a=(p q r)` | is |
+| --- | --- |
+| `${a[1,(i)r]}` | `p q r` |
+| `${a[1,(I)q]}` | `p q` |
+| `${a[(i)q,2]}` | `invalid subscript`, and the line ends at 1 |
+| `${a[(I)q,3]}` | the same |
+| `${a[(ri)q,2]}` | the same — the last selecting letter is what counts |
+| `${a[(ir)q,2]}` | `q` — and here that letter is `r` |
+| `${a[(e)1,(i)r]}` | `p q r` — so it is the position and not the letter |
+
+**The comma has to have been written**, which makes the split the
+parser's rather than the run's. Two measurements say so: `a=(p "q,r" s);
+${a[(r)q,r]}` is empty rather than the element whose value holds the
+comma, so a comma inside what looks like an operand still separates the
+ends; and `i="1,2"; ${a[$i]}` is the *first* element rather than a range,
+so a comma arriving through a substitution separates nothing. The second
+half is not answered here yet — a substituted comma is still read as a
+range by this implementation, filed as #2160.
+
+Read as one operand, the search looked for a literal comma and a
+parenthesis, missed, and the whole range came back empty at status 0
+(#1533). `syntax.SubscriptRange` is where the two ends are separated.
+
+An end that is **no expression at all** ends the line, and the shell
+names the end rather than the pair: `${a[b c,2]}` is `bad math
+expression: operator expected at` `c` at status 1. It was answered empty
+at status 0 here — the span reported the failure and the reading that
+chooses between a range and an arithmetic comma dropped it (#2161).
 
 ### Grammar
 

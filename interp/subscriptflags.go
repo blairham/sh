@@ -93,44 +93,57 @@ func (r *Runner) subscriptSearch(e *syntax.ParamExpr) (search byte, ok bool) {
 // searchSubscript answers a search subscript against values already in hand,
 // so that a name's elements and an expansion's result are searched by the
 // same code. See subscriptSource.
+//
+// All four letters name the same position and part company only over what
+// they substitute: `i` and `I` the index itself, `r` and `R` the value that
+// index reads. So this is searchIndex plus one lookup, and the two misses
+// need no case of their own — both land outside the values and read as
+// nothing, which is what `${a[(r)zz]}` and `${s[(R)zz]}` already were.
 func (r *Runner) searchSubscript(e *syntax.ParamExpr, search byte, src subscriptSource) ([]string, bool) {
-	g := e.IndexFlags
-	elems, scalar := src.elems, src.scalar
-	if scalar {
-		return r.searchScalar(g, search, elems[0]), true
+	at := r.searchIndex(e.IndexFlags, search, src)
+	if search == 'i' || search == 'I' || r.subscriptIsReadAsItsIndex(e, src) {
+		return []string{itoa(at)}, true
 	}
-	at, found, below := r.searchElements(g, search, elems)
-	// The index is the base plus the element's *position*, which is the same
-	// thing only while an array has no gaps. It has none in the grammar that
-	// has this construct — measured, `a=(x); a[5]=y` there leaves five
-	// elements and `${a[(i)y]}` is 5 — and a grammar that kept its gaps would
-	// need the stored subscript rather than the position. Written down here
-	// because nothing in this file would notice the difference.
+	units := src.elems
+	if src.scalar {
+		units = r.units(src.elems[0])
+	}
+	if pos := at - r.arrayBase(); pos >= 0 && pos < len(units) {
+		return []string{units[pos]}, true
+	}
+	return nil, true
+}
+
+// searchIndex is the position a search subscript names, in the dialect's own
+// base and whether or not anything matched.
+//
+// The index is the base plus the element's *position*, which is the same
+// thing only while an array has no gaps. It has none in the grammar that has
+// this construct — measured, `a=(x); a[5]=y` there leaves five elements and
+// `${a[(i)y]}` is 5 — and a grammar that kept its gaps would need the stored
+// subscript rather than the position. Written down here because nothing in
+// this file would notice the difference.
+//
+// Three misses, and which one a letter takes is the whole of the difference
+// between the pairs: one past the last element going forward, one before the
+// first going back, and one before the first either way where the walk began
+// below the array (see searchElements). `r` takes the forward miss and `R`
+// the backward one, which is what makes `a[(r)new]=v` an append and
+// `${a[(R)zz,-1]}` the whole array.
+func (r *Runner) searchIndex(g *syntax.SubscriptFlags, search byte, src subscriptSource) int {
+	if src.scalar {
+		return r.scalarSearchIndex(g, search, r.units(src.elems[0]), src.elems[0])
+	}
+	at, found, below := r.searchElements(g, search, src.elems)
 	base := r.arrayBase()
-	switch search {
-	case 'r', 'R':
-		if !found {
-			return nil, true
-		}
-		return []string{elems[at]}, true
-	case 'i':
-		// One past the last element when nothing matched, which is what
-		// makes `a[(i)new]=v` an append in the shell that has the construct
-		// — except where the walk never entered the array from *below*, and
-		// then it is the other letter's miss. See searchElements.
-		if !found {
-			if below {
-				return []string{itoa(base - 1)}, true
-			}
-			return []string{itoa(base + len(elems))}, true
-		}
-	default: // 'I'
-		// One before the first, which is the index no element has.
-		if !found {
-			return []string{itoa(base - 1)}, true
-		}
+	switch {
+	case found:
+		return base + at
+	case below || search == 'R' || search == 'I':
+		return base - 1
+	default:
+		return base + len(src.elems)
 	}
-	return []string{itoa(base + at)}, true
 }
 
 // searchElements walks the elements the way the group asks and returns the
@@ -175,8 +188,10 @@ func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []s
 	return 0, false, false
 }
 
-// searchScalar answers a search subscript over a plain string, where what the
-// four letters count through is the string's *characters*.
+// scalarSearchIndex is searchIndex over a plain string: the character
+// position the search names, counted from the dialect's base and whether or
+// not anything matched. What the four letters count through here is the
+// string's *characters*.
 //
 // Measured on zsh 5.9.2, the one shell with the construct, with
 // `s="hello world"`:
@@ -205,21 +220,6 @@ func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []s
 // The character is the locale's rather than a byte, because r.units is:
 // measured under a UTF-8 locale `s="héllo"; ${s[(i)l]}` is 3 there and
 // under `LC_ALL=C` it is 4.
-func (r *Runner) searchScalar(g *syntax.SubscriptFlags, search byte, v string) []string {
-	chars := r.units(v)
-	at := r.scalarSearchIndex(g, search, chars, v)
-	if search == 'i' || search == 'I' {
-		return []string{itoa(at)}
-	}
-	pos := at - r.arrayBase()
-	if pos < 0 || pos >= len(chars) {
-		return nil
-	}
-	return []string{chars[pos]}
-}
-
-// scalarSearchIndex is the character position the search names, counted from
-// the dialect's base, whether or not anything matched.
 //
 // One position past the last character is walked, which the walk over an
 // array's elements has no equivalent of because only an empty match can land
@@ -662,7 +662,7 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 		// setArrayElem's to decide, exactly as it is for `s[3]=Q` — this
 		// side only says *which* subscript, which is what the read side says
 		// too.
-		return r.scalarSearchIndex(g, search, r.units(elems[0]), elems[0]), true
+		return r.searchIndex(g, search, subscriptSource{name: a.Name, elems: elems, scalar: true}), true
 	}
 	at, found, below := r.searchElements(g, search, elems)
 	base := r.arrayBase()
@@ -697,4 +697,150 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 	// spec entry names.
 	r.refuseAssignSubscriptFlag(e, string(search), " where nothing matched")
 	return 0, false
+}
+
+// subscriptIsReadAsItsIndex reports whether `(k)` in front of an *ordinary*
+// array's subscript makes the reading the index the subscript named rather
+// than the element it selected.
+//
+// The letter is an association's first: `${(k)m[b]}` is the key. On an
+// ordinary array the same letter reads the *index*, which is a different
+// question with a different source and was left out of that change (#1515).
+// Measured on zsh 5.9.2 with `x=(p q r)`:
+//
+//	${(k)x[2]}       2   the subscript itself
+//	${(k)x[1+1]}     2   evaluated, not the text
+//	${(k)x[-1]}      3   a negative counted forward from the end
+//	${(k)x[-9]}      -5  and not clamped when it reaches past the first
+//	${(k)x[9]}       9   nor when it reaches past the last
+//	${(k)x[(r)q]}    2   a search answers with the index it matched at
+//	${(k)x[(R)zz]}   0   and a miss with the index that letter names
+//	${(k)x[(e)2]}    2   a group that selects nothing is still the index
+//	${(k)x[1,2]}     invalid subscript (1)
+//	${(k)x[@]}       p q r   the whole-array forms are the elements
+//
+// Four shapes are outside it, each measured rather than assumed. A **scalar**
+// ignores the letter — `s=hello; ${(k)s[2]}` is `e` — which is why the source
+// is asked rather than the name. `v` beside `k` puts the element back, as it
+// does on an association. A `(P)` moves both letters to the indirection, so
+// baseFlags is what is read here. And a **chain** is left alone: `a=(pqrs t)`
+// gives `${(k)a[1][2]}` empty, `${(k)a[2][1]}` 2 and `${(k)a[1][-1]}` 1 in
+// that shell, which is not monotonic in anything and so is an artifact rather
+// than a rule to write down.
+//
+// A name holding nothing is answered before this is reached, and answers
+// empty rather than an index: measured, `${(k)nosuch[2]}` is empty where
+// `x=(); ${(k)x[2]}` is 2.
+func (r *Runner) subscriptIsReadAsItsIndex(e *syntax.ParamExpr, src subscriptSource) bool {
+	if !e.HasFlags || e.Inner != nil || len(e.Leading) > 0 || src.scalar {
+		return false
+	}
+	flags := baseFlags(e.Flags)
+	if !strings.ContainsRune(flags, 'k') || strings.ContainsRune(flags, 'v') {
+		return false
+	}
+	_, isAssoc := r.assocFor(e.Name)
+	return !isAssoc
+}
+
+// forwardSubscriptIndex is a subscript normalized to the index it names,
+// which is what `(k)` substitutes: a negative one counted forward from the
+// end, and anything else passed straight through however far out of range it
+// is. Measured with three elements, `${(k)x[-1]}` is 3 and `${(k)x[-9]}` is
+// -5, so the count is arithmetic rather than a clamp.
+func (r *Runner) forwardSubscriptIndex(n, count int) int {
+	if n < 0 {
+		return r.arrayBase() + count + n
+	}
+	return n
+}
+
+// rangeEndFlags is what a flag group in a range *endpoint* may select by, and
+// it is not the same set as a group anywhere else. Measured on zsh 5.9.2:
+//
+//	${a[(r)q,(r)r]}   q r   both ends search, and each answers an index
+//	${a[(R)p,3]}      p q r a reverse search is the index it matched last at
+//	${a[1,(i)r]}      p q r `i` and `I` are read in the *second* end
+//	${a[1,(I)q]}      p q
+//	${a[(i)q,2]}      invalid subscript (1)
+//	${a[(I)q,3]}      invalid subscript (1)
+//	${a[(ri)q,2]}     invalid subscript (1)  the last letter is what counts
+//	${a[(ir)q,2]}     q                      and here it is `r`
+//
+// So the four letters are interchangeable in the end on the right and two of
+// them are refused in the end on the left, where the group opens the whole
+// subscript. Which is a fact about that position and not about the letters —
+// `${a[(e)1,(i)r]}` is the whole array, so it is the *selecting* letter at
+// the front of a pair that the shell will not read.
+//
+// A miss is an index like any other: `${a[(r)zz,-1]}` is empty because the
+// start is one past the last element, and `${a[(R)zz,-1]}` is the whole array
+// because the start is one before the first.
+
+// flaggedRangeSubscript answers a subscript written as a pair whose ends
+// carry flag groups of their own — see syntax.SubscriptRange, which is where
+// the two ends were separated.
+func (r *Runner) flaggedRangeSubscript(e *syntax.ParamExpr, src subscriptSource) ([]string, bool) {
+	if !r.ask(r.sem().SubscriptCommaIsARange, "`${a[1,3]}` naming a range rather than one subscript") {
+		// No dialect measured has flag groups without ranges, so there is
+		// nothing here to answer with: the comma would be the arithmetic
+		// operator and a flag group is not arithmetic. Reported the way the
+		// subscript would have been had nothing taken it for a pair.
+		idx := r.subscriptText(e.Index)
+		if _, err := r.subscriptValue(idx); err != nil {
+			r.diagf("%s\n", r.subscriptFailure(idx, err))
+			r.expandErr = true
+		}
+		return nil, true
+	}
+	lo, ok := r.rangeEnd(e, e.IndexRange.Lo, src, true)
+	if !ok {
+		return nil, true
+	}
+	hi, ok := r.rangeEnd(e, e.IndexRange.Hi, src, false)
+	if !ok {
+		return nil, true
+	}
+	return r.rangeSpan(src, lo, hi), true
+}
+
+// rangeEnd is the subscript one end of such a pair comes to, as a number the
+// range reading can use. See rangeEndFlags for what a group may say there.
+func (r *Runner) rangeEnd(e *syntax.ParamExpr, end syntax.SubscriptEnd, src subscriptSource, first bool) (int, bool) {
+	g := end.Flags
+	if g == nil {
+		return r.endSubscriptValue(end.Text)
+	}
+	for _, c := range g.Flags {
+		if !strings.ContainsRune(implementedSubscriptFlags, c) {
+			r.refuseSubscriptFlag(e, string(c), "")
+			return 0, false
+		}
+	}
+	search := lastOf(g.Flags, searchSubscriptFlags)
+	if search == 0 {
+		// A group that selects nothing leaves the end read as arithmetic,
+		// which is the rule a group in front of a plain subscript follows
+		// too: measured, `${a[(e)1,(e)2]}` is the first two elements.
+		return r.endSubscriptValue(end.Text)
+	}
+	if first && (search == 'i' || search == 'I') {
+		r.diagf("%s\n", Wording(r.diag().SubscriptIsAnIndexAndARange, "invalid subscript"))
+		r.expandErr = true
+		return 0, false
+	}
+	return r.searchIndex(g, search, src), true
+}
+
+// endSubscriptValue evaluates one end of a range that no group selected,
+// reporting a failed expression the way every other subscript does.
+func (r *Runner) endSubscriptValue(w *syntax.Word) (int, bool) {
+	text := r.subscriptText(w)
+	n, err := r.subscriptValue(text)
+	if err != nil {
+		r.diagf("%s\n", r.subscriptFailure(text, err))
+		r.expandErr = true
+		return 0, false
+	}
+	return n, true
 }

@@ -457,18 +457,24 @@ func TestAnUnreadableInnerIsNotAReference(t *testing.T) {
 // `${${(P)h}[(w)y]}` with `h=a` reads the subscript against `a`, so a refusal
 // naming its subject would say `a[(w)y]` — a construct the file does not
 // contain, and one a reader cannot search for.
-// A search's operand is not a range, however it happens to be written.
+// A comma written in a subscript separates a *pair* even inside what looks
+// like a search's operand, and the search gets only the half in front of it.
 //
-// `(r)1,2` reads like one and is an operand, so what the search named is one
-// value and its length is a width. The search and the ordinary subscript go
-// through one dispatch now — the same one a chain's links use — and a fold
-// that let the range reading see a search operand would make this a count of
-// matches instead. zsh answers neither: it finds no match at all there, which
-// belongs to the search operand rather than to the shape.
-func TestASearchOperandThatLooksLikeARangeIsStillOneValue(t *testing.T) {
+// This asserted the other reading — that `(r)1,2` is one operand naming the
+// element whose value is `1,2`, a width of 3 — with a comment recording that
+// the shell answered neither 3 nor a count of matches and calling that the
+// operand's business. It is the pair's: measured on zsh 5.9.2,
+// `a=(p q,r s); ${a[(r)q,r]}` is empty rather than the element holding the
+// comma, so the search is for `q` alone and `r` is the other end. Here the
+// search for `1` misses, which is one past the last element, and `2` is an
+// end before it — an empty span, and a length of 0 (#1533).
+//
+// The nesting is what makes it worth a row of its own: a subscript on an
+// expansion's result reaches the same split as one on a name.
+func TestACommaInASearchOperandSeparatesThePair(t *testing.T) {
 	out, st := runNestedSubscript(t, `a=("1,2" x y); printf "[%s]" "${#${a[@]}[(r)1,2]}"`)
-	if want := "[3]"; out != want || st != 0 {
-		t.Errorf("gave %q at %d, want %q at 0 — a width and not a count", out, st, want)
+	if want := "[0]"; out != want || st != 0 {
+		t.Errorf("gave %q at %d, want %q at 0 — an empty span, not the element holding the comma", out, st, want)
 	}
 }
 

@@ -1482,12 +1482,26 @@ type subscriptSource struct {
 // and reading it as characters would be wrong however short it is.
 func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]string, bool) {
 	elems, scalar := src.elems, src.scalar
+	if e.IndexRange != nil {
+		// A pair whose ends carry flag groups of their own, separated by the
+		// parser because the comma has to have been *written* to separate
+		// one. Ahead of everything below, which reads the subscript as one
+		// piece of text and would hand a group's letters to the arithmetic.
+		return r.flaggedRangeSubscript(e, src)
+	}
 	written := r.subscriptTextAsWritten(e.Subscript())
 	idx := trimSubscript(written)
 	if r.wholeArrayIndex(e) {
 		return elems, true
 	}
 	if lo, hi, isRange := splitSubscriptRange(idx); isRange {
+		if r.subscriptIsReadAsItsIndex(e, src) &&
+			r.ask(r.sem().SubscriptCommaIsARange, "`${a[1,3]}` naming a range rather than one subscript") {
+			// A range names a span and `(k)` wants the one index a subscript
+			// named, so there is nothing for it to answer: measured,
+			// `${(k)x[1,2]}` is `invalid subscript` and the line ends at 1.
+			return nil, r.reportIndexAndRange()
+		}
 		return r.rangeSubscript(src, idx, lo, hi)
 	}
 	if at, extra := topLevelComma(idx); at >= 0 && extra &&
@@ -1516,6 +1530,9 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 	n, ok := r.subscriptIndex(written)
 	if !ok {
 		return nil, true
+	}
+	if r.subscriptIsReadAsItsIndex(e, src) {
+		return []string{itoa(r.forwardSubscriptIndex(n, len(elems)))}, true
 	}
 	if scalar {
 		if v, ok := scalarElemAt(elems[0], n, r.arrayBase()); ok {
@@ -1706,26 +1723,14 @@ func splitSubscriptRange(idx string) (lo, hi string, ok bool) {
 
 // topLevelComma reports where the first comma outside any nesting is, and
 // whether another follows it.
+//
+// The parser asks the same question of the subscript as *written*, so that a
+// pair whose ends carry flag groups becomes two ends there rather than one
+// operand here — see syntax.SubscriptRange. One implementation, because two
+// would be two answers to one question and the pair would then be split in
+// one place and not the other.
 func topLevelComma(idx string) (at int, extra bool) {
-	depth := 0
-	at = -1
-	for i := range len(idx) {
-		switch idx[i] {
-		case '(', '[':
-			depth++
-		case ')', ']':
-			depth--
-		case ',':
-			if depth != 0 {
-				continue
-			}
-			if at >= 0 {
-				return at, true
-			}
-			at = i
-		}
-	}
-	return at, false
+	return syntax.SubscriptComma(idx)
 }
 
 // rangeSubscript answers a subscript written as a pair, `${a[1,3]}`.
@@ -1735,7 +1740,7 @@ func topLevelComma(idx string) (at int, extra bool) {
 // comma separates a range or joins two expressions, so it needs no answer, and
 // neither does a pair either reading refuses.
 func (r *Runner) rangeSubscript(src subscriptSource, idx, lo, hi string) ([]string, bool) {
-	span, spanOK := r.rangeElems(src.elems, src.scalar, lo, hi)
+	span, badEnd, spanErr := r.rangeElems(src.elems, src.scalar, lo, hi)
 	whole, wholeErr := r.subscriptValue(idx)
 	var one []string
 	oneOK := wholeErr == nil
@@ -1744,11 +1749,19 @@ func (r *Runner) rangeSubscript(src subscriptSource, idx, lo, hi string) ([]stri
 			one = []string{v}
 		}
 	}
-	if spanOK && oneOK && equalStrings(span, one) {
+	if spanErr == nil && oneOK && equalStrings(span, one) {
 		return span, true
 	}
 	if r.ask(r.sem().SubscriptCommaIsARange, "`${a[1,3]}` naming a range rather than one subscript") {
-		if !spanOK {
+		if spanErr != nil {
+			// An end that will not evaluate is the *range* reading's
+			// failure, and it was thrown away here: `${a[b c,2]}` came back
+			// empty at status 0 where the shell with ranges writes `bad math
+			// expression: operator expected at ``c''` and ends the line.
+			// Reported against the end that failed, which is what names `c`
+			// rather than the whole pair (#2161).
+			r.diagf("%s\n", r.subscriptFailure(badEnd, spanErr))
+			r.expandErr = true
 			return nil, true
 		}
 		return span, true
@@ -1809,20 +1822,29 @@ func (r *Runner) rangeSubscript(src subscriptSource, idx, lo, hi string) ([]stri
 // non-monotonic in `hi` is an artifact of the shell's own arithmetic rather
 // than a statement about ranges, and writing it down here would be writing
 // down that artifact.
-func (r *Runner) rangeElems(elems []string, scalar bool, lo, hi string) ([]string, bool) {
-	var units []string
-	if scalar {
-		units = r.units(elems[0])
-	} else {
-		units = elems
-	}
+//
+// badEnd is the end that would not evaluate, named so that a caller reporting
+// spanErr blames the half the shell blames rather than the whole pair.
+func (r *Runner) rangeElems(elems []string, scalar bool, lo, hi string) (span []string, badEnd string, err error) {
 	from, err := r.subscriptValue(lo)
 	if err != nil {
-		return nil, false
+		return nil, lo, err
 	}
 	to, err := r.subscriptValue(hi)
 	if err != nil {
-		return nil, false
+		return nil, hi, err
+	}
+	return r.rangeSpan(subscriptSource{elems: elems, scalar: scalar}, from, to), "", nil
+}
+
+// rangeSpan is rangeElems with both ends already evaluated, which is what a
+// pair whose ends carry flag groups hands it: a search names an index and
+// there is no text left to evaluate. One reading for both spellings, so the
+// out-of-range rules above cannot come to hold for one and not the other.
+func (r *Runner) rangeSpan(src subscriptSource, from, to int) []string {
+	units, scalar := src.elems, src.scalar
+	if scalar {
+		units = r.units(src.elems[0])
 	}
 	n := len(units)
 	base := r.arrayBase()
@@ -1836,24 +1858,33 @@ func (r *Runner) rangeElems(elems []string, scalar bool, lo, hi string) ([]strin
 	}
 	if first < 0 {
 		if negative && !scalar {
-			return outOfRangeSpan(last >= first), true
+			return outOfRangeSpan(last >= first)
 		}
 		first = 0
 	}
 	if first >= n && !scalar {
-		return outOfRangeSpan(last > first), true
+		return outOfRangeSpan(last > first)
 	}
 	if last >= n {
 		last = n - 1
 	}
 	if last < first {
-		return []string{}, true
+		return []string{}
 	}
 	span := units[first : last+1]
 	if scalar {
-		return []string{strings.Join(span, "")}, true
+		return []string{strings.Join(span, "")}
 	}
-	return span, true
+	return span
+}
+
+// reportIndexAndRange refuses a subscript that is asked for the one index it
+// named and names a span instead. Always handled, so the caller answers
+// nothing rather than falling through to a reading the shell refuses.
+func (r *Runner) reportIndexAndRange() bool {
+	r.diagf("%s\n", Wording(r.diag().SubscriptIsAnIndexAndARange, "invalid subscript"))
+	r.expandErr = true
+	return true
 }
 
 // outOfRangeSpan is what a range whose start is outside the array comes to:

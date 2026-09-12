@@ -5366,6 +5366,26 @@ echo "st=$?"`,
 		Why:     "`n` asks for the nth match rather than the first and `b` moves where the search starts, forwards for `r` and backwards for `R`. The last of the four is the one worth a row of its own: a start past the end is *not* clamped to the end, so a reverse search from 6 over five elements finds nothing rather than finding the fifth",
 	},
 	{
+		ID: "array/a-subscript-flag-group-in-each-end-of-a-range", Category: "expansion",
+		Snippet: `s="hello world"; printf "[%s]" "${s[(r)l,(r)o]}" "${s[3,(r)o]}" "${s[(r)w,-1]}" "${s[(r)zz,-1]}" "${s[(R)zz,-1]}"; a=(p "q,r" s); printf "[%s]" "${a[(r)q,r]}"; echo`,
+		Why:     "each end of a range carries a flag group of its own, and a search in one answers with the *index* it matched at rather than with the element — so `${s[(r)l,(r)o]}` is `${s[3,5]}`. The two misses are the two out-of-range indices and not `no match`, which is what the fourth and fifth fields separate: a missed forward search starts one past the last character and bounds nothing, a missed reverse one starts one before the first and bounds everything. The last field is the discriminating one and the reason the split cannot wait for the run — an element whose *value* holds a comma is not what the search finds, so the pair is separated in the text as written and `(r)q` is the whole operand. Ours read the group at the front as the whole subscript's, left the second inside its operand, and answered empty at status 0 to every one of them (#1533)",
+	},
+	{
+		ID: "array/an-index-flag-in-the-first-end-of-a-range", Category: "expansion",
+		Snippet: `a=(p q r); printf "[%s]" "${a[1,(i)r]}" "${a[(r)q,(i)r]}" "${a[(e)1,(i)r]}" "${a[(ir)q,2]}"; echo "|${a[(i)q,2]}|"; echo`,
+		Why:     "the four selecting letters are not interchangeable in the two ends. `i` and `I` are read in the *second* one, where they are the index they name like any other end; at the front of a pair the shell refuses the subscript outright — `invalid subscript` at 1, which ends the line before the trailing echo. The third field is what places the rule in the position rather than in the letters, since a group that selects nothing at the front leaves the pair alone, and the fourth is the last-letter rule from anywhere else — `(ir)` selects by `r` and is read where `(ri)` is refused. The other five columns have no flag group in a subscript and read the whole thing as arithmetic",
+	},
+	{
+		ID: "array/the-key-flag-on-an-ordinary-array-is-the-index", Category: "expansion",
+		Snippet: `x=(p q r); printf "[%s]" "${(k)x[2]}" "${(k)x[1+1]}" "${(k)x[-1]}" "${(k)x[-9]}" "${(k)x[9]}" "${(k)x[(r)q]}" "${(k)x[(R)zz]}" "${(k)x[(e)2]}"; printf "[%s]" ${(k)x[@]}; s=hello; printf "[%s]" "${(k)s[2]}"; echo`,
+		Why:     "`(k)` on an *association* substitutes the key, and the same letter on an ordinary array reads the subscript's **index** — a different question with a different source, and the half that was not built (#1515). The reading is the subscript arithmetic-evaluated and normalized forward: a negative counted from the end and not clamped when it reaches past either edge, which is what the `-9` and `9` fields say, and a search answering with the position it matched at or with the out-of-range index its letter misses to. Every field's wrong answer is the element, which is a plausible word at status 0 — a script asking `${(k)x[2]}` for a position was handed `q`. The last two are the shapes the reading does not reach: `[@]` is still the elements, and a scalar's subscript is still a character",
+	},
+	{
+		ID: "array/a-range-end-that-will-not-evaluate-is-reported", Category: "expansion",
+		Snippet: `a=(p q r); echo "[${a[b c,2]}]"; echo ran`,
+		Why:     "an end of a range that is no expression is the range reading's failure, and it was thrown away here: the span reported it, the caller dropped it, and the expansion came back empty at status 0 while the script carried on. Every column refuses the line — the four that read the comma as arithmetic complain about the whole text and zsh about the end that failed, naming `c` — and none of them prints `ran`. The plain subscript already reported this; the pair was the copy that did not",
+	},
+	{
 		ID: "array/a-subscript-flag-group-start-below-the-first-element", Category: "expansion",
 		Snippet: `a=(p q r p t); printf "[%s]" "${a[(ib:-6:)p]}" "${a[(Ib:-6:)p]}" "${a[(ib:6:)p]}" "${a[(Ib:6:)p]}"; s="hello world"; printf "[%s]" "${s[(ib:-12:)l]}"; echo`,
 		Why:     "the row beside `(b:6:)` and not its mirror: a start past the *end* leaves each letter the miss its own direction names, and a start counted back past the *first* element gives the forward search the backward one. So the first two fields are both 0 while the next two are 6 and 0, and an implementation reading `outside the array` as one condition answers 6 to the first. The scalar is the fifth field and the control — a string's characters do not move with it, and `${s[(ib:-12:)l]}` is the ordinary forward miss — which is what places the rule in the element walk rather than in where a search begins. The other five columns have no flag group in a subscript and read the whole thing as arithmetic (#1534)",

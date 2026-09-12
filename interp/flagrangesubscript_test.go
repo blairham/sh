@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -413,6 +414,176 @@ func TestARangeStartingOutsideTheArrayNamesOneEmptyElement(t *testing.T) {
 			out, st := runFlagRange(t, count+tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// runFlagRangeGroups is runFlagRange with the subscript's own flag group in
+// the grammar, which is what puts a search in a range's endpoint.
+func runFlagRangeGroups(t *testing.T, src string) (string, int) {
+	t.Helper()
+	return runGrammar(t, src, func(d *syntax.Dialect) {
+		flagRangeGrammar(d)
+		d.ArraySubscriptFlags = true
+	}, func(r *Runner) {
+		sem := *r.Semantics
+		sem.SubscriptCommaIsARange = Yes
+		sem.ArrayBaseIsZero = No
+		sem.ScalarSubscriptIsACharacter = Yes
+		sem.SplitParamExpansion = No
+		sem.GlobExpansionResults = No
+		sem.GlobNoMatchIsError = Yes
+		sem.OperatorDistributesOverStarSubscript = No
+		r.Semantics = &sem
+	})
+}
+
+// Each end of a range carries a flag group of its own, and a search in one of
+// them answers with the *index* it matched at rather than with the element.
+// The group at the front used to be read as the whole subscript's, so the
+// second one stayed inside the first one's operand, the search looked for a
+// literal comma and a parenthesis, and the range came back empty — silent,
+// and indistinguishable from "nothing matched" (#1533).
+//
+// Every row is a measurement on zsh 5.9.2, 2026-09-12.
+func TestAFlagGroupInEachEndOfARange(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"both ends search a string",
+			`s="hello world"; f "${s[(r)l,(r)o]}"`,
+			`1:[llo]`,
+		},
+		{
+			"only the second does",
+			`s="hello world"; f "${s[3,(r)o]}"`,
+			`1:[llo]`,
+		},
+		{
+			"only the first does",
+			`s="hello world"; f "${s[(r)w,-1]}"`,
+			`1:[world]`,
+		},
+		{
+			"both ends search an array",
+			`a=(alpha beta gamma); f "${a[(r)alpha,(r)gamma]}"`,
+			`1:[alpha beta gamma]`,
+		},
+		{
+			"a reverse search names where it matched last",
+			`a=(p q r); f "${a[(R)p,3]}" "${a[1,(R)q]}"`,
+			`2:[p q r][p q]`,
+		},
+		{
+			// The two misses, which are the two out-of-range indices and
+			// not "no match": one past the last element and one before the
+			// first, so the same pair of letters bounds nothing and
+			// everything.
+			"a missed search is an index like any other",
+			`a=(p q r); f "${a[(r)zz,-1]}" "${a[(R)zz,-1]}" "${a[1,(r)zz]}" "${a[1,(R)zz]}"`,
+			`4:[][p q r][p q r][]`,
+		},
+		{
+			"the modifiers are read in an end too",
+			`a=(alpha beta gamma beta); f "${a[(rn:2:)*a,-1]}" "${a[(rb:3:)*a,-1]}" "${a[(re)beta,-1]}"`,
+			`3:[beta gamma beta][gamma beta][beta gamma beta]`,
+		},
+		{
+			"a group that selects nothing leaves the end arithmetic",
+			`a=(p q r); f "${a[(e)1,(e)2]}"`,
+			`1:[p q]`,
+		},
+		{
+			// The operand is a word, so a substitution in an end is
+			// performed exactly as one anywhere else in a subscript.
+			"an end's operand is expanded",
+			`a=(p q r); w=q; f "${a[(r)$w,-1]}"`,
+			`1:[q r]`,
+		},
+		{
+			// The comma splits before the operand exists, so an element
+			// whose value holds one is not what a search finds.
+			"a comma inside what looks like an operand still splits",
+			`a=(p "q,r" s); f "${a[(r)q,r]}"`,
+			`1:[]`,
+		},
+		{
+			"a pair of plain ends is unchanged beside them",
+			`a=(p q r); f "${a[1,2]}" "${a[2,-1]}" "${a[0,2]}"`,
+			`3:[p q][q r][p q]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runFlagRangeGroups(t, count+tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The four selecting letters are not interchangeable in the *first* end. `i`
+// and `I` answer an index there and a pair has no room for one, so the shell
+// refuses the subscript outright; in the second end all four are read.
+//
+// Which is a fact about the position rather than about the letters: a group
+// that selects nothing at the front leaves the pair alone, and only the last
+// selecting letter written counts.
+func TestAnIndexFlagInTheFirstEndOfARangeIsRefused(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{"i at the front", `a=(p q r); f "${a[(i)q,2]}"`},
+		{"I at the front", `a=(p q r); f "${a[(I)q,3]}"`},
+		{"the last selecting letter is what counts", `a=(p q r); f "${a[(ri)q,2]}"`},
+		{"and a string is refused alike", `s="hello world"; f "${s[(i)l,(I)l]}"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runFlagRangeGroups(t, count+tc.src)
+			if st == 0 {
+				t.Errorf("%s = %q at status 0, want the subscript refused", tc.src, out)
+			}
+			if !strings.Contains(out, "invalid subscript") {
+				t.Errorf("%s = %q, want it named an invalid subscript", tc.src, out)
+			}
+		})
+	}
+}
+
+// The other side of that line, so a fix that refused too much fails here.
+func TestAnIndexFlagInTheSecondEndOfARangeIsRead(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"i names where it matched first", `a=(p q r); f "${a[1,(i)r]}"`, `1:[p q r]`},
+		{"I names where it matched last", `a=(p q r); f "${a[1,(I)q]}"`, `1:[p q]`},
+		{"a search at the front beside it", `a=(p q r); f "${a[(r)q,(i)r]}"`, `1:[q r]`},
+		{"a group that selects nothing at the front", `a=(p q r); f "${a[(e)1,(i)r]}"`, `1:[p q r]`},
+		{"and the last selecting letter again", `a=(p q r); f "${a[(ir)q,2]}"`, `1:[q]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runFlagRangeGroups(t, count+tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// An end that will not evaluate is the range reading's failure and was thrown
+// away: the span reported it, the caller dropped it, and the expansion came
+// back empty at status 0 where the shell writes a diagnostic and ends the
+// line. The end that failed is what the complaint names, not the pair.
+func TestARangeEndThatWillNotEvaluateIsReported(t *testing.T) {
+	for _, tc := range []struct{ name, src, token string }{
+		{"the first end", `a=(p q r); f "${a[b c,2]}"`, "c"},
+		{"the second end", `a=(p q r); f "${a[1,b c]}"`, "c"},
+		{"an unreadable group at the front", `a=(p q r); f "${a[(z)1,2]}"`, "1"},
+		{"and one at the back", `a=(p q r); f "${a[1,(z)2]}"`, "2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runFlagRangeGroups(t, count+tc.src)
+			if st == 0 {
+				t.Errorf("%s = %q at status 0, want the end reported", tc.src, out)
+			}
+			if !strings.Contains(out, tc.token) || !strings.Contains(out, "operator expected") {
+				t.Errorf("%s = %q, want the failing end named around %q", tc.src, out, tc.token)
 			}
 		})
 	}

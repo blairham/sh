@@ -37,7 +37,7 @@ func TestARefusedFlagGroupNamesTheRestOfTheWord(t *testing.T) {
 		// And it runs past the closing brace to the end of the word.
 		{`echo a${(U)x}b c`, "syntax error at line 1: `x}b' unexpected"},
 		// A group whose argument holds the delimiter, and one whose
-		// delimiter is escaped: the `)` search honours the backslash.
+		// delimiter is escaped: the `)` search honors the backslash.
 		{`echo ${(s.:.)x}`, "syntax error at line 1: `x}' unexpected"},
 		{`echo ${(ps:\):)x}`, "syntax error at line 1: `x}' unexpected"},
 		// The idiom the corpus carries, quotes and all — a tail holding an

@@ -427,7 +427,7 @@ type Error struct {
 	// `echo ${~x} after`, `${=x}`, `${^x}` and `${+x}` each name the one
 	// character, measured in the same run.
 	//
-	// Two neighbours are measured and *not* modeled. Quotes are dropped from
+	// Two neighbors are measured and *not* modeled. Quotes are dropped from
 	// the tail — `${(U)"x"}` gives `x}` and `"[${(U)x}]"` gives `x}]` —
 	// which is what flagGroupTail does, but only where the tail holds no
 	// expansion: with one in it the shell keeps the quotes it was written

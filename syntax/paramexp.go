@@ -1811,7 +1811,7 @@ func (p *Parser) scanNestedExpansion(s string, at Pos, q Quoting) (inner *Word, 
 // flagGroupClose is the index in an expansion's inner source of the `)` that
 // closes the flag group it opens with, or -1 where the scan cannot reach one.
 //
-// The scan is deliberately shallow: it honours a backslash and stops at a
+// The scan is deliberately shallow: it honors a backslash and stops at a
 // nested `(`, which is what the shell whose refusal reads this does.
 // Measured on ksh93u+, 2026-09-12: `${(s.:.)x}` and `${(ps:\):)x}` both name
 // the text after their group's `)`, and `${(l(3))x}` goes back to naming the

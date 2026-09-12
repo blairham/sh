@@ -6800,6 +6800,13 @@
       }
     },
     "arith/a-values-leading-zeros-in-front-of-a-name": {
+      "ash": {
+        "Stdout": "s1=2~s2=2~hex=16~s3=0~s4=2",
+        "Stderr": "\u003cshell\u003e: arithmetic syntax error~\u003cshell\u003e: arithmetic syntax error~\u003cshell\u003e: arithmetic syntax error",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "s1=1~s2=1~hex=16~s3=0~s4=1",
         "Stderr": "\u003cshell\u003e: line 1: 0abc: value too great for base (error token is \"0abc\")~\u003cshell\u003e: line 1: 0b101: value too great for base (error token is \"0b101\")~\u003cshell\u003e: line 1: 00x10: value too great for base (error token is \"00x10\")",
@@ -11689,6 +11696,13 @@
       }
     },
     "array/a-comma-that-arrives-through-a-substitution": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "[s][s][]",
         "Stderr": "",
@@ -16170,6 +16184,13 @@
       }
     },
     "array/a-substituted-comma-on-the-left-of-an-assignment": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "[p][q][Z][s][1][2][3][Z]",
         "Stderr": "",
@@ -49629,6 +49650,13 @@
       }
     },
     "decl/a-table-letter-over-a-declared-array": {
+      "ash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=1~[x][y] after",
         "Stderr": "\u003cshell\u003e: line 2: typeset: a: cannot convert indexed to associative array",
@@ -49724,6 +49752,13 @@
       }
     },
     "decl/an-array-letter-over-a-declared-table": {
+      "ash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=1~declare -A h=([k]=\"v\" )~after",
         "Stderr": "\u003cshell\u003e: line 2: typeset: h: cannot convert associative to indexed array",
@@ -73761,6 +73796,13 @@
       }
     },
     "expansion/a-write-through-a-reference-reaches-every-subscript": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: ${(P)v::=Z}: bad substitution",
@@ -95673,6 +95715,13 @@
       }
     },
     "opt/set-f-writes-the-letter-in-the-shell-that-still-globs": {
+      "ash": {
+        "Stdout": "letter~zz.*",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "letter~zz.*",
         "Stderr": "",
@@ -97961,6 +98010,13 @@
       }
     },
     "param/a-flag-group-error-names-the-rest-of-its-word": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: A${(g:x:)v}B: bad substitution",
@@ -99790,6 +99846,13 @@
       }
     },
     "param/a-scalar-context-does-not-split-a-flag-group": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: ${(s:,:)v}: bad substitution",
@@ -99834,6 +99897,13 @@
       }
     },
     "param/a-scalar-context-joins-a-flag-groups-words": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: ${$(f)}: bad substitution",
@@ -111907,6 +111977,13 @@
       }
     },
     "param/where-a-scalar-contexts-join-sits": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: ${(j:+:)y#ab}: bad substitution",
@@ -154328,6 +154405,13 @@
       }
     },
     "special/dollar-dash-places-a-capital-among-the-letters-it-started-with": {
+      "ash": {
+        "Stdout": "[Cce]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "[ehBCc]",
         "Stderr": "",
@@ -159421,6 +159505,13 @@
       }
     },
     "test/a-comparison-operand-that-will-not-read": {
+      "ash": {
+        "Stdout": "st=2~div=2~after",
+        "Stderr": "\u003cshell\u003e: 1x1: bad number~\u003cshell\u003e: 3/0: bad number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=2~div=2~after",
         "Stderr": "\u003cshell\u003e: line 1: [: 1x1: integer expected~\u003cshell\u003e: line 1: [: 3/0: integer expected",
@@ -159465,6 +159556,13 @@
       }
     },
     "test/a-comparison-operands-leading-zeros": {
+      "ash": {
+        "Stdout": "dec=0~hex=2~name=2~inner=2",
+        "Stderr": "\u003cshell\u003e: 0x10: bad number~\u003cshell\u003e: 0x10: bad number~\u003cshell\u003e: 1+0x10: bad number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "dec=0~hex=2~name=2~inner=2",
         "Stderr": "\u003cshell\u003e: line 1: [: 0x10: integer expected~\u003cshell\u003e: line 1: [: 0x10: integer expected~\u003cshell\u003e: line 1: [: 1+0x10: integer expected",
@@ -159662,6 +159760,13 @@
       }
     },
     "test/a-terminal-test-descriptor-past-the-integer": {
+      "ash": {
+        "Stdout": "big=2~wide=2",
+        "Stderr": "\u003cshell\u003e: 9223372036854775808: out of range~\u003cshell\u003e: 99999999999999999999: out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "big=2~wide=2",
         "Stderr": "\u003cshell\u003e: line 1: [: 9223372036854775808: integer expected~\u003cshell\u003e: line 1: [: 99999999999999999999: integer expected",
@@ -159706,6 +159811,13 @@
       }
     },
     "test/a-terminal-test-descriptor-too-wide": {
+      "ash": {
+        "Stdout": "m1=1~m2=1~wrap=1~zero=1~max=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "m1=1~m2=1~wrap=1~zero=1~max=1",
         "Stderr": "",
@@ -160209,6 +160321,13 @@
       }
     },
     "test/comparison-operands-are-arithmetic": {
+      "ash": {
+        "Stdout": "name=2~expr=2~based=2~assign=2 n=5",
+        "Stderr": "\u003cshell\u003e: n: out of range~\u003cshell\u003e: 1+1: bad number~\u003cshell\u003e: 16#10: bad number~\u003cshell\u003e: n=9: out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "name=2~expr=2~based=2~assign=2 n=5",
         "Stderr": "\u003cshell\u003e: line 1: [: n: integer expected~\u003cshell\u003e: line 1: [: 1+1: integer expected~\u003cshell\u003e: line 1: [: 16#10: integer expected~\u003cshell\u003e: line 1: [: n=9: integer expected",

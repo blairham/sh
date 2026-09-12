@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -194,18 +195,26 @@ func TestAFoundDoesNotCarryItsRouteAcrossTheWire(t *testing.T) {
 	}
 }
 
-// TestTheAshColumnAgreesWithWhatWasRecorded is the one test here that needs
-// the container, and it is written so that the machine that cannot run it
-// still checks something: the degradation itself.
+// TestTheContainerRouteMeasuresAndNotJustRuns is the one test here that
+// needs the container, and it is written so that the machine that cannot run
+// it still checks something: the degradation itself.
 //
 // A skip that asserts nothing is the inert gate this repository already has a
 // scar from, so the else branch is not a courtesy — where ash cannot be
 // reached, the thing under test is that the harness said so and said why.
-func TestTheAshColumnAgreesWithWhatWasRecorded(t *testing.T) {
-	golden, err := Load(filepath.Join("testdata", "golden.json"))
-	if err != nil {
-		t.Fatalf("golden record: %v", err)
-	}
+//
+// What it asks about is the *wiring*, in the places a route can be wrong
+// while looking right: the two streams kept apart, an exit status that
+// arrives, a signal death that is a signal rather than 128+n, the script
+// route, and argv[0]. Every row is a fact about BusyBox that does not depend
+// on the architecture or the day.
+//
+// It deliberately does **not** compare cells against the golden record. That
+// comparison is `oracle -check`'s, and it is report-only in CI for a measured
+// reason — a runner is not the machine that made the record — so making a
+// required test ask it would be red for a legitimate reason, which is the one
+// way to teach people to ignore a check.
+func TestTheContainerRouteMeasuresAndNotJustRuns(t *testing.T) {
 	found, absent := Resolve(context.Background())
 	var ash Found
 	for _, f := range found {
@@ -229,25 +238,64 @@ func TestTheAshColumnAgreesWithWhatWasRecorded(t *testing.T) {
 	if !strings.Contains(strings.ToLower(ash.Version), "busybox") {
 		t.Fatalf("the ash column reports %q, which is not BusyBox", ash.Version)
 	}
-	// A handful rather than the corpus: the whole column is what `make
-	// oracle-check` runs, and what this asks is whether the route is wired to
-	// the same normalization the record was made with.
-	checked := 0
-	for _, c := range Corpus {
-		if c.ReferenceRaces || checked == 25 {
-			continue
+
+	for _, tc := range []struct {
+		name string
+		c    Case
+		want Result
+	}{{
+		// The streams are kept apart. A route that merged them would put
+		// the diagnostic in Stdout and no other row here would notice.
+		name: "two streams",
+		c:    Case{ID: "t/streams", Snippet: `echo out; echo err >&2`},
+		want: Result{Stdout: "out", Stderr: "err"},
+	}, {
+		// A status that is neither 0 nor a shell's own refusal code, so a
+		// route that reported "it failed" rather than the number fails here.
+		name: "exit status",
+		c:    Case{ID: "t/status", Snippet: `exit 42`},
+		want: Result{Status: 42},
+	}, {
+		// The reason the runner is a process that waits rather than a
+		// command line that execs: a signal death has no exit status, and a
+		// container reporting 128+n would record Status 130 and no signal at
+		// all. That would make the whole exit-on-signal discipline
+		// untestable in this column while looking like a measurement.
+		name: "a signal is a signal",
+		c:    Case{ID: "t/signal", Snippet: `kill -TERM $$`},
+		want: Result{Status: -1, Signal: syscall.SIGTERM, SignalName: syscall.SIGTERM.String()},
+	}, {
+		// The script route, which writes a file into the scratch directory
+		// the case is given — inside the image, where the harness cannot see
+		// it. A route that only knew -c would fail here.
+		name: "the script route",
+		c:    Case{ID: "t/script", Snippet: `echo "[${0##*/}]"`, Script: true},
+		want: Result{Stdout: "[case.sh]"},
+	}, {
+		// argv[0], which decides which shell a column is measuring and which
+		// a docker command line cannot set: there is no `exec -a` in this
+		// shell. The diagnostic naming the shell is normalized away, which
+		// is the other half of the wiring — a route that did not apply the
+		// name would leave `sh:` standing against every other column's
+		// `<shell>:`.
+		name: "argv0",
+		c:    Case{ID: "t/argv0", Snippet: `nosuchcmd_zz`, Argv0: "sh"},
+		want: Result{Stderr: "<shell>: nosuchcmd_zz: not found", Status: 127},
+	}, {
+		// And BusyBox's own answer to a name that is not one of its applets,
+		// which is a fact about the shell rather than about the route: it is
+		// a multi-call binary that dispatches on argv[0], so a name it does
+		// not know is not a shell at all. Recorded here because the first
+		// reading of `applet not found` in a cell is that the harness broke,
+		// and it did not — `ln -s /bin/busybox myshell; ./myshell -c :`
+		// answers the same on any Alpine machine.
+		name: "argv0 that is not an applet",
+		c:    Case{ID: "t/argv0-unknown", Snippet: `echo hi`, Argv0: "myshell"},
+		want: Result{Stderr: "<shell>: applet not found", Status: 127},
+	}} {
+		if got := Exec(context.Background(), ash, tc.c); got != tc.want {
+			t.Errorf("%s: %s\n\twant %s", tc.name, describe(got), describe(tc.want))
 		}
-		want, ok := golden.Results[c.ID]["ash"]
-		if !ok {
-			continue
-		}
-		if got := Exec(context.Background(), ash, c); got != want {
-			t.Errorf("%s: the container column answered %s, recorded %s", c.ID, describe(got), describe(want))
-		}
-		checked++
-	}
-	if checked == 0 {
-		t.Error("no recorded ash cell was re-run, so this proves nothing")
 	}
 }
 

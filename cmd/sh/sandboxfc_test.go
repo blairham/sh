@@ -95,7 +95,7 @@ func untouchedByFc(at string) bool {
 }
 
 // The other half, without which every case above passes for a shell that
-// writes no history file at all — which, for `-c`, is the correct behaviour
+// writes no history file at all — which, for `-c`, is the correct behavior
 // and is exactly the trap.
 //
 // So the sibling is run the same way, `-i` included, into the workspace the

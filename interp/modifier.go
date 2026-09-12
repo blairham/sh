@@ -109,10 +109,10 @@ func rangeSegmentIsAModifier(w *syntax.Word) bool {
 // a colon: `${x:s:Dir:OTHER:}` is one modifier, and splitting on colons first
 // turns it into four things none of which is one. Measured — every byte
 // serves as a delimiter, `/ | # , :` alike.
-func modifierSegments(first, rest *syntax.Word) []string {
-	text := modifierText(first)
-	if rest != nil {
-		text += ":" + modifierText(rest)
+func modifierSegments(firstText, restText string, hasRest bool) []string {
+	text := firstText
+	if hasRest {
+		text += ":" + restText
 	}
 	var segs []string
 	for {
@@ -123,6 +123,29 @@ func modifierSegments(first, rest *syntax.Word) []string {
 		}
 		text = remainder
 	}
+}
+
+// modifierSource is the text a modifier list reads, which is the **source**
+// where the parser kept it and a reconstruction from the spans where it did
+// not.
+//
+// The source is right and the reconstruction is an approximation, so this is
+// not two ways of saying the same thing: a brace's body is read raw by the
+// shell that has modifiers, and every quote character in it is an ordinary
+// character of whatever operand reads its own text (#1860). A word joined
+// from spans has had those characters taken off by the lexer and cannot get
+// them back — putting a delimiter around each quoted span would be a
+// different string again, since a `$` inside the quotes has been expanded by
+// then and the shell does not expand it. See syntax.ParamExpr.ArgText.
+//
+// The fallback is reached by a node the parser did not build — one this
+// package assembled to ask a question of — and it keeps the answer those
+// nodes had before the source was recorded.
+func modifierSource(written string, w *syntax.Word) string {
+	if written != "" {
+		return written
+	}
+	return modifierText(w)
 }
 
 // modifierText is a modifier list as it was *written*, with the protection a

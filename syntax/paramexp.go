@@ -229,6 +229,35 @@ type ParamExpr struct {
 	Arg *Word
 	// Arg2 is the replacement for `/`, or the length for a substring.
 	Arg2 *Word
+	// ArgText and Arg2Text are the two operands of a substring range as they
+	// were **written** — the raw source between the braces, before the lexer
+	// took a quote character off anything.
+	//
+	// Set for that operator alone, because a modifier list is the only
+	// operand in the grammar that reads its own *text* rather than a value,
+	// and the shell it belongs to reads a brace's body raw. Measured on zsh
+	// 5.9.2, 2026-09-12, from a script file so the outer quoting is not what
+	// is being tested (#1860):
+	//
+	//	x="a'.'b"; ${x:s/'.'/:/}   a:b     the pattern is the three
+	//	                                   characters `'.'`, and matches
+	//	y='a.b';   ${y:s/'.'/:/}   a.b     so it misses a bare dot
+	//	w='aQb';   ${w:s/'Q'/X/}   aQb     with no metacharacter in sight
+	//	v="a'b";   ${v:s/'/X/}     aXb     one quote is one character
+	//	r='a$b';   ${r:s/'$'/X/}   a$b     and a `$` between them is text
+	//	a=X; x=aXb; ${x:s/$a/Q/}   aXb     as is a `$` without them
+	//	u='a  b';  ${u:s/'  '/_/}  a  b
+	//
+	// Rows one and two are each other's control: the pattern the quotes are
+	// part of matches the value that holds them and misses the one that does
+	// not. Row six is the sharper claim — the text is not expanded either,
+	// so a word joined from spans is wrong in a second way — and it is why
+	// this is the source rather than a reconstruction with the delimiters
+	// written back.
+	//
+	// Empty for a node the parser did not fill, where the reconstruction is
+	// all there is. See interp/modifier.go.
+	ArgText, Arg2Text string
 	// Arg2Enclosed is the *replacement* operand read a second way: as
 	// content of the quoting around the expansion, rather than as a word of
 	// its own. Nil unless the two readings could differ, which is what makes
@@ -1437,11 +1466,17 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 			e.Arg = p.wordFrom(rest, start, Unquoted)
 		}
 	case ParamSubstring:
+		// The two operands are kept as source as well as as words: a
+		// modifier list reads its own text and a substring's offset reads a
+		// value, and the same characters are both until the run decides.
+		// See ParamExpr.ArgText.
 		if i := indexUnquoted(rest, ':'); i >= 0 {
 			e.Arg = p.wordFrom(rest[:i], start, Unquoted)
 			e.Arg2 = p.wordFrom(rest[i+1:], start, Unquoted)
+			e.ArgText, e.Arg2Text = rest[:i], rest[i+1:]
 		} else {
 			e.Arg = p.wordFrom(rest, start, Unquoted)
+			e.ArgText = rest
 		}
 	case ParamUpper, ParamLower, ParamToggle,
 		ParamUpperFirst, ParamLowerFirst, ParamToggleFirst:

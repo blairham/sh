@@ -91,6 +91,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ValueBackslashQuotesWhatFollows", s.ValueBackslashQuotesWhatFollows, interp.Yes},
 		{"PositionalListWithNoneIsSet", s.PositionalListWithNoneIsSet, interp.Yes},
+		{"PrefixToAFrozenNameIsCheckedFirst", s.PrefixToAFrozenNameIsCheckedFirst, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},

@@ -205,6 +205,11 @@ func Semantics() interp.Semantics {
 	// 2026-09-12, `set --; "${@-word}"` is empty and `"${@+word}"` is
 	// `word`, where bash and ksh93 answer the other way round (#1941).
 	s.PositionalListWithNoneIsSet = interp.Yes
+	// The value is expanded and the redirection opened before the prefix is
+	// checked, so a failure in either is what gets reported and the frozen
+	// name is never named. Measured 2026-09-12, with ksh93 and zsh against
+	// the three bash builds (#1943).
+	s.PrefixToAFrozenNameIsCheckedFirst = interp.No
 	// The mask reaches the trim, so an escaped IFS whitespace character
 	// closing a `read` value is data and stays — this shell alone.
 	// Measured 2026-09-12: `printf 'a b c\\ \n' | read x y` leaves `b c `

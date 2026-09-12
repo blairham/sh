@@ -312,7 +312,7 @@ the name was frozen does not enter into it either: `readonly x`, with no
 value, and `typeset -r x=1` refuse exactly as `readonly x=1` does in
 every column that has the spelling.
 
-**Three axes, because the table above needs three questions answered.**
+**Four axes, because the table above needs four questions answered.**
 Writing one axis from the bash rows would have given ksh93 the opposite
 answer for five kinds of nine, which is how this was first filed.
 
@@ -330,6 +330,18 @@ answer for five kinds of nine, which is how this was first filed.
   at status 1 where the refusal is not fatal. Yes in ksh93 and zsh, No in
   bash. Unanswered in the standard's preset, where every refusal is fatal
   and the command's fate never arises.
+- **`PrefixToAFrozenNameIsCheckedFirst`** — whether the check happens
+  before the command's values are expanded and its redirections opened.
+  Yes in bash alone. Measured 2026-09-12 with `readonly x=1`:
+  `x=$((1/0)) /bin/echo RAN` says `x: readonly variable`, prints `RAN`
+  and never mentions the division there, and reports the division and no
+  `RAN` in dash, ksh93 and zsh; `x=2 /bin/echo RAN >/nope/f` names the
+  name and then the file there, and only the file elsewhere. Two probes
+  agreeing on one boundary is what makes it a boundary rather than a
+  quirk of arithmetic, and the first says the value is not merely
+  reported later but **never evaluated**. Read once a name in the prefix
+  is actually frozen, which is where the other three are asked and for
+  the same reason (#1943).
 
 The kind is read once, at the dispatch, by resolving the command word the
 way the dispatch itself resolves it — a function shadows a builtin and a
@@ -342,14 +354,6 @@ first refusal, so the count follows from
 `PrefixRefusalCostsTheCommand`. And a name that resolves to nothing is an
 external command that fails to run, so the columns that skip the command
 report 1 and never write `command not found`.
-
-**What is left, and it is not this.** bash checks the prefix *before* it
-expands the value or opens a redirection, so `x=$((1/0)) cmd` and
-`x=2 cmd >/nope/f` complain about `x` there and about the expansion and
-the file everywhere else. Ours is on the everywhere-else side, on every
-dispatch route alike now, and the three `roprefix/` rows that measure it
-are the recorded divergence. That ordering is one axis of its own and has
-not been asked: #1943.
 
 Corpus: the twenty `roprefix/` rows, one per command kind and one per
 variable the construct turned out to depend on — including the control,

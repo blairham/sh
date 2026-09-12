@@ -371,6 +371,42 @@ type Semantics struct {
 	// where bash is fatal nowhere and skips nothing. See #1219.
 	PrefixRefusalCostsTheCommand Answer
 
+	// PrefixToAFrozenNameIsCheckedFirst refuses the prefix **before** the
+	// command's values are expanded and before its redirections are opened.
+	// `No` does the other things first, so a value that will not expand and
+	// a file that will not open each report on their own and the frozen name
+	// is never mentioned.
+	//
+	// Measured 2026-09-07 and again 2026-09-12, script file, `readonly x=1`
+	// in front of each line:
+	//
+	//	                              bash 5.3, as-`sh`, 3.2   dash, ksh93u+, zsh
+	//	x=$((1/0)) /bin/echo RAN      `x: readonly variable`,   the division, and
+	//	                              `RAN`, and no division    no `RAN`
+	//	x=$((1/0)) f                  the same, and the body    the division, and
+	//	                              runs                      no body
+	//	x=2 /bin/echo RAN >/nope/f    `x: readonly variable`,   the file only
+	//	                              then the file
+	//
+	// Two probes agreeing on one boundary is what makes it a boundary rather
+	// than a quirk of arithmetic: a redirection that cannot be opened reaches
+	// the same order with no expression in it at all. The first row also says
+	// the value is not merely reported later but **never evaluated** — the
+	// division is silent in the column that checks first.
+	//
+	// The other three prefix axes are asked at the same point and for the
+	// same reason: a command with a prefix is a minority of a script's lines
+	// and one with a frozen name in the prefix is a minority of those, so
+	// four questions sit off the common path entirely. This one is asked
+	// there too, once a name in the prefix is actually frozen (#1943).
+	//
+	// It is the order and not the refusal. What a reported refusal costs is
+	// PrefixRefusalCostsTheCommand and PrefixRefusalFatality, and those are
+	// answered the same way whichever order the two happen in — bash runs
+	// the command in both rows above, exactly as it does with a prefix that
+	// expands.
+	PrefixToAFrozenNameIsCheckedFirst Answer
+
 	// EchoOptions is the set of letters `echo` reads as options: `n` for
 	// every shell measured, `e` everywhere but dash, `E` in bash and zsh
 	// alone. A word carrying any other letter is not an option at all — the

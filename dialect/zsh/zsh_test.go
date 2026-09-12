@@ -181,6 +181,7 @@ func TestSemantics(t *testing.T) {
 		// open: that flag globs one expansion and the backslash quotes.
 		{"ValueBackslashQuotesWhatFollows", s.ValueBackslashQuotesWhatFollows, interp.Yes},
 		{"PositionalListWithNoneIsSet", s.PositionalListWithNoneIsSet, interp.Yes},
+		{"PrefixToAFrozenNameIsCheckedFirst", s.PrefixToAFrozenNameIsCheckedFirst, interp.No},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.No},
 		// A math error inside `(( ))` leaves 2 here and 1 in the rest of the
 		// panel, with the same sentence in front of it either way.

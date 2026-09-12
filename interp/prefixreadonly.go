@@ -95,6 +95,58 @@ func commandOperandOf(argv []string) []string {
 	return argv
 }
 
+// frozenPrefixNames is the names in an assignment prefix that are readonly,
+// in the order they were written.
+//
+// One walk rather than two: the early check asks whether there is one at all
+// and refusePrefixes names each of them, and a second copy of "which of these
+// count" is how the two would come to disagree about a positional prefix.
+//
+// positionalAssignIndex and not prefixAssignsPositional, which *performs* the
+// assignment: this is a question and not a step, and asking it through the
+// acting spelling gave `1=X /bin/echo hi` the parameter the external route
+// deliberately withholds.
+func (r *Runner) frozenPrefixNames(assigns []*syntax.Assign) []string {
+	var frozen []string
+	for _, a := range assigns {
+		if a.Operand {
+			continue
+		}
+		if _, ok := positionalAssignIndex(a.Name); ok {
+			continue
+		}
+		if r.readonly[a.Name] {
+			frozen = append(frozen, a.Name)
+		}
+	}
+	return frozen
+}
+
+// refusePrefixesEarly is the readonly check on an assignment prefix, run
+// before the command's values are expanded and before its redirections are
+// opened. That order is Semantics.PrefixToAFrozenNameIsCheckedFirst.
+//
+// It returns whether the command is given up on, and it sets
+// Runner.prefixCheckedFirst so the dispatch routes below skip the value of a
+// frozen name and refusePrefixes does not report the same names twice.
+//
+// The axis is read only once a name in the prefix is actually frozen, which
+// is where the other three prefix axes are asked and for the same reason: a
+// command with a prefix is a minority of a script's lines, and one with a
+// frozen name in it a minority of those.
+func (r *Runner) refusePrefixesEarly(assigns []*syntax.Assign, argv []string) bool {
+	if len(argv) == 0 || len(r.frozenPrefixNames(assigns)) == 0 {
+		return false
+	}
+	if !r.ask(r.sem().PrefixToAFrozenNameIsCheckedFirst,
+		"a frozen name in a prefix checked before the command's values and redirections") {
+		return false
+	}
+	r.prefixCheckedFirst = true
+	_, stop := r.refusePrefixesNow(assigns, r.prefixCommandOf(argv), true)
+	return stop
+}
+
 // prefixRefusalApplies reports whether a prefix to a frozen name is refused at
 // all in front of this command.
 //
@@ -171,22 +223,20 @@ func (r *Runner) prefixRefusalCost(p prefixCommand) (fatal, skip bool, unanswere
 // name in the location are never this refusal's, whatever builtin happens to
 // be running the command it is prefixed to.
 func (r *Runner) refusePrefixes(assigns []*syntax.Assign, p prefixCommand, report bool) (refused, stop bool) {
-	var frozen []string
-	for _, a := range assigns {
-		if a.Operand {
-			continue
-		}
-		// positionalAssignIndex and not prefixAssignsPositional, which
-		// *performs* the assignment: this is a question and not a step, and
-		// asking it through the acting spelling gave `1=X /bin/echo hi` the
-		// parameter the external route deliberately withholds.
-		if _, ok := positionalAssignIndex(a.Name); ok {
-			continue
-		}
-		if r.readonly[a.Name] {
-			frozen = append(frozen, a.Name)
-		}
+	if r.prefixCheckedFirst {
+		// Already reported, ahead of the values and the redirections, by the
+		// dialect that checks the prefix before either. The caller still
+		// needs "refused" so that the name keeps its value, and never
+		// "stop": a command the early check gave up on never reached here.
+		return true, false
 	}
+	return r.refusePrefixesNow(assigns, p, report)
+}
+
+// refusePrefixesNow is refusePrefixes without the already-reported guard, so
+// that the early check can be the one report rather than a second one.
+func (r *Runner) refusePrefixesNow(assigns []*syntax.Assign, p prefixCommand, report bool) (refused, stop bool) {
+	frozen := r.frozenPrefixNames(assigns)
 	if len(frozen) == 0 {
 		// Nothing is frozen, so no axis is asked. The commands with a prefix
 		// at all are a minority of a script's and the ones with a frozen name

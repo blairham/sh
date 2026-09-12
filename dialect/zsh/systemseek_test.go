@@ -175,7 +175,8 @@ print -r -- "st=$?"`)
 // A script that has put a number in `ERRNO` still gets that number's
 // sentence, which is byte-identical to zsh.
 func TestSyserrorWithNoOperandReportsTheLastNumber(t *testing.T) {
-	out, st, errs := runZshSplit(t, t.TempDir(), `syserror
+	out, st, errs := runZshSplit(t, t.TempDir(), `syserror 0
+syserror
 print -r -- "bare=$?"
 ERRNO=13
 syserror
@@ -184,10 +185,21 @@ print -r -- "set=$?"`)
 	if out != want || st != 0 {
 		t.Errorf("syserror with no operand = %q (status %d), want %q", out, st, want)
 	}
-	wantWholeLines(t, errs,
-		"Undefined error: 0",
-		"Permission denied",
-	)
+	// Against `syserror 0` rather than against a sentence written here: the
+	// wording for zero is the platform's and not this shell's — `Undefined
+	// error: 0` on darwin and `Success` on Linux, which errnotable_darwin.go
+	// and errnotable_linux.go already record. What this asserts is that the
+	// no-operand form in a fresh shell *is* the zero answer.
+	lines := splitLines(errs)
+	if len(lines) != 3 {
+		t.Fatalf("stderr = %q, want three sentences", errs)
+	}
+	if lines[0] != lines[1] {
+		t.Errorf("stderr = %q, want the bare form to answer as `syserror 0` does", errs)
+	}
+	if lines[2] != "Permission denied" {
+		t.Errorf("stderr = %q, want the assigned number's sentence last", errs)
+	}
 }
 
 // **A failed system call is what puts a number there**, which is the half

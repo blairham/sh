@@ -5714,16 +5714,32 @@ What was built, all through the extension seam — registered builtins in each
   filesmodule.go, socketmodule_unix.go): the three modules a prompt theme
   narrows to at startup, measured 2026-09-09 against zsh 5.9.2 with `zsh -f`.
 
-  **Only the names that cannot shadow a command are registered.** Each module
-  provides its commands under two spellings — `stat` and `zstat`, `rm` and
-  `zf_rm` — and this shell's builtins are the dialect's, registered before any
-  script runs, so a `stat` registered at all is a `stat` registered always and
-  every `stat -f %z` in every script would stop reaching /usr/bin/stat. zsh
-  does not have that problem because the module really is loaded on demand, and
-  the manual makes the same recommendation for the same reason. So `zstat`, the
-  nine `zf_` names and `zsocket` are implemented, the ten plain names are in
-  the feature table as features this shell has not got, and `zmodload -F
-  zsh/files b:rm` refuses by that name.
+  **A name that would shadow a command is registered withdrawn, so a script
+  gets it only by asking for the module.** Each module provides its commands
+  under two spellings — `stat` and `zstat`, `rm` and `zf_rm` — and this
+  shell's builtins are the dialect's, registered before any script runs, so a
+  `stat` in the table is a `stat` every script gets and every `stat -f %z`
+  would stop reaching /usr/bin/stat. zsh does not have that problem because
+  the module really is loaded on demand, and the manual recommends the `z`
+  spellings for the same reason.
+
+  The third builtin state is what makes the plain ten affordable. zsh's own
+  listings distinguish **absent**, **disabled** and **registered**: a name a
+  module has not switched on is not in `disable`'s listing, in `enable`'s, or
+  in `$builtins`, and `enable`/`disable` naming it are `no such hash table
+  element` at 1. So the ten are registered *withdrawn* — out of the lookup,
+  falling through to the command — and `zmodload` switches them on. A fresh
+  shell is `rm: command` and `stat: command`; `zmodload -F zsh/files b:rm` is
+  `rm: builtin` with `zf_rm: none`, the narrowed load having withdrawn the
+  seventeen it did not name; a plain `zmodload zsh/files` gives both
+  spellings. An unload **undoes the load** rather than taking the module's
+  builtins away — measured, `zsh/files`, `zsh/stat` and `zsh/datetime` lose
+  theirs and `zsh/zutil` keeps every one at 0 — so each name goes back to the
+  state the runner was built in.
+
+  Every plain spelling is the same implementation as its `z` twin and reaches
+  the filesystem through the same gates, so a policy refuses `rm` exactly as
+  it refuses `zf_rm`; `make sandbox` grades both spellings.
 
   `zstat` is the whole system call: fourteen elements in a fixed order, one
   selectable with `+element` shortened to any unique prefix, `-A` into an

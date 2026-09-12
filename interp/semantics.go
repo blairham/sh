@@ -4350,6 +4350,70 @@ type Semantics struct {
 	// which is also why this field is read by `unalias` as well.
 	SuffixAliases Answer
 
+	// AliasListsAsDefinitions gives `alias` a `-L`, which writes every line
+	// as a command that would define the alias back: `alias ` in front, and
+	// the kind's own letter where the entry is not the regular kind — `alias
+	// -g UP='| tr a-z A-Z'`, `alias -s txt=cat`.
+	//
+	// zsh alone, measured 2026-09-12. It is what a startup file wants and
+	// what the plain listing cannot be, since the plain listing is `name=value`
+	// there and says nothing about which kind an entry is. The letter is a
+	// listing form and not a filter: `alias -L`, `alias -g -L` and `alias -s
+	// -L` each list what the kind letter alone would have listed.
+	AliasListsAsDefinitions Answer
+
+	// AliasRestrictsToRegularKind gives `alias` a `-r`, the kind letter for
+	// "neither global nor suffix".
+	//
+	// zsh alone, and it exists there because the other two kind letters
+	// leave no way to ask for the plain ones: the shared table holds the
+	// regular and the global aliases together and the plain listing shows
+	// both. It is a kind like `-g` and `-s` rather than a modifier on them,
+	// so `alias -r -g` and `alias -rs` are `illegal combination of options`
+	// exactly as `alias -gs` is.
+	AliasRestrictsToRegularKind Answer
+
+	// AliasOperandsCanBePatterns gives `alias` and `unalias` a `-m`, which
+	// reads every operand as a pattern rather than as a name.
+	//
+	// zsh alone. Read by both builtins because one letter serves both there,
+	// and they differ in what an absent operand means: `alias -m` with
+	// nothing after it is the plain listing at 0, and `unalias -m` with
+	// nothing after it is `not enough arguments` at 1 — a removal with no
+	// pattern would be a removal of everything, which is what `-a` is for.
+	//
+	// A pattern that matches nothing is 0 for `alias` and 1 for `unalias`,
+	// which is the same shape as a name that is not there.
+	AliasOperandsCanBePatterns Answer
+
+	// AliasPlusPrintsNamesOnly makes `+g`, `+r`, `+s` and a bare `+` list the
+	// names without the values.
+	//
+	// zsh alone, and the plus words are not option letters in the ordinary
+	// sense: a bare `+` also *ends* the option list, so `alias + -L` looks up
+	// an alias called `-L` where `alias -L +` lists everything in the `-L`
+	// form. `-L` wins over the names-only reading when both are written,
+	// measured: `alias -L +g` is the full definition line.
+	//
+	// `unalias` has none of them — `unalias +m x` looks for hash table
+	// elements called `+m` and `x` — so this is read by `alias` alone.
+	AliasPlusPrintsNamesOnly Answer
+
+	// TypeNamesAnAliasOnlyWhenExpanded holds `type`, `command -v` and
+	// `command -V` silent about an alias while alias expansion is off.
+	//
+	// bash alone, and it is a real difference rather than a detail of how a
+	// program arrived: `alias a='echo hi'; type a` in a `-c` string is
+	// `type: a: not found` there while `alias` lists the entry one line
+	// earlier, and `shopt -s expand_aliases` in front of it makes the same
+	// call answer. The other three answer from the table whatever the switch
+	// says — zsh names one after `unsetopt aliases`.
+	//
+	// So the three builtins report what *would run*, in the dialect where an
+	// alias that cannot expand would not run, and report what the table
+	// holds in the dialects where the two are never apart.
+	TypeNamesAnAliasOnlyWhenExpanded Answer
+
 	// AliasReportsNotFound says something when `alias` is given a name the
 	// table does not hold. True in bash, dash and ksh93; zsh reports 1 and
 	// prints nothing.

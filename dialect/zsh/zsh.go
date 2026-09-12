@@ -651,6 +651,11 @@ func Semantics() interp.Semantics {
 	// keyed on a command word's extension (#2081).
 	s.GlobalAliases = interp.Yes
 	s.SuffixAliases = interp.Yes
+	s.AliasListsAsDefinitions = interp.Yes
+	s.AliasRestrictsToRegularKind = interp.Yes
+	s.AliasOperandsCanBePatterns = interp.Yes
+	s.AliasPlusPrintsNamesOnly = interp.Yes
+	s.TypeNamesAnAliasOnlyWhenExpanded = interp.No
 	// The reverse of ksh93: silent about `alias nope` and not about
 	// `unalias nope`.
 	s.AliasReportsNotFound = interp.No
@@ -1849,6 +1854,13 @@ func Diagnostics() interp.Diagnostics {
 		TypeKeyword: "%[1]s is a reserved word",
 		// The only one that names itself in the line.
 		TypeFunction: "%[1]s is a shell function from zsh",
+		// The three kinds, each with its own sentence. A suffix alias names
+		// the *extension*: `whence -v p.txt` is `txt is a suffix alias for
+		// cat`.
+		TypeAlias:       "%[1]s is an alias for %[2]s",
+		TypeGlobalAlias: "%[1]s is a global alias for %[2]s",
+		TypeSuffixAlias: "%[1]s is a suffix alias for %[2]s",
+		CommandVAlias:   "alias %[1]s=%[2]s",
 		// A name declared with `autoload` and not yet called is not an
 		// ordinary function here and does not say it is: measured,
 		// `whence -v myfn` and `type myfn` both write this line, and the
@@ -2116,18 +2128,6 @@ func Diagnostics() interp.Diagnostics {
 			// copy and -W is the `zsh/parameter` writability flag. -m and
 			// -M are implemented, in FunctionsOptions above.
 			"functions": "ckstuxzTUW",
-			// `alias`'s remaining letters, now that `-g` and `-s` are the
-			// two kinds this shell has rather than options nobody has
-			// (#2081): `-L` prints a listing in a form a startup file could
-			// read back, `-r` restricts a listing to the regular kind, and
-			// `-m` takes the operands as patterns. The paired rule is what
-			// puts them here — a letter belongs either in the set the
-			// builtin accepts or in this table, and one in neither reads as
-			// "zsh has no such letter".
-			"alias": "Lmr",
-			// `unalias` is the same rule with a shorter list: it has no
-			// `-L` or `-r` at all, and `-m` is its pattern form.
-			"unalias": "m",
 		},
 		// The builtin's name is stripped to the location prefix as ever:
 		// `zsh:read:1: -p: no coprocess`, measured with no coprocess to
@@ -2316,7 +2316,10 @@ func Diagnostics() interp.Diagnostics {
 		PrintfMissingVerb: "%[1]s: invalid directive",
 		UmaskBadMask:      "bad umask",
 		// The builtin's name comes from the location, as everywhere in zsh.
-		UnaliasNotFound:        "no such hash table element: %[2]s",
+		UnaliasNotFound: "no such hash table element: %[2]s",
+		// `zsh:unalias:1: not enough arguments` — the location carries the
+		// builtin's name, so the sentence does not.
+		UnaliasNoPattern:       "not enough arguments",
 		UnaliasAllWithOperands: "-a: too many arguments",
 		UnaliasUsage:           "not enough arguments",
 		UnsetNoOperands:        "%[1]s: not enough arguments",

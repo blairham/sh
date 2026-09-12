@@ -95,6 +95,9 @@ func loneDashRun2(t *testing.T, src string, option Answer) (string, int) {
 	// because the lone dash is the question here and three of the four
 	// answer that way.
 	sem.SuffixAliases = No
+	// And a fourth, for the same reason: `-m` is the other letter `unalias`
+	// asks about before it reads a word.
+	sem.AliasOperandsCanBePatterns = No
 	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh"})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {

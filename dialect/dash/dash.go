@@ -300,6 +300,11 @@ func Semantics() interp.Semantics {
 	// find rather than kinds it has.
 	s.GlobalAliases = interp.No
 	s.SuffixAliases = interp.No
+	s.AliasListsAsDefinitions = interp.No
+	s.AliasRestrictsToRegularKind = interp.No
+	s.AliasOperandsCanBePatterns = interp.No
+	s.AliasPlusPrintsNamesOnly = interp.No
+	s.TypeNamesAnAliasOnlyWhenExpanded = interp.No
 	s.AliasReportsNotFound = interp.Yes
 	s.UnaliasReportsNotFound = interp.Yes
 	s.AliasNotFoundStatusCounts = interp.No
@@ -500,6 +505,9 @@ func Diagnostics() interp.Diagnostics {
 
 		TypeKeyword:  "%[1]s is a shell keyword",
 		TypeFunction: "%[1]s is a shell function",
+		// `a is an alias for echo hi`, body raw.
+		TypeAlias:     "%[1]s is an alias for %[2]s",
+		CommandVAlias: "alias %[1]s=%[2]s",
 		// No shell name and no location in front of it, alone among the
 		// messages dash prints.
 		TypeNotFound:           "%[1]s: not found",

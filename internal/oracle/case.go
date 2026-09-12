@@ -14880,6 +14880,50 @@ echo "--s--"; alias -s`,
 		Snippet: `alias -g -s q=v; echo "st=$?"; alias -s; echo "st=$?"`,
 		Why:     "two namespaces, so one call cannot be about both — `illegal combination of options` at 1 in the shell with the letters, where the other five refuse whichever letter they meet first. The listing after it is what proves nothing was defined",
 	},
+	{
+		ID: "alias/a-listing-that-would-define-it-back", Category: "alias",
+		Snippet: `unalias -a 2>/dev/null
+alias -g G='b b' 2>/dev/null; alias r=y; alias -s t=z 2>/dev/null
+echo "--L--"; alias -L; echo "st=$?"
+echo "--sL--"; alias -s -L
+echo "--r--"; alias -r`,
+		Why: "the three letters left after the two kinds landed. `-L` writes each line as a command that would define the alias back — `alias ` in front and the kind's own letter where the entry is not the regular one — which the plain listing cannot be, since it is `name=value` and says nothing about the kind. `-r` is the kind letter for \"neither global nor suffix\", which the other two letters leave no way to ask for. One shell has them and the other five meet an option they do not know, each in its own words (#2097)",
+	},
+	{
+		ID: "alias/operands-as-patterns", Category: "alias",
+		Snippet: `unalias -a 2>/dev/null
+alias aa=1 ab=2 zz=3
+echo "--m--"; alias -m 'a*'; echo "st=$?"
+echo "--none--"; alias -m 'q*'; echo "st=$?"
+echo "--rm--"; unalias -m 'a*'; echo "st=$?"; alias
+echo "--bare--"; unalias -m; echo "st=$?"`,
+		Why: "`-m` reads every operand as a pattern in the one shell that has it, and the two builtins part company over an *absent* one: `alias -m` with nothing after it is the plain listing at 0, and `unalias -m` with nothing after it is `not enough arguments` at 1, because a removal with no pattern would be a removal of everything. A pattern that matches nothing is 0 for the listing and 1 for the removal, which is the same shape a name that is not there gets (#2097)",
+	},
+	{
+		ID: "alias/a-plus-word-prints-the-names", Category: "alias",
+		Snippet: `unalias -a 2>/dev/null
+alias -g G=x 2>/dev/null; alias r=y
+echo "--+--"; alias +; echo "st=$?"
+echo "--+g--"; alias +g
+echo "--L+--"; alias -L +
+echo "--+L--"; alias + -L; echo "st=$?"`,
+		Why: "the fourth thing `alias`'s options have in one shell: `+g`, `+r`, `+s` and a bare `+` print the names without the values, and the bare one also *ends* the option list. The last two lines are what tell those halves apart — `alias -L +` lists everything in the definition form, so the `-L` before it was still an option, and `alias + -L` looks up an alias called `-L` and finds none. The other five read every one of them as a name (#2097)",
+	},
+	{
+		ID: "alias/the-name-reporting-builtins-see-the-table", Category: "alias",
+		Snippet: `alias a='echo  hi'
+type a; echo "st=$?"
+command -V a; echo "st=$?"
+command -v a; echo "st=$?"`,
+		Why: "every shell in the panel names an alias here and no two word it alike: dash and zsh write the body raw, ksh93 quotes it the way its own listing would, bash carries the quotes in the sentence, and `command -v` is a line that would define the alias back everywhere except ksh93, which writes the body alone. bash is also the only one that answers *nothing* — it names an alias only while aliases expand, and `-c` does not — which is the row that keeps this from being read as one rule with five spellings (#2097)",
+	},
+	{
+		ID: "alias/naming-an-alias-follows-the-expansion-switch", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null; setopt aliases 2>/dev/null
+alias a='echo hi'
+type a; echo "st=$?"`,
+		Why: "the discriminating half of the row above: the same call with expansion turned on. bash answers here and refuses without it, so its silence is about what would *run* rather than about what the table holds; the other five answer either way. Written with both spellings of the switch and both silenced, so the line is a no-op in the four shells that have neither (#2097)",
+	},
 	// --- alias: the text this shell reads one level down (#2096) --------
 	{
 		ID: "alias/a-sourced-file-uses-the-shells-aliases", Category: "alias",

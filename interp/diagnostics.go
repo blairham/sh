@@ -552,9 +552,42 @@ type Diagnostics struct {
 	// UnaliasUsage is empty and nothing was wrong, which is 0.
 	UnaliasNoOperandStatus int
 
+	// UnaliasNoPattern is `unalias -m` with no pattern after it. No verbs.
+	// Only the dialect with the letter has anything to say — see
+	// Semantics.AliasOperandsCanBePatterns — and it is a separate sentence
+	// from the no-operand answer above because the plain form is a usage
+	// line there and this one is not.
+	UnaliasNoPattern string
+
 	// UnaliasAllWithOperands is `unalias -a` given a name as well. No verbs.
 	// Only zsh refuses it, which UnaliasAllRefusesOperands answers.
 	UnaliasAllWithOperands string
+
+	// TypeAlias is the sentence `type` and `command -V` write for a name the
+	// alias tables hold. Two verbs: the name and the body.
+	//
+	// Every dialect in the panel has one and they are not the same sentence:
+	// dash, ksh93 and zsh say `a is an alias for echo hi` and bash says
+	// ``a is aliased to `echo hi'``.
+	TypeAlias string
+	// TypeGlobalAlias and TypeSuffixAlias are that sentence for the two
+	// other kinds, in the one dialect that has them. Empty means the dialect
+	// has no such kind and TypeAlias answers for whatever it finds.
+	//
+	// A suffix alias's verb is the *extension*, not the word that was asked
+	// about: `whence -v p.txt` is `txt is a suffix alias for cat`.
+	TypeGlobalAlias string
+	TypeSuffixAlias string
+	// TypeAliasQuotesValue writes the body the way the listing would quote
+	// it. ksh93 alone: `a is an alias for 'echo hi'` beside its
+	// `a='echo hi'`, where dash and zsh write the body raw and bash's own
+	// wording carries the quotes.
+	TypeAliasQuotesValue bool
+	// CommandVAlias is what `command -v` writes for one. One or two verbs:
+	// three dialects write the line their `alias` listing would print,
+	// `alias %[1]s=%[2]s` with the body quoted, and ksh93 writes the quoted
+	// body alone.
+	CommandVAlias string
 
 	// AliasListPrefix goes in front of every line of a listing. `alias ` in
 	// bash, which is what makes its output text that can be read back, and

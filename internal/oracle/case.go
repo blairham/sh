@@ -17583,4 +17583,82 @@ echo "st=$?"`,
 		Snippet: `v=abc; r='[\&]'; shopt -u patsub_replacement 2>/dev/null; printf "[%s]" "${v/b/[&]}" "${v/b/$r}"; echo`,
 		Why:     "the other state of the option, which is what makes it an option rather than a dialect's fixed answer. With the reading off every column agrees on `a[&]c` for the first field, so the row is not discriminating between shells and is not meant to be -- it is the guard that says the switch is honored, and a shell that read the ampersand unconditionally is the only thing it can fail. The second field is the escape half moving with it: the backslash an expansion brought is kept here where the reading on would have taken it",
 	},
+	// --- the function library this shell ships ---------------------------
+	//
+	// #1282 decided what, if anything, this shell's own $fpath holds: two
+	// names a real startup file reaches before it has done anything of its
+	// own, written from zshcontrib(1) and from what the installed binary
+	// answers, and pinned here rather than only in a Go test.
+	//
+	// These rows are what makes the pin a *measurement*. Every other record
+	// of these functions is an expectation somebody typed; a row runs the
+	// snippet through real zsh and through this shell and compares what came
+	// back, so the library is graded against the shell it models on the same
+	// footing as the language is. Four of the six columns have no such name,
+	// and they do not all fail the same way: three report the call not found
+	// and carry on, and ksh93 stops at the `autoload -Uz` itself, where
+	// `autoload` is `typeset -fu` and those are not its letters. That is the
+	// fact worth having beside the other two — these functions are zsh's,
+	// they are not POSIX, and nothing else in the panel grows them by having
+	// $fpath pointed somewhere.
+	{
+		ID: "fnlib/is-at-least-component-counts", Category: "function library",
+		Snippet: `autoload -Uz is-at-least 2>/dev/null; is-at-least 5.9 5.9.2; printf "[%s]" $?; is-at-least 5.9.2 5.9; printf "[%s]" $?; is-at-least 5.9 5.9; printf "[%s]" $?; echo`,
+		Why:     "the shape every `is-at-least 5.1 && setopt …` in a startup file is: a two-component requirement against a three-component version, both ways round, and the equal case that says the comparison is not strict. A missing component counts as zero rather than as less than anything, so `5.9` is satisfied by `5.9.2` and `5.9.2` is not satisfied by `5.9`. Four columns have no such function and answer 127 three times over, which is the row's other half — the name is zsh's, and pointing $fpath at a directory does not give it to the rest",
+	},
+	{
+		ID: "fnlib/is-at-least-segments-are-numbers", Category: "function library",
+		Snippet: `autoload -Uz is-at-least 2>/dev/null; is-at-least 5.0.0 5.0; printf "[%s]" $?; is-at-least 5.0 5.0.0; printf "[%s]" $?; is-at-least 4.3.10 4.3.9; printf "[%s]" $?; is-at-least 5.10 5.9; printf "[%s]" $?; echo`,
+		Why:     "segments compare as numbers and not as text, which is the one reading a plausible implementation gets wrong in a way no released version would show until it did. `4.3.10` is greater than `4.3.9` and `5.10` is greater than `5.9`, where a string comparison answers the opposite for both; and the first pair is the guard on the zero rule from the row above — trailing zeros make a version neither newer nor older, so `5.0.0` and `5.0` satisfy each other",
+	},
+	{
+		ID: "fnlib/is-at-least-non-numeric-segments", Category: "function library",
+		Snippet: `autoload -Uz is-at-least 2>/dev/null; is-at-least 4.3.11-p1 4.3.11; printf "[%s]" $?; is-at-least 2.6-dev-3 2.6; printf "[%s]" $?; is-at-least 2.6-beta3 2.6; printf "[%s]" $?; echo`,
+		Why:     "what happens to a segment that is not a number, which is the whole of the manual's `leading non-number parts ignored` and is the half of this function that needs measuring rather than reading. Splitting is on `.` and `-` alike and a segment that is not wholly digits is dropped, so `4.3.11-p1` and `2.6-beta3` are satisfied by the versions they decorate — the suffix is gone — while `2.6-dev-3` is not, because `dev` is dropped and the `3` behind it is a segment of its own and greater than the nothing `2.6` has there. A reading that stripped the whole suffix answers 0 for the middle field; one that parsed a number out of `beta3` answers 1 for the last",
+	},
+	{
+		ID: "fnlib/is-at-least-second-argument-defaults", Category: "function library",
+		Snippet: `autoload -Uz is-at-least 2>/dev/null; is-at-least 5.0; printf "[%s]" $?; is-at-least 99; printf "[%s]" $?; is-at-least 5.0 ""; printf "[%s]" $?; is-at-least; printf "[%s]" $?; echo`,
+		Why:     "the argument that is usually left out: with nothing in the second position the comparison is against `$ZSH_VERSION`, and an *empty* second argument takes the same default rather than comparing against nothing — measured, `is-at-least 5.0 \"\"` is 0 on a shell that is past 5.0. The bounds are deliberately far from any real version so the row does not move when either shell's version does; the last field is no arguments at all, which asks nothing and is satisfied",
+	},
+	{
+		ID: "fnlib/add-zsh-hook-adds-a-name-once", Category: "function library",
+		Snippet: `autoload -Uz add-zsh-hook 2>/dev/null; f1() { :; }; add-zsh-hook precmd f1; add-zsh-hook precmd f1; echo "n=${#precmd_functions[@]} [${precmd_functions[*]}]"`,
+		Why:     "the base case, and the reason a plugin can call this on every reload: the array is `<hook>_functions`, the name is appended to it, and a name already there is not appended again. The count is printed with the contents because `[f1]` and `[f1 f1]` are the same characters once the boundaries are gone and the doubled one is the failure this row exists to catch — a hook installed twice runs twice at every prompt",
+	},
+	{
+		ID: "fnlib/add-zsh-hook-delete-exact-and-pattern", Category: "function library",
+		Snippet: `autoload -Uz add-zsh-hook 2>/dev/null; f1() { :; }; f2() { :; }; add-zsh-hook precmd f1; add-zsh-hook precmd f2; add-zsh-hook -d precmd 'f*'; echo "exact=[${precmd_functions[*]}]"; add-zsh-hook -D precmd 'f*'; echo "pattern=[${precmd_functions[*]}] set=${+precmd_functions}"`,
+		Why:     "the two removals are different operators and the same argument tells them apart: `-d` matches the name literally, so `f*` removes nothing and both names survive, and `-D` reads it as a pattern and removes both. The `set=` field is the third fact and the one an implementation gets wrong by being reasonable — removing the last element *unsets* the array rather than leaving an empty one, so `${+precmd_functions}` is 0 afterwards and the name is gone rather than present and empty",
+	},
+	{
+		ID: "fnlib/add-zsh-hook-removing-what-is-not-there", Category: "function library",
+		Snippet: `autoload -Uz add-zsh-hook 2>/dev/null; f1() { :; }; add-zsh-hook precmd f1; add-zsh-hook -d precmd f1; echo "set=${+precmd_functions}"; add-zsh-hook -d precmd nothere; echo "absent=$?"; add-zsh-hook -d chpwd nothere; echo "unsethook=$?"`,
+		Why:     "removal is idempotent and silent in both directions a teardown reaches it: a name that is not in the array, and a hook nothing has ever set, are each 0 with nothing said. It is the shape a plugin's unload function has, and it runs on a session where the load never happened; a status here is what would make `add-zsh-hook -d` under `set -e` take the shell down",
+	},
+	{
+		ID: "fnlib/add-zsh-hook-refuses-its-misuses", Category: "function library",
+		Snippet: `autoload -Uz add-zsh-hook 2>/dev/null; f1() { :; }; add-zsh-hook nosuchhook f1; echo "unknown=$?"; add-zsh-hook precmd; echo "one=$?"; add-zsh-hook; echo "none=$?"; add-zsh-hook precmd f1 f1; echo "three=$?"`,
+		Why:     "the four ways of getting it wrong, and they all end the same way: the usage on standard error and status 1. The hook name is validated against a list rather than taken, which is what keeps a typo from creating `precmd_funtions` and installing a hook nothing will ever fire — a silent failure, and the worst kind here. The operand counts matter because this is what a second call looked like while getopts shared its cursor across calls (#1392): the hook name was shifted past and the usage printed for every call after the first",
+	},
+	{
+		ID: "fnlib/add-zsh-hook-autoloads-the-name", Category: "function library",
+		Snippet: `autoload -Uz add-zsh-hook 2>/dev/null; add-zsh-hook precmd notdefinedyet; echo "st=$? [${precmd_functions[*]}]"; whence -w notdefinedyet`,
+		Why:     "a name that is not a function yet is installed anyway *and* marked for autoloading, with no `-U`, `-z` or `-k` asked for — which is why a plugin can register a hook before the file defining it has been read. `whence -w` is the half that says the marking happened rather than only the append: the name comes back `function` on a shell that has never seen a body for it",
+	},
+	{
+		ID: "fnlib/add-zsh-hook-every-hook-name", Category: "function library",
+		Snippet: `autoload -Uz add-zsh-hook 2>/dev/null; f1() { :; }; for h in chpwd precmd preexec periodic zshaddhistory zshexit zsh_directory_name; do add-zsh-hook $h f1 || echo "no $h"; done; echo "[${chpwd_functions[*]}][${precmd_functions[*]}][${preexec_functions[*]}][${periodic_functions[*]}][${zshaddhistory_functions[*]}][${zshexit_functions[*]}][${zsh_directory_name_functions[*]}]"`,
+		Why:     "the roster, which is a fact about the function and not about the shell: seven names are accepted and each gets its own array. It is the row a hook added to the list, or dropped from it, has to move — the previous row refuses an unknown name, so the two together say exactly which names exist. `|| echo` rather than a status field because a refusal here would otherwise be invisible in the arrays, which would simply come back empty",
+	},
+	{
+		ID: "fnlib/add-zsh-hook-listing", Category: "function library",
+		Snippet: `autoload -Uz add-zsh-hook 2>/dev/null; f1() { :; }; add-zsh-hook precmd f1; add-zsh-hook -L precmd; echo "L=$?"; add-zsh-hook -L zshexit; echo "unset=$?"; add-zsh-hook -L nosuchhook; echo "unknown=$?"`,
+		Why:     "`-L` writes each hook array back as a declaration that would recreate it, and it is 0 and silent for a hook that is unset and for one that does not exist — a listing asks rather than validates. The line it writes is `typeset -p`'s, so this row carries that builtin's spelling rather than this function's: zsh writes `typeset -g -a` because the listing is made from inside a function and a plain declaration there would recreate a *local*, and this shell writes `typeset -a` and owes the `-g` (#2041)",
+	},
+	{
+		ID: "fnlib/add-zsh-hook-autoload-letters", Category: "function library",
+		Snippet: `autoload -Uz add-zsh-hook 2>/dev/null; { add-zsh-hook -k precmd kf; } 2>/dev/null; echo "k=$? [${precmd_functions[*]}]"; { add-zsh-hook -Uzk precmd kf2; } 2>/dev/null; echo "Uzk=$? [${precmd_functions[*]}]"; { add-zsh-hook -q precmd kf3; } 2>/dev/null; echo "q=$?"`,
+		Why:     "the letters are handed to `autoload` rather than interpreted here, so what they answer is the *builtin's* answer arriving through the function. `-k` alone is accepted and `-Uzk` is not, because `-z` and `-k` name two different autoload styles and asking for both is a refusal at status 1 — and the hook is still installed either way, which is the part that makes the status the only thing to measure. Standard error is suppressed on purpose: the diagnostic names a line number in the function file, which is a fact about whose file it is rather than about the behavior. `-q` is the unknown letter, refused by `getopts` before anything is installed. This shell answers 0 for `-Uzk`, because its `autoload` has no `-k` to conflict with `-z` (#2149)",
+	},
 }

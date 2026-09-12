@@ -211,3 +211,54 @@ func shippedFunctionDir(t *testing.T) string {
 	}
 	return dir
 }
+
+// The two halves of #1282 joined, which is the only place they meet.
+//
+// The shipped `add-zsh-hook` puts a name in `precmd_functions` (#1968) and
+// the prompt loop reads that array (#1281). Each half is graded on its own
+// and neither grading can see the join: dialect/zsh drives the shipped file
+// and looks at the array it wrote, and repl/hooks_test.go fires an array a
+// test filled in Go. Both passed, in that order, while this shell was in
+// exactly the state #1281 measured — registration byte-identical to zsh's,
+// and not one hook ever run.
+//
+// So this drives a startup file that registers hooks the way every plugin in
+// the world does, then types a command, and asks whether the functions ran.
+// It is the acceptance test for the decision in #1282: a library whose
+// registrations nothing reads is a stub in all but spelling.
+func TestAHookTheShippedFunctionRegisteredFiresAtThePrompt(t *testing.T) {
+	home := scratchHome(t)
+	t.Setenv("FPATH", shippedFunctionDir(t))
+	writeHomeFile(t, home, ".zshrc", strings.Join([]string{
+		"autoload -Uz add-zsh-hook",
+		`beforeprompt() { print -r -- "MARK-PRECMD" }`,
+		`beforecommand() { print -r -- "MARK-PREEXEC $1" }`,
+		"add-zsh-hook precmd beforeprompt",
+		"add-zsh-hook preexec beforecommand",
+	}, "\n")+"\n")
+
+	out, errs, code := prompt(t, "echo body\nexit\n", "zsh", "-i")
+	if code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs)
+	}
+
+	// Two prompts are drawn — the first one and the one after `echo body` —
+	// so the prompt hook runs twice. A count rather than a Contains, because
+	// a hook that fires once and a hook that fires at every prompt are the
+	// same string and a different shell.
+	if n := strings.Count(out, "MARK-PRECMD"); n != 2 {
+		t.Errorf("prompt hook ran %d times, want 2; out = %q (stderr %q)", n, out, errs)
+	}
+
+	// The command hook is told the line, which is what a title-setting hook
+	// is for and is the whole of what it receives.
+	if !strings.Contains(out, "MARK-PREEXEC echo body") {
+		t.Errorf("out = %q (stderr %q), want the command hook to be given the line", out, errs)
+	}
+
+	// And it ran *before* the command did. A hook that fired afterwards would
+	// satisfy both checks above and be the wrong hook.
+	if before, after := strings.Index(out, "MARK-PREEXEC echo body"), strings.Index(out, "body\n"); before < 0 || after < 0 || before > after {
+		t.Errorf("out = %q: the command hook ran at %d and the command at %d, want the hook first", out, before, after)
+	}
+}

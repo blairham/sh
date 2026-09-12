@@ -324,7 +324,7 @@ func (c *containerConn) dial(ctx context.Context) error {
 	}
 
 	// Not the caller's ctx: this process outlives any one case, and a
-	// cancelled measurement must not take the container with it.
+	// canceled measurement must not take the container with it.
 	c.cmd = exec.Command(c.cli, "start", "-ai", c.id)
 	in, err := c.cmd.StdinPipe()
 	if err != nil {

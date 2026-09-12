@@ -52,12 +52,16 @@ func main() {
 			fmt.Fprintln(os.Stderr, "oraclerunner:", err)
 			return
 		}
-		out.Write(b)
-		out.WriteByte('\n')
+		_, _ = out.Write(b)
+		_ = out.WriteByte('\n')
 		// Flushed per line and not at the end. A case that kills its own
 		// process group can take this process with it, and every
 		// measurement made before that one has to have already arrived.
-		out.Flush()
+		//
+		// A failed flush is the pipe closing, which means the harness has
+		// gone and there is nobody left to tell: the next read returns end
+		// of file and the loop ends on its own.
+		_ = out.Flush()
 	}
 
 	ctx := context.Background()

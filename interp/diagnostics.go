@@ -2722,97 +2722,94 @@ type Diagnostics struct {
 	// such as `exit abc`. Two verbs, positional because the shells order them
 	// differently: %[1]s is the builtin's name and %[2]s the argument.
 	//
-	// Separate from InvalidNumber, which this was folded into and should not
-	// have been. They are two questions: dash answers this one "Illegal
-	// number: abc" and words the arithmetic failure by an entirely different
-	// route. One field cannot hold both without one dialect's answer to one
-	// question being read as its answer to the other.
+	// Separate from InvalidNumber. They are two questions: a preset may answer
+	// this one "Illegal number: abc" and word the arithmetic failure by an
+	// entirely different route. One field cannot hold both without one preset's
+	// answer to one question being read as its answer to the other.
 	NumericArgument string
-	// ShiftTooMany is `shift` past the end. One verb: the count, as a
-	// number — which a format is free to ignore, and dash's does.
+	// ShiftTooMany is `shift` past the end. One verb: the count, as a number —
+	// which a format is free to ignore, and some do.
 	ShiftTooMany string
 	// ShiftNegativeCount is the other end of the same range: a count below
 	// zero, where ShiftTooMany is one above `$#`. Two verbs, the same pair
-	// ShiftTooMany's format is handed — %[1]d the count as a number, %[2]s
-	// the operand as written — because the panel picks different ones:
-	// bash names the word, zsh names neither, and ksh93 reuses the wording
-	// it gives a count that is too large.
+	// ShiftTooMany's format is handed — %[1]d the count as a number, %[2]s the
+	// operand as written — because the presets pick different ones: one names
+	// the word, another names neither, and a third reuses the wording it gives a
+	// count that is too large.
 	//
-	// Empty means the dialect does not have this complaint, which is dash's
-	// answer: a negative count is a word that is not a number there, and
-	// ShiftBadNumber says so. ShiftNegativeIsOutOfRange is what decides
-	// which of the two is reached.
+	// Empty means the preset does not have this complaint: a negative count is a
+	// word that is not a number there, and ShiftBadNumber says so.
+	// ShiftNegativeIsOutOfRange is what decides which of the two is reached.
 	ShiftNegativeCount string
-	// ArithFloatDigits is how many significant digits a float is written to.
-	// ksh93 shows 15 and zsh 17, which is why `0.1+0.2` is 0.3 in one and
-	// 0.30000000000000004 in the other from the same arithmetic. Zero means
-	// 17, so a dialect that has floats and has not said is not silently
-	// rounded.
+	// ArithFloatDigits is how many significant digits a float is written to — 15
+	// and 17 are both measured, which is why `0.1+0.2` is 0.3 under one and
+	// 0.30000000000000004 under the other from the same arithmetic. Zero means
+	// 17, so a preset that has floats and has not said is not silently rounded.
 	ArithFloatDigits int
 	// ArithFloatKeepsPoint writes a whole float with a trailing point, so
-	// `1.5+2.5` is `4.` rather than `4`. zsh alone does it, and it is what
-	// keeps a float visible as one.
+	// `1.5+2.5` is `4.` rather than `4`. It is what keeps a float visible as
+	// one.
 	ArithFloatKeepsPoint bool
-	// ArithInfinity is how an infinity is written — `inf` in ksh93 and `Inf`
-	// in zsh, with the sign in front of either. Empty leaves Go's own
+	// ArithInfinity is how an infinity is written — `inf` and `Inf` are both
+	// measured, with the sign in front of either. Empty leaves Go's own
 	// spelling, which is neither.
 	ArithInfinity string
-	// ArithNotANumber is how a NaN is written: `nan` and `NaN` respectively.
+	// ArithNotANumber is how a NaN is written — `nan` and `NaN` are both
+	// measured.
 	ArithNotANumber string
 	// ArithInvalidFloatOperation is the refusal when a float reaches an
 	// operator defined only on integers. One verb: %[1]s the operator.
 	ArithInvalidFloatOperation string
-	// ArithNegativeExponent is the refusal when `**` meets an exponent
-	// below zero in a dialect whose answer is an error rather than a float.
+	// ArithNegativeExponent is the refusal when `**` meets an exponent below
+	// zero under a preset whose answer is an error rather than a float.
 	ArithNegativeExponent string
 
 	// SelectPrompt is what `select` asks with when PS3 is unset. No verbs.
-	// bash and ksh93 write `#? ` and zsh writes the same two characters the
-	// other way round, which makes it a value rather than an axis.
+	// `#? ` and the same two characters the other way round are both measured,
+	// which makes it a value rather than an axis.
 	SelectPrompt string
 	// ArithError wraps a failed arithmetic expansion. Three verbs, all
-	// positional because the shells order them differently and not every
-	// shell uses all three: %[1]s is the expression as written, %[2]s the
-	// reason, and %[3]s the token the failure is attributed to.
+	// positional because presets order them differently and not every preset
+	// uses all three: %[1]s is the expression as written, %[2]s the reason, and
+	// %[3]s the token the failure is attributed to.
 	//
-	// Only bash names a token. The other three formats simply do not mention
-	// %[3]s, which costs nothing — an indexed format ignores arguments past
-	// the highest index it uses.
+	// Only one preset names a token. The rest simply do not mention %[3]s, which
+	// costs nothing — an indexed format ignores arguments past the highest index
+	// it uses.
 	ArithError string
 	// ArithOperandExpected is the reason when an expression wanted a value
 	// and found something that could not be one: `$((%))`, `$((1+&2))`. One
-	// verb, the text from the refused byte to the end of the expression,
-	// which only the shells that name anything here use.
+	// verb, the text from the refused byte to the end of the expression, which
+	// only the presets that name anything here use.
 	//
-	// It is a reason rather than a message for the same purpose the others
-	// here are: ArithError wraps it, so a dialect states the reason once and
-	// the shape once instead of repeating the shape in every reason.
+	// It is a reason rather than a message for the same purpose the others here
+	// are: ArithError wraps it, so a preset states the reason once and the shape
+	// once instead of repeating the shape in every reason.
 	//
-	// Empty falls back to ArithExpressionRanOut, which is what the two
-	// dialects that word the two failures identically want.
+	// Empty falls back to ArithExpressionRanOut, which is what a preset that
+	// words the two failures identically wants.
 	ArithOperandExpected string
 	// ArithIllegalByte is the reason when the arithmetic reader met a byte
 	// that is part of no token at all, at a position where the expression
-	// could legally have stopped: `$((@))` and `$((1 @))` are
-	// `illegal character: @` in the one shell that has this sentence.
+	// could legally have stopped: `$((@))` and `$((1 @))` as
+	// `illegal character: @`, under a preset that has this sentence.
 	//
 	// One verb, the refused byte — not the text from it to the end of the
 	// expression, which is what ArithOperandExpected takes. The two sentences
 	// name different things about the same failure, which is why this cannot
 	// be a second wording of that field.
 	//
-	// Empty falls back to ArithOperandExpected, which is right for the three
-	// dialects that have no such sentence — and they never reach it anyway,
-	// because the kind is only produced where Dialect.ArithBytesRefusedOutright
-	// names the byte.
+	// Empty falls back to ArithOperandExpected, which is right for a preset with
+	// no such sentence — and it never reaches it anyway, because the kind is
+	// only produced where Dialect.ArithBytesRefusedOutright names the byte.
 	ArithIllegalByte string
-	// ArithBadFloatConstant is what a dialect with floating point says about
-	// a refused token that *begins with a point*, where it says something
-	// other than either operand complaint.
+	// ArithBadFloatConstant is what a preset with floating point says about a
+	// refused token that *begins with a point*, where it says something other
+	// than either operand complaint.
 	//
-	// A whole sentence rather than a reason: the one shell that has it writes
-	// it instead of the wrapper its other math refusals get. Measured
-	// 2026-09-11 and 2026-09-12 on zsh 5.9.2, where `$(( .foo ))` is
+	// A whole sentence rather than a reason: a preset that has it writes this
+	// instead of the wrapper its other math refusals get. Measured with
+	// `$(( .foo ))`, which is
 	//
 	//	bad floating point constant
 	//
@@ -2825,38 +2822,35 @@ type Diagnostics struct {
 	// `$(( 1 . 2 ))`, `$(( a.b ))`, `$(( .5.5 ))`, `$(( 0x.f ))` and
 	// `$(( a[.k] ))` all answer this way, while `$(( 1.e ))`, whose refused
 	// token is `e `, gets the ordinary operator complaint. So a point that
-	// begins a token commits that shell to reading a floating literal, and
-	// failing to is a *third* refusal rather than a wording of either
-	// (#1889).
+	// begins a token commits such a preset to reading a floating literal, and
+	// failing to is a *third* refusal rather than a wording of either.
 	//
-	// Empty is every other dialect, including the other one in the panel
-	// with floats: ksh93 answers the same expressions with its operand
-	// complaints, so this is a value one dialect holds and not an axis.
+	// Empty is every other preset, including another one with floats that
+	// answers the same expressions with its operand complaints — so this is a
+	// value one preset holds and not an axis.
 	ArithBadFloatConstant string
 	// ArithExpressionRanOut is the reason when an expression wanted a value
 	// and reached the end of the text instead: `$((1+))`, `$((~))`. One verb,
-	// the operator that was left wanting, which only the shell that names one
+	// the operator that was left wanting, which only a preset that names one
 	// uses.
 	//
-	// A separate field from ArithOperandExpected because two of the panel
-	// word the two apart — ksh93 has "more tokens expected" against
-	// "arithmetic syntax error", and zsh "operand expected at end of string"
-	// against "operand expected at `%'". One field had to pick one of them,
-	// and picking the end-of-input wording made every found-a-token failure
-	// claim the expression had run out. bash words both the same way, which
-	// is why it went unnoticed: it is the column a conformance number is
-	// usually read against.
+	// A separate field from ArithOperandExpected because some presets word the
+	// two apart — "more tokens expected" against "arithmetic syntax error", and
+	// "operand expected at end of string" against "operand expected at `%'". One
+	// field has to pick one of them, and picking the end-of-input wording makes
+	// every found-a-token failure claim the expression had run out. A preset
+	// that words both the same way is where that goes unnoticed.
 	ArithExpressionRanOut string
-	// ArithFailureStatus is the status a failed arithmetic expression carries.
-	// bash reports 1, the status of a command that failed, because it finds
+	// ArithFailureStatus is the status a failed arithmetic expression carries. A
+	// preset may report 1, the status of a command that failed, because it finds
 	// the failure while *expanding* rather than while parsing — we find it
-	// earlier, so the difference has to be stated. Zero means the dialect's
-	// general syntax-error status, which is what the other three want.
+	// earlier, so the difference has to be stated. Zero means the preset's
+	// general syntax-error status.
 	ArithFailureStatus int
 	// ArithBadOperator is the reason when text where an operator belonged
-	// could not have been one — `1 @`. bash alone words it separately from an
+	// could not have been one — `1 @`. A preset may word it separately from an
 	// operand standing in an operator's place; empty falls back to
-	// ArithOperatorExpected, which is what the other three want.
+	// ArithOperatorExpected.
 	ArithBadOperator string
 	// ArithConditionalThen and ArithConditionalElse are a conditional missing
 	// one of the two values it chooses between: `$(( 1 ? ))` and

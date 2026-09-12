@@ -127,6 +127,21 @@ type declareFlags struct {
 	// answering with the whole variable table is the one thing worse than
 	// refusing the letter (#1037).
 	inert bool
+	// letters is every option letter the line carried, in the order it was
+	// written and with the `f` that names the function table left out.
+	//
+	// Only one reader, and it is a seam rather than an attribute: a `-f`
+	// declaration whose letters mark a name to be defined later hands them
+	// straight to the dialect, because which of them mean anything there is
+	// that shell's vocabulary and not this package's. See
+	// Runner.SetFunctionMarkedUndefined and
+	// Semantics.FunctionLettersThatMarkUndefined.
+	//
+	// Cleared by withoutMatching, with the rest of "what else did this line
+	// say": every caller of that comparison is asking whether anything but
+	// the sign was written, and a record of the letters is not a second
+	// answer to it.
+	letters string
 }
 
 // declareOptionLetters is the set `declare` and `typeset` read where the
@@ -226,6 +241,9 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				return nil, f, r.refuseOption(name, a, known)
 			}
 			f.added = f.added || !f.remove
+			if c != 'f' {
+				f.letters += string(c)
+			}
 			if strings.ContainsRune(r.sem().DeclareOptionsWithoutEffect, c) {
 				f.inert = true
 				// The dialect spells the letter and this engine models
@@ -440,6 +458,25 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		} else {
 			return r.declareMatching(name, args, f)
 		}
+	}
+	if f.function && !f.remove && len(args) > 0 && r.markingLetters(f.letters) {
+		// Not a listing at all: this line *makes* the names functions whose
+		// bodies are read the first time they are called. See
+		// Runner.SetFunctionMarkedUndefined for the seam and
+		// Semantics.FunctionLettersThatMarkUndefined for which letters say
+		// so.
+		//
+		// Ahead of the listing branch because it is the same letters read
+		// the other way: `typeset -fu nm` writes nothing and leaves `nm`
+		// waiting, where this engine answered with a silent listing of a
+		// function that did not exist (#1753).
+		//
+		// The minus sign is required, and measured: `typeset +fu nm` is
+		// `invalid option(s)` in the shell that has the spelling, so the
+		// plus form is certainly not a marking. It is left to the
+		// names-only listing it already reached rather than refused here,
+		// which is a divergence of its own and not this one's to fix.
+		return r.markUndefinedFunctions(r, args, f.letters)
 	}
 	if f.function || f.funcNames {
 		// The function table rather than the variables, and the *sign* of

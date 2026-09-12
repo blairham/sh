@@ -11,6 +11,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -593,6 +594,42 @@ func (r *Runner) undefinedFunction(name string) (string, bool) {
 		return "", false
 	}
 	return r.undefinedFunctions(name)
+}
+
+// SetFunctionMarkedUndefined is the write half of [Runner.SetUndefinedFunctions]:
+// how this shell *makes* a name one that is still to be defined.
+//
+// A declaration builtin reaches it, because the two shells with the notion
+// spell it there as well as under their own word: `typeset -f` written with
+// the letters [Semantics.FunctionLettersThatMarkUndefined] names is not a
+// listing at all, it is `autoload` under a second name. Measured 2026-09-12
+// on zsh 5.9.2, `typeset -fu nm` and `autoload nm` leave the identical stub,
+// and `typeset -fUz nm` matches `autoload -Uz nm`.
+//
+// The hook is handed the operands and **the letters the line carried**, minus
+// the `f` that got it here, in the order they were written. Which of them
+// mean anything is the dialect's business and not this package's: one shell
+// records `U` and `z` on the stub it writes, and a shell that spelled the
+// same letters differently would map them here. This is deliberately not a
+// pre-digested set of options — an option struct crossing the seam would be
+// one shell's vocabulary in the substrate.
+//
+// The status is the hook's, because marking can fail: a name that is not a
+// name has nowhere to put the stub.
+func (r *Runner) SetFunctionMarkedUndefined(mark func(r *Runner, names []string, letters string) int) {
+	r.markUndefinedFunctions = mark
+}
+
+// markingLetters reports the letters a `-f` line carried that this dialect
+// says turn it into a marking, and whether there is a hook to do it. Both
+// halves, because a dialect that names the letters and installs no hook has
+// said something this package cannot act on, and a listing is the safer of
+// the two readings.
+func (r *Runner) markingLetters(letters string) bool {
+	if r.markUndefinedFunctions == nil {
+		return false
+	}
+	return strings.ContainsAny(letters, r.sem().FunctionLettersThatMarkUndefined)
 }
 
 // WriterForFd is the stream a builtin writing "to descriptor n" needs: the

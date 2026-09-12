@@ -45831,6 +45831,50 @@
         "TimedOut": false
       }
     },
+    "declare/marking-a-name-that-is-already-a-function": {
+      "bash": {
+        "Stdout": "body",
+        "Stderr": "\u003cshell\u003e: line 1: functions: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "body",
+        "Stderr": "\u003cshell\u003e: line 1: functions: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "body",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: functions: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "body",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: functions: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "body~f(){ echo body; };",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "body~f () {~\techo body~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/matching-names-a-name-once-per-pattern-that-reaches-it": {
       "bash": {
         "Stdout": "",
@@ -46931,6 +46975,50 @@
         "TimedOut": false
       }
     },
+    "declare/the-decorating-letter-does-not-mark-on-its-own": {
+      "bash": {
+        "Stdout": "st=2~then=127",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: -z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~then=127",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: -z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2~then=127",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -z: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~then=127",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: typeset: -z: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~then=1~nm () {~\t# undefined~\tbuiltin autoload -Xz~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/the-export-letter-and-the-scope-a-declaration-takes": {
       "bash": {
         "Stdout": "x=[UNSET]~r=[UNSET]~l=[UNSET]",
@@ -47057,6 +47145,50 @@
       },
       "zsh": {
         "Stdout": "export -i n5=5",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/the-f-letter-with-u-marks-rather-than-lists": {
+      "bash": {
+        "Stdout": "st=1~then=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~then=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2~then=127",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~then=127",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~typeset -fu nm~then=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~nm () {~\t# undefined~\tbuiltin autoload -X~}~then=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

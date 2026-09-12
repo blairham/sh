@@ -113,6 +113,12 @@ func registerAutoload(r *interp.Runner) {
 	// A listing is not the body printed back for a name still waiting to be
 	// defined — see the note above autoloadStubPrefix, and
 	// interp.Runner.SetUndefinedFunctions for the seam.
+	// `typeset -f` with `-u` or `-U` is this same declaration under the
+	// declaration builtin's word — see autoloadFromDeclaration, and
+	// Semantics.FunctionLettersThatMarkUndefined for which letters say so.
+	r.SetFunctionMarkedUndefined(func(_ *interp.Runner, names []string, letters string) int {
+		return autoloadFromDeclaration(r, names, letters)
+	})
 	r.SetUndefinedFunctions(func(name string) (string, bool) {
 		line, ok := autoloadStubLine(r, name)
 		if !ok {
@@ -179,8 +185,22 @@ func autoloadBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if len(rest) == 0 {
 		return autoloadListing(r)
 	}
+	return autoloadMark(r, rest, opts)
+}
+
+// autoloadMark writes the stub over each name, which is the whole of what a
+// declaration does: the name becomes a function at once and the search
+// happens at the call.
+//
+// Its own function because this shell spells the same declaration twice.
+// `typeset -f` with `-u` or `-U` is `autoload` under a second word — measured
+// 2026-09-12 on zsh 5.9.2, `typeset -fu nm` leaves the same stub `autoload
+// nm` leaves and `typeset -fUz nm` the same one `autoload -Uz nm` leaves — so
+// the two words share this rather than each writing a stub of their own. See
+// autoloadFromDeclaration, which is the seam interp reaches it by.
+func autoloadMark(r *interp.Runner, names []string, opts autoloadOpts) int {
 	status := 0
-	for _, name := range rest {
+	for _, name := range names {
 		if autoloadDefined(r, name) {
 			// Already a function, so there is nothing to mark: measured,
 			// `myfn() { echo body; }; autoload -Uz myfn; myfn` runs the body
@@ -227,6 +247,44 @@ func autoloadBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		autoloadRecord(r, name)
 	}
 	return status
+}
+
+// autoloadFromDeclaration is `typeset -f` with the marking letters: this
+// shell's *other* spelling of `autoload`, reached through
+// interp.Runner.SetFunctionMarkedUndefined.
+//
+// Measured 2026-09-12 on zsh 5.9.2, `env -i` and `-f`, reading each stub back
+// with `functions nm`:
+//
+//	typeset -fu nm     builtin autoload -X      the same as `autoload nm`
+//	typeset -fU nm     builtin autoload -XU     the same as `autoload -U nm`
+//	typeset -fuz nm    builtin autoload -Xz
+//	typeset -fUz nm    builtin autoload -XUz
+//	typeset -fuU nm    builtin autoload -XU     the letters are a set
+//	typeset -fz nm     nothing at all — `z` alone marks nobody
+//	typeset -fu        nothing at all, 0 — no operands, nothing to mark
+//	f(){ :; }; typeset -fu f   the body stands; a definition is not replaced
+//
+// So `u` and `U` both mean "mark", `U` and `z` are recorded on the stub, and
+// everything else about it — the guard over a name already defined, the
+// forgotten fixed path, the stub's canonical letter order — is autoloadMark's
+// and deliberately not written twice. The two words reaching one function is
+// what keeps them from drifting: a stub is the record, and two records of the
+// same thing is how they come to disagree.
+func autoloadFromDeclaration(r *interp.Runner, names []string, letters string) int {
+	var opts autoloadOpts
+	for _, c := range letters {
+		switch c {
+		case 'U':
+			opts.keepAliases = true
+		case 'z':
+			opts.zshParse = true
+		}
+		// `u` is the letter that got the line here and says nothing more; any
+		// other letter the declaration's own parser accepted is not part of
+		// this spelling and is left alone rather than guessed at.
+	}
+	return autoloadMark(r, names, opts)
 }
 
 // autoloadDefined reports whether a name is already a function this builtin

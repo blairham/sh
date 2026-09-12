@@ -7144,6 +7144,47 @@ not fold an array's elements at all — `typeset -al arr=(AB Cd)` reads back
 goes through the attribute is its own measured question.
 
 
+## `typeset -f` that marks rather than lists
+
+Measured 2026-09-12, `env -i` with a scratch `HOME`, zsh 5.9.2 `-f` and
+ksh93u+, each stub read back with `functions nm`.
+
+A `-f` declaration is a *listing* of the function table — except when it
+carries a letter that says the operands are names to be defined later.
+Then it is the shell's autoload declaration under a second word, and no
+listing happens at all:
+
+    typeset -fu nm     builtin autoload -X       identical to `autoload nm`
+    typeset -fU nm     builtin autoload -XU      identical to `autoload -U nm`
+    typeset -fuz nm    builtin autoload -Xz
+    typeset -fUz nm    builtin autoload -XUz
+    typeset -fuU nm    builtin autoload -XU      the letters are a set
+    typeset -fzu nm    builtin autoload -Xz      order does not matter
+    typeset -f -u nm   builtin autoload -X       nor does the bundling
+
+Three readings follow, and each is a row above rather than an inference.
+
+**`u` and `U` start a marking; `z` cannot.** `typeset -fz nm` marks
+nobody: the name stays undefined, `functions nm` is a silent 1, and the
+same `z` written beside a `u` reaches the stub and is recorded on it. So
+a letter's role here depends on the company it keeps.
+
+**Operands are required and the sign is a minus.** `typeset -fu` with no
+names is 0 and silent, and `typeset +fu nm` is `invalid option(s)` at 1 —
+not a marking under another name.
+
+**A definition is never replaced.** `f(){ echo body; }; typeset -fu f`
+leaves the body: it runs, and it still lists as itself. That matters more
+than the corner suggests — a real startup file writes the same marking on
+every reload, and a stub written over a definition turns a working
+function into a file that cannot be found at the next call.
+
+ksh93 has the same spelling with `u` alone and no `U`, and renders an
+undefined function as a declaration rather than a body: `typeset -fu nm`
+lists back as `typeset -fu nm`. The two bashes have no `-u` on `declare`
+and refuse the letter; dash has no `typeset`.
+
+
 ## The job and lookup long tail: type's letters, job specs, wait -n, disown, ulimit -a, the directory stack
 
 Oracle runs, 2026-09-04, bash 5.3, dash, ksh93u+, zsh 5.9.2. Corpus rows

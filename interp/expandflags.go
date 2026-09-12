@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULfsj@kvP%qMuoOniaQbcwWA~Zze-lr0Vt"
+const implementedParamFlags = "ULfsj@kvP%qMuoOniaQbcwWA~Zze-lr0VtS"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -1187,12 +1187,18 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 		// side — measured, `${(M)v#h*l}` on `hello` is `hel` and
 		// `${(M)v##h*l}` is `hell`, so the shortest/longest choice is still
 		// the operator's.
+		//
+		// `(S)` is the other flag this operator reads, and the node carries
+		// it rather than a second `take` here: it changes *which* match the
+		// trim found and not which side of it is substituted, so the two
+		// compose without either knowing about the other. See
+		// interp/searchflag.go.
 		take := r.trimWith
 		if matchingFlag(e) {
 			take = r.matchedWith
 		}
 		for i, w := range words {
-			words[i] = take(w, pattern, e.Op)
+			words[i] = take(w, pattern, e)
 		}
 	case syntax.ParamReplace:
 		pattern := r.patternOf(e.Arg)

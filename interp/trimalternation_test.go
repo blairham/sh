@@ -129,7 +129,7 @@ func TestTheOtherThreeTrimsDoNotAskWhichArmWasWritten(t *testing.T) {
 // The two readings of the same match, seen from the other side: the `(M)`
 // flag keeps what the pattern took rather than what it left, and a `(#b)`
 // group reports the arm the search settled on. Both follow the axis, because
-// both are the one match trimEdge found.
+// both are the one match trimSpan found.
 func TestTheArmReachesWhatTheMatchReports(t *testing.T) {
 	out, _ := trimArmRun(t, `x=abc; printf '%s' "${(M)x##(a|ab)}"`, Yes)
 	if out != "a" {

@@ -43,7 +43,7 @@ func TestCdSymlinkFreeRefusesALinkedOperand(t *testing.T) {
 		{"a path with no link in it", "cd -s real", false},
 		{"the link itself", "cd -s link", true},
 		{"a link partway along", "cd -s link/sub", true},
-		{"a link cancelled by a later ..", "cd -s link/../real", true},
+		{"a link canceled by a later ..", "cd -s link/../real", true},
 		// `.` and `..` are not links, so a path that only goes through them
 		// is accepted — the walk lstats each component where it stands
 		// rather than cleaning the path first.

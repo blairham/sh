@@ -117,9 +117,20 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 	if w == nil {
 		return ""
 	}
+	// A pattern is a word of its own, and the diagnostics raised inside it
+	// have to say so. The operand of `#`, `%` or `/` is reached from within
+	// the word that holds the expansion, and without this the run around a
+	// failure was measured from the *outer* word: `"${v#${BAD}}"` blamed all
+	// of `${v#${BAD}}` where bash 5.3 blames `${BAD}` alone, and
+	// `"pre${v#${BAD}}post"` dragged in the literal text on both sides
+	// (#1064). The value operands — `:-`, `:=` — already scoped themselves
+	// through wordTextUnsplit; this is the same promise for the pattern ones,
+	// which `case` and `[[ ]]` share.
+	defer r.inWord(w)()
 	var b strings.Builder
 	spans := r.patternTilde(w, &b)
-	for _, s := range spans {
+	for i, s := range spans {
+		r.expandingSpan = i
 		text, live := r.patternSpan(s)
 		if live {
 			b.WriteString(text)

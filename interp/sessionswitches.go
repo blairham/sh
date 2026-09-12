@@ -152,3 +152,39 @@ func (r *Runner) ChecksStoppedJobsAtExit() bool { return !r.stoppedJobExitCheckO
 // SetChecksStoppedJobsAtExit moves it, in the positive direction the getter
 // reads.
 func (r *Runner) SetChecksStoppedJobsAtExit(on bool) { r.stoppedJobExitCheckOff = !on }
+
+// KeepsLastPipelineElement reports whether this session has asked for the last
+// element of a pipeline to run in the shell itself, so that `echo x | read v`
+// leaves `v` set.
+//
+// A switch over Semantics.LastPipelineElementInCurrentShell rather than a
+// second way of spelling it, and the pair is what the panel needs. Measured
+// 2026-09-12 with `echo hi | read x; echo "[$x]"`:
+//
+//	zsh 5.9.2, ksh93   `[hi]` with nothing said, and no option to say it with
+//	dash, bash 3.2.57  `[]`, and no option either
+//	bash 5.3.15        `[]` until `shopt -s lastpipe`, then `[hi]`
+//
+// So the axis is where a shell stands and this is whether a script moved it.
+// Storing it as a plain bool rather than as a deviation from the axis is the
+// measurement too: the only shell with the name starts it off and the axis
+// there is already "a subshell", so on is the only direction it travels.
+//
+// **It is honored only while the monitor is off**, which is not a detail and
+// is the half an implementation is most likely to skip. Measured in bash
+// 5.3.15 on the same line: `shopt -s lastpipe; set -m; echo hi | read x`
+// answers `[]`, and `set -m; set +m` in front of the pipeline answers `[hi]`
+// again. That is why the option reads as a no-op in an interactive session,
+// where the monitor is on with nothing said, and why the repro in #2361 spells
+// `set +m` out. The condition is enforced in runPipeline rather than in the
+// setter, because `set -m` may arrive after `shopt -s lastpipe` and has to
+// take effect without the option being written again.
+//
+// Not an axis of its own, and deliberately: an axis records a disagreement
+// between shells, and there is nobody to disagree with. One shell in the panel
+// has the option at all.
+func (r *Runner) KeepsLastPipelineElement() bool { return r.keepsLastPipelineElement }
+
+// SetKeepsLastPipelineElement moves it, for a dialect naming the capability —
+// `shopt -s lastpipe` is the only name the panel has for it.
+func (r *Runner) SetKeepsLastPipelineElement(on bool) { r.keepsLastPipelineElement = on }

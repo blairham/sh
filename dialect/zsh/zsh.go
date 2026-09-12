@@ -639,7 +639,24 @@ func Semantics() interp.Semantics {
 	s.DeclareListing = interp.DeclareListingExportSpelled
 	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededEscaped
 	s.ListingControlEscape = interp.ControlEscapeCaret
-	s.ExportListing = interp.DeclareListingCommandWord
+	// `export -p` is that same form narrowed to the exported names, not a
+	// listing that repeats its own command word: it writes the attribute
+	// letters, and it picks `typeset` where `export` will not carry the
+	// value. Measured 2026-09-12, `env -i` and `-f`, from a table holding
+	// `typeset -ix n5=5`, `typeset -ax A5=(1 2); export A5` and a frozen
+	// export:
+	//
+	//	export -i n5=5
+	//	typeset -ax A5=( 1 2 )
+	//	export -r rr=4
+	//	export -T PATH path=( /usr/bin /bin )
+	//	export -i10 SHLVL=1
+	//
+	// The command-word form this had wrote `export A5` and `export n5=5` —
+	// the value right in every case and every letter absent, with an array
+	// reduced to its name (#1061). dash and ksh93 keep that form, measured:
+	// their `export -p` writes no letters at all.
+	s.ExportListing = interp.DeclareListingExportSpelled
 	// readonly -p speaks typeset here, not readonly.
 	s.ReadonlyListing = interp.DeclareListingExportSpelled
 	// The bare form drops the command word in both builtins, which is where
@@ -1560,6 +1577,12 @@ func Semantics() interp.Semantics {
 	// refuses it, which is why this is a field — see
 	// Semantics.SignAloneIsAnOptionWord.
 	s.SignAloneIsAnOptionWord = interp.Yes
+	// And `export` and `readonly` read it too, which is the half ksh93 does
+	// not have — see Semantics.SignAloneIsAnOptionWordToExport. Measured
+	// 2026-09-12: `export +` writes the exported names and `readonly +` the
+	// frozen ones, both bare and both at 0, where this engine answered
+	// `not valid in this context: +` at 1 (#1756).
+	s.SignAloneIsAnOptionWordToExport = interp.Yes
 	// `typeset +f` is the function *names*, one bare name a line and no
 	// quoting — the shape a shell snapshot reads to find what to capture.
 	// See Semantics.FunctionNamesUnderPlus for the two other answers.

@@ -435,6 +435,11 @@ func Semantics() interp.Semantics {
 	// command's status here as everywhere.
 	s.StartupFileReturnCarriesItsArgument = interp.Yes
 	s.LoneDashIsAnOption = interp.No
+	// And a lone `+` is a name to `export` and `readonly` here as well —
+	// measured 2026-09-12, `export +` is `export: +: bad variable name` at
+	// 2. There is no `typeset` in this shell for the other half of the
+	// question, so only this field is answered.
+	s.SignAloneIsAnOptionWordToExport = interp.No
 	s.UnsetFunctionChecksTheName = interp.No
 	s.UnsetFunctionReportsMissing = interp.No
 

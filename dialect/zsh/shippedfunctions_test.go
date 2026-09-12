@@ -211,17 +211,17 @@ default present 99.0 1
 
 // add-zsh-hook, against the answers zsh 5.9.2 gives for the same probes.
 //
-// Every line below matched zsh byte for byte on 2026-09-11 **except one**,
-// and it is this shell's typeset rather than this function's: the listing
-// reads
+// Every line below matches zsh byte for byte, measured 2026-09-11 and the
+// last row of it on 2026-09-12. That last row was the exception for a while:
+// `add-zsh-hook -L` is `typeset -p <hook>_functions` from inside a function,
+// so it lists a global from a place where a bare declaration would make a
+// local — and zsh writes the `-g` that says so where this shell wrote
 //
 //	typeset -a precmd_functions=( f1 )
 //
-// where zsh writes "typeset -g -a precmd_functions=( f1 )". zsh adds the -g
-// when the listing is made from inside a function, so that what it writes
-// would recreate a global rather than declare a local shadowing it; ours
-// never does, which is #2041. Asserting our own spelling here keeps the row
-// exact rather than approximate, and the row will say so when #2041 lands.
+// which is a line that creates a *local* array when it is read back. #2041
+// fixed the listing rather than this function, and the row now reads
+// "typeset -g -a precmd_functions=( f1 )" as zsh's does.
 //
 // The rest is the function, and the sharp corners are: a name already in the
 // array is not added twice, -d removes by exact name where -D takes a
@@ -278,7 +278,7 @@ del-unset st=0 set=0 ()
 del-exact-not-pattern st=0 set=1 (f1 f2)
 del-pattern st=0 set=0 ()
 --- listing
-typeset -a precmd_functions=( f1 )
+typeset -g -a precmd_functions=( f1 )
 L-one st=0
 L-unknown st=0
 L-unset st=0

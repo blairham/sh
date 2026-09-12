@@ -41,6 +41,15 @@ const (
 	// `typeset -ax`. Array values are wrapped `( x y )` with padding spaces
 	// and carry no subscripts: this engine's arrays are dense, so a gap is
 	// an empty element.
+	//
+	// It is also the one form that says **where the declaration would
+	// land**, because it is the one whose command word decides that: written
+	// from inside a function, a global takes a `-g` word ahead of the
+	// cluster and a local exported name is spelled `local` rather than
+	// `export`. See exportSpelledDeclaration for the measured table. That is
+	// part of the shape rather than an axis of its own — the other forms'
+	// shells write one text for a local and a global alike, so they have
+	// nothing to disagree with here.
 	DeclareListingExportSpelled
 	// DeclareListingBareAssignments writes `typeset` with each flag a word
 	// of its own — `typeset -x -r -i n=5` — and a name with no attributes as
@@ -149,6 +158,20 @@ type declaration struct {
 	// word of its own, `typeset -F 3 x=3.142`, and does not have the
 	// attribute here — see #1461.
 	float bool
+	// inAFunction and localHere are not attributes of the name at all: they
+	// are where the listing is being written *from*, and a form that claims
+	// to be re-executable needs them. Inside a function, a declaration lands
+	// on a local unless it says otherwise, so the same text that recreates a
+	// global at the top level shadows it here — which is the one case the
+	// promise breaks. See exportSpelledDeclaration, the one form measured to
+	// say it.
+	//
+	// localHere is the *innermost* scope's and not "some scope has it": a
+	// local of a calling function is not this function's to redeclare, and
+	// the listing writes it as a global. Measured 2026-09-12, zsh 5.9.2 —
+	// `g(){ typeset -p L }; f(){ local L=1; g }; f` writes `typeset -g L=1`.
+	inAFunction bool
+	localHere   bool
 }
 
 // declarationOf gathers what the runner knows about a name. The second result
@@ -156,15 +179,17 @@ type declaration struct {
 // still a declaration, and `declare -p` is how scripts ask.
 func (r *Runner) declarationOf(name string) (declaration, bool) {
 	d := declaration{
-		name:     name,
-		integer:  r.integer[name],
-		readonly: r.readonly[name],
-		exported: r.isExported(name),
-		lower:    r.lowered[name],
-		upper:    r.uppered[name],
-		hidden:   r.hidden[name],
-		unique:   r.unique[name],
-		base:     r.integerBase[name],
+		name:        name,
+		integer:     r.integer[name],
+		readonly:    r.readonly[name],
+		exported:    r.isExported(name),
+		lower:       r.lowered[name],
+		upper:       r.uppered[name],
+		hidden:      r.hidden[name],
+		unique:      r.unique[name],
+		base:        r.integerBase[name],
+		inAFunction: len(r.scopes) > 0,
+		localHere:   r.localInTheInnermostScope(name),
 	}
 	_, d.float = r.floatPrecision[name]
 	d.tied, d.hasTie = r.tieOf(name)
@@ -390,12 +415,25 @@ func (r *Runner) listedDeclaration(form DeclarationListingForm, d declaration) s
 }
 
 // commandWordDeclaration is DeclareListingCommandWord — see the constant.
+//
+// The value is listedDeclarationValue's rather than declareQuoted's, which is
+// the same correction plainAssignmentDeclaration took in #1868 and for the
+// same reason: a compound has elements to write and this wrote a bare name.
+// Measured 2026-09-12 on ksh93u+ — `export m=([k]=v)`, `export g=([3]=x)`,
+// `readonly A=(1 2)` — where this engine wrote `export m`, and `export
+// h=16#ff` for a based integer where it wrote the `#` quoted. Both are the
+// value half of that shell's own `-p`, which is what a listing claims to be.
 func (r *Runner) commandWordDeclaration(d declaration) string {
 	head := r.inBuiltin + " " + d.name
-	if d.hasValue && !d.hidden {
-		return head + "=" + r.declareQuoted(d.value)
+	if d.hidden || d.unset {
+		// Nothing to write a value from: `-H` withholds it, and a typed name
+		// whose value was taken away has none.
+		return head
 	}
-	return head
+	if !d.hasValue && !d.isArr && !d.isAssoc {
+		return head
+	}
+	return head + "=" + r.listedDeclarationValue(d)
 }
 
 // plainAssignmentDeclaration is DeclareListingPlainAssignment — see the
@@ -569,7 +607,42 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		// the one shell with this arrangement.
 		flags = strings.Replace(flags, "i", "i"+itoa(d.base), 1)
 	}
-	if d.exported && !d.isArr && !d.isAssoc {
+	// Where the declaration would *land* is part of this form, because the
+	// form's promise is that the text recreates the state it describes.
+	// Inside a function a bare `typeset` declares a local, so a global needs
+	// the letter that says so and a local needs none. Measured 2026-09-12 on
+	// zsh 5.9.2 with `env -i`, `-f`, from inside a one-line function:
+	//
+	//	global scalar          typeset -g s=plain
+	//	global array           typeset -g -a g=( a b )
+	//	global readonly        typeset -g -r rr=1
+	//	global based integer   typeset -g -i10 n=5
+	//	global tie             typeset -g -T TT tt=( a b )
+	//	global exported scalar export q=2
+	//	global exported array  typeset -g -ax A=( 1 2 )
+	//	local scalar           typeset g=2
+	//	local array            typeset -a la=( 1 2 )
+	//	local exported scalar  local -x e=9
+	//	local exported array   local -ax la=( 1 2 )
+	//	local exported+frozen  local -rx lxr=1
+	//
+	// so the letter is a word of its own ahead of the cluster, and it is
+	// written only beside `typeset` — the two words that already say where
+	// they land carry it in the word instead. `local` is the third command
+	// word of this form and keeps `x` where `export` drops it, which is what
+	// makes the pair legible: `export` *is* the export letter and `local` is
+	// not.
+	//
+	// At the top level every name is global and the letter would say
+	// nothing, which is why this asks whether there is a scope at all rather
+	// than only whether the name is in one.
+	local := d.inAFunction && d.localHere
+	switch {
+	case d.exported && local:
+		// A local that is also exported: the word says the scope and the
+		// cluster keeps every letter, `x` included.
+		word = "local"
+	case d.exported && !d.isArr && !d.isAssoc:
 		// Only a scalar earns the `export` spelling; an exported array keeps
 		// the word and the letter.
 		//
@@ -578,6 +651,12 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		// `export -xU x1=v` while `x` was the last letter there was.
 		word = "export"
 		flags = strings.ReplaceAll(flags, "x", "")
+	case d.inAFunction && !d.localHere:
+		// A global written from inside a function, under the one word that
+		// would otherwise declare a local. Without this the listing is not
+		// the declaration it read: pasting it into another function creates
+		// a local and leaves the global alone (#2041).
+		word += " -g"
 	}
 	head := word
 	if flags != "" {

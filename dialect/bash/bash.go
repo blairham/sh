@@ -991,6 +991,10 @@ func Semantics() interp.Semantics {
 	// `-': not a valid identifier`` at 1 where zsh and ksh93 both read it as
 	// an option word and list. See Semantics.SignAloneIsAnOptionWord.
 	s.SignAloneIsAnOptionWord = interp.No
+	// Nor on `export` and `readonly`: the sign is a name to them as well,
+	// measured on bash 5.3.15 and 3.2.57 alike — ``export: `+': not a valid
+	// identifier``.
+	s.SignAloneIsAnOptionWordToExport = interp.No
 	// `declare +f` takes the function attribute off rather than naming the
 	// functions, which leaves the bare `declare` listing — every variable
 	// and then every function. This engine has no bare listing for this

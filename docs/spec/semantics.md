@@ -2769,6 +2769,92 @@ its hash table's. We print keys sorted, the same choice `${m[@]}` reading
 already made, so a listing is deterministic; a corpus case must therefore
 not depend on the panel's key order — use one key, or sort downstream.
 
+### The listing says where the declaration would land
+
+Measured 2026-09-12, `env -i` with a scratch `HOME`, zsh 5.9.2 `-f`,
+bash 5.3.15 and 3.2.57 `--norc --noprofile`, ksh93u+ — the same states
+listed from inside a one-line function and again at the top level.
+
+zsh is the one column that answers differently in the two places, and it
+has to: inside a function a bare `typeset` declares a **local**, so the
+text that recreates a global at the top level shadows it here. It writes
+a `-g` word ahead of the flag cluster, and it spells a *local* export
+with the command word `local` rather than `export`:
+
+    state                     inside a function          at the top level
+    g=1                       typeset -g g=1             typeset g=1
+    typeset -a g=(a b)        typeset -g -a g=( a b )    typeset -a g=( a b )
+    typeset -r r=1            typeset -g -r r=1          typeset -r r=1
+    typeset -i10 n=5          typeset -g -i10 n=5        typeset -i10 n=5
+    typeset -T T t=(a b)      typeset -g -T T t=( a b )  typeset -T T t=( a b )
+    export q=2                export q=2                 export q=2
+    typeset -xa A=(1 2)       typeset -g -ax A=( 1 2 )   typeset -ax A=( 1 2 )
+    local l=2                 typeset l=2                —
+    local -x e=9              local -x e=9               —
+    local -xa a=(1 2)         local -ax a=( 1 2 )        —
+    local -xr r=1             local -rx r=1              —
+
+Three readings follow. The letter goes only beside `typeset`, because the
+other two words already say where they land. `local` keeps the export
+letter where `export` drops it — the word `export` *is* that letter and
+the word `local` is not. And an exported compound never earned the
+`export` spelling in the first place, so it stays on the `typeset` row
+and takes the `-g` with it.
+
+"Local" means local to the **innermost** scope, not to any scope on the
+stack: a caller's local read from a called function lists as a global,
+because a declaration written there would shadow it rather than reach it.
+Measured — `g(){ typeset -p L }; f(){ local L=1; g }; f` writes
+`typeset -g L=1`.
+
+bash and ksh93 write one text for a local and a global alike, so neither
+has anything to disagree with here; this is part of zsh's listing shape
+rather than an axis.
+
+### `export -p` and `readonly -p` are not always the command word
+
+Measured the same day, over `typeset -ix n5=5`, `typeset -ax A5=(1 2);
+export A5`, an exported read-only, and a based integer:
+
+    state                     ksh93 / dash              zsh
+    typeset -ix n5=5          export n5=5               export -i n5=5
+    exported array            export A5=(1 2)           typeset -ax A5=( 1 2 )
+    exported readonly rr=4    export rr=4               export -r rr=4
+    typeset -i16 h=255        export h=16#ff            export -i16 h=255
+
+So ksh93 and dash repeat the builtin's own word and write no attribute
+letters at all, while zsh's `export -p` is its full declaration listing
+narrowed to the exported names — letters and all, and picking `typeset`
+where `export` cannot carry the value. The letterless form still writes a
+**compound** value and a based integer's own text: `export g=([3]=x)`,
+`readonly A=(1 2)`, `export h=16#ff`.
+
+### A lone `+` given to `export` or `readonly`
+
+Measured the same day. A sign with no letters after it is an option word
+to zsh's `export` and `readonly` as it is to its `typeset`, and the
+listing it reaches is the builtin's own attribute with the values left
+off — `export +` writes the exported names and `readonly +` the frozen
+ones, one a line, at 0.
+
+Every other column reads it as a *name*, and refuses it as one: dash
+`export: +: bad variable name` at 2, bash 5.3 and 3.2 ``export: `+': not
+a valid identifier`` at 1, ksh93 `export: +: is not an identifier` at 1
+and `readonly: +: invalid variable name`.
+
+ksh93 is why this is a question of its own rather than the one `typeset`
+asks: **its `typeset +` lists** while its `export +` refuses, so a shell
+reading one answer for both builtins is wrong about one of them.
+
+A lone `-` needs no second question. It is already the "is a lone dash an
+option" reading, and once it is eaten `export -` is the bare listing —
+which is what zsh writes for it.
+
+With an *operand* alongside, zsh's `export + q` is a silent 0 that
+neither lists the name nor takes the attribute off it. That corner is
+deliberately not followed: an operand here keeps the refusal every other
+column gives it.
+
 ## A declaration letter with no names is a filtered listing
 
 Measured 2026-09-10, macOS arm64: bash 5.3.15 (`--norc --noprofile -c`,

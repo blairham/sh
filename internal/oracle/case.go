@@ -17668,6 +17668,36 @@ echo "st=$?"`,
 		Why:     "the escape rule the ampersand reading brings with it, over text an expansion carried rather than text that was written down -- a written backslash is gone to ordinary quote removal before the replacement is ever read, so only this route can ask. In the column that reads the `&`, a backslash escapes an `&` and another backslash and stands as itself in front of anything else: `[&]`, `[\\b]`, `[\\a]`. The order is observable in the second field, where resolving the escapes before the ampersands would answer `[\\&]`. It is a different rule from the history modifier's, where a backslash stands for whatever byte follows it, which is why the two share one pass with the rule handed in",
 	},
 	{
+		ID: "declare/a-listing-from-inside-a-function-says-where-it-lands", Category: "declarations",
+		Snippet: `g=1; f() { typeset -p g; }; f; typeset -p g`,
+		Why:     "one name, one listing, written from two places -- and one column answers differently in the two, because a listing that claims to be re-executable has to say where the declaration would land. Inside a function a bare declaration makes a local, so zsh writes `typeset -g g=1` there and `typeset g=1` at the top level; the two bashes write `declare -- g=\"1\"` in both places and ksh93 writes `g=1` in both, since neither of those shells has a listing form whose command word could carry the difference. Pasting the letterless line back into another function creates a local and leaves the global alone, which is the case where the promise breaks (#2041)",
+	},
+	{
+		ID: "declare/a-listed-local-export-spells-its-scope-in-the-command-word", Category: "declarations",
+		Snippet: `f(){ local -x e=9; typeset -p e; }; f`,
+		Why:     "the other half of the scope question, and the row that says the letter is not simply appended: where the listing already has a command word saying the scope, that word carries it instead. zsh writes `local -x e=9` -- keeping the export letter, which its `export` spelling of a *global* drops -- so the pair `export e=1` and `local -x e=9` is one distinction spelled in two words. bash writes `declare -x e=\"9\"` for both, and ksh93 and dash have no `local` to reach the question with (#2041)",
+	},
+	{
+		ID: "declare/the-export-listing-writes-the-attribute-letters", Category: "declarations",
+		Snippet: `typeset -i -x n5=5; export -p | grep n5`,
+		Why:     "whether `export -p` is a listing that repeats its own command word or the dialect's full declaration listing narrowed to the exported names. zsh writes `export -i n5=5`, keeping the letter; ksh93 writes `export n5=5` with no letter at all, which is the same shape dash uses; the bashes write their clustered `declare -ix n5=\"5\"`. So the three forms are visible in one row, and this engine had zsh on ksh93's -- the value right in every case and every letter absent (#1061)",
+	},
+	{
+		ID: "declare/the-export-listing-writes-a-compound-value", Category: "declarations",
+		Snippet: `typeset -a A5=(1 2); export A5; export -p | grep A5`,
+		Why:     "the same question asked of a name the command word cannot carry, which is what separates the two letterless forms: ksh93 keeps `export` and writes the elements after it -- `export A5=(1 2)` -- while zsh changes the word, to `typeset -ax A5=( 1 2 )`, because `export` will not do for a compound. This engine wrote a bare `export A5` for both, a listing that reads back as an exported name holding nothing. dash has no arrays and refuses the line (#1061)",
+	},
+	{
+		ID: "declare/a-lone-plus-given-to-export", Category: "declarations",
+		Snippet: `p=1; export q=2; export r=3; export + | grep "^[a-z]"; echo "st=$?"`,
+		Why:     "a sign with no letters after it, given to `export` rather than to `typeset`. zsh reads it as an option word and answers with the exported names, one a line and no values -- `typeset +x` under a second command word -- while dash, both bashes and ksh93 read it as a *name*, and refuse it as one. ksh93 is the discriminating column: its `typeset +` lists, so a shell reading one answer for both builtins is wrong about one of them, which is why this is a field of its own (#1756). The grep keeps the environment out of the record, since the names a scrubbed shell exports differ by column",
+	},
+	{
+		ID: "declare/a-lone-plus-given-to-readonly", Category: "declarations",
+		Snippet: `p=1; typeset -r rr=4; readonly + | grep -E "^(p|rr)$"; echo "st=$?"`,
+		Why:     "the same sign under the other attribute word, and the row that says the *filter* is the builtin's own: the frozen name is written and the plain one is not, where `export +` on the same table writes the exported one. The four columns that refuse it do so in four different wordings, each its own builtin's. The grep is narrow because the shell that answers has read-only parameters of its own with lowercase names",
+	},
+	{
 		ID: "shopt/patsub-replacement-reports-on", Category: "shell options",
 		Snippet: `shopt -p patsub_replacement 2>/dev/null; echo s=$?`,
 		Why:     "the reissuable line for the option that gates the ampersand reading, and its status. bash 5.3 writes `shopt -s patsub_replacement` at 0 because the option is on with nothing said; bash 3.2 has no such name and answers 1 with its complaint suppressed, and the three shells without the builtin answer 127. It is a capture surface -- a harness snapshots a shell with `shopt -p` and sources the result back -- so a shell reporting the wrong state here re-applies it to every later command (#1712, #1862)",

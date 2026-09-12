@@ -1001,6 +1001,11 @@ func Semantics() interp.Semantics {
 	// options through this parser, so the narrower reading is the one that
 	// gets to be true (#1576).
 	s.SignAloneIsAnOptionWord = interp.Yes
+	// Not on `export` and `readonly`, which is the one place these two
+	// questions come apart: measured 2026-09-12 on ksh93u+, `export +` is
+	// `+: is not an identifier` and `readonly +` is `+: invalid variable
+	// name`, both at 1, while `typeset +` on the same line lists.
+	s.SignAloneIsAnOptionWordToExport = interp.No
 	// typeset is one of this shell's own special builtins, so any of its
 	// failures ends the script — a bad option included.
 	s.TypesetBadOptionFatal = interp.Yes

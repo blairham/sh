@@ -429,31 +429,49 @@ whole path it was invoked by for a script it could not open — `/opt/homebrew/b
 shell writes what it was invoked by throughout, which is the convention
 everywhere else in it and not a decision taken here.
 
-#### The pid line is not reproduced, and that is a decision
+#### The pid line, and why it is reproduced after all
 
-bash 5.3.15 writes a line above the remark that carries its own process id:
-`bash: cannot set terminal process group (11143): Inappropriate ioctl for
-device`. It is left out, for three reasons in order of weight.
+bash 5.3.15 writes a line above the remark that names a process group:
+`bash: cannot set terminal process group (91050): Inappropriate ioctl for
+device`. It was left out once, for three reasons, and each has since stopped
+holding.
 
 1. **Two of the three bash members do not write it.** bash 3.2.57 and bash 3.2
-   run as `sh` write the second line alone. So it is one version's extra line
-   rather than bash's wording, and reproducing it would make this shell agree
-   with one member of the panel and disagree with two.
-2. **There is nothing here whose failure it would describe.** It is bash
-   reporting a `tcsetpgrp` that returned `ENOTTY`. This shell makes no such
-   call on this path, so the line would be a report of an event that did not
-   happen.
-3. **It carries a pid**, which no script can act on — it is the shell's own —
-   and which means no recording of it is the same twice.
+   run as `sh` write the second line alone — but the bash dialect models 5.3
+   everywhere else in this tree, and the older build's silence is recorded in
+   its own column rather than being the dialect's answer.
+2. **There is nothing here whose failure it would describe.** Still true: it
+   is bash reporting a `tcsetpgrp` that returned `ENOTTY`, and this shell
+   makes no such call on this path. That is why the errno half is fixed text
+   in the dialect's wording rather than a rendered error — the line is only
+   ever written by a shell that *has no terminal*, so the failure it describes
+   is always the same one. The fact being reported — an interactive shell that
+   could not have the terminal — is one this shell establishes for itself; how
+   it is worded is what `Diagnostics` is for.
+3. **It carries a number that is different every run.** The harness masks it:
+   `normalize` rewrites `process group (N)`, masked rather than dropped,
+   because *that it named one* is part of the complaint. That is what made the
+   row recordable, and it is what the golden record holds today.
 
-#### What the corpus cannot say about this
+So it is `Diagnostics.CannotSetTerminalProcessGroup`, a format taking the
+process group and empty in five of the six columns, written above
+`NoJobControlAtStartup` and separately from it — one column writes both, one
+writes the second alone, and two write neither, so a dialect has to be able to
+answer them apart.
 
-Nothing, and the third reason above is why: the corpus runs bash 5.3.15, whose
-first line has a different number in it every run. `docs/spec/invocation.md`
-already records that as the reason none of the `-i script.sh` grid is a corpus
-case. The evidence is the table above, the per-dialect wordings in
-`dialect/*/`, and a driver test that runs the front end with files on all three
-streams and asserts the whole line.
+The number this shell writes is its own process group. Measured, bash writes
+the group it is in when it is not that group's leader, and `-1` when it
+already is one; the leader case is not what the corpus records and not what a
+caller of `-ic` produces, and it is left unmodelled rather than guessed at.
+
+#### What the corpus says about this
+
+Two rows, `harness/an-interactive-bundle-runs-the-command-string` and
+`harness/a-login-and-interactive-bundle`, plus the whole `env/`, `prompt/` and
+`startup/` family that reaches a prompt or `-i` — every one of them carries
+the masked line in its two bash columns. Beside them are the per-dialect
+wording in `dialect/bash/`, and a driver test that runs the front end with
+files on all three streams and asserts both lines in order.
 
 ### The announcement splits where the monitor does not
 

@@ -385,6 +385,14 @@ func Semantics() interp.Semantics {
 	// A `jobs` listing keeps a job that has already ended, and shows the
 	// `&`-started command's own text.
 	s.JobsListNewestFirst = interp.Yes
+	// StoppedJobTakesTheCurrentJobMarker is deliberately left unanswered.
+	// The measurement wants a ^Z at a pseudo-terminal, which is exactly what
+	// the container this shell was measured in could not give it, so there
+	// is nothing recorded to put here — and the package comment above says
+	// to read that silence as an unanswered question rather than as
+	// agreement with dash. The axis is read and never asked, so an
+	// unanswered dialect gets the answer five of the six measured columns
+	// give rather than a refusal (#1563).
 	s.JobsListFinishedJobs = interp.Yes
 	s.JobsOptions = "lp"
 	s.JobsPidsOnlyOption = interp.Yes

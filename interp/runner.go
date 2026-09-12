@@ -1193,14 +1193,26 @@ type Runner struct {
 	// nil value is an explicit removal.
 	custom map[string]Builtin
 	// jobs are the background commands started by this shell.
-	jobs    []*Job
-	lastJob *Job
+	jobs []*Job
+	// jobOrder is the order jobs became *notable*, oldest first: a job is
+	// appended when it enters the table and again, moved to the end, every
+	// time it stops. It is not the table's order, which is slot order, and
+	// the two part company the moment a job stops after a later one started.
+	//
+	// A slice rather than a `lastJob` pointer because two markers are read
+	// off it — the `+` of `%%` and the `-` of `%-` — and the second is not
+	// "the job before this one in the table". Measured 2026-09-12 through a
+	// pseudo-terminal, with two jobs stopped and a third backgrounded after
+	// them: bash 5.3.15 marks the second `+`, the *first* `-`, and the third
+	// not at all, which no reading of the table's order produces. See
+	// markedJobs.
+	jobOrder []*Job
 	// lastJobPID is `$!`, which is a *value* and not a reference to a job.
 	//
-	// Separate from lastJob because the two stop being the same thing the
-	// moment the job ends. lastJob is the *current* job — what `%%` names and
-	// what a bare `fg` picks — so it has to go when the job leaves the table,
-	// or those two would name something that is not there. `$!` does not:
+	// Separate from jobOrder because the two stop being the same thing the
+	// moment the job ends. The current job — what `%%` names and what a bare
+	// `fg` picks — has to go when the job leaves the table, or those two
+	// would name something that is not there. `$!` does not:
 	// measured unanimous 2026-09-05, `sleep 0 & wait; echo "[$!]"` reports the
 	// pid in bash 5.3.15, bash 3.2.57, bash 3.2 as `sh`, dash, ksh93u+ and
 	// zsh 5.9.2, and so does the same script under `-i` on a pseudo-terminal

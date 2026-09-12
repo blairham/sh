@@ -9616,6 +9616,47 @@ A two-two split, which is the usual shape here and the reason this is a
 field rather than a choice: there is no ordering of the shells that
 explains it.
 
+**`StoppedJobTakesTheCurrentJobMarker`** — bash yes · dash yes · ksh93 no · zsh yes · ash unanswered
+
+Keeps the `+` on a job that stopped even after a later job has been
+backgrounded, so `%%`, `%+` and a bare `fg` all name the stopped one.
+Measured 2026-09-12 through a pseudo-terminal with a scratch home
+directory, on `sleep 40` stopped with ^Z and then `sleep 41 &`:
+
+| shell | listing |
+| --- | --- |
+| bash 5.3.15 | `[1]+ Stopped`, `[2]- Running` |
+| bash 3.2.57 | `[1]+ Stopped`, `[2]- Running` |
+| dash | `[1]+ Suspended`, `[2]- Running` |
+| zsh 5.9.2 | `[1]+ suspended`, `[2]- running` |
+| ksh93u+ | **`[1]- Stopped`, `[2]+ Running`** |
+
+Five to one, and not a cosmetic column: `jobs %+` and `jobs %-` name the
+same two jobs the listing marks in every column, so a `fg %+` after a ^Z
+resumes a different job in the two camps. dash is the one shell that
+will not resolve `%+` or `%-` at all — both are `No current job` — so
+its listing is the whole of its evidence.
+
+It is about **keeping** the marker rather than taking it. A job that
+stops takes it in all six: with two background jobs and `kill -TSTP %1`,
+every column moves the `+` onto the older job it has just stopped, and
+bringing a job forward and stopping it again moves the `+` back to it
+even though a later job exists. So one ordered list — the order jobs
+became notable, re-stamped on every stop — serves both camps, and this
+axis only decides how it is read. See `interp.Runner.markedJobs`.
+
+The `-` follows the same choice one step down, which is why it is not
+"the job before this one in the table": with two jobs stopped and a
+third backgrounded, bash marks the second `+`, the **first** `-`, and
+the third not at all.
+
+Read rather than `ask`ed, as `DefaultOptionLetters` is: naming the
+default job is not the place to refuse a script over a disagreement.
+`ash` is deliberately unanswered — the measurement needs a ^Z at a
+pseudo-terminal, which the container that shell was measured in could
+not give, so it takes the five columns' answer rather than a guess
+(#1563).
+
 **`JobsShowBackgroundCommand`** — bash yes · dash no · ksh93 no · zsh yes
 
 Puts the command of a `&` job in a `jobs` listing. True in bash and zsh;

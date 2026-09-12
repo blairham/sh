@@ -139,7 +139,13 @@ func (f *fakeJobs) poll() (Wait, bool) {
 	return w, true
 }
 
-func jobRun(t *testing.T, f *fakeJobs, src string) (string, int, *Runner) {
+// jobRun runs src on a shell whose job control is the fake's, and hands back
+// the runner so more input can be run on the same jobs.
+//
+// tweak, where given, moves the semantics before the run. It is variadic
+// rather than a second helper because the alternative is a copy of these
+// thirty lines with one line changed, and the copy is what drifts.
+func jobRun(t *testing.T, f *fakeJobs, src string, tweak ...func(*Semantics)) (string, int, *Runner) {
 	t.Helper()
 	file, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
@@ -161,6 +167,9 @@ func jobRun(t *testing.T, f *fakeJobs, src string) (string, int, *Runner) {
 	sem.JobsListNewestFirst = No
 	sem.JobsListFinishedJobs = Yes
 	sem.JobsShowBackgroundCommand = Yes
+	for _, f := range tweak {
+		f(&sem)
+	}
 	dg := Diagnostics{}
 	r := newTestRunner(t, &Runner{Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	if f != nil {

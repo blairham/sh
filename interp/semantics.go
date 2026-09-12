@@ -2834,6 +2834,40 @@ type Semantics struct {
 	// those, so there is no disagreement there to put to a dialect.
 	ReportsACommandKilledBySignal Answer
 
+	// StoppedJobTakesTheCurrentJobMarker keeps the `+` on a job that stopped
+	// even after a later job has been backgrounded, so that `%%`, `%+` and a
+	// bare `fg` all name the stopped one. False in the shell that simply
+	// marks the newest job whatever it is doing.
+	//
+	// Measured 2026-09-12 through a pseudo-terminal with a scratch home
+	// directory, on `sleep 40` stopped with ^Z and then `sleep 41 &`:
+	//
+	//	bash 5.3.15  [1]+ Stopped    [2]-  Running
+	//	bash 3.2.57  [1]+ Stopped    [2]-  Running
+	//	dash         [1]+ Suspended  [2]-  Running
+	//	zsh 5.9.2    [1]+ suspended  [2]-  running
+	//	ksh93u+      [1]- Stopped    [2]+  Running
+	//
+	// Five to one, and it is not a cosmetic column: `jobs %+` and `jobs %-`
+	// name the same two jobs the listing marks in every one of them, so a
+	// `fg %+` after a ^Z resumes a different job in the two camps.
+	//
+	// It is about *keeping* the marker and not about taking it. A job that
+	// stops takes the marker in all six — measured with two background jobs
+	// and `kill -TSTP %1`, every column moves the `+` onto the older job it
+	// just stopped — so the disagreement is only over whether a later `&`
+	// takes it back. See Runner.markedJobs, where one ordered list serves
+	// both camps and this decides how it is read.
+	//
+	// Read rather than `ask`ed, as DefaultOptionLetters is: naming the
+	// default job is not the place to refuse a script over a disagreement,
+	// and a dialect that has not answered gets the five columns' answer
+	// rather than a complaint. One dialect in this tree has not answered —
+	// its shell cannot be run on the machine the panel is measured on, so
+	// there is nothing to record and a guess would be worse than the
+	// majority standing in.
+	StoppedJobTakesTheCurrentJobMarker Answer
+
 	// JobsShowBackgroundCommand puts the command of a `&` job in a `jobs`
 	// listing. True in bash and zsh; dash prints an empty column there and
 	// ksh93 a placeholder.

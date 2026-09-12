@@ -1445,6 +1445,18 @@ func Diagnostics() interp.Diagnostics {
 		// dialect's syntax-error status.
 		ForNameStatus: 1,
 		ForName:       "`%[1]s': not a valid identifier",
+		// A C-style `for` header with the wrong number of separators, worded
+		// by the count: too few is a statement about the expression that was
+		// not there, too many blames the separator. Measured 2026-09-12 on
+		// 5.3.15, 3.2.57 and the same binary as `sh`, which all agree —
+		// `for ((i=0))`, `for (())`, `for ((;))` and `for ((1;2))` give the
+		// first, `for ((;;;))` and `for ((1;2;3;4))` the second (#2225).
+		ForArithHeader:    "syntax error: arithmetic expression required",
+		ForArithSeparator: "syntax error: `;' unexpected",
+		// And a second line under either, echoing the header alone rather
+		// than the line it was written on — the only failure in this dialect
+		// whose echo is not the source line.
+		ForArithHeaderEcho: "syntax error: `%[1]s'",
 		// The same sentence for a function definition's name, which is
 		// measured rather than borrowed: `` `_p_${w}': not a valid
 		// identifier `` is what bash writes there, word for word. This

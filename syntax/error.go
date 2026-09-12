@@ -179,6 +179,44 @@ const (
 	// four say something about the *name* and only the fourth blames the
 	// word it found.
 	ErrForName
+	// ErrForArithHeader is a C-style `for` header that does not hold two
+	// separators: `for (())`, `for ((;))`, `for ((i=0))`, `for ((1;2))`.
+	//
+	// Its own kind because every shell in the panel refuses it and none of
+	// them words it as a token the grammar did not want. Measured 2026-09-12
+	// on `for ((i=0)); do :; done`:
+	//
+	//	bash 5.3.15   syntax error: arithmetic expression required
+	//	bash 3.2.57   the same sentence
+	//	bash-as-sh    the same sentence
+	//	ksh93u+       `))' unexpected
+	//	zsh 5.9.2     parse error near `i=0'
+	//
+	// so one of the three sentences is about the expression that was not
+	// there, one blames the closer, and one names the text of the last part
+	// — and names nothing where that part is empty, which is why Token and
+	// LastToken are both carried.
+	//
+	// Token is the header as written, `((` and `))` included and the blanks
+	// and newlines inside it kept, which is what one dialect echoes back on
+	// a second line. LastToken is the last part trimmed, which is what
+	// another names.
+	ErrForArithHeader
+	// ErrForArithSeparator is a C-style `for` header with *more* than two
+	// separators: `for ((;;;))`, `for ((1;2;3;4))`.
+	//
+	// Apart from ErrForArithHeader because the panel splits twice over it.
+	// It splits on whether the header is refused at all — bash refuses,
+	// where ksh93 and zsh take the header and fold everything past the
+	// second `;` into the third expression, so the refusal arrives at run
+	// time and only if that expression is ever evaluated. That half is
+	// Dialect.ForArithExtraSeparators. And in the dialect that does refuse
+	// it, the sentence is not the one above: bash says `` `;' unexpected ``
+	// where it says `arithmetic expression required` for too few. Two
+	// refusals rather than one, so two kinds (#2225).
+	//
+	// Token and LastToken carry what ErrForArithHeader's do.
+	ErrForArithSeparator
 )
 
 // TokenClass is what sort of thing a token is, for the dialect that words an

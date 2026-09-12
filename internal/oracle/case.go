@@ -1731,6 +1731,36 @@ var Corpus = []Case{
 		Why:     "a `while` loop written as a `for`: the initialization and the step are the ones omitted here, and an omitted step must not be run as an expression whose value could end the loop. The trio with the two cases above covers every section this header can leave out",
 	},
 	{
+		ID: "core/c-style-for-with-no-separators", Category: "command language", SyntaxError: true,
+		Snippet: `for (()); do echo x; break; done; echo after`,
+		Why:     "the other side of the three cases above: a section may be *empty* and a separator may not be missing, so a header with none of the two is refused by every shell in the panel that has the construct. The severity is in what an acceptance would mean rather than in the refusal — a header with no separators has no condition, and an absent condition is true, so this would be an endless loop printing as fast as the machine allows where bash runs none of the script. The `break` is there so the row terminates if it ever regresses (#2225)",
+	},
+	{
+		ID: "core/c-style-for-with-one-separator", Category: "command language", SyntaxError: true,
+		Snippet: `for ((1;2)); do echo x; break; done; echo after`,
+		Why:     "two expressions and one separator, which is the shape that says the count is what decides rather than the presence of text: both sections here hold an expression and the header is still refused. Written with expressions rather than as `for ((;))` on purpose — the ksh93u+ on this machine *crashes* on that one, reproducibly, and a row recording a segmentation fault would pin a fault rather than a behavior",
+	},
+	{
+		ID: "core/c-style-for-with-an-assignment-and-no-separators", Category: "command language", SyntaxError: true,
+		Snippet: `for ((i=0)); do echo x; break; done; echo after`,
+		Why:     "the mistyped endless loop, and the row where the three wordings are furthest apart: one shell says the arithmetic expression is required, one blames the closing `))`, and one names the text of the last section — so an implementation that emits a single sentence for every bad header is wrong in two columns while looking right in the third",
+	},
+	{
+		ID: "core/c-style-for-with-three-separators", Category: "command language", SyntaxError: true,
+		Snippet: `for ((;;;)); do echo body; break; done; echo after`,
+		Why:     "more separators than the three sections need, and the panel divides: bash refuses the whole script and words it differently from the rows above — `` `;' unexpected `` rather than the expression being required — where ksh93 and zsh take the header, fold everything past the second `;` into the third section, and print `body`. So too few is a correction and too many is a dialect's, which is syntax.Dialect.ForArithExtraSeparators. The `break` matters twice here: it terminates the row, and it is what stops the two shells that accept reaching the leftover text (#2225)",
+	},
+	{
+		ID: "core/c-style-for-with-four-expressions", Category: "command language", SyntaxError: true,
+		Snippet: `for ((1;2;3;4)); do echo body; break; done; echo after`,
+		Why:     "the same split with text in every section, which is what says the extra separator is folded into the third expression rather than ignored: the two shells that accept this run the body, and the one row below reaches the folded text and shows what it comes to",
+	},
+	{
+		ID: "core/c-style-for-with-three-separators-reaches-the-leftover", Category: "command language", SyntaxError: true,
+		Snippet: `for ((i=0;i<2;i++;i=9)); do echo b=$i; done; echo after`,
+		Why:     "the row above without the `break`, so the shells that accept the header evaluate the third section — and what they find there is not an expression, because the fold left a `;` in it. One pass runs and the arithmetic then fails, which is what makes the acceptance survivable rather than unbounded and is the whole reason this is a dialect's answer rather than a second bug. bash still refuses the script before anything runs",
+	},
+	{
 		ID: "core/a-list-for-with-a-brace-body", Category: "command language",
 		Snippet: `for i in a b; { printf "%s" "$i"; }; echo`,
 		Why:     "the same production on the ordinary `for`, which is the half easiest to miss: the brace body is not the C-style loop's alone. It needs the separator, and the next case says why — this is the one three of the four accept and dash refuses, dash being the only panel shell without the form",

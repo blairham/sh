@@ -1171,6 +1171,86 @@ body zero times and exits 0. Pinned, one per shape:
 `core/c-style-for-without-a-condition` and
 `core/c-style-for-with-only-a-condition`.
 
+**A part may be empty and a separator may not be missing.** Exactly two
+`;` are required, and the count is what decides — not whether the
+sections hold text. Measured 2026-09-12, with a `break` in every body so
+the row terminates whatever the header is taken to mean:
+
+| header | bash 5.3.15 | bash 3.2.57 | bash as `sh` | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- | --- | --- |
+| `for ((;;))` | runs | runs | runs | runs | runs |
+| `for ((i=0;;))`, `for ((;i<1;))`, `for ((;;i++))` | runs | runs | runs | runs | runs |
+| `for (( ; ; ))` | runs | runs | runs | runs | runs |
+| `for (())` | **error** | **error** | **error** | **error** | **error** |
+| `for (( ))` | **error** | **error** | **error** | **error** | **error** |
+| `for ((;))` | **error** | **error** | **error** | **crash** | **error** |
+| `for ((1;2))` | **error** | **error** | **error** | **error** | **error** |
+| `for ((i=0))` | **error** | **error** | **error** | **error** | **error** |
+| `for ((;;;))` | **error** | **error** | **error** | runs | runs |
+| `for ((;;;;))` | **error** | **error** | **error** | runs | runs |
+| `for ((1;2;3;4))` | **error** | **error** | **error** | runs | runs |
+
+So the panel answers the two directions differently, and that is the
+whole of why they are modeled apart.
+
+**Fewer than two separators is unanimous**, and it is a correction
+rather than an axis. It is worth stating why it matters more than a
+missing refusal usually does: a header we wrongly accept has no
+condition, an absent condition is *true* by the rule above, and so
+`for (()); do echo x; done` printed without bound where bash executes
+nothing at all (#2225). Kind: `ErrForArithHeader`. Pinned:
+`core/c-style-for-with-no-separators`,
+`core/c-style-for-with-one-separator` and
+`core/c-style-for-with-an-assignment-and-no-separators`.
+
+The three sentences are three different statements about one header:
+
+    bash 5.3    syntax error: arithmetic expression required
+                syntax error: `((i=0))'
+    ksh93       syntax error at line 1: `))' unexpected
+    zsh         parse error near `i=0'
+
+bash writes **two** lines, and the second is not the offending source
+line it echoes everywhere else — it is the header alone, over as many
+lines as the header was written on. zsh names the text of the **last**
+section and says a bare `parse error` where that section is empty, so
+`for ((;2))` names `2` and `for ((1;))` names nothing. ksh93 names the
+closer whatever the header held.
+
+The ksh93u+ crash is recorded as measured and is not reproduced: a
+one-separator header with an empty last section — `for ((;))`,
+`for ((1;))` — takes that build down with SIGSEGV, reproducibly. The
+corpus rows use `for ((1;2))` for the one-separator shape so that what
+is pinned is a behavior rather than a fault.
+
+**More than two separators is a dialect's answer.** bash refuses the
+script, with a *different* sentence — `` syntax error: `;' unexpected ``
+— so an implementation with one message for every bad header is wrong in
+half of them. ksh93 and zsh accept the header and fold everything past
+the second `;` into the third expression, semicolons included, so
+`for ((;;;)); do echo body; break; done` prints `body` there and
+`for ((i=0;i<2;i++;i=9)); do echo b=$i; done` runs one pass and then
+fails as arithmetic on `i++;i=9`. Grammar flag:
+`ForArithExtraSeparators` (off in the core and for bash, on for ksh93
+and zsh). Kind: `ErrForArithSeparator`. Pinned:
+`core/c-style-for-with-three-separators`,
+`core/c-style-for-with-four-expressions` and
+`core/c-style-for-with-three-separators-reaches-the-leftover`.
+
+**The counting is textual, as the split is.** `(( … ))` arrives from the
+lexer whole and the parts are cut on its semicolons, so the check counts
+the same semicolons the split uses. A `;` inside a command substitution
+in the header is therefore counted — and that header does not reach this
+check at all today, because the lexer's paren matching stops first: `for
+(( i=$(echo 1;true) ;; ))` runs in bash and is an unmatched `)` here,
+which is a separate defect of the lexer rather than of the count.
+
+**The other `(( … ))` sites are not this.** `while (( ))`, `if (( ))`
+and a bare `(( ))` command take an empty expression and answer 1, and
+`((1;2))` is an arithmetic failure at run time rather than a parse
+failure, in every column. Measured alongside the table above, and
+unchanged by any of it.
+
 **The loop variable is an ordinary variable and survives the loop** —
 `for ((i=0;i<3;i++)); do :; done` leaves `i` at 3 — which follows from
 the header being arithmetic in the current scope.

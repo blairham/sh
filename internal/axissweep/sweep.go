@@ -248,6 +248,17 @@ func Run(ctx context.Context, o Options) (*Result, error) {
 				pass = append(pass, c)
 			}
 		}
+		if len(pass) == 0 {
+			// Nothing to pin anything with, so every axis would come out
+			// unpinned and every one of them would be marked never reached
+			// — a full backlog, reported with complete confidence, from a
+			// binary that never ran. It has happened once already: `-bin`
+			// was passed a path relative to the module root and the harness
+			// runs each case from a scratch directory, so every row errored
+			// and the report read as if the struct were vacuous.
+			return nil, fmt.Errorf("%s: not one of the %d graded rows agrees with %s — check that -bin %q is an absolute path to a shell built with -tags shaxissweep, because a sweep from here would call every axis unpinned",
+				t.Dialect, len(graded), t.Against, o.Bin)
+		}
 		state.pass = append(state.pass, pass)
 		res.Baseline[t.Dialect] = len(pass)
 		o.logf("%s: %d of %d graded rows agree with %s (%s)\n", t.Dialect, len(pass), len(graded), t.Against, time.Since(start).Round(time.Millisecond))

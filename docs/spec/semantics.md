@@ -13172,6 +13172,32 @@ Four kinds, and the sweep can tell one of them apart by itself:
 And a fifth, which is the one the rule at the top exists for: **the
 disagreement is not there**, as `SymbolicMaskSetsWithoutAWho` was not.
 
+This pass moved 21 of the 82 pairs: seventeen now have a row that catches
+them — `AliasHasPrintOption`, `UnaliasAllRefusesOperands`,
+`TypePSearchesPathPastTheShell`, `KeyedTableScalarIsTheFirstValue`,
+`ListingControlEscape`, `UnsetLocaleIsUnicodeAware` and
+`GetoptsClearsOptarg` in both dialects, and the three `trap` letters in
+bash — and four carry a verdict saying no row ever will. **The other 61
+are untriaged and the sweep says so**, which is the point of counting
+them separately: what is left is a number somebody can work down rather
+than a permanent property of the struct.
+
+Three candidate rows were written, measured, and **not** landed, because
+moving the axis under them changed nothing: a `type -t` probe against an
+axis bash never consults, a `printf '%d' ""` probe whose complaint zsh
+swallows, and a `local u` probe against an axis zsh never reaches. Each
+would have gone into the corpus reading as a measurement. Checking a row
+against the mutated shell before writing it down is what caught them, and
+it costs two processes:
+
+    SH_AXIS_MUTATION=Field=<value> build/axis-sh -dialect zsh -c '<probe>'
+
+A last trap belongs with these, because the instrument reported it with
+complete confidence: `-bin` given a path relative to the module root
+makes every row error, which leaves nothing passing, which makes **every
+axis unpinned and every one of them "never reached"**. A baseline of zero
+is now a hard error naming the likely cause.
+
 ### A flip to `Unspecified` asks a different question
 
 Moving a specified axis to `Unspecified` makes the shell refuse wherever

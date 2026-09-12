@@ -1175,9 +1175,9 @@ type Semantics struct {
 	// `getopts` cursor: OPTIND starts the call at 1 whatever the caller had
 	// reached, and the caller's position comes back when the call returns.
 	//
-	// zsh alone, and it is the parameter itself that is local rather than
-	// only the builtin's bookkeeping — an explicit assignment inside the
-	// function does not escape either:
+	// Under Yes it is the parameter itself that is local rather than only the
+	// builtin's bookkeeping — an explicit assignment inside the function does
+	// not escape either:
 	//
 	//	g() { echo "entry=$OPTIND"; OPTIND=7; }
 	//	OPTIND=3; g; echo "after=$OPTIND"
@@ -1456,64 +1456,57 @@ type Semantics struct {
 	// PrintfOutputPrecedesComplaint writes what `printf` produced before it
 	// complains about the rest, rather than after.
 	//
-	// True in ksh93 alone. It is visible only where both streams arrive at
-	// one place, which is exactly how the corpus reads them: `printf "[%z]"`
-	// is `[` then the complaint there and the complaint then `[` in the other
-	// three, whose output is still sitting in a buffer when the complaint
-	// goes out.
+	// Visible only where both streams arrive at one place, which is exactly how
+	// the corpus reads them: `printf "[%z]"` is `[` and then the complaint under
+	// Yes, and the complaint and then `[` under No, where the output is still
+	// sitting in a buffer when the complaint goes out.
 	PrintfOutputPrecedesComplaint Answer
 	// PrintfEmptyIsNotANumber complains about a numeric conversion given an
-	// operand that is present and empty. bash alone: `printf '%d' ""` is an
-	// error there and a zero in the other three, all of which print the zero
-	// anyway. An argument that is *missing* is never an error in any of them.
+	// operand that is present and empty. The zero is printed under either
+	// answer, and an argument that is *missing* is never an error under either.
 	PrintfEmptyIsNotANumber Answer
 
-	// PidListingFinishesWithAJob makes `jobs -p` forget a finished job the
-	// way a listing of states does.
+	// PidListingFinishesWithAJob makes `jobs -p` forget a finished job the way
+	// a listing of states does.
 	//
-	// ksh93 alone. Measured 2026-09-12 with a background command that has
-	// already ended: `jobs -p` writes the process id in dash, bash and
-	// ksh93 — zsh writes nothing for a job that is over — and the *next*
-	// `jobs` reports it as Done in dash and bash and shows nothing in
-	// ksh93. So the pid listing is a listing that finishes with the job in
-	// one column and a peek that leaves it in two.
+	// The two readings part on a background command that has already ended: Yes
+	// writes the process id and then shows nothing on the *next* `jobs`, where
+	// No writes the id and then reports it Done. So a pid listing is a listing
+	// that finishes with the job under one answer and a peek that leaves it
+	// under the other.
 	//
-	// Asked only where a pid listing met a finished job, so an ordinary
-	// `jobs` never raises it: that form finishes with the job everywhere and
-	// needs no dialect.
+	// Asked only where a pid listing met a finished job, so an ordinary `jobs`
+	// never raises it: that form finishes with the job under both answers.
 	PidListingFinishesWithAJob Answer
 
-	// PrintfTimeConversion gives `printf` a `%(fmt)T`: an epoch through a
-	// date format, with the format written inside the conversion. bash 5.3's
-	// alone among the panel — dash and zsh call `%(` a directive they do not
-	// have, and bash 3.2 an invalid format character.
+	// PrintfTimeConversion gives `printf` a `%(fmt)T`: an epoch through a date
+	// format, with the format written inside the conversion.
 	//
-	// The operand is seconds since the epoch, and two numbers are not times:
-	// -1 is now and -2 is when the shell started. A missing operand is now
-	// as well, and an empty format is the C locale's time of day.
+	// The operand is seconds since the epoch, and two numbers are not times: -1
+	// is now and -2 is when the shell started. A missing operand is now as well,
+	// and an empty format is the C locale's time of day.
 	//
-	// ksh93 also has a `%T`, and it is not this one: its operand is a date
-	// *string* — `now`, `tomorrow` — and a number earns a warning and the
-	// current time instead. Answered No there and recorded in
-	// docs/spec/semantics.md rather than modeled, because reading a date the
-	// way ksh93 reads one is its own feature.
+	// A `%T` whose operand is a date *string* is **not** this conversion, and
+	// answering No is what an implementation with that one holds: see
+	// PrintfTimeOperandIsADateString, and docs/spec/semantics.md for why reading
+	// a date that way is its own feature rather than this one configured.
 	//
-	// Asked only where a format actually carries a `%(`, so a dialect
+	// Asked only where a format actually carries a `%(`, so an implementation
 	// without the conversion is never questioned about `%s`.
 	PrintfTimeConversion Answer
 
 	// PrintfTimeOperandIsADateString makes that conversion's operand a date
-	// *string* rather than a number of seconds, and gives the shell a plain
-	// `%T` with no parentheses as well.
+	// *string* rather than a number of seconds, and gives the shell a plain `%T`
+	// with no parentheses as well.
 	//
-	// ksh93 alone, and asked only where PrintfTimeConversion already said
-	// yes — a dialect without the conversion is never questioned about its
-	// operand. See interp/printfdate.go for the strings, the subset taken
-	// and why the rest meet that shell's own warning rather than a guess.
+	// Asked only where PrintfTimeConversion already said yes — an implementation
+	// without the conversion is never questioned about its operand. See
+	// interp/printfdate.go for the strings, the subset taken, and why the rest
+	// meet a warning rather than a guess.
 	//
-	// It moves the empty format too: `%()T` is the time of day where the
-	// operand is an epoch and the full `date` line where it is a string,
-	// which is the same default the bare `%T` writes.
+	// It moves the empty format too: `%()T` is the time of day where the operand
+	// is an epoch and the full `date` line where it is a string, which is the
+	// same default the bare `%T` writes.
 	PrintfTimeOperandIsADateString Answer
 
 	// PrintfQuote is how `%q` quotes, which is three answers and an absence
@@ -1522,20 +1515,19 @@ type Semantics struct {
 
 	// RedirectsUseEveryTarget makes a stream redirected more than once use
 	// *every* file it names rather than only the last, in both directions:
-	// output goes to all of them and input arrives as all of them in the
-	// order written. `echo x >a >b` fills both in zsh and leaves `a` empty in
-	// the other five; `cat <a <b` is both files there and only `b` elsewhere.
+	// output goes to all of them and input arrives as all of them in the order
+	// written. Under Yes `echo x >a >b` fills both and `cat <a <b` is both
+	// files; under No `a` is left empty and only `b` is read.
 	//
-	// One axis and not two, because it is one switch in the one shell that
-	// has it: turning that shell's option off takes the fan-out and the
-	// concatenation together, and two fields would be two places to forget
-	// one of them. Named for a target rather than for a direction for the
-	// same reason.
+	// One axis and not two, because it is one switch where it exists: turning
+	// that switch off takes the fan-out and the concatenation together, and two
+	// fields would be two places to forget one of them. Named for a target
+	// rather than for a direction for the same reason.
 	//
-	// Silent either way — the shells that use the last target alone report no
-	// error, and the script looks like it worked — which is the `&>` failure
-	// mode in a redirection. Asked only where a command redirects one stream
-	// twice, because that is the only place it decides anything.
+	// Silent either way — using the last target alone reports no error, and the
+	// script looks like it worked — which is the `&>` failure mode in a
+	// redirection. Asked only where a command redirects one stream twice,
+	// because that is the only place it decides anything.
 	RedirectsUseEveryTarget Answer
 
 	// NullCommandVariable names the parameter holding the command that a

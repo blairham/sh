@@ -8392,6 +8392,88 @@ type Semantics struct {
 	// a[1]` needs no answer from anyone.
 	BadSubscriptToUnsetFatal Answer
 
+	// UnsetSubscriptSkippedWhenNameUnset looks the operand's *name* up before
+	// it reads the brackets, and leaves the whole operand alone — quietly, at
+	// 0 — where the shell has never heard of that name. The sibling of
+	// ArithSubscriptSkippedWhenNameUnset, one builtin over, and a separate
+	// field because the panel splits differently here: that one is zsh
+	// alone, and this one is **bash and zsh against ksh93**.
+	//
+	// Measured 2026-09-12, `env -i PATH=/usr/bin:/bin`, script file:
+	//
+	//	a=(x y z); unset a "a[x+]"; echo st=$?
+	//	  zsh 5.9.2      st=0, silent
+	//	  bash 5.3.15    st=0, silent
+	//	  bash 3.2.57    st=0, silent
+	//	  ksh93u+        unset: x+: more tokens expected ~ st=1
+	//
+	// The error is not what the axis is about, and a probe built on it could
+	// not tell the readings apart from a shell that merely swallowed the
+	// diagnostic. The side effect can: `i=0; unset "nodecl[i++]"` leaves i at
+	// **0** in zsh, bash 5.3 and bash 3.2 and at **1** in ksh93, with status
+	// 0 everywhere. The subscript is not evaluated at all, rather than
+	// evaluated and forgiven.
+	//
+	// "Never heard of" is set-ness and not emptiness, measured a name at a
+	// time on zsh: `v=`, `typeset -a e` and `typeset s` all evaluate the
+	// subscript and report, and `nope`, `unset -v nope` and a name that was
+	// unset a moment ago are all silent. A declared array with no elements is
+	// a name the shell has heard of.
+	//
+	// No answer reads as No — the subscript is evaluated, which is what every
+	// preset did before this axis existed — so a dialect that never meets an
+	// absent name's subscript needs no line.
+	//
+	// unexhibited: dash and BusyBox ash have no subscript for `unset` to
+	// read; `unset "nope[1]"` there is `nope[1]: bad variable name` and ends
+	// the script, so the question never arises.
+	UnsetSubscriptSkippedWhenNameUnset Answer
+
+	// UnsetStatusIsTheLastSubscripts makes a later operand's subscript
+	// *overwrite* the status an earlier one failed with, rather than the
+	// failure being kept for the whole builtin.
+	//
+	// Measured 2026-09-12, same conditions:
+	//
+	//	a=(x y z); unset "a[x+]" "a[1]"; echo st=$?
+	//	  zsh 5.9.2    complains, st=0    the last subscript's
+	//	  ksh93u+      complains, st=1    the failure is kept
+	//	  bash 5.3/3.2 complains, the command list ends — no status to read
+	//
+	// Both orders, because one order alone cannot tell the readings apart:
+	// `unset "a[1]" "a[x+]"` is 1 in zsh as well.
+	//
+	// It is the last *subscript's* and not the last operand's, which is the
+	// correction a table of two rows would have missed. On zsh, with an
+	// earlier `a[x+]` failing:
+	//
+	//	"a[1]"        st=0   an element
+	//	"a[@]"        st=0   the whole array
+	//	"a[1,2]"      st=0   a span
+	//	"a[9]"        st=0   an element that is not there
+	//	nope          st=1   a plain name — it does not carry a status
+	//	a             st=1   nor does the array's own name
+	//	"nope[1]"     st=1   nor does a name the shell has not got, which is
+	//	                     UnsetSubscriptSkippedWhenNameUnset above: the
+	//	                     brackets were never read, so there is no
+	//	                     subscript to take the status from
+	//	"m[k]"        st=1   nor an association's key, which is not arithmetic
+	//
+	// bash can be asked the general question by a route that does not go
+	// through a subscript, and answers No: `readonly r=1; x=1; unset r x` is
+	// 1 in bash 5.3, bash 3.2 and ksh93 in either order. zsh cannot be asked
+	// that way — a readonly refusal ends the script there — which is why the
+	// two are one axis and not two, and why any change to how the operand
+	// loop carries status has to leave the readonly path returning early.
+	//
+	// No answer reads as No, the majority and the reading every preset had
+	// before this axis existed.
+	//
+	// unexhibited: dash and BusyBox ash have no operand that can fail and be
+	// outlived — a bad variable name, a bracketed name and a readonly all end
+	// the script — so nothing there reads a status either way.
+	UnsetStatusIsTheLastSubscripts Answer
+
 	// UnsetSubscriptOnAScalarIsAnError refuses `unset "a[1]"` where `a`
 	// holds a string, rather than leaving the name alone without a word.
 	// bash says `unset: a: not an array variable` and fails; ksh93 says

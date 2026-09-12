@@ -1118,6 +1118,12 @@ func Semantics() interp.Semantics {
 	// And the complaint is the builtin's: `unset` reports 1 and the script
 	// goes on, which is what makes `unset a[@]` survivable here.
 	s.BadSubscriptToUnsetFatal = interp.No
+	// And it reads the brackets whether or not it has the name: `unset a
+	// "a[x+]"` complains and reports 1 where bash and zsh are silent at 0,
+	// and `i=0; unset "nodecl[i++]"` leaves i at 1.
+	s.UnsetSubscriptSkippedWhenNameUnset = interp.No
+	// The failure is kept: `unset "a[x+]" "a[1]"` is 1 here and 0 in zsh.
+	s.UnsetStatusIsTheLastSubscripts = interp.No
 	// A negative subscript is read against the elements the name has, and a
 	// name holding a string has none: `a=abc; a[-1]=x` is `subscript out of
 	// range` where the write over a non-negative subscript promotes.

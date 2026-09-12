@@ -1674,6 +1674,15 @@ func Semantics() interp.Semantics {
 	// The complaint is the builtin's rather than the script's: `unset` reports
 	// 1 and the next command still runs.
 	s.BadSubscriptToUnsetFatal = interp.No
+	// And a name it has never heard of is left alone with its brackets
+	// unread: `unset a "a[x+]"` is silent at 0, and `i=0; unset
+	// "nodecl[i++]"` leaves i at 0. What counts as heard of is set-ness and
+	// not emptiness — `v=` and an empty declared array both evaluate.
+	s.UnsetSubscriptSkippedWhenNameUnset = interp.Yes
+	// The status is the last *subscript's* and not the last operand's: with
+	// an earlier `a[x+]` failing, `unset "a[x+]" "a[1]"` is 0 and `unset
+	// "a[x+]" nope` is still 1, because a plain name carries no status.
+	s.UnsetStatusIsTheLastSubscripts = interp.Yes
 	// A negative subscript past the first element places one in front of it
 	// rather than being refused: `a=(p q); a[-3]=x` is three elements with
 	// `x` at the head, and `-4` and `-5` land in the same place. What this

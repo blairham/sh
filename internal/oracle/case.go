@@ -2730,6 +2730,26 @@ echo "reached-after st=$?"`,
 		Why:     "a subscripted operand is refused by the variable the subscript indexes, and the shells that reach the check name the base — `a`, not `a[0]` — so the refusal stands ahead of the element path and the subscript is never evaluated. Only bash and ksh93 get that far: dash refuses `a[0]` as a bad variable name first and zsh reads the brackets as a pattern that matches nothing, so this row records three different complaints for one line and is the reason the wording is worth reading rather than the status alone",
 	},
 	{
+		ID: "unset/a-subscript-on-a-name-it-has-not-got", Category: "semantics axes",
+		Snippet: `a=(x y z); unset a "a[x+]"; echo "st=$?"; echo after`,
+		Why:     "a name the shell has never heard of takes its brackets with it in bash 5.3, bash 3.2 and zsh — silent, status 0 — where ksh93 reads them and reports `more tokens expected` at 1. Two readings of identical syntax, so it is interp.Semantics.UnsetSubscriptSkippedWhenNameUnset and not a rule the core can hold. `unset a` first rather than a name never mentioned, so that the row also says the answer is about the *table* and not about the spelling: the same brackets on the same name were live one command earlier. dash and BusyBox ash refuse the array literal while reading and never reach it",
+	},
+	{
+		ID: "unset/a-skipped-subscript-is-not-evaluated", Category: "semantics axes",
+		Snippet: `i=0; unset "nodecl[i++]"; echo "i=$i st=$?"`,
+		Why:     "the same axis with the error taken out of it, which is what makes it a probe rather than a restatement: a shell that evaluated the subscript and swallowed the complaint would give the first row's answer too, and cannot give this one's. `i` is 0 in bash 5.3, bash 3.2 and zsh and 1 in ksh93, at status 0 in all four, so the brackets are not read rather than read and forgiven",
+	},
+	{
+		ID: "unset/the-status-of-a-later-subscript", Category: "semantics axes",
+		Snippet: `a=(x y z); unset "a[x+]" "a[1]"; echo "st=$?"; b=(x y z); unset "b[1]" "b[x+]"; echo "st=$?"`,
+		Why:     "whether a later operand's subscript overwrites the status an earlier one failed with: zsh answers 0 then 1 — the last subscript's — and ksh93 answers 1 twice, keeping the failure. Both orders in one row because one alone cannot tell the readings apart. bash cannot be asked here at all: a bad subscript ends the command list, so nothing downstream reads a status. interp.Semantics.UnsetStatusIsTheLastSubscripts",
+	},
+	{
+		ID: "unset/a-plain-name-carries-no-unset-status", Category: "semantics axes",
+		Snippet: `a=(x y z); unset "a[x+]" nope; echo "st=$?"; b=(x y z); unset "b[x+]" "nope[1]"; echo "st=$?"`,
+		Why:     "the correction to the row above, and the reason the axis is named for the last *subscript* rather than the last operand: in zsh a plain name leaves the status where it found it, so both of these are 1 where `unset \"a[x+]\" \"a[1]\"` is 0. The second operand is the two axes composing — a name the shell has not got is skipped, and being skipped it has no subscript to take a status from",
+	},
+	{
 		ID: "unset/takes-away-an-environment-name", Category: "parameters",
 		Snippet: `unset HOME; echo "[${HOME-gone}]"`,
 		Why:     "a name that arrived in the environment rather than from an assignment is still a name `unset` removes — deleting it from the shell's own table is not enough, because a lookup reads both",

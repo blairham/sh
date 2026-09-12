@@ -56,7 +56,38 @@ func BenchmarkReplaceExtendedGlob(b *testing.B) {
 	var got string
 	for b.Loop() {
 		o := benchOpts(b, benchPattern, benchSubject)
-		got = replace(benchSubject, benchPattern, e, o, with)
+		got = replace(benchSubject, benchPattern, e, o, armOrder{}, with)
+	}
+	if len(got) != 9 {
+		b.Fatalf("result %q is %d bytes, want the 9 real zsh gives", got, len(got))
+	}
+}
+
+// BenchmarkReplaceExtendedGlobWithTheWrittenArmReading is the same
+// substitution for the dialect that prefers the arm an alternation wrote
+// first (#2152), which the theme's pattern has three of.
+//
+// It is a pair with the benchmark above and has to be read as one: the answer
+// is the same nine bytes, so what the pair times is the *price of asking*.
+// Measured on this machine, 560us against 655us — about 19% — and every bit
+// of it is the second reading being consulted at each position a match was
+// found at. Two things that look like the cost are not:
+//
+//   - the matcher questions. The arm search is bounded above by the length
+//     reading's own edge, since a variant matches a subset of what the whole
+//     pattern does, so the common case is *one* further question.
+//   - the memo. The matcher drops it whenever the pattern moves, so asking
+//     about a variant through the caller's matchWhere threw away everything
+//     the whole-pattern scan had learned; armSearch carries one per variant
+//     for that reason.
+func BenchmarkReplaceExtendedGlobWithTheWrittenArmReading(b *testing.B) {
+	e := &syntax.ParamExpr{All: true}
+	with := func(matchReport, string) string { return "X" }
+	arm := armOrder{answer: Yes, ask: func() bool { return true }}
+	var got string
+	for b.Loop() {
+		o := benchOpts(b, benchPattern, benchSubject)
+		got = replace(benchSubject, benchPattern, e, o, arm, with)
 	}
 	if len(got) != 9 {
 		b.Fatalf("result %q is %d bytes, want the 9 real zsh gives", got, len(got))

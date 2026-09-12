@@ -2813,10 +2813,11 @@ func (r *Runner) trimWith(value, pattern string, e *syntax.ParamExpr) string {
 // question left in a closure so that it is asked only at the disagreement.
 func (r *Runner) armOrder() armOrder {
 	return armOrder{
-		answer: r.sem().LongestPrefixTrimTakesTheWrittenArm,
+		answer: r.sem().LongestMatchTakesTheWrittenArm,
 		ask: func() bool {
-			return r.ask(r.sem().LongestPrefixTrimTakesTheWrittenArm,
-				"`${x##pat}`, where the arms of an alternation take different lengths")
+			return r.ask(r.sem().LongestMatchTakesTheWrittenArm,
+				"`${x##pat}` and `${x//pat/rep}`, where the arms of an "+
+					"alternation take different lengths")
 		},
 	}
 }
@@ -2856,11 +2857,11 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 	repl := r.replacementWord(e)
 	if !reportsAMatch(o) {
 		with := r.replacementFor(repl)
-		return replace(value, pattern, e, o, func(_ matchReport, matched string) string {
+		return replace(value, pattern, e, o, r.armOrder(), func(_ matchReport, matched string) string {
 			return with(matched)
 		})
 	}
-	return replace(value, pattern, e, o, func(m matchReport, matched string) string {
+	return replace(value, pattern, e, o, r.armOrder(), func(m matchReport, matched string) string {
 		r.publishMatch(m)
 		return r.replacementFor(repl)(matched)
 	})
@@ -2985,24 +2986,48 @@ func trimSpan(value, pattern string, op syntax.ParamOp, o patternOpts, arm armOr
 	search bool,
 ) (int, int, matchReport, bool) {
 	lo, hi, m, ok := spanByLength(value, pattern, op, o, search)
-	if !ok || !writtenArmReaches(op, search) || arm.answer == No || arm.ask == nil {
+	if !ok || !writtenArmReaches(op, search) || !arm.reaches() {
 		return lo, hi, m, ok
 	}
-	j, decided := writtenArmEnd(value, pattern, o, lo)
-	if !decided || j == hi {
+	arms, prepared := newArmSearch(pattern, o)
+	if !prepared {
 		return lo, hi, m, ok
+	}
+	hi, m = armEnd(value, pattern, o, arms, arm, lo, hi, m)
+	return lo, hi, m, true
+}
+
+// armEnd is where a match beginning at start ends once the written-arm
+// reading has had its say: the length reading's end, unless a dialect prefers
+// the arm that was written first and the two land in different places.
+//
+// One function for the trims and for the substitution, because it is one
+// rule. It was the trim's alone, and a substitution takes the longest match
+// at each position exactly as `${x##pat}` does — so the arm the matcher would
+// have preferred was decided before the matcher was consulted there too, and
+// `${w//(a|ab)/X}` on `abc` was `Xc` where zsh 5.9.2 says `Xbc` (#2152).
+//
+// The axis is asked **only where the two readings differ**, which is what
+// keeps an unanswered dialect from being refused for having written an
+// alternation at all.
+func armEnd(value, pattern string, o patternOpts, arms armSearch, arm armOrder,
+	start, end int, m matchReport,
+) (int, matchReport) {
+	j, decided := arms.endAt(value, o, start, end)
+	if !decided || j == end {
+		return end, m
 	}
 	if !arm.ask() {
-		return lo, hi, m, ok
+		return end, m
 	}
 	// The edge is the written arm's and the report is the whole pattern's:
 	// matchGroup prefers a written arm on its own, so matching the pattern
 	// the script wrote against the piece this reading chose fills `$match`
 	// with the same arm the search took.
-	if armOK, armReport := matchPatternIn(pattern, value[lo:j], value, lo, o); armOK {
-		return lo, j, armReport, true
+	if armOK, armReport := matchPatternIn(pattern, value[start:j], value, start, o); armOK {
+		return j, armReport
 	}
-	return lo, hi, m, ok
+	return end, m
 }
 
 // writtenArmReaches is where the two readings can land in different places at
@@ -3133,7 +3158,36 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 // turn for the two anchored forms. Every rule below about empty matches and
 // about making progress is written against whichever span came back, so the
 // flag inherits all of them — see interp/searchflag.go.
-func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with func(matchReport, string) string) string {
+//
+// arm is the written-arm reading a substitution shares with the trims, and it
+// reaches exactly where the *longest* match is wanted and the end of it is
+// free to move: the unanchored forms and `/#`, but not `/%`, which pins the
+// end, and not under `(S)`, which asks for the shortest.
+//
+// **Those last two are skipped rather than guarded against**, and the
+// difference matters to a reader: asking there could not change an answer, so
+// the condition below buys the preparation rather than a behavior. `/%` never
+// consults it because its branch has no free end to move. And under `(S)` the
+// arm search is bounded above by the shortest match, which is the *minimum*
+// over every variant — so no variant can match shorter, and the first one
+// that matches at all matches exactly there. Mutating either condition away
+// leaves every test passing, which is the proof rather than a gap in them.
+//
+// Measured on zsh 5.9.2 with `w=abc`:
+//
+//	${w//(a|ab)/X}     Xbc    the arm that was written first
+//	${w//(ab|a)/X}     Xc
+//	${w/(|a)/X}        Xabc   an empty arm is an arm
+//	${w/%(c|bc)/X}     aX     the anchor pins the end: no disagreement
+//	${w/%(bc|c)/X}     aX
+//	${(S)w//(a|ab)/X}  Xbc    shortest first, in either written order
+//	${(S)w//(ab|a)/X}  Xbc
+//
+// See armEnd, which is the whole of the rule, and interp/trimarm.go for the
+// search behind it.
+func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armOrder,
+	with func(matchReport, string) string,
+) string {
 	// Every position a match may start or end at, in order, and there is one
 	// more of them than there are units. They are unit boundaries rather than
 	// byte offsets, so a pattern is never handed half of a character —
@@ -3149,6 +3203,16 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 
 	shortest := searchingFlag(e)
 
+	// Prepared once for the whole substitution rather than at each position:
+	// resolving the arms rewrites the pattern text, and a global substitution
+	// asks at every unit of the subject. Not prepared at all for the two
+	// spellings whose answer it could not change — see the note above.
+	var arms armSearch
+	takesTheArm := !shortest && e.Anchor != '%' && arm.reaches()
+	if takesTheArm {
+		arms, takesTheArm = newArmSearch(pattern, o)
+	}
+
 	switch e.Anchor {
 	case '#':
 		// Anchored at the start, so the end is the length choice: measured,
@@ -3161,7 +3225,11 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 		for k := first; ; k += step {
 			if spanCouldMatch(stops[k], lo, hi, bounded) {
 				if ok, m := matchPatternIn(pattern, value[:stops[k]], value, 0, o); ok {
-					return with(m, value[:stops[k]]) + value[stops[k]:]
+					end := stops[k]
+					if takesTheArm {
+						end, m = armEnd(value, pattern, o, arms, arm, 0, end, m)
+					}
+					return with(m, value[:end]) + value[end:]
 				}
 			}
 			if k == final {
@@ -3171,6 +3239,11 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 	case '%':
 		// And anchored at the end, so the start is: `${v/%b*c/X}` is `aX`
 		// and `${(S)v/%b*c/X}` is `abcaX`.
+		//
+		// Nothing here asks the written-arm reading, and that is the whole of
+		// why: the end is pinned, so every match at a given start is the same
+		// length and the arms have nothing to disagree about. Measured,
+		// `x=abc` gives `aX` for both `${x/%(c|bc)/X}` and `${x/%(bc|c)/X}`.
 		first, final, step := 0, len(stops)-1, 1
 		if shortest {
 			first, final, step = len(stops)-1, 0, -1
@@ -3224,6 +3297,13 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 			if m == mFinal {
 				break
 			}
+		}
+		if end >= 0 && takesTheArm {
+			// The position is settled; the arm may still move where the
+			// match ends. Asked here rather than inside the span walk above
+			// because the two readings agree about *where* a match begins
+			// and differ only about how much of one to take.
+			end, rep = armEnd(value, pattern, o, arms, arm, i, end, rep)
 		}
 		if end < 0 || end == i && pattern != "" && !matchPattern(pattern, "", o) {
 			if i < len(value) {

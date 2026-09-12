@@ -4341,9 +4341,10 @@ type Semantics struct {
 	// broken the unanimous half (#1407).
 	BracketEscapeIsAlsoAMember bool
 
-	// LongestPrefixTrimTakesTheWrittenArm decides which match `${x##pat}`
-	// removes when `pat` holds an alternation whose arms take different
-	// lengths: the arm that was written first, or the longest of them.
+	// LongestMatchTakesTheWrittenArm decides which match `${x##pat}` removes,
+	// and which one `${x//pat/rep}` replaces, when `pat` holds an alternation
+	// whose arms take different lengths: the arm that was written first, or
+	// the longest of them.
 	//
 	// Measured 2026-09-11, `x=abc`, each probe in a `-c` of its own. The
 	// spelling differs by column because the group does — one shell reads a
@@ -4369,13 +4370,27 @@ type Semantics struct {
 	// empty arm is an arm: `${x##(|a)}` removes nothing there and removes
 	// `a` under No.
 	//
-	// **Asked at the longest *prefix* trim and nowhere else**, which is
-	// where the panel actually splits. The single `#` takes the shortest
-	// match in every column, arms or no arms — `${x#(ab|a)}` is `bc` in all
-	// of them — and both suffix trims take the longest: `${x%%(|bc)}` is `a`
+	// **Asked where the longest match is wanted and the end of that match is
+	// free to move**, which is where the panel actually splits, and which is
+	// two operators rather than one. The single `#` takes the shortest match
+	// in every column, arms or no arms — `${x#(ab|a)}` is `bc` in all of them
+	// — and the unflagged suffix trims take the longest: `${x%%(|bc)}` is `a`
 	// in the shell that answers Yes, where a written-arm search would have
-	// taken the empty arm and removed nothing. So an axis worded for trims
-	// in general would have moved three rows the panel agrees about.
+	// taken the empty arm and removed nothing. So an axis worded for trims in
+	// general would have moved three rows the panel agrees about.
+	//
+	// The *substitution* is the second operator and was missing for a long
+	// time, which is what the field's old name — `LongestPrefixTrimTakes…` —
+	// recorded rather than caused. `${x//(a|ab)/X}` on `abc` is `Xbc` in the
+	// shell that answers Yes and `Xc` in the rest, exactly as the trim
+	// splits, and every unanchored spelling goes the same way: `${x/(|a)/X}`
+	// is `Xabc` there and `Xbc` elsewhere, and `/#` follows because its end
+	// is still free. `/%` does not, because pinning the end leaves the arms
+	// no length to disagree about — measured, `${x/%(c|bc)/X}` and
+	// `${x/%(bc|c)/X}` are both `aX` in every column (#2152).
+	//
+	// Under zsh's `(S)` flag the shortest match is wanted, which is the
+	// minimum over every arm, so the arms cannot disagree there either.
 	//
 	// It reaches the `(M)` flag and the `(#b)` captures with the same
 	// answer, because they are the same match seen from the other side:
@@ -4385,9 +4400,9 @@ type Semantics struct {
 	// Asked only where the two readings land in different places, which is
 	// why an ordinary pattern never reaches it: a pattern with no
 	// alternation has one reading, and `(ab|a)` — the arms in decreasing
-	// length — has two that agree. See trimSpan, which finds both edges and
-	// asks only when they differ, and interp/trimarm.go for the search.
-	LongestPrefixTrimTakesTheWrittenArm Answer
+	// length — has two that agree. See armEnd, which is the one place both
+	// operators ask it, and interp/trimarm.go for the search.
+	LongestMatchTakesTheWrittenArm Answer
 
 	// ParameterIsSetSeesPositionals lets `-v 1` ask about a positional
 	// parameter, and `-v 0` about the shell's name.

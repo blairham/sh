@@ -127,6 +127,11 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		sub.subshellLoopFloor = sub.loopDepth
 		sub.inheritJobs(jobBoundaryCompound)
 		err := sub.runList(ctx, c.List)
+		// The subshell is over, which for a real shell is a process exit: its
+		// own EXIT trap runs here, before the status is read, so a handler
+		// that exits with one of its own is the status these parentheses
+		// report. See Runner.endSubshell.
+		sub.endSubshell(ctx)
 		// The status and what produced it travel together: a subshell whose
 		// last command a signal killed is a signal death out here too, and
 		// a pipeline substituting the status has to know that.

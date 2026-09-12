@@ -34,7 +34,10 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 		name = "COPROC"
 	}
 	job, err := r.startCoproc(ctx, name, func(sub *Runner) error {
-		return sub.command(ctx, c.Cmd)
+		err := sub.command(ctx, c.Cmd)
+		// A coprocess is a subshell too, and this is where it ends.
+		sub.endSubshell(ctx)
+		return err
 	})
 	if err != nil || job == nil {
 		return err

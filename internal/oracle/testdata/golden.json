@@ -104050,6 +104050,50 @@
         "TimedOut": false
       }
     },
+    "print/a-count-in-front-of-a-color-is-the-index": {
+      "bash": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " 033 [ 3 0 m 033 [ 3 0 m 033 [ 3 1 m 033~ [ 3 2 m 033 [ 9 1 m 033 [ 9 7 m 033 [~ 3 8 ; 5 ; 1 6 m 033 [ 3 8 ; 5 ; 3~ 0 m 033 [ 3 8 ; 5 ; 2 0 0 m 033 [ 3~ 8 ; 5 ; 2 5 5 m 033 [ 3 9 m 033 [ 3~ 9 m ~~ 033 [ 4 2 m 033 [ 4 8 ; 5 ; 3 0 m ~~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "print/a-dash-before-a-digit-is-an-operand": {
       "bash": {
         "Stdout": " st=127",
@@ -104396,6 +104440,50 @@
       },
       "zsh": {
         "Stdout": "abafter",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "print/braces-win-over-a-count-in-front-of-a-color": {
+      "bash": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " 033 [ 3 1 m ~~ 033 [ 3 0 m ~~ 033 [ 3 8 ; 5 ; 3 0 m x \\n ~~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

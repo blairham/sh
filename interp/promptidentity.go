@@ -36,10 +36,11 @@ import (
 //
 // Empty is a real answer and not an omission: a uid with no password database
 // entry has no login name. The panel disagrees about what to draw then, which
-// is why nothing is invented here — measured in a container at uid 99999,
-// bash draws the words `I have no name!` and zsh draws nothing at all. The
-// callers get the empty string and each says what it says about it; see
-// #1451.
+// is why nothing is invented here — measured in a container at uid 99999, and
+// again on 2026-09-12, bash draws the words `I have no name!` and zsh draws
+// nothing at all. The callers get the empty string and each says what it says
+// about it, which since #1451 is PromptStyle.NoLoginName: the dialect's word,
+// and told apart from the Runner nobody carried a name into at all.
 func LoginName() string {
 	u, err := user.Current()
 	if err != nil {

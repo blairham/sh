@@ -240,11 +240,18 @@ type PromptStyle struct {
 	// the walker reads the first digit as the code, finds no field for `2`,
 	// and refuses `%2~` by name.
 	//
-	// The digits are handed to the resolver as the argument, unbraced. Nothing
-	// takes both a number and a `{…}` group — the codes that take a group are
-	// the colors and the clock, and none of them counts anything — so the two
-	// share one parameter rather than widening the resolver for a case that
-	// does not arise.
+	// The digits are handed to the resolver as the argument, unbraced, and a
+	// code that also takes a `{…}` group takes whichever of the two was
+	// written — the group where there is one. So the two share one parameter
+	// rather than widening the resolver, and the third result of
+	// promptArgument is what says which spelling arrived.
+	//
+	// This used to say that nothing takes both, on the grounds that the codes
+	// with a group are the colors and the clock and neither counts anything.
+	// The colors do: `%2F` is the color `%F{2}` paints and `%30F` is
+	// `%F{30}`, measured, and the count reaching them is #2087. The clock is
+	// still the case the sentence described — `%D` counts nothing — but one
+	// example is not the rule it was written as.
 	NumericArgument bool
 
 	// TrailingEscapeIsDropped says an escape character with nothing after it
@@ -284,6 +291,26 @@ type PromptStyle struct {
 	//
 	// Empty draws nothing, for a dialect without the notion.
 	Privilege string
+
+	// NoLoginName is what FieldUser draws when the system has no name for the
+	// uid this process runs as — a container started `--user 99999`, and any
+	// other uid with no password-database entry.
+	//
+	// A dialect's own word and not an axis, because the two shells that have
+	// the escape simply say different things. Measured 2026-09-12 at uid 99999
+	// with no `/etc/passwd` entry, through `PS4` in the bash images and
+	// `${(%%)…}` in the zsh one: bash 5.3.15, bash 3.2.57 and bash under an
+	// `argv[0]` of `sh` all draw the words `I have no name!`, and zsh 5.9
+	// draws nothing at all. So zsh's answer is the zero value here and is
+	// asserted in dialect/zsh beside the measurement rather than left to look
+	// like a field nobody filled in.
+	//
+	// This is **not** the same as a Runner nobody told who it is running as.
+	// That one is still refused by name — see FieldUser — and the two used to
+	// be one empty string, which is what #1451 was: a uid with no entry drew
+	// nothing in both dialects, and an empty prompt component announces
+	// nothing.
+	NoLoginName string
 
 	// Version and VersionFull are what FieldVersion and FieldVersionFull
 	// draw: bash's `\v` is 5.3 and its `\V` is 5.3.15. The strings are the
@@ -908,8 +935,22 @@ func (w *promptWalk) walk(runes []rune) {
 			continue
 		}
 		if layer, ok := w.st.Colors[code]; ok {
-			arg, next, _ := promptArgument(runes, i+1)
+			// A count in front of a color code is the index it paints, and
+			// braces after it win over the count: measured, `%2F` is
+			// `\e[32m`, `%30F` is `\e[38;5;30m` and `%2F{red}` is `\e[31m`.
+			// The two are read here in the order the Codes branch above reads
+			// them, and for the same reason — a code takes one argument, and
+			// which spelling it arrived in is what the third result says.
+			//
+			// This branch dropped the count until #2087, so every unbraced
+			// numeric color drew the *empty* argument, which colorIndex reads
+			// as nought and paints black. A wrong color at status 0 with
+			// nothing said.
+			arg, next, braced := promptArgument(runes, i+1)
 			i = next
+			if !braced {
+				arg = num
+			}
 			seq := colorSequence(layer, arg)
 			w.b.WriteString(seq)
 			// A color code is the one that is always a setting: it names the
@@ -1334,18 +1375,25 @@ func sgr(n int) string { return "\x1b[" + strconv.Itoa(n) + "m" }
 //	         needs its width markers there.
 //	newline  `\n`, where a prompt drawn in raw mode needs `\r\n` with it.
 //
-// askPromptUser is the login name, asked of whoever carried it in.
+// askPromptUser is the login name, asked of whoever carried it in, and whether
+// anybody carried one in at all.
 //
-// One accessor rather than a nil check at each use, because there are three
-// uses — `%n`, `%m`, `%M` — and a fourth reader that forgot the check would
-// panic on every runner nobody told, which is most of them. Empty covers both
-// "not told" and "told, and there is no answer": neither is drawable, and the
-// caller refuses on the string rather than having to know which it met.
-func (r *Runner) askPromptUser() string {
+// One accessor rather than a nil check at each use, because a reader that
+// forgot the check would panic on every runner nobody told, which is most of
+// them.
+//
+// **The two empties are told apart, and that is the whole of #1451.** They used
+// to be one string: a Runner nobody told and a uid the password database has no
+// entry for both answered `""`, and the caller refused on the string without
+// having to know which it met. They want different answers — the first is a
+// gap in how this Runner was set up and is still refused by name, the second is
+// a real state of a real machine and is the dialect's own word for it — so the
+// second result says which, and only the caller decides what either means.
+func (r *Runner) askPromptUser() (string, bool) {
 	if r.promptUser == nil {
-		return ""
+		return "", false
 	}
-	return r.promptUser()
+	return r.promptUser(), true
 }
 
 // askPromptHost is the machine's name, asked the same way and for the same
@@ -1368,9 +1416,17 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 		// (SetPromptUser); a runner nobody told refuses it with the rest
 		// rather than expanding to nothing, which would be a wrong answer
 		// wearing a success.
-		name := r.askPromptUser()
-		if name == "" {
+		name, told := r.askPromptUser()
+		if !told {
 			return "", false
+		}
+		if name == "" {
+			// Told, and the system had no answer — a uid with no
+			// password-database entry. That is a fact about the machine
+			// rather than a gap in this Runner, and what to draw for it is
+			// the dialect's: bash says so in words and zsh says nothing.
+			// #1451.
+			return st.NoLoginName, true
 		}
 		return name, true
 	case FieldHost:

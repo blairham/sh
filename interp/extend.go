@@ -937,9 +937,13 @@ func (r *Runner) SetPromptUser(name string) { r.promptUser = func() string { ret
 //
 // The answer is asked for once and kept, because a prompt is redrawn on every
 // keystroke that redraws the line and a login name does not change while a
-// shell runs. A function that answers empty is refused exactly as
-// SetPromptUser("") is: told, and with no answer, is not the same as not told,
-// but both are wrong to draw.
+// shell runs.
+//
+// A function that answers empty means *told, and the system had no name* — a
+// uid with no password-database entry — which is not the same as not told and
+// no longer draws the same thing. It draws PromptStyle.NoLoginName, which is
+// the dialect's own word for that state; see FieldUser and #1451. Not telling
+// this Runner at all is still the refusal.
 func (r *Runner) SetPromptUserFunc(ask func() string) { r.promptUser = sync.OnceValue(ask) }
 
 // SetPromptHost names the machine the `%m` and `%M` prompt escapes report.

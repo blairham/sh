@@ -204,3 +204,20 @@ func TestAScriptGetsAnEmptyPromptRatherThanNone(t *testing.T) {
 			st.DefaultWithNobodyToPrompt, st.DefaultContinuedWithNobodyToPrompt)
 	}
 }
+
+// And a uid the password database has no entry for is drawn as nothing.
+//
+// The other half of #1451, and the reason the answer is a dialect's string
+// rather than a rule in the drawer: measured 2026-09-12 in the
+// `zshusers/zsh:5.9` image at uid 99999 with no `/etc/passwd` entry,
+// `${(%%):-%n}` is the empty string — where bash draws the words `I have no
+// name!` in exactly the same container.
+//
+// Asserted rather than left as a zero value nobody mentions. Empty here is a
+// measurement and reads identically to a field somebody forgot, and the
+// difference between those two is the whole reason this test exists.
+func TestAUidWithNoPasswordDatabaseEntryIsDrawnAsNothing(t *testing.T) {
+	if got := zsh.PromptStyle().NoLoginName; got != "" {
+		t.Errorf("NoLoginName = %q, want empty — zsh draws nothing for a nameless uid", got)
+	}
+}

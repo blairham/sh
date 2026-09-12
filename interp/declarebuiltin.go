@@ -616,16 +616,32 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		if r.unspecified {
 			return r.status
 		}
-		if base, sub, subscripted := r.subscriptOperand(name); subscripted && hasValue {
-			// The operand names an element, so the attributes and the scope
-			// are about `a` and the value is about `a[1]`. Splitting at the
-			// `=` and handing `a[1]` to the variable store made the whole
-			// line a no-op at status 0 — see declareelement.go.
-			r.declareElement(base, sub, value, df, true)
-			if r.unspecified || r.ctl == controlExit {
-				return r.status
+		if base, sub, subscripted := r.subscriptOperand(name); subscripted {
+			if hasValue {
+				// The operand names an element, so the attributes and the
+				// scope are about `a` and the value is about `a[1]`.
+				// Splitting at the `=` and handing `a[1]` to the variable
+				// store made the whole line a no-op at status 0 — see
+				// declareelement.go.
+				r.declareElement(base, sub, value, df, true)
+				if r.unspecified || r.ctl == controlExit {
+					return r.status
+				}
+				continue
 			}
-			continue
+			// A subscripted operand carrying no value declares the *name*
+			// as an array and writes no element: measured 2026-09-12,
+			// `typeset a[3]` leaves `declare -a a` in bash and `${#a[@]}`
+			// is 0 in bash and ksh93 alike, and an array already standing
+			// is left as it is. It used to declare a variable literally
+			// named `a[3]` — invisible to `${a[3]}` and to `typeset -p a`,
+			// at status 0 (#1380).
+			//
+			// The name and not the operand, and the array letter whether or
+			// not one was written: the brackets are what say the name is an
+			// array.
+			name = base
+			df.array = df.array || !df.assoc
 		}
 		// Read before the attributes are applied, because `-x` on this very
 		// declaration would otherwise answer a question asked about the name

@@ -586,6 +586,14 @@ func Semantics() interp.Semantics {
 	// `typeset -a b=(1)`.
 	s.ScalarUnderAnArrayDeclaration = interp.ScalarUnderACompoundStaysAScalar
 	s.ScalarUnderATableDeclaration = interp.ScalarUnderACompoundBecomesTheFirstElement
+	// A name holding a compound reaches a child as its **first value**:
+	// measured 2026-09-12, `typeset -x a=(p q)` puts `a=p` in a child's
+	// environment and an exported table puts its first value there. The
+	// only column that hands a child anything for a compound (#1380).
+	s.ExportedCompoundReachesAChildAsItsFirstValue = interp.Yes
+	// And a subscripted operand's letters land on the name: `typeset -x
+	// a[1]=v` lists `typeset -x -a a=([1]=v)` here (#1380).
+	s.SubscriptedOperandCarriesTheAttributes = interp.Yes
 	// `a=(1 2); a+=x` is `typeset -a a=(1x 2)`: the first element joined, the
 	// rest standing, two elements.
 	s.ScalarAppendedToAnArrayBecomesANewElement = interp.No

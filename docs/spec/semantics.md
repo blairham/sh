@@ -12059,6 +12059,67 @@ compound* is the pair of axes below. A declaration carrying its own value
 is not this question either: `b=1; typeset -a b=(9)` is the one element
 `9` everywhere.
 
+**`ExportedCompoundReachesAChildAsItsFirstValue`** — bash no · dash unspecified · ksh93 yes · zsh no
+
+Hands a child an entry for an exported name holding an **array or a
+table**, whose value is the array's first element or the table's first
+value. The alternative is no entry at all, which is not a nicety: a name
+and no name are different things to the program reading the environment,
+and a compound has no environment representation for the columns to have
+chosen a different one of.
+
+Measured 2026-09-12 from a script file, counting what a child sees:
+
+    typeset -x a=(p q); env | grep ^a=    bash nothing · ksh93 `a=p` · zsh nothing
+    a=(p q); export a                     bash nothing · ksh93 `a=p` · zsh nothing
+    typeset -Ax m; m[k]=v                 bash nothing · ksh93 `m=v` · zsh nothing
+    export b=1; typeset -x c=(p)          bash `b=1` alone · ksh93 both · zsh `b=1` alone
+
+The last row is the control that says the *scalar* half is unaffected.
+
+An **empty** compound is a third shape and is not this axis: ksh93
+refuses `typeset -x a=()` outright — `only simple variables can be
+exported` — where bash and zsh accept it and hand a child nothing. Both
+answers here give a child nothing, so the refusal is a wording and a
+status this does not carry.
+
+This shell handed a child the first element in every dialect, which is
+one column's answer given to three, and handed `a=` for an *empty* array,
+which is nobody's: a name arriving with an empty value where the script
+exported an array is the quiet kind of wrong, since the program reading
+it cannot tell an empty array from an empty string.
+
+**`SubscriptedOperandCarriesTheAttributes`** — bash yes · dash unspecified · ksh93 yes · zsh no
+
+Gives a declaration's letters to the **name** when the operand is
+subscripted — `typeset -x a[1]=v` — rather than to the element alone.
+
+    typeset -x a[1]=v; typeset -p a   bash `declare -ax a=([1]="v")`
+                                      ksh93 `typeset -x -a a=([1]=v)`
+                                      zsh   `typeset -a a=( v )`
+    export a[1]=v                     bash refuses it as a bad name
+                                      ksh93 and zsh as above
+    typeset -x a=(p q)                `-ax` in every column
+
+The third row is the control and is unanimous: a *whole-name*
+declaration records the letter everywhere, so what the axis is about is
+the subscripted operand alone. Listing-only where the compound reaches no
+child anyway, which is the column that answers no.
+
+Asked only where the declaration names a letter at all: `typeset a[1]=v`
+raises no question between the columns.
+
+**A subscripted operand carrying no value is not an axis** and is core:
+`typeset a[3]` declares the *name* as an array and writes no element —
+`${#a[@]}` is 0 in bash and ksh93 alike, and an array already standing is
+left as it is. zsh reaches none of it, a declaration operand holding no
+`=` being a glob there. This shell declared a variable literally named
+`a[3]`, invisible to `${a[3]}` and to `typeset -p a`, at status 0.
+
+Pinned by `decl/an-exported-array-in-a-child-environment`,
+`decl/an-exported-array-with-nothing-in-it` and
+`decl/a-subscripted-operand-with-no-value` (#1380).
+
 **`TableUnderAnArrayDeclaration`** — bash refused · dash unspecified · ksh93 refused, and the script ends · zsh empties the name
 
 **`ArrayUnderATableDeclaration`** — bash refused · dash unspecified · ksh93 keeps the elements · zsh empties the name

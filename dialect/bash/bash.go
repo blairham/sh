@@ -597,6 +597,15 @@ func Semantics() interp.Semantics {
 	// no `-A` at all.
 	s.ScalarUnderAnArrayDeclaration = interp.ScalarUnderACompoundBecomesTheFirstElement
 	s.ScalarUnderATableDeclaration = interp.ScalarUnderACompoundBecomesTheFirstElement
+	// A name holding an array or a table reaches no child at all: measured
+	// 2026-09-12, `typeset -x a=(p q)` and `a=(p q); export a` both leave
+	// nothing named `a` in a child's environment, and so does an exported
+	// table. `export b=1` beside it is the control and does arrive, so it is
+	// the compound and not the export (#1380).
+	s.ExportedCompoundReachesAChildAsItsFirstValue = interp.No
+	// And a subscripted operand's letters land on the name: `typeset -x
+	// a[1]=v` lists `declare -ax a=([1]="v")` here (#1380).
+	s.SubscriptedOperandCarriesTheAttributes = interp.Yes
 	// `a=(1 2); a+=x` joins the first element and leaves the rest standing —
 	// `declare -a a=([0]="1x" [1]="2")`, two elements, in 5.3.15, in the same
 	// binary under argv[0] of `sh` and in 3.2.57. The value lands at the base

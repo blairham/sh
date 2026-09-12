@@ -70,6 +70,12 @@ func testSemantics() Semantics {
 	s.ScalarAssignedOverACompoundReplacesTheName = No
 	s.ScalarUnderAnArrayDeclaration = ScalarUnderACompoundBecomesTheFirstElement
 	s.ScalarUnderATableDeclaration = ScalarUnderACompoundBecomesTheFirstElement
+	// The two questions a *subscripted* declaration and an exported compound
+	// raise, at bash's answers, which is the floor these suites assert
+	// against. The tests that are *about* them set both sides themselves —
+	// see exportedcompound_test.go (#1380).
+	s.ExportedCompoundReachesAChildAsItsFirstValue = No
+	s.SubscriptedOperandCarriesTheAttributes = Yes
 	s.IndirectionYieldsName = No
 	s.ArithNameValueRecurses = Yes
 	// And what an unset name found that way is: a zero, which is what three

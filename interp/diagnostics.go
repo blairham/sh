@@ -562,96 +562,90 @@ type Diagnostics struct {
 	// `a is an alias for echo hi` and ``a is aliased to `echo hi'`` are both
 	// measured.
 	TypeAlias string
-	// TypeGlobalAlias and TypeSuffixAlias are that sentence for the two
-	// other kinds, in the one dialect that has them. Empty means the dialect
-	// has no such kind and TypeAlias answers for whatever it finds.
+	// TypeGlobalAlias and TypeSuffixAlias are that sentence for the two other
+	// kinds, under a preset that has them. Empty means the preset has no such
+	// kind and TypeAlias answers for whatever it finds.
 	//
 	// A suffix alias's verb is the *extension*, not the word that was asked
 	// about: `whence -v p.txt` is `txt is a suffix alias for cat`.
 	TypeGlobalAlias string
 	TypeSuffixAlias string
-	// TypeAliasQuotesValue writes the body the way the listing would quote
-	// it. ksh93 alone: `a is an alias for 'echo hi'` beside its
-	// `a='echo hi'`, where dash and zsh write the body raw and bash's own
-	// wording carries the quotes.
+	// TypeAliasQuotesValue writes the body the way the listing would quote it:
+	// `a is an alias for 'echo hi'` beside a listing of `a='echo hi'`. Other
+	// presets write the body raw, or carry the quotes in the wording itself.
 	TypeAliasQuotesValue bool
-	// CommandVAlias is what `command -v` writes for one. One or two verbs:
-	// three dialects write the line their `alias` listing would print,
-	// `alias %[1]s=%[2]s` with the body quoted, and ksh93 writes the quoted
-	// body alone.
+	// CommandVAlias is what `command -v` writes for one. One or two verbs: a
+	// preset may write the line its `alias` listing would print,
+	// `alias %[1]s=%[2]s` with the body quoted, or the quoted body alone.
 	CommandVAlias string
 
-	// AliasListPrefix goes in front of every line of a listing. `alias ` in
-	// bash, which is what makes its output text that can be read back, and
-	// empty in the other three.
+	// AliasListPrefix goes in front of every line of a listing. `alias ` is what
+	// makes such output text that can be read back; empty is the other answer.
 	AliasListPrefix string
 
-	// UmaskBadSymbolicOperator is that complaint where what was wanted was
-	// one of `+-=` rather than one of `rwx`, for the two dialects that tell
-	// them apart: bash says "invalid symbolic mode operator" against
-	// "invalid symbolic mode character", and zsh "bad symbolic mode
-	// operator" against "bad symbolic mode permission".
+	// UmaskBadSymbolicOperator is that complaint where what was wanted was one
+	// of `+-=` rather than one of `rwx`, for the presets that tell them apart:
+	// "invalid symbolic mode operator" against "invalid symbolic mode
+	// character", or "bad symbolic mode operator" against "bad symbolic mode
+	// permission".
 	//
-	// Empty means the dialect says the same thing to both, which is dash and
-	// ksh93 — they name the argument and never reach the question.
+	// Empty means the preset says the same thing to both — naming the argument
+	// and never reaching the question.
 	UmaskBadSymbolicOperator string
 	// UmaskWhoAloneIsANumericComplaint answers `umask g` with the wording a
-	// number it could not read gets, rather than with a symbolic one. zsh
-	// alone, which says `bad umask` there and `bad symbolic mode operator:
-	// X` for `umask X` — so which complaint it reaches for is not the same
-	// question as whether it refuses.
+	// number it could not read gets, rather than with a symbolic one — `bad
+	// umask` there and `bad symbolic mode operator: X` for `umask X`. Which
+	// complaint is reached for is not the same question as whether it refuses.
 	UmaskWhoAloneIsANumericComplaint bool
 
 	// HereDocumentAtEOF is what a shell says about a here-document whose
 	// delimiter never arrived, taking the line it began on and the delimiter
-	// that was wanted. Empty means nothing is said, which is three of the
-	// four — silence is the answer here rather than a missing wording.
+	// that was wanted. Empty means nothing is said, which is the common answer —
+	// silence here rather than a missing wording.
 	//
 	// The remark is located where the input ran out and names the other line
 	// inside itself, which is why it takes a line as a verb at all.
 	HereDocumentAtEOF string
 
-	// WaitBadJob is an operand to `wait` that names neither a process nor a
-	// job, taking the word. Four wordings across the panel and no two alike:
-	// one quotes it and names both things it could have been, one calls it an
-	// illegal number, one lists what it would have taken, and one calls it a
-	// job that was not found.
+	// WaitBadJob is an operand to `wait` that names neither a process nor a job,
+	// taking the word. Four measured wordings and no two alike: one quotes it and
+	// names both things it could have been, one calls it an illegal number, one
+	// lists what it would have taken, and one calls it a job that was not found.
 	WaitBadJob string
 	// WaitBadJobStatus is what that reports. Zero means the substrate's own,
 	// which is 2. Three answers: 1, 2, and the 127 of a command that is not
-	// there — which is what the dialect saying "job not found" takes the
-	// operand to have been.
+	// there — which is what the preset saying "job not found" takes the operand
+	// to have been.
 	WaitBadJobStatus int
 
 	// WaitNoSuchJob is a job spec `wait` cannot resolve — asked past
-	// Semantics.WaitReportsAMissingJob, whose No is the engine that says
-	// nothing at all. One verb: the spec as written. The status rides
-	// WaitNoSuchJobStatus; zero means 127, a missing command's number,
-	// which two of the three that speak report.
+	// Semantics.WaitReportsAMissingJob, whose No is the engine that says nothing
+	// at all. One verb: the spec as written. The status rides
+	// WaitNoSuchJobStatus; zero means 127, a missing command's number, which is
+	// the common answer among those that speak.
 	WaitNoSuchJob       string
 	WaitNoSuchJobStatus int
 
-	// AmbiguousJobSpec is `%name` matching more than one job, in the one
-	// engine that refuses it — see Semantics.AmbiguousJobNameIsRefused.
+	// AmbiguousJobSpec is `%name` matching more than one job, under a preset
+	// that refuses it — see Semantics.AmbiguousJobNameIsRefused.
 	// Two verbs: the builtin, and the text with its `%` already stripped,
 	// which is how the engine writes it.
 	AmbiguousJobSpec string
 
 	// WaitNotOurChild is a number that is a plausible process id and is not
-	// one of this shell's children, taking the number. Empty means nothing
-	// is said, which is two of the four — the status is 127 in all of them
-	// either way, so silence here is a wording rather than a behavior.
+	// one of this shell's children, taking the number. Empty means nothing is
+	// said — the status is 127 either way, so silence here is a wording rather
+	// than a behavior.
 	WaitNotOurChild string
 
 	// AliasIllegalOptionCombination is `alias -g -s`, which asks for both
 	// kinds at once. They are two namespaces, so no call can be about both:
-	// measured `illegal combination of options` at status 1, whether the
-	// call would have defined or listed. Only the dialect with both letters
-	// reaches it.
+	// measured `illegal combination of options` at status 1, whether the call
+	// would have defined or listed. Only a preset with both letters reaches it.
 	AliasIllegalOptionCombination string
 
 	// UnimplementedOptionLetters are, per builtin, the option letters this
-	// dialect has and this shell does not.
+	// preset has and this shell does not.
 	//
 	// They are said to be *missing* rather than refused as unknown, because
 	// refusing an option the shell really has is a different and worse
@@ -660,35 +654,32 @@ type Diagnostics struct {
 	UnimplementedOptionLetters map[string]string
 
 	// ReadBadNumber is a count, timeout or descriptor argument to `read`
-	// that is not a number, taking the word. The panel has a wording per
-	// shell per letter; this is one for all of them, and a dialect that
-	// wants the measured ones letter by letter is a refinement this field
-	// does not block.
+	// that is not a number, taking the word. There is a measured wording per
+	// preset per letter; this is one for all of them, and a preset that wants
+	// them letter by letter is a refinement this field does not block.
 	ReadBadNumber string
 	// ReadBadFileDescriptor is `read -u` on a descriptor this shell holds
-	// nothing open at, taking the number as given. Empty means nothing is
-	// said — one shell in the panel reports 1 in silence — so this path has
-	// no fallback wording.
+	// nothing open at, taking the number as given. Empty means nothing is said —
+	// reporting 1 in silence is measured — so this path has no fallback wording.
 	ReadBadFileDescriptor string
-	// ReadTimeoutStatus is what an expired `read -t` reports. bash says 128
-	// plus SIGALRM's number; ksh93 and zsh say 1. Zero means 1.
+	// ReadTimeoutStatus is what an expired `read -t` reports — 1, or 128 plus
+	// SIGALRM's number. Zero means 1.
 	ReadTimeoutStatus int
-	// ReadNoCoprocess is `read -p` in a dialect whose -p takes no argument
-	// and names the coprocess as the source — there being none to read
-	// from. Both shells with that shape report 1 and leave the variables
-	// untouched; the words differ: ksh93 says `no query process`, zsh says
-	// `-p: no coprocess`.
+	// ReadNoCoprocess is `read -p` under a preset whose -p takes no argument and
+	// names the coprocess as the source — there being none to read from. Every
+	// preset with that shape reports 1 and leaves the variables untouched; the
+	// words differ, `no query process` and `-p: no coprocess` both measured.
 	ReadNoCoprocess string
 
 	// CoprocessAlreadyRunning is a second `cmd |&` started while the first
-	// coprocess is still running, in the dialect that spells a coprocess as
-	// an operator. ksh93 says `process already exists` and it is fatal —
-	// measured, the script ends at status 1 with the next line unreached.
+	// coprocess is still running, under the preset that spells a coprocess as an
+	// operator: `process already exists`, and it is fatal — the script ends at
+	// status 1 with the next line unreached.
 	//
-	// Only that dialect reaches it: the `coproc` word replaces its
-	// predecessor silently in both shells that have it, so there is nothing
-	// for them to word. Zero is the same text, because the construct exists
-	// in one shell and its wording is not a variable.
+	// Only that preset reaches it: the `coproc` word replaces its predecessor
+	// silently wherever it exists, so there is nothing there to word. Zero is
+	// the same text, because the construct belongs to one preset and its wording
+	// is not a variable.
 	CoprocessAlreadyRunning string
 
 	// BuiltinComplaintName is the name a builtin's complaints call it, by
@@ -709,34 +700,34 @@ type Diagnostics struct {
 	// operand it will not take, per builtin. Three verbs: %[1]s the builtin,
 	// %[2]s the whole operand, %[3]s the name before the subscript.
 	//
-	// Empty means the dialect says what it says about any other bad name,
-	// which is two of the three that refuse it. The third has two complaints
-	// of its own — one about the subscript naming the base, one about array
-	// elements naming the operand — and they are not its bad-name wording.
+	// Empty means the preset says what it says about any other bad name, which
+	// is the common answer among those that refuse it. A preset may instead have
+	// two complaints of its own — one about the subscript naming the base, one
+	// about array elements naming the operand — which are not its bad-name
+	// wording.
 	BuiltinBadSubscript map[string]string
 	// SubscriptRefusalNamesBuiltin is which of those name the builtin in the
-	// *location*. One does and one does not, in the same shell, which is why
+	// *location*. One does and one does not within a single preset, which is why
 	// this is a set rather than following NamesBuiltinInLocation.
 	SubscriptRefusalNamesBuiltin map[string]bool
 
 	// ArithErrorNamesTheBuiltin puts the name of the builtin that raised an
 	// arithmetic complaint in front of the sentence.
 	//
-	// Measured 2026-09-11, `let '1+'`:
+	// Measured with `let '1+'`:
 	//
-	//	bash 5.3	bash: line 1: let: 1+: arithmetic syntax error: …
-	//	ksh93   	ksh: let: 1+: more tokens expected
-	//	zsh     	zsh:1: bad math expression: operand expected …
+	//	true 	<shell>: line 1: let: 1+: arithmetic syntax error: …
+	//	true 	<shell>: let: 1+: more tokens expected
+	//	false	<shell>:1: bad math expression: operand expected …
 	//
-	// False is not "the shell has no name for it": zsh names a builtin in the
-	// *location* as a rule — `zsh:cd:1:` — and does not here, nor for `let
-	// '1/0'`. It is the same distinction NamesBuiltinInLocation's own comment
-	// draws and this is what draws it for one more message: a math failure is
-	// the shell's rather than the builtin's there, the way a division by zero
-	// and an unset parameter already are. The same shell's `let` with no
-	// operand *is* the builtin's and writes `zsh:let:1: not enough
-	// arguments`, which is the control saying this is about the message and
-	// not about `let`.
+	// False is not "the preset has no name for it": a preset may name a builtin
+	// in the *location* as a rule — `<shell>:cd:1:` — and not here, nor for
+	// `let '1/0'`. It is the same distinction NamesBuiltinInLocation's own
+	// comment draws, for one more message: a math failure is the shell's rather
+	// than the builtin's there, the way a division by zero and an unset
+	// parameter already are. The same preset's `let` with no operand *is* the
+	// builtin's and writes `<shell>:let:1: not enough arguments`, which is the
+	// control saying this is about the message and not about `let`.
 	//
 	// Only the complaint is affected. What `let` reports is
 	// Semantics.LetKeepsTheValueBeforeAnIllegalByte's, and the two were
@@ -748,11 +739,11 @@ type Diagnostics struct {
 	// cannot carry what the declaration is asking the *variable* to be. Two
 	// verbs each: %[1]s the base name, %[2]s the subscript as written.
 	//
-	// One dialect has all three and the others have none, because the others
-	// take the operand — see Semantics.ReadonlyElement and its two
-	// neighbors. Three strings rather than one because the shell that has
-	// them words the three differently, and it is the wording that tells a
-	// script which of the three it ran into.
+	// A preset either has all three or has none, the others taking the operand
+	// instead — see Semantics.ReadonlyElement and its two neighbors. Three
+	// strings rather than one because a preset that has them words the three
+	// differently, and it is the wording that tells a script which of the three
+	// it ran into.
 	ReadonlyElementRefusal string
 	IntegerElementRefusal  string
 	LocalElementRefusal    string
@@ -760,36 +751,36 @@ type Diagnostics struct {
 	// UmaskBadOption is an option `umask` does not have. One verb.
 	UmaskBadOption string
 
-	// UmaskBadOptionStatus is what that reports. Zero means the substrate's
-	// own, which is 2 — zsh alone says 1, where it says 2 for a bad *mask*.
+	// UmaskBadOptionStatus is what that reports. Zero means the substrate's own,
+	// which is 2; a preset may say 1 here while saying 2 for a bad *mask*.
 	UmaskBadOptionStatus int
 
-	// UmaskUsage follows a bad option, where the dialect prints one. bash and
-	// ksh93 do; dash and zsh print the complaint alone. Empty means none.
+	// UmaskUsage follows a bad option, where the preset prints one. Printing the
+	// complaint alone is the other answer. Empty means none.
 	UmaskUsage string
 
 	// UmaskUsageUnprefixed writes it with no location and no shell name in
-	// front, which is what ksh93 does with a usage line.
+	// front, which is what a preset that treats a usage line as not-a-diagnostic
+	// does.
 	UmaskUsageUnprefixed bool
 
 	// LetNoExpression is `let` with nothing to evaluate. No verbs.
 	//
-	// bash `let: expression expected`, ksh93 a bare usage line, zsh
-	// `not enough arguments`.
+	// `let: expression expected`, a bare usage line, and `not enough arguments`
+	// are all measured.
 	LetNoExpression string
 
 	// LetNoExpressionStatus is what that reports. Zero means the substrate's
-	// own, which is 1 — ksh93 alone says 2, treating it as a usage error
-	// where bash and zsh treat it as an ordinary failure.
+	// own, which is 1; a preset may say 2, treating it as a usage error where
+	// others treat it as an ordinary failure.
 	LetNoExpressionStatus int
 
 	// LetNoExpressionUnprefixed writes that complaint with no location and no
-	// shell name in front. ksh93 alone, which is what it does with every
-	// usage line.
+	// shell name in front, which is what a preset does with every usage line.
 	LetNoExpressionUnprefixed bool
 
 	// UlimitBadOption is an option `ulimit` does not have — which includes a
-	// resource letter this dialect lacks. One verb: the letter.
+	// resource letter this preset lacks. One verb: the letter.
 	UlimitBadOption string
 
 	// UlimitBadOptionStatus is what that reports. Zero means the substrate's
@@ -802,8 +793,8 @@ type Diagnostics struct {
 	// UlimitBadNumberStatus is what that reports. Zero means 1.
 	UlimitBadNumberStatus int
 
-	// UlimitListing is `ulimit -a`, one row per line in the dialect's own
-	// order and layout — see UlimitListingRow. Empty refuses the letter's
+	// UlimitListing is `ulimit -a`, one row per line in the preset's own order
+	// and layout — see UlimitListingRow. Empty refuses the letter's
 	// listing as the unanswered question it is.
 	UlimitListing []UlimitListingRow
 
@@ -814,29 +805,29 @@ type Diagnostics struct {
 	// BuiltinBadOption is an option a builtin does not have. Two verbs: the
 	// builtin's name and the option as written.
 	//
-	// One wording rather than one per builtin, because the shape is the same
-	// for every one of them within a dialect: bash `export: -Q: invalid
-	// option`, dash `export: Illegal option -Q`, ksh93 `export: -Q: unknown
-	// option`, zsh `export: bad option: -Q`.
+	// One wording rather than one per builtin, because the shape is the same for
+	// every one of them within a preset: `export: -Q: invalid option`,
+	// `export: Illegal option -Q`, `export: -Q: unknown option` and
+	// `export: bad option: -Q` are all measured.
 	BuiltinBadOption string
 
-	// BuiltinBadOptionStatus is what that reports where it is not fatal.
-	// Zero means the substrate's own, which is 2 — zsh says 1.
+	// BuiltinBadOptionStatus is what that reports where it is not fatal. Zero
+	// means the substrate's own, which is 2; 1 is also measured.
 	// BadOptionNaming is which part of a leading `-` word a complaint about
 	// it names. Three answers, and `--version` tells them apart:
 	//
-	//	bash, dash   --            the first letter it cannot use
-	//	ksh93        --version     the whole word as written
-	//	zsh          -v            the first letter it does not know, with
-	//	                           every leading dash skipped first
+	//	--            the first letter it cannot use
+	//	--version     the whole word as written
+	//	-v            the first letter it does not know, with every leading
+	//	              `-` skipped first
 	//
-	// zsh's is the one that needs saying twice: `unset --version` is `-e`
-	// there, not `-v`, because `v` is one of unset's own options and is
-	// consumed before an unknown letter is reached. That is the tell that it
-	// walks the bundle rather than naming a piece of the word.
+	// The third needs saying twice: `unset --version` is `-e` under it, not
+	// `-v`, because `v` is one of unset's own options and is consumed before an
+	// unknown letter is reached. That is the tell that it walks the bundle
+	// rather than naming a piece of the word.
 	//
-	// A single-dash bundle sharpens the second answer: `read -rx` is `-x` in
-	// ksh93 too — every shell walks the bundle and names the letter it
+	// A single-`-` bundle sharpens the second answer: `read -rx` is `-x` under
+	// it too — every reading walks the bundle and names the letter it
 	// stopped on — so the whole word survives only for a word that begins
 	// with `--`, which is where the three rules diverge at all.
 	BadOptionNaming BadOptionName

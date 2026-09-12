@@ -17054,6 +17054,50 @@
         "TimedOut": false
       }
     },
+    "assoc/an-empty-key": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: m[\"\"]: bad array subscript",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: m[\"\"]: bad array subscript",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~st2=0~st3=0 n=2~[5][7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~st2=0~st3=0 n=3~[4][7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "assoc/an-operator-on-a-subscript-search": {
       "bash": {
         "Stdout": "[][][][0]",

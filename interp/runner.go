@@ -4959,7 +4959,10 @@ func (r *Runner) assign(a *syntax.Assign) {
 		// never evaluated: `m[1+1]=x` stores under the three characters.
 		// This is the switch the attribute exists to throw — the same text
 		// on an undeclared name falls through to the arithmetic reading.
-		key := r.assocKey(a.Index)
+		key, ok := r.assocAssignKey(a.Name, a.Index)
+		if !ok {
+			return
+		}
 		value := r.assignValue(a)
 		if a.Append {
 			// `m[k]+=v` joins the element it names, the same operation the

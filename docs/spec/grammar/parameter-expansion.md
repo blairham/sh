@@ -4140,6 +4140,47 @@ Two neighbors stay unanimous and must not move with it:
   subscript can afford — the evaluator ignores blanks anyway — is wrong
   here.
 
+#### An empty key
+
+A key that comes out **empty** is a third answer again, and it is
+`Semantics.EmptyAssociativeKeyIsAnError`. Measured 2026-09-12 from a
+script file, with the name declared and `w=`:
+
+| probe | bash 5.3.15 | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `m[""]=4` | refused | stored | stored |
+| `m[$w]=5` | refused | stored | stored |
+| `m[" "]=7` | stored | stored | stored |
+| elements afterwards | 1 | 2 | 3 |
+
+bash names the subscript **as it was written** — `m[""]: bad array
+subscript` and `m[$w]: bad array subscript`, not what either came to —
+leaves the table untouched, reports 1, and gives up the rest of the
+command list, so `m[""]=4; echo A` prints no `A` and the line after it
+runs. That last part is not a rule of its own: it is what a refused
+reassignment does in the same column.
+
+The two columns that store are not storing the same key, and that is the
+axis above rather than this one. ksh93's subscript is a quoting context,
+so both spellings are the empty key and the second write replaces the
+first — two elements, counting the blank. zsh's is not, so `m[""]` is a
+two-character key and only `m[$w]` reaches the empty one — three.
+
+The blank row is the control that says this is emptiness and not
+whitespace: one space is an ordinary key wherever the brackets hold a key
+at all.
+
+**Reading an empty key is a fourth question** and is not this axis: bash
+writes `m: bad array subscript` there — a different subject — and still
+answers with the empty string at status 0, which is #1972.
+
+This needed the parser before it needed an axis. `m[""]=4` parsed with no
+subscript at all, because the empty quoted span between the brackets was
+dropped as a zero-length piece of text; the assignment then arrived as a
+plain `m=4` and stored under the key `0`. An empty span that was written
+*quoted* is the record that quotes were there, and it is the whole of the
+difference between `m[""]` and `m[]` (#1938).
+
 ### `n` and `b`, measured
 
 Both arguments are arithmetic expressions rather than numerals, and

@@ -1764,6 +1764,16 @@ const toEnd = -1
 // Empty pieces are dropped: `a[$i]=v` splits its first span at the bracket
 // with nothing before the expansion, and a zero-length literal span would be
 // a word the printer writes back and the expander has to carry.
+//
+// **An empty span that was written *quoted* is kept**, and it is the one
+// exception. Such a span is not a piece of text that came out empty — it is
+// the record that quotes were written, and it is the whole of the difference
+// between `m[""]=4` and `m[]=4`: the first is a subscript holding the empty
+// key and the second is brackets with nothing in them, which five of six
+// shells refuse. Dropped, the two parsed identically and the assignment
+// arrived with no subscript at all, so `typeset -A m; m[""]=4` stored under
+// the key `0` — the empty-expression reading of a name that had never asked
+// for one (#1938).
 func spanRange(spans []Span, from, fromOff, to, toOff int) []Span {
 	var out []Span
 	for i := from; i <= to && i < len(spans); i++ {
@@ -1782,6 +1792,12 @@ func spanRange(spans []Span, from, fromOff, to, toOff int) []Span {
 			hi = toOff
 		}
 		if lo >= hi {
+			if s.Quoting != Unquoted && len(s.Value) == 0 {
+				// The written-quotes record, kept whole — see above. Only a
+				// span that *is* empty, never one this range clipped to
+				// nothing, which is text belonging to a neighbor.
+				out = append(out, s)
+			}
 			continue
 		}
 		s.Pos.Offset += int32(lo)

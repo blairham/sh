@@ -166,6 +166,21 @@ func (r *Runner) timeClause(ctx context.Context, tc *syntax.TimeClause) error {
 // which `-p` selects identically in both shells that read the flag.
 func (r *Runner) reportTime(d Diagnostics, posix bool, elapsed time.Duration, user, sys time.Duration, timing *pipelineTiming) {
 	var b strings.Builder
+	if format, ok := r.timeFormat(); ok && !posix {
+		// A format the script named. `-p` is not one of the things it may
+		// override: measured, `TIMEFORMAT='X %R'; time -p sleep 0` prints
+		// the POSIX three lines in bash and ksh93 alike, so the flag is
+		// asked first.
+		text, usable := r.timeFormatReport(format, elapsed, user, sys)
+		if !usable {
+			return
+		}
+		if text != "" {
+			text += "\n"
+		}
+		_, _ = fmt.Fprint(r.stderr(), text)
+		return
+	}
 	switch {
 	case posix:
 		// `real 0.00`, one space, two decimals, no leading blank line:

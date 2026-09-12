@@ -2926,6 +2926,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `print/a-unicode-escape-outside-the-locale` | **2>** `<shell>: 1: print: not found` | **2>** `<shell>: line 1: print: command not found` | **2>** `<shell>: line 1: print: command not found` | **2>** `<shell>: print: command not found` | ` 61 5c 75 30 30 65 39 5a 0a ` | ` 61 0a ` **2>** `<shell>:1: character not in range` | **2>** `<shell>: print: not found` |
 | `echo/a-hexadecimal-escape-with-no-digits` | ` 2d 65 20 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a ` | ` 61 00 5a 3a 61 00 5a 0a ` | ` 61 5c 78 5a 3a 61 5c 75 5a 0a` |
 | `echo/the-order-of-e-and-capital-e` | `-e -E m	n` | `m\tn` | `m\tn` | `m\tn` | `-E m	n` | `m	n` | `m	n` |
+| `printf/quoted-operand-is-a-character-value` | `65~65~0x61~65~0~65.000000` | `65~65~0x61~65~0~65.000000` | `65~65~0x61~65~0~65.000000` | `65~65~0x61~65~0~65.000000` | `65~65~0x61~65~0~65.000000` **2>** `<shell>: printf: warning: 'AB: invalid character constant~<shell>: printf: warning: ': invalid character constant` | `65~65~0x61~65~0~65.000000` | `65~65~0x61~65~0~65.000000` |
+| `printf/quoted-operand-needs-the-quote-first` | `0~st=1` **2>** `<shell>: 1: printf:  'A: expected numeric value` | `0~st=1` **2>** `<shell>: line 1: printf:  'A: invalid number` | `0~st=1` **2>** `<shell>: line 1: printf:  'A: invalid number` | `0~st=1` **2>** `<shell>: line 0: printf:  'A: invalid number` | `65~st=0` | `0~st=1` **2>** `<shell>:1: bad math expression: illegal character: '` | `65~st=0` |
 | `readonly/reassignment-by-a-declaration` | **2>** `<shell>: 1: export: x: is read only` *(status 2)* | `after` **2>** `<shell>: line 1: x: readonly variable` | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | `after` **2>** `<shell>: x: readonly variable` | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* | **2>** `<shell>: export: line 0: x: is read only` *(status 2)* |
 | `readonly/reassignment-from-a-command-string` | **2>** `<shell>: 1: x: is read only` *(status 2)* | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | **2>** `<shell>: line 1: x: readonly variable` *(status 127)* | **2>** `<shell>: x: readonly variable` *(status 1)* | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* | **2>** `<shell>: x: is read only` *(status 2)* |
 | `jobs/the-last-background-pid-before-any-job` | `[]` | `[]` | `[]` | `[]` | `[]` | `[0]` | `[]` |
@@ -3511,6 +3513,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `echo/the-order-of-e-and-capital-e` — -e then -E: bash lets the last flag win and prints the backslash, zsh lets -e win and expands — the other order agrees everywhere and asks nothing
   ```sh
   echo -e -E 'm\tn'
+  ```
+- `printf/quoted-operand-is-a-character-value` — a numeric conversion whose operand begins with a quote takes the value of the *character after it* rather than reading digits — POSIX XCU says so in so many words and all seven columns do it, so it is the core's. It is also the only way a shell has of asking what a character's code is, which is what made the gap sting here: `printf '0x%x' "'a"` answered `invalid number` and printed `0x0`. Five readings in one row: both quote characters, a hex and a float conversion taking the same operand, a trailing character ignored rather than refused — ksh93 warns beside the same 65 — and a lone quote worth zero
+  ```sh
+  printf '%d\n' "'A"; printf '%d\n' '"A'; printf '0x%x\n' "'a"; printf '%d\n' "'AB"; printf '%d\n' "'"; printf '%f\n' "'A"
+  ```
+- `printf/quoted-operand-needs-the-quote-first` — the control for the row above, and the reason the operand is not trimmed before that reading where a plain numeral is: one blank in front of the quote makes the word an ordinary operand again and a bad number in six of the seven columns, each in its own wording. ksh93 alone reads through the blank and answers 65
+  ```sh
+  printf '%d\n' " 'A"; echo "st=$?"
   ```
 - `readonly/reassignment-by-a-declaration` — the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one
   ```sh
@@ -6299,6 +6309,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `axis/trap-body-line-exit` | `one~two~a` **2>** `<script>: 2: nosuchcmd-xyz: not found` | `one~two~a` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `one~two~a` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `one~two~a` **2>** `<script>: line 6: nosuchcmd-xyz: command not found` | `one~two~a` **2>** `<script>: line 2: nosuchcmd-xyz: not found` | `one~two~a` **2>** `<script>:5: command not found: nosuchcmd-xyz` | `one~two~a` **2>** `<script>: line 4: nosuchcmd-xyz: not found` |
 | `axis/trap-body-parse-failure-location` | `one~two~a` **2>** `<script>: 2: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `one~two~a~three` **2>** `<script>: trap: line 3: syntax error: unexpected end of file from `if' command on line 2` | `one~two~a~three` **2>** `<script>: trap: line 3: syntax error: unexpected end of file from `if' command on line 2` | `one~two~a~three` **2>** `<script>: trap: line 7: syntax error: unexpected end of file` | `one~two~three` **2>** `<script>: line 5: syntax error at line 6: `if' unmatched` | `one~two` **2>** `<script>:2: parse error near `if'~<script>:trap:2: couldn't parse trap command` *(killed by signal 30 (user defined signal 1))* | `one~two~a` **2>** `<script>: line 5: syntax error: unexpected end of file (expecting "then")` *(status 2)* |
 | `axis/trap-body-line-signal` | `two~a~three` **2>** `<script>: 2: nosuchcmd-xyz: not found` | `two~a~three` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `two~a~three` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `two~a~three` **2>** `<script>: line 5: nosuchcmd-xyz: command not found` | `two~a~three` **2>** `<script>: line 5: nosuchcmd-xyz: not found` | `two~a~three` **2>** `<script>:4: command not found: nosuchcmd-xyz` | `two~a~three` **2>** `<script>: line 4: nosuchcmd-xyz: not found` |
+| `axis/trap-body-line-debug` | `two~three` **2>** `trap: DEBUG: bad trap` | `at=3~two~at=4~three` **2>** `<script>: line 4: nosuchcmd-xyz: command not found~<script>: line 5: nosuchcmd-xyz: command not found` | `at=3~two~at=4~three` **2>** `<script>: line 4: nosuchcmd-xyz: command not found~<script>: line 5: nosuchcmd-xyz: command not found` | `at=3~two~at=4~three` **2>** `<script>: line 4: nosuchcmd-xyz: command not found~<script>: line 5: nosuchcmd-xyz: command not found` | `at=3~two~at=4~three` **2>** `<script>: line 4: nosuchcmd-xyz: not found~<script>: line 5: nosuchcmd-xyz: not found` | `at=3~two~at=4~three` **2>** `<script>:3: command not found: nosuchcmd-xyz~<script>:4: command not found: nosuchcmd-xyz` | `two~three` **2>** `<script>: trap: line 1: DEBUG: invalid signal specification` |
+| `axis/trap-body-line-err` | `two~four` **2>** `trap: ERR: bad trap` | `two~at=4~four` **2>** `<script>: line 5: nosuchcmd-xyz: command not found` | `two~at=4~four` **2>** `<script>: line 5: nosuchcmd-xyz: command not found` | `two~at=4~four` **2>** `<script>: line 5: nosuchcmd-xyz: command not found` | `two~at=4~four` **2>** `<script>: line 5: nosuchcmd-xyz: not found` | `two~at=4~four` **2>** `<script>:4: command not found: nosuchcmd-xyz` | `two~at=4~four` **2>** `<script>: line 4: nosuchcmd-xyz: not found` |
+| `axis/trap-body-line-return` | `one~in-f~two` **2>** `trap: RETURN: bad trap` | `one~in-f~at=1~two` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `one~in-f~at=1~two` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `one~in-f~at=1~two` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `one~in-f~two` **2>** `<script>[2]: trap: RETURN: bad trap` | `one~in-f~two` **2>** `f:trap:1: undefined signal: RETURN` | `one~in-f~two` **2>** `<script>: trap: line 2: RETURN: invalid signal specification` |
 | `axis/trap-prints-a-bare-action` | `trap -- ':' INT~end` | `trap -- ':' SIGINT~end` | `trap -- ':' INT~end` | `trap -- ':' SIGINT~end` | `trap -- : INT~end` | `trap -- : INT~end` | `trap -- ':' INT~end` |
 | `axis/trap-prints-a-quoted-action` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' INT~end` |
 | `axis/redirect-opened-for-a-builtin` | `end` **2>** `<script>: 2: cannot create /nonexistent-dir-xyz/x: Directory nonexistent` | `end` **2>** `<script>: line 2: /nonexistent-dir-xyz/x: No such file or directory` | `end` **2>** `<script>: line 2: /nonexistent-dir-xyz/x: No such file or directory` | `end` **2>** `<script>: line 2: /nonexistent-dir-xyz/x: No such file or directory` | `end` **2>** `<script>[2]: /nonexistent-dir-xyz/x: cannot create [No such file or directory]` | `end` **2>** `<script>:2: no such file or directory: /nonexistent-dir-xyz/x` | `end` **2>** `<script>: line 2: can't create /nonexistent-dir-xyz/x: nonexistent directory` |
@@ -6359,6 +6372,32 @@ grades it and nothing drift-checks it either, for the same reason.
   echo two
   kill -INT $$
   echo three
+  ```
+- `axis/trap-body-line-debug` — the same two-line body on the condition that fires *at a command*, and the row that says the trap-body line question is two questions rather than one: every bash column counts a DEBUG body from the line the trap fired before — `at=3` and the failure on line 4 — where the signal row above has them counting the body's own lines. ksh93 counts every body from where it fired and zsh names only where it fired, so neither has a second answer to give and dash has no DEBUG condition at all. Written with two `echo`s after the trap so the second firing moves the number: a body that reported the same line twice would be a pin rather than an offset. The CommandTrapBodyLine axis
+  ```sh
+  trap 'echo at=$LINENO
+  nosuchcmd-xyz' DEBUG
+  echo two
+  echo three
+  ```
+- `axis/trap-body-line-err` — ERR asked the same way, because the axis is about the two conditions that fire at a command rather than about DEBUG alone: the bash columns report the *failing* line and the body's second line one past it. The `echo four` is there so a shell that ended the script over the failure is visible as a missing line rather than as a status
+  ```sh
+  trap 'echo at=$LINENO
+  nosuchcmd-xyz' ERR
+  echo two
+  false
+  echo four
+  ```
+- `axis/trap-body-line-return` — and the control that keeps the axis from being read as "the pseudo-conditions": RETURN is one of them and the bash columns count its body from the body's own first line, exactly as they count a signal's. So the split is measured rather than reasoned — a rule written for the three would have taken this row with it. ksh93, dash and zsh have no RETURN condition and refuse the trap
+  ```sh
+  f() {
+    trap 'echo at=$LINENO
+  nosuchcmd-xyz' RETURN
+    echo in-f
+  }
+  echo one
+  f
+  echo two
   ```
 - `axis/trap-prints-a-bare-action` — a one-word action: bash and dash quote it anyway, ksh93 and zsh leave it bare
   ```sh
@@ -8793,6 +8832,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `trap/an-exit-from-a-handler-ends-nested-loops` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
 | `trap/an-exit-from-a-handler-ends-a-loop-inside-a-function` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
 | `trap/lineno-inside-an-action` | `one~in trap LINENO=1~two` | `one~in trap LINENO=1~two` | `one~in trap LINENO=1~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` |
+| `trap/listing-is-ordered-by-signal-number` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' SIGHUP~trap -- 'echo x' SIGINT~trap -- 'echo x' SIGQUIT~trap -- 'echo x' SIGABRT~trap -- 'echo x' SIGTERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' SIGHUP~trap -- 'echo x' SIGINT~trap -- 'echo x' SIGQUIT~trap -- 'echo x' SIGABRT~trap -- 'echo x' SIGTERM~x` | `trap -- 'echo x' TERM~trap -- 'echo x' IOT~trap -- 'echo x' QUIT~trap -- 'echo x' INT~trap -- 'echo x' HUP~trap -- 'echo x' EXIT~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` | `trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x` |
 | `trap/empty-handler-ignores` | `after` | `after` | `after` | `after` | `after` | `after` | `after` |
 | `trap/default-signal-terminates` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
 | `trap/reset-restores-the-default` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
@@ -8925,6 +8965,16 @@ grades it and nothing drift-checks it either, for the same reason.
   echo one
   kill -USR1 $$
   echo two
+  ```
+- `trap/listing-is-ordered-by-signal-number` — a bare listing is ordered by *signal number*, EXIT counting as 0: bash 5.3, bash-as-`sh`, bash 3.2, zsh, dash and BusyBox ash all print EXIT, HUP, INT, QUIT, ABRT, TERM whatever order the traps were set in, and ksh93 alone runs the sequence the other way with EXIT last. Set in a deliberately scrambled order so an implementation that printed them as they arrived is visible. Only signals numbered alike on every system the panel runs on — 1, 2, 3, 6 and 15 — because the order is the *host's* numbering and USR1 sits either side of TERM depending on the kernel, which would make the row a fact about the machine. This listed alphabetically, which is an order no column produces, and printed EXIT outside the ordering altogether — a listing is what a script parses to save and restore its traps, so its order is output rather than presentation
+  ```sh
+  trap 'echo x' TERM
+  trap 'echo x' HUP
+  trap 'echo x' ABRT
+  trap 'echo x' INT
+  trap 'echo x' EXIT
+  trap 'echo x' QUIT
+  trap
   ```
 - `trap/empty-handler-ignores` — an empty handler ignores the signal, which is different from having no trap at all
   ```sh
@@ -15537,6 +15587,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cond/terminal-test-closed-descriptors` | `t0=127~t1=127~t99=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` |
 | `cond/terminal-test-redirected-descriptors` | `nul=127~out=127~fd3=127~pipe=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `nul=1~out=1~fd3=1~pipe=1` | `nul=1~out=1~fd3=1~pipe=1` | `nul=1~out=1~fd3=1~pipe=1` | `nul=1~out=1~fd3=1~pipe=1` | `nul=1~out=1~fd3=1~pipe=1` | `nul=1~out=1~fd3=1~pipe=1` |
 | `cond/terminal-test-non-number-diverges` | `st=127` **2>** `<shell>: 1: [[: not found` | `st=2` **2>** `<shell>: line 1: [[: x: integer expected` | `st=2` **2>** `<shell>: line 1: [[: x: integer expected` | `st=1` | `st=1` | `st=1` | `st=2` **2>** `<shell>: x: out of range` |
+| `test/three-word-connectives` | `aa=0~ab=1~oa=0~ob=1` | `aa=0~ab=1~oa=0~ob=1` | `aa=0~ab=1~oa=0~ob=1` | `aa=0~ab=1~oa=0~ob=1` | `aa=0~ab=1~oa=0~ob=1` | `aa=0~ab=1~oa=0~ob=1` | `aa=0~ab=1~oa=0~ob=1` |
+| `test/connective-precedence` | `l=0~r=0~n=1` | `l=0~r=0~n=1` | `l=0~r=0~n=1` | `l=0~r=0~n=1` | `l=0~r=0~n=1` | `l=0~r=0~n=1` | `l=0~r=0~n=1` |
+| `test/ownership-operators` | `o=0~g=0~om=1~b=0` | `o=0~g=0~om=1~b=0` | `o=0~g=0~om=1~b=0` | `o=0~g=0~om=1~b=0` | `o=0~g=0~om=1~b=0` | `o=0~g=0~om=1~b=0` | `o=0~g=0~om=1~b=0` |
+| `cond/ownership-operators` | `o=127~g=127~om=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `o=0~g=0~om=1` | `o=0~g=0~om=1` | `o=0~g=0~om=1` | `o=0~g=0~om=1` | `o=0~g=0~om=1` | `o=0~g=0~om=1` |
 | `cond/option-test-reads-a-set-option` | **2>** `<shell>: 1: [[: not found` *(status 127)* | `on=0~off=1` | `on=0~off=1` | `on=0~off=1` | `on=0~off=1` | `on=0~off=1` | **2>** `<shell>: errexit: unknown operand` *(status 2)* |
 | `cond/option-test-operand-is-an-ordinary-word` | `var=127~quoted=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `var=0~quoted=0` | `var=0~quoted=0` | `var=0~quoted=0` | `var=0~quoted=0` | `var=0~quoted=0` | `var=2~quoted=2` **2>** `<shell>: nounset: unknown operand~<shell>: nounset: unknown operand` |
 | `cond/option-test-unknown-name-diverges` | `st=127~alive` **2>** `<shell>: 1: [[: not found` | `st=1~alive` | `st=1~alive` | `st=1~alive` | `st=1~alive` | `st=3~alive` **2>** `<shell>:1: no such option: nosuchoption` | `st=2~alive` **2>** `<shell>: nosuchoption: unknown operand` |
@@ -15691,6 +15745,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cond/terminal-test-non-number-diverges` — a -t operand that is not a number: bash names an integer at status 2 where ksh93 and zsh answer a plain false at 1 — and bash 3.2 answers 1 too, so the complaint is younger than the operator. The TerminalTestRequiresANumber axis
   ```sh
   [[ -t x ]]; echo "st=$?"
+  ```
+- `test/three-word-connectives` — `[ "$a" -a "$b" ]` — the both-set guard, and the most common shape of `test` outside a single-operator check. Three words leave no room for an operator on either side, so each operand is true when it is non-empty: unanimous in all seven columns, dash and BusyBox ash included, which is why it is the core's. This implementation sent three words to the comparison rule, found no comparison among them and answered `binary operator expected` at **status 2** — neither 0 nor 1, so a script branching on `$?` took neither arm
+  ```sh
+  test x -a y; echo "aa=$?"; test x -a ""; echo "ab=$?"; test "" -o x; echo "oa=$?"; test "" -o ""; echo "ob=$?"
+  ```
+- `test/connective-precedence` — the same two words past three, where they are the grammar's connectives and `-a` binds tighter than `-o`. The first is the discriminating one: read with precedence it is `x || ("" && "")` and true, read left to right it is `(x || "") && ""` and false. The negation in front of three words negates all three — six columns answer 0 to the third and ksh93 alone answers 1, which is recorded rather than followed
+  ```sh
+  test x -o "" -a ""; echo "l=$?"; test x -a "" -o x; echo "r=$?"; test ! x -a y; echo "n=$?"
+  ```
+- `test/ownership-operators` — `-O` and `-G` ask whether a file belongs to the effective user or group, and every column has both in the builtin — a wider set than `[[ ]]` has, since dash and ash have the builtin without the keyword. The file is made by the snippet, so the true answers are true by construction and do not depend on whose machine ran it. Neither was an operator here: `test -O f` was `unary operator expected` at 2
+  ```sh
+  : > mine; test -O mine; echo "o=$?"; test -G mine; echo "g=$?"; test -O nosuchfile; echo "om=$?"; [ -G mine ]; echo "b=$?"
+  ```
+- `cond/ownership-operators` — the same pair inside the keyword, where they are core for the head count that put `-o` there: every column with `[[ ]]` at all has them and dash is absent only because it has no `[[ ]]`. Missing from the grammar, `[[ -O f ]]` was not an unsupported operator but a **syntax error**, which abandons the whole clause and the rest of the line with it
+  ```sh
+  : > mine; [[ -O mine ]]; echo "o=$?"; [[ -G mine ]]; echo "g=$?"; [[ -O nosuchfile ]]; echo "om=$?"
   ```
 - `cond/option-test-reads-a-set-option` — `-o` asks whether a shell option is set, and it is the core's rather than a dialect's: every shell in the panel that has `[[ ]]` at all has it, and dash is absent only because it has no `[[ ]]` to put it in. The name every one of them agrees about, read in both states from the same run
   ```sh
@@ -16197,6 +16267,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `time/report-lands-outside-the-pipeline` | `       1~st=0` | `       0~st=0` | `       0~st=0` | `       0~st=0` | `       0~st=0` | `       0~st=0` | `3~st=0` |
 | `time/report-format-is-per-dialect` | `1` | `1` | `1` | `1` | `1` | `0` *(status 1)* | `1` |
+| `time/format-variable-shapes-the-report` | `        N.N real         N.N user         N.N sys` | `\|N.N\|NmN.Ns\|N.N\|N.N\|%\|` | `\|N.N\|NmN.Ns\|N.N\|N.N\|%\|` | `\|N.N\|NmN.Ns\|N.N\|N.N\|%\|` | `\|N.N\|NmN.Ns\|N.N\|N.N\|%\|` | *(no output, status 0)* | `real	Nm N.Ns~user	Nm N.Ns~sys	Nm N.Ns` |
+| `time/an-empty-format-prints-nothing` | `1` | `0` *(status 1)* | `0` *(status 1)* | `0` *(status 1)* | `0` *(status 1)* | `0` *(status 1)* | `3` |
 
 - `time/report-lands-outside-the-pipeline` — `time` is a reserved word timing the whole pipeline, and its report goes to the *shell's* stderr — the `2>&1` belongs to an element inside the pipeline, so `wc` counts 0 in every shell that has the keyword. dash has no keyword at all: `time` resolves to /usr/bin/time there, whose report the element's own redirect does catch, and the count is 1. The outer redirect silences the reports themselves, which are numbers no record could hold
   ```sh
@@ -16205,6 +16277,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `time/report-format-is-per-dialect` — the report redirected from *outside* the construct, reduced to whether it says `real`: bash and ksh93 print a real/user/sys block — apart only in decimals — so 1; zsh reports per pipeline element and only for one that forked, and a lone builtin forks nothing, so 0 lines and 0; dash's /usr/bin/time prints one line whose words include `real`, so 1 — three shapes under one count
   ```sh
   { time true; } 2>&1 | grep -c real
+  ```
+- `time/format-variable-shapes-the-report` — $TIMEFORMAT, which is how a script asks for a report it can read rather than the three-line block. bash and ksh93 read the same variable in the same vocabulary and answer `|N.N|NmN.Ns|N.N|N.N|%|` alike; zsh has a variable for the same job under another name and a different vocabulary, so it ignores this one and prints nothing for a builtin that forked nothing; dash has none and prints its own fixed line. Every figure is reduced to `N` before it reaches the record, for the reason the two cases above give — the timings are nondeterministic and the *shape* is the whole of what is being pinned. This implementation did not read the variable at all, so a script asking for one machine-readable line got four lines of something else at status 0
+  ```sh
+  TIMEFORMAT='|%R|%lR|%U|%P|%%|'; { time true; } 2>&1 | sed -e 's/[0-9][0-9]*/N/g'
+  ```
+- `time/an-empty-format-prints-nothing` — and the state that is not the unset one: a format set to the empty string silences the report entirely — not a blank line, nothing — where an unset variable leaves the dialect's default block. bash and ksh93 count 0, zsh counts 0 because it never had a line for a builtin, dash counts 1 because the variable is not its business. The pair with the row above is what says the variable is *read* rather than merely present
+  ```sh
+  TIMEFORMAT=''; { time true; } 2>&1 | grep -c .
   ```
 
 ## command lookup

@@ -408,6 +408,15 @@ func Semantics() interp.Semantics {
 	s.GetoptsRejectsUnknownOption = interp.Yes
 	s.ShiftCountIsArithmetic = interp.No
 	s.TrapBodyRunsWhatParsed = interp.Yes
+	// A signal body, an EXIT body and a RETURN body count from their own
+	// first line — the zero value, and what TrapBodyLine leaves alone —
+	// while a DEBUG or ERR body counts from the line the condition fired
+	// on. Measured with a two-line body: fired before a command on line
+	// 4, `echo $LINENO` on the body's first line prints 4 and a failure
+	// on its second is located at line 5, where the same body on a signal
+	// trap prints 1 and locates the failure at line 2. bash 5.3,
+	// bash-as-sh and bash 3.2 all answer this way.
+	s.CommandTrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired
 	s.ReportsAKilledCommandInACommandSubstitution = interp.No
 	s.SelectAssumesUnboundedWidth = interp.No
 	s.SelectEofEndsPromptLine = interp.No
@@ -1872,6 +1881,11 @@ func Diagnostics() interp.Diagnostics {
 		// The `time` keyword's report: three decimals where ksh93 gives
 		// the same lines two.
 		TimeDecimals: 3,
+		// $TIMEFORMAT, read every time the keyword runs. The wording names
+		// the variable as well as the offending character, where ksh93
+		// names only the character.
+		TimeFormatVariable:     "TIMEFORMAT",
+		TimeFormatBadDirective: "%[1]s: `%[2]s': invalid format character",
 		// A path that is not there is the OS reason and does not name the
 		// builtin; a bare name off PATH does the reverse.
 		PathNotFound: "%[1]s: No such file or directory",

@@ -131,13 +131,14 @@ func (r *Runner) printTraps(conds []string, bare bool) int {
 			}
 			return 0
 		}
-		if r.exitTrap != nil {
-			r.printf("trap -- %s EXIT\n", r.quotedTrapAction(*r.exitTrap))
-		}
 		// hideInherited is asked once, and only when an inherited ignore is
 		// about to print — a listing with none never asks.
 		hideInherited, askedHide := false, false
-		for _, name := range sortedKeys(r.trapTable()) {
+		for _, name := range r.listedTrapOrder() {
+			if name == "EXIT" {
+				r.printf("trap -- %s EXIT\n", r.quotedTrapAction(*r.exitTrap))
+				continue
+			}
 			if r.inheritedIgnored[name] {
 				if !askedHide {
 					hideInherited = r.ask(r.sem().SubshellHidesInheritedIgnoredTraps,
@@ -407,4 +408,68 @@ func (r *Runner) listSignals() int {
 		r.printf("%s\n", k.Name)
 	}
 	return 0
+}
+
+// listedTrapOrder is the conditions a bare listing prints, in the order this
+// dialect prints them.
+//
+// **By signal number, not by name.** Six of the seven columns list EXIT and
+// then the signals in ascending numeric order — bash 5.3, bash-as-`sh`, bash
+// 3.2, zsh 5.9.2, dash and BusyBox ash — and the numbering is the host's own,
+// which is what makes the order observable rather than arbitrary: ash on
+// Linux prints USR1 and USR2 before TERM because they are 10 and 12 there,
+// and every column on this machine prints them after it because they are 30
+// and 31 here. ksh93 alone lists the same set in descending order, EXIT last.
+//
+// This listed by *name*, alphabetically, which is an order no shell produces:
+// ABRT came before HUP and EXIT was printed outside the ordering altogether.
+// A listing is the thing a script parses to save and restore traps, so the
+// order is part of the output rather than a presentation detail.
+//
+// EXIT is in the sequence rather than ahead of it because it is signal 0 to
+// the sort — which is what puts it first in the six and last in ksh93 with no
+// rule of its own.
+func (r *Runner) listedTrapOrder() []string {
+	table := r.trapTable()
+	names := make([]string, 0, len(table)+1)
+	if r.exitTrap != nil {
+		names = append(names, "EXIT")
+	}
+	for name := range table {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		a, b := trapConditionNumber(names[i]), trapConditionNumber(names[j])
+		if a == b {
+			// Two names the table cannot number — nothing produces a pair
+			// today, and ordering them by name keeps two runs on one
+			// machine printing the same thing.
+			return names[i] < names[j]
+		}
+		if r.sem().TrapListingOrder == TrapListingHighestFirst {
+			return a > b
+		}
+		return a < b
+	})
+	return names
+}
+
+// trapConditionNumber is what the listing sorts on: the signal's number, and
+// zero for EXIT, which is signal 0 everywhere the name is written.
+//
+// A name the signal table does not have sorts as -1 rather than as 0, so it
+// cannot land on top of EXIT. Nothing reaches this today — the table holds
+// only names the shell resolved when the trap was set — and an unnumbered
+// name sorting *into* the sequence would be a listing that moved when the
+// table grew.
+func trapConditionNumber(name string) int {
+	if name == "EXIT" {
+		return 0
+	}
+	for _, k := range knownSignals {
+		if k.Name == name {
+			return int(k.Sig)
+		}
+	}
+	return -1
 }

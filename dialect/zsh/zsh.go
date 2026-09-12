@@ -807,6 +807,10 @@ func Semantics() interp.Semantics {
 	s.DeclarationListingFilter = interp.DeclarationFilterAnyLetter
 	s.DeclarePrintReportsAMissingName = interp.Yes
 	s.TrapBodyLine = interp.TrapBodyLineWhereItFired
+	// Where it fired for a DEBUG or ERR body too: this shell names the
+	// firing line for every line of every body, so there is no second
+	// answer to give.
+	s.CommandTrapBodyLine = interp.TrapBodyLineWhereItFired
 	s.TrapActionIsParsedWhenSet = interp.Yes
 	// The strict end of the symbolic mask: one operator per clause, a who
 	// before `=`, and neither `s` nor `t`.

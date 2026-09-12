@@ -982,6 +982,34 @@ var Corpus = []Case{
 		Why:     "the same body on a signal: ksh93 counts it from where it fired and zsh names only where it fired",
 	},
 	{
+		ID: "printf/quoted-operand-is-a-character-value", Category: "builtins",
+		Snippet: `printf '%d\n' "'A"; printf '%d\n' '"A'; printf '0x%x\n' "'a"; printf '%d\n' "'AB"; printf '%d\n' "'"; printf '%f\n' "'A"`,
+		Why:     "a numeric conversion whose operand begins with a quote takes the value of the *character after it* rather than reading digits — POSIX XCU says so in so many words and all seven columns do it, so it is the core's. It is also the only way a shell has of asking what a character's code is, which is what made the gap sting here: `printf '0x%x' \"'a\"` answered `invalid number` and printed `0x0`. Five readings in one row: both quote characters, a hex and a float conversion taking the same operand, a trailing character ignored rather than refused — ksh93 warns beside the same 65 — and a lone quote worth zero",
+	},
+	{
+		ID: "printf/quoted-operand-needs-the-quote-first", Category: "builtins",
+		Snippet: `printf '%d\n' " 'A"; echo "st=$?"`,
+		Why:     "the control for the row above, and the reason the operand is not trimmed before that reading where a plain numeral is: one blank in front of the quote makes the word an ordinary operand again and a bad number in six of the seven columns, each in its own wording. ksh93 alone reads through the blank and answers 65",
+	},
+	{
+		ID: "axis/trap-body-line-debug", Category: "diagnostics",
+		Script:  true,
+		Snippet: "trap 'echo at=$LINENO\nnosuchcmd-xyz' DEBUG\necho two\necho three",
+		Why:     "the same two-line body on the condition that fires *at a command*, and the row that says the trap-body line question is two questions rather than one: every bash column counts a DEBUG body from the line the trap fired before — `at=3` and the failure on line 4 — where the signal row above has them counting the body's own lines. ksh93 counts every body from where it fired and zsh names only where it fired, so neither has a second answer to give and dash has no DEBUG condition at all. Written with two `echo`s after the trap so the second firing moves the number: a body that reported the same line twice would be a pin rather than an offset. The CommandTrapBodyLine axis",
+	},
+	{
+		ID: "axis/trap-body-line-err", Category: "diagnostics",
+		Script:  true,
+		Snippet: "trap 'echo at=$LINENO\nnosuchcmd-xyz' ERR\necho two\nfalse\necho four",
+		Why:     "ERR asked the same way, because the axis is about the two conditions that fire at a command rather than about DEBUG alone: the bash columns report the *failing* line and the body's second line one past it. The `echo four` is there so a shell that ended the script over the failure is visible as a missing line rather than as a status",
+	},
+	{
+		ID: "axis/trap-body-line-return", Category: "diagnostics",
+		Script:  true,
+		Snippet: "f() {\n  trap 'echo at=$LINENO\nnosuchcmd-xyz' RETURN\n  echo in-f\n}\necho one\nf\necho two",
+		Why:     "and the control that keeps the axis from being read as \"the pseudo-conditions\": RETURN is one of them and the bash columns count its body from the body's own first line, exactly as they count a signal's. So the split is measured rather than reasoned — a rule written for the three would have taken this row with it. ksh93, dash and zsh have no RETURN condition and refuse the trap",
+	},
+	{
 		ID: "axis/trap-body-will-not-parse", Category: "semantics axes",
 		Script:  true,
 		Snippet: "trap 'if' EXIT\necho after",
@@ -3193,6 +3221,12 @@ echo "reached-after st=$?"`,
 		LayoutSensitive: true,
 		Snippet:         "trap 'echo \"in trap LINENO=$LINENO\"' USR1\necho one\nkill -USR1 $$\necho two\n",
 		Why:             "which line a trap action thinks it is on, and the panel gives two answers: bash 5.3 numbers the action's own text from 1, while bash 3.2, ksh93, dash and zsh report the line the signal was delivered on. So a trap body is a little program of its own in one shell and part of the script in four, and the split runs *through* bash rather than between bash and the rest — which is why the case is worth having over an assertion that names `bash`",
+	},
+	{
+		ID: "trap/listing-is-ordered-by-signal-number", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap 'echo x' TERM\ntrap 'echo x' HUP\ntrap 'echo x' ABRT\ntrap 'echo x' INT\ntrap 'echo x' EXIT\ntrap 'echo x' QUIT\ntrap\n",
+		Why:     "a bare listing is ordered by *signal number*, EXIT counting as 0: bash 5.3, bash-as-`sh`, bash 3.2, zsh, dash and BusyBox ash all print EXIT, HUP, INT, QUIT, ABRT, TERM whatever order the traps were set in, and ksh93 alone runs the sequence the other way with EXIT last. Set in a deliberately scrambled order so an implementation that printed them as they arrived is visible. Only signals numbered alike on every system the panel runs on — 1, 2, 3, 6 and 15 — because the order is the *host's* numbering and USR1 sits either side of TERM depending on the kernel, which would make the row a fact about the machine. This listed alphabetically, which is an order no column produces, and printed EXIT outside the ordering altogether — a listing is what a script parses to save and restore its traps, so its order is output rather than presentation",
 	},
 	{
 		ID: "trap/empty-handler-ignores", Category: "traps and exit",
@@ -11188,6 +11222,26 @@ echo unreachable`,
 		Why:     "a -t operand that is not a number: bash names an integer at status 2 where ksh93 and zsh answer a plain false at 1 — and bash 3.2 answers 1 too, so the complaint is younger than the operator. The TerminalTestRequiresANumber axis",
 	},
 	{
+		ID: "test/three-word-connectives", Category: "conditions",
+		Snippet: `test x -a y; echo "aa=$?"; test x -a ""; echo "ab=$?"; test "" -o x; echo "oa=$?"; test "" -o ""; echo "ob=$?"`,
+		Why:     "`[ \"$a\" -a \"$b\" ]` — the both-set guard, and the most common shape of `test` outside a single-operator check. Three words leave no room for an operator on either side, so each operand is true when it is non-empty: unanimous in all seven columns, dash and BusyBox ash included, which is why it is the core's. This implementation sent three words to the comparison rule, found no comparison among them and answered `binary operator expected` at **status 2** — neither 0 nor 1, so a script branching on `$?` took neither arm",
+	},
+	{
+		ID: "test/connective-precedence", Category: "conditions",
+		Snippet: `test x -o "" -a ""; echo "l=$?"; test x -a "" -o x; echo "r=$?"; test ! x -a y; echo "n=$?"`,
+		Why:     "the same two words past three, where they are the grammar's connectives and `-a` binds tighter than `-o`. The first is the discriminating one: read with precedence it is `x || (\"\" && \"\")` and true, read left to right it is `(x || \"\") && \"\"` and false. The negation in front of three words negates all three — six columns answer 0 to the third and ksh93 alone answers 1, which is recorded rather than followed",
+	},
+	{
+		ID: "test/ownership-operators", Category: "conditions",
+		Snippet: `: > mine; test -O mine; echo "o=$?"; test -G mine; echo "g=$?"; test -O nosuchfile; echo "om=$?"; [ -G mine ]; echo "b=$?"`,
+		Why:     "`-O` and `-G` ask whether a file belongs to the effective user or group, and every column has both in the builtin — a wider set than `[[ ]]` has, since dash and ash have the builtin without the keyword. The file is made by the snippet, so the true answers are true by construction and do not depend on whose machine ran it. Neither was an operator here: `test -O f` was `unary operator expected` at 2",
+	},
+	{
+		ID: "cond/ownership-operators", Category: "conditions",
+		Snippet: `: > mine; [[ -O mine ]]; echo "o=$?"; [[ -G mine ]]; echo "g=$?"; [[ -O nosuchfile ]]; echo "om=$?"`,
+		Why:     "the same pair inside the keyword, where they are core for the head count that put `-o` there: every column with `[[ ]]` at all has them and dash is absent only because it has no `[[ ]]`. Missing from the grammar, `[[ -O f ]]` was not an unsupported operator but a **syntax error**, which abandons the whole clause and the rest of the line with it",
+	},
+	{
 		ID: "cond/option-test-reads-a-set-option", Category: "conditions",
 		Snippet: `set -e; [[ -o errexit ]]; echo "on=$?"; set +e; [[ -o errexit ]]; echo "off=$?"`,
 		Why:     "`-o` asks whether a shell option is set, and it is the core's rather than a dialect's: every shell in the panel that has `[[ ]]` at all has it, and dash is absent only because it has no `[[ ]]` to put it in. The name every one of them agrees about, read in both states from the same run",
@@ -11760,6 +11814,18 @@ printf 'TWO=still-running\n'`,
 		Snippet: `{ time true; } 2>&1 | grep -c real`,
 		Why: "the report redirected from *outside* the construct, reduced to whether it says `real`: bash and ksh93 print a real/user/sys block — apart only in decimals — so 1; zsh reports per pipeline element and only for one that forked, and a lone builtin forks nothing, so 0 lines and 0; " +
 			"dash's /usr/bin/time prints one line whose words include `real`, so 1 — three shapes under one count",
+	},
+
+	{
+		ID: "time/format-variable-shapes-the-report", Category: "time",
+		Snippet: `TIMEFORMAT='|%R|%lR|%U|%P|%%|'; { time true; } 2>&1 | sed -e 's/[0-9][0-9]*/N/g'`,
+		Why: "$TIMEFORMAT, which is how a script asks for a report it can read rather than the three-line block. bash and ksh93 read the same variable in the same vocabulary and answer `|N.N|NmN.Ns|N.N|N.N|%|` alike; zsh has a variable for the same job under another name and a different vocabulary, so it ignores this one and prints nothing for a builtin that forked nothing; dash has none and prints its own fixed line. " +
+			"Every figure is reduced to `N` before it reaches the record, for the reason the two cases above give — the timings are nondeterministic and the *shape* is the whole of what is being pinned. This implementation did not read the variable at all, so a script asking for one machine-readable line got four lines of something else at status 0",
+	},
+	{
+		ID: "time/an-empty-format-prints-nothing", Category: "time",
+		Snippet: `TIMEFORMAT=''; { time true; } 2>&1 | grep -c .`,
+		Why:     "and the state that is not the unset one: a format set to the empty string silences the report entirely — not a blank line, nothing — where an unset variable leaves the dialect's default block. bash and ksh93 count 0, zsh counts 0 because it never had a line for a builtin, dash counts 1 because the variable is not its business. The pair with the row above is what says the variable is *read* rather than merely present",
 	},
 
 	// --- finding a command: the script's PATH, and why it will not run ---

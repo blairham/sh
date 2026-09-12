@@ -1639,6 +1639,14 @@ type Runner struct {
 	// where a trap fired rather than where in its body a failure was.
 	linePin int
 
+	// inCommandTrap marks a DEBUG or ERR body as running, which is the one
+	// thing enterTrapBody needs that the name of the condition would tell
+	// it: one dialect numbers those two bodies differently from every other
+	// trap body — Semantics.CommandTrapBodyLine. Set by the single site that
+	// runs a pseudo-trap and put back there, so a body that fires another
+	// trap leaves this as it found it.
+	inCommandTrap bool
+
 	// programEnd is the line after the script's last, which is where the
 	// shell has got to once the script has run — what one dialect calls the
 	// EXIT trap's line.

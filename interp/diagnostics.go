@@ -236,6 +236,30 @@ type Diagnostics struct {
 	// bash 3, ksh93 2. Zero means the substrate's own, which is 3. The
 	// per-command layout does not read it — its line fixes its own widths.
 	TimeDecimals int
+	// TimeFormatVariable is the name of the variable whose value formats the
+	// `time` keyword's report, and the empty string where the dialect has no
+	// such variable.
+	//
+	// `TIMEFORMAT` in bash and ksh93, read every time the keyword runs and
+	// written in the vocabulary timeFormatReport implements: `%%`, `%P`, and
+	// `%[p][l]` before `R`, `U` or `S`. Empty in dash, which has no variable
+	// at all, and empty in zsh — which does have one, `TIMEFMT`, in a
+	// *different* vocabulary with different directives, so pointing this
+	// field at the name would render zsh's format with bash's reader. Naming
+	// what is missing rather than claiming zsh has nothing: that column keeps
+	// its per-command layout and ignores the variable, which is what it did
+	// before this field existed.
+	TimeFormatVariable string
+	// TimeFormatBadDirective is what a `%` followed by a character no
+	// directive uses says. Two verbs: %[1]s the variable's name and %[2]s
+	// the offending character.
+	//
+	// bash names the variable — ``TIMEFORMAT: `Q': invalid format
+	// character`` — and ksh93 names only the character: `Q: bad format
+	// character in time format`. Both then print no report at all, which is
+	// the part that is not a wording.
+	TimeFormatBadDirective string
+
 	// TimeBare is what a `time` with no pipeline reports. The three shells
 	// that have the keyword give three answers: bash reports a run of
 	// nothing, ksh93 the shell's own user and sys with no real, zsh a

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // `printf`, the last builtin that was not one.
@@ -322,6 +323,9 @@ func (r *Runner) printfNumber(arg string, present bool) (int64, int) {
 	if arg == "" && (!present || !r.ask(r.sem().PrintfEmptyIsNotANumber, "`printf` complaining about an empty operand where a number belongs")) {
 		return 0, 0
 	}
+	if n, ok := r.charConstant(arg); ok {
+		return n, 0
+	}
 	if n, err := strconv.ParseInt(strings.TrimSpace(arg), 0, 64); err == nil {
 		return n, 0
 	}
@@ -334,6 +338,11 @@ func (r *Runner) printfNumber(arg string, present bool) (int64, int) {
 func (r *Runner) printfFloat(arg string, present bool) (float64, int) {
 	if arg == "" && (!present || !r.ask(r.sem().PrintfEmptyIsNotANumber, "`printf` complaining about an empty operand where a number belongs")) {
 		return 0, 0
+	}
+	if n, ok := r.charConstant(arg); ok {
+		// The same operand a `%d` would read, widened: `printf '%f' "'A"` is
+		// `65.000000` in every column.
+		return float64(n), 0
 	}
 	if f, err := strconv.ParseFloat(strings.TrimSpace(arg), 64); err == nil {
 		return f, 0
@@ -983,4 +992,46 @@ func (p printfWriter) write(s string) {
 // it would be worse than picking the majority.
 func (r *Runner) printfWritesThrough() bool {
 	return r.sem().PrintfOutputPrecedesComplaint == Yes
+}
+
+// charConstant reads an operand written `'c` or `"c`, where a numeric
+// conversion takes the *character's* value rather than reading digits.
+//
+// POSIX XCU gives `printf` this in so many words — "if the leading character
+// is a single-quote or double-quote, the value shall be the numeric value in
+// the underlying codeset of the character following" — and all seven columns
+// have it: bash 5.3, bash-as-`sh`, bash 3.2, zsh 5.9.2, ksh93, dash and
+// BusyBox ash. So it is the core's. Without it `printf '0x%x' "'a"` was
+// `printf: 'a: invalid number` and a zero, which is what the idiom for "the
+// code point of this character" — the one way a shell has of asking — came
+// to here.
+//
+// Three details, each measured:
+//
+//   - The quote has to be the operand's first byte. A blank in front of it
+//     makes the word an ordinary operand again and a bad number — six of the
+//     seven, ksh93 alone reading through the blank — so the text is not
+//     trimmed before this, where a plain numeral is.
+//   - Anything after the first character is ignored rather than refused:
+//     `'AB` is 65 in every column, ksh93 printing a warning beside the same
+//     answer.
+//   - A quote with nothing after it is zero, not an error.
+//
+// The character is the locale's, through the reader every other length and
+// position in this package goes through: a UTF-8 locale gives the code point
+// and a single-byte one gives the first byte, which is what the panel does —
+// `printf '%d' "'é"` is 233 under a UTF-8 locale and 195 under LC_ALL=C.
+func (r *Runner) charConstant(arg string) (int64, bool) {
+	if arg == "" || (arg[0] != '\'' && arg[0] != '"') {
+		return 0, false
+	}
+	rest := arg[1:]
+	if rest == "" {
+		return 0, true
+	}
+	if r.countsCharacters(rest) {
+		c, _ := utf8.DecodeRuneInString(rest)
+		return int64(c), true
+	}
+	return int64(rest[0]), true
 }

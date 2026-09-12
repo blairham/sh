@@ -25581,6 +25581,108 @@
         "TimedOut": false
       }
     },
+    "axis/trap-body-line-debug": {
+      "ash": {
+        "Stdout": "two~three",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "at=3~two~at=4~three",
+        "Stderr": "\u003cscript\u003e: line 4: nosuchcmd-xyz: command not found~\u003cscript\u003e: line 5: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "at=3~two~at=4~three",
+        "Stderr": "\u003cscript\u003e: line 4: nosuchcmd-xyz: command not found~\u003cscript\u003e: line 5: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "at=3~two~at=4~three",
+        "Stderr": "\u003cscript\u003e: line 4: nosuchcmd-xyz: command not found~\u003cscript\u003e: line 5: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "two~three",
+        "Stderr": "trap: DEBUG: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "at=3~two~at=4~three",
+        "Stderr": "\u003cscript\u003e: line 4: nosuchcmd-xyz: not found~\u003cscript\u003e: line 5: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "at=3~two~at=4~three",
+        "Stderr": "\u003cscript\u003e:3: command not found: nosuchcmd-xyz~\u003cscript\u003e:4: command not found: nosuchcmd-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/trap-body-line-err": {
+      "ash": {
+        "Stdout": "two~at=4~four",
+        "Stderr": "\u003cscript\u003e: line 4: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "two~at=4~four",
+        "Stderr": "\u003cscript\u003e: line 5: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "two~at=4~four",
+        "Stderr": "\u003cscript\u003e: line 5: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "two~at=4~four",
+        "Stderr": "\u003cscript\u003e: line 5: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "two~four",
+        "Stderr": "trap: ERR: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "two~at=4~four",
+        "Stderr": "\u003cscript\u003e: line 5: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "two~at=4~four",
+        "Stderr": "\u003cscript\u003e:4: command not found: nosuchcmd-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/trap-body-line-exit": {
       "ash": {
         "Stdout": "one~two~a",
@@ -25627,6 +25729,57 @@
       "zsh": {
         "Stdout": "one~two~a",
         "Stderr": "\u003cscript\u003e:5: command not found: nosuchcmd-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/trap-body-line-return": {
+      "ash": {
+        "Stdout": "one~in-f~two",
+        "Stderr": "\u003cscript\u003e: trap: line 2: RETURN: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~in-f~at=1~two",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~in-f~at=1~two",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~in-f~at=1~two",
+        "Stderr": "\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~in-f~two",
+        "Stderr": "trap: RETURN: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~in-f~two",
+        "Stderr": "\u003cscript\u003e[2]: trap: RETURN: bad trap",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~in-f~two",
+        "Stderr": "f:trap:1: undefined signal: RETURN",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -41387,6 +41540,57 @@
       "zsh": {
         "Stdout": "not=3~or=0~and=3",
         "Stderr": "\u003cshell\u003e:1: no such option: nosuchoption~\u003cshell\u003e:1: no such option: nosuchoption~\u003cshell\u003e:1: no such option: nosuchoption",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/ownership-operators": {
+      "ash": {
+        "Stdout": "o=0~g=0~om=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "o=0~g=0~om=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "o=0~g=0~om=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "o=0~g=0~om=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "o=127~g=127~om=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "o=0~g=0~om=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "o=0~g=0~om=1",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -135495,6 +135699,108 @@
         "TimedOut": false
       }
     },
+    "printf/quoted-operand-is-a-character-value": {
+      "ash": {
+        "Stdout": "65~65~0x61~65~0~65.000000",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "65~65~0x61~65~0~65.000000",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "65~65~0x61~65~0~65.000000",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "65~65~0x61~65~0~65.000000",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "65~65~0x61~65~0~65.000000",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "65~65~0x61~65~0~65.000000",
+        "Stderr": "\u003cshell\u003e: printf: warning: 'AB: invalid character constant~\u003cshell\u003e: printf: warning: ': invalid character constant",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "65~65~0x61~65~0~65.000000",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/quoted-operand-needs-the-quote-first": {
+      "ash": {
+        "Stdout": "65~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "0~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf:  'A: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "0~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf:  'A: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "0~st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf:  'A: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "0~st=1",
+        "Stderr": "\u003cshell\u003e: 1: printf:  'A: expected numeric value",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "65~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "0~st=1",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: illegal character: '",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "printf/quoting-a-byte-each-shell-spells-differently": {
       "ash": {
         "Stdout": "[st=1",
@@ -165206,6 +165512,57 @@
         "TimedOut": false
       }
     },
+    "test/connective-precedence": {
+      "ash": {
+        "Stdout": "l=0~r=0~n=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "l=0~r=0~n=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "l=0~r=0~n=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "l=0~r=0~n=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "l=0~r=0~n=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "l=0~r=0~n=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "l=0~r=0~n=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "test/double-equal-is-equal": {
       "ash": {
         "Stdout": "st=0",
@@ -165563,6 +165920,57 @@
         "TimedOut": false
       }
     },
+    "test/ownership-operators": {
+      "ash": {
+        "Stdout": "o=0~g=0~om=1~b=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "o=0~g=0~om=1~b=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "o=0~g=0~om=1~b=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "o=0~g=0~om=1~b=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "o=0~g=0~om=1~b=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "o=0~g=0~om=1~b=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "o=0~g=0~om=1~b=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "test/parentheses-group": {
       "ash": {
         "Stdout": "st=0",
@@ -165761,6 +166169,57 @@
       },
       "zsh": {
         "Stdout": "unquoted=0~quoted=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "test/three-word-connectives": {
+      "ash": {
+        "Stdout": "aa=0~ab=1~oa=0~ob=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "aa=0~ab=1~oa=0~ob=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "aa=0~ab=1~oa=0~ob=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "aa=0~ab=1~oa=0~ob=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "aa=0~ab=1~oa=0~ob=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "aa=0~ab=1~oa=0~ob=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "aa=0~ab=1~oa=0~ob=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -166271,6 +166730,108 @@
       },
       "zsh": {
         "Stdout": "[/zz:/aa:/bb] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "time/an-empty-format-prints-nothing": {
+      "ash": {
+        "Stdout": "3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "time/format-variable-shapes-the-report": {
+      "ash": {
+        "Stdout": "real\tNm N.Ns~user\tNm N.Ns~sys\tNm N.Ns",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "|N.N|NmN.Ns|N.N|N.N|%|",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "|N.N|NmN.Ns|N.N|N.N|%|",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "|N.N|NmN.Ns|N.N|N.N|%|",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "        N.N real         N.N user         N.N sys",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "|N.N|NmN.Ns|N.N|N.N|%|",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -169695,6 +170256,57 @@
       },
       "zsh": {
         "Stdout": "trap -- 'echo x' USR1~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/listing-is-ordered-by-signal-number": {
+      "ash": {
+        "Stdout": "trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "trap -- 'echo x' EXIT~trap -- 'echo x' SIGHUP~trap -- 'echo x' SIGINT~trap -- 'echo x' SIGQUIT~trap -- 'echo x' SIGABRT~trap -- 'echo x' SIGTERM~x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "trap -- 'echo x' EXIT~trap -- 'echo x' SIGHUP~trap -- 'echo x' SIGINT~trap -- 'echo x' SIGQUIT~trap -- 'echo x' SIGABRT~trap -- 'echo x' SIGTERM~x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "trap -- 'echo x' TERM~trap -- 'echo x' IOT~trap -- 'echo x' QUIT~trap -- 'echo x' INT~trap -- 'echo x' HUP~trap -- 'echo x' EXIT~x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "trap -- 'echo x' EXIT~trap -- 'echo x' HUP~trap -- 'echo x' INT~trap -- 'echo x' QUIT~trap -- 'echo x' ABRT~trap -- 'echo x' TERM~x",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

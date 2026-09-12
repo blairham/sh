@@ -212,24 +212,37 @@ func TestAnEmptyBlocksDirTurnsOnlyBlocksOff(t *testing.T) {
 // dotfile in the home, because the bodies make it a directory of arbitrary
 // size.
 func TestWhereTheStoreLives(t *testing.T) {
+	// Named, which is the only way there is a store at all (#2274).
 	sh := Shell{Runner: newTestRunner(map[string]string{
+		"HISTFILE": "/tmp/hist", "SH_BLOCKS_DIR": "/state/sh/blocks",
+	})}
+	if got, want := sh.blocksDir(), "/state/sh/blocks"; got != want {
+		t.Errorf("the named store is %q, want %q", got, want)
+	}
+	// A home is no longer an invitation. This used to resolve to
+	// $HOME/.local/state/sh/blocks, and a person who had never heard of the
+	// feature got one; the whole of the change is that they do not.
+	sh = Shell{Runner: newTestRunner(map[string]string{
 		"HISTFILE": "/tmp/hist", "HOME": "/home/someone",
 	})}
-	want := filepath.Join("/home/someone", ".local", "state", "sh", "blocks")
-	if got := sh.blocksDir(); got != want {
-		t.Errorf("default store is %q, want %q", got, want)
+	if got := sh.blocksDir(); got != "" {
+		t.Errorf("an unnamed store is %q, want none — a home is not an opt-in", got)
 	}
+	// Nor is XDG_STATE_HOME, which was the other half of the old fallback
+	// chain and is the one a tidy machine is likelier to have set.
 	sh = Shell{Runner: newTestRunner(map[string]string{
 		"HISTFILE": "/tmp/hist", "HOME": "/home/someone", "XDG_STATE_HOME": "/state",
 	})}
-	if got := sh.blocksDir(); got != filepath.Join("/state", "sh", "blocks") {
-		t.Errorf("with XDG_STATE_HOME the store is %q", got)
-	}
-	// With no home there is nowhere to put it, which is the same answer the
-	// history file gives.
-	sh = Shell{Runner: newTestRunner(map[string]string{"HISTFILE": "/tmp/hist"})}
 	if got := sh.blocksDir(); got != "" {
-		t.Errorf("with no home the store is %q, want none", got)
+		t.Errorf("with XDG_STATE_HOME the store is %q, want none", got)
+	}
+	// And an empty HISTFILE still wins over a store that was named, which is
+	// the coupling the store has had from the start.
+	sh = Shell{Runner: newTestRunner(map[string]string{
+		"HISTFILE": "", "SH_BLOCKS_DIR": "/state/sh/blocks",
+	})}
+	if got := sh.blocksDir(); got != "" {
+		t.Errorf("with history off the store is %q, want none", got)
 	}
 }
 

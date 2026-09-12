@@ -50,6 +50,12 @@ func sourceRun(t *testing.T, dir, src string, sem Semantics, dg Diagnostics) (st
 // not tripped by another going unanswered.
 func permissive() Semantics {
 	s := PosixSemantics()
+	// The two questions a *subscripted* declaration and an exported compound
+	// raise, at bash's answers, which is the floor these suites assert
+	// against. The tests that are *about* them set both sides themselves —
+	// see exportedcompound_test.go (#1380).
+	s.ExportedCompoundReachesAChildAsItsFirstValue = No
+	s.SubscriptedOperandCarriesTheAttributes = Yes
 	s.BuiltinSyntaxErrorFatal = No
 	s.DotMissingFileFatal = No
 	s.DotWithNoOperandIsAnError = Yes

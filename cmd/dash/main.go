@@ -24,15 +24,19 @@ import (
 // shell is the whole of "which shell am I", as data.
 func shell() driver.Shell {
 	return driver.Shell{
-		Name:         "dash",
-		Dialect:      dash.Dialect(),
-		Semantics:    dash.Semantics(),
-		Diagnostics:  dash.Diagnostics(),
-		Prelude:      dash.Prelude(),
-		Register:     dash.Apply,
-		PromptStyle:  dash.PromptStyle(),
-		EditorStyle:  dash.EditorStyle(),
-		HistoryStyle: dash.HistoryStyle(),
+		Name: "dash",
+		// Where this machine keeps the administrator's startup files. It
+		// is the install's answer rather than the dialect's, which is why
+		// it is named here; see driver.Shell.SystemStartupDirectory.
+		SystemStartupDirectory: "/etc",
+		Dialect:                dash.Dialect(),
+		Semantics:              dash.Semantics(),
+		Diagnostics:            dash.Diagnostics(),
+		Prelude:                dash.Prelude(),
+		Register:               dash.Apply,
+		PromptStyle:            dash.PromptStyle(),
+		EditorStyle:            dash.EditorStyle(),
+		HistoryStyle:           dash.HistoryStyle(),
 	}
 }
 

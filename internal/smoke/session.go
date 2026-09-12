@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/blairham/sh/internal/blocks"
 	"github.com/blairham/sh/internal/pty"
 )
 
@@ -50,6 +51,15 @@ type session struct {
 	// perfectly healthy shell as unresponsive. Anything typed clears this,
 	// and the next wait is a real one.
 	ready bool
+	// unnamedStore starts the shell with SH_BLOCKS_DIR *removed* rather than
+	// pointed somewhere, which is the only way to ask what a session does
+	// when nobody has told it to keep blocks.
+	//
+	// A field rather than an argument because every other row wants the
+	// opposite — a store it can read back — and a row that has to opt out of
+	// the suite's own environment is the exception the default is worth
+	// keeping for.
+	unnamedStore bool
 	// exited records that the shell has gone, so a later check says so
 	// rather than waiting out its budget.
 	exited bool
@@ -94,9 +104,12 @@ func (s *session) start(ctx context.Context) error {
 	// Invoked under the name of the shell it is, because that is what a
 	// person's terminal does and because argv[0] is where a shell reads its
 	// own name — a prompt that draws it should draw the right one.
-	cmd.Args = []string{s.dialect.Name}
+	cmd.Args = append([]string{s.dialect.Name}, s.dialect.SuppressSystemFiles...)
 	cmd.Dir = s.home
 	cmd.Env = environment(s.home, s.path, s.dialect)
+	if s.unnamedStore {
+		cmd.Env = without(cmd.Env, blocks.DirVar)
+	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = terminal, terminal, terminal
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		// A session of its own with this terminal as its controlling one.

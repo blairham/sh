@@ -613,6 +613,27 @@ func Semantics() interp.Semantics {
 	// login shell too, which zsh is one of the three to do at all.
 	s.LateLoginStartupFile = ".zlogin"
 	s.InteractiveStartupFile = ".zshrc"
+	// And the system-wide file in front of each of those, which this shell
+	// is the one in the panel with enough slots to pin the *position* of.
+	// Measured 2026-09-12 with `setopt sourcetrace`, which names each file
+	// as it is read: `zsh -o sourcetrace -l -i` writes `~/.zshenv`,
+	// `/etc/zprofile`, `~/.zprofile`, `/etc/zshrc`, `~/.zshrc`, `~/.zlogin`.
+	// So each system file comes first in its own slot rather than all of
+	// them coming before all of the person's — a shell that hoisted them
+	// would read `/etc/zshrc` before `~/.zprofile`, and `~/.zprofile` is
+	// where a person sets `$PATH`.
+	//
+	// `zshenv` and `zlogin` are the manual's answer rather than a measured
+	// one, and the difference is worth stating: neither `/etc/zshenv` nor
+	// `/etc/zlogin` exists on the machine this was measured on, so no probe
+	// can see them read. The slot each occupies *is* measured, because the
+	// two files that do exist each land first in theirs.
+	s.SystemStartupFiles = interp.SystemStartupFiles{
+		Unconditional: "zshenv",
+		Login:         "zprofile",
+		Interactive:   "zshrc",
+		LateLogin:     "zlogin",
+	}
 	// And zsh reads it for a login shell as well as a plain one, where bash
 	// reads only its profile.
 	s.InteractiveStartupFileWhenLogin = interp.Yes
@@ -625,6 +646,12 @@ func Semantics() interp.Semantics {
 		// Both spellings of login-ness, which zsh has like the other three.
 		Login:       "-l --login",
 		SuppressAll: "-f --no-rcs",
+		// And one that drops root's files and keeps the person's, which no
+		// other shell in the panel has. Measured 2026-09-12: `zsh -d -l -c`
+		// still reads `.zshenv`, `.zprofile` and `.zlogin`, and every one of
+		// them reports the inherited `${PATH%%:*}` rather than
+		// `path_helper`'s, so `/etc/zprofile` did not run.
+		SuppressSystem: "-d --no-globalrcs",
 	}
 	// What `zsh --version` writes, on standard output at status 0 — measured
 	// 2026-09-11, one line and no more.
@@ -895,6 +922,15 @@ func Semantics() interp.Semantics {
 	// the one this implementation was giving every dialect.
 	s.ScalarUnderAnArrayDeclaration = interp.ScalarUnderACompoundDiscardsIt
 	s.ScalarUnderATableDeclaration = interp.ScalarUnderACompoundDiscardsIt
+	// A name holding a compound reaches no child, with bash and against
+	// ksh93 (#1380).
+	s.ExportedCompoundReachesAChildAsItsFirstValue = interp.No
+	// And a **subscripted operand** records no attribute at all here:
+	// measured 2026-09-12, `typeset -x a[1]=v` and `export a[1]=v` both list
+	// `typeset -a a=( v )` with no `x`, where the whole-name `typeset -x
+	// a=(p q)` lists `typeset -ax`. So it is the subscripted operand that
+	// carries nothing, and not the letter (#1380).
+	s.SubscriptedOperandCarriesTheAttributes = interp.No
 	// `a=(1 2); a+=x` adds a third element rather than joining the first:
 	// `typeset -a a=( 1 2 x )`. The empty string is a value and gets an
 	// element of its own — `a=(1 2); a+=""` is three elements — and a value
@@ -1103,7 +1139,7 @@ func Semantics() interp.Semantics {
 	// variables untouched. zsh's -t may also stand alone as a poll; that
 	// spelling is not modeled, so here it reads the word after it as its
 	// seconds.
-	s.ReadOptions = "rsnpAd:t:u:"
+	s.ReadOptions = "rsnpAd:t:u:k#"
 	// `unset -m` reads its operands as patterns, which is this shell's
 	// alone; `-n` is not here, and that is measured rather than an
 	// omission — `unset -n x` is `bad option: -n` in zsh 5.9.2 where bash
@@ -1351,6 +1387,12 @@ func Semantics() interp.Semantics {
 	s.DollarSingleBackslashC = interp.DollarSingleControlAbsent
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
 	s.DollarSingleNulTruncates = interp.No
+	// Two digits after `\x` and no more, as in bash — but a run with no
+	// digit at all is a zero byte here, where bash keeps the two characters
+	// it was written as. This shell keeps the zero, so `$'\xzz'` is three
+	// bytes.
+	s.DollarSingleHexReadsEveryDigit = interp.No
+	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
 	s.DollarSingleCaretMeta = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.No
 	// OPTIND is local to a shell function here: the call starts at 1 and the
@@ -1511,6 +1553,13 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-12, both store and the table ends with two elements
 	// (#1938).
 	s.EmptyAssociativeKeyIsAnError = interp.No
+	// Either letter takes a name that is already the other kind, and the
+	// elements are gone: measured 2026-09-12, `typeset -A h; h[k]=v;
+	// typeset -a h` is `typeset -a h=(  )` at status 0 and the reverse is
+	// `typeset -A a=( )`. The one column that converts in both directions,
+	// and the only one that loses the values doing it (#1375).
+	s.TableUnderAnArrayDeclaration = interp.CompoundKindChangeEmptiesTheName
+	s.ArrayUnderATableDeclaration = interp.CompoundKindChangeEmptiesTheName
 	// Nor is reading one reported: measured 2026-09-12, `typeset -A m;
 	// m[k]=v; w=; ${m[$w]}` is the empty string at status 0 and silent
 	// (#1972).
@@ -1536,6 +1585,14 @@ func Semantics() interp.Semantics {
 	// where `${a[ ]}` is the expression running out. The written `${a[]}`
 	// above is a third sentence again, which is why they are two axes.
 	s.EmptySubscriptTextIsAMathError = interp.Yes
+	// A subscript's expression stops at the first top-level `,` or `;` and
+	// the rest of the text is discarded, unevaluated: measured 2026-09-12,
+	// `a=(p q r s); i="2,3"; ${a[$i]}` is `q` where the comma operator would
+	// give `r`, and `i="2,n=9"` leaves `n` at 0. The other half of the rule
+	// that a comma has to have been *written* to separate a range: what
+	// reaches an expression with one still in it arrived through a
+	// substitution, and it separates nothing (#2160).
+	s.SubscriptExpressionStopsAtASeparator = interp.Yes
 	// Whitespace between the brackets is refused too, and by a different
 	// part of the shell: measured 2026-09-10, `a=(1 2 3); echo $(( a[ ] ))`
 	// is `bad math expression: operand expected at end of string` — the
@@ -1569,6 +1626,13 @@ func Semantics() interp.Semantics {
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No
+	// A stopped job keeps the current-job marker: measured 2026-09-12
+	// through a pseudo-terminal with a scratch home directory, `sleep 40`
+	// stopped with ^Z and then `sleep 41 &` lists `[1]  + suspended` and
+	// `[2]  - running`, and `jobs %+` names the suspended one. #1563
+	// recorded the opposite for this shell and it does not reproduce —
+	// re-measured on zsh 5.9.2 with `-f`, this column agrees with bash.
+	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
 	s.JobsListFinishedJobs = interp.No
 
 	// `jobs`' letters: POSIX's pair, the state filters, and three of zsh's
@@ -2194,13 +2258,21 @@ func Diagnostics() interp.Diagnostics {
 			// all, which is a different sentence from a letter we have not
 			// built — see ImmovableOptionLetters below.
 			"set": "dgiklprswyBDEFGHIJKLMNOPQRSTUVWXYZ",
-			// read's letters about a terminal or the line editor — raw -k
-			// keys, -q's one keystroke, -e/-E echoing, -z and the zle pair
-			// -c/-l. The -p coprocess is implemented as its measured
-			// refusal — see ReadNoCoprocess. zsh's read also says nothing
-			// at all about a dead -u descriptor and reports 1, which is why
-			// no ReadBadFileDescriptor wording appears here.
-			"read": "kqeEzcl",
+			// read's letters about a terminal or the line editor — -q's one
+			// keystroke, -e/-E echoing, -z and the zle pair -c/-l. The -p
+			// coprocess is implemented as its measured refusal — see
+			// ReadNoCoprocess. zsh's read also says nothing at all about a
+			// dead -u descriptor and reports 1, which is why no
+			// ReadBadFileDescriptor wording appears here.
+			//
+			// `-k` has left this list and joined ReadOptions above, spelled
+			// `k#` — a number, optional — which is the one letter in the
+			// panel with that shape. It reads characters from the terminal;
+			// interp/readkeys.go carries what was measured. The two tables
+			// move together on purpose: a letter in the accepted set and
+			// still named here is refused as missing while it works, and a
+			// letter in neither is `bad option` for something zsh has.
+			"read": "qeEzcl",
 			// typeset's letters this engine does not hold: floats (-E -F),
 			// namerefs (-n), padding and alignment (-L -R -Z), and the
 			// rest. The same set under both names, and for `local` too.
@@ -2706,6 +2778,11 @@ func Apply(r *interp.Runner) {
 	// And `zsh/mapfile`'s one: the filesystem as an association, where a key
 	// is a path and the value is that file's bytes. See mapfile.go.
 	registerMapfileModule(r)
+	// And `fc`'s three file letters over a history list this dialect keeps,
+	// which is what `print -s` fills. The core `fc` stays the answer for
+	// every other letter — this registration replaces it and delegates. See
+	// fchistory.go.
+	registerFcHistory(r)
 	// And `zsh/terminfo`'s and `zsh/termcap`'s one parameter each: the
 	// terminal's capabilities under two name systems, read out of the
 	// description `$TERM` names by repl.TerminalCapabilities. See

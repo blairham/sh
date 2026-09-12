@@ -201,6 +201,20 @@ func Semantics() interp.Semantics {
 	// — that is the same file under POSIX mode, where `~/.bashrc` goes
 	// unread; the front end asks the mode rather than the dialect.
 	s.InteractiveStartupFile = ".bashrc"
+	// The system-wide file, and this shell has one only in the login slot.
+	// Measured 2026-09-12: a login bash's `~/.bash_profile` reports
+	// `path_helper`'s `${PATH%%:*}` and not the inherited one, so
+	// `/etc/profile` ran in front of it — in 5.3, in 3.2 and under an
+	// argv[0] of `sh` alike.
+	//
+	// **No system-wide run-commands file**, which is measured rather than
+	// assumed and is the interesting half. `/etc/bashrc` exists on this
+	// machine and sets `PS1` and `checkwinsize`; a `~/.bashrc` that reports
+	// `$PS1` sees bash's own `\s-\v\$ ` default, and `shopt checkwinsize`
+	// answers `off` in 3.2. So bash reaches `/etc/bashrc` only through
+	// `/etc/profile`, which sources it by hand for a login shell, and a
+	// shell that named it here would read it twice.
+	s.SystemStartupFiles = interp.SystemStartupFiles{Login: "profile"}
 	// The panel's holdout on ordering, and the reason every bash tutorial
 	// tells a person to source `~/.bashrc` from their `~/.bash_profile` by
 	// hand: `bash -l -i` reads the profile and stops. zsh reads both.
@@ -209,7 +223,10 @@ func Semantics() interp.Semantics {
 	// `--init-file` are the same option, measured to behave identically, and
 	// both are carried because a person's muscle memory has one of them.
 	s.StartupFileOptions = interp.StartupFileOptions{
-		Login:               "-l --login",
+		Login: "-l --login",
+		// `--noprofile` names the *slot* and not the file: measured, `bash
+		// --noprofile -l -c 'echo ${PATH%%:*}'` answers the inherited head,
+		// so it suppressed `/etc/profile` along with `~/.bash_profile`.
 		SuppressLogin:       "--noprofile",
 		SuppressInteractive: "--norc",
 		NameInteractive:     "--rcfile --init-file",
@@ -433,6 +450,16 @@ func Semantics() interp.Semantics {
 	// and the next attempt leaves. Measured through a pseudo-terminal for
 	// `exit` and for ^D alike.
 	s.StoppedJobsHoldTheExit = interp.Yes
+	// And a `wait` for one gives up rather than waiting on a process that is
+	// not going to finish. Measured 2026-09-12 under `set -m`: a bare `wait`
+	// warns and reports 0, and a `wait` naming the job or its process id
+	// reports 145 — 128 plus SIGSTOP. See the axis for what the rest of the
+	// panel does, and for why the monitor is the condition (#2227).
+	s.WaitGivesUpOnAStoppedJob = interp.Yes
+	// And `kill` reads a signal written onto its option with no space:
+	// `kill -n9` and `kill -sKILL` both send. Measured 2026-09-12; bash 3.2
+	// refuses both, which is why this is an axis and not the engine (#2227).
+	s.KillReadsASignalJoinedToItsOption = interp.Yes
 	// And writes the job table under the sentence while `checkjobs` is on —
 	// measured, `[1]+  Stopped ./ticker` and `[2]-  Running sleep 40 &`
 	// below `There are stopped jobs.`, and nothing below it with the option
@@ -597,6 +624,15 @@ func Semantics() interp.Semantics {
 	// no `-A` at all.
 	s.ScalarUnderAnArrayDeclaration = interp.ScalarUnderACompoundBecomesTheFirstElement
 	s.ScalarUnderATableDeclaration = interp.ScalarUnderACompoundBecomesTheFirstElement
+	// A name holding an array or a table reaches no child at all: measured
+	// 2026-09-12, `typeset -x a=(p q)` and `a=(p q); export a` both leave
+	// nothing named `a` in a child's environment, and so does an exported
+	// table. `export b=1` beside it is the control and does arrive, so it is
+	// the compound and not the export (#1380).
+	s.ExportedCompoundReachesAChildAsItsFirstValue = interp.No
+	// And a subscripted operand's letters land on the name: `typeset -x
+	// a[1]=v` lists `declare -ax a=([1]="v")` here (#1380).
+	s.SubscriptedOperandCarriesTheAttributes = interp.Yes
 	// `a=(1 2); a+=x` joins the first element and leaves the rest standing —
 	// `declare -a a=([0]="1x" [1]="2")`, two elements, in 5.3.15, in the same
 	// binary under argv[0] of `sh` and in 3.2.57. The value lands at the base
@@ -764,6 +800,10 @@ func Semantics() interp.Semantics {
 	s.DollarSingleBackslashC = interp.DollarSingleControlMasked
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownKeepsBackslash
 	s.DollarSingleNulTruncates = interp.Yes
+	// Two digits after `\x`, and an escape with no digit at all stays the
+	// two characters it was written as: `$'\xzz'` is `\xzz` here.
+	s.DollarSingleHexReadsEveryDigit = interp.No
+	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.No
 	s.DollarSingleCaretMeta = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
@@ -928,6 +968,14 @@ func Semantics() interp.Semantics {
 	// one space in every column, so this is emptiness and not blankness
 	// (#1938).
 	s.EmptyAssociativeKeyIsAnError = interp.Yes
+	// Neither array letter may take a name that is already the other kind:
+	// measured 2026-09-12, `typeset -A h; h[k]=v; typeset -a h` is
+	// `typeset: h: cannot convert associative to indexed array`, the table
+	// is untouched, the status is 1 and the next command runs — and the
+	// reverse direction is the same refusal in the other words. Identical
+	// under argv[0] `sh`; 3.2.57 has no `-A` to reach it (#1375).
+	s.TableUnderAnArrayDeclaration = interp.CompoundKindChangeRefused
+	s.ArrayUnderATableDeclaration = interp.CompoundKindChangeRefused
 	// And a *read* whose key comes out empty is reported too, with a
 	// different subject and a different outcome: measured 2026-09-12,
 	// `typeset -A m; m[k]=v; w=; ${m[$w]}` writes `m: bad array subscript` —
@@ -964,6 +1012,12 @@ func Semantics() interp.Semantics {
 	// on 5.3.15, `a=(5 6 7); w=; ${a[$w]}` is `5` at status 0, and `${a[ ]}`
 	// beside it is too.
 	s.EmptySubscriptTextIsAMathError = interp.No
+	// The comma inside a subscript is the arithmetic operator here, as it is
+	// everywhere else: measured 2026-09-12, `a=(p q r s); i="2,3";
+	// ${a[$i]}` is the *third* element, which is the operator's right
+	// operand. This dialect has no ranges for the question to be about
+	// (#2160).
+	s.SubscriptExpressionStopsAtASeparator = interp.No
 	// Whitespace between the brackets is not that text and is not answered
 	// by it: measured 2026-09-10 in 5.3.15 and in 3.2.57, `a=(1 2 3); echo
 	// $(( a[ ] ))` is `1` with a clean stream — the blank expression is
@@ -996,6 +1050,14 @@ func Semantics() interp.Semantics {
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No
+	// A stopped job keeps the current-job marker: measured 2026-09-12
+	// through a pseudo-terminal, `sleep 40` stopped with ^Z and then
+	// `sleep 41 &` lists `[1]+  Stopped` and `[2]-  Running`, and `jobs %+`
+	// and `jobs %-` name those same two. bash 3.2.57 agrees. With two jobs
+	// stopped and a third backgrounded it is `[1]-  [2]+  [3]` — the second
+	// stopped job current, the first its runner-up, and the background job
+	// unmarked at all, which no reading of the table's order produces.
+	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
 	s.JobsListFinishedJobs = interp.Yes
 
 	// `jobs`' letters. bash has the widest set in the panel: POSIX's `-l`
@@ -1237,6 +1299,18 @@ func Diagnostics() interp.Diagnostics {
 		// terminal process group, and it is not reproduced — see
 		// Diagnostics.NoJobControlAtStartup.
 		NoJobControlAtStartup: "no job control in this shell",
+		// And the line above it, which bash 5.3 writes and bash 3.2 does
+		// not. Measured 2026-09-12 with no terminal on any of the three
+		// standard streams, on `-ic` and `-lic` alike:
+		//
+		//	bash: cannot set terminal process group (91050): Inappropriate ioctl for device
+		//	bash: no job control in this shell
+		//
+		// The errno half is fixed text rather than a rendered error, and
+		// deliberately: this line is only ever written by a shell that has
+		// no terminal, so the failure it describes is always the same one.
+		// See Diagnostics.CannotSetTerminalProcessGroup (#1036).
+		CannotSetTerminalProcessGroup: "cannot set terminal process group (%[1]d): Inappropriate ioctl for device",
 		// Silent for a count above `$#` — there is no ShiftTooMany here —
 		// and a sentence for one below zero, naming the word as written.
 		ShiftNegativeCount: "shift: %[2]s: shift count out of range",
@@ -1363,6 +1437,8 @@ func Diagnostics() interp.Diagnostics {
 		// A subscript before the first element, named as it was written:
 		// `a[x-2]`, not the -1 it evaluated to. Identical in bash 3.2.
 		BadArraySubscript:             "%[1]s[%[2]s]: bad array subscript",
+		CannotConvertTableToArray:     "%[2]s: %[1]s: cannot convert associative to indexed array",
+		CannotConvertArrayToTable:     "%[2]s: %[1]s: cannot convert indexed to associative array",
 		EmptyAssociativeKeyRead:       "%[1]s: bad array subscript",
 		ArithEmptySubscript:           "%[1]s[]: bad array subscript",
 		ArithWholeArraySubscript:      "%[1]s[%[2]s]: bad array subscript",
@@ -1577,6 +1653,11 @@ func Diagnostics() interp.Diagnostics {
 		DisownNoCurrentJob: "disown: current: no such job",
 		WaitBadJobStatus:   1,
 		WaitNotOurChild:    "wait: pid %[1]d is not a child of this shell",
+		// A job given up on because it stopped, in the two wordings bash has
+		// for it: the bare `wait` names the job and its process, and the one
+		// that named a job speaks from inside its own wait (#2227).
+		WaitJobStopped:    "wait: warning: job %[1]d[%[2]d] stopped",
+		WaitForJobStopped: "warning: wait_for_job: job %[1]d is stopped",
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters bash has and this shell does not: -b job
 			// notices, -k assignment-anywhere, -p privileged, -B brace

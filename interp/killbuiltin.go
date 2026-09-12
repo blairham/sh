@@ -133,6 +133,9 @@ func biKill(r *Runner, _ context.Context, args []string) int {
 		return r.killList(args[1:])
 	}
 	name, sig, rest, err := r.killSignal(args)
+	if r.unspecified {
+		return r.status
+	}
 	if err != nil {
 		return r.killFailed(err)
 	}
@@ -147,8 +150,14 @@ func biKill(r *Runner, _ context.Context, args []string) int {
 // Both spellings mean the same thing and neither is the odd one out: `-s INT`
 // is the POSIX form and `-INT` is the one everybody types. `-n` takes a
 // number and is the only option here dash does not have.
+//
+// The signal may also be written *onto* the option with no space — `kill -n9`
+// — which is its own reading rather than a spelling of the one above: see
+// joinedKillSignal, and Semantics.KillReadsASignalJoinedToItsOption for which
+// dialects have it.
 func (r *Runner) killSignal(args []string) (string, syscall.Signal, []string, error) {
 	spec, form := "TERM", killSpecBare
+	joined, isJoined := joinedKillSignal(args[0])
 	switch a := args[0]; {
 	case a == "--":
 		args = args[1:]
@@ -157,7 +166,16 @@ func (r *Runner) killSignal(args []string) (string, syscall.Signal, []string, er
 			return "", 0, nil, &killError{kind: killMissingSignalArgument, operand: a}
 		}
 		spec, form, args = args[1], killSpecOption, args[2:]
+	case isJoined && r.ask(r.sem().KillReadsASignalJoinedToItsOption,
+		"a signal written onto `kill -n` or `kill -s` with no space"):
+		spec, form, args = joined, killSpecOption, args[1:]
 	case strings.HasPrefix(a, "-") && len(a) > 1:
+		if r.unspecified {
+			// The axis above went unanswered, and this word is exactly the
+			// one it is about. Saying anything further about the signal
+			// would be answering a question this shell has just refused.
+			return "", 0, nil, nil
+		}
 		spec, form, args = a[1:], killSpecFlag, args[1:]
 	}
 	name, sig, err := r.signalSpec(spec, form)
@@ -165,6 +183,37 @@ func (r *Runner) killSignal(args []string) (string, syscall.Signal, []string, er
 		return "", 0, nil, err
 	}
 	return name, sig, args, nil
+}
+
+// joinedKillSignal is the signal written onto `-n` or `-s` with no space
+// between, and whether the word is that at all.
+//
+// Which way round the digits go is the whole of the reading, and it is
+// measured rather than assumed. `-n` joins a *number* and `-s` joins a
+// *name*: `kill -n9` sends signal 9 and `kill -sKILL` sends SIGKILL, while
+// `kill -nKILL` and `kill -s9` are neither — they fall through to the bare
+// `-SPEC` form and are refused as the signals `nKILL` and `s9`, which is what
+// bash 5.3.15 calls them. The two that *are* read report a bad spec without
+// the letter, which is how the reading shows in a diagnostic: `kill -n99` is
+// `kill: 99: invalid signal specification` there and `kill: n99:` in the
+// build that does not read it.
+//
+// A number reaching `-n` may be 0, the existence probe, which is why this
+// tests for digits rather than for a signal: `kill -n0` is status 0 and no
+// signal, exactly as `kill -0` is. The emptiness allDigits answers `true` for
+// cannot arrive — a word of two characters is not this shape.
+func joinedKillSignal(word string) (string, bool) {
+	if len(word) < 3 || word[0] != '-' {
+		return "", false
+	}
+	rest := word[2:]
+	switch word[1] {
+	case 'n':
+		return rest, allDigits(rest)
+	case 's':
+		return rest, !allDigits(rest)
+	}
+	return "", false
 }
 
 // killSpecForm is how the signal was spelled, which two dialects report

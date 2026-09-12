@@ -7030,11 +7030,44 @@ already there. The last row is the control both readings have to pass —
 another letter is not this question, and `typeset -x` over a based name
 leaves the base alone in both.
 
-Degenerate bases in ksh93 are measured and not modeled, and #1308 has
-them: `-i0` leaves a standing base alone where `-i1` takes it off, both
-list without a base word, and a base above the alphabet is kept and
-renders in ten with the mark on — `typeset -i65 d=100` is `10#100`.
-zsh reaches none of them, refusing everything outside 2 to 36.
+### The bases at the two ends of the alphabet
+
+Not an axis, and deliberately so: the only dialect that reaches any of
+this takes any base in silence, and the other one with the attribute
+refuses everything outside 2 to 36 by name — so a field here would have
+a second value nothing could hold. What decides is the alphabet's length
+and the base's, both of which the vector already carries. Measured
+2026-09-12 on ksh93u+ 2012-08-01:
+
+| written | value | listing |
+| --- | --- | --- |
+| `typeset -i64 f=100` | `64#1A` | `typeset -i 64 f=64#1A` |
+| `typeset -i65 d=100` | `10#100` | `typeset -i 65 d=10#100` |
+| `typeset -i1000 i=100` | `10#100` | `typeset -i 1000 i=10#100` |
+| `typeset -i1 b=5` | `5` | `typeset -i b=5` |
+| `typeset -i0 c=5` | `5` | `typeset -i c=5` |
+| `typeset -i-5 j=100` | `100` | `typeset -i j=100` |
+
+**A base above the alphabet is kept and renders in ten, with the mark
+on.** ksh93 spells up to 64 — `64#1A` for a hundred, 61 `Z`, 62 `@`, 63
+`_` — and everything from 65 up gives `10#` plus the decimal. It is not
+the plain decimal a shell without the base writes, and it is not base 65
+either; the listing keeps the 65, and a later `d=200` is `10#200`, so
+the base is stored and only the rendering falls back.
+
+**A base below two records nothing**, so the listing has no base word.
+
+**And 1 and 0 are not one rule**, which is the pair that settles it:
+
+    typeset -i16 a=255; typeset -i1 a    255      the base comes off
+    typeset -i16 e=255; typeset -i0 e    16#ff    the base stands
+
+So 1 takes the base off the way `-i10` and a bare `-i` do, and 0 is a
+no-op on the base a name already has. `-i-5` follows 1, which is what
+makes the rule "below two" rather than "one".
+
+Ours does not read `-i-5` at all — the option scanner takes only digits
+after the letter — so that row is recorded rather than matched (#1308).
 
 **The two listings write the base two ways**, and one of them writes the
 number rather than the text the name is holding:
@@ -8590,12 +8623,44 @@ there was no previous substitution (#1198). The byte was never lost from
 the tree, only from the joined text: a protected character is a span of
 its own, so the backslash is written back in front of it.
 
-**Quotes inside `${ }` are still not reproduced.** That shell reads the
-brace's text raw, so a quote there is an ordinary character:
-`${x:s/'.'/:/}` replaces a three-character `'.'` and leaves a plain `.`
-alone. This one's lexer removes the quotes, so the same modifier replaces
-the `.`. A backslash is enough to write any of these, and is what a
-script would ordinarily use.
+**Quotes inside `${ }` are not a quoting either**, and the same is true of
+a `$`. That shell reads the brace's text raw, so every byte between the
+delimiters is an ordinary character of the pattern. Measured on zsh 5.9.2,
+2026-09-12, from a script file so the quoting *around* the expansion is not
+what is being tested:
+
+| written | value | answer |
+| --- | --- | --- |
+| `${x:s/'.'/:/}` | `a'.'b` | `a:b` — the pattern is the three characters `'.'` |
+| `${y:s/'.'/:/}` | `a.b` | `a.b` — so it misses a bare dot |
+| `${w:s/'Q'/X/}` | `aQb` | `aQb` — with no metacharacter in sight |
+| `${u:s/\'/X/}` | `a'b` | `aXb` — one quote is one character |
+| `${v:s/'  '/_/}` | `a  b` | `a  b` — and blanks inside them are blanks |
+| `${x:s/$a/Q/}`, `a=X` | `aXb` | `aXb` — a `$` is text, not an expansion |
+| `${z:s/'$a'/Q/}`, `a=X` | `a$ab` | `a$ab` — and so is one between quotes |
+
+Rows one and two are each other's control: the pattern the quotes are part
+of matches the value that holds them and misses the one that does not.
+Rows six and seven are the sharper claim, and the reason this is answered
+from the **source** rather than by writing the delimiters back around each
+quoted span: a `$a` inside quotes has already been expanded by the time a
+word exists, and putting quotes back around the result would be a third
+string again. `ParamExpr.ArgText` and `Arg2Text` are the source, kept for
+the substring operator alone, and `interp/modifier.go` reads them.
+
+A backslash is still enough to write any of these, and is what a script
+would ordinarily use: `${x:s/\./:/}` agrees on both sides, as does a
+different delimiter.
+
+**What is not reproduced is where the brace *ends*.** Finding the closing
+`}` still honors a quote here and the panel divides over whether it
+should: `x=; echo "[${x:-'}'}]"` is `['}']` in bash 5.3.15 and here, and
+`[''}]` in zsh 5.9.2, dash and ksh93u+ — three columns closing the
+expansion at the first `}` and reading the quote as an ordinary character
+there too. So `${v:s/'/X/}`, a modifier whose pattern is one quote, parses
+in zsh and is `unmatched \"` here. That is a lexer question rather than a
+modifier's, it reaches every expansion in the grammar, and it wants an axis
+of its own.
 
 ### What "operand expected" means — two failures, not one
 
@@ -9616,6 +9681,47 @@ A two-two split, which is the usual shape here and the reason this is a
 field rather than a choice: there is no ordering of the shells that
 explains it.
 
+**`StoppedJobTakesTheCurrentJobMarker`** — bash yes · dash yes · ksh93 no · zsh yes · ash unanswered
+
+Keeps the `+` on a job that stopped even after a later job has been
+backgrounded, so `%%`, `%+` and a bare `fg` all name the stopped one.
+Measured 2026-09-12 through a pseudo-terminal with a scratch home
+directory, on `sleep 40` stopped with ^Z and then `sleep 41 &`:
+
+| shell | listing |
+| --- | --- |
+| bash 5.3.15 | `[1]+ Stopped`, `[2]- Running` |
+| bash 3.2.57 | `[1]+ Stopped`, `[2]- Running` |
+| dash | `[1]+ Suspended`, `[2]- Running` |
+| zsh 5.9.2 | `[1]+ suspended`, `[2]- running` |
+| ksh93u+ | **`[1]- Stopped`, `[2]+ Running`** |
+
+Five to one, and not a cosmetic column: `jobs %+` and `jobs %-` name the
+same two jobs the listing marks in every column, so a `fg %+` after a ^Z
+resumes a different job in the two camps. dash is the one shell that
+will not resolve `%+` or `%-` at all — both are `No current job` — so
+its listing is the whole of its evidence.
+
+It is about **keeping** the marker rather than taking it. A job that
+stops takes it in all six: with two background jobs and `kill -TSTP %1`,
+every column moves the `+` onto the older job it has just stopped, and
+bringing a job forward and stopping it again moves the `+` back to it
+even though a later job exists. So one ordered list — the order jobs
+became notable, re-stamped on every stop — serves both camps, and this
+axis only decides how it is read. See `interp.Runner.markedJobs`.
+
+The `-` follows the same choice one step down, which is why it is not
+"the job before this one in the table": with two jobs stopped and a
+third backgrounded, bash marks the second `+`, the **first** `-`, and
+the third not at all.
+
+Read rather than `ask`ed, as `DefaultOptionLetters` is: naming the
+default job is not the place to refuse a script over a disagreement.
+`ash` is deliberately unanswered — the measurement needs a ^Z at a
+pseudo-terminal, which the container that shell was measured in could
+not give, so it takes the five columns' answer rather than a guess
+(#1563).
+
 **`JobsShowBackgroundCommand`** — bash yes · dash no · ksh93 no · zsh yes
 
 Puts the command of a `&` job in a `jobs` listing. True in bash and zsh;
@@ -10164,10 +10270,47 @@ come before the comparison, not after it.
 This is only about `test` and `[`. Inside `[[ ]]` the same spelling is a
 pattern match, which is a different question entirely.
 
-**`TestIntegerRefusalIsSilent`** — bash no · dash no · ksh93 yes · zsh no
+**`TestBuiltinComparisonOperandsAreArithmetic`** — bash no · dash no ·
+ksh93 yes · zsh no
 
-Has `[ a -eq 1 ]` fail with no sentence at status 1 — ksh93; the other
-three complain at 2.
+Reads the operands of `test`'s and `[`'s word-spelled comparisons as
+arithmetic expressions, the way `[[ ]]` reads its own. Measured
+2026-09-12: with `n=5`, `[ n -eq 5 ]` holds in ksh93 alone, and so do
+`[ 1+1 -eq 2 ]` and `[ "" -eq 0 ]`. It is the whole expression language
+and not a name lookup — an assignment written in an operand lands, so
+`[ "n=9" -eq 9 ]` leaves `n` at nine.
+
+A refusal on that side is the arithmetic's, behind the name the builtin
+was called by, at status 1 and not fatal: `[ 1x1 -eq 0 ]` is
+`ksh: [: 1x1: arithmetic syntax error` and the script runs on, where the
+identical words inside `[[ ]]` abandon the input in the same shell.
+
+This replaces `TestIntegerRefusalIsSilent`, which recorded one symptom of
+it: `[ a -eq 1 ]` failing without a sentence is what the arithmetic
+reading does to an unset name — zero, unequal, quiet — and that axis
+could not explain `[ 1+1 -eq 2 ]`.
+
+**`TerminalTestDescriptorNarrowsToThirtyTwoBits`** — bash no · dash no ·
+ksh93 yes · zsh no
+
+Reads `-t`'s operand at the width of a machine `int`: a value too wide
+for the shell's own integer saturates, and what is left is taken modulo
+2**32 as a signed number. Measured 2026-09-12 under a pseudo-terminal
+with descriptors 0 and 1 on the terminal and 2 redirected away,
+`[ -t 4294967296 ]` and `[ -t 4294967297 ]` are true in ksh93 and
+`[ -t 4294967298 ]` is false — descriptors 0, 1 and 2. That third
+operand is what makes it a narrowing rather than "a big number is true".
+
+**`TerminalTestMinusOneIsATerminal`** — bash no · dash no · ksh93 yes ·
+zsh no
+
+Has `[ -t -1 ]` hold whatever the shell is holding. Measured with every
+stream redirected to a file, so that no descriptor of the run is a
+terminal: still true in ksh93 and false everywhere else. `-2`, `-3` and
+`-100` are false in all six columns, which is what makes it the one
+value rather than a rule about negative descriptors — and a second
+question beside the narrowing above, since every saturating conversion
+lands here.
 
 
 ### the names a builtin will and will not take
@@ -10498,6 +10641,47 @@ Asked only where the two readings differ, so `${a[2,2]}` needs no
 answer. The endpoints, and the one asymmetry between an array and a
 string, are in
 `docs/spec/grammar/parameter-expansion.md`.
+
+**The comma has to have been *written*.** Where the pair is separated is
+a question about the source and not about the text the subscript came
+to: measured 2026-09-12, `a=(p q r); i="1,2"; ${a[$i]}` is the **first
+element** on zsh 5.9.2 and not the range `1,2`, and `a=(p q,r s);
+${a[(r)q,r]}` is empty because the written comma separates a search from
+an arithmetic end. So the parser separates every written pair and the
+run never splits an expanded text.
+
+**`SubscriptExpressionStopsAtASeparator`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+The other half of that rule: a subscript's expression ends at the first
+top-level `,` or `;` and the rest of the text is **discarded**, rather
+than the comma being the operator it is everywhere else.
+
+    a=(p q r s)
+    i="2,3";   ${a[$i]}   zsh → q       the operator would give r
+    i="1+1,3"; ${a[$i]}   zsh → q       so it is not a numeral rule either
+    i="2,";    ${a[$i]}   zsh → q       and the tail need not be an expression
+    i="2;3";   ${a[$i]}   zsh → q       nor is the comma the only separator
+    i="2,3,4"; ${a[$i]}   zsh → q
+    i="2,n=9"; ${a[$i]}   zsh → q, and `n` is still 0
+    i="(1,2)"; ${a[$i]}   zsh → r       nested, so the operator applies
+
+The sixth row is the discriminator: a reading that evaluated the tail and
+threw the value away would leave `n` at 9. The seventh says it is the
+*top level of a subscript* rather than the character.
+
+**And it is the subscript alone.** `$(( 1,2 ))` is 2 in every column, zsh
+included, and a substring's offset takes the operator too — `x=abcdef;
+${x:1,2:2}` is `cd` there, which is offset 2.
+
+**A comma the source wrote is still the operator**, which is what makes
+this one rule with the pair split rather than two: `a=(1 2 3);
+a[1,2,3]=(x y)` is the span 1 through the arithmetic `2,3`, which is 3.
+The pair is separated at the first *written* comma and the arithmetic
+gets the rest. A `;` ends the expression either way, being no part of any
+arithmetic, which is what gives `${a[2,3;5]}` its second end of 3.
+
+Pinned by `array/a-comma-that-arrives-through-a-substitution` and
+`array/a-substituted-comma-on-the-left-of-an-assignment` (#2160).
 
 **`ScalarSubscriptIsACharacter`** — bash no · dash no · ksh93 no · zsh yes
 
@@ -11976,10 +12160,116 @@ why `${b[0]}` and `${#b[@]}` cannot tell it from bash's promotion.
 
 Asked only where the name is holding a scalar in the cell being declared.
 An unset name is unanimous — `unset b; typeset -a b` is an array of no
-elements in all three — and so is a name already holding an array, which
-every column leaves standing. A declaration carrying its own value is not
-this question either: `b=1; typeset -a b=(9)` is the one element `9`
-everywhere.
+elements in all three — and a name already holding *the other kind of
+compound* is the pair of axes below. A declaration carrying its own value
+is not this question either: `b=1; typeset -a b=(9)` is the one element
+`9` everywhere.
+
+**`ExportedCompoundReachesAChildAsItsFirstValue`** — bash no · dash unspecified · ksh93 yes · zsh no
+
+Hands a child an entry for an exported name holding an **array or a
+table**, whose value is the array's first element or the table's first
+value. The alternative is no entry at all, which is not a nicety: a name
+and no name are different things to the program reading the environment,
+and a compound has no environment representation for the columns to have
+chosen a different one of.
+
+Measured 2026-09-12 from a script file, counting what a child sees:
+
+    typeset -x a=(p q); env | grep ^a=    bash nothing · ksh93 `a=p` · zsh nothing
+    a=(p q); export a                     bash nothing · ksh93 `a=p` · zsh nothing
+    typeset -Ax m; m[k]=v                 bash nothing · ksh93 `m=v` · zsh nothing
+    export b=1; typeset -x c=(p)          bash `b=1` alone · ksh93 both · zsh `b=1` alone
+
+The last row is the control that says the *scalar* half is unaffected.
+
+An **empty** compound is a third shape and is not this axis: ksh93
+refuses `typeset -x a=()` outright — `only simple variables can be
+exported` — where bash and zsh accept it and hand a child nothing. Both
+answers here give a child nothing, so the refusal is a wording and a
+status this does not carry.
+
+This shell handed a child the first element in every dialect, which is
+one column's answer given to three, and handed `a=` for an *empty* array,
+which is nobody's: a name arriving with an empty value where the script
+exported an array is the quiet kind of wrong, since the program reading
+it cannot tell an empty array from an empty string.
+
+**`SubscriptedOperandCarriesTheAttributes`** — bash yes · dash unspecified · ksh93 yes · zsh no
+
+Gives a declaration's letters to the **name** when the operand is
+subscripted — `typeset -x a[1]=v` — rather than to the element alone.
+
+    typeset -x a[1]=v; typeset -p a   bash `declare -ax a=([1]="v")`
+                                      ksh93 `typeset -x -a a=([1]=v)`
+                                      zsh   `typeset -a a=( v )`
+    export a[1]=v                     bash refuses it as a bad name
+                                      ksh93 and zsh as above
+    typeset -x a=(p q)                `-ax` in every column
+
+The third row is the control and is unanimous: a *whole-name*
+declaration records the letter everywhere, so what the axis is about is
+the subscripted operand alone. Listing-only where the compound reaches no
+child anyway, which is the column that answers no.
+
+Asked only where the declaration names a letter at all: `typeset a[1]=v`
+raises no question between the columns.
+
+**A subscripted operand carrying no value is not an axis** and is core:
+`typeset a[3]` declares the *name* as an array and writes no element —
+`${#a[@]}` is 0 in bash and ksh93 alike, and an array already standing is
+left as it is. zsh reaches none of it, a declaration operand holding no
+`=` being a glob there. This shell declared a variable literally named
+`a[3]`, invisible to `${a[3]}` and to `typeset -p a`, at status 0.
+
+Pinned by `decl/an-exported-array-in-a-child-environment`,
+`decl/an-exported-array-with-nothing-in-it` and
+`decl/a-subscripted-operand-with-no-value` (#1380).
+
+**`TableUnderAnArrayDeclaration`** — bash refused · dash unspecified · ksh93 refused, and the script ends · zsh empties the name
+
+**`ArrayUnderATableDeclaration`** — bash refused · dash unspecified · ksh93 keeps the elements · zsh empties the name
+
+What one array *letter* makes of a name that is already the **other kind**
+of array. A name is one kind at a time in every shell measured; what they
+disagree about is what happens to the elements and to the script.
+
+    typeset -A h; h[k]=v; typeset -a h
+      bash 5.3.15  `typeset: h: cannot convert associative to indexed array`
+                   table intact, status 1, the next command runs
+      ksh93u+      `typeset: cannot change associative array h to index array`
+                   and the script **ends**
+      zsh 5.9.2    `typeset -a h=(  )` — converted and emptied, status 0
+
+    typeset -a a=(x y); typeset -A a
+      bash 5.3.15  `typeset: a: cannot convert indexed to associative array`
+                   array intact, status 1
+      ksh93u+      `typeset -A a=([0]=x [1]=y)` — converted, and `${a[0]}`
+                   still reads `x`, so the values are really there
+      zsh 5.9.2    `typeset -A a=( )` — converted and emptied
+
+Measured 2026-09-12 from a script file, panel and machine as `oracle.md`.
+dash has neither letter; bash 3.2.57 has no `-A` to reach either row.
+
+**Two fields because ksh93 answers the two directions differently**, and
+again that is the whole of why: it refuses one fatally and converts the
+other without losing anything. The two refusals are two answers rather
+than one wording, because what a refusal *costs* differs — bash runs the
+next command and ksh93 does not.
+
+bash names the builtin as it was **invoked**: `declare:`, `typeset:` and
+`local:` all appear in front of the same sentence, so the builtin is a
+verb of the wording rather than a prefix.
+
+**Asked only where the declaration carries no value of its own.** A
+declaration *with* one is a second question the panel splits differently
+again: `typeset -A h; h[k]=v; typeset -a h=(x)` ends the script in bash —
+and the sentence has no builtin in front of it there, because it comes
+from the assignment rather than from the builtin — where ksh93 and zsh
+both convert and keep the one element.
+
+Pinned by `decl/an-array-letter-over-a-declared-table` and
+`decl/a-table-letter-over-a-declared-array`.
 
 **A local declaration builds the array cell rather than converting one**,
 and that is core rather than a fourth answer. bash promotes at the top
@@ -12337,6 +12627,46 @@ Is how a listed declaration spells its value. A field of its own over
 the shared vocabulary because it does not follow the dialect's other
 listings: the engine that single-quotes its aliases and traps double-
 quotes its declarations.
+
+**`ListedHashIsBareAfterANonName`** — bash no · dash no · ksh93 yes · zsh no
+
+Leaves a `#` in a listed value unquoted when the text in front of the
+first one is there and is no name. Measured 2026-09-12 with `typeset -p`
+over a scalar:
+
+| value | ksh93 | zsh | bash |
+| --- | --- | --- | --- |
+| `16#ff` | `16#ff` | `'16#ff'` | `"16#ff"` |
+| `99#zz` | `99#zz` | `'99#zz'` | `"99#zz"` |
+| `16#gg` | `16#gg` | `'16#gg'` | `"16#gg"` |
+| `16#` | `16#` | `'16#'` | `"16#"` |
+| `1a#b` | `1a#b` | `'1a#b'` | `"1a#b"` |
+| `a.b#c` | `a.b#c` | `'a.b#c'` | `"a.b#c"` |
+| `a#b` | `'a#b'` | `'a#b'` | `"a#b"` |
+| `ab#` | `'ab#'` | `'ab#'` | `"ab#"` |
+| `#lead` | `'#lead'` | `'#lead'` | `"#lead"` |
+
+The rule is **not** "a value that spells a based number", which is what
+#1271 proposed: `99#zz` names no base and `16#gg` has no digits for the
+one it names, and both come out bare, while `1a#b` and `a.b#c` are bare
+for having no name in front of the `#`. What is quoted is a `#` a name
+stands in front of, or one that opens the value — the position where a
+comment would begin.
+
+The **first** `#` decides for the whole value: `1#b#c` is bare there and
+`a#b#c` is quoted, so it is the leading text that is judged and not each
+occurrence. Something else in the value needing quotes still quotes it,
+so `16#ff x` and `16#ff*` are quoted in every column. `export -p`
+agrees with `typeset -p` about all of it.
+
+Two neighboring characters were measured in the same pass and are
+**not** modeled, so ours still differs from both shells on them: with
+`a<c>b` as the value, ksh93 leaves `!`, `=` and `^` bare where zsh
+leaves only `!`, and ours leaves `^` and quotes `!`. `=` follows a
+mirror-image rule in ksh93 — `a=b` is bare and `1=2` is quoted, so a
+name in front of the `=` is what makes it safe rather than what makes
+it unsafe. Recorded here rather than fixed with #1271, which is about
+the `#`.
 
 **`DeclaredNameWithoutValueIsEmpty`** — bash no · dash no · ksh93 no · zsh yes
 

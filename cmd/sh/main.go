@@ -188,6 +188,11 @@ func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// The fallback for an argv with nothing in it; driver names the shell by
 	// argv[0] the way every dialect binary is named.
 	sh.Name = "sh"
+	// Where this machine keeps the administrator's startup files. Set here
+	// rather than in pickDialect for the reason the default is empty at all:
+	// it is the install's answer and not the dialect's, and a caller that
+	// picked a dialect to inspect it has not asked to read `/etc`.
+	sh.SystemStartupDirectory = "/etc"
 	sh = withHighlighting(sh, own)
 	if len(own.plugins) > 0 {
 		// A plugin host relays the plugin's standard error onto this one from

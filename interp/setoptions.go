@@ -3,7 +3,10 @@
 
 package interp
 
-import "sort"
+import (
+	"sort"
+	"syscall"
+)
 
 // The long `set -o` names, which shells have which, and what this one does
 // about each.
@@ -213,13 +216,18 @@ var extraSetOptions = map[string]setOption{
 	// takes that name too — where ksh93 says trackall. One state behind
 	// both, kept honestly because it is permission to cache rather than a
 	// promise to; see the field.
+	//
+	// Through the pair of methods rather than the field, because the state
+	// this reports before a script has moved it is the startup letters' and
+	// not the zero value's: `set -o` said `hashall off` in a bash whose own
+	// `$-` said `h` (#1951).
 	"hashall": {
-		apply: func(r *Runner, on bool) { r.tracksCommands = on },
-		get:   func(r *Runner) bool { return r.tracksCommands },
+		apply: func(r *Runner, on bool) { r.setCommandTracking(on) },
+		get:   func(r *Runner) bool { return r.commandTracking() },
 	},
 	"trackall": {
-		apply: func(r *Runner, on bool) { r.tracksCommands = on },
-		get:   func(r *Runner) bool { return r.tracksCommands },
+		apply: func(r *Runner, on bool) { r.setCommandTracking(on) },
+		get:   func(r *Runner) bool { return r.commandTracking() },
 	},
 	// zsh's histignoredups, which its `set -h` abbreviates. A script has no
 	// history for it to govern; an interactive session does, and reads this
@@ -431,6 +439,12 @@ func (r *Runner) SetInteractiveMonitor() {
 	if name == "" || r.diag().NoJobControlAtStartupNamesTheScript {
 		name = r.name()
 	}
+	// The shell that names the process group it could not hand the terminal
+	// to says so first, above the line below. Its process group is read here
+	// the way `$$` reads its process id — see the `$` case in expand.go: a
+	// fact about this process, asked for at the moment it is printed, and
+	// wanted by nothing else.
+	r.errf("%s", r.diag().TerminalProcessGroupDiagnostic(name, syscall.Getpgrp()))
 	r.errf("%s", r.diag().JobControlDiagnostic(name))
 }
 
@@ -645,6 +659,44 @@ func (r *Runner) AddSetOptions(names ...string) {
 	for _, n := range names {
 		r.extraOptions[n] = true
 	}
+}
+
+// commandTracking reports whether command tracking is on — the option bash
+// lists as `hashall`, ksh93 as `trackall`, and both abbreviate `-h`.
+//
+// It is a method and not a field read because the state has no constant
+// default. What a shell starts it in is the shell's own fact, and the dialect
+// has already stated it: a startup letter *is* the claim that the option
+// behind it is on before the script's first line, so `h` among the letters is
+// that declaration and nothing further needs saying. Deriving it here rather
+// than taking a second declaration is what keeps the two from disagreeing —
+// which is exactly the bug, in both directions at once: bash's letters are
+// `hB` and the zero value is off, so `$-` said the option was on while
+// `set -o` said it was off in a shell that had run nothing, and `set +h`
+// could not take the letter back out because no state stood behind it
+// (#1951).
+//
+// It also gets the case a constant default cannot reach. ksh93's letters are
+// `hB` for a script and `imBE` when it is interactive — the `h` is *gone* —
+// and `set -o` there reports `trackall on` for the script and off at a
+// prompt, measured 2026-09-12. A default written down once, wherever it was
+// written, would be wrong for one of those two.
+func (r *Runner) commandTracking() bool {
+	if r.tracksCommandsMoved {
+		return r.tracksCommands
+	}
+	// Only where the letter means tracking at all. zsh spells a history
+	// option with `h` and has no startup letters to read anyway, and a
+	// shell whose dialect has not answered the axis has said nothing this
+	// could stand on — see Semantics.SetHLetterTracksCommands.
+	return r.sem().SetHLetterTracksCommands == Yes && r.startsWithOptionLetter('h')
+}
+
+// setCommandTracking is what `set -h`, `set -o hashall` and `set -o trackall`
+// all write, and it records that the state has been spoken for so that the
+// startup letters stop answering for it.
+func (r *Runner) setCommandTracking(on bool) {
+	r.tracksCommands, r.tracksCommandsMoved = on, true
 }
 
 // lookupSetOption finds a name this shell has, if it has it.

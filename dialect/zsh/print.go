@@ -169,9 +169,17 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	case opts.single && len(rest) > 1:
 		r.Diagnosef("option -S takes a single argument\n")
 		return 1
-	case opts.history, opts.editor:
-		// A history this shell does not keep and a line editor that is not
-		// running: the operands are consumed and nothing is written.
+	case opts.history:
+		// `-s` puts the operands in the history list as one entry, joined
+		// with a space the way the words of a command line are. That list is
+		// the dialect's rather than the prompt's — see fchistory.go, and
+		// #2283 for why a script has one at all — and `fc -W` is what writes
+		// it out. Nothing is written to the output.
+		fcRemember(r, strings.Join(rest, " "))
+		return 0
+	case opts.editor:
+		// A line editor that is not running: the operands are consumed and
+		// nothing is written.
 		return 0
 	}
 	if opts.hasFormat {

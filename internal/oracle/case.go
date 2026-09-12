@@ -1348,6 +1348,21 @@ var Corpus = []Case{
 		Why:     "one and two hex digits both, because the length is not fixed and a reader that demands two would silently take the `\\x9` of `\\x9Z` as 0x9Z",
 	},
 	{
+		ID: "core/dollar-single-hex-reads-every-digit", Category: "quoting",
+		Snippet: `printf '[%s]' $'\x00b' $'\x414' $'\x0041' | od -An -c | tr -s " "`,
+		Why:     "how far the digit run of a `\\x` reaches, which one shell answers alone: ksh93 takes every hexadecimal digit that follows and a run past two is a *code point*, so `\\x00b` is the one byte 0x0b there and `\\x414` is U+0414 in UTF-8, where bash and zsh read two digits and leave the rest as text. The first field is the sharpest of the three because the two readings do not merely differ in length — under the short one the escape is a NUL, which then truncates the whole span in the two shells that hold a word as a C string. dash has no `$'…'` at all and prints the text (#554)",
+	},
+	{
+		ID: "core/dollar-single-hex-two-digits-or-more", Category: "quoting",
+		Snippet: `printf '[%s]' $'\xFF' $'\x00FF' | od -An -c | tr -s " "`,
+		Why:     "the pair that says it is the digit *count* and not the value that decides. The same 0xFF written with two digits is a byte in every column, and written with four it is the code point U+00FF in ksh93 — two bytes there and a truncating NUL followed by `FF` in bash. A reading that switched on the value rather than on the length would answer the two fields alike (#554)",
+	},
+	{
+		ID: "core/dollar-single-escape-with-no-digits", Category: "quoting",
+		Snippet: `printf '[%s]' $'\xzz' $'\x' $'\uZ' | od -An -c | tr -s " "`,
+		Why:     "a hexadecimal escape with no digit after it at all: bash keeps the two characters it was written as, and ksh93 and zsh read a zero byte and carry on with the rest. The two that agree look different in the record and are the same answer — the zero truncates the span in ksh93, which is the NUL rule and not this one, so nothing is left there. `\\u` is on the line because no column splits it from `\\x`, which is what makes the three escapes one question (#554)",
+	},
+	{
 		ID: "core/dollar-single-octal-escape", Category: "quoting",
 		Snippet: `printf '[%s]' $'\101\0101\1' | od -An -c | tr -s " "`,
 		Why:     "the octal forms, and the reason they are one rule rather than two: `\\0101` is not four digits after a zero but three from the zero onward, so it is a backspace and then a `1`",
@@ -2097,6 +2112,22 @@ var Corpus = []Case{
 for $n in a b; do echo body; done
 echo "reached-after st=$?"`,
 		Why: "the **stage**, asked with the shell's own syntax check and nothing else running. bash 5.3, bash as `sh`, bash 3.2 and ksh93 accept this file silently at 0 — they parse the loop and check the name when they reach it — where dash and zsh refuse it while parsing. So `-n` is what makes the difference observable, and it is the difference that matters most: a syntax check is what a CI job runs, so refusing the parse reported a working script as broken (#1110)",
+	},
+	{
+		ID: "core/a-backquote-substitution-under-a-syntax-check", Category: "command language",
+		Args: []string{"-n", ArgScript},
+		Snippet: `x=` + "`" + `echo hi` + "`" + `
+y=$(echo there)` + "`" + `echo b` + "`" + `
+echo "$x$y"`,
+		Why: "the older command substitution, and the one shell that remarks on every one it reads: ksh93 writes `` warning: line N: `...` obsolete, use $(...) `` once per backquote and dash, bash 5.3, bash as `sh`, bash 3.2 and zsh read one without a word. The second line has both spellings on it, so the row also says the remark is the backquote's and not the substitution's. Nothing is wrong with the file — it is accepted at 0 in every column — which is what makes this a *remark* rather than a diagnostic (#1466)",
+	},
+	{
+		ID: "core/a-backquote-substitution-when-it-runs", Category: "command language",
+		Script: true,
+		Snippet: `x=` + "`" + `echo hi` + "`" + `
+y=$(echo there)` + "`" + `echo b` + "`" + `
+echo "$x$y"`,
+		Why: "the same file run instead of checked, which is the half of the answer an implementation gets wrong by reading only the row above: ksh93 says **nothing** here. The remark belongs to a shell that is not going to execute — `ksh -n` writes two lines and `ksh` writes none, on the same bytes — so a front end that said it whenever the parse produced it would put two warnings in front of every script this dialect runs (#1466)",
 	},
 	{
 		ID: "core/a-refused-loop-name-costs-the-loop-or-the-script", Category: "command language", SyntaxError: true,
@@ -3977,6 +4008,36 @@ echo "st=$?"`,
 		Why:     "the refusal itself: four wordings, two of them with a usage line naming the letters that shell really does have, and 2 everywhere but zsh. An option silently ignored is the failure this pins against",
 	},
 	{
+		ID: "jobs/a-signal-number-joined-to-kill-s-option", Category: "builtins",
+		Snippet: `sleep 0.4 & p=$!; kill -n9 $p 2>e; echo "st=$? said=$(grep -c . e)"; wait 2>/dev/null`,
+		Why:     "the signal written onto the option with no space, which is the spelling #2227 turned on. bash 5.3 and ksh93 read it and send SIGKILL; bash 3.2 and zsh read the whole word as a signal called `n9` and refuse it. The complaint is counted rather than printed because the four that speak say four different things and none of them is the question here, and the job notice a killed job draws carries a process id, which is why the trailing `wait` is silenced. What the row is really holding down is the *stall*: a script that kills a job and then waits for it gets the job's whole lifetime back when the kill is refused, and the refusal lands on a stderr such a script has usually redirected",
+	},
+	{
+		ID: "jobs/a-signal-name-joined-to-kill-s-option", Category: "builtins",
+		Snippet: `sleep 0.4 & p=$!; kill -sKILL $p 2>e; echo "st=$? said=$(grep -c . e)"; wait 2>/dev/null`,
+		Why:     "the other half of the same reading, and it is the half that says which option joins what: `-s` joins a *name* where `-n` joins a number. Same split — bash 5.3 and ksh93 send, bash 3.2 and zsh refuse — so one answer covers both spellings",
+	},
+	{
+		ID: "jobs/a-signal-name-joined-to-kill-n-option", Category: "builtins",
+		Snippet: `sleep 0.4 & p=$!; kill -nKILL $p; echo "st=$?"; wait`,
+		Why:     "the guard on the pair above, and the reason the rule is two rules rather than one: a *name* joined to `-n` is read by nobody. bash calls it the signal `nKILL`, which is the bare `-SPEC` form having taken the whole word — so a shell that simply stripped two characters after `-n` would send SIGKILL here and pass the row above for the wrong reason",
+	},
+	{
+		ID: "jobs/a-signal-number-joined-to-kill-s-option-is-not-read", Category: "builtins",
+		Snippet: `sleep 0.4 & p=$!; kill -s9 $p; echo "st=$?"; wait`,
+		Why:     "and the guard in the other direction: a *number* joined to `-s` is read by ksh93 alone. bash 5.3 refuses it under the word `s9` — the same bare reading — while accepting `-sKILL` two rows up, which is what makes the digits part of the answer and not a detail of it",
+	},
+	{
+		ID: "jobs/wait-for-a-stopped-job-under-the-monitor", Category: "builtins",
+		Snippet: `set -m 2>/dev/null; sleep 0.8 & p=$!; { sleep 0.4; kill -CONT $p; } & sleep 0.15; kill -STOP $p; wait $p; echo "st=$?"; wait 2>/dev/null`,
+		Why:     "whether a `wait` that names a stopped job goes on waiting for a process that cannot finish until something outside resumes it. bash 5.3 gives up at 145 — 128 plus SIGSTOP, a command that signal killed — while bash 3.2 and ksh93 wait it out and report the job's own 0. zsh cannot be asked: `set -m` is a refusal in a non-interactive zsh, so it answers with the waiting columns for that reason rather than by choosing. The second job is what makes the row *terminate* under the shells that wait: a stopped process is not going to continue on its own, and a corpus case that hung on the answer it exists to record would be worse than no case at all",
+	},
+	{
+		ID: "jobs/a-stopped-background-job-in-the-listing", Category: "builtins",
+		Snippet: `set -m 2>/dev/null; sleep 0.8 & p=$!; { sleep 0.4; kill -CONT $p; } & sleep 0.15; kill -STOP $p; jobs %1; wait 2>/dev/null`,
+		Why:     "the same stop asked of the listing rather than of `wait`, because a shell can know one without the other: bash 5.3 and ksh93 call the job `Stopped` and bash 3.2 still calls it `Running`, having never been told. It is the visible half of the same fault — a shell whose background jobs are waited for in a way that cannot report a stop says `Running` about a process that is going nowhere — and it is asked under the monitor because with the monitor off every bash says `Running` here by agreement rather than by oversight",
+	},
+	{
 		ID: "jobs/a-subshell-and-the-parents-jobs", Category: "builtins",
 		Snippet: `sleep 0.4 & first=$!; (jobs -p) >s.txt; x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait`,
 		Why:     "ksh93 alone hands a subshell the jobs the shell around it started; bash, dash and zsh hand it an empty table. Through a file rather than by printing the id, because a process id is not the same twice — and with commands after the `( … )`, because a subshell that is the last thing a script does need not be a subshell at all: without them dash answers the parent's job instead",
@@ -4430,6 +4491,61 @@ echo "st=$?"`,
 		ID: "read/a-count-that-crosses-the-delimiter", Category: "builtins",
 		Snippet: `printf "ab\ncd" | { read -N 4 v; echo "st=$? [$v]"; }`,
 		Why:     "-N is the count that means it: the delimiter stops counting for -n and is just another character for -N, so bash 5.3 and ksh93 read `ab`, the newline, and the `c` after it into one variable. bash 3.2 has no such letter and answers with its usage, and zsh has neither -N nor a usage to print",
+	},
+	{
+		ID: "read/keys-from-a-descriptor", Category: "builtins",
+		Snippet: `printf 'abcdef' | { read -k 2 -u 0 v; echo "st=$? [$v]"; }`,
+		Why:     "zsh's -k reads that many characters rather than a line. -u is what makes it testable without a terminal: the letter otherwise reads the terminal the shell holds and ignores the stream entirely. The other five have no such letter and say so their own way",
+	},
+	{
+		ID: "read/keys-without-a-count-is-one", Category: "builtins",
+		Snippet: `printf 'abcdef' | { read -k -u 0 v; echo "st=$? [$v]"; }`,
+		Why:     "the count is optional and defaults to one, which is the spelling a plugin waiting for a keystroke uses. It is also the shape that tells this letter from every other count in the panel: bash's -n and ksh93's -N refuse to be given without a number",
+	},
+	{
+		ID: "read/keys-count-what-the-locale-calls-a-character", Category: "builtins",
+		Snippet: `printf 'h\303\251llo' | { read -k 2 -u 0 v; read -k 2 -u 0 w; printf '%s' "$v$w" | od -An -tx1; }`,
+		Why:     "the count is in whatever the locale calls a character, which is the same split `${#s}` answers rather than a decision this letter makes. The harness pins LC_ALL=C, so the shell with the letter takes `h` and the accented letter's lead byte and then its tail and an `l` — four bytes across two reads. Under a UTF-8 locale the first read would take all three bytes of `hé`, which is why the bytes are dumped rather than printed: the value is not text in one of the two readings",
+	},
+	{
+		ID: "read/keys-do-not-stop-at-a-newline", Category: "builtins",
+		Snippet: `printf 'a\nb' | { read -k 3 -u 0 v; echo "st=$? len=${#v}"; }`,
+		Why:     "nothing is a terminator for -k, the newline included, which is what separates it from every other spelling of read. The length is asserted rather than the value because the value contains the newline",
+	},
+	{
+		ID: "read/keys-short-read-keeps-what-came", Category: "builtins",
+		Snippet: `printf 'ab' | { read -k 5 -u 0 v; echo "st=$? [$v]"; }`,
+		Why:     "fewer characters than asked for is a failure that still assigns, which is the shape read's ordinary end of input has: the status says the count was not met and the variable says what did arrive",
+	},
+	{
+		ID: "read/keys-of-nought-reads-nothing", Category: "builtins",
+		Snippet: `printf 'abcdef' | { v=keep; read -k 0 -u 0 v; echo "st=$? [$v]"; }`,
+		Why:     "a count of nought is a failure and not a satisfied read of nothing, and it still clears the variable — the assignment happens before the status is decided, so `keep` does not survive it",
+	},
+	{
+		ID: "read/keys-fill-one-name-only", Category: "builtins",
+		Snippet: `printf 'a b c d' | { w=keep; read -k 5 -u 0 v w; echo "st=$? [$v] w=[$w]"; }`,
+		Why:     "three facts in one line: the five characters go into the first name whole with no field splitting, the names after it are left exactly as they were, and that is where -k differs from -N, which hands the text to the first name and clears the rest",
+	},
+	{
+		ID: "read/keys-default-to-reply", Category: "builtins",
+		Snippet: `printf 'abcdef' | { read -k 3 -u 0; echo "st=$? [$REPLY]"; }`,
+		Why:     "no name is the same default the rest of read has, which is worth pinning beside the count: `read -k 3` reads three characters and `read -k` reads one, so a bare word after the letter could plausibly have been either a count or a name",
+	},
+	{
+		ID: "read/keys-need-a-terminal", Category: "builtins",
+		Snippet: `printf 'abcdef' | { read -k v; echo "st=$? [$v]"; }`,
+		Why:     "without -u the letter reads the terminal the shell holds and not the stream in front of it, so a pipe is not a source at all — the refusal carries no location and no builtin name, which is the one complaint this builtin makes that way",
+	},
+	{
+		ID: "read/keys-ignore-a-redirected-input", Category: "builtins",
+		Snippet: `printf 'abcdef' > f; { read -k 2 v < f; echo "st=$? [$v]"; }`,
+		Why:     "the same fact from the other side and the sharper half of it: redirecting standard input does not redirect -k. The file is left unread and the refusal is the terminal one, where every other spelling of read would have taken two characters from it",
+	},
+	{
+		ID: "read/keys-attached-count-must-be-a-number", Category: "builtins",
+		Snippet: `read -k2v x; echo "st=$?"`,
+		Why:     "the attached spelling commits the whole remainder of the word to being the number, so `2v` is refused rather than read as a count of two and a letter v. `read -kv` is the other side of it and is a bad option, because a non-digit after the letter means the letter took no argument at all",
 	},
 	{
 		ID: "read/an-escaped-separator-closing-a-remainder", Category: "builtins",
@@ -5513,6 +5629,11 @@ echo "st=$?"`,
 		Why:     "a modifier reads its own text rather than a value, and it is the only operand of a `${ }` that does — so the backslash has to survive as far as the modifier. The escaped delimiter is what holds the first field open; the two ampersand fields are the pair that says the escapes and the matched text are answered in one pass, since `\\&` is the character and `\\\\&` is a backslash followed by the match. The escape was removed before the modifier saw anything here: the first field arrived empty, which is this modifier's spelling for the previous substitution, and reported there had not been one (#1198). The other three read the whole range as arithmetic and refuse it, which is why the status is the last line",
 	},
 	{
+		ID: "param/a-substring-modifier-reads-its-own-quotes", Category: "parameter expansion",
+		Snippet: `x="a'.'b"; y=a.b; w=aQb; a=X; z='a$ab'; echo "[${x:s/'.'/:/}][${y:s/'.'/:/}][${w:s/'Q'/X/}][${z:s/'$a'/Q/}][${y:s/\./:/}]"; echo "st=$?"`,
+		Why:     "the other half of the backslash row above, and the half that is not the same fix: a brace's body is read raw in the shell with modifiers, so a quote inside it is an ordinary character of the operand that reads its own text. Fields one and two are each other's control — the pattern the quotes are part of matches the value that holds them and misses the one that does not — and field three says it with no metacharacter anywhere, so nothing about patterns can be what is being measured. Field four is the sharper claim: the text is not *expanded* either, so a `$a` between quotes is three characters and not the value of `a`, which a word joined from spans cannot say. Field five is the workaround a script would write and the row that must not move. The other three read the whole range as arithmetic and refuse it, which is why the status is the last line (#1860)",
+	},
+	{
 		ID: "param/a-substring-modifier-after-an-offset-and-a-length", Category: "parameter expansion",
 		Snippet: `x=/tmp/Dir/File.Txt.gz; t=0; echo "[${x:1:5:t}]"; echo "st=$?"`,
 		Why:     "a modifier after **both** an offset and a length, which is a third shape rather than a variation of either: the tail of the five characters from offset one. The parser splits a range once, so `5:t` arrives whole — it reached the evaluator as an expression here and was an arithmetic failure over a range the shell with modifiers reads without complaint",
@@ -5717,6 +5838,16 @@ echo "st=$?"`,
 		Why:     "`n` asks for the nth match rather than the first and `b` moves where the search starts, forwards for `r` and backwards for `R`. The last of the four is the one worth a row of its own: a start past the end is *not* clamped to the end, so a reverse search from 6 over five elements finds nothing rather than finding the fifth",
 	},
 	{
+		ID: "array/a-comma-that-arrives-through-a-substitution", Category: "expansion",
+		Snippet: `a=(p q r s); i="2,3"; printf "[%s]" "${a[$i]}" "${a[2,3]}" "${a[$i,4]}"; echo`,
+		Why:     "where a subscript's pair is separated, which is at a comma the **source** wrote and not at one a substitution brought in. The one shell with ranges reads the first field as a single subscript whose expression stops at the comma -- the second element -- and the second as the pair it was typed as; the third has both in one subscript, so the written comma separates and the substituted one stops the first end. A reading that split the expanded text answers a two-element range to the first field, which is a plausible list at status 0. The other columns have no ranges and read the comma as the arithmetic operator, so the first two fields are their third element and the third field is a bad subscript in some and the fourth element in others -- all of which is what makes the pair a dialect question rather than a fault (#2160)",
+	},
+	{
+		ID: "array/a-substituted-comma-on-the-left-of-an-assignment", Category: "expansion",
+		Snippet: `a=(p q r s); i="1,2"; a[$i]=Z; printf "[%s]" "${a[@]}"; b=(1 2 3); b[1,2,3]=Z; printf "[%s]" "${b[@]}"; echo`,
+		Why:     "the same rule on the left, and the pair of shapes that says it is about where the comma came from rather than about the character. The shell with ranges writes the *first element* of `a` and leaves the other three, because nothing separated a pair; and it replaces the whole span 1 through 3 of `b`, because the first comma was written and the arithmetic gets the `2,3` behind it, which is 3. Splitting the expanded text answers a two-element span to the first and a two-element span to the second, and both come back as plausible arrays at status 0. The columns without ranges write one element in both, at the subscript the comma operator names (#2160)",
+	},
+	{
 		ID: "array/a-subscript-flag-group-in-each-end-of-a-range", Category: "expansion",
 		Snippet: `s="hello world"; printf "[%s]" "${s[(r)l,(r)o]}" "${s[3,(r)o]}" "${s[(r)w,-1]}" "${s[(r)zz,-1]}" "${s[(R)zz,-1]}"; a=(p "q,r" s); printf "[%s]" "${a[(r)q,r]}"; echo`,
 		Why:     "each end of a range carries a flag group of its own, and a search in one answers with the *index* it matched at rather than with the element — so `${s[(r)l,(r)o]}` is `${s[3,5]}`. The two misses are the two out-of-range indices and not `no match`, which is what the fourth and fifth fields separate: a missed forward search starts one past the last character and bounds nothing, a missed reverse one starts one before the first and bounds everything. The last field is the discriminating one and the reason the split cannot wait for the run — an element whose *value* holds a comma is not what the search finds, so the pair is separated in the text as written and `(r)q` is the whole operand. Ours read the group at the front as the whole subscript's, left the second inside its operand, and answered empty at status 0 to every one of them (#1533)",
@@ -5849,6 +5980,26 @@ echo "st=$?"`,
 		ID: "param/where-the-ordering-step-sits", Category: "parameter expansion",
 		Snippet: `a=(zb ya); printf "[%s]" "${(@o)a#z}"; a=(B a); printf "[%s]" "${(@oU)a}"; a=(c a b); printf "[%s]" "${(oj.-.)a}"; printf "[%s]" "${(o)a}"; echo`,
 		Why:     "where the step sits, in four answers that would each be different if it sat anywhere else: the operator has already run, so trimming `z` off `zb` puts it first; the case conversion has already run, so `(B a)` uppercased sorts as `A B` and not `B A`; a forced join has already made one word, which is in order however it was written; and the quoted join without `(@)` does the same. None of it is what the rule numbers suggest by name",
+	},
+	{
+		ID: "param/a-flag-group-error-names-the-rest-of-its-word", Category: "parameter expansion",
+		Snippet: `v=x; print -r -- A${(g:x:)v}B tail; echo done`,
+		Why:     "the text a flag-group error quotes is the rest of the **word**, and this one probe separates all three readings of what that means: the expansion alone would say `${(g:x:)v}`, the rest of the line would carry ` tail` with it, and the word carries the `B` and stops at the blank. Written unquoted on purpose — the quoted spellings elsewhere in this file end in a closing quote that a reading taking the expansion alone would also drop, so they cannot tell the word from the line. The other five columns have no flag group and refuse the construct at four wordings and three statuses; the error is fatal to the whole input in every one of them, which is why the probe is one line and not three (#1647)",
+	},
+	{
+		ID: "param/a-scalar-context-joins-a-flag-groups-words", Category: "parameter expansion",
+		Snippet: `f() { printf "b  b\na a\nc\n"; }; x=${$(f)}; printf "[%s]" "$x"; x=${(j:-:)$(f)}; printf "[%s]" "$x"; x=${(o)$(f)}; printf "[%s]" "$x"; x=${(q)$(f)}; printf "[%s]" "$x"; x=${(l:3::_:)$(f)}; printf "[%s]" "$x"; printf "[%s]" ${(o)$(f)}; echo`,
+		Why:     "an assignment has room for exactly one word, so the group's words are joined and every step below the join finds one. The double space is the instrument: a value left whole and a value split and rejoined are the same nine characters without it. The first two fields are the controls — the split happens and the separator the group named is honored — and the third is #1705, a sort with nothing left to order. The last field is that row's refutation: the same characters on a command line sort five fields, so it is the context and not the flag. Fields four and five fix the join from below, the quoting escaping the spaces the join made and the pad clipping the nine characters rather than measuring three of them",
+	},
+	{
+		ID: "param/a-scalar-context-does-not-split-a-flag-group", Category: "parameter expansion",
+		Snippet: `v=c,a,b; x=${(s:,:)v}; printf "[%s]" "$x"; printf "[%s]" ${(s:,:)v}; printf "[%s]" "${(s:,:)v}"; x=${(@s:,:)v}; printf "[%s]" "$x"; case ${(s:,:)v} in "c,a,b") printf "[case-unsplit]";; *) printf "[case-split]";; esac; [[ ${(s:,:)v} == "c,a,b" ]] && printf "[cond-unsplit]"; echo`,
+		Why:     "the same rule reaching the splitting flags, which the `=` spelling has always followed and which `f`, `s`, `0` and `p` follow with it. Fields two and three are the discriminating pair: a split the *quoting* turned off would answer one field in the third, and a split nothing turns off would answer three in the first. The `@` letter does not turn it back on, and the last two fields say it is the context rather than the assignment — a `case` subject and a `[[ ]]` operand read the same unsplit word",
+	},
+	{
+		ID: "param/where-a-scalar-contexts-join-sits", Category: "parameter expansion",
+		Snippet: `y=(ab ab); x=${(j:+:)y#ab}; printf "[%s]" "$x"; x="${(j:+:)y#ab}"; printf "[%s]" "$x"; x=${(j:+:)y}; printf "[%s]" "$x"; z=(x y); x=${(@)z:/x/Q}; printf "[%s]" "$x"; u='b a'; x=${(oZ+n+)u}; printf "[%s]" "$x"; printf "[%s]" ${(oZ+n+)u}; echo`,
+		Why:     "below the operator and above everything else, which the first two fields say together: the same characters in the same assignment, unquoted leaving only the separator because the trim emptied both elements, and quoted leaving `+ab` because the join at rule 5 ran first and the trim took one `ab` off the pair it made. The third field is the control with no trim at all. The element replacement is the same claim from the other side, running elementwise where a join ahead of it would have found one word. The last two are the shell split, which is the one step *below* the join that can make a list again — so the join is repeated after it, and the ordering finds one word where the same expansion on a command line sorts two",
 	},
 	{
 		ID: "param/the-index-is-an-ordering-key", Category: "parameter expansion",
@@ -9334,6 +9485,11 @@ echo "st=$?"`,
 		Why:     "the one subscript on the *base* that is not read as an index. Every other one naming nothing is no name — `[4]` and `[-4]` are empty — and the index before the first resolves the base's whole value as though none had been written, which is `p q` and not the empty `${n[0]}` beside it. The second bracket says it is the value the expression comes to rather than the numeral, since `1-1` answers alike. A corner no script can depend on, recorded because the alternative answer is an empty at status 0 (#1852)",
 	},
 	{
+		ID: "expansion/a-write-through-a-reference-reaches-every-subscript", Category: "expansion",
+		Snippet: `a=(p q); v='a[(r)q]'; : ${(P)v::=Z}; printf "[%s]" "${a[@]}"; x=(p q r); w='x[1,2]'; : ${(P)w::=Y}; printf "[%s]" "${x[@]}"; echo`,
+		Why:     "an assignment through the indirection flag, where the resolved text is read as the parameter expansion it spells rather than taken apart by hand into a name and one arithmetic subscript. The search writes the element it found; the range replaces the **span**, so the array comes back shorter. The second is the one that was silent -- `1,2` reaching the arithmetic as one expression makes the comma operator answer 2, and the write lands on that element instead, which is a plausible array at status 0. Only one shell in the panel has the flag; the rest read the same characters as a substring and fail in arithmetic, each in its own words (#2169)",
+	},
+	{
 		ID: "unset/a-subscript-flag-group-names-the-element", Category: "expansion",
 		Snippet: `b=(x y z); w=y; unset "b[(r)$w]"; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`,
 		Why:     "`unset` is the third side of the subscript flag group, and the one where the subscript arrives as a runtime *string* rather than as a word the parser lexed — so the group had nowhere to hang its operand and the whole of `(r)y` went to the arithmetic as `bad math expression`. zsh finds the element whose value matched and removes it, leaving the array three long with an empty one in the middle, which is that shell's answer for `unset a[i]` generally and already an axis here; all the group decides is which element. The operand is written through a parameter on purpose: it is the half a scan-the-text fix gets wrong, since the value has to be substituted before the search runs. The other five have no flag group in a subscript and read the brackets as arithmetic (#1275)",
@@ -9506,6 +9662,33 @@ echo "st=$?"`,
 		Snippet: `[[ -n x
  ; ]]; echo "st=$?"`,
 		Why: "and the reason bash's extra line carries a location of its own: the construct is named at the `[[`'s line and the token at the token's, so a condition opened on line 1 and refused on line 2 names both. One line would have looked right in every single-line case above",
+	},
+	{
+		ID: "decl/an-exported-array-in-a-child-environment", Category: "parameter expansion",
+		Snippet: `export b=1; typeset -x c=(p q); env | grep -c '^[bc]=' ; env | grep '^c=' || echo none`,
+		Why:     "what a child sees for an exported name holding an **array**, which is a name a child either has or has not -- there being no environment representation for a compound to have a different one of. bash and zsh hand it nothing; ksh93 hands it the array's *first element*. The count and the entry are both printed because the count alone cannot say which name arrived: `b=1` is the control and reaches a child in every column, so what the row separates is the compound from the export. dash has no arrays and reads the parentheses as a syntax error. This shell handed a child the first element under every dialect and an empty entry for an empty array, which is nobody's answer (#1380)",
+	},
+	{
+		ID: "decl/an-exported-array-with-nothing-in-it", Category: "parameter expansion",
+		Snippet: `typeset -x a=(); echo "st=$?"; env | grep '^a=' || echo none`,
+		Why:     "the same export with nothing to export, which is a third answer and the reason the emptiness is not folded into the row above: ksh93 refuses the declaration outright -- `only simple variables can be exported` -- where bash and zsh take it and hand a child nothing. Both of the answers the axis offers give a child nothing here, so what this row records is the refusal and its status rather than a value (#1380)",
+	},
+	{
+		ID: "decl/a-subscripted-operand-with-no-value", Category: "parameter expansion",
+		Snippet: `typeset a[3]; echo "st=$? n=${#a[@]}"; typeset -p a 2>&1; a=(x y); typeset a[3]; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "a declaration whose operand is subscripted and carries **no value**, which declares the *name* as an array and writes no element: `${#a[@]}` is 0 in bash and ksh93 alike and an array already standing is left as it is, which the second half is the control for. zsh reaches none of it -- a declaration operand holding no `=` is a glob there, and no file is named `a[3]` -- and bash 3.2 answers as bash 5 does. It used to declare a variable literally named `a[3]`, invisible to `${a[3]}` and to `typeset -p a`, at status 0, so a script declaring an array this way had none (#1380)",
+	},
+	{
+		ID: "decl/an-array-letter-over-a-declared-table", Category: "parameter expansion",
+		Snippet: "typeset -A h 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`h[k]=v; typeset -a h; echo "st=$?"; typeset -p h; echo after`,
+		Why: "one kind of array declared over the other, which the three columns with both attributes answer three ways. bash refuses, names the builtin as it was invoked and the name after it, leaves the table exactly as it was, reports 1 and runs the next command. ksh93 refuses too and **ends the script**, so neither the status nor the listing nor the `after` is reached -- which is what makes the two refusals two answers rather than one wording. zsh converts and the element is gone, at status 0. Every one of the four things printed is load-bearing: the status separates the refusal from the conversion, the listing separates a table that survived from one that did not, and `after` separates the two refusals from each other. bash 3.2 has no `-A` and dash no `typeset` (#1375)",
+	},
+	{
+		ID: "decl/a-table-letter-over-a-declared-array", Category: "parameter expansion",
+		Snippet: "typeset -A junk 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`typeset -a a=(x y); typeset -A a; echo "st=$?"; printf "[%s][%s]" "${a[0]}" "${a[1]}"; echo " after"`,
+		Why: "the same collision from the other side, and the row that says it is two questions and not one: ksh93 refuses the direction above fatally and **converts** this one without losing anything, carrying the elements over as the keys `0` and `1`. bash refuses in the other direction's words and keeps the array; zsh converts and takes the values away. The elements are read back by subscript rather than listed, because that is what separates ksh93's answer from zsh's -- both list a table, and only one of them still has the values in it. The `-A` probe on a throwaway name is what keeps the columns without the attribute out (#1375)",
 	},
 	{
 		ID: "decl/an-array-assignment-as-an-operand", Category: "parameter expansion",
@@ -9990,6 +10173,11 @@ echo unreachable`,
 		ID: "arith/a-zero-padded-value-with-more-expression-after-it", Category: "arithmetic",
 		Snippet: `k=010+1; j=1+010; echo "$((k)) $((j)) $((010+1))"`,
 		Why:     "how far the decimal reading reaches: on the shell that splits it is the value's *leading* numeral only, so `010+1` is 11 where `1+010` and the written literal are both 9. Without the second and third fields a rule that read every numeral in a value decimally would pass",
+	},
+	{
+		ID: "arith/a-values-leading-zeros-in-front-of-a-name", Category: "arithmetic",
+		Snippet: `abc=5; b101=9; x10=7; k=0abc; ( echo "name=$(( k ))" ); echo "s1=$?"; k=0b101; ( echo "bin=$(( k ))" ); echo "s2=$?"; k=0x10; ( echo "hex=$(( k ))" ); echo "s3=$?"; k=00x10; ( echo "two=$(( k ))" ); echo "s4=$?"`,
+		Why:     "what the same reading does when the zeros stand in front of something that is not a digit. ksh93 takes them off there too — `0abc` is the name `abc` and `0b101` the name `b101` — so this is not a rule about zero-padded numerals. The exception is the third field: one zero in front of an `x` is a radix prefix and survives, which is why `0x10` is sixteen while `00x10`, where two zeros cannot be a prefix, is the name `x10` again. Those last two are the pair that pins the rule; without them a reader that stripped every leading zero and one that stripped none both pass. Each field is run in a subshell because the failure is fatal in four columns. zsh answers the binary field 5, having no octal to fall back from (#1627)",
 	},
 	{
 		ID: "arith/a-zero-padded-numeral-in-a-let-word", Category: "arithmetic",
@@ -10893,6 +11081,31 @@ printf 'TWO=still-running\n'`,
 		ID: "test/bare-terminal-test-is-descriptor-one", Category: "test",
 		Snippet: `[ -t ] >/dev/null; echo "bare=$?"; test -t >/dev/null; echo "tbare=$?"; [ ! -t ] >/dev/null; echo "not=$?"; [ -f ] >/dev/null; echo "f=$?"`,
 		Why:     "the BareTerminalTestIsDescriptorOne axis. With one argument POSIX gives `test` the string rule, and `-t` is a non-empty string: dash, bash, bash-as-sh and bash 3.2 answer 0, where ksh93 and zsh read it as `-t 1` and answer about the descriptor. Descriptor 1 is redirected to the null device so the split is a fact about the reading rather than about the run; `[ -f ]` is beside it because it is 0 in all six, which says the exception is the one word and not a general rule about an operator with no operand",
+	},
+	{
+		ID: "test/comparison-operands-are-arithmetic", Category: "test",
+		Snippet: `n=5; [ n -eq 5 ]; echo "name=$?"; [ 1+1 -eq 2 ]; echo "expr=$?"; [ 16#10 -eq 16 ]; echo "based=$?"; n=5; [ "n=9" -eq 9 ]; echo "assign=$? n=$n"`,
+		Why:     "the TestBuiltinComparisonOperandsAreArithmetic axis. ksh93 reads the operands of the word-spelled comparisons as arithmetic expressions, the way every shell reads `[[ ]]`'s: a bare name is its value, `1+1` is two, a based numeral is a number, and an assignment written in an operand *lands* — the last field is 9 there and 5 in the five columns that want a numeral and name the word that is not one. Recorded on `[` rather than `[[ ]]` because that construct is unanimous (#1626)",
+	},
+	{
+		ID: "test/a-comparison-operand-that-will-not-read", Category: "test",
+		Snippet: `[ 1x1 -eq 0 ]; echo "st=$?"; [ 3/0 -eq 0 ]; echo "div=$?"; echo after`,
+		Why:     "the other side of the same axis: what happens to text neither reading can use. Five columns say `integer expected` in their own words at 2, and ksh93 raises the *arithmetic's* complaint — `[: 1x1: arithmetic syntax error`, `[: 3/0: divide by zero` — at 1, behind the name the builtin was called by. The trailing `after` is the part worth pinning beside it: the refusal is loud in every column and fatal in none, where the identical words inside `[[ ]]` take ksh93's script with them (#1626)",
+	},
+	{
+		ID: "test/a-comparison-operands-leading-zeros", Category: "test",
+		Snippet: `x10=7; [ 010 -eq 10 ]; echo "dec=$?"; [ 0x10 -eq 16 ]; echo "hex=$?"; [ 0x10 -eq 7 ]; echo "name=$?"; [ 1+0x10 -eq 17 ]; echo "inner=$?"`,
+		Why:     "how far ksh93's leading-zero rewrite reaches in a comparison operand. `010` is ten there rather than the eight its own `$(( ))` reads, and the zeros come off in front of an `0x` prefix too, so `0x10` is the *name* `x10` — sixteen in the second field is false and seven in the third is true. The fourth is the control: with something in front of the zero there is nothing to take off, so `1+0x10` is seventeen and the reader plainly does have hex in it. The other five columns want a numeral and refuse every field but the first (#1627)",
+	},
+	{
+		ID: "test/a-terminal-test-descriptor-too-wide", Category: "test",
+		Snippet: `[ -t -1 ]; echo "m1=$?"; [ -t -2 ]; echo "m2=$?"; [ -t 4294967295 ]; echo "wrap=$?"; [ -t 4294967296 ] </dev/null; echo "zero=$?"; [ -t 9223372036854775807 ]; echo "max=$?"`,
+		Why:     "the two axes over what `-t`'s operand is converted to. ksh93 reads it at the width of a machine int, so 4294967295 and the largest integer it can hold both narrow to -1 — and -1 answers true whatever the shell is holding, which is what the first field shows with no terminal anywhere. `-2` is false in all six, so it is the one value and not a rule about negative descriptors, and 4294967296 narrows to descriptor 0, redirected here to the null device, which is what makes the reading a *narrowing* rather than `a big number is true`. Every other column answers a descriptor nothing is open at false however it was spelled (#2000)",
+	},
+	{
+		ID: "test/a-terminal-test-descriptor-past-the-integer", Category: "test",
+		Snippet: `[ -t 9223372036854775808 ]; echo "big=$?"; [ -t 99999999999999999999 ]; echo "wide=$?"`,
+		Why:     "an operand too wide for the shell's own integer, which is where the narrowing above becomes visible in a run with no terminal in it. bash and dash convert first and refuse what will not fit, at 2 with their integer wordings; ksh93 saturates and narrows to -1, which is true; bash 3.2 and zsh answer a quiet false. Ours owes zsh a warning here — that shell truncates *any* number past nineteen digits and says so, in arithmetic and `printf` as much as in `test`, which is a reader of its own and not this operand's question. Kept as a row because it is the only place a run without a terminal can tell a narrowed descriptor from a refused one (#2000)",
 	},
 
 	// --- times: the last special builtin, and the most divergent for its size
@@ -13960,6 +14173,11 @@ echo "st=$? alive"`,
 		ID: "opt/command-tracking-has-two-long-names", Category: "shell options",
 		Snippet: `set -o hashall 2>/dev/null; echo "hashall=$?"; set -o trackall 2>/dev/null; echo "trackall=$?"`,
 		Why:     "the same idea under two names, and the membership is not the clean split it looks like: bash has hashall alone, ksh93 trackall alone, and zsh has *both* — so a dialect table that gives trackall to ksh93 only is wrong, which is how this row came to exist",
+	},
+	{
+		ID: "opt/command-tracking-starts-on-where-the-letter-says-so", Category: "shell options",
+		Snippet: `trk() { set -o 2>/dev/null | grep -E "^(hashall|trackall)" | tr -s "[:blank:]" "="; }; trk; case $- in *h*) echo "letter=in";; *) echo "letter=out";; esac; case $- in *h*) set +h;; esac; trk; case $- in *h*) echo "after=in";; *) echo "after=out";; esac`,
+		Why:     "the letter and the listing are one fact, asked in both spellings and on both sides of a withdrawal: the three bash columns and ksh93 start command tracking *on*, carry `h` in `$-` for it, and drop both together on `set +h`, where dash has no such option and zsh has the name under a spelling this grep does not match and no `h` to lose. Ours had the letter without the state — `$-` said `h` and `set -o` said off in a shell that had run nothing, and `set +h` could not take the letter back out because nothing stood behind it (#1951). The withdrawal is guarded by the letter rather than written outright because dash makes `set +h` a fatal usage error and the row would end there",
 	},
 	{
 		ID: "opt/an-unknown-long-name-is-refused", Category: "shell options",
@@ -19007,6 +19225,16 @@ echo "st=$?"`,
 		ID: "param/keyed-table-as-a-scalar", Category: "arrays",
 		Snippet: `setopt ksharrays 2>/dev/null; typeset -A m 2>/dev/null; m[a]=1; m[b]=2; echo "[$m]"; echo "st=$?"`,
 		Why:     "a plain `$m` where `m` is a keyed table and the dialect has already said a bare name is one element. Two columns look up the key `0` and hand back nothing; the shell that reads a table as an ordered list hands back the first value in its own order. The `setopt` is what puts that shell in the state where a bare name is one element at all -- without it the same name is the whole table and the question is never asked -- and it is guarded because the other five have no such builtin (#2057)",
+	},
+	{
+		ID: "declare/a-hash-in-a-listed-value", Category: "declarations",
+		Snippet: `a=16#ff; typeset -p a; b="#lead"; typeset -p b; c="tail#"; typeset -p c; d="a#b"; typeset -p d; e=99#zz; typeset -p e; f=1a#b; typeset -p f; g="a.b#c"; typeset -p g`,
+		Why:     "which `#` a listing has to quote. bash and zsh quote all seven and ksh93 quotes three: what it leaves bare is a `#` with no *name* in front of the first one. That is not the same rule as `a value that spells a based number`, which is what #1271 proposed — `99#zz` names no base and `16#gg` has no digits for the one it names, and both come out bare, while `1a#b` and `a.b#c` are bare for having no name in front and `a#b` and `ab#` are quoted for having one. `#lead` is the position where a comment would begin and is quoted everywhere. dash has no `typeset` at all",
+	},
+	{
+		ID: "declare/an-output-base-at-the-ends-of-the-alphabet", Category: "declarations",
+		Snippet: `typeset -i65 d=100; echo "[$d]"; typeset -p d; typeset -i1 b=5; typeset -p b; typeset -i16 e=255; typeset -i0 e; typeset -p e; typeset -i16 a=255; typeset -i1 a; typeset -p a`,
+		Why:     "the bases at the two ends of ksh93's alphabet, which zsh reaches none of — it refuses everything outside 2 to 36 by name, and bash has no base on `-i` at all. A base **past** the end is kept and rendered in ten *with the mark on*: `typeset -i65 d=100` reads `10#100` and lists as `typeset -i 65 d=10#100`, so the 65 is stored and only the spelling gives way. A base **below** two records nothing, so `typeset -i1 b=5` lists with no base word. And 1 and 0 are not one rule — over a name that already has a base, 1 takes it off the way `-i10` and a bare `-i` do, and 0 leaves it exactly where it is, which is the last two fields. The bash 3.2 column differs from the bash one on the usage string and the line number of an invalid option, which is that build's own and older than any of this (#1308)",
 	},
 	{
 		ID: "declare/listing-a-control-byte", Category: "declarations",

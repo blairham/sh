@@ -71,6 +71,14 @@ type ValueUse struct {
 // core and posix are deliberately absent. Neither imitates a member of the
 // panel — the core refuses where the panel disagrees and posix answers to the
 // standard — so a value only they hold is not a shell exhibiting it.
+//
+// ash is absent for a different reason, and it is worth stating because the
+// next reader will ask. Both lists here read the *absence* of an answer as an
+// answer: an axis nobody has measured in ash holds Unspecified, which would
+// count as a fifth reading and quietly clear the unanimity of every axis the
+// other four agree on. Whether a dialect answers an axis at all is a
+// different question from what the answer is, and it is asked in coverage.go
+// — over every dialect, ash included.
 func dialectPresets() map[string]interp.Semantics {
 	out := map[string]interp.Semantics{}
 	for _, t := range Targets() {

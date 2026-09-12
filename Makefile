@@ -56,7 +56,7 @@ SHELLS := sh bash zsh ksh dash ash
 FUNCSRC := share/sh/functions
 FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage coverage wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
 
 all: build
 
@@ -214,10 +214,28 @@ acp-wire: ## Print a real annotated ACP session, message by message, for showing
 # Deliberately not in `check`, and the comment is the rule: this is thousands
 # of shell processes against a 3000-row corpus, on demand. See the `lint`
 # comment above for what wiring a slow thing into every commit costs here.
+# The denominator axis-sweep does not cover: what nothing ever *asks* about.
+# Report-only and cheap — it parses the corpus and reads the tree's own
+# tables, and starts no shell at all — so unlike the sweep above there is
+# nothing here to schedule around. Still not in `check`: it is a work-list
+# rather than a gate, and an element nobody has written a case for yet is not
+# a broken build.
+coverage: ## Report, per dialect, every builtin, node kind and operator no case mentions (#2293)
+	@go run ./internal/cmd/coverage $(ARGS)
+
 axis-sweep: ## Move every axis in interp.Semantics and report the ones nothing objected to (#2031)
 	@mkdir -p $(BINDIR)
 	@go build -tags shaxissweep -o $(BINDIR)/axis-sh ./cmd/sh
 	@go run ./internal/cmd/axissweep -bin $(BINDIR)/axis-sh $(ARGS)
+
+# The other question, and the cheap one: not whether anything objects when an
+# axis moves, but whether each dialect answers it at all. No shell is run, so
+# unlike the sweep above this *is* gated -- as a test, in `go test ./...`, and
+# so in `make check`. This target is the same check with its report printed,
+# for reading and for `ARGS=-write` after an axis has been measured. See
+# internal/axissweep/coverage.go for why the ledger is committed (#2340).
+axis-coverage: ## Report every interp.Semantics axis a dialect does not answer, ash included (#2340)
+	@go run ./internal/cmd/axissweep -coverage $(ARGS)
 
 sandbox: ## Try every way a script has of reaching the filesystem, against the shipped binaries, and report what the boundary stopped
 	@mkdir -p $(BINDIR)

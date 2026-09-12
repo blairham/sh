@@ -235,10 +235,21 @@ func (e *editor) below(prompt drawnPrompt, text string) {
 
 // pushBack keeps a byte for the caller's next read.
 //
-// One byte is enough, and it is enough for the reason the mode exists: exactly
-// one key ends the search, and it is that key the caller has to see. A queue
-// would be a queue with one thing in it.
-func (e *editor) pushBack(c byte) { e.pushed, e.hasPushed = c, true }
+// One byte is all this mode ever needs, and it is for the reason the mode
+// exists: exactly one key ends the search, and it is that key the caller has
+// to see. It goes on the front of the same queue pushKeys uses rather than in
+// a field of its own, because two places putting input back with two answers
+// to "which comes first" is how a pushed key gets read out of order.
+func (e *editor) pushBack(c byte) { e.pushed = append([]byte{c}, e.pushed...) }
+
+// pushKeys is the same for an action outside the editor putting characters
+// back — see Actions.PushKeys, and editoractions.go for what reaches it.
+//
+// In front of whatever is already pushed, and that is measured rather than
+// convenient: two pushes inside one widget come back newest first, each push's
+// own characters in the order they were given. Pushing `ab` and then `cd`
+// leaves `cdab` on the line.
+func (e *editor) pushKeys(s string) { e.pushed = append([]byte(s), e.pushed...) }
 
 // bell is what a terminal is asked to do about a search that found nothing.
 // Both shells ring it, and it is the only report available: there is nowhere

@@ -5790,6 +5790,50 @@
         "TimedOut": false
       }
     },
+    "arith/a-values-leading-zeros-in-front-of-a-name": {
+      "bash": {
+        "Stdout": "s1=1~s2=1~hex=16~s3=0~s4=1",
+        "Stderr": "\u003cshell\u003e: line 1: 0abc: value too great for base (error token is \"0abc\")~\u003cshell\u003e: line 1: 0b101: value too great for base (error token is \"0b101\")~\u003cshell\u003e: line 1: 00x10: value too great for base (error token is \"00x10\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "s1=1~s2=1~hex=16~s3=0~s4=1",
+        "Stderr": "\u003cshell\u003e: line 1: 0abc: value too great for base (error token is \"0abc\")~\u003cshell\u003e: line 1: 0b101: value too great for base (error token is \"0b101\")~\u003cshell\u003e: line 1: 00x10: value too great for base (error token is \"00x10\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "s1=1~s2=1~hex=16~s3=0~s4=1",
+        "Stderr": "\u003cshell\u003e: 0abc: value too great for base (error token is \"0abc\")~\u003cshell\u003e: 0b101: value too great for base (error token is \"0b101\")~\u003cshell\u003e: 00x10: value too great for base (error token is \"00x10\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "s1=2~s2=2~hex=16~s3=0~s4=2",
+        "Stderr": "\u003cshell\u003e: 1: Illegal number: 0abc~\u003cshell\u003e: 1: Illegal number: 0b101~\u003cshell\u003e: 1: Illegal number: 00x10",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "name=5~s1=0~bin=9~s2=0~hex=16~s3=0~two=7~s4=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "s1=1~bin=5~s2=0~hex=16~s3=0~s4=1",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operator expected at `abc'~\u003cshell\u003e:1: bad math expression: operator expected at `x10'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arith/a-whole-float-keeps-its-point": {
       "bash": {
         "Stdout": "",
@@ -9970,6 +10014,50 @@
         "TimedOut": false
       }
     },
+    "array/a-comma-that-arrives-through-a-substitution": {
+      "bash": {
+        "Stdout": "[s][s][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[s][s][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[s][s][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[s][s][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[q][q r][q r s]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/a-declaration-append-operand-folds-the-attribute": {
       "bash": {
         "Stdout": "st=0 [3]",
@@ -13792,6 +13880,50 @@
       },
       "zsh": {
         "Stdout": "[x[1]]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/a-substituted-comma-on-the-left-of-an-assignment": {
+      "bash": {
+        "Stdout": "[p][q][Z][s][1][2][3][Z]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[p][q][Z][s][1][2][3][Z]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[p][q][Z][s][1][2][3][Z]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[p][q][Z][s][1][2][3][Z]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[Z][q][r][s][Z]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -35491,6 +35623,94 @@
         "TimedOut": false
       }
     },
+    "core/a-backquote-substitution-under-a-syntax-check": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: warning: line 1: `...` obsolete, use $(...)~\u003cscript\u003e: warning: line 2: `...` obsolete, use $(...)",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-backquote-substitution-when-it-runs": {
+      "bash": {
+        "Stdout": "hithereb",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "hithereb",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "hithereb",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "hithereb",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "hithereb",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "hithereb",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/a-bare-brace-in-a-nested-quoted-operand": {
       "bash": {
         "Stdout": "[a{bcz\"}]~after",
@@ -40727,6 +40947,50 @@
         "TimedOut": false
       }
     },
+    "core/dollar-single-escape-with-no-digits": {
+      "bash": {
+        "Stdout": " [ \\ x z z ] [ \\ x ] [ \\ u Z ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " [ \\ x z z ] [ \\ x ] [ \\ u Z ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " [ \\ x z z ] [ \\ x ] [ \\ u Z ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " [ $ \\ x z z ] [ $ \\ x ] [ $ \\ u~ Z ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " [ ] [ ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " [ \\0 z z ] [ \\0 ] [ \\0 Z ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/dollar-single-expands-escapes": {
       "bash": {
         "Stdout": " [ a \\t b ] ",
@@ -40809,6 +41073,94 @@
       },
       "zsh": {
         "Stdout": " [ A J \\t ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/dollar-single-hex-reads-every-digit": {
+      "bash": {
+        "Stdout": " [ ] [ A 4 ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " [ ] [ A 4 ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " [ ] [ A 4 ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " [ $ \\ x 0 0 b ] [ $ \\ x 4 1 4 ]~ [ $ \\ x 0 0 4 1 ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " [ \\v ] [ 320 224 ] [ A ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " [ \\0 b ] [ A 4 ] [ \\0 4 1 ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/dollar-single-hex-two-digits-or-more": {
+      "bash": {
+        "Stdout": " [ 377 ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " [ 377 ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " [ 377 ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " [ $ \\ x F F ] [ $ \\ x 0 0 F F ]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " [ 377 ] [ 303 277 ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " [ 377 ] [ \\0 F F ] ",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -42399,6 +42751,94 @@
         "TimedOut": false
       }
     },
+    "decl/a-subscripted-operand-with-no-value": {
+      "bash": {
+        "Stdout": "st=0 n=0~declare -a a~[x][y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 n=0~declare -a a~[x][y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0 n=0~declare -a a='()'~[x][y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 n=0~typeset -a a=([0]=)~[x][y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: no matches found: a[3]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "decl/a-table-letter-over-a-declared-array": {
+      "bash": {
+        "Stdout": "st=1~[x][y] after",
+        "Stderr": "\u003cshell\u003e: line 2: typeset: a: cannot convert indexed to associative array",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~[x][y] after",
+        "Stderr": "\u003cshell\u003e: line 2: typeset: a: cannot convert indexed to associative array",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~[x][y] after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~[][] after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "decl/an-array-assignment-as-an-operand": {
       "bash": {
         "Stdout": "[y]",
@@ -42437,6 +42877,138 @@
       },
       "zsh": {
         "Stdout": "[x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "decl/an-array-letter-over-a-declared-table": {
+      "bash": {
+        "Stdout": "st=1~declare -A h=([k]=\"v\" )~after",
+        "Stderr": "\u003cshell\u003e: line 2: typeset: h: cannot convert associative to indexed array",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~declare -A h=([k]=\"v\" )~after",
+        "Stderr": "\u003cshell\u003e: line 2: typeset: h: cannot convert associative to indexed array",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "no-attribute",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e[2]: typeset: cannot change associative array h to index array",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~typeset -a h=(  )~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "decl/an-exported-array-in-a-child-environment": {
+      "bash": {
+        "Stdout": "1~none",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1~none",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1~none",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "2~c=p",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1~none",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "decl/an-exported-array-with-nothing-in-it": {
+      "bash": {
+        "Stdout": "st=0~none",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~none",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~none",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: typeset: a: only simple variables can be exported",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~none",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -43185,6 +43757,50 @@
       },
       "zsh": {
         "Stdout": "read=[x]~after=[bar]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-hash-in-a-listed-value": {
+      "bash": {
+        "Stdout": "declare -- a=\"16#ff\"~declare -- b=\"#lead\"~declare -- c=\"tail#\"~declare -- d=\"a#b\"~declare -- e=\"99#zz\"~declare -- f=\"1a#b\"~declare -- g=\"a.b#c\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -- a=\"16#ff\"~declare -- b=\"#lead\"~declare -- c=\"tail#\"~declare -- d=\"a#b\"~declare -- e=\"99#zz\"~declare -- f=\"1a#b\"~declare -- g=\"a.b#c\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -- a=\"16#ff\"~declare -- b=\"#lead\"~declare -- c=\"tail#\"~declare -- d=\"a#b\"~declare -- e=\"99#zz\"~declare -- f=\"1a#b\"~declare -- g=\"a.b#c\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a=16#ff~b='#lead'~c='tail#'~d='a#b'~e=99#zz~f=1a#b~g=a.b#c",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset a='16#ff'~typeset b='#lead'~typeset c='tail#'~typeset d='a#b'~typeset e='99#zz'~typeset f='1a#b'~typeset g='a.b#c'",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -47146,6 +47762,50 @@
       "zsh": {
         "Stdout": "st=1",
         "Stderr": "\u003cshell\u003e:typeset:1: bad option: +q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-output-base-at-the-ends-of-the-alphabet": {
+      "bash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: -6: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: d: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: b: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -0: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: e: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: a: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: -6: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: d: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: b: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -0: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: e: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: a: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -6: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: d: not found~\u003cshell\u003e: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: b: not found~\u003cshell\u003e: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: -0: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: e: not found~\u003cshell\u003e: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: a: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[10#100]~typeset -i 65 d=10#100~typeset -i b=5~typeset -i 16 e=16#ff~typeset -i a=255",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[]~typeset -i16 e=255~typeset -i16 a=255",
+        "Stderr": "\u003cshell\u003e:typeset:1: invalid base (must be 2 to 36 inclusive): 65~\u003cshell\u003e:typeset:1: no such variable: d~\u003cshell\u003e:typeset:1: invalid base (must be 2 to 36 inclusive): 1~\u003cshell\u003e:typeset:1: no such variable: b~\u003cshell\u003e:typeset:1: invalid base (must be 2 to 36 inclusive): 0~\u003cshell\u003e:typeset:1: invalid base (must be 2 to 36 inclusive): 1",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -62991,6 +63651,50 @@
         "TimedOut": false
       }
     },
+    "expansion/a-write-through-a-reference-reaches-every-subscript": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(P)v::=Z}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(P)v::=Z}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: ${(P)v::=Z}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `v::=Z}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[p][Z][Y][r]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "expansion/an-at-list-joined-in-a-here-document": {
       "bash": {
         "Stdout": "[x y z]",
@@ -75531,6 +76235,226 @@
         "TimedOut": false
       }
     },
+    "jobs/a-signal-name-joined-to-kill-n-option": {
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: kill: nKILL: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: kill: nKILL: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 0: kill: nKILL: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: 1: kill: Illegal option -n",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "Usage: kill [-lL] [-n signum] [-s signame] job ...~   Or: kill [ options ] -l [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:kill:1: unknown signal: SIGNKILL~\u003cshell\u003e:kill:1: type kill -L for a list of signals",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/a-signal-name-joined-to-kill-s-option": {
+      "bash": {
+        "Stdout": "st=0 said=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 said=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 said=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0 said=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 said=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 said=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/a-signal-number-joined-to-kill-s-option": {
+      "bash": {
+        "Stdout": "st=0 said=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 said=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 said=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 said=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 said=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 said=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/a-signal-number-joined-to-kill-s-option-is-not-read": {
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: kill: s9: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: kill: s9: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 0: kill: s9: invalid signal specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:kill:1: unknown signal: SIGS9~\u003cshell\u003e:kill:1: type kill -L for a list of signals",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/a-stopped-background-job-in-the-listing": {
+      "bash": {
+        "Stdout": "[1]+  Stopped                    sleep 0.8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1]+  Stopped(SIGSTOP)           sleep 0.8",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[1]-  Running                 sleep 0.8 \u0026",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[1] - Running                    ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1] + Stopped (SIGSTOP)        \u003ccommand unknown\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "jobs/a-subshell-and-the-parents-jobs": {
       "bash": {
         "Stdout": "no jobs",
@@ -76627,6 +77551,50 @@
         "Stdout": "LATE-42~NOW-42",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/wait-for-a-stopped-job-under-the-monitor": {
+      "bash": {
+        "Stdout": "st=145",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=145",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0",
+        "Stderr": "[1]-  Done                    sleep 0.8~[2]+  Done                    { sleep 0.4; kill -CONT $p; }",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -81082,6 +82050,50 @@
         "TimedOut": false
       }
     },
+    "opt/command-tracking-starts-on-where-the-letter-says-so": {
+      "bash": {
+        "Stdout": "hashall=on~letter=in~hashall=off~after=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "hashall=on~letter=in~hashall=off~after=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "hashall=on~letter=in~hashall=off~after=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "letter=out~after=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "trackall=on~letter=in~trackall=off~after=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "letter=out~after=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "opt/dollar-dash-drops-a-letter-turned-back-off": {
       "bash": {
         "Stdout": "no-e",
@@ -83458,6 +84470,50 @@
         "TimedOut": false
       }
     },
+    "param/a-flag-group-error-names-the-rest-of-its-word": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: A${(g:x:)v}B: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: A${(g:x:)v}B: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: A${(g:x:)v}B: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `v}B' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: error in flags near position 6 in '${(g:x:)v}B'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/a-flag-group-is-not-a-second-answer-for-the-assignment": {
       "bash": {
         "Stdout": "",
@@ -84998,6 +86054,94 @@
         "TimedOut": false
       }
     },
+    "param/a-scalar-context-does-not-split-a-flag-group": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(s:,:)v}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(s:,:)v}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: ${(s:,:)v}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `v}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[c,a,b][c][a][b][c][a][b][c,a,b][case-unsplit][cond-unsplit]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/a-scalar-context-joins-a-flag-groups-words": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${$(f)}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${$(f)}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: ${$(f)}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: x=${$(f)}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[b b a a c][b-b-a-a-c][b b a a c][b\\ b\\ a\\ a\\ c][a c][a][a][b][b][c]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/a-searching-trim-and-the-arms-of-an-alternation": {
       "bash": {
         "Stdout": "",
@@ -85696,6 +86840,50 @@
       },
       "zsh": {
         "Stdout": "[a:b/c]~[a[\u0026]bXc][a[\\X]bXc]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/a-substring-modifier-reads-its-own-quotes": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x: s/'.'/: arithmetic syntax error: operand expected (error token is \"'.'/\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x: s/'.'/: arithmetic syntax error: operand expected (error token is \"'.'/\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: x: s/'.'/: syntax error: operand expected (error token is \"'.'/\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: s/'.'/:/: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[a:b][a.b][aQb][a$ab][a:b]~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -95332,6 +96520,50 @@
       },
       "zsh": {
         "Stdout": "error in flags near position 4 in '${(+)v}\"'~error in flags near position 5 in '${(U+)v}\"'~error in flags near position 6 in '${(q-+)v}\"'~error in flags near position 5 in '${(qq-)v}\"'~error in flags near position 5 in '${(qq+)v}\"'~error in flags near position 6 in '${(q-q)v}\"'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/where-a-scalar-contexts-join-sits": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(j:+:)y#ab}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(j:+:)y#ab}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: ${(j:+:)y#ab}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `y#ab}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[+][+ab][ab+ab][Q y][b a][a][b]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -116282,6 +117514,490 @@
         "TimedOut": false
       }
     },
+    "read/keys-attached-count-must-be-a-number": {
+      "bash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: read: -k: unknown option~\u003cshell\u003e: read: -2: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:read:1: number expected after -k: 2v",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/keys-count-what-the-locale-calls-a-character": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]~\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -k~\u003cshell\u003e: 1: read: Illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]~\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "           68  c3  a9  6c                                                ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/keys-default-to-reply": {
+      "bash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [abc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/keys-do-not-stop-at-a-newline": {
+      "bash": {
+        "Stdout": "st=2 len=0",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2 len=0",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 len=0",
+        "Stderr": "\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 len=0",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 len=0",
+        "Stderr": "\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 len=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/keys-fill-one-name-only": {
+      "bash": {
+        "Stdout": "st=2 [] w=[keep]",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2 [] w=[keep]",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 [] w=[keep]",
+        "Stderr": "\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 [] w=[keep]",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 [] w=[keep]",
+        "Stderr": "\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [a b c] w=[keep]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/keys-from-a-descriptor": {
+      "bash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [ab]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/keys-ignore-a-redirected-input": {
+      "bash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 []",
+        "Stderr": "not interactive and can't open terminal",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/keys-need-a-terminal": {
+      "bash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 []",
+        "Stderr": "not interactive and can't open terminal",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/keys-of-nought-reads-nothing": {
+      "bash": {
+        "Stdout": "st=2 [keep]",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2 [keep]",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 [keep]",
+        "Stderr": "\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 [keep]",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 [keep]",
+        "Stderr": "\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 []",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/keys-short-read-keeps-what-came": {
+      "bash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 [ab]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/keys-without-a-count-is-one": {
+      "bash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: line 0: read: -k: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: read: -k: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "read/names-and-a-closing-whitespace-run": {
       "bash": {
         "Stdout": "[a][b]",
@@ -135843,6 +137559,94 @@
         "TimedOut": false
       }
     },
+    "test/a-comparison-operand-that-will-not-read": {
+      "bash": {
+        "Stdout": "st=2~div=2~after",
+        "Stderr": "\u003cshell\u003e: line 1: [: 1x1: integer expected~\u003cshell\u003e: line 1: [: 3/0: integer expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~div=2~after",
+        "Stderr": "\u003cshell\u003e: line 1: [: 1x1: integer expected~\u003cshell\u003e: line 1: [: 3/0: integer expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2~div=2~after",
+        "Stderr": "\u003cshell\u003e: line 0: [: 1x1: integer expression expected~\u003cshell\u003e: line 0: [: 3/0: integer expression expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~div=2~after",
+        "Stderr": "\u003cshell\u003e: 1: [: Illegal number: 1x1~\u003cshell\u003e: 1: [: Illegal number: 3/0",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~div=1~after",
+        "Stderr": "\u003cshell\u003e: [: 1x1: arithmetic syntax error~\u003cshell\u003e: [: 3/0: divide by zero",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=2~div=2~after",
+        "Stderr": "\u003cshell\u003e:[:1: integer expression expected: 1x1~\u003cshell\u003e:[:1: integer expression expected: 3/0",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "test/a-comparison-operands-leading-zeros": {
+      "bash": {
+        "Stdout": "dec=0~hex=2~name=2~inner=2",
+        "Stderr": "\u003cshell\u003e: line 1: [: 0x10: integer expected~\u003cshell\u003e: line 1: [: 0x10: integer expected~\u003cshell\u003e: line 1: [: 1+0x10: integer expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "dec=0~hex=2~name=2~inner=2",
+        "Stderr": "\u003cshell\u003e: line 1: [: 0x10: integer expected~\u003cshell\u003e: line 1: [: 0x10: integer expected~\u003cshell\u003e: line 1: [: 1+0x10: integer expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "dec=0~hex=2~name=2~inner=2",
+        "Stderr": "\u003cshell\u003e: line 0: [: 0x10: integer expression expected~\u003cshell\u003e: line 0: [: 0x10: integer expression expected~\u003cshell\u003e: line 0: [: 1+0x10: integer expression expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "dec=0~hex=2~name=2~inner=2",
+        "Stderr": "\u003cshell\u003e: 1: [: Illegal number: 0x10~\u003cshell\u003e: 1: [: Illegal number: 0x10~\u003cshell\u003e: 1: [: Illegal number: 1+0x10",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "dec=0~hex=1~name=0~inner=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "dec=0~hex=2~name=2~inner=2",
+        "Stderr": "\u003cshell\u003e:[:1: integer expression expected: 0x10~\u003cshell\u003e:[:1: integer expression expected: 0x10~\u003cshell\u003e:[:1: integer expression expected: 1+0x10",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "test/a-malformed-expression-is-2": {
       "bash": {
         "Stdout": "st=2",
@@ -135970,6 +137774,94 @@
       "zsh": {
         "Stdout": "st=2",
         "Stderr": "\u003cshell\u003e:[:1: integer expression expected: a",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "test/a-terminal-test-descriptor-past-the-integer": {
+      "bash": {
+        "Stdout": "big=2~wide=2",
+        "Stderr": "\u003cshell\u003e: line 1: [: 9223372036854775808: integer expected~\u003cshell\u003e: line 1: [: 99999999999999999999: integer expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "big=2~wide=2",
+        "Stderr": "\u003cshell\u003e: line 1: [: 9223372036854775808: integer expected~\u003cshell\u003e: line 1: [: 99999999999999999999: integer expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "big=1~wide=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "big=2~wide=2",
+        "Stderr": "\u003cshell\u003e: 1: [: Illegal number: 9223372036854775808~\u003cshell\u003e: 1: [: Illegal number: 99999999999999999999",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "big=0~wide=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "big=1~wide=1",
+        "Stderr": "\u003cshell\u003e:1: number truncated after 18 digits: 9223372036854775808~\u003cshell\u003e:1: number truncated after 19 digits: 99999999999999999999",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "test/a-terminal-test-descriptor-too-wide": {
+      "bash": {
+        "Stdout": "m1=1~m2=1~wrap=1~zero=1~max=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "m1=1~m2=1~wrap=1~zero=1~max=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "m1=1~m2=1~wrap=1~zero=1~max=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "m1=1~m2=1~wrap=1~zero=1~max=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "m1=0~m2=1~wrap=0~zero=1~max=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "m1=1~m2=1~wrap=1~zero=1~max=1",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -136366,6 +138258,50 @@
       "zsh": {
         "Stdout": "st=2",
         "Stderr": "\u003cshell\u003e:1: condition expected: b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "test/comparison-operands-are-arithmetic": {
+      "bash": {
+        "Stdout": "name=2~expr=2~based=2~assign=2 n=5",
+        "Stderr": "\u003cshell\u003e: line 1: [: n: integer expected~\u003cshell\u003e: line 1: [: 1+1: integer expected~\u003cshell\u003e: line 1: [: 16#10: integer expected~\u003cshell\u003e: line 1: [: n=9: integer expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "name=2~expr=2~based=2~assign=2 n=5",
+        "Stderr": "\u003cshell\u003e: line 1: [: n: integer expected~\u003cshell\u003e: line 1: [: 1+1: integer expected~\u003cshell\u003e: line 1: [: 16#10: integer expected~\u003cshell\u003e: line 1: [: n=9: integer expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "name=2~expr=2~based=2~assign=2 n=5",
+        "Stderr": "\u003cshell\u003e: line 0: [: n: integer expression expected~\u003cshell\u003e: line 0: [: 1+1: integer expression expected~\u003cshell\u003e: line 0: [: 16#10: integer expression expected~\u003cshell\u003e: line 0: [: n=9: integer expression expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "name=2~expr=2~based=2~assign=2 n=5",
+        "Stderr": "\u003cshell\u003e: 1: [: Illegal number: n~\u003cshell\u003e: 1: [: Illegal number: 1+1~\u003cshell\u003e: 1: [: Illegal number: 16#10~\u003cshell\u003e: 1: [: Illegal number: n=9",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "name=0~expr=0~based=0~assign=0 n=9",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "name=2~expr=2~based=2~assign=2 n=5",
+        "Stderr": "\u003cshell\u003e:[:1: integer expression expected: n~\u003cshell\u003e:[:1: integer expression expected: 1+1~\u003cshell\u003e:[:1: integer expression expected: 16#10~\u003cshell\u003e:[:1: integer expression expected: n=9",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

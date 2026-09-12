@@ -275,39 +275,39 @@ func TestWhichMinusIsTheQuotingModifier(t *testing.T) {
 		{"the extended form beside the q", `v="a b"; printf "[%s]" "${(q+)v}"`, "['a b']"},
 		{
 			"a plus on its own is no flag", `v="a b"; printf "[%s]" "${(+)v}"`,
-			"sh: error in flags near position 4 in '${(+)v}'\n",
+			`sh: error in flags near position 4 in '${(+)v}"'` + "\n",
 		},
 		{
 			"nor is one behind another letter", `v="a b"; printf "[%s]" "${(U+)v}"`,
-			"sh: error in flags near position 5 in '${(U+)v}'\n",
+			`sh: error in flags near position 5 in '${(U+)v}"'` + "\n",
 		},
 		{
 			"nor one behind the modifier", `v="a b"; printf "[%s]" "${(q-+)v}"`,
-			"sh: error in flags near position 6 in '${(q-+)v}'\n",
+			`sh: error in flags near position 6 in '${(q-+)v}"'` + "\n",
 		},
 		{
 			"nor one behind a q that is not the first", `v="a b"; printf "[%s]" "${(qq+)v}"`,
-			"sh: error in flags near position 5 in '${(qq+)v}'\n",
+			`sh: error in flags near position 5 in '${(qq+)v}"'` + "\n",
 		},
 		// A doubled `q` takes neither modifier, and the position reported is
 		// the second `q`'s rather than the modifier's — measured, not
 		// derived.
 		{
 			"a doubled q does not take a minus", `v="a b"; printf "[%s]" "${(qq-)v}"`,
-			"sh: error in flags near position 5 in '${(qq-)v}'\n",
+			`sh: error in flags near position 5 in '${(qq-)v}"'` + "\n",
 		},
 		{
 			"wherever in the group it stands", `v="a b"; printf "[%s]" "${(qoq-)v}"`,
-			"sh: error in flags near position 6 in '${(qoq-)v}'\n",
+			`sh: error in flags near position 6 in '${(qoq-)v}"'` + "\n",
 		},
 		// And a group that took a `q-` takes no further `q`, adjacent or not.
 		{
 			"a q- group takes no second q", `v="a b"; printf "[%s]" "${(q-q)v}"`,
-			"sh: error in flags near position 6 in '${(q-q)v}'\n",
+			`sh: error in flags near position 6 in '${(q-q)v}"'` + "\n",
 		},
 		{
 			"at any distance", `v="a b"; printf "[%s]" "${(q-Uq)v}"`,
-			"sh: error in flags near position 7 in '${(q-Uq)v}'\n",
+			`sh: error in flags near position 7 in '${(q-Uq)v}"'` + "\n",
 		},
 		// Where `q+` is the asymmetry: that shell reads the group and
 		// answers it with a spelling that does not read back, so it is

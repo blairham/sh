@@ -19,6 +19,11 @@
 // *measured* but not *maintained*: nothing in `make check` notices when one
 // of them drifts. #2263 is the follow-on that fixes it.
 //
+// One thing `make check` does notice, since #2340: an axis this dialect has
+// no value for *at all*. That is absence rather than drift, it costs no shell
+// processes, and it is the shape #2272 shipped — so `make axis-coverage`
+// asks it of every dialect and the same check fails in `go test ./...`.
+//
 // Read a comment that cites a measurement as evidence; read the absence of
 // one as an unanswered question rather than as agreement with dash.
 package ash
@@ -159,6 +164,13 @@ func Semantics() interp.Semantics {
 	// `ash --login -c cmd` each run the command — where dash refuses the long
 	// one outright.
 	s.StartupFileOptions = interp.StartupFileOptions{Login: "-l --login"}
+	// Semantics.SystemStartupFiles is left at what the POSIX preset gives it
+	// — `/etc/profile` in the login slot — and that is an **unanswered
+	// question rather than a measurement**, in the sense the package comment
+	// above sets out. There is no BusyBox on the machine this was measured
+	// on and the field was added by a change that could not run one, so the
+	// standard's preset carries it the way it carries `.profile` itself.
+	// #2263 is the follow-on that would let it be asked.
 	// VersionOption is left at its zero deliberately: `ash --version` is `bad
 	// option '--version'`. This shell will not name its version through an
 	// option, which is the same answer dash gives and reached the same way.
@@ -385,6 +397,14 @@ func Semantics() interp.Semantics {
 	// A `jobs` listing keeps a job that has already ended, and shows the
 	// `&`-started command's own text.
 	s.JobsListNewestFirst = interp.Yes
+	// StoppedJobTakesTheCurrentJobMarker is deliberately left unanswered.
+	// The measurement wants a ^Z at a pseudo-terminal, which is exactly what
+	// the container this shell was measured in could not give it, so there
+	// is nothing recorded to put here — and the package comment above says
+	// to read that silence as an unanswered question rather than as
+	// agreement with dash. The axis is read and never asked, so an
+	// unanswered dialect gets the answer five of the six measured columns
+	// give rather than a refusal (#1563).
 	s.JobsListFinishedJobs = interp.Yes
 	s.JobsOptions = "lp"
 	s.JobsPidsOnlyOption = interp.Yes
@@ -464,6 +484,162 @@ func Semantics() interp.Semantics {
 	s.ReadRefusesABadNameBeforeReading = interp.No
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.InteractiveSelectsEmacs = interp.No
+
+	// ---- axes this dialect did not answer, swept for and measured ----
+	//
+	// #2272 was reported as one row — `read -t` refusing in the shipped
+	// binary — and the row was the symptom of a shape. A `Semantics` axis
+	// added after a dialect is written is unanswered there, and an
+	// unanswered axis *refuses at run time* while `go test ./...` stays
+	// green, so the whole set is swept rather than the one that was
+	// noticed: every corpus snippet was run through this shell's binary and
+	// every "no dialect was chosen" collected, which found nineteen sites
+	// and not one — and then twenty, because answering one uncovers the
+	// next question on the same path, so the sweep was re-run until it
+	// stopped moving.
+	//
+	// Measured the same way the rest of this file was: BusyBox v1.37.0's
+	// `/bin/ash` in the `alpine:3` image, 2026-09-12, each probe being the
+	// corpus case that reaches the axis. The three the sweep found and this
+	// block does *not* answer are named at the end, with what they answered
+	// and why a value cannot be written yet — read those as open questions,
+	// which is what docs/spec/ash.md says the absence of a measurement
+	// means here.
+
+	// `echo -e -E 'm\tn'` writes a tab, and so does `echo -E -e 'm\tn'`:
+	// `-e` wins whichever way round the two are written, so the last flag
+	// does not decide. bash is the panel's shell that lets it (#2272).
+	s.EchoLastEscapeFlagWins = interp.No
+
+	// `read -t 0` polls. `printf "a\nb\n" > f; exec < f; read -t 0 v` is
+	// status 0 with `v` empty and the *next* `read` still finds `a`, so it
+	// answered whether input was waiting and consumed none of it; on an
+	// empty file it is status 0 as well, the end of a stream being ready to
+	// a shell that only asks. bash's reading (#2272).
+	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
+	// And a non-zero `-t` bounds the whole read rather than the wait for the
+	// first byte. Measured with the case the axis was written for: a byte
+	// into a fifo at once and the rest of the line 0.4s later, under `read
+	// -t 0.1`, is status 1 with the variable left alone — where zsh answers
+	// 0 with the whole line. This is the row #2272 was filed on (#644).
+	s.ReadTimeoutBoundsReadability = interp.No
+	// An expired `-t` touches no name, so the variable keeps what it held —
+	// and this axis only became reachable once the one above was answered,
+	// which is the layering the sweep had to be re-run to see. Measured with
+	// the probe ReadTimeoutKeepsWhatArrived documents, half a line and then a
+	// stall: `{ printf part; sleep 0.5; printf 'ial\n'; } | { v=old; read -t
+	// 0.2 v; echo "$? [$v]"; }` is `1 [old]` here, against bash 5.3's `142
+	// [part]`. ksh93's row (#2272).
+	s.ReadTimeoutKeepsWhatArrived = interp.No
+	// A count does not stop `read` judging the names after the first:
+	// `printf 'XYZW\n' | read -n 3 a 1bad b` complains `read: '1bad': bad
+	// variable name` at 1, exactly as it does without the count, and `-n 3`
+	// really is a count here — `read -n 3 v` of `abcdef` leaves `abc`. ksh93
+	// is the shell a count quiets (#2272).
+	s.ReadCountJudgesTheNamesAfterTheFirst = interp.Yes
+
+	// `set -e` stops for a failure only pipefail saw: `set -eo pipefail;
+	// false | true; echo reached` reaches nothing and the shell ends at 1,
+	// where a plain `set -e; false | true` reaches the echo. ksh93 is the
+	// column that runs on (#2272).
+	s.ErrexitSeesPipefailFailure = interp.Yes
+	// The status pipefail hands back for an element a signal killed is the
+	// ordinary 128-plus-the-signal and not the bare number: a `{ echo "$v";
+	// } | true` over a value grown past the pipe buffer is 141, and so is
+	// `yes | head -1`. ksh93's 13 is the other answer (#2272).
+	s.PipefailSubstitutesTheBareSignal = interp.No
+
+	// `${1:=abc}` does not assign to a positional: after `set --` it is `1:
+	// bad variable name` and the script ends. zsh alone assigns (#2272).
+	s.AssignThroughExpansionMayNameAPositional = interp.No
+	// A quoted replacement operand's own quotes quote, and are removed:
+	// `s=xay; v=VAL; echo "${s/a/'$v'}"` is `x$vy` rather than `x'VAL'y`, so
+	// the single quotes kept `$v` from expanding and then went. The
+	// backslash row agrees — `\q`, `\{`, `\\`, `\"`, `\}` and `\$v` all lose
+	// the backslash — which is bash 5.3's and ksh93's reading (#2272).
+	s.ReplacementOperandTakesTheEnclosingQuoting = interp.No
+	// An empty pattern in a span replacement matches nothing, whatever the
+	// value holds: `v=abc; e=` makes `${v///X}`, `${v//$e/X}`, `${e///X}`
+	// and `${e//x/X}` come to `abc`, `abc`, empty and empty. ksh93 replaces
+	// in the third and zsh in every position (#2272).
+	s.EmptyReplacementPattern = interp.EmptyReplacementPatternMatchesNothing
+
+	// `$'\q\8'` keeps both characters, which is bash's answer and not the
+	// dropping one ksh93 and zsh share (#2272).
+	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownKeepsBackslash
+	// There is no `\c` inside `$'…'` at all: `$'\cA\cz'` is the six
+	// characters as written. zsh is the other column with none (#2272).
+	s.DollarSingleBackslashC = interp.DollarSingleControlAbsent
+	// And no caret or meta spelling either: `$'\C-A'`, `$'\CA'`, `$'\M-x'`
+	// and `$'\M-\C-?'` are all kept as written, so the escape vocabulary
+	// this shell's `$'…'` has is neither zsh's nor ksh93's (#2272).
+	s.DollarSingleCaretMeta = interp.No
+
+	// `$((2**-1))` is `exponent less than 0` — no float answer, which is
+	// bash's side of the split (#2272).
+	s.ArithNegativeExponentIsError = interp.Yes
+
+	// A declaration does not shadow a readonly: `readonly x=1; f() { local
+	// x=2; }; f` is `local: line 1: x: is read only` and the script ends,
+	// which is dash's and bash's answer rather than ksh93's and zsh's
+	// (#2272).
+	s.DeclarationMayShadowAReadonly = interp.No
+	// A valueless declaration of a name its own scope already holds lists
+	// nothing: `f() { local v=1; local v; }` is silent at 0, and the value
+	// stays — `local FOO=x; local FOO` still reads `x`. zsh is the column
+	// that lists (#2272).
+	s.ValuelessDeclarationOfAHeldNameListsIt = interp.No
+
+	// `jobs -p` does not finish a job the way a state listing does: after a
+	// background `sleep` has ended, `jobs -p` prints the id and the next
+	// bare `jobs` still reports it `Done`. ksh93 is the column that forgets
+	// it there (#2272). The plain `jobs -p` in the issue answered 0 for
+	// this reason — the axis is only reached once there is a finished job to
+	// list.
+	s.PidListingFinishesWithAJob = interp.No
+
+	// And two more this file leaves unanswered for want of a binary rather
+	// than for want of room in the vector: `DollarSingleHexReadsEveryDigit`
+	// and `DollarSingleDigitlessEscapeIsAZeroByte` (#554). The panel splits
+	// three ways on `$'\x00b'` and `$'\xzz'` — bash stops at two digits and
+	// keeps a digitless escape as written, zsh stops at two and reads a zero
+	// byte, ksh93 takes every digit — and this shell's answer was not
+	// measured, so nothing is written down for it. `$'\x41'` and every other
+	// two-digit spelling reaches neither, which is the shape a script writes.
+	//
+	// Three the sweep reached and this file deliberately leaves unanswered,
+	// each with what BusyBox answered and what stands in the way of writing
+	// it down. None is a guess deferred; each is a measurement the vector
+	// cannot yet hold.
+	//
+	// The first two are written as `unanswered <axis>:` lines, which is the
+	// spelling internal/axissweep reads back (#2340). The coverage check
+	// prints them under the entry they answer, so what this dialect has not
+	// measured is stated by the instrument rather than only here — and a
+	// value quietly appearing for one of them, copied from a neighbor to
+	// quiet the refusal, fails that check instead of passing quietly.
+	//
+	// unanswered DollarSingleNulTruncates: a *third* reading (#2276).
+	// `x=$'a\0b'` leaves `ab` at length 2: the NUL is neither kept (zsh,
+	// length 3) nor the end of the span (bash and ksh93, length 1) but
+	// dropped, and the octal and hex spellings agree. `Answer` has no room
+	// for it, so a value here would have to be one of the two wrong ones.
+	//
+	// unanswered ReadonlyRecordsTheCompoundAttribute: this shell has no
+	// letter to ask it with (#2277). `readonly -a a` is `readonly: illegal
+	// option -a` and there is no `typeset` at all. The refusal our binary
+	// reaches is `readonly`'s option set being fixed in the interpreter
+	// rather than the dialect's, which is a gap ksh93 has today for the same
+	// reason — it refuses the same corpus row, on `main`, for want of the
+	// same letter.
+	//
+	// The third is not an axis of the semantics vector at all, so it carries
+	// no marker: Diagnostics.UlimitListing — measured in full (#2278:
+	// fifteen rows, `core file size (blocks)         (-c) unlimited` and its
+	// fellows), and five of them — `-e`, `-i`, `-q`, `-r`, `-x` — name
+	// resources no [interp.Resource] constant does. It was also measured on
+	// Linux, where those five exist; the table a macOS build should print is
+	// a second measurement and not this one.
 
 	return s
 }

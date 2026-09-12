@@ -461,6 +461,11 @@ func (rt Route) run(col column, f Fixture, mode Mode) Outcome {
 	if p != "" {
 		args = append(args, col.policyFlag, p)
 	}
+	// A route's own arguments go in front of `-c`, because what they say is
+	// what kind of shell this is rather than what it should run — see
+	// Route.Args, and `builtin/fc-write`, which is the one row that needs a
+	// shell that thinks somebody is watching.
+	args = append(args, rt.Args...)
 	args = append(args, "-c", rt.script(f))
 	cmd := exec.Command(col.bin, args...)
 	// From inside the workspace, because that is where a caller puts a

@@ -131,7 +131,10 @@ func truncatedMark(truncated bool) string {
 func openBlocks(sh driver.Shell) (*blocks.Store, error) {
 	dir := blocks.DirFrom(os.LookupEnv)
 	if dir == "" {
-		return nil, errors.New("no block store: set SH_BLOCKS_DIR, or HOME")
+		// "or HOME" until #2274, when a home stopped being an invitation.
+		// Saying so is the whole of the help: the reason a person sees this
+		// is almost always that they never turned the store on.
+		return nil, errors.New("no block store: SH_BLOCKS_DIR names one, and nothing else does")
 	}
 	// No session, on both halves. This route reads a store rather than being a
 	// shell, so nothing here builds one and the front end never defaults one in

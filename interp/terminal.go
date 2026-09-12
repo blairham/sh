@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"errors"
 	"io"
 	"os"
 	"strconv"
@@ -119,11 +120,38 @@ func (r *Runner) descriptorIsTerminal(fd int) bool {
 // `[ -t ' 1 ' ]` on a pseudo-terminal is true in dash, bash 5.3, bash-as-sh,
 // bash 3.2 and zsh 5.9.2, and false in ksh93 alone.
 func (r *Runner) terminalTest(operand string) (answer, isNumber bool) {
-	fd, err := strconv.Atoi(strings.TrimSpace(operand))
-	if err != nil {
+	fd, err := strconv.ParseInt(strings.TrimSpace(operand), 10, 64)
+	if err != nil && !errors.Is(err, strconv.ErrRange) {
 		return false, false
 	}
-	return r.descriptorIsTerminal(fd), true
+	// How wide the descriptor is read at, which one dialect answers
+	// differently — see TerminalTestDescriptorNarrowsToThirtyTwoBits. Asked
+	// only where the two readings can differ: a number the whole panel holds
+	// is the same descriptor either way.
+	//
+	// ParseInt hands back the saturated value along with a range error, which
+	// is the value a C conversion of the same text stops at, so the two
+	// branches are one rule read at two widths rather than two rules.
+	if narrow := int64(int32(fd)); err != nil || narrow != fd {
+		if !r.ask(r.sem().TerminalTestDescriptorNarrowsToThirtyTwoBits,
+			"a `-t` descriptor read at the width of a machine int") {
+			// Nothing narrows it. A value too wide to convert at all is not a
+			// number, which is a question of its own; one that merely does not
+			// fit in 32 bits is a descriptor nothing is open at.
+			if err != nil {
+				return false, false
+			}
+			return r.descriptorIsTerminal(int(fd)), true
+		}
+		fd = narrow
+	}
+	if fd == -1 && r.ask(r.sem().TerminalTestMinusOneIsATerminal, "`[ -t -1 ]`") {
+		// The one value that answers on its own, in the one dialect that has
+		// it: true whatever the shell is holding, and where every conversion
+		// too wide to hold has just landed.
+		return true, true
+	}
+	return r.descriptorIsTerminal(int(fd)), true
 }
 
 // terminalSize is how big the terminal this shell holds is, or zeroes where
@@ -162,16 +190,40 @@ func (r *Runner) terminalTest(operand string) (answer, isNumber bool) {
 // not make. See TestTheTerminalIsRememberedOnceItHasBeenSeen, which asserts
 // the claim and records the limit.
 func (r *Runner) terminalSize() (rows, cols int) {
+	f, held := r.terminal()
+	if !held {
+		return 0, 0
+	}
+	return tty.Size(f)
+}
+
+// terminal is the terminal this shell holds, and false where it holds none.
+//
+// The remembering terminalSize describes, factored out because a second thing
+// needs the same answer: `read -k` reads characters from *the shell's*
+// terminal and not from the stream it was told to read, which is measured —
+// `printf abc | read -k v` is `not interactive and can't open terminal` at 1,
+// `read -k 2 v < f.txt` is the same refusal with the file untouched, and under
+// a pseudo-terminal `read -k v` works after `exec 0</dev/null` has taken the
+// terminal off standard input. All three fall out of asking this question
+// rather than asking about the descriptor the builtin is reading.
+//
+// Fresh first and remembered second, for the reason terminalSize gives: a
+// session whose stdin is still the terminal must not be answered from a stale
+// one. A remembered file that has since been closed is still handed back — the
+// ioctl on it fails, which is the caller's answer, rather than a branch here
+// second-guessing it.
+func (r *Runner) terminal() (*os.File, bool) {
 	for _, held := range []any{r.stdin(), r.stdout(), r.stderr()} {
 		f, ok := held.(*os.File)
 		if !ok || !tty.IsTerminal(f) {
 			continue
 		}
 		r.windowTerminal = f
-		return tty.Size(f)
+		return f, true
 	}
 	if r.windowTerminal != nil {
-		return tty.Size(r.windowTerminal)
+		return r.windowTerminal, true
 	}
-	return 0, 0
+	return nil, false
 }

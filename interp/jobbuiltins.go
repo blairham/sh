@@ -49,13 +49,14 @@ func biDisown(r *Runner, _ context.Context, args []string) int {
 		// The current job, and with none the complaint is the dialect's —
 		// or, in one shell, a bare failing status. Empty means silence: the
 		// engine measured saying nothing says nothing here on purpose.
-		if r.lastJob == nil {
+		current := r.currentJob()
+		if current == nil {
 			if w := r.diag().DisownNoCurrentJob; w != "" {
 				r.diagf("%s\n", w)
 			}
 			return 1
 		}
-		jobs = []*Job{r.lastJob}
+		jobs = []*Job{current}
 	}
 	for _, a := range args {
 		j, code := r.findJob(a, "disown")
@@ -479,10 +480,11 @@ func (r *Runner) showsBackgroundCommand(rows []jobRow) (bool, int) {
 // it, which is how a listing says what `%%` and `%-` mean without spelling
 // them out.
 func (r *Runner) jobMarker(j *Job) string {
-	switch {
-	case j == r.lastJob:
+	current, previous := r.markedJobs()
+	switch j {
+	case current:
 		return "+"
-	case len(r.jobs) > 1 && j == r.jobs[len(r.jobs)-2]:
+	case previous:
 		return "-"
 	}
 	return " "
@@ -537,6 +539,7 @@ func biFg(r *Runner, _ context.Context, args []string) int {
 		// stopped.
 		j.Stopped, j.StopSig = true, int(w.Signal)
 		r.setLastJob(j)
+		r.becomeCurrentJob(j)
 		r.announceStopped(j)
 		return status
 	}
@@ -586,11 +589,12 @@ func (r *Runner) resume(args []string, name string) (*Job, int) {
 		return nil, 2
 	}
 	if len(args) == 0 {
-		if r.lastJob == nil {
+		current := r.currentJob()
+		if current == nil {
 			r.diagf("%s\n", Wording(r.diag().NoSuchJob, "%[1]s: no current job", name))
 			return nil, 1
 		}
-		return r.lastJob, 0
+		return current, 0
 	}
 	return r.findJob(args[0], name)
 }
@@ -711,15 +715,21 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 	text := strings.TrimPrefix(spec, "%")
 	switch text {
 	case "", "%", "+":
-		if r.lastJob == nil {
+		current := r.currentJob()
+		if current == nil {
 			return nil, jobMissing
 		}
-		return r.lastJob, jobFound
+		return current, jobFound
 	case "-":
-		if len(r.jobs) < 2 {
+		// The runner-up rather than the job before this one in the table,
+		// which is the same choice the listing's `-` is written from — see
+		// markedJobs. Measured, the two agree in every column: `jobs %-`
+		// names exactly the job a listing puts `-` on.
+		_, previous := r.markedJobs()
+		if previous == nil {
 			return nil, jobMissing
 		}
-		return r.jobs[len(r.jobs)-2], jobFound
+		return previous, jobFound
 	}
 	n, ok := atoi(text)
 	if !ok {

@@ -382,10 +382,6 @@ type Runner struct {
 	exportedFuncs                      map[string]bool
 	importedFuncs                      bool
 	funcExportPrefix, funcExportSuffix string
-	// nestedLength says a nested expansion is being *measured* rather than
-	// used, which is the one context where a substitution in the name
-	// position is not field-split — see nestedInnerSplit.
-	nestedLength bool
 	// undefinedFunctions is the dialect's answer to "has this function's body
 	// been read yet, and what does a listing write where it has not" — see
 	// SetUndefinedFunctions. Nil in a shell with no such thing, which is two
@@ -995,7 +991,18 @@ type Runner struct {
 	// time keeps the promise in either state, so the state is real here
 	// even though no cache hangs off it — the same honesty `hash` answers
 	// with an empty table.
-	tracksCommands bool
+	//
+	// Read through Runner.commandTracking and written through
+	// Runner.setCommandTracking, never directly. Two of the panel start it
+	// *on* and say so in `$-`, so the zero value is not their answer, and
+	// one of those two turns it back off when it is interactive — a default
+	// that moves with the invocation, which a field initialized once cannot
+	// hold. tracksCommandsMoved is what parts "the script said so" from
+	// "nobody has said anything yet"; until it is set the answer comes from
+	// the startup letters, which is where the dialect already declared it
+	// (#1951).
+	tracksCommands      bool
+	tracksCommandsMoved bool
 	// histIgnoreDups is zsh's histignoredups, which its `set -h`
 	// abbreviates. A script cannot see what it does, because a script has no
 	// history — but an interactive session does: repl reads it through the
@@ -1019,7 +1026,9 @@ type Runner struct {
 	tracksWindowSize bool
 	// windowTerminal is the terminal this shell found, remembered so that a
 	// read after the script has redirected itself still has one to ask. See
-	// Runner.terminalSize, where the measurement that says to remember it is.
+	// Runner.terminal, which is where the remembering is and where the
+	// measurement that says to remember it is; terminalSize named it, and
+	// `read -k` now asks the same question about the same file.
 	windowTerminal *os.File
 	// windowRows and windowCols are how big that terminal was when $LINES and
 	// $COLUMNS last answered, and windowSettled says the pair has been read at
@@ -1197,14 +1206,26 @@ type Runner struct {
 	// nil value is an explicit removal.
 	custom map[string]Builtin
 	// jobs are the background commands started by this shell.
-	jobs    []*Job
-	lastJob *Job
+	jobs []*Job
+	// jobOrder is the order jobs became *notable*, oldest first: a job is
+	// appended when it enters the table and again, moved to the end, every
+	// time it stops. It is not the table's order, which is slot order, and
+	// the two part company the moment a job stops after a later one started.
+	//
+	// A slice rather than a `lastJob` pointer because two markers are read
+	// off it — the `+` of `%%` and the `-` of `%-` — and the second is not
+	// "the job before this one in the table". Measured 2026-09-12 through a
+	// pseudo-terminal, with two jobs stopped and a third backgrounded after
+	// them: bash 5.3.15 marks the second `+`, the *first* `-`, and the third
+	// not at all, which no reading of the table's order produces. See
+	// markedJobs.
+	jobOrder []*Job
 	// lastJobPID is `$!`, which is a *value* and not a reference to a job.
 	//
-	// Separate from lastJob because the two stop being the same thing the
-	// moment the job ends. lastJob is the *current* job — what `%%` names and
-	// what a bare `fg` picks — so it has to go when the job leaves the table,
-	// or those two would name something that is not there. `$!` does not:
+	// Separate from jobOrder because the two stop being the same thing the
+	// moment the job ends. The current job — what `%%` names and what a bare
+	// `fg` picks — has to go when the job leaves the table, or those two
+	// would name something that is not there. `$!` does not:
 	// measured unanimous 2026-09-05, `sleep 0 & wait; echo "[$!]"` reports the
 	// pid in bash 5.3.15, bash 3.2.57, bash 3.2 as `sh`, dash, ksh93u+ and
 	// zsh 5.9.2, and so does the same script under `-i` on a pseudo-terminal
@@ -1928,6 +1949,15 @@ func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body fun
 
 // Verbose reports `set -v`, for the front end that holds the raw lines.
 func (r *Runner) Verbose() bool { return r.verbose }
+
+// NoExec reports `set -n`: the program is read and never run.
+//
+// Exported for the front end, which has one thing to decide by it that the
+// interpreter cannot — whether to say a remark the parse produced. One shell
+// remarks on every backquote substitution it reads and does so only when it
+// is not going to execute, so the answer belongs to the place that both holds
+// the remarks and knows the option. See interp.RemarkOnlyWhenNotRunning.
+func (r *Runner) NoExec() bool { return r.noexec }
 
 // ExitStatus reports the status of the last command.
 func (r *Runner) ExitStatus() int { return r.status }
@@ -3553,9 +3583,8 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// by which time the shell has already read the field.
 		r.bg.settleStartedPID(cmd.Process.Pid, ownGroup)
 		r.tookJobProcess(cmd.Process.Pid, ownGroup)
-		err := cmd.Wait()
+		r.status = r.waitForBackgroundProcess(cmd)
 		r.releasedJobProcess(cmd.Process.Pid)
-		r.status = r.exitStatus(err)
 		r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
 		return nil
 	}
@@ -3584,6 +3613,62 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	}
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
 	return nil
+}
+
+// waitForBackgroundProcess waits for a background job's process, and — where
+// the shell is in a position to notice — sees it *stop* rather than only end.
+//
+// os/exec's own Wait is an ordinary waitpid, so a job stopped by SIGSTOP or
+// SIGTSTP never comes back from it: the process is still there, it is simply
+// never going to finish. That is the whole of #2227. A `wait` for such a job
+// blocked for as long as something outside the shell took to resume or kill
+// it, and a `jobs` listing went on calling it `Running` for the same reason —
+// nothing in this shell had been told otherwise.
+//
+// The caller's wait — the driver's, with WUNTRACED — is the one that can be
+// told, which is why this reaches for r.WaitForCommand exactly as runWatched
+// does for a foreground command. A stop is recorded on the job and the wait
+// resumed: the job has not ended, and what the shell *does* about a job it
+// now knows is stopped belongs to `wait` and to the listing rather than here.
+//
+// Only while the monitor is on, which is the same condition the job's own
+// process group is given under, a few lines above. With it off a `&` job runs
+// in the shell's own group, stopping it is not a job-control act at all, and
+// no shell in the panel gives up a `wait` for one: measured 2026-09-12 with
+// `sleep 97 & kill -STOP $!; wait`, bash 5.3.15, that bash as `sh`, bash
+// 3.2.57, ksh93u+ and zsh 5.9.2 all sit there. So with it off this stays the
+// plain os/exec wait it has always been, and nothing moves.
+func (r *Runner) waitForBackgroundProcess(cmd *exec.Cmd) int {
+	if !r.monitor || r.WaitForCommand == nil || r.bg == nil {
+		return r.exitStatus(cmd.Wait())
+	}
+	pid := cmd.Process.Pid
+	for {
+		w, err := r.WaitForCommand(pid)
+		if err != nil {
+			// Nothing to be learned from the front end's wait, so fall back
+			// to os/exec's: it is the one that still holds the child.
+			return r.exitStatus(cmd.Wait())
+		}
+		if w.Stopped {
+			r.bg.noteStopped(w.Signal)
+			// Waited for again rather than answered. A stopped job has not
+			// ended, and the next thing this wait returns is whatever
+			// happens to it after something resumes it.
+			continue
+		}
+		// The command has ended, so os/exec's bookkeeping is closed out the
+		// way runWatched closes it — the child is already reaped by the wait
+		// above, and this joins the goroutines copying its streams.
+		_ = cmd.Wait()
+		if cmd.ProcessState != nil {
+			r.addChildTime(cmd.ProcessState)
+		} else if r.elemCPU != nil {
+			r.elemCPU.add(w.User, w.System)
+		}
+		status, _ := r.waitResult(w)
+		return status
+	}
 }
 
 // runWatched runs a foreground command through the caller's own wait, which is
@@ -3616,12 +3701,32 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 			defer func() { _ = r.Foreground(0) }()
 		}
 	}
-	w, err := r.WaitForCommand(pid)
-	if err != nil {
-		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-		r.diagf("%s: %v\n", argv[0], err)
-		r.status = 126
-		return nil
+	var w Wait
+	for {
+		var err error
+		w, err = r.WaitForCommand(pid)
+		if err != nil {
+			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
+			r.diagf("%s: %v\n", argv[0], err)
+			r.status = 126
+			return nil
+		}
+		if !stoppedWait(w) || r.monitor {
+			break
+		}
+		// Stopped, and this shell is not watching jobs — so it waits the
+		// command out rather than answering with it. Unanimous: measured
+		// 2026-09-12 with a script whose background job stops its own
+		// foreground command and lets it go again half a second later, bash
+		// 5.3.15, bash 3.2.57, ksh93u+ and zsh 5.9.2 all report the
+		// command's own 0 when it finally ends, for SIGSTOP and SIGTSTP
+		// alike. With `set -m` bash 5.3 answers with the stop instead, which
+		// is the branch below and what an interactive shell always reaches:
+		// a shell with a terminal runs the monitor.
+		//
+		// There is nobody to tell either — a job the script cannot see is a
+		// job it cannot resume — so waiting again is also the only ending
+		// that does not strand the process.
 	}
 	if !stoppedWait(w) {
 		// The command has ended, so os/exec's own bookkeeping can be closed
@@ -3727,6 +3832,19 @@ func (r *Runner) environ() []string {
 		if !r.isExported(k) {
 			continue
 		}
+		if entry, compound := r.exportedCompound(k); compound {
+			// A name holding an array or a table has no environment
+			// representation, and the columns part over whether it reaches a
+			// child at all — see
+			// Semantics.ExportedCompoundReachesAChildAsItsFirstValue. The
+			// scalar view this store keeps in step is *not* the answer: it
+			// handed a child the first element in every dialect, and an
+			// empty entry for an empty array, which is nobody's.
+			if entry != "" {
+				out = append(out, k+"="+entry)
+			}
+			continue
+		}
 		if r.declaredEmpty[k] {
 			// Declared rather than assigned, so the name has no value of
 			// its own and an exported name with no value reaches no child
@@ -3740,11 +3858,74 @@ func (r *Runner) environ() []string {
 		// a read like any other.
 		out = append(out, k+"="+r.readCaseFolded(k, v))
 	}
+	// A **table** keeps no scalar view, so the loop above never sees one and
+	// the dialect that hands a child its first value would hand it nothing.
+	// Sorted, for the reason zeroValuedTypeExports is: a child's environment
+	// must not depend on a map walk.
+	out = append(out, r.exportedTables()...)
 	for k, v := range r.hiddenExports {
 		out = append(out, k+"="+v)
 	}
 	out = append(out, r.zeroValuedTypeExports()...)
 	return out
+}
+
+// exportedTables is the environment entries the exported keyed tables earn,
+// which no other pass produces: a table has no scalar view in Vars, so the
+// walk over that map cannot see one.
+func (r *Runner) exportedTables() []string {
+	var out []string
+	for k := range r.AssocArrays {
+		if _, own := r.Vars[k]; own || !r.isExported(k) {
+			continue
+		}
+		if entry, _ := r.exportedCompound(k); entry != "" {
+			out = append(out, k+"="+entry)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// exportedCompound is the environment entry an exported name holding an array
+// or a table is given, and whether the name holds one at all.
+//
+// An empty string with compound true means no entry: either the dialect hands
+// a child nothing for a compound, or the compound has nothing in it. The two
+// come to the same thing for a child — measured, ksh93 refuses to export an
+// empty array at all and the other two hand one nothing — so the emptiness is
+// not a second question.
+func (r *Runner) exportedCompound(name string) (string, bool) {
+	values, held := r.compoundValues(name)
+	if !held {
+		return "", false
+	}
+	if !r.ask(r.sem().ExportedCompoundReachesAChildAsItsFirstValue,
+		"an exported name holding a compound reaching a child at all") {
+		return "", true
+	}
+	if len(values) == 0 {
+		return "", true
+	}
+	return values[0], true
+}
+
+// compoundValues is what a name holds when it holds an array or a table, in
+// the order that array or table lists them, and whether it holds one.
+func (r *Runner) compoundValues(name string) ([]string, bool) {
+	if a, ok := r.assocFor(name); ok {
+		return a.values(), true
+	}
+	// The *stored* array and not arrayElems, which reads a scalar back as
+	// the array of one it otherwise is — every exported name would have
+	// looked like a compound and reached no child at all.
+	if a, ok := r.Arrays[name]; ok {
+		return r.readArray(a), true
+	}
+	if produce, ok := r.DynamicArrays[name]; ok {
+		return produce(r), true
+	}
+	return nil, false
 }
 
 // zeroValuedTypeExports is the exported names whose declaration named a
@@ -5160,7 +5341,12 @@ func (r *Runner) assign(a *syntax.Assign) {
 				r.assignValue(a), false)
 			return
 		}
-		idx, err := r.subscriptValue(text)
+		// Told what the source spelled, because that is what decides whether
+		// a comma still in the expanded text separates anything: measured,
+		// `a=(p q r s); i="1,2"; a[$i]=Z` writes the *first* element in the
+		// shell with ranges, where a written `a[2,3]+=(x)` reads the comma
+		// as the operator it is (#2160).
+		idx, err := r.subscriptValueAsWritten(subject, text)
 		if err != nil {
 			r.fatal("%s\n", r.subscriptFailure(text, err))
 			return

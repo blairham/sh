@@ -100,7 +100,7 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 			return r.dollarQuoted(v)
 		case strings.ContainsRune(v, '\''):
 			return r.dollarQuoted(v)
-		case listedValueIsBare(v):
+		case r.valueListsBare(v):
 			return v
 		}
 		return singleQuoted(v, `'\''`, true)
@@ -108,12 +108,12 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 		switch {
 		case hasControl(v):
 			return r.dollarQuoted(v)
-		case listedValueIsBare(v):
+		case r.valueListsBare(v):
 			return v
 		}
 		return singleQuoted(v, `'\''`, true)
 	case ListingQuoteWhenNeededPlain:
-		if listedValueIsBare(v) {
+		if r.valueListsBare(v) {
 			return v
 		}
 		return singleQuoted(v, `'\''`, true)
@@ -137,11 +137,62 @@ func listedValueIsBare(v string) bool {
 		return false
 	}
 	for i := 0; i < len(v); i++ {
-		c := v[i]
-		if isLetter(c) || isDigit(c) || strings.IndexByte("_-./:@+,%^", c) >= 0 {
-			continue
+		if !listedByteIsOrdinary(v[i]) {
+			return false
 		}
+	}
+	return true
+}
+
+// listedByteIsOrdinary is one character a listing may leave unquoted whatever
+// stands around it.
+func listedByteIsOrdinary(c byte) bool {
+	return isLetter(c) || isDigit(c) || strings.IndexByte("_-./:@+,%^", c) >= 0
+}
+
+// valueListsBare is listedValueIsBare for the value of a *declaration*, where
+// one dialect leaves a `#` unquoted as well — see
+// Semantics.ListedHashIsBareAfterANonName.
+//
+// Asked only where the two answers differ: a value with no `#` in it, and one
+// whose `#` follows a name, are the same either way.
+func (r *Runner) valueListsBare(v string) bool {
+	if listedValueIsBare(v) {
+		return true
+	}
+	if !hashIsAllThatNeedsQuoting(v) {
 		return false
+	}
+	return r.ask(r.sem().ListedHashIsBareAfterANonName,
+		"a `#` in a listed value with no name in front of it")
+}
+
+// hashIsAllThatNeedsQuoting reports whether the only reason this value is not
+// bare is a `#`, and that `#` is one the dialect above may leave alone: the
+// text in front of the first one is there and is no name.
+//
+// The first `#` decides for the whole value, which is measured rather than
+// convenient — `1#b#c` is bare in the shell that has this and `a#b#c` is
+// quoted, so it is the leading text and not each occurrence that is judged.
+//
+// Measured 2026-09-12 on ksh93u+, listing a scalar with `typeset -p`:
+//
+//	16#ff  99#zz  16#gg  16#  1#0  1a#b  9x#y  /1#a  .1#a  a.b#c   bare
+//	a#b  ab#  a1#  _#  e1#a  A1#a  a#b#c  #lead  tail#  #        quoted
+//
+// So the rule is not "a based number", which is what the issue that asked for
+// this proposed: `99#zz` names no base and `16#gg` has no digits for the one
+// it names, and both are bare. What is quoted is a `#` that a *name* stands
+// in front of, or one that opens the value — where a comment would begin.
+func hashIsAllThatNeedsQuoting(v string) bool {
+	hash := strings.IndexByte(v, '#')
+	if hash <= 0 || isNameLike(v[:hash]) {
+		return false
+	}
+	for i := 0; i < len(v); i++ {
+		if v[i] != '#' && !listedByteIsOrdinary(v[i]) {
+			return false
+		}
 	}
 	return true
 }

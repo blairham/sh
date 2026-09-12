@@ -136,7 +136,7 @@ func writeHomeFile(t *testing.T, home, name, body string) {
 func prompt(t *testing.T, typed string, argv ...string) (out, errs string, code int) {
 	t.Helper()
 	var o, e bytes.Buffer
-	sh := shell()
+	sh := scratchShell(t)
 	sh.Stdout, sh.Stderr = &o, &e
 	r, w, err := os.Pipe()
 	if err != nil {

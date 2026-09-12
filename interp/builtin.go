@@ -6,6 +6,7 @@ package interp
 import (
 	"context"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -598,7 +599,7 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			if r.ask(r.sem().SetHLetterTracksCommands, "which option `set -h` abbreviates") {
 				// The same state the hashall and trackall table entries
 				// write, so the letter and the names cannot disagree.
-				r.tracksCommands = on
+				r.setCommandTracking(on)
 			} else if r.unspecified {
 				return false
 			} else {
@@ -3087,6 +3088,21 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		count, exact = n, true
 	}
 
+	// -k is the third count and is not one of these two: it reads characters
+	// from the *terminal*, nothing is a terminator, and one name is filled
+	// with the lot. readkeys.go holds the measurements and the reading; what
+	// is here is where it joins the rest of the builtin.
+	keys, readsKeys := readKeyCount(opts, optArg)
+	if readsKeys && keys < 0 {
+		// Its own wording, measured: `read -k2v x` is `number expected after
+		// -k: 2v` where a bad `-t` is the dialect's ReadBadNumber. The
+		// attached form is the only way to reach it — a *word* that is not a
+		// number was never the argument, it is the name to read into.
+		r.diagf("%s\n", Wording(r.diag().ReadBadOptionNumber,
+			"read: number expected after -%[1]s: %[2]s", "k", optArg['k']))
+		return 1
+	}
+
 	// The array: bash's -a names it in the option's argument and ignores
 	// any operands after it; ksh93 and zsh spell it -A and take the name as
 	// the first operand, clearing the names that follow. The letters
@@ -3112,6 +3128,32 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			return r.readBadNumber(word)
 		}
 		timeout, timed = time.Duration(secs*float64(time.Second)), true
+	}
+
+	// The terminal, for -k, and before the byte source is built so that -t
+	// still bounds it — measured, `read -k -t 1` inside a widget waits a
+	// second for a keystroke and reports 1 when none comes. A source -u or -p
+	// already named is left alone: it may not be a terminal, and `read -k 2
+	// -u 3 v` on a file reads two bytes of the file.
+	keyTerminal := (*os.File)(nil)
+	if readsKeys {
+		explicit := io.Reader(nil)
+		if _, named := optArg['u']; named || coprocSource >= 0 {
+			explicit = in
+		}
+		src, restore, held := r.readKeySource(explicit)
+		defer restore()
+		if !held {
+			return r.readNoTerminal()
+		}
+		in = src
+		if explicit == nil {
+			// The terminal, as a file. Kept so the timed read below can wait
+			// for readability instead of parking a read on it — see
+			// pollingKeySource, and why that distinction is load-bearing here
+			// and nowhere else.
+			keyTerminal, _ = src.(*os.File)
+		}
 	}
 
 	next := directByteSource(in)
@@ -3146,12 +3188,24 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		if r.unspecified {
 			return 2
 		}
+		// `read -k` on the terminal waits for the bytes rather than parking a
+		// read on them, because the stream it would park on is the line
+		// editor's own input and an abandoned read there swallows the next
+		// key somebody presses. Every other read keeps the shared machinery,
+		// whose cost is confined to the pipe it was used on.
+		if polled, can := keyTimedSource(keyTerminal, timeout, whole); can {
+			next = polled
+			break
+		}
 		next, stop = r.timedByteSource(ctx, in, timeout, whole)
 		defer stop()
 	default:
 		// The read that never returns, which is the one a coprocess makes
 		// by construction.
 		r.settleBackgroundJobBeforeABlockingRead(in)
+	}
+	if readsKeys {
+		return r.readKeysInto(next, keys, args)
 	}
 	text, lits, end := readSegment(next, raw, delim, count, exact)
 
@@ -3848,7 +3902,13 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// mark rather than an `if` of its own, because the copy that stood
 		// here had the table's half and not the array's — see
 		// markDeclaredCompound and #1535.
-		r.markDeclaredCompound(name, fresh, f)
+		if !r.markDeclaredCompound(name, fresh, f, hasValue) {
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			r.assignFailed = true
+			continue
+		}
 		if f.readonly && f.readonlyOff {
 			// `local +r y` after this same call's `local -r y=1`, which is
 			// the one shape that reaches this with a freeze still standing:
@@ -4028,7 +4088,13 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			// loop keeps: the letters say what the name is and the value
 			// then lands in it. `fresh` is false because this builtin takes
 			// no scope of its own.
-			r.markDeclaredCompound(name, false, f)
+			if !r.markDeclaredCompound(name, false, f, hasValue) {
+				if r.unspecified || r.ctl == controlExit {
+					return r.status
+				}
+				r.assignFailed = true
+				continue
+			}
 		}
 		if r.unspecified {
 			return r.status

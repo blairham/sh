@@ -627,6 +627,37 @@ type Diagnostics struct {
 	// inside itself, which is why it takes a line as a verb at all.
 	HereDocumentAtEOF string
 
+	// BackquoteObsolete is what a shell says about the older command
+	// substitution, `` `…` ``. Empty means nothing is said, which is five of
+	// the six columns.
+	//
+	// Measured 2026-09-12 from a script file: ksh93u+ writes `warning: line
+	// 1: ` + "`" + `...` + "`" + ` obsolete, use $(...)` for every backquote it reads, and
+	// dash, bash 5.3, bash-as-sh, bash 3.2 and zsh 5.9.2 read one without a
+	// word. It accompanies a refusal as well, warning first: a backquote
+	// that never closes draws both.
+	//
+	// **Only where the shell is not going to run the program**, which is
+	// measured rather than assumed and is the half the issue that asked for
+	// this had wrong. `ksh -n bq.sh` writes it and `ksh bq.sh` writes
+	// nothing at all, on the same file; a backquote typed at an interactive
+	// prompt is silent too. See RemarkOnlyWhenNotRunning, which is how the
+	// front end knows to hold it back.
+	// It takes the line the backquote stands on, because this dialect
+	// carries the line inside the sentence rather than in the location in
+	// front of it — see RemarkNamesItsOwnLine.
+	BackquoteObsolete string
+
+	// RemarkNamesItsOwnLine has a remark's wording carry the line it is
+	// about, so the location in front of it says only who is speaking.
+	//
+	// ksh93 writes `<script>: warning: line 1: ` + "`" + `...` + "`" + ` obsolete, use
+	// $(...)` where bash writes `<script>: line 2: warning: here-document at
+	// line 1 …` — the same split its syntax errors make, which
+	// ParseFailureNamesItsOwnLine already records for those. Measured
+	// 2026-09-12 from a script file.
+	RemarkNamesItsOwnLine bool
+
 	// WaitBadJob is an operand to `wait` that names neither a process nor a
 	// job, taking the word. Four wordings across the panel and no two alike:
 	// one quotes it and names both things it could have been, one calls it an
@@ -652,6 +683,18 @@ type Diagnostics struct {
 	// Two verbs: the builtin, and the text with its `%` already stripped,
 	// which is how the engine writes it.
 	AmbiguousJobSpec string
+
+	// WaitJobStopped is what a *bare* `wait` says about a job it has given
+	// up on because the job stopped — Semantics.WaitGivesUpOnAStoppedJob.
+	// Two verbs: the job's number and its process id. Empty means nothing is
+	// said, which is every dialect that does not give up at all.
+	WaitJobStopped string
+	// WaitForJobStopped is the same thing said by a `wait` that *named* the
+	// job, which bash words differently and from the other side of its own
+	// machinery. One verb: the job's number. The status is not a wording —
+	// it is 128 plus the stop signal, the number a command that signal
+	// killed reports.
+	WaitForJobStopped string
 
 	// WaitNotOurChild is a number that is a plausible process id and is not
 	// one of this shell's children, taking the number. Empty means nothing
@@ -695,6 +738,21 @@ type Diagnostics struct {
 	// untouched; the words differ: ksh93 says `no query process`, zsh says
 	// `-p: no coprocess`.
 	ReadNoCoprocess string
+	// ReadNoTerminal is `read -k` in a shell that holds no terminal to read
+	// characters from. One dialect has the letter and it is the only one, so
+	// there is one wording; it carries neither a location nor the builtin's
+	// name, which is measured — `printf abc | zsh -c 'read -k v'` writes the
+	// bare sentence and nothing else. Empty means the default, which is that
+	// sentence.
+	ReadNoTerminal string
+	// ReadBadOptionNumber is a `read` option whose argument had to be a
+	// number and was not. One letter reaches it — zsh's `-k`, and only in the
+	// attached spelling, since a separate word that is not a number was never
+	// the argument but the name to read into. Two verbs: the letter, then the
+	// word. Measured 2026-09-12: `read -k2v x` is `number expected after -k:
+	// 2v`, which is a different sentence from the same dialect's answer for a
+	// bad `-t`, so it is a wording of its own rather than ReadBadNumber.
+	ReadBadOptionNumber string
 
 	// CoprocessAlreadyRunning is a second `cmd |&` started while the first
 	// coprocess is still running, in the dialect that spells a coprocess as
@@ -1375,6 +1433,23 @@ type Diagnostics struct {
 	// Only a dialect answering SubscriptedArrayLiteralRefused has anything to
 	// put here.
 	ArrayLiteralThroughASubscript string
+
+	// CannotConvertTableToArray is what a declaration says when `-a` names a
+	// name already declared a **table**. Two verbs: the name, and the
+	// builtin as it was invoked — bash writes `declare:`, `typeset:` and
+	// `local:` for the same refusal, so the builtin is a verb rather than a
+	// prefix this package adds.
+	//
+	// Only a dialect answering Semantics.TableUnderAnArrayDeclaration with
+	// one of the two refusals has anything to put here.
+	CannotConvertTableToArray string
+
+	// CannotConvertArrayToTable is the same sentence for the other
+	// direction, `-A` over a name holding an indexed array. Two verbs, the
+	// same two — a field of its own because the shells that word one word
+	// the other differently, and because a shell may refuse one direction
+	// and convert the other, which ksh93 does.
+	CannotConvertArrayToTable string
 
 	// ArrayValueToNonArray is what the splicing shell says when the name a
 	// subscripted literal writes through holds a plain string. One verb: the
@@ -2731,16 +2806,44 @@ type Diagnostics struct {
 	// Empty says nothing, which is two of the four and is the base's answer:
 	// the standard does not have the shell remark on it.
 	//
-	// bash 5.3.15 writes a *second* line above this one — `bash: cannot set
-	// terminal process group (11143): Inappropriate ioctl for device` — and
-	// it is deliberately not reproduced. Three reasons, and the first is the
-	// one that settles it: bash 3.2.57 and bash 3.2 run as `sh` do not write
-	// it at all, so it is one version's extra line rather than bash's
-	// wording. It is also that shell reporting the failure of an ioctl this
-	// shell never makes, and there is nothing here whose failure it would be
-	// describing. And it carries the shell's own pid, which no script can act
-	// on and which no recording of would be the same twice.
+	// One shell writes a second line *above* this one; see
+	// CannotSetTerminalProcessGroup, which is that line.
 	NoJobControlAtStartup string
+
+	// CannotSetTerminalProcessGroup is the line bash 5.3 writes above
+	// NoJobControlAtStartup, naming the process group it could not hand the
+	// terminal to. One verb: `%[1]d` is the process group.
+	//
+	// Measured 2026-09-12 with no terminal on any of the three standard
+	// streams, on `-ic` and `-lic` alike:
+	//
+	//	bash 5.3.15   bash: cannot set terminal process group (91050): Inappropriate ioctl for device
+	//	bash as `sh`  the same, under its own name
+	//	bash 3.2.57   nothing — only the line below it
+	//	dash          nothing
+	//	ksh93u+       nothing
+	//	zsh 5.9.2     nothing
+	//
+	// So bash 5.3 is the single column out of six this shell did not match
+	// on the `-ic` route, which is the shape a caller writes when it wants a
+	// person's aliases in scope and has no terminal to offer (#1036).
+	//
+	// It was left out on purpose once, for three reasons, and each has since
+	// stopped holding. That bash 3.2.57 does not write it made it "one
+	// version's extra line" — but this dialect models 5.3 everywhere else,
+	// and the older build's silence is recorded in its own column rather
+	// than being this dialect's answer. That it reports an ioctl this shell
+	// does not make is still true, and is the reason the errno half is fixed
+	// text rather than a rendered error: the *fact* being reported — an
+	// interactive shell that could not have the terminal — is one this shell
+	// establishes for itself, and how it is worded is what Diagnostics is
+	// for. And that the number is different every run stopped mattering when
+	// the harness began masking it: `process group (N)`, masked rather than
+	// dropped, because *that it named one* is part of the complaint.
+	//
+	// Empty says nothing, which is five of the six columns and the base's
+	// answer.
+	CannotSetTerminalProcessGroup string
 
 	// NoJobControlAtStartupNamesTheScript puts `$0` in front of that remark
 	// rather than the shell's own name. dash and only dash, of the two that
@@ -4087,10 +4190,29 @@ func (d Diagnostics) ParseFailure(err error) string {
 // parse time and only about one thing. Silence is expressed by having no
 // wording rather than by the front end knowing which shells are quiet.
 func (d Diagnostics) Remark(r syntax.Remark) string {
-	if r.Kind != syntax.RemarkHeredocAtEOF || d.HereDocumentAtEOF == "" {
-		return ""
+	switch r.Kind {
+	case syntax.RemarkHeredocAtEOF:
+		if d.HereDocumentAtEOF == "" {
+			return ""
+		}
+		return Wording(d.HereDocumentAtEOF, "", r.At.Line, r.Token)
+	case syntax.RemarkBackquoteSubstitution:
+		return Wording(d.BackquoteObsolete, "", r.Pos.Line)
 	}
-	return Wording(d.HereDocumentAtEOF, "", r.At.Line, r.Token)
+	return ""
+}
+
+// RemarkOnlyWhenNotRunning reports whether this remark is one the shell keeps
+// to itself once it is going to execute the program.
+//
+// A property of the *remark* rather than of a dialect, which is what the
+// measurement says: the one shell that remarks on a backquote writes it under
+// `-n` and never otherwise, on the same file, and no shell in the panel has a
+// second answer to compare. A here-document that ran to the end of the input
+// is the other way and is said either way, which is why this is a question at
+// all and not a rule about remarks.
+func RemarkOnlyWhenNotRunning(k syntax.RemarkKind) bool {
+	return k == syntax.RemarkBackquoteSubstitution
 }
 
 // ForScript returns the diagnostics a script read from a file should use.
@@ -4201,6 +4323,23 @@ func (d Diagnostics) JobControlDiagnostic(shell string) string {
 		return ""
 	}
 	return d.invocationPrefix(shell) + d.NoJobControlAtStartup + "\n"
+}
+
+// TerminalProcessGroupDiagnostic is the line above that one, in the single
+// dialect that writes it, and empty in the rest — see
+// CannotSetTerminalProcessGroup.
+//
+// Separate from JobControlDiagnostic rather than folded into it because the
+// two are not one sentence: one column writes both, one writes the second
+// alone, and two write neither, so a dialect has to be able to answer them
+// apart.
+func (d Diagnostics) TerminalProcessGroupDiagnostic(shell string, pgid int) string {
+	if d.CannotSetTerminalProcessGroup == "" {
+		return ""
+	}
+	msg := Wording(d.CannotSetTerminalProcessGroup,
+		"cannot set terminal process group (%[1]d)", pgid)
+	return d.invocationPrefix(shell) + msg + "\n"
 }
 
 // ScriptStatus is what a shell exits with when the script operand would not

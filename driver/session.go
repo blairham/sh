@@ -99,7 +99,7 @@ func (s *Session) run(ctx context.Context, src string) int {
 		p := syntax.NewParser(src, s.dialect().On(syntax.RouteFromCommandString))
 		p.Parse()
 		if err := p.Err(); err != nil {
-			s.sh.sayRemarks(in.dg, in.name, p.Remarks(), 0)
+			s.sh.sayRemarks(in.dg, in.name, p.Remarks(), 0, true)
 			s.sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, src))
 			return in.dg.StatusForParseError(err)
 		}

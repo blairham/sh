@@ -53,6 +53,8 @@ func (r *Runner) chainLink(e *syntax.ParamExpr, i int) *syntax.ParamExpr {
 		Src:        e.Src,
 		Index:      e.Leading[i].Index,
 		IndexFlags: e.Leading[i].Flags,
+		IndexRange: e.Leading[i].Range,
+		IndexText:  e.Leading[i].Text,
 		Leading:    e.Leading[:i],
 	}
 }

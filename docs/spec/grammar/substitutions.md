@@ -63,6 +63,52 @@ The older form. It nests only with backslash escaping, which is why the
 `$( )` form exists and why this one is worth supporting but never
 recommending. Its delimiter is a backtick that is not backslash-escaped.
 
+### One shell says so, and only when it is not going to run
+
+ksh93 remarks on every backquote substitution it reads:
+
+    $ ksh -n bq.sh
+    bq.sh: warning: line 1: `...` obsolete, use $(...)
+
+Measured 2026-09-12 on 93u+ 2012-08-01, from a script file, from `-c`
+and from standard input. dash, bash 5.3, bash-as-`sh`, bash 3.2 and zsh
+read a backquote without a word, so this is one column's and the
+wording is a `Diagnostics` field, `BackquoteObsolete`, empty in the
+rest.
+
+**It is said only while the shell is not going to execute**, which is
+the half that decides where the rule lives:
+
+| route | ksh93 |
+| --- | --- |
+| `ksh -n bq.sh` | one line per backquote |
+| `ksh bq.sh` | nothing at all |
+| ``ksh -n -c 'x=`echo hi`'`` | one line |
+| ``ksh -c 'x=`echo hi`'`` | nothing |
+| a backquote typed at a prompt | nothing |
+
+So the parse produces the remark either way and the front end decides
+whether to say it — `interp.RemarkOnlyWhenNotRunning` answers that per
+remark kind, because the other remark this substrate has, a
+here-document that ran to the end of the input, is said either way.
+
+It accompanies a refusal as well, warning first:
+
+    $ ksh -n bqu.sh
+    bqu.sh: warning: line 1: `...` obsolete, use $(...)
+    bqu.sh: syntax error at line 1: ``' unmatched
+
+which is the same shape the here-document remark has, and the reason
+remarks are read whether or not the parse also failed.
+
+The line is inside the sentence rather than in the location in front of
+it — `<script>: warning: line 1: …` and not `<script>: line 1: warning:
+…` — which is the split this shell's syntax errors already make and
+which `Diagnostics.RemarkNamesItsOwnLine` records.
+
+Corpus: `core/a-backquote-substitution-under-a-syntax-check`,
+`core/a-backquote-substitution-when-it-runs`.
+
 ## `${…}`
 
 `${x:-y}` and its relatives lex as one word, and the delimiting rule is

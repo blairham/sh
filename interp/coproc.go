@@ -111,9 +111,10 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 	}
 
 	job := &Job{
-		done:    make(chan struct{}),
-		ready:   make(chan struct{}),
-		started: make(chan struct{}),
+		done:     make(chan struct{}),
+		ready:    make(chan struct{}),
+		started:  make(chan struct{}),
+		stopNote: make(chan struct{}),
 		// The body itself, released when its pid settles either way — the
 		// same count `&` keeps, for the same reason. See Job.expectPart.
 		parts:   1,
@@ -166,6 +167,7 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 
 	r.addJob(job)
 	r.setLastJob(job)
+	r.becomeCurrentJob(job)
 
 	// The near ends go into the descriptor table the way `exec {fd}>f`
 	// would put them there: numbered from ten up, for keeps.

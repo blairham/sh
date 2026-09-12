@@ -161,6 +161,7 @@ func TestSemantics(t *testing.T) {
 		{"TypeNamesTheKindWithDashT", s.TypeNamesTheKindWithDashT, interp.Yes},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.Yes},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.No},
+		{"StoppedJobTakesTheCurrentJobMarker", s.StoppedJobTakesTheCurrentJobMarker, interp.Yes},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
 		// All three pseudo-conditions, RETURN being this shell's alone —
 		// and none of them follows the script into a call or a subshell
@@ -678,6 +679,16 @@ func TestDeclareReportsARefusedName(t *testing.T) {
 	out, _ := runBash(t, t.TempDir(), "readonly r=1\ndeclare r=2\necho st=$?\n")
 	if !strings.Contains(out, "st=1\n") {
 		t.Errorf("output = %q, want the refusal to fail the builtin", out)
+	}
+}
+
+// bash 5.3 alone of the six columns names the process group it could not hand
+// the terminal to, above the line saying there is no job control. bash 3.2
+// writes only the second; this dialect models 5.3, as it does everywhere else.
+func TestItNamesTheProcessGroupItCouldNotSet(t *testing.T) {
+	want := "cannot set terminal process group (%[1]d): Inappropriate ioctl for device"
+	if got := bash.Diagnostics().CannotSetTerminalProcessGroup; got != want {
+		t.Errorf("CannotSetTerminalProcessGroup = %q, want %q", got, want)
 	}
 }
 

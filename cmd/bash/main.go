@@ -28,19 +28,23 @@ import (
 // about the binary.
 func shell() driver.Shell {
 	return driver.Shell{
-		Name:         "bash",
-		Dialect:      bash.Dialect(),
-		Semantics:    bash.Semantics(),
-		Diagnostics:  bash.Diagnostics(),
-		Prelude:      bash.Prelude(),
-		Register:     bash.Apply,
-		PromptStyle:  bash.PromptStyle(),
-		EditorStyle:  bash.EditorStyle(),
-		KeyBindings:  bash.KeyBindings,
-		ViEditing:    bash.ViEditing,
-		RunWidget:    bash.RunWidget,
-		HistoryStyle: bash.HistoryStyle(),
-		HookStyle:    bash.HookStyle(),
+		Name: "bash",
+		// Where this machine keeps the administrator's startup files. It
+		// is the install's answer rather than the dialect's, which is why
+		// it is named here; see driver.Shell.SystemStartupDirectory.
+		SystemStartupDirectory: "/etc",
+		Dialect:                bash.Dialect(),
+		Semantics:              bash.Semantics(),
+		Diagnostics:            bash.Diagnostics(),
+		Prelude:                bash.Prelude(),
+		Register:               bash.Apply,
+		PromptStyle:            bash.PromptStyle(),
+		EditorStyle:            bash.EditorStyle(),
+		KeyBindings:            bash.KeyBindings,
+		ViEditing:              bash.ViEditing,
+		RunWidget:              bash.RunWidget,
+		HistoryStyle:           bash.HistoryStyle(),
+		HookStyle:              bash.HookStyle(),
 	}
 }
 

@@ -62,8 +62,8 @@ func TestWorkHandedTheTerminalBackFindsItsOwnLineDiscipline(t *testing.T) {
 // raw mode turns off and restoring turns back on.
 func echoes(t *testing.T, f *os.File) bool {
 	t.Helper()
-	var termios syscall.Termios
-	if err := ioctl(int(f.Fd()), tcGets, &termios); err != nil {
+	termios, err := probeTermios(int(f.Fd()))
+	if err != nil {
 		t.Fatalf("reading the terminal: %v", err)
 	}
 	return termios.Lflag&syscall.ECHO != 0
@@ -185,9 +185,8 @@ type modeRecordingWriter struct {
 
 func (m *modeRecordingWriter) Write(p []byte) (int, error) {
 	<-m.gate
-	var termios syscall.Termios
 	on := false
-	if err := ioctl(m.fd, tcGets, &termios); err == nil {
+	if termios, err := probeTermios(m.fd); err == nil {
 		on = termios.Oflag&syscall.OPOST != 0
 	}
 	m.mu.Lock()

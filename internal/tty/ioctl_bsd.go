@@ -8,3 +8,5 @@ package tty
 import "syscall"
 
 const tcGets = syscall.TIOCGETA
+
+const tcSets = syscall.TIOCSETA

@@ -281,8 +281,10 @@ func TestAHandlerThatPrintsIsGivenTheTerminalFirst(t *testing.T) {
 	}
 }
 
-// TestUnderABlockStoreAHandlerKeepsBothTheStreamAndRawMode is the default
-// session, which is the one the measurement in #1463 was taken in.
+// TestUnderABlockStoreAHandlerKeepsBothTheStreamAndRawMode is a session that
+// asked for the output half, which is the one the measurement in #1463 was
+// taken in. It was the *default* session when that was written; since #2274 a
+// session gets a conduit only by asking, so this one asks.
 //
 // With a block store the Runner's streams are the far end of a
 // pseudo-terminal, and its pump asks the real terminal per write whether it is
@@ -313,6 +315,9 @@ func TestUnderABlockStoreAHandlerKeepsBothTheStreamAndRawMode(t *testing.T) {
 		cfg.Runner.Stdout, cfg.Runner.Stderr = tty, tty
 		cfg.Runner.Vars["HISTFILE"] = dir + "/history"
 		cfg.Runner.Vars[blocks.DirVar] = dir
+		// And the output half by name: a store alone records commands, and it
+		// is the capture that puts a conduit in front of the streams.
+		cfg.Runner.Vars[blocks.OutputVar] = blocks.CaptureTerminalValue
 		runner = cfg.Runner
 		cfg.WatchedDescriptors = p.watched
 		cfg.DescriptorReady = p.ready

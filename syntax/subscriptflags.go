@@ -166,10 +166,13 @@ type SubscriptEnd struct {
 // `r` read as two ends, rather than the element whose value holds the comma.
 // So the split is the parser's and not the run's.
 //
-// Only where the grammar has flag groups at all, and only where one of the
-// ends carries one: a pair of plain arithmetic ends has always been read from
-// the subscript's text and reads identically, and leaving it there keeps this
-// additive.
+// Only where the grammar has flag groups at all, and **every** written pair
+// there — a pair of plain arithmetic ends included. It was the flagged pairs
+// alone, and the plain ones were separated out of the subscript's *expanded*
+// text at the run instead, which is the same rule applied to the wrong text:
+// `i="1,2"; ${a[$i]}` came back a two-element range where the shell answers
+// the first element, because the comma the substitution brought in had never
+// been written (#2160).
 type SubscriptRange struct {
 	// Lo and Hi are the two ends, in written order.
 	Lo, Hi SubscriptEnd
@@ -185,25 +188,60 @@ type SubscriptRange struct {
 // run, where a pair of plain ends is separated out of the subscript's
 // expanded text — and two copies of it would be two answers to one question.
 func SubscriptComma(text string) (at int, extra bool) {
+	first, second := topLevelByte(text, ",")
+	return first, second >= 0
+}
+
+// SubscriptExpressionEnd is where a subscript's *expression* stops, or -1
+// where it runs to the end of the text.
+//
+// The same walk SubscriptComma makes, over two characters instead of one,
+// because the shell with ranges ends a subscript's expression at either of
+// them. Measured on zsh 5.9.2, 2026-09-12, with `a=(p q r s)`:
+//
+//	i="2,3";   ${a[$i]}   q     the reader takes the 2 and stops
+//	i="1+1,3"; ${a[$i]}   q     so it is not the comma *operator*, which is 3
+//	i="2,";    ${a[$i]}   q     and the tail need not be an expression
+//	i="2;3";   ${a[$i]}   q     nor is the comma the only separator
+//	i="2,n=9"; ${a[$i]}   q, and `n` is still 0 — the tail is not evaluated
+//	i="(1,2)"; ${a[$i]}   q     nested, so the comma operator applies
+//	$(( 1,2 ))            2     and outside a subscript it always applies
+//
+// So it is the *top level of a subscript* and nowhere else: the operator is
+// there, and this reader stops before reaching it. Exported for the same
+// reason SubscriptComma is — the question is asked in the parser and at the
+// run, and two copies would be two answers.
+func SubscriptExpressionEnd(text string) int {
+	first, _ := topLevelByte(text, ",;")
+	return first
+}
+
+// topLevelByte is where the first and second of any of these characters
+// stand outside every nesting, or -1 for each that is not there.
+//
+// Nested parentheses and brackets hold their own, so `f(1,2),3` has one
+// top-level comma and a flag group's own `(rn:1,2:)` argument has none.
+func topLevelByte(text, of string) (first, second int) {
 	depth := 0
-	at = -1
+	first, second = -1, -1
 	for i := range len(text) {
 		switch text[i] {
 		case '(', '[':
 			depth++
 		case ')', ']':
 			depth--
-		case ',':
-			if depth != 0 {
+		default:
+			if depth != 0 || strings.IndexByte(of, text[i]) < 0 {
 				continue
 			}
-			if at >= 0 {
-				return at, true
+			if first < 0 {
+				first = i
+				continue
 			}
-			at = i
+			return first, i
 		}
 	}
-	return at, false
+	return first, second
 }
 
 // LeadingIndex is one subscript of a chain: everything ParamExpr.Index and
@@ -217,27 +255,34 @@ type LeadingIndex struct {
 	Index *Word
 	// Flags is the group it opened with, nil when there was none.
 	Flags *SubscriptFlags
+	// Range is the pair it was written as, nil when it was not one. The same
+	// field ParamExpr.IndexRange is, and for the same reason: a link that
+	// carried only the text would have its pair separated out of the
+	// *expanded* text at the run, where a comma that arrived through a
+	// substitution reads as a separator (#2160).
+	Range *SubscriptRange
+	// Text is the subscript as the source spelled it, for the reason
+	// ParamExpr.IndexText is.
+	Text string
 }
 
 // subscriptRange reads a subscript written as a pair whose ends each carry a
 // flag group of their own, and reports whether it is one.
 //
-// Two conditions, and both keep the reading additive. A *third* top-level
-// comma is no pair at all — the shell with the construct calls `[1,2,3]` a
-// bad substitution — and a pair whose ends are both plain arithmetic is left
-// to the reading that already separates it out of the subscript's expanded
-// text, so nothing that parses today parses differently.
+// A *third* top-level comma is no pair at all — the shell with the construct
+// calls `[1,2,3]` a bad substitution — and that is the whole of the condition
+// now. A pair whose ends are both plain arithmetic used to be left to a run
+// that split the *expanded* text, which read a comma that arrived through a
+// substitution as a separator (#2160).
 func (p *Parser) subscriptRange(inner string, start Pos) (*SubscriptRange, bool) {
 	at, extra := SubscriptComma(inner)
 	if at < 0 || extra {
 		return nil, false
 	}
-	lo := p.subscriptEnd(inner[:at], start)
-	hi := p.subscriptEnd(inner[at+1:], start)
-	if lo.Flags == nil && hi.Flags == nil {
-		return nil, false
-	}
-	return &SubscriptRange{Lo: lo, Hi: hi}, true
+	return &SubscriptRange{
+		Lo: p.subscriptEnd(inner[:at], start),
+		Hi: p.subscriptEnd(inner[at+1:], start),
+	}, true
 }
 
 // subscriptEnd reads one end of such a pair: the group it opens with, where

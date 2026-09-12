@@ -278,13 +278,23 @@ func TestAnOutputBaseIsReadInBothSpellings(t *testing.T) {
 }
 
 // The alphabet is the whole of what a dialect can spell: its case and its
-// length, which is the largest base. A base past the end is taken and
-// rendered plain where the dialect has no complaint for it.
+// length, which is the largest base.
+//
+// A base past the end is *taken* where the dialect has no complaint for it,
+// and the rendering falls back to ten **with the mark still on** — measured
+// 2026-09-12 on ksh93u+, where `typeset -i65 d=100` reads `10#100` and lists
+// as `typeset -i 65 d=10#100`, so the base is stored and only the spelling
+// gives way (#1308). This row used to assert a plain `100`, which was our
+// answer rather than a measured one.
+//
+// A dialect with no alphabet at all has no end for a base to be past, so it
+// renders plain as it always did — the last row, and the one that keeps the
+// fallback from reaching a dialect without the feature.
 func TestTheOutputBaseAlphabetSaysTheCaseAndTheRange(t *testing.T) {
 	for _, tc := range []struct{ digits, want string }{
 		{"0123456789abcdefghijklmnopqrstuvwxyz", "b=[36#2s]\n"},
 		{"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", "b=[36#2S]\n"},
-		{"0123456789", "b=[100]\n"},
+		{"0123456789", "b=[10#100]\n"},
 		{"", "b=[100]\n"},
 	} {
 		out, errs, st := integerRun(t, "typeset -i36 b=100\necho \"b=[$b]\"",

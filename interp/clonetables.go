@@ -211,6 +211,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// parent's job rather than a snapshot of it.
 	c.redirFds = slices.Clone(r.redirFds)
 	c.jobs = slices.Clone(r.jobs)
+	c.jobOrder = slices.Clone(r.jobOrder)
 	c.aroundFunctionCalls = slices.Clone(r.aroundFunctionCalls)
 	c.freezeAfter = slices.Clone(r.freezeAfter)
 

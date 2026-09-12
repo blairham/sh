@@ -7,6 +7,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/blairham/sh/driver"
+
 	"github.com/blairham/sh/internal/testenv"
 )
 
@@ -25,4 +27,30 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 	os.Exit(testenv.Run("cmd/bash", m))
+}
+
+// scratchShell is this binary's own shell value with the machine's system-wide
+// startup directory replaced by an empty one belonging to this test.
+//
+// The shipped binary reads `/etc`, which is the whole of #1717 and is pinned
+// by TestTheBinaryNamesTheMachinesStartupDirectory below. A *test* that read it
+// would be measuring the runner it happened to be on — `/etc/profile` sets
+// `$PATH` and sources `/etc/profile.d` on a Linux runner and runs `path_helper`
+// on macOS — which is the same failure internal/testenv exists to prevent, and
+// the one a scratch `HOME` cannot reach because no environment variable stands
+// between a shell and `/etc`.
+func scratchShell(t *testing.T) driver.Shell {
+	t.Helper()
+	sh := shell()
+	sh.SystemStartupDirectory = t.TempDir()
+	return sh
+}
+
+// TestTheBinaryNamesTheMachinesStartupDirectory keeps the line above honest.
+// Every test here runs with the directory moved, so nothing else would notice
+// if the shipped value went missing.
+func TestTheBinaryNamesTheMachinesStartupDirectory(t *testing.T) {
+	if got := shell().SystemStartupDirectory; got != "/etc" {
+		t.Errorf("SystemStartupDirectory = %q, want /etc", got)
+	}
 }

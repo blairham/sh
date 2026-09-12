@@ -68,6 +68,14 @@ func TestSemantics(t *testing.T) {
 		// zsh on a non-numeric -t operand.
 		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.Yes},
 		{"TerminalTestRequiresANumber", s.TerminalTestRequiresANumber, interp.No},
+		// And the descriptor is read at the width of a machine int, with -1
+		// — where every conversion too wide to hold lands — true whatever
+		// the shell is holding (#2000).
+		{"TerminalTestDescriptorNarrowsToThirtyTwoBits", s.TerminalTestDescriptorNarrowsToThirtyTwoBits, interp.Yes},
+		{"TerminalTestMinusOneIsATerminal", s.TerminalTestMinusOneIsATerminal, interp.Yes},
+		// `[ n -eq 5 ]` reads its operands as arithmetic here, alone in the
+		// panel (#1626).
+		{"TestBuiltinComparisonOperandsAreArithmetic", s.TestBuiltinComparisonOperandsAreArithmetic, interp.Yes},
 		// And a lone `-t` is `-t 1` rather than a non-empty string, the one
 		// reading this shell shares with zsh.
 		{"BareTerminalTestIsDescriptorOne", s.BareTerminalTestIsDescriptorOne, interp.Yes},
@@ -173,6 +181,7 @@ func TestSemantics(t *testing.T) {
 		{"TypeNamesTheKindWithDashT", s.TypeNamesTheKindWithDashT, interp.No},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.No},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
+		{"StoppedJobTakesTheCurrentJobMarker", s.StoppedJobTakesTheCurrentJobMarker, interp.No},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
 		// ERR and DEBUG but not RETURN. The subshell answers differ on
 		// purpose: a command substitution here captures the DEBUG

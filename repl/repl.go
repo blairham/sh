@@ -114,6 +114,22 @@ type Shell struct {
 	// merely not finished.
 	AskAgainAfterARefusedToken bool
 
+	// CountSessionLines numbers each line by how many the session has read,
+	// rather than starting every construct's text at line 1.
+	//
+	// One dialect names a line at a prompt at all, and it counts the session:
+	// the second line typed is line 2, whether what it says about it is a
+	// parse failure or a command it could not find. The other three name no
+	// line there, so the number is invisible to them and the zero value keeps
+	// the numbering a construct's own.
+	//
+	// It is the position the *parser* is given rather than a wording, which
+	// is what makes the two routes agree: a diagnostic about the text as
+	// written comes from the parse, and one about running it comes from the
+	// tree's own positions, and only a number carried in at the parse reaches
+	// both (#2022).
+	CountSessionLines bool
+
 	// Style is what this dialect does to a prompt parameter's value before
 	// it is drawn. The zero value draws it as it stands.
 	Style PromptStyle
@@ -993,11 +1009,12 @@ func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *outpu
 // an exec is argv after expansion. `echo $HOME` is a block whose command is
 // `echo $HOME`.
 func (s Shell) accept(pending *strings.Builder, remember func(string), line string) ([]*syntax.File, string, error, bool) {
+	first := s.countLine(pending.Len() == 0)
 	pending.WriteString(line)
 	pending.WriteString("\n")
 	text := pending.String()
 
-	p := syntax.NewParser(text, s.Dialect)
+	p := syntax.NewParserAt(text, s.Dialect, first)
 	// The hook goes on unconditionally, unlike the script path: every shell
 	// in the panel expands aliases at a prompt, and the dialect's answer is
 	// only about a *non-interactive* one. This is the place that knows there
@@ -1038,6 +1055,34 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 	return stmts, text, err, true
 }
 
+// countLine records that one more line has been read and answers the line
+// number the text now accumulating begins at.
+//
+// The count runs whatever the dialect says, so that turning the numbering on
+// is one branch here rather than a second accounting nothing keeps in step;
+// what the dialect decides is only whether the parser is told about it. See
+// Shell.CountSessionLines.
+func (s Shell) countLine(startsPending bool) int {
+	c := s.counted()
+	if startsPending {
+		c.pendingLine = c.line + 1
+	}
+	c.line++
+	return s.pendingLine()
+}
+
+// pendingLine is the session line the text now accumulating began on, or 1
+// where the dialect numbers every construct from its own first line.
+func (s Shell) pendingLine() int {
+	if !s.CountSessionLines {
+		return 1
+	}
+	if n := s.counted().pendingLine; n > 0 {
+		return n
+	}
+	return 1
+}
+
 // endOfInput is what becomes of a half-typed construct when there is no more
 // input coming.
 //
@@ -1064,7 +1109,7 @@ func (s Shell) endOfInput(pending *strings.Builder) ([]*syntax.File, string, err
 	if strings.TrimSpace(text) == "" {
 		return nil, "", nil
 	}
-	p := syntax.NewParser(text, s.Dialect)
+	p := syntax.NewParserAt(text, s.Dialect, s.pendingLine())
 	// The same alias table the accepted lines were parsed with: a construct
 	// half of which was typed through an alias must not finish differently
 	// for having been finished here.

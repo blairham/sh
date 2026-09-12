@@ -3223,14 +3223,37 @@ type Diagnostics struct {
 	//
 	// Each of the first three writes a line for the same failure in a script
 	// and in `-c`, so this is the route's answer and not the dialect's whole
-	// answer. dash keeps its line and counts the **session** rather than the
-	// construct — the second line typed is 2 — which is state a front end
-	// would have to keep and is not modeled; see #2022.
+	// answer. dash keeps its line, and what it counts is
+	// PromptCountsTheSessionsLines below.
 	//
 	// Zero means "the same as Location". The prompt borrowed the general
 	// answer before this existed, so every dialect wrote a line no shell
 	// writes there (#1892).
 	PromptLocation LocationStyle
+	// PromptCountsTheSessionsLines numbers a line typed at a prompt by how
+	// many the **session** has read, rather than restarting at 1 for every
+	// construct.
+	//
+	// dash alone, and only because it is the only one of the four that names
+	// a line at a prompt at all — the other three name none, for a parse
+	// failure and for a command that was not found alike, so nothing they
+	// write could show a number either way. Measured 2026-09-12, three lines
+	// piped into each shell under `-i` with a scratch HOME:
+	//
+	//	echo one / if; then / echo three
+	//	  dash  dash: 2: Syntax error: ";" unexpected
+	//	  ours  dash: 1: Syntax error: ";" unexpected
+	//
+	//	nosuchcmd_zz / nosuchcmd_zz
+	//	  dash  dash: 1: … not found   then   dash: 2: … not found
+	//	  ours  dash: 1: … not found   twice
+	//
+	// The run-time route is the second half and is what says this cannot be
+	// a wording: the two must agree with each other on one screen, so what
+	// carries the number is the position the *parser* was given for the line
+	// — see repl.Shell.CountSessionLines, which is where the front end keeps
+	// the count (#2022).
+	PromptCountsTheSessionsLines bool
 	// PromptBuiltinLocation is BuiltinLocation for the same route, for the
 	// dialect that names the place two ways in one session. Zero means "the
 	// same as BuiltinLocation".

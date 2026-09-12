@@ -5805,6 +5805,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/single-quotes-in-a-quoted-expansion-body` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` |
 | `core/a-substitution-inside-those-quotes-is-performed` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` |
 | `core/an-unbalanced-substitution-inside-those-quotes` | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: command substitution: line 2: unexpected EOF while looking for matching `''` *(status 1)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `''` *(status 2)* | **2>** `<shell>: bad substitution: no closing `)' in 'a$(b'` *(status 1)* | **2>** `<shell>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<shell>:1: unmatched '~<shell>:1: unmatched "` *(status 1)* | **2>** `<shell>: syntax error: unterminated quoted string` *(status 2)* |
+| `core/an-unreadable-operand-a-branch-does-not-take` | `one` **2>** `<script>: 6: Syntax error: Unterminated quoted string` *(status 2)* | `one~SET~two` | `one` **2>** `<script>: line 3: unexpected EOF while looking for matching `''` *(status 2)* | `one~SET~two` | `one` **2>** `<script>: line 2: syntax error at line 3: `'' unmatched` *(status 3)* | `one` **2>** `<script>:6: unmatched '~<script>:6: unmatched "` *(status 1)* | `one` **2>** `<script>: line 6: syntax error: unterminated quoted string` *(status 2)* |
+| `core/an-unreadable-operand-a-branch-takes` | `one` **2>** `<script>: 5: Syntax error: Unterminated quoted string` *(status 2)* | `one~two` **2>** `<script>: command substitution: line 3: unexpected EOF while looking for matching `''` | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one~two` **2>** `<script>: line 2: bad substitution: no closing `)' in '$('` | `one` **2>** `<script>: syntax error at line 2: `'' unmatched` *(status 3)* | `one` **2>** `<script>:5: unmatched '~<script>:5: unmatched "` *(status 1)* | `one` **2>** `<script>: line 5: syntax error: unterminated quoted string` *(status 2)* |
+| `core/an-unreadable-operand-with-nothing-to-defer-behind` | `one~~two` | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one~~two` | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''~<script>: line 5: syntax error: unexpected end of file` *(status 2)* | `one~~two` | `one~~two` | `one~~two` |
 | `core/single-quotes-in-an-unquoted-expansion-body` | `[$v]` | `[$v]` | `[$v]` | `[$v]` | `[$v]` | `[$v]` | `[$v]` |
 | `core/double-quotes-in-a-quoted-expansion-body` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` |
 | `core/single-quotes-in-a-quoted-pattern-operand` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | **2>** `<shell>:1: unmatched '~<shell>:1: unmatched "` *(status 1)* | `[ay][xay]` |
@@ -5913,6 +5916,25 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/an-unbalanced-substitution-inside-those-quotes` — the same fact reaching the parse, and unanimous as a refusal: with the `'` an ordinary character there is nothing to close the `$(`, so every shell in the panel fails the line. They part company only on the wording and the status, which makes this a diagnostics row as well as a grammar one
   ```sh
   printf '[%s]' "${x:-'a$(b'}"; echo
+  ```
+- `core/an-unreadable-operand-a-branch-does-not-take` — the row above asked whether the operand reads; this asks **when** it is read, by setting the parameter so the branch holding it is never taken. bash 5.3 and bash 3.2 answer `SET` and say nothing at all, so the second read happens where the expansion reaches the operand and not where the file is read; zsh, ksh93 and dash refuse the line, for a reason upstream of any operand — their scan for the closing brace does not honour the quotes either, so the expansion ends at the first `}` and what is left is a stray quote. Three lines rather than one because the whole of the difference is what runs after, and `-c` puts everything in one list where a failed expansion ends the list (#2380)
+  ```sh
+  echo one
+  v=SET
+  echo "${v-'$('}"
+  echo two
+  ```
+- `core/an-unreadable-operand-a-branch-takes` — the same operand with the parameter unset, so the branch fires and the operand is read. The two that defer complain at *run* time — the wording carries the prefix `command substitution:` or `bad substitution`, which are run-time wordings — give up that line and print `two`, exiting 0; the other three refused the file at the line before. This is the pair's other half: neither row alone can tell a deferred read from a read that happens to succeed
+  ```sh
+  echo one
+  echo "${v-'$('}"
+  echo two
+  ```
+- `core/an-unreadable-operand-with-nothing-to-defer-behind` — the control that keeps the deferral from being read as a licence. Here the quote is not balanced *inside* the braces either, so the scan for the closing brace runs off the end and there is no operand to defer: every column refuses the file and `two` is never printed. A shell that answered this one by carrying on would have widened the rule rather than moved it
+  ```sh
+  echo one
+  echo "${v+'bar}"
+  echo two
   ```
 - `core/single-quotes-in-an-unquoted-expansion-body` — the contrast that says the rule belongs to the enclosing context and not to the body: unquoted, the same characters are an ordinary single-quoted run in all six — the quotes removed and the `$v` never substituted. Without this row a fix could take the quotes literally everywhere and still pass the quoted one
   ```sh
@@ -16391,6 +16413,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/readonly-does-not-leave-a-subshell` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` |
 | `declare/an-attribute-does-not-leave-a-subshell` | `[1+1][def]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `[1+1][def]` | `[1+1][def]` | `[1+1][def]` **2>** `<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[1+1][DEF]` | `[1+1][def]` | `[1+1][def]` **2>** `<shell>: typeset: not found~<shell>: typeset: not found` |
 | `declare/readonly-does-not-leave-a-process-substitution` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` |
+| `array/an-operator-between-a-literal-s-elements` | `one` **2>** `<script>: 2: Syntax error: "(" unexpected` *(status 2)* | `one~st=1~a=UNSET~two` **2>** `<script>: line 2: syntax error near unexpected token `&'~<script>: line 2: `a=(p & q)'` | `one` **2>** `<script>: line 2: syntax error near unexpected token `&'~<script>: line 2: `a=(p & q)'` *(status 1)* | `one~st=1~a=UNSET~two` **2>** `<script>: line 2: syntax error near unexpected token `&'~<script>: line 2: `a=(p & q)'` | `one` **2>** `<script>: syntax error at line 2: `&' unexpected` *(status 3)* | `one` **2>** `<script>:2: parse error near `&'` *(status 1)* | `one` **2>** `<script>: line 2: syntax error: unexpected "("` *(status 2)* |
+| `array/a-redirection-operator-in-a-literal-s-element` | `one` **2>** `<script>: 2: Syntax error: "(" unexpected` *(status 2)* | `one~two` **2>** `<script>: line 2: syntax error near unexpected token `>'~<script>: line 2: `a=( [0]=p [1]=> )'` | `one` **2>** `<script>: line 2: syntax error near unexpected token `>'~<script>: line 2: `a=( [0]=p [1]=> )'` *(status 1)* | `one~two` **2>** `<script>: line 2: syntax error near unexpected token `>'~<script>: line 2: `a=( [0]=p [1]=> )'` | `one` **2>** `<script>: syntax error at line 2: `>' unexpected` *(status 3)* | `one` **2>** `<script>:2: parse error near `>'` *(status 1)* | `one` **2>** `<script>: line 2: syntax error: unexpected "("` *(status 2)* |
+| `array/a-literal-holding-an-operator-in-a-function-body` | `one` **2>** `<script>: 2: Syntax error: "(" unexpected (expecting "}")` *(status 2)* | `one~defined~two` **2>** `<script>: line 2: syntax error near unexpected token `&'~<script>: line 2: `f() { a=(p & q); }'~<script>: line 4: f: command not found` | `one` **2>** `<script>: line 2: syntax error near unexpected token `&'~<script>: line 2: `f() { a=(p & q); }'` *(status 1)* | `one~defined~two` **2>** `<script>: line 2: syntax error near unexpected token `&'~<script>: line 2: `f() { a=(p & q); }'~<script>: line 4: f: command not found` | `one` **2>** `<script>: syntax error at line 2: `&' unexpected` *(status 3)* | `one` **2>** `<script>:2: parse error near `&'` *(status 1)* | `one` **2>** `<script>: line 2: syntax error: unexpected "(" (expecting "}")` *(status 2)* |
+| `array/a-literal-that-runs-out-of-input` | `one` **2>** `<script>: 2: Syntax error: "(" unexpected` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `)'` *(status 1)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `)'` *(status 1)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `)'` *(status 1)* | `one` **2>** `<script>: syntax error at line 5: `end of file' unexpected` *(status 3)* | `one` **2>** `<script>:5: parse error near `\n'` *(status 1)* | `one` **2>** `<script>: line 2: syntax error: unexpected "("` *(status 2)* |
 | `declare/matching-with-a-minus-writes-each-match-value` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` *(status 127)* | **2>** `<shell>: line 1: typeset: -m: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` *(status 2)* | **2>** `<shell>: line 1: typeset: -m: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` *(status 2)* | **2>** `<shell>: line 0: typeset: -m: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` *(status 2)* | **2>** `<shell>: typeset: q*: invalid variable name` *(status 1)* | `qa=1~qb=2` | **2>** `<shell>: typeset: not found~<shell>: typeset: not found` *(status 127)* |
 | `declare/matching-with-a-plus-writes-attributes-and-name` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` *(status 127)* | **2>** `<shell>: line 1: typeset: +m: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` *(status 2)* | **2>** `<shell>: line 1: typeset: +m: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` *(status 2)* | **2>** `<shell>: line 0: typeset: +m: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` *(status 2)* | **2>** `<shell>: typeset: q*: invalid variable name` *(status 1)* | `qa~integer qb` | **2>** `<shell>: typeset: not found~<shell>: typeset: not found` *(status 127)* |
 | `declare/matching-over-functions-is-named-by-the-f-sign` | **2>** `<shell>: 1: typeset: not found` *(status 127)* | **2>** `<shell>: line 1: typeset: +m: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` *(status 2)* | **2>** `<shell>: line 1: typeset: +m: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` *(status 2)* | **2>** `<shell>: line 0: typeset: +m: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` *(status 2)* | **2>** `Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `_a~_b` | **2>** `<shell>: typeset: not found` *(status 127)* |
@@ -17582,6 +17608,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/readonly-does-not-leave-a-process-substitution` — the boundary that matters for #1384, because this one is a subshell the shell runs *beside* itself: the same tables, and now two writers with no schedule between them. The shell without the construct never reaches the question, which is what makes this a different row from the one above rather than a restatement
   ```sh
   x=1; cat <(readonly x; echo sub) >/dev/null; x=2; printf "[%s]\n" "$x"
+  ```
+- `array/an-operator-between-a-literal-s-elements` — `a=( … )` is one word, so what stands between the parentheses is a list read on its own and an unquoted `&` in it is that list's complaint. bash 5.3 and bash 3.2 report it, throw the line away unrun — `a` is UNSET and `$?` is 1, a failed command's status and not a refused file's — and carry on to `two` at status 0. bash as `sh`, zsh and ksh93 stop there, and dash has no arrays at all and stops at the `(`. So the difference is not *when* the error is found — `bash -n` reports it in every column — but how much of the program it ends (#2380)
+  ```sh
+  echo one
+  a=(p & q)
+  echo "st=$?"
+  echo "a=${a[@]-UNSET}"
+  echo two
+  ```
+- `array/a-redirection-operator-in-a-literal-s-element` — the same rule reached through a subscripted element and a different operator, which is what says the recovery is the construct's and not one token's. The two that carry on name the `>` exactly as they named the `&`
+  ```sh
+  echo one
+  a=( [0]=p [1]=> )
+  echo two
+  ```
+- `array/a-literal-holding-an-operator-in-a-function-body` — where the line being thrown away is *visible*: the definition is not made, so the call after it is a command not found, and the shell still reaches `two`. A shell that reported the complaint and defined the function anyway would pass the row above and fail this one
+  ```sh
+  echo one
+  f() { a=(p & q); }
+  echo defined
+  f
+  echo two
+  ```
+- `array/a-literal-that-runs-out-of-input` — the control for the three rows above: the input running out is not the same failure and nothing carries on from it. bash words it against the parenthesis — `unexpected EOF while looking for matching )` — where the operator rows name the token, and every column stops. The distinction is real rather than incidental: the same text with more after it is an unfinished construct, which is a shell waiting rather than a shell complaining
+  ```sh
+  echo one
+  a=(p q
+  echo two
   ```
 - `declare/matching-with-a-minus-writes-each-match-value` — the `m` letter takes the operands as *patterns* rather than as names, and under a minus it writes each match's value. One shell has the letter with this meaning; ksh93's `-m` is a rename and is recorded here as what it does with one operand and no `=`, which is the evidence that the two are not the same feature. The `zz` name is the control: a listing that ignored the pattern would write it too
   ```sh

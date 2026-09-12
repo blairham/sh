@@ -1926,7 +1926,7 @@ type Dialect struct {
 	//
 	// The second read is not new. A `${ … }` written inside double quotes is
 	// scanned once for its closing brace, with the quotes inside the braces
-	// honoured, and the operand is then read again with those quotes standing
+	// honored, and the operand is then read again with those quotes standing
 	// for themselves — which is why `"${v+'bar}"` is `unexpected EOF while
 	// looking for matching '` here and in every column that has the reading.
 	// This flag says **when** the second read happens.
@@ -1946,10 +1946,10 @@ type Dialect struct {
 	// takes: a function body holding one is defined in silence.
 	//
 	// The three that refuse do it for a reason **upstream of any operand**:
-	// their brace scan does not honour the quotes either, so the expansion
+	// their brace scan does not honor the quotes either, so the expansion
 	// ends at the first `}` and what is left is a stray quote. That is a
 	// difference of its own and this shell does not have it yet — every
-	// dialect here honours the quotes in the scan — so the flag records the
+	// dialect here honors the quotes in the scan — so the flag records the
 	// observable the columns actually produce rather than the mechanism each
 	// reaches it by. Without it, turning the deferral on everywhere would
 	// answer `SET` where zsh, ksh93 and dash all refuse the line.

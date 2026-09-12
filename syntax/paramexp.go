@@ -263,7 +263,7 @@ type ParamExpr struct {
 	// writes.
 	//
 	// A `${ … }` written inside double quotes is read twice. The scan for the
-	// closing brace honours the quotes inside the braces, so `"${v-'$('}"`
+	// closing brace honors the quotes inside the braces, so `"${v-'$('}"`
 	// closes at its own `}` and the line parses; the operand between the `-`
 	// and the `}` is then read *again*, and in that read the two single
 	// quotes are characters rather than quoting, so the `$(` is a command
@@ -290,7 +290,7 @@ type ParamExpr struct {
 	// enough to ask: bash 5.3 and bash 3.2 defer, and zsh, ksh93 and dash
 	// end the expansion at the first `}` instead, so the construct is a
 	// stray quote to them long before an operand exists. bash in POSIX mode
-	// is the same three-way — it does not honour the quotes in the brace
+	// is the same three-way — it does not honor the quotes in the brace
 	// scan either, and refuses the file at parse time.
 	//
 	// The error is kept rather than the text re-read later because nothing

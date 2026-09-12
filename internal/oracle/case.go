@@ -15995,6 +15995,24 @@ echo end`,
 		Why: "and the fourth door into the same room: a trap's action is read when it fires, by this shell, so the alias table it reads is this shell's. Unanimous among the three that expand aliases in a script, which is what makes it the control for the two rows above — a fix reaching `eval` and `.` and not this one would still leave the last `trap` on every exit path saying `command not found`",
 	},
 	{
+		ID: "alias/a-body-may-be-a-compound-assignment", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias t='a=(x y)'
+t
+echo "[${a[0]}][${a[1]}]"`,
+		Why:    "an alias body is a piece of program, and the grammar has to read one the way it reads the input. `a=(x y)` is an array only where the parenthesis touches the `=`, which is an offset comparison — and every spliced token carries the position of the *word it replaced*, so in a body the two never touched and the assignment was refused outright. Written from a file rather than `-c`, which is the route all three expanding shells take without an option (#2299)",
+		Script: true,
+	},
+	{
+		ID: "alias/a-body-may-be-a-loop", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias t='for i in 1 2; do echo hi$i; done'
+t
+echo end`,
+		Why:    "the same fault at the other question that reads the input between two tokens: a loop variable is compared against the source text to see whether it was written plainly, and for a spliced token that text is the alias's own name — so every loop in a body was refused for a variable it did not have. A different construct and a different check, which is what makes it a second row rather than a restatement (#2299)",
+		Script: true,
+	},
+	{
 		ID: "alias/nested-text-expands-where-the-command-string-did-not", Category: "alias",
 		Snippet: `alias t=echo; eval "t E"; v=$(t S); echo "v=$v"`,
 		Why:     "zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases: the option is the only gate on a nested text, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. This is the row #2109 split `Dialect.ExpandAliases` in two for — one field held both the option's default and the route rule, and the front end derived the nested texts' answer from the route, which turned the table off for every `eval` and `$( )` under a zsh command string. The dash column is a *different* fault and still misses: that shell parses a substitution with the line that holds it, so its `$( )` here is read before the `alias` beside it has run — #2357",

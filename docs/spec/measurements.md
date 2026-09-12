@@ -18427,6 +18427,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/eval-uses-the-shells-aliases` | `EVAL~HIT~st=0` | `st=127` **2>** `<script>: line 3: e: command not found~<script>: line 4: t: command not found` | `EVAL~HIT~st=0` | `st=127` **2>** `<script>: line 5: e: command not found~<script>: line 6: t: command not found` | `HIT~st=0` **2>** `<script>[2]: eval: line 2: e: not found` | `HIT~st=0` **2>** `(eval):2: command not found: e` | `EVAL~HIT~st=0` |
 | `alias/a-substitution-uses-the-shells-aliases` | `v=SUB~w=BACK` | `v=~w=` **2>** `<script>: line 2: t: command not found~<script>: line 4: t: command not found` | `v=SUB~w=BACK` | `v=~w=` **2>** `<script>: line 2: t: command not found~<script>: line 4: t: command not found` | `v=SUB~w=BACK` | `v=SUB~w=BACK` | `v=SUB~w=BACK` |
 | `alias/a-trap-body-uses-the-shells-aliases` | `end~TRAP` | `end` **2>** `<script>: line 1: t: command not found` | `end~TRAP` | `end` **2>** `<script>: line 4: t: command not found` | `end~TRAP` | `end~TRAP` | `end~TRAP` |
+| `alias/a-body-may-be-a-compound-assignment` | **2>** `<script>: 3: Syntax error: "(" unexpected` *(status 2)* | `[x][y]` | `[x][y]` | `[x][y]` | `[x][y]` | `[][x]` | **2>** `<script>: line 3: syntax error: unexpected "("` *(status 2)* |
+| `alias/a-body-may-be-a-loop` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` |
 | `alias/nested-text-expands-where-the-command-string-did-not` | `E~v=` **2>** `<shell>: 1: t: not found` | `v=` **2>** `<shell>: line 1: t: command not found~<shell>: line 1: t: command not found` | `E~v=` **2>** `<shell>: line 1: t: command not found` | `v=` **2>** `<shell>: t: command not found~<shell>: t: command not found` | `E~v=S` | `E~v=S` | `E~v=` **2>** `<shell>: t: not found` |
 | `alias/a-trap-body-under-a-command-string-expands-too` | `end~TRAP` | `end` **2>** `<shell>: line 1: t: command not found` | `end~TRAP` | `end` **2>** `<shell>: t: command not found` | `end~TRAP` | `end~TRAP` | `end~TRAP` |
 | `alias/neither-kind-is-accepted-where-the-shell-has-not-got-it` | `ag=1~as=1~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=0~as=0~us=1` | `ag=1~as=1~us=2` |
@@ -18674,6 +18676,20 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   alias t='echo TRAP'
   trap 't' EXIT
+  echo end
+  ```
+- `alias/a-body-may-be-a-compound-assignment` — an alias body is a piece of program, and the grammar has to read one the way it reads the input. `a=(x y)` is an array only where the parenthesis touches the `=`, which is an offset comparison — and every spliced token carries the position of the *word it replaced*, so in a body the two never touched and the assignment was refused outright. Written from a file rather than `-c`, which is the route all three expanding shells take without an option (#2299)
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias t='a=(x y)'
+  t
+  echo "[${a[0]}][${a[1]}]"
+  ```
+- `alias/a-body-may-be-a-loop` — the same fault at the other question that reads the input between two tokens: a loop variable is compared against the source text to see whether it was written plainly, and for a spliced token that text is the alias's own name — so every loop in a body was refused for a variable it did not have. A different construct and a different check, which is what makes it a second row rather than a restatement (#2299)
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias t='for i in 1 2; do echo hi$i; done'
+  t
   echo end
   ```
 - `alias/nested-text-expands-where-the-command-string-did-not` — zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases: the option is the only gate on a nested text, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. This is the row #2109 split `Dialect.ExpandAliases` in two for — one field held both the option's default and the route rule, and the front end derived the nested texts' answer from the route, which turned the table off for every `eval` and `$( )` under a zsh command string. The dash column is a *different* fault and still misses: that shell parses a substitution with the line that holds it, so its `$( )` here is read before the `alias` beside it has run — #2357

@@ -15507,7 +15507,14 @@ echo end`,
 	{
 		ID: "alias/nested-text-expands-where-the-command-string-did-not", Category: "alias",
 		Snippet: `alias t=echo; eval "t E"; v=$(t S); echo "v=$v"`,
-		Why:     "the row this shell does not pass yet, kept because it is the evidence: zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases — the option is the only gate, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. `Dialect.ExpandAliases` records the symptom; #2109 is the model",
+		Why:     "zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases: the option is the only gate on a nested text, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. This is the row #2109 split `Dialect.ExpandAliases` in two for — one field held both the option's default and the route rule, and the front end derived the nested texts' answer from the route, which turned the table off for every `eval` and `$( )` under a zsh command string. The dash column is a *different* fault and still misses: that shell parses a substitution with the line that holds it, so its `$( )` here is read before the `alias` beside it has run — #2357",
+	},
+	{
+		ID: "alias/a-trap-body-under-a-command-string-expands-too", Category: "alias",
+		Snippet: `alias t=echo
+trap 't TRAP' EXIT
+echo end`,
+		Why: "the third door into the room the row above opens, and the one furthest from the `-c` string's own text: a trap action is read when it fires, so the table it reads is the shell's and not the route's. zsh writes TRAP here while refusing to expand the two lines that set it up, which is the whole of #2109 in one case — the route governs the program text and nothing nested inside it. `alias/a-trap-body-uses-the-shells-aliases` asks the same thing from a script file, where the route agrees with the option and so cannot tell them apart",
 	},
 	{
 		ID: "alias/neither-kind-is-accepted-where-the-shell-has-not-got-it", Category: "alias",
@@ -17758,7 +17765,7 @@ echo "st=$?"`,
 		ID: "invoke/c-outranks-standard-input", Category: "invocation",
 		Args:    []string{"-sc", ArgSnippet},
 		Snippet: `echo "hi|$#"`,
-		Why:     "-s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0",
+		Why:     "-s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0. It is the *first* program that is unanimous, and only because this case leaves standard input closed — `invoke/standard-input-still-follows-the-command-string` gives it something to read and one shell goes on to read it (#625)",
 	},
 	{
 		ID: "invoke/plus-c-names-itself", Category: "invocation",
@@ -17801,6 +17808,27 @@ echo "st=$?"`,
 		Args:    []string{"-sc", ArgSnippet},
 		Snippet: `echo "$0|$#|$*"`,
 		Why:     "the same invocation with nothing for the two rules to disagree about: with no operand past the command string all four keep the shell's own name and no parameters, which is why the question is only asked where an operand follows",
+	},
+	{
+		ID: "invoke/standard-input-still-follows-the-command-string", Category: "invocation",
+		Args:    []string{"-sc", ArgSnippet},
+		Stdin:   "echo LINE1\necho LINE2\n",
+		Snippet: `echo FROM-C`,
+		Why:     "the half of `-sc` that is not unanimous, and it read as unanimous because every case before this one left standard input closed. dash reads `-s` as still meaning *and then read standard input*, so it writes FROM-C and then LINE1 and LINE2 where the other five stop after the command string. The order the two letters are written in makes no difference to it — `-cs`, `-sc` and `-s -c` all go on (#625)",
+	},
+	{
+		ID: "invoke/standard-input-follows-only-where-the-option-said-so", Category: "invocation",
+		Args:    []string{"-c", ArgSnippet},
+		Stdin:   "echo LINE1\necho LINE2\n",
+		Snippet: `echo FROM-C`,
+		Why:     "the control for the row above, and the reason this is the two options together rather than a rule about `-c`: with the same program waiting on standard input and no `-s`, every shell in the panel — dash included — stops after the command string",
+	},
+	{
+		ID: "invoke/the-command-string-and-what-follows-it-are-one-shell", Category: "invocation",
+		Args:    []string{"-sc", ArgSnippet, "NAME", "a"},
+		Stdin:   "echo \"in=[$x] 0=$0 1=$1\"\n",
+		Snippet: `x=1; trap 'echo BYE' EXIT; echo "c=[$x] 0=$0 1=$1"`,
+		Why:     "what the shell that goes on carries with it, which is everything: the variable the command string set, the `$0` and the parameters the invocation named, and one EXIT trap that fires once at the end of both halves rather than once per program. Five of the six never reach the second line at all, so their column is the command string alone and the trap firing after it — which is what makes the one that does reach it legible (#625)",
 	},
 	{
 		ID: "invoke/standard-input-that-is-not-a-terminal", Category: "invocation",

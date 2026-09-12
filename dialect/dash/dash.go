@@ -15,7 +15,8 @@ func Dialect() syntax.Dialect {
 	d := syntax.POSIX()
 	// dash expands aliases in a script, with no option to turn on, and by
 	// every route: `-c`, a file and standard input all expand.
-	d.ExpandAliases = syntax.RouteOnEveryRoute
+	d.AliasesExpandUnlessTold = true
+	d.ExpandAliasesInProgramText = syntax.RouteOnEveryRoute
 	// And it splices the body's text, so a newline in one is a line of the
 	// program: everything after an expansion shifts down by one per newline.
 	// Set here rather than inherited because this dialect starts from the
@@ -137,6 +138,13 @@ func Semantics() interp.Semantics {
 	// also measured — a startup file that breaks it is escaped by moving
 	// the file.
 	s.StartupFileOptions = interp.StartupFileOptions{Login: "-l"}
+	// The panel's only shell that goes on to read standard input as a program
+	// once the `-c` string has run, when `-s` was given too. Measured
+	// 2026-09-12: `printf 'echo LINE1\necho LINE2\n' | dash -sc 'echo
+	// FROM-C'` writes all three lines where the other five write FROM-C
+	// alone, and the order the two options are written in makes no
+	// difference.
+	s.StdinOptionSurvivesTheCommandString = true
 	// Semantics.SystemStartupFiles stays at the POSIX preset's `/etc/profile`,
 	// which is measured for this shell and not only inherited: `dash -l -c
 	// 'echo ${PATH%%:*}'` with a `~/.profile` that reports the same thing

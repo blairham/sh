@@ -34,10 +34,17 @@ func Dialect() syntax.Dialect {
 	// this is a version line inside one lineage; the preset is the current
 	// build (#1223).
 	d.ArithDoubleQuote = syntax.ArithDoubleQuoteRemoved
-	// bash expands them interactively and needs `shopt -s expand_aliases`
-	// otherwise, which is not modeled yet — so no route, rather than a route
-	// this shell only takes with an option set. Measured on all three.
-	d.ExpandAliases = syntax.RouteOnNoRoute
+	// bash is the panel's holdout: it expands interactively and needs `shopt
+	// -s expand_aliases` anywhere else. Measured 2026-09-12 on all three
+	// routes, and in `eval`, `$( )`, a sourced file and a trap body — nothing
+	// expands until the option is on, and everything does once it is.
+	d.AliasesExpandUnlessTold = false
+	// And once it is on, the program text expands by every route: `bash -c
+	// $'shopt -s expand_aliases\nalias t=echo\nt TOP'` writes TOP, and so do
+	// the same three lines in a file and on standard input. The route set
+	// used to be empty here, which conflated "off until asked" with a rule
+	// about routes and is what #2109 split apart.
+	d.ExpandAliasesInProgramText = syntax.RouteOnEveryRoute
 	// And a body's newlines do not count: bash alone leaves the whole of an
 	// expanded body on the line the alias word was written on.
 	d.AliasBodyCountsLines = false

@@ -61,7 +61,10 @@ func NewSession(sh Shell) (*Session, int) {
 	r := sh.newRunner(sh.Name, nil, sh.Diagnostics, interp.RouteCommandString)
 	// Every input is a command string, so the route's answer is the same for
 	// all of them and is settled here rather than per input.
-	r.SetAliasExpansionBase(sh.Dialect.ExpandAliases.Has(syntax.RouteFromCommandString))
+	// The option, which is the gate on every nested text a turn evaluates.
+	// Whether a turn's *own* text expands is the route, and it is asked per
+	// input below — the two were one field until #2109.
+	r.SetAliasExpansionBase(sh.Dialect.AliasesExpandUnlessTold)
 	if sh.Prelude != "" {
 		if code := sh.source(r, sh.Name); code != 0 {
 			return nil, code
@@ -112,10 +115,14 @@ func (s *Session) run(ctx context.Context, src string) int {
 	//
 	// Whether the shell expands at all is the runner's now and was decided
 	// once, in NewSession — not per input, which would undo a `shopt -u
-	// expand_aliases` the session ran earlier.
-	pr.aliases = s.r.ExpandingAlias
-	pr.globalAliases = s.r.ExpandingGlobalAlias
-	pr.suffixAliases = s.r.ExpandingSuffixAlias
+	// expand_aliases` the session ran earlier. Whether a turn's own text is
+	// a place the dialect expands is the route, and every turn here is a
+	// command string, so the answer is the same for all of them.
+	if s.sh.Dialect.ExpandAliasesInProgramText.Has(syntax.RouteFromCommandString) {
+		pr.aliases = s.r.ExpandingAlias
+		pr.globalAliases = s.r.ExpandingGlobalAlias
+		pr.suffixAliases = s.r.ExpandingSuffixAlias
+	}
 	status, how := s.sh.executeLines(ctx, s.r, pr, in)
 	if how != endingRanOut {
 		// A parse failure or a refusal has a status of its own, and neither

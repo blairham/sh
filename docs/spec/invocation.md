@@ -1668,10 +1668,11 @@ fact about the shell and not about the spelling.
 is asked only where an operand follows the command string, and a dialect
 that has not answered still runs the common case.
 
-**Where the program comes from is a different question, and it is
-unanimous.** All five run the command string and none of them reads
-standard input for a program — pinned by `invoke/c-outranks-standard-input`
-and by #522, which fixed `-sc CMD` running `s` as a command.
+**Where the *first* program comes from is a different question, and that
+one is unanimous.** All six run the command string and none of them reads
+standard input *instead* — pinned by `invoke/c-outranks-standard-input`
+and by #522, which fixed `-sc CMD` running `s` as a command. The section
+below is the half of that which is not unanimous.
 
 **Nothing to break the tie.** POSIX gives `-c` and `-s` separate synopses
 and says the standard-input route is assumed only when `-c` is absent, so
@@ -1679,6 +1680,73 @@ it never describes an invocation carrying both. `PosixSemantics()`
 therefore leaves the axis unanswered, and a shell built on the substrate
 without choosing refuses such an invocation with a usage error rather
 than picking a side.
+
+## `-c` and `-s` together: and then standard input
+
+**The rule.** One shell reads `-s` as still meaning *and then read
+standard input*, so it runs the command string and goes on to read
+standard input as a second program. `Semantics.StdinOptionSurvivesTheCommandString`.
+
+### Measured
+
+2026-09-12, with a scratch `HOME`:
+
+```console
+$ printf 'echo LINE1\necho LINE2\n' | <shell> -sc 'echo FROM-C'
+```
+
+| shell | writes |
+| --- | --- |
+| bash 5.3 | `FROM-C` |
+| bash 3.2 | `FROM-C` |
+| bash as `sh` | `FROM-C` |
+| ksh93 | `FROM-C` |
+| zsh | `FROM-C` |
+| **dash** | `FROM-C`, then `LINE1`, then `LINE2` |
+
+One against five, and the spelling makes no difference to it: `-cs`, `-sc`
+and `-s -c` all go on. **Plain `-c` without `-s` stops after the string in
+every column**, with the same program waiting on the descriptor — which is
+what makes this the two options together and not a rule about `-c`.
+
+So the unanimity recorded above and in #522 and #524 is about the *first*
+program. The `Why` on `invoke/c-outranks-standard-input` now says so: that
+case leaves standard input closed, which is why it read as unanimous.
+
+### One shell, two programs
+
+Everything the command string did is in effect for the half that follows
+it, which is measured in dash and is the reason this is a second *program*
+rather than a second shell:
+
+- a variable, an alias, a function and a `cd` all carry over, and so does
+  a `set -e`;
+- `$0` and the positional parameters are the ones the invocation named,
+  in both halves;
+- one EXIT trap fires, at the end of both.
+
+And the half itself is the ordinary standard-input route rather than a
+third way of running a program: it numbers its own lines from 1, reports
+through the standard-input diagnostics, and takes its input in whatever
+size `Semantics.StdinProgramReadInBlocks` says — so a `read` in it finds
+what a `read` on a plain `sh -s` would, which is nothing, because the
+block already swallowed the line.
+
+Two endings fall out rather than needing a rule, and both are measured:
+an `exit` in the command string ends the shell with standard input unread,
+and a parse failure in it does the same.
+
+`invoke/standard-input-still-follows-the-command-string`,
+`invoke/standard-input-follows-only-where-the-option-said-so` and
+`invoke/the-command-string-and-what-follows-it-are-one-shell` are the
+corpus rows; `driver/stdinaftercommand_test.go` is the rest (#625).
+
+### A neighboring corner, measured and not modeled
+
+`ksh -s +c CMD name a` runs **nothing** and reads standard input instead,
+so in ksh93 a minus-signed `-s` outranks a plus-signed `c`. zsh applies its
+`-s` naming rule and still runs the command string; bash and dash apply the
+`-c` rule. We match zsh. See the `+c` measurements above (#523, PR #621).
 
 ## Refusing an option
 

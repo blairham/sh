@@ -87,12 +87,15 @@ func TestGrammarTakesWhatWasMeasured(t *testing.T) {
 // standard input and not under `-c`, where `ash -c 'alias foo=echo; foo'`
 // answers `foo: not found`.
 func TestAliasesExpandOnEveryRouteButTheCommandString(t *testing.T) {
-	got := ash.Dialect().ExpandAliases
+	if !ash.Dialect().AliasesExpandUnlessTold {
+		t.Error("AliasesExpandUnlessTold = false, want true")
+	}
+	got := ash.Dialect().ExpandAliasesInProgramText
 	if got&syntax.RouteFromCommandString != 0 {
-		t.Errorf("ExpandAliases = %v, want the command-string route excluded", got)
+		t.Errorf("ExpandAliasesInProgramText = %v, want the command-string route excluded", got)
 	}
 	if got&syntax.RouteFromScriptFile == 0 || got&syntax.RouteOnStandardInput == 0 {
-		t.Errorf("ExpandAliases = %v, want a file and standard input included", got)
+		t.Errorf("ExpandAliasesInProgramText = %v, want a file and standard input included", got)
 	}
 	if !ash.Dialect().AliasBodyCountsLines {
 		t.Error("AliasBodyCountsLines = false, want true")

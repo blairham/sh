@@ -93,14 +93,6 @@ refuses what every real shell accepts is a core nobody can write against.
                       binary, as a client, over a pipe
       coverage        names, per dialect, every builtin, node kind and
                       operator that no case in the tree mentions
-      suitecheck      runs a suite file-by-file through a real shell and
-                      through the dialect binary claiming to be it —
-                      bash's own, fetched and never committed, and ours
-    share/suite/      our own conformance suite, in the shape of a shell's
-                      own tests/. Committed, Apache-2.0 and readable,
-                      which is the whole difference between it and
-                      anything fetched. `make suite` grades every dialect
-                      over it at once.
 
 **The core does not know its successors.** `syntax` and `interp` define the
 questions — a grammar flag, a semantics axis, a diagnostic value — and each
@@ -1076,64 +1068,6 @@ compiler, no reference shell. An instrument that failed a build because a
 download did not arrive would be switched off within the week, and one that
 exited quietly would be worse, because zero files compared and zero
 disagreements look identical in a log.
-
-`make suite` is the same instrument over **our own** cases. The files live in
-`share/suite/core/*.tests`, committed and Apache-2.0, and every dialect
-binary is graded over all of them at once against the shell it claims to be.
-
-It exists because the fetched panel can never be more than one column. zsh's
-suite is `.ztst`, ksh93's maintained suite is a different lineage from the
-binary on a Mac, dash ships none, and there is no BusyBox ash here — **four of
-five dialects can never get a column from somebody else's work**, and three of
-those four blockers are about the provenance of the *files* rather than about
-grading the dialect. Our own files have no format, license or lineage problem.
-
-**It is not a second grader.** A native column is a `suite.Suite` with `Ours`
-set and its files on disk instead of in an archive; `suite.Sweep` grades it
-with the same `grade`, the same `normalize`, the same `repeats` and the same
-`agreement` the bash column is graded with, and nothing in `-own` mode
-computes a score of its own. A second scorer that drifted from the first is a
-failure this repository has made more than once.
-
-**The no-path rule is scoped, not dropped.** `suite.Result` still has nowhere
-to put a file name — that stays exactly as it is, because a path to another
-project's file is an invitation to go look. The name lives on `NamedResult`,
-and `Suite.attribute` is the only thing that fills one in: it returns the
-empty string for every fetched column and the file's name for ours.
-`TestAFetchedColumnCannotNameAFile` is the guard, so the difference is built
-rather than remembered. Ours are meant to be opened, and a report that would
-not say which of our own cases failed is not a work list.
-
-**No expected output is checked in.** The reference shell on the machine is
-the expectation, exactly as it is for the corpus: a `.right` file of ours
-would let us record our own bug as correct, which is the one failure the
-oracle exists to prevent. That constrains a case to being deterministic, and
-`repeats()` refuses a file the reference will not reproduce twice.
-
-**The cross-check is the half no fetched suite can have.** Grading our binary
-against one reference proves that dialect right; running `core/` through the
-reference shells *alone* and asking whether they all wrote the same bytes
-proves the construct **common** — which is the claim
-`docs/spec/shell-matrix.md` makes in prose and nothing measured until now. A
-file they split on does not belong in `core/`, and the instrument names it.
-
-**A run that never started is not a shell that disagreed.** Every run gets a
-directory of its own to ruin and the file is run from inside it, so a relative
-path to the binary under test used to resolve against *that* directory,
-nothing started, and each column printed `0/10 strict` for four dialects.
-`suite.Shell` resolves the path once, absolute, where the person who typed it
-is; `Result.OracleFailed` and `Result.DialectFailed` keep a failed start out
-of the score and print it as `NOT MEASURED`, beside the hung pair and distinct
-from it — a hang is something a shell did, a failure to start is something the
-harness did before a shell was reached.
-
-**A tier is a claim, and an empty one would report a column that agreed.**
-Only `core/` is written today, so `Tiers` and every column's `Dirs` name only
-`core/`; `ext/` and the per-dialect directories arrive with cases in them
-rather than as placeholders, and `Suite.Missing` makes a column unable to
-claim a directory that is not there. The baseline over the ten core files —
-bash, zsh, ksh93 and dash each 10/10 parsed, 9/10 strict — is #2291's burndown
-number, and the single disagreement is the same file in all four columns.
 
 `make corpus-guard` fails when the corpus has *lost* a case. It runs in
 `make check` and as a step of the required `Build and test (ubuntu-latest)`

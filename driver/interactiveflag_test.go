@@ -89,7 +89,7 @@ func TestWithoutDashIAScriptIsNotInteractive(t *testing.T) {
 func TestAnInteractiveShellExpandsAliases(t *testing.T) {
 	const src = "alias hi='echo aliased'\nhi\n"
 	sh := shell()
-	if sh.Dialect.ExpandAliases != syntax.RouteOnNoRoute {
+	if sh.Dialect.ExpandAliasesInProgramText != syntax.RouteOnNoRoute {
 		t.Fatal("this test needs a dialect that does not expand aliases in a script")
 	}
 	// `alias` itself asks an axis the zero vector leaves open — whether it

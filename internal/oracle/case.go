@@ -11675,6 +11675,31 @@ printf 'TWO=still-running\n'`,
 		Why:     "which alternative the newline joined, which parsing alone cannot say: the subject `a` matches, `b` does not, the empty string does not, and a value beginning with a newline does — so the second alternative is the two characters newline and `b`. The five shells that refuse the line print nothing at all, which is the fact this row records for them",
 	},
 	{
+		ID: "case/a-blank-in-a-parenthesized-pattern-list", Category: "compound shapes",
+		Snippet: `case "a b" in (a b) echo m;; *) echo no;; esac`,
+		Why:     "the same claim as the newline rows above with the other character, and the one that makes it a claim about the *word*: a blank inside the arm's parentheses is a character of the pattern in zsh, so the three-character subject matches and every other shell in the panel refuses the line. A rule written only about newlines answers this one wrong in the accepting direction — nothing in a newline says a blank behaves the same way",
+	},
+	{
+		ID: "case/what-the-blank-joined", Category: "compound shapes",
+		Snippet: `m(){ case "$1" in (a b) printf m;; *) printf .;; esac; }; m a; m b; m ab; m "a b"; echo`,
+		Why:     "which pattern the blank made, which parsing alone cannot say: `a`, `b` and `ab` all miss and `a b` matches, so `(a b)` is the single three-character pattern and not two alternatives. Read as two, the first two subjects would match and the last would not, which is the opposite answer in three of the four fields. The six shells that refuse the line print nothing at all",
+	},
+	{
+		ID: "case/an-alternatives-outer-blanks-are-trimmed", Category: "compound shapes",
+		Snippet: `case a in (a | b) echo m;; *) echo no;; esac`,
+		Why:     "the boundary, and the row that keeps the rule above from being \"a blank is always a character\": every shell in the panel takes this and runs the arm, so the blanks either side of the `|` are trimmed off the alternatives rather than kept in them. It is also what says the one-word reading is compatible with the ordinary one — `(a | b)` has to keep meaning two alternatives",
+	},
+	{
+		ID: "case/a-blank-after-a-newline-is-not-trimmed", Category: "compound shapes",
+		Snippet: "m(){ case \"$1\" in (a |\n b) printf m;; *) printf .;; esac; }; m a; m \"$(printf '\\n b')\"; m \"$(printf '\\nb')\"; m \"$(printf ' \\n b')\"; echo",
+		Why:     "where the trimming stops, measured a subject at a time: the second alternative of `(a |` newline ` b)` is newline-space-`b`. The blank *after* the `|` is trimmed and the one after the newline is not, so trimming is of the alternative's outer blanks and the newline is inside it — fields two and three are the pair that says so, and field four rules out a reading that trimmed nothing. A command substitution carries each subject because its trailing newlines are stripped, which is what puts a leading one in reach",
+	},
+	{
+		ID: "case/a-blanked-pattern-list-prints-back-the-same-way", Category: "compound shapes",
+		Snippet: "f(){ case a in (a b) echo m;; esac; }; g(){ case a in (a |\n b) echo m;; esac; }; functions f g",
+		Why:     "the same fact from the writing side, which is the half a parser can get right while the printer loses it: the shell writes both arms back with the characters bare — `(a b)` and `(a|` newline ` b)` — so a printer that quoted either would produce text that means the same thing only under a quoting the shell does not use. The other six have no such listing builtin and refuse the line at the arm anyway",
+	},
+	{
 		ID: "case/a-newline-before-the-separator", Category: "compound shapes",
 		Snippet: "case a in (a\n|b) echo m;; *) echo no;; esac",
 		Why:     "the same newline on the other side of the `|`, and the row that says the rule is not about the separator: it joins the *first* alternative there, so the subject `a` matches neither and zsh answers `no` where a rule about the `|` alone would answer `m`",

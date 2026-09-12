@@ -2485,11 +2485,33 @@ The line this was found on is `VCS_INFO_get_data_git` line 234,
 `(''(x|exec) *)` — a group, a blank, more pattern — which every prompt
 drawing a git segment autoloads (#1744).
 
-A pattern holding a bare blank is **printed** with the arm's paren, which
-is otherwise dropped as layout: `(a b)` written back as `a b)` is a parse
-error, and `((x) y)` written back as `(x) y)` is worse, being a program
-that parses to a different one. A bare newline needs nothing, the word
-printer already writing one back quoted.
+A pattern holding a bare blank **or a bare newline** is printed with the
+arm's paren, which is otherwise dropped as layout: `(a b)` written back
+as `a b)` is a parse error, and `((x) y)` written back as `(x) y)` is
+worse, being a program that parses to a different one. Inside that paren
+both characters go back as themselves.
+
+The newline used to go back single-quoted instead, and that is worth
+writing down because the reason it changed is not that the old form was
+wrong. `'` ⏎ `'` keeps the character, and it let the arm re-parse under a
+dialect *without* the rule — a real property, and one the blank had
+already given up. Keeping it for the newline made one construct print two
+ways, and it was also what made the paren unsettled: the paren went in on
+the first pass because the newline was there, and the quoting took it
+back out on the second. What the shell writes settles it. Measured
+2026-09-12, its own `functions` listing of two arms:
+
+    f(){ case a in (a b) echo m;; esac; }
+    g(){ case a in (a |⏎ b) echo m;; esac; }
+    functions f g       →   (a b)   and   (a|⏎ b)
+
+so both characters are written bare, and both need the paren for it. The
+printer is handed a `Layout` and not a `Dialect`, so the shape is what
+says the rule was in force: a blank or a newline in an *unquoted* literal
+span can only have come from a dialect that has it, no other grammar here
+putting either character in one. What is promised of a printed arm is
+therefore the same **tree** under the same dialect, rather than the same
+text under any of them (#1254).
 
 ## `select`
 

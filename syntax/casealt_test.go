@@ -163,27 +163,70 @@ func TestTheArmsBodyGetsItsNewlinesBack(t *testing.T) {
 
 // A bare newline in a word has to survive being printed, and a backslash is
 // the one escape that cannot carry it: a backslash before a newline is a line
-// continuation, which the next read removes. So it goes back single-quoted,
-// which keeps it and keeps it as the same character — a newline is literal
-// text under either quoting.
+// continuation, which the next read removes.
 //
-// Nothing else in the grammar puts a bare newline inside a word, which is why
-// this had never come up.
+// It goes back **bare**, inside the arm's parenthesis — the same treatment a
+// bare blank gets there, and for the same reason. Both characters are the
+// pattern's, both are ordinary only inside the parentheses, and an *unquoted*
+// literal span holding either is itself the evidence that the dialect had the
+// rule, since no other grammar here puts one in a word. It is also what the
+// shell being modeled writes back (#1254).
+//
+// It used to go back single-quoted, which kept the character and let the arm
+// re-parse under a dialect *without* the rule. That was a real property and
+// it is given up on purpose: the blank had already given it up, so keeping it
+// for the newline made one construct print two ways, and the quoting was what
+// made the paren unsettled — it went in on the first pass and came back out
+// on the second.
 func TestABareNewlineInAWordSurvivesPrinting(t *testing.T) {
 	d := Core()
 	caseGrammar(&d)
-	f, err := Parse("case a in (a|\nb) echo m;; esac", d)
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	printed := Print(f)
-	if strings.Contains(printed, "\\\n") {
-		t.Errorf("printed %q, want no backslash-newline — the next read would take it out", printed)
-	}
-	// And the reparse has the same patterns, without needing the flag: the
-	// quotes are what carry it now.
-	got := firstArm(t, printed, Core())
-	if len(got) != 2 || got[0] != "a" || got[1] != "\nb" {
-		t.Errorf("reparsed %q as %q, want the two patterns %q", printed, got, []string{"a", "\nb"})
+	// The blank half of the same grammar, which two rows below need: the
+	// point of them is that the two characters are one rule now.
+	d.CasePatternListSpansBlanks = true
+	for _, tc := range []struct {
+		src  string
+		want []string
+		arm  string
+	}{
+		// The newline alone, and the newline with a blank after it — the
+		// pair that says the two characters are one rule now.
+		{"case a in (a|\nb) echo m;; esac", []string{"a", "\nb"}, "(a|\nb)"},
+		{"case a in (a |\n b) echo m;; esac", []string{"a", "\n b"}, "(a|\n b)"},
+		// A blank with no newline, unchanged.
+		{"case a in (a b) echo m;; esac", []string{"a b"}, "(a b)"},
+	} {
+		f, err := Parse(tc.src, d)
+		if err != nil {
+			t.Fatalf("%q: parse: %v", tc.src, err)
+		}
+		printed := Print(f)
+		if strings.Contains(printed, "\\\n") {
+			t.Errorf("%q printed %q, want no backslash-newline — the next read would take it out", tc.src, printed)
+		}
+		if !strings.Contains(printed, tc.arm) {
+			t.Errorf("%q printed %q, want the arm written %q", tc.src, printed, tc.arm)
+		}
+		// The reparse needs the same dialect, which is the property that
+		// replaced the old one: what is promised is the same *tree*.
+		got := firstArm(t, printed, d)
+		if len(got) != len(tc.want) {
+			t.Errorf("reparsed %q as %q, want %q", printed, got, tc.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("reparsed %q as %q, want %q", printed, got, tc.want)
+				break
+			}
+		}
+		// And the print is settled, which is what the paren used not to be.
+		again, err := Parse(printed, d)
+		if err != nil {
+			t.Fatalf("%q printed %q, which does not parse: %v", tc.src, printed, err)
+		}
+		if twice := Print(again); twice != printed {
+			t.Errorf("%q is not settled:\n  once:  %q\n  twice: %q", tc.src, printed, twice)
+		}
 	}
 }

@@ -991,7 +991,18 @@ type Runner struct {
 	// time keeps the promise in either state, so the state is real here
 	// even though no cache hangs off it — the same honesty `hash` answers
 	// with an empty table.
-	tracksCommands bool
+	//
+	// Read through Runner.commandTracking and written through
+	// Runner.setCommandTracking, never directly. Two of the panel start it
+	// *on* and say so in `$-`, so the zero value is not their answer, and
+	// one of those two turns it back off when it is interactive — a default
+	// that moves with the invocation, which a field initialized once cannot
+	// hold. tracksCommandsMoved is what parts "the script said so" from
+	// "nobody has said anything yet"; until it is set the answer comes from
+	// the startup letters, which is where the dialect already declared it
+	// (#1951).
+	tracksCommands      bool
+	tracksCommandsMoved bool
 	// histIgnoreDups is zsh's histignoredups, which its `set -h`
 	// abbreviates. A script cannot see what it does, because a script has no
 	// history — but an interactive session does: repl reads it through the

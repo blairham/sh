@@ -1667,9 +1667,10 @@ func Apply(r *interp.Runner) {
 		r.Register("source", dot)
 	}
 	// `integer` is `typeset` with the type already decided, and it is one of
-	// the two shells that has the word: zsh's own `add-zsh-hook` opens with
-	// `integer del list help`, which is why a shell claiming to be either of
-	// them needs it. Registered rather than built here, so that both
+	// the two shells that has the word: zsh's own `add-zsh-hook` declares
+	// integers before it does anything else — run it under a shell without
+	// the word and it fails there — which is why a shell claiming to be
+	// either of them needs it. Registered rather than built here, so that both
 	// dialects get the *same* declaration — see interp/integerbuiltin.go.
 	r.Register("integer", interp.IntegerBuiltin())
 	// And the assignment rule follows the name the way it follows `declare`:

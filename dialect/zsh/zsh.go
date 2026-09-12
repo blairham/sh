@@ -2611,8 +2611,8 @@ func Apply(r *interp.Runner) {
 	r.SetPrecommand("builtin", interp.PrecommandTransparent)
 	r.SetPrecommand("exec", interp.PrecommandTransparent)
 	// `integer` is `typeset` with the type already decided, and it is one of
-	// the two shells that has the word — this shell's own `add-zsh-hook`
-	// opens with `integer del list help`, so a startup file that installs a
+	// the two shells that has the word — `add-zsh-hook` declares integers
+	// before it does anything else, so a startup file that installs a
 	// hook cannot run without it. Registered rather than built here, so both
 	// dialects get the *same* declaration — see interp/integerbuiltin.go.
 	r.Register("integer", interp.IntegerBuiltin())

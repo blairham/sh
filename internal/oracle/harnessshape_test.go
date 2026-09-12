@@ -156,6 +156,12 @@ func TestAnArgvThatDroppedTheCasesWordsIsReported(t *testing.T) {
 // standard input, the name it was called by, and the environment — because
 // those are the only inputs there are. Two cases alike in all five are one
 // case counted twice, and the corpus percentage is a headline number.
+//
+// Standard input counts for two of them rather than one: what is on it, and
+// whether it is open at all. Those are different questions and one shell
+// answers them differently, so a key that read only the bytes would call the
+// null-device case and the closed-descriptor case one measurement — which is
+// how this test failed the moment Case.StdinClosed existed, correctly (#1038).
 // It found two pairs already in the tree when it was written, and they were
 // listed rather than deleted. Both were deliberate cross-references — a case
 // filed under two chapters, each Why pointing at the other — so removing
@@ -182,8 +188,9 @@ func TestNoTwoCasesAskTheSameQuestion(t *testing.T) {
 	seen := map[string]string{}
 	for _, c := range Corpus {
 		cmd := command(t.Context(), sh, c, dir)
-		key := fmt.Sprintf("%q|%q|%q|%q|%q", cmd.Args[1:], c.Snippet,
-			strings.ReplaceAll(c.Stdin, ArgSnippet, c.Snippet), c.Argv0, c.Env)
+		key := fmt.Sprintf("%q|%q|%q|%v|%q|%q", cmd.Args[1:], c.Snippet,
+			strings.ReplaceAll(c.Stdin, ArgSnippet, c.Snippet), c.StdinClosed,
+			c.Argv0, c.Env)
 		first, dup := seen[key]
 		switch {
 		case !dup:

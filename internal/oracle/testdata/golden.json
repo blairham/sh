@@ -87088,6 +87088,57 @@
         "TimedOut": false
       }
     },
+    "invoke/a-program-on-a-standard-input-that-is-closed": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: error creating buffered stream: Bad file descriptor",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: error creating buffered stream: Bad file descriptor",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/a-read-at-the-end-of-a-program-on-standard-input": {
       "ash": {
         "Stdout": "1 []",
@@ -138805,6 +138856,57 @@
       "zsh": {
         "Stdout": "[]",
         "Stderr": "\u003cshell\u003e:read:1: bad option: -a",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/from-a-standard-input-that-is-closed": {
+      "ash": {
+        "Stdout": "st=1|[]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1|[]~after",
+        "Stderr": "\u003cshell\u003e: line 1: read: 0: read error: Bad file descriptor",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1|[]~after",
+        "Stderr": "\u003cshell\u003e: line 1: read: 0: read error: Bad file descriptor",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1|[]~after",
+        "Stderr": "\u003cshell\u003e: line 0: read: read error: 0: Bad file descriptor",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=1|[]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1|[]~after",
+        "Stderr": "\u003cshell\u003e: read: bad file unit number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1|[]~after",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

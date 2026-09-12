@@ -337,6 +337,10 @@ func signalOf(st *os.ProcessState) syscall.Signal {
 // other than what it says would be measured, and the measurement is the
 // whole product.
 func (c Case) validate() error {
+	if c.StdinClosed && c.Stdin != "" {
+		return errors.New("Case.StdinClosed and Case.Stdin are exclusive: " +
+			"a closed standard input is not an empty one")
+	}
 	if len(c.Args) == 0 {
 		return nil
 	}
@@ -444,16 +448,24 @@ func command(ctx context.Context, sh Found, c Case, dir string) *exec.Cmd {
 	if sh.Argv0 != "" {
 		cmd.Args[0] = sh.Argv0
 	}
-	// Standard input is closed unless the case asked for some. A nil Stdin is
-	// os/exec's own spelling of that, and it is the right default twice over:
-	// a shell with nothing to read must not wait for a terminal, and a case
-	// that says nothing about input must not be handed whatever the harness
-	// itself was started with.
+	// Standard input is the **null device** unless the case asked for
+	// something, which is what a nil Stdin means to os/exec. It is the right
+	// default twice over: a shell with nothing to read must not wait for a
+	// terminal, and a case that says nothing about input must not be handed
+	// whatever the harness itself was started with.
+	//
+	// This comment used to say "closed", and so did Case.Stdin's. Neither was
+	// true, and the difference is a measurable one — see Case.StdinClosed for
+	// the panel row it hides. The corpus itself was never wrong, only the two
+	// sentences describing it (#1038).
 	//
 	// The placeholders are honored here too, so a case whose *program*
 	// arrives on standard input writes it once as its Snippet. The script
 	// file is only written if something asks for it.
-	if c.Stdin != "" {
+	switch {
+	case c.StdinClosed:
+		cmd.Stdin = closedDescriptor()
+	case c.Stdin != "":
 		in := strings.ReplaceAll(c.Stdin, ArgSnippet, c.Snippet)
 		if strings.Contains(in, ArgScript) {
 			in = strings.ReplaceAll(in, ArgScript, script())
@@ -461,6 +473,35 @@ func command(ctx context.Context, sh Found, c Case, dir string) *exec.Cmd {
 		cmd.Stdin = strings.NewReader(in)
 	}
 	return cmd
+}
+
+// closedDescriptor is a standard input that is not open at all, for the cases
+// that ask what a shell does with no fd 0 rather than with an empty one.
+//
+// An already closed *os.File is the whole trick: os/exec hands the child the
+// descriptor such a file reports, which is -1, and Go's fork-and-exec reads
+// -1 as "close this descriptor in the child" rather than as an error. So the
+// child is exec'd with fd 0 genuinely absent, which is the thing being asked
+// about, and no goroutine is copying anything.
+//
+// A pipe whose read end is closed before Start does the same and the panel
+// cannot tell the two apart, measured. Closing it *after* Start does not: the
+// descriptor is still open when the child is forked, and the child gets a
+// perfectly good pipe that is merely at end of file.
+//
+// A failure to open the null device leaves Stdin nil, which is the ordinary
+// default rather than a wrong measurement dressed as a right one — and it
+// cannot happen on any machine that could run this panel in the first place.
+func closedDescriptor() *os.File {
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		return nil
+	}
+	// The point of the file, not tidy-up: Fd reports -1 from here on.
+	if err := f.Close(); err != nil {
+		return nil
+	}
+	return f
 }
 
 // normalize removes what is true of this machine rather than of this shell.

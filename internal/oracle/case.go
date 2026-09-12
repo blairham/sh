@@ -79,9 +79,17 @@ type Case struct {
 	Args []string
 
 	// Stdin is what the shell finds on its standard input, handed to both
-	// sides of a comparison byte for byte. Empty means the input is closed,
+	// sides of a comparison byte for byte. Empty means the **null device**,
 	// which is what every case without one gets and why the record does not
 	// depend on what the harness itself was started with.
+	//
+	// Not a closed descriptor, which this said for a long time and which the
+	// harness has never done: a nil Stdin is os/exec's spelling of "open the
+	// null device", so fd 0 is a character device that reads as end of file.
+	// One case already knew — `invoke/standard-input-that-is-not-a-terminal`
+	// turns on the null device *being* a character device — so the record was
+	// right and the sentence describing it was not (#1038). Say
+	// StdinClosed to ask the other question.
 	//
 	// It is a separate question from where the *program* comes from, and the
 	// two combine in three useful ways:
@@ -110,6 +118,37 @@ type Case struct {
 	// the single copy of the text. That keeps the rendered table showing what
 	// actually ran, which a second hand-kept copy would not.
 	Stdin string
+
+	// StdinClosed hands the shell a standard input that is not open at all,
+	// rather than the null device every other case gets. Exclusive with
+	// Stdin, which is the opposite request.
+	//
+	// It is a different shell, and only one member of the panel says so.
+	// Measured 2026-09-12 with fd 0 genuinely closed in the child:
+	//
+	//	                        program on stdin (-s)     `read -r x`
+	//	dash                    nothing, status 0         silent, status 1
+	//	bash 5.3                error creating buffered   read error: Bad
+	//	                        stream: Bad file          file descriptor
+	//	                        descriptor, status 126
+	//	bash 3.2                nothing, status 0         read error: 0: …
+	//	ksh93                   nothing, status 0         bad file unit number
+	//	zsh                     nothing, status 0         silent, status 1
+	//
+	// So bash 5.3 alone cannot take its program from a standard input that is
+	// closed, where its own 3.2 build and every other member read nothing and
+	// stop at status 0. A supervisor, a daemonized runner and `exec 0<&-` in
+	// a wrapper all produce exactly that shell, and the diagnostic names a
+	// buffered stream rather than the missing descriptor.
+	//
+	// The mechanism is an already closed *os.File. Go's fork-and-exec reads a
+	// descriptor of -1 as "close this one in the child" rather than as an
+	// error, so the child really has no fd 0 — which a closed pipe read end
+	// also achieves, and the panel cannot tell the two apart: all five columns
+	// answer identically to either, on both rows above. The one recipe that
+	// does *not* work is closing the pipe after Start, since the descriptor is
+	// still open when the child is forked.
+	StdinClosed bool
 
 	// Argv0 is the name every shell in the run is invoked under for this
 	// case, in place of the one its panel entry gives it — and the binary
@@ -4714,6 +4753,12 @@ echo "st=$?"`,
 		Snippet: `read a; echo "[$a]"; read b; echo "[$b]"; read c; echo "eof=$?|[$c]"`,
 		Stdin:   "one\ntwo\n",
 		Why:     "every other read case feeds a pipe or a here-string built inside the snippet, so what the *shell* was started with was never read at all. Here it is the shell's own input: two lines arrive in order and the third read finds the end, reporting 1 with the variable cleared rather than left holding the line before",
+	},
+	{
+		ID: "read/from-a-standard-input-that-is-closed", Category: "builtins",
+		Snippet:     `read a; echo "st=$?|[$a]"; echo after`,
+		StdinClosed: true,
+		Why:         "the same builtin reading a descriptor that is not open, against the row above where it reads one that is merely finished. Every column reports 1 and leaves the variable empty, so the *status* cannot tell absence from emptiness -- and three of them say so anyway, each in its own words: bash 5.3 `read: 0: read error: Bad file descriptor`, bash 3.2 the same fields in the other order, ksh93 `read: bad file unit number`, while dash and zsh are as silent as they are at end of file. None of them makes it fatal, so `after` prints everywhere. Recorded because a shell that treated a bad descriptor as end of file would pass on status alone and say nothing where three columns speak (#1038)",
 	},
 	{
 		ID: "read/a-zero-timeout-and-what-it-does-to-the-stream", Category: "builtins",
@@ -18270,6 +18315,13 @@ echo "st=$?"`,
 		Args:    []string{"-s"},
 		Snippet: `echo unreachable`,
 		Why:     "the harness gives every child the null device for standard input, and the null device is a character device — which is exactly what made the prompt decision say terminal, ask it for raw mode, and exit 2 with `operation not supported by device` (#509). No shell in the panel prompts here: -s says read standard input, standard input ends at once, and the shell exits 0 having said nothing. Deliberately no placeholder — what is pinned is what a shell does before it reads anything, and the snippet is written down as the thing that would have run",
+	},
+	{
+		ID: "invoke/a-program-on-a-standard-input-that-is-closed", Category: "invocation",
+		Args:        []string{"-s"},
+		StdinClosed: true,
+		Snippet:     `echo unreachable`,
+		Why:         "the same invocation with fd 0 not open at all, which is the row the case above cannot reach: the null device is an open character device that reads as end of file, and a supervisor, a daemonized runner and `exec 0<&-` in a wrapper each hand a shell something else. bash 5.3 alone refuses -- `error creating buffered stream: Bad file descriptor` at status 126, naming a stream rather than the missing descriptor -- where its own 3.2 build and every other member read nothing and exit 0, exactly as they do on the null device. So a caller that closes standard input rather than pointing it at /dev/null gets a bash that cannot take a program at all, and the two ways of saying nothing are not the same shell. The pair is the whole point: neither row alone says whether a column is answering about emptiness or about absence (#1038)",
 	},
 	{
 		ID: "invoke/the-program-arrives-on-standard-input", Category: "invocation",

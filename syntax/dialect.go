@@ -636,6 +636,23 @@ type Dialect struct {
 	// A granularity fact rather than a wording one, which is why it is here
 	// and not in Diagnostics — the two halves of `f( )` are not this token in
 	// that shell either, and it declines to read that as a definition at all.
+	//
+	// **It is the pair wherever a refusal falls on the first of them**, and
+	// not only inside the production that consumes them. An assignment in
+	// front of the name puts the parenthesis outside the definition path —
+	// the word list is read as a command's arguments and the `(` after them
+	// is refused by the ordinary rule — and the pair is still named there.
+	// Measured 2026-09-12 on zsh 5.9.2:
+	//
+	//	x=1 f () { echo X; }     parse error near `()'
+	//	x=1 a b () { echo X; }   parse error near `()'
+	//	x=1 f ( ) { echo X; }    parse error near `}'    — a blank inside,
+	//	                                                   so two tokens and
+	//	                                                   a subshell
+	//
+	// The third row is why the join reads the source for an *adjacent* `)`
+	// rather than skipping blanks the way the definition path's lookahead
+	// does: one blank and the two characters are not this token (#1846).
 	EmptyParensAreOneToken bool
 
 	// FunctionNamePunctuation lets a POSIX-form or keyword-form function
@@ -871,10 +888,29 @@ type Dialect struct {
 	// So the names are read where a command's *arguments* are read, and the
 	// two things that are not names — an assignment before them, and a
 	// missing body after them — are refusals rather than readings (#1685).
-	// The third row is a definition there and is **not** read here: the
-	// parentheses follow the redirection's target rather than a name, and the
-	// redirection sits inside the header text a formatter copies from the
-	// source, so the body would write it a second time. See #1838.
+	//
+	// **The redirection is the body's**, which is where a definition's
+	// written one goes everywhere else. Measured 2026-09-12 on zsh 5.9.2,
+	// each in a scratch directory:
+	//
+	//	a b >o1 () { echo "[$0]"; }; a; b; cat o1     `[b]`, nothing on the
+	//	                                              terminal — one body,
+	//	                                              two names, one file
+	//	>o1 a b () { echo "[$0]"; }; a; cat o1        `[a]` — a leading one
+	//	                                              is taken too
+	//	a b >o1 >o2 () { echo "[$0]"; }; a            both files written
+	//	x=1 a b >o1 () { … }                          still `parse error
+	//	                                              near `()'` — the
+	//	                                              assignment still ends
+	//	                                              the reading
+	//
+	// It reaches the parser by a second route, because the `(` then follows
+	// the redirection's target rather than a name and there is no word in
+	// hand to announce the reading — see
+	// [Parser.parseFuncPosixNamesAtParen]. And it reaches the *formatter*,
+	// which copies a declaration's header from the source: the redirection
+	// lies inside that span and the body writes it again, so the header
+	// leaves it out. Printed twice, a formatted file redirects twice (#1838).
 	FunctionMultipleNames bool
 
 	// FunctionKeywordReferenceList lets the `function` keyword's name be

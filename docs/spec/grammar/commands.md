@@ -2072,7 +2072,24 @@ Two things here are zsh's alone. It names **`()`** where the others'
 last token would be the closing paren, because its lexer reads the empty
 pair as one token — grammar flag `EmptyParensAreOneToken`, and `f( )`
 with a space is not that token and is not read as a definition there at
-all. And it prints **no line** in the location for either of these,
+all.
+
+**The pair is named wherever a refusal falls on the first of them**, not
+only inside the production that consumes them. An assignment in front of
+the name puts the parenthesis outside the definition path — the word list
+is read as a command's arguments, and the `(` after them is refused by
+the ordinary rule — and zsh still writes the pair:
+
+    x=1 f () { echo X; }     parse error near `()'
+    x=1 a b () { echo X; }   parse error near `()'
+    x=1 f ( ) { echo X; }    parse error near `}'
+
+The refusal itself is right in all three and this is the wording alone;
+the third row is why the join asks for an *adjacent* `)` rather than
+skipping blanks the way the definition path's lookahead does (#1846,
+`cmd/function-posix-form-with-an-assignment-before-the-names`).
+
+And it prints **no line** in the location for either of these,
 `zsh:` where the same shell writes `zsh:1:` for `if true`, which is an
 input that ran out just as much. That is not the kind of failure, so the
 parser marks the error instead — `syntax.Error.FuncBody`, rendered by
@@ -2328,12 +2345,33 @@ array: measured, `a e1=() { echo X; }` defines `a` and `e1=` where the
 same word after `typeset -a` is the array and a `()` after it is a parse
 error (#1685).
 
-One row is measured and **not** read: a redirection written between the
-names and the parentheses is still a definition there, `a b >out () { … }`
-sending both calls to the file. The parentheses then follow the
-redirection's target rather than a name, and the redirection sits inside
-the header text a formatter copies from the source, so the body would
-write it a second time (#1838).
+**A redirection may stand between the names and the parentheses**, and
+the definition still reads — the redirection being the *body's*, which is
+where a definition's written one goes everywhere else. Measured
+2026-09-12 on zsh 5.9.2 in a scratch directory
+(`cmd/function-posix-form-with-a-redirection-before-the-parens`):
+
+    a b >o1 () { echo "[$0]"; }; a; b; cat o1   nothing on the terminal
+                                                and `[b]` in the file
+    >o1 a b () { echo "[$0]"; }; a; cat o1      a leading one is taken too
+    a b >o1 >o2 () { echo "[$0]"; }; a          both files written
+    x=1 a b >o1 () { … }                        still refused — the
+                                                assignment ends the reading
+
+It reaches the parser by a route of its own, because the `(` then follows
+the redirection's target rather than a name and there is no word in hand
+to announce the reading. **And it reaches the formatter**, which is the
+part worth writing down: a declaration's header is copied from the source
+between the declaration's start and the body's, and in this shape the
+redirection lies inside that span, so the body emitted it a second time —
+
+    once:  a b >out () { echo "[$0]"; } >out
+    twice: a b >out () { echo "[$0]"; } >out >out
+
+not a fixed point, and a formatted file that redirects twice where the
+source redirected once. The header now blanks the redirections that lie
+inside it and leaves them to the body, which the formatter can ask for
+because it already has a `redirsOf` over every compound (#1838).
 
 ### A name list with no body
 

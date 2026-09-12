@@ -510,18 +510,32 @@ func (p *printer) anonFunc(x *syntax.AnonFunc) {
 // and its body — squeezed to one spaced line. A comment can sit in that span;
 // it stays queued for whoever flushes next, so it must not be squashed into
 // the header here.
-func (p *printer) headerText(from, to int) string {
-	header := p.src[from:to]
+//
+// cut is source ranges inside the span that belong to something the caller
+// prints itself, and they are blanked rather than removed so the words either
+// side of them stay apart.
+func (p *printer) headerText(from, to int, cut ...[2]int) string {
+	header := []byte(p.src[from:to])
+	for _, r := range cut {
+		lo, hi := r[0]-from, r[1]-from
+		if lo < 0 || hi > len(header) || lo >= hi {
+			continue
+		}
+		for i := lo; i < hi; i++ {
+			header[i] = ' '
+		}
+	}
+	text := string(header)
 	for i := p.ci; i < len(p.comments); i++ {
 		c := p.comments[i]
 		if c.Pos.Offset >= to {
 			break
 		}
 		if c.Pos.Offset >= from {
-			header = strings.Replace(header, c.Text, "", 1)
+			text = strings.Replace(text, c.Text, "", 1)
 		}
 	}
-	return squeezedHeader(header)
+	return squeezedHeader(text)
 }
 
 // squeezedHeader is a header's text on one line: every run of whitespace that
@@ -1189,7 +1203,27 @@ func (p *printer) funcDecl(x *syntax.FuncDecl) {
 		p.node(x)
 		return
 	}
-	p.b.WriteString(p.headerText(x.Pos().Offset, x.Body.Pos().Offset))
+	from, to := x.Pos().Offset, x.Body.Pos().Offset
+	// A redirection may stand *between* the names and the parentheses, and it
+	// is the body's — `a b >out () { … }` sends both calls to the file. It is
+	// therefore inside the header span this copies from the source, and the
+	// body writes it again afterwards, so the header has to leave it out:
+	// printed twice the file is redirected twice, which is not a fixed point
+	// and is a formatted file that does something the source did not (#1838).
+	p.b.WriteString(p.headerText(from, to, insideTheHeader(redirsOf(x.Body), from, to)...))
 	p.b.WriteByte(' ')
 	p.command(x.Body)
+}
+
+// insideTheHeader is the source extent of each redirection lying wholly
+// within [from, to), which is where a declaration's header is copied from.
+func insideTheHeader(rs []*syntax.Redirect, from, to int) [][2]int {
+	var out [][2]int
+	for _, r := range rs {
+		lo, hi := r.Pos().Offset, r.End().Offset
+		if lo >= from && hi <= to {
+			out = append(out, [2]int{lo, hi})
+		}
+	}
+	return out
 }

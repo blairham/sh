@@ -7497,6 +7497,16 @@ echo "st=$?"`,
 		Why:     "what makes the name list before `()` the *argument* loop's reading rather than a wider name test: the first word is `echo`, a command name everywhere, and the parentheses at the end of the line are all that makes it a name. zsh defines `echo` and `hi` both — which is why the status is printed with `printf` and not with the `echo` this line has just replaced — and the other five refuse the `(`",
 	},
 	{
+		ID: "cmd/function-posix-form-with-a-redirection-before-the-parens", Category: "command language",
+		Snippet: `a b >out () { echo "[$0]"; }; a; b; cat out; echo st=$?`,
+		Why:     "a redirection standing **between** the names and the parentheses, which is a definition too and whose redirection is the *body's*: in zsh neither call reaches the terminal and the file holds what the last one wrote, `[b]`. bash 5.3, bash 3.2, bash-as-`sh`, ksh93 and dash are all a syntax error at the `(`, as they are for the name list itself. The row is the formatter's as much as the parser's — the redirection lies inside the header text a declaration is printed from, so a layout that copied the header and then printed the body wrote `>out` twice, redirecting a formatted file where the source redirected once (#1838)",
+	},
+	{
+		ID: "cmd/function-posix-form-with-an-assignment-before-the-names", SyntaxError: true, Category: "command language",
+		Snippet: `x=1 f () { echo X; }; echo st=$?`,
+		Why:     "the bound on the name list, and the row that says what the refusal is *called*: an assignment in front of the name puts the parenthesis outside the definition production — the word list is read as a command's arguments — and zsh still names `()` as one token there, `parse error near `()'`. Naming the opening paren alone was right about the refusal and wrong about the granularity, on the one route that does not run through the definition (#1846). The other five blame the `(` in four wordings at two statuses",
+	},
+	{
 		ID: "cmd/function-posix-form", Category: "command language",
 		Snippet: `f() { echo posix; }; f`,
 		Why:     "the universal definition form",

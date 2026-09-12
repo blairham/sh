@@ -44,15 +44,55 @@ Nesting works for the same reason and needs no separate rule:
 
     $(echo "$(echo deep)")  →  deep
 
-## `$((` is arithmetic, and a nested subshell needs a space
+## `$((` opens two constructs, and the parentheses say which
 
     $((1+2))        →  3       arithmetic
     $( (echo sub) ) →  sub     a subshell inside a substitution
 
-Unanimous. `$((` is taken as the start of arithmetic, so a command
-substitution whose first construct is a subshell must be written with a
-space. That is the only disambiguation available and it belongs to the
-lexer, since by the time the parser sees tokens the choice has been made.
+Unanimous with the space written, which is the spelling POSIX tells an
+author to use. POSIX says nothing about the shell that meets the two
+parentheses together, and the panel does not agree there:
+
+| probe | bash 5.3, bash 3.2, bash-as-`sh`, ksh93, zsh | dash, ash |
+| --- | --- | --- |
+| `echo $((echo ab cde) )` | `ab cde` | refused: missing `))` |
+
+Five of seven fall back to reading `$( ( … ) … )`. That is the same head
+count that put process substitution in the core, so the core has the
+fallback and the two minimal shells turn it off
+(`Dialect.ArithSubstFallsBackToCommandSubst`). Measured 2026-09-12; dash
+0.5.12 and BusyBox ash 1.37.0 in containers, the rest on the machine.
+
+**The rule is positional, not "try arithmetic and fall back on a parse
+failure".** Counting from one after the `$((`, find the `)` that brings
+the count back to zero: the construct is arithmetic when the very next
+byte is another `)`, and a command substitution otherwise.
+
+| probe | five shells |
+| --- | --- |
+| `echo $(( (1+2) ))` | `3` — the closers touch |
+| `echo $(( (1+2)) )` | runs `1+2` as a command |
+| `echo $(( 1 ) + (2 ))` | a command substitution, and a syntax error inside it |
+
+The third is what rules the other reading out: `(1) + (2)` is perfectly
+good arithmetic, and the five still read it as a substitution, because
+the first `)` closes the count and a `+` follows it.
+
+Where the input runs out before the count reaches zero, the construct
+stays arithmetic and the complaint is the one an unfinished `$((` gets.
+
+Quoting is the one edge the five do not share:
+
+| probe | bash 5.3, 3.2, bash-as-`sh` | ksh93, zsh |
+| --- | --- | --- |
+| `echo $(( '0)' + 1 ))` | an arithmetic error | runs `0)` as a command |
+
+bash tracks quoting in the deciding scan, so a `)` inside a string closes
+nothing — the same rule as *The closing delimiter is not found by
+counting* above. ksh93 and zsh let it close. We follow bash.
+
+The choice belongs to the lexer, since by the time the parser sees tokens
+it has been made.
 
 ## Backticks
 

@@ -8559,7 +8559,22 @@ echo "st=$?"`,
 	{
 		ID: "subst/arith-vs-subshell", Category: "substitutions",
 		Snippet: `echo "[$((1+2))] [$( (echo sub) )]"`,
-		Why:     "$(( starts arithmetic, so a substitution beginning with a subshell needs the space — the only disambiguation available",
+		Why:     "the two constructs written apart, which is the spelling POSIX tells an author to use and the one every shell reads the same way. The rows below are what happens when they are written together",
+	},
+	{
+		ID: "subst/double-paren-is-a-subshell", Category: "substitutions",
+		Snippet: `echo "[$((echo ab cde) )]"`,
+		Why:     "the parentheses written together, and the row that says the space is not the only disambiguation after all: bash 5.3, bash 3.2, bash-as-sh, ksh93 and zsh all run the subshell, and dash and ash refuse the line for a missing `))`. The same head count that put process substitution in the core, so this is core and the two minimal shells turn it off. We read every `$((` as arithmetic and failed the expression instead (#2299)",
+	},
+	{
+		ID: "subst/double-paren-count-decides-not-the-expression", Category: "substitutions",
+		Snippet: `echo "[$(( (1+2) ))] [$(( (1+2)) )]"`,
+		Why:     "the same three bytes twice, parted only by where the blank sits, and the row that says the rule is positional rather than `try arithmetic and fall back`. Counting from one after the `$((`, the `)` that brings the count to zero opens arithmetic only when another `)` follows it immediately — so the first is 3 and the second runs `1+2` as a command. Read as a fallback on a failed parse, both would be 3",
+	},
+	{
+		ID: "subst/double-paren-closer-in-quotes", Category: "substitutions",
+		Snippet: `echo $(( '0)' + 1 ))`,
+		Why:     "whether the scan that tells the two constructs apart tracks quoting, and the panel splits on it: bash 5.3, 3.2 and bash-as-sh read the quoted `)` as closing nothing and report an arithmetic error, where ksh93 and zsh let it close the count and run `0)` as a command. Our bash follows bash; the two rows above are what the whole panel agrees on, and this is the edge it does not",
 	},
 	{
 		ID: "subst/backticks-nest-with-escaping", Category: "substitutions",

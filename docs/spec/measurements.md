@@ -13730,6 +13730,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `subst/brace-in-quotes-does-not-close` | `[a}b]` | `[a}b]` | `[a}b]` | `[a}b]` | `[a}b]` | `[a}b]` | `[a}b]` |
 | `subst/nesting` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` |
 | `subst/arith-vs-subshell` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` |
+| `subst/double-paren-is-a-subshell` | **2>** `<shell>: 1: Syntax error: Missing '))'` *(status 2)* | `[ab cde]` | `[ab cde]` | `[ab cde]` | `[ab cde]` | `[ab cde]` | **2>** `<shell>: syntax error: missing '))'` *(status 2)* |
+| `subst/double-paren-count-decides-not-the-expression` | **2>** `<shell>: 1: Syntax error: Missing '))'` *(status 2)* | `[3] []` **2>** `<shell>: line 1: 1+2: command not found` | `[3] []` **2>** `<shell>: line 1: 1+2: command not found` | `[3] []` **2>** `<shell>: 1+2: command not found` | `[3] []` **2>** `<shell>: 1+2: not found` | `[3] []` **2>** `<shell>:1: command not found: 1+2` | **2>** `<shell>: syntax error: missing '))'` *(status 2)* |
+| `subst/double-paren-closer-in-quotes` | **2>** `<shell>: 1: arithmetic expression: expecting primary: " '0)' + 1 "` *(status 2)* | **2>** `<shell>: line 1: '0)' + 1 : arithmetic syntax error: operand expected (error token is "'0)' + 1 ")` *(status 1)* | **2>** `<shell>: line 1: '0)' + 1 : arithmetic syntax error: operand expected (error token is "'0)' + 1 ")` *(status 127)* | **2>** `<shell>: '0)' + 1 : syntax error: operand expected (error token is "'0)' + 1 ")` *(status 1)* | **2>** `<shell>: 0): not found` | **2>** `<shell>:1: command not found: 0)` | **2>** `<shell>: arithmetic syntax error` *(status 2)* |
 | `subst/backticks-nest-with-escaping` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` |
 
 - `subst/does-not-end-the-word` — a substitution is part of a word, not a word of its own
@@ -13752,9 +13755,21 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   echo "[$(echo "$(echo deep)")]"
   ```
-- `subst/arith-vs-subshell` — $(( starts arithmetic, so a substitution beginning with a subshell needs the space — the only disambiguation available
+- `subst/arith-vs-subshell` — the two constructs written apart, which is the spelling POSIX tells an author to use and the one every shell reads the same way. The rows below are what happens when they are written together
   ```sh
   echo "[$((1+2))] [$( (echo sub) )]"
+  ```
+- `subst/double-paren-is-a-subshell` — the parentheses written together, and the row that says the space is not the only disambiguation after all: bash 5.3, bash 3.2, bash-as-sh, ksh93 and zsh all run the subshell, and dash and ash refuse the line for a missing `))`. The same head count that put process substitution in the core, so this is core and the two minimal shells turn it off. We read every `$((` as arithmetic and failed the expression instead (#2299)
+  ```sh
+  echo "[$((echo ab cde) )]"
+  ```
+- `subst/double-paren-count-decides-not-the-expression` — the same three bytes twice, parted only by where the blank sits, and the row that says the rule is positional rather than `try arithmetic and fall back`. Counting from one after the `$((`, the `)` that brings the count to zero opens arithmetic only when another `)` follows it immediately — so the first is 3 and the second runs `1+2` as a command. Read as a fallback on a failed parse, both would be 3
+  ```sh
+  echo "[$(( (1+2) ))] [$(( (1+2)) )]"
+  ```
+- `subst/double-paren-closer-in-quotes` — whether the scan that tells the two constructs apart tracks quoting, and the panel splits on it: bash 5.3, 3.2 and bash-as-sh read the quoted `)` as closing nothing and report an arithmetic error, where ksh93 and zsh let it close the count and run `0)` as a command. Our bash follows bash; the two rows above are what the whole panel agrees on, and this is the edge it does not
+  ```sh
+  echo $(( '0)' + 1 ))
   ```
 - `subst/backticks-nest-with-escaping` — the older form nests only with backslash escaping, which is why $( ) exists
   ```sh

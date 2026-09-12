@@ -1255,12 +1255,22 @@ func (p *printer) span(s Span) {
 			p.str("`" + escapeBackquoted(s.Value) + "`")
 			return
 		}
-		// A space where the command starts with its own parenthesis: `$((`
-		// is arithmetic, so `$( (echo x) )` written without one is a
-		// different construct entirely. The same trap as a redirection whose
-		// target begins with `<`, and found the same way — by printing
-		// scripts nobody wrote for this.
-		if strings.HasPrefix(s.Value, "(") {
+		// A space where the command starts with its own parenthesis and
+		// dropping it would change the construct: `$((` opens arithmetic
+		// wherever the count closes as `))`, so a body of `(1+2)` written
+		// without one comes back an expression. The same trap as a
+		// redirection whose target begins with `<`, and found the same way —
+		// by printing scripts nobody wrote for this.
+		//
+		// Asked of the text rather than assumed from the first byte, and
+		// through the reader's own rule, so that a body the reader gives back
+		// unchanged is written unchanged: `$((echo x) )` is a command
+		// substitution in five of the panel's seven shells and printing it as
+		// `$( (echo x) )` would edit a script that needed no editing. The two
+		// minimal shells have no such reading, and the space is what a body
+		// of theirs was written with in the first place — the construct is
+		// unreachable there without it.
+		if strings.HasPrefix(s.Value, "(") && doubleParenIsArith("$("+s.Value+")", 0) {
 			p.str("$( " + s.Value + ")")
 			return
 		}

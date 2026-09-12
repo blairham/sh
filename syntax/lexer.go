@@ -2381,9 +2381,21 @@ func (l *Lexer) doubleParenKind() SpanKind {
 	if !l.dialect.ArithSubstFallsBackToCommandSubst {
 		return ArithSubst
 	}
-	src := l.src
+	if doubleParenIsArith(l.src, l.off) {
+		return ArithSubst
+	}
+	return CommandSubst
+}
+
+// doubleParenIsArith applies that rule to the `$((` at off in src.
+//
+// Taken apart from the method because the printer asks the same question of
+// text it is about to write: a command substitution whose body opens with a
+// parenthesis is written back without a space only where reading it again
+// gives the construct back. One rule, asked from both ends.
+func doubleParenIsArith(src string, off int) bool {
 	depth := 1
-	for i := l.off + 3; i < len(src); i++ {
+	for i := off + 3; i < len(src); i++ {
 		switch src[i] {
 		case '\\':
 			i++
@@ -2396,14 +2408,11 @@ func (l *Lexer) doubleParenKind() SpanKind {
 		case ')':
 			depth--
 			if depth == 0 {
-				if i+1 < len(src) && src[i+1] == ')' {
-					return ArithSubst
-				}
-				return CommandSubst
+				return i+1 < len(src) && src[i+1] == ')'
 			}
 		}
 	}
-	return ArithSubst
+	return true
 }
 
 // skipQuotedFrom returns the offset of the byte closing the quote that opens

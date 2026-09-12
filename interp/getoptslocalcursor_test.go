@@ -21,13 +21,25 @@ func localCursorSem(restores Answer) Semantics {
 	s := getoptsSem()
 	s.GetoptsLocalOptindRestoresTheCursor = restores
 	// The neighbours these cases walk past, answered so that an unanswered
-	// axis cannot be mistaken for the one under test. The cursor is not local
-	// to every call here — that is the other axis, and a preset that said yes
-	// would hand the caller its place back without this one doing anything —
-	// and a valueless declaration empties the name and lists nothing.
+	// axis cannot be mistaken for the one under test — and answered the way
+	// the shell this reproduces answers them, because two of them decide
+	// whether these cases test anything.
+	//
+	// The cursor is not local to every call: that is the other axis, and a
+	// preset saying yes would hand the caller its place back without this
+	// one doing anything.
 	s.GetoptsPositionIsFunctionLocal = No
-	s.DeclaredNameWithoutValueIsEmpty = Yes
+	// A valueless declaration does *not* give the name a value, which is what
+	// makes `local OPTIND` with no `=1` reach the question at all. Said yes,
+	// the declaration becomes an assignment, GetoptsAssignmentRestartsWord
+	// drops the position inside the word on the strength of it, and the case
+	// about entering the call passes with nothing implemented.
+	s.DeclaredNameWithoutValueIsEmpty = No
 	s.ValuelessDeclarationOfAHeldNameListsIt = No
+	// And the declaration hides whatever the caller's name held, which is
+	// the other half of "no value": the local starts empty rather than
+	// carrying the outer value in.
+	s.ValuelessDeclarationHidesTheOuterValue = Yes
 	return s
 }
 

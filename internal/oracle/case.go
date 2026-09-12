@@ -17390,6 +17390,33 @@ echo "st=$?"`,
 			"`read-only variable` for a name this shell is claiming not to have. Ours did exactly that",
 	},
 	{
+		ID: "zmodload/a-plain-spelling-arrives-only-when-the-module-is-asked-for", Category: "builtins",
+		Snippet: `whence -w rm; zmodload -F zsh/files b:rm; echo "st=$?"; whence -w rm; whence -w zf_rm`,
+		Why: "`zsh/files` provides nine operations under eighteen names, and the plain half would shadow a command " +
+			"every script on the machine means. The three readings are the row: before the load `rm` is not this " +
+			"shell's, the narrowed load is 0, and afterwards `rm` is the builtin and `zf_rm` — which the same line " +
+			"did *not* name — is gone. A shell that registered the nine outright passes the second and third and " +
+			"fails the first; one that refuses the name, as this did, fails all three (#1670)",
+	},
+	{
+		ID: "zmodload/a-plain-load-switches-both-spellings-on", Category: "builtins",
+		Snippet: `zmodload zsh/files; echo "st=$?"; whence -w rm; whence -w zf_rm; zmodload -u zsh/files; whence -w rm`,
+		Why: "the un-narrowed line, which says nothing about which of the eighteen it wants and therefore gets all " +
+			"of them — and then the unload, which is the row that pins *undo the load* rather than *forget the " +
+			"listing*: `rm` stops being this shell's word again. Both spellings are read each time, because a " +
+			"shell that switched on only the one it already had would answer the same to either alone",
+	},
+	{
+		ID: "zmodload/a-withdrawn-name-is-in-neither-listing", Category: "builtins",
+		Snippet: `zmodload zsh/zutil; zmodload -F zsh/zutil -b:zparseopts; ` +
+			`n=0; for b in ${(f)"$(enable)"}; do [[ $b == zparseopts ]] && n=1; done; print "enable=$n"; ` +
+			`disable; print "disable-end"; enable zparseopts; print "en=$?"; disable zparseopts; print "dis=$?"`,
+		Why: "a name a module took away is *absent*, and absent from both hash-table listings — which is the whole " +
+			"difference between it and a `disable`d one, and the reason the plain spellings above cost nothing to " +
+			"register. Four readings because this shell had three of them wrong: it printed the name from `enable`, " +
+			"and `enable`/`disable` naming it succeeded silently instead of `no such hash table element` at 1",
+	},
+	{
 		ID: "zmodload/unloading-what-was-never-loaded", Category: "builtins",
 		Snippet: `zmodload -u zsh/nosuchmodule; echo "st=$?"`,
 		Why:     "`no such module` here means *not loaded*, not *no such name*: `-u` on a module that was never loaded is `no such module zsh/nosuchmodule` and 1. The row that proves it is the next one, which says the same of a module zsh certainly ships",

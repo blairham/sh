@@ -98,3 +98,73 @@ func TestTheFeatureListingStillReportsTheSelection(t *testing.T) {
 		t.Errorf("listing = %q (status %d), want %q at 0", out, st, want)
 	}
 }
+
+// The other listing has to agree with it. `disable` was right and `enable`
+// was not: a withdrawn name went on appearing in `enable`'s output and in
+// `$builtins`, and `enable`/`disable` given that name went on succeeding as
+// though the module had never taken it away.
+//
+// Measured on zsh 5.9.2, 2026-09-12, after
+// `zmodload zsh/zutil; zmodload -F zsh/zutil -b:zparseopts`:
+//
+//	enable | grep -c zparseopts       0
+//	${+builtins[zparseopts]}          0
+//	enable zparseopts    zsh:enable:1: no such hash table element: zparseopts   1
+//	disable zparseopts   zsh:disable:1: no such hash table element: zparseopts  1
+//
+// Each row here is one this shell answered differently before the fix — `1`,
+// `1`, silence at 0 and silence at 0 — so any one of them failing is a
+// regression rather than a rewording.
+func TestAWithdrawnBuiltinIsOutOfTheEnableListingToo(t *testing.T) {
+	const setUp = "zmodload zsh/parameter\nzmodload zsh/zutil\n" +
+		"zmodload -F zsh/zutil -b:zparseopts\n"
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"the listing does not name it",
+			setUp + listingHolds,
+			"n=0",
+		},
+		{
+			"nor does the parameter that reads the same table",
+			setUp + "print \"n=${+builtins[zparseopts]}\"",
+			"n=0",
+		},
+		{
+			"and enabling it is a hash-table complaint, not a restore",
+			setUp + "enable zparseopts\nprint \"st=$?\"",
+			"st=1",
+		},
+		{
+			"as is disabling it",
+			setUp + "disable zparseopts\nprint \"st=$?\"",
+			"st=1",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _, _ := runZshSplit(t, t.TempDir(), tc.src)
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("%s\n = %q, want %q in it", tc.src, out, tc.want)
+			}
+		})
+	}
+	// The sentence, once — the two builtins share it and differ only in the
+	// name in front, which is the part a caller greps for.
+	_, _, errOut := runZshSplit(t, t.TempDir(), setUp+"enable zparseopts")
+	if !strings.Contains(errOut, "no such hash table element: zparseopts") ||
+		!strings.Contains(errOut, "enable:") {
+		t.Errorf("diagnostic = %q, want zsh's hash-table sentence", errOut)
+	}
+	// And the module can still put it back: the name is out of the *lookup*,
+	// not forgotten, so `+b:` restores the builtin this shell already had.
+	out, _, _ := runZshSplit(t, t.TempDir(),
+		setUp+"zmodload -F zsh/zutil +b:zparseopts\n"+listingHolds)
+	if !strings.Contains(out, "n=1") {
+		t.Errorf("got %q, want the name back in the listing", out)
+	}
+}
+
+// listingHolds prints `n=1` when `enable`'s listing names the withdrawn
+// builtin and `n=0` when it does not. Counted in the shell rather than
+// through `grep`, so the test measures this shell's listing and not whether
+// the machine running it has a `grep`.
+const listingHolds = "n=0\nfor b in ${(f)\"$(enable)\"}; do [[ $b == zparseopts ]] && n=1; done\nprint \"n=$n\""

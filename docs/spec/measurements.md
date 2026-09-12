@@ -10731,6 +10731,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/assigning-through-a-negative-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `one two X` | `one two X` | **2>** `<shell>: a[-1]: bad array subscript` *(status 1)* | `one two X` | `one two X` |
 | `param/an-operator-distributes-over-the-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` |
 | `param/an-operator-on-the-star-subscript-diverges` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `a b` | `a b` | `a b` | `a b` | `a ab` |
+| `decl/an-exported-array-in-a-child-environment` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `1~none` | `1~none` | `1~none` | `2~c=p` | `1~none` |
+| `decl/an-exported-array-with-nothing-in-it` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~none` | `st=0~none` | `st=0~none` | **2>** `<shell>: typeset: a: only simple variables can be exported` *(status 1)* | `st=0~none` |
+| `decl/a-subscripted-operand-with-no-value` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 n=0~declare -a a~[x][y]` | `st=0 n=0~declare -a a~[x][y]` | `st=0 n=0~declare -a a='()'~[x][y]` | `st=0 n=0~typeset -a a=([0]=)~[x][y]` | **2>** `<shell>:1: no matches found: a[3]` *(status 1)* |
 | `decl/an-array-letter-over-a-declared-table` | `no-attribute` | `st=1~declare -A h=([k]="v" )~after` **2>** `<shell>: line 2: typeset: h: cannot convert associative to indexed array` | `st=1~declare -A h=([k]="v" )~after` **2>** `<shell>: line 2: typeset: h: cannot convert associative to indexed array` | `no-attribute` | **2>** `<shell>[2]: typeset: cannot change associative array h to index array` *(status 1)* | `st=0~typeset -a h=(  )~after` |
 | `decl/a-table-letter-over-a-declared-array` | `no-attribute` | `st=1~[x][y] after` **2>** `<shell>: line 2: typeset: a: cannot convert indexed to associative array` | `st=1~[x][y] after` **2>** `<shell>: line 2: typeset: a: cannot convert indexed to associative array` | `no-attribute` | `st=0~[x][y] after` | `st=0~[][] after` |
 | `decl/an-array-assignment-as-an-operand` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[y]` | `[y]` | `[y]` | `[y]` | `[x]` |
@@ -11771,6 +11774,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/an-operator-on-the-star-subscript-diverges` — the star form is the axis the at form is not: bash and ksh93 trim each element and join what is left (`a b`), zsh joins first and trims the joined string once (`a ab`)
   ```sh
   a=(aa ab); echo "${a[*]#a}"
+  ```
+- `decl/an-exported-array-in-a-child-environment` — what a child sees for an exported name holding an **array**, which is a name a child either has or has not -- there being no environment representation for a compound to have a different one of. bash and zsh hand it nothing; ksh93 hands it the array's *first element*. The count and the entry are both printed because the count alone cannot say which name arrived: `b=1` is the control and reaches a child in every column, so what the row separates is the compound from the export. dash has no arrays and reads the parentheses as a syntax error. This shell handed a child the first element under every dialect and an empty entry for an empty array, which is nobody's answer (#1380)
+  ```sh
+  export b=1; typeset -x c=(p q); env | grep -c '^[bc]=' ; env | grep '^c=' || echo none
+  ```
+- `decl/an-exported-array-with-nothing-in-it` — the same export with nothing to export, which is a third answer and the reason the emptiness is not folded into the row above: ksh93 refuses the declaration outright -- `only simple variables can be exported` -- where bash and zsh take it and hand a child nothing. Both of the answers the axis offers give a child nothing here, so what this row records is the refusal and its status rather than a value (#1380)
+  ```sh
+  typeset -x a=(); echo "st=$?"; env | grep '^a=' || echo none
+  ```
+- `decl/a-subscripted-operand-with-no-value` — a declaration whose operand is subscripted and carries **no value**, which declares the *name* as an array and writes no element: `${#a[@]}` is 0 in bash and ksh93 alike and an array already standing is left as it is, which the second half is the control for. zsh reaches none of it -- a declaration operand holding no `=` is a glob there, and no file is named `a[3]` -- and bash 3.2 answers as bash 5 does. It used to declare a variable literally named `a[3]`, invisible to `${a[3]}` and to `typeset -p a`, at status 0, so a script declaring an array this way had none (#1380)
+  ```sh
+  typeset a[3]; echo "st=$? n=${#a[@]}"; typeset -p a 2>&1; a=(x y); typeset a[3]; printf "[%s]" "${a[@]}"; echo
   ```
 - `decl/an-array-letter-over-a-declared-table` — one kind of array declared over the other, which the three columns with both attributes answer three ways. bash refuses, names the builtin as it was invoked and the name after it, leaves the table exactly as it was, reports 1 and runs the next command. ksh93 refuses too and **ends the script**, so neither the status nor the listing nor the `after` is reached -- which is what makes the two refusals two answers rather than one wording. zsh converts and the element is gone, at status 0. Every one of the four things printed is load-bearing: the status separates the refusal from the conversion, the listing separates a table that survived from one that did not, and `after` separates the two refusals from each other. bash 3.2 has no `-A` and dash no `typeset` (#1375)
   ```sh

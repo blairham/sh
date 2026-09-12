@@ -9468,6 +9468,21 @@ echo "st=$?"`,
 		Why: "and the reason bash's extra line carries a location of its own: the construct is named at the `[[`'s line and the token at the token's, so a condition opened on line 1 and refused on line 2 names both. One line would have looked right in every single-line case above",
 	},
 	{
+		ID: "decl/an-exported-array-in-a-child-environment", Category: "parameter expansion",
+		Snippet: `export b=1; typeset -x c=(p q); env | grep -c '^[bc]=' ; env | grep '^c=' || echo none`,
+		Why:     "what a child sees for an exported name holding an **array**, which is a name a child either has or has not -- there being no environment representation for a compound to have a different one of. bash and zsh hand it nothing; ksh93 hands it the array's *first element*. The count and the entry are both printed because the count alone cannot say which name arrived: `b=1` is the control and reaches a child in every column, so what the row separates is the compound from the export. dash has no arrays and reads the parentheses as a syntax error. This shell handed a child the first element under every dialect and an empty entry for an empty array, which is nobody's answer (#1380)",
+	},
+	{
+		ID: "decl/an-exported-array-with-nothing-in-it", Category: "parameter expansion",
+		Snippet: `typeset -x a=(); echo "st=$?"; env | grep '^a=' || echo none`,
+		Why:     "the same export with nothing to export, which is a third answer and the reason the emptiness is not folded into the row above: ksh93 refuses the declaration outright -- `only simple variables can be exported` -- where bash and zsh take it and hand a child nothing. Both of the answers the axis offers give a child nothing here, so what this row records is the refusal and its status rather than a value (#1380)",
+	},
+	{
+		ID: "decl/a-subscripted-operand-with-no-value", Category: "parameter expansion",
+		Snippet: `typeset a[3]; echo "st=$? n=${#a[@]}"; typeset -p a 2>&1; a=(x y); typeset a[3]; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "a declaration whose operand is subscripted and carries **no value**, which declares the *name* as an array and writes no element: `${#a[@]}` is 0 in bash and ksh93 alike and an array already standing is left as it is, which the second half is the control for. zsh reaches none of it -- a declaration operand holding no `=` is a glob there, and no file is named `a[3]` -- and bash 3.2 answers as bash 5 does. It used to declare a variable literally named `a[3]`, invisible to `${a[3]}` and to `typeset -p a`, at status 0, so a script declaring an array this way had none (#1380)",
+	},
+	{
 		ID: "decl/an-array-letter-over-a-declared-table", Category: "parameter expansion",
 		Snippet: "typeset -A h 2>/dev/null || { echo no-attribute; exit 0; }\n" +
 			`h[k]=v; typeset -a h; echo "st=$?"; typeset -p h; echo after`,

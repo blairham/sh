@@ -3705,6 +3705,19 @@ func (r *Runner) environ() []string {
 		if !r.isExported(k) {
 			continue
 		}
+		if entry, compound := r.exportedCompound(k); compound {
+			// A name holding an array or a table has no environment
+			// representation, and the columns part over whether it reaches a
+			// child at all — see
+			// Semantics.ExportedCompoundReachesAChildAsItsFirstValue. The
+			// scalar view this store keeps in step is *not* the answer: it
+			// handed a child the first element in every dialect, and an
+			// empty entry for an empty array, which is nobody's.
+			if entry != "" {
+				out = append(out, k+"="+entry)
+			}
+			continue
+		}
 		if r.declaredEmpty[k] {
 			// Declared rather than assigned, so the name has no value of
 			// its own and an exported name with no value reaches no child
@@ -3718,11 +3731,74 @@ func (r *Runner) environ() []string {
 		// a read like any other.
 		out = append(out, k+"="+r.readCaseFolded(k, v))
 	}
+	// A **table** keeps no scalar view, so the loop above never sees one and
+	// the dialect that hands a child its first value would hand it nothing.
+	// Sorted, for the reason zeroValuedTypeExports is: a child's environment
+	// must not depend on a map walk.
+	out = append(out, r.exportedTables()...)
 	for k, v := range r.hiddenExports {
 		out = append(out, k+"="+v)
 	}
 	out = append(out, r.zeroValuedTypeExports()...)
 	return out
+}
+
+// exportedTables is the environment entries the exported keyed tables earn,
+// which no other pass produces: a table has no scalar view in Vars, so the
+// walk over that map cannot see one.
+func (r *Runner) exportedTables() []string {
+	var out []string
+	for k := range r.AssocArrays {
+		if _, own := r.Vars[k]; own || !r.isExported(k) {
+			continue
+		}
+		if entry, _ := r.exportedCompound(k); entry != "" {
+			out = append(out, k+"="+entry)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// exportedCompound is the environment entry an exported name holding an array
+// or a table is given, and whether the name holds one at all.
+//
+// An empty string with compound true means no entry: either the dialect hands
+// a child nothing for a compound, or the compound has nothing in it. The two
+// come to the same thing for a child — measured, ksh93 refuses to export an
+// empty array at all and the other two hand one nothing — so the emptiness is
+// not a second question.
+func (r *Runner) exportedCompound(name string) (string, bool) {
+	values, held := r.compoundValues(name)
+	if !held {
+		return "", false
+	}
+	if !r.ask(r.sem().ExportedCompoundReachesAChildAsItsFirstValue,
+		"an exported name holding a compound reaching a child at all") {
+		return "", true
+	}
+	if len(values) == 0 {
+		return "", true
+	}
+	return values[0], true
+}
+
+// compoundValues is what a name holds when it holds an array or a table, in
+// the order that array or table lists them, and whether it holds one.
+func (r *Runner) compoundValues(name string) ([]string, bool) {
+	if a, ok := r.assocFor(name); ok {
+		return a.values(), true
+	}
+	// The *stored* array and not arrayElems, which reads a scalar back as
+	// the array of one it otherwise is — every exported name would have
+	// looked like a compound and reached no child at all.
+	if a, ok := r.Arrays[name]; ok {
+		return r.readArray(a), true
+	}
+	if produce, ok := r.DynamicArrays[name]; ok {
+		return produce(r), true
+	}
+	return nil, false
 }
 
 // zeroValuedTypeExports is the exported names whose declaration named a

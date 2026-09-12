@@ -863,6 +863,15 @@ func Semantics() interp.Semantics {
 	// the one this implementation was giving every dialect.
 	s.ScalarUnderAnArrayDeclaration = interp.ScalarUnderACompoundDiscardsIt
 	s.ScalarUnderATableDeclaration = interp.ScalarUnderACompoundDiscardsIt
+	// A name holding a compound reaches no child, with bash and against
+	// ksh93 (#1380).
+	s.ExportedCompoundReachesAChildAsItsFirstValue = interp.No
+	// And a **subscripted operand** records no attribute at all here:
+	// measured 2026-09-12, `typeset -x a[1]=v` and `export a[1]=v` both list
+	// `typeset -a a=( v )` with no `x`, where the whole-name `typeset -x
+	// a=(p q)` lists `typeset -ax`. So it is the subscripted operand that
+	// carries nothing, and not the letter (#1380).
+	s.SubscriptedOperandCarriesTheAttributes = interp.No
 	// `a=(1 2); a+=x` adds a third element rather than joining the first:
 	// `typeset -a a=( 1 2 x )`. The empty string is a value and gets an
 	// element of its own — `a=(1 2); a+=""` is three elements — and a value

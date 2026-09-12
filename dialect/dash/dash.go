@@ -633,10 +633,14 @@ func Diagnostics() interp.Diagnostics {
 		ReadonlyVariable:            "%s: is read only",
 		UnsetReadonly:               "unset: %s: is read only",
 		InvalidNumber:               "Illegal number: %s",
-		NumericArgument:             "%[1]s: Illegal number: %[2]s",
-		ArithError:                  "arithmetic expression: %[2]s: \"%[1]s\"",
-		FileNotFound:                "No such file",
-		TestNamesFirstOperand:       true,
+		// A conditional with no `:` says which byte it wanted; a missing
+		// value is the ordinary `expecting primary`, so ArithConditionalValue
+		// stays empty.
+		ArithConditionalColon: "expecting ':'",
+		NumericArgument:       "%[1]s: Illegal number: %[2]s",
+		ArithError:            "arithmetic expression: %[2]s: \"%[1]s\"",
+		FileNotFound:          "No such file",
+		TestNamesFirstOperand: true,
 		// 2 rather than the 1 the other three report, for a read and a write
 		// alike. Not fatal — the script carries on — so this is a different
 		// question from FatalErrorStatusIsOne, which is about a failure that

@@ -1455,6 +1455,14 @@ func (r *Runner) parseNum(s string) (int, error) {
 	case r.spellsANamedBase(s):
 		text, rest, _ := strings.Cut(s, "#")
 		b, _ := strconv.Atoi(text)
+		if b == 0 && r.ask(r.sem().ArithBaseZeroReadsTheDigitsAsWritten,
+			"a base of zero") {
+			// Zero is a base one dialect reads *through*: the digits after
+			// the `#` are read as an ordinary constant, so `0#5` is 5 and
+			// `0#0x10` is 16. Read again from the top rather than in base
+			// ten, because the radix prefix counts there too.
+			return r.parseNum(rest)
+		}
 		if b < 2 || b > 64 {
 			// Below two is no base at all and above 64 is past the alphabet.
 			// Worded the same way as a base the dialect stops short of,

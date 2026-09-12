@@ -9895,6 +9895,46 @@ echo unreachable`,
 		Why:     "the conditional operator",
 	},
 	{
+		ID: "arith/a-numeral-followed-by-letters", Category: "arithmetic",
+		Snippet: `echo "v=$((1abc))"; echo "st=$?"`,
+		Why:     "how many tokens `1abc` is, which is a grammar question rather than a wording one: zsh stops the number at `1` and then wants an operator, naming `abc`, where bash reads the whole run into the numeral and reports a digit base ten does not have. ksh93 and dash refuse the expression without saying which reading they took. Ours named the whole text with zsh's operand wording, which is neither (#2007)",
+	},
+	{
+		ID: "arith/a-numeral-whose-letters-are-base-digits", Category: "arithmetic",
+		Snippet: `echo "v=$(( 1@2 ))"; echo "w=$(( 1_ ))"; echo "st=$?"`,
+		Why:     "the control for the row above on the other side: `@` and `_` are digits 62 and 63 of the base-64 alphabet, and bash reads them into the numeral exactly as it reads letters — `value too great for base` for both, not the `invalid arithmetic operator` it keeps for a byte no operator could be. So the swallowing reading is about the alphabet and not about letters. zsh refuses the `@` outright and is a cell short on `1_`, which it answers 1",
+	},
+	{
+		ID: "arith/a-radix-prefix-with-a-digit-its-base-lacks", Category: "arithmetic",
+		Snippet: `echo "v=$(( 0b2 ))"; echo "w=$(( 08#9 ))"; echo "st=$?"`,
+		Why:     "the same split reached through a base the text names rather than through plain decimal, which is what says the reader knows the base it is in: zsh stops both at the digit the base cannot use and blames what is left, so `0b2` is `operator expected at `2'` and not a complaint about the number. A reading that stopped at the first letter or at the first non-decimal digit answers neither",
+	},
+	{
+		ID: "arith/a-conditional-with-no-value-after-the-question", Category: "arithmetic",
+		Snippet: `echo "v=$((1 ?))"; echo "st=$?"`,
+		Why:     "a conditional that stops at its `?`, and the panel splits two ways at once: bash parts a conditional's missing value from an ordinary one — `expression expected` rather than its `operand expected` — where ksh93 reports the *colon* it is still waiting for, and zsh and dash reuse their own end-of-input sentence. Ours wrote `expected : in an arithmetic conditional`, which is a bare string in the parser that no dialect could answer (#1190)",
+	},
+	{
+		ID: "arith/a-conditional-with-no-colon", Category: "arithmetic",
+		Snippet: `echo "v=$((1 ? 2))"; echo "st=$?"`,
+		Why:     "the value is there and the colon is not, which all four word and no two alike: bash `` `:' expected for conditional expression `` blaming the value, ksh93 `':' expected for '?' operator`, zsh `':' expected`, dash `expecting ':'`. It is the row that says the missing colon is its own failure rather than the missing value's",
+	},
+	{
+		ID: "arith/a-conditional-with-no-value-after-the-colon", Category: "arithmetic",
+		Snippet: `echo "v=$((1 ? 2 :))"; echo "st=$?"`,
+		Why:     "the other value missing, and the row that says the two positions are two questions: ksh93 answers this one with its ordinary `more tokens expected` where the `?` position got the colon sentence, while bash writes `expression expected` in both. So one field cannot hold the panel — bash cuts conditional from ordinary and ksh93 cuts then from else, and the two cuts cross",
+	},
+	{
+		ID: "arith/a-colon-with-no-question-and-nothing-after-it", Category: "arithmetic",
+		Snippet: `echo "v=$((1 :))"; echo "st=$?"`,
+		Why:     "a `:` where no `?` opened a conditional, which zsh reads as a math *token* — it takes the byte and then wants a value, so the complaint is `operand expected at end of string` and not one about the colon. bash blames the leftover text with the sentence it gives any of it, and ksh93 calls it an invalid character, which is a fourth shape and is recorded rather than modeled",
+	},
+	{
+		ID: "arith/a-colon-with-no-question-and-a-value-after-it", Category: "arithmetic",
+		Snippet: `echo "v=$((1 : 2))"; echo "st=$?"`,
+		Why:     "the pair with the row above, and the whole evidence that the byte is read rather than refused: with something after the colon zsh gets far enough to say `':' without '?'`, which a reader that stopped at the byte could not — it would give both rows the same complaint, as ours did. bash blames `: 2` rather than `:`, which says its reader ran on too",
+	},
+	{
 		ID: "arith/compound-arithmetic-assignment", Category: "arithmetic",
 		Snippet: `x=44; a=$((x-=2)); b=$((x/=6)); c=$((x%=4)); echo "$a $b $c x=$x"`,
 		Why:     "-=, /= and %= each apply their operator to the target and leave the result behind, so the chain reads 42, 7, 3 off one variable",

@@ -115,6 +115,13 @@ func Dialect() syntax.Dialect {
 	d.SeparatorWhereACommandBelongs = syntax.AnySeparatorWhereACommandBelongs
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
+	// `:` is a math token here wherever it stands, rather than text no
+	// operator could be — see syntax.Dialect.ArithColonIsAToken.
+	d.ArithColonIsAToken = true
+	// And a numeral stops at the first character its base cannot use, where
+	// the rest read every letter into the number and then refuse it — see
+	// syntax.Dialect.ArithNumeralEndsAtABadDigit.
+	d.ArithNumeralEndsAtABadDigit = true
 	// And the binary radix prefix, which this shell alone has: `0b101` is 5
 	// here and an octal constant carrying a `b` everywhere else.
 	d.ArithBinaryLiteral = true
@@ -945,6 +952,9 @@ func Semantics() interp.Semantics {
 	// any case, ArithLeadingZeroIsOctal being No.
 	s.ArithBaseMayHaveALeadingZero = interp.Yes
 	s.ArithBaseIsAtMostTwoDigits = interp.No
+	// And zero is a base this shell reads through rather than refuses: the
+	// digits after it are an ordinary constant, so `$(( 0#0x10 ))` is 16.
+	s.ArithBaseZeroReadsTheDigitsAsWritten = interp.Yes
 	// `$(( 0x ))` is 0 and `$(( 0x+1 ))` is 1, as in bash.
 	s.ArithEmptyRadixDigitsAreZero = interp.Yes
 	// ${#a} of an array counts elements, and a function's $LINENO counts
@@ -2170,6 +2180,14 @@ func Diagnostics() interp.Diagnostics {
 		FcNoSuchEvent:                      "no such event: 1",
 		NoJobControl:                       "no job control in this shell.",
 		FdVariableWithoutADescriptor:       "parameter %[1]s does not contain a file descriptor",
+		// A conditional with no `:` is its own sentence; a conditional
+		// missing either value is the ordinary end of input, so
+		// ArithConditionalThen and ArithConditionalElse stay empty and fall
+		// through to it.
+		ArithConditionalColon: "bad math expression: ':' expected",
+		// And a `:` with no `?` in front of it, which is a complaint only a
+		// reader that took the colon and then read a second value can make.
+		ArithColonWithoutQuestion: "bad math expression: ':' without '?'",
 		// The same split ksh93 makes, said the other way round: the text
 		// that could not be an operand is named where there is one, and the
 		// end of the string is named where there is not.

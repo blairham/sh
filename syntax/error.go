@@ -70,6 +70,36 @@ const (
 	// operator belonged and "invalid arithmetic operator" when the text could
 	// not be either. The other three have one wording for both.
 	ErrArithBadOperator
+	// ErrArithConditionalThen is `? ` with nothing after it to be the value
+	// the condition chooses when it is true: `$(( 1 ? ))`.
+	//
+	// Its own kind because two of the four shells word it apart from an
+	// ordinary missing operand — bash "expression expected" and ksh93
+	// "':' expected for '?' operator", against their own "operand expected"
+	// and "more tokens expected" — while zsh and dash reuse theirs. Token is
+	// the `?` and everything after it, which is what bash names.
+	ErrArithConditionalThen
+	// ErrArithConditionalColon is a conditional whose two values are not
+	// parted by a `:`: `$(( 1 ? 2 ))`. All four word it, and each its own
+	// way. Token is the value that was read and everything after it.
+	ErrArithConditionalColon
+	// ErrArithConditionalElse is `:` with nothing after it to be the value
+	// the condition chooses when it is false: `$(( 1 ? 2 : ))`.
+	//
+	// Apart from ErrArithConditionalThen because ksh93 parts the two — its
+	// then is the colon complaint and its else the ordinary end of input —
+	// and apart from ErrArithOperandEnd because bash parts *those*. Token is
+	// the `:` and everything after it.
+	ErrArithConditionalElse
+	// ErrArithColonWithoutQuestion is a `:` standing where no `?` opened a
+	// conditional, in the dialect whose reader takes `:` as a math token
+	// wherever it is written: `$(( 1 : 2 ))` is `':' without '?'` in zsh.
+	//
+	// Reachable only under Dialect.ArithColonIsAToken. Everywhere else the
+	// `:` is text left over, which is ErrArithOperator's — and that is the
+	// same reading, since a shell that did not know the byte would call it
+	// no operator at all.
+	ErrArithColonWithoutQuestion
 	// ErrArithCharacterMissing is the character-code operator with nothing
 	// after it to take the code of: `$((##))`, or a backslash at the end of
 	// the expression. Its own kind because the one dialect that has the

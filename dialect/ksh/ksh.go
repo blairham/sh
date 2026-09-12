@@ -581,6 +581,7 @@ func Semantics() interp.Semantics {
 	// 3, so it is a length rule and not one about the zero.
 	s.ArithBaseMayHaveALeadingZero = interp.Yes
 	s.ArithBaseIsAtMostTwoDigits = interp.Yes
+	s.ArithBaseZeroReadsTheDigitsAsWritten = interp.No
 	// And a radix prefix wants a digit after it: `$(( 0x ))` is refused.
 	s.ArithEmptyRadixDigitsAreZero = interp.No
 	// And a third site with a third answer: `let` reads *every* numeral in
@@ -1326,6 +1327,12 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperandExpected:  "arithmetic syntax error",
 		ArithExpressionRanOut: "more tokens expected",
 		ArithOperatorExpected: "arithmetic syntax error",
+		// A conditional with no `:` says so, and so does one with no value
+		// after the `?` — this shell reports the colon it is still waiting
+		// for rather than the value. A missing *else* is the ordinary end of
+		// input, so ArithConditionalElse stays empty.
+		ArithConditionalColon: "':' expected for '?' operator",
+		ArithConditionalThen:  "':' expected for '?' operator",
 		// A digit the base does not have is the same sentence.
 		DigitTooGreatForBase: "arithmetic syntax error",
 		// The same sentence for a base outside 2..64: `$(( 1#0 ))` is

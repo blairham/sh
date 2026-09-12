@@ -878,10 +878,40 @@ answers `typeset -A`, `[1+1]` and `[i]` are two different three- and
 one-character keys rather than two spellings of 2, and `${a[2]}` finds
 nothing that `a=([1+1]=c)` stored. bash and zsh evaluate the subscript,
 so both spellings land on the same element. Semantics axis:
-`ArrayLiteralSubscriptIsAKey` — ksh93 yes, bash and zsh no. Asked only
-where the two readings differ: a plain decimal numeral evaluates to
-itself, so `a=([2]=c)` fills the same slot either way and the core needs
-no dialect for it.
+`ArrayLiteralSubscriptIsAKey` — ksh93 yes, bash and zsh no.
+
+**A plain decimal subscript is read the same way**, which is not what an
+earlier reading of this paragraph said. The shortcut was that `[2]`
+fills slot 2 under either answer, so the common form needs no dialect —
+true of the *slot* and false of everything else, because the reading
+also decides what the literal creates. Measured 2026-09-12 on ksh93u+
+2012-08-01:
+
+| written | listed back | `${a[05]}` | `${a[5]}` |
+| --- | --- | --- | --- |
+| `a=([5]=q)` | `typeset -A a=([5]=q)` | empty | `q` |
+| `a=([05]=q)` | `typeset -A a=([05]=q)` | `q` | empty |
+| `a=([0]=x [1]=y)` | `typeset -A a=([0]=x [1]=y)` | — | — |
+| `a[5]=q` | `typeset -a a=([5]=q)` | `q` | `q` |
+
+The leading zero is what settles it and cannot agree by accident: two
+spellings of the same number are one slot where the subscript is an
+expression and two keys where it is text. #1659 read the first row as a
+*listing* rule about sparseness; the third row is dense and still an
+association and the fourth is sparse and still an indexed array, so a
+rule keyed on the gap prints the wrong letter for both shapes. The
+literal builds the association and the letter follows from having keys.
+
+An **unanswered** axis still leans on the shortcut, so a core that has
+chosen no shell runs `a=([2]=c)` rather than diagnosing it and complains
+only where the readings visibly part — `[1+1]`, `[i]`, `[k]`.
+
+The one route back to the expression reading is the **indexed letter on
+the same command**: `typeset -a a=([1+1]=q)` is `typeset -a a=([2]=q)`
+there. It is the letter and not the attribute — `typeset -a a;
+a=([5]=q)`, `a=(x y); a=([5]=q)` and `a[0]=x; a=([5]=q)` are every route
+to a name already holding an indexed array, and all three are
+associations.
 
 The last row is a divergence that is **recorded rather than modeled**.
 bash and zsh take a literal mixing bare and subscripted elements, and a

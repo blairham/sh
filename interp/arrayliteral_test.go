@@ -162,3 +162,33 @@ func TestALiteralSubscriptAsksOnlyWhereItMatters(t *testing.T) {
 		t.Errorf("an expression subscript gave %q, want the axis named", out)
 	}
 }
+
+// An *answered* axis decides the reading for every subscript in a literal,
+// decimal or not — which is where the shortcut above stopped short. #1659 was
+// filed as ksh93 listing a sparse array with the table letter; measured
+// against ksh93u+ 2012-08-01 it is neither a listing rule nor about
+// sparseness. The literal is what builds the association, and the letter
+// follows from the keys.
+//
+// The leading zero is the discriminator and cannot be answered right by
+// accident: read as an expression `05` and `5` are one slot and both answer
+// `q`, and read as keys they are two keys and `${a[5]}` is empty.
+func TestADecimalLiteralSubscriptIsAKeyWhereTheAxisSaysSo(t *testing.T) {
+	key := permissive()
+	key.ArrayBaseIsZero = Yes
+	key.ArraysAreSparse = Yes
+	key.ArrayLiteralSubscriptIsAKey = Yes
+
+	src := `a=([05]=q); echo "k05=[${a[05]}] k5=[${a[5]}] n=${#a[@]}"`
+	if out, _ := run(t, src, withSem(key)); strings.TrimSpace(out) != "k05=[q] k5=[] n=1" {
+		t.Errorf("a leading-zero subscript gave %q, want two distinct keys", strings.TrimSpace(out))
+	}
+
+	expr := permissive()
+	expr.ArrayBaseIsZero = Yes
+	expr.ArraysAreSparse = Yes
+	expr.ArrayLiteralSubscriptIsAKey = No
+	if out, _ := run(t, src, withSem(expr)); strings.TrimSpace(out) != "k05=[q] k5=[q] n=1" {
+		t.Errorf("as an expression gave %q, want one slot under both spellings", strings.TrimSpace(out))
+	}
+}

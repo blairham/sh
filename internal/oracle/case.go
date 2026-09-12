@@ -5881,6 +5881,26 @@ echo "st=$?"`,
 		Why:     "a subscript written inside a literal is evaluated in two of the three and kept as the text between the brackets in the other, which is the same characters meaning two different things — the `ArrayLiteralSubscriptIsAKey` axis. Both spellings evaluate to 2, so where they are expressions the second overwrites the first and one element comes back; where they are keys they are two different keys and two elements do. The count is what tells the readings apart, which is why it is printed",
 	},
 	{
+		ID: "array/a-decimal-literal-subscript-is-a-key-too", Category: "expansion",
+		Snippet: `a=([05]=q); echo "k05=[${a[05]}] k5=[${a[5]}] n=${#a[@]}"`,
+		Why:     "the same axis as the case above asked where nobody thought it was asked at all: the row above uses `[1+1]` and `[i]`, and the reading of a *plain decimal* subscript was taken to be neutral because `[2]` fills slot 2 either way. The leading zero says otherwise, and cannot be answered the same way by accident — where the subscript is an expression `05` and `5` are one slot and both reads answer `q`, and where it is a key they are two different keys and `${a[5]}` is empty. ksh93 is the column with the empty one. Written with the zero rather than with a word because a word subscript is already refused by the shells that evaluate, so it tests the refusal and not the reading",
+	},
+	{
+		ID: "array/a-dense-literal-with-subscripts", Category: "expansion",
+		Snippet: `a=([0]=x [1]=y); typeset -p a 2>/dev/null || declare -p a; echo "k01=[${a[01]}]"`,
+		Why:     "a literal with subscripts that leaves no gap at all, which is what disproves #1659's premise: it was filed as ksh93 listing a *sparse* array with the table letter, and this array is dense and listed `typeset -A` there just the same. The listing letter follows from the subscripts being keys and not from the extent, and `${a[01]}` is the half of the row that says so rather than leaving the letter to be argued about — empty beside the `-A`, `y` beside the `-a`",
+	},
+	{
+		ID: "array/a-sparse-array-built-without-a-literal", Category: "expansion",
+		Snippet: `a[5]=q; typeset -p a 2>/dev/null || declare -p a; echo "k05=[${a[05]}]"`,
+		Why:     "the other half of the same disproof, and the contrast that makes the case above readable: the gap is here and the literal is not, and ksh93 lists this one `typeset -a` with `${a[05]}` answering `q` — an ordinary indexed array with an ordinary evaluated subscript. So sparseness is not what moves the letter in either direction, and a rule reading it off the extent would print the wrong one for this row and for the dense literal alike",
+	},
+	{
+		ID: "array/the-indexed-letter-beside-a-subscripted-literal", Category: "expansion",
+		Snippet: `typeset -a a=([1+1]=q); typeset -p a`,
+		Why:     "the one route back to the expression reading in the column that keys them: the indexed letter written on the *same* command as the literal. `typeset -a a; a=([5]=q)`, `a=(x y); a=([5]=q)` and `a[0]=x; a=([5]=q)` are all associations in ksh93 — every way of reaching a name that already holds an indexed array — and only the letter beside the value puts the subscript back to being evaluated, which `[1+1]` reports as the slot 2 it computes to rather than as three characters of key. Written with `typeset` on both halves rather than falling back to `declare` through a `||`, because ksh93 will not parse a compound assignment on the left of one and the row recorded a syntax error in the column it exists to measure",
+	},
+	{
 		ID: "array/a-literal-repeats-a-subscript", Category: "expansion",
 		Snippet: `a=([2]=c [2]=d); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
 		Why:     "the same subscript twice is one element holding the later value, unanimously — the elements are placed in the order written rather than gathered and reconciled, which is the only reading under which the second wins",

@@ -11283,6 +11283,14 @@ an indexed one. In ksh93 `a=([1+1]=c)` stores under the three
 characters, `typeset -p a` answers `typeset -A`, and `${a[2]}` finds
 nothing; bash and zsh evaluate the subscript and the value lands at 2.
 
+A **plain decimal** subscript is no exception, which #1659 was filed
+against the belief that it was: `a=([05]=q)` is `typeset -A a=([05]=q)`
+with `${a[5]}` empty, and `a=([0]=x [1]=y)` is an association though it
+has no gap in it. Only an unanswered axis treats a decimal as neutral,
+and only so a core that has chosen no shell can still run `a=([2]=c)`.
+The indexed letter written on the same command as the literal puts the
+subscript back to an expression — see `commands.md`.
+
 One concept with two consequences, like whether an assignment prefix
 survives a special builtin.
 

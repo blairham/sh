@@ -3125,6 +3125,38 @@ type Semantics struct {
 	// script that should have stopped carries on holding an array of the
 	// type it was refused.
 	TypeLetterAndAnArrayLiteralIsAnInconsistentType Answer
+	// NumericTypeWithNoValueReachesAChildAsZero hands a child `0` for an
+	// exported name whose declaration named a numeric type — the integer or
+	// the float letter — and which holds no value at all.
+	//
+	// Measured 2026-09-12 from a script file, `env -i` with a scratch
+	// `HOME`, reading a real child's environment:
+	//
+	//	typeset -ix Z; env | grep '^Z='
+	//
+	//	ksh93u+      Z=0
+	//	bash 5.3.15  nothing
+	//	zsh 5.9.2    nothing
+	//
+	// The name really is unset in the shell that answers yes: `${Z+set}` is
+	// empty there and `typeset -p Z` writes `typeset -x -i Z` with no value.
+	// So the zero is not a value the store holds and cannot come from it —
+	// it is what the *type* makes of nothing, produced for the child alone.
+	// The float letter does the same and does not carry its precision:
+	// `typeset -F 3 F; export F` hands over `F=0` and not `0.000`.
+	//
+	// It is the numeric letters and no others. `typeset -u U; export U`,
+	// `typeset -a A; export A` and a plain `typeset P; export P` tell that
+	// child nothing.
+	//
+	// The shell that answers no for the one-command form still tells a child
+	// about the name when a *second* declaration names it — `typeset -i Z;
+	// export Z` is `Z=0` in zsh — but that is the ordinary store being
+	// exported once the name owns its value, and not this. See
+	// Runner.declarationOwnsTheStandingEmpty, which is where the two part.
+	//
+	// Silent where it is answered wrongly, and only a real child can see it.
+	NumericTypeWithNoValueReachesAChildAsZero Answer
 	// NumericAttributeReplacesTheCaseAttribute makes the integer and float
 	// letters take a case attribute off the name they are given, rather than
 	// standing beside it.

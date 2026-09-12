@@ -464,6 +464,10 @@ func Semantics() interp.Semantics {
 	s.ValuelessDeclarationOfAHeldNameListsIt = interp.No
 	// And a plain word over a name holding an array is taken.
 	s.ScalarOverACompoundIsAnInconsistentType = interp.No
+	// An exported name whose declaration named a numeric type reaches a
+	// child as `0`, even though the shell itself reads the name as unset:
+	// `typeset -ix Z; env` hands over `Z=0` where `${Z+set}` is empty.
+	s.NumericTypeWithNoValueReachesAChildAsZero = interp.Yes
 	// So is a type letter with an array literal: `typeset -ia z=(1 2)` is
 	// `typeset -a -i z=(1 2)`, and `typeset -Fa z=(1 2)` is the float
 	// spelling of the same line.

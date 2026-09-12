@@ -417,3 +417,113 @@ func TestALocalThatDropsTheAttributeWhereNoLocalInheritsItHandsOverNothing(t *te
 		t.Errorf("status = %d, want 0", st)
 	}
 }
+
+// A **second** declaration naming an attribute is what gives the name the
+// empty in its own right, and a child is then told about it. See
+// Runner.declarationOwnsTheStandingEmpty for the eight rows this comes from.
+func TestASecondDeclarationGivesTheNameTheEmptyItHolds(t *testing.T) {
+	for _, tc := range []struct{ name, second, want string }{
+		// Every one of these names an attribute, so every one owns the empty.
+		{"the same letter again", "typeset -x FOO", "FOO=\n"},
+		{"the export word", "export FOO", "FOO=\n"},
+		{"the readonly word", "readonly FOO", "FOO=\n"},
+		{"a letter that takes one off", "typeset +r FOO", "FOO=\n"},
+		{"another letter entirely", "typeset -u FOO", "FOO=\n"},
+		// And this one does not: with no letters at all it is the listing
+		// the dialect writes for a name that already holds something, which
+		// is not a declaration and changes nothing a child sees.
+		{"a bare word, which is a listing", "typeset FOO >/dev/null", "(none)\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			probe := `typeset -x FOO; ` + tc.second +
+				`; /usr/bin/env | grep '^FOO=' || echo "(none)"`
+			out, st := axisRun(t, probe, func(s *Semantics) {
+				s.DeclaredNameWithoutValueIsEmpty = Yes
+				s.ValuelessDeclarationOfAHeldNameListsIt = Yes
+				s.DeclareOptions = "rux"
+				s.ReadonlyAttributeCanBeRemoved = Yes
+				// The listing row writes a declaration back, which needs a
+				// spelling; it goes to /dev/null and only the child matters.
+				s.DeclareValueQuoting = ListingQuoteAlwaysDouble
+			})
+			if st != 0 || out != tc.want {
+				t.Errorf("%s: got %q status %d, want %q", tc.second, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The record is per cell and not per name: a local shadowing a declared-empty
+// outer name is the *first* declaration of the cell it writes, so it records
+// rather than owns.
+func TestALocalOverADeclaredEmptyNameIsAFirstDeclaration(t *testing.T) {
+	out, st := axisRun(t,
+		`typeset -x FOO; f() { local -x FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`,
+		func(s *Semantics) {
+			s.DeclaredNameWithoutValueIsEmpty = Yes
+			s.DeclareOptions = "x"
+			s.LocalOptions = "x"
+		})
+	if st != 0 || out != "(none)\n" {
+		t.Errorf("got %q status %d, want the fresh cell to record rather than own", out, st)
+	}
+}
+
+// An exported name whose declaration named a numeric type, holding nothing at
+// all, is an axis: one shell hands a child the zero the type makes of nothing
+// even though the shell itself reads the name as unset. See
+// Semantics.NumericTypeWithNoValueReachesAChildAsZero.
+func TestAnExportedNumericTypeWithNoValueIsAnAxis(t *testing.T) {
+	const probe = `typeset -ix Z; echo "read=[${Z-UNSET}]"; ` +
+		`/usr/bin/env | grep '^Z=' || echo "(none)"`
+	set := func(a Answer) func(*Semantics) {
+		return func(s *Semantics) {
+			s.DeclaredNameWithoutValueIsEmpty = No
+			s.DeclareOptions = "iux"
+			s.NumericTypeWithNoValueReachesAChildAsZero = a
+		}
+	}
+	out, st := axisRun(t, probe, set(Yes))
+	if st != 0 || out != "read=[UNSET]\nZ=0\n" {
+		t.Errorf("yes: got %q status %d, want the shell reading it unset and the child told Z=0", out, st)
+	}
+	out, st = axisRun(t, probe, set(No))
+	if st != 0 || out != "read=[UNSET]\n(none)\n" {
+		t.Errorf("no: got %q status %d, want no entry at all", out, st)
+	}
+}
+
+// It is the numeric letters and no others, which is what makes it a *type*
+// rather than any attribute a valueless declaration wrote.
+func TestOnlyANumericTypeReachesAChildWithNoValue(t *testing.T) {
+	for _, decl := range []string{"typeset -ux Z", "typeset -ax Z", "typeset -x Z"} {
+		out, st := axisRun(t, decl+`; /usr/bin/env | grep '^Z=' || echo "(none)"`,
+			func(s *Semantics) {
+				s.DeclaredNameWithoutValueIsEmpty = No
+				s.DeclareOptions = "aiux"
+				s.NumericTypeWithNoValueReachesAChildAsZero = Yes
+			})
+		if st != 0 || out != "(none)\n" {
+			t.Errorf("%s: got %q status %d, want no entry", decl, out, st)
+		}
+	}
+}
+
+// And a value of the name's own supersedes it, in both directions: a store
+// after the declaration is what the child is told, and an `unset` takes the
+// name away entirely rather than leaving the type behind to speak for it.
+func TestAStoreAndAnUnsetBothSupersedeTheTypesZero(t *testing.T) {
+	set := func(s *Semantics) {
+		s.DeclaredNameWithoutValueIsEmpty = No
+		s.DeclareOptions = "ix"
+		s.NumericTypeWithNoValueReachesAChildAsZero = Yes
+	}
+	out, st := axisRun(t, `typeset -ix Z; Z=5; /usr/bin/env | grep '^Z=' || echo "(none)"`, set)
+	if st != 0 || out != "Z=5\n" {
+		t.Errorf("after a store: got %q status %d, want Z=5", out, st)
+	}
+	out, st = axisRun(t, `typeset -ix Z; unset Z; /usr/bin/env | grep '^Z=' || echo "(none)"`, set)
+	if st != 0 || out != "(none)\n" {
+		t.Errorf("after an unset: got %q status %d, want no entry", out, st)
+	}
+}

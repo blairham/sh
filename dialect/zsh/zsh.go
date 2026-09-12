@@ -761,6 +761,13 @@ func Semantics() interp.Semantics {
 	// `readonly -a` declares the array as well as freezing the name:
 	// `readonly -a a` lists as `typeset -ar a=(  )`.
 	s.ReadonlyRecordsTheCompoundAttribute = interp.Yes
+	// A valueless declaration sets the name here, so an exported name of a
+	// numeric type is holding `0` already and there is no valueless one for
+	// this to be about. What the one-command form hands a child is nothing —
+	// `typeset -ix Z; env` is silent — and a second declaration is what
+	// gives the name its value and the child its entry. See
+	// Runner.declarationOwnsTheStandingEmpty.
+	s.NumericTypeWithNoValueReachesAChildAsZero = interp.No
 	// The integer and float letters make a name a *scalar* of that type
 	// here, so a declaration that also assigns an array literal is asking
 	// for two kinds at once and is refused fatally — `typeset -ia z=(1 2)`

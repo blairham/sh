@@ -11,6 +11,7 @@ import (
 	"maps"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -3683,6 +3684,43 @@ func (r *Runner) environ() []string {
 	}
 	for k, v := range r.hiddenExports {
 		out = append(out, k+"="+v)
+	}
+	out = append(out, r.zeroValuedTypeExports()...)
+	return out
+}
+
+// zeroValuedTypeExports is the exported names whose declaration named a
+// numeric *type* and which hold no value at all, each handed to a child as
+// `0` — see Semantics.NumericTypeWithNoValueReachesAChildAsZero.
+//
+// Sorted, because the environment a child is handed must not depend on a map
+// walk: two runs of the same script would otherwise order the entries
+// differently and nothing in the shell would look wrong.
+//
+// The name really is unset in the shell that does this — `typeset -i Z;
+// export Z` leaves `${Z+set}` empty and `typeset -p Z` writing `typeset -x -i
+// Z` with no value — so this cannot come from the store. What it comes from
+// is the attribute: the type is what the declaration named, and zero is what
+// the type makes of nothing.
+func (r *Runner) zeroValuedTypeExports() []string {
+	var names []string
+	for name, on := range r.exported {
+		if !on || r.declaredNameHolds(name) {
+			continue
+		}
+		if _, float := r.floatPrecision[name]; !float && !r.integer[name] {
+			continue
+		}
+		if !r.ask(r.sem().NumericTypeWithNoValueReachesAChildAsZero,
+			"an exported name of a numeric type with no value reaching a child as zero") {
+			return nil
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		out = append(out, name+"=0")
 	}
 	return out
 }

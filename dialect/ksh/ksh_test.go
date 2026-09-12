@@ -462,7 +462,7 @@ func TestKshHasOnlyTheOlderDeclarationName(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := ksh.Semantics(), ksh.Diagnostics()
-		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+		r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
 		ksh.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -492,7 +492,7 @@ func TestBraceRangeAnswers(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := ksh.Semantics(), ksh.Diagnostics()
-		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+		r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
 		ksh.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)

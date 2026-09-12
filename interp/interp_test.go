@@ -230,11 +230,13 @@ func runScript(t *testing.T, src string, enable func(*syntax.Dialect), setup fun
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var buf output
-	// Bash's answers unless a test says otherwise. A test asserting a
-	// *behavior* has to name a dialect, because the default is the strict
-	// core and the core refuses anything the shells disagree about — which
-	// is exactly what these tests are full of.
-	bash := testSemantics()
+	// The standard's preset plus the axes these tests reach — see
+	// testSemantics in vector_test.go — and not any shell's. A test asserting
+	// a *behavior* has to name a dialect, because the default is the strict
+	// core and the core refuses anything the shells disagree about, which is
+	// exactly what these tests are full of. The local used to be called
+	// `bash`, which said the opposite of what the value is (#1300).
+	sem := testSemantics()
 	// The runner is told the same grammar the source was parsed with, because
 	// several constructs re-parse text *at run time* — `eval`, a
 	// here-document body, the shell-word split, the `(e)` flag — and a runner
@@ -242,7 +244,7 @@ func runScript(t *testing.T, src string, enable func(*syntax.Dialect), setup fun
 	// never written in. It reported `${(e)l1}` inside a re-read value as a
 	// bad substitution while the identical text in the source expanded.
 	r := newTestRunner(t, &Runner{
-		Stdout: &buf, Stderr: &buf, Semantics: &bash, Env: testPATH(), Dialect: &d,
+		Stdout: &buf, Stderr: &buf, Semantics: &sem, Env: testPATH(), Dialect: &d,
 	})
 	if setup != nil {
 		setup(r)

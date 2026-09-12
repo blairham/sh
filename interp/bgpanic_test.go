@@ -97,9 +97,9 @@ func TestABugOnTheShellsOwnGoroutineCostsOnlyThatGoroutine(t *testing.T) {
 			// on it.
 			var out syncBuffer
 			var g concurrentGuard
-			bash := testSemantics()
+			sem := testSemantics()
 			r := newTestRunner(t, &Runner{
-				Stdout: &out, Stderr: &out, Semantics: &bash, Env: testPATH(),
+				Stdout: &out, Stderr: &out, Semantics: &sem, Env: testPATH(),
 			})
 			r.GuardConcurrent = g.run
 			r.Register("boom", func(*Runner, context.Context, []string) int {

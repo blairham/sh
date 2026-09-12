@@ -17,7 +17,7 @@ import (
 const interpPath = "github.com/blairham/sh/interp"
 
 // TestEveryRunnerUnderDialectIsToldWhichShellItIs is the half of #860 that
-// outlives the patch.
+// outlives the patch — and, since #925, the same rule for Runner.Name.
 //
 // Adding Runner.Dialect to the nineteen files that were missing it fixes those
 // nineteen; it does nothing about the twentieth, which will be written by
@@ -36,6 +36,17 @@ const interpPath = "github.com/blairham/sh/interp"
 // Runner (in this package) is the way out: a runner built through a Preset
 // cannot lack the field, and the failure message points there rather than
 // asking for another correct call site.
+//
+// Name is here for the same reason and has the same shape of silence. It is
+// `$0` — what the shell calls itself in front of a diagnostic — and unset it
+// is the empty string, so a message that should read `zsh:shift:1:` reads
+// `:shift:1:` and every assertion written with `strings.Contains` still
+// passes. Eighteen literals under dialect/ were built without it; setting all
+// eighteen changed no test's verdict, which is exactly the property that makes
+// the omission worth a guard rather than a review note. The conformance
+// harness cannot grade it either: #848 established that it rewrites the
+// implementation's own basename, so a shell naming itself by argv[0] and one
+// naming itself by a constant arrive at the comparison spelt alike.
 func TestEveryRunnerUnderDialectIsToldWhichShellItIs(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(moduleRoot(t), "dialect")
@@ -62,6 +73,14 @@ func TestEveryRunnerUnderDialectIsToldWhichShellItIs(t *testing.T) {
 				"\tSet Dialect, or build the runner with dialecttest.Preset.Runner.",
 				rel, fset.Position(pos).Line)
 		}
+		for _, pos := range runnersMissingField(f, "Name") {
+			rel, _ := filepath.Rel(root, path)
+			t.Errorf("dialect/%s:%d builds an interp.Runner without Name.\n"+
+				"\tName is `$0`, and unset it is the empty string — so a diagnostic that\n"+
+				"\tshould begin `zsh:` begins `:`, and a Contains assertion still passes.\n"+
+				"\tSet Name, or build the runner with dialecttest.Preset.Runner.",
+				rel, fset.Position(pos).Line)
+		}
 		for _, pos := range preludesPastedOnto(f) {
 			rel, _ := filepath.Rel(root, path)
 			t.Errorf("dialect/%s:%d pastes Prelude() onto a snippet.\n"+
@@ -85,11 +104,17 @@ func TestEveryRunnerUnderDialectIsToldWhichShellItIs(t *testing.T) {
 
 // runnersMissingDialect reports the position of every composite literal in f
 // that builds an interp.Runner without naming the Dialect field.
+func runnersMissingDialect(f *ast.File) []token.Pos {
+	return runnersMissingField(f, "Dialect")
+}
+
+// runnersMissingField reports the position of every composite literal in f
+// that builds an interp.Runner without naming the given field.
 //
 // The import is resolved rather than assumed: a file that spells the package
 // something other than `interp` is still building the same struct, and one
 // that has its own type called Runner is not.
-func runnersMissingDialect(f *ast.File) []token.Pos {
+func runnersMissingField(f *ast.File, field string) []token.Pos {
 	local := ""
 	for _, spec := range f.Imports {
 		path, err := strconv.Unquote(spec.Path.Value)
@@ -129,7 +154,7 @@ func runnersMissingDialect(f *ast.File) []token.Pos {
 				// against a struct this size; report it either way.
 				continue
 			}
-			if key, ok := kv.Key.(*ast.Ident); ok && key.Name == "Dialect" {
+			if key, ok := kv.Key.(*ast.Ident); ok && key.Name == field {
 				return true
 			}
 		}
@@ -265,6 +290,44 @@ func f() { _ = &ip.Runner{Name: "bash"} }
 	}
 	if got := len(runnersMissingDialect(f)); got != 1 {
 		t.Errorf("reported %d omissions under a renamed import, want 1", got)
+	}
+}
+
+// TestTheGuardCatchesAMissingName is the Name half of
+// TestTheGuardCatchesADeliberateOmission, and it is not the same test with a
+// different argument: the two fields are omitted by different accidents, and a
+// detector shown only one of them is a detector that has been shown none.
+func TestTheGuardCatchesAMissingName(t *testing.T) {
+	t.Parallel()
+	const src = `package x
+
+import "github.com/blairham/sh/interp"
+
+func f() {
+	_ = &interp.Runner{Dialect: nil}                 // line 6: named the other field
+	_ = &interp.Runner{Name: "zsh", Dialect: nil}    // fine: names both
+	_ = &interp.Runner{                              // line 8: nested, still missing
+		Semantics: nil,
+	}
+}
+`
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "x.go", src, parser.SkipObjectResolution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []int
+	for _, pos := range runnersMissingField(f, "Name") {
+		lines = append(lines, fset.Position(pos).Line)
+	}
+	want := []int{6, 8}
+	if len(lines) != len(want) {
+		t.Fatalf("reported lines %v, want %v", lines, want)
+	}
+	for i, l := range lines {
+		if l != want[i] {
+			t.Errorf("reported line %d, want %d", l, want[i])
+		}
 	}
 }
 

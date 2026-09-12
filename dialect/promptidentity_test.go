@@ -68,7 +68,7 @@ func TestEveryDialectThatCanDrawTheUserWasToldWho(t *testing.T) {
 					continue
 				}
 				sem, grammar := d.sem, d.grammar
-				r := &interp.Runner{Semantics: &sem, Dialect: &grammar}
+				r := &interp.Runner{Name: d.name, Semantics: &sem, Dialect: &grammar}
 				d.apply(r)
 				got, ok := r.PromptField(want.field, "", false)
 				if !ok || got != want.value {

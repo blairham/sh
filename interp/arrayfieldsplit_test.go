@@ -191,29 +191,51 @@ func TestUnquotedListRefusesAnUnansweredAxis(t *testing.T) {
 	}
 }
 
-// TestUnquotedListEscapesBeforeItSplits pins an order no shell in the panel
-// can reach.
+// TestUnquotedListEscapesBeforeItSplits pins the order the two stages run in
+// for the pair of answers no *preset* holds.
 //
 // The two stages only interact when a separator is also a pattern
 // metacharacter, and only for a dialect that splits an expansion's result
-// *and* does not read it as a pattern — a combination none of the four
-// presets has: the three that split also glob, and the one that does neither
-// splits nor globs. So there is no oracle for it, and what settles it is
-// agreement with the scalar path, which has escaped before splitting since
-// expansionResult was written.
+// *and* does not read it as a pattern. None of the four presets is that pair:
+// the three that split also glob, and the one that does neither splits nor
+// globs.
 //
-// Recorded because a mutant that swapped the two survived the rest of this
-// file: without a row here the order is accidental, and an embedder choosing
-// that pair of answers would get whichever one the last edit left behind.
+// **A preset is not the whole of a dialect, though, and this row used to say
+// there was no oracle for the pair at all.** There is one: zsh reaches it with
+// `setopt shwordsplit`, which turns its splitting on and leaves its globbing
+// of expansion results off. Measured on zsh 5.9.2, 2026-09-12, from a script
+// file under `env -i PATH=/usr/bin:/bin`:
+//
+//	setopt shwordsplit; IFS='*'
+//	a=("x*y" z); set -- ${a[@]}   3[x][y][z]
+//	v="x*y";     set -- $v        2[x][y]
+//	b=('a\*c' z); set -- ${b[@]}  3[a\][c][z]
+//
+// So the escaped `*` still separates and its mark goes with it, and the
+// backslash a value carried is the only one left in the field. What stood
+// here before was `3[x\][y][z]` — a trailing backslash the escape put on and
+// the split then cut the field behind, which is #2212 and which no shell
+// produces. The row was pinning the artifact, and the third case above is the
+// one that says it is an artifact rather than a reading: a value with a
+// backslash of its own keeps exactly that one.
+//
+// It is still the order that is recorded, and it still has to be: a mutant
+// that swapped the two survived the rest of this file. The scalar row beside
+// it is the invariant that outlives any one pair of answers — the two paths
+// give the same fields for the same value.
 func TestUnquotedListEscapesBeforeItSplits(t *testing.T) {
 	const list = `IFS='*'; a=("x*y" z); set -- ${a[@]}; printf "%d" "$#"; printf "[%s]" "$@"`
 	const scalar = `IFS='*'; v="x*y"; set -- $v; printf "%d" "$#"; printf "[%s]" "$@"`
+	const valueBackslash = `IFS='*'; b=('a\*c' z); set -- ${b[@]}; printf "%d" "$#"; printf "[%s]" "$@"`
 	got, _ := fieldsRun(t, list, Yes, No)
-	if got != `3[x\][y][z]` {
+	if got != `3[x][y][z]` {
 		t.Errorf("list: got %q, want the escape before the split", got)
 	}
-	if scalarGot, _ := fieldsRun(t, scalar, Yes, No); scalarGot != `2[x\][y]` {
+	if scalarGot, _ := fieldsRun(t, scalar, Yes, No); scalarGot != `2[x][y]` {
 		t.Errorf("scalar: got %q, want the same order the list path takes", scalarGot)
+	}
+	if bsGot, _ := fieldsRun(t, valueBackslash, Yes, No); bsGot != `3[a\][c][z]` {
+		t.Errorf("value backslash: got %q, want the value's own backslash and no other", bsGot)
 	}
 }
 

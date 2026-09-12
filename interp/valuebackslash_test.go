@@ -211,3 +211,131 @@ func TestAValueBackslashSurvivesWhereTheResultIsNotAPattern(t *testing.T) {
 		})
 	}
 }
+
+// A value's backslash standing directly in front of a separator loses the
+// separator and keeps itself.
+//
+// Two facts at once, and each is the other's guard. The separator still
+// separates — a backslash that arrived in a value quotes nothing for this
+// stage, which the whole panel agrees about — and the backslash is still in
+// the field, because no shell removes quotes from the result of an expansion.
+// So `IFS=:` over `a\:b` is two fields and a first field of **two**
+// characters, and the two neighboring mistakes are one field and `a`.
+//
+// The count is asserted rather than the rendered field because that is the
+// only thing that separates the right answer from the one this shell gave:
+// `[a\]` and `[a\\]` differ by a character that reads as a quoting artifact
+// wherever it is displayed. The splitter walked the escaped form a byte at a
+// time, cut at the marked separator, and left the mark on the field in front
+// of it, where the unescape read it as a marked backslash (#2212).
+//
+// Measured 2026-09-12, `env -i PATH=/usr/bin:/bin`, from a script file,
+// against bash 5.3.15, bash-as-`sh`, bash 3.2.57, dash, ksh93u+ and zsh 5.9.2
+// — the last under `setopt shwordsplit`, since it splits no parameter
+// expansion otherwise and answers every row with the value whole.
+func TestAValueBackslashBeforeASeparatorLosesOnlyTheSeparator(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a marked separator cuts and leaves one backslash",
+			`IFS=:; v='a\:b'; set -- $v; printf '%d' "$#"; printf '[%s:%d]' "$1" "${#1}"; printf '[%s]' "$2"`,
+			`2[a\:2][b]`,
+		},
+		{
+			"the separator being whitespace changes nothing",
+			`IFS=' '; v='a\ b'; set -- $v; printf '%d' "$#"; printf '[%s:%d]' "$1" "${#1}"; printf '[%s]' "$2"`,
+			`2[a\:2][b]`,
+		},
+		{
+			"a doubled backslash is not halved",
+			`IFS=:; v='a\\:b'; set -- $v; printf '%d' "$#"; printf '[%s:%d]' "$1" "${#1}"; printf '[%s]' "$2"`,
+			`2[a\\:3][b]`,
+		},
+		{
+			"a backslash before an ordinary character is untouched",
+			`IFS=:; v='a\bc:d'; set -- $v; printf '%d' "$#"; printf '[%s:%d]' "$1" "${#1}"; printf '[%s]' "$2"`,
+			`2[a\bc:4][d]`,
+		},
+		{
+			"at the leading edge the field is the backslash alone",
+			`IFS=:; v='\:b'; set -- $v; printf '%d' "$#"; printf '[%s:%d]' "$1" "${#1}"; printf '[%s]' "$2"`,
+			`2[\:1][b]`,
+		},
+		{
+			// The trailing-separator axis is answered here because it is
+			// live at this shape and is not what the row is about: one
+			// reading absorbs the closing separator and the other opens a
+			// field for it, and both have to keep the backslash.
+			"at the trailing edge the separator is still absorbed",
+			`IFS=:; v='a\:'; set -- $v; printf '%d' "$#"; printf '[%s:%d]' "$1" "${#1}"`,
+			`1[a\:2]`,
+		},
+		{
+			"two separators behind it still leave the empty field between them",
+			`IFS=:; v='a\::b'; set -- $v; printf '%d' "$#"; printf '[%s:%d]' "$1" "${#1}"; printf '[%s][%s]' "$2" "$3"`,
+			`3[a\:2][][b]`,
+		},
+		{
+			"a mixed IFS separates on the marked byte and the plain one alike",
+			`IFS=' :'; v='a\:b c'; set -- $v; printf '%d' "$#"; printf '[%s:%d]' "$1" "${#1}"; printf '[%s][%s]' "$2" "$3"`,
+			`3[a\:2][b][c]`,
+		},
+		{
+			"a word assembled around it keeps the text that follows",
+			`IFS=:; a='x\:y'; b='q'; set -- $a$b; printf '%d' "$#"; printf '[%s:%d]' "$1" "${#1}"; printf '[%s]' "$2"`,
+			`2[x\:2][yq]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := axisRun(t, tc.src, func(s *Semantics) {
+				s.SplitParamExpansion = Yes
+				s.TrailingSeparatorEndsAField = No
+			})
+			if out != tc.want {
+				t.Errorf("out = %q, want %q", out, tc.want)
+			}
+			if st != 0 {
+				t.Errorf("status = %d, want 0", st)
+			}
+		})
+	}
+}
+
+// The same rule where the dialect does not read an expansion result as a
+// pattern, which is the pair of answers no preset holds and where a
+// separator can also be a metacharacter.
+//
+// It is a case of its own because the marks come from the other producer
+// there: with globbing off, the whole result is mark-escaped rather than only
+// its backslashes, so an `IFS` holding `*` meets a separator the escape has
+// marked for a reason that has nothing to do with the value's backslashes.
+// The answer is the same — the mark goes with the separator — and the shell
+// that reaches this pair by option agrees: zsh 5.9.2 under `setopt
+// shwordsplit` with `IFS='*'` answers `2[a][b]` for `v='a*b'`, measured
+// 2026-09-12.
+func TestAMarkedSeparatorCutsWhereTheResultIsNotAPattern(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a separator that is also a metacharacter",
+			`IFS='*'; v='a*b'; set -- $v; printf '%d' "$#"; printf '[%s:%d]' "$1" "${#1}"; printf '[%s]' "$2"`,
+			`2[a:1][b]`,
+		},
+		{
+			"and the value's own backslash beside it",
+			`IFS='*'; v='a\*c'; set -- $v; printf '%d' "$#"; printf '[%s:%d]' "$1" "${#1}"; printf '[%s]' "$2"`,
+			`2[a\:2][c]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := axisRun(t, tc.src, func(s *Semantics) {
+				s.SplitParamExpansion = Yes
+				s.GlobExpansionResults = No
+			})
+			if out != tc.want {
+				t.Errorf("out = %q, want %q", out, tc.want)
+			}
+			if st != 0 {
+				t.Errorf("status = %d, want 0", st)
+			}
+		})
+	}
+}

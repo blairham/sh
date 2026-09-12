@@ -837,7 +837,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			if s.Quoting != syntax.Unquoted {
 				return []string{globEscape(joined)}, true
 			}
-			return r.splitFieldsAsk(joined, ifs, set), true
+			return r.splitFieldsAskPlain(joined, ifs, set), true
 		}
 		if s.Quoting != syntax.Unquoted {
 			return escapeAll(names), true
@@ -1089,7 +1089,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			if s.Quoting != syntax.Unquoted {
 				return []string{globEscape(joined)}, true
 			}
-			return r.splitFieldsAsk(joined, ifs, set), true
+			return r.splitFieldsAskPlain(joined, ifs, set), true
 		}
 		if s.Quoting != syntax.Unquoted {
 			return escapeAll(elems), true
@@ -3791,7 +3791,7 @@ func splitFields(s string, ifs string, ifsSet bool) []string {
 // separating one are the same byte, so only a mask can still tell them
 // apart. A nil mask exempts nothing.
 func splitFieldsLiteral(s string, literal []bool, ifs string, ifsSet bool) []string {
-	return splitFieldsEdges(s, literal, ifs, ifsSet, false)
+	return splitFieldsEdges(s, literal, ifs, ifsSet, false, false)
 }
 
 // splitFieldsEdges is splitFieldsLiteral with the discarding of the outermost
@@ -3803,8 +3803,14 @@ func splitFieldsLiteral(s string, literal []bool, ifs string, ifsSet bool) []str
 // a quoted `${=spec}` measures — see interp/splitflag.go — and it is a
 // parameter here rather than a splitter of its own, because everything else
 // about the two is the same rule and a copy of it would drift.
-func splitFieldsEdges(s string, literal []bool, ifs string, ifsSet, keepEdges bool) []string {
-	fields, _ := splitFieldsAt(s, literal, ifs, ifsSet, keepEdges)
+//
+// escaped says the string is a field in the escaped form rather than plain
+// text, which is what every caller splitting the result of an expansion hands
+// it. `read` and `${#(w)v}` hand it plain text and pass false. The two cannot
+// be told apart by looking, since a backslash is a legal character of a value
+// as well as the form's own mark — so it is the caller that knows.
+func splitFieldsEdges(s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) []string {
+	fields, _ := splitFieldsAt(s, literal, ifs, ifsSet, keepEdges, escaped)
 	return fields
 }
 
@@ -3819,7 +3825,7 @@ func splitFieldsEdges(s string, literal []bool, ifs string, ifsSet, keepEdges bo
 // only thing that makes the difference recoverable. It is reported from the
 // one splitter rather than recomputed beside it, because a second walk of the
 // same rule is a second place for it to drift.
-func splitFieldsAt(s string, literal []bool, ifs string, ifsSet, keepEdges bool) ([]string, []int) {
+func splitFieldsAt(s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) ([]string, []int) {
 	if ifsSet && ifs == "" {
 		// Set and empty disables the stage entirely, which is a different
 		// state from unset rather than a degree of it.
@@ -3832,13 +3838,33 @@ func splitFieldsAt(s string, literal []bool, ifs string, ifsSet, keepEdges bool)
 		return emptyFields(keepEdges)
 	}
 
+	// The escaped form spells "this byte was quoted" as a backslash in front
+	// of it, so a byte of it is either a mark or data and a walk that reads
+	// every byte as data cannot tell the two apart. See escapedMarks, and
+	// #2212 for what reading them as data did here.
+	var marks []bool
+	if escaped {
+		marks = escapedMarks(s)
+	}
+	isMark := func(i int) bool { return marks != nil && marks[i] }
 	isWS := func(i int) bool {
 		c := s[i]
-		return (literal == nil || !literal[i]) &&
+		return !isMark(i) && (literal == nil || !literal[i]) &&
 			strings.IndexByte(ifs, c) >= 0 && (c == ' ' || c == '\t' || c == '\n')
 	}
 	isSep := func(i int) bool {
-		return (literal == nil || !literal[i]) && strings.IndexByte(ifs, s[i]) >= 0
+		return !isMark(i) && (literal == nil || !literal[i]) && strings.IndexByte(ifs, s[i]) >= 0
+	}
+	// cutAt is where the field in front of the separator at i ends. A marked
+	// separator still separates — a value's backslash quotes for the *match*
+	// and never for the split, which the whole panel agrees about — but its
+	// mark belongs to the separator and goes with it, rather than staying on
+	// the end of the field as a backslash nobody wrote.
+	cutAt := func(i int) int {
+		if i > 0 && isMark(i-1) {
+			return i - 1
+		}
+		return i
 	}
 
 	var out []string
@@ -3852,11 +3878,13 @@ func splitFieldsAt(s string, literal []bool, ifs string, ifsSet, keepEdges bool)
 		for i < len(s) && !isSep(i) {
 			i++
 		}
-		out = append(out, s[start:i])
-		at = append(at, start)
 		if i >= len(s) {
+			out = append(out, s[start:i])
+			at = append(at, start)
 			break
 		}
+		out = append(out, s[start:cutAt(i)])
+		at = append(at, start)
 		// One delimiter is: a run of IFS whitespace, at most one
 		// non-whitespace separator, and another run of whitespace. Consuming
 		// exactly that and then letting the loop read the next field is what

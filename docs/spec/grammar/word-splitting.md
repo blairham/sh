@@ -357,6 +357,66 @@ decides nothing is a refusal a script cannot act on.
 An unquoted expansion of an empty value vanishes. Quoting it produces one
 empty field. All four shells agree.
 
+## A value's backslash does not quote the separator behind it
+
+    IFS=:
+    v='a\:b'
+    set -- $v
+    printf 'n=%d len1=%d f1=[%s] f2=[%s]\n' "$#" "${#1}" "$1" "$2"
+
+    bash 5.3.15, bash 3.2.57, bash-as-sh, dash, ksh93u+
+                        n=2 len1=2 f1=[a\] f2=[b]
+
+Two things at once, and each is the other's guard. The separator **still
+separates** — a backslash that arrived in a *value* is an ordinary
+character and quotes nothing for this stage — and the backslash **stays
+in the field**, because no shell performs quote removal on the result of
+an expansion. So the answer is two fields and a first field of two
+characters, and a fix that got one of them alone would answer `n=1` or
+`f1=[a]`.
+
+**The length is the assertion.** A probe printing only the first field
+reads as a quoting artifact of whatever is displaying it, which is how
+this went unnoticed: this implementation answered `len1=3`, a backslash
+longer than the value, for every dialect that splits.
+
+It is not about the separator being non-whitespace. `IFS=' '` with
+`v='a\ b'` splits into the same two fields with the same one backslash,
+and that is the form an ordinary script reaches with `IFS` left alone.
+
+The neighboring shapes, measured the same way and all unanimous:
+
+| value | `IFS` | fields | first field |
+| --- | --- | --- | --- |
+| `a\:b` | `:` | 2 | `a\`, 2 characters |
+| `a\ b` | ` ` | 2 | `a\`, 2 |
+| `a\\:b` | `:` | 2 | `a\\`, 3 — the pair is not halved |
+| `a\bc:d` | `:` | 2 | `a\bc`, 4 — an ordinary character behind it |
+| `\:b` | `:` | 2 | `\`, 1 |
+| `a\:` | `:` | 1 | `a\`, 2 — the trailing separator is still absorbed |
+| `a\:b c` | ` :` | 3 | `a\`, 2 |
+
+zsh answers every row with the value whole, because it does not split a
+parameter expansion at all; with `setopt shwordsplit` — or through
+`${=v}` — it splits exactly as the five above do, count included. So the
+rule is unanimous and the only dialect question here is the one `IFS`
+already has: *whether* the result is split.
+
+Measured 2026-09-12 against bash 5.3.15, bash 3.2.57, bash-as-`sh`, dash,
+ksh93u+ and zsh 5.9.2, from a script file under
+`env -i PATH=/usr/bin:/bin`. Corpus rows
+`ifs/a-value-backslash-before-a-separator` and its six neighbors.
+
+**Why an implementation gets this wrong.** The fields an expansion
+produces are not carried as text: they are carried in an escaped form
+where a mark is a backslash *and the byte behind it*, which is how a
+field remembers that a `*` in a value is not a pattern. `a\:b` therefore
+reaches the splitter as `a`, `\\`, `\:`, `b`. A splitter that walks that
+form one byte at a time cuts at the `:` — correctly — and leaves the `\`
+that marked it on the end of the field in front, where the unescape reads
+it as a marked backslash. The cure is that the mark belongs to the byte
+behind it: cutting at a marked separator takes its mark with it (#2212).
+
 ## `$@` and `$*` unquoted
 
 Without quotes the two are the same expansion in every shell measured,

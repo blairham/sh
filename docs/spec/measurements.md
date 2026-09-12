@@ -92,6 +92,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `ifs/nonws-both-ends-split-on` | `2[][a]` **2>** `<shell>: 1: setopt: not found` | `2[][a]` **2>** `<shell>: line 1: setopt: command not found` | `2[][a]` **2>** `<shell>: line 1: setopt: command not found` | `2[][a]` **2>** `<shell>: setopt: command not found` | `2[][a]` **2>** `<shell>: setopt: not found` | `3[][a][]` |
 | `ifs/ws-trailing-absorbed-split-on` | `1[a]` **2>** `<shell>: 1: setopt: not found` | `1[a]` **2>** `<shell>: line 1: setopt: command not found` | `1[a]` **2>** `<shell>: line 1: setopt: command not found` | `1[a]` **2>** `<shell>: setopt: command not found` | `1[a]` **2>** `<shell>: setopt: not found` | `1[a]` |
 | `ifs/mixed-trailing-run-split-on` | `1[a] 1[a]` **2>** `<shell>: 1: setopt: not found` | `1[a] 1[a]` **2>** `<shell>: line 1: setopt: command not found` | `1[a] 1[a]` **2>** `<shell>: line 1: setopt: command not found` | `1[a] 1[a]` **2>** `<shell>: setopt: command not found` | `1[a] 1[a]` **2>** `<shell>: setopt: not found` | `2[a][] 1[a]` |
+| `ifs/a-value-backslash-before-a-separator` | `2[a\:2][b]` | `2[a\:2][b]` | `2[a\:2][b]` | `2[a\:2][b]` | `2[a\:2][b]` | `1[a\:b:4][]` |
+| `ifs/a-value-backslash-before-a-whitespace-separator` | `2[a\:2][b]` | `2[a\:2][b]` | `2[a\:2][b]` | `2[a\:2][b]` | `2[a\:2][b]` | `1[a\ b:4][]` |
+| `ifs/a-value-doubled-backslash-before-a-separator` | `2[a\\:3][b]` | `2[a\\:3][b]` | `2[a\\:3][b]` | `2[a\\:3][b]` | `2[a\\:3][b]` | `1[a\\:b:5][]` |
+| `ifs/a-value-backslash-before-an-ordinary-character-and-a-separator-later` | `2[a\bc:4][d]` | `2[a\bc:4][d]` | `2[a\bc:4][d]` | `2[a\bc:4][d]` | `2[a\bc:4][d]` | `1[a\bc:d:6][]` |
+| `ifs/a-value-backslash-before-a-separator-at-each-edge` | `2[\:1] 1[a\:2]` | `2[\:1] 1[a\:2]` | `2[\:1] 1[a\:2]` | `2[\:1] 1[a\:2]` | `2[\:1] 1[a\:2]` | `1[\:b:3] 1[a\::3]` |
+| `ifs/a-value-backslash-before-a-separator-under-the-split-option` | `2[a\:2][b]` **2>** `<shell>: 1: setopt: not found` | `2[a\:2][b]` **2>** `<shell>: line 1: setopt: command not found` | `2[a\:2][b]` **2>** `<shell>: line 1: setopt: command not found` | `2[a\:2][b]` **2>** `<shell>: setopt: command not found` | `2[a\:2][b]` **2>** `<shell>: setopt: not found` | `2[a\:2][b]` |
+| `ifs/a-value-backslash-before-a-separator-with-a-mixed-ifs` | `3[a\:2][b][c]` | `3[a\:2][b][c]` | `3[a\:2][b][c]` | `3[a\:2][b][c]` | `3[a\:2][b][c]` | `1[a\:b c:6][][]` |
 | `ifs/nonws-trailing-cmdsub` | `1[a]` | `1[a]` | `1[a]` | `1[a]` | `1[a]` | `2[a][]` |
 | `ifs/nonws-trailing-read-remainder` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b:]` |
 | `ifs/read-remainder-keeps-its-separators` | `[a][b:c]` | `[a][b:c]` | `[a][b:c]` | `[a][b:c]` | `[a][b:c]` | `[a][b:c]` |
@@ -154,6 +161,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `ifs/mixed-trailing-run-split-on` — it is the closing *run* of separators that decides and not the last byte: the trailing space does not hide the colon in front of it, so this is two fields where `'a  '` is one. A reading that looked at the last character alone would answer one here
   ```sh
   setopt shwordsplit; IFS=" :"; x="a: "; set -- $x; printf "%d" "$#"; printf "[%s]" "$@"; y="a  "; set -- $y; printf " %d" "$#"; printf "[%s]" "$@"
+  ```
+- `ifs/a-value-backslash-before-a-separator` — a value's backslash standing directly in front of a separator: the separator still separates — two fields in all five shells that split a parameter expansion at all — and the backslash stays in the first field as one character. The **length** is the assertion and is why it is printed beside the field: this shell answered `a\` with *two* backslashes, and a row showing only the text reads as a quoting artifact of whatever is displaying it. Nothing about the separator being a colon: the whitespace row below is the same answer. The fields an expansion produces are carried in a form where a mark is a backslash and the byte behind it, and the splitter walked that form a byte at a time — it cut at the marked separator and left the mark behind on the field in front of it, where the unescape read it as a marked backslash (#2212)
+  ```sh
+  IFS=:; v='a\:b'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; printf "[%s]" "$2"
+  ```
+- `ifs/a-value-backslash-before-a-whitespace-separator` — the same shape with the separator a space, which is what says the row above is not about a non-whitespace IFS: two fields and a first field of two characters again. It matters because the whitespace form is the one an ordinary script reaches — `v` holding a Windows path, or a `find -exec` line — with IFS left entirely alone
+  ```sh
+  IFS=' '; v='a\ b'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; printf "[%s]" "$2"
+  ```
+- `ifs/a-value-doubled-backslash-before-a-separator` — the neighbor a fix must not move, and the one that says the field above is short by a character rather than the pair being long by one: two backslashes in the value are two in the field, so this row is three characters where the one above is two. The two rows have the same rendered shape and different counts, which is the whole reason the count is in the probe
+  ```sh
+  IFS=:; v='a\\:b'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; printf "[%s]" "$2"
+  ```
+- `ifs/a-value-backslash-before-an-ordinary-character-and-a-separator-later` — the backslash moved off the separator: it is an ordinary character in the middle of a field, four characters in all six, and it was already right. It is here so that a fix reaching for the backslash rather than for the separator's own mark is caught — dropping the pair wherever it appears answers `abc` and looks like quote removal nobody asked for
+  ```sh
+  IFS=:; v='a\bc:d'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; printf "[%s]" "$2"
+  ```
+- `ifs/a-value-backslash-before-a-separator-at-each-edge` — the two edges, where the field the backslash lands on is empty of anything else. A leading marked separator gives two fields with a first field of exactly one backslash, and a trailing one is still absorbed — one field of two characters, not two. The pair is one row because the leading and trailing rules are already asymmetric and a fix that cut at the mark in one place and at the separator in the other would pass either half alone
+  ```sh
+  IFS=:; v='\:b'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; w='a\:'; set -- $w; printf " %d" "$#"; printf "[%s:%d]" "$1" "${#1}"
+  ```
+- `ifs/a-value-backslash-before-a-separator-under-the-split-option` — the sixth shell, which leaves a parameter expansion unsplit and so answers the rows above with the value whole. With its splitting turned on it splits exactly as the other five do, down to the count — so this is not a divergence to model but the same rule reached by the other route, and it is the row that makes the shell's own `${=v}` and `shwordsplit` paths graded rather than assumed. The `setopt` is not found in the other five and costs them nothing
+  ```sh
+  setopt shwordsplit; IFS=:; v='a\:b'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; printf "[%s]" "$2"
+  ```
+- `ifs/a-value-backslash-before-a-separator-with-a-mixed-ifs` — whitespace and non-whitespace separators in one IFS and both used in one value: three fields, and the marked colon separates on the same terms the plain space does. A reading that treated the mark as making the byte behind it data would answer two fields here and would still answer two for a value with only the colon in it, which is the shape a single-separator row cannot tell apart
+  ```sh
+  IFS=" :"; v='a\:b c'; set -- $v; printf "%d" "$#"; printf "[%s:%d]" "$1" "${#1}"; printf "[%s]" "$2"; printf "[%s]" "$3"
   ```
 - `ifs/nonws-trailing-cmdsub` — the same divergence with no option set and no flag written, which is what says it is reachable by ordinary means in every shell: an unquoted command substitution is split in all six, including the one that leaves parameter expansions alone, so the tail question is asked here whatever the splitting option says
   ```sh

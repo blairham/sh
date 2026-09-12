@@ -17,16 +17,28 @@ import "strings"
 // splitFieldsAsking is the field-splitting stage with that question asked:
 // splitFieldsEdges, and then the field a trailing non-whitespace separator
 // opens where the dialect says it opens one.
-func (r *Runner) splitFieldsAsking(s string, literal []bool, ifs string, ifsSet, keepEdges bool) []string {
-	out := splitFieldsEdges(s, literal, ifs, ifsSet, keepEdges)
+func (r *Runner) splitFieldsAsking(s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) []string {
+	out := splitFieldsEdges(s, literal, ifs, ifsSet, keepEdges, escaped)
 	return r.trailingSeparatorField(out, s, literal, ifs, ifsSet, keepEdges)
 }
 
 // splitFieldsAsk is splitFieldsAsking for the callers that have no escape
 // mask and no edge-keeping rule in force, which is every expansion but
-// `${=spec}`.
+// `${=spec}`. Their string is a field in the escaped form, which is what an
+// expansion result is carried as; see splitFieldsAt on why that has to be
+// said rather than detected.
 func (r *Runner) splitFieldsAsk(s, ifs string, ifsSet bool) []string {
-	return r.splitFieldsAsking(s, nil, ifs, ifsSet, false)
+	return r.splitFieldsAsking(s, nil, ifs, ifsSet, false, true)
+}
+
+// splitFieldsAskPlain is splitFieldsAsk for the two callers whose string is
+// not in the escaped form: `${!prefix*}`, whose fields are variable names,
+// and a transform over `$*`, whose elements are joined and split as the text
+// they came to. Both are measured right as they stand — bash gives `A\` and
+// `B` for `${*@U}` over `a\:b` under `IFS=:`, and so do we — and reading
+// their backslashes as marks would take a character off each.
+func (r *Runner) splitFieldsAskPlain(s, ifs string, ifsSet bool) []string {
+	return r.splitFieldsAsking(s, nil, ifs, ifsSet, false, false)
 }
 
 // trailingSeparatorField adds the field the closing separator opens, to a

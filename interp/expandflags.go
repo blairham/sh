@@ -404,7 +404,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 				// not a separator the group named. Quoted it keeps the
 				// fields at the edges — see interp/splitflag.go.
 				ifs, set := r.ifs()
-				split = append(split, r.splitFieldsAsking(w, nil, ifs, set, quoted)...)
+				split = append(split, r.splitFieldsAsking(w, nil, ifs, set, quoted, true)...)
 				continue
 			}
 			split = append(split, r.splitFlagged(w, e)...)

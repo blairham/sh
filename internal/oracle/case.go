@@ -2231,6 +2231,26 @@ echo "reached-after st=$?"`,
 		Why:     "the half of the position OPTIND cannot hold: with the caller's `-ab` half read, zsh's function scans its own `-cd` from the beginning and reads both letters, and the caller then still finds its `b`. The other five carry the intra-word cursor into the call, so the function skips `c`, and the caller's `b` is gone when it returns. A save of OPTIND alone passes the row above and fails this one",
 	},
 	{
+		ID: "getopts/a-local-optind-hands-back-the-position-in-a-word", Category: "getopts",
+		Snippet: `g() { local OPTIND=1; :; }; set -- -ab; getopts ab o; echo "1=$o"; g; getopts ab o; echo "2=[$o] st=$?"`,
+		Why:     "the GetoptsLocalOptindRestoresTheCursor axis, and the callee runs no `getopts` at all — which is what makes it a clean discriminator. With `-ab` half read, the declaration shadows the number and the question is what happens to the other half of the position on the way back: bash, ksh93 and zsh read `b` because the whole cursor came back, bash 3.2 and dash read `a` a second time because only the number did. ksh93 answers it without a `local` — the word is not a command there, so nothing is declared and nothing is displaced, which is the same `b` by a third route and is why the keyword-`typeset` row below is the one that pins its answer",
+	},
+	{
+		ID: "getopts/a-local-optind-scans-its-own-words-from-the-start", Category: "getopts",
+		Snippet: `g() { local OPTIND; set -- -cd; while getopts "cd" x; do printf "[%s]" "$x"; done; echo " g=$OPTIND"; }; set -- -ab; getopts "ab" o; echo "outer1=$o"; g; getopts "ab" o; st=$?; echo "outer2=[$o] st=$st"`,
+		Why:     "both halves of the same declaration in one row, and the valueless spelling on purpose: with no `=1` there is no assignment to blame, and every column that has a local scope still hands the callee a cursor at the start of a word — `[c][d]` and not `[d]` — so entering the call is the core's answer rather than an axis. The way back is where they part, exactly as the row above. ksh93 has no `local`, so its `[d]` is the un-declared behaviour of `getopts/a-functions-cursor-inside-a-clustered-word` and the control on what the declaration is doing everywhere else",
+	},
+	{
+		ID: "getopts/a-keyword-functions-typeset-optind", Category: "getopts",
+		Snippet: `function g { typeset OPTIND=1; :; }; set -- -ab; getopts ab o; echo "1=$o"; g; getopts ab o; echo "2=[$o] st=$?"`,
+		Why:     "the spelling that reaches the axis in the shell without `local`, and the row that says ksh93 answers it yes: a `function`-word body is the only kind with a scope there, and inside one `typeset OPTIND` gives back the whole cursor. Measured 2026-09-12 against the same word in a parenthesis-defined body, which declares nothing there and so reads `a` a second time — that is `GetoptsAssignmentRestartsWord` reaching an ordinary assignment rather than this axis, and it is why the row is written with the keyword. bash 3.2 reads `a` here too, which is this axis and is the disagreement the row exists for. dash has no `function` word and refuses the line, which is its answer to a construct rather than to this question",
+	},
+	{
+		ID: "getopts/a-loop-that-calls-a-function-declaring-local-optind", Category: "getopts",
+		Snippet: `f() { local OPTIND=1 o; while getopts "pqr" o; do i=$((i+1)); if [ "$i" -gt 8 ]; then break; fi; printf "[%s]" "$o"; if [ "$o" = q ]; then f -p; fi; done; }; i=0; f -pqr; echo " steps=$i"`,
+		Why:     "the axis as a script rather than as a letter, and the reason it is worth fixing: a loop that parses options and calls something which declares its own `OPTIND` mid-scan. bash and zsh finish the word — `[p][q][p][r]` — where bash 3.2 starts `-pqr` over every time the inner call returns and never runs out of options at all. The iteration count and the `break` are what make it a case: without them the bash 3.2 column does not terminate, and a row nobody can record is not evidence. The other two are their own answers rather than this one's — ksh93 has no `local`, so nothing is declared and its inner call finds the caller's scan already spent, and dash loses the intra-word half without looping because its `OPTIND` had already counted past the word",
+	},
+	{
 		ID: "getopts/a-nested-call-has-its-own-cursor", Category: "getopts",
 		Snippet: `inner() { echo "  inner=$OPTIND"; OPTIND=3; }; outer() { echo " outer=$OPTIND"; OPTIND=6; inner; echo " outer-after=$OPTIND"; }; OPTIND=9; outer; echo "top=$OPTIND"`,
 		Why:     "one saved copy is not enough: each call has its own, so zsh unwinds 1/1/6/9 where a single save would put 9 back over the middle frame's 6. The control on the implementation rather than on the shells — the five columns that share one global read 9/6/3/3 and cannot show the mistake",

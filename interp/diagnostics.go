@@ -13,35 +13,38 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
-// Diagnostics is how a dialect reports failure.
+// Diagnostics is how a preset reports failure.
 //
-// It is a third vector beside [Dialect] and [Semantics], and it exists because
-// the first two could not hold what goes in it. A dialect flag says whether a
-// construct parses; a semantics axis says which of two behaviors a construct
-// has. Neither can say what a shell *prints* when it refuses, or which number
-// it exits with — those are not sides of a question, they are values.
+// It is a third vector beside [syntax.Dialect] and [Semantics], and it exists
+// because the first two could not hold what goes in it. A grammar flag says
+// whether a construct parses; a semantics axis says which of two behaviors a
+// construct has. Neither can say what a shell *prints* when it refuses, or
+// which number it exits with — those are not sides of a question, they are
+// values.
 //
 // It lives here, next to [Semantics] and [PosixSemantics], rather than in the
 // shells built on the substrate. The argument is the one the presets already
-// make: a dialect is a set of measured answers, and where the answers live is
+// make: a preset is a set of measured answers, and where the answers live is
 // already settled. A shell that wants its own wording overrides the vector,
 // exactly as it would override a semantics axis.
 //
 // The zero value means "the substrate's own", not "unset". That is the
 // difference between this and [Semantics], and it is deliberate: a semantics
-// axis with no answer is refused, because answering it would claim some
-// shell's behavior. A status has no such claim to make — the process must
-// exit with *some* number, and refusing to choose is not available. `sh` is
-// itself a shell, so where a dialect says nothing, `sh` answers for itself.
+// axis with no answer is refused, because answering it would claim somebody
+// else's behavior. A status has no such claim to make — the process must exit
+// with *some* number, and refusing to choose is not available. This is itself a
+// shell, so where a preset says nothing, it answers for itself.
+
 // BadSubstitutionSubject is the text a bad-substitution diagnostic puts where
 // its verb is.
 //
-// Three answers because the panel gives three. One names the expansion and
+// Three answers because three are measured. One names the expansion and
 // nothing around it; one names the whole word exactly as it was written; and
 // one names the run of the word that shares the expansion's quoting, with the
-// quotes taken off — so `echo "pre${x@QQ}post"` blames all of
-// `pre${x@QQ}post` there while `echo 'lit'"${x@QQ}"` blames `${x@QQ}` alone.
-// The remaining two dialects name nothing at all and never reach this.
+// quotes taken off — so `echo "pre${x@QQ}post"` blames all of `pre${x@QQ}post`
+// under that reading while `echo 'lit'"${x@QQ}"` blames `${x@QQ}` alone.
+//
+// A preset that names nothing at all never reaches this.
 type BadSubstitutionSubject uint8
 
 const (
@@ -58,25 +61,24 @@ const (
 // UnexpectedWordNaming is which spelling of a refused word a dialect echoes
 // back: the text the word comes to, or the characters it was written with.
 //
-// Measured 2026-09-12 on a script holding `if true; then echo t; fi W`, where
-// the `fi` has already closed the `if` and W is a word the grammar cannot
-// take:
+// Measured on a script holding `if true; then echo t; fi W`, where the `fi`
+// has already closed the `if` and W is a word the grammar cannot take:
 //
-//	W          bash 5.3 / bash32 / bash-as-sh / zsh   ksh93
-//	"zzz"      `"zzz"`                                `zzz`
-//	'a b'      `'a b'`                                `a b`
-//	a""b       `a""b`                                 `ab`
-//	\zzz       `\zzz`                                 `zzz`
-//	$x         `$x`                                   `$x`
-//	${x}       `${x}`                                 `${x}`
-//	$(echo q)  `$(echo q)`                            `$(echo q)`
-//	"$x"       `"$x"`                                 `"$x"`
-//	"a"$x      `"a"$x`                                `"a"$x`
-//	"a"~       `"a"~`                                 `a~`
+//	W          as written   as it comes to
+//	"zzz"      `"zzz"`      `zzz`
+//	'a b'      `'a b'`      `a b`
+//	a""b       `a""b`       `ab`
+//	\zzz       `\zzz`       `zzz`
+//	$x         `$x`         `$x`
+//	${x}       `${x}`       `${x}`
+//	$(echo q)  `$(echo q)`  `$(echo q)`
+//	"$x"       `"$x"`       `"$x"`
+//	"a"$x      `"a"$x`      `"a"$x`
+//	"a"~       `"a"~`       `a~`
 //
-// dash is absent because it names no word at all — `word unexpected`, which
-// is [Diagnostics.SyntaxUnexpectedWord] — so the axis has three values rather
-// than four.
+// A preset that names no word at all — `word unexpected`, which is
+// [Diagnostics.SyntaxUnexpectedWord] — is not a value here, so the axis has
+// three rather than four.
 type UnexpectedWordNaming uint8
 
 const (
@@ -115,9 +117,8 @@ type Diagnostics struct {
 	//
 	// Measured across eight distinct syntax errors — a stray `}`, `echo (`,
 	// an unterminated `if`, `case`, `for`, and more — and stable within each
-	// shell: dash 2, bash 2, ksh93 3, zsh 1. It was hardcoded to 2 under a
-	// comment reading "a syntax error is 2 in every shell in the panel",
-	// which is true of half of them.
+	// preset: 1, 2 and 3 are all measured answers. Hardcoding 2 under a note
+	// that a syntax error is 2 everywhere is true of only half of them.
 	//
 	// Zero means the substrate's own, which is 2.
 	SyntaxErrorStatus int
@@ -125,11 +126,10 @@ type Diagnostics struct {
 	// SourcedSyntaxErrorStatus is what a parse failure in a file read by `.`
 	// reports, when that differs from SyntaxErrorStatus.
 	//
-	// It is a separate field because one shell answers the two differently:
-	// zsh reports 1 for a syntax error it read from -c and 126 for the same
-	// text read by `.`, where bash says 2 for both and ksh93 says 3 for both.
-	// Folding them together would have given zsh one answer and lost the
-	// other.
+	// It is a separate field because a preset may answer the two differently:
+	// 1 for a syntax error read from `-c` and 126 for the same text read by
+	// `.`, where others give one number for both. Folding them together would
+	// keep one answer and lose the other.
 	//
 	// Zero means "the same as SyntaxErrorStatus", which is the common case.
 	SourcedSyntaxErrorStatus int
@@ -138,56 +138,54 @@ type Diagnostics struct {
 	// up because of an error, in a dialect that catches one there at all —
 	// see Semantics.FatalErrorEndsBorrowedTextOnly.
 	//
-	// `.` and not `eval`, which is the same split SourcedSyntaxErrorStatus
-	// has and measured the same way: an error caught at an `eval` reports 1
-	// in both catching shells, where the same failure caught at a `.` reports
-	// 126 in zsh.
+	// `.` and not `eval`, which is the same split SourcedSyntaxErrorStatus has
+	// and measured the same way: an error caught at an `eval` reports 1 wherever
+	// it is caught, where the same failure caught at a `.` need not.
 	//
-	// Its own field because neither of the two shells that catch reports the
-	// status the error itself carried, and they do not agree with each
-	// other: measured over an unset parameter under `set -u`, a readonly
-	// assignment, a division by zero and a bad substitution alike, `.`
-	// reports 1 in ksh93 and 126 in zsh, where a fatal error that reaches
-	// the top reports 1 in both. Nor is it the sourced *syntax* status,
-	// which is 3 in ksh93 against this 1.
+	// Its own field because a preset that catches does not report the status
+	// the error itself carried, and two that catch need not agree: over an unset
+	// parameter under `set -u`, a readonly assignment, a division by zero and a
+	// bad substitution alike, `.` reports 1 under one and 126 under another,
+	// where a fatal error that reaches the top reports 1 under both. Nor is it
+	// the sourced *syntax* status, which may be a third number again.
 	//
-	// Zero means the status the error already produced, which is what makes
-	// ksh93 need no answer here.
+	// Zero means the status the error already produced, which is what lets a
+	// preset that reports it need no answer here.
 	SourcedFatalStatus int
 
 	// DotNoOperand is what `.` says when given no filename at all. No verbs.
 	DotNoOperand string
-	// DotNoOperandStatus is the status that carries. bash and ksh93 say 2,
-	// zsh says 1; dash does not treat it as an error at all, which is a
-	// semantics axis rather than a value here.
+	// DotNoOperandStatus is the status that carries — 1 and 2 are both measured
+	// answers. Not treating it as an error at all is a semantics axis rather
+	// than a value here.
 	//
 	// Zero means the substrate's own, which is 2.
 	DotNoOperandStatus int
 
 	// DotNoOperandUnprefixed prints that usage with no location and no shell
-	// name in front of it. ksh93 alone, and the same thing it does to `kill`'s
-	// usage — a usage line is not a diagnostic there.
+	// name in front of it — the same thing such a preset does to `kill`'s usage,
+	// a usage line not being a diagnostic there.
 	DotNoOperandUnprefixed bool
 
 	// DotCannotOpen is what `.` says when it cannot read the file. Two verbs,
-	// positional because the shells order them differently: %[1]s is the
-	// operand as written and %[2]s the reason.
+	// positional because presets order them differently: %[1]s is the operand as
+	// written and %[2]s the reason.
 	DotCannotOpen string
 	// CannotExecute is what `exec` says when the command is there and will not
-	// run — a file without the execute bit, a directory. Two verbs,
-	// positional because the shells order them differently: %[1]s is the
-	// command as written and %[2]s the reason.
+	// run — a file without the execute bit, a directory. Two verbs, positional
+	// because presets order them differently: %[1]s is the command as written
+	// and %[2]s the reason.
 	CannotExecute string
 	// ExecCannotExecute is the same failure reported by `exec` rather than by
-	// a command word. Two dialects name the builtin there and do not name it
-	// for an ordinary command — dash says `exec: x: Permission denied` for
-	// one and `x: Permission denied` for the other. Empty means "the same as
-	// CannotExecute", which is bash and zsh.
+	// a command word. A preset may name the builtin there and not name it for
+	// an ordinary command — `exec: x: Permission denied` for one and
+	// `x: Permission denied` for the other. Empty means "the same as
+	// CannotExecute".
 	ExecCannotExecute string
 	// ExecNotFound is what `exec` says when there is no such command at all,
-	// which every shell words as some form of "not found" rather than with
-	// the strerror text CannotExecute carries. Same two verbs; the reason is the
-	// literal "not found", so most dialects ignore it.
+	// which is worded as some form of "not found" rather than with the strerror
+	// text CannotExecute carries. Same two verbs; the reason is the literal
+	// "not found", so most presets ignore it.
 	//
 	// Empty means "the same as CannotExecute".
 	ExecNotFound string
@@ -195,11 +193,11 @@ type Diagnostics struct {
 	// and there is no such file — as opposed to a bare name that was not on
 	// PATH. Same two verbs.
 	//
-	// The distinction is real in three of the four: bash says `exec: x: not
-	// found` for a bare name and `/p/x: No such file or directory` for a
-	// path, and zsh says `command not found: x` against `no such file or
-	// directory: /p/x`. It is the same split `.` has between DotNotFound and
-	// DotCannotOpen, arrived at from the other direction.
+	// The distinction is real under most presets: `exec: x: not found` for a
+	// bare name against `/p/x: No such file or directory` for a path, or
+	// `command not found: x` against `no such file or directory: /p/x`. It is
+	// the same split `.` has between DotNotFound and DotCannotOpen, arrived at
+	// from the other direction.
 	//
 	// Empty means "the same as ExecNotFound".
 	PathNotFound string
@@ -209,76 +207,71 @@ type Diagnostics struct {
 	//
 	// bash alone, and only for `exec`: `exec ./ne.sh` in /tmp reports
 	// "/tmp/ne.sh: Permission denied" there, where dash, ksh93 and zsh all
-	// report "./ne.sh". The same bash reports `. ./nosuch.sh` as written, so
-	// this is not a general habit of the shell and cannot be shared with the
-	// `.` wording.
+	// report "./ne.sh". The same preset reports `. ./nosuch.sh` as written, so
+	// this is not a general habit and cannot be shared with the `.` wording.
 	NamesResolvedPath bool
 
 	// DirectoryReason is the reason this dialect gives for `exec` on a
 	// directory, when it is not the one the operating system reported.
 	//
-	// bash and ksh93 check for a directory themselves and say so — "Is a
-	// directory" — where dash and zsh hand the path to execve and report the
-	// EACCES it comes back with, as "Permission denied". Same failure, same
-	// status of 126, two different explanations, and the difference is
-	// whether the shell looked before it leapt.
+	// A preset may check for a directory itself and say so — "Is a directory" —
+	// or hand the path to execve and report the EACCES it comes back with, as
+	// "Permission denied". Same failure, same status of 126, two different
+	// explanations, and the difference is whether the shell looked before it
+	// leapt.
 	//
-	// Empty means "whatever the operating system said", which is the first
-	// pair.
+	// Empty means "whatever the operating system said".
 	DirectoryReason string
 
 	// TimeLayout is how the `time` keyword arranges its report. Zero is the
 	// substrate's own: a blank line, then labeled `real`, `user` and `sys`
-	// lines in the minutes-and-seconds form — the shape bash and ksh93
-	// share, apart in only their decimals.
+	// lines in the minutes-and-seconds form, which is the common shape.
 	TimeLayout TimeLayout
-	// TimeDecimals is how many decimal places that report's seconds carry:
-	// bash 3, ksh93 2. Zero means the substrate's own, which is 3. The
+	// TimeDecimals is how many decimal places that report's seconds carry — 2
+	// and 3 are both measured. Zero means the substrate's own, which is 3. The
 	// per-command layout does not read it — its line fixes its own widths.
 	TimeDecimals int
-	// TimeBare is what a `time` with no pipeline reports. The three shells
-	// that have the keyword give three answers: bash reports a run of
-	// nothing, ksh93 the shell's own user and sys with no real, zsh a
-	// `shell` and a `children` line. Zero is the first, which is also the
-	// substrate's own.
+	// TimeBare is what a `time` with no pipeline reports. Three answers among
+	// the presets that have the keyword: a run of nothing, the shell's own user
+	// and sys with no real, or a `shell` and a `children` line. Zero is the
+	// first, which is also the substrate's own.
 	TimeBare TimeBareLayout
 
 	// TimesLayout is how `times` arranges what it prints. Zero is the
-	// substrate's own, which is the two-line self-then-children shape dash,
-	// bash and zsh share.
+	// substrate's own, which is the common two-line self-then-children shape.
 	TimesLayout TimesLayout
 	// TimesDecimals is how many decimal places `times` gives its seconds, and
-	// the panel offers four different answers to a question nobody would think
-	// to ask: dash 6, bash 3, ksh93 and zsh 2.
+	// there are three measured answers to a question nobody would think to ask:
+	// 2, 3 and 6.
 	//
 	// Zero means the substrate's own, which is 3.
 	TimesDecimals int
 	// TimesArguments is what `times` says when given an argument it refuses.
-	// No verbs. Only zsh says anything — dash and bash ignore the argument, and
-	// ksh93 never reaches a builtin because `times` is a reserved word there.
+	// No verbs. Most presets ignore the argument, and one never reaches a
+	// builtin at all because `times` is a reserved word there.
 	TimesArguments string
 
 	// NamesBuiltinInLocation puts the reporting builtin's name between the
 	// shell's name and the line number: `zsh:shift:1: …` rather than
 	// `zsh:1: …`.
 	//
-	// zsh alone, and it is a rule rather than a handful of special cases —
-	// measured across `.`, `times`, `shift`, `cd`, `unset`, `read`, `trap` and
-	// `break`, every one of which names itself. What does *not* get a segment
+	// A rule rather than a handful of special cases — measured across `.`,
+	// `times`, `shift`, `cd`, `unset`, `read`, `trap` and `break`, every one of
+	// which names itself. What does *not* get a segment
 	// is equally consistent: a command that could not be found, a parse error,
 	// an unset parameter, a division by zero, a redirection that would not
 	// open. Those are the shell's own failures rather than a builtin's.
 	//
 	// The distinction is "whose diagnostic is this", not "where did it happen".
 	// A builtin that runs a script — `.`, `eval` — is not the author of what
-	// that script reports, and zsh agrees: an unset parameter inside a sourced
-	// file is `./f.sh:2: NOPE: parameter not set`, with no `.` anywhere in it.
+	// that script reports: an unset parameter inside a sourced file is
+	// `./f.sh:2: NOPE: parameter not set`, with no `.` anywhere in it.
 	NamesBuiltinInLocation bool
 
 	// TestNamesFirstOperand makes a malformed three-argument `test` blame the
-	// first word rather than the middle one: `test a b c` is "a: unexpected
-	// operator" in dash and names `b` — the word that should have been an
-	// operator — in the other three.
+	// first word rather than the middle one: `test a b c` is
+	// "a: unexpected operator" under true, and names `b` — the word that should
+	// have been an operator — under false.
 	TestNamesFirstOperand bool
 
 	// TestUnknownLongOperator is how `test` reads a word spelled like an
@@ -293,9 +286,9 @@ type Diagnostics struct {
 	// with words left over and the count is what gets reported, which sends
 	// the reader to count words in an expression whose word count is fine.
 	//
-	// Measured 2026-09-12 with `[ -Q x -a -n x ]`, and the panel gives three
-	// answers rather than two, which is why this is an enumeration and not a
-	// bool. See the constants.
+	// Measured with `[ -Q x -a -n x ]`, and there are three answers rather than
+	// two, which is why this is an enumeration and not a bool. See the
+	// constants.
 	TestUnknownLongOperator TestUnknownOperatorReport
 
 	// TestUnaryExpected is what `test` says about a word where a unary
@@ -303,18 +296,18 @@ type Diagnostics struct {
 	TestUnaryExpected string
 	// TestBinaryExpected is the same for a binary operator's place. One verb.
 	//
-	// Two fields because one dialect words them differently — "unary operator
-	// expected" against "binary operator expected" — where the other three use
-	// one message for both and simply set these to the same string.
+	// Two fields because a preset may word them differently — "unary operator
+	// expected" against "binary operator expected" — where another uses one
+	// message for both and simply sets these to the same string.
 	TestBinaryExpected string
 	// TestIntegerExpected is a non-numeric operand to `-eq` and its siblings.
 	// One verb: the operand.
 	TestIntegerExpected string
 	// TestOperandExpected is an operator with nothing after it. No verbs.
 	TestOperandExpected string
-	// ProcessSubstitutionNotInCondition is a `<(cmd)` standing as a
-	// condition's operand in a dialect that does not allow one there. One
-	// verb: the substitution as it was written, `<(cmd)` and not its inside.
+	// ProcessSubstitutionNotInCondition is a `<(cmd)` standing as a condition's
+	// operand under a preset that does not allow one there. One verb: the
+	// substitution as it was written, `<(cmd)` and not its inside.
 	ProcessSubstitutionNotInCondition string
 	// TestTooManyArguments is a well-formed expression with words left over.
 	// No verbs.

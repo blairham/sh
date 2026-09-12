@@ -145644,6 +145644,57 @@
         "TimedOut": false
       }
     },
+    "redir/a-write-into-a-broken-pipe-with-the-signal-disarmed": {
+      "ash": {
+        "Stdout": "ws=1~done",
+        "Stderr": "\u003cshell\u003e: write error: Broken pipe",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "ws=1~done",
+        "Stderr": "\u003cshell\u003e: line 1: echo: write error: Broken pipe",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ws=1~done",
+        "Stderr": "\u003cshell\u003e: line 1: echo: write error: Broken pipe",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "~ws=1~done",
+        "Stderr": "\u003cshell\u003e: line 0: echo: write error: Broken pipe",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "ws=1~done",
+        "Stderr": "\u003cshell\u003e: 1: echo: echo: I/O error",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "ws=0~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ws=1~done",
+        "Stderr": "\u003cshell\u003e:echo:1: write error: broken pipe~\u003cshell\u003e:1: write error: broken pipe",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "redir/a-write-to-a-closed-descriptor-fails": {
       "ash": {
         "Stdout": "st=1",

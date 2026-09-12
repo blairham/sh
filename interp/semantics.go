@@ -736,15 +736,46 @@ type Semantics struct {
 
 	// BuiltinWriteErrorFailsTheCommand makes a builtin whose output write
 	// failed — into a descriptor closed with `>&-`, most plainly — report
-	// status 1. True in bash, dash and ksh93; zsh keeps the builtin's own
-	// status and quietly loses the text.
+	// status 1. True in bash, dash, ksh93 and ash; zsh keeps the builtin's
+	// own status and quietly loses the text.
 	//
 	// Whether anything is *said* about it is the dialect's wording —
-	// Diagnostics.BuiltinWriteError — not a second axis: bash and dash
+	// Diagnostics.BuiltinWriteError — not a second axis: bash, dash and ash
 	// complain, ksh93 fails silently, and zsh has nothing to word because it
 	// does not fail. Asked only when a write has actually failed, so `echo
 	// hi` on an open stream needs no dialect.
+	//
+	// This one is about a **closed descriptor** and not about every failed
+	// write; see BrokenPipeWriteErrorFailsTheCommand for the other errno,
+	// which two dialects answer the opposite way round.
 	BuiltinWriteErrorFailsTheCommand Answer
+
+	// BrokenPipeWriteErrorFailsTheCommand is the same question for a write
+	// into a **broken pipe** with SIGPIPE disarmed — a reader that has gone,
+	// where the script trapped or ignored the signal so the errno comes back
+	// to a writer that is still running.
+	//
+	// A second axis because the errno decides and two dialects swap places on
+	// it. Measured 2026-09-12 on a builtin writing 256 KiB into a reader that
+	// has exited, against `echo hi >&-` for the same shells:
+	//
+	//	          closed descriptor        broken pipe
+	//	dash      1, `echo: I/O error`     1, `echo: I/O error`
+	//	bash 5.3  1, `write error: …`      1, `write error: Broken pipe`
+	//	bash 3.2  1, `write error: …`      1, `write error: Broken pipe`
+	//	ash       1, `write error: …`      1, `write error: Broken pipe`
+	//	ksh93     **1**, silent            **0**, silent
+	//	zsh       **0**, silent            **1**, and it speaks twice
+	//
+	// So five columns answer both the same way and two do not, which is why
+	// this cannot be folded into the axis above or derived from it. ksh93
+	// fails the command for a descriptor that was closed and shrugs at a pipe
+	// nobody is reading; zsh does the reverse (#770).
+	//
+	// Asked in place of the other one when the write failed with EPIPE, and
+	// only once the disposition says this is not a death — a default SIGPIPE
+	// kills the shell and never reaches either axis.
+	BrokenPipeWriteErrorFailsTheCommand Answer
 
 	// LengthOfSpecialIsCount makes `${#@}` the number of positional
 	// parameters. False in dash, which gives the length of the joined
@@ -9270,6 +9301,12 @@ func PosixSemantics() Semantics {
 		// error occurred", and a write that went nowhere is one; dash
 		// complies. zsh is the holdout, keeping status 0.
 		BuiltinWriteErrorFailsTheCommand: Yes,
+		// And the same for the other errno. POSIX draws no line between a
+		// descriptor that was closed and a pipe nobody is reading -- both
+		// are a write that went nowhere -- so the standard's answer is one
+		// answer twice, and the two dialects that split them depart from it
+		// in opposite directions.
+		BrokenPipeWriteErrorFailsTheCommand: Yes,
 		// The XSI echo: -n alone, no \x, no \e. The letters the dialects
 		// add are theirs to add.
 		EchoOptions:                 "n",

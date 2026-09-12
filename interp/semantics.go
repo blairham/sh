@@ -6404,132 +6404,127 @@ type Semantics struct {
 	ReadNameOperands NameOperands
 
 	// DeclarationTakesASubscript accepts `export a[0]` and `readonly a[0]`,
-	// naming an element rather than a variable. ksh93 does; bash and dash
-	// refuse it in the words they give any other bad name.
+	// naming an element rather than a variable. Answering No refuses it in the
+	// words given to any other bad name.
 	//
-	// A separate question from the name strictness above, because the answer
-	// is per builtin: bash refuses it here and takes it for `unset`, and the
-	// two builtins sit on different strictnesses in every shell, so no rule
-	// over that strictness gives all four.
+	// A separate question from the name strictness above, because the answer is
+	// per builtin: an implementation may refuse it here and take it for `unset`,
+	// and the two builtins sit on different strictnesses, so no rule over that
+	// strictness gives every answer.
 	DeclarationTakesASubscript Answer
 
-	// TypesetTakesASubscript is that same question for `typeset`, `declare`
-	// and `integer`, and it is a third field because the answer is per
-	// builtin here as well: measured, bash refuses `export a[1]=v` as a bad
-	// name and *takes* `typeset a[1]=v`, creating the element. ksh93 and zsh
-	// take both. So the declaration builtins are not one strictness with two
-	// spellings, and reading `typeset a[1]=v` through
-	// DeclarationTakesASubscript would have made bash start refusing a line
-	// it has always accepted.
+	// TypesetTakesASubscript is that same question for `typeset`, `declare` and
+	// `integer`, and it is a third field because the answer is per builtin here
+	// as well: an implementation may refuse `export a[1]=v` as a bad name and
+	// *take* `typeset a[1]=v`, creating the element.
+	//
+	// So the declaration builtins are not one strictness with two spellings, and
+	// reading `typeset a[1]=v` through DeclarationTakesASubscript would make
+	// such a preset start refusing a line it has always accepted.
 	TypesetTakesASubscript Answer
 
 	// UnsetTakesASubscript is the same question asked of `unset`, where the
-	// answers are not the same: bash, ksh93 and zsh take it and dash refuses
-	// it.
+	// answers are not the same again.
 	UnsetTakesASubscript Answer
 
 	// BadNameDeclaresTheOperandsAfterIt keeps declaring past an operand the
 	// builtin refused, where the refusal is fatal.
 	//
-	// Measured 2026-09-07 with the bad name first, in the middle and last,
-	// over `export`, `readonly`, `typeset` and `unset`, reading the names
-	// back from an EXIT trap because the fatality otherwise hides the answer:
-	// ksh93 and zsh declare every well-formed operand wherever the bad one
-	// stood, and dash and bash-as-`sh` declare only the ones in front of it.
+	// Measured with the bad name first, in the middle and last, over `export`,
+	// `readonly`, `typeset` and `unset`, reading the names back from an EXIT
+	// trap because the fatality otherwise hides the answer: Yes declares every
+	// well-formed operand wherever the bad one stood, No declares only the ones
+	// in front of it.
 	//
-	// Asked only on the fatal path. bash proper reports each bad operand and
-	// carries on, so its whole list is declared by the loop rather than by
-	// this — the answer recorded for it is the one bash-as-`sh` gives, which
-	// is the same shell with the fatality turned on.
+	// Asked only on the fatal path. Where the refusal is *not* fatal each bad
+	// operand is reported and the loop carries on, so the whole list is declared
+	// by the loop rather than by this — the answer recorded for such a preset is
+	// the one it gives with the fatality turned on.
 	BadNameDeclaresTheOperandsAfterIt Answer
 
 	// SubscriptedOperandTakesTheIntegerAttribute lets `typeset -i a[1]=0x10`
-	// give the array the integer attribute and write the element with it.
+	// give the array the integer attribute and write the element with it, so the
+	// element stores 16 and the array lists back with the attribute on it.
 	//
-	// Measured 2026-09-07: bash 5.3 and ksh93u+ both store 16 and list the
-	// array back with the attribute on it; zsh 5.9.2 refuses the operand
-	// outright, because an element is not a name and the attribute belongs to
-	// the name. Asked only when the letter was written, so the plain
-	// declaration needs no answer from anyone.
+	// Answering No refuses the operand outright, because an element is not a
+	// name and the attribute belongs to the name. Asked only when the letter was
+	// written, so the plain declaration needs no answer from anyone.
 	SubscriptedOperandTakesTheIntegerAttribute Answer
 
 	// SubscriptedOperandTakesALocalDeclaration lets `typeset a[1]=v` inside a
 	// function make the array local and write the element into the local one.
 	//
-	// The same split, and a separate field because it is a different thing
-	// being done to the variable: bash 5.3 declares a local array holding the
-	// element and the caller's array comes back on return; ksh93u+ has no
-	// scope for it to take and writes the caller's; zsh 5.9.2 refuses. A
-	// dialect could answer one of the two and not the other, and folding them
-	// would give zsh's refusal to whichever the other shell was measured for.
+	// A separate field from the axis above because it is a different thing being
+	// done to the variable: Yes declares a local array holding the element and
+	// the caller's array comes back on return; an implementation with no scope
+	// for it to take writes the caller's; and a refusal refuses. A preset could
+	// answer one of the two and not the other, and folding them would give one
+	// answer's refusal to whichever the other was measured for.
 	//
 	// Asked only where there is a scope to take, so a declaration at the top
 	// level never reaches it.
 	SubscriptedOperandTakesALocalDeclaration Answer
 
-	// ReadonlyElement is what a declaration does when it would freeze the
-	// array whose element its operand names — `readonly a[1]=v` and
-	// `typeset -r a[1]=v`.
+	// ReadonlyElement is what a declaration does when it would freeze the array
+	// whose element its operand names — `readonly a[1]=v` and `typeset -r
+	// a[1]=v`.
 	//
-	// Three answers rather than two, which is why it is not an Answer:
-	// ksh93u+ writes the element and freezes the array over it, zsh 5.9.2
-	// refuses the operand, and bash 5.3 does a third thing — it creates the
-	// array frozen and *empty* and then reports the element write it has just
+	// Three answers rather than two, which is why it is not an [Answer]: write
+	// the element and freeze the array over it; refuse the operand; or create
+	// the array frozen and *empty* and then report the element write it has just
 	// made impossible, at status 0. The third is measured and recorded and
-	// deliberately not implemented here; bash reaches this by `typeset -r`
-	// alone, since it refuses `readonly a[1]=v` as a bad name long before.
+	// deliberately not implemented here, and it is reached by `typeset -r` alone
+	// under the preset that has it, since that one refuses `readonly a[1]=v` as
+	// a bad name long before.
 	ReadonlyElement ReadonlyElementPolicy
 
 	// BadSubscriptToUnsetFatal ends the script when an `unset` operand's
-	// subscript will not evaluate. True in bash, where a bad expression ends
-	// it wherever one is written; false in ksh93 and zsh, which leave a failed
-	// builtin behind and go on. dash has no subscript to evaluate.
+	// subscript will not evaluate — a bad expression ending it wherever one is
+	// written. Answering No leaves a failed builtin behind and goes on; a preset
+	// with no subscript to evaluate never reaches it.
 	//
-	// Asked only for an operand whose subscript actually failed, so `unset
-	// a[1]` needs no answer from anyone.
+	// Asked only for an operand whose subscript actually failed, so `unset a[1]`
+	// needs no answer from anyone.
 	BadSubscriptToUnsetFatal Answer
 
-	// UnsetSubscriptOnAScalarIsAnError refuses `unset "a[1]"` where `a`
-	// holds a string, rather than leaving the name alone without a word.
-	// bash says `unset: a: not an array variable` and fails; ksh93 says
-	// nothing and succeeds.
+	// UnsetSubscriptOnAScalarIsAnError refuses `unset "a[1]"` where `a` holds a
+	// string, rather than leaving the name alone without a word. Yes is
+	// `unset: a: not an array variable` and a failure; No says nothing and
+	// succeeds.
 	//
-	// Reached only through the *element* reading of a subscripted name — the
-	// shell that reads `a[1]` as a character of the string takes that
-	// character out and never gets here, so this is ScalarSubscriptIsACharacter's
+	// Reached only through the *element* reading of a subscripted name — a
+	// preset that reads `a[1]` as a character of the string takes that character
+	// out and never gets here, so this is ScalarSubscriptIsACharacter's
 	// consequence rather than a second decision about the same shape.
 	//
 	// Asked only where the subscript names *no* element. A scalar is the one
-	// element at the base, so `unset "a[0]"` where the base is 0 takes the
-	// whole name away in both shells and asks nothing; and a name holding
-	// nothing at all has no element for any subscript to name and is left
-	// alone everywhere, which is why `unset "b[0]"` on an unset `b` is quiet
-	// in all four.
+	// element at the base, so `unset "a[0]"` where the base is 0 takes the whole
+	// name away under both and asks nothing; and a name holding nothing at all
+	// has no element for any subscript to name and is left alone under both,
+	// which is why `unset "b[0]"` on an unset `b` is quiet throughout.
 	//
-	// Nor is it about arrays with a gap: `a=(x y z); unset "a[9]"` is silent
-	// and succeeds in every shell measured. What the refusing shell objects
-	// to is the *name* not being an array, which is what its wording says.
+	// Nor is it about arrays with a gap: `a=(x y z); unset "a[9]"` is silent and
+	// succeeds under every answer. What a Yes objects to is the *name* not being
+	// an array, which is what its wording says.
 	//
-	// The preset is no. POSIX has `unset` remove what is there and say
-	// nothing about what is not — `unset nosuchname` is a success everywhere
-	// — and the silent reading is that sentence applied to a subscript.
+	// The preset is no. POSIX has `unset` remove what is there and say nothing
+	// about what is not — `unset nosuchname` is a success everywhere — and the
+	// silent reading is that sentence applied to a subscript.
 	//
-	// bash 3.2 refuses the base subscript too, so a corpus case here splits
-	// the `bash` and `bash32` columns on purpose: that build reads `${a[0]}`
-	// as the whole string for an *expansion* and still refuses to unset
-	// through it, which is a disagreement within one shell rather than
-	// between two.
+	// One build refuses the base subscript too, so a corpus case here splits two
+	// columns of the same implementation on purpose: that build reads `${a[0]}`
+	// as the whole string for an *expansion* and still refuses to unset through
+	// it, which is a disagreement within one shell rather than between two.
 	UnsetSubscriptOnAScalarIsAnError Answer
 
-	// UnsetArraySpan is what `unset` does to the elements a subscript names,
-	// and the panel gives three answers rather than two — see
-	// UnsetArraySpanPolicy.
+	// UnsetArraySpan is what `unset` does to the elements a subscript names, and
+	// there are three answers rather than two — see UnsetArraySpanPolicy.
 	//
-	// One field for `unset a[@]` and for `unset a[3]`, because in the shell
+	// One field for `unset a[@]` and for `unset a[3]`, because under the reading
 	// that parts from the rest they are one rule: `unset` of a span replaces
 	// that span with a single empty element, so `a[3]` is a span of one and
-	// comes back blank in place while `[@]` is the whole array and comes back
-	// as one empty element. Measured across spans of one, two and all — see
+	// comes back blank in place while `[@]` is the whole array and comes back as
+	// one empty element. Measured across spans of one, two and all — see
 	// docs/spec/measurements.md.
 	UnsetArraySpan UnsetArraySpanPolicy
 	// EmptyArithSubscript is what `a[]` means where an expression wants a
@@ -6539,113 +6534,99 @@ type Semantics struct {
 	EmptyArithSubscript EmptyArithSubscriptPolicy
 	// PositionalListWithNoneIsSet calls `$@` — and `$*` — a **set** parameter
 	// when there are no positional parameters at all. `No` says the list is
-	// unset until something is in it, so a colon-less conditional fires.
+	// unset until something is in it, so a colon-less conditional fires. After
+	// `set --`:
 	//
-	// Measured 2026-09-11 and again 2026-09-12, `-c` and a script file,
-	// after `set --`:
-	//
-	//	                       dash, zsh 5.9.2   bash 5.3/as-sh/3.2, ksh93u+
+	//	                       No                Yes
 	//	"${@-word}"            (empty)           word
 	//	"${@+word}"            word              (empty)
 	//	"${*-word}"            (empty)           word
 	//	"${@?}"                (empty), 0        `@: parameter not set`
 	//	${@=abc}               (empty), 0        the operator fires, and is
-	//	                                         refused: `$@: cannot assign
-	//	                                         in this way` in bash,
-	//	                                         `${@=abc}: bad substitution`
-	//	                                         in ksh93
+	//	                                         then refused
 	//
-	// Two columns say set and four say unset, and `$*` splits exactly as
-	// `$@` does, so one axis answers the family rather than one operator.
-	// The refusal in the last row is not this question — #1541 put that in
-	// and every dialect reaches it the moment the operator fires — this is
-	// the step before it, which decides whether it fires at all.
+	// `$*` splits exactly as `$@` does, so one axis answers the family rather
+	// than one operator. The refusal in the last row is not this question —
+	// every preset reaches it the moment the operator fires — this is the step
+	// before it, which decides whether it fires at all.
 	//
-	// The **colon** form is unanimous and asks nothing: `${@:-word}` is
-	// `word` and `${@:+word}` is empty in all six, because an empty value
-	// fires the test whichever way the set-ness reads. `${1-word}` is
-	// `word` everywhere too, so this is about the list and not about a
-	// positional parameter that is not there.
+	// The **colon** form is unanimous and asks nothing: `${@:-word}` is `word`
+	// and `${@:+word}` is empty under both, because an empty value fires the
+	// test whichever way the set-ness reads. `${1-word}` is `word` under both
+	// too, so this is about the list and not about a positional parameter that
+	// is not there.
 	//
 	// Asked at the disagreement: a colon-less conditional, on `$@` or `$*`
-	// itself, with no positional parameters. With any parameter at all every
-	// column calls the list set, and a subscripted name that happens to be
-	// spelled `@` is an array and answers elsewhere (#1941).
+	// itself, with no positional parameters. With any parameter at all the list
+	// is set under both, and a subscripted name that happens to be spelled `@`
+	// is an array and answers elsewhere.
 	PositionalListWithNoneIsSet Answer
 
-	// EmptyAssociativeKeyIsAnError refuses to *store* under a key that is
-	// empty once the subscript has been read — `typeset -A m; m[""]=4`, and
-	// `m[$w]=4` with an empty `$w` beside it.
+	// EmptyAssociativeKeyIsAnError refuses to *store* under a key that is empty
+	// once the subscript has been read — `typeset -A m; m[""]=4`, and `m[$w]=4`
+	// with an empty `$w` beside it.
 	//
-	// Measured 2026-09-12 from a script file, with the name declared:
+	//	             m[""]=4    m[$w]=4    m[ ]=7
+	//	Yes          refused    refused    stored under one space
+	//	No           stored     stored     stored
 	//
-	//	                   m[""]=4    m[$w]=4    m[ ]=7
-	//	bash 5.3.15        refused    refused    stored under one space
-	//	ksh93u+            stored     stored     stored
-	//	zsh 5.9.2          stored     stored     a bad pattern
+	// A Yes names the subscript as it was written — `m[""]: bad array subscript`
+	// — leaves the table untouched, reports 1 and carries on; under a POSIX mode
+	// the same refusal ends the script instead. The blank column is the control
+	// that says this is emptiness and not whitespace: one space is a key
+	// wherever the brackets are read as a key at all.
 	//
-	// bash names the subscript as it was written — `m[""]: bad array
-	// subscript` and `m[$w]: bad array subscript` — leaves the table
-	// untouched, reports 1 and carries on; the same build under argv[0] `sh`
-	// ends the script instead. The blank column is the control that says
-	// this is emptiness and not whitespace: one space is a key everywhere
-	// that reads the brackets as a key at all.
-	//
-	// The two columns that store are not storing the same key, and that is
-	// SubscriptIsAQuotingContext rather than this axis: ksh93 reads the
-	// quotes off and holds the empty key, zsh keeps them and holds a
-	// two-character one, so `typeset -A m; m[""]=4; m[$w]=4` leaves ksh93
-	// with one element and zsh with two. Both are measured and both are
-	// right for their column.
+	// Two presets that store are not necessarily storing the same key, and that
+	// is SubscriptIsAQuotingContext rather than this axis: reading the quotes
+	// off holds the empty key, keeping them holds a two-character one, so
+	// `typeset -A m; m[""]=4; m[$w]=4` leaves one with a single element and the
+	// other with two. Both are measured and both are right for their column.
 	//
 	// Asked only where an association is about to be stored under a key that
 	// came out empty. A key with anything in it asks nothing, an indexed name
-	// reads its subscript as an expression and asks EmptySubscriptText…
-	// instead, and *reading* an empty key is a third question again — bash
-	// writes `m: bad array subscript` there, with a different subject, and
-	// that is #1972 (#1938).
+	// reads its subscript as an expression and asks EmptySubscriptText… instead,
+	// and *reading* an empty key is a third question again, with a different
+	// subject.
 	EmptyAssociativeKeyIsAnError Answer
 
-	// EmptyAssociativeKeyIsReportedWhenRead reports a *read* whose key came
-	// out empty — `typeset -A m; w=; ${m[$w]}` — and answers with the empty
-	// string anyway.
+	// EmptyAssociativeKeyIsReportedWhenRead reports a *read* whose key came out
+	// empty — `typeset -A m; w=; ${m[$w]}` — and answers with the empty string
+	// anyway.
 	//
-	// The other face of EmptyAssociativeKeyIsAnError, and a different
-	// question rather than the same one seen from the read side: the store
-	// refuses and the read does not, the subject is the name alone rather
-	// than the subscript as written, and the status stays 0.
+	// The other face of EmptyAssociativeKeyIsAnError, and a different question
+	// rather than the same one seen from the read side: the store refuses and
+	// the read does not, the subject is the name alone rather than the subscript
+	// as written, and the status stays 0. With `typeset -A m; m[k]=v` and `w=`:
 	//
-	// Measured 2026-09-12, `-c`, with `typeset -A m; m[k]=v` and `w=`:
+	//	probe             Yes                              No
+	//	${m[$w]}          `m: bad array subscript`, ``, 0  ``, 0
+	//	${m[""]}          the same sentence                ``, 0
+	//	${m[$w]-none}     the same sentence, then `none`   `none`
+	//	${m[ ]}           nothing at all                   ``, 0
 	//
-	//	probe             bash 5.3.15                      ksh93u+   zsh 5.9.2
-	//	${m[$w]}          `m: bad array subscript`, ``, 0  ``, 0     ``, 0
-	//	${m[""]}          the same sentence                ``, 0     a two-character key
-	//	${m[$w]-none}     the same sentence, then `none`   `none`    `none`
-	//	${m[ ]}           nothing at all                   ``, 0     ``, 0
-	//
-	// So one column says the subscript is bad and two say nothing, and all
-	// three answer the same empty string at the same status — which is why
-	// this is a report and not a value. bash 3.2 has no such attribute to
-	// ask about, and dash reaches no subscript in an expansion at all.
+	// So one answer says the subscript is bad and the other says nothing, and
+	// both give the same empty string at the same status — which is why this is
+	// a report and not a value. A preset with no such attribute, or one that
+	// reaches no subscript in an expansion at all, cannot be asked.
 	//
 	// The blank row is the control that says this is emptiness and not
 	// whitespace: `${m[ ]}` looks up a one-space key and finds nothing,
-	// silently, in every column. `${m[]}` — nothing between the brackets as
-	// written — is refused one construct earlier by
-	// EmptyParamSubscriptIsAnError and never reaches this.
+	// silently, under both. `${m[]}` — nothing between the brackets as written —
+	// is refused one construct earlier by EmptyParamSubscriptIsAnError and never
+	// reaches this.
 	//
-	// It is the **key** and not the subscript, so an indexed name asks
-	// nothing here: `a=(1 2); ${a[$w]}` is the first element and silent
-	// everywhere, and the refusal an indexed name can earn from the same
-	// emptiness is EmptySubscriptTextIsAMathError, in another column again.
+	// It is the **key** and not the subscript, so an indexed name asks nothing
+	// here: `a=(1 2); ${a[$w]}` is the first element and silent under both, and
+	// the refusal an indexed name can earn from the same emptiness is
+	// EmptySubscriptTextIsAMathError.
 	//
-	// Reported once per read, and the expansion carries on: measured,
-	// `"[${m[$w]}]${m[$w]}"` writes the sentence twice and prints `[]`, and
-	// a word that goes on to a conditional still gets its empty value. So
-	// nothing here sets the failed-expansion flag.
+	// Reported once per read, and the expansion carries on:
+	// `"[${m[$w]}]${m[$w]}"` writes the sentence twice and prints `[]`, and a
+	// word that goes on to a conditional still gets its empty value. So nothing
+	// here sets the failed-expansion flag.
 	//
-	// The wording is Diagnostics.EmptyAssociativeKeyRead, whose one verb is
-	// the name (#1972).
+	// The wording is Diagnostics.EmptyAssociativeKeyRead, whose one verb is the
+	// name.
 	EmptyAssociativeKeyIsReportedWhenRead Answer
 
 	// EmptyParamSubscriptIsAnError refuses `${a[]}` — a subscript written

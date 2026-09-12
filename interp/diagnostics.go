@@ -1456,46 +1456,47 @@ type Diagnostics struct {
 	// shell constructed it — `./inc.sh` as written, the joined path for a
 	// PATH hit — never the resolved absolute path.
 	//
-	// bash and zsh, and in zsh only where the failing line was not read from
-	// a function body, which is where LocationNamesTheFunction replaces the
-	// name instead. A file sourced *from* a function is named here: the
-	// innermost frame is the file's. dash and
-	// ksh93 keep the script's own name in both cases while still counting
-	// the sourced file's lines; while the sourced file runs each also labels
-	// it in its own place — dash writes the path after the location,
-	// `outer.sh: 3: ./inc.sh: …`, and ksh93 writes `.: line 3:` after a
-	// location pinned where the `.` was — which the corpus records rather
-	// than this field claiming it.
+	// True only where the failing line was not read from a function body, which
+	// is where LocationNamesTheFunction replaces the name instead. A file
+	// sourced *from* a function is named here: the innermost frame is the
+	// file's.
+	//
+	// A false preset keeps the script's own name in both cases while still
+	// counting the sourced file's lines; while the sourced file runs it may also
+	// label it in its own place — the path written after the location,
+	// `outer.sh: 3: ./inc.sh: …`, or `.: line 3:` after a location pinned where
+	// the `.` was — which the corpus records rather than this field claiming
+	// it.
 	LocationNamesTheCurrentFile bool
 
 	// LocationNamesTheFunction puts the function a message came from where
 	// the file's name would go, and counts the line within the function
-	// rather than within the file. zsh alone.
+	// rather than within the file.
 	//
-	// The count is the offset from the line the function was written on, so
-	// a body on the same line as its `f() {` is offset zero — and zsh leaves
-	// the number out entirely there rather than writing a nought.
+	// The count is the offset from the line the function was written on, so a
+	// body on the same line as its `f() {` is offset zero — and the number is
+	// left out entirely there rather than written as a nought.
 	//
 	// It applies to a line the function body *holds*, which is not the same
 	// as every line run while the function is on the stack. A file the
 	// function sourced is named by LocationNamesTheCurrentFile as if it had
-	// been sourced at the top level, because the innermost frame is the
-	// file's — so the two fields are read off the call stack rather than one
-	// overriding the other wherever a function is anywhere below (#2037).
+	// been sourced at the top level, because the innermost frame is the file's —
+	// so the two fields are read off the call stack rather than one overriding
+	// the other wherever a function is anywhere below.
 	LocationNamesTheFunction bool
 
 	// SetInvalidOptionName is a long `set -o` name this shell does not have.
 	// One verb: the name.
 	//
-	//	bash   set: bogusname: invalid option name
-	//	dash   set: Illegal option -o bogusname
-	//	ksh93  set: bogusname: bad option(s)
-	//	zsh    set: no such option: bogusname
+	//	set: bogusname: invalid option name
+	//	set: Illegal option -o bogusname
+	//	set: bogusname: bad option(s)
+	//	set: no such option: bogusname
 	//
-	// dash writes `-o` whichever way it was asked, so the operator is part
-	// of the wording rather than a verb. zsh puts the builtin's name in the
-	// location instead of in the sentence, which the location already does.
-	// ksh93 follows it with the usage line it keeps in BuiltinUsage.
+	// One preset writes `-o` whichever way it was asked, so the operator is part
+	// of the wording rather than a verb. Another puts the builtin's name in the
+	// location instead of in the sentence, which the location already does. A
+	// third follows it with the usage line it keeps in BuiltinUsage.
 	SetInvalidOptionName string
 
 	// SetImmovableOptionName is a long `set -o` name this shell *has* and
@@ -1511,81 +1512,74 @@ type Diagnostics struct {
 	// that reach it are answering about a name they have and we do not do —
 	// there is no borrowed sentence for that.
 	//
-	// Only a dialect with an option table of its own (SetOptionTable) can
-	// reach the *spoken* form of this: without one, a name outside the
-	// substrate's table is an invalid name instead. zsh says it about the
-	// five options that are about being interactive — `interactive`,
+	// Only a preset with an option table of its own (SetOptionTable) can reach
+	// the *spoken* form of this: without one, a name outside the substrate's
+	// table is an invalid name instead. A preset that has it says it about the
+	// handful of options that are about being interactive — `interactive`,
 	// `monitor`, `shinstdin`, `singlecommand` and `zle` — measured in a
-	// non-interactive `-c` run, and about nothing else in the other 180.
+	// non-interactive `-c` run, and about none of the rest.
 	//
-	// Its status and whether it ends the script are SetInvalidOptionStatus
-	// and Semantics.BadSetOptionNameFatal, the same two the invalid name
-	// uses: measured, zsh answers `set -o onecmd` and `set -o zzznosuch`
-	// with the same 1 and stops the script at both.
+	// Its status and whether it ends the script are SetInvalidOptionStatus and
+	// Semantics.BadSetOptionNameFatal, the same two the invalid name uses: an
+	// immovable name and a name that does not exist report the same number and
+	// stop the script alike.
 	SetImmovableOptionName string
 
 	// ImmovableOptionLetters are, per builtin, the option letters this shell
 	// *has* and will not move — the letter half of SetImmovableOptionName,
 	// and a third answer beside "does not have it" and "has not built it".
 	//
-	// One dialect fills it in, with the same letter its `set -o` table
-	// refuses under a name: measured, `set -t` there is `can't change
-	// option: -t` at 1 and fatally, which is the wording, status and
-	// fatality `set -o singlecommand` gets — and the letter is echoed back
-	// rather than the name it abbreviates, which is why this is a table of
-	// letters rather than a lookup through the name.
+	// A preset fills it in with the same letter its `set -o` table refuses under
+	// a name: `set -t` is `can't change option: -t` at 1 and fatally, which is
+	// the wording, status and fatality the long name gets — and the letter is
+	// echoed back rather than the name it abbreviates, which is why this is a
+	// table of letters rather than a lookup through the name.
 	//
 	// Read before UnimplementedOptionLetters, because the two say different
 	// things and only one of them can be true of a letter: "we have not built
-	// it" is this implementation's confession, and this field is the shell's
-	// own refusal. A letter in both would be the paired-table failure #1709
-	// was.
+	// it" is this implementation's confession, and this field is the preset's
+	// own refusal. A letter in both is the paired-table failure to avoid.
 	ImmovableOptionLetters map[string]string
 
 	// SetInvalidOptionLetter is an option letter this shell does not have.
 	// Two verbs: the letter as the script spelled it, sign and all, and the
 	// letter on its own.
 	//
-	//	bash   set: -q: invalid option
-	//	dash   set: Illegal option -q
-	//	ksh93  set: -q: unknown option
-	//	zsh    set: bad option: -q
+	//	set: -q: invalid option
+	//	set: Illegal option -q
+	//	set: -q: unknown option
+	//	set: bad option: -q
 	//
-	// Two verbs rather than one because the sign splits the panel: `set +q`
-	// is echoed back as `+q` by bash and ksh93 and as `-q` by dash and zsh,
-	// which those two say by writing the `-` into the wording and taking the
-	// bare letter. Measured 2026-09-05 on `-q`, `-j`, `-z` and `-A`, the
-	// letters all six of bash 5.3, bash 3.2, bash-as-`sh`, dash, ksh93 and
-	// zsh refuse. zsh's `set:` comes from the location, as everywhere else.
+	// Two verbs rather than one because the sign splits the presets: `set +q` is
+	// echoed back as `+q` by some and as `-q` by others, which those say by
+	// writing the `-` into the wording and taking the bare letter. Measured on
+	// `-q`, `-j`, `-z` and `-A`, the letters every preset refuses. A leading
+	// `set:` may come from the location rather than the wording.
 	//
-	// A letter the dialect *has* and this shell has not implemented is a
-	// different answer and belongs in UnimplementedOptionLetters under
-	// "set", not here.
+	// A letter the preset *has* and this shell has not implemented is a
+	// different answer and belongs in UnimplementedOptionLetters under "set",
+	// not here.
 	SetInvalidOptionLetter string
 
 	// SetInvalidOptionNameUsage repeats BuiltinUsage["set"] under a refused
 	// `set -o` name, as well as under a refused letter.
 	//
-	// ksh93 alone. bash prints its `set` usage line after a bad *letter* —
-	// which is what it does after any builtin's bad letter — and not after a
-	// bad option name, whose complaint is a sentence of its own. dash and
-	// zsh print no usage line for either. So the letter always gets one
-	// where the dialect has one, and this says whether the name does too.
+	// A preset may print its `set` usage line after a bad *letter* — which is
+	// what it does after any builtin's bad letter — and not after a bad option
+	// name, whose complaint is a sentence of its own; another prints no usage
+	// line for either. So the letter always gets one where the preset has one,
+	// and this says whether the name does too.
 	SetInvalidOptionNameUsage bool
 
-	// SetInvalidOptionStatus is what a refused `set` option reports —
-	// either spelling. Zero means 2, which is three of the four; zsh
-	// answers 1.
+	// SetInvalidOptionStatus is what a refused `set` option reports — either
+	// spelling. Zero means 2, the common answer; 1 is also measured.
 	//
-	// One value for the letter and the name because the panel answers them
-	// identically, measured 2026-09-05 on `-q`, `-j`, `-z` and `-A`, which
-	// are the letters all six of bash 5.3, bash 3.2, bash-as-`sh`, dash,
-	// ksh93 and zsh refuse: `set -q` reports exactly what
-	// `set -o nosuchoption` reports in every one of them, and so does the
-	// same letter given to the invocation. Two fields would be two names for
-	// one measurement, and the one that was not being read would be the one
-	// that drifted — which is what this replaced: the letter never asked at
-	// all and the front end exited 2 for everybody (#483).
+	// One value for the letter and the name because every preset answers them
+	// identically, measured on `-q`, `-j`, `-z` and `-A`, the letters every one
+	// refuses: `set -q` reports exactly what `set -o nosuchoption` reports, and
+	// so does the same letter given to the invocation. Two fields would be two
+	// names for one measurement, and the one that was not being read would be
+	// the one that drifted.
 	SetInvalidOptionStatus int
 
 	// MonitorDenied is `set -m` asked for by a shell the dialect says needs

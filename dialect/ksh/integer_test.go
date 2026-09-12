@@ -64,11 +64,22 @@ func TestAPlusFormOnIntegerRemovesNothingHere(t *testing.T) {
 // under `typeset`, which is what its own refusal says.
 //
 //	integer -Q w=1   →  typeset: -Q: unknown option  + typeset's usage
+//
+// With **one** exception, measured 2026-09-12 by asking ksh93u+ for every
+// letter of typeset's grammar under the second name: `integer -f w=1` is
+// refused, with the usage line alone, and nothing else is. A word that
+// carries a type has no function to declare. So the two sets part by exactly
+// that letter, and the *missing* sets stay identical — `-f` is not on either,
+// because the function listing is built (#1494) and is simply not this word's.
 func TestIntegerReadsTypesetsLettersAndSpeaksAsTypeset(t *testing.T) {
 	s, d := ksh.Semantics(), ksh.Diagnostics()
-	if s.IntegerOptions != s.DeclareOptions {
-		t.Errorf("IntegerOptions = %q and DeclareOptions = %q; this shell gives the "+
-			"two names one letter set", s.IntegerOptions, s.DeclareOptions)
+	if want := strings.ReplaceAll(s.DeclareOptions, "f", ""); s.IntegerOptions != want {
+		t.Errorf("IntegerOptions = %q and DeclareOptions = %q; the two names share "+
+			"one letter set but for `f`", s.IntegerOptions, s.DeclareOptions)
+	}
+	if strings.Contains(s.IntegerOptions, "f") {
+		t.Errorf("IntegerOptions = %q, want no `f`: this shell refuses `integer -f`",
+			s.IntegerOptions)
 	}
 	if got := d.UnimplementedOptionLetters["integer"]; got != d.UnimplementedOptionLetters["typeset"] {
 		t.Errorf("integer is missing %q and typeset %q; one set for both names",

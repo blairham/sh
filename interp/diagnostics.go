@@ -963,6 +963,48 @@ type Diagnostics struct {
 	// layout inside the braces is the dialect's function layout.
 	FunctionListingHeader string
 
+	// FunctionListingKeywordHeader is that header for a function declared
+	// with the `function` word, where the dialect writes the word back.
+	// Empty means the dialect writes one header for both spellings, which
+	// is three of the four.
+	//
+	// It exists because in one shell the two spellings are two *programs*.
+	// ksh93's `typeset` declares a local in a `function f { … }` body and
+	// assigns the global in an `f() { … }` one — see
+	// Semantics.TypesetLocalNeedsKeywordFunction — so a listing that wrote
+	// `f () ` back for a keyword function hands over a program whose
+	// variables are global where the original's were local. That is #1406's
+	// failure one layer up: the body goes through syntax.Print, which does
+	// keep FuncDecl.Keyword, and the header does not go through it at all.
+	//
+	// Measured 2026-09-08 and again 2026-09-12 on ksh93u+ 2012-08-01:
+	// `functions g` writes `function g { typeset x=1; }` for the keyword
+	// form and `f(){ :; }` for the other. bash 5.3, bash 3.2 and zsh 5.9.2
+	// write `f () ` back for either spelling, which they may because
+	// `typeset` declares a local in both bodies there.
+	FunctionListingKeywordHeader string
+
+	// FunctionNameListing is how a **names-only** function listing spells
+	// one name — `typeset +f`, `declare -F` with an operand. One verb, the
+	// name. Empty is the bare name, which is what two of the three shells
+	// with the shape write.
+	//
+	// A wording rather than a plain print because ksh93 writes the spelling
+	// the function was *declared* with: measured, `f()` for a parenthesised
+	// declaration. The name is written **raw** in every dialect — a listing
+	// of names is a list and not a program that reads back — so what this
+	// carries is punctuation and never quoting.
+	FunctionNameListing string
+
+	// FunctionNameListingKeyword is that spelling for a function declared
+	// with the `function` word. Empty falls back to FunctionNameListing,
+	// which is every dialect that does not tell the two apart.
+	//
+	// Measured on ksh93u+: `f() { :; }; function g { :; }; typeset +f`
+	// writes `f()` and then `g`. The pair in one listing is what makes it
+	// visible — a row with one declaration form reads as a fixed suffix.
+	FunctionNameListingKeyword string
+
 	// BuiltinUsageUnprefixed writes it with no location and no shell name in
 	// front, which is what ksh93 does with every usage line.
 	BuiltinUsageUnprefixed bool

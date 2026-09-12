@@ -1007,12 +1007,19 @@ func Semantics() interp.Semantics {
 	s.TypePathAnswerIsASentence = interp.No
 	s.TypeFSaysTheFunctionBack = interp.No
 
-	// The letters `typeset` reads here. `-f` prints functions *verbatim* in
-	// this engine — it keeps the source text, which this one does not — so
-	// it rides in Diagnostics.UnimplementedOptionLetters with the floats
-	// and the padding letters; `-g` it simply does not have. There is no
-	// `local` (see Register), so LocalOptions stays empty.
-	s.DeclareOptions = "aAilprux"
+	// The letters `typeset` reads here. `-g` it simply does not have, and
+	// there is no `local` (see Register), so LocalOptions stays empty.
+	//
+	// `-f` is here now (#1494). The real shell prints a function back
+	// *verbatim* — it keeps the source text and this engine keeps a tree —
+	// so the listing is a layout that reproduces that text for a definition
+	// written the way anybody writes one; see FunctionLayout for what that
+	// does and does not promise. What the listing must get right is not the
+	// spacing: it is the `function` keyword, because `typeset` declares a
+	// local in a keyword body here and the global in the other, so a
+	// listing that dropped the word would hand back a program whose
+	// variables leak.
+	s.DeclareOptions = "aAfilprux"
 	// A lone `-` or `+` is an option word to *this* builtin: measured
 	// 2026-09-10, `typeset +` names every parameter and `typeset -` writes
 	// the same table with values, where bash calls the sign an identifier
@@ -1029,6 +1036,21 @@ func Semantics() interp.Semantics {
 	// typeset is one of this shell's own special builtins, so any of its
 	// failures ends the script — a bad option included.
 	s.TypesetBadOptionFatal = interp.Yes
+	// `typeset +f` names the functions here as it does in zsh, and the
+	// *spelling* is this shell's own — see Diagnostics.FunctionNameListing.
+	// Measured 2026-09-12: `f() { :; }; function g { :; }; typeset +f`
+	// writes `f()` and then `g`.
+	s.FunctionNamesUnderPlus = interp.Yes
+	// `functions` is a word here as well as in zsh, and it is `typeset -f`
+	// under a second name — same listing, same status, same silence for a
+	// name nobody defined. The letters are narrower than `typeset`'s: this
+	// engine implements `-f` and `-p`, which are the two that reach the
+	// listing. Measured 2026-09-12, ksh93u+ also takes `-t` and `-u` there
+	// — tracing and autoloading from FPATH, neither of which this shell
+	// does — and answers the usage line for `-F`, `-m` and `-M`, which is
+	// what an unimplemented letter gets here too. See #2192 for the two
+	// that are missing.
+	s.FunctionsOptions = "fp"
 	// `integer` is the same declaration under a second name, and this shell
 	// hands it typeset's whole letter grammar — measured 2026-09-06, every
 	// letter typeset takes is either accepted by `integer` or refused by it
@@ -1036,6 +1058,12 @@ func Semantics() interp.Semantics {
 	// set is typeset's and so is Diagnostics.UnimplementedOptionLetters for
 	// it, which is why `integer -f` here says the letter is missing rather
 	// than claiming this shell has never heard of it.
+	//
+	// `-f` is *not* here, and that is measured rather than an oversight:
+	// `integer -f nm` answers with the usage line on ksh93u+ — and
+	// fatally, since these are special builtins there — where `typeset -f
+	// nm` on the same line lists. The word carries a type and a function
+	// has none.
 	s.IntegerOptions = "aAilprux"
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#ff` — and this engine has no base to keep, so it refuses by name.
@@ -1386,14 +1414,46 @@ func Diagnostics() interp.Diagnostics {
 			// of the same name, which counts a job that has only just
 			// started as a change.
 			"jobs": "-n",
-			// typeset's letters this engine does not hold: the verbatim
-			// function listings (-f and the floats' -F), namerefs, padding
-			// and alignment, mappings and the rest of its usage line.
-			"typeset": "-bfFhmnstCEHLMRSTXZ",
+			// typeset's letters this engine does not hold: the floats'
+			// -F, namerefs, padding and alignment, mappings and the rest of
+			// its usage line.
+			//
+			// `-f` has left this list — the function listing is built
+			// (#1494). `-t` has not: on a `-f` line it *traces* a function,
+			// which this shell does not do, and a letter taken and dropped
+			// would read as one that worked — `typeset -ft f` writing the
+			// body is the opposite of the silence ksh93 answers with.
+			//
+			// `-u` is not here and cannot be: it is the upper-case
+			// attribute, which this shell has, and only its meaning *on a
+			// `-f` line* is missing — there it marks a name to be read from
+			// `$FPATH`. So `typeset -fu nm` reads as a listing of a
+			// function that is not there, silent at 1, where ksh93 marks
+			// the name and is 0. That half is #2192; the seam it needs is
+			// Semantics.FunctionLettersThatMarkUndefined, and what is
+			// missing is an FPATH search for this dialect to put behind it.
+			"typeset": "-bFhmnstCEHLMRSTXZ",
+			// `functions` is `typeset -f` under a second name, so the
+			// letters it is missing are read off its own set: `-t` traces a
+			// function and `-u` marks one to be read from `$FPATH`, both of
+			// which ksh93 takes there and this shell does not do, and `-M`
+			// is a character mapping rather than zsh's math facility. `-F`
+			// and `-m` are deliberately absent: measured, `functions -F`
+			// and `functions -m` are the usage line on ksh93u+, so that
+			// shell has not got them either and "unknown" is the truth.
+			// See #2192.
+			"functions": "-tuM",
 			// `integer` reads typeset's letters, so it is missing exactly
 			// the ones typeset is missing — including the `--version` this
 			// shell answers on both names.
-			"integer": "-bfFhmnstCEHLMRSTXZ",
+			// `integer` is missing exactly what `typeset` is missing, with
+			// one letter of its own: `-f` is not on this list because it is
+			// not *unimplemented* — the function listing is built (#1494)
+			// and `typeset -f` uses it. It is simply not a letter this word
+			// takes. Measured 2026-09-12, `integer -f w=1` is the only
+			// letter of typeset's grammar that ksh93u+ refuses under the
+			// second name, and it refuses it with the usage line alone.
+			"integer": "-bFhmnstCEHLMRSTXZ",
 		},
 		// ksh93's one sentence for a dead -u descriptor, the number not
 		// named; the non-number wordings per letter are not modeled yet, so
@@ -1424,7 +1484,27 @@ func Diagnostics() interp.Diagnostics {
 		// second name is a spelling and the builtin says so, both in the
 		// complaint and in the usage line under it. Measured with
 		// `integer -Q w=1`, whose two lines name typeset throughout.
-		BuiltinComplaintName: map[string]string{"type": "whence", "integer": "typeset"},
+		// A function said back, in the two spellings this shell tells
+		// apart. The body starts at its own `{`, laid out by FunctionLayout,
+		// so the header is the name and the join: `f(){ :; }` and `function
+		// g { typeset x=1; }`. Measured 2026-09-12 on ksh93u+ through
+		// `od -c`.
+		//
+		// Keeping the keyword is not cosmetic here. `typeset` declares a
+		// local in a keyword body and assigns the global in a parenthesised
+		// one — Semantics.TypesetLocalNeedsKeywordFunction — so the two
+		// spellings are two programs, and `eval "$(functions g)"` has to
+		// give back the one it was handed (#1494, #1406).
+		FunctionListingHeader:        "%[1]s()%[2]s",
+		FunctionListingKeywordHeader: "function %[1]s %[2]s",
+		// And the names-only listing keeps the same distinction with
+		// punctuation instead of a word: measured, `f() { :; }; function g
+		// { :; }; typeset +f` writes `f()` and then `g`.
+		FunctionNameListing:        "%[1]s()",
+		FunctionNameListingKeyword: "%[1]s",
+		BuiltinComplaintName: map[string]string{
+			"type": "whence", "integer": "typeset", "functions": "typeset",
+		},
 		// Two wordings, split between `export` and the other two, and the
 		// operand quoted back as given.
 		BuiltinBadName: map[string]string{
@@ -1470,6 +1550,15 @@ func Diagnostics() interp.Diagnostics {
 			// prints: the usage belongs to the builtin and not to the word
 			// that reached it.
 			"integer": "Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]\n" +
+				"               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]\n" +
+				"               [name[=value]...]\n" +
+				"   Or: typeset [ options ] -f [name...]",
+			// And under `functions`, which is `typeset -f` again: measured,
+			// `functions -Q` on ksh93u+ answers `typeset: -Q: unknown
+			// option` with these same three lines under it, so both the
+			// name in the complaint and the usage belong to the builtin
+			// rather than to the word that reached it.
+			"functions": "Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]\n" +
 				"               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]\n" +
 				"               [name[=value]...]\n" +
 				"   Or: typeset [ options ] -f [name...]",
@@ -1713,4 +1802,15 @@ func Apply(r *interp.Runner) {
 	// both pervasive in real ksh scripts. See whence.go and print.go.
 	registerWhence(r)
 	registerPrint(r)
+	// `functions` is `typeset -f` under a second name — registered rather
+	// than written here, so the two words reach one listing and cannot come
+	// to disagree about the header, the layout, or the status a name nobody
+	// defined leaves behind. See interp/functionsbuiltin.go.
+	r.Register("functions", interp.FunctionsBuiltin())
+	// How this shell arranges a function it says back, stated rather than
+	// left to the zero value — see FunctionLayout. The same layout for a
+	// function written into the environment, because this shell does not
+	// put functions there at all and a second arrangement would be a claim
+	// about nothing.
+	r.SetFunctionLayout(FunctionLayout(), FunctionLayout())
 }

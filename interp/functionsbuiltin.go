@@ -176,7 +176,7 @@ func (r *Runner) functionsMatching(patterns []string, namesOnly bool) int {
 				continue
 			}
 			if namesOnly {
-				r.printf("%s\n", name)
+				r.printf("%s\n", r.listedFunctionNameOnly(name, r.funcs[name]))
 				continue
 			}
 			r.printf("%s\n", r.listedFunction(name, r.funcs[name]))

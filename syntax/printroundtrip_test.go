@@ -85,13 +85,18 @@ import (
 // because quoting it would hand back a program those shells refuse for a
 // different reason or accept.
 //
-// Thirty-one since the `function` header cluster: two rows measuring how far
+// Thirty-one after the `function` header cluster: two rows measuring how far
 // a body that is not a brace group reaches (#1832) and one measuring the
 // words a keyword's name may be followed by (#2014). All three are ordinary
 // keyword definitions to this grammar — the reach and the reference list are
 // each one dialect's, and neither flag is on here — so they exercise the same
 // path the twenty-eight already did and are counted with them.
-const keywordFunctionsInTheCorpus = 31
+//
+// Thirty-three since #1494 added a *listing* that has to write the keyword
+// back: one row reading the two header spellings out of the same script and
+// one taking the keyword definition out through `functions` and back in
+// through `eval`. Both are ordinary keyword definitions here too.
+const keywordFunctionsInTheCorpus = 33
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 	// The arrangement a formatter asks for, alongside the zero value that a

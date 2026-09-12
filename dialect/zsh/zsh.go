@@ -1459,6 +1459,9 @@ func Semantics() interp.Semantics {
 	// suffix is shared by every hook this shell has, wherever it fires.
 	s.HookListSuffix = "_functions"
 	s.DirectoryChangeHook = "chpwd"
+	// The other hook whose site is not the prompt loop: this one fires as the
+	// shell ends, which is where a plugin tears down what it started. #2111.
+	s.ExitHook = "zshexit"
 	s.CdLastPathOptionWins = interp.No
 	s.BadSetOptionNameFatal = interp.Yes
 	s.UnknownConditionOptionIsAStatus = interp.Yes

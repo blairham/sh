@@ -3113,6 +3113,26 @@ echo "reached-after st=$?"`,
 		Why:     "the trap's own exit wins over the one that triggered it",
 	},
 	{
+		ID: "exit-hook/the-named-function-and-its-list", Category: "traps and exit",
+		Snippet: `zshexit() { echo "named st=$?"; }; zshexit_functions=(z2 z3); z2() { echo "z2 st=$?"; }; z3() { echo "z3 st=$?"; }; exit 4`,
+		Why:     "the hook a plugin tears itself down in — gitstatus registers its daemon's cleanup here and powerlevel10k its async worker's. One shell in the panel has it: the named function runs, then every name in the list, in the order the list holds them, and each is told the status the shell is leaving with. The other five define a function called `zshexit`, exit 4, and call nothing, which is the whole of what the column difference is. Each hook prints `$?` rather than a bare marker because the status is the half a chain that ran the items in the right order could still get wrong",
+	},
+	{
+		ID: "exit-hook/runs-after-the-exit-trap", Category: "traps and exit",
+		Snippet: `trap 'echo trap' EXIT; zshexit() { echo hook; }; exit 3`,
+		Why:     "which of the two goes last, asked of the one shell that has both. The trap is the script's own last word and the hook is the shell's, in that order — so a plugin's teardown cannot be cut short by a script's cleanup, and a shell that fired the hook first would pass every other row here",
+	},
+	{
+		ID: "exit-hook/an-exit-inside-it-wins-and-stops-nothing", Category: "traps and exit",
+		Snippet: `zshexit() { echo a; exit 9; }; zshexit_functions=(z2); z2() { echo b; }; exit 4`,
+		Why:     "the one rule this chain does not share with every other hook chain in this shell. Everywhere else an item that exited ends the chain, because what it ended is the session; here the session is already over, so `exit` has nothing left to end and only records a status — `b` still prints and the shell leaves with 9 rather than 4. A `return` cannot do the same, which the row below pins",
+	},
+	{
+		ID: "exit-hook/a-return-cannot-change-the-status", Category: "traps and exit",
+		Snippet: `zshexit() { echo "a st=$?"; return 5; }; zshexit_functions=(z2); z2() { echo "b st=$?"; false; }; exit 4`,
+		Why:     "the counter-case to the row above, and what makes it mean something: a hook that merely *fails* changes neither the status the shell leaves with nor the status the next item is told. Both items read 4, a `false` at the end of one is not carried, and the shell still exits 4 — where a chain that let the last command's status through would exit 1",
+	},
+	{
 		ID: "trap/second-trap-replaces", Category: "traps and exit",
 		Snippet: `trap 'echo one' EXIT; trap 'echo two' EXIT; echo body`,
 		Why:     "traps are set rather than accumulated, and `trap -` removes",
@@ -16000,8 +16020,20 @@ echo "st=$?"`,
 	{
 		ID: "terminfo/the-two-modules-load", Category: "variables",
 		Env:     []string{"TERM=xterm-256color"},
-		Snippet: `zmodload zsh/terminfo; echo "ti=$?"; zmodload zsh/termcap; echo "tc=$?"; echoti smcup 2>&1 >/dev/null; echo "echoti=$?"`,
-		Why:     "the module rule in zmodload.go opening by itself: each module names one builtin and one parameter, the parameters arrived, and nothing in the loader changed. The builtin is still missing and that is the rule rather than an inconsistency — `command not found: echoti` on the line that ran it is loud, names itself, and is where a person would look anyway, so it never holds a module shut. zsh answers 0 to all three of the first questions and has `echoti`, which is the one word of the row that differs. `echoti`'s own output goes to /dev/null and its diagnostic does not: zsh has the builtin, so the row would otherwise record a real switch to the alternate screen into the golden file",
+		Snippet: `zmodload zsh/terminfo; echo "ti=$?"; zmodload zsh/termcap; echo "tc=$?"; echoti smcup 2>&1 >/dev/null; echo "echoti=$?"; echotc ti 2>&1 >/dev/null; echo "echotc=$?"`,
+		Why:     "each module names one builtin and one parameter, and this row is where the pair is counted. `echoti` is here now (#2142) and `echotc` is not, which is the module rule in zmodload.go rather than an inconsistency: a missing builtin refuses by name on the line that ran it, so it never holds a module shut, and a script told `zsh/termcap` loaded finds out about `echotc` where it calls `echotc`. Each builtin's own output goes to /dev/null and its diagnostic does not — zsh has both, so the row would otherwise record a real switch to the alternate screen into the golden file",
+	},
+	{
+		ID: "terminfo/echoti-writes-a-capability-by-its-kind", Category: "variables",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `zmodload zsh/terminfo; words=$(echoti colors; echoti am; echoti hs); echo "words=${#words}"; bytes=$(echoti cuu1; echoti cuu1); echo "bytes=${#bytes}"`,
+		Why:     "which of terminfo's three sections a capability came from is what decides how it is written, and both readings of `$terminfo` answer with a plain string — so a shell given only the value would have to guess, and `yes` is a plausible value for either. A number and a boolean are answers for a person and get a newline: `256`, `yes` and the absent-and-therefore-`no` `hs` are ten characters once the substitution has eaten the last one. A string capability is bytes for the terminal and gets nothing added: two `cuu1` are six. Counted rather than printed because the bytes are escape sequences and this row would otherwise move the cursor of whatever is reading the golden file",
+	},
+	{
+		ID: "terminfo/echoti-refuses-a-name-the-terminal-has-no-answer-for", Category: "variables",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `zmodload zsh/terminfo; echoti nosuchcap_zz 2>/dev/null; echo "bogus=$?"; echoti ncv 2>/dev/null; echo "absent-number=$?"; echoti hs; echo "absent-boolean=$?"; echoti 2>/dev/null; echo "none=$?"`,
+		Why:     "an absent *number* is a refusal and an absent *boolean* is `no`, which is terminfo's own shape — a boolean the description does not store is false — and is the pair a lookup that treated every missing key alike would fail. `ncv` is a real capability name that `xterm-256color` does not carry, so the first two differ in nothing but the section they would have come from. The wordings are measured elsewhere and discarded here; what this row is about is the status, which is what a script testing a capability reads",
 	},
 	// The length of a one-element array, which is where `${#functions}` with
 	// one function defined lands and where this implementation was wrong.

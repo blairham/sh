@@ -88,6 +88,28 @@ package repl
 //     interp.Runner.SetDynamicAssocElement requires of a produced
 //     association, so the extended names are in both readings here.
 //
+// TerminalCapabilityKind is which of the description's three sections a
+// capability came from.
+//
+// Carried because the sections are not interchangeable to a caller that has to
+// *write* a capability out: a string capability is bytes meant for the
+// terminal and goes out as they stand, where a number and a boolean are
+// answers meant for a person and are written as a word with a newline after
+// it. Both readings of the parameter answer with a string, so a caller given
+// only the value would have to guess from its shape — and `yes` is a plausible
+// value for either.
+type TerminalCapabilityKind uint8
+
+const (
+	// BooleanCapability is a flag: `yes` or `no`, and every boolean name
+	// answers whether the description stores it or not.
+	BooleanCapability TerminalCapabilityKind = iota
+	// NumericCapability is a count, written in decimal.
+	NumericCapability
+	// StringCapability is the bytes the terminal is sent.
+	StringCapability
+)
+
 // TerminalCapability is one capability, under both name systems.
 type TerminalCapability struct {
 	// Terminfo is the terminfo capability name — the long one.
@@ -106,6 +128,10 @@ type TerminalCapability struct {
 	// what the file holds and what the parameter hands a script in the shell
 	// being modeled.
 	Value string
+
+	// Kind is which section it came from, which is what says whether Value is
+	// bytes for the terminal or a word for a person.
+	Kind TerminalCapabilityKind
 }
 
 // TerminalCapabilities is every capability in the description `$TERM` names,

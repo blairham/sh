@@ -297,21 +297,67 @@ func TestBothParametersAreReadonlyAndTheirValuesStayOutOfAListing(t *testing.T) 
 	}
 }
 
-// The modules load now, because their parameters are here — and their
-// builtins are still missing and still refuse where they are called.
+// The modules load, and one of the two builtins they name is still missing
+// and still refuses where it is called.
 //
-// That pair is the module rule in zmodload.go rather than an inconsistency: a
+// That is the module rule in zmodload.go rather than an inconsistency: a
 // missing builtin refuses by name on the line that ran it, so it never holds a
-// module shut, and a script told `zsh/terminfo` loaded finds out about
-// `echoti` where it calls `echoti`.
-func TestTheModulesLoadAndTheirBuiltinsStillRefuse(t *testing.T) {
+// module shut, and a script told `zsh/termcap` loaded finds out about `echotc`
+// where it calls `echotc`. `echoti` is no longer on that side of the line —
+// see echoti.go and #2142 — so the row it used to occupy here is now the
+// answer rather than the refusal.
+func TestTheModulesLoadAndTheRemainingBuiltinStillRefuses(t *testing.T) {
 	out, st := runZshTerminfo(t, `zmodload zsh/terminfo; print -r -- "ti=$?"
 zmodload zsh/termcap; print -r -- "tc=$?"
 zmodload -e zsh/terminfo zsh/termcap; print -r -- "both=$?"
-echoti smcup 2>&1; print -r -- "echoti=$?"`)
-	want := "ti=0\ntc=0\nboth=0\nzsh:4: command not found: echoti\necho" + "ti=127\n"
+echoti cuu1 >/dev/null 2>&1; print -r -- "echoti=$?"
+echotc ti 2>&1; print -r -- "echotc=$?"`)
+	want := "ti=0\ntc=0\nboth=0\nechoti=0\nzsh:5: command not found: echotc\necho" + "tc=127\n"
 	if out != want || st != 0 {
 		t.Errorf("loading the two modules = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `echoti` writes a capability, and which of terminfo's three sections it came
+// from is what decides how.
+//
+// A string capability is bytes for the terminal and goes out as they stand; a
+// number and a boolean are answers for a person and are written as a word with
+// a newline. Both readings of `$terminfo` answer with a plain string, so a
+// builtin given only the value would have to guess from its shape — and `yes`
+// is a plausible value for either. That is what repl.TerminalCapability.Kind
+// is for and this is the test of it. #2142.
+func TestEchotiWritesACapabilityByItsKind(t *testing.T) {
+	out, st := runZshTerminfo(t, `zmodload zsh/terminfo
+v=$(echoti cuu1; echoti cuu1); print -r -- "string=${#v}"
+echoti colors; echoti lines
+echoti am; echoti hs`)
+	want := "string=6\n256\n24\nyes\nno\n"
+	if out != want || st != 0 {
+		t.Errorf("echoti by kind = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And a name the terminal has no answer for is a refusal, by name, at status
+// 1 — where an absent *boolean* is `no`.
+//
+// The pair is terminfo's own shape rather than a special case: a boolean the
+// description does not store is false, so every boolean name answers, while a
+// number or a string it does not store is simply not there. A lookup that
+// treated every missing key alike would fail one of these two rows whichever
+// way it went.
+func TestEchotiRefusesANameTheTerminalHasNoAnswerFor(t *testing.T) {
+	out, st := runZshTerminfo(t, `zmodload zsh/terminfo
+echoti nosuchcap_zz; print -r -- "bogus=$?"
+echoti hs; print -r -- "absent-boolean=$?"
+echoti; print -r -- "none=$?"
+echoti cuu1 3; print -r -- "parameters=$?"`)
+	want := "zsh:echoti:2: no such terminfo capability: nosuchcap_zz\nbogus=1\n" +
+		"no\nabsent-boolean=0\n" +
+		"zsh:echoti:4: not enough arguments\nnone=1\n" +
+		"zsh:echoti:5: cuu1: computing a capability's parameters is not implemented yet\nparameters=1\n"
+	if out != want || st != 0 {
+		t.Errorf("echoti refusals = %q (status %d), want %q", out, st, want)
 	}
 }
 

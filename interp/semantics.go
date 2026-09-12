@@ -2395,6 +2395,52 @@ type Semantics struct {
 	// ordinary function call meets.
 	DirectoryChangeHook string
 
+	// ExitHook names the function this shell runs on the way out — zsh's
+	// `zshexit`. Empty is a shell without one, which is three of the four:
+	// measured 2026-09-12, a `zshexit` function defined in bash 5.3.15,
+	// bash-as-sh, bash 3.2.57, dash and ksh93 ran on none of their exits and
+	// none of them said anything about it.
+	//
+	// **After the EXIT trap, not before it.** Measured against zsh 5.9.2, a
+	// script with both wrote the trap's line and then the hook's — and an
+	// interactive session left with `exit` or with end-of-input wrote them
+	// in that same order. So the trap is the script's last word and the hook
+	// is the shell's, which is the order a plugin's teardown is written
+	// against: gitstatus registers `_gitstatus_cleanup_…` here to stop the
+	// daemon it started, and powerlevel10k's async worker registers
+	// `_p9k_worker_cleanup`.
+	//
+	// The hook is told **no arguments** — `$#` is 0 in the named function and
+	// in every member of the list — and every one of them is told the status
+	// the shell is exiting with. That is the entry status and not a running
+	// one: with the shell exiting 4, a named hook that returned 5 and a
+	// member that ran `false` were both followed by a member reading `$?` as
+	// 4.
+	//
+	// **`return` cannot change the status and `exit` can.** `zshexit`
+	// returning 5 left a shell exiting 4 exiting 4. `exit 9` in the named
+	// hook and `exit 11` in a member left it exiting 11 — the *last* `exit`
+	// wins — and, unlike every other chain in this shell, an item that exited
+	// did **not** stop the ones after it: the member after `exit 9` still
+	// ran. There is no session left for `exit` to end, so all it can do is
+	// record a status. See Runner.runExitHook, which is where that one
+	// difference from FireChain's rules lives.
+	//
+	// **Not on a signal death.** A script killed by SIGTERM ran neither its
+	// EXIT trap nor its `zshexit`, which is the same two-two split
+	// ExitTrapRunsOnSignalDeath records for the trap — and since zsh is the
+	// only shell in the panel with the hook at all, there is no disagreement
+	// to make an axis of.
+	//
+	// **The subshell case is not this site.** A subshell that calls `exit`
+	// explicitly fires the hook in there — measured, `(exit 7)` ran
+	// `zshexit` with `$ZSH_SUBSHELL` of 1 — while a subshell that merely
+	// falls off its end does not. That is a firing at a subshell's own exit
+	// and not at the shell's, and this shell's subshells do not pass through
+	// Finish at all, so it is written down here rather than modeled: nothing
+	// reaches it, and a guess about it would be a plausible wrong answer.
+	ExitHook string
+
 	// ChildInterruptEndsTheScript stops the script when a child was ended by
 	// an interrupt, instead of carrying on with the next command. True in
 	// ksh93 alone, and for SIGINT alone — measured across QUIT, TERM, HUP,

@@ -2262,6 +2262,7 @@ func (r *Runner) Finish(ctx context.Context) int {
 	r.ctx = ctx
 	r.runPendingTraps(ctx)
 	r.runExitTrap(ctx)
+	r.runExitHook(ctx)
 	if !r.inSubshell {
 		r.stopSignals()
 	}
@@ -2325,6 +2326,58 @@ func (r *Runner) runExitTrap(ctx context.Context) {
 		r.status = before
 	}
 	r.ctl = controlExit
+}
+
+// runExitHook runs the dialect's exit hook — zsh's `zshexit` — as the shell
+// ends.
+//
+// After runExitTrap, which is the measured order: a script with both wrote the
+// trap's line and then the hook's. See Semantics.ExitHook for the rest of what
+// was measured, including why a shell killed by a signal runs neither.
+//
+// The chain is [Runner.FireChain], as every hook chain in this shell is, and
+// the closure carries the one rule this site does not share with the others.
+// Everywhere else an item that exited ends the chain, because what it ended is
+// the session. Here the session is already over, so `exit` has nothing left to
+// end and all it can do is record the status the shell leaves with — measured:
+// `exit 9` in the named hook did not stop the member after it, and an
+// `exit 11` in that member is what the shell exited with. So the flag is
+// cleared around each call and the last status an item asked for is kept.
+func (r *Runner) runExitHook(ctx context.Context) {
+	name := r.sem().ExitHook
+	if name == "" || r.inSubshell || r.killedBy != "" {
+		return
+	}
+	// The status the shell is leaving with. FireChain hands it to every item
+	// and puts it back after the last, so this only has to record the one
+	// case FireChain has no opinion about: an item that asked for another.
+	leaving, asked := r.ExitStatus(), false
+	// Put back rather than set to controlExit on the way out. Finish did not
+	// touch this flag before the hook existed, and a shell that arrived here
+	// without having exited must not leave here looking as though it had —
+	// see the driver's `if r.Exited()` after the startup files, which is one
+	// of the callers that reads it afterwards.
+	entered := r.ctl
+	r.FireChain(r.HookChain(name), func(fn string) {
+		// Cleared before the call rather than once before the loop, because
+		// the item before this one may have exited — and an item that ran
+		// under the flag would not run at all.
+		r.ctl = controlNone
+		_, _ = r.CallFunction(ctx, fn)
+		if r.ctl == controlExit {
+			leaving, asked = r.ExitStatus(), true
+		}
+		// And cleared again, so FireChain's own "an item that exited ends the
+		// chain" never fires here. That rule is right everywhere it is asked
+		// and wrong at this one site, which is the whole of what this closure
+		// is for.
+		r.ctl = controlNone
+	})
+	r.SetExitStatus(leaving)
+	r.ctl = entered
+	if asked {
+		r.ctl = controlExit
+	}
 }
 
 // runTrapBody parses and runs a trap's text, which is re-parsed at fire time

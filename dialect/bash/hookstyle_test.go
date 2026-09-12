@@ -56,6 +56,18 @@ func TestThisShellHasNoDirectoryChangeHook(t *testing.T) {
 	}
 }
 
+// Nor on the way out.
+//
+// Measured 2026-09-12 the same way: a `zshexit` function defined in bash
+// 5.3.15, in 3.2.57, under an argv[0] of `sh`, in dash and in ksh93 ran on
+// none of their exits and none of them said anything. zsh alone does — see
+// interp.Semantics.ExitHook. #2111.
+func TestThisShellHasNoExitHook(t *testing.T) {
+	if name := bash.Semantics().ExitHook; name != "" {
+		t.Errorf("an exit hook %q is named, and this shell has none", name)
+	}
+}
+
 // Nothing is named as unfired, because every hook this shell has is the one it
 // fires.
 //

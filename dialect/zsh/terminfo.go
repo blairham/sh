@@ -59,15 +59,20 @@ import (
 // otherwise write out the whole capability table as an assignment somebody
 // could source back.
 //
-// # `echoti` and `echotc` are not here
+// # `echoti` is here and `echotc` is not
 //
 // Each module names a builtin as well as a parameter — `zmodload -lF
-// zsh/terminfo` is `+b:echoti` and `+p:terminfo` — and neither builtin is
-// implemented. That is deliberate and it is the module rule in zmodload.go
+// zsh/terminfo` is `+b:echoti` and `+p:terminfo`, and `zsh/termcap` is
+// `+b:echotc` and `+p:termcap`. `echoti` arrived with #2142, because
+// powerlevel10k's instant-prompt teardown calls it on every start; see
+// echoti.go, which reads the same table this file builds so that a capability
+// cannot be present to `${+terminfo[x]}` and absent to `echoti x`.
+//
+// `echotc` is still missing, and that is the module rule in zmodload.go
 // rather than an omission: a missing builtin refuses at its own call site, by
-// name, on the line that ran it, so it never holds a module shut. The
-// modules load now because their *parameters* are here, and a script that
-// calls `echoti` finds out where it called it.
+// name, on the line that ran it, so it never holds a module shut. The modules
+// load because their *parameters* are here, and a script that calls `echotc`
+// finds out where it called it.
 
 // capabilityTables is one reading of the terminal description, under both
 // name systems, kept for as long as the environment it was read from says the
@@ -91,6 +96,12 @@ type capabilityTables struct {
 	from     string
 	terminfo interp.AssocArray
 	termcap  interp.AssocArray
+	// kinds is which section each terminfo name came from, which the two
+	// parameters have no use for and `echoti` cannot do without: a string
+	// capability is bytes for the terminal and a number or a boolean is a
+	// word for a person. Keyed by the terminfo name alone, because that is
+	// the only spelling the builtin takes.
+	kinds map[string]repl.TerminalCapabilityKind
 }
 
 // terminfoEnvironment is every variable the answer depends on, in the order
@@ -99,7 +110,9 @@ var terminfoEnvironment = []string{"TERM", "TERMINFO", "TERMINFO_DIRS", "HOME"}
 
 // load returns the two tables, reading the database if the environment has
 // moved since the last read.
-func (c *capabilityTables) load(r *interp.Runner) (interp.AssocArray, interp.AssocArray) {
+func (c *capabilityTables) load(r *interp.Runner) (
+	interp.AssocArray, interp.AssocArray, map[string]repl.TerminalCapabilityKind,
+) {
 	env := func(name string) string {
 		value, _ := r.GetVar(name)
 		return value
@@ -113,13 +126,15 @@ func (c *capabilityTables) load(r *interp.Runner) (interp.AssocArray, interp.Ass
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.terminfo != nil && c.from == key {
-		return c.terminfo, c.termcap
+		return c.terminfo, c.termcap, c.kinds
 	}
 	caps := repl.TerminalCapabilities(env)
+	kinds := make(map[string]repl.TerminalCapabilityKind, len(caps))
 	byTerminfo := make(interp.AssocArray, len(caps))
 	byTermcap := make(interp.AssocArray, len(caps))
 	for _, entry := range caps {
 		byTerminfo[entry.Terminfo] = entry.Value
+		kinds[entry.Terminfo] = entry.Kind
 		// Skipped rather than keyed by the empty string: an extended
 		// capability is a name the description carries itself and predates no
 		// termcap, so it has no two-letter code to be found under.
@@ -134,8 +149,8 @@ func (c *capabilityTables) load(r *interp.Runner) (interp.AssocArray, interp.Ass
 			byTermcap[entry.Termcap] = entry.Value
 		}
 	}
-	c.from, c.terminfo, c.termcap = key, byTerminfo, byTermcap
-	return byTerminfo, byTermcap
+	c.from, c.terminfo, c.termcap, c.kinds = key, byTerminfo, byTermcap, kinds
+	return byTerminfo, byTermcap, kinds
 }
 
 // registerTerminfoModules installs `$terminfo` and `$termcap`: two views over
@@ -144,13 +159,14 @@ func (c *capabilityTables) load(r *interp.Runner) (interp.AssocArray, interp.Ass
 func registerTerminfoModules(r *interp.Runner) {
 	tables := &capabilityTables{}
 	registerCapabilityParameter(r, "terminfo", func(r *interp.Runner) interp.AssocArray {
-		found, _ := tables.load(r)
+		found, _, _ := tables.load(r)
 		return found
 	})
 	registerCapabilityParameter(r, "termcap", func(r *interp.Runner) interp.AssocArray {
-		_, found := tables.load(r)
+		_, found, _ := tables.load(r)
 		return found
 	})
+	registerEchoti(r, tables)
 }
 
 // registerCapabilityParameter installs one of them, with the two things a

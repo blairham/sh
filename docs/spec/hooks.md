@@ -290,27 +290,60 @@ Everything in that table follows from one placement, which is the reason to
 state it that way: `pushd`, `popd` and `autocd` are `cd` here and in zsh both,
 so putting the hook at the end of `cd` answers all of them at once. #1775.
 
+## The hook that fires as the shell ends
+
+zsh's `zshexit`, and it is where a plugin tears down what it started:
+`gitstatus` registers `_gitstatus_cleanup_…` there to stop the daemon it
+launched and powerlevel10k's async worker registers `_p9k_worker_cleanup`.
+
+Same chain again — the named function, then the array in order, no
+deduplication, an undefined name passed over in silence — and it is told **no
+arguments**. Measured 2026-09-12, zsh 5.9.2:
+
+| asked | answer |
+| --- | --- |
+| where it fires relative to `trap … EXIT` | **after** it: the trap wrote its line, then the hook |
+| what `$?` is | the status the shell is leaving with, put back before **each** item — with the shell exiting 4, an item that returned 5 and an item that ran `false` were both followed by one reading 4 |
+| whether `return` changes the status | no: a hook returning 5 left a shell exiting 4 exiting 4 |
+| whether `exit` changes it | **yes**, and the *last* one wins: `exit 9` in the named hook and `exit 11` in a member left it exiting 11 |
+| whether an item that exited stops the rest | **no** — the member after `exit 9` still ran |
+| after a fatal signal | neither this nor the EXIT trap runs: a script killed by SIGTERM wrote nothing and exited 143 |
+| in a subshell | a subshell that calls `exit` explicitly fires it — `(exit 7)` ran it with `$ZSH_SUBSHELL` of 1 — where one that falls off its end does not |
+
+The exit rule is the single place this chain parts company with every other
+one here, and it follows from the site rather than being a special case: at a
+prompt hook, `exit` ends the session, so the chain has nothing left to do; on
+the way out the session is already over, so all `exit` can do is record a
+status.
+
+The site is **the end of the session**, which every route out of a shell
+reaches and no prompt loop reaches at all — a script run with no prompt in
+sight fires it too. So it is `Semantics.ExitHook`, fired from `interp`'s
+`Finish`, for the same reason `chpwd` is `Semantics.DirectoryChangeHook`. The
+subshell firing is written down and not modeled: a subshell here does not pass
+through `Finish`, so nothing reaches it, and a guess would be a plausible
+wrong answer. #2111.
+
 ## The hooks that are named and not fired
 
-`periodic`, `zshaddhistory` and `zshexit` take the named function and the
-`_functions` array exactly as `precmd` does — measured, with the same
+`periodic` and `zshaddhistory` take the named function and the `_functions`
+array exactly as `precmd` does — measured, with the same
 undefined-name-in-the-middle probe for each — so the **chain** is one mechanism
-and one implementation serves all five. Their **firing sites** are three more,
-and none of them is the prompt loop:
+and one implementation serves all of them. Their **firing sites** are two more,
+and neither is the prompt loop:
 
 | hook | fires | told |
 | --- | --- | --- |
 | `periodic` | on a timer, `$PERIOD` seconds apart | nothing |
 | `zshaddhistory` | where a line is saved | the raw line, newline included; returning non-zero rejects it |
-| `zshexit` | on the way out | nothing |
 
 bash has no such list: every hook it has is `PROMPT_COMMAND` and it runs, so
 `dialect/bash.HookStyle()` names nothing as unfired. What follows is zsh's.
 
-This shell fires none of the three, and **says so by name**, once per name, the
-first time it sees one defined:
+This shell fires neither of the two, and **says so by name**, once per name,
+the first time it sees one defined:
 
-    zsh: zshexit: hook not implemented yet
+    zsh: periodic: hook not implemented yet
 
 A hook that is registered and never called is the failure #1281 is about; one
 that is registered and never called *quietly* is the same failure one level

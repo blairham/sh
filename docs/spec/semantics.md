@@ -8623,6 +8623,25 @@ here and there both, so one placement answers all of them; assigning to
 `PWD` is not a move and runs nothing. `docs/spec/hooks.md` has the whole
 table and the chain it shares with the prompt hooks. #1775.
 
+**`ExitHook`** — bash — · dash — · ksh93 — · zsh `zshexit`
+
+Names the function the shell calls on the way out, which is where a
+plugin tears down what it started. Empty is a shell without one, which is
+three of the four: measured 2026-09-12, a `zshexit` function defined in
+bash 5.3.15, in that binary under an argv[0] of `sh`, in bash 3.2.57, in
+dash and in ksh93 ran on none of their exits and none of them said
+anything about it.
+
+It fires **after** the EXIT trap — the trap is the script's own last word
+and the hook is the shell's — and it is told no arguments, with `$?` the
+status the shell is leaving with, put back before each item of the chain.
+A `return` cannot change that status and an `exit` can, the last one
+winning; and, alone among the hook chains here, an item that exited does
+not stop the ones after it. That follows from the site rather than being
+a special case: the session is already over, so `exit` has nothing left
+to end. Neither this nor the EXIT trap runs after a fatal signal.
+`docs/spec/hooks.md` has the whole table. #2111.
+
 **`HookListSuffix`** — bash — · dash — · ksh93 — · zsh `_functions`
 
 What a hook's list of *extra* function names is spelled by: the hook's

@@ -55,6 +55,45 @@ const (
 	NamesTheWholeWord
 )
 
+// UnexpectedWordNaming is which spelling of a refused word a dialect echoes
+// back: the text the word comes to, or the characters it was written with.
+//
+// Measured 2026-09-12 on a script holding `if true; then echo t; fi W`, where
+// the `fi` has already closed the `if` and W is a word the grammar cannot
+// take:
+//
+//	W          bash 5.3 / bash32 / bash-as-sh / zsh   ksh93
+//	"zzz"      `"zzz"`                                `zzz`
+//	'a b'      `'a b'`                                `a b`
+//	a""b       `a""b`                                 `ab`
+//	\zzz       `\zzz`                                 `zzz`
+//	$x         `$x`                                   `$x`
+//	${x}       `${x}`                                 `${x}`
+//	$(echo q)  `$(echo q)`                            `$(echo q)`
+//	"$x"       `"$x"`                                 `"$x"`
+//	"a"$x      `"a"$x`                                `"a"$x`
+//	"a"~       `"a"~`                                 `a~`
+//
+// dash is absent because it names no word at all — `word unexpected`, which
+// is [Diagnostics.SyntaxUnexpectedWord] — so the axis has three values rather
+// than four.
+type UnexpectedWordNaming uint8
+
+const (
+	// UnexpectedWordIsWhatItComesTo writes the word with its quoting off,
+	// which is the substrate's own answer and what a dialect gets by saying
+	// nothing.
+	UnexpectedWordIsWhatItComesTo UnexpectedWordNaming = iota
+	// UnexpectedWordIsSourceText writes the characters the word was written
+	// with. bash in all three of its spellings, and zsh.
+	UnexpectedWordIsSourceText
+	// UnexpectedWordIsSourceTextWhenItExpands writes the source only where
+	// the word holds an expansion and the quoting off otherwise. ksh93
+	// alone, and the last two rows above are what part it from the value
+	// before it: one expansion anywhere in the word keeps every quote in it.
+	UnexpectedWordIsSourceTextWhenItExpands
+)
+
 type Diagnostics struct {
 	// TiedNamesRequired, TieToItself, AlreadyTiedScalar and TieWithAValue are
 	// what `typeset -T` says when it cannot make a tie — see tiedscalar.go.
@@ -2121,6 +2160,12 @@ type Diagnostics struct {
 	// token, which is why [syntax.Error] carries both (#2013).
 	SyntaxUnexpectedNamesTheOpener bool
 
+	// UnexpectedWordNaming is which spelling of a refused *word* this
+	// dialect echoes back — see [UnexpectedWordNaming], where the panel is.
+	// Zero is the word with its quoting off, which is what the core says and
+	// what the one dialect that never names a word here leaves it at.
+	UnexpectedWordNaming UnexpectedWordNaming
+
 	// CondSyntaxPreamble is a line one dialect writes *before* that one,
 	// naming the construct rather than the token: bash's `syntax error in
 	// conditional expression: unexpected token `-z'`. Two verbs: %[1]s the
@@ -3376,12 +3421,30 @@ func readOn(se *syntax.Error, expr string) bool {
 // wrong inside `${ }` and "Syntax error: …" for everything else, and matching
 // on our own phrasing to tell those apart would break the first time the
 // phrasing changed.
+// namesTheSourceText reports whether this dialect echoes a refused word back
+// as it was written. See [UnexpectedWordNaming].
+func (d Diagnostics) namesTheSourceText(se *syntax.Error) bool {
+	switch d.UnexpectedWordNaming {
+	case UnexpectedWordIsSourceText:
+		return true
+	case UnexpectedWordIsSourceTextWhenItExpands:
+		return se.TokenHoldsExpansion
+	}
+	return false
+}
+
 // unexpectedToken words a token the grammar did not want, which is one
 // sentence shared by two failures: a token in the wrong place anywhere, and
 // an operand a conditional operator could not take in a dialect with no
 // sentence of its own for that.
 func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 	token := se.Token
+	if se.TokenSource != "" && d.namesTheSourceText(se) {
+		// A refused word echoed back as it was written rather than as what
+		// it comes to. Only a word has a second spelling, which is why
+		// TokenSource is empty for everything else.
+		token = se.TokenSource
+	}
 	if d.SyntaxUnexpectedNamesTheOpener && se.TokenOpener != "" {
 		token = se.TokenOpener
 	}

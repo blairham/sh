@@ -532,16 +532,18 @@ func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 		return
 	}
 	literal, text := tokenLiteral(tok), tokenText(tok)
+	source := tokenSource(tok)
 	if p.emptyParensStartAt(tok) {
 		// The dialect that reads `()` as one token names the pair wherever a
 		// refusal falls on the first of them, and not only inside the
 		// definition production that consumes them. See
 		// [Dialect.EmptyParensAreOneToken].
-		literal, text = "()", `"()"`
+		literal, text, source = "()", `"()"`, ""
 	}
 	p.err = &Error{
 		Pos: tok.Pos, Kind: ErrUnexpected,
 		Token: literal, TokenOpener: tokenOpener(tok),
+		TokenSource: source, TokenHoldsExpansion: tokenHoldsAnExpansion(tok),
 		Class: tokenClass(tok, plain), Expected: expected,
 		Redirect: tok.Kind.IsRedirect(),
 		Msg:      text + " unexpected",
@@ -581,6 +583,20 @@ func tokenLiteral(tok Token) string {
 		return tok.Text
 	}
 	return tok.Kind.String()
+}
+
+// tokenSource is the word as it was written, quotes and all, for the dialects
+// that echo a refused word back rather than naming what it comes to. See
+// Error.TokenSource.
+//
+// Only a word has two spellings: every other token's source and its name are
+// the same characters, and TokArithCmd's Text is already the expression rather
+// than the source, so answering it here would name the same thing twice.
+func tokenSource(tok Token) string {
+	if tok.Kind != TokWord {
+		return ""
+	}
+	return tok.Text
 }
 
 // tokenOpener is the second spelling of a token whose text is not what it was
@@ -3703,7 +3719,19 @@ func (p *Parser) parseCase() Command {
 		saved := p.lex.inArgument
 		savedList := p.lex.inCaseParenList
 		p.lex.inArgument = true
+		parenthesized := false
 		if p.at(TokLeftParen) {
+			if p.emptyParensStartAt(p.tok) {
+				// `()` is one token to this dialect, so the `(` never opens
+				// an arm: the pair is a word the grammar cannot take here
+				// and the refusal names both characters. `( )` — the same
+				// two with a blank between them — is an arm with an empty
+				// pattern list and parses, which is what says the refusal
+				// is the token's and not the emptiness's (#1111).
+				p.lex.inArgument, p.lex.inCaseParenList = saved, savedList
+				p.failUnexpected("")
+				return c
+			}
 			// The paren is what puts one dialect's newline inside the
 			// pattern rather than ending it. Only here: an arm written
 			// *without* the paren is a parse error there too, so this is the
@@ -3711,9 +3739,10 @@ func (p *Parser) parseCase() Command {
 			// `p.next()` that reads the first pattern, which is the token it
 			// has to reach.
 			p.lex.inCaseParenList = true
+			parenthesized = true
 			p.next()
 		}
-		if !p.casePatterns(it) {
+		if !p.casePatterns(it, parenthesized) {
 			p.lex.inArgument, p.lex.inCaseParenList = saved, savedList
 			return c
 		}
@@ -3777,11 +3806,18 @@ func (p *Parser) parseCase() Command {
 // that matches only the empty string. `(|a|b)` is the idiom for "one of these
 // or none" and is what a real zsh library's own startup path is written with.
 //
-// `()` is a parse error even there, which is why this is not "the list may be
-// empty": with no separator there is nothing to read the emptiness off, and
-// the shell that accepts every line above refuses that one.
-func (p *Parser) casePatterns(it *CaseItem) bool {
+// The list may also be written as nothing at all, where the arm's parentheses
+// are there to hold it: `( )` matches only the empty string in that dialect,
+// measured 2026-09-12. `()` is a parse error there and this is why — the pair
+// with no blank between is one token to that shell's lexer, so it never
+// reaches the production at all (#1111). Without the parentheses there is
+// nowhere for an empty list to be written and `case a in ) …` is refused.
+func (p *Parser) casePatterns(it *CaseItem, parenthesized bool) bool {
 	empty := p.dialect.CasePatternMayBeEmpty
+	if empty && parenthesized && p.at(TokRightParen) {
+		it.Patterns = append(it.Patterns, p.emptyPattern())
+		return true
+	}
 	for {
 		switch {
 		case empty && (p.at(TokPipe) || p.at(TokOrOr)):

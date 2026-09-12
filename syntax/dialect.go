@@ -468,13 +468,22 @@ type Dialect struct {
 	// statuses and in three wordings, and each blames a different token
 	// depending on where the emptiness is.
 	//
-	// The emptiness is read off the *separator* rather than off the
-	// position, and every place a separator can put one is allowed:
-	// `(|a|b)`, `(a||b)`, `(a|b|)`, `(|)` and `(||)` all parse there, with
-	// or without the arm's optional open paren. `()` does not — the shell
-	// that accepts every line above calls it a parse error — so this is not
-	// "the list may be empty": with no separator there is nothing to read
-	// the emptiness off.
+	// Every place a separator can put one is allowed: `(|a|b)`, `(a||b)`,
+	// `(a|b|)`, `(|)` and `(||)` all parse there, with or without the arm's
+	// optional open paren.
+	//
+	// So is the whole list, where the arm's parentheses are there to hold
+	// it. `case "" in ( ) echo em;; (*) echo star;; esac` prints `em` on zsh
+	// 5.9.2 and prints `star` for a subject of one blank, measured
+	// 2026-09-12 — the empty string, not the blank, that dialect trimming
+	// blanks either side of a list. Written *without* the parentheses there
+	// is nowhere for an empty list to be and `case a in ) …` is refused.
+	//
+	// `()` is refused as well, and this file said for a while that the
+	// reason was the missing separator. It is not: the pair is one token to
+	// the same dialect — see [Dialect.EmptyParensAreOneToken] — so the `(`
+	// never opens an arm, and the two characters with a blank between them
+	// are the line above (#1111).
 	//
 	// It is a grammar flag and not a matching rule. A group with an arm that
 	// matches nothing already stands for nothing in every shell that has the
@@ -517,6 +526,32 @@ type Dialect struct {
 	// nothing, which is a rule about the list; this says the separator does
 	// not end the word at all, which reaches the lexer.
 	CasePatternListSpansNewlines bool
+
+	// CasePatternListPipeIsOnlyASeparator keeps a `|` inside a `case` arm's
+	// **parenthesized** pattern list from joining the character after it into
+	// a two-byte operator: the pipe is the alternation separator there and
+	// nothing else.
+	//
+	// zsh alone, and only one operator can be written where it shows —
+	// `|&`, which every other member of the panel that has the operator
+	// lexes whole. Measured 2026-09-12, `-n` over a script file:
+	//
+	//	case a in (a|&b) …    zsh `&`      bash 5.3 / ksh93 `|&`
+	//	case a in (a|&|b) …   zsh `&|`     bash 5.3 / ksh93 `|&`
+	//	case a in (a|&&b) …   zsh `&&`     — the discriminator
+	//	case a in a|&|b) …    zsh `|&`     — the control
+	//
+	// The third row is what says the rule belongs to the `|` and not to the
+	// `&`: an `&&` after the separator is still one token, so it is the pipe
+	// that stops reading rather than the ampersand that starts. The fourth is
+	// what confines it to the parentheses — written without the arm's paren,
+	// the same characters lex as `|&` in zsh too, which is the answer every
+	// other column gives everywhere.
+	//
+	// It is a lexical rule and shows only as the token a refusal names: no
+	// line that parses is read differently, because `|&` cannot stand in a
+	// pattern list under either reading.
+	CasePatternListPipeIsOnlyASeparator bool
 
 	// CasePatternListSpansBlanks makes a blank inside a `case` arm's
 	// **parenthesized** pattern list an ordinary character of the pattern

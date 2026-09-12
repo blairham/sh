@@ -1565,6 +1565,10 @@ func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	// by the `((` that opened it here, where bash and zsh name the expression
 	// it held — see Diagnostics.SyntaxUnexpectedNamesTheOpener.
 	d.SyntaxUnexpectedNamesTheOpener = true
+	// A refused word comes back with its quoting off — `"zzz"` is `zzz` —
+	// unless it holds an expansion, and then every quote in it stays:
+	// `"$x"` is `"$x"` and `"a"~` is `a~`. See UnexpectedWordNaming.
+	d.UnexpectedWordNaming = interp.UnexpectedWordIsSourceTextWhenItExpands
 	d.Unterminated, d.PromptUnterminated = parseWording(6, "`%[3]s' unmatched")
 	// Nothing is unmatched when nothing was open, so the end of input is
 	// named as the thing that was unexpected instead.

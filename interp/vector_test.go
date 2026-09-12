@@ -50,6 +50,13 @@ func testSemantics() Semantics {
 	// on the way to something else need an answer rather than a refusal.
 	s.RedirectsUseEveryTarget = No
 
+	// The hexadecimal escape's two readings. `$'a\x1bb'` has three digits
+	// after the `\x`, so a snippet writing a control character that way
+	// reaches the first of them on the way to something else — the
+	// `${x@Q}` rows do. The suites that are *about* them set both sides.
+	s.DollarSingleHexReadsEveryDigit = No
+	s.DollarSingleDigitlessEscapeIsAZeroByte = No
+
 	s.ArraysAreSparse = Yes
 	s.ArrayScalarIsTheWholeArray = No
 	// And which element the one-element answer means on a keyed table: the

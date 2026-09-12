@@ -1348,6 +1348,21 @@ var Corpus = []Case{
 		Why:     "one and two hex digits both, because the length is not fixed and a reader that demands two would silently take the `\\x9` of `\\x9Z` as 0x9Z",
 	},
 	{
+		ID: "core/dollar-single-hex-reads-every-digit", Category: "quoting",
+		Snippet: `printf '[%s]' $'\x00b' $'\x414' $'\x0041' | od -An -c | tr -s " "`,
+		Why:     "how far the digit run of a `\\x` reaches, which one shell answers alone: ksh93 takes every hexadecimal digit that follows and a run past two is a *code point*, so `\\x00b` is the one byte 0x0b there and `\\x414` is U+0414 in UTF-8, where bash and zsh read two digits and leave the rest as text. The first field is the sharpest of the three because the two readings do not merely differ in length — under the short one the escape is a NUL, which then truncates the whole span in the two shells that hold a word as a C string. dash has no `$'…'` at all and prints the text (#554)",
+	},
+	{
+		ID: "core/dollar-single-hex-two-digits-or-more", Category: "quoting",
+		Snippet: `printf '[%s]' $'\xFF' $'\x00FF' | od -An -c | tr -s " "`,
+		Why:     "the pair that says it is the digit *count* and not the value that decides. The same 0xFF written with two digits is a byte in every column, and written with four it is the code point U+00FF in ksh93 — two bytes there and a truncating NUL followed by `FF` in bash. A reading that switched on the value rather than on the length would answer the two fields alike (#554)",
+	},
+	{
+		ID: "core/dollar-single-escape-with-no-digits", Category: "quoting",
+		Snippet: `printf '[%s]' $'\xzz' $'\x' $'\uZ' | od -An -c | tr -s " "`,
+		Why:     "a hexadecimal escape with no digit after it at all: bash keeps the two characters it was written as, and ksh93 and zsh read a zero byte and carry on with the rest. The two that agree look different in the record and are the same answer — the zero truncates the span in ksh93, which is the NUL rule and not this one, so nothing is left there. `\\u` is on the line because no column splits it from `\\x`, which is what makes the three escapes one question (#554)",
+	},
+	{
 		ID: "core/dollar-single-octal-escape", Category: "quoting",
 		Snippet: `printf '[%s]' $'\101\0101\1' | od -An -c | tr -s " "`,
 		Why:     "the octal forms, and the reason they are one rule rather than two: `\\0101` is not four digits after a zero but three from the zero onward, so it is a backspace and then a `1`",

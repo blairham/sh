@@ -40859,6 +40859,50 @@
         "TimedOut": false
       }
     },
+    "core/dollar-single-escape-with-no-digits": {
+      "bash": {
+        "Stdout": " [ \\ x z z ] [ \\ x ] [ \\ u Z ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " [ \\ x z z ] [ \\ x ] [ \\ u Z ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " [ \\ x z z ] [ \\ x ] [ \\ u Z ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " [ $ \\ x z z ] [ $ \\ x ] [ $ \\ u~ Z ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " [ ] [ ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " [ \\0 z z ] [ \\0 ] [ \\0 Z ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/dollar-single-expands-escapes": {
       "bash": {
         "Stdout": " [ a \\t b ] ",
@@ -40941,6 +40985,94 @@
       },
       "zsh": {
         "Stdout": " [ A J \\t ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/dollar-single-hex-reads-every-digit": {
+      "bash": {
+        "Stdout": " [ ] [ A 4 ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " [ ] [ A 4 ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " [ ] [ A 4 ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " [ $ \\ x 0 0 b ] [ $ \\ x 4 1 4 ]~ [ $ \\ x 0 0 4 1 ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " [ \\v ] [ 320 224 ] [ A ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " [ \\0 b ] [ A 4 ] [ \\0 4 1 ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/dollar-single-hex-two-digits-or-more": {
+      "bash": {
+        "Stdout": " [ 377 ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " [ 377 ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " [ 377 ] [ ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " [ $ \\ x F F ] [ $ \\ x 0 0 F F ]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " [ 377 ] [ 303 277 ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " [ 377 ] [ \\0 F F ] ",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -586,6 +586,15 @@ func Semantics() interp.Semantics {
 	// list.
 	s.PidListingFinishesWithAJob = interp.No
 
+	// And two more this file leaves unanswered for want of a binary rather
+	// than for want of room in the vector: `DollarSingleHexReadsEveryDigit`
+	// and `DollarSingleDigitlessEscapeIsAZeroByte` (#554). The panel splits
+	// three ways on `$'\x00b'` and `$'\xzz'` — bash stops at two digits and
+	// keeps a digitless escape as written, zsh stops at two and reads a zero
+	// byte, ksh93 takes every digit — and this shell's answer was not
+	// measured, so nothing is written down for it. `$'\x41'` and every other
+	// two-digit spelling reaches neither, which is the shape a script writes.
+	//
 	// Three the sweep reached and this file deliberately leaves unanswered,
 	// each with what BusyBox answered and what stands in the way of writing
 	// it down. None is a guess deferred; each is a measurement the vector

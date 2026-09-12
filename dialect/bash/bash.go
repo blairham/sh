@@ -783,6 +783,10 @@ func Semantics() interp.Semantics {
 	s.DollarSingleBackslashC = interp.DollarSingleControlMasked
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownKeepsBackslash
 	s.DollarSingleNulTruncates = interp.Yes
+	// Two digits after `\x`, and an escape with no digit at all stays the
+	// two characters it was written as: `$'\xzz'` is `\xzz` here.
+	s.DollarSingleHexReadsEveryDigit = interp.No
+	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.No
 	s.DollarSingleCaretMeta = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No

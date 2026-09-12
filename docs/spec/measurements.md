@@ -5667,6 +5667,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/dollar-single-nul-ends-the-span-only` | ` [ $ a \ 0 b c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a \0 b c c c ] ` |
 | `core/dollar-single-esc-escape` | ` [ $ \ e [ m \ E ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` |
 | `core/dollar-single-hex-escape` | ` [ $ \ x 4 1 \ x 4 a \ x 9 ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` |
+| `core/dollar-single-hex-reads-every-digit` | ` [ $ \ x 0 0 b ] [ $ \ x 4 1 4 ]~ [ $ \ x 0 0 4 1 ] ` | ` [ ] [ A 4 ] [ ] ` | ` [ ] [ A 4 ] [ ] ` | ` [ ] [ A 4 ] [ ] ` | ` [ \v ] [ 320 224 ] [ A ] ` | ` [ \0 b ] [ A 4 ] [ \0 4 1 ] ` |
+| `core/dollar-single-hex-two-digits-or-more` | ` [ $ \ x F F ] [ $ \ x 0 0 F F ]` | ` [ 377 ] [ ] ` | ` [ 377 ] [ ] ` | ` [ 377 ] [ ] ` | ` [ 377 ] [ 303 277 ] ` | ` [ 377 ] [ \0 F F ] ` |
+| `core/dollar-single-escape-with-no-digits` | ` [ $ \ x z z ] [ $ \ x ] [ $ \ u~ Z ] ` | ` [ \ x z z ] [ \ x ] [ \ u Z ] ` | ` [ \ x z z ] [ \ x ] [ \ u Z ] ` | ` [ \ x z z ] [ \ x ] [ \ u Z ] ` | ` [ ] [ ] [ ] ` | ` [ \0 z z ] [ \0 ] [ \0 Z ] ` |
 | `core/dollar-single-octal-escape` | ` [ $ \ 1 0 1 \ 0 1 0 1 \ 1 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` |
 | `core/dollar-single-unicode-escape` | ` [ $ \ u 4 1 \ u 0 0 4 1 \ U 0 0~ 0 0 0 0 5 8 ] ` | ` [ A A X ] ` | ` [ A A X ] ` | ` [ \ u 4 1 \ u 0 0 4 1 \ U 0 0 0~ 0 0 0 5 8 ] ` | ` [ A A X ] ` | ` [ A A X ] ` |
 | `core/dollar-single-unknown-escape` | ` [ $ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ q 8 ] ` | ` [ q 8 ] ` |
@@ -5727,6 +5730,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/dollar-single-hex-escape` — one and two hex digits both, because the length is not fixed and a reader that demands two would silently take the `\x9` of `\x9Z` as 0x9Z
   ```sh
   printf '[%s]' $'\x41\x4a\x9' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-hex-reads-every-digit` — how far the digit run of a `\x` reaches, which one shell answers alone: ksh93 takes every hexadecimal digit that follows and a run past two is a *code point*, so `\x00b` is the one byte 0x0b there and `\x414` is U+0414 in UTF-8, where bash and zsh read two digits and leave the rest as text. The first field is the sharpest of the three because the two readings do not merely differ in length — under the short one the escape is a NUL, which then truncates the whole span in the two shells that hold a word as a C string. dash has no `$'…'` at all and prints the text (#554)
+  ```sh
+  printf '[%s]' $'\x00b' $'\x414' $'\x0041' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-hex-two-digits-or-more` — the pair that says it is the digit *count* and not the value that decides. The same 0xFF written with two digits is a byte in every column, and written with four it is the code point U+00FF in ksh93 — two bytes there and a truncating NUL followed by `FF` in bash. A reading that switched on the value rather than on the length would answer the two fields alike (#554)
+  ```sh
+  printf '[%s]' $'\xFF' $'\x00FF' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-escape-with-no-digits` — a hexadecimal escape with no digit after it at all: bash keeps the two characters it was written as, and ksh93 and zsh read a zero byte and carry on with the rest. The two that agree look different in the record and are the same answer — the zero truncates the span in ksh93, which is the NUL rule and not this one, so nothing is left there. `\u` is on the line because no column splits it from `\x`, which is what makes the three escapes one question (#554)
+  ```sh
+  printf '[%s]' $'\xzz' $'\x' $'\uZ' | od -An -c | tr -s " "
   ```
 - `core/dollar-single-octal-escape` — the octal forms, and the reason they are one rule rather than two: `\0101` is not four digits after a zero but three from the zero onward, so it is a backspace and then a `1`
   ```sh

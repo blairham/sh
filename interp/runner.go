@@ -2405,17 +2405,28 @@ func (r *Runner) Finish(ctx context.Context) int {
 	return r.status
 }
 
-// runExitTrap runs `trap … EXIT` as the script ends.
+// runExitTrap runs `trap … EXIT` as the shell ends.
 //
-// Once, and only for the main script: a subshell and a command substitution
-// both leave it alone, which is unanimous across the panel and the reason
-// clone marks its copies.
+// Once per shell, and a subshell is a shell: its own EXIT trap fires when it
+// ends, and the parent's does not fire there — which is two separate rules
+// and not one. The parent's is already handled by inheritTraps, which hands a
+// clone no EXIT trap at all; this used to carry the other half as a
+// `!r.inSubshell` guard, which is what stopped a subshell's own trap from
+// ever running (#2349).
+//
+// Measured 2026-09-12 against dash, bash 5.3, bash 3.2, ksh93 and zsh, which
+// agree on every shape: `( trap … EXIT; exit 5 )` runs the handler and still
+// reports 5, `( trap … EXIT; true )` runs it on the fallthrough, and
+// `x=$( trap … EXIT; true )` captures what it wrote. See
+// Runner.endSubshell for where the boundaries that are not a whole Run call
+// this.
 //
 // The status is left as it is so the body can read `$?` — measured: a trap set
-// after `false` sees 1. If the body exits with a status of its own, that wins,
+// after `false` sees 1, and in a subshell it sees the status the subshell is
+// about to report. If the body exits with a status of its own, that wins,
 // which is why the control flag is cleared first and consulted after.
 func (r *Runner) runExitTrap(ctx context.Context) {
-	if r.exitTrap == nil || r.inSubshell {
+	if r.exitTrap == nil {
 		return
 	}
 	// A shell that was killed rather than ended is a two-two split: bash and

@@ -3,6 +3,8 @@
 
 package interp
 
+import "context"
+
 // How traps cross into a subshell.
 //
 // POSIX is plain about the working state: entering a subshell puts every
@@ -232,4 +234,34 @@ func (r *Runner) pseudoTrapInherited(name string) bool {
 		return r.returnTrapInherited
 	}
 	return false
+}
+
+// endSubshell ends a cloned runner's shell at a boundary that is not a whole
+// Run call.
+//
+// `$( … )` and the process substitutions run their bodies through Run, which
+// ends at Finish and so already reaches the EXIT trap. `( … )`, a pipeline
+// element, a background job and a coprocess each run a body directly, so the
+// end of the subshell is a return in Go with nothing standing for the process
+// exit a real shell has. This is that moment — the boundary reconstructed by
+// hand, which is what AGENTS.md says a goroutine-for-a-fork costs.
+//
+// One function rather than the same two lines in four files, for the reason
+// substRunner is one helper: a second copy of a boundary's ending is where the
+// next fix goes missing.
+//
+// Called *inside* whatever the boundary set up around the body — the
+// subshell's redirections, the element's end of the pipe — because that is
+// where the handler's output goes. Measured 2026-09-12 across dash, bash 5.3,
+// bash 3.2, ksh93 and zsh: `( trap 'echo T >&2' EXIT; true ) 2>file` puts the
+// line in the file everywhere, and `( trap 'echo T' EXIT; exit 5 ) | cat`
+// sends it down the pipe.
+func (r *Runner) endSubshell(ctx context.Context) {
+	if r.canceledChunk {
+		// The caller stopped this shell rather than the script ending, and
+		// the EXIT trap is more of the script. Run excludes it on the same
+		// grounds and in the same words.
+		return
+	}
+	r.runExitTrap(ctx)
 }

@@ -613,6 +613,9 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 			status = 1
 			return
 		}
+		// The job is a subshell, and it is over: its own EXIT trap runs
+		// here, before the status the shell will report for it is read.
+		sub.endSubshell(ctx)
 		status = sub.status
 	}, func() {
 		job.finish(status)

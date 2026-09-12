@@ -3478,7 +3478,52 @@ echo "reached-after st=$?"`,
 	{
 		ID: "trap/subshell-does-not-refire", Category: "traps and exit",
 		Snippet: `trap 'echo T' EXIT; (echo sub); x=$(echo cs); echo after`,
-		Why:     "the trap fires once for the script: neither a subshell nor a command substitution repeats it",
+		Why:     "the trap fires once for the script: neither a subshell nor a command substitution repeats the *parent's*. Half of a pair — the trap a subshell installs for itself is a separate rule and fires at the subshell's own end, which `trap/exit-set-inside-a-subshell` holds and this row deliberately does not reach",
+	},
+	{
+		ID: "trap/exit-set-inside-a-subshell", Category: "traps and exit",
+		Snippet: `( trap 'echo TRAP' EXIT; exit 5 ); echo "[$?]"`,
+		Why:     "the other half of the row above, and the one nothing asked for a long time: the trap the *subshell itself* installs fires when the subshell ends, and the status the parentheses report is still the one `exit` named. The pair is what makes each half mean something — a shell that fired the parent's trap here would pass this row and fail that one, and a shell that fired neither passed both until this arrived (#2349). Unanimous across the panel",
+	},
+	{
+		ID: "trap/exit-inside-a-subshell-on-the-fallthrough", Category: "traps and exit",
+		Snippet: `( trap 'echo TRAP' EXIT; true ); echo "[$?]"`,
+		Why:     "the same trap where the body simply runs out rather than calling `exit`, which is the shape the cleanup idiom actually has — `( trap 'rm -rf \"$tmp\"' EXIT; … )`. A shell that fired the handler only on an explicit exit would leave the directory behind with no diagnostic anywhere, and would pass the row above",
+	},
+	{
+		ID: "trap/exit-inside-a-subshell-sees-the-status", Category: "traps and exit",
+		Snippet: `( trap 'echo "T=$?"' EXIT; exit 5 ); echo "[$?]"`,
+		Why:     "`$?` in the handler is the status the *subshell* is about to report, not the parent's and not zero — 5 inside and 5 outside. Single-quoted so the expansion happens when the handler runs rather than when the trap is set, which is the difference between measuring this and measuring nothing",
+	},
+	{
+		ID: "trap/exit-inside-a-command-substitution", Category: "traps and exit",
+		Snippet: `x=$( trap 'echo "T=$?"' EXIT; exit 5 ); echo "[$x] [$?]"`,
+		Why:     "the same defect reached from ordinary script text rather than from a deliberate subshell: the handler's output is part of what the substitution captured, and the status is still the body's. `make conformance` was silent on this for as long as it was, because the snippet exits 5 whether or not the handler ever ran",
+	},
+	{
+		ID: "trap/exit-inside-a-subshell-can-override-the-status", Category: "traps and exit",
+		Snippet: `( trap 'exit 9' EXIT; exit 5 ); echo "[$?]"`,
+		Why:     "an `exit` in the handler wins over the one that triggered it, and what it changes is the *subshell's* status — the parentheses report 9. The same rule the top-level row pins, asked at the boundary where the status has somewhere else to go",
+	},
+	{
+		ID: "trap/exit-inside-a-subshell-and-the-parents", Category: "traps and exit",
+		Snippet: `trap 'echo PARENT' EXIT; ( trap 'echo CHILD' EXIT; exit 7 ); echo "[$?]"`,
+		Why:     "both traps run, each at its own end and in that order: the child's when the parentheses close, the parent's when the script does. Two rules that look like one — the parent's must not fire at the boundary and the child's must — and only a case holding both handlers at once can tell a shell that has them from a shell that has neither",
+	},
+	{
+		ID: "trap/exit-inside-a-pipeline-element", Category: "traps and exit",
+		Snippet: `trap 'echo P' EXIT; { trap 'echo TRAP' EXIT; echo body; } | cat; echo "[$?]"`,
+		Why:     "a pipeline element is a subshell, so it ends like one — and the handler writes into the element's end of the pipe rather than past it, which is what puts TRAP after body and before the status. bash 3.2 is the column that does not run it, which is a version difference rather than a dialect one",
+	},
+	{
+		ID: "trap/exit-inside-a-background-job", Category: "traps and exit",
+		Snippet: `( trap 'echo TRAP' EXIT; exit 4 ) & wait $!; echo "[$?]"`,
+		Why:     "the fourth boundary, and the one with a status nobody else reports: `wait` is what tells the script the job left with 4, and the handler has run by then. Waited on by pid rather than bare so the row terminates and its output is in one order",
+	},
+	{
+		ID: "trap/exit-inside-a-subshell-runs-inside-its-redirections", Category: "traps and exit",
+		Snippet: `( trap 'echo TRAP >&2' EXIT; true ) 2>err.txt; echo "[$(cat err.txt)]"`,
+		Why:     "*where* the handler runs, which is a separate question from whether it does: the subshell's own redirections are still up, so a handler writing to standard error writes to the file the parentheses were redirected into. A shell that fired the trap after taking them down would print TRAP on the terminal and leave the file empty, and would pass every row above",
 	},
 	{
 		ID: "trap/subshell-resets-a-handled-trap", Category: "traps and exit",

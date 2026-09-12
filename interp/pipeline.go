@@ -413,6 +413,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		r.spawn(func() {
 			start := time.Now()
 			errs[i] = subs[i].command(ctx, cmd)
+			// A pipeline element is a subshell, so it ends like one — here,
+			// while its end of the pipe is still open, because that is where
+			// the handler writes. See Runner.endSubshell.
+			subs[i].endSubshell(ctx)
 			if timing != nil {
 				timing.elems[i].wall = time.Since(start)
 			}

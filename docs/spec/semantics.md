@@ -764,6 +764,35 @@ successful `exec`, not as a rule but because the trap died with the process
 — so standing in a child means clearing it by hand or printing a handler
 nothing else prints.
 
+**And the boundary has to be reconstructed in both directions, which is
+the half that was missing.** A subshell's end is a process exit, so a trap
+the subshell installed for itself fires there: measured 2026-09-12 against
+dash, bash 5.3, bash 3.2, ksh93 and zsh, all of which agree on every shape
+of it —
+
+    ( trap 'echo TRAP' EXIT; exit 5 ); echo "[$?]"     TRAP then [5]
+    ( trap 'echo TRAP' EXIT; true )                    TRAP on the fallthrough
+    x=$( trap 'echo TRAP' EXIT; true )                 x holds TRAP
+    ( trap 'echo "T=$?"' EXIT; exit 5 )                T=5, the subshell's own
+
+— and `$?` in the handler is the status the *subshell* is about to report
+rather than the parent's. Here the subshell's end is a return in Go with
+no process exit to notice, so nothing fired it: the guard that kept the
+parent's EXIT trap from re-firing at the boundary was one flag doing two
+jobs, and it suppressed the child's own trap along with it. Two rules, and
+a shell obeying neither passes every case written for either — which is
+why the corpus now holds a case with both handlers in it at once, and why
+this was invisible to `make conformance` for as long as it was: the
+snippet exits 5 whether or not the handler ever ran (#2349).
+
+`Runner.endSubshell` is where the boundaries that are not a whole `Run`
+call — `( … )`, a pipeline element, a background job, a coprocess — end.
+It is one function rather than four copies of the same two lines, for the
+reason `substRunner` is one helper, and it is called *inside* whatever the
+boundary set up around the body: the handler writes into the subshell's
+own redirections and into the element's end of the pipe, which is measured
+too.
+
 ## One option, fifteen divergences
 
 `set -x` produced more disagreement than any other single feature

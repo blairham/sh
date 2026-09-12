@@ -78,6 +78,13 @@ func testSemantics() Semantics {
 	s.ArithRecursedNameMustBeSet = No
 	s.BraceExpansion = Yes
 	s.SetFTurnsOffGlobbing = Yes
+	// What a value's backslash does to the character behind it once the
+	// field is a pattern. The standard's preset globs an expansion result and
+	// says nothing about this, so a suite that never answered it would refuse
+	// every `$v*` over a value with a backslash in it. The floor is the
+	// reading four of the six columns have; the suite that is *about* it sets
+	// all three -- see valuebackslash_test.go.
+	s.ValueBackslashInAPattern = ValueBackslashQuotesWhatFollows
 	s.RegexQuotingMakesLiteral = Yes
 
 	// Declarations: what `typeset`/`export -p` write, and what a name with

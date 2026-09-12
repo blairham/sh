@@ -61,70 +61,127 @@ func TestAValueKeepsItsBackslashThroughAWord(t *testing.T) {
 	}
 }
 
-// Whether the character a value's backslash precedes is a metacharacter, and
-// the axis that decides it.
+// What a backslash that arrived in a value does to the character behind it,
+// once the field it is in is matched as a pattern. Three readings, and the
+// directory is what tells them apart.
 //
-// The other half of the same marking, and it needs a directory because it is
-// only observable against real names. Measured 2026-09-07 and again
-// 2026-09-12 in a directory holding exactly `a\b` and `a*`: bash 5.3.15,
-// bash-as-`sh`, bash 3.2.57, dash and zsh 5.9.2 all leave the word as `a\*`,
-// matching neither name — so the `*` behind the backslash is not live and the
-// backslash is still there to be printed. ksh93u+ takes the backslash as data
-// and the `*` as live, and answers `a\b`.
-//
-// Both files are present on purpose: a directory holding neither would print
-// `a\*` whatever the rule was, and could not tell the readings apart. Which
-// is also why the assertion is over both answers of
-// Semantics.ValueBackslashQuotesWhatFollows rather than over the majority
-// one — a row that pinned only the five-shell reading would pass with the
-// axis wired to nothing (#1367).
-func TestAValueBackslashTakesTheMetacharacterOffWhatFollowsIt(t *testing.T) {
+// Measured 2026-09-07 and again 2026-09-12 in a directory holding exactly
+// `a\b`, `a*`, `a\bc` and `ab`. The names are chosen so that each reading has
+// something of its own to find: a directory holding none of them prints the
+// same word whichever rule is in force and could not tell the readings apart,
+// which is what made an earlier row here pass with the axis wired to nothing
+// (#1367, #1370).
+func TestWhatAValueBackslashDoesToWhatFollowsIt(t *testing.T) {
 	dir := t.TempDir()
-	for _, name := range []string{`a\b`, `a*`} {
+	for _, name := range []string{`a\b`, `a*`, `a\bc`, `ab`} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
 			t.Fatalf("write %q: %v", name, err)
 		}
 	}
-	// The control runs in the same directory and against the same two names:
-	// an unmarked `*` matches both, so a fix that simply stopped globbing
-	// expansion results would pass the row above and fail this one.
-	for _, tc := range []struct{ name, src, quotes, data string }{
-		{"a backslash before the metacharacter", `v='a\*'; set -- $v; printf '[%s]' "$@"`, `[a\*]`, `[a\b]`},
-		// The two readings answer these alike, which is what says the axis
-		// belongs at the row above and nowhere near them.
-		{"the metacharacter alone", `v='a*'; set -- $v; printf '[%s]' "$@"`, `[a*][a\b]`, `[a*][a\b]`},
-		{"a backslash before an ordinary character", `v='a\b'; set -- $v; printf '[%s]' "$@"`, `[a\b]`, `[a\b]`},
-		{"a backslash at the end of the value", `v='a\'; set -- $v; printf '[%s]' "$@"`, `[a\]`, `[a\]`},
-		// The second backslash is what the first one quotes, so the `*` is
-		// not behind a backslash at all and stays live under both readings.
-		{"a doubled backslash in front of the metacharacter", `v='a\\*'; set -- $v; printf '[%s]' "$@"`, `[a\\*]`, `[a\\*]`},
+	for _, tc := range []struct {
+		name, src             string
+		quotes, disarms, data string
+	}{
+		{
+			// The row that parts the quoting reading from the other two: the
+			// backslash is not matched, so the pattern is `ab*`.
+			"a backslash before an ordinary character, with a star beside it",
+			`v='a\b*'; set -- $v; printf '[%s]' "$@"`,
+			`[ab]`, `[a\b][a\bc]`, `[a\b][a\bc]`,
+		},
+		{
+			// The metacharacter comes from a *literal* span rather than from
+			// the value, which is why the reading cannot be chosen where the
+			// value is escaped: the field is a word and this span is not all
+			// of it.
+			"the star written beside the expansion",
+			`v='a\b'; set -- $v*; printf '[%s]' "$@"`,
+			`[ab]`, `[a\b][a\bc]`, `[a\b][a\bc]`,
+		},
+		{
+			// And the row that parts the data reading from the other two: the
+			// `*` behind the backslash is live only there.
+			"a backslash before a metacharacter",
+			`v='a\*'; set -- $v; printf '[%s]' "$@"`,
+			`[a\*]`, `[a\*]`, `[a\b][a\bc]`,
+		},
+		{
+			// A failed match restores the word with the backslash still in
+			// it, under every reading: a shell performs no quote removal on
+			// the result of an expansion.
+			"a pattern that matches nothing",
+			`v='a\b[q]'; set -- $v; printf '[%s]' "$@"`,
+			`[a\b[q]]`, `[a\b[q]]`, `[a\b[q]]`,
+		},
+		{
+			// The doubled backslash. The first quotes the second, so the
+			// quoting reading matches a name with one backslash in it where
+			// the other two look for two.
+			"a doubled backslash before a metacharacter",
+			`v='a\\*'; set -- $v; printf '[%s]' "$@"`,
+			`[a\b][a\bc]`, `[a\\*]`, `[a\\*]`,
+		},
+		{
+			// The same four characters written *literally* are two
+			// backslashes in every reading, which is what says the mark is
+			// about provenance and not about the text.
+			"the same text written literally",
+			`set -- 'a\\b'*; printf '[%s]' "$@"`,
+			`[a\\b*]`, `[a\\b*]`, `[a\\b*]`,
+		},
+		{
+			// Nothing live in the field, so nothing is globbed and all three
+			// restore the same word. This is the common shape and it asks
+			// no question at all.
+			"a backslash with no metacharacter anywhere",
+			`v='a\b'; set -- $v; printf '[%s]' "$@"`,
+			`[a\b]`, `[a\b]`, `[a\b]`,
+		},
+		{
+			"a backslash at the end of the value",
+			`v='a\'; set -- $v; printf '[%s]' "$@"`,
+			`[a\]`, `[a\]`, `[a\]`,
+		},
+		{
+			// A metacharacter with no backslash in front of it: the readings
+			// have nothing to say and the glob is the ordinary one.
+			"the metacharacter alone",
+			`v='a*'; set -- $v; printf '[%s]' "$@"`,
+			`[a*][a\b][a\bc][ab]`, `[a*][a\b][a\bc][ab]`, `[a*][a\b][a\bc][ab]`,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, side := range []struct {
-				answer Answer
+				policy ValueBackslashPolicy
 				want   string
-			}{{Yes, tc.quotes}, {No, tc.data}} {
+			}{
+				{ValueBackslashQuotesWhatFollows, tc.quotes},
+				{ValueBackslashDisarmsWhatFollows, tc.disarms},
+				{ValueBackslashIsData, tc.data},
+			} {
+				sem := testSemantics()
+				sem.ValueBackslashInAPattern = side.policy
 				out, st := run(t, tc.src, func(r *Runner) {
-					sem := testSemantics()
-					sem.ValueBackslashQuotesWhatFollows = side.answer
 					r.Semantics, r.Dir = &sem, dir
 				})
 				if out != side.want || st != 0 {
-					t.Errorf("%v: out = %q (status %d), want %q at 0", side.answer, out, st, side.want)
+					t.Errorf("%v: %s = %q (status %d), want %q at 0",
+						side.policy, tc.src, out, st, side.want)
 				}
 			}
 		})
 	}
 }
 
-// The axis is asked where the two readings part and nowhere else.
+// The axis is asked where the readings put different patterns on the wire,
+// and nowhere else.
 //
-// Both halves matter. An unanswered vector must refuse the row the panel
-// divides on — otherwise the axis is decoration — and must **not** refuse the
-// rows around it, which are unanimous across all six columns: a backslash
-// before an ordinary character, one at the end of a value, and a value with
-// no backslash in it at all.
-func TestTheValueBackslashAxisIsAskedOnlyBeforeAMetacharacter(t *testing.T) {
+// Both halves are the placement. An unanswered vector has to report the rows
+// the panel divides on, and has to stay quiet on the shapes around them —
+// which are the ones a script is actually made of: a value with a backslash
+// and nothing live beside it, a backslash at the end of one, a value with no
+// backslash at all, and text written literally.
+func TestTheValueBackslashAxisIsAskedOnlyWhereTheReadingsPart(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{`a\b`, `a*`} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
@@ -137,21 +194,20 @@ func TestTheValueBackslashAxisIsAskedOnlyBeforeAMetacharacter(t *testing.T) {
 		want      string
 	}{
 		{"before a metacharacter", `v='a\*'; set -- $v; printf '[%s]' "$@"`, true, ""},
+		{"before an ordinary character with a star beside it", `v='a\b*'; set -- $v; printf '[%s]' "$@"`, true, ""},
+		{"a star written beside the expansion", `v='a\b'; set -- $v*; printf '[%s]' "$@"`, true, ""},
 		{"before an ordinary character", `v='a\b'; set -- $v; printf '[%s]' "$@"`, false, `[a\b]`},
 		{"at the end of the value", `v='a\'; set -- $v; printf '[%s]' "$@"`, false, `[a\]`},
 		{"no backslash at all", `v='xy'; set -- $v; printf '[%s]' "$@"`, false, `[xy]`},
-		{"a doubled backslash before a metacharacter", `v='a\\*'; set -- $v; printf '[%s]' "$@"`, false, `[a\\*]`},
+		{"written literally", `set -- 'a\b'; printf '[%s]' "$@"`, false, `[a\b]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			sem := testSemantics()
+			sem.ValueBackslashInAPattern = ValueBackslashUnspecified
 			out, st := run(t, tc.src, func(r *Runner) {
-				sem := testSemantics()
-				sem.ValueBackslashQuotesWhatFollows = Unspecified
 				r.Semantics, r.Dir = &sem, dir
 			})
 			if tc.refused {
-				// The refusal is what is asserted, not the status: the
-				// `printf` that follows it in the snippet succeeds and the
-				// shell's status is that command's.
 				if !strings.Contains(out, "value's backslash") {
 					t.Fatalf("got %q (status %d), want a refusal naming the axis", out, st)
 				}
@@ -165,14 +221,14 @@ func TestTheValueBackslashAxisIsAskedOnlyBeforeAMetacharacter(t *testing.T) {
 	}
 }
 
-// Where the result is never globbed, the axis is not asked at all: the two
-// readings put the same text on the wire, so there is nothing to disagree
-// about. Asserted with the axis left unanswered, which is what would report
-// the question if it were still being put.
+// Where the result is never globbed, the axis is not asked at all: the three
+// readings put the same text on the wire. Asserted with the axis left
+// unanswered, which is what would report the question if it were still being
+// put.
 func TestTheValueBackslashAxisIsNotAskedWhereNothingIsGlobbed(t *testing.T) {
 	out, st := axisRun(t, `v='a\*'; set -- $v; printf '[%s]' "$@"`, func(s *Semantics) {
 		s.GlobExpansionResults = No
-		s.ValueBackslashQuotesWhatFollows = Unspecified
+		s.ValueBackslashInAPattern = ValueBackslashUnspecified
 	})
 	if out != `[a\*]` || st != 0 {
 		t.Fatalf("got %q (status %d), want %q at 0", out, st, `[a\*]`)

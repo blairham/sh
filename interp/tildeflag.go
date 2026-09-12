@@ -201,12 +201,12 @@ func (r *Runner) tildeFlagFields(s syntax.Span, head bool, fields []string) []st
 	}
 	plain = r.tildeFlagElements(s, head, plain)
 	for i, v := range plain {
-		// Yes for the axis, and that is measured rather than a default: this
-		// path is the flag that globs one expansion in the shell that
-		// otherwise globs none, and that shell reads a value's backslash as
-		// quoting what follows — `v='a\*'; print -r -- ${~v}` is `a\*` in a
-		// directory holding `a\b`, so the `*` was not live (#1367).
-		plain[i] = escapeValueBackslashes(v, true)
+		// No reading is chosen here: escapeValueBackslashes writes the mark
+		// that records a value's backslash and commits to nothing, and
+		// resolveValueBackslashes reads it once the whole field exists. This
+		// is a round trip through the same form, so it has to produce the same
+		// form (#1370).
+		plain[i] = escapeValueBackslashes(v)
 	}
 	return plain
 }

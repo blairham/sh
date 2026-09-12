@@ -1541,36 +1541,22 @@ func (r *Runner) escapeResult(v string, glob Answer) string {
 	// consumed before and every other byte is unchanged and in order.
 	// Checked by enumeration over four hundred thousand random strings on
 	// the metacharacter alphabet, in all four flag combinations.
-	esc := escapeValueBackslashes(v, r.valueBackslashQuotes(v, glob))
-	if r.resultReadsAsPattern(esc) && !r.ask(glob, "globbing the result of an expansion") {
+	esc := escapeValueBackslashes(v)
+	// Asked of the reading that leaves the *most* live, because the mark a
+	// value's backslash leaves has not chosen one yet and this question comes
+	// first: a field the data reading would glob is one the dialect must be
+	// asked about, even where two of the three readings would have left it
+	// alone. Answering no here escapes the whole value and the mark never
+	// reaches a field, which is what keeps the shell that globs no expansion
+	// result from being asked the backslash question at all.
+	if r.resultReadsAsPattern(rewriteValueBackslashes(esc, ValueBackslashIsData)) &&
+		!r.ask(glob, "globbing the result of an expansion") {
 		// zsh does not treat the result of an expansion as a pattern. The
 		// same rule decides `[[ abc == $p ]]`, which is one behavior
 		// observed twice rather than two quirks.
 		return globEscape(v)
 	}
 	return esc
-}
-
-// valueBackslashQuotes resolves Semantics.ValueBackslashQuotesWhatFollows for
-// one expansion result, and asks it only where the two readings part.
-//
-// Two guards, and both are the placement rather than an optimization. The
-// shape guard is valueBackslashDisarmsAMetacharacter: everywhere else the two
-// readings encode the same field or a field that matches the same text, so an
-// axis asked there would refuse a line every shell in the panel agrees about.
-//
-// The glob answer is *read* and not asked, which is the second guard and the
-// one that keeps the question honest for the shell that does not glob a
-// result at all: there the two readings put identical text on the wire, so
-// there is nothing to disagree about and nothing to refuse. It is not a claim
-// that shell has no answer — `${~v}` globs one expansion there, and that
-// route arrives here with Yes and asks like any other.
-func (r *Runner) valueBackslashQuotes(v string, glob Answer) bool {
-	if glob != Yes || !valueBackslashDisarmsAMetacharacter(v) {
-		return true
-	}
-	return r.ask(r.sem().ValueBackslashQuotesWhatFollows,
-		"whether a value's backslash quotes the metacharacter behind it")
 }
 
 // resultReadsAsPattern reports whether leaving this result live would let

@@ -645,7 +645,7 @@ func Semantics() interp.Semantics {
 	// `a\*` in 5.3.15, in 3.2.57 and as `sh` — neither name matched, so the
 	// `*` was not live and the backslash was not removed. ksh93 is the one
 	// column that reads it the other way (#1367).
-	s.ValueBackslashQuotesWhatFollows = interp.Yes
+	s.ValueBackslashInAPattern = interp.ValueBackslashQuotesWhatFollows
 	// An escaped IFS whitespace character closing a `read` value is trimmed
 	// off a value that took the *remainder* of the line and left alone on a
 	// value that was its own field. Measured 2026-09-12 on 5.3.15, 3.2.57

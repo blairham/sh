@@ -1569,6 +1569,13 @@ func Semantics() interp.Semantics {
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No
+	// A stopped job keeps the current-job marker: measured 2026-09-12
+	// through a pseudo-terminal with a scratch home directory, `sleep 40`
+	// stopped with ^Z and then `sleep 41 &` lists `[1]  + suspended` and
+	// `[2]  - running`, and `jobs %+` names the suspended one. #1563
+	// recorded the opposite for this shell and it does not reproduce —
+	// re-measured on zsh 5.9.2 with `-f`, this column agrees with bash.
+	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
 	s.JobsListFinishedJobs = interp.No
 
 	// `jobs`' letters: POSIX's pair, the state filters, and three of zsh's

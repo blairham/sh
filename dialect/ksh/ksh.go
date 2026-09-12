@@ -1026,6 +1026,15 @@ func Semantics() interp.Semantics {
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes
+	// The panel's lone dissent on the current-job marker: it goes to the
+	// newest job here rather than staying with one that stopped. Measured
+	// 2026-09-12 through a pseudo-terminal, `sleep 40` stopped with ^Z and
+	// then `sleep 41 &` lists `[2] +  Running` and `[1] - Stopped`, and
+	// `jobs %+` names the background job where the other five name the
+	// stopped one. A job that stops still *takes* the marker — with two
+	// background jobs, `kill -TSTP %1` moves the `+` onto the older one
+	// here too — so what differs is only whether a later `&` takes it back.
+	s.StoppedJobTakesTheCurrentJobMarker = interp.No
 	s.JobsListFinishedJobs = interp.Yes
 
 	// `jobs`' letters, as its own usage line gives them: `-lnp`. The state

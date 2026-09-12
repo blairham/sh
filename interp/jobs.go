@@ -487,6 +487,10 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// measured, two `$!` readings either side of a `&!` differ.
 	r.setLastJob(job)
 	if !st.Disown {
+		// The markers are the other half, and a disowned job is in neither
+		// the table nor this list: `%%` names a job something can still
+		// reach.
+		r.becomeCurrentJob(job)
 		r.announceJob(job)
 	}
 	// Starting a job succeeds even when the job will not.
@@ -561,9 +565,6 @@ func (r *Runner) FinishedJobNotices() []string {
 		r.jobs[i] = nil
 	}
 	r.jobs = kept
-	if r.lastJob != nil && r.lastJob.Finished() {
-		r.lastJob = nil
-	}
 	return lines
 }
 
@@ -647,7 +648,7 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		// shell with no job control that held them here would start listing
 		// finished jobs a shell without this line never listed.
 		if !r.JobControl {
-			r.jobs = nil
+			r.jobs, r.jobOrder = nil, nil
 		}
 		return 0
 	}
@@ -850,6 +851,7 @@ func (r *Runner) addStoppedJob(pid int, argv []string, sig syscall.Signal) {
 	job.settleStartedPID(pid, true)
 	r.jobs = append(r.jobs, job)
 	r.setLastJob(job)
+	r.becomeCurrentJob(job)
 	r.announceStopped(job)
 }
 
@@ -1059,14 +1061,101 @@ func (r *Runner) listJobsHeldAtExit() {
 // work at all.
 func (r *Runner) LastCommandWasInterrupted() bool { return r.diedOfSig == syscall.SIGINT }
 
-// setLastJob makes a job the current one and records its pid as `$!`.
+// setLastJob records a job's pid as `$!`.
 //
-// Two fields written together, and read apart. The job pointer is what `%%`
-// and a bare `fg` follow and is dropped when the job leaves the table; the pid
-// is `$!` and is never dropped, because no shell in the panel empties it.
+// Only the pid. Which job the markers point at is jobOrder's, and the two are
+// read apart because they stop being the same thing the moment the job ends —
+// `$!` is never dropped, because no shell in the panel empties it, and a job
+// that has left the table must not still answer `%%`. A disowned job is one
+// of these and not the other: it is the most recent background job for `$!`
+// and is in no table for `%%` to find.
 func (r *Runner) setLastJob(j *Job) {
-	r.lastJob, r.lastJobPID, r.lastJobPIDSet = j, j.PID, true
+	r.lastJobPID, r.lastJobPIDSet = j.PID, true
 }
+
+// becomeCurrentJob puts a job on top of the order the markers are read from:
+// it has just entered the table, or it has just stopped.
+//
+// Moved rather than appended where it is already there, so that a job which
+// stops a second time is newer than one that stopped after it started.
+// Measured through a pseudo-terminal, 2026-09-12: two jobs stopped in turn
+// and then the *first* brought forward and stopped again reads `[1]+ [2]-` in
+// every shell in the panel, where the order they were started in would give
+// the opposite.
+//
+// Jobs the table no longer holds are dropped on the way past, which is the
+// only cleanup this list needs: a marker names a job a script can still
+// reach, and nothing else keeps these pointers alive.
+func (r *Runner) becomeCurrentJob(j *Job) {
+	kept := r.jobOrder[:0]
+	for _, other := range r.jobOrder {
+		if other != j && slices.Contains(r.jobs, other) {
+			kept = append(kept, other)
+		}
+	}
+	for i := len(kept); i < len(r.jobOrder); i++ {
+		r.jobOrder[i] = nil
+	}
+	r.jobOrder = append(kept, j)
+}
+
+// markedJobs are the two jobs a listing marks: `+` on the one `fg` would pick
+// with no operand — `%%` and `%+` — and `-` on the one that would take its
+// place — `%-`.
+//
+// Both come off jobOrder rather than off the table, and both go through the
+// same choice, which is what makes `-` "the runner-up" rather than "the one
+// before it in the table".
+//
+// The choice itself is the axis. Measured 2026-09-12 through a pseudo-terminal
+// with a scratch home directory, on a job stopped with ^Z and then a `sleep &`
+// started after it:
+//
+//	bash 5.3.15  [1]+ Stopped   [2]-  Running
+//	bash 3.2.57  [1]+ Stopped   [2]-  Running
+//	dash         [1]+ Suspended [2]-  Running
+//	zsh 5.9.2    [1]+ suspended [2]-  running
+//	ksh93u+      [1]- Stopped   [2]+  Running
+//
+// So in five of the six columns a stopped job keeps the marker and a later
+// background job does not take it; in one, the marker is simply on the newest
+// job. `%+` and `%-` resolve to match in each — asked directly, they name the
+// same two jobs the listing marks — so this is not a cosmetic column: a
+// `fg %+` after a ^Z resumes a different job in the two camps.
+func (r *Runner) markedJobs() (current, previous *Job) {
+	current = r.pickMarkedJob(nil)
+	if current != nil {
+		previous = r.pickMarkedJob(current)
+	}
+	return current, previous
+}
+
+// pickMarkedJob is one step of that choice, skipping a job already marked.
+//
+// Read rather than `ask`ed, the way the letters of `$-` are: naming the
+// default job is not the place to refuse a script over a disagreement, and a
+// dialect that answers nothing gets the answer five of the six columns give.
+func (r *Runner) pickMarkedJob(skip *Job) *Job {
+	stopped := r.sem().StoppedJobTakesTheCurrentJobMarker != No
+	var newest *Job
+	for i := len(r.jobOrder) - 1; i >= 0; i-- {
+		j := r.jobOrder[i]
+		if j == skip || !slices.Contains(r.jobs, j) {
+			continue
+		}
+		if stopped && j.Stopped {
+			return j
+		}
+		if newest == nil {
+			newest = j
+		}
+	}
+	return newest
+}
+
+// currentJob is the job `%%`, `%+` and a bare `fg` name, or nil where this
+// shell has none.
+func (r *Runner) currentJob() *Job { current, _ := r.markedJobs(); return current }
 
 // Jobs is what this shell is keeping track of, oldest first.
 //
@@ -1095,7 +1184,10 @@ func (r *Runner) Forget(j *Job) {
 			break
 		}
 	}
-	if r.lastJob == j {
-		r.lastJob = nil
+	for i, other := range r.jobOrder {
+		if other == j {
+			r.jobOrder = append(r.jobOrder[:i], r.jobOrder[i+1:]...)
+			break
+		}
 	}
 }

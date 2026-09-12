@@ -159,6 +159,7 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 
 	r.jobs = append(r.jobs, job)
 	r.setLastJob(job)
+	r.becomeCurrentJob(job)
 
 	// The near ends go into the descriptor table the way `exec {fd}>f`
 	// would put them there: numbered from ten up, for keeps.

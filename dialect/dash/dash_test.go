@@ -178,6 +178,7 @@ func TestSemantics(t *testing.T) {
 		{"TypeNamesTheKindWithDashT", s.TypeNamesTheKindWithDashT, interp.No},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.No},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
+		{"StoppedJobTakesTheCurrentJobMarker", s.StoppedJobTakesTheCurrentJobMarker, interp.Yes},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
 		// The sole holdout on the pseudo-conditions: ERR, DEBUG and RETURN
 		// are refused as the unknown words they are here.

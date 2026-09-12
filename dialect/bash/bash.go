@@ -996,6 +996,14 @@ func Semantics() interp.Semantics {
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No
+	// A stopped job keeps the current-job marker: measured 2026-09-12
+	// through a pseudo-terminal, `sleep 40` stopped with ^Z and then
+	// `sleep 41 &` lists `[1]+  Stopped` and `[2]-  Running`, and `jobs %+`
+	// and `jobs %-` name those same two. bash 3.2.57 agrees. With two jobs
+	// stopped and a third backgrounded it is `[1]-  [2]+  [3]` — the second
+	// stopped job current, the first its runner-up, and the background job
+	// unmarked at all, which no reading of the table's order produces.
+	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
 	s.JobsListFinishedJobs = interp.Yes
 
 	// `jobs`' letters. bash has the widest set in the panel: POSIX's `-l`
@@ -1237,6 +1245,18 @@ func Diagnostics() interp.Diagnostics {
 		// terminal process group, and it is not reproduced — see
 		// Diagnostics.NoJobControlAtStartup.
 		NoJobControlAtStartup: "no job control in this shell",
+		// And the line above it, which bash 5.3 writes and bash 3.2 does
+		// not. Measured 2026-09-12 with no terminal on any of the three
+		// standard streams, on `-ic` and `-lic` alike:
+		//
+		//	bash: cannot set terminal process group (91050): Inappropriate ioctl for device
+		//	bash: no job control in this shell
+		//
+		// The errno half is fixed text rather than a rendered error, and
+		// deliberately: this line is only ever written by a shell that has
+		// no terminal, so the failure it describes is always the same one.
+		// See Diagnostics.CannotSetTerminalProcessGroup (#1036).
+		CannotSetTerminalProcessGroup: "cannot set terminal process group (%[1]d): Inappropriate ioctl for device",
 		// Silent for a count above `$#` — there is no ShiftTooMany here —
 		// and a sentence for one below zero, naming the word as written.
 		ShiftNegativeCount: "shift: %[2]s: shift count out of range",

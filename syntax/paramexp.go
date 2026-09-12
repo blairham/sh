@@ -355,6 +355,29 @@ type ParamExpr struct {
 	// node carries the position and Src carries the text.
 	FlagsErrPos int
 
+	// FlagsErrTail is the source of the *word* the group stands in, from
+	// this expansion's `$` to the end of that word, and is set only where
+	// FlagsErrPos is. It is what the report quotes.
+	//
+	// Measured on zsh 5.9.2, 2026-09-12, and it is the word rather than the
+	// line — which is what the issue behind it had recorded (#1647):
+	//
+	//	print -r -- "[${(Z:x:)v}]"   `${(Z:x:)v}]"`     to the end of the word
+	//	echo ${(g:x:)v} tail         `${(g:x:)v}`       and no further
+	//	echo A${(Z:x:)v}B ; echo n   `${(Z:x:)v}B`      through the literal
+	//	echo "${(!)v}"$'q'tail       `${(!)v}"$'q'tail` across three quotings
+	//	echo $( echo ${(!)v} in )    `${(!)v}`          the inner word's end
+	//
+	// Row two is the discriminating one: a line would have carried ` tail`
+	// with it, and a bare expansion would have carried nothing in rows one,
+	// three and four.
+	//
+	// Empty where the word could not be recovered — a word the grammar
+	// supplied rather than one a script wrote has no source to slice, and an
+	// alias body is lexed apart from the input these offsets count in. The
+	// report falls back to the expansion alone, which is what it always said.
+	FlagsErrTail string
+
 	// IndexFlags is the parenthesized flag group the subscript opened with,
 	// nil when there was none. Index keeps the subscript as written, and the
 	// operand behind the group is IndexFlags.Arg — see Subscript, which is
@@ -731,7 +754,10 @@ scan:
 				// The one already read is not the last after all — see
 				// Leading, which is where every subscript but the final one
 				// goes.
-				e.Leading = append(e.Leading, LeadingIndex{Index: e.Index, Flags: e.IndexFlags})
+				e.Leading = append(e.Leading, LeadingIndex{
+					Index: e.Index, Flags: e.IndexFlags,
+					Range: e.IndexRange, Text: e.IndexText,
+				})
 			}
 			e.Index, e.IndexFlags, e.IndexRange, e.IndexText = idx, g, rng, inner
 			if bare {

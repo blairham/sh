@@ -151,13 +151,41 @@ vector rather than a decision taken here:
   byte takes it: `\0`, `\x00`, `\u0000`, an octal value past a byte, and
   `\c@`.
 
-One decision is still recorded rather than made an axis, because nothing
-reaches it through another rule:
+Two more places the panel splits, both about the hexadecimal escape's
+digits, and each an axis:
 
-- **`\x` with no digit after it stays literal.** bash keeps `\xzz` as
-  written; zsh reads a zero byte and keeps the `zz`; ksh93 emits a byte
-  of its own. Ours is bash's answer, and the same rule covers a
-  digitless `\u` and `\U`.
+- **How many digits `\x` reads** — `DollarSingleHexReadsEveryDigit`.
+  bash and zsh stop at two; ksh93 takes every digit that follows, and a
+  run past two is a *code point* rather than a byte. Measured 2026-09-12
+  under `LC_ALL=C`, by `od`:
+
+  | written | bash 5.3, bash 3.2, zsh | ksh93 |
+  | --- | --- | --- |
+  | `$'\x00b'` | 00, which truncates, then `b` | 0b |
+  | `$'\x414'` | 41 then `4` | d0 94, which is U+0414 |
+  | `$'\xFF'` | ff | ff |
+  | `$'\x00FF'` | 00, which truncates, then `FF` | c3 bf, which is U+00FF |
+
+  The last two rows are the pair that says the *digit count* decides and
+  not the value. A run past the last code point is encoded rather than
+  refused, in the extended form UTF-8 has room for: `$'\x41414141'` is
+  the six bytes fd 81 90 94 85 81 there, and a run too long for the value
+  to hold keeps the low bits, so `$'\x41414141414141414141'` is the same
+  six. The locale does not enter into it — the same bytes come back under
+  `LC_ALL=C` and under a UTF-8 locale.
+
+  The same escape in a `printf` format is `PrintfHexEscape`, which holds
+  this reading as one of its four values. The two are separate fields
+  because a shell answers the two sites differently — ksh93 reads `\x41`
+  in a format and leaves it alone in a `%b` argument.
+
+- **An escape with no digit after it** —
+  `DollarSingleDigitlessEscapeIsAZeroByte`. bash keeps `\xzz` as written;
+  ksh93 and zsh read a zero byte and carry on with the rest. The two that
+  agree look different in a terminal and are the same answer: the zero
+  truncates the span in ksh93, which is `DollarSingleNulTruncates` and
+  not this, so what is left there is nothing at all. One answer for
+  `\x`, `\u` and `\U` alike — no column splits them.
 
 **What `\c` applies to also differs, when the argument is itself an
 escape**, and it follows the same axis. bash takes the raw byte —
@@ -165,13 +193,6 @@ escape**, and it follows the same axis. bash takes the raw byte —
 that a doubled backslash is read as the single character it stands for.
 ksh93 decodes first, so the same text is control-tab. It is the one
 place `DollarSingleBackslashC` decides more than arithmetic.
-
-One measured divergence is deliberately not implemented, recorded so the
-gap is a decision rather than an oversight:
-
-- **How many hex digits `\x` reads.** bash and zsh stop at two; ksh93
-  does not, so `$'\x00b'` is one byte 0x0b there and a truncating NUL in
-  bash. Ours stops at two everywhere.
 
 The form is specified here because it is a *quoting* rule: the decoded
 text is a *quoted span*, so no later stage splits or globs it —

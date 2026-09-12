@@ -28,14 +28,6 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 	// `false; x=$(false)` leaves the same 1 that was already there — so the
 	// fact that one ran is recorded rather than inferred.
 	r.substRan = true
-	// The program is not the word: a nested expansion reached from inside it
-	// is not the one being measured, whatever the word outside is doing. See
-	// Runner.nestedLength, and expandingQuoting for the same containment
-	// asked of quoting.
-	if r.nestedLength {
-		r.nestedLength = false
-		defer func() { r.nestedLength = true }()
-	}
 	// Pathname expansion is the same containment asked of globbing. A word
 	// that substitutes as *text* expands with it suspended — an assignment's
 	// value, a `[[ ]]` operand, a redirection target — and that is a rule

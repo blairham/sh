@@ -541,6 +541,14 @@ func Semantics() interp.Semantics {
 	// The reading side of the same option: zsh's short spelling of noglob
 	// is `-F`, and that capital is what its `$-` reports.
 	s.NoglobLetterIsF = interp.No
+	// And what this shell does spend `-f` on: the startup files, whose name
+	// in its own option namespace is `norcs`. The letter and the name are
+	// one state, which is measured from both ends — `set -f` puts `norcs`
+	// in a bare `setopt` listing and `f` in `$-`, `set -o norcs` puts the
+	// letter there without the letter having been written, and `set +f` in a
+	// `zsh -f` shell takes both away again (#1542). See setopt.go's `rcs`
+	// entry, which is the same state read the other way up.
+	s.SetFLetterOption = "norcs"
 	// `set -h` is histignoredups here — a history option — not the command
 	// tracking the letter abbreviates in bash and ksh93.
 	s.SetHLetterTracksCommands = interp.No
@@ -632,6 +640,22 @@ func Semantics() interp.Semantics {
 	s.CommandStringShowsCInDollarDash = interp.No
 	s.LoginShowsLInDollarDash = interp.Yes
 	s.CommandStringShowsSInDollarDash = interp.No
+	// And the order, which is the simplest in the panel and the only sorted
+	// one: the whole string by byte, so the digits lead, the capitals follow
+	// and the lowercase letters come last. Measured 2026-09-12 on zsh 5.9.2,
+	// the interactive row through a pseudo-terminal:
+	//
+	//	set -f; set -u; set -e   569Xefu
+	//	set -C                   569CX
+	//	set -C -e                569CXe
+	//	set -o noglob            569FX
+	//	set -e -C, on stdin      569CXes
+	//	-l -c                    569Xl
+	//	-i -c, at a terminal     569XZim
+	//
+	// The `-C` rows are what make it a sort rather than an append: the
+	// letter lands in front of a startup letter this shell already held.
+	s.DollarDashLetterOrder = "569BCEFHTXZacefhilmnstuvx"
 	// The panel's holdout: `echo hi >&-` is status 0 here and 1 in the other
 	// three — the text is quietly lost and nothing is said about a simple
 	// command's own closed stream. What zsh prints when the stream was
@@ -871,6 +895,15 @@ func Semantics() interp.Semantics {
 	// the one this implementation was giving every dialect.
 	s.ScalarUnderAnArrayDeclaration = interp.ScalarUnderACompoundDiscardsIt
 	s.ScalarUnderATableDeclaration = interp.ScalarUnderACompoundDiscardsIt
+	// A name holding a compound reaches no child, with bash and against
+	// ksh93 (#1380).
+	s.ExportedCompoundReachesAChildAsItsFirstValue = interp.No
+	// And a **subscripted operand** records no attribute at all here:
+	// measured 2026-09-12, `typeset -x a[1]=v` and `export a[1]=v` both list
+	// `typeset -a a=( v )` with no `x`, where the whole-name `typeset -x
+	// a=(p q)` lists `typeset -ax`. So it is the subscripted operand that
+	// carries nothing, and not the letter (#1380).
+	s.SubscriptedOperandCarriesTheAttributes = interp.No
 	// `a=(1 2); a+=x` adds a third element rather than joining the first:
 	// `typeset -a a=( 1 2 x )`. The empty string is a value and gets an
 	// element of its own — `a=(1 2); a+=""` is three elements — and a value
@@ -1327,6 +1360,12 @@ func Semantics() interp.Semantics {
 	s.DollarSingleBackslashC = interp.DollarSingleControlAbsent
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
 	s.DollarSingleNulTruncates = interp.No
+	// Two digits after `\x` and no more, as in bash — but a run with no
+	// digit at all is a zero byte here, where bash keeps the two characters
+	// it was written as. This shell keeps the zero, so `$'\xzz'` is three
+	// bytes.
+	s.DollarSingleHexReadsEveryDigit = interp.No
+	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
 	s.DollarSingleCaretMeta = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.No
 	// OPTIND is local to a shell function here: the call starts at 1 and the
@@ -1487,6 +1526,13 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-12, both store and the table ends with two elements
 	// (#1938).
 	s.EmptyAssociativeKeyIsAnError = interp.No
+	// Either letter takes a name that is already the other kind, and the
+	// elements are gone: measured 2026-09-12, `typeset -A h; h[k]=v;
+	// typeset -a h` is `typeset -a h=(  )` at status 0 and the reverse is
+	// `typeset -A a=( )`. The one column that converts in both directions,
+	// and the only one that loses the values doing it (#1375).
+	s.TableUnderAnArrayDeclaration = interp.CompoundKindChangeEmptiesTheName
+	s.ArrayUnderATableDeclaration = interp.CompoundKindChangeEmptiesTheName
 	// Nor is reading one reported: measured 2026-09-12, `typeset -A m;
 	// m[k]=v; w=; ${m[$w]}` is the empty string at status 0 and silent
 	// (#1972).
@@ -1512,6 +1558,14 @@ func Semantics() interp.Semantics {
 	// where `${a[ ]}` is the expression running out. The written `${a[]}`
 	// above is a third sentence again, which is why they are two axes.
 	s.EmptySubscriptTextIsAMathError = interp.Yes
+	// A subscript's expression stops at the first top-level `,` or `;` and
+	// the rest of the text is discarded, unevaluated: measured 2026-09-12,
+	// `a=(p q r s); i="2,3"; ${a[$i]}` is `q` where the comma operator would
+	// give `r`, and `i="2,n=9"` leaves `n` at 0. The other half of the rule
+	// that a comma has to have been *written* to separate a range: what
+	// reaches an expression with one still in it arrived through a
+	// substitution, and it separates nothing (#2160).
+	s.SubscriptExpressionStopsAtASeparator = interp.Yes
 	// Whitespace between the brackets is refused too, and by a different
 	// part of the shell: measured 2026-09-10, `a=(1 2 3); echo $(( a[ ] ))`
 	// is `bad math expression: operand expected at end of string` — the
@@ -1545,6 +1599,13 @@ func Semantics() interp.Semantics {
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No
+	// A stopped job keeps the current-job marker: measured 2026-09-12
+	// through a pseudo-terminal with a scratch home directory, `sleep 40`
+	// stopped with ^Z and then `sleep 41 &` lists `[1]  + suspended` and
+	// `[2]  - running`, and `jobs %+` names the suspended one. #1563
+	// recorded the opposite for this shell and it does not reproduce —
+	// re-measured on zsh 5.9.2 with `-f`, this column agrees with bash.
+	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
 	s.JobsListFinishedJobs = interp.No
 
 	// `jobs`' letters: POSIX's pair, the state filters, and three of zsh's
@@ -2690,6 +2751,11 @@ func Apply(r *interp.Runner) {
 	// And `zsh/mapfile`'s one: the filesystem as an association, where a key
 	// is a path and the value is that file's bytes. See mapfile.go.
 	registerMapfileModule(r)
+	// And `fc`'s three file letters over a history list this dialect keeps,
+	// which is what `print -s` fills. The core `fc` stays the answer for
+	// every other letter — this registration replaces it and delegates. See
+	// fchistory.go.
+	registerFcHistory(r)
 	// And `zsh/terminfo`'s and `zsh/termcap`'s one parameter each: the
 	// terminal's capabilities under two name systems, read out of the
 	// description `$TERM` names by repl.TerminalCapabilities. See

@@ -939,20 +939,40 @@ design and a second run against what it left would be measuring the
 leftovers.
 
 **`inert` is a ledger, not a skip.** It is a route this shell cannot take
-*yet* — bash's `history -w` still falls through to a refused exec, and zsh's
-`fc -W` does not accept the letter — which is the state #1808 calls "safe by
-accident". Those are the rows that become escapes the day the feature lands,
-so they are printed rather than hidden, and each moves to `contained` or
-`ESCAPED` on its own when it starts working.
+*yet*, which is the state #1808 calls "safe by accident" — the rows that become
+escapes the day the feature lands. They are printed rather than hidden, and
+each moves to `contained` or `ESCAPED` on its own when it starts working.
 
-**The ledger works, and `zsh/mapfile` is the proof.** Its two rows sat inert
-with the note "will need a gate when it is" until #2260 implemented the
-module — and the gate arrived in the same change, so they moved to
-`contained` rather than to `ESCAPED`. Reading the ledger before writing a
-feature is what makes that the easy path; a third row for the module's
-`${(k)mapfile}` roster went in at the same time, because implementing it is
-what revealed that the enumerating form is a readdir with no path in it to
-hang a check on.
+**The ledger is empty, and emptying it is the worked example of what it is
+for.** Three features landed against it over #2260, #2271 and #2283 —
+`zsh/mapfile`, bash's `history` and zsh's `fc` file letters — and every one
+brought its gate in the same change, so each row moved to `contained` rather
+than to `ESCAPED`. An empty ledger is the normal state and not an achievement
+to protect: **a new row appearing there is the instrument working**, and the
+rule is that the gate lands with the feature, never after it.
+
+**Every one of the three found routes the ledger had not listed**, which is the
+argument for doing it this way round. `${(k)mapfile}` is a readdir with no path
+in it to hang a check on; `history -a` and `fc -A` each open the same file the
+write letter does, on a different letter; and `history -r` and `fc -R` bring a
+denied file's contents into a list the script can then print, with no write
+anywhere in them. Seven rows were added beside the four that were waiting.
+
+**One of them needed the instrument fixed and not only the shell, and that is
+the part to remember.** `builtin/fc-write/zsh` could not have gone green
+however faithfully `fc -W` was written, because the sweep runs every route
+through `-c` and **zsh writes a history file only when the shell is
+interactive** — measured 2026-09-12, and not on account of an empty list: a
+list loaded by `fc -R` and printed by `fc -l` is still not written. bash is the
+opposite and keeps a list in a script, which is why its row was reachable all
+along. The row's note had said the letter was not accepted, which was true and
+was not the reason.
+
+So `Route.Args` now carries what a route needs *before* `-c`, and that row asks
+for `-i`. A route needing it is saying something worth seeing: the shell's own
+mode is part of what makes the route a route. **When a row will not go green,
+check that the route can reach it at all before assuming the shell is at
+fault.**
 
 The instrument was checked against a shell known to be broken, which is the
 only way to know a green table means anything: pointed at the commit before

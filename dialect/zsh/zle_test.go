@@ -6,6 +6,7 @@ package zsh_test
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -45,12 +46,69 @@ func zleRunner(t *testing.T, src string) (*interp.Runner, *bytes.Buffer) {
 
 // runWidget is what repl does with a keystroke, spelled out so a test can see
 // both halves: what the widget did to the line, and what it printed.
+//
+// With an editor on the other end, because in a session there always is one:
+// repl puts a repl.Actions on the context every widget call runs under, and
+// `zle up-line-or-history` from inside a widget is a call back through it. A
+// test that left it off would be testing the no-editor path and calling it the
+// ordinary one.
 func runWidget(t *testing.T, r *interp.Runner, out *bytes.Buffer, name string, in repl.Line) (repl.Line, bool, string) {
 	t.Helper()
-	out.Reset()
-	line, ok := zsh.RunWidget(r, context.Background(), name, in)
-	return line, ok, out.String()
+	line, ok, said, _ := runWidgetWatching(t, r, out, name, in, &stubEditor{})
+	return line, ok, said
 }
+
+// runWidgetWatching is the same with the editor handed in, for a test that
+// wants to see what the widget asked the editor to do.
+func runWidgetWatching(
+	t *testing.T, r *interp.Runner, out *bytes.Buffer, name string, in repl.Line, ed *stubEditor,
+) (repl.Line, bool, string, *stubEditor) {
+	t.Helper()
+	out.Reset()
+	line, ok := zsh.RunWidget(r, repl.WithActions(context.Background(), ed), name, in)
+	return line, ok, out.String(), ed
+}
+
+// stubEditor is an editor for a widget to reach back into.
+//
+// It records rather than edits, and that is deliberate: what
+// `up-line-or-history` does to a line is repl's to answer and repl's tests
+// pin it. What this package has to prove is the *naming* — that `zle
+// up-line-or-history` reaches the action repl calls WidgetPreviousHistory,
+// that what comes back is written into the four parameters the next line of
+// the widget reads, and that the two the editor declines are refused out loud.
+// A stub that reimplemented the editor would let those pass while the real
+// pairing was wrong.
+type stubEditor struct {
+	// performed is every action asked for, in order, and lines is what each
+	// was handed.
+	performed []repl.Widget
+	lines     []repl.Line
+	// refuse is the actions this editor declines, standing in for the two the
+	// real one will not perform from inside a widget.
+	refuse map[repl.Widget]bool
+	// gives is what an action hands back, by action. An action with no entry
+	// hands back the line it was given.
+	gives map[repl.Widget]repl.Line
+	// drawn is every Redisplay, and pushed is every PushKeys.
+	drawn  []repl.Line
+	pushed []string
+}
+
+func (e *stubEditor) Perform(w repl.Widget, in repl.Line) (repl.Line, bool) {
+	e.performed = append(e.performed, w)
+	e.lines = append(e.lines, in)
+	if e.refuse[w] {
+		return in, false
+	}
+	if out, ok := e.gives[w]; ok {
+		return out, true
+	}
+	return in, true
+}
+
+func (e *stubEditor) Redisplay(in repl.Line) { e.drawn = append(e.drawn, in) }
+func (e *stubEditor) PushKeys(s string)      { e.pushed = append(e.pushed, s) }
 
 // TestAWidgetIsDefinedAndSaidBack is the honest minimum the issue asked for:
 // an rc file that defines a widget runs to the end, and the widget is there
@@ -174,7 +232,7 @@ func TestZleRefusesEachMistakeItsOwnWay(t *testing.T) {
 // remaining spellings that need a seam repl has not got are named in zle.go's
 // own comment rather than here.
 func TestALetterThisShellHasNotGotSaysSo(t *testing.T) {
-	for _, letter := range []string{"R", "M", "U", "I", "K", "T", "c", "f", "g", "m", "r", "G"} {
+	for _, letter := range []string{"M", "I", "K", "T", "c", "f", "g", "m", "r", "G"} {
 		out, st := runZsh(t, t.TempDir(), "zle -"+letter+" x y\n")
 		want := "zsh:zle:1: -" + letter + " is not implemented yet\n"
 		if out != want || st != 1 {
@@ -486,18 +544,111 @@ func TestInvokingANameNothingAnswersToIsSilent(t *testing.T) {
 	}
 }
 
-// And invoking one of the *editor's* own actions refuses by name. The name
-// resolves perfectly well; what it would take is for a shell function to reach
-// back into the editor mid-keystroke.
-func TestInvokingABuiltInWidgetRefusesByName(t *testing.T) {
-	r, out := zleRunner(t, "a() { zle end-of-line; print -r -- \"rc=$?\"; }\nzle -N a\n")
-	_, ok, printed := runWidget(t, r, out, "a", repl.Line{})
+// Invoking one of the *editor's* own actions reaches the editor, and the name
+// it reaches by is this shell's half of the mapping.
+//
+// The assertion is on the action, not on the line: what
+// WidgetPreviousHistory does to a buffer is repl's answer and repl's tests
+// pin it. What can only be wrong here is the pairing — `up-line-or-history`
+// is this shell's word for walking history back where the other shell with an
+// editor says `previous-history`, and a mapping that reached the wrong action
+// would still return 0 and still edit the line.
+func TestInvokingABuiltInWidgetReachesTheEditor(t *testing.T) {
+	r, out := zleRunner(t, "a() { zle up-line-or-history; print -r -- \"rc=$?\"; }\nzle -N a\n")
+	_, ok, printed, ed := runWidgetWatching(t, r, out, "a", repl.Line{}, &stubEditor{})
 	if !ok {
 		t.Fatal("the widget did not run")
 	}
-	want := "a:zle: end-of-line: calling a built-in widget is not implemented yet\nrc=1\n"
+	if want := "rc=0\n"; printed != want {
+		t.Errorf("output = %q, want %q — nothing is said and the status is 0", printed, want)
+	}
+	if want := []repl.Widget{repl.WidgetPreviousHistory}; !slices.Equal(ed.performed, want) {
+		t.Errorf("performed %v, want %v", ed.performed, want)
+	}
+}
+
+// What the editor hands back is written into the line the *widget* is holding,
+// so the next line of the widget reads it.
+//
+// This is the fact the plugin the whole change was filed for depends on. Its
+// `_history-substring-search-end` reads `$BUFFER` on the line after the walk
+// and sets `CURSOR=${#BUFFER}` from it, so an effect deferred to the end of
+// the widget — carried back the way an accept is — would arrive too late and
+// the search would run against the line the keystroke started with. Measured
+// 2026-09-12 against zsh 5.9.2: the buffer is the recalled entry immediately,
+// with the cursor at its end.
+func TestWhatTheEditorGivesBackIsVisibleToTheRestOfTheWidget(t *testing.T) {
+	r, out := zleRunner(t,
+		"a() { zle up-line-or-history; print -r -- \"[$BUFFER][$CURSOR][$LBUFFER]\"; }\nzle -N a\n")
+	ed := &stubEditor{gives: map[repl.Widget]repl.Line{
+		repl.WidgetPreviousHistory: {Buffer: "echo two", Cursor: 8},
+	}}
+	line, ok, printed, _ := runWidgetWatching(t, r, out, "a", repl.Line{}, ed)
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	if want := "[echo two][8][echo two]\n"; printed != want {
+		t.Errorf("the widget saw %q, want %q", printed, want)
+	}
+	if want := (repl.Line{Buffer: "echo two", Cursor: 8}); line != want {
+		t.Errorf("line back = %+v, want %+v", line, want)
+	}
+}
+
+// And the line the editor is *given* is the one the widget is holding now,
+// not the one the keystroke arrived with.
+//
+// A widget that rewrites the buffer and then asks for the cursor to be moved
+// means the end of what it just wrote. Passing the keystroke's line would make
+// every such widget operate on a stale copy, and the two would drift further
+// apart with every action in a run of them.
+func TestTheEditorIsGivenTheLineTheWidgetIsHoldingNow(t *testing.T) {
+	r, out := zleRunner(t, "a() { BUFFER=rewritten; CURSOR=2; zle end-of-line; }\nzle -N a\n")
+	ed := &stubEditor{}
+	if _, ok, _, _ := runWidgetWatching(t, r, out, "a", repl.Line{Buffer: "old", Cursor: 0}, ed); !ok {
+		t.Fatal("the widget did not run")
+	}
+	if want := []repl.Line{{Buffer: "rewritten", Cursor: 2}}; !slices.Equal(ed.lines, want) {
+		t.Errorf("the editor was given %+v, want %+v", ed.lines, want)
+	}
+}
+
+// An action the editor will not perform from inside a widget is still refused
+// out loud, in the wording a letter this shell has not got gets.
+//
+// There are two of them and they are the two that read a key of their own —
+// which two is repl's answer, so this test names the refusal rather than the
+// pair. A refusal a script can see beats a call that appears to work.
+func TestAnActionTheEditorDeclinesIsRefusedByName(t *testing.T) {
+	r, out := zleRunner(t,
+		"a() { zle history-incremental-search-backward; print -r -- \"rc=$?\"; }\nzle -N a\n")
+	ed := &stubEditor{refuse: map[repl.Widget]bool{repl.WidgetSearchHistoryBackward: true}}
+	_, ok, printed, _ := runWidgetWatching(t, r, out, "a", repl.Line{}, ed)
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	want := "a:zle: history-incremental-search-backward: " +
+		"calling a built-in widget is not implemented yet\nrc=1\n"
 	if printed != want {
 		t.Errorf("output = %q, want %q", printed, want)
+	}
+}
+
+// A widget call with no editor on the other end is status 1 and says nothing.
+//
+// Reached where a dialect is driven without a session — an embedder with a
+// Runner and a line and no editor of repl's — rather than by a script, which
+// callWidget turns away earlier with its own wording. Silence, because there
+// is no editor to have refused: the same answer a name nothing answers to
+// gets.
+func TestABuiltInWidgetWithNoEditorIsSilent(t *testing.T) {
+	r, out := zleRunner(t, "a() { zle end-of-line; print -r -- \"rc=$?\"; }\nzle -N a\n")
+	out.Reset()
+	if _, ok := zsh.RunWidget(r, context.Background(), "a", repl.Line{}); !ok {
+		t.Fatal("the widget did not run")
+	}
+	if want := "rc=1\n"; out.String() != want {
+		t.Errorf("output = %q, want %q", out.String(), want)
 	}
 }
 
@@ -1018,20 +1169,153 @@ func TestAnAcceptDoesNotSurviveIntoTheNextWidget(t *testing.T) {
 	}
 }
 
-// The other built-in actions are still refused out loud, which is the claim
-// zle.go makes about them: reaching back into the editor mid-keystroke is not
-// something this shell does, and an accept is the one that can be honored
-// *after* the widget returns rather than during it.
-func TestAnotherBuiltinWidgetIsStillRefused(t *testing.T) {
+// The dotted spelling reaches the editor too, and it does not accept.
+//
+// `zle .end-of-line` is how a wrapper reaches past whatever a plugin rebound
+// the bare name to — the spelling zsh-autosuggestions is built on — so it has
+// to arrive at the same action the bare name does. And it must not set the
+// accept: only the editor's own "commit this line" does that, and a widget
+// whose every action committed the line would run one command per keystroke.
+func TestTheDottedSpellingReachesTheEditorAndDoesNotAccept(t *testing.T) {
 	r, out := zleRunner(t, "w(){ zle .end-of-line }; zle -N w")
-	line, ok, said := runWidget(t, r, out, "w", repl.Line{Buffer: "x", Cursor: 1})
+	line, ok, said, ed := runWidgetWatching(t, r, out, "w", repl.Line{Buffer: "x", Cursor: 1}, &stubEditor{})
 	if !ok {
 		t.Fatal("the widget did not run")
 	}
 	if line.Accept {
-		t.Error("a refused action asked for the line to be committed")
+		t.Error("an ordinary action asked for the line to be committed")
 	}
-	if !strings.Contains(said, "not implemented yet") {
-		t.Errorf("it said %q, want it to say the action is not implemented", said)
+	if said != "" {
+		t.Errorf("it said %q, want nothing", said)
+	}
+	if want := []repl.Widget{repl.WidgetEndOfLine}; !slices.Equal(ed.performed, want) {
+		t.Errorf("performed %v, want %v", ed.performed, want)
+	}
+}
+
+// `zle -R` from inside a widget is a redraw, and it is given the line as the
+// widget has it now.
+//
+// The screen catches up when the widget returns whether this is called or not,
+// so what a widget is asking for is the line on the screen *before* it does
+// something slow. The plugin this was filed for draws and then waits up to a
+// second for a keystroke; without the draw the person spends that second
+// looking at the line as it was.
+func TestRedisplayDrawsTheLineTheWidgetHasNow(t *testing.T) {
+	r, out := zleRunner(t, "a() { BUFFER=drawn; CURSOR=5; zle -R; print -r -- \"rc=$?\"; }\nzle -N a\n")
+	ed := &stubEditor{}
+	_, ok, printed, _ := runWidgetWatching(t, r, out, "a", repl.Line{Buffer: "old"}, ed)
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	if want := "rc=0\n"; printed != want {
+		t.Errorf("output = %q, want %q", printed, want)
+	}
+	if want := []repl.Line{{Buffer: "drawn", Cursor: 5}}; !slices.Equal(ed.drawn, want) {
+		t.Errorf("drew %+v, want %+v", ed.drawn, want)
+	}
+}
+
+// A display string is refused by name: it goes on a status line under the
+// prompt, and nothing under repl/ owns one for something other than a search
+// or a listing to write on.
+func TestRedisplayWithADisplayStringIsRefused(t *testing.T) {
+	r, out := zleRunner(t, "a() { zle -R hi; print -r -- \"rc=$?\"; }\nzle -N a\n")
+	ed := &stubEditor{}
+	_, ok, printed, _ := runWidgetWatching(t, r, out, "a", repl.Line{}, ed)
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	want := "a:zle: -R with a display string is not implemented yet\nrc=1\n"
+	if printed != want {
+		t.Errorf("output = %q, want %q", printed, want)
+	}
+	if len(ed.drawn) != 0 {
+		t.Errorf("it drew %+v, want the refusal to have drawn nothing", ed.drawn)
+	}
+}
+
+// Outside a widget `zle -R` is status 1 and says nothing at all.
+//
+// Measured 2026-09-12 against zsh 5.9.2, and it is the odd one of three:
+// naming an action outside a widget is `widgets can only be called when ZLE is
+// active`, `zle -U` outside one is `can only be called from widget function`,
+// and this one is silent. A shell that gave all three the same answer would be
+// tidier and would not be this shell.
+func TestRedisplayOutsideAWidgetIsSilent(t *testing.T) {
+	for _, src := range []string{"zle -R\n", "zle -R hi\n"} {
+		out, st := runZsh(t, t.TempDir(), src)
+		if out != "" || st != 1 {
+			t.Errorf("%q = %q status %d, want silence at 1", src, out, st)
+		}
+	}
+}
+
+// `zle -U` puts characters where the editor reads them next.
+func TestPushingKeysBackReachesTheEditor(t *testing.T) {
+	// The string is built in the body: a widget function is called with no
+	// arguments, which is measured and is what TestAWidgetFunctionIsCalledWithNoArguments pins.
+	r, out := zleRunner(t, "a() { local k=q; zle -U -- \"${k}x\"; print -r -- \"rc=$?\"; }\nzle -N a\n")
+	ed := &stubEditor{}
+	_, ok, printed, _ := runWidgetWatching(t, r, out, "a", repl.Line{}, ed)
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	if want := "rc=0\n"; printed != want {
+		t.Errorf("output = %q, want %q", printed, want)
+	}
+	if want := []string{"qx"}; !slices.Equal(ed.pushed, want) {
+		t.Errorf("pushed %v, want %v", ed.pushed, want)
+	}
+}
+
+// It takes exactly one operand, and the arity is checked before the question
+// of whether there is an editor at all.
+//
+// Measured 2026-09-12 against zsh 5.9.2, in a script as well as in a widget:
+// `zle -U` alone is `not enough arguments for -U` and `zle -U x y` is `too
+// many arguments for -U`, both at status 1 and both *outside* a widget too —
+// where a shell that asked about the widget first would say `can only be
+// called from widget function` instead.
+//
+// Worth pinning because the idiom is written `zle -U -- "$REPLY"`. A shell
+// that took the operands as a list would silently push something else where a
+// `$REPLY` split into two words.
+func TestPushingKeysTakesExactlyOneOperand(t *testing.T) {
+	for src, want := range map[string]string{
+		"zle -U\n":       "zsh:zle:1: not enough arguments for -U\n",
+		"zle -U x y\n":   "zsh:zle:1: too many arguments for -U\n",
+		"zle -U x y z\n": "zsh:zle:1: too many arguments for -U\n",
+	} {
+		out, st := runZsh(t, t.TempDir(), src)
+		if out != want || st != 1 {
+			t.Errorf("%q = %q status %d, want %q at 1", src, out, st, want)
+		}
+	}
+}
+
+// And with the right arity but no widget, it says which of the two it is.
+func TestPushingKeysOutsideAWidgetSaysSo(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), "zle -U x\n")
+	want := "zsh:zle:1: can only be called from widget function\n"
+	if out != want || st != 1 {
+		t.Errorf("= %q status %d, want %q at 1", out, st, want)
+	}
+}
+
+// Neither `-R` nor `-U` may be paired with another operation letter, which is
+// the answer every pair of them gets.
+//
+// The pairing rule was measured across the whole alphabet this builtin has
+// before either letter was built — see zleOperationLetters — so this is
+// checking that promoting them out of the unimplemented set left them on the
+// side the measurement put them.
+func TestRedisplayAndPushAreOperationLetters(t *testing.T) {
+	const want = "zsh:zle:1: incompatible operation selection options\n"
+	for _, src := range []string{"zle -NR w\n", "zle -NU w\n", "zle -RU\n"} {
+		out, st := runZsh(t, t.TempDir(), src)
+		if out != want || st != 1 {
+			t.Errorf("%q = %q status %d, want %q at 1", src, out, st, want)
+		}
 	}
 }

@@ -512,15 +512,24 @@ func (r *Runner) pendingTrap() (syscall.Signal, bool) {
 // A subshell is left to block. Its traps are its own table and what is in the
 // shared state belongs to the shell at the top, so a subshell returning from
 // one would be reacting to a signal it is never going to handle.
-func (r *Runner) awaitOrTrap(done <-chan struct{}) (syscall.Signal, bool) {
+//
+// giveUp is a second way out, for the caller that has one: `wait` in the
+// dialect that does not go on waiting for a job it has been told *stopped*
+// (#2227). nil is the common case and needs no guard — a receive on a nil
+// channel is never ready, so a caller with no second way out cannot take one.
+func (r *Runner) awaitOrTrap(done, giveUp <-chan struct{}) (sig syscall.Signal, trapped, gaveUp bool) {
 	s := r.signals
 	if s == nil || r.inSubshell {
-		<-done
-		return 0, false
+		select {
+		case <-done:
+			return 0, false, false
+		case <-giveUp:
+			return 0, false, true
+		}
 	}
 	for {
 		if sig, ok := r.pendingTrap(); ok {
-			return sig, true
+			return sig, true, false
 		}
 		select {
 		case <-done:
@@ -531,9 +540,19 @@ func (r *Runner) awaitOrTrap(done <-chan struct{}) (syscall.Signal, bool) {
 			// and every shell in the panel reports the signal rather than the
 			// job, which is only reproducible if the arrival wins outright.
 			if sig, ok := r.pendingTrap(); ok {
-				return sig, true
+				return sig, true, false
 			}
-			return 0, false
+			return 0, false, false
+		case <-giveUp:
+			// The same rule in the other direction: a job that stopped and
+			// then ended is a job that ended, and the two are ready together
+			// often enough that a random choice would be a flaky answer.
+			select {
+			case <-done:
+				return 0, false, false
+			default:
+			}
+			return 0, false, true
 		case <-s.wake:
 		case sig := <-s.ch:
 			s.mu.Lock()

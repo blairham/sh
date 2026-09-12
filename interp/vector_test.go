@@ -50,6 +50,13 @@ func testSemantics() Semantics {
 	// on the way to something else need an answer rather than a refusal.
 	s.RedirectsUseEveryTarget = No
 
+	// The hexadecimal escape's two readings. `$'a\x1bb'` has three digits
+	// after the `\x`, so a snippet writing a control character that way
+	// reaches the first of them on the way to something else — the
+	// `${x@Q}` rows do. The suites that are *about* them set both sides.
+	s.DollarSingleHexReadsEveryDigit = No
+	s.DollarSingleDigitlessEscapeIsAZeroByte = No
+
 	s.ArraysAreSparse = Yes
 	s.ArrayScalarIsTheWholeArray = No
 	// And which element the one-element answer means on a keyed table: the
@@ -70,6 +77,12 @@ func testSemantics() Semantics {
 	s.ScalarAssignedOverACompoundReplacesTheName = No
 	s.ScalarUnderAnArrayDeclaration = ScalarUnderACompoundBecomesTheFirstElement
 	s.ScalarUnderATableDeclaration = ScalarUnderACompoundBecomesTheFirstElement
+	// The two questions a *subscripted* declaration and an exported compound
+	// raise, at bash's answers, which is the floor these suites assert
+	// against. The tests that are *about* them set both sides themselves —
+	// see exportedcompound_test.go (#1380).
+	s.ExportedCompoundReachesAChildAsItsFirstValue = No
+	s.SubscriptedOperandCarriesTheAttributes = Yes
 	s.IndirectionYieldsName = No
 	s.ArithNameValueRecurses = Yes
 	// And what an unset name found that way is: a zero, which is what three

@@ -291,6 +291,24 @@ func (s Shell) closeBlock(ctx context.Context, store *blocks.Store, cap *outputC
 	// disagree about a blank line. It happens whether or not there is a store
 	// to write to — a prompt provider is not a feature of the block index.
 	s.counted().last = lastCommand{command: b.command, duration: end.Sub(b.start)}
+	if s.historyRules().hidesRecord(b.command) {
+		// A leading space means "run this but do not write it down", and a
+		// store that kept the line — and, with the output half on, everything
+		// it printed — would be writing down precisely what was asked not to
+		// be. The same reasoning that couples this store to an empty HISTFILE,
+		// scoped to the one line instead of the whole session.
+		//
+		// Asked of historyRules rather than answered here, so that the file
+		// and this cannot come to disagree about what the gesture means; see
+		// hidesRecord for why only the space rule is in it and the tidiness
+		// rules are not.
+		//
+		// The capture is taken and dropped, for the reason the blank-line path
+		// above takes it: output left in the conduit does not stay unrecorded,
+		// it joins the next block and is attributed to whatever runs next.
+		s.takeOutput(cap)
+		return
+	}
 	_ = store.Record(ctx, blocks.Record{
 		ID:      event.NewID(b.start),
 		Command: b.command,

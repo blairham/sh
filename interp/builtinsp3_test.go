@@ -69,10 +69,16 @@ func TestKillListingShapes(t *testing.T) {
 	}
 }
 
+// The silence a non-numeric operand can meet is no longer an axis of its own:
+// where a dialect reads the operands as arithmetic, `a` is an unset name and
+// so zero, which is unequal to one and says nothing about it. That reading is
+// TestBuiltinComparisonOperandsAreArithmetic and the two sides of it are in
+// testcomparison_test.go; what is kept here is the answer the axis it replaced
+// was written for.
 func TestIntegerRefusalCanBeSilent(t *testing.T) {
 	out, st := run(t, `[ a -eq 1 ]`, func(r *Runner) {
 		sem := CoreSemantics()
-		sem.TestIntegerRefusalIsSilent = Yes
+		sem.TestBuiltinComparisonOperandsAreArithmetic = Yes
 		r.Semantics = &sem
 	})
 	if st != 1 || out != "" {

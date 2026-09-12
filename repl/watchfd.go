@@ -118,12 +118,14 @@ import (
 //
 // nil where the front end offered no way to answer one, which is what makes
 // the editor's loop skip the waiting entirely — see serveDescriptors.
-func (s Shell) descriptorHandlers(ctx context.Context, state *terminalState) func(int, Line) (Line, bool) {
+func (s Shell) descriptorHandlers(
+	ctx context.Context, state *terminalState,
+) func(int, Line, Actions) (Line, bool) {
 	if s.DescriptorReady == nil {
 		return nil
 	}
 	guard := s.guard()
-	return func(fd int, in Line) (Line, bool) {
+	return func(fd int, in Line, ed Actions) (Line, bool) {
 		var out Line
 		var ok bool
 		// In raw mode until it writes something — see runHandler, and the
@@ -135,7 +137,7 @@ func (s Shell) descriptorHandlers(ctx context.Context, state *terminalState) fun
 		// in it would end a session over something the person at the keyboard
 		// did not do.
 		s.runHandler(state, func() {
-			if guard.Do(func() { out, ok = s.DescriptorReady(ctx, fd, in) }) {
+			if guard.Do(func() { out, ok = s.DescriptorReady(WithActions(ctx, ed), fd, in) }) {
 				out, ok = Line{}, false
 			}
 		})
@@ -472,7 +474,7 @@ func (e *editor) serveDescriptors(prompt drawnPrompt) {
 // *the line is untouched and the screen is the shell's problem* rather than
 // meaning the shell declined.
 func (e *editor) serveDescriptor(fd int, prompt drawnPrompt) {
-	out, changed := e.descriptorReady(fd, Line{Buffer: string(e.line), Cursor: e.pos})
+	out, changed := e.descriptorReady(fd, e.give(), editorActions{e: e, prompt: prompt})
 	if !changed {
 		return
 	}

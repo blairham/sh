@@ -7,11 +7,15 @@ import "testing"
 
 // What SH_BLOCKS_OUTPUT says, and it says three things rather than two.
 //
-// The third is the default and it is the point of #720: keeping output used to
-// cost a child its terminal, so it was off unless asked; a front end that can
-// put a pseudo-terminal behind the capture pays nothing, and one that cannot
-// still pays the whole price. The variable says which of those a session will
-// accept and the front end says which it is.
+// The third is CaptureTerminalValue and it is the point of #720: keeping
+// output costs a child its terminal unless the front end can put a
+// pseudo-terminal behind the capture, so the variable says which of those a
+// session will accept and the front end says which it is.
+//
+// None of the three is what silence gets. Unset is off (#2274) — the output
+// half writes down what a person was *shown*, which is the one part of this
+// store whose harm a backup makes permanent, so it is asked for by name or it
+// does not happen.
 func TestWhatTheOutputVariableSays(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -19,16 +23,27 @@ func TestWhatTheOutputVariableSays(t *testing.T) {
 		want CaptureMode
 	}{
 		{
-			name: "unset is the default, which is where a terminal allows it",
+			// The row that changed in #2274, and the one worth reading first:
+			// a session told nothing keeps nothing.
+			name: "unset is off, because this is asked for by name",
 			vars: map[string]string{},
-			want: CaptureIfTerminal,
+			want: CaptureOff,
 		},
 		{
-			// The one way to say "not this session", and it has to exist now
-			// that the default is on. The same gesture an empty HISTFILE is.
+			// The same answer as unset now, and still worth accepting on its
+			// own: it is the gesture an empty HISTFILE is, and a rc file that
+			// spells the refusal out goes on meaning it.
 			name: "empty is off outright",
 			vars: map[string]string{OutputVar: ""},
 			want: CaptureOff,
+		},
+		{
+			// The mode that used to be reachable only by saying nothing. It
+			// has a name now, so it is a thing a person can ask for rather
+			// than a thing that happened to them.
+			name: "the terminal spelling is where a terminal allows it",
+			vars: map[string]string{OutputVar: CaptureTerminalValue},
+			want: CaptureIfTerminal,
 		},
 		{
 			name: "a value is on whatever it costs",

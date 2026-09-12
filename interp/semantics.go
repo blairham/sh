@@ -528,6 +528,62 @@ type Semantics struct {
 	// character no escape claims — `$'\q'` — see DollarSingleUnknownPolicy.
 	// Asked only when such an escape is actually there.
 	DollarSingleUnknownEscape DollarSingleUnknownPolicy
+	// DollarSingleHexReadsEveryDigit lets `\x` inside `$'…'` take a run of
+	// hexadecimal digits of any length, where the other readings stop at
+	// two. Up to two digits are a byte either way; a longer run is a *code
+	// point*, written in UTF-8.
+	//
+	// ksh93 alone. Measured 2026-09-12 under `LC_ALL=C`, by `od`, so the
+	// answer is bytes rather than what a terminal made of them:
+	//
+	//	                bash 5.3, bash 3.2, zsh    ksh93
+	//	$'\x00b'         00 (truncating) then b   0b
+	//	$'\x4'           04                       04
+	//	$'\x414'         41 then `4`              d0 94, which is U+0414
+	//	$'\x0041'        41 then `41`             41
+	//	$'\x00FF'        00 (truncating) then FF  c3 bf, which is U+00FF
+	//	$'\xFF'          ff                       ff
+	//
+	// The fifth row and the sixth are the pair that says the *digit count*
+	// decides and not the value: 0xFF written with two digits is the byte
+	// and written with four is the code point. The locale does not enter
+	// into it — the same bytes come back under `LC_ALL=C` and under a UTF-8
+	// locale.
+	//
+	// A run past the last code point is encoded rather than refused, in the
+	// extended form UTF-8 has room for: `$'\x41414141'` is the six bytes
+	// fd 81 90 94 85 81 there, which is what EncodeCodePoint writes.
+	//
+	// Asked only for a run of three digits or more, since a shorter one is
+	// the same byte under both readings. The same escape in a `printf`
+	// format is PrintfHexEscape, which has this reading as one of its four
+	// values; the two are separate fields because a shell answers the two
+	// sites differently.
+	//
+	// Silent and wrong either way it is answered wrongly: `$'\x00b'` is one
+	// character under one reading and a truncated word under the other,
+	// with nothing said about it.
+	DollarSingleHexReadsEveryDigit Answer
+	// DollarSingleDigitlessEscapeIsAZeroByte makes `\x`, `\u` and `\U`
+	// with no hexadecimal digit after them a zero byte, rather than the two
+	// characters they were written as.
+	//
+	// Measured 2026-09-12 under `LC_ALL=C`:
+	//
+	//	              bash 5.3, bash 3.2   ksh93         zsh
+	//	$'\xzz'       \xzz                 00 then zz    00 then zz
+	//	$'\x'         \x                   00            00
+	//	$'\uZ'        \uZ                  00 then Z     00 then Z
+	//
+	// ksh93 and zsh look different in a terminal and are the same answer:
+	// the zero byte truncates the span in ksh93, which is
+	// DollarSingleNulTruncates and not this, so what is left there is
+	// nothing at all.
+	//
+	// One answer for the three escapes, which is measured rather than
+	// assumed — no column splits them. Asked only where such an escape has
+	// no digits, so an ordinary `$'\x41'` never meets it.
+	DollarSingleDigitlessEscapeIsAZeroByte Answer
 	// DollarSingleNulTruncates ends the decoded text at the first NUL an
 	// escape produces, which is C-string semantics: `$'a\0b'` is `a` in
 	// bash and ksh93 and the three bytes `a`, NUL, `b` in zsh.
@@ -1965,6 +2021,65 @@ type Semantics struct {
 	// SetFTurnsOffGlobbing records, seen from the reading side.
 	NoglobLetterIsF Answer
 
+	// SetFLetterOption is the `set -o` name this shell's `-f` letter is
+	// short for where SetFTurnsOffGlobbing says it is not noglob, and it is
+	// read from both sides: `set -f` moves the name, and `$-` carries `f`
+	// for as long as the name is on.
+	//
+	// A name rather than a second boolean field because the state already
+	// exists in the dialect's own option namespace, and the letter and the
+	// name have to be one state or `set -f` and the listing disagree.
+	// Measured on zsh 5.9.2, 2026-09-12, where the name is `norcs` — the
+	// startup files this shell was told to skip:
+	//
+	//	zsh -c 'set -f; setopt'              nohashdirs, norcs
+	//	zsh -c 'set -f; echo $-'             569Xf
+	//	zsh -c 'set -o norcs; echo $-'       569Xf
+	//	zsh -f -c 'echo $-'                  569Xf
+	//	zsh -f -c 'set +f; setopt'           nohashdirs
+	//	zsh -f -c 'set +f; echo $-'          569X
+	//
+	// The third row is what makes this the option's state and not a record
+	// that the letter was written: a script that never says `-f` still gets
+	// the letter once the name is on. The last two are the other half — the
+	// letter withdraws when the name does, on a route that never wrote it.
+	//
+	// Empty in the three shells that spend `-f` on globbing, where
+	// SetFTurnsOffGlobbing answers the whole question and this is never
+	// reached.
+	SetFLetterOption string
+
+	// DollarDashLetterOrder is the order this shell publishes the letters of
+	// `$-` in. Letters it does not name follow the ones it does, in the
+	// order this implementation happens to produce them.
+	//
+	// A per-dialect sequence rather than an Answer, because there is no
+	// majority to follow and no single rule to derive: measured 2026-09-12
+	// on `set -f; set -u; set -e; echo $-`, the six columns answer `ufe`,
+	// `efhuBc`, `efhuBc`, `efhuBc`, `cefhsuB` and `569Xefu` — four different
+	// disciplines, none of them the order the script wrote.
+	//
+	// Written as one string per dialect rather than as a named discipline so
+	// that a letter's place is a measurement someone can check against a
+	// shell, and so that the one member whose order is neither sorted nor
+	// chronological needs no special case.
+	//
+	// The four, each derived from the runs recorded beside the dialect's own
+	// value:
+	//
+	//   - bash sorts the lowercase letters, then the uppercase ones, and
+	//     puts the letter naming the route it was invoked by last.
+	//   - ksh93 leads with `i` and `c`, sorts the rest of the lowercase
+	//     letters, then the uppercase ones, and puts `l` last of all.
+	//   - zsh sorts the whole string by byte, digits and capitals included.
+	//   - dash uses an order of its own, which is neither.
+	//
+	// Empty leaves the letters as this implementation produces them, which
+	// is what the substrate's own preset does: POSIX says which letters `$-`
+	// holds and nothing about the order, so there is no text to read and no
+	// shell to copy.
+	DollarDashLetterOrder string
+
 	// DefaultOptionLetters is what `$-` starts with before the script has
 	// set anything: the single-letter options a shell turns on at startup.
 	// Measured identical under `-c`, a script file and standard input —
@@ -2774,6 +2889,40 @@ type Semantics struct {
 	// are how a command is meant to end, and all four stay quiet about
 	// those, so there is no disagreement there to put to a dialect.
 	ReportsACommandKilledBySignal Answer
+
+	// StoppedJobTakesTheCurrentJobMarker keeps the `+` on a job that stopped
+	// even after a later job has been backgrounded, so that `%%`, `%+` and a
+	// bare `fg` all name the stopped one. False in the shell that simply
+	// marks the newest job whatever it is doing.
+	//
+	// Measured 2026-09-12 through a pseudo-terminal with a scratch home
+	// directory, on `sleep 40` stopped with ^Z and then `sleep 41 &`:
+	//
+	//	bash 5.3.15  [1]+ Stopped    [2]-  Running
+	//	bash 3.2.57  [1]+ Stopped    [2]-  Running
+	//	dash         [1]+ Suspended  [2]-  Running
+	//	zsh 5.9.2    [1]+ suspended  [2]-  running
+	//	ksh93u+      [1]- Stopped    [2]+  Running
+	//
+	// Five to one, and it is not a cosmetic column: `jobs %+` and `jobs %-`
+	// name the same two jobs the listing marks in every one of them, so a
+	// `fg %+` after a ^Z resumes a different job in the two camps.
+	//
+	// It is about *keeping* the marker and not about taking it. A job that
+	// stops takes the marker in all six — measured with two background jobs
+	// and `kill -TSTP %1`, every column moves the `+` onto the older job it
+	// just stopped — so the disagreement is only over whether a later `&`
+	// takes it back. See Runner.markedJobs, where one ordered list serves
+	// both camps and this decides how it is read.
+	//
+	// Read rather than `ask`ed, as DefaultOptionLetters is: naming the
+	// default job is not the place to refuse a script over a disagreement,
+	// and a dialect that has not answered gets the five columns' answer
+	// rather than a complaint. One dialect in this tree has not answered —
+	// its shell cannot be run on the machine the panel is measured on, so
+	// there is nothing to record and a guess would be worse than the
+	// majority standing in.
+	StoppedJobTakesTheCurrentJobMarker Answer
 
 	// JobsShowBackgroundCommand puts the command of a `&` job in a `jobs`
 	// listing. True in bash and zsh; dash prints an empty column there and
@@ -3679,6 +3828,107 @@ type Semantics struct {
 	// discards under both; dash has no `typeset` and bash 3.2.57 has no
 	// `-A`, so no column answers *this* letter with the scalar (#2060).
 	ScalarUnderATableDeclaration ScalarUnderACompoundPolicy
+
+	// ExportedCompoundReachesAChildAsItsFirstValue hands a child an entry for
+	// an exported name holding an **array or a table**, whose value is the
+	// array's first element or the table's first value.
+	//
+	// The alternative is no entry at all, which is not a nicety: a name and
+	// no name are different things to the program that reads the
+	// environment, and a compound has no environment representation for the
+	// other columns to have chosen a different one of.
+	//
+	// Measured 2026-09-12 from a script file, counting what a child sees:
+	//
+	//	probe                                bash 5.3.15 / 3.2 / as-sh   ksh93u+   zsh 5.9.2
+	//	typeset -x a=(p q); env | grep ^a=   nothing                     `a=p`     nothing
+	//	a=(p q); export a                    nothing                     `a=p`     nothing
+	//	typeset -Ax m; m[k]=v                nothing                     `m=v`     nothing
+	//	export b=1; typeset -x c=(p)         `b=1` alone                 both      `b=1` alone
+	//
+	// The last row is the control that says the *scalar* half is unaffected:
+	// an ordinary exported name reaches a child in every column, so what
+	// this axis moves is the compound and nothing beside it.
+	//
+	// An **empty** compound is a third shape and is not this: ksh93 refuses
+	// `typeset -x a=()` outright — `only simple variables can be exported` —
+	// where bash and zsh accept it and hand a child nothing. Both answers
+	// here give a child nothing, so the refusal is a wording and a status
+	// this does not carry.
+	//
+	// This shell handed a child `a=p` in every dialect, which is one
+	// column's answer given to three, and handed `a=` for an *empty* array,
+	// which is nobody's: a name arriving with an empty value where the
+	// script exported an array is the quiet kind of wrong, since a program
+	// reading it cannot tell an empty array from an empty string (#1380).
+	ExportedCompoundReachesAChildAsItsFirstValue Answer
+
+	// SubscriptedOperandCarriesTheAttributes gives a declaration's letters to
+	// the *name* when the operand is subscripted — `typeset -x a[1]=v` —
+	// rather than to the element alone.
+	//
+	// Measured 2026-09-12 from a script file:
+	//
+	//	probe                        bash 5.3.15 / 3.2   ksh93u+                zsh 5.9.2
+	//	typeset -x a[1]=v; typeset -p a   `declare -ax a=([1]="v")`   `typeset -x -a a=([1]=v)`   `typeset -a a=( v )`
+	//	export a[1]=v                     refused as a bad name        `typeset -x -a a=([1]=v)`   `typeset -a a=( v )`
+	//	typeset -x a=(p q)                `declare -ax`                `typeset -x -a`             `typeset -ax`
+	//
+	// The third row is the control and it is unanimous: a *whole-name*
+	// declaration records the letter everywhere, so what the axis is about
+	// is the subscripted operand alone. zsh records nothing there, by either
+	// spelling, and lists the name without the `x`.
+	//
+	// Listing-only where the compound never reaches a child anyway — see
+	// ExportedCompoundReachesAChildAsItsFirstValue, which is why the column
+	// that answers no here is also a column a child sees nothing from.
+	SubscriptedOperandCarriesTheAttributes Answer
+
+	// TableUnderAnArrayDeclaration is what `typeset -a` makes of a name
+	// already declared a **table** — see CompoundKindChangePolicy, where the
+	// four answers are.
+	//
+	// Measured 2026-09-12 from a script file, with `typeset -A h; h[k]=v`
+	// in front of it:
+	//
+	//	shell        `typeset -a h`
+	//	bash 5.3.15  `typeset: h: cannot convert associative to indexed array`, status 1, table intact, the list runs on
+	//	bash 3.2.57  no `-A` to begin with
+	//	ksh93u+      `typeset: cannot change associative array h to index array`, and the script **ends**
+	//	zsh 5.9.2    converted and emptied: `typeset -a h=(  )`, status 0
+	//
+	// Three answers, and the two refusals part over what the refusal costs —
+	// bash runs the next command and ksh93 does not — which is why the
+	// refusals are two values of the policy rather than one.
+	//
+	// The builtin names itself, and it is the builtin as *invoked*: bash
+	// writes `declare:`, `typeset:` and `local:` for the same refusal
+	// (#1375).
+	TableUnderAnArrayDeclaration CompoundKindChangePolicy
+	// ArrayUnderATableDeclaration is the same question asked of `typeset -A`
+	// over a name already holding an **indexed array**.
+	//
+	// A second field and not a widening of the one above, because one shell
+	// answers the two directions differently. Measured 2026-09-12 with
+	// `typeset -a a=(x y)` in front of it:
+	//
+	//	shell        `typeset -A a`
+	//	bash 5.3.15  `typeset: a: cannot convert indexed to associative array`, status 1, array intact
+	//	ksh93u+      converted, **keeping the elements as keys**: `typeset -A a=([0]=x [1]=y)`, status 0
+	//	zsh 5.9.2    converted and emptied: `typeset -A a=( )`, status 0
+	//
+	// So ksh93 refuses one direction fatally and converts the other without
+	// losing anything, and one field for both would have had to give it an
+	// answer that is wrong for one of its letters whichever way it was set.
+	//
+	// The keys ksh93 writes are the subscripts as decimal text — `0`, `1` —
+	// and `${a[0]}` reads `x` afterwards, which is what says the elements
+	// survived rather than the listing merely looking as though they had.
+	//
+	// unexhibited CompoundKindChangeEndsTheScript: TableUnderAnArrayDeclaration
+	// holds it, for ksh93, and no column ends the script over this direction
+	// (#1375).
+	ArrayUnderATableDeclaration CompoundKindChangePolicy
 
 	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function
 	// hide any outer `u` — the local exists unset, so `${u-UNSET}` fires the
@@ -6028,6 +6278,54 @@ type Semantics struct {
 	// `exit` still warns; and a job stopping afterwards starts it over.
 	StoppedJobsHoldTheExit Answer
 
+	// WaitGivesUpOnAStoppedJob ends a `wait` for a background job that has
+	// stopped, instead of going on waiting for a process that is not going to
+	// finish until something outside the shell resumes it.
+	//
+	// bash 5.x, and only while the monitor is on. Measured 2026-09-12 with
+	// `set -m; sleep 97 & p=$!; sleep 0.3; kill -STOP $p; sleep 0.3; wait`:
+	// bash 5.3.15 and the same binary as `sh` come back inside the first
+	// second, warning `wait: warning: job 1[pid] stopped` and reporting 0 for
+	// the bare form; `wait %1` and `wait $p` report 145 there — 128 plus
+	// SIGSTOP, the status of a command that signal killed. bash 3.2.57 and
+	// ksh93u+ sit until the bound, and ksh93 prints `wait: pid: Stopped
+	// (SIGSTOP)` on its way into a wait it does not come back from, which is
+	// a wording rather than a different answer. zsh cannot be asked: `set -m`
+	// is `can't change option: -m` in a non-interactive zsh.
+	//
+	// With the monitor *off* the panel is unanimous and this is never asked:
+	// the same script without `set -m` blocks in all five, so the base's No
+	// is what every column does on the ordinary route, and the axis is only
+	// about the shell that has been told it is watching jobs.
+	//
+	// It is what #2227 was: a job-control file of bash's own suite ran three
+	// times slower here than under bash, and the whole of the difference was
+	// one wait for a job this shell had no way of knowing had stopped.
+	WaitGivesUpOnAStoppedJob Answer
+	// KillReadsASignalJoinedToItsOption takes `kill -n9` and `kill -sKILL`,
+	// where the signal is written onto the option with no space between.
+	//
+	// bash 5.x and ksh93; bash 3.2 and zsh refuse both, reading the whole
+	// word as a signal called `n9` or `SIGN9`. Measured 2026-09-12 against a
+	// background `sleep`: `kill -n9 $!` and `kill -sKILL $!` kill it at
+	// status 0 in bash 5.3.15, in that binary as `sh` and in ksh93u+, and
+	// are `kill: n9: invalid signal specification` at status 1 in bash
+	// 3.2.57 and `unknown signal: SIGN9` in zsh 5.9.2.
+	//
+	// Which way round the digits go is part of the answer rather than a
+	// detail of it, and joinedKillSignal has the measurement: `-n` joins a
+	// number and `-s` joins a name, so `kill -nKILL` and `kill -s9` are
+	// refused by the shells that read the other two. ksh93 is looser — it
+	// takes `-s9` as well — and that remains a divergence rather than
+	// something this answer claims, because every word the rule here accepts
+	// ksh93 accepts too.
+	//
+	// It is what #2227 was. A script that kills a job it is about to wait
+	// for wrote `kill -n9`; the kill was refused into a stderr the script
+	// had redirected, nothing died, and the `wait` after it then ran for as
+	// long as the job would have.
+	KillReadsASignalJoinedToItsOption Answer
+
 	// HeldExitListsTheJobs follows that warning with the job table — the
 	// same rows `jobs` writes. bash does and zsh does not: measured through a
 	// pseudo-terminal, `shopt -s checkjobs` then `exit` writes
@@ -6070,9 +6368,36 @@ type Semantics struct {
 	// zsh; bash and dash answer a script with silence at 0.
 	FcEmptyHistoryIsAnError Answer
 
-	// TestIntegerRefusalIsSilent has `[ a -eq 1 ]` fail with no sentence at
-	// status 1 — ksh93; the other three complain at 2.
-	TestIntegerRefusalIsSilent Answer
+	// TestBuiltinComparisonOperandsAreArithmetic reads the operands of
+	// `test`'s and `[`'s word-spelled comparisons as arithmetic
+	// expressions, the way `[[ ]]` reads its own. ksh93 alone; dash, bash
+	// 5.3, bash-as-sh, bash 3.2 and zsh want a numeral and say so.
+	//
+	// Measured 2026-09-12, `-c`, `env -i`:
+	//
+	//	                   n=5; [ n -eq 5 ]   [ 1+1 -eq 2 ]   [ "" -eq 0 ]
+	//	dash                 Illegal number    Illegal number   Illegal number
+	//	bash 5.3, 3.2        integer expected  integer expected integer expected
+	//	zsh 5.9.2            integer expected  integer expected true
+	//	ksh93u+              true              true             true
+	//
+	// It is the whole expression language and not a name lookup: `1+1` is
+	// two there, `n+1` is six with `n=5`, and an assignment written in an
+	// operand lands — `n=5; [ "n=9" -eq 9 ]` holds and leaves `n` at nine.
+	// A failure it cannot read is loud but *not* fatal and not the
+	// not-an-expression 2: `[ 1x1 -eq 0 ]` is `ksh: [: 1x1: arithmetic
+	// syntax error` at 1 and the script runs on, where the identical
+	// `[[ 1x1 -eq 0 ]]` in the same shell abandons the input.
+	//
+	// This is the single-bracket builtin only. `[[ ]]` reads its operands
+	// as arithmetic in every shell that has the construct, which is why
+	// there is nothing to ask there.
+	//
+	// It replaces an axis that recorded one symptom of it:
+	// `TestIntegerRefusalIsSilent` had `[ a -eq 1 ]` fail without a
+	// sentence, which is what an arithmetic reading does to an unset name
+	// — zero, unequal, quiet — and could not explain `[ 1+1 -eq 2 ]`.
+	TestBuiltinComparisonOperandsAreArithmetic Answer
 
 	// MissingFileIsOlder has `-nt` and `-ot` count a path that does not
 	// exist as older than any file that does, so `f -nt missing` and
@@ -6114,6 +6439,53 @@ type Semantics struct {
 	// Nothing is asked for `[[ -t ]]`: every shell in the panel that has the
 	// construct refuses it as a syntax error.
 	BareTerminalTestIsDescriptorOne Answer
+
+	// TerminalTestDescriptorNarrowsToThirtyTwoBits reads `-t`'s operand the
+	// width a C `int` is: a value too wide for the shell's own integer
+	// saturates, and what is left is then taken modulo 2**32 as a signed
+	// number. ksh93 alone; every other column answers a descriptor nothing
+	// is open at false whatever its spelling.
+	//
+	// Measured 2026-09-12 under a pseudo-terminal, with descriptors 0 and 1
+	// on the terminal and 2 redirected away:
+	//
+	//	operand                 narrows to   ksh93   bash 5.3
+	//	4294967296              0            true    false
+	//	4294967297              1            true    false
+	//	4294967298              2            false   false
+	//	9223372036854775807     -1           true    false
+	//	99999999999999999999    -1           true    2, integer expected
+	//
+	// The third row is the control and is what makes this a *narrowing*
+	// rather than "a big number is true": 4294967298 is descriptor 2, and
+	// descriptor 2 is not a terminal in that run. The same five operands
+	// with no terminal anywhere answer true for the two that narrow to -1
+	// and false for the three that narrow to 0, 1 and 2.
+	//
+	// Silent and wrong either way: a descriptor number that arrived from
+	// arithmetic and overflowed is answered about some other descriptor,
+	// with nothing said.
+	//
+	// unpinned zsh: the corpus runs with no terminal, so a narrowed
+	// descriptor and an un-narrowed one are both false — the only field
+	// that can tell them apart is one where the *conversion* fails, and
+	// the shells that refuse such an operand are bash and dash. zsh takes
+	// it quietly under either answer, so nothing a row can say moves that
+	// pair without a pseudo-terminal, which the harness has not got. The
+	// two sides are pinned in interp/terminaltest_test.go, which opens one.
+	TerminalTestDescriptorNarrowsToThirtyTwoBits Answer
+
+	// TerminalTestMinusOneIsATerminal has `[ -t -1 ]` hold whatever the
+	// shell is holding. ksh93 alone.
+	//
+	// Measured 2026-09-12 with every stream redirected to a file, so no
+	// descriptor of the run is a terminal: `[ -t -1 ]` is still true in
+	// ksh93 and false in dash, bash 5.3, bash-as-sh, bash 3.2 and zsh.
+	// `-2`, `-3` and `-100` are false in all six, which is what says this
+	// is the one value and not a rule about negative descriptors — and what
+	// makes it a second question beside the narrowing above, since every
+	// saturating conversion lands here.
+	TerminalTestMinusOneIsATerminal Answer
 
 	// ReadRequiresAVariableName refuses a bare `read`: dash's "arg count"
 	// at 2, where the other three read into REPLY.
@@ -7900,6 +8272,46 @@ type Semantics struct {
 	// Diagnostics.ArithExpressionRanOut, which already words `$(( a[ ] ))`.
 	EmptySubscriptTextIsAMathError Answer
 
+	// SubscriptExpressionStopsAtASeparator ends a subscript's expression at
+	// the first top-level `,` or `;` and discards the rest of the text,
+	// rather than reading the comma as the arithmetic operator it is
+	// everywhere else.
+	//
+	// It is the other half of "a comma has to have been *written* to
+	// separate a range". The parser separates a written pair, so what
+	// reaches an expression with a separator still in it is a separator that
+	// arrived through a substitution — and the shell with ranges does not
+	// take it as an operator there either. Measured on zsh 5.9.2,
+	// 2026-09-12, with `a=(p q r s)`:
+	//
+	//	probe                        zsh 5.9.2   the comma operator would give
+	//	i="2,3";   ${a[$i]}          `q`         `r`
+	//	i="1+1,3"; ${a[$i]}          `q`         `r`
+	//	i="2,";    ${a[$i]}          `q`         a complaint
+	//	i="2;3";   ${a[$i]}          `q`         a complaint
+	//	i="2,3,4"; ${a[$i]}          `q`         `s`
+	//	i="2,n=9"; ${a[$i]}          `q`, and `n` is still 0
+	//	i="(1,2)"; ${a[$i]}          `r`         `r` — nested, so it applies
+	//	${a[2,3;5]}                  `q r`       the pair, second end `3`
+	//
+	// So the tail is not evaluated at all — the sixth row is the
+	// discriminator, since a reading that evaluated it and threw the value
+	// away would leave `n` at 9 — and the seventh says it is the *top level*
+	// of a subscript rather than the character: inside parentheses the
+	// operator applies.
+	//
+	// And it is the **subscript** and nowhere else. `$(( 1,2 ))` is 2 in
+	// every column, zsh included, and a substring's offset takes the
+	// operator too: measured, `x=abcdef; ${x:1,2:2}` is `cd` there, which is
+	// offset 2. So this is asked where a subscript is read as a number and
+	// not in the arithmetic the two sites share.
+	//
+	// A separator standing *first* is not truncated to nothing: `i=",3"` is
+	// `operand expected at ,3` there, so the text is left whole for the
+	// arithmetic to complain about rather than made into the empty
+	// expression, which is a different answer again (#2160).
+	SubscriptExpressionStopsAtASeparator Answer
+
 	// BlankArithSubscriptIsTheEmptyExpression reads a subscript holding
 	// whitespace and nothing else — `$(( a[ ] ))` — as the blank expression,
 	// which is zero, so the operand is the *element that subscript names*
@@ -8627,15 +9039,21 @@ func PosixSemantics() Semantics {
 		// through — which is also the majority, five of the six.
 		UnderscoreStartsAtTheInvocation:      No,
 		UnderscoreInheritsFromTheEnvironment: Yes,
-		// The majority answers: full bases, wrapping overflow, zero for an
-		// empty expression.
-		TestIntegerRefusalIsSilent: No,
+		// POSIX gives `test`'s `-eq` family two *integers* to compare, so
+		// the standard's reading is a numeral and not an expression. It is
+		// five of the six as well.
+		TestBuiltinComparisonOperandsAreArithmetic: No,
 		// POSIX has no -nt or -ot at all; dash, its closest reading, wants
 		// both files to exist.
 		MissingFileIsOlder: No,
 		// POSIX gives -t a file descriptor, and dash refuses anything that
 		// is not a number.
 		TerminalTestRequiresANumber: Yes,
+		// And a descriptor the shell has nothing open at is not a terminal,
+		// however the number was spelled: no narrowing, and no value that
+		// answers true on its own.
+		TerminalTestDescriptorNarrowsToThirtyTwoBits: No,
+		TerminalTestMinusOneIsATerminal:              No,
 		// POSIX gives the one-argument form of `test` to the string rule
 		// with no exception in it, which is dash's reading and bash's.
 		BareTerminalTestIsDescriptorOne:  No,
@@ -8649,9 +9067,17 @@ func PosixSemantics() Semantics {
 		// The standard describes `exit` as exiting and says nothing about a
 		// job left stopped, so the base leaves; bash and zsh, which stay and
 		// warn, override.
-		StoppedJobsHoldTheExit:       No,
-		CdpathAnnouncesTheDirectory:  Yes,
-		FdVariableOutlivesTheCommand: Yes,
+		StoppedJobsHoldTheExit: No,
+		// The standard has `wait` wait, and says nothing about a job that
+		// stopped; bash 5.x alone gives up on one, so the base goes on
+		// waiting and that dialect overrides.
+		WaitGivesUpOnAStoppedJob: No,
+		// POSIX gives `kill` only `-s signal` with the signal as a separate
+		// operand, so the base reads nothing joined to the option; bash 5.x
+		// and ksh93 override.
+		KillReadsASignalJoinedToItsOption: No,
+		CdpathAnnouncesTheDirectory:       Yes,
+		FdVariableOutlivesTheCommand:      Yes,
 		// The standard has the here-document end at the delimiter and says
 		// nothing about a body the input cut short, so this follows the
 		// panel: three of the five leave the last line as it was written and
@@ -9613,6 +10039,68 @@ func (p ScalarUnderACompoundPolicy) String() string {
 		return "stays a scalar"
 	case ScalarUnderACompoundDiscardsIt:
 		return "discards it"
+	}
+	return "unspecified"
+}
+
+// CompoundKindChangePolicy is what a declaration makes of a name that is
+// already the *other* kind of compound — `typeset -a` over a declared table,
+// and `typeset -A` over a declared array.
+//
+// A name is one kind of array at a time in every shell measured; what they
+// disagree about is what happens to the elements and to the script. Four
+// answers, and each of them is somebody's:
+//
+//	bash        refuses, keeps everything, reports 1 and runs the next command
+//	ksh93 `-a`  refuses and ends the script
+//	ksh93 `-A`  converts, and the elements become the keys `0`, `1`, …
+//	zsh         converts, and the elements are gone
+//
+// Asked only where the name is *already declared* the other kind in the cell
+// being declared. An unset name, a name holding a scalar — which is
+// ScalarUnderAnArrayDeclaration — and a redeclaration of the kind the name
+// already is all raise no question between the columns.
+//
+// It was unanswered in one direction and wrong in the other. `typeset -a`
+// over a table left the table standing and said nothing, so the elements
+// survived under the old reading and no column agreed; `typeset -A` over an
+// array emptied it in every dialect, which is right for one column of three
+// (#1375).
+type CompoundKindChangePolicy int
+
+const (
+	// CompoundKindChangeUnspecified is no answer, and it is refused rather
+	// than guessed at: one answer keeps the elements, one takes them away
+	// and one will not do it at all, and no later command can tell which was
+	// meant.
+	CompoundKindChangeUnspecified CompoundKindChangePolicy = iota
+	// CompoundKindChangeRefused declines: the name keeps the kind and the
+	// elements it had, the declaration reports and the status is 1, and the
+	// rest of the command list runs. bash, in both directions.
+	CompoundKindChangeRefused
+	// CompoundKindChangeEndsTheScript is the same refusal costing the input:
+	// nothing after it runs. ksh93, for the array letter over a table.
+	CompoundKindChangeEndsTheScript
+	// CompoundKindChangeKeepsTheElements converts and carries the values
+	// over — an array's elements become the keys `0`, `1`, … of the table.
+	// ksh93, for the table letter over an array.
+	CompoundKindChangeKeepsTheElements
+	// CompoundKindChangeEmptiesTheName converts and takes the elements away,
+	// leaving the name an empty compound of the new kind. zsh, in both
+	// directions.
+	CompoundKindChangeEmptiesTheName
+)
+
+func (p CompoundKindChangePolicy) String() string {
+	switch p {
+	case CompoundKindChangeRefused:
+		return "refused"
+	case CompoundKindChangeEndsTheScript:
+		return "refused, and the script ends"
+	case CompoundKindChangeKeepsTheElements:
+		return "keeps the elements"
+	case CompoundKindChangeEmptiesTheName:
+		return "empties the name"
 	}
 	return "unspecified"
 }

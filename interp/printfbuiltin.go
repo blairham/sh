@@ -840,20 +840,7 @@ func (r *Runner) hexEscapeText(p PrintfHexEscapePolicy, s string) (string, int) 
 	if p == PrintfHexEscapeAbsent || r.unspecified {
 		return `\x`, 2
 	}
-	n, used := 0, 0
-	if p == PrintfHexEscapeCodePoint {
-		// Every digit that follows. Eight of them reach past the last code
-		// point there is, so the value is read from the first eight and a
-		// longer run is out of range — which is what ksh93 does with one,
-		// writing nothing for it.
-		n, used = scanBase(s[2:], 16, 8)
-		for 2+used < len(s) && digitValue(s[2+used]) >= 0 {
-			used++
-			n = -1
-		}
-	} else {
-		n, used = scanBase(s[2:], 16, 2)
-	}
+	n, used := hexEscapeRun(s[2:], p == PrintfHexEscapeCodePoint)
 	switch {
 	case used == 0 && p == PrintfHexEscapeByte:
 		// The escape stands, with a warning that does not change the status:
@@ -868,10 +855,16 @@ func (r *Runner) hexEscapeText(p PrintfHexEscapePolicy, s string) (string, int) 
 		return "\x00", 2
 	case used <= 2:
 		return string([]byte{byte(n)}), 2 + used
-	case n < 0 || n > 0x10FFFF:
-		return "", 2 + used
 	}
-	return string(rune(n)), 2 + used
+	// A run past the last code point is *encoded* rather than refused, in
+	// the extended form UTF-8 has room for. This used to answer nothing for
+	// one, on the strength of a measurement that was not taken: re-measured
+	// 2026-09-12 under `LC_ALL=C`, `printf '\x41414141'` on ksh93u+ writes
+	// the six bytes fd 81 90 94 85 81, and `printf '\x110000b'` the five
+	// f9 84 80 80 8b. A run too long for the value to hold keeps the low
+	// bits, so `\x41414141414141414141` is the same six bytes as
+	// `\x41414141` — which is what the scan's own overflow already does.
+	return EncodeCodePoint(n), 2 + used
 }
 
 // unicodeEscapeText decodes the `\u` or `\U` at the front of s under one of the

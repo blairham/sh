@@ -67,6 +67,15 @@ func jobSessionShaped(t *testing.T, f *fakeJobs, src string, jobControl bool, sh
 	if jobControl {
 		r.SetInteractiveMonitor()
 	}
+	if !jobControl {
+		// The monitor without a session: a shell told its commands stopped
+		// is a shell watching jobs, and after #2227 a shell that is not
+		// waits a stopped command out instead of answering with it. The
+		// session route above already has it through SetInteractiveMonitor.
+		if code := r.SetOptionLetters("m", true); code != 0 {
+			t.Fatalf("set -m: status %d", code)
+		}
+	}
 	t.Cleanup(func() { f.reapSaidStopped(t) })
 	r.WaitForCommand = f.waitFor
 	r.SignalGroup = func(int, syscall.Signal) error { return nil }

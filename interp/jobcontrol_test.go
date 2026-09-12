@@ -139,7 +139,13 @@ func (f *fakeJobs) poll() (Wait, bool) {
 	return w, true
 }
 
-func jobRun(t *testing.T, f *fakeJobs, src string) (string, int, *Runner) {
+// jobRun runs src on a shell whose job control is the fake's, and hands back
+// the runner so more input can be run on the same jobs.
+//
+// tweak, where given, moves the semantics before the run. It is variadic
+// rather than a second helper because the alternative is a copy of these
+// thirty lines with one line changed, and the copy is what drifts.
+func jobRun(t *testing.T, f *fakeJobs, src string, tweak ...func(*Semantics)) (string, int, *Runner) {
 	t.Helper()
 	file, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
@@ -161,10 +167,22 @@ func jobRun(t *testing.T, f *fakeJobs, src string) (string, int, *Runner) {
 	sem.JobsListNewestFirst = No
 	sem.JobsListFinishedJobs = Yes
 	sem.JobsShowBackgroundCommand = Yes
+	for _, f := range tweak {
+		f(&sem)
+	}
 	dg := Diagnostics{}
 	r := newTestRunner(t, &Runner{Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	if f != nil {
 		t.Cleanup(func() { f.reapSaidStopped(t) })
+		// A shell that is told its commands *stopped* is a shell running the
+		// monitor, and saying so is what these tests need after #2227: the
+		// stop of a command is an answer only where the shell is watching
+		// jobs, and a script without `set -m` waits the command out instead
+		// — which is what the whole panel does and what this fake, answering
+		// for the kernel, would otherwise be modeling a shell that cannot be.
+		if code := r.SetOptionLetters("m", true); code != 0 {
+			t.Fatalf("set -m: status %d", code)
+		}
 		r.WaitForCommand = f.waitFor
 		r.SignalGroup = func(pgid int, sig syscall.Signal) error {
 			f.signals = append(f.signals, struct {
@@ -273,6 +291,11 @@ func TestTheStatusOfAStoppedCommand(t *testing.T) {
 	// was the last zombie left in the package after #1006.
 	countsFrom256 := &fakeJobs{waits: []Wait{{Signal: syscall.SIGTSTP, Stopped: true}}}
 	t.Cleanup(func() { countsFrom256.reapSaidStopped(t) })
+	// With the monitor, for the reason jobRun turns it on: a stop is an
+	// answer only in a shell that is watching jobs (#2227).
+	if code := r.SetOptionLetters("m", true); code != 0 {
+		t.Fatalf("set -m: status %d", code)
+	}
 	r.WaitForCommand = countsFrom256.waitFor
 	if _, err := r.Run(context.Background(), file); err != nil {
 		t.Fatal(err)

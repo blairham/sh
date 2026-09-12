@@ -254,6 +254,27 @@ var exempt = map[string]string{
 	"dialect/zsh.mapfileNames": "the listing behind `${(k)mapfile}`, after AllowList on the " +
 		"shell's own directory. It is the route with no path in it to hang a check on, which is " +
 		"why the roster has a sandboxcheck row of its own.",
+	// dialect/bash. history.go is the whole of the `history` builtin's gate.
+	// bash keeps a history list and writes a history file with no terminal
+	// anywhere, so `-w`, `-a`, `-r` and `-n` are four letters that reach a
+	// path a script named in an ordinary script (#2271).
+	"dialect/bash.historyWriteFile": "the history file `-w` and `-a` put down, after AllowModify " +
+		"on the path — which is the operand, or $HISTFILE when there is none. 0600 rather than " +
+		"the umask's answer, which is the mode bash leaves behind: a history file holds what " +
+		"somebody typed.",
+	"dialect/bash.historyReadFile": "the history file `-r` and `-n` take entries from, after " +
+		"AllowReadPath on the path. Reading it is an open, so a refusal is reported the way a " +
+		"redirection's is rather than read back as an empty list.",
+	// dialect/zsh. fchistory.go is the whole of `fc`'s file gate, and the
+	// shape is bash's `history` with one condition on top: zsh writes a
+	// history file only when the shell is interactive, so these are reached
+	// from a session rather than from a script (#2283).
+	"dialect/zsh.fcWriteFile": "the history file `fc -W` and `fc -A` put down, after AllowModify " +
+		"on the path — the operand, or $HISTFILE when there is none. 0600, which is the mode zsh " +
+		"leaves behind.",
+	"dialect/zsh.fcReadFile": "the history file `fc -R` takes entries from, after AllowReadPath " +
+		"on the path. It is the letter with no write in it and it still crosses the boundary: " +
+		"the lines land in a list `fc -l` will print.",
 	// The smoke suite is in scope because it holds a Boundary to read a block
 	// store back — and it is the one package here that is not the shell. The
 	// rest of this list explains a path the shell reaches; these two explain

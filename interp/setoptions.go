@@ -3,7 +3,10 @@
 
 package interp
 
-import "sort"
+import (
+	"sort"
+	"syscall"
+)
 
 // The long `set -o` names, which shells have which, and what this one does
 // about each.
@@ -431,6 +434,12 @@ func (r *Runner) SetInteractiveMonitor() {
 	if name == "" || r.diag().NoJobControlAtStartupNamesTheScript {
 		name = r.name()
 	}
+	// The shell that names the process group it could not hand the terminal
+	// to says so first, above the line below. Its process group is read here
+	// the way `$$` reads its process id — see the `$` case in expand.go: a
+	// fact about this process, asked for at the moment it is printed, and
+	// wanted by nothing else.
+	r.errf("%s", r.diag().TerminalProcessGroupDiagnostic(name, syscall.Getpgrp()))
 	r.errf("%s", r.diag().JobControlDiagnostic(name))
 }
 

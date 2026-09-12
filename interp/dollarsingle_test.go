@@ -20,6 +20,12 @@ func dollarSingleSem(c DollarSingleControlPolicy, u DollarSingleUnknownPolicy, n
 	s.DollarSingleBackslashC = c
 	s.DollarSingleUnknownEscape = u
 	s.DollarSingleNulTruncates = nul
+	// And the two the hexadecimal escape asks, answered the majority way so
+	// that a row about the NUL is about the NUL: `$'a\x00b'` has three
+	// digits after the `\x` and so reaches the first of them. The tests
+	// that are *about* those two set them themselves and assert both sides.
+	s.DollarSingleHexReadsEveryDigit = No
+	s.DollarSingleDigitlessEscapeIsAZeroByte = No
 	return s
 }
 
@@ -226,6 +232,98 @@ func TestDollarSingleAxesAreAskedOnlyWhereTheyDecide(t *testing.T) {
 			_, st := run(t, tc.src, withSem(CoreSemantics()))
 			if st == 0 {
 				t.Errorf("status %d, want a refusal", st)
+			}
+		})
+	}
+}
+
+// How far the digit run of a `\x` reaches, and what an empty one comes to
+// (#554).
+//
+// Two axes and one escape. The digit count is asked only where the readings
+// can differ — three digits or more — and the empty run only where there are
+// none, so an ordinary `$'\x41'` puts neither question to the dialect.
+func TestDollarSingleHexDigitRun(t *testing.T) {
+	hexSem := func(every, digitless, nul Answer) Semantics {
+		s := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, nul)
+		s.DollarSingleHexReadsEveryDigit = every
+		s.DollarSingleDigitlessEscapeIsAZeroByte = digitless
+		return s
+	}
+	for _, tc := range []struct {
+		name, src        string
+		every, stopAtTwo string
+	}{
+		{
+			// The sharpest of them: under the short reading the escape is a
+			// NUL, which then ends the span in a shell that holds a word as
+			// a C string.
+			"a zero and a third digit",
+			`printf '[%s]' $'\x00b'`,
+			"[\x0b]", "[]",
+		},
+		{
+			"a run of three is a code point",
+			`printf '[%s]' $'\x414'`,
+			"[Д]", "[A4]",
+		},
+		{
+			// The digit count decides and not the value: the same 0xFF is a
+			// byte written with two digits and a code point with four.
+			"the same value at two widths",
+			`printf '[%s]' $'\xFF' $'\x00FF'`,
+			"[\xff][ÿ]", "[\xff][]",
+		},
+		{
+			"two digits are a byte either way",
+			`printf '[%s]' $'\x41'`,
+			"[A]", "[A]",
+		},
+		{
+			// Past the last code point there is, the extended form UTF-8 has
+			// room for, and a run too long to hold keeps the low bits.
+			"past the last code point",
+			`printf '[%s]' $'\x41414141'`,
+			"[\xfd\x81\x90\x94\x85\x81]", "[A414141]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, _ := run(t, tc.src, withSem(hexSem(Yes, No, Yes))); got != tc.every {
+				t.Errorf("every digit: got %q, want %q", got, tc.every)
+			}
+			if got, _ := run(t, tc.src, withSem(hexSem(No, No, Yes))); got != tc.stopAtTwo {
+				t.Errorf("two digits: got %q, want %q", got, tc.stopAtTwo)
+			}
+		})
+	}
+}
+
+// An escape with no hexadecimal digit at all, at the three places it can
+// happen. The zero goes through the NUL rule, so the shell that ends a span
+// there ends it here too — which is why the third column is the same answer
+// as the second and looks nothing like it.
+func TestDollarSingleEscapeWithNoDigits(t *testing.T) {
+	for _, tc := range []struct{ name, src, zero, written string }{
+		{"hex with letters after it", `printf '[%s]' $'\xzz'`, "[\x00zz]", `[\xzz]`},
+		{"hex with nothing after it", `printf '[%s]' $'\x'`, "[\x00]", `[\x]`},
+		{"a code point escape", `printf '[%s]' $'\uZ'`, "[\x00Z]", `[\uZ]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, No)
+			sem.DollarSingleDigitlessEscapeIsAZeroByte = Yes
+			if got, _ := run(t, tc.src, withSem(sem)); got != tc.zero {
+				t.Errorf("a zero byte: got %q, want %q", got, tc.zero)
+			}
+			sem.DollarSingleDigitlessEscapeIsAZeroByte = No
+			if got, _ := run(t, tc.src, withSem(sem)); got != tc.written {
+				t.Errorf("as written: got %q, want %q", got, tc.written)
+			}
+			// And the zero is the ordinary road to a NUL, so a dialect that
+			// ends the span at one ends it here.
+			sem = dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, Yes)
+			sem.DollarSingleDigitlessEscapeIsAZeroByte = Yes
+			if got, _ := run(t, tc.src, withSem(sem)); got != "[]" {
+				t.Errorf("truncating: got %q, want %q", got, "[]")
 			}
 		})
 	}

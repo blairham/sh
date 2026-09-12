@@ -653,6 +653,18 @@ type Diagnostics struct {
 	// which is how the engine writes it.
 	AmbiguousJobSpec string
 
+	// WaitJobStopped is what a *bare* `wait` says about a job it has given
+	// up on because the job stopped — Semantics.WaitGivesUpOnAStoppedJob.
+	// Two verbs: the job's number and its process id. Empty means nothing is
+	// said, which is every dialect that does not give up at all.
+	WaitJobStopped string
+	// WaitForJobStopped is the same thing said by a `wait` that *named* the
+	// job, which bash words differently and from the other side of its own
+	// machinery. One verb: the job's number. The status is not a wording —
+	// it is 128 plus the stop signal, the number a command that signal
+	// killed reports.
+	WaitForJobStopped string
+
 	// WaitNotOurChild is a number that is a plausible process id and is not
 	// one of this shell's children, taking the number. Empty means nothing
 	// is said, which is two of the four — the status is 127 in all of them
@@ -1390,6 +1402,23 @@ type Diagnostics struct {
 	// Only a dialect answering SubscriptedArrayLiteralRefused has anything to
 	// put here.
 	ArrayLiteralThroughASubscript string
+
+	// CannotConvertTableToArray is what a declaration says when `-a` names a
+	// name already declared a **table**. Two verbs: the name, and the
+	// builtin as it was invoked — bash writes `declare:`, `typeset:` and
+	// `local:` for the same refusal, so the builtin is a verb rather than a
+	// prefix this package adds.
+	//
+	// Only a dialect answering Semantics.TableUnderAnArrayDeclaration with
+	// one of the two refusals has anything to put here.
+	CannotConvertTableToArray string
+
+	// CannotConvertArrayToTable is the same sentence for the other
+	// direction, `-A` over a name holding an indexed array. Two verbs, the
+	// same two — a field of its own because the shells that word one word
+	// the other differently, and because a shell may refuse one direction
+	// and convert the other, which ksh93 does.
+	CannotConvertArrayToTable string
 
 	// ArrayValueToNonArray is what the splicing shell says when the name a
 	// subscripted literal writes through holds a plain string. One verb: the
@@ -2746,16 +2775,44 @@ type Diagnostics struct {
 	// Empty says nothing, which is two of the four and is the base's answer:
 	// the standard does not have the shell remark on it.
 	//
-	// bash 5.3.15 writes a *second* line above this one — `bash: cannot set
-	// terminal process group (11143): Inappropriate ioctl for device` — and
-	// it is deliberately not reproduced. Three reasons, and the first is the
-	// one that settles it: bash 3.2.57 and bash 3.2 run as `sh` do not write
-	// it at all, so it is one version's extra line rather than bash's
-	// wording. It is also that shell reporting the failure of an ioctl this
-	// shell never makes, and there is nothing here whose failure it would be
-	// describing. And it carries the shell's own pid, which no script can act
-	// on and which no recording of would be the same twice.
+	// One shell writes a second line *above* this one; see
+	// CannotSetTerminalProcessGroup, which is that line.
 	NoJobControlAtStartup string
+
+	// CannotSetTerminalProcessGroup is the line bash 5.3 writes above
+	// NoJobControlAtStartup, naming the process group it could not hand the
+	// terminal to. One verb: `%[1]d` is the process group.
+	//
+	// Measured 2026-09-12 with no terminal on any of the three standard
+	// streams, on `-ic` and `-lic` alike:
+	//
+	//	bash 5.3.15   bash: cannot set terminal process group (91050): Inappropriate ioctl for device
+	//	bash as `sh`  the same, under its own name
+	//	bash 3.2.57   nothing — only the line below it
+	//	dash          nothing
+	//	ksh93u+       nothing
+	//	zsh 5.9.2     nothing
+	//
+	// So bash 5.3 is the single column out of six this shell did not match
+	// on the `-ic` route, which is the shape a caller writes when it wants a
+	// person's aliases in scope and has no terminal to offer (#1036).
+	//
+	// It was left out on purpose once, for three reasons, and each has since
+	// stopped holding. That bash 3.2.57 does not write it made it "one
+	// version's extra line" — but this dialect models 5.3 everywhere else,
+	// and the older build's silence is recorded in its own column rather
+	// than being this dialect's answer. That it reports an ioctl this shell
+	// does not make is still true, and is the reason the errno half is fixed
+	// text rather than a rendered error: the *fact* being reported — an
+	// interactive shell that could not have the terminal — is one this shell
+	// establishes for itself, and how it is worded is what Diagnostics is
+	// for. And that the number is different every run stopped mattering when
+	// the harness began masking it: `process group (N)`, masked rather than
+	// dropped, because *that it named one* is part of the complaint.
+	//
+	// Empty says nothing, which is five of the six columns and the base's
+	// answer.
+	CannotSetTerminalProcessGroup string
 
 	// NoJobControlAtStartupNamesTheScript puts `$0` in front of that remark
 	// rather than the shell's own name. dash and only dash, of the two that
@@ -4216,6 +4273,23 @@ func (d Diagnostics) JobControlDiagnostic(shell string) string {
 		return ""
 	}
 	return d.invocationPrefix(shell) + d.NoJobControlAtStartup + "\n"
+}
+
+// TerminalProcessGroupDiagnostic is the line above that one, in the single
+// dialect that writes it, and empty in the rest — see
+// CannotSetTerminalProcessGroup.
+//
+// Separate from JobControlDiagnostic rather than folded into it because the
+// two are not one sentence: one column writes both, one writes the second
+// alone, and two write neither, so a dialect has to be able to answer them
+// apart.
+func (d Diagnostics) TerminalProcessGroupDiagnostic(shell string, pgid int) string {
+	if d.CannotSetTerminalProcessGroup == "" {
+		return ""
+	}
+	msg := Wording(d.CannotSetTerminalProcessGroup,
+		"cannot set terminal process group (%[1]d)", pgid)
+	return d.invocationPrefix(shell) + msg + "\n"
 }
 
 // ScriptStatus is what a shell exits with when the script operand would not

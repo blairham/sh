@@ -7,7 +7,9 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/blairham/sh/driver"
@@ -184,4 +186,48 @@ func TestTheRemarkIsOnlyForAShellThatCouldNotHaveTheMonitor(t *testing.T) {
 			t.Errorf("wrote %q, want nothing — zsh's and ksh93's shape", errs)
 		}
 	})
+}
+
+// One dialect writes a second line *above* that one, naming the process group
+// it could not hand the terminal to.
+//
+// Measured 2026-09-12 with no terminal on any of the three standard streams,
+// on `-ic` and `-lic` alike:
+//
+//	bash: cannot set terminal process group (91050): Inappropriate ioctl for device
+//	bash: no job control in this shell
+//
+// bash 5.3 alone of the six columns: bash 3.2.57 and bash 3.2 run as `sh`
+// write only the second line, and dash, ksh93 and zsh write neither or only
+// their own. The order is the assertion as much as the wording — this line is
+// first — and so is the number's presence, which is what a caller of `-ic`
+// sees named and what the corpus masks rather than drops (#1036).
+func TestTheShellNamesTheProcessGroupItCouldNotSet(t *testing.T) {
+	dg := remarking()
+	dg.CannotSetTerminalProcessGroup = "cannot set terminal process group (%[1]d): Inappropriate ioctl for device"
+	errs, _ := noTerminalScript(t, dg, interp.PosixSemantics(), "-i", "-c", "echo ran")
+
+	lines := strings.Split(strings.TrimSuffix(errs, "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("wrote %q, want two lines", errs)
+	}
+	want := "testsh: cannot set terminal process group (" +
+		strconv.Itoa(syscall.Getpgrp()) + "): Inappropriate ioctl for device"
+	if lines[0] != want {
+		t.Errorf("the first line was %q, want %q", lines[0], want)
+	}
+	if want := "testsh: no job control in this shell"; lines[1] != want {
+		t.Errorf("the second line was %q, want %q", lines[1], want)
+	}
+}
+
+// And a dialect that leaves it empty writes only the line below it, which is
+// five of the six columns. The pairing is the point: the two are separate
+// fields because one shell writes both, one writes the second alone, and two
+// write neither.
+func TestOnlyOneDialectNamesTheProcessGroup(t *testing.T) {
+	errs, _ := noTerminalScript(t, remarking(), interp.PosixSemantics(), "-i", "-c", "echo ran")
+	if want := "testsh: no job control in this shell\n"; errs != want {
+		t.Errorf("wrote %q, want %q", errs, want)
+	}
 }

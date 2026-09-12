@@ -190,14 +190,19 @@ import (
 // script can tell apart from a typo, and the spellings of *invoking* that need
 // a seam repl has not got are refused by name too:
 //
-//   - **`zle -R`, `zle -M` and `zle reset-prompt`**, redisplay. These write to
-//     the screen in the middle of a widget rather than changing the line, so
-//     they belong with the question of who owns the prompt while a widget is
-//     running.
-//   - **`zle <one of the editor's own actions>`** — `zle end-of-line` from
-//     inside a widget. The name resolves perfectly well; what it would take is
-//     for a shell function to reach back into the editor mid-keystroke, which
-//     is re-entering the read loop rather than transforming the line.
+//   - **`zle -M` and `zle reset-prompt`**. Both write somewhere other than the
+//     line — a status line under the prompt, and the prompt itself — and both
+//     belong with the question of who owns the prompt while a widget is
+//     running. `zle -R` has left this list: bare, it is a redraw and repl can
+//     do that; **with a display string it is still refused**, because the
+//     string goes on the status line `-M` would need.
+//   - **The two editor actions that read a key** — an incremental search, and
+//     a completion that may stop to ask about a long listing. Running either
+//     from inside a widget really would be re-entering the read loop
+//     mid-keystroke. The rest of the editor's actions have left this list;
+//     they transform the line and repl performs them on request, which is
+//     repl.Actions and callBuiltinWidget below. Which two are refused is
+//     repl's answer and not this file's — see repl's performable.
 //
 // `vared` is left out entirely, and so are `zcompile` and `zregexparse`: the
 // first two are separate features and the third belongs with the completion
@@ -297,7 +302,7 @@ func registerZle(r *interp.Runner) {
 // is not built yet says so — the distinction whence.go documents.
 const (
 	zleLetters            = "acfglmrwACDFGIKLMNRTU"
-	zleLettersImplemented = "aACDFLNlw"
+	zleLettersImplemented = "aACDFLNRUlw"
 	// zleOperationLetters are the letters that choose what this builtin
 	// *does*. At most one may be given, and two is a refusal rather than a
 	// preference — see zleBuiltin.
@@ -320,6 +325,8 @@ type zleOpts struct {
 	alias    bool // -A
 	list     bool // -l
 	watch    bool // -F
+	draw     bool // -R
+	push     bool // -U
 	all      bool // -a
 	source   bool // -L
 	widget   bool // -w
@@ -396,6 +403,10 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return listWidgets(r, opts, rest)
 	case opts.watch:
 		return watchDescriptor(r, opts, rest)
+	case opts.draw:
+		return redisplay(r, ctx, rest)
+	case opts.push:
+		return pushKeys(r, ctx, rest)
 	case len(rest) == 0:
 		// `zle` with nothing at all: status 1 and not a word, measured.
 		return 1
@@ -433,6 +444,10 @@ func setZleLetter(opts *zleOpts, letter rune) {
 		opts.list = true
 	case 'F':
 		opts.watch = true
+	case 'R':
+		opts.draw = true
+	case 'U':
+		opts.push = true
 	case 'w':
 		// A modifier and not an operation: measured, `zle -w` alone is the
 		// bare `zle` — status 1 and not a word — and `zle -N -w a f` defines
@@ -675,25 +690,140 @@ func accepts(name string) bool {
 // callBuiltinWidget performs one of the editor's own actions, asked for from
 // inside a widget.
 //
-// Only the accept, which is the one the editor can honor *after* the widget
-// returns rather than in the middle of it: zsh's `zle accept-line` does not
-// stop the function it is called from — the rest of the body still runs — and
-// the line is committed when the widget is finished. So it is recorded and
-// carried back by runWidgetFunction, and repl ends the line the way a typed
-// Return ends it.
+// Two kinds, and the split is the editor's rather than this shell's.
 //
-// The others are still refused out loud. `zle end-of-line` from inside a
-// widget really does mean re-entering the read loop mid-keystroke, which this
-// shell cannot do and should not pretend to — see the file comment.
-func callBuiltinWidget(r *interp.Runner, name string) int {
-	if !accepts(name) {
-		if _, editors := bindkeyWidgets[name]; editors {
-			r.Diagnosef("%s: calling a built-in widget is not implemented yet\n", name)
-			return 1
-		}
+// The **accept** is the one the editor honors *after* the widget returns
+// rather than in the middle of it: zsh's `zle accept-line` does not stop the
+// function it is called from — the rest of the body still runs — and the line
+// is committed when the widget is finished. So it is recorded and carried back
+// by runWidgetFunction, and repl ends the line the way a typed Return ends it.
+//
+// **Everything else goes to the editor and comes straight back**, through the
+// handle repl put on this call's context. The line the editor is given is the
+// one the widget is holding *now* and not the one the keystroke started with,
+// which is what makes a widget that sets `BUFFER` and then asks for the cursor
+// to move mean the line it just wrote; and what comes back is written into the
+// same four parameters, so the next line of the widget reads it.
+//
+// Measured 2026-09-12 against zsh 5.9.2 through a pseudo-terminal, with
+// `echo one` and `echo two` in history and a key bound to a widget:
+//
+//	zle up-line-or-history     rc 0   BUFFER=echo two   CURSOR=8
+//	again                      rc 0   BUFFER=echo one   CURSOR=8
+//	again, at the top          rc 0   BUFFER=echo one   CURSOR=8
+//	zle beginning-of-line      rc 0   BUFFER=echo one   CURSOR=0
+//	zle forward-word           rc 0   BUFFER=echo one   CURSOR=5
+//	zle kill-word              rc 0   BUFFER=echo       CURSOR=5
+//	zle down-line-or-history   rc 0   BUFFER=echo two   CURSOR=8
+//	again                      rc 0   BUFFER=           CURSOR=0
+//	again, at the bottom       rc 0   BUFFER=           CURSOR=0
+//
+// Three facts came out of that and all three are in the code. The effect is
+// **immediate** — the plugin this was filed for reads `$BUFFER` on the very
+// next line. The status is **0 even when the action could not move**, so
+// running off either end of history is not something a script can see. And the
+// cursor lands where the key would have left it, which is why this runs the
+// editor's own action rather than a copy of it.
+//
+// The two the editor will not perform from here are the two that read a key —
+// an incremental search, and a completion that may stop to ask about a long
+// listing. Those are still refused out loud, in the same words a letter this
+// shell has not got gets, because a refusal a script can see beats a call that
+// appears to work. repl decides which two; see repl's performable.
+func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string) int {
+	if accepts(name) {
+		r.SetVar(zleAccept, "1")
+		return 0
+	}
+	widget, editors := bindkeyWidgets[name]
+	if !editors {
 		return 1
 	}
-	r.SetVar(zleAccept, "1")
+	actions, inside := repl.ActionsFrom(ctx)
+	if !inside {
+		// No editor on the other end of this call. Reached where a widget
+		// function was called by something that is not a session — an
+		// embedder with a Runner and a line and no editor of repl's — rather
+		// than by a script, which callWidget has already turned away with its
+		// own wording. Silence, because there is no editor to have refused.
+		return 1
+	}
+	out, performed := actions.Perform(widget, widgetLine(r))
+	if !performed {
+		r.Diagnosef("%s: calling a built-in widget is not implemented yet\n", name)
+		return 1
+	}
+	setWidgetLine(r, out)
+	return 0
+}
+
+// redisplay is `zle -R`: draw the line as it stands, in the middle of a widget.
+//
+// The screen catches up when the widget returns whether this is called or not
+// — repl redraws unconditionally after every widget — so what this is for is
+// the widget that wants the line on the screen *before* it does something
+// slow. The plugin this was filed for is exactly that: it draws, then waits up
+// to a second for a keystroke, and without the draw the person spends that
+// second looking at the line as it was.
+//
+// Measured 2026-09-12 against zsh 5.9.2. Inside a widget `zle -R` is status 0.
+// **Outside one it is status 1 and says nothing at all** — which is not what
+// naming an action outside a widget does (`widgets can only be called when ZLE
+// is active`) and not what `zle -U` outside one does (`can only be called from
+// widget function`). Three spellings, three answers, and this is the silent
+// one.
+//
+// A display string is refused by name. `zle -R "text"` puts the text on a
+// status line below the prompt until the next redisplay, and there is nothing
+// under repl/ that owns a line below the prompt for something other than a
+// search or a listing to write on. Every use of it in the plugins this shell
+// is driven under is the bare spelling.
+func redisplay(r *interp.Runner, ctx context.Context, args []string) int {
+	actions, inside := repl.ActionsFrom(ctx)
+	if !inside {
+		return 1
+	}
+	if len(args) > 0 {
+		r.Diagnosef("-R with a display string is not implemented yet\n")
+		return 1
+	}
+	actions.Redisplay(widgetLine(r))
+	return 0
+}
+
+// pushKeys is `zle -U`: put characters where the editor will read them next.
+//
+// What a widget that read a keystroke of its own does with the one it did not
+// want. The plugin this was filed for waits a second for a key and pushes back
+// whatever came, so the key means what it would have meant if the widget had
+// never run.
+//
+// Measured 2026-09-12 against zsh 5.9.2: **exactly one operand**, and the
+// arity is settled before the question of whether there is a widget at all.
+// `zle -U` alone is `not enough arguments for -U` and `zle -U x y z` is `too
+// many arguments for -U`, both at status 1 and both *outside* a widget too,
+// where the count is still what it complains about. Worth pinning because the
+// idiom is written `zle -U -- "$REPLY"`: a shell that took the operands as a
+// list would silently push something else where a `$REPLY` split into words.
+//
+// Two pushes in one widget come back **newest first**, each push's own
+// characters in order — `zle -U ab; zle -U cd` leaves `cdab` on the line. That
+// is repl's pushKeys, and the measurement is written down there too.
+func pushKeys(r *interp.Runner, ctx context.Context, args []string) int {
+	if len(args) == 0 {
+		r.Diagnosef("not enough arguments for -U\n")
+		return 1
+	}
+	if len(args) > 1 {
+		r.Diagnosef("too many arguments for -U\n")
+		return 1
+	}
+	actions, inside := repl.ActionsFrom(ctx)
+	if !inside {
+		r.Diagnosef("can only be called from widget function\n")
+		return 1
+	}
+	actions.PushKeys(args[0])
 	return 0
 }
 
@@ -708,16 +838,15 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 	// `_zsh_autosuggest_orig_accept-line() { zle .accept-line }` — so it is
 	// read here rather than treated as a name nothing answers to.
 	if builtin, isDotted := strings.CutPrefix(name, "."); isDotted {
-		return callBuiltinWidget(r, builtin)
+		return callBuiltinWidget(r, ctx, builtin)
 	}
 	def, defined := widgetDefinitionOf(r, name)
 	if !defined {
 		if accepts(name) {
-			return callBuiltinWidget(r, name)
+			return callBuiltinWidget(r, ctx, name)
 		}
 		if _, editors := bindkeyWidgets[name]; editors {
-			r.Diagnosef("%s: calling a built-in widget is not implemented yet\n", name)
-			return 1
+			return callBuiltinWidget(r, ctx, name)
 		}
 		// Silence, measured: a widget invoking a name nothing answers to is
 		// status 1 and not a word, with its own stderr watched to be sure.

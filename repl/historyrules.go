@@ -129,11 +129,34 @@ func historyRulesFrom(
 // every rule but the patterns, and for those only where the dialect said so.
 // Meaningless when the first result is false, and false there so that a caller
 // reading it alone cannot mistake "not ignored" for "kept out of the file".
+// hidesRecord reports that the person asked for this line not to be written
+// down anywhere.
+//
+// The space rule alone, and the distinction it draws is the point of this
+// existing at all. A leading space is a *privacy* gesture — the comment on
+// ignoreSpace calls it "run this but do not write it down" — and it is the
+// same sentence an empty HISTFILE says about a whole session, scoped to one
+// line. The other two rules are *tidiness*: ignoreDups and the patterns keep
+// the list the up arrow walks worth walking, which is a statement about a
+// recall list and not about what may be kept.
+//
+// So this is what a recorder beside the history file asks, and `ignored`
+// above is what the file itself asks. They share this rather than each
+// spelling it out, because a second copy of "does a leading space hide this"
+// is a second place for the answer to drift — and the copy that drifts is the
+// one that writes a line somebody asked not to be written.
+//
+// A block store is the recorder this was added for: it kept the line, and its
+// output, for a command the session had already agreed to forget (#2273).
+func (r historyRules) hidesRecord(line string) bool {
+	return r.ignoreSpace && strings.HasPrefix(line, " ")
+}
+
 func (r historyRules) ignored(line, previous string) (ignored, recallable bool) {
 	// A blank hides a line and a repeat hides a line, and in every shell that
 	// has either rule the line is gone from the list too. So these two return
 	// false for recallable regardless of what the dialect said about patterns.
-	if r.ignoreSpace && strings.HasPrefix(line, " ") {
+	if r.hidesRecord(line) {
 		return true, false
 	}
 	if r.ignoreDups && previous != "" && line == previous {

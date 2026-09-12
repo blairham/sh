@@ -215,8 +215,13 @@ func atACapturingPrompt(t *testing.T) *capturingSession {
 		"PS1":      "$ ",
 		"HISTFILE": filepath.Join(dir, "hist"),
 		// Named outright rather than left to HOME, because the suite's home
-		// is a tripwire that must stay empty.
+		// is a tripwire that must stay empty — and, since #2274, because an
+		// unnamed store is no store at all.
 		"SH_BLOCKS_DIR": filepath.Join(dir, "blocks"),
+		// Asked for by name as well. These tests are about what the conduit
+		// does at a terminal, and the output half stopped being something a
+		// session gets for saying nothing.
+		"SH_BLOCKS_OUTPUT": blocks.CaptureTerminalValue,
 	}
 	r := newTestRunner(vars)
 	// The terminal, not a buffer. os/exec inherits an *os.File as a
@@ -398,11 +403,28 @@ func TestWhichCaptureASessionGets(t *testing.T) {
 		wantChildFd1 string
 	}{
 		{
-			name: "the default at a terminal is a conduit", streams: "terminal",
+			// Saying nothing is keeping nothing, terminal or not (#2274).
+			// This row was the opposite of itself until then: an unset
+			// variable at a terminal built a conduit and wrote down what
+			// every command printed.
+			name: "unset keeps nothing even at a terminal", streams: "terminal",
+			wantCapture: false, wantChildFd1: "the terminal",
+		},
+		{
+			name: "unset without a terminal keeps nothing either", streams: "buffer",
+			wantCapture: false, wantChildFd1: "whatever it was",
+		},
+		{
+			name:   "the terminal spelling at a terminal is a conduit",
+			output: blocks.CaptureTerminalValue, outputSet: true, streams: "terminal",
 			wantCapture: true, wantConduit: true, wantChildFd1: "the terminal",
 		},
 		{
-			name: "the default without a terminal keeps nothing", streams: "buffer",
+			// And the point of the spelling: it declines rather than take a
+			// child's terminal away, which is what separates it from a value
+			// that means "whatever it costs".
+			name:   "the terminal spelling without a terminal keeps nothing",
+			output: blocks.CaptureTerminalValue, outputSet: true, streams: "buffer",
 			wantCapture: false, wantChildFd1: "whatever it was",
 		},
 		{

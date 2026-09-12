@@ -144,6 +144,29 @@ func Semantics() interp.Semantics {
 	s.CommandStringShowsCInDollarDash = interp.No
 	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
+	// The order of the letters, and this shell is the reason the axis is a
+	// sequence rather than a discipline: it is neither sorted, nor the order
+	// the script set them in, nor capitals apart. Measured 2026-09-12, the
+	// `s` rows by feeding the program on standard input and the last through
+	// a pseudo-terminal:
+	//
+	//	set -f; set -u; set -e             ufe
+	//	set -a -b -C -e -f -u -v -E -I     ubaCEvIfe
+	//	set -x -a -C -e -u -v              uaCvxe
+	//	set -C -e, on stdin                Cse
+	//	set -x -C -v -u -a -f -e, on stdin uaCvxsife
+	//	-i -c, at a terminal               mi
+	//
+	// `n` is in the string and is the one letter here nobody can measure
+	// directly: the option it stands for stops the `echo` that would read
+	// `$-`. Its place is the one the rest of the order implies — this
+	// shell's `set -o` listing runs `errexit noglob ignoreeof interactive
+	// monitor noexec stdin xtrace verbose vi emacs noclobber allexport
+	// notify nounset`, which is this string reversed, and `noexec` sits
+	// between `stdin` and `interactive` there. The `mi` row is the check on
+	// that: `m` precedes `i` in `$-` exactly as the reversal predicts, and
+	// nothing else in the panel puts them that way round.
+	s.DollarDashLetterOrder = "ubaCEVvxsnmiIfe"
 	// This shell has no `typeset`, but it can still be asked and it answers:
 	// `readonly` is POSIX and `local` is the one declaration here, so the
 	// two words that make the question both exist. Measured 2026-09-07:
@@ -397,6 +420,13 @@ func Semantics() interp.Semantics {
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes
+	// And a stopped job keeps the current-job marker, which is a separate
+	// question from the order the rows come out in: measured 2026-09-12
+	// through a pseudo-terminal, `sleep 40` stopped with ^Z and then
+	// `sleep 41 &` lists `[1] + Suspended` before `[2] - Running`. This
+	// shell will not resolve `%+` or `%-` at all — both are `No current
+	// job` — so the listing is the whole of the evidence here.
+	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
 	s.JobsListFinishedJobs = interp.Yes
 
 	// `jobs`' letters: POSIX's pair and nothing else. `-r`, `-s`, `-n` and

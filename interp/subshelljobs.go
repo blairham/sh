@@ -121,20 +121,20 @@ func (r *Runner) inheritJobs(kind jobBoundary) {
 		return
 	}
 	if kind == jobBoundaryBackground {
-		r.jobs = nil
+		r.jobs, r.jobOrder = nil, nil
 		return
 	}
 	switch r.subshellJobTable() {
 	case SubshellJobsKept:
 	case SubshellJobsKeptOutsideACompound:
 		if kind == jobBoundaryCompound {
-			r.jobs = nil
+			r.jobs, r.jobOrder = nil, nil
 		}
 	default:
 		// Cleared, and the unspecified answer with it: a runner that has
 		// already complained must not then go on to show the parent's jobs
 		// as though it had been told to.
-		r.jobs = nil
+		r.jobs, r.jobOrder = nil, nil
 	}
 }
 

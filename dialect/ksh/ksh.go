@@ -313,6 +313,24 @@ func Semantics() interp.Semantics {
 	s.CommandStringShowsCInDollarDash = interp.Yes
 	s.LoginShowsLInDollarDash = interp.Yes
 	s.CommandStringShowsSInDollarDash = interp.Yes
+	// And the order: `i` and `c` lead, the rest of the lowercase letters are
+	// sorted, then the uppercase ones, and `l` comes last of all. Measured
+	// 2026-09-12, the interactive rows through a pseudo-terminal with a
+	// scratch home directory:
+	//
+	//	set -f; set -u; set -e   cefhsuB
+	//	set -C                   chsBC
+	//	set -a                   cahsB
+	//	-l -c                    chsBl
+	//	-i -c                    icmsBE
+	//	-il -c                   icmsBEl
+	//	-i -Cc                   icmsBCE
+	//
+	// Two of those are why this is not simply "sorted, capitals last": `i`
+	// stands in front of a `c` it sorts after, and `l` stands behind
+	// capitals it sorts before. Both are stable across runs and both differ
+	// from every other member of the panel.
+	s.DollarDashLetterOrder = "icaefhmnstuvxBCEHTl"
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
 	// A negative exponent is a float answer here, not a refusal: `2**-1`
 	// is 0.5.
@@ -437,12 +455,20 @@ func Semantics() interp.Semantics {
 	// and in both bashes, and 3 only in zsh — which is why the two are
 	// separate axes.
 	s.WholeSubscriptOnAScalarSlicesIt = interp.No
-	// [ a -eq 1 ] is a plain false here, no sentence, status 1.
-	s.TestIntegerRefusalIsSilent = interp.Yes
+	// `[ n -eq 5 ]` holds with `n=5` here, and so does `[ 1+1 -eq 2 ]`: the
+	// single-bracket builtin reads its comparison operands as arithmetic the
+	// way `[[ ]]` does, which is what makes `[ a -eq 1 ]` a silent false
+	// rather than an integer complaint — the name is zero.
+	s.TestBuiltinComparisonOperandsAreArithmetic = interp.Yes
 	// `f -nt missing` holds when f exists, and `-t x` is a plain false
 	// rather than dash's and bash's integer complaint.
 	s.MissingFileIsOlder = interp.Yes
 	s.TerminalTestRequiresANumber = interp.No
+	// A `-t` descriptor is read at the width of a C `int` — `[ -t 4294967296 ]`
+	// asks about descriptor 0 — and -1, which is where every conversion too
+	// wide to hold lands, holds whatever the shell is holding.
+	s.TerminalTestDescriptorNarrowsToThirtyTwoBits = interp.Yes
+	s.TerminalTestMinusOneIsATerminal = interp.Yes
 	// And a lone `-t` is `-t 1` rather than a non-empty string: `[ -t ]
 	// >/dev/null` is 1 here and 0 in dash and bash, while the same line on a
 	// pseudo-terminal is 0 in all six.
@@ -560,6 +586,14 @@ func Semantics() interp.Semantics {
 	// `typeset -a b=(1)`.
 	s.ScalarUnderAnArrayDeclaration = interp.ScalarUnderACompoundStaysAScalar
 	s.ScalarUnderATableDeclaration = interp.ScalarUnderACompoundBecomesTheFirstElement
+	// A name holding a compound reaches a child as its **first value**:
+	// measured 2026-09-12, `typeset -x a=(p q)` puts `a=p` in a child's
+	// environment and an exported table puts its first value there. The
+	// only column that hands a child anything for a compound (#1380).
+	s.ExportedCompoundReachesAChildAsItsFirstValue = interp.Yes
+	// And a subscripted operand's letters land on the name: `typeset -x
+	// a[1]=v` lists `typeset -x -a a=([1]=v)` here (#1380).
+	s.SubscriptedOperandCarriesTheAttributes = interp.Yes
 	// `a=(1 2); a+=x` is `typeset -a a=(1x 2)`: the first element joined, the
 	// rest standing, two elements.
 	s.ScalarAppendedToAnArrayBecomesANewElement = interp.No
@@ -763,6 +797,11 @@ func Semantics() interp.Semantics {
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes
+	// And a signal written onto the option with no space: `kill -n9` and
+	// `kill -sKILL` both send. Measured 2026-09-12. This shell is looser
+	// still — it takes `kill -s9` too, which the axis records and does not
+	// follow (#2227).
+	s.KillReadsASignalJoinedToItsOption = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsUseEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnyFailure
@@ -829,6 +868,12 @@ func Semantics() interp.Semantics {
 	s.DollarSingleBackslashC = interp.DollarSingleControlToggled
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
 	s.DollarSingleNulTruncates = interp.Yes
+	// `\x` here takes every hexadecimal digit that follows and a run past
+	// two is a code point, so `$'\x00b'` is the one byte 0x0b where the
+	// other shells read `\x00` and truncate. A run with no digit at all is
+	// a zero byte, which this shell's truncation then makes into nothing.
+	s.DollarSingleHexReadsEveryDigit = interp.Yes
+	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	// Reached through `typeset` in a function defined with the `function`
@@ -962,6 +1007,14 @@ func Semantics() interp.Semantics {
 	// leaves one element under the empty key here and is refused in bash
 	// (#1938).
 	s.EmptyAssociativeKeyIsAnError = interp.No
+	// The two directions part here, which is why they are two axes. Measured
+	// 2026-09-12: `typeset -A h; h[k]=v; typeset -a h` is `typeset: cannot
+	// change associative array h to index array` and the **script ends**,
+	// where `typeset -a a=(x y); typeset -A a` converts and carries the
+	// elements over as the keys `0` and `1` — `typeset -A a=([0]=x [1]=y)`,
+	// with `${a[0]}` reading `x` afterwards (#1375).
+	s.TableUnderAnArrayDeclaration = interp.CompoundKindChangeEndsTheScript
+	s.ArrayUnderATableDeclaration = interp.CompoundKindChangeKeepsTheElements
 	// And reading one says nothing either: measured 2026-09-12, `typeset -A
 	// m; m[k]=v; w=; ${m[$w]}` is the empty string at status 0 with no
 	// diagnostic, where bash names the table (#1972).
@@ -987,6 +1040,9 @@ func Semantics() interp.Semantics {
 	// shell reads as the empty expression exactly as it reads the written
 	// `${a[]}`: measured 2026-09-11 on ksh93u+, both are element zero.
 	s.EmptySubscriptTextIsAMathError = interp.No
+	// The comma is the operator here too, and there are no ranges for the
+	// question to be about (#2160).
+	s.SubscriptExpressionStopsAtASeparator = interp.No
 	// And so is whitespace between them, which is the same reading one text
 	// further along: measured 2026-09-10, `a=(1 2 3); echo $(( a[ ] ))` is
 	// `1` and `(( a[ ] = 9 ))` writes element zero. The two texts coincide
@@ -1008,6 +1064,15 @@ func Semantics() interp.Semantics {
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes
+	// The panel's lone dissent on the current-job marker: it goes to the
+	// newest job here rather than staying with one that stopped. Measured
+	// 2026-09-12 through a pseudo-terminal, `sleep 40` stopped with ^Z and
+	// then `sleep 41 &` lists `[2] +  Running` and `[1] - Stopped`, and
+	// `jobs %+` names the background job where the other five name the
+	// stopped one. A job that stops still *takes* the marker — with two
+	// background jobs, `kill -TSTP %1` moves the `+` onto the older one
+	// here too — so what differs is only whether a later `&` takes it back.
+	s.StoppedJobTakesTheCurrentJobMarker = interp.No
 	s.JobsListFinishedJobs = interp.Yes
 
 	// `jobs`' letters, as its own usage line gives them: `-lnp`. The state
@@ -1294,7 +1359,8 @@ func Diagnostics() interp.Diagnostics {
 		KilledCommandNotice: "%[1]d: %[2]s",
 		ParamNull:           "parameter null",
 		// The array alone is named, not the subscript that was written.
-		BadArraySubscript: "%[1]s: subscript out of range",
+		BadArraySubscript:         "%[1]s: subscript out of range",
+		CannotConvertTableToArray: "%[2]s: cannot change associative array %[1]s to index array",
 		// The same sentence from `unset`, with the builtin named in front of
 		// it as this shell names it in front of the arithmetic one below.
 		UnsetSubscriptBeforeTheFirstElement: "unset: %[1]s: subscript out of range",

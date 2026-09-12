@@ -111,9 +111,10 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 	}
 
 	job := &Job{
-		done:    make(chan struct{}),
-		ready:   make(chan struct{}),
-		Command: name,
+		done:     make(chan struct{}),
+		ready:    make(chan struct{}),
+		stopNote: make(chan struct{}),
+		Command:  name,
 	}
 	sub := r.clone()
 	sub.inheritJobs(jobBoundaryBackground)
@@ -159,6 +160,7 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 
 	r.jobs = append(r.jobs, job)
 	r.setLastJob(job)
+	r.becomeCurrentJob(job)
 
 	// The near ends go into the descriptor table the way `exec {fd}>f`
 	// would put them there: numbered from ten up, for keeps.

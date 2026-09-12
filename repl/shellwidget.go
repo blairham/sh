@@ -24,20 +24,19 @@ import "context"
 // is the dialect's — see dialect/zsh, where the parameters a widget function
 // reads have that shell's names on them and nothing here knows any of them.
 //
-// Two things are deliberately *not* offered.
+// A shell action *can* also ask this editor to perform a Widget, and this file
+// used to say it could not. The paragraph that stood here said the editor's
+// actions read the terminal, so running one from inside a call would be
+// re-entering the read loop — which is true of two of them and of none of the
+// rest. See editoractions.go, which is that seam, the two it still refuses,
+// and why the handle is not a field on Shell.
 //
-// A shell action cannot ask this editor to perform a Widget. It is the obvious
-// next seam and it is a different one: the editor's actions read the terminal
-// and redraw, so running one from inside a call would be re-entering the read
-// loop, and the dialect that wants it has to be able to name the moment the
-// screen is written. The dialect refuses that spelling by name instead, which
-// is the rule this tree keeps for a gap — a refusal a script can see beats a
-// call that appears to work.
-//
-// And there is no seam for an action to be *started* and finish later. A
-// callback on a descriptor — how a plugin in one of these shells does
-// asynchrony — needs this loop to wait on more than the terminal, which is a
-// change to how a key is read rather than an addition beside it.
+// There is no seam for an action to be *started* and finish later. A callback
+// on a descriptor — how a plugin in one of these shells does asynchrony —
+// needs this loop to wait on more than the terminal, which is a change to how
+// a key is read rather than an addition beside it. That one arrived as
+// WatchedDescriptors and DescriptorReady; a handler under those runs to
+// completion like anything else here.
 
 // Line is the line being edited, as an action outside the editor sees it.
 //
@@ -83,7 +82,7 @@ func (e *editor) runShellWidget(name string, prompt drawnPrompt) bool {
 		// what a binding to an action this shell cannot perform means.
 		return false
 	}
-	out, ok := e.runFunc(name, Line{Buffer: string(e.line), Cursor: e.pos})
+	out, ok := e.runFunc(name, e.give(), editorActions{e: e, prompt: prompt})
 	if !ok {
 		// The shell declined to run it: no such action, or one whose
 		// definition has gone. It has said so itself if it had anything to
@@ -99,18 +98,22 @@ func (e *editor) runShellWidget(name string, prompt drawnPrompt) bool {
 // shellWidgets is how a session runs an action the shell owns, with the ctx
 // the session was started under closed over — the editor reads keys and has no
 // context of its own to give one.
-func (s Shell) shellWidgets(ctx context.Context) func(string, Line) (Line, bool) {
+func (s Shell) shellWidgets(ctx context.Context) func(string, Line, Actions) (Line, bool) {
 	if s.RunWidget == nil {
 		return nil
 	}
 	guard := s.guard()
-	return func(name string, in Line) (out Line, ok bool) {
+	return func(name string, in Line, ed Actions) (out Line, ok bool) {
 		// Behind the guard a typed line and a hook already run behind, and
 		// for the stronger version of the same reason: an action bound to a
 		// key runs on a *keystroke*, so a panic in one would end a session
 		// over a key somebody pressed by accident. A guarded panic leaves the
 		// line alone.
-		if guard.Do(func() { out, ok = s.RunWidget(ctx, name, in) }) {
+		// The handle rides the context rather than the signature, which is
+		// editoractions.go's decision and its file comment carries the
+		// reason: what needs it is a builtin the interpreter reaches, not the
+		// dialect entry point this calls.
+		if guard.Do(func() { out, ok = s.RunWidget(WithActions(ctx, ed), name, in) }) {
 			return Line{}, false
 		}
 		return out, ok

@@ -2047,6 +2047,90 @@ Details, each measured:
   way at the first character that is not a flag: `${(Ux}` errors at
   position 5.
 
+  **The text it quotes is the rest of the word**, from the expansion's `$`
+  to the end of the word it stands in — not the expansion alone, and not
+  the rest of the line. Measured on zsh 5.9.2, 2026-09-12:
+
+  | probe | quoted text |
+  | --- | --- |
+  | `echo ${(!)v}` | `${(!)v}` |
+  | `echo ${(!)v}rest more` | `${(!)v}rest` |
+  | `echo ${(g:x:)v} tail` | `${(g:x:)v}` |
+  | `print -r -- "[${(Z:x:)v}]"` | `${(Z:x:)v}]"` |
+  | `echo "${(Ux}"` | `${(Ux}"` |
+  | `echo "${(!)v}"$'q'tail` | `${(!)v}"$'q'tail` |
+  | `echo $( echo ${(!)v} in )` | `${(!)v}` |
+
+  Row three is the discriminating one: a line would have carried ` tail`
+  with it, and the expansion alone would have carried nothing in rows two,
+  four, five and six. Row seven says the word is the *inner* word where the
+  group stands inside a substitution. A control character in that text is
+  made visible rather than written out — a tab is `\t`, a newline `\n`,
+  every other control character is a caret spelling, and a backslash is
+  left alone, which is the same rendering `(V)` uses.
+
+### A context with room for one word joins the group's words
+
+An assignment's value, a `case` subject, a `[[ ]]` operand and a here-string
+keep no fields, so the words a group came to are joined there — and every
+step below the join then sees one word. Measured on zsh 5.9.2, 2026-09-12,
+with `f(){ printf "b  b\na a\nc\n"; }`, `g(){ printf "b\na\nb\n"; }`,
+`h(){ printf "3\n1\n2\n"; }` and `v=c,a,b`. The double space in `f` is the
+instrument: a value left whole and a value split and rejoined are the same
+nine characters without it.
+
+| probe | zsh 5.9.2 | |
+| --- | --- | --- |
+| `x=${$(f)}` | `b b a a c` | split, then joined on IFS |
+| `x=${(j:-:)$(f)}` | `b-b-a-a-c` | on the separator the group named |
+| `x=${(o)$(f)}` | `b b a a c` | one word by now, so nothing to sort |
+| `x=${(u)$(g)}` | `b a b` | nor to dedup |
+| `x=${(s:,:)v}` | `c,a,b` | nor to split |
+| `x=${(l:3::_:)$(h)}` | `1 2` | and the pad measures the joined word |
+| `x=${(q)$(f)}` | `b\ b\ a\ a\ c` | which the quoting takes whole |
+| `printf '[%s]' ${(o)$(f)}` | `[a][a][b][b][c]` | where a list context sorts |
+
+The last row is every other row's refutation: the same characters on a
+command line sort five fields, so this is the context and not the flag.
+
+**Where the join sits: below the operator, above everything else.** It is
+*not* rule 5's quoted join, and the discriminating pair is the same
+characters in the same assignment with and without quotes:
+
+| probe, `y=(ab ab)` | zsh 5.9.2 | |
+| --- | --- | --- |
+| `x=${(j:+:)y#ab}` | `+` | the trim emptied both elements first |
+| `x="${(j:+:)y#ab}"` | `+ab` | rule 5 joined first, then trimmed once |
+| `x=${(j:+:)y}` | `ab+ab` | the control, with no trim at all |
+| `x=${(@)z:/x/Q}`, `z=(x y)` | `Q y` | the element operators run elementwise |
+| `x=${(o)q:#one}`, `q=(one two)` | `two` | all of them |
+
+**The `@` letter does not exempt it**, where in quotes it does: `y=(c a b)`
+and `x=${(o@)y}` is `c a b`, so the join happened and the sort found one
+word. A scalar context has nowhere to put a second field.
+
+**A length is still asked ahead of the join**, exactly as in quotes:
+`a=(abc de f); x=${(U)#a}` is 3.
+
+**The splitting flags do not split there.** `f`, `s`, `0` and `p` follow the
+rule the `=` spelling already followed. `x=${(s:,:)v}` is `c,a,b` where
+`printf '[%s]' ${(s:,:)v}` is three fields and `printf '[%s]' "${(s:,:)v}"`
+is three as well — that pair is what says quoting is not the thing deciding
+it. The `@` letter does not turn the split back on either.
+
+**The shell split is the exception, and is joined back afterwards.** It is
+the one step below the join that can make a list out of one word, so the
+join is repeated after it — on IFS, and not on the separator the group
+named, which is what says the two joins are different joins. With `u='b a'`:
+`x=${(oZ+n+)u}` is `b a`, `x=${(l:3::_:Z+n+)u}` is `b a`, `IFS=:
+x=${(Z+n+)u}` is `b:a`, `x=${(j:+:Z+n+)u}` is `b a`, and
+`printf '[%s]' ${(oZ+n+)u}` on a command line is `[a][b]`.
+
+**The inner of a nesting is not one of these contexts**, though it reaches
+the group by the same route: what it comes to is read by the operator around
+it rather than by a command line. `a=(one '' two)` and
+`"${(j:,:)${(@)${a[@]}}}"` is `one,,two`, three fields reaching the join.
+
 ### `(t)` is what a name *is*, in place of what it holds
 
 The one read that separates "the value changed" from "the name is still an
@@ -2225,6 +2309,28 @@ subscript naming nothing is no name — `${(P)n[4]}` and `${(P)n[-4]}` are
 empty — and an **association** is outside it, `[0]` being a key there like
 any other. A corner no script can depend on, reproduced because the
 alternative is an empty at status 0.
+
+**The write side reads the same node.** An assignment through the flag goes
+through the resolved text read as the parameter expansion it spells, so every
+subscript the read answers the write answers too. Measured 2026-09-12 on zsh
+5.9.2, with the resolved text on the left:
+
+    a=(p q);   v='a[(r)q]'; ${(P)v::=Z}   →  a is `p Z`   a search names the element
+    a=(p q);   v='a[(i)q]'; ${(P)v::=Z}   →  a is `p Z`   and its index form
+    x=(p q r); v='x[1,2]';  ${(P)v::=Z}   →  x is `Z r`   a range names a *span*
+    s=abc;     v='s[2]';    ${(P)v::=Z}   →  s is `aZc`   the control
+    x=(p q r); v='x[2]';    ${(P)v::=Z}   →  x is `p Z r`
+
+Taken apart by hand into a name plus one arithmetic index, the first two
+failed in the arithmetic and the third was **silent**: `1,2` reached the
+reader as one expression, the comma operator answered its right operand, and
+the write landed on element 2 instead of replacing the span — a plausible
+array back at status 0 (#2169).
+
+`[@]` and `[*]` on the left are not answered by either spelling and are
+refused as they were: the shell replaces the whole array with the one value,
+and the *direct* `x[@]=Z` does not do that here either, so answering only the
+indirect one would put the two spellings out of step.
 
 ### `(P)` beside an operator that assigns
 

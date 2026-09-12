@@ -429,31 +429,49 @@ whole path it was invoked by for a script it could not open — `/opt/homebrew/b
 shell writes what it was invoked by throughout, which is the convention
 everywhere else in it and not a decision taken here.
 
-#### The pid line is not reproduced, and that is a decision
+#### The pid line, and why it is reproduced after all
 
-bash 5.3.15 writes a line above the remark that carries its own process id:
-`bash: cannot set terminal process group (11143): Inappropriate ioctl for
-device`. It is left out, for three reasons in order of weight.
+bash 5.3.15 writes a line above the remark that names a process group:
+`bash: cannot set terminal process group (91050): Inappropriate ioctl for
+device`. It was left out once, for three reasons, and each has since stopped
+holding.
 
 1. **Two of the three bash members do not write it.** bash 3.2.57 and bash 3.2
-   run as `sh` write the second line alone. So it is one version's extra line
-   rather than bash's wording, and reproducing it would make this shell agree
-   with one member of the panel and disagree with two.
-2. **There is nothing here whose failure it would describe.** It is bash
-   reporting a `tcsetpgrp` that returned `ENOTTY`. This shell makes no such
-   call on this path, so the line would be a report of an event that did not
-   happen.
-3. **It carries a pid**, which no script can act on — it is the shell's own —
-   and which means no recording of it is the same twice.
+   run as `sh` write the second line alone — but the bash dialect models 5.3
+   everywhere else in this tree, and the older build's silence is recorded in
+   its own column rather than being the dialect's answer.
+2. **There is nothing here whose failure it would describe.** Still true: it
+   is bash reporting a `tcsetpgrp` that returned `ENOTTY`, and this shell
+   makes no such call on this path. That is why the errno half is fixed text
+   in the dialect's wording rather than a rendered error — the line is only
+   ever written by a shell that *has no terminal*, so the failure it describes
+   is always the same one. The fact being reported — an interactive shell that
+   could not have the terminal — is one this shell establishes for itself; how
+   it is worded is what `Diagnostics` is for.
+3. **It carries a number that is different every run.** The harness masks it:
+   `normalize` rewrites `process group (N)`, masked rather than dropped,
+   because *that it named one* is part of the complaint. That is what made the
+   row recordable, and it is what the golden record holds today.
 
-#### What the corpus cannot say about this
+So it is `Diagnostics.CannotSetTerminalProcessGroup`, a format taking the
+process group and empty in five of the six columns, written above
+`NoJobControlAtStartup` and separately from it — one column writes both, one
+writes the second alone, and two write neither, so a dialect has to be able to
+answer them apart.
 
-Nothing, and the third reason above is why: the corpus runs bash 5.3.15, whose
-first line has a different number in it every run. `docs/spec/invocation.md`
-already records that as the reason none of the `-i script.sh` grid is a corpus
-case. The evidence is the table above, the per-dialect wordings in
-`dialect/*/`, and a driver test that runs the front end with files on all three
-streams and asserts the whole line.
+The number this shell writes is its own process group. Measured, bash writes
+the group it is in when it is not that group's leader, and `-1` when it
+already is one; the leader case is not what the corpus records and not what a
+caller of `-ic` produces, and it is left unmodelled rather than guessed at.
+
+#### What the corpus says about this
+
+Two rows, `harness/an-interactive-bundle-runs-the-command-string` and
+`harness/a-login-and-interactive-bundle`, plus the whole `env/`, `prompt/` and
+`startup/` family that reaches a prompt or `-i` — every one of them carries
+the masked line in its two bash columns. Beside them are the per-dialect
+wording in `dialect/bash/`, and a driver test that runs the front end with
+files on all three streams and asserts both lines in order.
 
 ### The announcement splits where the monitor does not
 
@@ -630,20 +648,51 @@ in the panel builds it the same way. Measured 2026-09-05, `set -f; set
 | zsh | `569Xefu` |
 
 None of them is the order the options were written in, and only two
-resemble each other. bash sorts the lowercase letters and keeps the ones
-it started with as a suffix; ksh93 sorts everything it holds; zsh puts
-its digits first; and dash's `ufe` is neither sorted nor chronological —
-it is its own option table's order, which is a fact about a table nobody
-outside dash can see.
-
-So a script may test `case $- in *e*)` and may not compare `$-` against a
-string, and an implementation has no order to inherit: it has to pick
-one, per dialect, the way it picks the letters. The whole string is also
-recorded by route in `special/dollar-dash-in-full` and
+resemble each other. So a script may test `case $- in *e*)` and may not
+compare `$-` against a string, and an implementation has no order to
+inherit: it picks one **per dialect**, the way it picks the letters, and
+`Semantics.DollarDashLetterOrder` is where each says which. The whole
+string is also recorded by route in `special/dollar-dash-in-full` and
 `special/dollar-dash-in-full-from-a-script`, which is where the
 route-dependence above shows up as text rather than as membership — ksh93
 carries `s` for a command string and drops it for a script, landing on
 exactly bash's `hB`.
+
+Re-measured a letter at a time on 2026-09-12, each shell has a
+discipline, and no two of them are the same one:
+
+**bash** sorts the lowercase letters, then the uppercase ones, then puts
+the letter naming the route it was invoked by last. `set -C -e` is
+`ehBCc` and `set -C -e` with the program on standard input is `ehBCs`,
+which is what says the trailing letter is the route's rather than `c` in
+particular — `i` and `m` sort in with the rest (`-i -c` at a terminal is
+`himBHc`) where `s` does not.
+
+**ksh93** leads with `i`, then `c`, sorts the rest of the lowercase
+letters, then the uppercase ones, and puts `l` last of all. `-i -c` at a
+terminal is `icmsBE`, `-il -c` is `icmsBEl`, and `-l -c` is `chsBl`, so
+two letters sit outside the sort in opposite directions: `i` in front of
+a `c` it sorts after, and `l` behind capitals it sorts before.
+
+**zsh** sorts the whole string by byte, digits and capitals included.
+`set -C` is `569CX` — the capital lands *in front of* a startup letter
+the shell already held, which is what makes it a sort rather than an
+append.
+
+**dash** uses an order of its own that is neither sorted nor
+chronological: `set -a -b -C -e -f -u -v -E -I` is `ubaCEvIfe`, and
+adding the standard-input route puts `s` between `x` and `i`. It is the
+reverse of the order the same shell's `set -o` writes its rows in, which
+is the only evidence available for `n` — `set -n` stops the `echo` that
+would read `$-`, so the letter cannot be observed directly. `-i -c` at a
+terminal answers `mi`, and `m` before `i` is what that reversal
+predicts.
+
+These are recorded as one string per dialect rather than as four named
+disciplines, so that a letter's place is a measurement a reader can check
+against a shell, and so that the member whose order is its own table's
+needs no special case. A letter a dialect's string does not name follows
+the ones it does.
 
 ## Where it lives
 

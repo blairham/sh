@@ -479,11 +479,34 @@ zf_chmod 777 ./sneaky`,
 		Did: func(_ Fixture, o Outcome) bool { return o.Says("secret") },
 		Why: "#2260: the roster enumerates a directory and names no path",
 	}, {
+		// bash keeps a history list and writes a history file in a shell
+		// nobody is sitting at — measured, `bash -c 'history -w out'` creates
+		// the file even with an empty list — which is what makes this row
+		// reachable where zsh's `fc -W` beside it is not. It was inert with
+		// the note "not a builtin yet" until #2271 landed the builtin and its
+		// gate together.
 		Name:   "builtin/history-write",
 		Only:   []string{"bash"},
 		Script: `history -w {{target}}`,
 		Did:    made,
-		Why:    "not a builtin yet — falls through to a refused exec",
+		Why:    "#2271: a history file is a write to a path the script names",
+	}, {
+		// The append half, which is a different system call on a different
+		// flag and would be a hole of its own: a gate on `-w` alone leaves
+		// `-a` opening the same path with O_APPEND.
+		Name:   "builtin/history-append",
+		Only:   []string{"bash"},
+		Script: `history -s x; history -a {{target}}`,
+		Did:    made,
+		Why:    "#2271: `-a` opens the same path the write letter does",
+	}, {
+		// And the read, which is the letter that brings a denied file's
+		// contents *into* the shell where `history` will print them.
+		Name:   "builtin/history-read",
+		Only:   []string{"bash"},
+		Script: `history -r {{secret}}; history`,
+		Did:    leaked,
+		Why:    "#2271: `-r` reads a file into a list the script can print",
 	}, {
 		Name:   "builtin/mapfile",
 		Only:   []string{"bash"},

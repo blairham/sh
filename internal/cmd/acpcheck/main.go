@@ -35,6 +35,10 @@ func main() {
 		only = flag.String("run", "", "grade only the rows whose name contains this")
 		verb = flag.Bool("v", false, "print the detail for every row, not only for the ones that did not pass")
 		wire = flag.Bool("wire", false, "print a real annotated transcript of one session, message by message")
+		// Which shell the binary under test should be. The multi-call binary
+		// defaults to the core, so a grade that never said this was grading
+		// the one dialect nobody runs (#2258).
+		dialect = flag.String("dialect", "", "grade the binary as this dialect: bash, zsh, ksh, dash, posix or core")
 		// The client rows need an agent to drive, and this binary is one:
 		// re-executed with this flag it speaks ACP as an agent instead of
 		// grading one. Not a mode anybody runs by hand.
@@ -77,7 +81,7 @@ func main() {
 	defer cancel()
 
 	if *wire {
-		t, err := acpcheck.Transcript(ctx, shell, filepath.Join(dir, "transcript"))
+		t, err := acpcheck.Transcript(ctx, shell, filepath.Join(dir, "transcript"), *dialect)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "acpcheck:", err)
 			os.Exit(1)
@@ -92,11 +96,13 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "acpcheck: naming this binary:", err)
 	}
-	res := acpcheck.Run(ctx, shell, dir, self, *only)
-	fmt.Print(table(res, *verb))
+	res := acpcheck.Run(ctx, acpcheck.Config{
+		Bin: shell, Root: dir, Self: self, Only: *only, Dialect: *dialect,
+	})
+	fmt.Print(table(res, *verb, *dialect))
 
 	if *only == "" {
-		cmp, err := acpcheck.Compare(ctx, shell, filepath.Join(dir, "compare"))
+		cmp, err := acpcheck.Compare(ctx, shell, filepath.Join(dir, "compare"), *dialect)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "acpcheck: comparison:", err)
 		} else {
@@ -109,7 +115,7 @@ func main() {
 }
 
 // table renders the graded rows.
-func table(res acpcheck.Result, verbose bool) string {
+func table(res acpcheck.Result, verbose bool, dialect string) string {
 	var b strings.Builder
 	width := 0
 	for _, r := range res.Rows {
@@ -117,7 +123,13 @@ func table(res acpcheck.Result, verbose bool) string {
 			width = len(r.Name)
 		}
 	}
-	fmt.Fprintf(&b, "\nACP, graded against the binary that ships\n\n")
+	// The dialect is in the header because a grade that does not say which
+	// shell it graded reads as a grade of all of them (#2258).
+	as := dialect
+	if as == "" {
+		as = "core, the binary's default"
+	}
+	fmt.Fprintf(&b, "\nACP, graded against the binary that ships, as %s\n\n", as)
 	pass := 0
 	for _, r := range res.Rows {
 		mark := "FAIL"

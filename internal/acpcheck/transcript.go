@@ -25,7 +25,9 @@ import (
 // quietly keep its old commentary.
 
 // Transcript drives one session and returns it, annotated.
-func Transcript(ctx context.Context, bin, dir string) (string, error) {
+//
+// dialect is which shell the binary should be; empty is its default.
+func Transcript(ctx context.Context, bin, dir, dialect string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
@@ -48,7 +50,11 @@ func Transcript(ctx context.Context, bin, dir string) (string, error) {
 		}
 		return AllowOnce
 	}
-	c, err := Dial(bin, Options{Args: []string{"-acp"}, Dir: dir, Answer: answer, Trace: trace})
+	args := []string{"-acp"}
+	if dialect != "" {
+		args = append([]string{"-dialect", dialect}, args...)
+	}
+	c, err := Dial(bin, Options{Args: args, Dir: dir, Answer: answer, Trace: trace})
 	if err != nil {
 		return "", err
 	}

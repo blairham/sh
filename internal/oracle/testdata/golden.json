@@ -149622,6 +149622,108 @@
         "TimedOut": false
       }
     },
+    "set/listed-value-with-a-hash": {
+      "ash": {
+        "Stdout": "v1='ab#cd'~v2='a#b#c'~v3='1#b'~v4='tail#'~v5='#abcd'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "v1=ab#cd~v2=a#b#c~v3=1#b~v4=tail#~v5='#abcd'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "v1=ab#cd~v2=a#b#c~v3=1#b~v4=tail#~v5='#abcd'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "v1=ab#cd~v2=a#b#c~v3=1#b~v4=tail#~v5='#abcd'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "v1='ab#cd'~v2='a#b#c'~v3='1#b'~v4='tail#'~v5='#abcd'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "v1='ab#cd'~v2='a#b#c'~v3=1#b~v4='tail#'~v5='#abcd'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "v1='ab#cd'~v2='a#b#c'~v3='1#b'~v4='tail#'~v5='#abcd'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "set/listed-value-with-a-quote-at-an-end": {
+      "ash": {
+        "Stdout": "v1='x'\"'\"~v2=''\"'\"'x'~v3=''\"'\"~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "v1='x'\\'''~v2=''\\''x'~v3=\\'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "v1='x'\\'''~v2=''\\''x'~v3=\\'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "v1='x'\\'''~v2=''\\''x'~v3=''\\'''~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "v1='x'\"'\"~v2=''\"'\"'x'~v3=''\"'\"~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "v1=$'x\\''~v2=$'\\'x'~v3=$'\\''~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "v1='x'\\'~v2=\\''x'~v3=\\'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "set/o-at-the-end-of-a-bundle": {
       "ash": {
         "Stdout": "ok=0~*",

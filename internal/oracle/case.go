@@ -13083,6 +13083,16 @@ printf 'TWO=still-running\n'`,
 		Why:     "one listing, three spellings of the same three values: bare-until-needed with `'\\''` for the embedded quote, always-single-quoted with the quote doubled out, and `$'...'` — filtered to the script's own names because the rest of the listing is the machine's",
 	},
 	{
+		ID: "set/listed-value-with-a-quote-at-an-end", Category: "builtins",
+		Snippet: `v1="x'"; v2="'x"; v3="'"; set | grep "^v[123]"; echo "st=$?"`,
+		Why:     "where the two single-quoting listings part, and the only place they can: a quote at an *end* of the value. bash wraps the whole value in one pair and keeps the empty run its escape leaves behind, zsh cuts the value at each quote and wraps only the non-empty pieces, and bash 5 writes the lone-quote value with no quotes at all where 3.2 wraps it. All of them read back as the value, which is why a spelling belonging to neither survived here until a listing was compared byte for byte (#2299)",
+	},
+	{
+		ID: "set/listed-value-with-a-hash", Category: "builtins",
+		Snippet: `v1=ab#cd; v2=a#b#c; v3=1#b; v4=tail#; v5=#abcd; set | grep "^v[1-5]"; echo "st=$?"`,
+		Why:     "three shells and three rules for one character: bash quotes a `#` only where a comment could begin, so only the last of these is quoted; ksh93 quotes one a name stands in front of, so `1#b` joins it in staying bare and `ab#cd` does not; zsh quotes every one. We had bash on zsh's answer and listed `ab#cd` quoted where the shell lists it bare (#2299)",
+	},
+	{
 		ID: "set/bare-set-and-the-functions", Category: "builtins",
 		Snippet: `myfn() { echo hi; }; set | grep -c '^myfn'; echo "st=$?"`,
 		Why:     "exactly one shell follows the variables with every defined function; counted rather than shown, so the answer is 1 against three 0s whatever the body's layout",

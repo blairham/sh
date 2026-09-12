@@ -2066,12 +2066,12 @@ type Semantics struct {
 	// passing it on as an operand.
 	//
 	// Only visible once something looks at the operands. `unset -` is quiet
-	// under No because its bare form validates nothing, not because the dash was
-	// eaten — `unset -v -`, which does validate, names the dash there. Under Yes
-	// it is `not enough arguments` instead, because after the dash is eaten
-	// there is nothing left to unset. Recorded as
-	// `name/a-lone-dash-given-to-a-builtin` and
-	// `name/unset-v-validates-the-lone-dash`.
+	// under No because its bare form validates nothing, not because the word was
+	// eaten — `unset -v -`, which does validate, names it there. Under Yes it is
+	// `not enough arguments` instead, because after the word is eaten there is
+	// nothing left to unset. Recorded as
+	// `name/a-lone-hyphen-given-to-a-builtin` and
+	// `name/unset-v-validates-the-lone-hyphen`.
 	LoneDashIsAnOption Answer
 
 	// LoopControlOutsideALoopIsFatal ends the script when `break` or `continue`
@@ -2206,7 +2206,7 @@ type Semantics struct {
 	// CdRefusesUnknownOption refuses a letter `cd` does not have rather than
 	// reading the word as a directory. Answering No looks for somewhere called
 	// `-Q` instead, which is what a `cd` taking two operands — `cd old new` —
-	// does with a leading dash word.
+	// does with a leading `-` word.
 	//
 	// Only about an *unknown* letter. `-L` and `-P` are options under both
 	// answers and are not asked about.
@@ -2836,50 +2836,48 @@ type Semantics struct {
 	//
 	//	FOO=bar; typeset -i FOO; echo "[$FOO]"
 	//
-	//	bash 5.3, bash as sh, bash 3.2   [bar]   the text stands
-	//	ksh93u+, zsh 5.9.2               [0]     re-read as an expression
+	//	No    [bar]   the text stands
+	//	Yes   [0]     re-read as an expression
 	//
-	// **One of the two answers loses data whichever way it is chosen**, and
-	// that is the reason this is a field and not a rule: the shells that
-	// re-read destroy `bar` — an expression made of an unset name is 0, and
-	// 0 is what is left — and the shells that do not leave a name declared
-	// integer holding text that is not a number. There is no reading under
-	// which both are satisfied, so a dialect has to say which shell it is.
+	// **One of the two answers loses data whichever way it is chosen**, and that
+	// is the reason this is a field and not a rule: re-reading destroys `bar` —
+	// an expression made of an unset name is 0, and 0 is what is left — and not
+	// re-reading leaves a name declared integer holding text that is not a
+	// number. There is no reading under which both are satisfied, so a preset
+	// has to say which it is.
 	//
-	// It is one question over every attribute that has something to say
-	// about a value, not one per letter: the shells that re-read `-i` also
-	// fold `-u` and `-l` on the spot, and the shells that do not, do not.
-	// `-x`, `-r` and `-a` say nothing about a value and reach this nowhere.
+	// It is one question over every attribute that has something to say about a
+	// value, not one per letter: an implementation that re-reads `-i` also folds
+	// `-u` and `-l` on the spot, and one that does not, does not. `-x`, `-r` and
+	// `-a` say nothing about a value and reach this nowhere.
 	//
-	// Asked only where a name is *already* holding something in the cell
-	// being declared. A declaration that creates the name has nothing to
-	// re-read, and inside a function the cell a shadow just made is new
-	// whatever the caller held — measured, `v=5; function f { typeset -i v;
-	// echo "[${v-UNSET}]"; }` reads UNSET in bash and ksh93 and `0` in zsh,
-	// which is DeclaredNameWithoutValueIsEmpty and not this. Nor is it asked
-	// where the two readings agree, so `a=7; typeset -i a` is 7 without a
-	// dialect.
+	// Asked only where a name is *already* holding something in the cell being
+	// declared. A declaration that creates the name has nothing to re-read, and
+	// inside a function the cell a shadow just made is new whatever the caller
+	// held — which is DeclaredNameWithoutValueIsEmpty and not this. Nor is it
+	// asked where the two readings agree, so `a=7; typeset -i a` is 7 without an
+	// answer.
 	//
-	// The *next* assignment is unanimous and is no part of this: `typeset -i
-	// a; a=3+4` is 7 and `typeset -u d; d=again` is AGAIN in every shell
-	// that spells the letter. What is being asked is only whether the
-	// attribute reaches backwards.
+	// The *next* assignment is unanimous and is no part of this: `typeset -i a;
+	// a=3+4` is 7 and `typeset -u d; d=again` is AGAIN wherever the letter is
+	// spelled. What is being asked is only whether the attribute reaches
+	// backwards.
 	//
-	// Not an assignment, so it does not meet the readonly refusal: measured,
-	// `typeset -r r=1; typeset -i r` is 1 at status 0 in the shells that
+	// Not an assignment, so it does not meet the readonly refusal:
+	// `typeset -r r=1; typeset -i r` is 1 at status 0 even where the value is
 	// re-read.
 	AttributeRereadsTheValueItFinds Answer
 	// InheritedValueSurvivesADeclaredType keeps the value a name was born
 	// with when a declaration gives it a *type* — `-i`, `-u` or `-l` — that
 	// the same declaration does not also export or freeze.
 	//
-	// The third answer to the question above, on the one input where the two
-	// shells that agree about a scalar part company. bash and zsh both keep
-	// the value and go on to answer that question: bash leaves `bar` alone
-	// and zsh re-reads it to 0, and both still hand it to a child. ksh93u+
-	// **discards it** — the name comes back *unset* and *unexported*, so
-	// `INHERITED=bar sh -c 'typeset -i INHERITED; env'` tells the child
-	// nothing at all where the other two tell it something.
+	// The third answer to the question above, on the one input where two presets
+	// that agree about a scalar part company. Both readings above keep the value
+	// and go on to answer that question — one leaving the text alone and the
+	// other re-reading it to 0 — and both still hand it to a child. A No here
+	// **discards it**: the name comes back *unset* and *unexported*, so
+	// `INHERITED=bar sh -c 'typeset -i INHERITED; env'` tells the child nothing
+	// at all where the others tell it something.
 	//
 	// It is not the re-read seen from another angle, and modeling it as one
 	// gives the wrong answer twice over: a re-read produces 0 and keeps the
@@ -3262,23 +3260,23 @@ type Semantics struct {
 
 	// DeclareOptionsTakingANumber names letters out of DeclareOptions whose
 	// *argument* is a number rather than the first operand: `typeset -F 3 x`
-	// declares one name with three digits of precision, and the `3` was
-	// never a name. Both spellings, measured 2026-09-07 in zsh 5.9.2 and
-	// ksh93 alike: the detached `-F 3 x` and the attached `-F3 x`.
+	// declares one name with three digits of precision, and the `3` was never a
+	// name. Both spellings, where the letter exists at all: the detached
+	// `-F 3 x` and the attached `-F3 x`.
 	//
-	// Empty is bash's answer and the substrate's: measured, bash reads the
-	// same line as two operands and says `8: not a valid identifier` for
-	// `typeset -i 8 n=64`, so the word after the letter is a name there and
-	// nothing is consumed. dash has neither builtin.
+	// Empty is the substrate's answer and a preset that reads the same line as
+	// two operands, saying `8: not a valid identifier` for `typeset -i 8 n=64` —
+	// the word after the letter is a name there and nothing is consumed. A
+	// preset with neither builtin cannot be asked.
 	//
 	// Three rules come with the letters, each measured rather than assumed:
 	//
 	//   - Only a run of decimal digits is the argument. `typeset -F abc x=1`
-	//     declares *both* `abc` and `x` as floats in zsh and ksh93 alike, so
-	//     a word that is not a number was never the letter's argument.
+	//     declares *both* `abc` and `x` as floats wherever the letter takes a
+	//     number, so a word that is not a number was never its argument.
 	//   - One number, not a list. `typeset -F 3 4 x` is `not an identifier:
-	//     4` in zsh and `4: invalid variable name` in ksh93: the letter is
-	//     satisfied by the first number and the second is an operand again.
+	//     4` or `4: invalid variable name`: the letter is satisfied by the
+	//     first number and the second is an operand again.
 	//   - The number belongs to the *first* number-taking letter of its
 	//     option word, wherever in the word that letter stands, and taking
 	//     it discards whatever else that word carried. `typeset -ix 16
@@ -3567,7 +3565,7 @@ type Semantics struct {
 	// Yes keeps parsing, so the values are whatever the option parse does not
 	// claim — exactly the words that would have become the positional parameters
 	// — and a `--` among them still ends the options. No stops at the name and
-	// every word behind it is a value, dash words and `--` included.
+	// every word behind it is a value, words beginning with `-` and `--` included.
 	//
 	// **One question, not two.** Both rows move together, because whether `--`
 	// is an operand *is* whether options are still being read. Asked only once
@@ -3832,10 +3830,10 @@ type Semantics struct {
 	// table does not hold. Answering No reports 1 and prints nothing.
 	AliasReportsNotFound Answer
 
-	// UnaliasReportsNotFound is that question for `unalias`, and the panel
-	// does not pair the two: ksh93 complains about `alias nope` and is silent
-	// about `unalias nope`, and zsh does exactly the reverse. One field could
-	// not say that.
+	// UnaliasReportsNotFound is that question for `unalias`, and the two are not
+	// paired: an implementation may complain about `alias nope` and stay silent
+	// about `unalias nope`, or do exactly the reverse. One field could not say
+	// that.
 	UnaliasReportsNotFound Answer
 
 	// AliasNotFoundStatusCounts makes `alias` report how many names it could not
@@ -3922,11 +3920,11 @@ type Semantics struct {
 	//
 	// The third reading is what makes it three: refusing `-x` as an option while
 	// reading `-1` as a count that is out of range, so "reads options" and
-	// "reads every dash word as an option" are not the same answer.
+	// "reads every `-` word as an option" are not the same answer.
 	//
-	// A lone `-` is not a dash word in any reading here and reaches the count.
+	// A lone `-` is not a `-` word in any reading here and reaches the count.
 	// Other readings of that one word exist and are not modeled — see
-	// docs/spec/semantics.md. Nor is `--` a dash word, which is asked about
+	// docs/spec/semantics.md. Nor is `--` such a word, which is asked about
 	// separately — see ShiftDoubleDashEndsOptions.
 	//
 	// Asked only for a word that actually begins with a `-`.
@@ -3935,7 +3933,7 @@ type Semantics struct {
 	// reads what follows as the count. Answering No calls `--` an illegal
 	// number, having no option parsing here for a marker to end.
 	//
-	// It is not ShiftOptionWords: a preset may read no dash word as an option
+	// It is not ShiftOptionWords: a preset may read no `-` word as an option
 	// and still honor the marker, so the two questions have different answers in
 	// the same implementation. Only the *first* `--` is the marker —
 	// `shift -- --` complains about the second wherever the marker is taken.
@@ -4005,7 +4003,7 @@ type Semantics struct {
 	// about, and it would otherwise be the optstring.
 	//
 	// Yes makes `getopts -q o` an unknown option; No makes `-q` the optstring.
-	// Recorded as `getopts/a-dash-word-where-the-optstring-belongs`, with a
+	// Recorded as `getopts/a-leading-hyphen-where-the-optstring-belongs`, with a
 	// letter no preset owns: a first probe using a letter that is a real option
 	// somewhere left that implementation's answer standing wrongly at No.
 	GetoptsRejectsUnknownOption Answer
@@ -4623,12 +4621,8 @@ type Semantics struct {
 	// Measured 2026-09-09 with `declare a=1; declare a+=2; echo "$a"`, and
 	// the same three lines under `export`, `readonly` and `local`:
 	//
-	//	bash 5.3.15         12
-	//	bash 5.3.15 as sh   12
-	//	bash 3.2.57         12
-	//	ksh93               typeset: a+: invalid variable name
-	//	zsh 5.9.2           not valid in this context: a+
-	//	dash                export: a+: bad variable name
+	//	Yes   12
+	//	No    `a+: invalid variable name`, or `not valid in this context: a+`
 	//
 	// So it is one preset's operand rather than a core one. A reading that
 	// refuses it names **`a+`** — the text in front of the `=` — and not the
@@ -4914,7 +4908,7 @@ type Semantics struct {
 	//
 	// Measured with `shift`, which no PATH carries — `cd` is a contaminated
 	// probe, since some systems ship a `/usr/bin/cd`. Recorded as
-	// `hash/a-builtin-counts-except-in-zsh`.
+	// `hash/a-builtin-does-not-always-count`.
 	HashSearchesPathAlone Answer
 
 	// UnderscoreTracksTheLastArgument moves `$_` to the previous simple
@@ -5286,7 +5280,7 @@ type Semantics struct {
 
 	// LoginProfileWhenNonInteractive has a login shell read its login profile
 	// even when there is a script to run rather than a person to prompt. A shell
-	// is a login shell when argv[0] begins with a dash, which is what `login`
+	// is a login shell when argv[0] begins with a `-`, which is what `login`
 	// and every terminal emulator's "run as a login shell" does, and the
 	// question is only what that then means for a shell that is not going to
 	// prompt.
@@ -5297,9 +5291,9 @@ type Semantics struct {
 	// route. docs/spec/invocation.md has the grid, including the two
 	// facts that keep the axis from being wider than it is: an interactive
 	// login shell reads its profile in all four, so the interactive route
-	// asks nothing, and an explicit `--login` makes bash read it too, so
-	// this is about login-ness *inferred from argv[0]* and not about being
-	// a login shell as such.
+	// asks nothing, and an explicit `--login` makes the profile be read under
+	// every answer, so this is about login-ness *inferred from argv[0]* and not
+	// about being a login shell as such.
 	//
 	// A bool rather than an Answer: there is no third thing to do, and
 	// "refuse to start" is not an answer any shell could ship.
@@ -6013,7 +6007,7 @@ type Semantics struct {
 
 	// PrintfRejectsUnknownOption treats any leading word starting with `-` as an
 	// option and refuses one it does not know, so even `printf "-%s\n" x` is an
-	// error because the format itself begins with a dash.
+	// error because the format itself begins with a `-`.
 	//
 	// Answering No recognizes the options it has and takes anything else as the
 	// format — so `printf -q x` prints `-q` there and is an error under Yes.
@@ -6200,11 +6194,11 @@ type Semantics struct {
 
 	// UlimitHasResidentSet is `ulimit -m`. Answering No has no such letter and
 	// reports it as a bad option. Recorded as
-	// `ulimit/a-letter-zsh-does-not-have`.
+	// `ulimit/a-letter-not-every-shell-has`.
 	UlimitHasResidentSet Answer
 
 	// UlimitHasProcessCount is `ulimit -u`. Answering No has no such letter.
-	// Recorded as `ulimit/a-letter-dash-does-not-have`.
+	// Recorded as `ulimit/a-letter-some-shells-lack`.
 	UlimitHasProcessCount Answer
 
 	// UlimitSetsBothLimits lowers the hard limit along with the soft one when
@@ -6285,8 +6279,8 @@ type Semantics struct {
 	//
 	// The failure is the *redirection's*, so the builtin never runs and its
 	// own status is never reached; the status of the shell that stops is
-	// FatalErrorStatusIsOne's, which is why dash exits 2 here and the rest
-	// exit 1 without this needing a status of its own.
+	// FatalErrorStatusIsOne's, which is why the status differs between presets
+	// without this needing one of its own.
 	//
 	// The boundary is measured rather than assumed. A regular builtin
 	// (`true 3>/nope/x`) and an external command are unaffected everywhere,
@@ -6304,8 +6298,7 @@ type Semantics struct {
 	// the mode.
 	//
 	// So a preset's field here is where the shell *starts*, and the shell's own
-	// posix knob moves it — see dialect/bash's `posix` option and dialect/zsh's
-	// `emulate`. Nothing is attached to argv[0]: naming the invocation would
+	// posix knob moves it — see each preset's own posix or emulation option. Nothing is attached to argv[0]: naming the invocation would
 	// record the accident and lose the rule.
 	RedirectErrorOnSpecialBuiltinFatal Answer
 

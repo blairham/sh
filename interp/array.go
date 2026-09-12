@@ -1773,6 +1773,37 @@ func (r *Runner) rangeSubscript(src subscriptSource, idx, lo, hi string) ([]stri
 // element leaves an array empty — `${a[-5,2]}` on four elements is nothing —
 // where the same reach past the start of a string is clamped, so `${s[-6,2]}`
 // on five characters is still `he`.
+//
+// A start outside the array is not always *nothing*, and that half is
+// measured rather than derived: an array answers some of those shapes with
+// **one empty element**, which `${#a[lo,hi]}` counts as 1 and `${(@)a[lo,hi]}`
+// makes one field of. Measured 2026-09-12 on zsh 5.9.2 over the whole grid of
+// endpoints for arrays of five, two, one and no elements, the two blocks that
+// leave one are:
+//
+//   - **above** the array, `first >= n`: one empty element when the
+//     unclamped `last` is strictly greater than `first`. With five elements
+//     `${#a[6,7]}` is 1 and `${#a[6,6]}` is 0, and `${#a[7,9]}` is 1 where
+//     `${#a[9,9]}` is 0 — so it is the strictness and not the distance.
+//   - **below** it, an `lo` written negative that counts back past the first
+//     element: one empty element whenever `last` is at or above `first`,
+//     equal ends included. `${#a[-8,-8]}` is 1 where the shape above at
+//     equal ends is 0, so the two edges are not mirror images.
+//
+// The two are told apart by how `lo` was *written* rather than by where it
+// landed: `-6` and `0` both normalize to the same position on a five-element
+// array, and the negative answers 1 everywhere while the literal `0` answers
+// exactly as `1` does.
+//
+// A *scalar* does neither — `s=hello; ${#s[6,7]}` and `${#s[-8,-8]}` are both
+// 0 — so this is the element reading's alone.
+//
+// One cell of the grid is not reproduced, and it is recorded rather than
+// fitted: on an array with **no** elements `${#a[0,0]}` is 1 there while
+// `${#a[0,1]}` beside it is 0 and `${#a[0,2]}` is 1 again. A rule
+// non-monotonic in `hi` is an artifact of the shell's own arithmetic rather
+// than a statement about ranges, and writing it down here would be writing
+// down that artifact.
 func (r *Runner) rangeElems(elems []string, scalar bool, lo, hi string) ([]string, bool) {
 	var units []string
 	if scalar {
@@ -1800,9 +1831,12 @@ func (r *Runner) rangeElems(elems []string, scalar bool, lo, hi string) ([]strin
 	}
 	if first < 0 {
 		if negative && !scalar {
-			return []string{}, true
+			return outOfRangeSpan(last >= first), true
 		}
 		first = 0
+	}
+	if first >= n && !scalar {
+		return outOfRangeSpan(last > first), true
 	}
 	if last >= n {
 		last = n - 1
@@ -1815,6 +1849,20 @@ func (r *Runner) rangeElems(elems []string, scalar bool, lo, hi string) ([]strin
 		return []string{strings.Join(span, "")}, true
 	}
 	return span, true
+}
+
+// outOfRangeSpan is what a range whose start is outside the array comes to:
+// one empty element, or nothing at all. See rangeElems for which is which and
+// for the measurement behind it.
+//
+// A named function rather than a literal at each of the two sites, because
+// the two differ only in the comparison and the answer they share is the
+// surprising half.
+func outOfRangeSpan(oneEmpty bool) []string {
+	if oneEmpty {
+		return []string{""}
+	}
+	return []string{}
 }
 
 // scalarReadsAsCharacters asks whether a subscript on a plain string names one

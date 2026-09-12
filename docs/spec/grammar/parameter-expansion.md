@@ -728,6 +728,40 @@ symmetry predicts and it is a fact rather than a derivation: a start
 counted back past the *first element* leaves an array empty, where the
 same reach past the first *character* of a string is clamped to it.
 
+#### A start outside the array names one empty element
+
+"Empty" above is the *value*; the element **count** is not always zero.
+Measured 2026-09-12 on zsh 5.9.2 over the whole grid of endpoints for
+arrays of five, two, one and no elements, with `a=(1 2 3 4 5)`:
+
+| probe | `${#a[lo,hi]}` |
+| --- | --- |
+| `[6,7]` — a start past the end, ends apart | `1` |
+| `[6,6]` — the same start, equal ends | `0` |
+| `[7,9]` / `[9,9]` — the same pair further out | `1` / `0` |
+| `[-8,-8]` — a start below the array, equal ends | `1` |
+| `[-6,-8]` — the same start, end below it | `0` |
+| `[-6,0]` / `[0,0]` — a negative and the literal it normalizes to | `1` / `0` |
+| `[6,7]` on `s=hello` — a character range | `0` |
+
+So two blocks answer with **one empty element** rather than with no
+element at all, and the same count comes back through `(@)`:
+`set -- "${(@)a[6,7]}"` leaves one parameter. Above the array the ends
+must differ *strictly*, and it is the strictness rather than the distance
+— `[7,9]` is 1 where `[9,9]` is 0. Below it, equal ends still count, so
+the two edges are not mirror images.
+
+The two are told apart by how `lo` was **written** and not by where it
+landed: `-6` and `0` normalize onto the same position on five elements
+and answer differently. A character range does neither, so this is the
+element reading's rule alone.
+
+One cell is not reproduced here, and it is recorded rather than fitted:
+on an array with no elements `${#a[0,0]}` is `1` there while `${#a[0,1]}`
+beside it is `0` and `${#a[0,2]}` is `1` again. A rule non-monotonic in
+`hi` is the shell's own arithmetic showing through rather than a
+statement about ranges.
+
 ### A subscript on a plain string
 
 | probe, `s=hello` | zsh | bash 5.3 | bash 3.2 | bash-as-sh | ksh93 | dash |
@@ -3799,6 +3833,22 @@ the `$`.
 - `b` **outside** the array is not clamped to its nearest end. With five
   elements `${a[(Ib:6:)*a]}` is `0` and `${a[(ib:6:)*a]}` is `6`: neither
   direction searches at all, where clamping would have found element 5.
+- The two ends of *outside* are not mirrors. A start past the end leaves
+  each letter the miss its own direction names, as above; a start counted
+  back past the **first** element gives the forward search the *backward*
+  miss. Measured 2026-09-12 with `a=(p q r p t)`: `${a[(ib:-6:)p]}` is
+  `0`, not `6`, and `${a[(Ib:-6:)p]}` is `0` as it already was, while
+  `${a[(rb:-6:)p]}` and `${a[(Rb:-6:)p]}` are both empty. An **array**
+  only: `s="hello world"; ${s[(ib:-12:)l]}` is `12`, the ordinary forward
+  miss, so the rule belongs to the element walk rather than to where a
+  search begins.
+
+  The same answer reaches the left of an assignment, where neither half
+  of it is a subscript that side can write to: `b[(ib:-6:)p]=Q` on
+  `b=(x y z p)` puts `Q` in front of every other element exactly as
+  `b[(Ib:-6:)p]=Q` does, and `b[(rb:-6:)p]=Q` is `assignment to invalid
+  subscript range` exactly as the `R` miss is. Refused by name here, as
+  the `I` and `R` misses already are.
 - Forward searches (`r`, `i`) run from `b` upward; reverse ones (`R`,
   `I`) run from `b` downward, so `${a[(Rb:3:)*a]}` is `gamma`.
 
@@ -3917,8 +3967,7 @@ nowhere to hang its operand. Filed rather than guessed (#1275).
 
 A flag group inside a **range endpoint** — `${s[(r)l,(r)o]}`, which is
 `${s[3,5]}` there — is read as part of the first group's operand and
-answers empty. Filed as #1533; a negative `(b:expr:)` start past the first
-element of an *array* answers the wrong miss, filed as #1534.
+answers empty. Filed as #1533.
 
 ### Grammar
 

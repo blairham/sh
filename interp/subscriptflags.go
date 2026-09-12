@@ -99,7 +99,7 @@ func (r *Runner) searchSubscript(e *syntax.ParamExpr, search byte, src subscript
 	if scalar {
 		return r.searchScalar(g, search, elems[0]), true
 	}
-	at, found := r.searchElements(g, search, elems)
+	at, found, below := r.searchElements(g, search, elems)
 	// The index is the base plus the element's *position*, which is the same
 	// thing only while an array has no gaps. It has none in the grammar that
 	// has this construct — measured, `a=(x); a[5]=y` there leaves five
@@ -115,8 +115,13 @@ func (r *Runner) searchSubscript(e *syntax.ParamExpr, search byte, src subscript
 		return []string{elems[at]}, true
 	case 'i':
 		// One past the last element when nothing matched, which is what
-		// makes `a[(i)new]=v` an append in the shell that has the construct.
+		// makes `a[(i)new]=v` an append in the shell that has the construct
+		// — except where the walk never entered the array from *below*, and
+		// then it is the other letter's miss. See searchElements.
 		if !found {
+			if below {
+				return []string{itoa(base - 1)}, true
+			}
 			return []string{itoa(base + len(elems))}, true
 		}
 	default: // 'I'
@@ -129,8 +134,22 @@ func (r *Runner) searchSubscript(e *syntax.ParamExpr, search byte, src subscript
 }
 
 // searchElements walks the elements the way the group asks and returns the
-// position of the match it wanted, 0-based.
-func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []string) (at int, found bool) {
+// position of the match it wanted, 0-based, and — where nothing matched —
+// which side of the array the walk began on.
+//
+// below is the half the two out-of-range starts do not share. A start past
+// the *end* leaves each letter its own miss, and a start before the
+// *beginning* gives both forward and backward the backward one: measured
+// 2026-09-12 on zsh 5.9.2 with `a=(p q r p t)`, `${a[(ib:-6:)p]}` is 0 where
+// `${a[(ib:6:)p]}` is 6, and `${a[(Ib:-6:)p]}` and `${a[(Ib:6:)p]}` are both
+// 0. So the direction decides the miss only when the start is above the
+// array, and below it the answer is the index no element has whichever way
+// the walk would have run (#1534).
+//
+// A *scalar* does not do this — `s="hello world"; ${s[(ib:-12:)l]}` is 12,
+// the ordinary forward miss — which is why the answer is here rather than in
+// searchStart, where both walks would inherit it.
+func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []string) (at int, found, below bool) {
 	matches := r.subscriptMatcher(g, false)
 	back := search == 'R' || search == 'I'
 	from, within := r.searchStart(g, len(elems), back)
@@ -138,7 +157,7 @@ func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []s
 		// A start outside the array is not clamped to its end: measured,
 		// with five elements `${a[(Ib:6:)*a]}` is 0 and `${a[(ib:6:)*a]}` is
 		// 6, so neither direction searches at all.
-		return 0, false
+		return 0, false, from < 0
 	}
 	want := r.searchNth(g)
 	step := 1
@@ -150,10 +169,10 @@ func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []s
 			continue
 		}
 		if want--; want == 0 {
-			return i, true
+			return i, true, false
 		}
 	}
-	return 0, false
+	return 0, false, false
 }
 
 // searchScalar answers a search subscript over a plain string, where what the
@@ -645,10 +664,23 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 		// too.
 		return r.scalarSearchIndex(g, search, r.units(elems[0]), elems[0]), true
 	}
-	at, found := r.searchElements(g, search, elems)
+	at, found, below := r.searchElements(g, search, elems)
 	base := r.arrayBase()
 	if found {
 		return base + at, true
+	}
+	if below {
+		// The read side's rule reaches this side unchanged: a walk that
+		// began before the array answers the *backward* miss, and that is
+		// the index no element has. Measured 2026-09-12 on zsh 5.9.2 with
+		// `b=(x y z p)`, `b[(ib:-6:)p]=Q` puts `Q` in front of every other
+		// element exactly as `b[(Ib:-6:)p]=Q` does, and `b[(rb:-6:)p]=Q` is
+		// `assignment to invalid subscript range` exactly as the `R` miss
+		// is — so `i` and `r` take the answer below rather than the append
+		// they take from a start *above* the array, and neither of the two
+		// answers below is one this side can use (#1534).
+		r.refuseAssignSubscriptFlag(e, string(search), " where the search began before the first element")
+		return 0, false
 	}
 	switch search {
 	case 'i', 'r':

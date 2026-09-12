@@ -207,8 +207,15 @@ func guardedBy(mu *sync.Mutex, w io.Writer) bool {
 // A *os.File is left alone: os/exec hands a file to the child directly and
 // copies nothing, so there is no goroutine to race and wrapping it would
 // *create* the copying it is meant to make safe.
-func (r *Runner) lockedStdin() io.Reader {
-	in := r.In()
+func (r *Runner) lockedStdin() io.Reader { return r.lockReader(r.In()) }
+
+// lockReader is the same guard over a named stream rather than over the
+// shell's current one. It exists because a process substitution's body may be
+// handed the input the shell had *before* a pipeline's pipe replaced it, which
+// is a different stream from r.In() and needs the guard just as much — two
+// readers of one io.Reader is what the guard is for, whichever of the shell's
+// inputs they happen to share. See Runner.shellStdin.
+func (r *Runner) lockReader(in io.Reader) io.Reader {
 	if _, ok := in.(*os.File); ok {
 		return in
 	}
@@ -355,6 +362,11 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			sub.bg = nil
 		}
 		if readers[i] != nil {
+			// What the pipe replaced is kept, because one dialect's process
+			// substitutions read it rather than the pipe. See
+			// Runner.shellStdin for the whole of why, and procSub for the
+			// axis that decides whether anything looks.
+			sub.shellStdin = r.stdin()
 			sub.Stdin = readers[i]
 		}
 		if writers[i] != nil {
@@ -432,14 +444,21 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		func() {
 			savedIn, savedOut, savedErr := r.Stdin, r.Stdout, r.Stderr
 			savedCPU := r.elemCPU
+			savedShellIn := r.shellStdin
 			defer func() {
 				r.Stdin, r.Stdout, r.Stderr = savedIn, savedOut, savedErr
 				r.elemCPU = savedCPU
+				// Put back with the streams, and for a sharper reason than
+				// tidiness: this element runs on the shell itself, so a
+				// record left behind would outlive the pipeline and tell
+				// every later substitution to read a pipe that is closed.
+				r.shellStdin = savedShellIn
 				if readers[i] != nil {
 					_ = readers[i].Close()
 				}
 			}()
 			if readers[i] != nil {
+				r.shellStdin = r.stdin()
 				r.Stdin = readers[i]
 			}
 			r.Stdout, r.Stderr = sharedOut, sharedErr

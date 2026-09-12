@@ -986,6 +986,14 @@ func Semantics() interp.Semantics {
 	// 2026-09-05: `[[ x == <(x) ]]` is `process substitution <(x) cannot be
 	// used here` here and runs the command in bash.
 	s.ProcessSubstitutionInCondition = interp.No
+	// A substitution's body reads what the *shell* is reading, and this shell
+	// is alone in it. `printf "PIPE\n" | cat <(cat)` with the shell's own
+	// input a file holding OUTER prints OUTER here and PIPE in bash and
+	// ksh93 — the body takes the input the element's pipe replaced, because
+	// that pipe is a redirection of the element and the words were expanded
+	// before it was applied. `=(cat)` in the same place answers the same,
+	// which is the whole reason #1933 was filed before the file form landed.
+	s.ProcessSubstitutionBodyReadsTheShellsInput = interp.Yes
 	// A condition operand that is not an expression abandons the input —
 	// `echo one; [[ 1+ -eq 0 ]]; echo two` writes `one`, complains, and
 	// never reaches `two`. Note it is `[[ ]]` alone: the same expression

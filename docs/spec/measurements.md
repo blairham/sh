@@ -10733,6 +10733,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `procsub/a-file-substitution-opens-only-at-a-word` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `echo x=(echo hi); echo after'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `echo x=(echo hi); echo after'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `echo x=(echo hi); echo after'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | **2>** `<shell>:1: missing end of string` *(status 1)* |
 | `procsub/a-file-substitution-in-a-condition` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 1: syntax error near `=(x'~<shell>: -c: line 1: `[[ x == =(x) ]] && echo hit \|\| echo miss; echo after'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 1: syntax error near `=(x'~<shell>: -c: line 1: `[[ x == =(x) ]] && echo hit \|\| echo miss; echo after'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 0: syntax error near `=(x'~<shell>: -c: line 0: `[[ x == =(x) ]] && echo hit \|\| echo miss; echo after'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | **2>** `<shell>:1: process substitution =(x) cannot be used here` *(status 1)* |
 | `procsub/an-unterminated-file-substitution` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `cat =(echo hi'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `cat =(echo hi'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `cat =(echo hi'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `=(echo hi'` *(status 1)* |
+| `procsub/a-body-in-a-pipeline-reads-the-shells-input` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `PIPE` | `PIPE` | `PIPE` | `PIPE` | `OUTER` |
+| `procsub/a-file-substitutions-body-in-a-pipeline` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `printf "PIPE\n" \| cat =(read -r v; printf "%s\n" "$v")'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `printf "PIPE\n" \| cat =(read -r v; printf "%s\n" "$v")'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `printf "PIPE\n" \| cat =(read -r v; printf "%s\n" "$v")'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `OUTER` |
+| `procsub/a-body-outside-a-pipeline-reads-the-same-input` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `OUTER` | `OUTER` | `OUTER` | `OUTER` | `OUTER` |
+| `procsub/a-body-in-a-grouped-pipeline-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `PIPE` | `PIPE` | `PIPE` | `PIPE` | `PIPE` |
+| `procsub/a-body-in-a-function-called-from-a-pipeline` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `PIPE` | `PIPE` | `PIPE` | `PIPE` | `PIPE` |
+| `procsub/a-body-in-a-redirection-operand-of-a-pipeline-element` | **2>** `<shell>: 1: Syntax error: redirection unexpected` *(status 2)* | `PIPE` | `PIPE` | `PIPE` | `PIPE` | `PIPE` |
+| `procsub/a-nested-body-in-a-pipeline` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `PIPE` | `PIPE` | `PIPE` | `PIPE` | `OUTER` |
+| `procsub/a-body-in-a-backgrounded-pipeline` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `PIPE` | `PIPE` | `PIPE` | `PIPE` | `OUTER` |
+| `procsub/a-writing-body-in-a-pipeline-reads-its-own-pipe` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `PIPE` | `PIPE` | `PIPE` | `PIPE` | `PIPE` |
 | `procsub/a-quoted-file-substitution-is-text` | `[=(echo hi)]` | `[=(echo hi)]` | `[=(echo hi)]` | `[=(echo hi)]` | `[=(echo hi)]` | `[=(echo hi)]` |
 | `redir/a-target-that-is-not-one-word` | `st=0` | `st=1` **2>** `<shell>: line 1: $e: ambiguous redirect` | `st=0` | `st=1` **2>** `<shell>: $e: ambiguous redirect` | `st=0` | `st=0` |
 | `redir/a-target-that-expands-to-nothing` | `st=2` **2>** `<shell>: 1: cannot create : Directory nonexistent` | `st=1` **2>** `<shell>: line 1: $e: ambiguous redirect` | `st=1` **2>** `<shell>: line 1: $e: ambiguous redirect` | `st=1` **2>** `<shell>: $e: ambiguous redirect` | `st=1` **2>** `<shell>: : cannot open` | `st=1` **2>** `<shell>:1: no such file or directory: ` |
@@ -10964,6 +10973,42 @@ grades it and nothing drift-checks it either, for the same reason.
 - `procsub/an-unterminated-file-substitution` — the input running out inside one, which every column refuses and none of them refuses in the same words. It is here because the *shape* of getting it wrong is silent: an opener with no wording of its own falls through to the sentence for an unmatched quote, and this reported `unmatched =(` — a complaint about a quote, for a line with none — while `<(` and `$(` beside it were already right. A second construct reaching a shared table through a case nobody added is the defect this repository has now hit five times
   ```sh
   cat =(echo hi
+  ```
+- `procsub/a-body-in-a-pipeline-reads-the-shells-input` — whose standard input a substitution's body reads, asked in the one place the two candidates are different streams: inside a pipeline element, where the element's input is the pipe and the shell's is still its own. zsh hands the body the shell's and answers OUTER; bash 5.3, bash 3.2, bash as `sh` and ksh93 hand it the element's and answer PIPE, so the body eats the pipe the outer `cat` was going to read. An axis rather than a correction, and the reading behind zsh's answer is that a pipeline's pipe is a redirection of the element, applied after the element's words are expanded. The body is written with the shell's own `read` rather than an external `cat` — the two are measured to answer identically in all six columns — because an external body is handed the element's descriptor and starts a process with it, which is #2144 and is older than this row. #1933
+  ```sh
+  printf "PIPE\n" | cat <(read -r v; printf "%s\n" "$v")
+  ```
+- `procsub/a-file-substitutions-body-in-a-pipeline` — the same question of the third spelling, which only one shell has — and it answers it the same way, which is what says the input a body reads is a property of the construct rather than of the pipe it happens to be attached to. Pinned beside `<(cmd)` so the two cannot be fixed apart: `=(cmd)` arrived later and reached the same preparation, and a second helper beside the first is the shape this repository keeps getting wrong
+  ```sh
+  printf "PIPE\n" | cat =(read -r v; printf "%s\n" "$v")
+  ```
+- `procsub/a-body-outside-a-pipeline-reads-the-same-input` — the control the row above needs, and the reason the bug was silent for as long as it was: with no pipeline the command's input *is* the shell's, so every shell that has the construct answers OUTER and nothing distinguishes the two readings. It is here to keep the fix from being a loosening — a shell that always took the shell's input would pass this and the row above alike, and the four rows below are what tell them apart
+  ```sh
+  cat <(read -r v; printf "%s\n" "$v")
+  ```
+- `procsub/a-body-in-a-grouped-pipeline-element` — the boundary of the axis above, and the row that makes it narrow rather than a blanket rule: written as a group the element's redirections are in place before its body runs, so the substitution is expanded with the pipe already installed and the whole panel — zsh with it — answers PIPE. A shell that read the axis as `a substitution always takes the shell's input` passes the pipeline row and fails this one
+  ```sh
+  printf "PIPE\n" | { cat <(read -r v; printf "%s\n" "$v"); }
+  ```
+- `procsub/a-body-in-a-function-called-from-a-pipeline` — the same boundary reached through a function rather than a group: the substitution stands in the body's own command, which runs after the element's redirections, so all five answer PIPE. It is the row that says the answer reaches one simple command's words and stops — not the whole of the element, and not everything the element goes on to run
+  ```sh
+  f() { cat <(read -r v; printf "%s\n" "$v"); }; printf "PIPE\n" | f
+  ```
+- `procsub/a-body-in-a-redirection-operand-of-a-pipeline-element` — the third boundary, and the finest of them: the same word in the same element, moved from an argument to a redirection operand. A redirection's operand is expanded while the redirections are being applied rather than before, so the pipe is already there and the panel is unanimous on PIPE — where the argument spelling splits it. A fix written as `a pipeline element's substitutions read the shell's input` gets this one wrong in the accepting direction, which is silent
+  ```sh
+  printf "PIPE\n" | cat < <(read -r v; printf "%s\n" "$v")
+  ```
+- `procsub/a-nested-body-in-a-pipeline` — a substitution inside a substitution, in a pipeline: the outer body is a shell whose own input is whatever the axis handed it, so the inner body inherits that and never sees the pipe. zsh answers OUTER and the other four PIPE, the same split as the plain row — which is what says the answer is carried by the body's shell rather than recomputed from where the word was written. The middle command's input is sent to `/dev/null`, which sharpens it twice over: the inner body still answers with what the *outer body's shell* was reading, so a redirection written beside the word is no more its source than the pipe was, and no command in the row is handed the element's own descriptor (#2144)
+  ```sh
+  printf "PIPE\n" | cat <(cat <(read -r v; printf "%s\n" "$v") < /dev/null)
+  ```
+- `procsub/a-body-in-a-backgrounded-pipeline` — the same split with the pipeline backgrounded, which is worth a row of its own because a background job is where a shell's own standard input is most often replaced — several shells give an asynchronous job an empty input. Not here: zsh still answers OUTER, so what the body reads is the shell's real input and not a `/dev/null` standing in for it, and the other four still answer PIPE
+  ```sh
+  printf "PIPE\n" | cat <(read -r v; printf "%s\n" "$v") & wait
+  ```
+- `procsub/a-writing-body-in-a-pipeline-reads-its-own-pipe` — the spelling the axis cannot reach, recorded so that it stays unreachable: `>(cmd)` gives its body the reading end of its own pipe, which replaces whatever input the body would otherwise have had — so all five, zsh included, answer PIPE. It is the completeness row for the family, since the fix is made in the one place all three spellings are prepared and could be applied to this one by accident
+  ```sh
+  printf "PIPE\n" | tee >(cat; sleep 0.2) >/dev/null; sleep 0.3
   ```
 - `procsub/a-quoted-file-substitution-is-text` — the completeness half of `procsub/a-file-rather-than-a-pipe`, and it parses everywhere because the quotes take the `=` out of the grammar's hands: the same ten characters are text in all six columns. A lexer that read the form inside quotes would pass the case above and fail this one
   ```sh

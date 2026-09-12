@@ -276,6 +276,90 @@ substitution. It has a deadline now: a hundred milliseconds of repeating a
 transition whose race is between two system calls, after which a reader that
 is still there is one holding the pipe for its own reasons.
 
+### Which standard input the body reads — an axis
+
+A substitution's body is a shell of its own and has to read *something*.
+Two candidates: the standard input of the command whose word the
+substitution stands in, or the standard input of the **shell**. They are
+the same stream almost everywhere, which is why the obvious probe cannot
+see the question — `cat <(cat)` reads the shell's input in every shell
+that has the construct, because the command's input *is* the shell's.
+
+They part inside a **pipeline element**, whose input is the pipe.
+Measured 2026-09-11 and re-measured across the panel, with the shell's
+own standard input a file holding `OUTER`:
+
+| probe | bash 5.3 | bash 3.2 | bash as `sh` | ksh93 | zsh 5.9.2 |
+| --- | --- | --- | --- | --- | --- |
+| `printf "PIPE\n" \| cat <(cat)` | `PIPE` | `PIPE` | `PIPE` | `PIPE` | **`OUTER`** |
+| `printf "PIPE\n" \| cat =(cat)` | — | — | — | — | **`OUTER`** |
+| `cat <(cat)` | `OUTER` | `OUTER` | `OUTER` | `OUTER` | `OUTER` |
+
+dash has no such construct in any row. So the panel **splits**: this is
+an axis and not a correction. `ProcessSubstitutionBodyReadsTheShellsInput`
+is it — zsh `Yes`, bash, bash-as-`sh`, bash 3.2 and ksh93 `No`, and the
+POSIX base `No` because the standard has no construct to answer for.
+
+The third row is the control, and it is why the divergence was silent:
+without a pipeline the two readings name one stream and nothing
+distinguishes them. What goes wrong under the wrong answer is quiet too —
+nothing errors, the body simply eats the pipe the outer command was
+going to read.
+
+**The reading behind zsh's answer bounds the axis.** A pipeline element's
+pipe is one of that element's *redirections*, and a redirection is
+applied after the element's words have been expanded — so a substitution
+performed while expanding them is still looking at the shell's own input.
+Everything that happens *after* that point sees the pipe, and zsh agrees
+with the rest of the panel at every one of them:
+
+| probe | every shell with the construct |
+| --- | --- |
+| `printf "PIPE\n" \| { cat <(cat); }` | `PIPE` |
+| `printf "PIPE\n" \| ( cat <(cat) )` | `PIPE` |
+| `f() { cat <(cat); }; printf "PIPE\n" \| f` | `PIPE` |
+| `printf "PIPE\n" \| eval 'cat <(cat)'` | `PIPE` |
+| `printf "PIPE\n" \| cat < <(cat)` | `PIPE` |
+
+A compound command's body, a function's body and an `eval`'s program all
+run once the element's redirections are in place; a substitution written
+as a redirection **operand** is expanded with them rather than before
+them. So the answer reaches one simple command's words and stops there —
+a fix written as "a pipeline element's substitutions read the shell's
+input" gets the last row wrong, in the accepting direction, silently.
+
+Two more shapes, both measured and both the same split as the first row:
+a substitution **nested** in another (`printf "PIPE\n" | cat <(cat
+<(cat))`) answers `OUTER` in zsh, because the outer body is a shell whose
+own input is whatever the axis handed it and the inner body inherits
+that; and a **backgrounded** pipeline (`printf "PIPE\n" | cat <(cat) &
+wait`) answers `OUTER` too, so what the body reads is the shell's real
+input rather than the empty one an asynchronous job is often given.
+
+**`>(cmd)` cannot observe it.** That spelling hands its body the reading
+end of its own pipe, which replaces whatever the body would otherwise
+have read, so all five answer alike. The axis is still asked in the one
+place all three spellings are prepared — `substRunner` in
+`interp/procsubst.go` — which is what keeps `=(cmd)` from drifting away
+from `<(cmd)`. Deciding it per spelling is exactly the shape #1933 was
+filed to prevent, since the file form arrived after the pipe forms and
+would have been the second copy.
+
+The corpus writes each body with the shell's own `read` rather than an
+external `cat`. The two are measured to answer identically in every
+column; what the external spelling adds is a process started with the
+element's descriptor, which is #2144 and is older than this axis.
+
+Measured: `procsub/a-body-in-a-pipeline-reads-the-shells-input`,
+`procsub/a-file-substitutions-body-in-a-pipeline`,
+`procsub/a-body-outside-a-pipeline-reads-the-same-input`,
+`procsub/a-body-in-a-grouped-pipeline-element`,
+`procsub/a-body-in-a-function-called-from-a-pipeline`,
+`procsub/a-body-in-a-redirection-operand-of-a-pipeline-element`,
+`procsub/a-nested-body-in-a-pipeline`,
+`procsub/a-body-in-a-backgrounded-pipeline`,
+`procsub/a-writing-body-in-a-pipeline-reads-its-own-pipe`.
+
 ## Process substitution to a file: `=(cmd)`
 
 The same construct with a **regular file** where the two spellings above

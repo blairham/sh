@@ -160,50 +160,37 @@ type Semantics struct {
 	// behind the last separator is already there.
 	TrailingSeparatorEndsAField Answer
 
-	// ReadTrailingWhitespaceEndsAField is the same question about a closing
-	// run of IFS *whitespace*, and it is asked of `read` alone because one
-	// shell answers the two differently.
+	// ReadTrailingWhitespaceEndsAField is the same question about a closing run
+	// of IFS *whitespace*, and it is asked of `read` alone because the two can
+	// be answered differently.
 	//
-	// Measured 2026-09-07 with a here-string into `read -A`/`-a` and the
-	// element count read back:
+	// It cannot ride on TrailingSeparatorEndsAField: that one is measured on an
+	// expansion, and an implementation that opens a field on a closing
+	// whitespace run in `read` may still give `x=' a '; set -- ${=x}` one
+	// field. Folding them would make `${=x}` grow a field it does not have.
 	//
-	//	read -A r <<< 'a  '        bash, ksh93 [a]      · zsh [a][]
-	//	read -A r <<< ' a '        bash, ksh93 [a]      · zsh [a][]
-	//	read -A r <<< "$(printf 'a\t')"   bash, ksh93 [a] · zsh [a][]
-	//	read -A r <<< 'a: ', IFS=': '      bash, ksh93 [a] · zsh [a][]
-	//
-	// And the same shell, same IFS, through an expansion instead:
-	// `x=' a '; set -- ${=x}` is **one** field in zsh. So this cannot ride on
-	// TrailingSeparatorEndsAField — that one is measured on an expansion and
-	// is right there, and folding them would make `${=x}` grow a field zsh
-	// does not give it.
-	//
-	// A *leading* run of whitespace is still absorbed — `read -A r <<< ' a'`
-	// is one element in all three — so the asymmetry is at the tail here as
-	// it is above, and the run rather than the byte decides: `a::` with
-	// `IFS=:` is three elements in zsh and not four.
+	// A *leading* run of whitespace is still absorbed, so the asymmetry is at
+	// the tail here as it is above, and the run rather than the byte decides:
+	// `a::` with `IFS=:` is three elements and not four.
 	//
 	// Only the array target can see it. With a list of names the last name
 	// takes the remainder of the *line* and the closing whitespace comes off
-	// that remainder anyway, so `read x <<< 'a  '` is `a` in every column
-	// whichever way this is answered — which is why it is asked in `read`'s
-	// splitting rather than at the array store, and observed there.
+	// that remainder anyway, so `read x <<< 'a  '` is `a` whichever way this is
+	// answered — which is why it is asked in `read`'s splitting rather than at
+	// the array store, and observed there.
 	ReadTrailingWhitespaceEndsAField Answer
 
 	// ReadNoFieldsIsOneEmptyElement leaves an array `read` filled from a line
 	// that split into nothing at all holding one empty element rather than
-	// none.
+	// none. A line of nothing but IFS whitespace answers the same way.
 	//
-	// Measured 2026-09-07: `read -A r <<< ''` is one empty element in ksh93
-	// and zsh and no elements in bash, and a line of nothing but IFS
-	// whitespace answers the same way in each. bash's is the ordinary field
-	// split — no text, no fields — which is what the POSIX preset takes,
-	// since the letter is not in the standard at all.
+	// No is the ordinary field split — no text, no fields — which is what the
+	// POSIX preset takes, since the letter is not in the standard at all.
 	//
 	// Asked after ReadTrailingWhitespaceEndsAField and only where nothing is
-	// left: the shell that opens a field on a closing whitespace run already
-	// has one by then, and asking before it would give that shell two
-	// elements for a line of spaces where it gives one.
+	// left: an implementation that opens a field on a closing whitespace run
+	// already has one by then, and asking before it would give that
+	// implementation two elements for a line of spaces where it gives one.
 	ReadNoFieldsIsOneEmptyElement Answer
 
 	// ReadTrailingEscapedSeparator is what `read` does with an IFS
@@ -468,7 +455,7 @@ type Semantics struct {
 	// take the other as its argument.
 	//
 	// Three-valued rather than two, because an implementation may give `\C` a
-	// different meaning of its own — a control escape spelled without the dash,
+	// different meaning of its own — a control escape taking no separator,
 	// which reads `$'\C-A'` as control-`-` followed by `A` — and that is a
 	// different reading rather than this one turned off. Refusing it there is
 	// the point: answering `$'\C-A'` as `C-A` would be off by a byte and
@@ -714,445 +701,357 @@ type Semantics struct {
 	// whose variable held a stale name a plausible number where it should have
 	// stopped.
 	ArithRecursedNameMustBeSet Answer
-	// ArithSubscriptSkippedWhenNameUnset looks the name up before it reads
-	// the brackets, and answers zero for a name that is not there without
-	// evaluating the subscript at all. Yes in zsh alone: measured 2026-09-10,
-	// `$(( nodecl[1/0] ))` is a quiet 0 there and a division by zero in bash
-	// 5.3, bash 3.2 and ksh93, and `i=0; $(( nodecl[i++] ))` leaves i at 0 in
-	// zsh and at 1 in the other three.
+	// ArithSubscriptSkippedWhenNameUnset looks the name up before it reads the
+	// brackets, and answers zero for a name that is not there without
+	// evaluating the subscript at all: `$(( nodecl[1/0] ))` is a quiet 0 rather
+	// than a division by zero, and `i=0; $(( nodecl[i++] ))` leaves `i` at 0.
 	//
 	// Not a rule about *empty* subscripts, though it is what answers one:
 	// `$(( m[$w] ))` with `$w` empty reaches the expression as the literal
 	// `m[]`, and where the name has never been set the brackets are never
 	// looked at, so the operand is the plain unset 0 that `$(( nosuchvar ))`
 	// is. Modeling that as a special case for the empty subscript would have
-	// been a rule the probe for it could not tell from this one — the two
-	// agree on every empty-subscript row and part only on a subscript that
-	// errors or assigns.
+	// been a rule no probe could tell from this one — the two agree on every
+	// empty-subscript row and part only on a subscript that errors or assigns.
 	//
 	// What "not there" means is set-ness and not emptiness: `e=` then
-	// `$(( e[1/0] ))` divides by zero in zsh too, and so does an array
+	// `$(( e[1/0] ))` divides by zero under both answers, and so does an array
 	// declared with nothing in it.
 	//
-	// No answer reads as No, which is the majority and the harmless side: a
-	// subscript that has no error and no side effect gives the same zero
-	// either way, so an unanswered preset is not refused over `$(( a[0] ))`.
-	//
-	// unexhibited No: bash 5.3.15, bash-as-`sh`, bash 3.2.57 and ksh93u+,
-	// re-measured 2026-09-12: `unset nodecl; $(( nodecl[1/0] ))` is a
-	// division by zero in all four and a quiet 0 in zsh 5.9.2, and `i=0;
-	// $(( nodecl2[i++] ))` leaves i at 1 in the four and 0 in zsh. dash
-	// has no subscript in arithmetic, so the question does not arise
-	// there. No preset writes it because the axis is read (`== Yes`) and
-	// not asked — silence and `No` reach the same code, so writing it down
-	// would add a line and no fact (#2060).
+	// An unanswered axis reads as No, which is the harmless side: a subscript
+	// with no error and no side effect gives the same zero either way, so an
+	// unanswered preset is not refused over `$(( a[0] ))`. A grammar with no
+	// subscript in arithmetic never reaches the question at all. The axis is
+	// read (`== Yes`) rather than asked, so silence and No reach the same code
+	// and a preset writing No down would add a line and no fact.
 	ArithSubscriptSkippedWhenNameUnset Answer
-	// ArithInvalidOctalDigitIsError rejects `08` once a leading zero has
-	// been read as octal. True in dash and bash; ksh93 falls back to decimal
-	// and yields 8.
+	// ArithInvalidOctalDigitIsError rejects `08` once a leading zero has been
+	// read as octal, rather than falling back to decimal and yielding 8.
 	//
-	// This is the second axis the vector could not express with one field.
-	// `ArithLeadingZeroIsOctal` was doing two jobs: `0100` is 64 in dash,
-	// bash and ksh93 and 100 in zsh, so ksh93 *is* octal — but it is octal
-	// and tolerant, and one boolean cannot say that. The `${!x}` note in
-	// semantics.md records the same failure mode; this is it happening a
-	// second time, which makes it a limit of the model rather than a quirk.
+	// The second axis the vector could not express with one field.
+	// ArithLeadingZeroIsOctal was doing two jobs: an implementation can be
+	// octal *and tolerant*, and one boolean cannot say that. The `${!x}` note
+	// in docs/spec/semantics.md records the same failure mode, which makes it a
+	// limit of the model rather than a quirk.
 	//
-	// zsh never reaches this: nothing there made the zero octal.
+	// Never reached where nothing made the zero octal in the first place.
 	ArithInvalidOctalDigitIsError Answer
-	// IntegerAssignmentReadsALeadingZeroAsDecimal makes `typeset -i d=010`
-	// ten rather than eight, in a shell whose *arithmetic* still reads
-	// `$((010))` as eight.
+	// IntegerAssignmentReadsALeadingZeroAsDecimal makes `typeset -i d=010` ten
+	// rather than eight, where the *arithmetic* reader still makes `$((010))`
+	// eight.
 	//
-	// Measured 2026-09-10 from a script file under `env -i`:
+	// The question is one implementation having two readers, only one of which
+	// applies the octal rule. An implementation that applies octal in both, and
+	// one that has no octal-by-leading-zero at all, each agree with themselves
+	// for opposite reasons — which is why this is a field and not a rule.
 	//
-	//	                        $((010))   typeset -i d=010   e=010; typeset -i e
-	//	bash 5.3.15, bash 3.2      8              8                  010
-	//	ksh93u+                    8             10                   10
-	//	zsh 5.9.2                 10             10                   10
+	// Whether a *standing* value is re-read when the attribute arrives is a
+	// third fact and not this axis: see AttributeRereadsTheValueItFinds.
 	//
-	// The middle row is the whole of the question: one shell has two
-	// readers, and the one an *assignment* to an integer name goes through
-	// does not apply the octal rule the expression reader does. The other
-	// two rows agree with themselves for two different reasons — bash
-	// applies octal in both, and zsh has no octal-by-leading-zero at all —
-	// which is why this is a field and not a rule. bash's third column is a
-	// third fact and not this axis: it never re-reads a standing value, and
-	// AttributeRereadsTheValueItFinds is where that lives.
+	// Asked only where the text is a signed digit string with a leading zero in
+	// front of another digit, and only where ArithLeadingZeroIsOctal is Yes.
+	// Outside that shape the two readers agree — `$((010+1))` and
+	// `typeset -i d=010+1` are both nine even where they split — and where
+	// nothing made the zero octal there is nothing to choose between. See
+	// Runner.zeroPaddedInteger for the edges.
 	//
-	// Asked only where the text is a signed digit string with a leading
-	// zero in front of another digit, and only where
-	// ArithLeadingZeroIsOctal is Yes. Outside that shape the two readers
-	// agree — `$((010+1))` and `typeset -i d=010+1` are both nine in the
-	// shell that splits — and where nothing made the zero octal there is
-	// nothing to choose between. See Runner.zeroPaddedInteger for the
-	// measured edges.
-	//
-	// Silent and arithmetically wrong either way it is answered wrongly: a
-	// zero-padded date field or counter comes out eight where the shell
-	// says ten, with nothing said about it.
+	// Silent and arithmetically wrong when it is answered wrongly: a
+	// zero-padded date field or counter comes out eight where it should be ten,
+	// with nothing said about it.
 	IntegerAssignmentReadsALeadingZeroAsDecimal Answer
 	// ArithStoredValueReadsALeadingZeroAsDecimal reads `010` out of a
-	// *variable* as ten inside an expression, in a shell whose lexer still
-	// reads the identical literal as eight.
+	// *variable* as ten inside an expression, where the lexer still reads the
+	// identical literal as eight.
 	//
 	// The other half of the split IntegerAssignmentReadsALeadingZeroAsDecimal
 	// records, at the other reader. That one is the assignment to an integer
-	// name; this one is `$(( k ))`, with no attribute anywhere in it.
-	//
-	// Measured 2026-09-11, `k=010; echo "$((k)) $((010))"`:
-	//
-	//	                    a name holding 010   the literal 010
-	//	dash                        8                   8
-	//	bash 5.3.15, bash 3.2       8                   8
-	//	ksh93u+                    10                   8
-	//	zsh 5.9.2                  10                  10
-	//
-	// ksh93 is the only column whose two answers differ: its arithmetic lexer
-	// reads a leading zero as octal, and a value dereferenced into the
-	// expression does not go through that lexer. zsh's two agree because
-	// nothing there makes a leading zero octal at all, and the rest because
-	// both readers are octal — which is why this is asked only where
-	// ArithLeadingZeroIsOctal is Yes, and never of zsh.
+	// name; this one is `$(( k ))`, with no attribute anywhere in it. An
+	// implementation reaches it by having an arithmetic lexer that makes a
+	// leading zero octal while a value dereferenced into the expression does
+	// not go through that lexer — so it is asked only where
+	// ArithLeadingZeroIsOctal is Yes.
 	//
 	// It is the *leading numeral* of the value and not the whole of it, which
-	// is what tells this apart from a value read as a number: `k=010+1` is 11
-	// on the shell that splits, where the same literal is 9, so the ten is
-	// read decimal and the rest of the expression stays octal. See
-	// Runner.decimalLeadingNumeral for the measured edges — a sign, leading
-	// space, and an `0x` prefix each leave the value alone.
+	// is what tells this apart from a value read as a number: where they split,
+	// `k=010+1` is 11 and the same literal is 9, so the ten is read decimal and
+	// the rest of the expression stays octal. See Runner.decimalLeadingNumeral
+	// for the edges — a sign, leading space, and an `0x` prefix each leave the
+	// value alone.
 	//
 	// Silent and arithmetically wrong: a zero-padded field read out of a
-	// variable — a month, a padded counter — comes out short with nothing
-	// said, and under the octal reading `09` is an invalid digit as well as
-	// a wrong number.
+	// variable — a month, a padded counter — comes out short with nothing said,
+	// and under the octal reading `09` is an invalid digit as well as a wrong
+	// number.
 	ArithStoredValueReadsALeadingZeroAsDecimal Answer
 	// LetReadsALeadingZeroAsDecimal gives the `let` builtin a reader of its
 	// own, in which `010` is ten and not eight.
 	//
-	// ksh93 alone, and it is a third site rather than either of the two
-	// above. Measured 2026-09-12:
+	// A third site rather than a reuse of either axis above.
+	// ArithStoredValueReadsALeadingZeroAsDecimal rewrites the *leading* numeral
+	// of a value and leaves the rest octal, so `k=1+010; $((k))` is 9 there —
+	// where `let "x=1+010"` is 11, every numeral in the word having been read
+	// in decimal. So `let`'s words are evaluated with the octal rule off rather
+	// than with one numeral rewritten, and `(( y=010 ))` beside `let "x=010"`
+	// is what separates the site from the builtin.
 	//
-	//	                    let "x=010"  (( y=010 ))  let "x=1+010"  k=1+010; $((k))
-	//	bash 5.3.15              8            8             9               9
-	//	ksh93u+                 10            8            11               9
-	//	zsh 5.9.2               10           10            11              11
-	//
-	// The third and fourth columns are what make it a site and not a reuse
-	// of ArithStoredValueReadsALeadingZeroAsDecimal: that one rewrites the
-	// *leading* numeral of a value and leaves the rest octal, so `k=1+010`
-	// is 9 there — where `let "x=1+010"` is 11, every numeral in the word
-	// having been read in decimal. So `let`'s words are evaluated with the
-	// octal rule off rather than with one numeral rewritten.
-	//
-	// Answered No where nothing makes a leading zero octal in the first
-	// place, which is zsh: the two readings coincide there and the column
-	// above says so.
+	// Answered No where nothing makes a leading zero octal in the first place:
+	// the two readings coincide there.
 	//
 	// Silent and arithmetically wrong, the way its two neighbors are:
-	// `let "n=010"` is a plausible number, eight where the shell says ten.
+	// `let "n=010"` is a plausible number, eight where it should be ten.
 	LetReadsALeadingZeroAsDecimal Answer
 	// ArithmeticAssignmentDeclaresAnInteger gives a name assigned inside an
-	// arithmetic context the integer attribute, which outlives the
-	// expression. zsh alone.
-	//
-	// Measured 2026-09-12 against `typeset -p`, with bash as the control:
-	//
-	//	                                  zsh 5.9.2         bash 5.3.15   ksh93u+
-	//	(( x = 5 ))                       typeset -i x=5    declare -- x  x=5
-	//	(( x = 5 )); x=7                  typeset -i x=7    declare -- x  x=7
-	//	(( y = 0x1f ))                    typeset -i16 y=31 declare -- y  y=31
-	//	for (( i=0; i<2; i++ )); do :; done  typeset -i i=2 declare -- i  i=2
-	//	let "z = 3"                       typeset -i z=3    declare -- z  z=3
+	// arithmetic context the integer attribute, which outlives the expression.
 	//
 	// It is not only a listing difference, which is the reason it is an axis
 	// rather than a note: the attribute changes what a *later* assignment
-	// means. `(( x = 5 )); x=2+3` is 5 in zsh and the three characters
-	// `2+3` everywhere else, and with the attribute comes the output base,
-	// so a name that learned 16 renders a later plain `5` as `16#5`.
+	// means. Where it is Yes, `(( x = 5 )); x=2+3` leaves `x` holding 5 rather
+	// than the three characters `2+3`, and with the attribute comes the output
+	// base, so a name that learned 16 renders a later plain `5` as `16#5`.
 	//
 	// Every construct that assigns inside arithmetic is the same answer —
 	// `(( ))`, `let` and a C-style `for` header alike — so it is asked where
 	// the assignment operator is applied rather than at each of them.
 	ArithmeticAssignmentDeclaresAnInteger Answer
 	// IndirectionYieldsName makes `${!x}` the *name* rather than the value it
-	// names: with `x=y`, ksh93 gives `x` and bash gives the value of `y`.
+	// names: with `x=y`, Yes gives `x` and No gives the value of `y`.
 	//
-	// Only reachable where the grammar parses `${!x}` at all, which is bash
-	// and ksh93 — dash and zsh reject it. That is the point: a three-way
-	// divergence became a grammar flag plus a binary axis, and neither half
-	// needed a third state. `semantics.md` records `${!x}` as the axis the
-	// binary table could not express; this is the shape that expresses it.
+	// Only reachable where the grammar parses `${!x}` at all, and that is the
+	// point: a three-way divergence became a grammar flag plus a binary axis,
+	// and neither half needed a third state. docs/spec/semantics.md records
+	// `${!x}` as the axis a binary table could not express; this is the shape
+	// that expresses it.
 	IndirectionYieldsName Answer
-	// BraceExpansion expands `{a,b}` and `{1..3}`. Absent from dash, where
-	// the word is a literal.
+	// BraceExpansion expands `{a,b}` and `{1..3}`, rather than leaving the word
+	// a literal.
 	//
-	// It lives here rather than in syntax.Dialect even though it is
-	// additive, because the token stream is identical either way: the
-	// parser produces the same word, and only expansion differs. It is also
-	// silent in the `&>` sense — `echo {1..3}` prints something either way,
-	// and nothing reports that one of them is not what was meant.
+	// It lives here rather than in [syntax.Dialect] even though it is additive,
+	// because the token stream is identical either way: the parser produces the
+	// same word, and only expansion differs. It is also silent in the `&>`
+	// sense — `echo {1..3}` prints something under either answer, and nothing
+	// reports that one of them is not what was meant.
 	BraceExpansion Answer
-	// BraceRangePadsToEndpointWidth keeps the leading zeros of a range
-	// endpoint and pads every element to the widest endpoint, zeros after
-	// the sign: `{01..3}` is `01 02 03` and `{-03..3..3}` is `-03 000 003`.
-	// True in bash and zsh; ksh93 strips the padding and prints `1 2 3` and
-	// `-3 0 3`. Asked only when an endpoint is written with leading zeros,
-	// and only in a dialect whose braces expand at all — dash never reaches
-	// it.
+	// BraceRangePadsToEndpointWidth keeps the leading zeros of a range endpoint
+	// and pads every element to the widest endpoint, zeros after the sign:
+	// `{01..3}` is `01 02 03` and `{-03..3..3}` is `-03 000 003`. Answering No
+	// strips the padding and gives `1 2 3` and `-3 0 3`.
+	//
+	// Asked only when an endpoint is written with leading zeros, and only where
+	// BraceExpansion is Yes.
 	BraceRangePadsToEndpointWidth Answer
-	// BraceRangeStepSignHonored takes a written step's sign at its word:
-	// the walk leaves the first endpoint in the direction the sign says, so
-	// a sign pointing away from the far endpoint ends the range after one
-	// element. ksh93's `{10..1..3}` is `10`, its `{1..10..-3}` is `1`, and
-	// letters answer the same way — `{a..e..-1}` is `a`. False in bash and
-	// zsh, where the endpoints decide the direction and the step
-	// contributes magnitude alone. Asked only when the sign and the
-	// endpoints disagree.
+	// BraceRangeStepSignHonored takes a written step's sign at its word: the
+	// walk leaves the first endpoint in the direction the sign says, so a sign
+	// pointing away from the far endpoint ends the range after one element —
+	// `{10..1..3}` is `10`, `{1..10..-3}` is `1`, and letters answer the same
+	// way, `{a..e..-1}` being `a`. Answering No lets the endpoints decide the
+	// direction and the step contribute magnitude alone.
+	//
+	// Asked only when the sign and the endpoints disagree.
 	BraceRangeStepSignHonored Answer
-	// BraceRangeNegativeStepReverses hands a negative step's sign to the
-	// order of the result rather than to the walk: the range is walked
-	// endpoint to endpoint and then reversed, so zsh's `{3..1..-1}` is
-	// `1 2 3` and its `{1..10..-4}` is `9 5 1` — bash's `1 5 9` backwards,
-	// not the `10 6 2` that swapping the endpoints would give. True in
-	// zsh; false in bash, whose `{3..1..-1}` stays `3 2 1`, and in ksh93,
-	// which reaches the question only when the sign agrees with the
-	// endpoints and then keeps their order too. Asked only for a written
-	// negative step whose sign was not already honored.
+	// BraceRangeNegativeStepReverses hands a negative step's sign to the order
+	// of the result rather than to the walk: the range is walked endpoint to
+	// endpoint and then reversed, so `{3..1..-1}` is `1 2 3` and `{1..10..-4}`
+	// is `9 5 1` — the forward `1 5 9` backwards, not the `10 6 2` that
+	// swapping the endpoints would give. Answering No leaves `{3..1..-1}` as
+	// `3 2 1`.
+	//
+	// Asked only for a written negative step whose sign was not already
+	// honored, so an implementation that reaches the question only when the
+	// sign agrees with the endpoints keeps their order too.
 	BraceRangeNegativeStepReverses Answer
 	// BraceRangeEndpointsExpanded reads a range's endpoints *after* the
 	// expansions written in them, rather than before: with `n=3`,
-	// `echo {1..$n}` is `1 2 3` in zsh and ksh93 and the literal `{1..3}` in
-	// bash, bash 3.2 and bash-as-sh, where brace expansion has finished
-	// before `$n` exists. Quoting hides an endpoint from the brace scanner
-	// and not from the range, so `{1..'3'}` counts the same way.
+	// `echo {1..$n}` is `1 2 3` rather than the literal `{1..3}` that brace
+	// expansion finishing before `$n` exists produces. Quoting hides an
+	// endpoint from the brace scanner and not from the range, so `{1..'3'}`
+	// counts the same way.
 	//
-	// This is the ordering axis the vector had no field for, and the comment
-	// in `interp/brace.go` asserted flatly that no shell could do it — a
-	// claim two of the six panel columns disprove (#1679). It is asked only
+	// This is an ordering axis, and the ordering is the whole of it. Asked only
 	// where a range is written with something to expand in it: a literal
 	// `{1..3}` is unanimous and must not be turned into a question.
 	//
-	// What a failed range leaves is not a second axis. Both shells that
-	// expand endpoints run those expansions once and put the text back
-	// unsplit and unmatched — ksh93 splits `$sp` in a word of its own and
-	// leaves `{1..$sp}` a single field — so the ordering decides that too.
+	// What a failed range leaves is not a second axis. An implementation that
+	// expands endpoints runs those expansions once and puts the text back
+	// unsplit and unmatched, so the ordering decides that too.
 	BraceRangeEndpointsExpanded Answer
-	// EqualsExpansion replaces an unquoted word beginning with `=` by the
-	// path of the command named after it: `echo =ls` prints /bin/ls. zsh
-	// alone, and silent in the `&>` sense — the other three take the word
-	// literally and report nothing, so the same script prints two different
-	// things and neither shell complains.
+	// EqualsExpansion replaces an unquoted word beginning with `=` by the path
+	// of the command named after it: `echo =ls` prints /bin/ls.
+	//
+	// Silent in the `&>` sense — answering No takes the word literally and
+	// reports nothing, so the same script prints two different things and
+	// neither answer complains.
 	//
 	// Its failure is not silent: a name that resolves to nothing is fatal to
 	// the script, like any other failed expansion.
 	EqualsExpansion Answer
-	// UnterminatedBracket is what `[` without a closing `]` means in a
-	// pattern, and it is the axis that does not fit Answer.
+	// UnterminatedBracket is what `[` without a closing `]` means in a pattern,
+	// and it is the axis that does not fit [Answer]. Three readings:
 	//
 	//	case "[" in [) hit;; *) miss;; esac
-	//	bash  → hit          a literal `[`
-	//	ksh93 → hit          a literal `[`
-	//	dash  → miss         a class that can never match
-	//	zsh   → bad pattern  an error
+	//	a literal `[`                     → hit
+	//	a class that can never match      → miss
+	//	an error                          → a bad pattern
 	//
-	// Three answers, and it is load-bearing rather than exotic: `[` is the
-	// name of the test builtin.
+	// Load-bearing rather than exotic: `[` is the name of the test builtin.
 	//
-	// It gets its own type rather than a wider Answer. The prediction in
-	// semantics.md was that Answer would have to grow a third state; writing
-	// it showed that would be worse, because every other axis is genuinely
-	// binary and a wider Answer would let `BracketBadPattern` be assigned to
-	// any of them and still compile. An axis with three answers gets a type
-	// with three values; the binary ones keep the type that says so.
+	// It gets its own type rather than a wider [Answer]. Growing [Answer] a
+	// third state would be worse, because every other axis is genuinely binary
+	// and a wider [Answer] would let a bad-pattern value be assigned to any of
+	// them and still compile. An axis with three answers gets a type with three
+	// values; the binary ones keep the type that says so.
 	UnterminatedBracket BracketPolicy
 	// TraceAssignmentsSeparately gives each assignment of `a=1 b=2` its own
-	// trace line. True in bash and ksh93; dash and zsh put them on one.
+	// trace line, rather than putting them on one.
 	TraceAssignmentsSeparately Answer
-	// TraceShowsItsOwnDisabling prints `set +x` before acting on it. True in
-	// dash, bash and zsh; ksh93 applies the change first, so the command
-	// that stops tracing leaves no trace of itself.
+	// TraceShowsItsOwnDisabling prints `set +x` before acting on it. Answering
+	// No applies the change first, so the command that stops tracing leaves no
+	// trace of itself.
 	TraceShowsItsOwnDisabling Answer
 	// UnsetPositionalIsAllowed lets `$1` expand to nothing under `set -u`
-	// rather than being an error. ksh93 alone, and quiet where it differs:
-	// a script that reads an argument it was not given carries on there and
-	// stops everywhere else.
+	// rather than being an error.
+	//
+	// Quiet where it differs: a script that reads an argument it was not given
+	// carries on under Yes and stops under No.
 	UnsetPositionalIsAllowed Answer
 	// BackgroundJobInput is the standard input a job started with `&` reads,
 	// and it is three answers rather than a switch.
 	//
-	// The probe reads one descriptor twice, so the answers come out in
-	// opposite orders and neither can be mistaken for the other:
-	//
-	//	printf 'DATA\n' > f
-	//	<shell> -c '/bin/cat & wait; echo ---; /bin/cat' < f
-	//
-	// Measured 2026-09-07 it writes `---` and then `DATA` in dash, bash
-	// 5.3.15, bash 5.3.15 as `sh`, bash 3.2.57 and ksh93u+ — the job read
-	// nothing and the script kept its line — and `DATA` then `---` in zsh
-	// 5.9.2, where the job ate it. `ls -l /dev/fd/0` inside the job names
-	// what the five handed it: a character device with `/dev/null`'s rdev in
-	// the four, and the file itself in zsh. Same answer whether the shell's
-	// input is a file or a pipe; `/dev/null` cannot tell the two apart, which
-	// is why the probe uses neither.
-	//
-	// POSIX XCU 2.9.3, Asynchronous Lists, says a background command's
-	// standard input "shall be assigned to an empty file or /dev/null" while
-	// job control is disabled, so the majority is the specified answer and
-	// zsh is the divergence. It is also the direction that *steals*: the job
-	// and the script read the same descriptor, so every byte the job consumes
-	// is one the script's own `read` never sees —
+	// POSIX XCU 2.9.3, Asynchronous Lists, says a background command's standard
+	// input "shall be assigned to an empty file or /dev/null" while job control
+	// is disabled. The divergence is to hand the job the shell's own input
+	// instead, and it is the direction that *steals*: the job and the script
+	// read the same descriptor, so every byte the job consumes is one the
+	// script's own `read` never sees —
 	//
 	//	while read -r line; do process "$line" & done < input.txt
 	//
 	// silently loses lines, at status 0, with nothing said.
 	//
-	// The third answer is what a *closed* descriptor does, and it splits the
-	// five: `exec 0<&-; /bin/cat & wait` is silent at 0 in dash and bash,
-	// which substitute the empty input even there, and
-	// `cat: stdin: Bad file descriptor` in ksh93u+, which substitutes only
-	// what it can dup and leaves a closed fd 0 closed. zsh says the same as
-	// ksh93 there, for the different reason that it never substitutes at all.
-	// Four columns against one, and it is the sub-answer rather than a second
-	// axis: it is the same decision, asked of an input that is not there.
+	// The third answer is what a *closed* descriptor does. Substituting the
+	// empty input even there is silent at 0; substituting only what can be
+	// duplicated leaves a closed fd 0 closed and the job reports a bad file
+	// descriptor. It is a sub-answer rather than a second axis: the same
+	// decision, asked of an input that is not there.
 	//
 	// Only while job control is off. That is the condition XCU 2.9.3 states,
-	// and it is measured rather than inherited: on a pty,
-	// `bash -i -c '/bin/cat & sleep 0.3; jobs'` lists the job `Stopped` and
-	// zsh lists it `suspended (tty input)`. Both handed it the *terminal* and
-	// let the kernel stop it with SIGTTIN, which an empty input can never
-	// produce — so stdin's kind is an axis of the measurement rather than a
-	// detail of it, and a shell with someone to tell substitutes nothing.
+	// and it is measured rather than inherited: with job control on, the job is
+	// handed the *terminal* and the kernel stops it with SIGTTIN, which an
+	// empty input can never produce — so the kind of standard input is an axis
+	// of the measurement rather than a detail of it, and an implementation with
+	// someone to tell substitutes nothing.
 	//
-	// Read without asking, for the reason the field below gives: an
-	// unanswered axis here would have to refuse `&` itself, and backgrounding
-	// a command is ordinary where a background job that reads standard input
-	// is rare. Unanswered is the POSIX answer, which puts a preset that has
-	// chosen nothing in the column five of the six shells are in.
+	// Read without asking, for the reason the field below gives: an unanswered
+	// axis here would have to refuse `&` itself, and backgrounding a command is
+	// ordinary where a background job that reads standard input is rare.
+	// Unanswered is the POSIX answer.
 	BackgroundJobInput BackgroundJobInputPolicy
 	// LastBackgroundPidIsZeroBeforeAnyJob makes `$!` read `0` before a
-	// background command has been started. zsh alone, and it is a number
-	// nothing ever had: `sh -c 'echo "[$!]"'` writes `[0]` there and `[]` in
-	// bash 5.3, bash 3.2, bash 3.2 as `sh`, dash and ksh93u+.
+	// background command has been started, where the alternative is that it
+	// expands to nothing at all.
 	//
-	// Zero is not the same answer as nothing, which is why this is a switch
-	// and not a rendering: a background builtin runs in this process and its
-	// job carries no pid, so a shell really can hold a *recorded* zero, and a
-	// script cannot tell that apart from zsh's if the two are spelled alike.
+	// Zero is not the same answer as nothing, which is why this is a switch and
+	// not a rendering: a background builtin runs in this process and its job
+	// carries no pid, so an implementation really can hold a *recorded* zero,
+	// and a script cannot tell that apart from the before-any-job zero if the
+	// two are spelled alike.
 	//
-	// Read without asking. A dialect that answers nothing answers with
-	// nothing, which is what five of the six columns do, and refusing a `$!`
-	// expansion over an unanswered field would break the `p=$!` of every
-	// script that runs under a preset which has not chosen — including
-	// before its first job, where the read is exactly the ordinary one.
+	// Read without asking. A preset that answers nothing answers with nothing,
+	// and refusing a `$!` expansion over an unanswered field would break the
+	// `p=$!` of every script running under a preset that has not chosen —
+	// including before its first job, where the read is exactly the ordinary
+	// one.
 	LastBackgroundPidIsZeroBeforeAnyJob Answer
 	// LastBackgroundPidIsUnsetBeforeAnyJob makes `$!` an *unset* parameter
-	// before a background command has been started, so `set -u` is fatal
-	// about it.
+	// before a background command has been started, so `set -u` is fatal about
+	// it.
 	//
-	// A different split from the field above, and the more useful one: two
-	// shells against two. `set -u; echo "[$!]"` stops bash — `$!: unbound
-	// variable`, status 127 — and dash — `!: parameter not set`, status 2 —
-	// and is silently empty in ksh93 and zero in zsh, both carrying on at 0.
-	// Neither answer predicts the other: zsh's zero is set and ksh93's empty
-	// is set too, for different reasons.
+	// A different split from the field above, and the more useful one: neither
+	// answer predicts the other, because an implementation can hold a zero that
+	// is *set* and another can hold an empty value that is set too, for
+	// different reasons.
 	//
-	// It is the half a script relies on, since `set -u` exists to stop
-	// exactly this read. The wording and the status come from the same
-	// Diagnostics fields an unset *name* uses, because measured they are the
-	// same two lines — bash writes the `$` back for `$!` as it does for `$1`,
-	// which is Diagnostics.UnboundPositional, and dash's is its ordinary
-	// `parameter not set`.
+	// It is the half a script relies on, since `set -u` exists to stop exactly
+	// this read. The wording and the status come from the same [Diagnostics]
+	// fields an unset *name* uses, because they are the same two lines: an
+	// implementation that writes the `$` back for `$!` writes it back for `$1`
+	// too, which is Diagnostics.UnboundPositional, and one that does not uses
+	// its ordinary `parameter not set`.
 	//
-	// Read without asking, for the reason above. Unanswered means the
-	// parameter is set and empty, which is what this shell did before the
-	// axis existed and what the two shells that carry on do.
+	// Read without asking, for the reason above. Unanswered means the parameter
+	// is set and empty, which is what carrying on requires.
 	LastBackgroundPidIsUnsetBeforeAnyJob Answer
-	// ExitInTrapReportsEarlierStatus makes a bare `exit` in an EXIT trap
-	// report the status the shell had when the trap began, rather than that
-	// of the trap's own last command.
+	// ExitInTrapReportsEarlierStatus makes a bare `exit` in an EXIT trap report
+	// the status the shell had when the trap began, rather than that of the
+	// trap's own last command.
 	//
 	//	trap "false; exit" 0; true
 	//
-	// is 0 in bash, dash and ksh93 and 1 in zsh. Only the bare form: `exit 7`
-	// is 7 everywhere, and a trap that does not exit at all leaves the
-	// script's status alone in all four.
+	// is 0 under Yes and 1 under No. Only the bare form: `exit 7` is 7 under
+	// both, and a trap that does not exit at all leaves the script's status
+	// alone under both.
 	//
-	// Found on an installed script — /usr/bin/bzless traps `stty …; exit` on
-	// EXIT, and the `stty` failing made the script exit 1 where every shell
-	// exits 0. A wrong exit status is what a caller branches on, so this is
-	// the quiet kind of difference.
+	// Found on an installed script rather than by construction — a script that
+	// traps `stty …; exit` on EXIT exits 1 under the wrong answer where it
+	// should exit 0. A wrong exit status is what a caller branches on, so this
+	// is the quiet kind of difference.
 	ExitInTrapReportsEarlierStatus Answer
 
 	// SignalHandlerSeesEarlierStatus shows a signal handler the status from
-	// before the command that triggered it rather than that command's own.
-	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
-	// the others read 0, because `kill` succeeded.
+	// before the command that triggered it rather than that command's own:
+	// after `false; kill -INT $$`, Yes reads 1 where No reads the 0 that `kill`
+	// succeeding left.
 	SignalHandlerSeesEarlierStatus Answer
 	// ExitTrapIsFunctionLocal fires an EXIT trap set inside a function when
-	// that function returns, rather than when the script ends. zsh alone; a
-	// trap set at the top level behaves the same everywhere.
+	// that function returns, rather than when the script ends. A trap set at
+	// the top level behaves the same under either answer.
 	ExitTrapIsFunctionLocal Answer
 
 	// FunctionLocalTraps is whether a trap a function *sets* is undone when
 	// that function returns — the displaced disposition coming back, and the
 	// signal going back to its default where nothing was displaced. See
-	// TrapLocality for the answers and for why it is a form rather than a
-	// flag.
+	// TrapLocality for the answers and for why it is a form rather than a flag.
 	//
-	// EXIT is not this question. It is already function-scoped in the one
-	// shell that has both, by a rule of its own that does not ask any
-	// option — see ExitTrapIsFunctionLocal — and measured, the switch this
-	// axis carries changes nothing about it in either direction.
+	// EXIT is not this question. Where both exist it is already function-scoped
+	// by a rule of its own that asks no option — see ExitTrapIsFunctionLocal —
+	// and the switch this axis carries changes nothing about it in either
+	// direction.
 	//
-	// unanimous: the four answer alike because zsh's other answer is an
-	// option and not a default. Re-measured 2026-09-12: `trap 'echo OUTER'
-	// USR1; f() { trap 'echo INNER' USR1; }; f; kill -USR1 $$` prints
-	// INNER in all six columns, and the same script under `setopt
-	// localtraps` prints OUTER in zsh 5.9.2. A preset is not the whole of
-	// a dialect (#2060).
-	//
-	// unexhibited TrapsGoBackAtTheReturn: zsh under `setopt localtraps`,
-	// at run time — the measurement above, wired in
-	// dialect/zsh/localtraps.go rather than in the preset. This is the
-	// standing example of a value no vector holds and a real shell
-	// exhibits (#2060).
+	// Every preset answers this the same way, because the other reading is
+	// reached through a run-time option rather than a default. That is the
+	// standing example of a value no vector holds and an implementation still
+	// exhibits: a preset is not the whole of an implementation, and the option
+	// is wired where the option lives.
 	FunctionLocalTraps TrapLocality
 	// SIGPrefixAccepted reads `SIGINT` as a name for the same signal `INT`
-	// names, wherever a signal can be named.
-	//
-	// dash alone says no, and says it in three places for two different
-	// reasons — the prefix is simply not part of a signal's name there:
-	//
-	//	trap 'x' SIGINT   trap: SIGINT: bad trap
-	//	kill -SIGINT $$   kill: Illegal option -S
-	//	kill -s SIGINT $$ kill: invalid signal number or name: SIGINT
+	// names, wherever a signal can be named. Answering No means the prefix is
+	// simply not part of a signal's name, and it shows in three places for two
+	// different reasons — `trap 'x' SIGINT` is a bad trap, `kill -SIGINT $$` is
+	// an illegal option, and `kill -s SIGINT $$` is an invalid name.
 	//
 	// It is one axis rather than one per builtin because it is a property of
-	// how the shell reads a signal name, and the shell that refuses it
+	// how a signal name is read, and an implementation that refuses the prefix
 	// refuses it everywhere. Asked only where the prefix is actually present
-	// and stripping it would name a signal: `trap 'x' INT` needs no answer
-	// from anyone, and neither does `SIGNOPE`, which names nothing either way.
+	// and stripping it would name a signal: `trap 'x' INT` needs no answer from
+	// anyone, and neither does `SIGNOPE`, which names nothing either way.
 	SIGPrefixAccepted Answer
 
-	// KillListAcceptsName lets `kill -l` translate a name into a number, as
-	// the reverse of what it does with one. True in bash, ksh93 and zsh.
+	// KillListAcceptsName lets `kill -l` translate a name into a number, as the
+	// reverse of what it does with one.
 	//
-	// dash's `-l` takes an *exit status* rather than a signal, so `kill -l 9`
-	// agrees with everyone by arriving there another way and `kill -l INT` is
-	// an illegal number. One question with two answers rather than a feature
-	// dash is missing, which is why it is an axis and not a gap.
+	// Answering No gives `-l` an *exit status* operand instead, so `kill -l 9`
+	// agrees with Yes by arriving there another way and `kill -l INT` is an
+	// illegal number. One question with two answers rather than a feature that
+	// is missing, which is why it is an axis and not a gap.
 	KillListAcceptsName Answer
 
 	// ExitTrapRunsOnSignalDeath fires the EXIT trap when the shell is ending
-	// because a signal it had no handler for killed it, rather than because
-	// it reached the end or ran `exit`.
+	// because a signal it had no handler for killed it, rather than because it
+	// reached the end or ran `exit`.
 	//
 	//	trap 'echo bye' EXIT; kill -INT $$
 	//
-	// prints bye in bash and ksh93 and prints nothing in dash and zsh, and
-	// all four report 130. A two-two split on whether dying counts as
-	// exiting.
+	// prints bye under Yes and nothing under No, and reports 130 either way.
+	// The axis is whether dying counts as exiting.
 	ExitTrapRunsOnSignalDeath Answer
 
 	// QuitIgnoredWhenNotInteractive makes an untrapped SIGQUIT do nothing at
@@ -1160,24 +1059,22 @@ type Semantics struct {
 	//
 	//	kill -QUIT $$; echo after
 	//
-	// prints after and exits 0 in bash 5.3 and zsh, and kills the shell with
-	// SIGQUIT in dash and ksh93. It is asked only where those disagree — an
-	// untrapped QUIT in a shell that is not interactive — because every other
-	// case is unanimous: all five in the panel ignore it with `-i`, and a QUIT
-	// with a trap runs the handler everywhere.
+	// prints after and exits 0 under Yes, and kills the shell with SIGQUIT
+	// under No. Asked only where those disagree — an untrapped QUIT in a shell
+	// that is not interactive — because every other case is unanimous: it is
+	// ignored with `-i` under both answers, and a QUIT with a trap runs the
+	// handler under both.
 	//
 	// Two things are worth recording beside the split. The first is that this
-	// is a *version* divergence as much as a shell one: bash 3.2 dies by
-	// SIGQUIT where bash 5.3 ignores it, so the two bash columns of the corpus
-	// differ here and a claim about "bash" that does not say which build is
-	// incomplete. The second is that where it is ignored it is ignored
-	// properly rather than deferred — measured with a signal sent from another
-	// process, bash 5.3 and zsh survive that too.
+	// is a *version* divergence as much as an implementation one: builds of one
+	// implementation answer it differently, so a claim about a name that does
+	// not say which build is incomplete. The second is that where it is ignored
+	// it is ignored properly rather than deferred — a signal sent from another
+	// process is survived too.
 	//
-	// What `trap - QUIT` then means is a further question this does not
-	// answer, and the panel splits differently on it: after a handler is
-	// installed and removed again, bash 5.3 still ignores the signal and zsh
-	// dies by it.
+	// What `trap - QUIT` then means is a further question this does not answer,
+	// and the answers split differently on it: after a handler is installed and
+	// removed again, the signal may still be ignored or may become fatal.
 	QuitIgnoredWhenNotInteractive Answer
 
 	// SubshellRunsOnAfterSignalingTheShell lets the rest of a subshell's
@@ -1187,35 +1084,30 @@ type Semantics struct {
 	//
 	// The shell ends either way, and that half is unanimous. Measured
 	// 2026-09-05, `(kill -TERM $$; echo inner); echo outer` ends the shell by
-	// the signal in all six panel members, `outer` is printed by none of
-	// them, and the answer is the same on twenty-five runs of each under
-	// load — this is not a delivery race. What splits is `inner`: bash
-	// 5.3.15, bash 3.2.57, bash 3.2 run as `sh`, dash and zsh 5.9.2 print it
-	// and ksh93u+ does not.
+	// The shell ends either way, and that half is unanimous: `outer` is never
+	// printed, and the answer holds under load, so this is not a delivery race.
+	// What splits is `inner`.
 	//
-	// The reason is the opposite of the obvious one. Measured with a child
-	// started inside the subshell and its parent process id read back:
-	// bash, dash and zsh give it a **process of its own**, so `$$` names the
-	// parent, the child never receives the signal, and it finishes its body
-	// while the parent dies. ksh93 runs the subshell **in the shell's own
-	// process**, so `kill -TERM $$` is a self-signal landing on the very
-	// process that was about to run `echo inner`, and there is nothing left
-	// to run it. So the shell that keeps going is the one that forked, and
-	// ksh93 is the panel's only member here that does not.
+	// The reason is the opposite of the obvious one. An implementation that
+	// gives the subshell a **process of its own** has `$$` name the parent, so
+	// the child never receives the signal and finishes its body while the
+	// parent dies. One that runs the subshell **in the shell's own process**
+	// makes `kill -TERM $$` a self-signal landing on the very process that was
+	// about to run `echo inner`, and there is nothing left to run it. So the
+	// one that keeps going is the one that forked.
 	//
-	// Nothing in this implementation forks for a subshell either, which is
-	// what makes this an axis rather than a consequence: the answer has to be
-	// chosen rather than inherited from the architecture, and choosing the
-	// majority is choosing to behave like the shells that fork.
+	// Nothing here forks for a subshell either, which is what makes this an
+	// axis rather than a consequence: the answer has to be chosen rather than
+	// inherited from the architecture, and choosing Yes is choosing to behave
+	// like an implementation that forks.
 	//
-	// Only a subshell. Measured on the same signal at the top level, in a
-	// brace group, in a function body and in a `while` body: all six shells
-	// stop at once and print nothing, so there is no question to ask
-	// anywhere but here.
+	// Only a subshell. The same signal at the top level, in a brace group, in a
+	// function body and in a `while` body stops at once and prints nothing
+	// under every answer, so there is no question to ask anywhere but here.
 	//
-	// The preset says yes. POSIX has `( )` execute "in a subshell
+	// The POSIX preset says yes: the standard has `( )` execute "in a subshell
 	// environment" and describes that environment as a copy, which is the
-	// forking reading, and it is five of the six.
+	// forking reading.
 	SubshellRunsOnAfterSignalingTheShell Answer
 
 	// HangupIsAnOrderlyExit makes an untrapped SIGHUP end the shell the way
@@ -1223,69 +1115,63 @@ type Semantics struct {
 	//
 	//	kill -HUP $$; echo after
 	//
-	// reports 1 in zsh and 129 in bash, dash and ksh93, and prints nothing
-	// after it anywhere. The number is the visible half; the discipline
-	// behind it is the whole answer, and three further measurements say so:
-	// the shell's caller sees an ordinary exit rather than a death by
-	// SIGHUP, the EXIT trap runs, and an `exit 5` inside that trap wins the
-	// status the way it would after any other ending.
+	// reports 1 under Yes and 129 under No, and prints nothing after it either
+	// way. The number is the visible half; the discipline behind it is the
+	// whole answer, and three further observations say so: under Yes the
+	// shell's caller sees an ordinary exit rather than a death by SIGHUP, the
+	// EXIT trap runs, and an `exit 5` inside that trap wins the status the way
+	// it would after any other ending.
 	//
-	// That the EXIT trap runs is what makes this an axis of its own rather
-	// than a number to special-case. ExitTrapRunsOnSignalDeath asks whether
-	// dying counts as exiting, and zsh answers no — `trap 'echo bye' EXIT;
-	// kill -TERM $$` prints nothing there. `kill -HUP $$` prints bye in the
-	// same shell, which is only consistent if SIGHUP never produced a death
+	// That the EXIT trap runs is what makes this an axis of its own rather than
+	// a number to special-case. ExitTrapRunsOnSignalDeath asks whether dying
+	// counts as exiting; an implementation can answer that No — `trap 'echo
+	// bye' EXIT; kill -TERM $$` printing nothing — and still print bye for
+	// `kill -HUP $$`, which is only consistent if SIGHUP never produced a death
 	// to ask the question about.
 	//
-	// It is one signal, and only this one. Measured across the nineteen
-	// signals whose default action ends a process — HUP, INT, QUIT, ILL,
-	// TRAP, ABRT, FPE, BUS, SEGV, SYS, PIPE, ALRM, TERM, USR1, USR2, XCPU,
-	// XFSZ, VTALRM and PROF — the panel is unanimous on every one except
-	// QUIT, which QuitIgnoredWhenNotInteractive covers, and this. An
-	// external SIGHUP is answered the same way, so it is a disposition
-	// rather than something the `kill` builtin does on its way past.
+	// It is one signal, and only this one. Across the nineteen signals whose
+	// default action ends a process — HUP, INT, QUIT, ILL, TRAP, ABRT, FPE,
+	// BUS, SEGV, SYS, PIPE, ALRM, TERM, USR1, USR2, XCPU, XFSZ, VTALRM and
+	// PROF — the answers are unanimous on every one except QUIT, which
+	// QuitIgnoredWhenNotInteractive covers, and this. An external SIGHUP is
+	// answered the same way, so it is a disposition rather than something the
+	// `kill` builtin does on its way past.
 	HangupIsAnOrderlyExit Answer
 
-	// StatusArgument is how a *status operand* is read — the word after
-	// `exit` and the word after `return` — and it is an ordering rather
-	// than a side:
+	// StatusArgument is how a *status operand* is read — the word after `exit`
+	// and the word after `return` — and it is an ordering rather than a side.
+	// The questions it bundles are whether text that is not a number is
+	// refused, whether a sign is, whether the value is masked to eight bits,
+	// and whether the refusal ends the script.
 	//
-	//	                    dash   bash 5.3   ksh93   zsh
-	//	exit -1 / return -1 error  255        255     -1
-	//	exit abc            error  error      0       0
-	//	return r  (r=3)     error  error      0       3
-	//	return r+1  (r=2)   error  error      0       3
-	//	return 3abc         error  error      3       math error
-	//	return 300          300    44         44      300
-	//
-	// One axis for two builtins because the panel reads the two operands
-	// identically — every row above was measured on `exit` and on `return`
-	// and the two never parted. A second field for `return` is the shape
-	// that has cost this tree seven bugs: the copy omits what the original
-	// learned, and here it would have left `exit r` in zsh at 0 while
-	// `return r` answered 3.
+	// One axis for two builtins because the two operands are read identically:
+	// every row was measured on `exit` and on `return` and the two never
+	// parted. A second field for `return` is the shape that has cost this tree
+	// seven bugs — the copy omits what the original learned — and here it would
+	// have left `exit r` and `return r` disagreeing.
 	//
 	// Four readings, so a policy rather than a bool — the same shape as
-	// UnterminatedBracket, and for the same reason. What each value carries
-	// is a bundle rather than three axes, because the four questions were
-	// measured together and never crossed: a shell that refuses text is a
-	// shell that refuses a sign or does not, masks to eight bits or does
-	// not, and ends the script over the refusal or does not. Two of the four
-	// refuse nothing at all, so splitting the refusal out would have needed
-	// an answer from columns that cannot reach the question.
+	// UnterminatedBracket, and for the same reason. What each value carries is
+	// a bundle rather than four axes, because the four questions were measured
+	// together and never crossed: an implementation that refuses text is one
+	// that refuses a sign or does not, masks to eight bits or does not, and
+	// ends the script over the refusal or does not. Some readings refuse
+	// nothing at all, so splitting the refusal out would have needed an answer
+	// from presets that cannot reach the question.
 	StatusArgument StatusArgumentPolicy
-	// BracketCaretNegates reads `[^abc]` as a negated class. dash alone
-	// treats `^` as an ordinary character, so `[^abc]` matches a caret there
-	// and everything-but there elsewhere: the two answers are both matches,
-	// on different inputs, with nothing to warn on.
+	// BracketCaretNegates reads `[^abc]` as a negated class, rather than
+	// treating `^` as an ordinary character.
+	//
+	// Both answers are matches, on different inputs, with nothing to warn on:
+	// under No `[^abc]` matches a caret, and under Yes it matches
+	// everything-but.
 	BracketCaretNegates Answer
 	// GetoptsAssignmentRestartsWord makes assigning OPTIND begin the word
 	// again, dropping any position inside a cluster.
 	//
-	// True in bash, dash and ksh93, and it is the *assignment* that does it
-	// rather than the value: `set -- -ab; getopts ab o; OPTIND=1` writes the
-	// number OPTIND already held, and those three still restart and read `a`
-	// a second time where zsh carries on to `b`.
+	// It is the *assignment* that does it rather than the value: `set -- -ab;
+	// getopts ab o; OPTIND=1` writes the number OPTIND already held, and Yes
+	// still restarts and reads `a` a second time where No carries on to `b`.
 	GetoptsAssignmentRestartsWord Answer
 
 	// GetoptsPositionIsFunctionLocal gives every shell function call its own

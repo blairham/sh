@@ -194,6 +194,9 @@ func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// picked a dialect to inspect it has not asked to read `/etc`.
 	sh.SystemStartupDirectory = "/etc"
 	sh = withHighlighting(sh, own)
+	// And a second line for a name that is another preset's builtin, at a
+	// prompt and in this binary alone — see cmd/sh/dialecthint.go.
+	sh = withDialectHint(sh, own.dialect)
 	if len(own.plugins) > 0 {
 		// A plugin host relays the plugin's standard error onto this one from
 		// a goroutine of its own, so from here on more than one goroutine

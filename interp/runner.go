@@ -487,6 +487,22 @@ type Runner struct {
 	// Runner.diag, which stops applying the prompt's wording there.
 	AtPrompt bool
 
+	// NotFoundHint is a second line to write after a bare name was not
+	// found, and nothing where it returns the empty string or is nil.
+	//
+	// A seam and not a wording, because the only useful thing to say here is
+	// a thing this package may not know. `whence` is a real builtin one
+	// keystroke away in two of the presets, and to the core it is
+	// indistinguishable from a typo — but `syntax` and `interp` may not
+	// import a dialect or name a shell, which is what TestNothingHereIsAShell
+	// enforces, so the core can never learn that. The binary that maps a name
+	// to a preset can, and it is the only one that may: a binary claiming to
+	// *be* bash must print what bash prints and nothing after it.
+	//
+	// Written after the diagnostic and never instead of it. The first line is
+	// what a script parses, and it is byte-identical with or without this.
+	NotFoundHint func(name string) string
+
 	// Terminal says this shell has a terminal, which is the fact job control
 	// turns on: the kernel hands SIGINT and SIGTSTP to whatever process group
 	// owns one, so a shell with none has nothing to hand a job and nothing to

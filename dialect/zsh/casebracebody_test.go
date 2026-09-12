@@ -19,8 +19,8 @@ import (
 //	$ zsh -c 'case x { x) echo hit;; }'
 //	hit
 func TestABraceSpelledCaseRunsHere(t *testing.T) {
-	if !zsh.Dialect().CaseBraceBody {
-		t.Error("this shell writes `case x { … }`")
+	if got := zsh.Dialect().CaseBraceBody; got != syntax.CaseBraceBodyMixesWithTheKeyword {
+		t.Errorf("spelling = %v, want CaseBraceBodyMixesWithTheKeyword", got)
 	}
 	for _, tc := range []struct{ src, want string }{
 		{"case x { x) echo hit;; }", "hit"},
@@ -50,9 +50,9 @@ func TestABraceSpelledCaseRunsHere(t *testing.T) {
 	}
 }
 
-// The brace opener does not bring the *other* shell's reading of the word
-// after a `case` header with it: `esac` is still reserved after the `{` here,
-// where ksh93 reads the word after `in` as a pattern.
+// The brace opener does not bring ksh93's reading of the word after a `case`
+// header with it: `esac` is still reserved after the `{` here, where that
+// shell reads the word after *either* opener as a pattern and prints `hit`.
 //
 //	$ zsh -c 'case esac { esac) echo hit;; }'
 //	zsh:1: parse error near `)'

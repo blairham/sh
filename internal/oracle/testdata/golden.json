@@ -34834,21 +34834,21 @@
     "core/a-case-mixes-its-two-spellings": {
       "bash": {
         "Stdout": "",
-        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `{'~\u003cscript\u003e: line 1: `case x { x) echo one;; esac; case y in y) echo two;; }'",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `{'~\u003cscript\u003e: line 1: `case x { x) echo one;; esac'",
         "Status": 2,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
         "Stdout": "",
-        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `{'~\u003cscript\u003e: line 1: `case x { x) echo one;; esac; case y in y) echo two;; }'",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `{'~\u003cscript\u003e: line 1: `case x { x) echo one;; esac'",
         "Status": 2,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
         "Stdout": "",
-        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `{'~\u003cscript\u003e: line 1: `case x { x) echo one;; esac; case y in y) echo two;; }'",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `{'~\u003cscript\u003e: line 1: `case x { x) echo one;; esac'",
         "Status": 2,
         "Signal": 0,
         "TimedOut": false
@@ -34862,13 +34862,57 @@
       },
       "ksh93": {
         "Stdout": "",
-        "Stderr": "\u003cscript\u003e: syntax error at line 1: `;' unexpected",
+        "Stderr": "\u003cscript\u003e: syntax error at line 2: `newline' unexpected",
         "Status": 3,
         "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "one~two",
+        "Stdout": "one",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-case-mixes-its-two-spellings-the-other-way": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `newline'~\u003cscript\u003e: line 1: `case x in x) echo one;; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `newline'~\u003cscript\u003e: line 1: `case x in x) echo one;; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `newline'~\u003cscript\u003e: line 1: `case x in x) echo one;; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: Syntax error: newline unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 2: `newline' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -39715,50 +39759,6 @@
         "TimedOut": false
       }
     },
-    "core/esac-is-reserved-after-a-brace-opened-case": {
-      "bash": {
-        "Stdout": "",
-        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `{'~\u003cscript\u003e: line 1: `case esac { esac) echo hit;; }'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "",
-        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `{'~\u003cscript\u003e: line 1: `case esac { esac) echo hit;; }'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "",
-        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `{'~\u003cscript\u003e: line 1: `case esac { esac) echo hit;; }'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "",
-        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"{\" unexpected (expecting \"in\")",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "hit",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "",
-        "Stderr": "\u003cscript\u003e:1: parse error near `)'",
-        "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
     "core/for-wants-a-name": {
       "bash": {
         "Stdout": "",
@@ -40371,6 +40371,50 @@
         "Stdout": "it=1~it=0",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/the-word-after-a-brace-opened-case-header": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `{'~\u003cscript\u003e: line 1: `case esac { esac) echo hit;; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `{'~\u003cscript\u003e: line 1: `case esac { esac) echo hit;; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `{'~\u003cscript\u003e: line 1: `case esac { esac) echo hit;; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"{\" unexpected (expecting \"in\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "hit",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:1: parse error near `)'",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

@@ -18,4 +18,12 @@ import "github.com/blairham/sh/syntax"
 // What this shell does contribute is a grammar refusal the formatter inherits
 // for free: `function f() { … }` is rejected here at parse time, so the
 // hybrid spelling never reaches the printer under this dialect.
+//
+// [syntax.Style.BraceShortForm] is left at the core's ExpandShortForm on
+// purpose, and it is reachable here: this shell writes `case x { … }` as well
+// as `case x in … esac` (#1928). Expanding is right for it where preserving is
+// right for zsh, because **the shell itself calls the spelling obsolete** —
+// `ksh -n` on a brace-opened `case` prints “ warning: `{' instead of `in' is
+// obsolete “ beside the parse. Rewriting to the keyword form is what the
+// vendor is asking for; keeping it would be preserving a deprecation.
 func Style() syntax.Style { return syntax.CoreStyle() }

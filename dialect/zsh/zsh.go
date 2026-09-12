@@ -88,12 +88,13 @@ func Dialect() syntax.Dialect {
 	d.Repeat = true
 	d.Foreach = true
 	// `case x { x) echo hit;; }`: the brace spelling of a `case` header, the
-	// same shape as the short loop forms above. The opener and the closer
-	// are independent here — `case x { … esac` and `case x in … }` both run
-	// — and `esac` stays reserved after the `{`, so `case esac { esac) … }`
-	// is a parse error where ksh93's answer after `in` is the opposite
-	// (#1928).
-	d.CaseBraceBody = true
+	// same shape as the short loop forms above. The opener and the closer are
+	// independent here — `case x { … esac` and `case x in … }` both run —
+	// which is what separates this answer from ksh93's, where the two are
+	// paired and both mixtures are `` `case' unmatched ``. And `esac` stays
+	// reserved after the `{`, so `case esac { esac) … }` is a parse error
+	// here and prints `hit` there (#1928).
+	d.CaseBraceBody = syntax.CaseBraceBodyMixesWithTheKeyword
 	// `{ … } always { … }`, the try-always block. Measured 2026-09-07: the
 	// word is positional and not reserved here — `always` alone is `command
 	// not found`, `always() { :; }` defines a function and `echo always`

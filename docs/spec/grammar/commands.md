@@ -1211,37 +1211,53 @@ which a prompt framework loads (#1880).
 
 ## A `case` written with braces
 
-The `case` header has the same second spelling, and unlike the `if` it is
-two independent words rather than one paired construct. Measured
-2026-09-12 on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin` with a scratch
-`HOME`:
+The `case` header has a second spelling too, and **two** shells have it —
+which the first measurement of this missed, because it looked only at
+zsh. They do not draw it the same way. Measured 2026-09-12 under `env -i
+PATH=/usr/bin:/bin` with a scratch `HOME`; dash, bash 5.3, that binary as
+`sh` and bash 3.2 refuse every row.
 
-| probe | zsh 5.9 | the other five |
+| probe | ksh93 | zsh 5.9 |
 | --- | --- | --- |
-| `case x { x) echo hit;; }` | `hit` | error at the `{` |
-| `case x { x) echo hit;; esac` | `hit` | error at the `{` |
-| `case x in x) echo hit;; }` | `hit` | error |
-| `case x { x) echo hit }` | `hit` | error at the `{` |
-| `case x { }` | runs | error at the `{` |
-| `case x {x) echo hit;; }` | `hit` | error |
-| `case {a,b} {*) echo star;; }` | `star` | error at the `{` |
-| `case esac { esac) echo hit;; }` | error at the `)` | error |
+| `case x { x) echo hit;; }` | `hit` | `hit` |
+| `case x { }` | runs | runs |
+| `case x { (x) echo hit;; }` | `hit` | `hit` |
+| `case x { x) echo hit;; esac` | `` `case' unmatched `` | `hit` |
+| `case x in x) echo hit;; }` | `` `case' unmatched `` | `hit` |
+| `case esac { esac) echo hit;; }` | `hit` | parse error at `)` |
+| `case x { x) echo hit }` | `` `case' unmatched `` | `hit` |
+| `case x {x) echo hit;; }` | `` `{x' unexpected `` | `hit` |
 
-Rows 2 and 3 are why the flag is not a paired construct: either opener
-composes with either closer there, so nothing needs to remember which was
-written. Row 6 is `OpenBraceNeedsNoBlank` reaching this position as it
-reaches command position. Row 8 is the one worth having beside ksh93's
-answer: `esac` stays **reserved** after the `{` here, where that shell
-reads the word after `in` as a pattern — the two lenient shells are
-answering different questions and
-`CaseTerminatorIsAPatternAfterIn` is not this flag under another name.
+Rows 4 and 5 are the split: ksh93 **pairs** the two words — a `{` closes
+with a `}` and an `in` with an `esac` — and zsh takes either closer after
+either opener. Grammar flag: `CaseBraceBody`, whose type is a spelling
+rather than a bool for that reason — `NoCaseBraceBody` in the core,
+`CaseBraceBodyPairsWithItsOpener` for `ksh`,
+`CaseBraceBodyMixesWithTheKeyword` for `zsh`.
 
-Grammar flag: `CaseBraceBody` — core off, `zsh` on.
+The last three rows are **other flags showing through**, and each is one
+the two shells already disagreed about:
 
-The tree is a `CaseClause` either way and nothing in it records the
-spelling, which is `Style.BraceShortForm`'s question exactly as it is for
-the short loop bodies: the formatter reads both words back out of the
-source. See `../style.md`.
+- Row 6 is `CaseTerminatorIsAPatternAfterTheHeader`, which ksh93 has: the
+  word straight after the header opener is the first arm's pattern there,
+  and the reading follows the *position* rather than the word `in`. The
+  `}` is never taken that way, which row 2 is the control for.
+- Row 7 is `CloseBraceAlwaysReserved`, which zsh has: a `}` at the end of
+  an unquoted word closes the clause there and is an argument to `echo`
+  in ksh93, so the arm needs its `;;`.
+- Row 8 is `OpenBraceNeedsNoBlank`, which zsh has: a bare `{` is the
+  reserved word however the text runs on there, and `{x` is one word in
+  ksh93.
+
+ksh93 prints a **warning** beside the run — `` `{' instead of `in' is
+obsolete `` — so the spelling is deliberate legacy in that shell rather
+than an accident of its grammar.
+
+The tree is a `CaseClause` whichever way it was written and nothing in it
+records the spelling, which is `Style.BraceShortForm`'s question exactly
+as it is for the short loop bodies: the formatter reads both words back
+out of the source, separately, because they are not paired everywhere.
+See `../style.md`.
 
 ## What may stand where a loop's name does
 

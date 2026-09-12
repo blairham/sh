@@ -11,7 +11,7 @@ import (
 
 func caseBraces() syntax.Dialect {
 	d := syntax.Core()
-	d.CaseBraceBody = true
+	d.CaseBraceBody = syntax.CaseBraceBodyMixesWithTheKeyword
 	// Both brace rules travel with it in the only preset that has any of
 	// them, and each is load-bearing for a row below: without the first a
 	// `}` at the end of an arm's last word is ordinary text, and without the
@@ -70,8 +70,60 @@ func TestABraceSpelledCaseIsACaseClause(t *testing.T) {
 	}
 }
 
-// The opener does not carry the *other* dialect's reading of the word after a
-// `case` header with it: `esac` stays reserved after the `{`.
+// Whether the two words are paired is a second answer, and the spelling is
+// what carries it: one value takes all four combinations and the other only
+// the two matched pairs.
+func TestWhetherTheCaseBracesPairWithTheirOpener(t *testing.T) {
+	paired := syntax.Core()
+	paired.CaseBraceBody = syntax.CaseBraceBodyPairsWithItsOpener
+	for _, tc := range []struct {
+		src          string
+		mixes, pairs bool
+	}{
+		{"case x { x) echo hit;; }\n", true, true},
+		{"case x in x) echo hit;; esac\n", true, true},
+		{"case x { x) echo hit;; esac\n", true, false},
+		{"case x in x) echo hit;; }\n", true, false},
+		// A `case` with no arm at all closes on the `}` under both, which is
+		// what says the terminator reading below is about the word `esac`
+		// and never about the brace.
+		{"case x { }\n", true, true},
+	} {
+		for name, col := range map[string]struct {
+			d    syntax.Dialect
+			want bool
+		}{
+			"mixes": {caseBraces(), tc.mixes},
+			"pairs": {paired, tc.pairs},
+		} {
+			_, err := syntax.Parse(tc.src, col.d)
+			if got := err == nil; got != col.want {
+				t.Errorf("%s: %q parsed = %v, want %v (%v)", name, tc.src, got, col.want, err)
+			}
+		}
+	}
+}
+
+// The terminator reading travels with the header's *position* rather than
+// with the word `in`, so a dialect that has both flags reads `esac` after the
+// `{` as a pattern too — and still closes on a `}`.
+func TestTheTerminatorReadingFollowsEitherOpener(t *testing.T) {
+	d := syntax.Core()
+	d.CaseBraceBody = syntax.CaseBraceBodyPairsWithItsOpener
+	d.CaseTerminatorIsAPatternAfterTheHeader = true
+	if _, err := syntax.Parse("case esac { esac) echo hit;; }\n", d); err != nil {
+		t.Errorf("`case esac { esac) … }`: %v", err)
+	}
+	if _, err := syntax.Parse("case x { esac\n", d); err == nil {
+		t.Error("`case x { esac` parsed; the `esac` is a pattern here")
+	}
+	if _, err := syntax.Parse("case x { }\n", d); err != nil {
+		t.Errorf("`case x { }`: %v — the `}` is never a pattern", err)
+	}
+}
+
+// Without that flag, the opener does not carry the reading with it: `esac`
+// stays reserved after the `{`.
 func TestEsacIsStillReservedAfterTheBrace(t *testing.T) {
 	if _, err := syntax.Parse("case esac { esac) echo hit;; }\n", caseBraces()); err == nil {
 		t.Error("`case esac { esac) … }` parsed; the `esac` closes the case here")

@@ -62,7 +62,17 @@ func Dialect() syntax.Dialect {
 	// on one line is refused as a consequence. A newline gives the word back
 	// its reservation — `case x in⏎esac` runs — which is what says this is
 	// not "a case must have an arm" (#773).
-	d.CaseTerminatorIsAPatternAfterIn = true
+	d.CaseTerminatorIsAPatternAfterTheHeader = true
+	// And this shell has the brace spelling of a `case` header too, with the
+	// two words **paired**: `case x { … }` and `case x in … esac` run, while
+	// `case x { … esac` and `case x in … }` are both `` `case' unmatched ``.
+	// zsh takes all four, which is the split the spelling records. The other
+	// three rows that differ between the two are other flags showing through:
+	// `case x {x)` needs the blank here because OpenBraceNeedsNoBlank is off,
+	// `case x { x) echo hit }` needs the `;;` because CloseBraceAlwaysReserved
+	// is, and `case esac { esac) … }` prints `hit` because the rule above
+	// follows the header's position rather than the word `in` (#1928).
+	d.CaseBraceBody = syntax.CaseBraceBodyPairsWithItsOpener
 	// A loop's variable may be written with quoting or an escape in it, and
 	// the quoting comes off before the word is read as a name: `for "i" in a
 	// b` binds `i` here and is refused by the other four. `for 'i'`,

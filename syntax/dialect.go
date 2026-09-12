@@ -100,6 +100,30 @@ const (
 	AnySeparatorWhereACommandBelongs
 )
 
+// CaseBraceSpelling is how a dialect writes a `case` header's second
+// spelling, `case x { … }`. See [Dialect.CaseBraceBody], where the rows are.
+//
+// A spelling rather than a bool because the two shells that have the
+// construct disagree about whether the opener and the closer are paired, and
+// a single yes/no could not be given a value for either without accepting
+// lines the other refuses.
+type CaseBraceSpelling uint8
+
+const (
+	// NoCaseBraceBody is the core answer: a `case` header is `in` and the
+	// clause ends at `esac`. dash and every bash column.
+	NoCaseBraceBody CaseBraceSpelling = iota
+
+	// CaseBraceBodyPairsWithItsOpener takes `case x { … }` and `case x in …
+	// esac` and neither of the mixtures. ksh93u+, where `case x { … esac`
+	// and `case x in … }` are both `` `case' unmatched ``.
+	CaseBraceBodyPairsWithItsOpener
+
+	// CaseBraceBodyMixesWithTheKeyword takes all four combinations: either
+	// opener closes with either word. zsh 5.9.2.
+	CaseBraceBodyMixesWithTheKeyword
+)
+
 // Dialect says which constructs the lexer accepts.
 //
 // Fields are named for the construct rather than for the shell that wants it,
@@ -513,9 +537,15 @@ type Dialect struct {
 	// have such an alternative written into it.
 	CasePatternMayBeEmpty bool
 
-	// CaseTerminatorIsAPatternAfterIn makes `esac` an ordinary word where the
-	// *first* arm's pattern list begins, so a `case` whose subject list is
-	// written on one line has no terminator until a newline has been read.
+	// CaseTerminatorIsAPatternAfterTheHeader makes `esac` an ordinary word
+	// where the *first* arm's pattern list begins, so a `case` whose subject
+	// list is written on one line has no terminator until a newline has been
+	// read.
+	//
+	// "The header" is either opener: this shell writes `case x { … }` as well
+	// as `case x in … esac` — see [Dialect.CaseBraceBody] — and the reading
+	// follows the position rather than the word. `case esac { esac) echo
+	// hit;; }` prints `hit` there too.
 	//
 	// ksh93u+ alone, and it is not the rule #773 filed it as. That issue read
 	// `case x in esac` being refused there as "a case must have an arm", and
@@ -550,39 +580,33 @@ type Dialect struct {
 	// than as a rule of its own. Writing it the other way round — a flag that
 	// simply refused an armless `case` — would have refused `case x in⏎esac`
 	// too, which ksh93 runs.
-	CaseTerminatorIsAPatternAfterIn bool
+	CaseTerminatorIsAPatternAfterTheHeader bool
 
 	// CaseBraceBody lets a `case` be written with braces in place of `in` …
 	// `esac`: `case x { x) echo hit;; }`.
 	//
-	// zsh alone, the same shape as the short loop forms that flag already
-	// carries — dash, bash 5.3, that binary as `sh`, bash 3.2 and ksh93 all
-	// refuse the `{`, so this is additive grammar for one dialect rather
-	// than a divergence about shared text.
+	// **Two shells have it and they draw it differently**, which is why this
+	// is a spelling rather than a bool. Measured 2026-09-12 under `env -i
+	// PATH=/usr/bin:/bin` with a scratch HOME, ksh93u+ and zsh 5.9.2; dash,
+	// bash 5.3, that binary as `sh` and bash 3.2 refuse every row.
 	//
-	// **The two halves are independent**, which is measured rather than
-	// assumed and is why nothing here remembers which opener was used.
-	// Measured 2026-09-12 on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin`
-	// with a scratch HOME:
+	//	probe                              ksh93            zsh
+	//	case x { x) echo hit;; }           hit              hit
+	//	case x { }                         runs             runs
+	//	case x { (x) echo hit;; }          hit              hit
+	//	case x { x) echo hit;; esac        `case' unmatched hit
+	//	case x in x) echo hit;; }          `case' unmatched hit
+	//	case esac { esac) echo hit;; }     hit              parse error at `)`
+	//	case x { x) echo hit }             `case' unmatched hit
+	//	case x {x) echo hit;; }            `{x' unexpected  hit
 	//
-	//	case x { x) echo hit;; }        hit
-	//	case x { x) echo hit;; esac     hit   — brace open, keyword close
-	//	case x in x) echo hit;; }       hit   — keyword open, brace close
-	//	case x { x) echo hit }          hit   — the last arm still needs no
-	//	                                        terminator
-	//	case x { }                      runs  — and no arm at all
-	//	case x {x) echo hit;; }         hit   — the `{` needs no blank after
-	//	                                        it, as in command position
-	//	case esac { esac) echo hit;; }  parse error near `)` — `esac` is
-	//	                                        still reserved after the `{`,
-	//	                                        unlike ksh93's answer after
-	//	                                        `in`
-	//
-	// The last row is the one worth having: the brace opener does *not*
-	// carry [Dialect.CaseTerminatorIsAPatternAfterIn] with it, so the two
-	// dialects' answers about the word after a `case` header are different
-	// answers to different questions.
-	CaseBraceBody bool
+	// Rows 4 and 5 are the split this field records: ksh93 **pairs** the two
+	// words and zsh takes either closer after either opener. Rows 6, 7 and 8
+	// are the other three flags showing through rather than anything of this
+	// one's — [Dialect.CaseTerminatorIsAPatternAfterTheHeader],
+	// [Dialect.CloseBraceAlwaysReserved] and [Dialect.OpenBraceNeedsNoBlank],
+	// each of which one of the two shells has and the other does not.
+	CaseBraceBody CaseBraceSpelling
 
 	// CasePatternListSpansNewlines makes a newline inside a `case` arm's
 	// **parenthesized** pattern list an ordinary character of the pattern
@@ -2276,7 +2300,7 @@ type Dialect struct {
 	// `case x in esac` — is a list of *arms* rather than a command list, and
 	// the one shell that refuses it on one line runs the same `case` with a
 	// newline in front of the `esac`, which is
-	// [Dialect.CaseTerminatorIsAPatternAfterIn] and not an emptiness rule at
+	// [Dialect.CaseTerminatorIsAPatternAfterTheHeader] and not an emptiness rule at
 	// all. A command substitution's body — `x=$( )` — is a whole program
 	// rather than a compound command's body, and every shell in the panel
 	// takes an empty one. And a body written as a single stepped-over `;` —

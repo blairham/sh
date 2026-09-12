@@ -3879,11 +3879,13 @@ func (p *Parser) parseCase() Command {
 	// is an expression. See Lexer.inCaseArm.
 	p.lex.inCaseArm = true
 	defer func() { p.lex.inCaseArm = false }()
-	if p.dialect.CaseBraceBody && p.atWord("{") {
-		// The brace spelling of the same header. The two halves are
-		// independent — `case x { … esac` and `case x in … }` both run in
-		// the shell that has this — so the closer is not remembered from
-		// here. See Dialect.CaseBraceBody.
+	braced := false
+	if p.dialect.CaseBraceBody != NoCaseBraceBody && p.atWord("{") {
+		// The brace spelling of the same header. Which words may close it is
+		// the dialect's next answer: one shell pairs the two and the other
+		// takes either closer after either opener, so which opener was read
+		// has to be carried. See Dialect.CaseBraceBody.
+		braced = true
 		p.next()
 	} else {
 		p.expectWord("in")
@@ -3893,11 +3895,20 @@ func (p *Parser) parseCase() Command {
 	// before any newline — is the first arm's first pattern and not the
 	// terminator. A newline takes the reading away again, so this is asked
 	// before the newlines are skipped and cleared if any were.
-	// See Dialect.CaseTerminatorIsAPatternAfterIn.
-	esacIsAPattern := p.dialect.CaseTerminatorIsAPatternAfterIn && !p.at(TokNewline)
+	// See Dialect.CaseTerminatorIsAPatternAfterTheHeader.
+	esacIsAPattern := p.dialect.CaseTerminatorIsAPatternAfterTheHeader && !p.at(TokNewline)
 	p.skipNewlines()
 
-	for p.err == nil && !p.at(TokEOF) && (esacIsAPattern || !p.atCaseEnd()) {
+	// Only the word `esac` is taken away by that reading, and never the `}`:
+	// the shell with both takes `case x { }` as an empty `case` and reads
+	// `case x { esac` as an arm whose pattern is `esac`. Measured.
+	atEnd := func() bool {
+		if esacIsAPattern && p.atWord("esac") {
+			return false
+		}
+		return p.atCaseEnd(braced)
+	}
+	for p.err == nil && !p.at(TokEOF) && !atEnd() {
 		esacIsAPattern = false
 		p.lex.inCaseArm = false
 		it := &CaseItem{Start: p.tok.Pos}
@@ -3966,7 +3977,7 @@ func (p *Parser) parseCase() Command {
 		default:
 			// The last arm may omit its terminator before `esac`.
 			it.TermPos = p.tok.Pos
-			if !p.atCaseEnd() {
+			if !atEnd() {
 				if p.at(TokEOF) {
 					// The panel expects `;;` here rather than `esac`: an arm
 					// that has not been closed is what ran out, not the case.
@@ -3990,22 +4001,37 @@ func (p *Parser) parseCase() Command {
 	}
 	p.lex.inCaseArm = false
 	c.Stop = p.tok.End
-	if p.dialect.CaseBraceBody && p.atWord("}") {
+	if atEnd() && p.atWord("}") {
 		p.next()
+	} else if braced && p.dialect.CaseBraceBody == CaseBraceBodyPairsWithItsOpener {
+		// The opener was a `{` in a dialect that pairs them, so `esac` will
+		// not do: the shell that draws it this way answers `` `case'
+		// unmatched `` for `case x { … esac`, which is the unterminated
+		// shape rather than a word in the wrong place.
+		p.expectWord("}")
 	} else {
 		p.expectWord("esac")
 	}
 	return c
 }
 
-// atCaseEnd reports whether the current token closes a `case`.
+// atCaseEnd reports whether the current token closes a `case` that was opened
+// the way braced says.
 //
-// Two words can, and only in the dialect that writes the brace spelling of
-// the header. They are asked together rather than paired with the opener
-// because the shell that has them does not pair them either: `case x { …
-// esac` and `case x in … }` both run there. See Dialect.CaseBraceBody.
-func (p *Parser) atCaseEnd() bool {
-	return p.atWord("esac") || (p.dialect.CaseBraceBody && p.atWord("}"))
+// Two words can, and only in a dialect that writes the brace spelling of the
+// header — and whether they are interchangeable is that dialect's own answer:
+// ksh93 pairs `{` with `}` and `in` with `esac`, while zsh takes either closer
+// after either opener. See Dialect.CaseBraceBody.
+func (p *Parser) atCaseEnd(braced bool) bool {
+	switch p.dialect.CaseBraceBody {
+	case CaseBraceBodyMixesWithTheKeyword:
+		return p.atWord("esac") || p.atWord("}")
+	case CaseBraceBodyPairsWithItsOpener:
+		if braced {
+			return p.atWord("}")
+		}
+	}
+	return p.atWord("esac")
 }
 
 // casePatterns reads one arm's pattern list, `a | b | c`, and reports whether

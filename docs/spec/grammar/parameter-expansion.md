@@ -32,6 +32,41 @@ The four operators then differ only in what they do when the test fires:
 `${u:=V}` leaves `u` set to `V` afterwards, so it is an expansion with a
 side effect — the only one in this document.
 
+### Whether `$@` with nothing in it is set
+
+The table above says the colon-less row tests "unset", and there is one
+parameter the panel disagrees about the set-ness of:
+`Semantics.PositionalListWithNoneIsSet`.
+
+Measured 2026-09-12, `-c` and a script file, after `set --`:
+
+| probe | dash, zsh 5.9.2 | bash 5.3/as-`sh`/3.2, ksh93u+ |
+| --- | --- | --- |
+| `"${@-word}"` | *(empty)* | `word` |
+| `"${@+word}"` | `word` | *(empty)* |
+| `"${*-word}"` | *(empty)* | `word` |
+| `"${@?}"` | *(empty)*, status 0 | `@: parameter not set` |
+| `${@=abc}` | *(empty)*, status 0 | the operator fires, and is refused |
+
+Two columns call the empty list set and four call it unset. `$*` splits
+exactly as `$@` does, so one answer decides the family rather than one
+operator.
+
+The last row is the loudest and is two questions rather than one. Whether
+the assignment **fires** is this axis; what happens once it does is
+unanimous — `$@` is a name no assignment can land on, so bash says `$@:
+cannot assign in this way` and ksh93 `${@=abc}: bad substitution`, which
+is #1541 and reached by every dialect the moment the operator fires.
+
+The **colon** forms are unanimous and ask nothing: `${@:-word}` is `word`
+and `${@:+word}` is empty in all six, because an empty value fires the
+test whichever way the set-ness reads. The one place the colon form still
+depends on the answer is the *sentence* `${@:?}` writes, which names the
+null where the list is set and says "not set" where it is not.
+
+`${1-word}` is `word` in every column, so this is about the list and not
+about a positional parameter that is not there (#1941).
+
 ## The word is itself a word
 
 It is expanded, not taken literally:

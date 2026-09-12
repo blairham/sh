@@ -109,6 +109,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		// The one column that reads a value's backslash as data, so the
 		// metacharacter behind it stays live (#1367).
 		{"ValueBackslashQuotesWhatFollows", s.ValueBackslashQuotesWhatFollows, interp.No},
+		{"PositionalListWithNoneIsSet", s.PositionalListWithNoneIsSet, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"EmptyParamSubscriptIsAnError", s.EmptyParamSubscriptIsAnError, interp.No},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},

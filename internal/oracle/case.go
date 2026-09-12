@@ -11108,6 +11108,26 @@ echo unreachable`,
 		Why:     "a -t operand that is not a number: bash names an integer at status 2 where ksh93 and zsh answer a plain false at 1 — and bash 3.2 answers 1 too, so the complaint is younger than the operator. The TerminalTestRequiresANumber axis",
 	},
 	{
+		ID: "test/three-word-connectives", Category: "conditions",
+		Snippet: `test x -a y; echo "aa=$?"; test x -a ""; echo "ab=$?"; test "" -o x; echo "oa=$?"; test "" -o ""; echo "ob=$?"`,
+		Why:     "`[ \"$a\" -a \"$b\" ]` — the both-set guard, and the most common shape of `test` outside a single-operator check. Three words leave no room for an operator on either side, so each operand is true when it is non-empty: unanimous in all seven columns, dash and BusyBox ash included, which is why it is the core's. This implementation sent three words to the comparison rule, found no comparison among them and answered `binary operator expected` at **status 2** — neither 0 nor 1, so a script branching on `$?` took neither arm",
+	},
+	{
+		ID: "test/connective-precedence", Category: "conditions",
+		Snippet: `test x -o "" -a ""; echo "l=$?"; test x -a "" -o x; echo "r=$?"; test ! x -a y; echo "n=$?"`,
+		Why:     "the same two words past three, where they are the grammar's connectives and `-a` binds tighter than `-o`. The first is the discriminating one: read with precedence it is `x || (\"\" && \"\")` and true, read left to right it is `(x || \"\") && \"\"` and false. The negation in front of three words negates all three — six columns answer 0 to the third and ksh93 alone answers 1, which is recorded rather than followed",
+	},
+	{
+		ID: "test/ownership-operators", Category: "conditions",
+		Snippet: `: > mine; test -O mine; echo "o=$?"; test -G mine; echo "g=$?"; test -O nosuchfile; echo "om=$?"; [ -G mine ]; echo "b=$?"`,
+		Why:     "`-O` and `-G` ask whether a file belongs to the effective user or group, and every column has both in the builtin — a wider set than `[[ ]]` has, since dash and ash have the builtin without the keyword. The file is made by the snippet, so the true answers are true by construction and do not depend on whose machine ran it. Neither was an operator here: `test -O f` was `unary operator expected` at 2",
+	},
+	{
+		ID: "cond/ownership-operators", Category: "conditions",
+		Snippet: `: > mine; [[ -O mine ]]; echo "o=$?"; [[ -G mine ]]; echo "g=$?"; [[ -O nosuchfile ]]; echo "om=$?"`,
+		Why:     "the same pair inside the keyword, where they are core for the head count that put `-o` there: every column with `[[ ]]` at all has them and dash is absent only because it has no `[[ ]]`. Missing from the grammar, `[[ -O f ]]` was not an unsupported operator but a **syntax error**, which abandons the whole clause and the rest of the line with it",
+	},
+	{
 		ID: "cond/option-test-reads-a-set-option", Category: "conditions",
 		Snippet: `set -e; [[ -o errexit ]]; echo "on=$?"; set +e; [[ -o errexit ]]; echo "off=$?"`,
 		Why:     "`-o` asks whether a shell option is set, and it is the core's rather than a dialect's: every shell in the panel that has `[[ ]]` at all has it, and dash is absent only because it has no `[[ ]]` to put it in. The name every one of them agrees about, read in both states from the same run",

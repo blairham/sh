@@ -192,7 +192,8 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		r.ctl = controlExit
 		return false, condStatus{code: 1}
 	case "-e", "-f", "-d", "-s", "-r", "-w", "-x",
-		"-b", "-c", "-p", "-S", "-g", "-u", "-k", "-L", "-h":
+		"-b", "-c", "-p", "-S", "-g", "-u", "-k", "-L", "-h",
+		"-O", "-G":
 		// The file questions are `test`'s, answered by the same code: the
 		// two constructs disagree about how an operand is obtained, never
 		// about what the filesystem says about it. fileTest stats through

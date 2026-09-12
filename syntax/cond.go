@@ -126,6 +126,12 @@ var condUnaryOps = map[string]bool{
 	"-b": true, "-c": true, "-p": true, "-S": true, "-L": true, "-h": true,
 	"-g": true, "-u": true, "-k": true, "-t": true,
 	"-o": true,
+	// Ownership, and core for the same head count as `-o`: bash 5.3, bash
+	// 3.2, bash-as-`sh`, ksh93 and zsh 5.9 all have both, and dash has no
+	// `[[ ]]` to put them in. Missing here, `[[ -O f ]]` was not an
+	// expression at all — a syntax error that abandoned the whole clause,
+	// where the question it asks has an answer every shell agrees on.
+	"-O": true, "-G": true,
 }
 
 // condBinaryWordOps are the two-operand tests spelled as words. These compare

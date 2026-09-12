@@ -231,6 +231,32 @@ func (r *Runner) testExpr(args []string) (bool, error) {
 		if ok, err, handled := r.binaryTest(args[0], args[1], args[2]); handled {
 			return ok, err
 		}
+		if args[1] == "-a" || args[1] == "-o" {
+			// The connectives, over two *strings* rather than over two
+			// expressions: three words leave no room for an operator on
+			// either side, so each side is true when it is non-empty and
+			// `[ "$a" -a "$b" ]` is the both-set guard people write it for.
+			//
+			// Unanimous across the whole panel — bash 5.3, bash-as-`sh`,
+			// bash 3.2, ksh93, zsh 5.9.2, dash and BusyBox ash all answer
+			// `[ x -a "" ]` false and `[ "" -o x ]` true — which is why it
+			// is here rather than behind an axis, and why the refusal this
+			// replaces was a plain defect: the grammar below already had
+			// both connectives and only the three-word form fell through it
+			// to `binary operator expected` at status 2. A guard that is
+			// meant to answer yes or no answered "this is not an
+			// expression", and a script reading `$?` saw neither.
+			//
+			// Not folded into binaryTest, which the grammar also calls: the
+			// parser reads these two as connectives with `-a` binding
+			// tighter, and a primary that swallowed `a -o b` whole would
+			// make `[ a -o b -a c ]` associate the other way.
+			left, right := args[0] != "", args[2] != ""
+			if args[1] == "-a" {
+				return left && right, nil
+			}
+			return left || right, nil
+		}
 		if args[0] == "!" {
 			v, err := r.testExpr(args[1:])
 			return !v, err
@@ -426,7 +452,12 @@ func (r *Runner) isTestUnary(s string) bool {
 func isTestUnary(s string) bool {
 	switch s {
 	case "-n", "-z", "-e", "-f", "-d", "-s", "-r", "-w", "-x", "-L", "-h",
-		"-b", "-c", "-p", "-S", "-g", "-u", "-k", "-t":
+		"-b", "-c", "-p", "-S", "-g", "-u", "-k", "-t",
+		// Ownership. Unanimous across the panel — bash 5.3, bash-as-`sh`,
+		// bash 3.2, ksh93, zsh 5.9.2, dash and BusyBox ash all answer both,
+		// which is a wider set than `[[ ]]` has because dash and ash have
+		// the builtin without the keyword.
+		"-O", "-G":
 		return true
 	}
 	return false
@@ -546,6 +577,23 @@ func (r *Runner) fileTest(op, operand string) bool {
 	case "-L", "-h":
 		li, lerr := r.lstat(path)
 		return lerr == nil && li.Mode()&os.ModeSymlink != 0
+	case "-O", "-G":
+		// Ownership, against the *effective* identity rather than the real
+		// one — which is what a shell running under setuid is asking about,
+		// and the same pair `U` and `G` already compare a glob against.
+		//
+		// A file whose stat this platform cannot decompose answers false
+		// rather than true: the question is "is this mine", and a shell that
+		// could not tell must not say yes.
+		if err != nil {
+			return false
+		}
+		kind, want := byte('u'), uint64(uint32(osGeteuid()))
+		if op == "-G" {
+			kind, want = 'g', uint64(uint32(osGetegid()))
+		}
+		id, ok := fileOwner(info, kind)
+		return ok && id == want
 	}
 	return false
 }

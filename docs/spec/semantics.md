@@ -8247,6 +8247,79 @@ a dialect should instead hold a table of the names it *presents* as
 builtins — which would move `type` too, and is therefore not a local
 change — is left open.
 
+### What a coprocess leaves behind when it ends
+
+A coprocess ends and the shell is left holding two descriptors into a
+process that is gone. What it does with them is `ReapedCoprocessEnds`,
+and the panel splits three ways — measured 2026-09-12 with a coprocess
+that writes one line and exits, and the shell then made to notice:
+
+    bash 5.3.15, bash-as-sh   both ends go, and the array with them
+    ksh93 (AJM 93u+ 2012)     the end the shell writes goes; the read end stays
+    zsh 5.9.2                 neither goes
+    bash 3.2, dash, ash       no coprocess of any spelling
+
+In bash the array is **unset** rather than emptied — `declare -p CP`
+answers `CP: not found`, and so does `declare -p CP_PID` — so `${CP[1]}`
+expands to nothing and `echo x >&${CP[1]}` is `ambiguous redirect` at 1.
+Both descriptors go with it, which a number saved out of the array
+beforehand shows: `r=${CP[0]}` and a later `<&$r` is `Bad file
+descriptor`, and the line the coprocess had already written is lost with
+the end that would have read it. ksh93 answers the same question about
+the write end through the letter instead — `print: no query process [Bad
+file descriptor]` at 1, the same sentence it gives before any coprocess
+was started — while a `read -p` still hands back what is in the pipe.
+zsh takes back neither, so a write reaches a pipe with no reader and the
+shell dies on SIGPIPE at 141.
+
+**That death is shared ground and is not what the axis is about.**
+`exec 3> >(exec true)` and a later write ends the shell everywhere; what
+bash and ksh93 do is take the descriptor away *before* a script can
+reach it, so the write is refused instead of performed. So the fix for
+#2411 was the letting go and never a signal disposition.
+
+**The array is not a separate axis.** It only publishes the ends, so
+where the ends go it goes with them — which is why the question is asked
+of the two shells that have no array at all.
+
+**When the shell notices is measured too, and is neither `wait` nor the
+next command.** With a coprocess that has certainly ended:
+
+    :  :  :                   the array is still 2, for any number of builtins
+    jobs                      still 2 — asking after the jobs is not waiting
+    v=$( : )                  still 2
+    ( : )                     0
+    : | :                     0
+    /usr/bin/true             0
+    wait                      0
+
+So the notice rides on the shell reaping a job, which a real shell gets
+from SIGCHLD and this one has to place by hand: at the subshell, the
+pipeline, the external command and `wait`, and nowhere else. Putting it
+at the top of every statement instead is the mistake worth naming,
+because it passes every row above and breaks the ordinary idiom —
+`coproc CP { echo hi; }; read -r a <&${CP[0]}` answers `hi` in bash, and
+would answer an ambiguous redirect. Six corpus rows are controls for
+exactly that, and a build with the retirement moved to the statement
+boundary fails all six while passing every row that measures the fix.
+
+**A read that finds end-of-file is a different rule and is shared.**
+Both shells with the coprocess letters forget the *whole* coprocess
+there — the write end with the read one — and neither needs it reaped
+first: `coproc (print hi)` with no `wait` anywhere answers the line, then
+a silent end-of-file at 1, then `-p: no coprocess` in zsh and `read: no
+query process` in ksh93, and a `print -p` after that is refused too. bash
+never reaches it, spelling `-p` as a prompt, and two reads that both find
+end-of-file leave `${#CP[@]}` at 2. So it lives in the read path rather
+than being a fourth value of the axis.
+
+Twelve corpus rows, under `commands/` and `redirection/`; six of them are
+the controls named above. The zsh column of
+`commands/writing-by-a-letter-to-a-coprocess-that-has-ended` is red until
+#770: a builtin's broken-pipe write is answered here with a status rather
+than with the signal, so this shell reports the refusal where zsh reports
+141.
+
 ### Out of scope, recorded rather than silent: newgrp
 
 `newgrp` — the one POSIX regular builtin still absent — replaces the

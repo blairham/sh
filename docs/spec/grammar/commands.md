@@ -871,9 +871,32 @@ Three facts come out of that, and each is load-bearing:
   unset and `$?` is 1 — a failed command's status, not a refused file's.
   A script whose last line is the bad one exits 1, and `set -e` makes it
   the file's after all, at the parse-failure status.
-- **The input running out is a different failure.** bash words that one
-  against the parenthesis and stops, which is right: the same text with
-  more after it is an unfinished construct rather than a bad one.
+- **The input running out is worded differently and ends the same
+  much.** bash words that one against the parenthesis and stops, which
+  is right — the same text with more after it is an unfinished construct
+  rather than a bad one — but there is no next line to carry on to, so
+  stopping is all that is left of the recovery. The status still says
+  which failure it was: 1, a refused line's, where the identical message
+  outside the parentheses is 2. Measured 2026-09-12, bash 5.3.15, from a
+  script file and again under `-c` and `-n`, all three agreeing:
+
+  | probe | status |
+  | --- | --- |
+  | `a=( x` | 1 |
+  | `a=( $(` | 1 |
+  | `a=( "x` | 1 |
+  | `echo $(` | 2 |
+  | `echo "x` | 2 |
+  | `set -e` then `a=( x` | 2 |
+  | `a=( $(if; then :; fi) )` | 2 |
+
+  Row one against row four is the whole of it: one wording, two
+  statuses, and the parentheses the only difference. Row six is what
+  says this is the refused *line* and not a status attached to the
+  failure — `set -e` turns it back into 2, exactly as it does for a
+  token refused between the parentheses. The last row is the boundary
+  the other way: it is the input running out that this takes, and not
+  everything that can go wrong inside the parentheses (#2404).
 
 Nor is it a property of nested reading in general — `echo $(if)` is
 fatal at status 2 in bash — so it is the assignment's parentheses and
@@ -889,7 +912,11 @@ what recovers — it reads past the array's closing parenthesis so that
 there is a next line to reach — and hands the failure back on the line
 rather than on itself (`syntax.File.Refused`). A read of the **whole
 file**, which runs nothing and has no next line, still takes the refusal
-as its answer, which is what `bash -n` reports and exits 1 for. Measured:
+as its answer, which is what `bash -n` reports and exits 1 for. Input
+that ran out inside the parentheses is handed back the same way, so that
+it leaves the same status; where it was a quote that ran out the lexer
+holds the failure rather than the parser, and it is dropped from there
+too, since nothing is left to read. Measured:
 `array/an-operator-between-a-literal-s-elements`,
 `array/a-redirection-operator-in-a-literal-s-element`,
 `array/a-literal-holding-an-operator-in-a-function-body`,

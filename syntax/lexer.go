@@ -260,6 +260,17 @@ func NewLexer(src string, d Dialect) *Lexer {
 // Err reports why lexing stopped early, or nil.
 func (l *Lexer) Err() error { return l.err }
 
+// forgetErr drops an error the lexer recorded, for the one caller that reads
+// on past one: Parser.giveUpOnTheArray, where the input running out between an
+// array literal's parentheses ends the line rather than the file. Without it
+// the parser adopts the lexer's copy again on its next token — see
+// Parser.next — and the refusal becomes the file's after all.
+//
+// Only ever called at the end of the input, which is what makes it safe: there
+// is no more text for a lexer in a state it cannot continue from to be asked
+// about.
+func (l *Lexer) forgetErr() { l.err = nil }
+
 // Incomplete reports whether the input ended in the middle of something that
 // could still be finished — an unclosed quote, a trailing line continuation.
 // A prompt should ask for another line; a script should report an error.

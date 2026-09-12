@@ -4,6 +4,7 @@
 package syntax
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -2493,18 +2494,55 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 // recovery is "read past this construct so the next line can be reached", and
 // never "read the rest of the line as though it had parsed".
 //
-// The input running out is **not** this and is deliberately excluded. bash
-// words that one against the parenthesis — `unexpected EOF while looking for
-// matching )` — and stops, because there is no next line for a shell to go on
-// to; the same text with more after it has not been seen yet, which is the
-// ordinary unfinished-construct case the caller already handles.
+// The input running out between the parentheses is the same refusal, and it
+// is what the *status* says. There is no next line to read on to — that is
+// what EOF means — so the recovery is only how much the failure ended, and
+// bash ends the line rather than the file there too. Measured 2026-09-12,
+// bash 5.3.15, from a script file:
+//
+//	a=( x                    status 1     input ran out inside the parens
+//	a=( $(                   status 1     and inside a construct inside them
+//	a=( "x                    status 1     and inside a quote
+//	echo $(                  status 2     the same message outside them
+//	echo "x                  status 2     the same
+//	set -e ⏎ a=( x           status 2     the refused *line*'s own rule
+//	a=( $(if; then :; fi) )  status 2     a *token* refused deeper in is not
+//
+// Row one against row four is the whole of it: one message, two statuses, and
+// the parens are the only difference. Row six is what says this is the
+// refused line and not a status of its own — `set -e` turns it back into 2,
+// exactly as it does for the token rows above, which a number attached to the
+// failure could not have done. Row seven is the boundary the other way: it is
+// the input running out that this takes, not everything that can go wrong
+// inside the parens (#2404).
 //
 // inArgument is put back before anything else, because the skip reads the
 // remaining elements the way the loop above read them, and what follows the
 // array is not an argument either way.
 func (p *Parser) giveUpOnTheArray(savedInArgument bool) bool {
-	if !p.dialect.CompoundAssignmentErrorGivesUpTheLine || p.at(TokEOF) || p.err != nil {
+	if !p.dialect.CompoundAssignmentErrorGivesUpTheLine {
 		return false
+	}
+	if p.at(TokEOF) || p.err != nil {
+		if !p.arrayLiteralInputRanOut() {
+			// Something other than the end of the input, raised deeper in
+			// than this production: the file's, as it always was.
+			return false
+		}
+		if p.err == nil {
+			// Nothing has recorded it yet, so the caller's own report is
+			// made here instead — same token, same wording, same `)` asked
+			// for — and only where it goes differs.
+			p.failUnexpected(")")
+		}
+		p.refused, p.err = p.err, nil
+		// The lexer's copy as well, where the failure was its: a parser that
+		// re-reads at EOF adopts it again on the next token and the refusal
+		// would become the file's after all. There is nothing left to read
+		// but the end of the input, which is why forgetting it here is safe.
+		p.lex.forgetErr()
+		p.lex.inArgument = savedInArgument
+		return true
 	}
 	p.failUnexpected("")
 	// Moved off the parser before the skip, because a parser holding an error
@@ -2526,6 +2564,25 @@ func (p *Parser) giveUpOnTheArray(savedInArgument bool) bool {
 	}
 	p.lex.inArgument = savedInArgument
 	return true
+}
+
+// arrayLiteralInputRanOut reports whether what stopped the array literal was
+// the input running out rather than a token the grammar did not want.
+//
+// Two shapes of the one fact. With no error recorded it is the element loop
+// having reached EOF — `a=( x` — and with one it is a construct or a quote
+// inside an element that the end of the input closed: `a=( $(` records the
+// parser's unterminated, `a=( "x` the lexer's unmatched. A token refused
+// deeper in — `a=( $(if; then :; fi) )` — is neither, and is the file's.
+func (p *Parser) arrayLiteralInputRanOut() bool {
+	if p.err == nil {
+		return p.at(TokEOF)
+	}
+	var e *Error
+	if !errors.As(p.err, &e) {
+		return false
+	}
+	return e.Kind == ErrUnterminated || e.Kind == ErrUnmatched
 }
 
 // declarationArray reads `name=(x y)` written as an operand of a utility that

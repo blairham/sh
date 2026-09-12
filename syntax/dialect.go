@@ -2083,6 +2083,11 @@ type Dialect struct {
 	// fatal at status 2 in bash, so a substitution's contents are the file's
 	// and an assignment's elements are not.
 	//
+	// The input running out between the parentheses is this too, and only
+	// the status is left of it: there is no next line to read on to, and
+	// `a=( x` is 1 where `echo $(` — the same message, outside an array
+	// literal — is 2 (#2404).
+	//
 	// A grammar flag rather than a semantics axis because the parser is what
 	// recovers: it has to read past the construct for there to be a next line
 	// at all. See Parser.giveUpOnTheArray and File.Refused.

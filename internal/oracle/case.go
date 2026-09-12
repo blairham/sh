@@ -14144,7 +14144,7 @@ printf "[%s]" .@(hid); echo`,
 		SyntaxError:     true,
 		LayoutSensitive: true,
 		Snippet:         "echo one\na=(p q\necho two\n",
-		Why:             "the control for the three rows above: the input running out is not the same failure and nothing carries on from it. bash words it against the parenthesis — `unexpected EOF while looking for matching )` — where the operator rows name the token, and every column stops. The distinction is real rather than incidental: the same text with more after it is an unfinished construct, which is a shell waiting rather than a shell complaining",
+		Why:             "the control for the three rows above: the input running out is worded differently and nothing carries on from it. bash words it against the parenthesis — `unexpected EOF while looking for matching )` — where the operator rows name the token, and every column stops. The distinction is real rather than incidental: the same text with more after it is an unfinished construct, which is a shell waiting rather than a shell complaining. What the three bash columns still say is *which* failure it was, and they say it in the status: 1 here, a refused line's, where `echo $(` and `echo \"x` — the same message and the same end of input, outside an array literal — are 2. So the parentheses change the status of a failure they cannot recover from, and this row is the only place the panel records it (#2404)",
 	},
 	{
 		ID: "pat/a-glob-flag-where-a-loop-item-begins", Category: "pattern matching", SyntaxError: true,

@@ -408,35 +408,68 @@ print -r -- "guard=$?"`)
 	}
 }
 
-// And the half of each module this shell deliberately has not got, refused by
-// the builtin's own name.
+// And the half of each module that would shadow a command: produced on
+// request, and only on request.
 //
 // `stat`, `rm`, `mv` and the six beside them are real features of these
-// modules and are **not** registered here, because this shell's builtins are
-// registered before any script runs: a `stat` registered at all is a `stat`
-// registered always, and every script's `stat -f %z` would stop reaching the
-// command on the machine. The `zf_` spellings exist in zsh for exactly that
-// reason and the manual recommends the narrowed load for exactly that reason.
+// modules, and this shell's builtins are registered before any script runs —
+// so a `stat` in the table used to be a `stat` every script got, and every
+// `stat -f %z` on the machine would have stopped reaching the command. They
+// were left out for that reason and `zmodload -F zsh/stat b:stat` refused by
+// name.
 //
-// So the answer is a refusal that names what is missing rather than a silent
-// success — which is the same sentence the module gets for a builtin nobody
-// has written at all, because it is the same fact.
+// It is a third state that makes them affordable, not a compromise between
+// the two the refusal was choosing from. Registered **withdrawn**, the name
+// is out of the lookup until a `zmodload` asks for it — which is precisely
+// the state zsh is in, and this asserts both halves of it (#1670).
 //
-// The last line names two and gets them back in the *table's* order rather
-// than the order it wrote them, which is deliberate: a refusal reads against
-// the `zmodload -lF` listing of the same module, so the two are in step.
-func TestTheNamesThatWouldShadowACommandRefuseByName(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/stat b:stat 2>&1
+// Every line below is byte-identical to zsh 5.9.2, measured 2026-09-12. The
+// two that discriminate hardest are the last two: `rm: command` proves that
+// naming `mv` and `ln` produced *those* and did not open the module, and
+// `zf_mv: none` proves the narrowed load withdrew the eighteen it did not
+// name — the `zf_` spellings included, which are otherwise always present
+// here.
+func TestTheNamesThatWouldShadowACommandArriveOnlyWhenAsked(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `whence -w stat rm mv
+zmodload -F zsh/stat b:stat 2>&1
 print -r -- "stat=$?"
-zmodload -F zsh/files b:rm 2>&1
-print -r -- "rm=$?"
+whence -w stat zstat
 zmodload -F zsh/files b:mv b:ln 2>&1
-print -r -- "two=$?"`)
-	want := "zsh:1: failed to load module `zsh/stat': stat is not implemented yet\nstat=1\n" +
-		"zsh:3: failed to load module `zsh/files': rm is not implemented yet\nrm=1\n" +
-		"zsh:5: failed to load module `zsh/files': ln and mv are not implemented yet\ntwo=1\n"
+print -r -- "two=$?"
+whence -w mv ln rm zf_mv`)
+	// `none` where a shell on a real machine writes `command`: this runner
+	// has no PATH, so a name that is not a builtin finds nothing rather than
+	// /bin/rm. The two are the same answer to the question being asked —
+	// **not this shell's** — and either one tells `builtin` apart.
+	want := "stat: none\nrm: none\nmv: none\n" +
+		"stat=0\nstat: builtin\nzstat: none\n" +
+		"two=0\nmv: builtin\nln: builtin\nrm: none\nzf_mv: none\n"
+	if out != want || st != 1 {
+		t.Errorf("the shadowing names = %q (status %d), want %q at 1", out, st, want)
+	}
+}
+
+// A plain load switches all eighteen on, and an unload puts the nine plain
+// spellings back out of the table.
+//
+// The unload row is the one that had to be measured rather than reasoned:
+// three modules lose their builtins when unloaded and `zsh/zutil` keeps
+// every one of them, so the rule this shell states is the narrow one — an
+// unload undoes the load. See zmodloadRelease.
+func TestAPlainLoadSwitchesTheShadowingNamesOnAndAnUnloadPutsThemBack(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/files
+print -r -- "load=$?"
+whence -w rm zf_rm
+zmodload -u zsh/files
+print -r -- "unload=$?"
+whence -w rm
+zmodload zsh/zutil
+zmodload -u zsh/zutil
+whence -w zstyle`)
+	want := "load=0\nrm: builtin\nzf_rm: builtin\n" +
+		"unload=0\nrm: none\nzstyle: builtin\n"
 	if out != want || st != 0 {
-		t.Errorf("the shadowing names = %q (status %d), want %q", out, st, want)
+		t.Errorf("load and unload = %q (status %d), want %q at 0", out, st, want)
 	}
 }
 

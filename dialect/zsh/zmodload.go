@@ -548,6 +548,55 @@ func zmodloadEnforce(r *interp.Runner, module string, selected []string) {
 	}
 }
 
+// zmodloadRelease puts a module's builtins back the way this runner was
+// built, which is what an unload does here.
+//
+// **Not "take the module's builtins away".** That was the first reading and
+// the panel refuses it. Measured on zsh 5.9.2, 2026-09-12, loading a module
+// and immediately unloading it:
+//
+//	zsh/files     rm: command      zf_rm: none
+//	zsh/stat      stat: command    zstat: none
+//	zsh/datetime  strftime: none   ${+EPOCHSECONDS} 0
+//	zsh/zutil     zstyle: builtin  zparseopts: builtin
+//
+// Three modules lose their builtins and `zsh/zutil` keeps every one of them,
+// at status 0, with `zmodload` afterwards listing `zsh/complete` and
+// `zsh/zle` that nothing asked for. Whatever that is, it is not a rule this
+// shell can state, and copying "unload removes the builtins" would have
+// turned `zmodload -u zsh/zutil; zstyle` from 0 into `command not found`.
+//
+// The rule that survives every row is the narrower one: **an unload undoes
+// the load, and nothing else.** A name this shell registers withdrawn goes
+// back to withdrawn — which is `rm: command` and `stat: command`, the rows
+// #1670 exists for — and a name it registers outright stays registered,
+// which is `zstyle: builtin` and also the long-standing `zf_rm: builtin`
+// that filesmodule.go argues for on its own grounds. So this is strictly the
+// state before the load, and no row moves that was not the load's doing.
+func zmodloadRelease(r *interp.Runner, module string) {
+	withdrawn := zmodloadWithdrawnAtStart(module)
+	for _, f := range zmodloadFeatures[module] {
+		if kind, name, ok := strings.Cut(f, ":"); ok && kind == "b" {
+			r.SetBuiltinWithdrawn(name, withdrawn[f])
+		}
+	}
+}
+
+// zmodloadWithdrawnAtStart is the features a module provides whose names this
+// runner registers **withdrawn** — the plain spellings of a builtin that is
+// an ordinary command on every machine, which a script gets only by asking
+// for the module (#1670).
+//
+// Derived from the module's own registration rather than listed here, so the
+// day a tenth file operation is added it is in both places at once.
+func zmodloadWithdrawnAtStart(module string) map[string]bool {
+	out := map[string]bool{}
+	for _, name := range zshWithdrawnPlainNames(module) {
+		out["b:"+name] = true
+	}
+	return out
+}
+
 // zmodloadWiden puts a module back to all-features-on, which is what a plain
 // load leaves behind.
 //
@@ -558,6 +607,13 @@ func zmodloadEnforce(r *interp.Runner, module string, selected []string) {
 func zmodloadWiden(r *interp.Runner, module string) int {
 	selected, ok := r.GetAssoc(zmodloadFeatureStore)
 	if !ok {
+		// Nothing has been narrowed, so there is no selection to forget —
+		// but the table still has to be made to agree. A module's plain
+		// spellings are registered withdrawn (`rm` from `zsh/files`, `stat`
+		// from `zsh/stat`), and a plain load is precisely what switches them
+		// on, so the enforcement is the work here rather than the bookkeeping
+		// (#1670).
+		zmodloadEnforce(r, module, zmodloadFeatures[module])
 		return 0
 	}
 	// A producer the script has taken the name of cannot go back, and the
@@ -837,10 +893,18 @@ func zmodloadLoad(r *interp.Runner, opts zmodloadOpts, module string) int {
 // carried, to tell "absent here" from "no such thing anywhere" — turned out
 // to answer no question this builtin asks. It is gone.
 //
-// Nothing is unloaded in the sense zsh means it: the features this shell has
-// are the ones it has, and `-u` only takes the module out of the listing.
-// Said plainly rather than refused, because a script's `zmodload -u` is
-// tidying up after itself and has nothing to act on either way.
+// **An unload undoes the load**, which it did not have to before #1670 made a
+// module's plain spellings reachable: with `rm` registered withdrawn until
+// `zmodload zsh/files` switches it on, an unload that left it switched on
+// would have been the one route by which this shell kept an `rm` builtin
+// where zsh has none. Measured on zsh 5.9.2, 2026-09-12:
+//
+//	zmodload zsh/files; zmodload -u zsh/files;  whence -w rm   rm: command
+//	zmodload zsh/files;                         whence -w rm   rm: builtin
+//
+// It is *undo the load* and not *take the module's builtins away* — see
+// zmodloadRelease, where the four modules that decide the difference are
+// measured. Parameters are not touched at all, also measured there.
 func zmodloadUnload(r *interp.Runner, modules []string) int {
 	status := 0
 	for _, m := range modules {
@@ -850,6 +914,11 @@ func zmodloadUnload(r *interp.Runner, modules []string) int {
 			continue
 		}
 		zmodloadSetLoaded(r, m, false)
+		// Take the builtins out of the table. zmodloadEnforce with an empty
+		// selection is exactly that, and reusing it is what keeps unloading
+		// and deselecting one rule: whatever `-b:` means for a name, `-u`
+		// means for all of them.
+		zmodloadRelease(r, m)
 		// The narrowing is deliberately *not* cleared here. It would be a
 		// second rule saying what zmodloadEnabled's first line already says
 		// — a module that is not loaded has nothing on — and the entry left
@@ -1145,4 +1214,17 @@ func isOrAre(n int) string {
 		return "is"
 	}
 	return "are"
+}
+
+// zshWithdrawnPlainNames is which of a module's builtin names this runner
+// registers withdrawn. Each module answers for itself, beside its own
+// registration, so the two cannot drift apart.
+func zshWithdrawnPlainNames(module string) []string {
+	switch module {
+	case "zsh/files":
+		return filesPlainNames()
+	case "zsh/stat":
+		return statPlainNames()
+	}
+	return nil
 }

@@ -18,26 +18,29 @@ import (
 // The `zsh/stat` module: one system call reported fourteen ways.
 //
 // Measured 2026-09-09 against zsh 5.9.2 with `zsh -f`. The module is two names
-// for one builtin — `zstat` and `stat` — and **only `zstat` is registered
-// here**. That is a decision rather than an omission, and the manual makes the
-// same one in the same words: "as the name stat is often used by an external
-// command it is recommended that only the zstat form of the command is used."
+// for one builtin — `zstat` and `stat` — and both are registered here, `stat`
+// **withdrawn** until a `zmodload` asks for it.
 //
-// The reason is this shell's own shape. Its builtins are the dialect's and are
-// registered before any script runs (see zmodload.go), so a `stat` registered
-// at all is a `stat` registered *always* — and `stat -f %z file` in any script
-// this shell runs would stop reaching /usr/bin/stat, on a machine where that
-// command is the one everybody means. zsh does not have that problem because
-// the module really is loaded on demand. Registering the name would buy
-// literal agreement with `zmodload zsh/stat; stat f` and cost every script
-// that never asked for the module, so `b:stat` is in the feature table as
-// what it is — a feature of the module this shell has not got — and
-// `zmodload -F zsh/stat b:stat` refuses by that name.
+// The manual recommends the `zstat` form for the reason this shell felt most
+// sharply: "as the name stat is often used by an external command it is
+// recommended that only the zstat form of the command is used." Its builtins
+// are the dialect's and are registered before any script runs (see
+// zmodload.go), so a `stat` registered at all used to be a `stat` registered
+// *always* — and `stat -f %z file` in any script would have stopped reaching
+// /usr/bin/stat on a machine where that command is the one everybody means.
+// zsh does not have that problem because the module really is loaded on
+// demand.
 //
-// Every real caller writes the narrowed form. Counted on this machine: three
-// plugin trees name this module, and all three write `zmodload -F zsh/stat
-// b:zstat`, which is the line the manual recommends and the line #1634 was
-// filed on.
+// It does not have to be this shell's problem either. Registered *withdrawn*,
+// the name is out of the lookup until the module is loaded and the word finds
+// /usr/bin/stat exactly as before, which is the state zsh is in and the one
+// filesmodule.go measures in full. `zmodload -F zsh/stat b:stat` then answers
+// 0 and produces the builtin rather than refusing by name (#1670).
+//
+// Every real caller still writes the narrowed `zstat` form. Counted on this
+// machine: three plugin trees name this module, and all three write
+// `zmodload -F zsh/stat b:zstat`, which is the line the manual recommends and
+// the line #1634 was filed on.
 
 // statElements are the fields, in the order zsh lists them — which is the
 // order `-l` writes, the order a listing writes, and the order an array is
@@ -93,6 +96,10 @@ func registerStatModule(r *interp.Runner) {
 		return
 	}
 	r.Register("zstat", zstatBuiltin)
+	// The other name for the same builtin, out of the table until a
+	// `zmodload` puts it in — see the module comment above.
+	r.Register("stat", zstatBuiltin)
+	r.SetBuiltinWithdrawn("stat", true)
 }
 
 // zstatOpts is what the letters asked for.
@@ -610,4 +617,15 @@ func statFileType(mode uint64) string {
 
 func zstatPrintf(r *interp.Runner, format string, args ...any) {
 	_, _ = fmt.Fprintf(r.Out(), format, args...)
+}
+
+// statPlainNames is the plain spelling of `zstat`, registered but withdrawn
+// for the reason the module comment gives — and empty on a platform whose
+// stat fields this package has not been taught, where nothing is registered
+// at all.
+func statPlainNames() []string {
+	if !statSupported {
+		return nil
+	}
+	return []string{"stat"}
 }

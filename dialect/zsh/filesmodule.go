@@ -22,20 +22,47 @@ import (
 // still move and remove files when there is no room to start a process.
 //
 // Measured 2026-09-09 against zsh 5.9.2 with `zsh -f`. The module provides
-// each of the nine under two names — `mv` and `zf_mv` — and **only the `zf_`
-// half is registered here**, for the reason statmodule.go sets out at length
-// for `stat`: this shell's builtins are registered before any script runs, so
-// registering `rm` at all is registering it always, and every `rm -v` and
-// `mv -n` in every script this shell runs would stop reaching the system's
-// command. The manual names the `zf_` spellings as the ones to load on their
-// own, and every real caller writes them — `zmodload -F zsh/files b:zf_mv
-// b:zf_rm` is a prompt theme's line and `zmodload -F zsh/files b:zf_rm ||
-// return` is a plugin manager's.
+// each of the nine under two names — `mv` and `zf_mv` — and both halves are
+// registered here, the plain half **withdrawn** until a `zmodload` asks for
+// it.
 //
-// So the nine plain names are in the feature table as what they are — features
-// of the module this shell has not got — and `zmodload -F zsh/files b:rm`
-// refuses by that name rather than answering yes and leaving a script with
-// whatever `rm` was already on its `$PATH`.
+// # Why the plain half was left out, and why that is no longer the answer
+//
+// This shell's builtins are the dialect's and are registered before any
+// script runs, so a name registered at all was a name registered always: an
+// `rm` in the table would have been an `rm` every script got, and every
+// `rm -v` and `mv -n` on this machine would have stopped reaching the
+// system's command whether or not the script ever named the module. So the
+// nine plain names were in the feature table as features this shell had not
+// got, and `zmodload -F zsh/files b:rm` refused by name (#1670).
+//
+// The cost that reasoning priced does not have to be paid, because the
+// registered/disabled pair it assumed is not the state zsh is in. Measured on
+// zsh 5.9.2, 2026-09-12, its own listing distinguishes **three** states:
+//
+//	zsh -fc 'disable'                                        (nothing)
+//	zsh -fc 'zmodload zsh/files; disable'                    (nothing)
+//	zsh -fc 'zmodload zsh/files; disable rm; disable'        rm
+//	zsh -fc 'zmodload zsh/files; zmodload -F zsh/files -b:rm; disable'  (nothing)
+//
+// A name a module has not switched on is **absent** — not listed, and the
+// word finds the external command. A name a module switched on and a script
+// switched off is **disabled**, and listed. A name a module took away with
+// `-b:` is absent again. That third state is exactly
+// [interp.Runner.SetBuiltinWithdrawn], built for #1635's deselection, and it
+// already answered byte-identically to zsh in every probe.
+//
+// So the nine are registered withdrawn and `zmodloadEnforce` switches them
+// on: `zmodload zsh/files; rm -s f` reaches the builtin, `zmodload -F
+// zsh/files b:rm` is `rm: builtin` and `zf_rm: none` as it is in zsh, and a
+// shell nobody has asked still has `rm` meaning /bin/rm. The visible cost the
+// issue was filed on is nothing, because the state is the one zsh is in.
+//
+// **The gate came first.** These are the same nine implementations under a
+// second name, so every plain spelling arrives through the wrappers in
+// filesgate.go (#1819) and is refused by a policy exactly as its `zf_` twin
+// is — see the `module/rm` route in internal/sandboxcheck. A name made
+// reachable without that would be #2260's escape-the-day-it-works.
 //
 // **`-s` is refused by name.** Four of the commands take it, and it is not a
 // variation on what they do: it asks that no symbolic link be followed *during
@@ -82,10 +109,20 @@ func registerFilesModule(r *interp.Runner) {
 		if op.name == "sync" && !fileSyncSupported {
 			// A platform whose flush-the-buffers call this package has not
 			// been taught. Unregistered rather than registered and refusing,
-			// so `zmodload -F zsh/files b:zf_sync` answers honestly.
+			// so `zmodload -F zsh/files b:zf_sync` answers honestly. The
+			// plain spelling goes with it: an unregistered name and a
+			// withdrawn one differ in whether `zmodload` can produce it, and
+			// on such a platform it cannot.
 			continue
 		}
-		r.Register("zf_"+op.name, fileBuiltin(op))
+		run := fileBuiltin(op)
+		r.Register("zf_"+op.name, run)
+		// The plain spelling is the same builtin, out of the table until a
+		// `zmodload` puts it in. Registering it first is what lets the
+		// selection put it back without a second table of features to
+		// functions — see zmodloadEnforce.
+		r.Register(op.name, run)
+		r.SetBuiltinWithdrawn(op.name, true)
 	}
 }
 
@@ -921,4 +958,21 @@ func fileErrText(err error) string {
 		return lerr.Err.Error()
 	}
 	return err.Error()
+}
+
+// filesPlainNames is the nine plain spellings — `rm`, `mv`, `ln` and the rest
+// — which are registered but withdrawn, so a script gets them only by loading
+// the module. Read off fileOps so it cannot fall behind it, and skipping the
+// one operation a platform may not have for the same reason registration
+// does.
+func filesPlainNames() []string {
+	ops := fileOps()
+	names := make([]string, 0, len(ops))
+	for _, op := range ops {
+		if op.name == "sync" && !fileSyncSupported {
+			continue
+		}
+		names = append(names, op.name)
+	}
+	return names
 }

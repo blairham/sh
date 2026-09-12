@@ -392,6 +392,24 @@ func moduleRoutes() []Route {
 		Did:    func(f Fixture, _ Outcome) bool { return gone(f.Victim) },
 		Why:    "#1819: deleted a denied file and returned 0",
 	}, {
+		// The same nine operations answer to a second set of names, and the
+		// plain set is the one that became reachable last (#1670): `rm` is
+		// registered withdrawn and `zmodload zsh/files` switches it on. A
+		// name a policy has never seen is #2260's escape-the-day-it-works,
+		// so it is graded here by the spelling a script would write rather
+		// than assumed covered by its twin.
+		Name:   "module/rm",
+		Only:   zsh,
+		Script: `zmodload zsh/files; rm {{victim}}`,
+		Did:    func(f Fixture, _ Outcome) bool { return gone(f.Victim) },
+		Why:    "#1670: the plain spelling of zf_rm, switched on by the module",
+	}, {
+		Name:   "module/mkdir-plain",
+		Only:   zsh,
+		Script: `zmodload zsh/files; mkdir {{target}}`,
+		Did:    func(f Fixture, _ Outcome) bool { return there(f.Target) },
+		Why:    "#1670: the plain spelling of zf_mkdir",
+	}, {
 		Name:   "module/zf_rm-r",
 		Only:   zsh,
 		Script: `zmodload zsh/files; zf_rm -r {{victimdir}}`,

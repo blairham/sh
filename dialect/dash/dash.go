@@ -47,6 +47,15 @@ func Semantics() interp.Semantics {
 	// `export a+=2` is `a+: bad variable name` here, so the append operator
 	// is not an operand this shell's declarations take.
 	s.DeclarationTakesAnAppendOperand = interp.No
+	// A prefix to a function is the call's environment and nothing after it,
+	// which is the answer six of the seven columns give and the one POSIX
+	// leaves open. Measured 2026-09-12: `f(){ env | grep "^v="; }; v=1; v=9
+	// f; echo "[$v]"` prints `v=9` from the child and `[1]` after. Worth
+	// saying out loud in the shell that targets the standard's text —
+	// 2.9.1 makes both of these unspecified, so this is a measurement of
+	// this shell rather than compliance with anything (#2407).
+	s.AssignmentPrefixPersistsAfterAFunction = interp.No
+	s.PrefixToAFunctionIsExported = interp.Yes
 	// An unquoted list is its elements taken one at a time, never their
 	// join — the reading POSIX describes, and the one an empty element
 	// disappears under: `IFS=:; set -- x "" y` is two fields here and three

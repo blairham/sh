@@ -36,6 +36,28 @@ func prefixAssignRun(t *testing.T, src string, sem Semantics) string {
 	return out.String()
 }
 
+// prefixAssignStreams is the same run with both streams handed back, for the
+// rows whose subject is a diagnostic that was or was not written. A refusal of
+// an unanswered axis goes to standard error and leaves standard output as it
+// was, so a helper that returns only the first of them cannot tell an axis
+// that was never asked from one that was asked and refused.
+func prefixAssignStreams(t *testing.T, src string, sem Semantics) (string, string) {
+	t.Helper()
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	var out, errs bytes.Buffer
+	r := newTestRunner(t, &Runner{
+		Stdout: &out, Stderr: &errs, Semantics: &sem,
+		Dir: t.TempDir(), Name: "testsh",
+	})
+	if _, rerr := r.Run(context.Background(), f); rerr != nil {
+		t.Fatalf("run %q: %v\nstderr: %s", src, rerr, errs.String())
+	}
+	return out.String(), errs.String()
+}
+
 func TestAPrefixIsVisibleToTheBuiltinItPrefixes(t *testing.T) {
 	sem := permissive()
 	sem.LastPipelineElementInCurrentShell = Yes
@@ -115,5 +137,205 @@ func TestAnAppendPrefixOverAnUnsetNameIsTheValue(t *testing.T) {
 	got := prefixAssignRun(t, `unset v; v+=5 eval 'echo "[$v]"'`, sem)
 	if want := "[5]\n"; got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// A prefix in front of a **function** call, which is the third kind and is
+// the one that used to be discarded outright: the value was expanded on that
+// route and never applied, so `v=1; v=9 f` showed the body `1` where all
+// seven panel columns show it `9` (#2407).
+
+func TestAPrefixIsVisibleInsideTheFunctionItPrefixes(t *testing.T) {
+	// Core, not an axis: unanimous across dash, bash 5.3, bash-as-sh, bash
+	// 3.2, ksh93u+, zsh 5.9.2 and BusyBox ash. Both answers of both axes are
+	// set, so this asserts the visibility rather than one dialect's reading
+	// of what happens afterwards.
+	for _, persists := range []Answer{Yes, No} {
+		for _, exported := range []Answer{Yes, No} {
+			sem := permissive()
+			sem.AssignmentPrefixPersistsAfterAFunction = persists
+			sem.PrefixToAFunctionIsExported = exported
+			got := prefixAssignRun(t, `f(){ echo "[$v]"; }; v=1; v=9 f`, sem)
+			if want := "[9]\n"; got != want {
+				t.Errorf("persists=%v exported=%v: got %q, want %q", persists, exported, got, want)
+			}
+		}
+	}
+}
+
+func TestAPrefixOnAFunctionFollowsThePersistenceAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"persists when the dialect says so", Yes, "[9]\nafter=[9]\n"},
+		{"is taken back when it says not", No, "[9]\nafter=[1]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := permissive()
+			sem.AssignmentPrefixPersistsAfterAFunction = tc.answer
+			got := prefixAssignRun(t, `f(){ echo "[$v]"; }; v=1; v=9 f; echo "after=[$v]"`, sem)
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// The same axis decides what a body that *assigned over* the name leaves
+// behind, which is the half a row using an untouched name cannot see: under
+// the keeping answer the caller reads what the body wrote, not the prefix.
+func TestThePersistenceAxisKeepsWhateverTheBodyLeft(t *testing.T) {
+	src := `f(){ v=inner; }; v=1; v=9 f; echo "after=[$v]"`
+	sem := permissive()
+	sem.AssignmentPrefixPersistsAfterAFunction = Yes
+	if got := prefixAssignRun(t, src, sem); got != "after=[inner]\n" {
+		t.Errorf("Yes side: got %q, want the body's value", got)
+	}
+	sem.AssignmentPrefixPersistsAfterAFunction = No
+	if got := prefixAssignRun(t, src, sem); got != "after=[1]\n" {
+		t.Errorf("No side: got %q, want the caller's value back", got)
+	}
+}
+
+// A name the prefix invented is gone again under the taking-back answer,
+// rather than left holding an empty string — which is the shape `${v-absent}`
+// is the only probe for.
+func TestAPrefixedNameAFunctionInventedIsUnsetAgain(t *testing.T) {
+	sem := permissive()
+	sem.AssignmentPrefixPersistsAfterAFunction = No
+	got := prefixAssignRun(t, `unset v; f(){ :; }; v=9 f; echo "[${v-absent}]"`, sem)
+	if want := "[absent]\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestAPrefixOnAFunctionFollowsTheExportAxis(t *testing.T) {
+	// `export -p` rather than a child, because the substrate must not start
+	// one to answer a question about an attribute — and matched with `case`
+	// rather than `grep`, so the probe starts no program either. The listing
+	// is the same evidence: every column that hands the name to a child
+	// lists it here. The name is a rare one because the listing is the whole
+	// environment, and a pattern of one letter would match somebody else's.
+	src := `f(){ case "$(export -p)" in *zqp*) echo YES;; *) echo NO;; esac; }; zqp=1; zqp=9 f`
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"exported for the call when the dialect says so", Yes, "YES\n"},
+		{"an ordinary variable when it says not", No, "NO\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := permissive()
+			sem.AssignmentPrefixPersistsAfterAFunction = No
+			sem.PrefixToAFunctionIsExported = tc.answer
+			if got := prefixAssignRun(t, src, sem); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// And the attribute goes back with the value: a name exported only for the
+// length of a call is told to no child on the next line.
+func TestAnExportedPrefixLosesTheAttributeWithTheCall(t *testing.T) {
+	sem := permissive()
+	sem.AssignmentPrefixPersistsAfterAFunction = No
+	sem.PrefixToAFunctionIsExported = Yes
+	got := prefixAssignRun(t,
+		`f(){ :; }; zqp=1; zqp=9 f; case "$(export -p)" in *zqp*) echo YES;; *) echo NO;; esac`, sem)
+	if want := "NO\n"; got != want {
+		t.Errorf("got %q, want %q — the export attribute outlived the call", got, want)
+	}
+}
+
+// The export answer moves the attribute in *both* directions rather than one
+// reading leaving it alone: where the prefix is a plain assignment to this
+// shell, a name that was exported before the call loses the attribute for it.
+// Measured — `export v=1; f(){ typeset -p v; }; v=9 f` prints a plain `v=9` in
+// ksh93 and `declare -x v="9"` in bash, and a child the body starts is told
+// `v=9` in six columns and nothing in ksh93.
+func TestAPrefixOnAFunctionTakesTheAttributeOffWhereTheDialectSaysSo(t *testing.T) {
+	sem := permissive()
+	sem.AssignmentPrefixPersistsAfterAFunction = No
+	sem.PrefixToAFunctionIsExported = No
+	src := `export zqp=1; f(){ case "$(export -p)" in *zqp*) echo YES;; *) echo NO;; esac; }; zqp=9 f`
+	if got, want := prefixAssignRun(t, src, sem), "NO\n"; got != want {
+		t.Errorf("got %q, want %q — the attribute was left on for the call", got, want)
+	}
+}
+
+// And the removal is given back with everything else, so a name the caller
+// exported is still exported on the next line.
+func TestAnAttributeTakenOffForACallComesBackWithIt(t *testing.T) {
+	sem := permissive()
+	sem.AssignmentPrefixPersistsAfterAFunction = No
+	sem.PrefixToAFunctionIsExported = No
+	got := prefixAssignRun(t,
+		`export zqp=1; f(){ :; }; zqp=9 f; case "$(export -p)" in *zqp*) echo YES;; *) echo NO;; esac`, sem)
+	if want := "YES\n"; got != want {
+		t.Errorf("got %q, want %q — the caller's export attribute did not come back", got, want)
+	}
+}
+
+// The two answers ksh93 gives together, which is the combination the whole
+// panel's holdout column is: the name keeps the prefix's value afterwards and
+// is exported to nobody, before or after.
+func TestTheKeepingAndUnexportingAnswersCompose(t *testing.T) {
+	sem := permissive()
+	sem.AssignmentPrefixPersistsAfterAFunction = Yes
+	sem.PrefixToAFunctionIsExported = No
+	got := prefixAssignRun(t,
+		`export zqp=1; f(){ :; }; zqp=9 f; echo "[$zqp]"; case "$(export -p)" in *zqp*) echo YES;; *) echo NO;; esac`, sem)
+	if want := "[9]\nNO\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// The persistence axis is not asked where the two readings land in the same
+// place, which is what keeps an unanswered vector off an ordinary line: a
+// prefix whose value is what the name already holds changes nothing either
+// way. Read off **stderr**, because a refusal writes there and leaves the
+// line's output alone — a probe that reads standard output alone cannot tell
+// an axis that was not asked from one that was asked and refused.
+func TestThePersistenceAxisIsNotAskedWhereTheReadingsAgree(t *testing.T) {
+	// One case per export answer, because the attribute is part of what
+	// giving the name back would put back. Under the un-exporting answer a
+	// name nobody exported is where the two readings meet; under the
+	// exporting one it is a name the caller had already exported.
+	for _, tc := range []struct {
+		exported Answer
+		src      string
+	}{
+		{No, `f(){ echo "[$v]"; }; v=9; v=9 f`},
+		{Yes, `f(){ echo "[$v]"; }; export v=9; v=9 f`},
+	} {
+		sem := permissive()
+		sem.AssignmentPrefixPersistsAfterAFunction = Unspecified
+		sem.PrefixToAFunctionIsExported = tc.exported
+		out, errs := prefixAssignStreams(t, tc.src, sem)
+		if out != "[9]\n" {
+			t.Errorf("exported=%v: stdout = %q, want %q", tc.exported, out, "[9]\n")
+		}
+		if errs != "" {
+			t.Errorf("exported=%v: asked an axis it did not need: %q", tc.exported, errs)
+		}
+	}
+}
+
+// The export axis has no such case, and that is the correction rather than an
+// omission. An earlier reading skipped it for a name that was exported
+// already, on the premise that such a name reaches every child under either
+// answer; the un-exporting column above is what that premise is false in, so
+// the axis is asked on every name a prefix stands in front of.
+func TestTheExportAxisIsAskedEvenForANameAlreadyExported(t *testing.T) {
+	sem := permissive()
+	sem.AssignmentPrefixPersistsAfterAFunction = No
+	sem.PrefixToAFunctionIsExported = Unspecified
+	_, errs := prefixAssignStreams(t, `export v=9; f(){ :; }; v=9 f`, sem)
+	if !strings.Contains(errs, "exported for the call") {
+		t.Errorf("stderr = %q, want the unanswered export axis named", errs)
 	}
 }

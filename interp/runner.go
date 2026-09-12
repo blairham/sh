@@ -3490,17 +3490,73 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 				}
 			}
 		}
-		if _, stop := r.refusePrefixes(c.Assigns, prefixCommand{kind: prefixBeforeFunction}, !r.expandErr); stop {
+		refused, stop := r.refusePrefixes(c.Assigns, prefixCommand{kind: prefixBeforeFunction}, !r.expandErr)
+		if stop {
 			return nil
 		}
 		// A numbered prefix is applied to the shell here, which is measured
 		// and is why the acting spelling is called rather than the asking
 		// one: `set -- a b; 1=X f` shows the function `X` in `$1`.
+		//
+		// And a named one is applied too, which is what the whole panel does
+		// and what this shell did not: the prefix used to be dropped on the
+		// floor here, so `f(){ echo "[$v]"; }; v=1; v=9 f` printed `[1]`
+		// where all seven columns print `[9]` (#2407). What happens to it
+		// *after* the call, and whether a command the function starts is
+		// told about it, are the two axes taken back below.
+		var undo []savedVar
 		for _, a := range c.Assigns {
-			if !a.Operand {
-				r.prefixAssignsPositional(a)
+			if a.Operand {
+				continue
+			}
+			if r.prefixAssignsPositional(a) {
+				continue
+			}
+			if refused && r.readonly[a.Name] {
+				// The frozen name keeps what it holds, the same way the
+				// builtin route leaves it: the body runs with the shell's
+				// value, which is what every column shows for `readonly v=1;
+				// v=2 f`. Its value was already expanded above, for the
+				// refusal's ordering, so skipping it here is also what keeps
+				// a command substitution in it from running twice.
+				continue
+			}
+			undo = append(undo, r.saveVar(a.Name))
+			r.setVar(a.Name, r.prefixValue(a))
+			// The export attribute for the duration, which the two readings
+			// move in opposite directions rather than one of them leaving it
+			// alone: where the prefix is the command's *environment* the name
+			// gains the attribute, and where it is a plain assignment to this
+			// shell the name **loses** it. So the axis is asked on every
+			// name, including one that was exported before the call —
+			// `export v=1; f(){ env; }; v=9 f` hands the child `v=9` in six
+			// columns and tells it nothing in ksh93, where `typeset -p v`
+			// inside the body prints a plain `v=9`. An earlier reading asked
+			// only on a name that was not exported already, on the premise
+			// that one that was reaches every child either way; the ksh93
+			// column is what that premise is false in.
+			answer := r.sem().PrefixToAFunctionIsExported
+			if on := r.ask(answer, "an assignment before a function being exported for the call"); on || answer == No {
+				if r.exported == nil {
+					r.exported = map[string]bool{}
+				}
+				// Recorded as `false` rather than deleted, because deleting
+				// it only makes the name unspoken and an unspoken name the
+				// shell was born with is still exported. See isExported.
+				r.exported[a.Name] = on
 			}
 		}
+		// The line the *call* was written on, because the take-back below
+		// runs once the body has moved the record to wherever its last
+		// command was. A refusal of the axis there is about this command and
+		// has to say so.
+		callLine := r.line
+		defer func() {
+			bodyLine := r.line
+			r.line = callLine
+			r.takeBackFunctionPrefix(undo)
+			r.line = bodyLine
+		}()
 		return r.callFunc(ctx, fn, argv[1:])
 	}
 
@@ -4653,6 +4709,14 @@ type savedVar struct {
 	inArray bool
 	table   AssocArray
 	inTable bool
+	// The export attribute is part of the state, and it is a tri-state
+	// rather than a flag: recorded on, recorded off, and never spoken about.
+	// A prefix that exports the name for the length of a call has to be able
+	// to put the *silence* back, not merely record `false` — a name nobody
+	// has ever exported and one `export -n` took the attribute off are
+	// different things to the shell that inherited it. See Runner.isExported.
+	exported     bool
+	exportSpoken bool
 }
 
 // saveVar takes the whole of a name's state, for a prefix that will give it
@@ -4668,11 +4732,28 @@ func (r *Runner) saveVar(name string) savedVar {
 	old, present := r.Vars[name]
 	a, inArray := r.Arrays[name]
 	m, inTable := r.AssocArrays[name]
+	exported, exportSpoken := r.exported[name]
 	return savedVar{
 		name: name, value: old, present: present, removed: r.removed[name],
 		array: maps.Clone(a), inArray: inArray,
 		table: maps.Clone(m), inTable: inTable,
+		exported: exported, exportSpoken: exportSpoken,
 	}
+}
+
+// wasExported reports what isExported would have answered for this name at the
+// moment it was saved, resolving the same tri-state the same way: a recorded
+// attribute decides, a removed name is exported to nobody, and otherwise the
+// name is exported exactly if the shell was born with it.
+func (u savedVar) wasExported(r *Runner) bool {
+	if u.exportSpoken {
+		return u.exported
+	}
+	if u.removed {
+		return false
+	}
+	_, born := r.bornWith(u.name)
+	return born
 }
 
 // restoreVars takes back transient assignments, most recent first.
@@ -4705,7 +4786,67 @@ func (r *Runner) restoreVars(undo []savedVar) {
 		} else {
 			delete(r.removed, u.name)
 		}
+		if u.exportSpoken {
+			if r.exported == nil {
+				r.exported = map[string]bool{}
+			}
+			r.exported[u.name] = u.exported
+		} else {
+			delete(r.exported, u.name)
+		}
 	}
+}
+
+// takeBackFunctionPrefix ends an assignment prefix that stood in front of a
+// *function* call, which is one axis away from ending one that stood in front
+// of a builtin.
+//
+// The names are given back what they held, unless the dialect says a prefix to
+// a function is a plain assignment to the shell that outlives the call — ksh93
+// alone in the panel. See Semantics.AssignmentPrefixPersistsAfterAFunction.
+//
+// **Asked one name at a time, and only where the two readings differ.** A name
+// the body left holding exactly what it held before the call reaches the same
+// place under either answer, so there is nothing for a dialect to decide and
+// an unanswered axis must not refuse it: `v=1; v=1 f` is not a question about
+// anything. The comparison is of the whole state rather than the scalar,
+// because the prefix is taken back whole or not at all — the array a name held
+// and the export attribute it carried are as much a difference as the value.
+func (r *Runner) takeBackFunctionPrefix(undo []savedVar) {
+	for i := len(undo) - 1; i >= 0; i-- {
+		if r.matchesSavedVar(undo[i]) {
+			continue
+		}
+		if r.ask(r.sem().AssignmentPrefixPersistsAfterAFunction,
+			"an assignment before a function persisting after the call") {
+			continue
+		}
+		r.restoreVars(undo[i : i+1])
+	}
+}
+
+// matchesSavedVar reports whether a name is in exactly the state that was
+// saved for it, so that putting it back would change nothing.
+func (r *Runner) matchesSavedVar(u savedVar) bool {
+	value, present := r.Vars[u.name]
+	if present != u.present || value != u.value || r.removed[u.name] != u.removed {
+		return false
+	}
+	// The *effective* attribute rather than the recorded tri-state: a name
+	// nobody has spoken about and one recorded as not exported reach every
+	// child alike, so a prefix that only wrote the second over the first has
+	// changed nothing for a dialect to decide. Comparing the tri-state made
+	// the un-exporting answer ask this axis on `v=9; v=9 f`, where the two
+	// readings land in exactly the same place.
+	if r.isExported(u.name) != u.wasExported(r) {
+		return false
+	}
+	a, inArray := r.Arrays[u.name]
+	if inArray != u.inArray || !maps.Equal(a, u.array) {
+		return false
+	}
+	m, inTable := r.AssocArrays[u.name]
+	return inTable == u.inTable && maps.Equal(m, u.table)
 }
 
 // assignForm says how an assignment was written, which one dialect answers a

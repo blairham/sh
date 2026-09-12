@@ -89,6 +89,14 @@ func permissive() Semantics {
 	// And whether `type` speaks about an alias only while aliases expand:
 	// three of the four answer from the table whatever the switch says.
 	s.TypeNamesAnAliasOnlyWhenExpanded = No
+	// The two an assignment prefix in front of a *function* raises, at the
+	// answer six of the seven panel columns give: gone when the call
+	// returns, and exported while it runs. A test that writes `v=9 f` on the
+	// way to something else should see the majority reading rather than a
+	// refusal, and the suite that is *about* them sets both sides — see
+	// assignprefix_test.go (#2407).
+	s.AssignmentPrefixPersistsAfterAFunction = No
+	s.PrefixToAFunctionIsExported = Yes
 	return s
 }
 

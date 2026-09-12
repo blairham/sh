@@ -424,6 +424,14 @@ func Semantics() interp.Semantics {
 	s.SelectTakesUnterminatedReply = interp.No
 	s.SelectEofPrintsNewline = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No
+	// A prefix to a *function* is the command's environment for the length
+	// of the call and nothing afterwards: `f(){ echo "[$v]"; }; v=1; v=9 f`
+	// prints `[9]`, a command the body starts is told `v=9`, and `$v` is `1`
+	// on the next line. Measured 2026-09-12 in 5.3.15 and in 3.2.57, and the
+	// same either way round the `posix` switch in 5.3 — 3.2 is the build
+	// that moves under it, which is what macOS `/bin/sh` is (#2407).
+	s.AssignmentPrefixPersistsAfterAFunction = interp.No
+	s.PrefixToAFunctionIsExported = interp.Yes
 	// echo reads -n, -e and -E, the last of -e/-E deciding, with the hex
 	// and ESC escapes on top of the XSI set.
 	s.EchoOptions = "neE"

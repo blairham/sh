@@ -567,6 +567,20 @@ func Semantics() interp.Semantics {
 	// the assignment. An earlier reading of this held `true` fixed
 	// throughout and got five of those rows backwards (#1219).
 	s.PrefixToARegularBuiltinIsRefused = interp.No
+	// The panel's holdout on both halves of a prefix to a *function*, and it
+	// is the same departure twice: the assignment is made to this shell
+	// rather than handed to the call, so it is still there afterwards and no
+	// child is ever told about it. Measured 2026-09-12 in 93u+ 2012-08-01:
+	// `f(){ env | grep "^v="; }; v=1; v=9 f; echo "[$v]"` prints nothing
+	// from the child and `[9]` after, where the other six print `v=9` and
+	// `[1]`. It holds for a body that assigns over the name as well —
+	// whatever the function leaves is what the caller reads. And the
+	// attribute is taken *off* rather than merely withheld: `export v=1;
+	// f(){ typeset -p v; }; v=9 f` prints a plain `v=9` here against bash's
+	// `declare -x v="9"`, so a name the script had exported reaches no child
+	// during the call and none after it either (#2407).
+	s.AssignmentPrefixPersistsAfterAFunction = interp.Yes
+	s.PrefixToAFunctionIsExported = interp.No
 	s.PrefixRefusalFatality = interp.PrefixRefusalFatalOnASpecialBuiltinOrFunction
 	s.PrefixRefusalCostsTheCommand = interp.Yes
 	// The attribute cannot come off, though, which is where this shell parts

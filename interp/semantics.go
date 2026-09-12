@@ -5576,128 +5576,121 @@ type Semantics struct {
 	// is one empty field, the same field `"$a"` gives.
 	//
 	// It is a question about **existence** and not about emptiness. An array
-	// that exists and has no elements is no field in every column measured,
-	// so that half is core and asks nothing:
+	// that exists and has no elements is no field under every answer, so that
+	// half is core and asks nothing:
 	//
 	//	f() { printf '%s\n' "$#"; }
 	//
-	//	                       unset a   declared, no elements   one element
-	//	dash                   n/a       n/a                     n/a
-	//	bash 5.3, as sh, 3.2   0         0                       1
-	//	ksh93u+                0         0                       1
-	//	zsh 5.9.2              1         0                       1
+	//	      unset a   declared, no elements   one element
+	//	No    0         0                       1
+	//	Yes   1         0                       1
 	//
-	// Measured 2026-09-07 from files, with a *function* rather than `set --`
-	// so the positional-parameter builtin is not a confound, and with each
-	// shell's own way of declaring an empty array — `a=()` for bash and zsh,
-	// `set -A a` for ksh93, which has no such literal.
+	// Measured from files, with a *function* rather than `set --` so the
+	// positional-parameter builtin is not a confound, and with each preset's own
+	// way of declaring an empty array.
 	//
-	// That last clause is the whole reason this axis is spelled this way. It
-	// was `EmptyArrayAtIsOneEmptyField`, ksh93 yes, on the strength of
-	// `a=(); set -- "${a[@]}"; echo "n=$#"` answering `n=1` there. ksh93 does
-	// not read `a=()` as an array literal: it makes a *compound variable*
-	// whose value is the two-line text `(\n)`, which `typeset -p a` reports
-	// as `typeset -C a=()`, so the one field that row counted held those
-	// three bytes rather than nothing. A count-only snippet cannot tell one
-	// empty field from one field holding `(`, newline, `)`, and the corpus
-	// row recorded the agreement of a coincidence. Asked with `set -A a`,
-	// ksh93 gives no field — and `set -A a` on an existing array leaves the
-	// name *unset*, so ksh93 has no declared-and-empty state to ask about.
+	// That last clause is the whole reason this axis is spelled this way. An
+	// earlier reading had it as a question about an *empty* array, on the
+	// strength of `a=(); set -- "${a[@]}"; echo "n=$#"` answering `n=1`
+	// somewhere. That implementation does not read `a=()` as an array literal at
+	// all: it makes a *compound variable* whose value is the two-line text
+	// `(\n)`, so the one field that row counted held those three bytes rather
+	// than nothing. A count-only snippet cannot tell one empty field from one
+	// field holding `(`, newline, `)`, and the corpus row recorded the agreement
+	// of a coincidence. Asked with that preset's real empty-array spelling it
+	// gives no field — and that spelling on an existing array leaves the name
+	// *unset*, so it has no declared-and-empty state to ask about.
 	//
-	// zsh is the column that really splits the two, and in the opposite
-	// direction from the one that story predicted: `a=()` there is a set,
-	// empty array and no field, while a name nothing declared is one field.
+	// The column that really splits the two does it in the opposite direction
+	// from the one that story predicted: an empty literal is a set, empty array
+	// and no field, while a name nothing declared is one field.
 	UnsetNameAtIsOneEmptyField Answer
 
-	// SubstringNegativeLengthIsEmpty answers `${x:1:-2}` with nothing at
-	// all: ksh93; bash and zsh count the negative length from the end.
+	// SubstringNegativeLengthIsEmpty answers `${x:1:-2}` with nothing at all,
+	// rather than counting the negative length from the end.
 	SubstringNegativeLengthIsEmpty Answer
 
-	// SubstringRangeReadsModifiers makes `${x:h}` a *modifier* rather than
-	// an arithmetic offset: zsh, where the range is also that shell's
-	// history-modifier syntax; bash, ksh93 and dash read it as the
-	// expression it looks like everywhere else.
+	// SubstringRangeReadsModifiers makes `${x:h}` a *modifier* rather than an
+	// arithmetic offset, where the range is also a history-modifier syntax.
+	// Answering No reads it as the expression it looks like everywhere else.
 	//
-	// The two spellings share every byte of their punctuation, so the reading
-	// is decided before either is evaluated, and it is decided by the first
-	// byte: a range segment that begins with an unquoted letter is a
-	// modifier. `${x:_q:2}`, `${x: i:2}`, `${x:(i):2}`, `${x:$i:2}` and
-	// `${x:"h"}` are all substrings in that shell for that reason.
+	// The two spellings share every byte of their punctuation, so the reading is
+	// decided before either is evaluated, and it is decided by the first byte: a
+	// range segment that begins with an unquoted letter is a modifier.
+	// `${x:_q:2}`, `${x: i:2}`, `${x:(i):2}`, `${x:$i:2}` and `${x:"h"}` are all
+	// substrings under Yes for that reason.
 	//
 	// Asked only where a segment does begin with one, so `${x:1:2}` needs no
 	// answer from anyone.
 	SubstringRangeReadsModifiers Answer
 
-	// ReplacementOperandTakesTheEnclosingQuoting reads the replacement half
-	// of `${v/pat/repl}` as *content* of the quoting around the expansion
-	// rather than as a word of its own. Yes in zsh and in bash 3.2, where
-	// `"${s/a/'$v'}"` on `s=xay` and `v=VAL` is `x'VAL'y` — the quotes are
-	// two characters of the result and what stands between them is still
-	// substituted; No in bash 5.3, that build as `sh` and ksh93, where the
-	// quotes quote and are removed, giving `x$vy`.
+	// ReplacementOperandTakesTheEnclosingQuoting reads the replacement half of
+	// `${v/pat/repl}` as *content* of the quoting around the expansion rather
+	// than as a word of its own.
 	//
-	// The third of three readings a quote in a `${ }` operand can take, and
-	// the only one the panel divides on. A *word* operand takes the enclosing
-	// quoting unanimously — `"${u:-'$v'}"` is `'VAL'` in all six — and a
-	// *pattern* operand's quotes quote, also unanimously. So neither of those
-	// is an axis, and the replacement cannot borrow either one's answer.
+	// Under Yes, `"${s/a/'$v'}"` on `s=xay` and `v=VAL` is `x'VAL'y` — the
+	// quotes are two characters of the result and what stands between them is
+	// still substituted. Under No the quotes quote and are removed, giving
+	// `x$vy`.
 	//
-	// bash moved between its two builds, which is what says a field named for
-	// a shell could not carry it.
+	// The third of three readings a quote in a `${ }` operand can take, and the
+	// only one that is disagreed about. A *word* operand takes the enclosing
+	// quoting unanimously — `"${u:-'$v'}"` is `'VAL'` throughout — and a
+	// *pattern* operand's quotes quote, also unanimously. So neither of those is
+	// an axis, and the replacement cannot borrow either one's answer.
+	//
+	// Builds of one implementation moved between the two, which is what says a
+	// field named for a shell could not carry it.
 	//
 	// Asked only at the disagreement: the two readings coincide unless the
 	// expansion is double-quoted *and* the operand holds one of the three
-	// characters they part on — a single quote, a backslash, or a tilde at
-	// the front. Unquoted, all five shells with the operator agree with the
-	// word reading, which is what says the disagreement belongs to the
-	// enclosing context and not to the operator. The parser decides whether
-	// it can arise at all and keeps both readings when it can; see
-	// syntax.ParamExpr.Arg2Enclosed (#1209).
+	// characters they part on — a single quote, a backslash, or a tilde at the
+	// front. Unquoted, every preset with the operator agrees with the word
+	// reading, which is what says the disagreement belongs to the enclosing
+	// context and not to the operator. The parser decides whether it can arise
+	// at all and keeps both readings when it can; see
+	// syntax.ParamExpr.Arg2Enclosed.
 	ReplacementOperandTakesTheEnclosingQuoting Answer
 
-	// LinenoCountsFromTheFunction numbers `$LINENO` inside a function from
-	// the line the function was written on: zsh; the other three count from
-	// the file.
+	// LinenoCountsFromTheFunction numbers `$LINENO` inside a function from the
+	// line the function was written on, rather than from the file.
 	//
-	// Inside means the line is one the body holds. A file the function
-	// sourced counts from its own top, because the line is the file's — the
-	// same innermost-frame rule Diagnostics.LocationNamesTheFunction is read
-	// by, and measured the same way (#2037).
+	// Inside means the line is one the body holds. A file the function sourced
+	// counts from its own top, because the line is the file's — the same
+	// innermost-frame rule Diagnostics.LocationNamesTheFunction is read by, and
+	// measured the same way.
 	LinenoCountsFromTheFunction Answer
 
-	// ArithBaseAbove36 admits `37#…` through `64#…`, whose letters split
-	// into cases and whose last two digits are `@` and `_`. bash and ksh93
-	// take the full 64; zsh stops at 36 and says so.
+	// ArithBaseAbove36 admits `37#…` through `64#…`, whose letters split into
+	// cases and whose last two digits are `@` and `_`. Answering No stops at 36
+	// and says so.
 	ArithBaseAbove36 Answer
-	// ArithBaseMayHaveALeadingZero lets `010#5` name base ten. The base is
-	// read in decimal either way; what this decides is whether a zero in
-	// front of it is padding or the start of an octal constant.
+	// ArithBaseMayHaveALeadingZero lets `010#5` name base ten. The base is read
+	// in decimal either way; what this decides is whether a zero in front of it
+	// is padding or the start of an octal constant.
 	//
-	// Measured 2026-09-12 over the panel, with the digit chosen so the two
-	// readings could not agree — `010#5` is five under both base eight and
-	// base ten, which is the probe the issue was filed from:
+	// Measured with the digit chosen so the two readings could not agree —
+	// `010#5` is five under both base eight and base ten, which is the probe
+	// that cannot discriminate:
 	//
 	//	          010#5   010#9   010#11   08#7   0010#5
-	//	bash 5.3  refuse  refuse  refuse   refuse refuse
-	//	ksh93u+   refuse  refuse  refuse   7      refuse
-	//	zsh 5.9.2 5       9       11       7      5
+	//	Yes       5       9       11       7      5
+	//	No        refuse  refuse  refuse   refuse refuse
 	//
-	// So zsh reads the base in plain decimal, padding and all. bash refuses
-	// every one of them for a single reason that is not about bases at all:
-	// a leading zero makes the text an octal constant there, so the `#` is
-	// never a base marker and the literal fails as a number — which is why
-	// `08#5` is "value too great for base" and `010#5` "invalid number".
-	// ksh93 says yes to the zero and no to the length, which is
-	// ArithBaseIsAtMostTwoDigits beside this one.
+	// Yes reads the base in plain decimal, padding and all. One No refuses every
+	// row for a single reason that is not about bases at all: a leading zero
+	// makes the text an octal constant, so the `#` is never a base marker and
+	// the literal fails as a number. Another says yes to the zero and no to the
+	// length, which is ArithBaseIsAtMostTwoDigits beside this one.
 	//
-	// dash has no `base#digits` at all, so its column is the same refusal it
-	// gives `10#5`.
+	// A grammar with no `base#digits` at all gives the same refusal it gives
+	// `10#5`.
 	ArithBaseMayHaveALeadingZero Answer
-	// ArithBaseIsAtMostTwoDigits stops the base after two characters, which
-	// is as many as a base up to 64 needs. ksh93 alone.
+	// ArithBaseIsAtMostTwoDigits stops the base after two characters, which is
+	// as many as a base up to 64 needs.
 	//
-	// Measured 2026-09-12, and it is the reading that survived three
-	// hypotheses — an octal base, a decimal base, and a two-character cap:
+	// The reading that survived three hypotheses — an octal base, a decimal
+	// base, and a two-character cap:
 	//
 	//	02#11    3        base two, so the cap took `02`
 	//	0002#11  refuse   four characters, so the cap took `00`
@@ -5705,119 +5698,116 @@ type Semantics struct {
 	//	012#11   refuse   the cap took `01`, which is no base
 	//	020#11   refuse   the cap took `02` and left `0#11`
 	//
-	// A decimal reading answers 13 and 21 to the last two and an octal one
-	// 11 and 17; ksh93 answers neither, and the cap explains all five.
+	// A decimal reading answers 13 and 21 to the last two and an octal one 11
+	// and 17; the cap explains all five and neither of the others does.
 	ArithBaseIsAtMostTwoDigits Answer
 	// ArithBaseZeroReadsTheDigitsAsWritten answers `0#5` with 5 rather than
 	// refusing a base of zero: the digits are read as an ordinary constant,
 	// prefix and all, so `$(( 0#0x10 ))` is 16.
 	//
-	// zsh alone, and it is not the same question as a base below two:
-	// measured 2026-09-12, `$(( 1#0 ))` there is `invalid base (must be 2 to
-	// 36 inclusive): 1` while `$(( 0#5 ))` is 5 — so zero is a base it reads
-	// through rather than one it refuses. bash never sees a base at all in
-	// either, the leading zero having made the text an octal constant, and
-	// ksh93 refuses both.
+	// Not the same question as a base below two: `$(( 1#0 ))` is an invalid base
+	// under Yes while `$(( 0#5 ))` is 5 — so zero is a base read through rather
+	// than one refused. A preset where a leading zero has already made the text
+	// an octal constant never sees a base in either.
 	ArithBaseZeroReadsTheDigitsAsWritten Answer
 	// ArithEmptyRadixDigitsAreZero reads `0x` — a radix prefix with no digits
 	// after it — as a complete number worth zero, rather than refusing it.
 	//
-	// Measured 2026-09-12. `$(( 0x ))` and `$(( 0X ))` are 0 in bash 5.3,
-	// bash 3.2, bash-as-sh and zsh, and refused by ksh93 and dash. The
-	// control is `$(( 0x+1 ))`, which is 1 in the four that accept it: the
-	// prefix is a *finished* number and the `+1` goes on from it, rather
-	// than the `+` being swallowed by a digit scan that found nothing.
+	// The control is `$(( 0x+1 ))`, which is 1 under Yes: the prefix is a
+	// *finished* number and the `+1` goes on from it, rather than the `+` being
+	// swallowed by a digit scan that found nothing.
 	//
 	// Only a radix prefix. `$(( 8# ))` — a named base with no digits — is a
-	// separate row the panel answers differently again (bash 5.3 refuses it
-	// where bash 3.2 answers zero), and is not this axis.
+	// separate row, answered differently again, and is not this axis.
 	ArithEmptyRadixDigitsAreZero Answer
-	// ArithOverflowSaturates clamps integer overflow at the edge: ksh93
-	// holds max+1 at the maximum where the other shells wrap. Asked only
-	// when an overflow actually happened.
+	// ArithOverflowSaturates clamps integer overflow at the edge, holding max+1
+	// at the maximum rather than wrapping. Asked only when an overflow actually
+	// happened.
 	ArithOverflowSaturates Answer
-	// EmptyArithExpressionIsAnError refuses `$(( ))`: dash wants a primary
-	// and stops the script; the other three answer zero.
+	// EmptyArithExpressionIsAnError refuses `$(( ))`, wanting a primary and
+	// stopping the script, rather than answering zero.
 	EmptyArithExpressionIsAnError Answer
-	// TildePlusMinusExpands turns `~+` into $PWD and `~-` into $OLDPWD,
-	// only while the variable is set — a fresh shell's `~-` stays literal.
-	// bash, ksh93 and zsh have the pair; dash keeps both as written. zsh
-	// alone still answers `~-` after `unset OLDPWD`, from directory state
-	// of its own this runner does not keep — recorded, not reproduced.
+	// TildePlusMinusExpands turns `~+` into $PWD and `~-` into $OLDPWD, only
+	// while the variable is set — a fresh shell's `~-` stays literal. Answering
+	// No keeps both as written.
+	//
+	// An implementation may still answer `~-` after `unset OLDPWD`, from
+	// directory state of its own this runner does not keep — recorded, not
+	// reproduced.
 	TildePlusMinusExpands Answer
 
-	// SetHasTraceLetters gives `set` the -E and -T letters, which carry
-	// the ERR trap (and DEBUG with RETURN) into functions and subshells the
-	// dialect otherwise bounds them out of. bash alone: dash and ksh93
-	// refuse the letters, and zsh spells different options with them, so
-	// only a refusal is honest elsewhere. Recorded as
+	// SetHasTraceLetters gives `set` the -E and -T letters, which carry the ERR
+	// trap (and DEBUG with RETURN) into functions and subshells the preset
+	// otherwise bounds them out of.
+	//
+	// Answering No either refuses the letters or spells different options with
+	// them, so only a refusal is honest there. Recorded as
 	// `opt/set-e-carries-the-err-trap`.
 	SetHasTraceLetters Answer
 
-	// SetHasTheTLetter gives `set` the -t letter: the shell reads and runs
-	// one more line and then stops, which is what bash lists as `onecmd` and
-	// what ksh93 spells with the letter alone. Two of the panel have it and
-	// mean this by it; zsh has the letter and refuses to move it, the way it
-	// refuses the `onecmd` name it borrowed for `singlecommand`; dash has
-	// never heard of it and answers `Illegal option -t`. Recorded as
-	// `opt/set-t-stops-after-one-command`.
+	// SetHasTheTLetter gives `set` the -t letter: the shell reads and runs one
+	// more line and then stops — the option some presets list as `onecmd` and
+	// others spell with the letter alone.
+	//
+	// Answering No either has the letter and refuses to move it, the way a
+	// fixed option is refused, or has never heard of it and calls it illegal.
+	// Recorded as `opt/set-t-stops-after-one-command`.
 	SetHasTheTLetter Answer
 
 	// ImmovableOptionsSetAtInvocation lets the command line that started the
-	// shell move an option a *running script* may not — a route split inside
-	// one shell rather than a disagreement between two, which is why it is
+	// shell move an option a *running script* may not — a route split inside one
+	// implementation rather than a disagreement between two, which is why it is
 	// asked where the route is known instead of where the option is.
 	//
-	// One of the panel has it. Measured on zsh 5.9.2, 2026-09-10: `zsh -t
-	// plain.sh` runs the first line of a three-line script and stops, and
-	// `-o singlecommand` and the borrowed `-o onecmd` do the same, while
-	// `set -t`, `setopt singlecommand` and `unsetopt singlecommand` inside
-	// that script are all `can't change option` at 1 and fatal. So the five
-	// names that shell calls fixed are not five states it cannot reach; they
-	// are five a script may not change.
+	// Under Yes, `-t plain.sh` runs the first line of a three-line script and
+	// stops, and the long spellings of the same option do the same, while
+	// `set -t` and the option's own set/unset words inside that script are all
+	// `can't change option` at 1 and fatal. So the names such a preset calls
+	// fixed are not states it cannot reach; they are states a script may not
+	// change.
 	//
-	// It governs the refusal and not the applying: a dialect that answers
-	// `Yes` still has to say what each such name *would* move, which for the
-	// letter is the substrate's `onecmd` and for a name is the dialect's own
-	// table (see the zsh dialect's singleCommandOption). A name with nothing
-	// to apply is refused at the invocation exactly as it is refused in a
-	// script.
+	// It governs the refusal and not the applying: a preset that answers Yes
+	// still has to say what each such name *would* move, which for the letter is
+	// the substrate's `onecmd` and for a name is the preset's own table. A name
+	// with nothing to apply is refused at the invocation exactly as it is
+	// refused in a script.
 	ImmovableOptionsSetAtInvocation Answer
 
-	// OneCommandStopsACommandString extends `set -t` to `-c`, and it is the
-	// one route the two shells that have the option disagree about.
-	// Measured: a two-line command string that sets it and then echoes —
-	// bash writes the echo, the option is on and `$-` says so, and the shell
-	// reads the rest of the string anyway — where ksh93 given the same
-	// string writes nothing. Both stop a script file and both stop standard
-	// input, so the question is this route and no other. Asked only where
-	// the option is on; see Runner.OneCommand.
+	// OneCommandStopsACommandString extends `set -t` to `-c`, and it is the one
+	// route the presets that have the option disagree about.
+	//
+	// With a two-line command string that sets it and then echoes, No writes the
+	// echo — the option is on and `$-` says so, and the rest of the string is
+	// read anyway — where Yes writes nothing. Both stop a script file and both
+	// stop standard input, so the question is this route and no other. Asked
+	// only where the option is on; see Runner.OneCommand.
 	OneCommandStopsACommandString Answer
 
-	// SetHasTheHLetter gives `set` the -h letter at all. Three of the four
-	// have it and no two mean quite the same thing by it — which option it
-	// abbreviates is SetHLetterTracksCommands — while dash refuses the
-	// letter outright, fatally, the way it refuses any letter it does not
-	// have.
+	// SetHasTheHLetter gives `set` the -h letter at all. Which option it
+	// abbreviates is SetHLetterTracksCommands; answering No refuses the letter
+	// outright, fatally, the way any letter that does not exist is refused.
 	SetHasTheHLetter Answer
 
 	// SetHLetterTracksCommands makes `set -h` the short spelling of command
-	// tracking — the option bash lists as hashall and ksh93 as trackall,
-	// permission to remember where commands were found. zsh answers no: its
-	// -h abbreviates histignoredups, a history option, and leaves command
-	// hashing alone. Asked only where the letter is written, like
-	// SetFTurnsOffGlobbing: the long names raise no question.
+	// tracking — permission to remember where commands were found, listed as
+	// `hashall` or `trackall` depending on the preset. Answering No abbreviates
+	// a history option with the letter instead and leaves command hashing alone.
+	//
+	// Asked only where the letter is written, like SetFTurnsOffGlobbing: the
+	// long names raise no question.
 	SetHLetterTracksCommands Answer
 
 	// MonitorNeedsATerminal ties turning `set -m` on to having a terminal.
-	// Measured in shells run with none, which is what a script has: bash
-	// and ksh93 grant the option silently; dash remarks `can't access tty;
-	// job control turned off` and reports success with the option left off;
-	// zsh refuses it at 1, fatally. The two refusal shapes are the
-	// dialect's own wording and status — Diagnostics.MonitorDenied and
-	// MonitorDeniedStatus. A runner whose front end gave it a person to
-	// report jobs to (JobControl) has a terminal, so the question is asked
-	// only without one. Turning the option *off* is granted everywhere.
+	//
+	// Measured in shells run with none, which is what a script has: answering No
+	// grants the option silently; answering Yes either remarks that no terminal
+	// could be reached and reports success with the option left off, or refuses
+	// at 1, fatally. Those two refusal shapes are the preset's own wording and
+	// status — Diagnostics.MonitorDenied and MonitorDeniedStatus.
+	//
+	// A runner whose front end gave it a person to report jobs to (JobControl)
+	// has a terminal, so the question is asked only without one. Turning the
+	// option *off* is granted under every answer.
 	MonitorNeedsATerminal Answer
 
 	// InteractiveMonitorNeedsATerminal ties the monitor an *interactive*

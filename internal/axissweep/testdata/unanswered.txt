@@ -63,6 +63,8 @@ ash   DeclareGlobalReachesPastALocal
 ash   DeclareListing
 ash   DeclarePrintReportsAMissingName
 ash   DisownRemovesTheJob
+ash   DollarSingleDigitlessEscapeIsAZeroByte
+ash   DollarSingleHexReadsEveryDigit
 ash   DollarSingleNulTruncates
 ash   EmptyArithSubscript
 ash   EmptyAssociativeKeyIsAnError
@@ -73,6 +75,7 @@ ash   ErrTrapRunsInSubshells
 ash   ErrTrapRunsInsideFunctions
 ash   ExitTrapFiresPastTheEnd
 ash   ExportLetterDeclaresAGlobal
+ash   ExportedCompoundReachesAChildAsItsFirstValue
 ash   ForNameWhenTheLoopRuns
 ash   FunctionNameWhenTheDefinitionRuns
 ash   FunctionNamesUnderPlus
@@ -123,9 +126,11 @@ ash   SetArrayBadNameLeavesZeroFromCommandString
 ash   SetArrayLetter
 ash   SetArrayOptionsContinuePastTheName
 ash   SetArrayWithNoValuesUnsetsTheName
+ash   StoppedJobTakesTheCurrentJobMarker
 ash   SubscriptExpressionStopsAtASeparator
 ash   SubscriptIsAQuotingContext
 ash   SubscriptedArrayLiteral
+ash   SubscriptedOperandCarriesTheAttributes
 ash   SubscriptedOperandTakesALocalDeclaration
 ash   SubscriptedOperandTakesTheIntegerAttribute
 ash   TableUnderAnArrayDeclaration
@@ -193,6 +198,8 @@ dash  DeclarePrintReportsAMissingName
 dash  DisownRemovesTheJob
 dash  DollarSingleBackslashC
 dash  DollarSingleCaretMeta
+dash  DollarSingleDigitlessEscapeIsAZeroByte
+dash  DollarSingleHexReadsEveryDigit
 dash  DollarSingleNulTruncates
 dash  DollarSingleUnknownEscape
 dash  EchoLastEscapeFlagWins
@@ -207,6 +214,7 @@ dash  ErrTrapRunsInsideFunctions
 dash  ErrexitSeesPipefailFailure
 dash  ExitTrapFiresPastTheEnd
 dash  ExportLetterDeclaresAGlobal
+dash  ExportedCompoundReachesAChildAsItsFirstValue
 dash  ForNameWhenTheLoopRuns
 dash  FunctionNameWhenTheDefinitionRuns
 dash  FunctionNamesUnderPlus
@@ -265,6 +273,7 @@ dash  SetArrayWithNoValuesUnsetsTheName
 dash  SubscriptExpressionStopsAtASeparator
 dash  SubscriptIsAQuotingContext
 dash  SubscriptedArrayLiteral
+dash  SubscriptedOperandCarriesTheAttributes
 dash  SubscriptedOperandTakesALocalDeclaration
 dash  SubscriptedOperandTakesTheIntegerAttribute
 dash  TableUnderAnArrayDeclaration

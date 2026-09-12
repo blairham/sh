@@ -212,7 +212,7 @@ func (p *Parser) blameCondition(start Pos) {
 	if !errors.As(p.err, &se) {
 		return
 	}
-	se.Construct, se.ConstructLine = "[[", start.Line
+	se.Construct, se.ConstructLine = "[[", int(start.Line)
 	if se.Kind == ErrUnterminated {
 		// A `[[` that never closed is unclosed *by the condition*, and two
 		// dialects name it: one as the construct and one as the innermost

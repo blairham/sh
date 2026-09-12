@@ -1792,7 +1792,7 @@ func (sh Shell) executeLines(
 		// spent, not saved — the line that says `set -v` is not echoed by the
 		// shell it turns on — and the line after it can only be found once
 		// every line before it has been walked past.
-		say(line.Last.Line)
+		say(int(line.Last.Line))
 		if err := r.RunPart(ctx, line); err != nil {
 			// Refused rather than silently doing nothing: a shell that
 			// quietly skips what it cannot do is worse than one that says so.
@@ -1962,7 +1962,7 @@ func verboseUpTo(text string, err error) int {
 	if !errors.As(err, &se) {
 		return end
 	}
-	return min(max(se.Pos.Line, se.EndLine, se.EofLine), end)
+	return min(max(int(se.Pos.Line), se.EndLine, se.EofLine), end)
 }
 
 // linesIn counts the physical lines of text the way the echo walks them: the
@@ -2030,7 +2030,7 @@ func (sh Shell) source(r *interp.Runner, name string) int {
 func (sh Shell) sayRemarks(dg interp.Diagnostics, name string, rs []syntax.Remark, shown int) int {
 	for _, rk := range rs[min(shown, len(rs)):] {
 		if msg := dg.Remark(rk); msg != "" {
-			sh.errf("%s", dg.Report(name, rk.Pos.Line, msg+"\n"))
+			sh.errf("%s", dg.Report(name, int(rk.Pos.Line), msg+"\n"))
 		}
 	}
 	return len(rs)

@@ -794,7 +794,7 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	defer func() { r.speaker, r.speakerLine = savedSpeaker, savedSpeakerLine }()
 	// Where the function was written, so a dialect that numbers a message
 	// from the function rather than from the file can subtract it.
-	r.funcLine = fn.Pos().Line
+	r.funcLine = int(fn.Pos().Line)
 	// This call's own serial, because the RETURN trap fires for the one
 	// function whose body set it and for nobody else — not a caller, and
 	// not a sibling entered after it returned.

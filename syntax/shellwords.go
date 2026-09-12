@@ -101,8 +101,8 @@ func ShellWords(src string, d Dialect, opt ShellSplit) []string {
 			if t.Kind == TokEOF || t.End.Offset <= t.Pos.Offset && t.Kind != TokNewline {
 				break
 			}
-			t.Pos.Offset += rest
-			t.End.Offset += rest
+			t.Pos.Offset += int32(rest)
+			t.End.Offset += int32(rest)
 			toks = append(toks, t)
 		}
 	}

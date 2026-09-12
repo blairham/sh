@@ -113,7 +113,7 @@ func (r *Runner) RunFunctionBodyInPlace(ctx context.Context, name string) (bool,
 	r.ctx = ctx
 	defer func() { r.ctx = saved }()
 	savedLine, savedIn := r.funcLine, r.inBuiltin
-	r.funcLine, r.inBuiltin = fn.Pos().Line, ""
+	r.funcLine, r.inBuiltin = int(fn.Pos().Line), ""
 	defer func() { r.funcLine, r.inBuiltin = savedLine, savedIn }()
 	// The frame was pushed for the stub, whose file is wherever the
 	// declaration was read; the body running in it now came out of the file

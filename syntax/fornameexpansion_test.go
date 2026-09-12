@@ -139,7 +139,7 @@ func TestTheRefusalIsLocatedAtTheWord(t *testing.T) {
 	if se.Pos.Line != 2 {
 		t.Errorf("line = %d, want 2", se.Pos.Line)
 	}
-	if want := len("echo one\nfor "); se.Pos.Offset != want {
+	if want := len("echo one\nfor "); int(se.Pos.Offset) != want {
 		t.Errorf("offset = %d, want %d — the word, not the keyword", se.Pos.Offset, want)
 	}
 }

@@ -54,7 +54,7 @@ func Recover(src string, f *syntax.File) []Comment {
 			end++
 		}
 		out = append(out, Comment{
-			Pos:  syntax.Pos{Offset: i, Line: line, Col: i - lineStart + 1},
+			Pos:  syntax.Pos{Offset: int32(i), Line: int32(line), Col: int32(i - lineStart + 1)},
 			Text: src[i:end],
 		})
 		i = end - 1 // resume at the newline so the line count stays right
@@ -94,18 +94,18 @@ func excluded(f *syntax.File) []span {
 	walk.Nodes(f, func(n syntax.Node) bool {
 		switch x := n.(type) {
 		case *syntax.Word:
-			add(x.Start.Offset, x.Stop.Offset)
+			add(int(x.Start.Offset), int(x.Stop.Offset))
 		case *syntax.Assign:
-			add(x.Start.Offset, x.Stop.Offset)
+			add(int(x.Start.Offset), int(x.Stop.Offset))
 			return false
 		case *syntax.TestClause:
-			add(x.Start.Offset, x.Stop.Offset)
+			add(int(x.Start.Offset), int(x.Stop.Offset))
 			// Fall through to redirections via the walker: they sit
 			// outside [Start, Stop) and carry words of their own.
 		case *syntax.ArithCmdClause:
-			add(x.Start.Offset, x.Stop.Offset)
+			add(int(x.Start.Offset), int(x.Stop.Offset))
 		case *syntax.ForArithClause:
-			add(x.Start.Offset, x.Start.Offset+len(x.Header))
+			add(int(x.Start.Offset), int(x.Start.Offset)+len(x.Header))
 		}
 		return true
 	})

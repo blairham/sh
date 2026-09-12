@@ -20,7 +20,7 @@ func TestNewParserAtNumbersFromTheLineItIsGiven(t *testing.T) {
 		if !ok {
 			t.Fatalf("no line where %d was expected", want)
 		}
-		if got := line.Stmts[0].Pos().Line; got != want {
+		if got := int(line.Stmts[0].Pos().Line); got != want {
 			t.Errorf("line numbered %d, want %d", got, want)
 		}
 	}

@@ -140,7 +140,7 @@ func TestAnEmptyAlternativeIsLocatedAtItsSeparator(t *testing.T) {
 		t.Errorf("spans = %d, want 0", n)
 	}
 	// The `|` is the eleventh byte of the line.
-	if got, want := first.Pos().Offset, strings.IndexByte(src, '|'); got != want {
+	if got, want := int(first.Pos().Offset), strings.IndexByte(src, '|'); got != want {
 		t.Errorf("located at offset %d, want %d — the separator that says it is there", got, want)
 	}
 	if first.End() != first.Pos() {

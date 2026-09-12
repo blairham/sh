@@ -57,7 +57,7 @@ func explainOne(path string) {
 		lines := strings.Split(out, "\n")
 		var at int
 		if e, ok := err.(*syntax.Error); ok {
-			at = e.Pos.Line
+			at = int(e.Pos.Line)
 		}
 		for i := max(0, at-4); i < min(len(lines), at+3); i++ {
 			fmt.Printf("%5d| %s\n", i+1, lines[i])

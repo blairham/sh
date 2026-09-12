@@ -757,7 +757,7 @@ func autoloadLoneDefinition(name, body string) (inner string, lone bool) {
 	// that quietly left this whole path unreached — which is the spelling
 	// `kfn() { print x }` uses and the one a real function file is written
 	// in. The group's own end is one past the brace.
-	start, end := group.Start.Offset+1, group.Stop.Offset-1
+	start, end := int(group.Start.Offset)+1, int(group.Stop.Offset)-1
 	if start >= end || end > len(body) || body[end] != '}' {
 		return "", false
 	}

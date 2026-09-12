@@ -31,7 +31,7 @@ import (
 // caller with no dialect in hand wants [syntax.CoreStyle].
 func Format(src string, f *syntax.File, cs []comments.Comment, st syntax.Style) string {
 	p := &printer{src: src, comments: cs, style: st}
-	p.stmtList(f.Stmts, f.Last.Offset)
+	p.stmtList(f.Stmts, int(f.Last.Offset))
 	p.ownLineComments(len(src) + 1)
 	out := p.b.String()
 	if st.AlignTrailingComments {
@@ -140,10 +140,10 @@ func (p *printer) newline() {
 		// body ran to the end of the file. Adding one there appends a byte
 		// to the body itself, which is content: `"body"` became `"body\n"`
 		// and the tree said so.
-		if !strings.HasSuffix(body, "\n") && r.Heredoc.Stop.Offset < len(p.src) {
+		if !strings.HasSuffix(body, "\n") && int(r.Heredoc.Stop.Offset) < len(p.src) {
 			p.b.WriteByte('\n')
 		}
-		if l := r.Heredoc.Stop.Line; l > p.lastLine {
+		if l := int(r.Heredoc.Stop.Line); l > p.lastLine {
 			p.lastLine = l - 1 // Stop sits one past the delimiter's newline
 		}
 	}
@@ -172,12 +172,12 @@ func (p *printer) blankGap(line int) {
 // ownLineComments emits every not-yet-consumed comment that starts before
 // limit, each on its own line at the current indent.
 func (p *printer) ownLineComments(limit int) {
-	for p.ci < len(p.comments) && p.comments[p.ci].Pos.Offset < limit {
+	for p.ci < len(p.comments) && int(p.comments[p.ci].Pos.Offset) < limit {
 		c := p.comments[p.ci]
-		p.blankGap(c.Pos.Line)
+		p.blankGap(int(c.Pos.Line))
 		p.pad()
 		p.b.WriteString(c.Text)
-		p.lastLine = c.Pos.Line
+		p.lastLine = int(c.Pos.Line)
 		p.newline()
 		p.ci++
 	}
@@ -186,7 +186,7 @@ func (p *printer) ownLineComments(limit int) {
 // skipComments drops queued comments before limit: they sit inside an extent
 // that was just emitted verbatim, so they are already on the page.
 func (p *printer) skipComments(limit int) {
-	for p.ci < len(p.comments) && p.comments[p.ci].Pos.Offset < limit {
+	for p.ci < len(p.comments) && int(p.comments[p.ci].Pos.Offset) < limit {
 		p.ci++
 	}
 }
@@ -197,8 +197,8 @@ func (p *printer) skipComments(limit int) {
 func (p *printer) stmtList(list []*syntax.Stmt, closeOffset int) {
 	for i := 0; i < len(list); {
 		st := list[i]
-		p.ownLineComments(st.Pos().Offset)
-		p.blankGap(st.Pos().Line)
+		p.ownLineComments(int(st.Pos().Offset))
+		p.blankGap(int(st.Pos().Line))
 		// A run: statements chained on one line. The test is against the
 		// previous statement's *end* — `a ||<newline> b; print` puts print
 		// on b's line, and the `;` between them is the author's.
@@ -224,7 +224,7 @@ func (p *printer) stmtList(list []*syntax.Stmt, closeOffset int) {
 			p.b.WriteString(p.comments[p.ci].Text)
 			p.ci++
 		}
-		p.lastLine = endLine
+		p.lastLine = int(endLine)
 		p.newline()
 		i = j
 	}
@@ -241,7 +241,7 @@ func (p *printer) stmt(st *syntax.Stmt) {
 	case st.Disown:
 		// The two spellings are distinct tokens; the terminator's own two
 		// bytes are the only record of which one was written.
-		if st.Semi.Line > 0 && st.Semi.Offset+2 <= len(p.src) {
+		if st.Semi.Line > 0 && int(st.Semi.Offset)+2 <= len(p.src) {
 			p.b.WriteByte(' ')
 			p.b.WriteString(p.src[st.Semi.Offset : st.Semi.Offset+2])
 		} else {
@@ -416,7 +416,7 @@ func (p *printer) command(c syntax.Command) {
 func (p *printer) verbatim(c syntax.Command) {
 	p.node(c)
 	end := c.End().Offset
-	p.skipComments(end)
+	p.skipComments(int(end))
 	walk.Nodes(c, func(n syntax.Node) bool {
 		if r, ok := n.(*syntax.Redirect); ok && r.Heredoc != nil &&
 			r.Heredoc.Start.Offset >= end {
@@ -424,7 +424,7 @@ func (p *printer) verbatim(c syntax.Command) {
 		}
 		return true
 	})
-	p.suffixRedirs(afterOnly(redirsOf(c), end))
+	p.suffixRedirs(afterOnly(redirsOf(c), int(end)))
 }
 
 // tryClause is `{ … } always { … }`, whose braces are the construct's own
@@ -444,18 +444,18 @@ func (p *printer) tryClause(x *syntax.TryClause) {
 	}
 	p.b.WriteString("{")
 	p.newline()
-	p.block(x.Try, tryClose)
+	p.block(x.Try, int(tryClose))
 	p.b.WriteString("} always {")
 	p.newline()
-	p.block(x.Always, x.Stop.Offset)
+	p.block(x.Always, int(x.Stop.Offset))
 	p.b.WriteString("}")
 }
 
 // repeatClause always writes the `do … done` spelling; the dialect's shorter
 // forms parse to the same tree.
 func (p *printer) repeatClause(x *syntax.RepeatClause) {
-	if b := p.shortForm(x.Start.Offset, x.Count.End().Offset, bodyStart(x.Body, x.Stop.Offset)); b >= 0 {
-		p.braceClause(x.Start.Offset, b, x.Body, x.Stop.Offset, oneLine(x.Start, x.Stop))
+	if b := p.shortForm(int(x.Start.Offset), int(x.Count.End().Offset), bodyStart(x.Body, int(x.Stop.Offset))); b >= 0 {
+		p.braceClause(int(x.Start.Offset), b, x.Body, int(x.Stop.Offset), oneLine(x.Start, x.Stop))
 		return
 	}
 	p.b.WriteString("repeat ")
@@ -468,7 +468,7 @@ func (p *printer) repeatClause(x *syntax.RepeatClause) {
 	}
 	p.doKeyword()
 	p.newline()
-	p.block(x.Body, x.Stop.Offset)
+	p.block(x.Body, int(x.Stop.Offset))
 	p.b.WriteString("done")
 }
 
@@ -478,7 +478,7 @@ func (p *printer) repeatClause(x *syntax.RepeatClause) {
 // come from the fields, in source order.
 func (p *printer) anonFunc(x *syntax.AnonFunc) {
 	end := x.End().Offset
-	p.b.WriteString(p.headerText(x.Pos().Offset, x.Body.Pos().Offset))
+	p.b.WriteString(p.headerText(int(x.Pos().Offset), int(x.Body.Pos().Offset)))
 	p.b.WriteByte(' ')
 	p.command(x.Body)
 	type piece struct {
@@ -488,11 +488,11 @@ func (p *printer) anonFunc(x *syntax.AnonFunc) {
 	}
 	var pieces []piece
 	for _, w := range x.Args {
-		pieces = append(pieces, piece{from: w.Start.Offset, w: w})
+		pieces = append(pieces, piece{from: int(w.Start.Offset), w: w})
 	}
-	for _, r := range afterOnly(x.Redirs, end) {
+	for _, r := range afterOnly(x.Redirs, int(end)) {
 		if !r.PipeBoth {
-			pieces = append(pieces, piece{from: r.Pos().Offset, r: r})
+			pieces = append(pieces, piece{from: int(r.Pos().Offset), r: r})
 		}
 	}
 	sort.Slice(pieces, func(i, j int) bool { return pieces[i].from < pieces[j].from })
@@ -528,10 +528,10 @@ func (p *printer) headerText(from, to int, cut ...[2]int) string {
 	text := string(header)
 	for i := p.ci; i < len(p.comments); i++ {
 		c := p.comments[i]
-		if c.Pos.Offset >= to {
+		if int(c.Pos.Offset) >= to {
 			break
 		}
-		if c.Pos.Offset >= from {
+		if int(c.Pos.Offset) >= from {
 			text = strings.Replace(text, c.Text, "", 1)
 		}
 	}
@@ -647,7 +647,7 @@ func isHeaderSpace(c byte) bool {
 func afterOnly(rs []*syntax.Redirect, end int) []*syntax.Redirect {
 	var out []*syntax.Redirect
 	for _, r := range rs {
-		if r.Pos().Offset >= end {
+		if int(r.Pos().Offset) >= end {
 			out = append(out, r)
 		}
 	}
@@ -664,16 +664,16 @@ func (p *printer) simple(x *syntax.SimpleCmd) {
 	}
 	var pieces []piece
 	for _, a := range x.Assigns {
-		pieces = append(pieces, piece{from: a.Start.Offset, n: a})
+		pieces = append(pieces, piece{from: int(a.Start.Offset), n: a})
 	}
 	for _, w := range x.Args {
-		pieces = append(pieces, piece{from: w.Start.Offset, n: w})
+		pieces = append(pieces, piece{from: int(w.Start.Offset), n: w})
 	}
 	for _, r := range x.Redirs {
 		if r.PipeBoth {
 			continue // spelled `|&` by the pipeline, not by us
 		}
-		pieces = append(pieces, piece{from: r.Pos().Offset, r: r})
+		pieces = append(pieces, piece{from: int(r.Pos().Offset), r: r})
 	}
 	sort.Slice(pieces, func(i, j int) bool { return pieces[i].from < pieces[j].from })
 	prevEnd := 0
@@ -683,7 +683,7 @@ func (p *printer) simple(x *syntax.SimpleCmd) {
 			node = pc.r
 		}
 		if i > 0 {
-			if node.Pos().Line > prevEnd {
+			if int(node.Pos().Line) > prevEnd {
 				// The author split the list with backslash-newlines; keep
 				// each element on its own line rather than rebuilding one
 				// long one. A raw newline, not p.newline(): a continuation
@@ -701,7 +701,7 @@ func (p *printer) simple(x *syntax.SimpleCmd) {
 		} else {
 			p.node(pc.n)
 		}
-		prevEnd = node.End().Line
+		prevEnd = int(node.End().Line)
 	}
 }
 
@@ -872,7 +872,7 @@ func hasNewlineInAPattern(src string, x *syntax.CaseClause) bool {
 	for _, it := range x.Items {
 		for _, pat := range it.Patterns {
 			from, to := pat.Pos().Offset, pat.End().Offset
-			if to <= len(src) && from < to && strings.Contains(src[from:to], "\n") {
+			if int(to) <= len(src) && from < to && strings.Contains(src[from:to], "\n") {
 				return true
 			}
 		}
@@ -905,7 +905,7 @@ func (p *printer) group(x *syntax.Group) {
 	}
 	p.b.WriteString("{")
 	p.newline()
-	p.block(x.List, x.Stop.Offset)
+	p.block(x.List, int(x.Stop.Offset))
 	p.b.WriteString("}")
 }
 
@@ -927,7 +927,7 @@ func (p *printer) subshell(x *syntax.Subshell) {
 	}
 	p.b.WriteString("(")
 	p.newline()
-	p.block(x.List, x.Stop.Offset)
+	p.block(x.List, int(x.Stop.Offset))
 	p.b.WriteString(")")
 }
 
@@ -959,7 +959,7 @@ func (p *printer) ifClause(x *syntax.IfClause) {
 	p.newline()
 	then := x.Then
 	for _, e := range x.Elifs {
-		p.block(then, e.Start.Offset)
+		p.block(then, int(e.Start.Offset))
 		p.b.WriteString("elif ")
 		p.seqStmts(e.Cond)
 		p.bodyKeyword(e.Cond, "then", p.style.ThenOnHeaderLine)
@@ -971,12 +971,12 @@ func (p *printer) ifClause(x *syntax.IfClause) {
 		if len(x.Else) > 0 {
 			limit = x.Else[0].Pos().Offset
 		}
-		p.block(then, limit)
+		p.block(then, int(limit))
 		p.b.WriteString("else")
 		p.newline()
-		p.block(x.Else, x.Stop.Offset)
+		p.block(x.Else, int(x.Stop.Offset))
 	} else {
-		p.block(then, x.Stop.Offset)
+		p.block(then, int(x.Stop.Offset))
 	}
 	p.b.WriteString("fi")
 }
@@ -986,8 +986,8 @@ func (p *printer) loop(x *syntax.LoopClause) {
 	if x.Until {
 		kw = "until"
 	}
-	if b := p.shortForm(x.Start.Offset, condEnd(x.Cond, x.Start.Offset), bodyStart(x.Body, x.Stop.Offset)); b >= 0 {
-		p.braceClause(x.Start.Offset, b, x.Body, x.Stop.Offset, oneLine(x.Start, x.Stop))
+	if b := p.shortForm(int(x.Start.Offset), condEnd(x.Cond, int(x.Start.Offset)), bodyStart(x.Body, int(x.Stop.Offset))); b >= 0 {
+		p.braceClause(int(x.Start.Offset), b, x.Body, int(x.Stop.Offset), oneLine(x.Start, x.Stop))
 		return
 	}
 	if oneLine(x.Start, x.Stop) {
@@ -1002,7 +1002,7 @@ func (p *printer) loop(x *syntax.LoopClause) {
 	p.seqStmts(x.Cond)
 	p.bodyKeyword(x.Cond, "do", p.style.DoOnHeaderLine)
 	p.newline()
-	p.block(x.Body, x.Stop.Offset)
+	p.block(x.Body, int(x.Stop.Offset))
 	p.b.WriteString("done")
 }
 
@@ -1023,8 +1023,8 @@ func (p *printer) forHeader(x *syntax.ForClause) {
 }
 
 func (p *printer) forClause(x *syntax.ForClause) {
-	if b := p.shortForm(x.Start.Offset, itemsEnd(x.Items, x.Start.Offset), bodyStart(x.Body, x.Stop.Offset)); b >= 0 {
-		p.braceClause(x.Start.Offset, b, x.Body, x.Stop.Offset, oneLine(x.Start, x.Stop))
+	if b := p.shortForm(int(x.Start.Offset), itemsEnd(x.Items, int(x.Start.Offset)), bodyStart(x.Body, int(x.Stop.Offset))); b >= 0 {
+		p.braceClause(int(x.Start.Offset), b, x.Body, int(x.Stop.Offset), oneLine(x.Start, x.Stop))
 		return
 	}
 	p.forHeader(x)
@@ -1036,13 +1036,13 @@ func (p *printer) forClause(x *syntax.ForClause) {
 	}
 	p.doKeyword()
 	p.newline()
-	p.block(x.Body, x.Stop.Offset)
+	p.block(x.Body, int(x.Stop.Offset))
 	p.b.WriteString("done")
 }
 
 func (p *printer) selectClause(x *syntax.SelectClause) {
-	if b := p.shortForm(x.Start.Offset, itemsEnd(x.Items, x.Start.Offset), bodyStart(x.Body, x.Stop.Offset)); b >= 0 {
-		p.braceClause(x.Start.Offset, b, x.Body, x.Stop.Offset, oneLine(x.Start, x.Stop))
+	if b := p.shortForm(int(x.Start.Offset), itemsEnd(x.Items, int(x.Start.Offset)), bodyStart(x.Body, int(x.Stop.Offset))); b >= 0 {
+		p.braceClause(int(x.Start.Offset), b, x.Body, int(x.Stop.Offset), oneLine(x.Start, x.Stop))
 		return
 	}
 	p.b.WriteString("select ")
@@ -1066,12 +1066,12 @@ func (p *printer) selectClause(x *syntax.SelectClause) {
 	}
 	p.doKeyword()
 	p.newline()
-	p.block(x.Body, x.Stop.Offset)
+	p.block(x.Body, int(x.Stop.Offset))
 	p.b.WriteString("done")
 }
 
 func (p *printer) forArith(x *syntax.ForArithClause) {
-	header := p.src[x.Start.Offset : x.Start.Offset+len(x.Header)]
+	header := p.src[x.Start.Offset : int(x.Start.Offset)+len(x.Header)]
 	p.b.WriteString(header)
 	if oneLine(x.Start, x.Stop) {
 		p.b.WriteString("; do ")
@@ -1081,7 +1081,7 @@ func (p *printer) forArith(x *syntax.ForArithClause) {
 	}
 	p.doKeyword()
 	p.newline()
-	p.block(x.Body, x.Stop.Offset)
+	p.block(x.Body, int(x.Stop.Offset))
 	p.b.WriteString("done")
 }
 
@@ -1133,8 +1133,8 @@ func (p *printer) caseClause(x *syntax.CaseClause) {
 	p.indent++
 	p.lastLine = 0
 	for _, it := range x.Items {
-		p.ownLineComments(it.Start.Offset)
-		p.blankGap(it.Start.Line)
+		p.ownLineComments(int(it.Start.Offset))
+		p.blankGap(int(it.Start.Line))
 		p.pad()
 		if armNeedsParen(it) {
 			p.b.WriteByte('(')
@@ -1167,21 +1167,21 @@ func (p *printer) caseClause(x *syntax.CaseClause) {
 			if hasTerm {
 				p.b.WriteString(" " + term)
 			}
-			p.lastLine = end.Line
+			p.lastLine = int(end.Line)
 			p.newline()
 			continue
 		}
 		p.newline()
 		p.indent++
 		p.lastLine = 0
-		p.stmtList(it.Body, end.Offset)
+		p.stmtList(it.Body, int(end.Offset))
 		if hasTerm {
 			p.pad()
 			p.b.WriteString(term)
 		}
 		p.indent--
 		if l := end.Line; l > 0 {
-			p.lastLine = l
+			p.lastLine = int(l)
 		}
 		if hasTerm {
 			// Without a terminator the body's own last line already ended,
@@ -1189,7 +1189,7 @@ func (p *printer) caseClause(x *syntax.CaseClause) {
 			p.newline()
 		}
 	}
-	p.ownLineComments(x.Stop.Offset)
+	p.ownLineComments(int(x.Stop.Offset))
 	p.indent--
 	p.pad()
 	p.b.WriteString("esac")
@@ -1203,7 +1203,7 @@ func (p *printer) funcDecl(x *syntax.FuncDecl) {
 		p.node(x)
 		return
 	}
-	from, to := x.Pos().Offset, x.Body.Pos().Offset
+	from, to := int(x.Pos().Offset), int(x.Body.Pos().Offset)
 	// A redirection may stand *between* the names and the parentheses, and it
 	// is the body's — `a b >out () { … }` sends both calls to the file. It is
 	// therefore inside the header span this copies from the source, and the
@@ -1220,7 +1220,7 @@ func (p *printer) funcDecl(x *syntax.FuncDecl) {
 func insideTheHeader(rs []*syntax.Redirect, from, to int) [][2]int {
 	var out [][2]int
 	for _, r := range rs {
-		lo, hi := r.Pos().Offset, r.End().Offset
+		lo, hi := int(r.Pos().Offset), int(r.End().Offset)
 		if lo >= from && hi <= to {
 			out = append(out, [2]int{lo, hi})
 		}

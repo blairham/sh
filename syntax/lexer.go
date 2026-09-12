@@ -285,7 +285,9 @@ func (l *Lexer) ranOut(word string) {
 	l.incomplete = true
 }
 
-func (l *Lexer) pos() Pos { return Pos{Offset: l.off, Line: l.line, Col: l.col} }
+func (l *Lexer) pos() Pos {
+	return Pos{Offset: int32(l.off), Line: int32(l.line), Col: int32(l.col)}
+}
 
 // shiftLines moves the line counter on without moving through any input.
 //
@@ -590,7 +592,7 @@ func (l *Lexer) startsProcSubstFile() bool {
 	if l.peek() != '=' || l.peekAt(1) != '(' {
 		return false
 	}
-	return l.off == l.wordStart.Offset || l.atAssignValue()
+	return l.off == int(l.wordStart.Offset) || l.atAssignValue()
 }
 
 // atAssignValue reports whether the cursor stands where an assignment's value
@@ -2386,7 +2388,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// text would say the opposite — `EOF` alone is the delimiter, so
 		// there would be nothing to remark on, which is also why the
 		// substitution itself runs and yields `a`.
-		remarks, bodyRanOut := l.takeRemarks(l.src[start:l.off], open.Line)
+		remarks, bodyRanOut := l.takeRemarks(l.src[start:l.off], int(open.Line))
 		// And whether that read is an answer at all is a dialect question,
 		// which nothing here used to ask. Counting the parentheses finds the
 		// `)` whatever shell this is, so all four dialects accepted a program
@@ -2585,7 +2587,7 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
 	if sub.err != nil || !sub.at(TokRightParen) {
 		return 0, nil, false
 	}
-	return from + sub.tok.Pos.Offset, sub.lex.remarks, true
+	return from + int(sub.tok.Pos.Offset), sub.lex.remarks, true
 }
 
 // procSubstKind says which end of the pipe the word will name.

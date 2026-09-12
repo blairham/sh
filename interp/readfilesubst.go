@@ -91,7 +91,7 @@ func (r *Runner) readFileSubst(ctx context.Context, rd *syntax.Redirect, span sy
 	sub := r.clone()
 	sub.inheritJobs(jobBoundarySubstitution)
 	sub.inCommandSubst = true
-	sub.lineBase = r.lineBase + span.Pos.Line - 1
+	sub.lineBase = r.lineBase + int(span.Pos.Line) - 1
 	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {
 		sub.lineBase = 0
 	}

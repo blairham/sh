@@ -116,7 +116,7 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 	// because a span starts at its opening delimiter — and it accumulates,
 	// so a substitution inside a substitution is still placed in the file
 	// rather than in whichever body most recently began.
-	sub.lineBase = r.lineBase + span.Pos.Line - 1
+	sub.lineBase = r.lineBase + int(span.Pos.Line) - 1
 	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {
 		sub.lineBase = 0
 	}
@@ -145,7 +145,7 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 	// script it was written in did not. Same offset the subshell form
 	// carries, and put back afterwards because this runner goes on being
 	// used.
-	r.lineBase = savedBase + span.Pos.Line - 1
+	r.lineBase = savedBase + int(span.Pos.Line) - 1
 	for _, st := range f.Stmts {
 		if err := r.stmt(ctx, st); err != nil {
 			r.Stdout, r.lineBase = savedOut, savedBase

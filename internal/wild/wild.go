@@ -221,8 +221,8 @@ func Sweep(ctx context.Context, scope Scope, dialect syntax.Dialect, reference s
 			res := Result{Path: path, Err: perr}
 			var e *syntax.Error
 			if asParseError(perr, &e) {
-				res.Line = e.Pos.Line
-				res.Text = LineAt(string(src), e.Pos.Line)
+				res.Line = int(e.Pos.Line)
+				res.Text = LineAt(string(src), int(e.Pos.Line))
 			}
 			rep.Failures = append(rep.Failures, res)
 		}

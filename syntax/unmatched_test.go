@@ -61,7 +61,7 @@ func TestUnmatchedDelimitersCarryTheirState(t *testing.T) {
 		if se.LastToken != c.near {
 			t.Errorf("%q: near %q, want %q", c.src, se.LastToken, c.near)
 		}
-		if se.Pos.Line != c.openLine || se.EofLine != c.eofLine {
+		if int(se.Pos.Line) != c.openLine || se.EofLine != c.eofLine {
 			t.Errorf("%q: lines %d/%d, want %d/%d", c.src, se.Pos.Line, se.EofLine, c.openLine, c.eofLine)
 		}
 	}

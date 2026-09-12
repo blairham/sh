@@ -31,6 +31,22 @@ func typedBound(t *testing.T, table map[string]Binding, keys string) string {
 	return line
 }
 
+// typedBoundWithHistory is typedBound with entries a walk can reach, for the
+// tests about a rebinding shadowing the editor's own arrow keys.
+func typedBoundWithHistory(t *testing.T, table map[string]Binding, history []string, keys string) string {
+	t.Helper()
+	var out strings.Builder
+	e := Shell{KeyBindings: func(Keymap) map[string]Binding { return table }}.newEditor(t.Context(), nil)
+	e.in, e.out = typing(keys), &out
+	e.history = history
+	e.browsing = len(history)
+	line, err := e.readLine(drawPrompt("$ "))
+	if err != nil {
+		t.Fatalf("%q: %v", keys, err)
+	}
+	return line
+}
+
 // TestAnOverriddenKeyRunsItsWidget is the whole point: a key nobody would
 // otherwise act on moves the cursor because the table says so.
 //
@@ -234,5 +250,66 @@ func TestEveryWidgetIsReachable(t *testing.T) {
 		if got, want := typedBound(t, table, "ab\a\n"), "ab"; got != want {
 			t.Errorf("widget %d: line = %q, want %q", w, got, want)
 		}
+	}
+}
+
+// A rebinding that shares a prefix with a key the editor handles must not
+// shadow it.
+//
+// This is the shape of the bug macOS's `/etc/zshrc` found (#2435). It binds
+// the arrows by `$terminfo[kcuu1]`, which is the application-cursor spelling
+// `\eOA`, while a terminal in normal cursor mode sends `\e[A`. The lookup read
+// `\e`, then `[`, found nothing in the override table waiting for it, dropped
+// what it had read — and left the `A` to be typed into the line, never
+// reaching the `\e[A` in defaultkeys.go.
+//
+// The line asserted here is what a person sees: `A` in the line instead of the
+// previous command.
+func TestARebindingDoesNotShadowAKeyTheEditorHandles(t *testing.T) {
+	// The application spelling bound to something, the normal spelling typed.
+	table := map[string]Binding{"\x1bOA": {Widget: WidgetEndOfLine}}
+	got := typedBoundWithHistory(t, table, []string{"earlier"}, "ab\x1b[A\n")
+	if want := "earlier"; got != want {
+		t.Errorf("line = %q, want %q — the arrow must still walk history", got, want)
+	}
+}
+
+// And the override still wins where it *does* match, which is the other half:
+// a table consulted second would be no override layer at all.
+func TestARebindingStillWinsOnItsOwnSequence(t *testing.T) {
+	table := map[string]Binding{"\x1b[A": {Widget: WidgetBeginningOfLine}}
+	// Up is rebound to "go to the start of the line", so typing it and then a
+	// marker puts the marker at the front rather than recalling anything.
+	got := typedBoundWithHistory(t, table, []string{"earlier"}, "ab\x1b[A!\n")
+	if want := "!ab"; got != want {
+		t.Errorf("line = %q, want %q — the rebinding must win on its own sequence", got, want)
+	}
+}
+
+// A sequence neither table answers to is still dropped whole, rather than
+// having its tail typed.
+func TestASequenceNeitherTableAnswersToIsDroppedWhole(t *testing.T) {
+	table := map[string]Binding{"\x1bOA": {Widget: WidgetEndOfLine}}
+	// `\e[Z` is shift-Tab: a well-formed control sequence with no entry in
+	// either table.
+	got := typedBoundWithHistory(t, table, nil, "ab\x1b[Z!\n")
+	if want := "ab!"; got != want {
+		t.Errorf("line = %q, want %q — the whole sequence goes, tail included", got, want)
+	}
+}
+
+// A rebinding of several bytes runs even when nothing in the editor's own
+// table shares its prefix.
+//
+// `^G` is the first byte because the editor does nothing with it and no
+// default sequence begins with it, so the read-ahead that finds the second
+// byte can only be the override table's own. A mutation run asked for this
+// one: with the override's look-ahead disabled, every other test here still
+// passed, because their sequences start with `\e` and the *default* table kept
+// the read going to the same place.
+func TestAMultiByteRebindingRunsWithNoDefaultSharingItsPrefix(t *testing.T) {
+	table := map[string]Binding{"\a\a": {Widget: WidgetBeginningOfLine}}
+	if got, want := typedBound(t, table, "world\a\aecho hello \n"), "echo hello world"; got != want {
+		t.Errorf("line = %q, want %q", got, want)
 	}
 }

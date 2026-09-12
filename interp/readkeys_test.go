@@ -81,8 +81,16 @@ func TestANumericOptionalOptionDoesNotEatALetter(t *testing.T) {
 	if status == 0 {
 		t.Errorf("got %q at 0, want the unknown letter refused", out)
 	}
-	if !strings.Contains(out, "v") {
-		t.Errorf("got %q, want the complaint to name the letter it could not read", out)
+	// **Which complaint, and not merely that there was one.** Taking the rest
+	// of the word unconditionally also fails, and fails with `v` in the
+	// message — `number expected after -k: v` — so a test asking only for a
+	// non-zero status and the letter `v` passes for the wrong reason. It did:
+	// a mutation run is what asked.
+	if !strings.Contains(out, "invalid option") {
+		t.Errorf("got %q, want `v` refused as an option rather than read as a number", out)
+	}
+	if strings.Contains(out, "number expected") {
+		t.Errorf("got %q, want the letter not to have been taken as the count", out)
 	}
 }
 
@@ -197,9 +205,20 @@ func TestKeysComeFromTheTerminalAndNotTheStream(t *testing.T) {
 
 // With no terminal on any stream, it is a refusal at 1 and the stream in front
 // of it is not touched.
+//
+// **The wording is asserted and not only the status**, which is not fussiness:
+// a status of 1 with an empty variable is also what "found the terminal and
+// read nothing from it" looks like. Deleting the check that there *is* a
+// terminal leaves a nil file, whose Read answers an error rather than
+// panicking, so the count is never met and the status is 1 either way — a
+// mutation run is what asked, and the first version of this test passed with
+// the refusal removed.
 func TestKeysWithNoTerminalRefuse(t *testing.T) {
 	out, _ := run(t,
 		`printf 'abcdef' | { v=keep; read -k 2 v; echo "st=$? [$v]"; }`, readsKeys)
+	if !strings.Contains(out, "not interactive and can't open terminal") {
+		t.Errorf("got %q, want the refusal said out loud", out)
+	}
 	if !strings.Contains(out, "st=1") {
 		t.Errorf("got %q, want a failure", out)
 	}

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/dialect/zsh"
 )
 
 // `read -k`, which is this shell's letter for reading characters from the
@@ -98,5 +100,34 @@ func TestReadKeysDoesNotSwallowALetter(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), "read -kv x\n")
 	if !strings.Contains(out, "-v") || st == 0 {
 		t.Errorf("got %q status %d, want the letter v refused as an option", out, st)
+	}
+}
+
+// No letter is in both tables at once, for `read` or for any other builtin.
+//
+// The two are a pair and the pairing is not checked anywhere by construction:
+// a letter named in `UnimplementedOptionLetters` while it is *also* in the
+// builtin's accepted optstring is simply accepted, because the unimplemented
+// list is only ever consulted for a letter the optstring does not have. So the
+// stale entry does nothing, says the opposite of the truth, and nothing fails
+// — which is exactly how a letter gets implemented and left documented as
+// missing.
+//
+// A mutation run is what asked for this one: putting `k` back in the
+// unimplemented list broke nothing at all.
+func TestNoLetterIsBothAcceptedAndCalledMissing(t *testing.T) {
+	sem, dg := zsh.Semantics(), zsh.Diagnostics()
+	accepted := map[string]string{"read": sem.ReadOptions}
+	for builtin, missing := range dg.UnimplementedOptionLetters {
+		take, known := accepted[builtin]
+		if !known {
+			continue
+		}
+		for _, letter := range missing {
+			if i := strings.IndexRune(take, letter); i >= 0 {
+				t.Errorf("%s: -%c is in the accepted set %q and also called missing in %q",
+					builtin, letter, take, missing)
+			}
+		}
 	}
 }

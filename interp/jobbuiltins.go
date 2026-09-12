@@ -6,6 +6,7 @@ package interp
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"syscall"
 )
@@ -192,7 +193,13 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 		!r.ask(r.sem().PidListingFinishesWithAJob, "`jobs -p` finishing with a job the way a state listing does") {
 		return 0
 	}
-	for _, j := range jobs {
+	// Over a copy, because Forget compacts the table in place and a bare
+	// listing was handed the table itself: dropping one element shifts every
+	// element after it down, so the walk skipped the job that moved into the
+	// slot it had just left. With three finished jobs the middle one survived
+	// and was reported a second time by the next listing — under a number the
+	// shell had told nobody about, once numbers stopped being positions.
+	for _, j := range slices.Clone(jobs) {
 		if j.Finished() {
 			r.Forget(j)
 		}
@@ -331,9 +338,10 @@ type jobRow struct {
 func (r *Runner) jobRows(jobs []*Job, explicit bool) ([]jobRow, int) {
 	rows := make([]jobRow, 0, len(jobs))
 	for _, j := range jobs {
-		// The job's own number, not its place in this listing. `jobs %2`
-		// printed `[1]` before this, because a listing of one job counted
-		// from the start of the slice it had been handed.
+		// The job's own number, which is neither its place in this listing
+		// nor its place in the table. `jobs %2` printed `[1]` before this,
+		// because a listing of one job counted from the start of the slice it
+		// had been handed.
 		i := r.jobNumber(j)
 		// Asked only where there is a finished job to leave out. A listing
 		// of running ones is the same in every shell, and refusing it
@@ -383,12 +391,12 @@ func (r *Runner) jobLine(i int, j *Job, showBg bool) string {
 func (r *Runner) jobLineLong(i int, j *Job, showBg bool) string {
 	dg := r.diag()
 	return Wording(dg.JobLineLong, "[%[1]d]%[2]s %[3]d %-24[4]s%[5]s",
-		i+1, r.jobMarker(j), j.PID, r.jobState(j, false), r.jobCommand(j, showBg))
+		i, r.jobMarker(j), j.PID, r.jobState(j, false), r.jobCommand(j, showBg))
 }
 
 func (r *Runner) jobLineAs(i int, j *Job, showBg, noticing bool) string {
 	return Wording(r.diag().JobLine, "[%[1]d]%[2]s  %-24[3]s%[4]s",
-		i+1, r.jobMarker(j), r.jobState(j, noticing), r.jobCommand(j, showBg))
+		i, r.jobMarker(j), r.jobState(j, noticing), r.jobCommand(j, showBg))
 }
 
 // jobState is the state column: what a job is doing, worded the dialect's
@@ -415,16 +423,12 @@ func (r *Runner) jobState(j *Job, noticing bool) string {
 	return Wording(dg.JobRunning, "Running")
 }
 
-// jobNumber is the number a job is listed under: its place in the table,
-// which is not its place in a listing that was asked for particular jobs.
-func (r *Runner) jobNumber(j *Job) int {
-	for i, other := range r.jobs {
-		if other == j {
-			return i
-		}
-	}
-	return 0
-}
+// jobNumber is the number a job is listed under and named by.
+//
+// The job's own, assigned when it entered the table — not its place in the
+// table, and not its place in a listing that was asked for particular jobs.
+// See Runner.addJob for why the difference is load-bearing.
+func (r *Runner) jobNumber(j *Job) int { return j.num }
 
 // jobCommand is the command column of a listing.
 //
@@ -550,7 +554,7 @@ func (r *Runner) resumeNotice(j *Job, wording, fallback string) string {
 	if wording == "" {
 		return fallback
 	}
-	return Wording(wording, "", r.jobNumber(j)+1, r.jobMarker(j), j.Command)
+	return Wording(wording, "", r.jobNumber(j), r.jobMarker(j), j.Command)
 }
 
 func biBg(r *Runner, _ context.Context, args []string) int {
@@ -622,7 +626,12 @@ func (r *Runner) reportJobLookup(spec string, code int, name string) int {
 	return orDefault(d.NoSuchJobStatus, 1)
 }
 
-// signalJob sends to the job's process group rather than to the one process.
+// signalJob sends to every process the job is made of.
+//
+// Every one, because a job is not one process: a backgrounded pipeline is as
+// many as it has elements, and `fg`, `bg` and `kill %1` all mean the job
+// rather than whichever of its processes happened to settle its pid. See
+// Job.took.
 //
 // The group is the point: a job is a pipeline as often as a command, and
 // signaling only the first of three would resume one and leave the rest
@@ -636,33 +645,50 @@ func (r *Runner) reportJobLookup(spec string, code int, name string) int {
 // started, and refusing it here would leave a stopped job with nothing able
 // to reach it. `kill -CONT %1` is the script choosing, and that one is gated.
 func (r *Runner) signalJob(j *Job, sig syscall.Signal) error {
-	if j.PID != 0 && !j.ownGroup {
-		// The job runs in *this shell's* group — a background job started
-		// with the monitor off — so the group is not the job's to signal:
-		// aiming at it would reach the shell, every other job it started and,
-		// on a terminal, the whole foreground group. The process is the only
-		// honest target, and here it is the whole job for the same reason the
-		// group is elsewhere: without the monitor a pipeline has no group of
-		// its own to be more than one process in (#1738).
-		//
-		// Through killProcess, so this signal passes the gate and reaches the
-		// event stream. The group above does not, and the difference is
-		// deliberate rather than an oversight: that is the embedder's own hook
-		// being called, where this is the interpreter asking the kernel
-		// itself, and every signal *this* package delivers is visible to the
-		// boundary — see interp/signalgate.go.
-		return r.killProcess(j.PID, sig)
-	}
-	if j.PID == 0 {
+	procs := j.processes()
+	if len(procs) == 0 {
 		// A job with no process of its own — a builtin or a compound command
 		// running on a cloned runner. There is nothing to signal, and saying
 		// so is better than signaling something else.
 		return errNoJobProcess
 	}
+	sent, last := 0, error(nil)
+	for _, p := range procs {
+		if err := r.signalJobProcess(p, sig); err != nil {
+			last = err
+			continue
+		}
+		sent++
+	}
+	if sent == 0 {
+		return last
+	}
+	// One member already gone is not a failure to resume the job: what `fg`
+	// and `bg` are asking for is that the job runs on, and it does.
+	return nil
+}
+
+// signalJobProcess sends to one of the processes a job is made of.
+func (r *Runner) signalJobProcess(p jobProcess, sig syscall.Signal) error {
+	if !p.ownGroup {
+		// The process runs in *this shell's* group — anything started with
+		// the monitor off — so the group is not the job's to signal: aiming
+		// at it would reach the shell, every other job it started and, on a
+		// terminal, the whole foreground group. The process is the only
+		// honest target (#1738).
+		//
+		// Through killProcess, so this signal passes the gate and reaches the
+		// event stream. The group below does not, and the difference is
+		// deliberate rather than an oversight: that is the embedder's own hook
+		// being called, where this is the interpreter asking the kernel
+		// itself, and every signal *this* package delivers is visible to the
+		// boundary — see interp/signalgate.go.
+		return r.killProcess(p.pid, sig)
+	}
 	if r.SignalGroup == nil {
 		return errNoJobProcess
 	}
-	return r.SignalGroup(j.PID, sig)
+	return r.SignalGroup(p.pid, sig)
 }
 
 // errNoJobProcess is a job there is nothing to signal for: one that never had
@@ -699,10 +725,12 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 	if !ok {
 		return r.findJobByName(text)
 	}
-	if n < 1 || n > len(r.jobs) {
-		return nil, jobMissing
+	for _, j := range r.jobs {
+		if j.num == n {
+			return j, jobFound
+		}
 	}
-	return r.jobs[n-1], jobFound
+	return nil, jobMissing
 }
 
 // findJobByName resolves `%name` — the job whose command begins with the

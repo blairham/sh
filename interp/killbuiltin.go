@@ -229,7 +229,7 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) int {
 	sent, failed := 0, 0
 	for _, t := range targets {
-		pid, group, bad := r.killTarget(t)
+		aims, bad := r.killTarget(t)
 		switch bad {
 		case jobSpecUnanswered:
 			return r.status
@@ -244,31 +244,43 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 		case killTargetNotAPid:
 			return r.killReport(killNotAPid, t)
 		}
-		if group {
-			// A job is a process *group*, so the signal goes to all of it —
-			// which is what makes `kill %1` reach a pipeline rather than only
-			// its first command. Through the same hook `fg` and `bg` use, so
-			// that "a job is a group" is said in one place rather than two
-			// that could drift.
-			if err := r.signalGroupPid(pid, sig); err != nil {
-				failed++
-				r.killReport(killFailureKind(err), t)
+		// One operand, however many processes it named: the operand is what
+		// `kill` reports on, so a job whose pipeline has already lost a
+		// member is a job that was signaled and not a target that failed.
+		hit, miss := 0, error(nil)
+		for _, aim := range aims {
+			if aim.ownGroup {
+				// The process leads a group, so the signal goes to all of it.
+				// Through the same hook `fg` and `bg` use, so that "a job is
+				// a group" is said in one place rather than two that could
+				// drift.
+				if err := r.signalGroupPid(aim.pid, sig); err != nil {
+					miss = err
+					continue
+				}
+				hit++
 				continue
 			}
-			sent++
-			continue
+			if r.stoppedBySignal {
+				// This shell has just ended itself. Nothing after the signal
+				// runs, including the rest of these targets, and the status
+				// is the one signalDeath settled — returned rather than only
+				// assigned, because the dispatcher takes what a builtin
+				// returns as the command's status.
+				return r.status
+			}
+			if err := r.sendSignal(aim.pid, name, sig); err != nil {
+				miss = err
+				continue
+			}
+			hit++
 		}
 		if r.stoppedBySignal {
-			// This shell has just ended itself. Nothing after the signal
-			// runs, including the rest of these targets, and the status is
-			// the one signalDeath settled — returned rather than only
-			// assigned, because the dispatcher takes what a builtin returns
-			// as the command's status.
 			return r.status
 		}
-		if err := r.sendSignal(pid, name, sig); err != nil {
+		if hit == 0 {
 			failed++
-			r.killReport(killFailureKind(err), t)
+			r.killReport(killFailureKind(miss), t)
 			continue
 		}
 		sent++
@@ -299,31 +311,35 @@ const killTargetNotAPid = jobSpecUnanswered + 1
 
 // killTarget reads what `kill` was pointed at: a pid, or a job.
 //
-// `%1` names a job rather than a process, and a job is a process *group*. The
-// caller is told which it got, because reaching a group is a different call
-// from reaching a process and only one of them is this package's to make.
-func (r *Runner) killTarget(t string) (pid int, group bool, bad int) {
+// A pid is one target and a job is as many as it has processes — `%1` names
+// the job, and a backgrounded pipeline is every element of it. Each target
+// carries whether its number names a process group, because reaching a group
+// is a different call from reaching a process and only one of them is this
+// package's to make.
+func (r *Runner) killTarget(t string) (targets []jobProcess, bad int) {
 	if !strings.HasPrefix(t, "%") {
 		n, err := strconv.Atoi(t)
 		if err != nil {
-			return 0, false, killTargetNotAPid
+			return nil, killTargetNotAPid
 		}
-		return n, false, jobFound
+		return []jobProcess{{pid: n}}, jobFound
 	}
 	j, code := r.findJobQuietly(t)
 	if code != jobFound {
-		return 0, false, code
+		return nil, code
 	}
-	if j.PID == 0 {
+	// A group only where the process leads one. Started with the monitor off
+	// it runs in this shell's group, so naming the group would name the shell
+	// — and every other job it started, and on a terminal the whole foreground
+	// group. The process is what `%1` means there (#1738). Job.processes
+	// carries that answer per process.
+	targets = j.processes()
+	if len(targets) == 0 {
 		// A job with no process of its own — nothing to signal, reported as
 		// the missing job it behaves as.
-		return 0, false, jobMissing
+		return nil, jobMissing
 	}
-	// A group only where the job leads one. Started with the monitor off it
-	// runs in this shell's group, so naming the group would name the shell —
-	// and every other job it started, and on a terminal the whole foreground
-	// group. The process is what `%1` means there (#1738).
-	return j.PID, j.ownGroup, jobFound
+	return targets, jobFound
 }
 
 // signalGroupPid sends to a job's process group.

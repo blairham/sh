@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
 	"slices"
 	"strings"
 	"sync"
@@ -67,6 +68,84 @@ type Job struct {
 	// there: the two are one fact about one process, and a reader that saw
 	// the pid without knowing which kind of target it is would have to guess.
 	ownGroup bool
+
+	// num is the number this job is listed under and named by: `%2` is the
+	// job whose num is 2, for as long as the job is in the table. Assigned
+	// when the job enters it and never reassigned — see Runner.addJob.
+	num int
+
+	// procs is every process the job is made of *now*, which is not the same
+	// question as PID and is the one `kill %1` asks. See Job.took.
+	procsMu sync.Mutex
+	procs   []jobProcess
+
+	// parts counts the pieces of the job that have still to start, and
+	// started is closed when the count reaches zero. A backgrounded pipeline
+	// is more than one process and `&` must not return before all of them
+	// exist — see Job.expectPart.
+	partsMu sync.Mutex
+	parts   int
+	started chan struct{}
+}
+
+// expectPart says one more piece of this job has still to start.
+//
+// Counted rather than assumed, because the shell that ran `&` blocks until
+// every piece is there. `$!` is one pid and [Job.ready] is what answers it,
+// but `kill %1` on the very next line means the whole job — and a pipeline
+// element that had not reached its fork yet was a process the kill could not
+// name and the shell then waited out in full. Measured against bash 5.3.15:
+// `sleep 6 | cat & kill %1; wait` returns at once there, and returned at once
+// here only when the race fell the right way (#2295).
+//
+// A part added after the shell has already been released is dropped rather
+// than counted. That is not a lost piece: the shell is past the `&`, so there
+// is nothing left to hold, and a count raised behind a closed gate would be a
+// count nobody ever lowers.
+func (j *Job) expectPart(n int) {
+	j.partsMu.Lock()
+	defer j.partsMu.Unlock()
+	if j.started == nil {
+		// A job nobody is waiting on this way — one this shell was told about
+		// rather than one it started. There is no gate to hold.
+		return
+	}
+	select {
+	case <-j.started:
+		return
+	default:
+	}
+	j.parts += n
+}
+
+// partStarted lowers the count expectPart raised, and opens the gate at zero.
+func (j *Job) partStarted() {
+	j.partsMu.Lock()
+	defer j.partsMu.Unlock()
+	if j.started == nil || j.parts == 0 {
+		return
+	}
+	j.parts--
+	if j.parts == 0 {
+		close(j.started)
+	}
+}
+
+// jobPart is one piece of a job, and the once that keeps it from being
+// counted as started twice: a pipeline element reaches that point either by
+// starting a process, by waiting on something outside the shell, or by
+// ending, and whichever comes first is the one that counts.
+type jobPart struct {
+	job  *Job
+	once sync.Once
+}
+
+// started says this piece of the job is as started as it is going to get.
+func (p *jobPart) started() {
+	if p == nil {
+		return
+	}
+	p.once.Do(p.job.partStarted)
 }
 
 // settlePID records the process this job is answered by, and does it once.
@@ -97,6 +176,11 @@ func (j *Job) settlePID(pid int) {
 		j.PID = pid
 		close(j.ready)
 	})
+	// The job body is a piece of the job like a pipeline element is, and this
+	// is the point it has started: a pid settled, or the decision that there
+	// is none. A pipeline raises the count for its other elements before any
+	// of them runs, so the count cannot reach zero in between.
+	j.partStarted()
 }
 
 // settleStartedPID is settlePID for a process this shell has just started,
@@ -111,6 +195,7 @@ func (j *Job) settleStartedPID(pid int, ownGroup bool) {
 		j.PID, j.ownGroup = pid, ownGroup
 		close(j.ready)
 	})
+	j.partStarted()
 }
 
 // settleNoPID says this job is answered by no process of its own.
@@ -164,7 +249,7 @@ func (j *Job) settleNoPID() { j.settlePID(0) }
 // back. It is the same trade the doc comment on Job.PID states — a job with
 // no process of its own is reported as zero rather than papered over.
 func (r *Runner) settleBackgroundJobBeforeABlockingOpen(path string) {
-	if r.bg == nil {
+	if r.bg == nil && r.part == nil {
 		return
 	}
 	fi, err := os.Stat(path)
@@ -176,7 +261,7 @@ func (r *Runner) settleBackgroundJobBeforeABlockingOpen(path string) {
 	if fi.Mode()&os.ModeNamedPipe == 0 {
 		return
 	}
-	r.bg.settleNoPID()
+	r.settleWaitingJobPart()
 }
 
 // settleBackgroundJobBeforeABlockingRead settles a background job's pid when
@@ -219,13 +304,13 @@ func (r *Runner) settleBackgroundJobBeforeABlockingOpen(path string) {
 // it where the job is waiting on anything outside the shell. That is #1283, and
 // it needs a different contract for `$!` rather than a fifth trigger.
 func (r *Runner) settleBackgroundJobBeforeABlockingRead(in io.Reader) {
-	if r.bg == nil {
+	if r.bg == nil && r.part == nil {
 		return
 	}
 	if inputWaiting(in) {
 		return
 	}
-	r.bg.settleNoPID()
+	r.settleWaitingJobPart()
 }
 
 // settleBackgroundJobAtALoopsBackEdge settles a background job's pid once the
@@ -267,10 +352,25 @@ func (r *Runner) settleBackgroundJobBeforeABlockingRead(in io.Reader) {
 // pid — `{ while :; do sleep 1; done } & echo $!` settles on the sleep before
 // this is ever reached.
 func (r *Runner) settleBackgroundJobAtALoopsBackEdge() {
-	if r.bg == nil {
+	if r.bg == nil && r.part == nil {
 		return
 	}
-	r.bg.settleNoPID()
+	r.settleWaitingJobPart()
+}
+
+// settleWaitingJobPart is what the three triggers above do once they have
+// decided the job is about to wait on something outside the shell: the job's
+// pid settles at zero where this shell is the one that names it, and either
+// way the piece of the job it is has started as far as it ever will.
+//
+// Both, because a pipeline element reaches these too and only one element
+// names the job. An element blocked on a fifo with no peer is a piece the
+// shell that ran `&` would otherwise wait for forever.
+func (r *Runner) settleWaitingJobPart() {
+	if r.bg != nil {
+		r.bg.settleNoPID()
+	}
+	r.part.started()
 }
 
 // backgroundStdin is the standard input a job started with `&` reads.
@@ -372,8 +472,13 @@ func (j *Job) finish(status int) {
 // visible the moment anything tries to signal it.
 func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	job := &Job{
-		done:  make(chan struct{}),
-		ready: make(chan struct{}),
+		done:    make(chan struct{}),
+		ready:   make(chan struct{}),
+		started: make(chan struct{}),
+		// The job body itself, released when its pid settles either way. It
+		// is raised here rather than inside the goroutine so that nothing can
+		// read the count before it is there.
+		parts: 1,
 		// What was typed. The words are about to be expanded and the
 		// process started, and after that nothing else remembers how the
 		// command was spelled — which is what a `jobs` listing shows.
@@ -403,6 +508,14 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// than a pipeline element does, so it is its own kind of boundary.
 	sub.retagTrapBoundary(trapContextBackground)
 	sub.bg = job
+	// Every process this shell and anything it clones starts is a process of
+	// this job. Wider than bg on purpose: a pipeline clears bg on all but its
+	// last element so that one pid is settled once, and inJob is what keeps
+	// the other elements attached to the job they are part of.
+	sub.inJob = job
+	// And a job nested inside this one is its own, so it does not answer for
+	// a piece of the job around it.
+	sub.part = nil
 	// A background job runs concurrently with everything after it, so it
 	// shares the caller's streams with the foreground. That is the pipeline
 	// race again in a second place: a real shell hands each side a file
@@ -465,6 +578,11 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// Wait for the PID to be known before returning, so `$!` on the next line
 	// is not racing the goroutine that sets it.
 	<-job.ready
+	// And for every other piece of the job to have started, so `kill %1` on
+	// that same next line is not racing them either. One pipeline element
+	// settles the pid and the rest are pieces this gate counts — see
+	// Job.expectPart.
+	<-job.started
 
 	// A disowned job — `cmd &!` — is started and then let go of, so it never
 	// reaches the table: nothing lists it, `fg` cannot name it, and the next
@@ -480,7 +598,7 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// interactive shell with job control, which a script cannot have —
 	// `set -m` is `can't change option: -m` in a non-interactive zsh.
 	if !st.Disown {
-		r.jobs = append(r.jobs, job)
+		r.addJob(job)
 	}
 	// `$!` is the most recent background job, which is how a script waits for
 	// a specific one — and a disowned job is still the most recent one:
@@ -515,7 +633,7 @@ func (r *Runner) announceJob(job *Job) {
 		// rather than assumed either way — see the axis (#1738).
 		return
 	}
-	r.errf("%s\n", Wording(r.diag().JobStarted, "[%[1]d] %[2]d", len(r.jobs), job.PID))
+	r.errf("%s\n", Wording(r.diag().JobStarted, "[%[1]d] %[2]d", job.num, job.PID))
 }
 
 // FinishedJobNotices is what to say about the jobs that have ended since it
@@ -546,7 +664,7 @@ func (r *Runner) FinishedJobNotices() []string {
 	r.reapJobs()
 	var lines []string
 	kept := r.jobs[:0]
-	for i, j := range r.jobs {
+	for _, j := range r.jobs {
 		if !j.Finished() {
 			kept = append(kept, j)
 			continue
@@ -555,7 +673,7 @@ func (r *Runner) FinishedJobNotices() []string {
 		// it out of a `jobs` listing: both of them print it here. That is
 		// what makes JobsShowBackgroundCommand a question about the listing
 		// rather than about the text.
-		lines = append(lines, r.jobLineAs(i, j, true, true))
+		lines = append(lines, r.jobLineAs(j.num, j, true, true))
 	}
 	for i := len(kept); i < len(r.jobs); i++ {
 		r.jobs[i] = nil
@@ -848,7 +966,7 @@ func (r *Runner) addStoppedJob(pid int, argv []string, sig syscall.Signal) {
 	// — see setProcessGroup's caller, where the foreground half does not ask
 	// about the monitor.
 	job.settleStartedPID(pid, true)
-	r.jobs = append(r.jobs, job)
+	r.addJob(job)
 	r.setLastJob(job)
 	r.announceStopped(job)
 }
@@ -881,7 +999,7 @@ func (r *Runner) announceStopped(j *Job) {
 	}
 	i := r.jobNumber(j)
 	if w := dg.JobStoppedNotice; w != "" {
-		r.errf("%s\n", Wording(w, "", i+1, r.jobMarker(j), r.name(), j.Command))
+		r.errf("%s\n", Wording(w, "", i, r.jobMarker(j), r.name(), j.Command))
 		return
 	}
 	// Nothing said otherwise, so the notice is the listing's own row, which is
@@ -1033,11 +1151,11 @@ func (r *Runner) listJobsHeldAtExit() {
 	// measured, the table under the sentence is `[1]+  Stopped ...` beside
 	// `[2]-  Running ...`, which is the listing's own line and not a second
 	// rendering of it.
-	for i, j := range r.jobs {
+	for _, j := range r.jobs {
 		if j.Finished() {
 			continue
 		}
-		r.errf("%s\n", r.jobLineAs(i, j, true, false))
+		r.errf("%s\n", r.jobLineAs(j.num, j, true, false))
 	}
 }
 
@@ -1066,6 +1184,39 @@ func (r *Runner) LastCommandWasInterrupted() bool { return r.diedOfSig == syscal
 // is `$!` and is never dropped, because no shell in the panel empties it.
 func (r *Runner) setLastJob(j *Job) {
 	r.lastJob, r.lastJobPID, r.lastJobPIDSet = j, j.PID, true
+}
+
+// addJob puts a job in the table under a number of its own.
+//
+// The number is the job's identity and not its place in the table, which is
+// the whole of what this is for. It used to be the place: `%2` meant the
+// second element of the slice and a listing printed the index it was walking,
+// so forgetting a job that had ended renumbered every job after it — and
+// measured against bash 5.3.15, nothing renumbers. Three background jobs, the
+// first reported as done and dropped, and bash still calls the third `%3`
+// while this called it `%2`; a script that then said `kill %3` was told there
+// was no such job and the process it meant ran to the end of its sleep. That
+// is #2295 in the bash suite's own `jobs` file, several times over.
+//
+// One past the highest in the table, rather than the lowest number free. Both
+// are measured: with `%2` gone from a table holding 1 and 3, the next job is
+// `%4` and not `%2`; and once the table empties, numbering begins again at 1.
+// The first rule gives the second for nothing — the highest of nothing is
+// zero.
+func (r *Runner) addJob(job *Job) {
+	job.num = r.nextJobNumber()
+	r.jobs = append(r.jobs, job)
+}
+
+// nextJobNumber is the number the next job entering the table takes.
+func (r *Runner) nextJobNumber() int {
+	high := 0
+	for _, j := range r.jobs {
+		if j.num > high {
+			high = j.num
+		}
+	}
+	return high + 1
 }
 
 // Jobs is what this shell is keeping track of, oldest first.
@@ -1098,4 +1249,97 @@ func (r *Runner) Forget(j *Job) {
 	if r.lastJob == j {
 		r.lastJob = nil
 	}
+}
+
+// jobProcess is one of the processes a job is made of: what to signal, and
+// whether the number names a process group or a single process.
+type jobProcess struct {
+	pid      int
+	ownGroup bool
+}
+
+// took records a process this job is now made of.
+//
+// A job is not one process. A backgrounded pipeline is several, and `%1` names
+// all of them — measured against bash 5.3.15, `sleep 6 | cat & kill %1` ends
+// both halves whether the monitor is on or off. Only [Job.PID] is one number,
+// because `$!` is one number; what `kill %1` has to reach is this list.
+//
+// Appended in start order and pruned as each process is waited for, so a
+// background loop that starts a thousand commands holds one entry rather than
+// a thousand. The pruning is why the readers below fall back to [Job.PID]: a
+// job between two commands is made of nothing at that instant, and a `kill`
+// that arrived then used to reach the pid the job settled with, so it still
+// does.
+func (j *Job) took(pid int, ownGroup bool) {
+	j.procsMu.Lock()
+	defer j.procsMu.Unlock()
+	j.procs = append(j.procs, jobProcess{pid: pid, ownGroup: ownGroup})
+}
+
+// released drops a process this job was made of, once it has been waited for.
+func (j *Job) released(pid int) {
+	j.procsMu.Lock()
+	defer j.procsMu.Unlock()
+	j.procs = slices.DeleteFunc(j.procs, func(p jobProcess) bool { return p.pid == pid })
+}
+
+// processes is what signaling this job has to reach, newest last.
+//
+// The settled pid where the list is empty, which is the pre-pipeline answer
+// and stays the answer for a job that has no live process of its own just now.
+// Empty means there is nothing to signal at all, and the callers word that as
+// the job they cannot find.
+func (j *Job) processes() []jobProcess {
+	j.procsMu.Lock()
+	live := slices.Clone(j.procs)
+	j.procsMu.Unlock()
+	if len(live) > 0 {
+		return live
+	}
+	// Outside the lock, because this is a wait and the goroutine it is
+	// waiting for takes that lock on its way past.
+	<-j.ready
+	if j.PID == 0 {
+		return nil
+	}
+	return []jobProcess{{pid: j.PID, ownGroup: j.ownGroup}}
+}
+
+// tookJobProcess records a process this shell has just started against the
+// background job it is part of, and does nothing where it is part of none.
+//
+// The job rather than the runner, because the two are not the same set: the
+// runner that *names* a backgrounded pipeline is its last element, and the
+// `sleep` in `sleep 6 | cat &` is a process of the job all the same. It was
+// not recorded anywhere before, so `kill %1` reached the `cat` and left the
+// `sleep` to run out its six seconds — which is the whole of #2295, multiplied
+// by every such pipeline in a suite file.
+func (r *Runner) tookJobProcess(pid int, ownGroup bool) {
+	if r.inJob != nil {
+		r.inJob.took(pid, ownGroup)
+	}
+	// A piece of the job with a process of its own has started, whatever else
+	// it goes on to do.
+	r.part.started()
+}
+
+// releasedJobProcess is tookJobProcess undone, once the process has been
+// waited for. See Job.took for why the list is pruned rather than kept.
+func (r *Runner) releasedJobProcess(pid int) {
+	if r.inJob != nil {
+		r.inJob.released(pid)
+	}
+}
+
+// startAndWait is exec.Cmd.Run with the pid recorded against the job in
+// between, which is the one thing Run leaves no room for.
+func (r *Runner) startAndWait(cmd *exec.Cmd, ownGroup bool) error {
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	pid := cmd.Process.Pid
+	r.tookJobProcess(pid, ownGroup)
+	defer r.releasedJobProcess(pid)
+	return cmd.Wait()
 }

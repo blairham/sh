@@ -1008,6 +1008,87 @@ own pid from inside a subshell, so an unanswered preset refuses there and
 nowhere else.
 
 
+## What a shell with no child subshells reports for a pid
+
+The section above establishes that nothing here forks for a subshell. This
+is the consequence a *script* can see, and it is the one question a reader
+of this repository asks next: when a script asks for the pid of something
+that has no process, what comes back?
+
+`zsh/system`'s `$sysparams[procsubstpid]` is the sharp case. It is the
+process id of the most recent process substitution, and real zsh answers
+**0** for "none started yet". A `<(cmd)` here runs on a goroutine of the
+shell's own process, so there is no such process and there never will be —
+it is a property of the shell rather than of the moment it is asked.
+
+**Four answers were available and three of them are worse.** This is a
+decided position, not an omission (#2125):
+
+| answer | true? | safe? |
+| --- | --- | --- |
+| `0`, copying real zsh | no — nothing started | **no**: `kill -- -0` signals the shell's own process group |
+| this process's pid | no | **no**: the same catastrophe spelled differently |
+| refuse the key by name | yes | no: a refused expansion is fatal to the line, so it takes down the caller mid-way |
+| **empty, and the key present** | **yes** | **yes** — the chosen answer |
+
+Empty is the only one that is both. It is true because there is no pid, and
+safe because the guard callers put in front of the dangerous line reads it
+as nothing to signal. It also carries *more* information than `0` does: a
+caller can tell "no process" from "process 0", which real zsh's spelling
+cannot. `${+sysparams[procsubstpid]}` is `1` in both shells, so the key
+exists; only the value deviates.
+
+The third row is the one that cost something before it was understood.
+Refusing by name ended `_p9k_worker_start` one line before it armed its
+`zle -F` handler, and the theme's `always` block then tried to remove a
+handler that was never installed — two diagnostics per prompt from one
+cause, and the async worker dead in a shell that could have run it.
+
+### The guard is doing the work, and not every caller has one
+
+This is the limit of the position and it is worth stating plainly rather
+than leaving for somebody to find. Empty is safe **because of what callers
+write around it**, not because an empty string is inherently harmless:
+
+| what the caller writes | ours | real zsh | then `kill -- -$pid` |
+| --- | --- | --- | --- |
+| `[[ -n $pid ]] && kill …` | skipped | runs with `0` | safe here |
+| `${sysparams[procsubstpid]-none}` | `` (empty) | `0` | the `-` default is not reached — the key is set |
+| `${sysparams[procsubstpid]:-none}` | `none` | `0` | — |
+| `${sysparams[procsubstpid]:--1}` | **`-1`** | `0` | **`kill -- -1`** |
+
+The last row is the real one: gitstatus writes exactly
+`typeset -gi GITSTATUS_DAEMON_PID_$name="${sysparams[procsubstpid]:--1}"`.
+It survives only because it *also* guards with `[[ $daemon_pid == <1-> ]]`
+before `kill -- -$daemon_pid`. A program with the `:-` and without the
+second guard would ask to signal every process it can reach.
+
+**That hazard is not created by this deviation** — `kill -- -1` means the
+same thing in every POSIX shell, and a caller that reaches it has written a
+bug the shell cannot see. But it is the reason the `-` and `:-` rows are
+distinct and both pinned: a test on `-` alone passes for a shell whose `:-`
+is a loaded gun, and `-` is not the spelling the program in the wild uses.
+
+Whether `kill` should refuse `-1` as a process group is a separate
+question, with its own measurement and its own axis, because every panel
+shell permits it.
+
+### The same deviation, arrived at the same way
+
+`$sysparams[pid]` is this process's at the top level and **empty inside a
+subshell**. In zsh the key exists precisely because `$sysparams[pid]`
+differs from `$$` there — a subshell is a fork, `$$` keeps the parent's
+number, and a body reads the key to learn the one thing `$$` will not tell
+it. Here a subshell is a cloned Runner in one process, so answering it made
+the two agree — and a body that believes it has a process of its own
+believes it leads a process group of its own. This machine's prompt theme
+duly tore itself down with `kill -- -$sysparams[pid]` and killed the
+interactive shell (#2046).
+
+So the rule generalises past the one key: **where a real shell would name a
+process this one does not have, the honest answer is no answer, and the
+plausible answer is the dangerous one.**
+
 ## The other fatal signal, which is fatal without being a death
 
     kill -HUP $$; echo after

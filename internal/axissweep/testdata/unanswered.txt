@@ -251,6 +251,7 @@ dash  OperatorDistributesOverStarSubscript
 dash  PipefailSubstitutesTheBareSignal
 dash  PrefixRefusalCostsTheCommand
 dash  PrintfOutputPrecedesComplaint
+dash  QuitResetRestoresTheDefault
 dash  ReadCountJudgesTheNamesAfterTheFirst
 dash  ReadExactCountKeepsPartial
 dash  ReadPartialCountSucceeds
@@ -315,6 +316,7 @@ ksh   InteractiveStartupFileWhenLogin
 ksh   JobsStateFiltersAccumulate
 ksh   LocalOutsideAFunctionIsFatal
 ksh   NegatedTestRecordsThePostNegationStatus
+ksh   QuitResetRestoresTheDefault
 ksh   ReadonlyRecordsTheCompoundAttribute
 ksh   SelectAssumesUnboundedWidth
 ksh   SubscriptedArrayLiteral

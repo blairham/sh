@@ -3313,7 +3313,17 @@ echo "reached-after st=$?"`,
 	{
 		ID: "signal-death/quit-is-not-fatal-in-every-shell", Category: "traps and exit",
 		Snippet: `kill -QUIT $$; echo after`,
-		Why:     "the one fatal signal the panel disagrees about: bash 5.3 and zsh take QUIT's default action away and print after with status 0, where dash, ksh93 — and bash 3.2, so the two bash columns differ — are killed by it. Measured with a signal from another process too, so it is a disposition rather than a deferral, and it disappears with `-i`, where all five ignore it",
+		Why:     "the one fatal signal the panel disagrees about: bash 5.3, zsh and BusyBox ash take QUIT's default action away and print after with status 0, where dash, ksh93 — and bash 3.2, so the two bash columns differ — are killed by it. ash siding with bash rather than with dash is the half this row recorded correctly while dialect/ash answered the other way for the whole of that column's life (#645). Measured with a signal from another process too, so it is a disposition rather than a deferral, and it disappears with `-i`, where all five ignore it",
+	},
+	{
+		ID: "signal-death/a-reset-takes-the-ignore-away-in-one-shell", Category: "traps and exit",
+		Snippet: `trap - QUIT; kill -QUIT $$; echo after`,
+		Why:     "what `trap -` means for a signal the shell was born ignoring, which the row above does not answer and the panel splits differently on: bash 5.3 and ash keep the ignore and print after, zsh hands SIGQUIT back its default action and is killed by it. The three columns that die on the row above die here too, so this asks nothing of them. No handler is installed first on purpose — the issue that filed this framed it as `trap 'x' QUIT; trap - QUIT` and the handler turns out to be no part of it, so a snippet carrying one could not tell a disposition from a memory of what the script did",
+	},
+	{
+		ID: "signal-death/an-ignore-written-after-a-reset-stands", Category: "traps and exit",
+		Snippet: `trap - QUIT; trap '' QUIT; kill -QUIT $$; echo after`,
+		Why:     "the control for the row above, and what makes it a disposition rather than a latch: zsh prints after here, so the reset is undone by writing the ignore back rather than being a fact about the shell from then on. All seven print it, which is the other half of the point: `trap '' QUIT` is an ignore any shell will honor, so the row above is about the disposition a shell was *born* with and not about whether SIGQUIT can be ignored at all",
 	},
 	{
 		ID: "signal-death/hangup-is-an-exit-in-one-shell", Category: "traps and exit",

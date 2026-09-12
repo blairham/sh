@@ -418,7 +418,16 @@ func Semantics() interp.Semantics {
 	// An EXIT trap does not run when a signal kills the shell: `trap 'echo
 	// bye' EXIT; kill -TERM $$` writes nothing and dies at 143.
 	s.ExitTrapRunsOnSignalDeath = interp.No
-	s.QuitIgnoredWhenNotInteractive = interp.No
+	// BusyBox ash sides with bash here rather than with dash, which is what
+	// this line said until it was measured: `kill -QUIT $$; echo after`
+	// prints after and exits 0, an external SIGQUIT is survived too, and
+	// `kill -TERM $$` in the same shell dies at 143 — so it is this signal's
+	// disposition and not a `kill` that delivers nothing. The oracle's own
+	// record of `signal-death/quit-is-not-fatal-in-every-shell` has said so
+	// for the whole of the ash column's life.
+	s.QuitIgnoredWhenNotInteractive = interp.Yes
+	// And the ignore survives `trap -`, as it does in bash.
+	s.QuitResetRestoresTheDefault = interp.No
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes

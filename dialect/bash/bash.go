@@ -819,6 +819,10 @@ func Semantics() interp.Semantics {
 	// dies by it — a divergence between two builds of the same shell, and
 	// this preset is 5.3.
 	s.QuitIgnoredWhenNotInteractive = interp.Yes
+	// And `trap - QUIT` does not take that ignore away: measured, `trap -
+	// QUIT; kill -QUIT $$; echo after` prints after and exits 0, with or
+	// without a handler having been installed and removed first.
+	s.QuitResetRestoresTheDefault = interp.No
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes

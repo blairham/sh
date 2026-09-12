@@ -42,15 +42,16 @@ package interp
 //     there an inherited attribute to take off. A `+h` that merely parsed and
 //     did nothing would pass row two and fail row six.
 //
-// `unset` forgets it, measured: `typeset -h PATH; unset PATH; PATH=/y` leaves
-// a later `local PATH` tied again. That is where the other attributes of a
-// name are forgotten too, in unsetName — and it has no test of its own,
-// because there is nothing left here to observe it through. The letter is
+// **`unset` does not forget it.** This file used to say the opposite —
+// "`typeset -h PATH; unset PATH; PATH=/y` leaves a later `local PATH` tied
+// again" — and the reading could not have come from the shell: the letter is
 // visible only over one of the shell's *own* ties (see tielocal.go), and this
-// engine's `unset` of such a name forgets the tie as well (#1631), so the
-// name that comes back is untied whether or not it kept the letter. The
-// delete stays because it is right, and the row that would pin it arrives
-// with #1631.
+// engine's `unset` of such a name forgot the tie as well, so the name that
+// came back was untied whether or not it had kept the letter and both answers
+// looked identical. Fixing the tie (#1631) made the row measurable, and zsh
+// 5.9.2 keeps the letter: after that very line a `local PATH=/z` still leaves
+// `path` holding `/y`, and only `typeset +h PATH` puts the tie back in a
+// local's reach. clearAttributes says so, with the four rows.
 //
 // No listing shows it. `typeset -h v=1; typeset -p v` is `typeset v=1` there,
 // and `typeset -p PATH` after `typeset -h PATH` still writes the tie — so

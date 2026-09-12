@@ -9017,6 +9017,16 @@ echo "st=$?"`,
 		Why:     "`(t)` is the one read that separates \"the value changed\" from \"the name is still an array\", and `[[ ${(t)x} == *array* ]]` is how a function checks what it was handed. The first six brackets are the kinds and the attributes that ride on them, each a different word so no row passes by accident. Then the two that say an *unset* name is empty **and unset** — the colon-less `-D` fires — rather than a word for a nothing, which is the plausible answer a flag that always described something would give. The last three are the rule the whole flag follows: it puts the type word in place of the value and the rest of the group runs on *that*, so `(U)` uppercases it, `${#…}` measures it at 6, and a subscript reads its characters — `array[2]` is `r`, not the second element of `w`. Only one shell has the flag; the rest refuse the group, which is the three-way split of an expansion a grammar cannot read (#1657)",
 	},
 	{
+		ID: "param/the-two-hiding-letters-are-two-attributes", Category: "parameter expansion",
+		Snippet: `typeset -H hv=1; typeset -hr hs=1; typeset -hH b=1; typeset -rHhU -a c=(1 2); printf "[%s]" "${(t)hv}" "${(t)hs}" "${(t)b}" "${(t)c}"; echo`,
+		Why:     "the shell with two hiding letters names them apart, and a parameter given only one of them is the row that says so. `-H` withholds a value from a listing and describes as `hideval`; `-h` hides a parameter's specialness inside a function scope and describes as `hide`; together they are `hide-hideval`, and among the other words they come last but one, after `unique`. Writing `hide` for `-H` -- which this engine did, on the ground that the shell's own `options` parameter carries both letters at once -- tells a script switching on the word about the wrong letter (#2042). The scope-hiding letter is written with `-r` beside it rather than alone, because a bare `typeset -h name=value` in ksh93 writes that shell's whole variable table, and two of its lines are a pid and a random number: a row nothing could re-record. Only one shell has the flag; the rest refuse the group",
+	},
+	{
+		ID: "variable/a-shell-tie-keeps-its-pairing-across-an-unset", Category: "variables",
+		Snippet: "unset CDPATH; CDPATH=/a:/b; echo \"1[${cdpath[*]}]\"\nunset cdpath; cdpath=(/q /r) 2>/dev/null; echo \"2[$CDPATH]\"",
+		Why:     "the pairs the shell arrives with are its own and an `unset` does not dissolve them: in zsh both names go away and the next assignment to either half re-makes the other, from the scalar end and from the array end alike, where the other shells have no such pair and the array name is an ordinary one nothing reads. A tie a *script* made with `typeset -T` is the opposite and is forgotten -- two kinds behind one letter, held in one map here until #1631. `unset PATH` would be the natural probe and is not usable in a corpus row, since the shells then cannot find a command; `CDPATH` is the same mechanism with nothing depending on it",
+	},
+	{
 		ID: "param/expansion-flags-keys-and-values", Category: "parameter expansion",
 		Snippet: `typeset -A m=(k1 v1); printf "<%s>" ${(k)m} ${(kv)m}; echo`,
 		Why:     "(k) yields an associative array's keys and (v) beside it interleaves key and value. Probed with a single pair on purpose: zsh yields hash order for more, which it does not promise and a golden record must not pin",

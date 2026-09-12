@@ -26,7 +26,9 @@ import "strings"
 //     `S2=a#b#c` is three fields and `s2=(1 2)` is `1#2`.
 //   - **`unset` of either name unsets both.** `unset SCA` leaves `sca` with
 //     no elements *and* unset — `${+sca}` is 0 — and `unset sca` leaves
-//     `$SCA` unset. Half a tie is not a state this shell has.
+//     `$SCA` unset. Half a tie is not a state this shell has. Whether the
+//     *pairing* survives is a second question and the two kinds answer it
+//     differently — see the `special` field below and unsetName.
 //   - A declaration with no value leaves the scalar set and empty and the
 //     array with *no* elements, where an explicit `SCA=”` leaves it with
 //     one empty element. The array is the storage and the empty string
@@ -48,8 +50,15 @@ type tie struct {
 	array  string
 	sep    string
 	// special says the shell made this tie for itself rather than a script
-	// making it with the letter, and it decides what a *local* of one half
-	// means. See tielocal.go, which is where that measurement lives.
+	// making it with the letter, and it decides two things.
+	//
+	// What a *local* of one half means — see tielocal.go, which is where
+	// that measurement lives — and whether `unset` forgets the pairing. A
+	// script's tie is forgotten and the next assignment writes a plain
+	// scalar; the shell's own pairs survive, so `unset PATH; PATH=/y` splits
+	// into `path` again. Holding both kinds in one map with one answer is
+	// what left a real startup with an empty `$path` nothing would refill
+	// (#1631). See unsetName.
 	special bool
 	// depth is how many scopes were on the stack when the tie was made, so a
 	// scope *deeper* than that can be told from the one the declaration
@@ -72,9 +81,10 @@ func (r *Runner) tieNames(t tie) {
 	r.tied[t.array] = t
 }
 
-// untie forgets a tie, from either half — which is what `unset` leaves
-// behind, measured: `unset SCA` then `SCA=a:b` gives a plain scalar and
-// `${#sca}` stays 0.
+// untie forgets a tie, from either half — which is what `unset` of a
+// *script's* tie leaves behind, measured: `unset SCA` then `SCA=a:b` gives a
+// plain scalar and `${#sca}` stays 0. One of the shell's own pairs is not
+// untied by `unset` at all; see the `special` field and unsetName.
 func (r *Runner) untie(name string) {
 	t, ok := r.tied[name]
 	if !ok {

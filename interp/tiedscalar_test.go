@@ -101,6 +101,32 @@ echo "3 untied n=${#u[@]} U=[$U]"`, withTies, Diagnostics{})
 	}
 }
 
+// A tie the *shell* made is the other kind, and `unset` treats it
+// differently: both names still go away, and the **pairing survives**, so
+// the next assignment to either half re-makes the other. Measured against
+// the shell's own pairs, which is the only place this kind of tie exists —
+// `unset PATH; PATH=/y` leaves `path` holding `/y`, and `unset path;
+// path=(/q)` writes `PATH` from the other side (#1631).
+//
+// Runner.Tie rather than the letter, because the seam is what makes a tie
+// the shell's own: the letter can only make the script's kind.
+func TestUnsettingHalfAShellsOwnTieKeepsThePairing(t *testing.T) {
+	out, errs, st := declRunTied(t, `S=a:b
+unset S
+echo "1 gone n=${#s[@]} S=[${S-UNSET}]"
+S=c:d
+echo "2 back n=${#s[@]} s=[${s[*]}]"
+unset s
+T=x:y
+echo "3 other way T=[$T] n=${#t[@]} t=[${t[*]}]"
+t=(p q)
+echo "4 rejoined T=[$T]"`, withTies, Diagnostics{}, [2]string{"S", "s"}, [2]string{"T", "t"})
+	want := "1 gone n=0 S=[UNSET]\n2 back n=2 s=[c d]\n3 other way T=[x:y] n=2 t=[x y]\n4 rejoined T=[p:q]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("unsetting a shell's own tie = %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}
+
 // A declaration with no value leaves the scalar set and empty and the array
 // with *no* elements — which is not the same as an empty string assigned on
 // purpose, because that splits into one field. The mirror is held off at the

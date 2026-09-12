@@ -2641,6 +2641,13 @@ func (r *Runner) shadow(name string) (fresh bool) {
 		}
 		sc.savedAssigned[name], sc.assignedSpoken[name] = r.assigned[name]
 		delete(r.assigned, name)
+		if name == "OPTIND" {
+			// And the half of the `getopts` position that is not a
+			// parameter. Here rather than beside the builtin because this is
+			// what *makes* a name local, and the cursor is local exactly when
+			// the number is — see shadowGetoptsCursor.
+			r.shadowGetoptsCursor(sc)
+		}
 	}
 	// Arrays live in a table of their own, so a name has to be saved from
 	// both. Saving only the scalar left `f() { local a; a=(x y); }` writing a

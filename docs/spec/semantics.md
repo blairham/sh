@@ -11535,6 +11535,56 @@ had the second call reading its arguments from index 2 and printing its
 usage, which is what a shared cursor does to a script that never asked
 for one (`getopts/an-option-parsing-function-called-twice`).
 
+**`GetoptsLocalOptindRestoresTheCursor`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Hands the caller back its position *inside* a clustered word when a call
+that declared a local `OPTIND` returns, and not only the number the
+parameter held.
+
+The scan position has two halves — `OPTIND`, which counts words, and how
+far into a clustered word the letters have been read — and only the
+first is a parameter. So a shell that shadows the parameter and stops
+there gives the caller a cursor pointing at the start of a word it had
+already part-read, which is visible with no `getopts` in the callee at
+all (`getopts/a-local-optind-hands-back-the-position-in-a-word`):
+
+    g() { local OPTIND=1; :; }
+    set -- -ab; getopts ab o; g; getopts ab o
+
+The second `getopts` reads `b` in bash, ksh93 and zsh and reads `a` a
+second time in bash 3.2 and dash.
+
+**Entering the call is not the disagreement.** Every column with a local
+scope hands the callee a cursor at the start of a word, whether or not
+the declaration carried a value: a callee scanning its own `-cd` reads
+both letters in all of them
+(`getopts/a-local-optind-scans-its-own-words-from-the-start`). That is
+the core's answer and is not asked. Only the way back splits the panel.
+
+zsh reaches yes by a different route: its cursor is local to every call
+whether or not anything was declared, which is
+`GetoptsPositionIsFunctionLocal` above. ksh93 has no `local` at all, and
+answers this through `typeset` inside a body defined with the `function`
+word, which is the only kind with a scope there
+(`getopts/a-keyword-functions-typeset-optind`); the same word in a
+parenthesis-defined body declares nothing and reads `a` again, which is
+`GetoptsAssignmentRestartsWord` reaching an ordinary assignment rather
+than this axis.
+
+Why it is an axis and not a curiosity: reading `a` a second time is not
+a wrong letter so much as a scan that cannot finish. A `while getopts`
+loop whose body calls a function declaring `local OPTIND` — the
+documented way to write a reusable option parser everywhere but zsh —
+starts the same word over every time round and never runs out of
+options. Under the answer this engine had, one such loop produced 228 MB
+of output in 240 s and was still going where the shell it claims to be
+finished in 0.31 s (#2226). The recorded case bounds its own iterations
+so that bash 3.2 — the one column that does not terminate on the
+unbounded shape — can still be measured
+(`getopts/a-loop-that-calls-a-function-declaring-local-optind`). dash
+reaches the same wrong letter without looping, because its `OPTIND` has
+already counted past the word by the time the declaration is made.
+
 **`GetoptsClearsOptarg`** — bash no · dash no · ksh93 no · zsh yes
 
 Empties OPTARG when `getopts` reports a bad option rather than leaving

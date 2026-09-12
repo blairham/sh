@@ -1437,6 +1437,38 @@ type Semantics struct {
 	// and printing its usage — see #1392.
 	GetoptsPositionIsFunctionLocal Answer
 
+	// GetoptsLocalOptindRestoresTheCursor hands the caller back its position
+	// *inside* a clustered word when a call that declared a local `OPTIND`
+	// returns — not only the number the parameter held.
+	//
+	// The scan position has two halves: `OPTIND`, which counts words, and
+	// how far into a clustered word the letters have been read. Only the
+	// first is a parameter, so a shell that shadows the parameter and stops
+	// there hands the caller a cursor pointing at the start of a word it had
+	// already part-read. That is measurable with no `getopts` in the callee
+	// at all:
+	//
+	//	g() { local OPTIND=1; :; }
+	//	set -- -ab; getopts ab o; g; getopts ab o
+	//
+	// The second `getopts` reads `b` in bash, ksh93 and zsh, and reads `a` a
+	// second time in bash 3.2 and dash. Reading `a` again is not a wrong
+	// letter so much as a scan that cannot finish: a loop whose body calls a
+	// function that declares `local OPTIND` starts the same word over every
+	// time round and never runs out of options (#2226).
+	//
+	// Entering the call is *not* the disagreement and is not asked here:
+	// every shell in the panel that has a local scope at all hands the callee
+	// a cursor at the start of a word, so a callee scanning its own `-cd`
+	// reads both letters whether or not the declaration carried a value.
+	// What splits the panel is only the way back.
+	//
+	// zsh answers yes and reaches it by a different route — its cursor is
+	// local to every call whether or not anything was declared, which is
+	// GetoptsPositionIsFunctionLocal. ksh93 has no `local`, and answers this
+	// through `typeset` in a function defined with the `function` word.
+	GetoptsLocalOptindRestoresTheCursor Answer
+
 	// GetoptsClearsOptarg empties OPTARG when `getopts` reports a bad option
 	// rather than leaving it unset. zsh alone, and a script testing
 	// `${OPTARG-}` can tell the two apart.
@@ -8223,7 +8255,12 @@ func PosixSemantics() Semantics {
 		ExitTrapIsFunctionLocal:        No,
 		FunctionLocalTraps:             TrapsSurviveTheFunction,
 		GetoptsPositionIsFunctionLocal: No,
-		SignalHandlerSeesEarlierStatus: No,
+		// dash is the panel's POSIX-faithful member and it loses the
+		// intra-word half at the return, so the preset that follows it
+		// loses it too. The standard has nothing to say — `local` is not
+		// in it — so the measured member decides.
+		GetoptsLocalOptindRestoresTheCursor: No,
+		SignalHandlerSeesEarlierStatus:      No,
 		// POSIX says a bare `exit` reports the status of the last command,
 		// and in an EXIT trap it names the value `$?` had when the trap was
 		// entered — which is what three of the four do.

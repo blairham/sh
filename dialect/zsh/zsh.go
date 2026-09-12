@@ -1326,6 +1326,11 @@ func Semantics() interp.Semantics {
 	// comes back on return. It is what lets this shell's own function
 	// library parse options without resetting OPTIND by hand.
 	s.GetoptsPositionIsFunctionLocal = interp.Yes
+	// The same answer by a second route, and recorded rather than left to
+	// the axis above: every call here has its own cursor whether or not
+	// anything was declared, so a declaration inside one cannot be the
+	// thing that loses the caller's place.
+	s.GetoptsLocalOptindRestoresTheCursor = interp.Yes
 	s.GetoptsClearsOptarg = interp.Yes
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.No

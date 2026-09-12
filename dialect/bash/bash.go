@@ -748,6 +748,13 @@ func Semantics() interp.Semantics {
 	s.DollarSingleCaretMeta = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
+	// A `local OPTIND` gives the call the whole cursor and gives the caller
+	// the whole cursor back — the position inside a clustered word along
+	// with the number. bash 3.2 restores only the number, so a loop whose
+	// body calls a function that declares one never finishes there; this is
+	// the newer answer and the one `getopts ab o; g; getopts ab o` reads `b`
+	// from (#2226).
+	s.GetoptsLocalOptindRestoresTheCursor = interp.Yes
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.Yes

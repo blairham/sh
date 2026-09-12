@@ -963,6 +963,16 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 			delete(r.removed, name)
 		}
 	}
+	// And the half of the `getopts` position a declaration of OPTIND
+	// displaced, which lives here for the reason the traps below do: it is
+	// the substrate's state rather than a dialect's.
+	//
+	// Ahead of the hooks, and the order is load-bearing: a dialect that
+	// gives *every* call its own cursor registers its restore on the way in,
+	// so a declaration made inside the body is the inner of the two and has
+	// to be unwound first. Run it after the hooks and the call's own restore
+	// is overwritten by the declaration's.
+	r.restoreGetoptsCursor(sc)
 	// And whatever a dialect asked to have run when this call unwinds, in
 	// reverse order of registration, before the scope is dropped: the last
 	// thing registered is the innermost, the same order a defer stack has.

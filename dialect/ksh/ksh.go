@@ -823,6 +823,10 @@ func Semantics() interp.Semantics {
 	s.DollarSingleNulTruncates = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
+	// Reached through `typeset` in a function defined with the `function`
+	// word, this shell having no `local`: the caller's position inside a
+	// clustered word comes back with the number.
+	s.GetoptsLocalOptindRestoresTheCursor = interp.Yes
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.No

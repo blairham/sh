@@ -1419,17 +1419,16 @@ type Dialect struct {
 	// the shell at all. Measured 2026-09-05, the same two lines by all three
 	// routes:
 	//
-	//	shell   -c    script file   standard input
-	//	bash    no    no            no
-	//	dash    yes   yes           yes
-	//	ksh93   yes   yes           yes
-	//	zsh     no    yes           yes
+	//	        -c    script file   standard input
+	//	        no    no            no
+	//	        yes   yes           yes
+	//	        no    yes           yes
 	//
-	// A boolean gets one of zsh's three right and the two it gets wrong are
-	// the ones a real script uses. The same measurement found bash in POSIX
-	// mode splitting the other way — `sh -c` expands and `sh script.sh` does
-	// not — so the route is a dimension of the question rather than one
-	// shell's quirk.
+	// A boolean gets one of the third row's three right and the two it gets
+	// wrong are the ones a real script uses. The same measurement found a POSIX
+	// mode splitting the other way — `-c` expanding where a script file does not
+	// — so the route is a dimension of the question rather than one preset's
+	// quirk.
 	//
 	// Whether a word *is* expanded, and into what, is not a dialect question:
 	// every shell that expands agrees on the whole algorithm, so that is the
@@ -1441,19 +1440,18 @@ type Dialect struct {
 	// newline and a command written on the body's second line is reported
 	// there.
 	//
-	// It is the one place the two substitution models are visible from
-	// outside. dash, ksh93 and zsh splice the body's *text*, so its newlines
-	// are input lines; bash splices tokens and the whole body sits on the
-	// line the alias word was written on. Measured 2026-09-05 with `$LINENO`
-	// after a two-line body physically on line 5 — bash 5, the other three 6
-	// — and again with a three-line body, which shifts by two; and with a
-	// command that fails inside the body, reported on the body's own line by
-	// the three and on the alias word's line by bash. The shift is per
-	// *expansion*: using the alias twice shifts twice, and defining it and
-	// never using it shifts nothing.
+	// It is the one place the two substitution models are visible from outside.
+	// Splicing the body's *text* makes its newlines input lines; splicing tokens
+	// puts the whole body on the line the alias word was written on. Measured
+	// with `$LINENO` after a two-line body physically on line 5 — 5 under the
+	// token model, 6 under the text one — and again with a three-line body,
+	// which shifts by two; and with a command that fails inside the body,
+	// reported on the body's own line under one and on the alias word's line
+	// under the other. The shift is per *expansion*: using the alias twice
+	// shifts twice, and defining it and never using it shifts nothing.
 	//
-	// True in the core, which is the majority of the panel and of the
-	// dialects that expand at all. Unreachable where ExpandAliases is empty,
+	// True in the core, which is the common answer among the presets that expand
+	// at all. Unreachable where ExpandAliases is empty,
 	// since nothing is ever spliced.
 	AliasBodyCountsLines bool
 
@@ -1472,11 +1470,10 @@ type Dialect struct {
 	// ParamTildeFlag enables a `~` written between the `${` and the
 	// parameter: `${~name}`, which makes the *result* of the substitution
 	// eligible for tilde expansion and filename generation whatever the
-	// `GLOB_SUBST` option says. zsh alone has it; to the other four a
-	// leading `~` is not a name and the whole expansion is unreadable, which
+	// `GLOB_SUBST` option says. One preset has it; to the rest a leading `~` is
+	// not a name and the whole expansion is unreadable, which
 	// BadSubstitutionAtParseTime already splits into a parse-time refusal
-	// for ksh93 (`` `~' unexpected ``) and a deferred runtime error for the
-	// rest.
+	// (`` `~' unexpected ``) and a deferred runtime error.
 	//
 	// A grammar flag rather than a semantics axis, for the reason
 	// NestedParamExpansion is one: it decides where the word is cut. Without
@@ -1491,21 +1488,20 @@ type Dialect struct {
 	// consults the option. Counting in the parser keeps that arithmetic in
 	// one place and lets the printer write the span back as written.
 	//
-	// The flag also relaxes the name, the way ParamExpansionFlags does:
-	// `${~}` is the empty string in the shell that has the construct.
+	// The flag also relaxes the name, the way ParamExpansionFlags does: `${~}`
+	// is the empty string under the preset that has the construct.
 	//
-	// It cannot collide with ParamCaseChange, and not only because no
-	// dialect has both: bash's case-toggle `~` follows the name — `${x~}` —
-	// and this one precedes it.
+	// It cannot collide with ParamCaseChange, and not only because no preset has
+	// both: the case-toggle `~` follows the name — `${x~}` — and this one
+	// precedes it.
 	ParamTildeFlag bool
 
 	// ParamSplitFlag enables an `=` written between the `${` and the
 	// parameter: `${=name}`, which splits the *result* of the substitution
-	// into words on `IFS` whatever the `SH_WORD_SPLIT` option says. zsh
-	// alone has it; to the other four a leading `=` is not a name and the
-	// whole expansion is unreadable, which BadSubstitutionAtParseTime
-	// already splits into a parse-time refusal for ksh93 (`` `=' unexpected
-	// ``) and a deferred runtime error for the rest.
+	// into words on `IFS` whatever the `SH_WORD_SPLIT` option says. One preset
+	// has it; to the rest a leading `=` is not a name and the whole expansion is
+	// unreadable, which BadSubstitutionAtParseTime already splits into a
+	// parse-time refusal (`` `=' unexpected ``) and a deferred runtime error.
 	//
 	// The sibling of ParamTildeFlag in every structural respect, and a
 	// grammar flag for the same reason: without it there is no parameter at
@@ -1517,13 +1513,13 @@ type Dialect struct {
 	// not, from either starting point.
 	//
 	// It cannot collide with ParamAssign, the `${x=word}` that assigns a
-	// default: that `=` follows a name and this one precedes it, so the
-	// two are told apart by position before either is read. `${#=word}` is
-	// the assignment on `$#` in zsh, and it stays one here, because the
-	// run is read in front of the `#` and not behind it.
+	// default: that `=` follows a name and this one precedes it, so the two are
+	// told apart by position before either is read. `${#=word}` is the
+	// assignment on `$#`, and it stays one here, because the run is read in
+	// front of the `#` and not behind it.
 	//
 	// The flag also relaxes the name, the way ParamExpansionFlags and
-	// ParamTildeFlag do: `${=}` is the empty string in the shell that has
+	// ParamTildeFlag do: `${=}` is the empty string under the preset that has
 	// the construct.
 	ParamSplitFlag bool
 
@@ -1531,11 +1527,10 @@ type Dialect struct {
 	// parameter: `${^name}`, which distributes the word the expansion stands
 	// in over the elements it came to — `a=(1 2); x${^a}y` is the two words
 	// `x1y` and `x2y`, where `x${a}y` is `x1` and `2y` — whatever the
-	// `RC_EXPAND_PARAM` option says. zsh alone has it; to the other four a
-	// leading `^` is not a name and the whole expansion is unreadable, which
+	// `RC_EXPAND_PARAM` option says. One preset has it; to the rest a leading
+	// `^` is not a name and the whole expansion is unreadable, which
 	// BadSubstitutionAtParseTime already splits into a parse-time refusal
-	// for ksh93 (`` `^' unexpected ``) and a deferred runtime error for the
-	// rest.
+	// (`` `^' unexpected ``) and a deferred runtime error.
 	//
 	// The third occupant of ParamTildeFlag's slot and a grammar flag for the
 	// same reason: without it there is no parameter at the front of

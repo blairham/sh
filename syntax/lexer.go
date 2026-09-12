@@ -236,6 +236,28 @@ type Lexer struct {
 	// writes the input back as it is read, and it echoed the delimiter after
 	// running the command rather than with it.
 	heredocEnd Pos
+
+	// subscriptDepth counts the brackets open in the subscript the word
+	// being read opened at command position, and is zero everywhere else.
+	// While it is positive a separator is a character of the subscript
+	// rather than the end of the word; see
+	// [Dialect.SubscriptSpansSeparators] and endsWord.
+	//
+	// Only literal text written unquoted counts, the way the brace counter
+	// in scanWord does: a `]` inside quotes, behind a backslash or produced
+	// by an expansion closes nothing, which is measured.
+	subscriptDepth int
+
+	// subscriptCloses caches whether the subscript now open has a matching
+	// `]` ahead of it, asked at most once per word: 0 not asked, 1 yes,
+	// -1 no. Reset with subscriptDepth at the start of every word.
+	subscriptCloses int8
+
+	// assumeSubscriptCloses makes the answer yes without asking. It is set
+	// on the *probe* lexer subscriptHasMatchingClose builds, which is the
+	// same scanner reading the same bytes to find out where the subscript
+	// ends — so this is what stops that question asking itself.
+	assumeSubscriptCloses bool
 }
 
 // queueHeredoc registers a redirection whose body is still to be read. The
@@ -1056,6 +1078,14 @@ func (l *Lexer) endsWord(c byte) bool {
 			return !l.dialect.RegexTakesAlternation
 		}
 	}
+	if l.insideOpenSubscript() {
+		// Inside a command word's subscript nothing separates: a blank, a
+		// newline and every operator alike are characters of the subscript
+		// until the matching `]`. One test rather than one per character,
+		// because that is how it was measured — see
+		// [Dialect.SubscriptSpansSeparators], where the rows are.
+		return false
+	}
 	if c == '\n' && l.newlineIsText() {
 		return false
 	}
@@ -1063,6 +1093,68 @@ func (l *Lexer) endsWord(c byte) bool {
 		return false
 	}
 	return c != '(' || (!l.opensPatternGroup() && !l.opensSubscriptFlags())
+}
+
+// insideOpenSubscript reports whether the cursor stands inside a subscript
+// the word being read opened at command position and has not closed yet.
+//
+// The depth counter alone is not the answer, because a bracket that never
+// closes is not a subscript: `m[a b; echo done` is a word ending at the
+// blank, which is what a grammar without the flag makes of it and what this
+// leaves it as. See [Dialect.SubscriptSpansSeparators] for why the fallback
+// is that rather than the refusal bash raises there.
+func (l *Lexer) insideOpenSubscript() bool {
+	if l.subscriptDepth == 0 {
+		return false
+	}
+	return l.subscriptHasMatchingClose()
+}
+
+// subscriptHasMatchingClose reports whether the subscript now open is closed
+// somewhere ahead, caching the answer for the rest of the word.
+//
+// It is asked by running **this same scanner** over the word from its start,
+// with the question already answered yes, and reading off the depth it ends
+// at — the way caseArmParenOpensAGroup asks where a pattern list ends by
+// lexing one. A hand-written search for the matching `]` would be a second
+// account of which brackets count, and it would have to be told about quotes,
+// escapes and expansions all over again; this one cannot drift from the scan
+// it is deciding for, because it is that scan.
+//
+// A probe that fails answers no: input that ran out inside a quote closed no
+// bracket either, so the word falls back to the reading it has today and the
+// quote is reported by the ordinary route.
+func (l *Lexer) subscriptHasMatchingClose() bool {
+	if l.assumeSubscriptCloses {
+		return true
+	}
+	if l.subscriptCloses != 0 {
+		return l.subscriptCloses > 0
+	}
+	probe := NewLexer(l.src[l.wordStart.Offset:], l.dialect)
+	probe.assumeSubscriptCloses = true
+	closes := probe.Next().Kind == TokWord && probe.err == nil &&
+		probe.subscriptDepth == 0
+	if closes {
+		l.subscriptCloses = 1
+	} else {
+		l.subscriptCloses = -1
+	}
+	return closes
+}
+
+// opensCommandWordSubscript reports whether the `[` at the cursor opens a
+// subscript that spans separators, given the word so far.
+//
+// `name` is the unquoted literal text read so far and `started` whether any
+// span has been produced before it — together they are "the word so far is
+// one unquoted name and nothing else", which is the whole of the condition
+// besides the position. Measured: the bracket after anything that is not a
+// name ends the word at the next blank in every shell that has the
+// construct.
+func (l *Lexer) opensCommandWordSubscript(name string, started bool) bool {
+	return l.dialect.SubscriptSpansSeparators && !started && isName(name) &&
+		l.atCommandWord()
 }
 
 // newlineIsText reports whether a newline here is an ordinary character of
@@ -1719,6 +1811,13 @@ func (l *Lexer) scanWord(start Pos) Token {
 	// [Dialect.CloseBraceAlwaysReserved], where the pairing is measured.
 	braces := 0
 
+	// The subscript counter is the lexer's rather than a local, because
+	// endsWord is what consults it. Cleared here so that a bracket left open
+	// by the word before cannot decide this one; the value is deliberately
+	// *not* cleared on the way out, since the probe in
+	// subscriptHasMatchingClose reads it off a finished scan.
+	l.subscriptDepth, l.subscriptCloses = 0, 0
+
 	if l.openBraceIsAWordOfItsOwn() {
 		lit.WriteByte(l.advance())
 		flush()
@@ -1866,6 +1965,20 @@ func (l *Lexer) scanWord(start Pos) Token {
 			case '}':
 				if braces > 0 {
 					braces--
+				}
+			case '[':
+				// Counted only here, in the unquoted literal case, which is
+				// what makes `m['a]b']=v` and `m[a\]b]=v` the one key they
+				// are measured to be: a bracket a quote or a backslash
+				// protects is a character, and one an expansion produces was
+				// never written at all.
+				if l.subscriptDepth > 0 ||
+					l.opensCommandWordSubscript(lit.String(), len(spans) > 0) {
+					l.subscriptDepth++
+				}
+			case ']':
+				if l.subscriptDepth > 0 {
+					l.subscriptDepth--
 				}
 			}
 			lit.WriteByte(l.advance())

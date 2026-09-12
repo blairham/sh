@@ -55,6 +55,13 @@ func Dialect() syntax.Dialect {
 		"export": true, "readonly": true,
 	}
 	d.CaseContinue = true
+	// A subscript written at command position runs to its matching `]`, so
+	// `m[foo bar]=v` is the element keyed `foo bar` rather than the command
+	// `m[foo`. Measured 2026-09-12 in 5.3.15, 3.2.57 and as `sh` — all three
+	// read it back as `declare -A m=(["foo bar"]="v" )` — against zsh 5.9.2,
+	// which refuses the same text with `bad pattern: m[foo`. See
+	// [syntax.Dialect.SubscriptSpansSeparators] for the rest of the rows.
+	d.SubscriptSpansSeparators = true
 	// A `${…}` operand may carry a process substitution here, and only here.
 	// Measured 2026-09-05 across the panel: `${u:-<(:)}` is a path in bash
 	// 3.2 and 5.3 and the five characters `<(:)` in ksh93, zsh and dash —

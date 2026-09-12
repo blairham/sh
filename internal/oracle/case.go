@@ -7484,6 +7484,31 @@ echo "st=$?"`,
 		Why:     "the whole-array reading belongs to the indexed array alone. With the attribute on, `@` is a key like any other and nothing was stored under it, so all three that have the attribute leave both elements where they are — including the two that clear an indexed array through the same spelling. It is the boundary a fix is likeliest to cross by accident, because the two kinds share a builtin and an operand shape",
 	},
 	{
+		ID: "assoc/a-key-holding-a-blank-is-written", Category: "syntax",
+		Snippet: `typeset -A m; m[foo bar]=qux; echo "[${m[foo bar]}]"`,
+		Why:     "a subscript is text and text may hold a blank, so the question is where the *word* ends. bash 5.3 under both its names and ksh93 read a name followed by `[` at command position through to the matching `]` and store the key `foo bar`; zsh refuses the same line with `bad pattern: m[foo` before anything is stored; bash 3.2 has no `-A` and reaches the subscript as arithmetic; dash has no arrays at all. The read side `${m[foo bar]}` is not in question anywhere; it is the *assignment* that the word boundary cuts, so a shell that ends the word at the blank runs `m[foo` as a command and answers the empty element (#2410)",
+	},
+	{
+		ID: "assoc/a-key-holding-a-blank-is-appended-to", Category: "syntax",
+		Snippet: `typeset -A m; m[foo bar]=qux; m[foo bar]+=" blat"; echo "[${m[foo bar]}]"`,
+		Why:     "the append spelling of the row above, and the same cut rather than a second one: the `+=` sits behind the same `]`, so a word that ended at the blank never reached it. The two columns that take the form answer `qux blat`",
+	},
+	{
+		ID: "assoc/a-key-holding-an-operator", Category: "syntax",
+		Snippet: `typeset -A m; m[a; b]=v; echo "[${m[a; b]}]"`,
+		Why:     "what the blank row does not say on its own: it is not blanks that are special there but the brackets, so a `;` inside them is a character of the key and not the end of a command. bash and ksh93 store under `a; b`; dash ends the word at the blank and runs two commands, which is what a shell reading this by the ordinary word rules does",
+	},
+	{
+		ID: "assoc/a-key-holding-a-nested-bracket", Category: "syntax",
+		Snippet: `typeset -A m; m[a [b] c]=v; echo "[${m[a [b] c]}]"`,
+		Why:     "which `]` ends it. Brackets nest in the two columns that take the form, so the key is the whole of `a [b] c` and not `a [b`, and bash 3.2 reaches the same text as an arithmetic expression — which is the tell that its word ran to the matching bracket too",
+	},
+	{
+		ID: "subscript/a-blank-in-an-argument-subscript", Category: "syntax",
+		Snippet: `printf "<%s>" m[foo bar]=v; echo`,
+		Why:     "the control for the four rows above, and the reason the rule is about command position rather than about subscripts. Every column that reads a command word through to the matching `]` still ends an *argument* at the blank, so all five print two fields; only zsh differs, and it differs by refusing the pattern rather than by joining the word",
+	},
+	{
 		ID: "assoc/a-missing-key-quoted-is-one-field", Category: "expansion",
 		Snippet: `typeset -A m; m[k]=v; set -- "${m[nokey]}"; echo "n=$#"`,
 		Why:     "the same guarantee where the subscript is a key rather than an index: a key nothing was stored under is one empty field in quotes, in all three that have the attribute. The declared path had its own reading of an absent element and gave no field either",

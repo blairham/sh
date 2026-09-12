@@ -94,3 +94,23 @@ func (r *Runner) enterTrapBody() func() {
 	r.inCommandTrap = false
 	return restore
 }
+
+// TrapListingSequence is the order a bare `trap` listing prints in.
+type TrapListingSequence int
+
+const (
+	// TrapListingLowestFirst is EXIT and then the signals in ascending
+	// numeric order: bash 5.3, bash-as-`sh`, bash 3.2, zsh, dash and
+	// BusyBox ash. The zero value, because it is six of the seven.
+	TrapListingLowestFirst TrapListingSequence = iota
+	// TrapListingHighestFirst is the same set descending, which puts EXIT
+	// last: ksh93 alone.
+	TrapListingHighestFirst
+)
+
+func (t TrapListingSequence) String() string {
+	if t == TrapListingHighestFirst {
+		return "TrapListingHighestFirst"
+	}
+	return "TrapListingLowestFirst"
+}

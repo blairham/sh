@@ -5274,6 +5274,10 @@ type Semantics struct {
 	// the wider question the same way everywhere are not asked twice.
 	ReportsAKilledCommandInACommandSubstitution Answer
 
+	// TrapListingOrder is the order a bare `trap` listing prints its
+	// conditions in. See TrapListingSequence.
+	TrapListingOrder TrapListingSequence
+
 	// TrapBodyLine is which lines a diagnostic from inside a trap's body
 	// names. See TrapBodyLineStyle.
 	TrapBodyLine TrapBodyLineStyle

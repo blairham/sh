@@ -440,6 +440,9 @@ func Semantics() interp.Semantics {
 	s.ShiftCountIsArithmetic = interp.Yes
 	s.TrapBodyRunsWhatParsed = interp.No
 	s.ReportsAKilledCommandInACommandSubstitution = interp.Yes
+	// The listing runs the other way here: descending by signal number,
+	// which puts EXIT last where the other six put it first.
+	s.TrapListingOrder = interp.TrapListingHighestFirst
 	s.TrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired
 	// And the same for the two conditions that fire at a command: this
 	// shell counts every trap body from where it fired, so the second

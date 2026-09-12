@@ -982,6 +982,22 @@ var Corpus = []Case{
 		Why:     "the same body on a signal: ksh93 counts it from where it fired and zsh names only where it fired",
 	},
 	{
+		ID: "printf/quoted-operand-is-a-character-value", Category: "builtins",
+		Snippet: `printf '%d\n' "'A"; printf '%d\n' '"A'; printf '0x%x\n' "'a"; printf '%d\n' "'AB"; printf '%d\n' "'"; printf '%f\n' "'A"`,
+		Why:     "a numeric conversion whose operand begins with a quote takes the value of the *character after it* rather than reading digits — POSIX XCU says so in so many words and all seven columns do it, so it is the core's. It is also the only way a shell has of asking what a character's code is, which is what made the gap sting here: `printf '0x%x' \"'a\"` answered `invalid number` and printed `0x0`. Five readings in one row: both quote characters, a hex and a float conversion taking the same operand, a trailing character ignored rather than refused — ksh93 warns beside the same 65 — and a lone quote worth zero",
+	},
+	{
+		ID: "printf/quoted-operand-needs-the-quote-first", Category: "builtins",
+		Snippet: `printf '%d\n' " 'A"; echo "st=$?"`,
+		Why:     "the control for the row above, and the reason the operand is not trimmed before that reading where a plain numeral is: one blank in front of the quote makes the word an ordinary operand again and a bad number in six of the seven columns, each in its own wording. ksh93 alone reads through the blank and answers 65",
+	},
+	{
+		ID: "trap/listing-is-ordered-by-signal-number", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap 'echo x' TERM\ntrap 'echo x' HUP\ntrap 'echo x' ABRT\ntrap 'echo x' INT\ntrap 'echo x' EXIT\ntrap 'echo x' QUIT\ntrap\n",
+		Why:     "a bare listing is ordered by *signal number*, EXIT counting as 0: bash 5.3, bash-as-`sh`, bash 3.2, zsh, dash and BusyBox ash all print EXIT, HUP, INT, QUIT, ABRT, TERM whatever order the traps were set in, and ksh93 alone runs the sequence the other way with EXIT last. Set in a deliberately scrambled order so an implementation that printed them as they arrived is visible. Only signals numbered alike on every system the panel runs on — 1, 2, 3, 6 and 15 — because the order is the *host's* numbering and USR1 sits either side of TERM depending on the kernel, which would make the row a fact about the machine. This listed alphabetically, which is an order no column produces, and printed EXIT outside the ordering altogether — a listing is what a script parses to save and restore its traps, so its order is output rather than presentation",
+	},
+	{
 		ID: "axis/trap-body-line-debug", Category: "diagnostics",
 		Script:  true,
 		Snippet: "trap 'echo at=$LINENO\nnosuchcmd-xyz' DEBUG\necho two\necho three",

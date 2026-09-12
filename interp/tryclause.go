@@ -51,6 +51,7 @@ func (r *Runner) tryClause(ctx context.Context, c *syntax.TryClause) error {
 		}
 		ctl, status, sig := r.ctl, r.status, r.diedOfSig
 		ctlDepth, abandon, abandonLine := r.ctlDepth, r.abandon, r.abandonLine
+		errexitStopped := r.errexitStopped
 		if r.transferEndsTheShell(ctl, abandon) {
 			// A transfer with nothing above it to catch it ends the shell
 			// where it stands, and the second half never runs.
@@ -63,6 +64,7 @@ func (r *Runner) tryClause(ctx context.Context, c *syntax.TryClause) error {
 		// its status thrown away. Measured — `{ readonly q=1; q=2; } always
 		// { exit 9; }` exits 9, not 1.
 		r.ctl, r.ctlDepth, r.abandon, r.abandonLine = controlNone, 0, abandonRequested, 0
+		r.errexitStopped = false
 		if err := r.runList(ctx, c.Always); err != nil {
 			return err
 		}
@@ -77,6 +79,7 @@ func (r *Runner) tryClause(ctx context.Context, c *syntax.TryClause) error {
 			// The second half's own error condition is discarded rather than
 			// abandoning the statement around the construct.
 			r.ctl, r.ctlDepth, r.abandon, r.abandonLine = ctl, ctlDepth, abandon, abandonLine
+			r.errexitStopped = errexitStopped
 		case loopTransfer(r.ctl) && loopTransfer(ctl):
 			// Both halves asked a loop for something, and then the halves are
 			// not ranked against each other at all — see [loopTransfer].
@@ -87,6 +90,7 @@ func (r *Runner) tryClause(ctx context.Context, c *syntax.TryClause) error {
 			// Anything the second half transferred that the try half
 			// out-ranks is dropped.
 			r.ctl, r.ctlDepth, r.abandon, r.abandonLine = ctl, ctlDepth, abandon, abandonLine
+			r.errexitStopped = errexitStopped
 		}
 		// Whichever transfer won, the status is the try half's — and what
 		// produced it travels with it, the way a subshell's does: a try half
@@ -207,18 +211,34 @@ func controlRank(c control) int {
 // `{ break; } always { echo A; }` at the top level complains about the loop
 // and still runs the always half.
 //
-// **One flavor of hard exit is not modeled**, and it is written down rather
-// than guessed at: `set -e` firing inside the try half skips the always half
-// in zsh *even inside a function*, where a script's own `exit` there runs it —
-// measured 2026-09-07. The runner carries both as controlExit with
-// abandonRequested and cannot tell them apart, and the distinction abandonKind
-// draws is a different one, so separating them is a change to the core enum
-// that #1216 does not need. Tracked separately; the visible effect is a
-// cleanup block that runs where zsh's would not, which is louder than it is
-// wrong.
+// **`set -e` firing is not a script's own `exit`**, and telling them apart is
+// what Runner.errexitStopped is for. #1216 left the two as one controlExit
+// with abandonRequested and took the `exit` answer for both, which ran a
+// cleanup half zsh does not. They differ only *inside a function* — at the
+// top level both skip it, which is why a probe that stays out of one cannot
+// see the difference. Measured 2026-09-07 and again 2026-09-12 on zsh 5.9.2
+// from a script file:
+//
+//	f(){ { echo t; exit 7; } always { echo A; }; }; f
+//	                                        t, A — status 7
+//	setopt errexit; f(){ { echo t; false; } always { echo A; }; echo after-f; }; f
+//	                                        t alone — status 1
+//	setopt errexit; { echo t; false; } always { echo A; }
+//	                                        t alone — the top level agrees
+//
+// So an `exit` unwinds the function frames and runs the cleanup halves on the
+// way out, where `set -e` firing ends things where it stands. It ends them all
+// the way down, too: with two nested constructs both halves are skipped, and
+// a failure inside a called function or a subshell fires it just the same.
 func (r *Runner) transferEndsTheShell(ctl control, abandon abandonKind) bool {
 	switch ctl {
 	case controlExit:
+		if r.errexitStopped {
+			// Nothing above catches this one — not a function frame, not
+			// anything. `set -e` stops the shell where the failing statement
+			// stood, so no cleanup half between here and the top runs.
+			return true
+		}
 		switch abandon {
 		case abandonError:
 			// An error the shell reported and gave up over is what zsh calls

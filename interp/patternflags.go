@@ -663,7 +663,7 @@ func (r *Runner) extendedPatternOpts(o patternOpts, pattern string, badStatus in
 	default:
 		r.diagf("%s: the (#%c) pattern flag is not implemented\n", pattern, f.flag)
 		r.status = 1
-		r.ctl = controlExit
+		r.stopTheShell()
 	}
 	return o
 }

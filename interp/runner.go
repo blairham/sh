@@ -786,6 +786,24 @@ type Runner struct {
 	// shell reported or a request to stop, for the boundaries that give up
 	// one file and catch only the first. See fileabandon.go.
 	abandon abandonKind
+	// errexitStopped says the controlExit being carried is `set -e` firing
+	// rather than anything a script asked for, which is a question only a
+	// try-always block asks — see Runner.transferEndsTheShell.
+	//
+	// A field of its own rather than a fourth abandonKind, because the two
+	// are different questions: abandonKind is whether the stop was an *error
+	// the shell reported*, and both of these are stops it was asked to make.
+	// A fourth value there would have changed what fileabandon.go and
+	// source.go do with it, which is a boundary neither of these crosses
+	// differently (#1238).
+	//
+	// It qualifies the controlExit in hand and nothing more, so it is
+	// cleared wherever one is raised for another reason, and saved and put
+	// back with the rest of the transfer where a try-always block sets that
+	// aside. The zero value is the safe one: an ordinary exit runs the
+	// cleanup halves it unwinds through, which is what a site that has not
+	// thought about it should get.
+	errexitStopped bool
 	// loopDepth is how many loops execution is inside right now, which is
 	// what a ^Z has to break out of — see breakLoopsForAStop. Dynamic rather
 	// than lexical: a loop that calls a function that loops is two, because
@@ -2287,7 +2305,7 @@ func (r *Runner) fatalExpansion(format string, args ...any) {
 // against and where it is asked.
 func (r *Runner) fatalParamError(format string, args ...any) {
 	r.fatalExpansion(format, args...)
-	r.abandon = abandonParamError
+	r.abandon, r.errexitStopped = abandonParamError, false
 }
 
 // fatalExpansionQuiet is the same for a failure that has already reported
@@ -2567,7 +2585,7 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 		// status it already had.
 		r.status = before
 	}
-	r.ctl = controlExit
+	r.stopTheShell()
 	return exitedInTheBody
 }
 
@@ -2630,7 +2648,7 @@ func (r *Runner) fireExitHook(ctx context.Context) {
 	r.SetExitStatus(leaving)
 	r.ctl = entered
 	if asked {
-		r.ctl = controlExit
+		r.stopTheShell()
 	}
 }
 
@@ -2862,7 +2880,12 @@ func (r *Runner) checkErrExit(ctx context.Context) {
 	}
 	// The status is the failing command's, not a status of its own —
 	// `set -e; exit` reports what failed.
-	r.ctl = controlExit
+	//
+	// abandonKind is set rather than left at whatever the failing statement
+	// happened to leave: this is a request to stop, and reading it as an
+	// error the shell reported would let a boundary that gives up one file
+	// catch a `set -e` the shell has already decided to end over.
+	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonRequested, true
 }
 
 func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
@@ -4427,7 +4450,7 @@ func (r *Runner) fatalQuiet() {
 	// reading a file of its own give up that file and carry on. Set here for
 	// the reason the status and the unwinding are: every fatal error comes
 	// through this one door, so nothing else has to remember to say so.
-	r.ctl, r.abandon = controlExit, abandonError
+	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
 }
 
 func (r *Runner) fatal(format string, args ...any) {

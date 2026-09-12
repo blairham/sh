@@ -1969,9 +1969,44 @@ catch it, and "nothing above it" is two different questions:
   level skips it and the same block inside a sourced file does not.
 
 `${x?word}`, which that shell documents as exiting outright, skips the
-second half even inside a function. `set -e` firing skips it too, and
-that one is **not modeled** — see #1238 for why the distinction from a
-script's own `exit` is not `abandonKind`'s to draw.
+second half even inside a function.
+
+**And `set -e` firing is not a script's own `exit`.** It skips the second
+half *inside* a function, where an `exit` there runs it — so the two
+flavors of "the shell is exiting" behave differently and cannot be
+carried as one thing. Measured 2026-09-12 on zsh 5.9.2 from a script
+file:
+
+| probe | zsh 5.9 |
+| --- | --- |
+| `f(){ { echo t; exit 7; } always { echo A; }; }; f` | `t`, `A` — status 7 |
+| `set -e; f(){ { echo t; false; } always { echo A; }; echo after-f; }; f; echo tail` | `t` alone — status 1 |
+| `set -e; f(){ { echo t; false; } always { echo A; }; }; g(){ { f; } always { echo B; }; }; g` | `t` alone — **neither** half |
+| `set -e; g(){ false; }; f(){ { echo t; g; } always { echo A; }; echo after-f; }; f` | `t` alone |
+| `set -e; f(){ { echo t; ( exit 3 ); } always { echo A; }; echo after-f; }; f` | `t` alone — status 3 |
+| `set -e; { echo t; false; } always { echo A; }` | `t` alone — the top level |
+| `set -e; f(){ { echo t; true; } always { echo A; }; echo after-f; }; f; echo tail` | `t`, `A`, `after-f`, `tail` |
+| `set -e; f(){ { echo t; false \|\| true; } always { echo A; }; echo after-f; }; f` | `t`, `A`, `after-f` |
+
+An `exit` unwinds the function frames and runs the cleanup halves on the
+way out; `set -e` ends things **where it stands**, and all the way down —
+row 3 skips the outer construct's half as well as the inner one's. Where
+the failing status came from does not matter (rows 4 and 5).
+
+**Rows 6 to 8 are what make the rest gradeable.** At the top level the
+two answers agree, so a probe that stays out of a function cannot see the
+difference at all; and rows 7 and 8 are the controls that keep this from
+being "with `set -e` on, no cleanup half runs" — a statement that
+succeeded, and one whose failure an `||` accounted for, run the whole
+line.
+
+The runner carried both as one `controlExit` with `abandonRequested` and
+took row 1's answer for both, which ran a cleanup block this shell does
+not. `abandonKind` is not where the distinction goes: its values are
+about whether the stop was an *error the shell reported*, and both of
+these are stops the shell was asked to make, so a fourth value there
+would have changed what the file and source boundaries do with it. It is
+a field of its own beside it (#1238).
 
 **What `$?` is inside it.** The try half's status, including the value a
 propagating `return` carried. Real code depends on this: gitstatus opens

@@ -47,6 +47,22 @@ func (r *Runner) pendingFileError() bool {
 	return r.ctl == controlExit && r.abandon != abandonRequested
 }
 
+// stopTheShell raises a controlExit for any reason but `set -e` firing.
+//
+// One function rather than an assignment at each site, and that is the whole
+// of why it exists: Runner.errexitStopped qualifies the controlExit in hand,
+// so a raise that forgot to clear it would inherit the last one's answer and
+// a try-always block would skip a cleanup half it should run. There are more
+// than a dozen places a shell stops from, and "remember to clear the flag"
+// at each of them is the shape of rule that gets a new one wrong (#1238).
+//
+// The sites that also choose an abandonKind write all three fields together
+// instead, for the same reason: whichever way it is spelled, nothing sets
+// controlExit without saying which producer it is.
+func (r *Runner) stopTheShell() {
+	r.ctl, r.errexitStopped = controlExit, false
+}
+
 // takeFileError consumes a caught error, putting the runner back into ordinary
 // flow so the file that reached this one carries on at the next command.
 //
@@ -54,7 +70,7 @@ func (r *Runner) pendingFileError() bool {
 // `exit` be read as an error by the next boundary up, which is the one way
 // this could turn `exit` into something survivable.
 func (r *Runner) takeFileError() {
-	r.ctl, r.abandon = controlNone, abandonRequested
+	r.ctl, r.abandon, r.errexitStopped = controlNone, abandonRequested, false
 }
 
 // GiveUpTheFile ends the *file* a fatal error happened in rather than the

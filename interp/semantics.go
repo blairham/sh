@@ -11236,7 +11236,7 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 func (r *Runner) fatalPattern(pattern string, status int) {
 	r.diagf("%s\n", Wording(r.diag().BadPattern, "bad pattern: %s", pattern))
 	r.status = status
-	r.ctl = controlExit
+	r.stopTheShell()
 }
 
 // OutsideLocaleEscapePolicy is what a `\u` or `\U` escape does when the code
@@ -11298,7 +11298,7 @@ func (r *Runner) outsideLocaleEscape() OutsideLocaleEscapePolicy {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			r.unanswered(`a \u escape outside the locale`)))
 		r.status = 2
-		r.ctl = controlExit
+		r.stopTheShell()
 	}
 	return p
 }

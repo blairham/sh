@@ -485,7 +485,7 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 		status := r.diag().dotNoOperandStatus()
 		if r.ask(r.sem().DotMissingFileFatal, "`.` with no operand being fatal") {
 			r.status = status
-			r.ctl = controlExit
+			r.stopTheShell()
 		}
 		return status
 	}

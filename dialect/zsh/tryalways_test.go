@@ -143,3 +143,52 @@ func TestTheTryAlwaysBlockHasABoundary(t *testing.T) {
 		t.Errorf("said %q status %d, want t and a command-not-found at 127", got, st)
 	}
 }
+
+// `set -e` firing skips a cleanup half and a script's own `exit` does not,
+// end to end under this dialect.
+//
+// The construct carried both as one kind of stop and took the `exit` answer
+// for both, so a cleanup block ran where this shell's would not. Measured
+// 2026-09-12 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`
+// and `ZDOTDIR`, from a script file — the whole table ran there first
+// (#1238).
+//
+// **Only inside a function**, which is why every row that grades the
+// difference is written in one: at the top level the two answers agree, and
+// the last group below is that control.
+func TestErrexitStoppingIsNotAnExit(t *testing.T) {
+	for _, tc := range []struct {
+		src, want string
+		status    int
+	}{
+		{"f(){ { echo t; exit 7; } always { echo A; }; }; f", "t\nA", 7},
+		{"setopt errexit; f(){ { echo t; false; } always { echo A; }; echo after-f; }; f; echo tail", "t", 1},
+		{"setopt errexit; f(){ { echo t; false; } always { echo A; }; }; " +
+			"g(){ { f; } always { echo B; }; }; g", "t", 1},
+		{"setopt errexit; g(){ false; }; " +
+			"f(){ { echo t; g; } always { echo A; }; echo after-f; }; f", "t", 1},
+		{"setopt errexit; f(){ { echo t; ( exit 3 ); } always { echo A; }; echo after-f; }; f", "t", 3},
+		{"setopt errexit; f(){ { echo t; false; } always { exit 5; }; }; f", "t", 1},
+		// The top level, where both answers agree.
+		{"setopt errexit; { echo t; false; } always { echo A; }", "t", 1},
+		// The controls: `set -e` on and not firing, and the two ways a
+		// failure is accounted for rather than fatal.
+		{
+			"setopt errexit; f(){ { echo t; true; } always { echo A; }; echo after-f; }; f; echo tail",
+			"t\nA\nafter-f\ntail", 0,
+		},
+		{
+			"setopt errexit; f(){ { echo t; false; } always { echo A; }; echo after-f; }; f || echo caught",
+			"t\nA\nafter-f", 0,
+		},
+		{
+			"setopt errexit; f(){ { echo t; false || true; } always { echo A; }; echo after-f; }; f",
+			"t\nA\nafter-f", 0,
+		},
+	} {
+		out, st := answersRun(t, tc.src)
+		if got := strings.TrimSpace(out); got != tc.want || st != tc.status {
+			t.Errorf("%s: said %q status %d, want %q status %d", tc.src, got, st, tc.want, tc.status)
+		}
+	}
+}

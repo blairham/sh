@@ -490,7 +490,7 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 				// recorded, so the parent takes it at the next sequence
 				// point and ends by the signal exactly as it would have.
 				r.status = 128 + int(sig)
-				r.ctl = controlExit
+				r.stopTheShell()
 			}
 			return nil
 		}
@@ -551,13 +551,13 @@ func (r *Runner) signalDeath(name string, sig syscall.Signal) {
 	if name == "HUP" && r.ask(r.sem().HangupIsAnOrderlyExit,
 		"whether an untrapped HUP exits the shell rather than killing it") {
 		r.status = hangupExitStatus
-		r.ctl = controlExit
+		r.stopTheShell()
 		return
 	}
 	r.killedBy, r.killedBySig = name, sig
 	r.diedOfSig = sig
 	r.status = 128 + int(sig)
-	r.ctl = controlExit
+	r.stopTheShell()
 }
 
 // hangupExitStatus is what a shell that treats SIGHUP as an exit exits with.

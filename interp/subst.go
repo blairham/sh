@@ -71,7 +71,7 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 		// which is the shape this package keeps finding.
 		r.diagf("%v\n", err)
 		r.status = r.diag().SyntaxStatus()
-		r.ctl = controlExit
+		r.stopTheShell()
 		return ""
 	}
 

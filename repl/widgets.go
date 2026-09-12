@@ -46,6 +46,40 @@ const (
 	WidgetTransposeChars
 	WidgetPreviousHistory
 	WidgetNextHistory
+
+	// The same walk, restricted to entries that begin with what the line
+	// already says. A shell with a line editor offers both, and a system
+	// startup file may bind the arrows to either — macOS's `/etc/zshrc` binds
+	// them to the searching pair, which is how these came to be needed
+	// (#2435).
+	//
+	// **What "begins with" means is measured and is not the obvious guess.**
+	// Driven through a pseudo-terminal against zsh 5.9.2 on 2026-09-12, with
+	// `echo one`, `ls -la`, `echo two`, `print hello` in history:
+	//
+	//	typed        pressed      line becomes
+	//	echo         Up           echo two      then echo one, then no further
+	//	echo zz      Up           echo two      ← the rest of the line is ignored
+	//	ec           Up           echo two
+	//	echo + ^A    Up           echo two      ← the cursor is not the question
+	//	(empty)      Up           print hello   ← a plain walk
+	//	zzz          Up           zzz           ← no match leaves the line alone
+	//
+	// The second row is the discriminating one: no entry begins with `echo
+	// zz`, and it matched anyway. So the text searched for is the line's
+	// **first word**, not the whole buffer. The fourth rules out the other
+	// plausible reading — the text before the cursor — which would have been
+	// empty there and given a plain walk.
+	//
+	// The cursor lands at the end of the recalled line in every row, and
+	// walking back down to the bottom brings back what was being typed.
+	//
+	// One case is recorded rather than implemented, because black-box probing
+	// did not explain it: recall an entry, *edit* it, then press the other
+	// direction, and zsh leaves the line alone with `$HISTNO` unmoved, where
+	// the entry it would walk to is still a match. See browseMatching.
+	WidgetPreviousHistoryMatching
+	WidgetNextHistoryMatching
 	WidgetSearchHistoryBackward
 	WidgetClearScreen
 	WidgetDeleteChar
@@ -188,6 +222,10 @@ func (e *editor) runWidget(w Widget, prompt drawnPrompt) {
 		e.browse(-1, prompt)
 	case WidgetNextHistory:
 		e.browse(+1, prompt)
+	case WidgetPreviousHistoryMatching:
+		e.browseMatching(-1, prompt)
+	case WidgetNextHistoryMatching:
+		e.browseMatching(+1, prompt)
 	case WidgetSearchHistoryBackward:
 		e.reverseSearch(prompt)
 	case WidgetClearScreen:

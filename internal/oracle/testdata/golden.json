@@ -113718,6 +113718,57 @@
         "TimedOut": false
       }
     },
+    "param/which-word-a-bad-substitution-in-an-operand-names": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: syntax error: bad substitution~ a=2~\u003cshell\u003e: syntax error: bad substitution~ b=2~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cshell\u003e: line 1: ${v@Z}: bad substitution~ a=1~\u003cshell\u003e: line 1: ${v@Z}: bad substitution~ b=1~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cshell\u003e: line 1: ${v@Z}: bad substitution~ a=1~\u003cshell\u003e: line 1: ${v@Z}: bad substitution~ b=1~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e: ${v@Z}: bad substitution~ a=1~\u003cshell\u003e: ${v@Z}: bad substitution~ b=1~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: Bad substitution~ a=2~\u003cshell\u003e: 1: Bad substitution~ b=2~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "\u003cshell\u003e: \"${v#${v@Z}}\": bad substitution~ a=1~\u003cshell\u003e: \"pre${u:-${v@Z}}post\": bad substitution~ b=1~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cshell\u003e:1: bad substitution~ a=1~\u003cshell\u003e:1: bad substitution~ b=1~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/whole-subscript-on-a-scalar": {
       "ash": {
         "Stdout": "",

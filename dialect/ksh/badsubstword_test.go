@@ -36,6 +36,30 @@ func TestBadSubstitutionNamesTheWholeWord(t *testing.T) {
 	}
 }
 
+// "The whole word" means the word the command line holds, however deeply the
+// failure was nested. Measured 2026-09-12 against ksh93 AJM 93u+: an operand
+// of an expansion is not the word, so the sentence still carries the outer
+// expansion and the literal text on either side of it (#1064).
+func TestBadSubstitutionInAnOperandStillNamesTheWholeWord(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`x=a; v=abc; printf "[%s]" "${v#${x@QQ}}"`, `"${v#${x@QQ}}": bad substitution`},
+		{`x=a; v=abc; printf "[%s]" "${v#pre${x@QQ}post}"`, `"${v#pre${x@QQ}post}": bad substitution`},
+		{`x=a; printf "[%s]" "${u:-${x@QQ}}"`, `"${u:-${x@QQ}}": bad substitution`},
+		{`x=a; printf "[%s]" "pre${u:-${x@QQ}}post"`, `"pre${u:-${x@QQ}}post": bad substitution`},
+		{`x=a; printf "[%s]" "${u:=${x@QQ}}"`, `"${u:=${x@QQ}}": bad substitution`},
+		// A `case` arm and a condition operand are whole words in their own
+		// right, so there the two readings coincide -- which is why the rows
+		// above are the ones that separate them.
+		{`x=a; case abc in pre${x@QQ}post) ;; esac`, `pre${x@QQ}post: bad substitution`},
+		{`x=a; [[ abc == pre${x@QQ}post ]]`, `pre${x@QQ}post: bad substitution`},
+	} {
+		out, _ := answersRun(t, c.src)
+		if !strings.Contains(out, c.want) {
+			t.Errorf("%q said %q, want %q", c.src, out, c.want)
+		}
+	}
+}
+
 // Without the family the letter is not a letter, so there is nothing to check
 // against a value: an unset name is refused exactly as a set one is.
 func TestABadSubstitutionIsRefusedWithoutAValueToo(t *testing.T) {

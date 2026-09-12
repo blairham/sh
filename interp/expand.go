@@ -75,10 +75,20 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 // It has to be put back rather than cleared: an expansion's operand is a word
 // of its own — `${u:-${y@QQ}}` — and the inner one finishing does not mean the
 // outer one has.
+// The outermost word of the nesting is recorded alongside, and only the first
+// call fills it in: a dialect that names "the word" means the one the command
+// line holds, not the operand a failure happened to be reached through.
 func (r *Runner) inWord(w *syntax.Word) func() {
 	prevWord, prevSpan := r.expandingWord, r.expandingSpan
+	prevOuter := r.expandingOuterWord
 	r.expandingWord, r.expandingSpan = w, 0
-	return func() { r.expandingWord, r.expandingSpan = prevWord, prevSpan }
+	if r.expandingOuterWord == nil {
+		r.expandingOuterWord = w
+	}
+	return func() {
+		r.expandingWord, r.expandingSpan = prevWord, prevSpan
+		r.expandingOuterWord = prevOuter
+	}
 }
 
 // expandOneWord is the pipeline for a single word, after braces: fields, then
@@ -1700,7 +1710,11 @@ func (r *Runner) badSubstitutionSubject(e *syntax.ParamExpr) string {
 	}
 	var text string
 	if names == NamesTheWholeWord {
-		text = syntax.PrintWord(r.expandingWord)
+		// The outermost word, because that dialect names the word the
+		// command line holds however deeply the failure was nested:
+		// `"${u:-${x@Z}}"` and `"${v#x${x@Z}y}"` are each blamed entire,
+		// measured on ksh93 2026-09-12.
+		text = syntax.PrintWord(r.expandingOuterWord)
 	} else {
 		text = syntax.PrintWordQuotingRun(r.expandingWord, r.expandingSpan)
 	}

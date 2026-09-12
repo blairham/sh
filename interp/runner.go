@@ -926,6 +926,24 @@ type Runner struct {
 	// expansion was reached from something that is not a word.
 	expandingWord *syntax.Word
 	expandingSpan int
+	// expandingOuterWord is the *outermost* word of that nesting: the word
+	// the command line holds, before any operand of an expansion inside it
+	// took over expandingWord.
+	//
+	// The two are a pair because the two word-naming dialects disagree about
+	// which one their sentence means, measured 2026-09-12 on an operand that
+	// holds an expansion the grammar could not read:
+	//
+	//	                              ksh93                  bash 5.3
+	//	"${v#${BAD}}"                 "${v#${BAD}}"          ${BAD}
+	//	"pre${v#${BAD}}post"          "pre${v#${BAD}}post"   ${BAD}
+	//	"${u:-${BAD}}"                "${u:-${BAD}}"         ${BAD}
+	//
+	// So the whole-word subject is the outermost word and the quoting-run
+	// subject is the innermost — see badSubstitutionSubject. Reading both
+	// from one field made each dialect right on whichever route the other
+	// was not.
+	expandingOuterWord *syntax.Word
 
 	// expandingNestedInner marks the expansion of the *inner* of a nested
 	// `${${…}}`, whose fields are read by the operator around them rather

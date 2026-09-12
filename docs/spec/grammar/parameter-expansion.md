@@ -1338,6 +1338,30 @@ dialect gives and one as core behavior:
   word that shares the expansion's quoting, with the quote characters
   off; ksh93 names the whole word exactly as written; dash and zsh name
   nothing at all, so their wordings have no verb and never reach it.
+
+  **The two word-namers do not mean the same word**, which only shows
+  once the failure is one level down. An expansion's operand — the
+  pattern of `#`, `%` or `/`, the value of `:-` or `:=` — is a word of
+  its own, and measured 2026-09-12:
+
+  | written | bash 5.3 and 3.2 | ksh93 |
+  | --- | --- | --- |
+  | `"${v#${x@QQ}}"` | `${x@QQ}` | `"${v#${x@QQ}}"` |
+  | `"pre${v#${x@QQ}}post"` | `${x@QQ}` | `"pre${v#${x@QQ}}post"` |
+  | `"${v#pre${x@QQ}post}"` | `pre${x@QQ}post` | `"${v#pre${x@QQ}post}"` |
+  | `"pre${u:-${x@QQ}}post"` | `${x@QQ}` | `"pre${u:-${x@QQ}}post"` |
+
+  So the quoting run is measured against the **innermost** word being
+  expanded and the whole word is the **outermost** — the one the command
+  line holds, however deep the nesting. `Runner.expandingWord` and
+  `Runner.expandingOuterWord` are that pair. Reading both subjects off
+  one field made each dialect right on whichever route the other was
+  not: the value operands scoped themselves and the pattern operands did
+  not, so `#` named the outer word where bash names the inner while `:-`
+  named the inner where ksh93 names the outer (#1064).
+
+  A `case` arm and a `[[ ]]` operand are whole words already, so the two
+  readings coincide there and those rows cannot tell the answers apart.
 - **Whether the letter is checked on a name with no value** is
   `Semantics.TransformLetterCheckedOnlyWhenValued`, reached only by a
   grammar that *has* the family. It is an axis with one measured answer

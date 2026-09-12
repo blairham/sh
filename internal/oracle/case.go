@@ -9005,6 +9005,11 @@ echo "st=$?"`,
 		Why:     "and when it is reached: bash names the construct and abandons the line, dash and zsh say only that the substitution was bad, ksh93 never got this far",
 	},
 	{
+		ID: "param/which-word-a-bad-substitution-in-an-operand-names", Category: "parameter expansion",
+		Snippet: `v=abc; ( printf "[%s]" "${v#${v@Z}}" ) 2>&1; echo " a=$?"; ( printf "[%s]" "pre${u:-${v@Z}}post" ) 2>&1; echo " b=$?"; echo done`,
+		Why:     "the same failure one level down, which is where the two word-naming columns stop agreeing. `@Z` is a letter neither the `@` family nor anything else claims, and it is written inside an *operand* -- a pattern in the first field, a `:-` value in the second -- rather than directly in the word. bash 5.3 and bash 3.2 name `${v@Z}` alone in both, so the sentence is measured against the operand and the literal text on either side of the outer expansion is not in it. ksh93 names the whole of `\"${v#${v@Z}}\"` and the whole of `\"pre${u:-${v@Z}}post\"`, quotes and all, so its sentence is the word the command line holds however deep the failure is nested. dash and zsh name nothing either way, and dash alone makes it fatal. Two fields and not one because either alone lets a wrong reading pass: the pattern operand and the value operand are different code here and only the value one had scoped itself, so `#` named the outer word where bash names the inner while `:-` named the inner where ksh93 names the outer -- one field read by two dialects that mean opposite things by it (#1064)",
+	},
+	{
 		ID: "param/substitution-anchored", Category: "parameter expansion",
 		Snippet: `x=a-b; printf "[%s]" "${x/#a/X}" "${x/%b/Y}"`,
 		Why:     "anchored to the start and the end of the value",

@@ -1339,116 +1339,113 @@ type Diagnostics struct {
 	// is not one.
 	ArrayValueToNonArray string
 
-	// SliceOfAnAssociativeArray is the same refusal for a declared table,
-	// which the splicing shell words differently: a subscript over a table
-	// names a key rather than a position, so there is no span for the words
-	// to replace. One verb: the name.
+	// SliceOfAnAssociativeArray is the same refusal for a declared table, which
+	// a splicing preset words differently: a subscript over a table names a key
+	// rather than a position, so there is no span for the words to replace. One
+	// verb: the name.
 	SliceOfAnAssociativeArray string
 
-	// AppendToANumericSlice is what the shell that splices characters says
-	// when `+=` is written at a subscript of a name carrying an arithmetic
-	// attribute. It takes the name, which that shell's own sentence does not
-	// use — the location carries it — so this is a field of its own rather
-	// than one of the two above worded again. A number has no characters for
-	// a span to name and so nothing for the value to join: where a plain `=`
-	// at the same subscript quietly lands whole, this one is refused and ends
-	// the script. Only a dialect answering ScalarSubscriptIsACharacter Yes has
-	// anything to put here.
+	// AppendToANumericSlice is what a preset that splices characters says when
+	// `+=` is written at a subscript of a name carrying an arithmetic attribute.
+	// It takes the name, which that preset's own sentence does not use — the
+	// location carries it — so this is a field of its own rather than one of the
+	// two above worded again. A number has no characters for a span to name and
+	// so nothing for the value to join: where a plain `=` at the same subscript
+	// quietly lands whole, this one is refused and ends the script. Only a
+	// preset answering ScalarSubscriptIsACharacter Yes has anything to put here.
 	AppendToANumericSlice string
 
 	// UnsetBadSubscript wraps the sentence about an `unset` operand whose
 	// subscript would not evaluate. One verb: that sentence, already worded by
-	// ArithError. Empty leaves it to stand alone, which is what bash and zsh
-	// do; ksh93 alone names the builtin in front of it, having worded the
-	// identical failure in an expansion without one.
+	// ArithError. Empty leaves it to stand alone, which is the common answer; a
+	// preset may name the builtin in front of it while wording the identical
+	// failure in an expansion without one.
 	UnsetBadSubscript string
 
 	// UnsetSubscriptBeforeTheFirstElement is what `unset a[i]` says about a
 	// subscript that lands before the array's first element. Two verbs: the
 	// name, and the subscript *as written*.
 	//
-	// A field of its own rather than BadArraySubscript used twice, because
-	// two of the three shells that reach the boundary word the `unset` route
-	// differently from the assignment: one drops the array's name and keeps
-	// the bare subscript, and both put the builtin's name in front. The third
-	// says the same sentence by both routes, which is what makes a shared
-	// field look adequate until it is measured.
+	// A field of its own rather than BadArraySubscript used twice, because most
+	// presets that reach the boundary word the `unset` route differently from
+	// the assignment: one drops the array's name and keeps the bare subscript,
+	// and they put the builtin's name in front. A preset that says the same
+	// sentence by both routes is what makes a shared field look adequate until
+	// it is measured.
 	UnsetSubscriptBeforeTheFirstElement string
 
 	// UnsetNotAnArray is what `unset a[@]` says when the name holds a value
 	// that is not an array. One verb: the name.
 	//
-	// Only the shell that answers UnsetArraySpanRemovesTheElements has
-	// anything to say here, and it is the same in both builds measured: the
-	// spelling means "take every element away" and a scalar has none to take,
-	// so it is refused rather than emptied. The shell that leaves one empty
-	// element instead treats a scalar as the single element it is and empties
-	// it without a word, so it words nothing.
+	// Only a preset answering UnsetArraySpanRemovesTheElements has anything to
+	// say here: the spelling means "take every element away" and a scalar has
+	// none to take, so it is refused rather than emptied. A preset that leaves
+	// one empty element instead treats a scalar as the single element it is and
+	// empties it without a word, so it words nothing.
 	UnsetNotAnArray string
 
 	// ExpansionFailureStatusFromCommandString is what a shell exits with when
 	// an expansion failed *and the program came from an argument* — `-c` —
 	// rather than from a file or standard input.
 	//
-	// bash alone, and only there: 127 given with `-c`, 1 from a file or from
+	// A preset that has it gives 127 with `-c` and 1 from a file or from
 	// standard input, for `set -u`, `${x?}` and a `@` transformation whose
-	// letter does not exist alike. Measured over eight other ways it stops,
-	// none of which differs by invocation. Zero leaves the dialect's
-	// ordinary fatal status standing either way.
+	// letter does not exist alike. Measured over eight other ways it stops, none
+	// of which differs by invocation. Zero leaves the preset's ordinary fatal
+	// status standing either way.
 	//
-	// It covers a *failed* expansion and not an unreadable word, which is
-	// the line the same shell draws itself: `${x@QQ}` on a value exits 127
-	// under `-c` and `${(q)x}` — a bad substitution for a different reason,
-	// found while reading the word rather than while expanding it — exits 1
-	// from the same invocation.
+	// It covers a *failed* expansion and not an unreadable word, which is the
+	// line such a preset draws itself: `${x@QQ}` on a value exits 127 under `-c`
+	// and a bad substitution found while *reading* the word rather than while
+	// expanding it exits 1 from the same invocation.
 	ExpansionFailureStatusFromCommandString int
 
 	// ParamErrorMessage is what `${x?word}` says. Two verbs: the parameter
-	// and the word. The shape is unanimous — `x: word` — and only the
-	// default word below is not.
+	// and the word. The shape is unanimous — `x: word` — and only the default
+	// word below is not.
 	ParamErrorMessage string
 
-	// ParamNullOrNotSet is the word `${x:?}` uses when none was given. That
-	// form covers two cases at once and each shell says so differently:
+	// ParamNullOrNotSet is the word `${x:?}` uses when none was given. That form
+	// covers two cases at once and each preset says so differently:
 	//
-	//	bash   parameter null or not set
-	//	dash   parameter not set or null
-	//	ksh93  parameter null  (only when it is there and empty)
-	//	zsh    parameter not set
+	//	parameter null or not set
+	//	parameter not set or null
+	//	parameter null  (only when it is there and empty)
+	//	parameter not set
 	//
-	// Empty falls back to `parameter not set`, which is what plain `${x?}`
-	// says in all four and what zsh says for both forms.
+	// Empty falls back to `parameter not set`, which is what plain `${x?}` says
+	// everywhere and what one preset says for both forms.
 	ParamNullOrNotSet string
 
-	// ParamNull is the word for a parameter that is *there and empty*, where
-	// a shell tells that from one that is absent. ksh93 alone.
+	// ParamNull is the word for a parameter that is *there and empty*, where a
+	// preset tells that from one that is absent.
 	ParamNull string
 
 	// SelfName is what the shell calls itself in a diagnostic, whatever it was
 	// invoked as.
 	//
-	// Three of the four name themselves by argv[0], verbatim and however long
-	// it is, which is what an empty value here means and what `$0` reports on
-	// the two routes that have no other name for it. Measured by handing each
-	// shell an argv[0] of its own:
+	// Most presets name themselves by argv[0], verbatim and however long it is,
+	// which is what an empty value here means and what `$0` reports on the two
+	// routes that have no other name for it. Measured by handing the shell an
+	// argv[0] of its own:
 	//
-	//	exec -a weirdname bash <<< 'if'
+	//	exec -a weirdname <shell> <<< 'if'
 	//	weirdname: line 2: syntax error: unexpected end of file
 	//
-	//	exec -a weirdname zsh <<< 'if'
-	//	zsh: parse error near `\n'
+	//	exec -a weirdname <shell> <<< 'if'
+	//	<shell>: parse error near `\n'
 	//
-	// So it is not a shortening of argv[0] — a symlink named `myzsh`, and a
-	// symlink named `sh`, both still say `zsh`, and `exec -a` says so most
-	// plainly. The name is fixed, and `$0` is unaffected: it still reports the
-	// path the shell was invoked by, which is why this is a separate answer
-	// rather than a different value for Runner.Name.
+	// So a fixed name is not a shortening of argv[0] — a symlink of any name
+	// still gives the fixed one, and `exec -a` says so most plainly. `$0` is
+	// unaffected: it still reports the path the shell was invoked by, which is
+	// why this is a separate answer rather than a different value for
+	// Runner.Name.
 	//
 	// It applies only where the shell names *itself*, which is the two routes
-	// that have no file: `-c` and standard input. A script is named by its
-	// own path — measured, all four print the script and not the shell — so
-	// the script route keeps Runner.Name, which is the path. That is the same
-	// three-way split `$0` is decided by rather than a second rule.
+	// that have no file: `-c` and standard input. A script is named by its own
+	// path — every preset prints the script and not the shell — so the script
+	// route keeps Runner.Name, which is the path. That is the same three-way
+	// split `$0` is decided by rather than a second rule.
 	SelfName string
 
 	// LocationNamesTheCurrentFile puts the file a failing line was read from

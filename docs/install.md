@@ -266,27 +266,35 @@ the same trick the system uses:
 
     exec -a -bash /usr/local/libexec/sh/bash     # from bash or zsh
 
-## What a session does not read yet
+## What a session reads
 
-**No `~/.bashrc`, and no `~/.zshrc`.** That is [#807][807], and it is the
-thing that most makes this not a daily driver: aliases, functions,
-exports and `PS1` written in those files reach an interactive session not
-at all.
+Everything a real shell of the same name reads, as of #1717, and in the
+same order. `driver/startup.go` is the whole of it, and
+`docs/spec/invocation.md` has the measured grid.
 
-What *is* read today, in `driver/startup.go`:
+Four slots, each with the machine's own file in front of the person's:
 
-- **`~/.profile`, for a login shell.** Measured through a pty on an
-  installed build: a session started as `-bash` has the variables
-  `~/.profile` exported; started as `bash -i` it does not.
-- **`$ENV`, for any interactive session**, login or not, after
-  parameter expansion — so `ENV='$HOME/.shrc'` in the environment gets
-  `~/.shrc` sourced at every prompt. This is what `dash` and `ksh93` read
-  and is nobody's brand, which is why the substrate reads it rather than
-  a name of its own.
+| slot | when | our `bash` | our `zsh` |
+| --- | --- | --- | --- |
+| unconditional | always | — | `/etc/zshenv`, `$ZDOTDIR/.zshenv` |
+| profile | login | `/etc/profile`, then the first of `~/.bash_profile`, `~/.bash_login`, `~/.profile` | `/etc/zprofile`, `$ZDOTDIR/.zprofile` |
+| run-commands | interactive | `~/.bashrc` | `/etc/zshrc`, `$ZDOTDIR/.zshrc` |
+| late profile | login, after the run-commands file | — | `$ZDOTDIR/.zlogin` |
 
-So the usable arrangement until #807 lands is `~/.profile` for a login
-shell plus `$ENV` for the interactive settings, rather than the rc file
-the dialect's name would suggest.
+`~/.bashrc` and `~/.zshrc` were the subject of [#807][807] and are read.
+The system-wide files were [#1717][1717]; before that a login shell read
+none of them, which on macOS meant `path_helper` never ran and `$PATH`
+kept whatever order it was handed — so `command -v git` answered
+`/opt/homebrew/bin/git` where the reference shell answered `/usr/bin/git`.
+
+`$ENV` is read in place of the run-commands file by a shell with no name
+of its own — our `dash` and our `ksh`, and any of them in POSIX mode —
+after parameter expansion, so `ENV='$HOME/.shrc'` in the environment gets
+`~/.shrc` sourced at every prompt.
+
+The escape hatches are the dialect's own: `--noprofile`, `--norc` and
+`--rcfile F` in `bash`; `-f` for every file and `-d` for the machine's
+alone in `zsh`. `dash` and `ksh` have none, which is what those shells do.
 
 Two smaller differences worth knowing before you live in it:
 
@@ -297,4 +305,5 @@ Two smaller differences worth knowing before you live in it:
   shell is, not which binary is running. `$0` is the one that answers
   that.
 
+[1717]: https://github.com/blairham/sh/issues/1717
 [807]: https://github.com/blairham/sh/issues/807

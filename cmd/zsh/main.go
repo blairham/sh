@@ -24,18 +24,22 @@ import (
 // shell is the whole of "which shell am I", as data.
 func shell() driver.Shell {
 	return driver.Shell{
-		Name:         "zsh",
-		Dialect:      zsh.Dialect(),
-		Semantics:    zsh.Semantics(),
-		Diagnostics:  zsh.Diagnostics(),
-		Prelude:      zsh.Prelude(),
-		Register:     zsh.Apply,
-		PromptStyle:  zsh.PromptStyle(),
-		EditorStyle:  zsh.EditorStyle(),
-		KeyBindings:  zsh.KeyBindings,
-		ViEditing:    zsh.ViEditing,
-		RunWidget:    zsh.RunWidget,
-		RunScheduled: zsh.RunScheduled,
+		Name: "zsh",
+		// Where this machine keeps the administrator's startup files. It
+		// is the install's answer rather than the dialect's, which is why
+		// it is named here; see driver.Shell.SystemStartupDirectory.
+		SystemStartupDirectory: "/etc",
+		Dialect:                zsh.Dialect(),
+		Semantics:              zsh.Semantics(),
+		Diagnostics:            zsh.Diagnostics(),
+		Prelude:                zsh.Prelude(),
+		Register:               zsh.Apply,
+		PromptStyle:            zsh.PromptStyle(),
+		EditorStyle:            zsh.EditorStyle(),
+		KeyBindings:            zsh.KeyBindings,
+		ViEditing:              zsh.ViEditing,
+		RunWidget:              zsh.RunWidget,
+		RunScheduled:           zsh.RunScheduled,
 		// What the editor waits on beside the terminal, and what happens when
 		// one of those wakes: `zle -F`.
 		WatchedDescriptors: zsh.WatchedDescriptors,

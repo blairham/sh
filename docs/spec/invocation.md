@@ -1164,9 +1164,9 @@ field was left at its default.
 The interactive rows ask nothing, because all four read a profile there. Only
 the script routes had a question.
 
-One thing in the table is **not** modeled: the **system-wide file**.
-`/etc/profile` is not read at all, on any route. Everything else in it is,
-and the rest of this section is how.
+The **system-wide file** in the table is modeled too, and until #1717 it was
+not: `/etc/profile` was read on no route at all. It has a section of its own
+below, after the four slots it fills in front of.
 
 ### Which file, per dialect
 
@@ -1212,6 +1212,151 @@ field of its own:
   directory: measured, such a shell reads none of its files.
   `Semantics.StartupDirectoryVariable`.
 
+### The system-wide files
+
+Every shell in the panel reads a startup file out of a directory the machine's
+administrator owns, before the file in the person's own. We read none of them
+until #1717, and on macOS that is not a detail: `/etc/profile`'s whole job
+there is to run `path_helper`, which rebuilds `$PATH` from `/etc/paths` and
+`/etc/paths.d`. A login shell that skips it keeps whatever order it inherited,
+along with whatever duplicates the parent had — which is how `command -v git`
+came to answer `/opt/homebrew/bin/git` where the reference shell answered
+`/usr/bin/git`, with the same resolution logic on both sides.
+
+Measured 2026-09-12 with `env -i HOME=$H PATH=/usr/bin:/bin <shell> -l -c
+'echo ${PATH%%:*}'`, in a scratch home holding a marker under every name any
+shell reads, each marker reporting `${PATH%%:*}` itself so the *order* is
+observable and not only the fact of the read:
+
+| shell | the person's profile reports | so the system file ran |
+| --- | --- | --- |
+| dash | `/usr/local/bin` | first |
+| bash 5.3.15 | `/usr/local/bin` | first |
+| bash as `sh` | `/usr/local/bin` | first |
+| bash 3.2.57 | `/usr/local/bin` | first |
+| ksh93u+ | `/usr/local/bin` | first |
+| zsh 5.9.2 | `.zshenv` `/usr/bin`, then `.zprofile` `/usr/local/bin` | first, in the profile slot |
+
+`/usr/local/bin` is `path_helper`'s answer and `/usr/bin` is the head of the
+inherited value, so the probe discriminates: a shell that read no system file
+would have reported `/usr/bin` in its own profile. The zsh row also shows the
+gate — the unconditional slot runs before the profile slot, so `.zshenv` sees
+the inherited value and `.zprofile` does not.
+
+#### Which file, per slot
+
+| slot | bash | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| unconditional | — | — | — | `/etc/zshenv` |
+| profile | `/etc/profile` | `/etc/profile` | `/etc/profile` | `/etc/zprofile` |
+| run-commands | **—** | — | — | `/etc/zshrc` |
+| late profile | — | — | — | `/etc/zlogin` |
+
+`Semantics.SystemStartupFiles`, one name per slot. **bash's empty
+run-commands cell is measured rather than assumed**, and it is the surprising
+one: `/etc/bashrc` exists on this machine and sets `PS1` and `checkwinsize`,
+yet a `~/.bashrc` that reports `$PS1` sees bash's own `\s-\v\$ ` default and
+`shopt checkwinsize` answers `off` in bash 3.2. So bash reaches `/etc/bashrc`
+only through `/etc/profile`, which sources it by hand for a login shell, and a
+shell that named it in this slot would read it twice.
+
+Two cells are the **manual's** answer rather than a measured one, and the
+difference is worth stating plainly: neither `/etc/zshenv` nor `/etc/zlogin`
+exists on the machine this was measured on, so no probe can watch them being
+read. zsh's manual names both, says `/etc/zshenv` is read first of all and
+that "this cannot be overridden", and says the files "may be in another
+directory, depending on the installation". The *slot* each occupies is
+measured, because the two system files that do exist each land first in
+theirs; what is taken on the manual's word is the name.
+
+#### The system file comes first in its own slot
+
+Not before every slot. Measured with `setopt sourcetrace`, which names each
+file as zsh reads it — the one shell in the panel with enough slots for the
+difference to show:
+
+```console
+$ zsh -o sourcetrace -l -i
+~/.zshenv
+/etc/zprofile
+~/.zprofile
+/etc/zshrc
+~/.zshrc
+~/.zlogin
+```
+
+So each system file is paired with the file it precedes. A shell that hoisted
+all of root's files to the front would read `/etc/zshrc` before `~/.zprofile`,
+and `~/.zprofile` is where a person sets `$ZDOTDIR` and `$PATH`.
+
+`$ZDOTDIR` does not move them, which is also measured: the same probe with
+`ZDOTDIR` pointing elsewhere reads the person's files from there and
+`/etc/zprofile` from `/etc`.
+
+#### The gate is the slot's own, and one option is not
+
+Each system file is read exactly when the file behind it is. Measured on the
+one axis that could have split them: with a dashed `argv[0]` and a command
+string, bash reads neither `/etc/profile` nor `~/.bash_profile` while dash,
+ksh93 and zsh read both — so `LoginProfileWhenNonInteractive` answers for the
+pair rather than for the person's file alone.
+
+The options split three ways, and each answer is measured:
+
+| | reads `/etc/…` | reads `~/…` |
+| --- | --- | --- |
+| `bash --noprofile -l -c` | no | no |
+| `zsh -d -l -c`, `zsh --no-globalrcs -l -c` | no | **yes** |
+| `zsh -f -l -c` | no | no |
+
+`--noprofile` names the **slot** and drops both files in it, so it stays
+`StartupFileOptions.SuppressLogin` rather than becoming a second option. zsh's
+`-d` is the only one in the panel that separates root's files from the
+person's, and it is `StartupFileOptions.SuppressSystem`.
+
+One rule here is **not** measured and is written down as a reading rather than
+a fact: `--rcfile` replaces the person's run-commands file and leaves the
+system-wide one alone. No shell in the panel has both a `--rcfile` and a
+system-wide run-commands file, so no run can settle it; the reading is that
+the option names a file to be read in place of *theirs*, and root's is not
+theirs.
+
+#### Where the directory lives, and why it is not on the vector
+
+`/etc` is on the front end, as `driver.Shell.SystemStartupDirectory`, and the
+names are on `Semantics`. Two reasons, and the second is the load-bearing one.
+
+It is the same directory for every dialect, so it records no disagreement and
+does not belong on a vector whose fields are disagreements — zsh's manual says
+as much from the other side.
+
+And it puts the safe answer in the zero value. These are absolute paths into a
+real machine with no environment variable in front of them, so a scratch
+`$HOME` cannot redirect them and `internal/testenv` cannot see them: a suite
+that read them would be measuring `/etc/profile` on whichever runner it
+happened to be on, which is exactly the failure that guard exists to prevent.
+With the directory on the front end, a `Shell` value a test built by hand
+reaches for nothing until it says otherwise, and the six shipped binaries say
+so in one line each.
+
+#### What no corpus row can reach
+
+**None of this is graded by the oracle.** Every corpus row is a `-c` snippet
+run by a shell that is neither a login shell nor interactive, so no row is
+ever in a slot where any startup file is read — which is why the seven
+startup-file axes that predate these are unpinned by the sweep as well, and
+why `make axis-sweep` reports the five added here the same way. The instrument
+is `driver/systemrcfiles_test.go`, whose interleaving case is checked against
+two mutations: a front end that reads no system file at all, and one that
+hoists them to the front.
+
+A last thing measured and deliberately **not** modeled. Ubuntu's bash reads
+`/etc/bash.bashrc` in the run-commands slot, which is a Debian patch rather
+than upstream behavior, and this table is the macOS build's. Modeling it would
+mean the same dialect answering differently on two machines, which is a fact
+about the install and not about the shell — the same reason the directory is
+on the front end. A build that wants it names it there.
+
 ### `$ENV`, and what POSIX mode does to the run-commands file
 
 `$ENV` is the standard's interactive startup file, and it is read by a shell
@@ -1246,7 +1391,7 @@ variable rather than a startup slot, and no other shell in the panel has one.
 
 ### The invocation options
 
-Four kinds, and they are the reason any of this is repairable. **A startup
+Five kinds, and they are the reason any of this is repairable. **A startup
 file that breaks has to be escapable**: a shell whose only `~/.zshrc` fails
 every time it starts is a shell a person cannot repair from.
 
@@ -1254,6 +1399,7 @@ every time it starts is a shell a person cannot repair from.
 | --- | --- | --- | --- | --- |
 | make it a login shell | `-l`, `--login` | `-l` | `-l`, `--login` | `-l`, `--login` |
 | skip every startup file | — | — | — | `-f`, `--no-rcs` |
+| skip the system-wide files | — | — | — | `-d`, `--no-globalrcs` |
 | skip the profile | `--noprofile` | — | — | — |
 | skip the run-commands file | `--norc` | — | — | — |
 | name the run-commands file | `--rcfile F`, `--init-file F` | — | — | — |

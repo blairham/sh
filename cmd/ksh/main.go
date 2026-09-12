@@ -26,15 +26,19 @@ import (
 // shell is the whole of "which shell am I", as data.
 func shell() driver.Shell {
 	return driver.Shell{
-		Name:         "ksh",
-		Dialect:      ksh.Dialect(),
-		Semantics:    ksh.Semantics(),
-		Diagnostics:  ksh.Diagnostics(),
-		Prelude:      ksh.Prelude(),
-		Register:     ksh.Apply,
-		PromptStyle:  ksh.PromptStyle(),
-		EditorStyle:  ksh.EditorStyle(),
-		HistoryStyle: ksh.HistoryStyle(),
+		Name: "ksh",
+		// Where this machine keeps the administrator's startup files. It
+		// is the install's answer rather than the dialect's, which is why
+		// it is named here; see driver.Shell.SystemStartupDirectory.
+		SystemStartupDirectory: "/etc",
+		Dialect:                ksh.Dialect(),
+		Semantics:              ksh.Semantics(),
+		Diagnostics:            ksh.Diagnostics(),
+		Prelude:                ksh.Prelude(),
+		Register:               ksh.Apply,
+		PromptStyle:            ksh.PromptStyle(),
+		EditorStyle:            ksh.EditorStyle(),
+		HistoryStyle:           ksh.HistoryStyle(),
 	}
 }
 

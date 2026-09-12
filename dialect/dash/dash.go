@@ -137,6 +137,11 @@ func Semantics() interp.Semantics {
 	// also measured — a startup file that breaks it is escaped by moving
 	// the file.
 	s.StartupFileOptions = interp.StartupFileOptions{Login: "-l"}
+	// Semantics.SystemStartupFiles stays at the POSIX preset's `/etc/profile`,
+	// which is measured for this shell and not only inherited: `dash -l -c
+	// 'echo ${PATH%%:*}'` with a `~/.profile` that reports the same thing
+	// sees `path_helper`'s answer in both places, where a shell that read no
+	// system file would have seen the inherited one.
 	// And no version option, which is left as the zero value deliberately:
 	// measured 2026-09-11, `dash --version` is `Illegal option --` at status
 	// 2, the same refusal every long option but `--login`'s absence gets.

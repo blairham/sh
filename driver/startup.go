@@ -21,6 +21,14 @@ import (
 // one shell has a second login file that comes after the run-commands one, so
 // that it sees what the prompt's own settings did.
 //
+// Each of those four slots has a **system-wide** file in front of it, out of a
+// directory the machine's administrator owns rather than a person's own. That
+// is not a detail on macOS, where the system-wide profile's whole job is to run
+// `path_helper` and rebuild `$PATH` from `/etc/paths` and `/etc/paths.d`: a
+// login shell that skipped it would keep whatever order it was handed (#1717).
+// The system file comes first *in its own slot* and not before every slot,
+// which is measured; see Semantics.SystemStartupFiles.
+//
 // The names are the dialect's and every one of them may be empty; see
 // Semantics.UnconditionalStartupFile and the fields beside it. The run-commands
 // file is the one exception, and it is the standard's rather than nobody's: a
@@ -43,6 +51,9 @@ type startupFlags struct {
 	login bool
 	// none suppresses every file: zsh's `-f`.
 	none bool
+	// noSystem suppresses the files in the system-wide directory and leaves
+	// the person's own: zsh's `-d`, `--no-globalrcs`.
+	noSystem bool
 	// noLogin suppresses the profile: bash's `--noprofile`.
 	noLogin bool
 	// noInteractive suppresses the run-commands file: bash's `--norc`.
@@ -101,8 +112,47 @@ func (sh Shell) startup(r *interp.Runner, in source) int {
 //
 // Empty in three of the four dialects, which is what makes this do nothing at
 // all for them; see Semantics.UnconditionalStartupFile.
-func (sh Shell) unconditionalStartupFile(r *interp.Runner, _ source) int {
+func (sh Shell) unconditionalStartupFile(r *interp.Runner, in source) int {
+	if code := sh.systemStartupFile(r, in, sh.Semantics.SystemStartupFiles.Unconditional); code != 0 {
+		return code
+	}
 	return sh.sourceFile(r, sh.startupPath(r, sh.Semantics.UnconditionalStartupFile))
+}
+
+// systemStartupFile sources one of the files in the directory the machine's
+// administrator owns, which comes first in its own slot rather than before
+// every slot.
+//
+// Measured 2026-09-12 with `zsh -o sourcetrace`, the one shell in the panel
+// with enough slots for the difference to show: an interactive login zsh reads
+// `/etc/zprofile`, `~/.zprofile`, `/etc/zshrc`, `~/.zshrc`, `~/.zlogin` — so
+// each system file is paired with the file it precedes rather than hoisted to
+// the front. A single "system files first" step would have read `/etc/zshrc`
+// before `~/.zprofile`, and a person's profile is where `$ZDOTDIR` and `$PATH`
+// are set.
+//
+// The gate is the slot's own, which is why this takes a name rather than
+// deciding anything: the caller has already answered whether this slot is read
+// at all, and the only question left here is the one option that separates
+// root's files from the person's.
+func (sh Shell) systemStartupFile(r *interp.Runner, in source, name string) int {
+	if in.startup.noSystem {
+		return 0
+	}
+	return sh.sourceFile(r, sh.systemStartupPath(name))
+}
+
+// systemStartupPath names one of the system-wide files, or nothing when this
+// shell has no system-wide directory or no file in that slot.
+//
+// Nothing rather than a path built on an empty directory, for the reason
+// startupPath answers nothing for an empty home: joining would give
+// `/profile`, which is a real path on a real machine and belongs to root.
+func (sh Shell) systemStartupPath(name string) string {
+	if sh.SystemStartupDirectory == "" || name == "" {
+		return ""
+	}
+	return sh.SystemStartupDirectory + "/" + name
 }
 
 // loginProfile sources the profile a login shell reads, which is the half of
@@ -119,6 +169,13 @@ func (sh Shell) unconditionalStartupFile(r *interp.Runner, _ source) int {
 func (sh Shell) loginProfile(r *interp.Runner, in source) int {
 	if !sh.readsLoginProfile(in) {
 		return 0
+	}
+	// The system-wide profile is not part of the fallback chain: it is read
+	// *as well as* the person's rather than instead of it. Measured — a
+	// login bash with a `~/.bash_profile` reads both, and the marker in the
+	// person's file already sees `path_helper`'s `$PATH`.
+	if code := sh.systemStartupFile(r, in, sh.Semantics.SystemStartupFiles.Login); code != 0 {
+		return code
 	}
 	for _, name := range strings.Fields(sh.Semantics.LoginStartupFiles) {
 		if code, found := sh.sourceFoundFile(r, sh.startupPath(r, name)); found {
@@ -137,6 +194,9 @@ func (sh Shell) loginProfile(r *interp.Runner, in source) int {
 func (sh Shell) lateLoginProfile(r *interp.Runner, in source) int {
 	if !sh.readsLoginProfile(in) {
 		return 0
+	}
+	if code := sh.systemStartupFile(r, in, sh.Semantics.SystemStartupFiles.LateLogin); code != 0 {
+		return code
 	}
 	return sh.sourceFile(r, sh.startupPath(r, sh.Semantics.LateLoginStartupFile))
 }
@@ -195,6 +255,15 @@ func (sh Shell) interactiveStartupFile(r *interp.Runner, in source) int {
 			// Measured: `bash -l -i` reads `~/.bash_profile` and nothing
 			// else, with `$ENV` set and pointing somewhere real.
 			return 0
+		}
+		// Before `--rcfile`, because that option names a file to read *in
+		// place of the person's own* and the system-wide one is not theirs.
+		// Nothing measures it — the shell with the option has no system-wide
+		// run-commands file and the shell with the file has no option — so
+		// this is a reading of what the option is for rather than a
+		// measurement, and it is written here rather than left implicit.
+		if code := sh.systemStartupFile(r, in, sh.Semantics.SystemStartupFiles.Interactive); code != 0 {
+			return code
 		}
 		if in.startup.file != "" {
 			// `--rcfile` replaces the name rather than adding to it, and it

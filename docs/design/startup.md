@@ -87,7 +87,9 @@ was tearing down had already finished. A stuck teardown costs one leaked
 process. An unbounded one costs the build.
 
 **A shell reads more than the file it was pointed at**, and both of the
-reference shells proved it on different machines. `zsh` with `ZDOTDIR`
+reference shells proved it on different machines — and since #1717 both of
+ours do too, which is why the zsh subject here is now given `-d` the way
+the reference one always was. `zsh` with `ZDOTDIR`
 set also reads `/etc/zshrc`, which on macOS sets a prompt of its own;
 `bash` with `--rcfile` also reads `/etc/bash.bashrc`, which on Ubuntu
 does the same. Either way the sentinel this harness watches for was

@@ -2105,297 +2105,259 @@ type Semantics struct {
 	// FunctionCallIsALoopControlBoundary stops a `break` or `continue` in a
 	// function body from reaching the loops the *caller* is inside.
 	//
-	// Measured 2026-09-11, `f(){ break; }; for i in 1 2; do f; echo body;
-	// done; echo after`:
+	// With `f(){ break; }; for i in 1 2; do f; echo body; done; echo after`, Yes
+	// prints `after` — the loop ended — and No prints `body body after`.
 	//
-	//	bash 3.2, zsh                  	`after` — the loop ended
-	//	dash, ksh93, bash called as sh 	`body body after` — it did not
-	//	bash 5.3                       	`body body after`, and the
-	//	                               	complaint twice
+	// A complaint alongside the No behavior is not a third answer: a boundary
+	// leaves the word with no loop at all, which is the misuse above, and
+	// implementations differ over saying so exactly as
+	// Diagnostics.LoopControlOutsideALoop does. That the same family of
+	// implementations answers this both ways is what says it is a decision and
+	// not a consequence of something else.
 	//
-	// bash 5.3's complaint is not a third answer: a boundary leaves the word
-	// with no loop at all, which is the misuse above, and the two rows differ
-	// over saying so exactly as Diagnostics.LoopControlOutsideALoop does.
-	// bash 3.2 is the same family answering the opposite way, which is what
-	// says this is a decision and not a consequence of something else.
+	// The reach is a count and not a flag: `break 2` from a body with one loop
+	// in it stops at that loop under Yes, and reaches the caller's under No.
 	//
-	// The reach is a count and not a flag: `break 2` from a body with one
-	// loop in it stops at that loop wherever this is Yes, and reaches the
-	// caller's wherever it is No.
-	//
-	// Asked only where the answer decides something — a `break` that can see
-	// a loop inside the call never reaches this.
+	// Asked only where the answer decides something — a `break` that can see a
+	// loop inside the call never reaches this.
 	FunctionCallIsALoopControlBoundary Answer
 
-	// SubshellIsALoopControlBoundary is the same question for `( )`, and it
-	// is a second field because the panel does not group the two.
+	// SubshellIsALoopControlBoundary is the same question for `( )`, and it is a
+	// second field because the two are not answered together.
 	//
-	// Measured 2026-09-11, `for i in 1 2; do ( break; echo insub ); echo
-	// body; done; echo after`:
+	// With `for i in 1 2; do ( break; echo insub ); echo body; done; echo
+	// after`, No prints `body body after` — the subshell was left, quietly —
+	// and Yes prints `insub body insub body after`.
 	//
-	//	bash 3.2, dash, ksh93, zsh	`body body after` — the subshell was
-	//	                          	left, quietly
-	//	bash 5.3, bash as sh      	`insub body insub body after`
+	// An implementation may make both boundaries or only the call one, and one
+	// may part from a sibling on the *call* while agreeing with it here. A
+	// single field would have to give one group the other's answer.
 	//
-	// So bash 5.3 makes both boundaries and dash and ksh93 make only the
-	// call one; a single field would have to give one group the other's
-	// answer. Note bash called as `sh` parts from bash 5.3 on the *call* and
-	// agrees with it here, which is a second reason the two cannot share.
-	//
-	// The parentheses and nothing else. A command substitution and a
-	// pipeline element are subshells too, and the column that makes `( )` a
-	// boundary makes neither of them one: `for i in 1 2; do x=$( break );
-	// done` and `do break | cat; done` draw no complaint from bash 5.3 where
-	// the parenthesized form draws one per pass.
+	// The parentheses and nothing else. A command substitution and a pipeline
+	// element are subshells too, and making `( )` a boundary makes neither of
+	// them one: `for i in 1 2; do x=$( break ); done` and `do break | cat; done`
+	// draw no complaint where the parenthesized form draws one per pass.
 	SubshellIsALoopControlBoundary Answer
 
 	// ReturnOutsideAFunctionIsRefused reports a `return` that has nothing to
-	// return from and carries on, instead of ending the script with the
-	// status it was given. True in bash alone.
+	// return from and carries on, instead of ending the script with the status
+	// it was given.
 	//
-	// Asked only where there is nothing to return from. Inside a function
-	// and inside a sourced file all four obey it, so the question is about
-	// the one case they split on.
+	// Asked only where there is nothing to return from. Inside a function and
+	// inside a sourced file it is obeyed under both answers, so the question is
+	// about the one case they split on.
 	ReturnOutsideAFunctionIsRefused Answer
 
 	// StartupFileReturnCarriesItsArgument makes `return 3` at the top of a
 	// startup file leave `$?` as 3, instead of leaving whatever the command
-	// before it left. True in dash, ksh93 and zsh; false in bash.
+	// before it left.
 	//
-	// A startup file *is* a sourced script — every shell in the panel accepts
-	// a `return` in one, stops reading the file there and says nothing — so
-	// the question is only what the argument does. Measured through a pty
-	// with the rc file as the whole probe, reading `$?` at the first prompt:
+	// A startup file *is* a sourced script — a `return` in one is accepted, the
+	// file stops being read there and nothing is said — so the question is only
+	// what the argument does. Reading `$?` at the first prompt, with the rc file
+	// as the whole probe:
 	//
-	//	rc              bash  bash32  dash  ksh93  zsh
-	//	return 3           0       0     3      3    3
-	//	false; return 3    1       1     3      3    3
-	//	false; return      1       1     1      1    1
-	//	(exit 5)           5       5     5      5    5
+	//	rc                 Yes  No
+	//	return 3             3   0
+	//	false; return 3      3   1
+	//	false; return        1   1
+	//	(exit 5)             5   5
 	//
-	// The last two rows are what make this about the argument and nothing
-	// else. bash does carry a startup file's status out — `(exit 5)` leaves
-	// 5 — and a `return` with no argument means the last command's status
-	// everywhere, so the only thing bash discards is the number written on
-	// the `return` itself.
+	// The last two rows are what make this about the argument and nothing else.
+	// No does carry a startup file's status out, and a `return` with no argument
+	// means the last command's status under both, so the only thing No discards
+	// is the number written on the `return` itself.
 	//
-	// Asked only of a `return` at the top level of the startup file. A
-	// `return` inside a function the file calls, or inside a file the file
-	// sources, carries its argument in bash too: measured, an rc running
-	// `f(){ return 3; }; f` or `. inner.sh` where inner returns 3 leaves 3 at
-	// the prompt in bash 5.3.15. So this is a property of the outermost
-	// frame rather than of `return`.
+	// Asked only of a `return` at the top level of the startup file. A `return`
+	// inside a function the file calls, or inside a file the file sources,
+	// carries its argument under both answers. So this is a property of the
+	// outermost frame rather than of `return`.
 	StartupFileReturnCarriesItsArgument Answer
 
 	// UnknownConditionOptionIsAStatus makes `[[ -o name ]]` with a name this
-	// shell does not have a status of its own with a complaint, instead of
-	// the plain false that a name it has but has not set would give. True in
-	// zsh alone; bash and ksh93 answer 1 and say nothing, and dash has no
-	// `[[ ]]` to ask it in.
+	// shell does not have a status of its own with a complaint, instead of the
+	// plain false that a name it has but has not set would give.
 	//
-	// Asked only where the shells disagree, which is at a name none of them
-	// would recognize. A name this shell has is read the same way in all
-	// three and nothing is asked.
+	// Asked only at a name nothing would recognize. A name the shell has is read
+	// the same way under both answers and nothing is asked.
 	//
-	// Not the same question as BadSetOptionNameFatal, and measured rather
-	// than assumed to be: the name that ends a zsh script when `set -o` is
-	// given it leaves `[[ ]]` running, with the complaint said and the next
-	// command reached. One construct's refusal is not the other's.
+	// Not the same question as BadSetOptionNameFatal, and measured rather than
+	// assumed to be: a name that ends the script when `set -o` is given it can
+	// still leave `[[ ]]` running, with the complaint said and the next command
+	// reached. One construct's refusal is not the other's.
 	//
 	// The status is a third value rather than a false, which the combining
-	// operators show: `[[ ! -o zzz ]]` is 3 and not 0, so `!` leaves it
-	// alone, and `[[ -o zzz || 1 == 1 ]]` is 0, so `||` goes on past it the
-	// way it would past a false. Measured across the whole truth table on
-	// zsh 5.9.2.
+	// operators show: `[[ ! -o zzz ]]` is 3 and not 0, so `!` leaves it alone,
+	// and `[[ -o zzz || 1 == 1 ]]` is 0, so `||` goes on past it the way it
+	// would past a false.
 	UnknownConditionOptionIsAStatus Answer
 
-	// BadSetOptionNameFatal ends the script when `set -o` is given a name
-	// this shell does not have. True in dash, ksh93 and zsh.
+	// BadSetOptionNameFatal ends the script when `set -o` is given a name this
+	// shell does not have.
 	//
 	// Not the same question as BadOptionToSpecialBuiltinFatal, and measured
-	// rather than assumed to be: a bad option *letter* to the same builtin
-	// is fatal in only two of them, and zsh does not so much as complain
-	// about `set -Q`. So one shell treats an unknown name as worse than an
-	// unknown letter, which is why this is a field of its own.
+	// rather than assumed to be: a bad option *letter* to the same builtin is
+	// fatal in fewer presets, and one of them does not so much as complain about
+	// it. So an unknown name can be treated as worse than an unknown letter,
+	// which is why this is a field of its own.
 	BadSetOptionNameFatal Answer
 
-	// CdLastPathOptionWins lets the last of `cd -L` and `cd -P` decide.
-	// True in bash, dash and ksh93 — `cd -P -L` is logical there. zsh gives
-	// `-P` the answer wherever it appears, so both orders resolve.
+	// CdLastPathOptionWins lets the last of `cd -L` and `cd -P` decide, so
+	// `cd -P -L` is logical. Answering No gives `-P` the answer wherever it
+	// appears, so both orders resolve.
 	//
-	// Asked only when both were given, because that is the only time the
-	// two rules differ.
+	// Asked only when both were given, because that is the only time the two
+	// rules differ.
 	CdLastPathOptionWins Answer
 
 	// CdRefusesUnknownOption refuses a letter `cd` does not have rather than
-	// reading the word as a directory. True in bash, dash and ksh93; zsh
-	// looks for somewhere called `-Q` instead, because its `cd` takes two
-	// operands — `cd old new` — and a leading dash word is the first of
-	// them there.
+	// reading the word as a directory. Answering No looks for somewhere called
+	// `-Q` instead, which is what a `cd` taking two operands — `cd old new` —
+	// does with a leading dash word.
 	//
-	// Only about an *unknown* letter. `-L` and `-P` are options in all four
-	// and are not asked about.
+	// Only about an *unknown* letter. `-L` and `-P` are options under both
+	// answers and are not asked about.
 	CdRefusesUnknownOption Answer
 
-	// CdHasQuietOption gives `cd` the `-q` of zsh, which is the one letter
-	// beyond `-L` and `-P` that any of the panel has. True in zsh alone.
+	// CdHasQuietOption gives `cd` a `-q`, the one letter beyond `-L` and `-P`
+	// that is in question at all.
 	//
-	// What the letter means there is *hook suppression*: measured 2026-09-08,
-	// a `chpwd` function and a `chpwd_functions` entry both ran on a plain
-	// `cd` and neither ran on `cd -q`. It is not about printing — `cd -q -`
-	// still wrote the directory at an interactive prompt, and a CDPATH move
-	// stayed silent with the letter and without it — so a shell that fires no
-	// `chpwd` has already done everything `-q` asks for.
+	// What the letter means is *hook suppression*: a change-of-directory
+	// function and a member of its list both run on a plain `cd` and neither
+	// runs on `cd -q`. It is not about printing — `cd -q -` still writes the
+	// directory at an interactive prompt, and a CDPATH move stays silent with
+	// the letter and without it — so an implementation that fires no such hook
+	// has already done everything `-q` asks for.
 	//
-	// So the letter is carried to that site rather than swallowed at the
-	// option loop: `cd` fires DirectoryChangeHook and `cd -q` does not,
-	// measured for the named function and for a `chpwd_functions` member
-	// alike, and measured again for `pushd -q` and `popd -q`, which move
-	// through `cd` and are quiet for the same reason. It is a *letter* and
-	// not an operand, which is the other half of why it is here — without it
-	// `cd -q /tmp` went looking for a directory called `-q`, which is #1558.
+	// So the letter is carried to that site rather than swallowed at the option
+	// loop: `cd` fires DirectoryChangeHook and `cd -q` does not, for the named
+	// function and for a list member alike, and for `pushd -q` and `popd -q`,
+	// which move through `cd` and are quiet for the same reason. It is a
+	// *letter* and not an operand, which is the other half of why it is here —
+	// without that, `cd -q /tmp` goes looking for a directory called `-q`.
 	//
-	// Asked only when a `q` is actually seen, so the three shells without the
-	// letter never reach the question and answer the word the way they answer
-	// any other letter they do not have — see CdRefusesUnknownOption, which
-	// is the next question when this one says no.
+	// Asked only when a `q` is actually seen, so a preset without the letter
+	// never reaches the question and answers the word the way it answers any
+	// other letter it does not have — see CdRefusesUnknownOption, which is the
+	// next question when this one says no.
 	CdHasQuietOption Answer
 
-	// HookListSuffix is what a hook's list of *extra* function names is
-	// spelled by: the hook's own name plus this. zsh's is `_functions`, so
-	// `precmd` reads `precmd_functions` as well and `chpwd` reads
-	// `chpwd_functions`. Empty is a shell whose hooks are the named function
-	// and nothing else, which is three of the four — and, since those three
-	// have no hooks at all, is really "no hooks" said once.
+	// HookListSuffix is what a hook's list of *extra* function names is spelled
+	// by: the hook's own name plus this. With `_functions`, `precmd` reads
+	// `precmd_functions` as well and `chpwd` reads `chpwd_functions`.
 	//
-	// Not decoration: `add-zsh-hook precmd f` defines no function called
-	// `precmd`, it appends `f` to `precmd_functions`, so a shell that read
-	// only the named function would find a correctly registered hook and run
-	// nothing. That was #1281.
+	// Empty is an implementation whose hooks are the named function and nothing
+	// else — which, where there are no hooks at all, is "no hooks" said once.
+	//
+	// Not decoration: a registration helper may define no function of the hook's
+	// name at all and only append to the list, so reading the named function
+	// alone would find a correctly registered hook and run nothing.
 	//
 	// Here rather than on repl.HookStyle, where it began, because the hook
-	// *sites* are on both sides of that line: `precmd` fires in a prompt loop
-	// and `chpwd` fires inside `cd`, which is a builtin and cannot reach up
-	// into a front end. One home for the suffix, one [Runner.HookChain] that
-	// applies it, and no way for the two sites to come to disagree about what
-	// a hook's list is called.
+	// *sites* are on both sides of that line: a pre-prompt hook fires in a
+	// prompt loop and a change-of-directory hook fires inside `cd`, which is a
+	// builtin and cannot reach up into a front end. One home for the suffix, one
+	// [Runner.HookChain] that applies it, and no way for the two sites to come
+	// to disagree about what a hook's list is called.
 	HookListSuffix string
 
 	// DirectoryChangeHook names the function this shell runs after `cd` has
-	// moved it — zsh's `chpwd`. Empty is a shell without one, which is three
-	// of the four: measured 2026-09-10, a `chpwd` function defined in bash
-	// 5.3.15, bash 3.2.57, bash-as-sh, dash and ksh93 ran on none of their
-	// `cd`s and none of them said anything about it.
+	// moved it. Empty is an implementation without one.
 	//
-	// It is the *last* thing `cd` does, after the directory has moved and
-	// after anything `cd` itself prints. Measured at a zsh prompt: `cd -`
-	// wrote `/usr` and *then* the hook's marker, and a CDPATH move wrote the
-	// directory it found and then the marker. So a hook cannot land in the
-	// middle of `cd`'s own output.
+	// It is the *last* thing `cd` does, after the directory has moved and after
+	// anything `cd` itself prints: `cd -` writes the old directory and *then*
+	// the hook runs, and a CDPATH move writes the directory it found and then
+	// runs it. So a hook cannot land in the middle of `cd`'s own output.
 	//
 	// **On the move, not on the change.** `cd` to the directory the shell is
-	// already in fires it — measured, `cd /usr` twice in a row fired it
-	// twice, with `$PWD` and `$OLDPWD` both `/usr`. A `cd` that *fails* does
-	// not: `cd /nope-nope` reported its error, left `$OLDPWD` alone and ran
-	// nothing.
+	// already in fires it — twice in a row fires it twice, with `$PWD` and
+	// `$OLDPWD` both the same. A `cd` that *fails* does not: it reports its
+	// error, leaves `$OLDPWD` alone and runs nothing.
 	//
-	// `$PWD` is where the shell now is and `$OLDPWD` where it was, both
-	// already set when the hook runs, and the hook is told **no arguments** —
-	// `$#` is 0 in the named function and in every member of the list.
+	// `$PWD` is where the shell now is and `$OLDPWD` where it was, both already
+	// set when the hook runs, and the hook is told **no arguments** — `$#` is 0
+	// in the named function and in every member of the list.
 	//
 	// Everything that moves through `cd` fires it and nothing else does.
-	// `pushd`, `popd` and a bare directory name under `autocd` are `cd` here
-	// and in zsh both, and all three fired it; assigning to `PWD` is not a
-	// move and fired nothing. A `cd` inside a function fires it at the `cd`,
-	// and a `cd` inside a subshell or a command substitution fires it in
-	// there, where the move is.
+	// `pushd`, `popd` and a bare directory name under `autocd` are `cd` here,
+	// and all three fire it; assigning to `PWD` is not a move and fires nothing.
+	// A `cd` inside a function fires it at the `cd`, and a `cd` inside a
+	// subshell or a command substitution fires it in there, where the move is.
 	//
-	// A hook that itself calls `cd` fires the hook again, and zsh has no
-	// guard against that beyond its ordinary recursion limit: a pair of
-	// hooks moving back and forth ended with `chpwd: job table full or
-	// recursion limit exceeded`. Nothing special is done here either — the
-	// call goes through [Runner.CallFunction] and meets whatever limit an
-	// ordinary function call meets.
+	// A hook that itself calls `cd` fires the hook again, and there is no guard
+	// against that beyond the ordinary recursion limit — a pair of hooks moving
+	// back and forth ends at it. Nothing special is done here either: the call
+	// goes through [Runner.CallFunction] and meets whatever limit an ordinary
+	// function call meets.
 	DirectoryChangeHook string
 
-	// ExitHook names the function this shell runs on the way out — zsh's
-	// `zshexit`. Empty is a shell without one, which is three of the four:
-	// measured 2026-09-12, a `zshexit` function defined in bash 5.3.15,
-	// bash-as-sh, bash 3.2.57, dash and ksh93 ran on none of their exits and
-	// none of them said anything about it.
+	// ExitHook names the function this shell runs on the way out. Empty is an
+	// implementation without one.
 	//
-	// **After the EXIT trap, not before it.** Measured against zsh 5.9.2, a
-	// script with both wrote the trap's line and then the hook's — and an
-	// interactive session left with `exit` or with end-of-input wrote them
-	// in that same order. So the trap is the script's last word and the hook
-	// is the shell's, which is the order a plugin's teardown is written
-	// against: gitstatus registers `_gitstatus_cleanup_…` here to stop the
-	// daemon it started, and powerlevel10k's async worker registers
-	// `_p9k_worker_cleanup`.
+	// **After the EXIT trap, not before it.** A script with both writes the
+	// trap's line and then the hook's, and an interactive session left with
+	// `exit` or with end-of-input writes them in that same order. So the trap is
+	// the script's last word and the hook is the shell's, which is the order a
+	// plugin's teardown is written against — a status daemon stopping itself, an
+	// async worker cleaning up.
 	//
-	// The hook is told **no arguments** — `$#` is 0 in the named function and
-	// in every member of the list — and every one of them is told the status
-	// the shell is exiting with. That is the entry status and not a running
-	// one: with the shell exiting 4, a named hook that returned 5 and a
-	// member that ran `false` were both followed by a member reading `$?` as
-	// 4.
+	// The hook is told **no arguments** — `$#` is 0 in the named function and in
+	// every member of the list — and every one of them is told the status the
+	// shell is exiting with. That is the entry status and not a running one:
+	// with the shell exiting 4, a named hook that returned 5 and a member that
+	// ran `false` are both followed by a member reading `$?` as 4.
 	//
-	// **`return` cannot change the status and `exit` can.** `zshexit`
-	// returning 5 left a shell exiting 4 exiting 4. `exit 9` in the named
-	// hook and `exit 11` in a member left it exiting 11 — the *last* `exit`
-	// wins — and, unlike every other chain in this shell, an item that exited
-	// did **not** stop the ones after it: the member after `exit 9` still
-	// ran. There is no session left for `exit` to end, so all it can do is
-	// record a status. See Runner.runExitHook, which is where that one
-	// difference from FireChain's rules lives.
+	// **`return` cannot change the status and `exit` can.** Returning 5 leaves a
+	// shell exiting 4 exiting 4. `exit 9` in the named hook and `exit 11` in a
+	// member leave it exiting 11 — the *last* `exit` wins — and, unlike every
+	// other chain here, an item that exited does **not** stop the ones after it.
+	// There is no session left for `exit` to end, so all it can do is record a
+	// status. See Runner.runExitHook, which is where that one difference from
+	// FireChain's rules lives.
 	//
-	// **Not on a signal death.** A script killed by SIGTERM ran neither its
-	// EXIT trap nor its `zshexit`, which is the same two-two split
-	// ExitTrapRunsOnSignalDeath records for the trap — and since zsh is the
-	// only shell in the panel with the hook at all, there is no disagreement
-	// to make an axis of.
+	// **Not on a signal death.** A script killed by SIGTERM runs neither its
+	// EXIT trap nor this hook, which is the same split ExitTrapRunsOnSignalDeath
+	// records for the trap.
 	//
 	// **The subshell case is not this site.** A subshell that calls `exit`
-	// explicitly fires the hook in there — measured, `(exit 7)` ran
-	// `zshexit` with `$ZSH_SUBSHELL` of 1 — while a subshell that merely
-	// falls off its end does not. That is a firing at a subshell's own exit
-	// and not at the shell's, and this shell's subshells do not pass through
-	// Finish at all, so it is written down here rather than modeled: nothing
-	// reaches it, and a guess about it would be a plausible wrong answer.
+	// explicitly fires the hook in there, while a subshell that merely falls off
+	// its end does not. That is a firing at a subshell's own exit and not at the
+	// shell's, and subshells here do not pass through Finish at all, so it is
+	// written down rather than modeled: nothing reaches it, and a guess about it
+	// would be a plausible wrong answer.
 	ExitHook string
 
-	// ChildInterruptEndsTheScript stops the script when a child was ended by
-	// an interrupt, instead of carrying on with the next command. True in
-	// ksh93 alone, and for SIGINT alone — measured across QUIT, TERM, HUP,
-	// USR1 and PIPE, every one of which it carries on from.
+	// ChildInterruptEndsTheScript stops the script when a child was ended by an
+	// interrupt, instead of carrying on with the next command. For SIGINT alone
+	// — QUIT, TERM, HUP, USR1 and PIPE are all carried on from under either
+	// answer.
 	//
-	// It ends the whole script rather than the construct around it: from
-	// inside a loop, the loop and everything after it are abandoned too.
-	// The status is 128 plus the signal, which is not the same shell's
-	// answer for a command killed by one — that is 256 plus it.
+	// It ends the whole script rather than the construct around it: from inside
+	// a loop, the loop and everything after it are abandoned too. The status is
+	// 128 plus the signal, which is not the same answer as for a command killed
+	// by one — that is 256 plus it.
 	ChildInterruptEndsTheScript Answer
 
-	// ReportsAnyKilledPipelineElement remarks on a signal that ended an
-	// element of a pipeline other than the last. True in dash alone.
+	// ReportsAnyKilledPipelineElement remarks on a signal that ended an element
+	// of a pipeline other than the last.
 	//
-	// bash and ksh93 report only the element whose status the pipeline
-	// takes: `sh -c 'kill -ABRT $$' | cat` is silent in both, and the same
-	// command as the *last* element is not. dash says the same thing
-	// wherever the element stands.
+	// Answering No reports only the element whose status the pipeline takes, so
+	// `sh -c 'kill -ABRT $$' | cat` is silent while the same command as the
+	// *last* element is not. Yes says the same thing wherever the element
+	// stands.
 	//
-	// Unreachable in zsh, which says nothing about a killed command at all,
-	// so the question never arises there.
+	// Unreachable where nothing is said about a killed command at all, so the
+	// question never arises for such a preset.
 	ReportsAnyKilledPipelineElement Answer
 
-	// ReportsACommandKilledBySignal says out loud that a signal ended a
-	// command, rather than leaving the status to carry it alone. True in
-	// bash, dash and ksh93; zsh says nothing — measured with a terminal as
-	// well as without one, so it is not the prompt-only rule that governs a
-	// background job's announcement.
+	// ReportsACommandKilledBySignal says out loud that a signal ended a command,
+	// rather than leaving the status to carry it alone. The answer is the same
+	// with a terminal and without one, so it is not the prompt-only rule that
+	// governs a background job's announcement.
 	//
-	// Not asked for the two signals nothing reports. ^C and a broken pipe
-	// are how a command is meant to end, and all four stay quiet about
-	// those, so there is no disagreement there to put to a dialect.
+	// Not asked for the two signals nothing reports. ^C and a broken pipe are
+	// how a command is meant to end, and both answers stay quiet about those, so
+	// there is no disagreement there to put to a preset.
 	ReportsACommandKilledBySignal Answer
 
 	// JobsShowBackgroundCommand puts the command of a `&` job in a `jobs`

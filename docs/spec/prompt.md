@@ -157,9 +157,11 @@ does.
 | `%m` `%M` | host to the first dot, and all of it | as bash's `\h` `\H` |
 | `%~` | directory, `$HOME` written `~` | `~`, `~/sub`, `/` |
 | `%d` `%/` | directory, untouched | `/private/tmp/p808/home` |
-| `%c` `%.` | last component of `%~` | `~` at `$HOME`, `sub` below it |
-| `%C` | last component of `%d` | `home` at `$HOME` |
-| `%N~` `%Nd` | the last N components | `%2~` drew `sub/deeper` |
+| `%c` `%.` | `%~` with the count defaulting to **one** | `~` at `$HOME`, `sub` below it, `/tmp` in `/tmp` |
+| `%C` | `%d` with the count defaulting to **one** | `home` at `$HOME`, `/tmp` in `/tmp` |
+| `%N~` `%Nd` `%Nc` `%NC` | the last N components | `%2~` drew `sub/deeper`, and `%2c` the same |
+| `%-N~` `%-Nd` `%-Nc` | the **first** N components | `%-1~` drew `~`, `%-2~` `~/sub`, `%-1d` `/private` |
+| `%-NF` `%-NK` | a negative color index: **nothing at all**, and the layer cleared | `%-2F` drew no bytes, where `%F{-1}` draws `\e[39m` |
 | `%#` | `#` for root and `%` otherwise | `%` |
 | `%%` | one percent sign | `25` |
 | `%*` `%T` | clock, **hour not padded** | `6:11:43`, `6:11`, and `0:17:07` after midnight |
@@ -184,6 +186,35 @@ does.
 | `%x` | the file being read | `/opt/homebrew/bin/zsh` at a prompt, the sourced file's path in one |
 | a trailing `%` | **dropped, not drawn** | `PS1='x%'` drew `x`, and `print -P 'x%'` is `x` too — both readers, so it is a row of the table and bash and ksh93 draw the character |
 | anything else | **nothing at all** | `%q` → nothing |
+
+### The count in front of a code
+
+The digits between the escape and the code are an argument to that code, and
+they may carry a **minus**. Measured on zsh 5.9.2, 2026-09-12, in `/tmp/a/b/c`
+and three levels under a home:
+
+| written | drawn | |
+| --- | --- | --- |
+| `%2~` | `b/c` | positive: the **last** N |
+| `%-2~` | `/tmp/a` | negative: the **first** N |
+| `%-1~` under a home | `~` | the tilde is a unit … |
+| `%-1d` spelled out | `/Users` | … and the leading slash is not |
+| `%-~` | `/tmp` | a bare minus is minus one |
+| `%-0~` | `/tmp/a/b/c` | nought is no limit, however it is spelled |
+| `%-9~` | `/tmp/a/b/c` | past the units is the whole path |
+
+`%c`, `%C` and `%.` are the same arithmetic with one difference, and it is the
+whole of what separates them from `%~` and `%d`: an absent count means **one
+component** rather than no limit, and a nought means one as well. So `%2c` is
+`%2~`, `%-1c` is `%-1~`, and only `%c` and `%~` differ. That is also what makes
+`%c` a different question from bash's `\W`, which has no count at all and
+answers the plain basename: in `/tmp`, `\W` is `tmp` and `%c` is `/tmp`.
+
+Every code reads the count, and the ones that count nothing ignore it exactly
+as they ignore a positive one — `%-2n` is the login name and `%-2j` the job
+count. The colors are the exception and the only one: a negative index there
+draws **nothing whatever** and clears the layer, where the braced `%F{-1}` is a
+number out of range and draws the terminal's default.
 
 The clock is where the two languages disagree about the same fact rather
 than about the spelling: measured at the same moment, bash's `\t` drew

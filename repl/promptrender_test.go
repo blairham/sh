@@ -150,6 +150,56 @@ func TestTheFieldsThePanelDisagreesAbout(t *testing.T) {
 	}
 }
 
+// The count in front of a directory code reaches the *drawn* prompt.
+//
+// It did not, and nothing said so. This reader had four cases of its own for
+// the directory codes — reading the same `PWD` and `HOME` out of the same
+// Runner, and abbreviating them with a copy of the same helper — and the copy
+// had no count in it. So `${(%%):-%2~}` written in a script was right while
+// `PS1='%2~> '` drew the whole path, which is about the most common thing
+// anyone puts in a hand-made prompt (#1699).
+//
+// The fix was to delete the copy and ask the Runner, so this test is the
+// guard on the *fold* rather than on an arithmetic that is asserted in interp:
+// what it proves is that the drawer and the script reach one implementation.
+// Every want here is what the same style answers on the script side.
+func TestACountReachesTheDrawnPrompt(t *testing.T) {
+	vars := map[string]string{"HOME": "/home/someone", "PWD": "/home/someone/work/deep"}
+	style := PromptStyle{
+		Escape:          '%',
+		NumericArgument: true,
+		Codes: map[rune]PromptField{
+			'~': FieldCwd, 'd': FieldCwdFull,
+			'c': FieldCwdCounted, 'C': FieldCwdCountedFull,
+			'W': FieldCwdBase,
+		},
+	}
+	s := Shell{Runner: newTestRunner(vars), Style: style}
+	for _, tc := range []struct{ code, want string }{
+		{"%~", "~/work/deep"},
+		{"%1~", "deep"},
+		{"%2~", "work/deep"},
+		{"%3~", "~/work/deep"},
+		{"%-1~", "~"},
+		{"%-2~", "~/work"},
+		{"%2d", "work/deep"},
+		{"%-1d", "/home"},
+		// The counting pair, whose absent count is one rather than no limit.
+		{"%c", "deep"},
+		{"%2c", "work/deep"},
+		{"%C", "deep"},
+		{"%-1C", "/home"},
+		// And bash's `\W`, which has no count at all and keeps its own field.
+		{"%W", "deep"},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			if got := s.render(tc.code); got != tc.want {
+				t.Errorf("%s drew %q, want %q", tc.code, got, tc.want)
+			}
+		})
+	}
+}
+
 // The three shapes a code can have that are not a field.
 func TestACodeThatDrawsWhatTheDialectSays(t *testing.T) {
 	s := Shell{
@@ -291,7 +341,14 @@ func TestTheTableIsReadBeforeExpansion(t *testing.T) {
 
 // The home directory is written `~` when the directory is it or is inside it,
 // and not when it merely starts with the same letters.
+//
+// Asked of the drawn field rather than of a helper. It used to be asked of a
+// copy of the helper that lived in this package, and the copy was the problem
+// #1699 is about — a second implementation of the directory codes, correct on
+// everything anybody tested and missing the count. What is worth pinning here
+// is that the *drawer* answers this, whoever does the arithmetic.
 func TestAbbreviatingTheHomeDirectory(t *testing.T) {
+	style := PromptStyle{Escape: '%', Codes: map[rune]PromptField{'~': FieldCwd}}
 	for _, tc := range []struct{ dir, home, want string }{
 		{"/home/someone", "/home/someone", "~"},
 		{"/home/someone/work", "/home/someone", "~/work"},
@@ -300,8 +357,12 @@ func TestAbbreviatingTheHomeDirectory(t *testing.T) {
 		{"/home/someone", "", "/home/someone"},
 		{"/", "/home/someone", "/"},
 	} {
-		if got := abbreviate(tc.dir, tc.home); got != tc.want {
-			t.Errorf("abbreviate(%q, %q) = %q, want %q", tc.dir, tc.home, got, tc.want)
+		s := Shell{
+			Runner: newTestRunner(map[string]string{"PWD": tc.dir, "HOME": tc.home}),
+			Style:  style,
+		}
+		if got := s.render("%~"); got != tc.want {
+			t.Errorf("%q under home %q drew %q, want %q", tc.dir, tc.home, got, tc.want)
 		}
 	}
 }

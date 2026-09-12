@@ -68,6 +68,8 @@ const (
 	FieldCwdFull          = interp.FieldCwdFull
 	FieldCwdBase          = interp.FieldCwdBase
 	FieldCwdBaseFull      = interp.FieldCwdBaseFull
+	FieldCwdCounted       = interp.FieldCwdCounted
+	FieldCwdCountedFull   = interp.FieldCwdCountedFull
 	FieldPrivilege        = interp.FieldPrivilege
 	FieldShellName        = interp.FieldShellName
 	FieldNewline          = interp.FieldNewline

@@ -181,17 +181,24 @@ func (s Shell) field(f PromptField, arg string, braced bool) string {
 		// Services behind every character typed; resolving eagerly at startup
 		// would put it in front of every `-c` run that can never draw one.
 		return s.askRunner(f, arg, braced)
-	case FieldCwd:
-		return abbreviate(s.varOr("PWD", ""), s.varOr("HOME", ""))
-	case FieldCwdFull:
-		return s.varOr("PWD", "")
-	case FieldCwdBase:
-		// The last component of the *abbreviated* path, so the home directory
-		// itself is `~` and not its own name. Measured: in it, bash's `\W` and
-		// zsh's `%c` both drew `~`, and one directory down both drew `sub`.
-		return lastComponent(abbreviate(s.varOr("PWD", ""), s.varOr("HOME", "")))
-	case FieldCwdBaseFull:
-		return lastComponent(s.varOr("PWD", ""))
+	case FieldCwd, FieldCwdFull, FieldCwdBase, FieldCwdBaseFull,
+		FieldCwdCounted, FieldCwdCountedFull:
+		// Asked of the Runner, not answered here — even though the values are
+		// the session's own `PWD` and `HOME`, which this reader has in hand.
+		//
+		// It had four cases of its own until #1699, reading the same two
+		// variables out of the same Runner and abbreviating them with a copy
+		// of the same helper. What the copy did not have was the **count**, so
+		// a drawn `PS1='%2~> '` showed the whole path where zsh showed `b/c`,
+		// and the script-side `${(%%):-%2~}` beside it was right the whole
+		// time. Nothing said so, because the two answers only differ when
+		// somebody writes a count and every test here wrote none.
+		//
+		// That is the shape a second helper always takes: it is written to
+		// avoid a dependency, it is correct on the day, and the next thing the
+		// first one learns is the thing it does not. So the dependency is
+		// taken instead. See askRunner.
+		return s.askRunner(f, arg, braced)
 	case FieldPrivilege:
 		if os.Geteuid() == 0 {
 			return "#"
@@ -326,43 +333,6 @@ func (s Shell) askRunner(f PromptField, arg string, braced bool) string {
 // this takes a zero off rather than replacing it with a space or with nothing:
 // zero o'clock keeps a digit.
 func unpadHour(clock string) string { return strings.TrimPrefix(clock, "0") }
-
-// lastComponent is the final component of a path, and nothing at all for no
-// path — where path.Base answers `.`, which is a directory and not the absence
-// of one.
-func lastComponent(dir string) string {
-	if dir == "" {
-		return ""
-	}
-	return path.Base(dir)
-}
-
-// abbreviate writes the home directory as `~`.
-//
-// The home directory exactly, or a path inside it — not any path that merely
-// starts with the same letters, which is why the boundary is checked.
-func abbreviate(dir, home string) string {
-	if home == "" || dir == "" {
-		return dir
-	}
-	if dir == home {
-		return "~"
-	}
-	if strings.HasPrefix(dir, home) && (strings.HasSuffix(home, "/") || dir[len(home)] == '/') {
-		return "~" + dir[len(home):]
-	}
-	return dir
-}
-
-func (s Shell) varOr(name, fallback string) string {
-	if s.Runner == nil {
-		return fallback
-	}
-	if v, ok := s.Runner.GetVar(name); ok && v != "" {
-		return v
-	}
-	return fallback
-}
 
 // now is the clock a prompt with the time in it reads.
 //

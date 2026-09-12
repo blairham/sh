@@ -16742,6 +16742,22 @@ echo "st=$?"`,
 		Why:     "zsh's prompt language has about forty escapes and this shell carries four of them. `%q` is one it does not, and zsh drops it silently — `[]` and 0 — so the row records the difference between dropping an escape and naming it as missing. Naming it is the choice here: a prompt quietly short of a field is the kind of wrong answer nobody reports",
 	},
 	{
+		ID: "print/a-negative-count-is-the-leading-components", Category: "builtins",
+		Snippet: `mkdir -p a/b/c/d; cd a/b/c/d; HOME=$(cd ../../../.. && pwd); print -rP -- "[%~][%2~][%-1~][%-2~][%-3~][%-4~][%-5~][%-~][%-0~]"; echo "st=$?"`,
+		Why:     "the count in front of a path code may carry a minus, and then it is the *leading* components where a positive one is the trailing ones. `%-1~` is the tilde on its own, so the marker is a unit and a path of four segments under a home is five things — which is the same asymmetry the trailing side has, seen from the other end. A bare minus is minus one and a nought is no limit however it is spelled, so `%-~` and `%-0~` are the two ends of the range rather than two spellings of the same thing. `HOME` is assigned to the directory above the four so that every field is exact wherever the scratch directory is; the shell reads the assignment, measured. This shell refused `%-` by name everywhere but the conditional until #1699",
+	},
+	{
+		ID: "print/the-base-directory-codes-take-a-count", Category: "builtins",
+		Snippet: `mkdir -p a/b/c/d; cd a/b/c/d; HOME=$(cd ../../../.. && pwd); print -rP -- "[%c][%0c][%1c][%2c][%4c][%5c][%-1c][%-2c][%-c][%-0c][%C][%2C][%.][%2.]"; echo "st=$?"`,
+		Why:     "`%c` is `%~` with one difference and this row is the whole of it: an absent count means **one component** here where it means the whole path there, and a nought means one as well. Everything else is shared — `%2c` is `%2~`, `%5c` past the units is the whole path with its marker back, and a negative count is the leading components. `%C` is the same code against the unabbreviated path and `%.` is a second spelling of `%c`. This shell drew the basename for all fourteen, which is right for bash's `\\W` and is a different question: in a directory one below the root `\\W` is `tmp` where `%c` is `/tmp`, because a single leading component keeps the slash in front of it (#1699)",
+	},
+	{
+		ID: "print/a-negative-count-in-front-of-a-color-is-no-color", Category: "builtins",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `print -rnP -- "%-2Fx%-1F%-F%-0F%-2F{red}" | od -An -c | tr -s ' '; print -rnP -- "%F{red}a%-2Fb%b" | od -An -c | tr -s ' '; echo "st=$?"`,
+		Why:     "where the two readings of a color's argument part company. `%F{-1}` is a number out of range and draws the terminal's default; `%-1F` draws **nothing whatever**, and so do `%-2F` and the bare `%-F` that is minus one. Nought is not negative, so `%-0F` still draws the first color, and braces still beat the count. The second line is the half that writing nothing does not imply: the code still *clears* the layer, so the reset at the end has no foreground to write back — a shell that skipped the code entirely would answer the first line and not this one",
+	},
+	{
 		ID: "print/a-color-prompt-escape-a-script-can-reach", Category: "builtins",
 		Env:     []string{"TERM=xterm-256color"},
 		Snippet: `print -rP '%F{red}r%f%F{196}i%f%K{blue}b%k' | od -An -c | tr -s ' '; echo "st=$?"`,

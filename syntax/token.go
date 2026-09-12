@@ -222,23 +222,39 @@ func (k SpanKind) String() string {
 // unquoted, double-quoted and unquoted, and the whole is a single word. Later
 // stages act only on the unquoted spans, so a lexer that flattened this would
 // make field splitting and globbing unimplementable.
+//
+// The field order is deliberate and is not the order to read them in. Wide
+// fields first, then the one-byte ones together at the end: written in
+// reading order — a kind, a value, a quoting — Go padded the struct out to
+// 88 bytes, of which 15 were holes. There are about 185,000 of these in the
+// tree a real interactive startup leaves behind, so the holes were 3MB of
+// resident memory holding nothing (#2073). Reordering for legibility costs
+// that again.
 type Span struct {
-	// Kind says whether this is literal text or a substitution.
-	Kind SpanKind
 	// Value is the span's text with its own delimiters removed — quotes for a
 	// literal, `$(` and `)` for a substitution — and with no expansion
 	// performed and no escapes resolved. Quote removal proper happens at the
 	// end of expansion, not here.
 	Value string
-	// Quoting is the quoting this span sits in. For a substitution it decides
-	// only whether the result is split afterwards, not what the span is.
-	Quoting Quoting
+
+	// Arith is the parsed form of an ArithSubst span, for the same reason.
+	Arith ArithExpr
+
 	// Param is the parsed form of a ParamExp span, filled by the parser. The
 	// lexer leaves it nil: finding the closing brace and understanding the
 	// operators are different jobs, and only the second needs a dialect.
 	Param *ParamExpr
-	// Arith is the parsed form of an ArithSubst span, for the same reason.
-	Arith ArithExpr
+
+	// Pos is where the span starts, including its opening delimiter.
+	Pos Pos
+
+	// Kind says whether this is literal text or a substitution.
+	Kind SpanKind
+
+	// Quoting is the quoting this span sits in. For a substitution it decides
+	// only whether the result is split afterwards, not what the span is.
+	Quoting Quoting
+
 	// CurrentShell says a command substitution was written `${ cmd;}`, which
 	// runs in the shell that read it rather than in a subshell — so what it
 	// assigns survives, which is the only reason the spelling exists.
@@ -316,9 +332,6 @@ type Span struct {
 	// Only the parser reads it, and only to hand ParamExpr.BareIndexText the
 	// subscript's text.
 	Bare bool
-
-	// Pos is where the span starts, including its opening delimiter.
-	Pos Pos
 }
 
 // Token is one lexical unit.

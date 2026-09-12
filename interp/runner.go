@@ -1987,7 +1987,7 @@ func (r *Runner) lineOf(p syntax.Pos) int {
 		// so the node's own line says nothing.
 		return r.linePin
 	}
-	return p.Line + r.lineBase
+	return int(p.Line) + r.lineBase
 }
 
 // builtinIsSpeaking reports whether this diagnostic belongs to a builtin,
@@ -2177,7 +2177,7 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	if r.started.IsZero() {
 		r.started = r.Now()
 	}
-	r.programEnd = f.End().Line + 1
+	r.programEnd = int(f.End().Line + 1)
 	abandoned := 0
 	for _, st := range f.Stmts {
 		if abandoned != 0 && r.lineOf(st.Pos()) == abandoned {
@@ -2464,7 +2464,7 @@ func shiftParseError(err error, by int) error {
 		return err
 	}
 	moved := *se
-	moved.Pos.Line += by
+	moved.Pos.Line += int32(by)
 	if moved.ConstructLine > 0 {
 		moved.ConstructLine += by
 	}

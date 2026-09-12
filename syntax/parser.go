@@ -210,7 +210,7 @@ func (p *Parser) LineShift() int { return p.aliasLineShift }
 // the text it was written as. A diagnostic quotes what the author typed, and
 // no reconstruction from the tree can be relied on to match it.
 func (p *Parser) slice(from, to Pos) string {
-	if from.Offset < 0 || to.Offset > len(p.lex.src) || from.Offset > to.Offset {
+	if from.Offset < 0 || int(to.Offset) > len(p.lex.src) || from.Offset > to.Offset {
 		return ""
 	}
 	return p.lex.src[from.Offset:to.Offset]
@@ -388,7 +388,7 @@ type opener struct {
 // stack out of step with the parse.
 func (p *Parser) opens(word string) func() {
 	depth := len(p.open)
-	p.open = append(p.open, opener{word: word, line: p.tok.Pos.Line, construct: true})
+	p.open = append(p.open, opener{word: word, line: int(p.tok.Pos.Line), construct: true})
 	return func() { p.open = p.open[:depth] }
 }
 
@@ -403,7 +403,7 @@ func (p *Parser) opensClause(word string) {
 	for len(p.open) > 0 && !p.open[len(p.open)-1].construct {
 		p.open = p.open[:len(p.open)-1]
 	}
-	p.open = append(p.open, opener{word: word, line: p.tok.Pos.Line})
+	p.open = append(p.open, opener{word: word, line: int(p.tok.Pos.Line)})
 }
 
 // ranOut records that the input ended with something unfinished, and keeps
@@ -475,7 +475,7 @@ func (p *Parser) unterminated(expected string) *Error {
 			}
 		}
 	}
-	e.EndLine = p.tok.Pos.Line
+	e.EndLine = int(p.tok.Pos.Line)
 	if !strings.HasSuffix(p.lex.src, "\n") {
 		// The text stopped mid-line, so the end of it is the line after.
 		e.EndLine++
@@ -560,7 +560,7 @@ func (p *Parser) emptyParensStartAt(tok Token) bool {
 	if !p.dialect.EmptyParensAreOneToken || tok.Kind != TokLeftParen {
 		return false
 	}
-	i := tok.End.Offset
+	i := int(tok.End.Offset)
 	return i >= 0 && i < len(p.lex.src) && p.lex.src[i] == ')'
 }
 
@@ -938,7 +938,7 @@ func (p *Parser) parseStmt() *Stmt {
 // produced it, and this is on the path a `jobs` listing prints from.
 func (p *Parser) textBetween(from, to Pos) string {
 	src := p.lex.src
-	if from.Offset < 0 || to.Offset > len(src) || from.Offset >= to.Offset {
+	if from.Offset < 0 || int(to.Offset) > len(src) || from.Offset >= to.Offset {
 		return ""
 	}
 	return strings.TrimSpace(src[from.Offset:to.Offset])
@@ -960,7 +960,7 @@ func (p *Parser) parseAndOr() Expr {
 		// Open while the command after it is looked for, the same way a
 		// pipeline's bar is: input ending on `&&` is a line waiting for its
 		// other half rather than a line that merely stopped.
-		p.open = append(p.open, opener{word: op.String(), line: pos.Line})
+		p.open = append(p.open, opener{word: op.String(), line: int(pos.Line)})
 		p.next()
 		p.skipNewlines()
 		skipped := p.skipSeparators(false)
@@ -1115,7 +1115,7 @@ func (p *Parser) parsePipeline() Expr {
 		// the pipeline and not to whatever construct the pipeline is in. As
 		// a clause it evicted the `then` it was written inside, which then
 		// reported an `if` waiting for a bar.
-		p.open = append(p.open, opener{word: p.tok.Kind.String(), line: p.tok.Pos.Line})
+		p.open = append(p.open, opener{word: p.tok.Kind.String(), line: int(p.tok.Pos.Line)})
 		p.next()
 		p.skipNewlines()
 		// And a `;` written where the command after the bar belongs, for the
@@ -1645,8 +1645,8 @@ func spanRange(spans []Span, from, fromOff, to, toOff int) []Span {
 		if lo >= hi {
 			continue
 		}
-		s.Pos.Offset += lo
-		s.Pos.Col += lo
+		s.Pos.Offset += int32(lo)
+		s.Pos.Col += int32(lo)
 		s.Value = s.Value[lo:hi]
 		out = append(out, s)
 	}

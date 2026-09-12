@@ -76,7 +76,7 @@ func TestALineEndsAtItsHereDocumentDelimiter(t *testing.T) {
 				if !ok {
 					break
 				}
-				got = append(got, f.Last.Line)
+				got = append(got, int(f.Last.Line))
 			}
 			if len(got) != len(c.want) {
 				t.Fatalf("ends = %v, want %v — %s", got, c.want, c.why)

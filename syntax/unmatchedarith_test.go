@@ -95,7 +95,7 @@ func TestAnUnterminatedArithmeticSubstitutionCarriesBothLines(t *testing.T) {
 			t.Errorf("%s: %q: got %v, want an ErrUnmatched", c.why, c.src, err)
 			continue
 		}
-		if se.Pos.Line != c.openerLine {
+		if int(se.Pos.Line) != c.openerLine {
 			t.Errorf("%s: %q: opener on line %d, want %d", c.why, c.src, se.Pos.Line, c.openerLine)
 		}
 		if se.EofLine != c.eof {

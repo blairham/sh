@@ -3254,17 +3254,17 @@ func (d Diagnostics) ParseFailureLine(err error) int {
 				return se.EndLine
 			}
 		} else if d.UnmatchedReportedAtOpener {
-			return se.Pos.Line
+			return int(se.Pos.Line)
 		}
 		if se.EofLine > 0 {
 			return se.EofLine
 		}
-		return se.Pos.Line
+		return int(se.Pos.Line)
 	}
 	if d.UnterminatedEndsOnNextLine && se.EndLine > 0 {
 		return se.EndLine
 	}
-	return se.Pos.Line
+	return int(se.Pos.Line)
 }
 
 // arithParseFailure words an expression the parser refused, blaming expr.

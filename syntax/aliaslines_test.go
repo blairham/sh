@@ -36,7 +36,7 @@ func lineOfCommand(t *testing.T, d syntax.Dialect, a syntax.Aliases, src string)
 		if !ok || len(cmd.Args) == 0 {
 			continue
 		}
-		lines = append(lines, cmd.Args[0].Pos().Line)
+		lines = append(lines, int(cmd.Args[0].Pos().Line))
 	}
 	return lines
 }

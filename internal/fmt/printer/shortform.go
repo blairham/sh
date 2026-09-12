@@ -76,10 +76,10 @@ func (p *printer) shortForm(headerFrom, from, to int) int {
 func (p *printer) commentIn(from, to int) bool {
 	for i := p.ci; i < len(p.comments); i++ {
 		c := p.comments[i]
-		if c.Pos.Offset >= to {
+		if int(c.Pos.Offset) >= to {
 			return false
 		}
-		if c.Pos.Offset >= from {
+		if int(c.Pos.Offset) >= from {
 			return true
 		}
 	}
@@ -141,7 +141,7 @@ func (p *printer) separatorBeforeClose(body []*syntax.Stmt) bool {
 		return false
 	}
 	semi := false
-	for i := body[len(body)-1].End().Offset; i < len(p.src); i++ {
+	for i := int(body[len(body)-1].End().Offset); i < len(p.src); i++ {
 		switch p.src[i] {
 		case ' ', '\t', '\n', '\r':
 		case ';':
@@ -159,7 +159,7 @@ func (p *printer) separatorBeforeClose(body []*syntax.Stmt) bool {
 // for its body's brace begins.
 func condEnd(cond []*syntax.Stmt, fallback int) int {
 	if n := len(cond); n > 0 {
-		return cond[n-1].End().Offset
+		return int(cond[n-1].End().Offset)
 	}
 	return fallback
 }
@@ -168,7 +168,7 @@ func condEnd(cond []*syntax.Stmt, fallback int) int {
 // body, or where the body would have been had it any statements.
 func bodyStart(body []*syntax.Stmt, fallback int) int {
 	if len(body) > 0 {
-		return body[0].Pos().Offset
+		return int(body[0].Pos().Offset)
 	}
 	return fallback
 }
@@ -186,7 +186,7 @@ func (p *printer) ifShortForm(x *syntax.IfClause) bool {
 	case x.HasElse && len(x.Else) > 0:
 		thenLimit = x.Else[0].Pos().Offset
 	}
-	brace := p.shortForm(x.Start.Offset, condEnd(x.Cond, x.Start.Offset), bodyStart(x.Then, thenLimit))
+	brace := p.shortForm(int(x.Start.Offset), condEnd(x.Cond, int(x.Start.Offset)), bodyStart(x.Then, int(thenLimit)))
 	if brace < 0 {
 		return false
 	}
@@ -204,19 +204,19 @@ func (p *printer) ifShortForm(x *syntax.IfClause) bool {
 		case x.HasElse && len(x.Else) > 0:
 			limit = x.Else[0].Pos().Offset
 		}
-		b := p.shortForm(e.Start.Offset, condEnd(e.Cond, e.Start.Offset), bodyStart(e.Then, limit))
+		b := p.shortForm(int(e.Start.Offset), condEnd(e.Cond, int(e.Start.Offset)), bodyStart(e.Then, int(limit)))
 		if b < 0 {
 			return false
 		}
-		links = append(links, link{e: e, brace: b, limit: limit})
+		links = append(links, link{e: e, brace: b, limit: int(limit)})
 	}
 
 	single := oneLine(x.Start, x.Stop)
 	if single {
-		p.braceClause(x.Start.Offset, brace, x.Then, thenLimit, true)
+		p.braceClause(int(x.Start.Offset), brace, x.Then, int(thenLimit), true)
 		for _, l := range links {
 			p.b.WriteByte(' ')
-			p.braceClause(l.e.Start.Offset, l.brace, l.e.Then, l.limit, true)
+			p.braceClause(int(l.e.Start.Offset), l.brace, l.e.Then, l.limit, true)
 		}
 		if x.HasElse {
 			p.b.WriteString(" else {")
@@ -229,13 +229,13 @@ func (p *printer) ifShortForm(x *syntax.IfClause) bool {
 		return true
 	}
 
-	p.b.WriteString(p.headerSource(x.Start.Offset, brace))
+	p.b.WriteString(p.headerSource(int(x.Start.Offset), brace))
 	p.b.WriteString(" {")
 	p.newline()
-	p.block(x.Then, thenLimit)
+	p.block(x.Then, int(thenLimit))
 	for _, l := range links {
 		p.b.WriteString("} ")
-		p.b.WriteString(p.headerSource(l.e.Start.Offset, l.brace))
+		p.b.WriteString(p.headerSource(int(l.e.Start.Offset), l.brace))
 		p.b.WriteString(" {")
 		p.newline()
 		p.block(l.e.Then, l.limit)
@@ -243,7 +243,7 @@ func (p *printer) ifShortForm(x *syntax.IfClause) bool {
 	if x.HasElse {
 		p.b.WriteString("} else {")
 		p.newline()
-		p.block(x.Else, x.Stop.Offset)
+		p.block(x.Else, int(x.Stop.Offset))
 	}
 	p.b.WriteString("}")
 	return true
@@ -254,7 +254,7 @@ func (p *printer) ifShortForm(x *syntax.IfClause) bool {
 // [printer.shortForm] steps over one.
 func itemsEnd(items []*syntax.Word, fallback int) int {
 	if n := len(items); n > 0 {
-		return items[n-1].End().Offset
+		return int(items[n-1].End().Offset)
 	}
 	return fallback
 }

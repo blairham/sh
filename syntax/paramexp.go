@@ -1549,8 +1549,8 @@ func (p *Parser) wordFrom(text string, at Pos, q Quoting) *Word {
 			gap(len(text))
 			break
 		}
-		gap(t.Pos.Offset)
-		last = t.End.Offset
+		gap(int(t.Pos.Offset))
+		last = int(t.End.Offset)
 		if t.Kind == TokWord {
 			// Through newWord, so a nested ${ } in an operand is parsed too.
 			nested := p.newWord(t.Spans, at, at)
@@ -1703,13 +1703,13 @@ func (p *Parser) scanNestedExpansion(s string, at Pos, q Quoting) (inner *Word, 
 		if t.Kind != TokWord {
 			return nil, "", false
 		}
-		spans, end = t.Spans, t.End.Offset
+		spans, end = t.Spans, int(t.End.Offset)
 	}
 	if len(spans) == 0 {
 		return nil, "", false
 	}
 	if len(spans) > 1 {
-		end = spans[1].Pos.Offset
+		end = int(spans[1].Pos.Offset)
 	}
 	if end > len(s) {
 		return nil, "", false

@@ -320,7 +320,7 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 			if msg == "" {
 				return ""
 			}
-			return pdg.Report(name, rk.Pos.Line, msg+"\n")
+			return pdg.Report(name, int(rk.Pos.Line), msg+"\n")
 		},
 		// And whether a construct it refused still asks for another line,
 		// which one of the four does — see

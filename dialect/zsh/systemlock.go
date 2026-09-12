@@ -311,7 +311,7 @@ func zsystemLock(r *interp.Runner, ctx context.Context, opts zsystemFlockOpts, n
 		// No `flock:` on this one, measured: the sentence names the file and
 		// what it was to be opened for, which is already more than the
 		// subcommand's name would add.
-		r.Diagnosef("failed to open %s for %s: %s\n", name, direction, sysErrnoText(err))
+		r.Diagnosef("failed to open %s for %s: %s\n", name, direction, sysErrnoText(r, err))
 		return 1
 	}
 	if !r.VerifyOpened(ctx, &action, f) {
@@ -328,7 +328,7 @@ func zsystemLock(r *interp.Runner, ctx context.Context, opts zsystemFlockOpts, n
 			// lock is busy.
 			return 2
 		}
-		r.Diagnosef("failed to lock file %s: %s\n", name, sysErrnoText(err))
+		r.Diagnosef("failed to lock file %s: %s\n", name, sysErrnoText(r, err))
 		return 1
 	}
 	fd := r.OpenDescriptor(f)

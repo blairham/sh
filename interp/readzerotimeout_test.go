@@ -34,6 +34,9 @@ func zeroTimeoutRun(t *testing.T, in *os.File, style ReadZeroTimeoutStyle, src s
 	// readoptions_test.go, where both answers are exercised; fixing it here
 	// keeps these tests about the style.
 	sem.ReadTimeoutKeepsWhatArrived = No
+	// And what a real deadline bounds, for the same reason: the control
+	// below writes one, and this file is about the zero.
+	sem.ReadTimeoutBoundsReadability = No
 	r := newTestRunner(t, &Runner{
 		Stdin: in, Stdout: &buf, Stderr: &buf,
 		Semantics: &sem, Dir: t.TempDir(), Name: "testsh",

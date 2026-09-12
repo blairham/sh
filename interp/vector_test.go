@@ -128,6 +128,10 @@ func testSemantics() Semantics {
 	s.ReadExactCountKeepsPartial = Yes
 	s.ReadPartialCountSucceeds = No
 	s.ReadTimeoutKeepsWhatArrived = Yes
+	// And what the deadline is a deadline *for*: the whole read, which is
+	// what two of the three answer. The suite that is *about* it sets both —
+	// see readtimeoutscope_test.go.
+	s.ReadTimeoutBoundsReadability = No
 
 	// Jobs, pipelines and what a pipeline leaves behind.
 	s.PipefailOption = Yes

@@ -84,6 +84,16 @@ func (r *Runner) reportRefusal(a Action) {
 // A run with no gate takes the first line and nothing else, so its opens are
 // the calls they always were, flags included.
 func (r *Runner) openGated(ctx context.Context, a *Action, path string, flags int) (*os.File, error) {
+	f, err := r.openGatedFile(ctx, a, path, flags)
+	// Every open this shell makes for a script comes through here, so this is
+	// where the number a failure left is recorded rather than at each caller
+	// — see interp/errno.go, and note that a second door recording it would
+	// be a second answer to what `$ERRNO` holds.
+	r.NoteErrno(err)
+	return f, err
+}
+
+func (r *Runner) openGatedFile(ctx context.Context, a *Action, path string, flags int) (*os.File, error) {
 	if r.Gate == nil {
 		return os.OpenFile(path, flags, 0o666)
 	}
@@ -101,6 +111,12 @@ func (r *Runner) openGated(ctx context.Context, a *Action, path string, flags in
 // different callers: a redirect hands the descriptor to a command and needs
 // the flags, and `.` wants the bytes and closes the file itself.
 func (r *Runner) readFileGated(ctx context.Context, a *Action, path string) ([]byte, error) {
+	b, err := r.readFileGatedBytes(ctx, a, path)
+	r.NoteErrno(err)
+	return b, err
+}
+
+func (r *Runner) readFileGatedBytes(ctx context.Context, a *Action, path string) ([]byte, error) {
 	if r.Gate == nil {
 		return os.ReadFile(path)
 	}

@@ -949,7 +949,31 @@ type Diagnostics struct {
 	TypeKeyword  string
 	TypeBuiltin  string
 	TypeFunction string
-	TypeExternal string
+	// TypeFunctionFrom is that sentence for a dialect that names *where* the
+	// function was defined. Two verbs: the name and the origin — the path of
+	// the file it was read from, or the shell's own name where the shell
+	// itself defined it.
+	//
+	// Empty means the dialect does not name an origin, which is three of the
+	// four; TypeFunction answers for them. It is a separate field rather than
+	// a second verb on that one because a one-verb format handed two verbs
+	// would silently drop the second, and the point here is that the second
+	// is the part that was missing.
+	//
+	// Measured 2026-09-12 on zsh 5.9.2 with `qf` on `$fpath` and `lib.zsh`
+	// holding `sf() { :; }`:
+	//
+	//	autoload -Uz qf; qf; whence -v qf   qf is a shell function from /…/qf
+	//	source lib.zsh; whence -v sf        sf is a shell function from /…/lib.zsh
+	//	g(){ :; }; whence -v g              g is a shell function from zsh
+	//
+	// The third row is what the fixed string used to give all three, which is
+	// why nothing noticed: every test that defines its function in the
+	// snippet it runs is on that row. There is a fourth — a program on
+	// standard input, where the clause is absent altogether — and
+	// Runner.functionOrigin is where that is decided.
+	TypeFunctionFrom string
+	TypeExternal     string
 
 	// TypeUndefinedFunction is that line again for a function whose body has
 	// not been read yet, in the two shells that have such a thing. One verb,

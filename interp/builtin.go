@@ -2579,6 +2579,10 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 		}
 	}
 	if err != nil {
+		// The number the kernel gave, for the parameter and the builtin that
+		// present it — `cd` is the plainest system call a script makes, and
+		// the one it asks about afterwards. See interp/errno.go.
+		r.NoteErrno(err)
 		// The reason the operating system gave, rather than one made up
 		// here: three of the four report it, and two of those distinguish a
 		// path that is not there from one that is not a directory. Saying
@@ -3118,7 +3122,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// that started this job is blocked for the whole of it.
 		r.settleBackgroundJobBeforeABlockingRead(in)
 		var stop func()
-		next, stop = r.timedByteSource(ctx, in, timeout)
+		whole := !r.ask(r.sem().ReadTimeoutBoundsReadability,
+			"`read -t` bounding the wait for the first byte rather than the whole read")
+		if r.unspecified {
+			return 2
+		}
+		next, stop = r.timedByteSource(ctx, in, timeout, whole)
 		defer stop()
 	default:
 		// The read that never returns, which is the one a coprocess makes
@@ -3552,7 +3561,12 @@ func directByteSource(in io.Reader) func() (byte, int) {
 // lost, which is the cost of a timeout over a plain pipe and is confined to
 // the stream the timeout was used on. stop releases the goroutine and must
 // be called once the segment is read.
-func (r *Runner) timedByteSource(ctx context.Context, in io.Reader, timeout time.Duration) (next func() (byte, int), stop func()) {
+//
+// bounded says the deadline covers the *whole* read. Where it does not, the
+// timer is dropped as soon as the first byte arrives and everything after it
+// is read without one — see Semantics.ReadTimeoutBoundsReadability, which is
+// what decides which of the two this is.
+func (r *Runner) timedByteSource(ctx context.Context, in io.Reader, timeout time.Duration, whole bool) (next func() (byte, int), stop func()) {
 	if timeout <= 0 {
 		// No time at all, which is out of time before the first byte. A
 		// timeout that is *written* as zero never reaches here — it is a
@@ -3581,18 +3595,32 @@ func (r *Runner) timedByteSource(ctx context.Context, in io.Reader, timeout time
 			resp <- event{b: ch[0]}
 		}
 	}()
-	done := false
+	done, arrived := false, false
 	next = func() (byte, int) {
 		if done {
 			return 0, evEOF
 		}
 		req <- struct{}{}
+		if arrived && !whole {
+			// The deadline bounded the wait for the stream to become
+			// readable and nothing after it, so this read waits as long as
+			// it has to. A byte dripping every 0.1s under `-t 0.25` gives
+			// the whole line and status 0 in the shell that reads this way,
+			// where a whole-read deadline gives 1 and a partial line (#644).
+			ev := <-resp
+			if ev.eof {
+				done = true
+				return 0, evEOF
+			}
+			return ev.b, evByte
+		}
 		select {
 		case ev := <-resp:
 			if ev.eof {
 				done = true
 				return 0, evEOF
 			}
+			arrived = true
 			return ev.b, evByte
 		case <-tctx.Done():
 			done = true

@@ -113994,6 +113994,50 @@
         "TimedOut": false
       }
     },
+    "read/a-fractional-timeout": {
+      "bash": {
+        "Stdout": "st=0 [hi]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 [hi]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 []",
+        "Stderr": "\u003cshell\u003e: line 0: read: 0.2: invalid timeout specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -t",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 [hi]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [hi]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "read/a-positional-where-a-name-is-wanted": {
       "bash": {
         "Stdout": "st=1 one=[]",
@@ -115440,6 +115484,50 @@
       },
       "zsh": {
         "Stdout": "[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/what-a-timeout-is-a-deadline-for": {
+      "bash": {
+        "Stdout": "st=142 l=[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=142 l=[a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 l=[keep]",
+        "Stderr": "\u003cshell\u003e: line 0: read: 0.1: invalid timeout specification",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 l=[keep]",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -t",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 l=[keep]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 l=[abc]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -133423,6 +133511,50 @@
         "TimedOut": false
       }
     },
+    "system/an-errno-of-the-shells-own": {
+      "bash": {
+        "Stdout": "st=127~[13]",
+        "Stderr": "\u003cshell\u003e: line 1: syserror: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~[13]",
+        "Stderr": "\u003cshell\u003e: line 1: syserror: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~[13]",
+        "Stderr": "\u003cshell\u003e: syserror: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~[13]",
+        "Stderr": "\u003cshell\u003e: 1: syserror: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~[13]",
+        "Stderr": "\u003cshell\u003e: syserror: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~[13]",
+        "Stderr": "Permission denied",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "system/an-error-number-becomes-a-name": {
       "bash": {
         "Stdout": "st=127 [[1]] [[2]] [[9]]",
@@ -143329,6 +143461,50 @@
       },
       "zsh": {
         "Stdout": "ll: alias~f: function~echo: builtin~if: reserved~ls: command~nosuchcmd431: none~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/where-a-function-was-defined": {
+      "bash": {
+        "Stdout": "\u003cscript\u003e: line 4: whence: command not found~sf is a function~sf () ~{ ~    :~}~\u003cscript\u003e: line 5: whence: command not found~own is a function~own () ~{ ~    :~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cscript\u003e: line 4: whence: command not found~sf is a function~sf () ~{ ~    :~}~\u003cscript\u003e: line 5: whence: command not found~own is a function~own () ~{ ~    :~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cscript\u003e: line 4: whence: command not found~sf is a function~sf () ~{ ~    :~}~\u003cscript\u003e: line 5: whence: command not found~own is a function~own () ~{ ~    :~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cscript\u003e: 4: whence: not found~sf is a shell function~\u003cscript\u003e: 5: whence: not found~own is a shell function",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "sf is a function~own is a function",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "sf is a shell function from ./lib.zsh~own is a shell function from \u003cscript\u003e",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

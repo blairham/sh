@@ -175,9 +175,9 @@ var exempt = map[string]string{
 	"interp.readDir": "fsgate.go's own listing, behind ActionReadDir. The gated path opens the " +
 		"directory through internal/opened and takes the entries from that descriptor; the " +
 		"os.ReadDir calls are the no-gate and watch-only forms.",
-	"interp.openGated": "verifyopen.go: the open the gate has just agreed to, verified against " +
+	"interp.openGatedFile": "verifyopen.go: the open the gate has just agreed to, verified against " +
 		"the object it reached before the descriptor is returned. The seam itself.",
-	"interp.readFileGated": "verifyopen.go: the same, for the read-whole-file form.",
+	"interp.readFileGatedBytes": "verifyopen.go: the same, for the read-whole-file form. The\n\touter openGated and readFileGated are the errno-recording wrappers around\n\tthese two and reach nothing themselves.",
 	"interp.settleBackgroundJobBeforeABlockingOpen": "a stat of the path a redirection is about " +
 		"to open, to learn whether the open can block. The open itself goes through the gate a " +
 		"moment later and is refused there; this answers a question about waiting, and a " +

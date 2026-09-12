@@ -227,11 +227,48 @@ func (r *Runner) typeBarePath(name string, kind bool) int {
 // copy is how the two would come to answer it differently — which is the
 // mistake this tree has made often enough to have a rule about. A shell with
 // no such notion has no second wording either, and falls straight through.
+// FunctionSentence is that line for a dialect's own name-reporting builtin,
+// which asks the identical question: `type` in one shell *is* `whence -v`,
+// and the two writing the sentence separately is how they came to disagree
+// about the origin — one of them naming a file and the other a constant.
+func (r *Runner) FunctionSentence(name string) string {
+	return r.typeFunctionLine(r.diag(), name)
+}
+
 func (r *Runner) typeFunctionLine(dg Diagnostics, name string) string {
 	if _, undefined := r.undefinedFunction(name); undefined && dg.TypeUndefinedFunction != "" {
 		return Wording(dg.TypeUndefinedFunction, "%[1]s is an undefined function", name)
 	}
+	if origin, ok := r.functionOrigin(name); ok && dg.TypeFunctionFrom != "" {
+		return Wording(dg.TypeFunctionFrom, "%[1]s is a function from %[2]s", name, origin)
+	}
 	return Wording(dg.TypeFunction, "%[1]s is a function", name)
+}
+
+// functionOrigin is where a function was defined, for the dialect whose
+// sentence names it.
+//
+// [Runner.funcFiles] already held the answer for a definition the parser read
+// — it is what a frame reports and what a function's own trace is built from
+// — and holds it for one a builtin defined from text as well, which is what
+// makes an autoloaded function name its file rather than the shell.
+//
+// The fallback is the shell's own name, and it is the shell's name in a
+// diagnostic rather than `$0`: measured 2026-09-12 through a symlink,
+// `./xyzzy -c 'g(){ :; }; whence -v g'` still says `from zsh`.
+//
+// There is one route with no origin at all — a program on standard input,
+// where the same definition is `g is a shell function` with no clause after
+// it. Reported as false rather than as an empty string, so the caller writes
+// the other sentence instead of a clause naming nothing.
+func (r *Runner) functionOrigin(name string) (string, bool) {
+	if file := r.funcFiles[name]; file != "" {
+		return file, true
+	}
+	if r.Route == RouteStandardInput {
+		return "", false
+	}
+	return r.name(), true
 }
 
 // typeAll is `-a`: every resolution the name has — the shell's own answer

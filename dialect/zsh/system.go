@@ -198,6 +198,11 @@ func sysparamsView(r *interp.Runner) interp.AssocArray {
 //	<( … )        54129            54074
 //	{ … } &       54132            54074
 //
+// Re-measured 2026-09-12 with the groups in place, one script and the same
+// contexts: real zsh answers a different pid in every body and this shell a
+// different group, and neither ever answers the shell's own process group —
+// which is the property the session rides on rather than "non-empty".
+//
 // `$$` is the shell's number in every row of both columns — *that difference*
 // is why the key exists. A body reads this key to learn the one thing `$$`
 // will not tell it: which process it is itself. Here the honest answer to
@@ -265,17 +270,28 @@ func sysparamsView(r *interp.Runner) interp.AssocArray {
 // the last of them is the one that made this shell's own number a catastrophe.
 //
 // So this key answers the group where there is one, and empty where there is
-// not: a plain subshell, a command substitution, a pipeline element and a
-// background job have no group of their own yet, and a front end that supplied
-// no anchor has none anywhere. See [interp.Runner.SubshellProcessGroup], and
-// interp/procanchor.go for the whole argument.
+// not — and since #2114 there is one in **all five** bodies a real shell would
+// have forked, not only a process substitution's. A subshell, a command
+// substitution, a pipeline element and a background job each lead a group of
+// their own now; only a front end that supplied no anchor has none anywhere.
+// See [interp.Runner.SubshellProcessGroup] and [interp.Runner.anchorForkedBody],
+// and interp/procanchor.go for the whole argument.
 //
-// The fifth of those five reads is the one the group does not cover, and it is
-// named rather than rounded off: gitstatus's `mbuild` — a build script, not
-// anything a startup runs — reads it inside `{ … } | while read; do; done`,
-// which is a pipeline element. It gets the same empty value it got before, for
-// the same reason, and closing that gap is a lifetime this shell does not
-// reconstruct yet rather than a different answer to the question.
+// The substitution came first because its lifetime was already reconstructed.
+// The other four needed one each — a subshell's and a command substitution's
+// is the body's own run, a pipeline element's is the element's, a background
+// job's is the job's — and they are one mechanism with four releases rather
+// than four mechanisms, because a second helper spreads the bug.
+//
+// The fifth of those five reads in the plugin tree is answered by this too:
+// gitstatus's `mbuild` — a build script, not anything a startup runs — reads
+// it inside `{ … } | while read; do; done`, which is a pipeline element.
+//
+// The **last** element of a zsh pipeline is the one body that still answers
+// this shell's own number, and that is not a gap: measured, real zsh answers
+// its own pid there too, because that element runs on the shell rather than in
+// a fork. It falls out of the mechanism — only the elements the pipeline
+// clones are given an anchor — rather than being written in.
 //
 // It is not this process's number in any of those cases, and it must never
 // become one. That is the deviation this file has recorded twice and the

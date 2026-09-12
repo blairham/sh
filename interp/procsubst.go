@@ -106,6 +106,12 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 		keep.nudge = path
 	}
 	sub.pipeEnd = keep
+	// And the same field every other forked body answers from. The anchor
+	// lives on the count rather than on the runner because *this* body's
+	// group outlives the body — a job it backgrounded holds it — which is
+	// the one lifetime of the five that is not the body's own run. See
+	// Runner.anchorForkedBody for the other four.
+	sub.bodyAnchor = keep.anchor
 
 	// `>(cmd)` reads the command's input out of the pipe, and the shell can
 	// take that end without waiting for anybody — so it is taken here, on

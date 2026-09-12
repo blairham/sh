@@ -347,6 +347,22 @@ type Runner struct {
 	// body's return, which is what a fork gives a real shell for nothing.
 	// See substEnd.
 	pipeEnd *substEnd
+	// bodyAnchor is the process group a body a real shell would have *forked*
+	// leads here: a subshell, a command substitution, a pipeline element, a
+	// background job or a process substitution's body. Nil on the shell
+	// itself, which has a process and needs no stand-in for one.
+	//
+	// One field for all five, deliberately. Each of them reconstructs the
+	// body's lifetime differently — a subshell's is its own run, a job's is
+	// the job's, a substitution's is the family's — and the *question* a
+	// script asks inside them is the same one, so the answer is the same
+	// mechanism with five different releases rather than five mechanisms.
+	// See procanchor.go, and Runner.anchorForkedBody for where it is set.
+	//
+	// Copied by clone, which is what a body nested in another body wants
+	// until it overwrites it: a `( … )` inside a `<(…)` whose own body never
+	// asked still names the substitution's group, which contains it.
+	bodyAnchor *procAnchor
 	// substRan records that a command substitution reported a status during
 	// the expansion just performed — see simple().
 	substRan bool

@@ -126,6 +126,12 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// and a pipeline element are subshells too and neither is one.
 		sub.subshellLoopFloor = sub.loopDepth
 		sub.inheritJobs(jobBoundaryCompound)
+		// The group a real shell's fork would have given these parentheses,
+		// for a body that asks which process it is. Its lifetime is the
+		// body's own run: the caller joins here before carrying on, so there
+		// is nothing left of the subshell to hold it open. See
+		// Runner.anchorForkedBody.
+		defer sub.anchorForkedBody()()
 		err := sub.runList(ctx, c.List)
 		// The subshell is over, which for a real shell is a process exit: its
 		// own EXIT trap runs here, before the status is read, so a handler

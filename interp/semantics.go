@@ -7094,6 +7094,23 @@ type Semantics struct {
 	// all: ksh93; bash and zsh count the negative length from the end.
 	SubstringNegativeLengthIsEmpty Answer
 
+	// ListSliceNegativeLengthIsAnError refuses `${a[@]:1:-1}` and
+	// `${@:1:-1}` outright, where the *string* spelling of the same length
+	// is accepted and counts from the end. bash alone: `-1: substring
+	// expression < 0`, status 1, and the command list is abandoned — and
+	// bash 3.2 says the same, though it refuses the string form too. zsh
+	// counts a list's negative length from the end just as it does a
+	// string's, and ksh93 answers both with nothing, which is
+	// SubstringNegativeLengthIsEmpty above.
+	//
+	// So the discriminator is the *subject* rather than the sign, and this
+	// is the axis for the list half; the string half is unanimous between
+	// bash and zsh and was settled in #342. Asked only where there is
+	// something to slice: bash's `${a[@]:3:-1}` on three elements is empty
+	// at status 0, and it does not even evaluate the length word there
+	// (#1735).
+	ListSliceNegativeLengthIsAnError Answer
+
 	// SubstringRangeReadsModifiers makes `${x:h}` a *modifier* rather than
 	// an arithmetic offset: zsh, where the range is also that shell's
 	// history-modifier syntax; bash, ksh93 and dash read it as the
@@ -9374,6 +9391,13 @@ func PosixSemantics() Semantics {
 		WholeSubscriptOnAScalarSlicesIt: Yes,
 		UnsetNameAtIsOneEmptyField:      No,
 		SubstringNegativeLengthIsEmpty:  No,
+		// POSIX has neither substrings nor arrays, so there is no list here
+		// to slice and no text to read. The base takes the reading two of
+		// the three shells with the construct share — a negative length is
+		// an offset from the end, not a refusal — which is also the one
+		// that keeps the list spelling agreeing with the string spelling
+		// beside it. dash and ash never reach it.
+		ListSliceNegativeLengthIsAnError: No,
 		// The standard has no modifiers and no history syntax, so a range is
 		// the arithmetic it looks like — which is also what three of the four
 		// do with it.

@@ -2748,6 +2748,33 @@ func sliceElems(elems []string, off int, e *syntax.ParamExpr, r *Runner) []strin
 		return out
 	}
 	n := r.numOf(lenWord, e, nil)
+	if n < 0 && off < len(elems) {
+		// The subject decides, not the sign: the same `-1` is a valid
+		// length for a *string* in bash and a refusal for a list, in one
+		// shell (#1735). Asked only where there is something to slice —
+		// bash's `${a[@]:3:-1}` on three elements is empty at status 0, and
+		// so is the same slice of an empty array, so an offset at or past
+		// the end is answered before the length is looked at.
+		if r.ask(r.sem().ListSliceNegativeLengthIsAnError, "a negative length refusing a list slice") {
+			// The length as *written*, which is what the one shell that
+			// refuses blames: `${a[@]:1:1-$n}` names `1-$n` and not the -2
+			// it came to.
+			r.diagf("%s\n", Wording(r.diag().ListSliceNegativeLength,
+				"%[1]s: substring expression < 0", syntax.PrintWord(lenWord)))
+			r.expandErr = true
+			return nil
+		}
+		if r.unspecified {
+			return nil
+		}
+		// And where it is not refused the two spellings still part: one
+		// dialect answers a negative length with nothing at all and the
+		// others count it from the end, which is the axis the string form
+		// beside this one already asks.
+		if r.ask(r.sem().SubstringNegativeLengthIsEmpty, "a negative substring length") {
+			return nil
+		}
+	}
 	if n < 0 {
 		n = len(elems) + n - off
 	}

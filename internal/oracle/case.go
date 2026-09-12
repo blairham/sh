@@ -9619,6 +9619,26 @@ echo "st=$?"`,
 		Why:     "the slice is a list, so an element holding a space stays one field — which is the whole reason this is not a substring of the joined text",
 	},
 	{
+		ID: "param/a-negative-length-splits-string-from-list", Category: "parameter expansion",
+		Snippet: `v=abcdef; printf "[%s]" "${v:1:-1}"; echo; a=(ax bx cx); printf "[%s]" "${a[@]:1:-1}"; echo " st=$?"`,
+		Why:     "the same -1 is a valid length for a string and a refusal for a list, in one shell: bash prints bcde and then stops on `-1: substring expression < 0` at status 1, so the discriminator is the subject and not the sign. zsh counts from the end for both, ksh93 answers both with nothing, and bash 3.2 refuses the string half too, which is a version difference rather than a dialect's. #342 settled the string half; this is the list half nobody had measured. ListSliceNegativeLengthIsAnError",
+	},
+	{
+		ID: "param/a-negative-length-on-the-positionals", Category: "parameter expansion",
+		Snippet: `set -- ax bx cx; printf "[%s]" "${@:1:-1}"; echo " st=$?"`,
+		Why:     "the positional spelling of the same slice, which is the one an ordinary script writes. It reaches the same refusal in bash and the same three answers across the panel, and it is worth its own row because the two spellings only started sharing a path in the #1589 fix — before that the positional form gave a third wrong answer of its own",
+	},
+	{
+		ID: "param/a-negative-length-past-the-end-is-not-refused", Category: "parameter expansion",
+		Snippet: `a=(ax bx cx); printf "[%s]" "${a[@]:3:-1}"; echo " st=$?"; b=(); printf "[%s]" "${b[@]:0:-1}"; echo " st=$?"`,
+		Why:     "the bound on the refusal, and the row that says it is not simply \"a negative length is an error here\": an offset at or past the end of the list is empty at status 0 in every column, bash included, so the sign is only looked at where there is something to slice",
+	},
+	{
+		ID: "param/a-negative-length-is-blamed-as-written", Category: "parameter expansion",
+		Snippet: `a=(ax bx cx); n=3; printf "[%s]" "${a[@]:1:1-$n}"; echo " st=$?"`,
+		Why:     "what the refusal names: the length as it was written, `1-$n`, and not the -2 it came to — so the diagnostic points at the script rather than at the arithmetic. The other two columns answer the same as they do for a literal -2, which is what makes this a row about the wording and not about the value",
+	},
+	{
 		ID: "param/a-negative-subscript-counts-from-the-end", Category: "parameter expansion",
 		Snippet: `a=(10 20 30); printf "[%s]" "${a[-1]}" "${a[-2]}" "$((a[-3]))"`,
 		Why:     "a negative subscript is end-relative in bash, ksh93 and zsh — zsh included, whose positive subscripts count from 1 — so it does not inherit the base axis, in an expansion or in arithmetic. bash 3.2 predates the form and refuses it. We expanded it to nothing",

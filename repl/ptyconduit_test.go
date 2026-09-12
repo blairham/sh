@@ -653,14 +653,14 @@ func TestPassingAMarkIsNotFollowedByAWriteOfNothing(t *testing.T) {
 				t.Errorf("the pump made writes of %v, want %v — a write of nothing after "+
 					"the mark is a write made after the drain was released", w.sizes, tc.want)
 			}
-			signalled := false
+			signaled := false
 			select {
 			case <-c.reached:
-				signalled = true
+				signaled = true
 			default:
 			}
-			if signalled != tc.after {
-				t.Errorf("the drain was signalled = %v, want %v", signalled, tc.after)
+			if signaled != tc.after {
+				t.Errorf("the drain was signaled = %v, want %v", signaled, tc.after)
 			}
 		})
 	}

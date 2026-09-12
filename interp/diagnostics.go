@@ -2465,11 +2465,11 @@ type Diagnostics struct {
 	//	typeset x=2    → <script>: line 2: x: is read only
 	//	typeset +r x   → <script>[2]: typeset: x: is read only
 	//
-	// One word, two sentences and two locations, so the builtin's name
-	// cannot decide it alone. The plus form there takes the shape `set -A`
-	// takes — the builtin's own location with the builtin named — and the
-	// assignment through the same word takes the plain line form. bash names
-	// the builtin for both and needs no second answer.
+	// One word, two sentences and two locations, so the builtin's name cannot
+	// decide it alone. The plus form there takes the shape `set -A` takes — the
+	// builtin's own location with the builtin named — and the assignment through
+	// the same word takes the plain line form. A preset that names the builtin
+	// for both needs no second answer.
 	ReadonlyRemovalNamesBuiltin map[string]bool
 
 	// DeclareNoSuchVariable is what `declare -p` and `typeset -p` say about
@@ -2482,11 +2482,11 @@ type Diagnostics struct {
 	// IntegerBadBase is an output base the dialect will not spell — `typeset
 	// -i64 a=100` and `typeset -i1 f=5`.
 	//
-	// One shell complains and leaves the name with nothing: `zsh:typeset:1:
-	// invalid base (must be 2 to 36 inclusive): 64`, status 1, and the
-	// script carries on. The other takes any base in silence and renders
-	// plain what it cannot spell, which is what an empty entry means — see
-	// Semantics.IntegerBaseDigits for what a dialect can spell.
+	// One reading complains and leaves the name with nothing:
+	// `<shell>:typeset:1: invalid base (must be 2 to 36 inclusive): 64`, status
+	// 1, and the script carries on. The other takes any base in silence and
+	// renders plain what it cannot spell, which is what an empty entry means —
+	// see Semantics.IntegerBaseDigits for what a preset can spell.
 	//
 	// Two arguments: the builtin and the base as written.
 	IntegerBadBase string
@@ -2498,12 +2498,12 @@ type Diagnostics struct {
 	// the name — the *base* name, since a subscripted operand is refused by
 	// the variable it indexes rather than by the element.
 	//
-	// A field of its own rather than ReadonlyVariable's wording reused,
-	// because only one dialect in the panel words the two the same way.
-	// Three of the four name `unset` in the sentence, and one of those three
-	// calls it a warning rather than an error; the fourth writes exactly what
-	// it writes for an assignment. Empty falls back to the default below,
-	// which is what the dialect the default was measured from wants.
+	// A field of its own rather than ReadonlyVariable's wording reused, because
+	// only one preset words the two the same way. Most name `unset` in the
+	// sentence, and one of those calls it a warning rather than an error; the
+	// rest write exactly what they write for an assignment. Empty falls back to
+	// the default below, which is what the preset the default was measured from
+	// wants.
 	UnsetReadonly string
 	// InvalidNumber is the reason given when arithmetic text is not a
 	// number. No verbs: it is a reason, not a message — ArithError wraps it
@@ -2517,32 +2517,31 @@ type Diagnostics struct {
 	// too many times — `x=x; $(( x ))`, and `a=b; b=a` through two. One verb:
 	// the name blamed, which ArithRecursionBlamesTheWrittenName chooses.
 	//
-	// Measured 2026-09-12. Every shell that re-reads a value at all has a
-	// sentence for it and no two agree, in wording or in shape:
+	// Every preset that re-reads a value at all has a sentence for it and no two
+	// agree, in wording or in shape:
 	//
-	//	bash 5.3.15  x: expression recursion level exceeded (error token is "x")
-	//	ksh93u+      x: recursion too deep
-	//	zsh 5.9.2    math recursion limit exceeded: x
+	//	x: expression recursion level exceeded (error token is "x")
+	//	x: recursion too deep
+	//	math recursion limit exceeded: x
 	//
-	// bash and ksh93 put the name in front through ArithError and say the
-	// reason after, so their wording takes no verb; zsh writes the name
-	// after its own reason and takes one. dash never recurses — its
-	// ArithNameValueRecurses is No — so it has no row.
+	// Some put the name in front through ArithError and say the reason after, so
+	// their wording takes no verb; another writes the name after its own reason
+	// and takes one. A preset that never recurses — ArithNameValueRecurses No —
+	// has no row.
 	ArithRecursionLimit string
 	// ArithRecursionBlamesTheWrittenName reports the bound against the name
-	// the *expression* held rather than the one it stopped on. zsh alone.
+	// the *expression* held rather than the one it stopped on.
 	//
-	// Unreachable with a name that points at itself, which is why `x=x` is
-	// not the probe: measured on `a=b; b=a; $(( a ))`, bash 5.3.15 and
-	// ksh93u+ both name `b` and zsh names `a`. A fix tested only against
-	// `x=x` cannot tell the two apart, both being `x`.
+	// Unreachable with a name that points at itself, which is why `x=x` is not
+	// the probe: on `a=b; b=a; $(( a ))`, false names `b` and true names `a`. A
+	// fix tested only against `x=x` cannot tell the two apart, both being `x`.
 	ArithRecursionBlamesTheWrittenName bool
 	// ArithErrorSkipsLeadingSpace quotes the expression back from its first
 	// non-blank character, where the rest quote back exactly the text the
-	// construct held. Measured 2026-09-11 on `x=$(( 1+ ))`, whose expression
-	// is ` 1+ `: bash 5.3 writes `1+ : arithmetic syntax error…` and ksh93
-	// ` 1+ : more tokens expected`, with the same asymmetry on a runtime
-	// failure — `1/0 : division by 0` against ` 1/0 : divide by zero`.
+	// construct held. Measured on `x=$(( 1+ ))`, whose expression is ` 1+ `:
+	// true writes `1+ : arithmetic syntax error…` and false ` 1+ : more tokens
+	// expected`, with the same asymmetry on a runtime failure —
+	// `1/0 : division by 0` against ` 1/0 : divide by zero`.
 	//
 	// Only the *leading* blanks. What follows the failing token is the other
 	// end of the same question and belongs to ArithErrorNamesThePrefix,
@@ -2550,17 +2549,17 @@ type Diagnostics struct {
 	ArithErrorSkipsLeadingSpace bool
 	// ArithErrorNamesTheConstruct puts the construct that raised a math
 	// complaint in front of it — `((: ` or `[[: ` — the way a builtin's name
-	// goes in front of one it raised. bash alone: measured 2026-09-11,
+	// goes in front of one it raised:
 	//
 	//	(( 1+ ))            ((: 1+ : arithmetic syntax error: operand expected
 	//	for (( i=1+; ; ))   ((: i=1+: arithmetic syntax error: operand expected
 	//	[[ 1+ -eq 1 ]]      [[: 1+: arithmetic syntax error: operand expected
 	//	x=$(( 1+ ))         1+ : arithmetic syntax error: operand expected
 	//
-	// so it is the *command* routes that name themselves and the expansion
-	// that does not — which is the same line `let` is already on, naming
-	// itself through ArithErrorNamesTheBuiltin. ksh93 and zsh name no
-	// construct on any route.
+	// so it is the *command* routes that name themselves and the expansion that
+	// does not — which is the same line `let` is already on, naming itself
+	// through ArithErrorNamesTheBuiltin. A false preset names no construct on
+	// any route.
 	ArithErrorNamesTheConstruct bool
 
 	// FdVariableWithoutADescriptor is `exec {name}>&-` when the name holds
@@ -2568,15 +2567,15 @@ type Diagnostics struct {
 	// braces stripped.
 	FdVariableWithoutADescriptor string
 
-	// MultiDigitDuplicationTarget is `>&10` in the dialect that will not
-	// take a duplication target wider than one digit — see
-	// Semantics.MultiDigitDuplicationTargetIsAnError. One verb: the target as
-	// it was written.
+	// MultiDigitDuplicationTarget is `>&10` under a preset that will not take a
+	// duplication target wider than one digit — see
+	// Semantics.MultiDigitDuplicationTargetIsAnError. One verb: the target as it
+	// was written.
 	//
-	// The one shell that refuses names nothing at all and words it as a
-	// syntax error, which is why the field exists rather than a shared
-	// sentence with a hole in it: `Syntax error: Bad fd number`, said at the
-	// line the redirection is on, with no number and no file in it.
+	// A preset that refuses names nothing at all and words it as a syntax error,
+	// which is why the field exists rather than a shared sentence with a hole in
+	// it: `Syntax error: Bad fd number`, said at the line the redirection is on,
+	// with no number and no file in it.
 	MultiDigitDuplicationTarget string
 
 	// DuplicationSourceNotOpen is `>&N` and `<&N` where nothing is open at N
@@ -2584,17 +2583,17 @@ type Diagnostics struct {
 	// not go through CannotOpen. Two verbs: %[1]s is the target and %[2]s the
 	// reason.
 	//
-	// Measured 2026-09-12, `cat <&10`:
+	// Measured with `cat <&10`:
 	//
-	//	bash 5.3, bash 3.2   10: Bad file descriptor
-	//	ksh93                10: cannot open [Bad file descriptor]
-	//	zsh 5.9.2            10: bad file descriptor
+	//	10: Bad file descriptor
+	//	10: cannot open [Bad file descriptor]
+	//	10: bad file descriptor
 	//
-	// Empty is the shape three of the four take, `%[1]s: %[2]s`, with the
-	// reason cased by the dialect. ksh93 puts the errno in a bracket after a
-	// verb, which is the same sentence it uses for `.` and for an open —
-	// and CannotOpen cannot be reused for it, because zsh's names the reason
-	// *first* and would answer `bad file descriptor: 10` here (#734).
+	// Empty is the common shape, `%[1]s: %[2]s`, with the reason cased by the
+	// preset. A preset may put the errno in a bracket after a verb, which is the
+	// same sentence it uses for `.` and for an open — and CannotOpen cannot be
+	// reused for it, because a preset that names the reason *first* would answer
+	// `bad file descriptor: 10` here.
 	DuplicationSourceNotOpen string
 
 	// NamesTheDuplicationTargetAsWritten makes that message quote the word

@@ -6630,6 +6630,16 @@ type Semantics struct {
 	// so there is nothing here to answer.
 	InteractiveStartupFileWhenLogin Answer
 
+	// SystemStartupFiles names the files this shell reads from a directory
+	// the machine's administrator owns, before each of the counterparts in a
+	// person's own directory above.
+	//
+	// The zero value reads nothing, which is what a Semantics nobody filled
+	// in must do for the reason LoginStartupFiles is empty there too — except
+	// that the file being reached into now belongs to root rather than to the
+	// person, so a default that read one would be worse still.
+	SystemStartupFiles SystemStartupFiles
+
 	// StartupFileOptions names the invocation options that say which of the
 	// files above to skip, and which file to read in place of the interactive
 	// one. The zero value is a shell with no way to skip them.
@@ -8194,6 +8204,120 @@ type Semantics struct {
 	SubscriptedArrayLiteral SubscriptedArrayLiteralPolicy
 }
 
+// SystemStartupFiles are the startup files a shell reads out of a directory
+// the machine's administrator owns rather than out of a person's own.
+//
+// Every shell in the panel reads one, and it is not a detail: on macOS the
+// system-wide profile's whole job is to run `path_helper`, which rebuilds
+// `$PATH` from `/etc/paths` and `/etc/paths.d`. A login shell that skips it
+// keeps whatever order it was handed and keeps the duplicates the parent had
+// (#1717).
+//
+// Measured 2026-09-12 with a scratch home holding a marker for every name,
+// each marker reporting `${PATH%%:*}` so that the *order* is observable and
+// not only the fact of the read. `env -i HOME=$H PATH=/usr/bin:/bin <shell>
+// -l -c 'echo FINAL ${PATH%%:*}'`:
+//
+//	shell         marker reports        so the system file ran
+//	dash          .profile → /usr/local/bin      first
+//	bash 5.3.15   .bash_profile → /usr/local/bin first
+//	bash-as-sh    .profile → /usr/local/bin      first
+//	bash 3.2.57   .bash_profile → /usr/local/bin first
+//	ksh93u+       .profile → /usr/local/bin      first
+//	zsh 5.9.2     .zshenv → /usr/bin, then .zprofile → /usr/local/bin
+//
+// `/usr/local/bin` is `path_helper`'s answer and `/usr/bin` is the head of
+// the inherited value, so the probe discriminates: a shell that read no
+// system file would have reported `/usr/bin` in its own profile.
+//
+// zsh's is the one that pins the *slot* rather than only the order, because
+// it has four of them and `setopt sourcetrace` names each file as it is read:
+// `zsh -o sourcetrace -l -c :` writes `~/.zshenv`, `/etc/zprofile`,
+// `~/.zprofile`, `~/.zlogin`, and the same probe with `-i` adds `/etc/zshrc`
+// before `~/.zshrc`. So the system file comes *first in its own slot* rather
+// than all of them coming before all of the person's.
+//
+// # A directory and four names, rather than four paths
+//
+// The directory is a field of its own for two reasons, and the weaker one is
+// that zsh's manual says so — "files listed above as being in /etc may be in
+// another directory, depending on the installation". The stronger is that a
+// test must be able to move them. These are absolute paths into a real
+// machine, and a suite that read them would be measuring `/etc/profile` on
+// whichever runner it happened to be on; that is the failure internal/testenv
+// exists to prevent, and a scratch `HOME` cannot reach it.
+//
+// An empty Directory reads nothing at all, whatever the names say. That is
+// the answer a Semantics nobody filled in gives, and it matters more here
+// than it does for the files in a home directory: the file being reached for
+// is root's.
+type SystemStartupFiles struct {
+	// Directory holds the files below. `/etc` in every dialect that has
+	// any; empty is a shell that reads no system-wide file at all.
+	Directory string
+
+	// Unconditional is the system-wide counterpart of
+	// UnconditionalStartupFile, read before it on every invocation.
+	//
+	// zsh alone names one, `zshenv`. It is the one entry here taken from
+	// the manual rather than from a run, and the reason is stated rather
+	// than hidden: `/etc/zshenv` does not exist on the machine this was
+	// measured on, so no probe can see it read. zsh's manual says commands
+	// are read from it first of all, that this cannot be overridden, and
+	// that the `GLOBAL_RCS` option governs the rest.
+	//
+	// The "cannot be overridden" half is deliberately *not* modeled — see
+	// StartupFileOptions.SuppressSystem — because SuppressAll suppressing
+	// everything is measured and this exception is not.
+	Unconditional string
+
+	// Login is the system-wide profile, read before the first of
+	// LoginStartupFiles and under exactly the same conditions.
+	//
+	// `profile` in five of the six columns and `zprofile` in zsh, and the
+	// gate is the user profile's own: measured, `bash -l -c` reads it and
+	// bash under a dashed argv[0] with a command string reads neither it
+	// nor `~/.bash_profile`, which is LoginProfileWhenNonInteractive
+	// answering for both files at once. `--noprofile` suppresses both, also
+	// measured.
+	Login string
+
+	// Interactive is the system-wide counterpart of InteractiveStartupFile,
+	// read before it when there is a person on the other end.
+	//
+	// zsh alone names one, `zshrc`, which is measured — the sourcetrace of
+	// `zsh -i` names `/etc/zshrc` and then `~/.zshrc`. **bash names none**,
+	// which is also measured rather than assumed: `/etc/bashrc` exists on
+	// this machine and sets `PS1` and `checkwinsize`, and a `~/.bashrc` that
+	// reports `$PS1` sees bash's own default and `shopt checkwinsize`
+	// answers `off` in bash 3.2 — so bash reached `/etc/bashrc` only
+	// through `/etc/profile`, which sources it by hand for a login shell.
+	// A shell that read it here would read it twice.
+	Interactive string
+
+	// LateLogin is the system-wide counterpart of LateLoginStartupFile.
+	//
+	// zsh alone names one, `zlogin`, and like Unconditional above it is the
+	// manual's answer rather than a measured one: there is no `/etc/zlogin`
+	// on this machine. The slot itself is measured — the two system files
+	// that do exist each come first in their own slot — so what is taken on
+	// the manual's word is the name and not the position.
+	LateLogin string
+}
+
+// Path names one of the system-wide files, or nothing when this shell has no
+// system-wide directory or no file in that slot.
+//
+// Nothing rather than a path built on an empty directory, for the reason
+// Semantics.StartupDirectoryVariable's join answers nothing: `/profile` is a
+// real path on a real machine and belongs to root.
+func (f SystemStartupFiles) Path(name string) string {
+	if f.Directory == "" || name == "" {
+		return ""
+	}
+	return f.Directory + "/" + name
+}
+
 // StartupFileOptions are the invocation options that change which startup
 // files a shell reads: the escape hatches from a startup file that is wrong.
 //
@@ -8241,8 +8365,30 @@ type StartupFileOptions struct {
 	// terminal cannot.
 	Login string
 
+	// SuppressSystem names the options that suppress the system-wide files
+	// and leave the person's own. zsh's `-d` and `--no-globalrcs`, and
+	// nobody else's.
+	//
+	// Measured 2026-09-12 with a scratch home whose every file reports
+	// `${PATH%%:*}`: `zsh -d -l -c` still reads `.zshenv`, `.zprofile` and
+	// `.zlogin`, and every one of them sees the inherited `$PATH` rather
+	// than `path_helper`'s, so `/etc/zprofile` did not run. The same probe
+	// with `-f` reads nothing at all, which is what separates this from
+	// SuppressAll: one option drops root's files and the other drops
+	// everybody's.
+	//
+	// bash's `--noprofile` is *not* this. Measured, it suppresses
+	// `/etc/profile` and `~/.bash_profile` together, so it is SuppressLogin
+	// answering for both files in that slot rather than a second option.
+	SuppressSystem string
+
 	// SuppressLogin names the options that suppress the login profile and
 	// leave the rest. bash's `--noprofile`, and nobody else's.
+	//
+	// It suppresses the *system-wide* profile too, which is measured: `bash
+	// --noprofile -l -c 'echo ${PATH%%:*}'` answers the inherited head
+	// rather than `path_helper`'s. So the slot is what the option names, not
+	// the file.
 	//
 	// It beats Login above, which is measured: `bash --noprofile --login -i`
 	// reads no profile.
@@ -8501,6 +8647,13 @@ func PosixSemantics() Semantics {
 		// not an omission: the standard's interactive file is `$ENV`, and an
 		// empty name is how a dialect says so.
 		LoginStartupFiles: ".profile",
+		// And the system-wide profile in front of it. Measured 2026-09-12:
+		// dash, ksh93, bash 5.3, bash 3.2 and bash-as-`sh` each read
+		// `/etc/profile` before the person's own file, with the marker in
+		// the person's file already seeing `path_helper`'s `$PATH` rather
+		// than the inherited one. Five of the six columns and one name, so
+		// it belongs to the standard's preset the way `.profile` does.
+		SystemStartupFiles: SystemStartupFiles{Directory: "/etc", Login: "profile"},
 		// The four brace-range axes are left unanswered: a brace that
 		// never expands never asks them.
 		BraceExpansion:                 No,
@@ -9014,6 +9167,13 @@ func CoreSemantics() Semantics {
 		// embedder or a test, neither of which should touch a home
 		// directory because a field was left at its default.
 		LoginStartupFiles: ".profile",
+		// And the system-wide one in front of it, for the same reason and
+		// under the same caveat: every shell in the panel reads one, they
+		// disagree only about the name, and `/etc/profile` is the name five
+		// of the six use. The zero Semantics still names no directory, so a
+		// vector nobody filled in reaches for nothing — which matters more
+		// here than it does above, because the file is root's.
+		SystemStartupFiles: SystemStartupFiles{Directory: "/etc", Login: "profile"},
 		// And a way to say so. All four shells in the panel take `-l`, so
 		// the common denominator has it even though the standard does not
 		// — which is the one respect in which this differs from

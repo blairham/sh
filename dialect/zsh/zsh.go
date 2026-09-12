@@ -613,6 +613,28 @@ func Semantics() interp.Semantics {
 	// login shell too, which zsh is one of the three to do at all.
 	s.LateLoginStartupFile = ".zlogin"
 	s.InteractiveStartupFile = ".zshrc"
+	// And the system-wide file in front of each of those, which this shell
+	// is the one in the panel with enough slots to pin the *position* of.
+	// Measured 2026-09-12 with `setopt sourcetrace`, which names each file
+	// as it is read: `zsh -o sourcetrace -l -i` writes `~/.zshenv`,
+	// `/etc/zprofile`, `~/.zprofile`, `/etc/zshrc`, `~/.zshrc`, `~/.zlogin`.
+	// So each system file comes first in its own slot rather than all of
+	// them coming before all of the person's — a shell that hoisted them
+	// would read `/etc/zshrc` before `~/.zprofile`, and `~/.zprofile` is
+	// where a person sets `$PATH`.
+	//
+	// `zshenv` and `zlogin` are the manual's answer rather than a measured
+	// one, and the difference is worth stating: neither `/etc/zshenv` nor
+	// `/etc/zlogin` exists on the machine this was measured on, so no probe
+	// can see them read. The slot each occupies *is* measured, because the
+	// two files that do exist each land first in theirs.
+	s.SystemStartupFiles = interp.SystemStartupFiles{
+		Directory:     "/etc",
+		Unconditional: "zshenv",
+		Login:         "zprofile",
+		Interactive:   "zshrc",
+		LateLogin:     "zlogin",
+	}
 	// And zsh reads it for a login shell as well as a plain one, where bash
 	// reads only its profile.
 	s.InteractiveStartupFileWhenLogin = interp.Yes
@@ -625,6 +647,12 @@ func Semantics() interp.Semantics {
 		// Both spellings of login-ness, which zsh has like the other three.
 		Login:       "-l --login",
 		SuppressAll: "-f --no-rcs",
+		// And one that drops root's files and keeps the person's, which no
+		// other shell in the panel has. Measured 2026-09-12: `zsh -d -l -c`
+		// still reads `.zshenv`, `.zprofile` and `.zlogin`, and every one of
+		// them reports the inherited `${PATH%%:*}` rather than
+		// `path_helper`'s, so `/etc/zprofile` did not run.
+		SuppressSystem: "-d --no-globalrcs",
 	}
 	// What `zsh --version` writes, on standard output at status 0 — measured
 	// 2026-09-11, one line and no more.

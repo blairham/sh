@@ -297,6 +297,10 @@ func Semantics() interp.Semantics {
 	// this shell has none, so a startup file that breaks it is escaped by
 	// moving the file, which is measured and is what it does.
 	s.StartupFileOptions = interp.StartupFileOptions{Login: "-l --login"}
+	// And Semantics.SystemStartupFiles stays at the POSIX preset's
+	// `/etc/profile`, measured for this shell too: with a dashed argv[0] and
+	// a command string, `~/.profile` reports `path_helper`'s `${PATH%%:*}`
+	// rather than the inherited one, so the system file ran in front of it.
 	// The panel's odd one out: this shell names its version on standard
 	// error and exits 2 for having been asked. Measured 2026-09-11.
 	s.VersionOption = interp.VersionOption{

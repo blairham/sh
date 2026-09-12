@@ -159,6 +159,13 @@ func Semantics() interp.Semantics {
 	// `ash --login -c cmd` each run the command — where dash refuses the long
 	// one outright.
 	s.StartupFileOptions = interp.StartupFileOptions{Login: "-l --login"}
+	// Semantics.SystemStartupFiles is left at what the POSIX preset gives it
+	// — `/etc/profile` in the login slot — and that is an **unanswered
+	// question rather than a measurement**, in the sense the package comment
+	// above sets out. There is no BusyBox on the machine this was measured
+	// on and the field was added by a change that could not run one, so the
+	// standard's preset carries it the way it carries `.profile` itself.
+	// #2263 is the follow-on that would let it be asked.
 	// VersionOption is left at its zero deliberately: `ash --version` is `bad
 	// option '--version'`. This shell will not name its version through an
 	// option, which is the same answer dash gives and reached the same way.

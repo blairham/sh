@@ -792,6 +792,7 @@ func (sh Shell) namesStartupOption(spelling string) bool {
 	o := sh.Semantics.StartupFileOptions
 	return spelt(o.Login, spelling) ||
 		spelt(o.SuppressAll, spelling) ||
+		spelt(o.SuppressSystem, spelling) ||
 		spelt(o.SuppressLogin, spelling) ||
 		spelt(o.SuppressInteractive, spelling) ||
 		spelt(o.NameInteractive, spelling)
@@ -821,6 +822,8 @@ func (sh Shell) startupOption(spelling string, args []string, inv *invocation) (
 		inv.startup.login = true
 	case spelt(o.SuppressAll, spelling):
 		inv.startup.none = true
+	case spelt(o.SuppressSystem, spelling):
+		inv.startup.noSystem = true
 	case spelt(o.SuppressLogin, spelling):
 		inv.startup.noLogin = true
 	case spelt(o.SuppressInteractive, spelling):

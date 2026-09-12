@@ -659,14 +659,13 @@ func TestExitInASourcedFileStillEndsTheShell(t *testing.T) {
 func TestEvalIsTheSameBoundaryWithADifferentStatus(t *testing.T) {
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, "eval 'echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER'\necho \"OUT-AFTER st=$?\"\n")
-	// The location is `zsh:3:` here and `(eval):3:` in the real shell — a
-	// naming gap that predates this and belongs to the diagnostic rather than
-	// to the boundary; the corpus row
-	// `eval/fatal-error-ends-the-evaluated-text-only` records both spellings.
-	// It is written out rather than matched around so that closing that gap
-	// fails this test and is noticed.
+	// The location is the evaluated text's, counted from the top of it:
+	// `(eval):3:` and not the file the `eval` was written in. That gap was
+	// written out here rather than matched around so that closing it would
+	// fail this test and be noticed, which is what happened — see
+	// Diagnostics.LocationNamesTheEvalText (#2133).
 	const want = "IN-BEFORE\n" +
-		"zsh:3: NOPE: parameter not set\n" +
+		"(eval):3: NOPE: parameter not set\n" +
 		"OUT-AFTER st=1\n"
 	if out != want {
 		t.Errorf("output = %q, want %q", out, want)

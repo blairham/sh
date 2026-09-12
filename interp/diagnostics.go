@@ -1637,6 +1637,36 @@ type Diagnostics struct {
 	// overriding the other wherever a function is anywhere below (#2037).
 	LocationNamesTheFunction bool
 
+	// LocationNamesTheEvalText puts EvalSourceName where the file's or the
+	// function's name would go, for a line `eval` is running.
+	//
+	// zsh alone, and it is a third kind of place a line can be read from
+	// rather than a wording over the other two. `eval` pushes no frame — it
+	// runs its text in the caller's context, and `$0`, the call stack and
+	// `return` all see straight through it — but that shell still gives the
+	// text a location of its own, and it wins over both the file and the
+	// function. Measured 2026-09-12 on zsh 5.9.2, `-f`, over a script file:
+	//
+	//	eval 'zznotacommand'                     (eval):1: command not found: …
+	//	q() { eval 'zznotacommand' }; q          (eval):1: …
+	//	eval 'eval "zznotacommand"'              (eval):1: …
+	//	eval 'cd /nope'                          (eval):cd:1: no such file …
+	//	eval 'echo ${zzz?boom}'                  (eval):1: zzz: boom
+	//
+	// The innermost text is what answers, the same way the file and the
+	// function are read off the stack rather than off a flag (#2037).
+	// Measured in the same run, and each row is a different innermost:
+	//
+	//	q() { zznotacommand }; eval 'q'          q:1: …        the function
+	//	eval 'source ./inc'                      ./inc:1: …    the file
+	//	q() { source ./inc }; eval 'q'           ./inc:1: …    likewise
+	//
+	// Only the name moves. The line is already counted from the top of the
+	// evaluated text — `eval` on line 4 of a file, failing on the third line
+	// of its own text, is `(eval):3` — and the builtin, when one is
+	// speaking, still stands between the name and the line.
+	LocationNamesTheEvalText bool
+
 	// SetInvalidOptionName is a long `set -o` name this shell does not have.
 	// One verb: the name.
 	//

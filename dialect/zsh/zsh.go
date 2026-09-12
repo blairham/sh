@@ -2679,6 +2679,9 @@ func Apply(r *interp.Runner) {
 	// And `zsh/net/socket`'s one: a Unix-domain socket opened into this
 	// shell's own descriptor table. See socketmodule.go.
 	registerSocketModule(r)
+	// And `zsh/mapfile`'s one: the filesystem as an association, where a key
+	// is a path and the value is that file's bytes. See mapfile.go.
+	registerMapfileModule(r)
 	// And `zsh/terminfo`'s and `zsh/termcap`'s one parameter each: the
 	// terminal's capabilities under two name systems, read out of the
 	// description `$TERM` names by repl.TerminalCapabilities. See

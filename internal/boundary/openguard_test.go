@@ -239,6 +239,21 @@ var exempt = map[string]string{
 		"`-o nonblock` needs a flag os.OpenFile cannot carry and has to be taken off again (#1805).",
 	"dialect/zsh.systemLockOpen": "the open behind `zsystem flock`, between the same AllowOpen " +
 		"and VerifyOpened pair (#1805).",
+	// dialect/zsh. mapfile.go is the whole of `zsh/mapfile`'s gate, and the
+	// module is the one that reaches the filesystem without naming a command:
+	// a read is an expansion and a write is an assignment, so these four are
+	// the only places it touches a path at all (#2260).
+	"dialect/zsh.mapfileRead": "the read behind `${mapfile[p]}`, after AllowReadPath on the " +
+		"path the subscript named. A refusal reads back the same as a denied path holding " +
+		"nothing, so the wording cannot be an oracle for what the policy hides.",
+	"dialect/zsh.mapfileWrite": "the write behind `mapfile[p]=v`, after AllowModify on the name. " +
+		"0666 before the umask, which is the mode zsh leaves behind.",
+	"dialect/zsh.mapfileRemove": "the unlink behind `unset \"mapfile[p]\"`, after AllowModify on " +
+		"the name — an unlink changes what is at a name, so it asks the write question and not " +
+		"the read one.",
+	"dialect/zsh.mapfileNames": "the listing behind `${(k)mapfile}`, after AllowList on the " +
+		"shell's own directory. It is the route with no path in it to hang a check on, which is " +
+		"why the roster has a sandboxcheck row of its own.",
 	// The smoke suite is in scope because it holds a Boundary to read a block
 	// store back — and it is the one package here that is not the shell. The
 	// rest of this list explains a path the shell reaches; these two explain

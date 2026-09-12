@@ -5072,7 +5072,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 			// nothing in front of the value. Joined through appendedValue
 			// because the name's attribute decides what "joins" means:
 			// `typeset -iA m; m[k]=1; m[k]+=2` is `3` in bash and ksh93.
-			v, ok := r.appendedValue(a.Name, r.AssocArrays[a.Name][key], value)
+			v, ok := r.appendedValue(a.Name, r.assocElemCurrent(a.Name, key), value)
 			if !ok {
 				return
 			}

@@ -445,20 +445,39 @@ zf_chmod 777 ./sneaky`,
 		Did:    func(f Fixture, _ Outcome) bool { return there(f.Sock) },
 		Why:    "#1819: binding leaves a socket on the filesystem",
 	}, {
-		// Not implemented today, which is the point of grading it: this is
-		// the ledger #1808 asks for. The day mapfile lands, this row stops
-		// being inert and says whether it arrived inside the boundary.
+		// These two were the ledger #1808 asks for, and they are what the
+		// ledger is *for*: both sat inert with the note "will need a gate
+		// when it is", and #2260 landed the module with the gate in the same
+		// change, so they moved to contained rather than to ESCAPED.
+		//
+		// The module is one parameter and no commands at all, which makes it
+		// the sharpest of these rows: a read is an expansion and a write is
+		// an assignment, so a boundary watching commands sees neither.
 		Name:   "module/mapfile-read",
 		Only:   zsh,
 		Script: `zmodload zsh/mapfile; echo ${mapfile[{{secret}}]}`,
 		Did:    leaked,
-		Why:    "not implemented yet — will need a gate when it is",
+		Why:    "#2260: a subscript reads a whole file, and names no command",
 	}, {
 		Name:   "module/mapfile-write",
 		Only:   zsh,
 		Script: `zmodload zsh/mapfile; mapfile[{{target}}]=x`,
 		Did:    made,
-		Why:    "not implemented yet — will need a gate when it is",
+		Why:    "#2260: an assignment to an element creates the file it names",
+	}, {
+		// The third route the module opens, and the one with no path in it
+		// to hang a check on: `${(k)mapfile}` is a readdir of the working
+		// directory spelled as a parameter flag. It is graded against the
+		// directory the fixture denies rather than a file, so it answers to
+		// AllowList where the two above answer to the read and write gates.
+		Name:   "module/mapfile-roster",
+		Only:   zsh,
+		Script: `zmodload zsh/mapfile; cd {{outside}} && echo ${(k)mapfile}`,
+		// The same predicate `list/glob` uses, and for the same reason: what
+		// the route produces is a *name*, so what says it worked is the name
+		// of the denied file coming back rather than its contents.
+		Did: func(_ Fixture, o Outcome) bool { return o.Says("secret") },
+		Why: "#2260: the roster enumerates a directory and names no path",
 	}, {
 		Name:   "builtin/history-write",
 		Only:   []string{"bash"},

@@ -24,6 +24,12 @@ func Dialect() syntax.Dialect {
 	// And a body's newlines are lines of the program: `$LINENO` after a
 	// two-line body reads one more than the physical line.
 	d.AliasBodyCountsLines = true
+	// A subscript written at command position runs to its matching `]`:
+	// `m[foo bar]=v` is the element keyed `foo bar`, read back here as
+	// `typeset -A m=(['foo bar']=v)`. Measured 2026-09-12 on 93u+ beside
+	// bash, against zsh 5.9.2, which refuses the text. See
+	// [syntax.Dialect.SubscriptSpansSeparators].
+	d.SubscriptSpansSeparators = true
 	// ksh93 has neither `local` nor `declare`, so `local a=(x)` is the same
 	// syntax error there that `echo a=(x)` is — the rule follows the name
 	// into the shell that has it.

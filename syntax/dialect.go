@@ -2921,6 +2921,51 @@ type Dialect struct {
 	// no-array dialect on purpose is told it is portable when it is not.
 	ArraySubscript bool
 
+	// SubscriptSpansSeparators lets a subscript written at command-word
+	// position hold a separator: `m[foo bar]=v` assigns the element keyed
+	// `foo bar`, where a grammar without the flag ends the word at the blank
+	// and runs `m[foo` as a command.
+	//
+	// **It is the word boundary and so it is the lexer's**, the way
+	// BareSubscript is. Once a name at command position is followed by `[`,
+	// the text runs to the *matching* `]` and everything in between is
+	// ordinary characters of the subscript — which is more than blanks.
+	// Measured 2026-09-12 on bash 5.3.15, bash 3.2.57, bash as `sh` and
+	// ksh93, each row read back with `typeset -p m`:
+	//
+	//	m[foo bar]=v      the key `foo bar`
+	//	m[foo	bar]=v    a tab the same way
+	//	m[a; b]=v         and a `;`, a `|`, a `>` and an `&&`
+	//	m[#c]=v           a `#` is not a comment in there
+	//	m[a [b] c]=v      brackets nest, so the *matching* `]` ends it
+	//	m['a]b']=v        a quoted `]` closes nothing
+	//
+	// A name is required in front of the bracket and it is required to be a
+	// name: `1m[foo bar]=v`, `m-n[foo bar]=v` and `[foo bar]=v` all still
+	// end at the blank in the same four shells. So does an argument —
+	// `printf '<%s>' m[foo bar]=v` prints two fields everywhere — which is
+	// why this asks atCommandWord rather than applying to every word.
+	//
+	// The `=` is not part of the condition, because the shells do not make
+	// it one: `m[foo bar]` alone is `m[foo bar]: command not found` in all
+	// four, quoting back the whole word. An assignment prefix is command
+	// position too, so `a=1 m[foo bar]=v` writes the element.
+	//
+	// Additive and not a semantics axis: zsh 5.9.2 is the panel's holdout
+	// and it does not mean something else by the text, it refuses it —
+	// `bad pattern: m[foo`, exit 1 — and dash and BusyBox ash have no
+	// arrays to subscript. So the flag gives a reading to text that four
+	// shells read one way and the other three do not read at all.
+	//
+	// Where the bracket has **no** matching `]` the word is left exactly as
+	// a grammar without the flag reads it, and that is deliberate. The two
+	// shells that span separators diverge there — bash refuses with
+	// `unexpected EOF while looking for matching ']'` and ksh93 swallows the
+	// rest of the input into the word — so there is no common answer to
+	// implement, and falling back means no input that parses today parses
+	// differently tomorrow.
+	SubscriptSpansSeparators bool
+
 	// SpecialParamSubscript lets a parameter that is *not* a name carry a
 	// subscript: `${@[1]}` and `${*[2]}` name one of the positional
 	// parameters, and `${1[2]}`, `${0[1]}`, `${?[1]}`, `${-[1]}` and

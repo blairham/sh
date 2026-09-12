@@ -91,6 +91,8 @@ refuses what every real shell accepts is a core nobody can write against.
                       that nothing but the layout changed
       acpcheck        speaks the Agent Client Protocol to the shipped
                       binary, as a client, over a pipe
+      coverage        names, per dialect, every builtin, node kind and
+                      operator that no case in the tree mentions
 
 **The core does not know its successors.** `syntax` and `interp` define the
 questions — a grammar flag, a semantics axis, a diagnostic value — and each

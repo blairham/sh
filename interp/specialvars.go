@@ -102,13 +102,15 @@ func (r *Runner) ensureSpecials() {
 // while this expanded to nothing both arms of that test silently took the
 // wrong branch.
 //
-// The string is the dialect's startup letters followed by a letter for each
-// option this runner tracks and has on. Presence is the contract, not order:
-// measured, no two shells in the panel order the merged string the same way —
-// one even appends in the order the script set them — so a script can ask
-// whether a letter is present and nothing more, and ours come out in a fixed
-// order of their own. pipefail earns no letter anywhere, which is unanimous
-// and so needs no axis; the noglob letter is the one the shells disagree on.
+// The string is the dialect's startup letters and a letter for each option
+// this runner tracks and has on, put into the order the dialect publishes
+// them in — Semantics.DollarDashLetterOrder, because no two shells in the
+// panel order the merged string the same way and one of the four orders is
+// its own option table's. Presence is still the contract a script can rely
+// on: `case $- in *e*)` is what scripts write and equality against a whole
+// string is what nothing realistic writes. pipefail earns no letter anywhere,
+// which is unanimous and so needs no axis; the noglob letter is the one the
+// shells disagree on.
 func (r *Runner) optionLetters() string {
 	var b strings.Builder
 	b.WriteString(r.startupOptionLetters())
@@ -172,6 +174,22 @@ func (r *Runner) optionLetters() string {
 			b.WriteByte('F')
 		}
 	}
+	if name := r.sem().SetFLetterOption; name != "" {
+		// The `f` letter in a shell that does not spend it on globbing. It
+		// reports the option's state and not that the letter was written,
+		// which is the measurement: see Semantics.SetFLetterOption, where a
+		// script that reaches the name the long way still gets the letter.
+		//
+		// Read through the namespace `[[ -o name ]]` asks in rather than
+		// through the substrate's own `set -o` table, because the name
+		// belongs to the dialect: the shell that has this letter keeps a
+		// hundred and eighty names its `set -o` never lists, and this is one
+		// of them. Measured: `[[ -o norcs ]]` and a bare `setopt` agree
+		// there, and the substrate's table has never heard of the name.
+		if on, _ := r.conditionOption(name); on {
+			b.WriteByte('f')
+		}
+	}
 	if r.nounset {
 		b.WriteByte('u')
 	}
@@ -180,6 +198,34 @@ func (r *Runner) optionLetters() string {
 	}
 	if r.noclobber {
 		b.WriteByte('C')
+	}
+	return orderedOptionLetters(b.String(), r.sem().DollarDashLetterOrder)
+}
+
+// orderedOptionLetters puts the letters into the order the dialect publishes
+// them in, which is a different order in every shell measured — see
+// Semantics.DollarDashLetterOrder.
+//
+// A letter the order does not name keeps its produced place and follows the
+// ones it does, rather than being dropped: the string is a claim about the
+// letters a shell was measured writing, and a letter nobody could measure —
+// `n`, whose option stops the `echo` that would read `$-` — must still come
+// out somewhere.
+func orderedOptionLetters(letters, order string) string {
+	if order == "" {
+		return letters
+	}
+	var b strings.Builder
+	b.Grow(len(letters))
+	for i := 0; i < len(order); i++ {
+		if strings.IndexByte(letters, order[i]) >= 0 {
+			b.WriteByte(order[i])
+		}
+	}
+	for i := 0; i < len(letters); i++ {
+		if strings.IndexByte(order, letters[i]) < 0 {
+			b.WriteByte(letters[i])
+		}
 	}
 	return b.String()
 }

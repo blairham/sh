@@ -9994,6 +9994,48 @@ and ksh93. zsh spells that option the long way only: there `-f` is about
 startup files and leaves globbing alone, so `set -f; echo *.txt` lists
 the files.
 
+**`SetFLetterOption`** — bash — · dash — · ksh93 — · zsh `norcs`
+
+The `set -o` name this shell's `-f` letter is short for where
+`SetFTurnsOffGlobbing` says it is not noglob, and it is read from both
+sides: `set -f` moves the name, and `$-` carries `f` for as long as the
+name is on. A name rather than a second boolean, because the state
+already exists in the dialect's own option namespace and the letter and
+the name have to be one state or `set -f` and the listing disagree.
+
+Measured on zsh 5.9.2, 2026-09-12, where the name is `norcs` — the
+startup files the shell was told to skip:
+
+| asked | zsh 5.9.2 |
+| --- | --- |
+| `set -f; setopt` | `nohashdirs`, `norcs` |
+| `set -f; echo $-` | `569Xf` |
+| `set -o norcs; echo $-` | `569Xf` |
+| `zsh -f -c 'echo $-'` | `569Xf` |
+| `zsh -f -c 'set +f; setopt'` | `nohashdirs` |
+| `zsh -f -c 'set +f; echo $-'` | `569X` |
+
+The third row is what makes this the option's state and not a record
+that the letter was written: a script that never says `-f` still gets
+the letter once the name is on. The last two are the other half — the
+letter withdraws when the name does, on a route that never wrote it.
+Empty in the three shells that spend `-f` on globbing, where
+`SetFTurnsOffGlobbing` answers the whole question (#1542).
+
+**`DollarDashLetterOrder`** — see `invocation.md`
+
+The order this shell publishes the letters of `$-` in; letters it does
+not name follow the ones it does. A per-dialect sequence rather than an
+Answer, because there is no majority to follow and no single rule to
+derive: measured 2026-09-12 on `set -f; set -u; set -e; echo $-`, the
+six columns answer `ufe`, `efhuBc`, `efhuBc`, `efhuBc`, `cefhsuB` and
+`569Xefu` — four disciplines, none of them the order the script wrote.
+The four are written out in `invocation.md` under "The order of the
+letters", each with the runs it was derived from. Empty leaves the
+letters as this implementation produces them, which is what the
+substrate's own preset does: POSIX says which letters `$-` holds and
+nothing about the order (#780).
+
 **`SetBTurnsOffBraceExpansion`** — bash yes · dash no · ksh93 yes · zsh no
 
 Makes `-B` the short spelling of `braceexpand`, so `set +B` stops `{a,b}`

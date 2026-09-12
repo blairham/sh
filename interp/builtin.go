@@ -676,6 +676,18 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			// noglob` needs no dialect.
 			if r.ask(r.sem().SetFTurnsOffGlobbing, "`set -f` turning off pathname expansion") {
 				r.noglob = on
+				continue
+			}
+			// The something else, where the dialect names it. Written
+			// through the long name rather than into a field of its own so
+			// that the letter and the name are one state: measured, `set -f`
+			// and `set -o norcs` leave zsh in the same place and both put
+			// `f` in `$-` (#1542). A dialect that names nothing leaves the
+			// letter accepted and inert, which is what it was before.
+			if name := r.sem().SetFLetterOption; name != "" {
+				if !r.setNamedOption(name, on) {
+					return false
+				}
 			}
 		case 'B':
 			// The short spelling of `braceexpand`, in the two shells that

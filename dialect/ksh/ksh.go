@@ -313,6 +313,24 @@ func Semantics() interp.Semantics {
 	s.CommandStringShowsCInDollarDash = interp.Yes
 	s.LoginShowsLInDollarDash = interp.Yes
 	s.CommandStringShowsSInDollarDash = interp.Yes
+	// And the order: `i` and `c` lead, the rest of the lowercase letters are
+	// sorted, then the uppercase ones, and `l` comes last of all. Measured
+	// 2026-09-12, the interactive rows through a pseudo-terminal with a
+	// scratch home directory:
+	//
+	//	set -f; set -u; set -e   cefhsuB
+	//	set -C                   chsBC
+	//	set -a                   cahsB
+	//	-l -c                    chsBl
+	//	-i -c                    icmsBE
+	//	-il -c                   icmsBEl
+	//	-i -Cc                   icmsBCE
+	//
+	// Two of those are why this is not simply "sorted, capitals last": `i`
+	// stands in front of a `c` it sorts after, and `l` stands behind
+	// capitals it sorts before. Both are stable across runs and both differ
+	// from every other member of the panel.
+	s.DollarDashLetterOrder = "icaefhmnstuvxBCEHTl"
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
 	// A negative exponent is a float answer here, not a refusal: `2**-1`
 	// is 0.5.

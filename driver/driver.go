@@ -65,6 +65,27 @@ type Shell struct {
 	// commands for the rest of the run.
 	Prelude string
 
+	// SystemStartupDirectory is where this machine keeps the startup files
+	// its administrator owns — `/etc` on every Unix anyone runs this on.
+	// The empty default reads none of them.
+	//
+	// Which files are read out of it, and in which slot, is the dialect's
+	// and is Semantics.SystemStartupFiles. Only *where* is here, for two
+	// reasons. It is the same directory for every dialect, so it records no
+	// disagreement and does not belong on a vector whose fields are
+	// disagreements; and zsh's manual says outright that the files "may be
+	// in another directory, depending on the installation", which makes it
+	// a fact about the install rather than about the shell.
+	//
+	// The default is empty rather than `/etc` because these are absolute
+	// paths into a real machine. A suite that read them would be measuring
+	// whichever runner it happened to be on — the failure internal/testenv
+	// exists to prevent, and the one a scratch `HOME` cannot reach, since
+	// no environment variable stands between the shell and `/etc/profile`.
+	// So a Shell value reaches for nothing until it says otherwise, and the
+	// five dialect binaries say so in one line each.
+	SystemStartupDirectory string
+
 	// PromptStyle is what this dialect does to a prompt parameter's value
 	// before it is drawn. The zero value draws it as it stands, which is
 	// what a shell without a dialect does.

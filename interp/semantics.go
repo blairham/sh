@@ -8237,25 +8237,23 @@ type Semantics struct {
 // before `~/.zshrc`. So the system file comes *first in its own slot* rather
 // than all of them coming before all of the person's.
 //
-// # A directory and four names, rather than four paths
+// # Names, and not paths
 //
-// The directory is a field of its own for two reasons, and the weaker one is
-// that zsh's manual says so — "files listed above as being in /etc may be in
-// another directory, depending on the installation". The stronger is that a
-// test must be able to move them. These are absolute paths into a real
-// machine, and a suite that read them would be measuring `/etc/profile` on
-// whichever runner it happened to be on; that is the failure internal/testenv
-// exists to prevent, and a scratch `HOME` cannot reach it.
+// Where the directory *is* is not here, and that is deliberate. It is the same
+// `/etc` for every dialect, so it records no disagreement and is not an axis;
+// zsh's manual says as much in the other direction — "files listed above as
+// being in /etc may be in another directory, depending on the installation".
+// It lives on the front end as driver.Shell.SystemStartupDirectory, where the
+// binary that is being installed can say so.
 //
-// An empty Directory reads nothing at all, whatever the names say. That is
-// the answer a Semantics nobody filled in gives, and it matters more here
-// than it does for the files in a home directory: the file being reached for
-// is root's.
+// The split also puts the safe answer in the zero value, which matters more
+// here than anywhere else in this struct. These are absolute paths into a real
+// machine: a suite that read them would be measuring `/etc/profile` on
+// whichever runner it happened to be on, which is the failure internal/testenv
+// exists to prevent and the one a scratch `HOME` cannot reach. With the
+// directory on the front end, a shell value a test built by hand reaches for
+// nothing until it says otherwise.
 type SystemStartupFiles struct {
-	// Directory holds the files below. `/etc` in every dialect that has
-	// any; empty is a shell that reads no system-wide file at all.
-	Directory string
-
 	// Unconditional is the system-wide counterpart of
 	// UnconditionalStartupFile, read before it on every invocation.
 	//
@@ -8303,19 +8301,6 @@ type SystemStartupFiles struct {
 	// that do exist each come first in their own slot — so what is taken on
 	// the manual's word is the name and not the position.
 	LateLogin string
-}
-
-// Path names one of the system-wide files, or nothing when this shell has no
-// system-wide directory or no file in that slot.
-//
-// Nothing rather than a path built on an empty directory, for the reason
-// Semantics.StartupDirectoryVariable's join answers nothing: `/profile` is a
-// real path on a real machine and belongs to root.
-func (f SystemStartupFiles) Path(name string) string {
-	if f.Directory == "" || name == "" {
-		return ""
-	}
-	return f.Directory + "/" + name
 }
 
 // StartupFileOptions are the invocation options that change which startup
@@ -8653,7 +8638,7 @@ func PosixSemantics() Semantics {
 		// the person's file already seeing `path_helper`'s `$PATH` rather
 		// than the inherited one. Five of the six columns and one name, so
 		// it belongs to the standard's preset the way `.profile` does.
-		SystemStartupFiles: SystemStartupFiles{Directory: "/etc", Login: "profile"},
+		SystemStartupFiles: SystemStartupFiles{Login: "profile"},
 		// The four brace-range axes are left unanswered: a brace that
 		// never expands never asks them.
 		BraceExpansion:                 No,
@@ -9173,7 +9158,7 @@ func CoreSemantics() Semantics {
 		// of the six use. The zero Semantics still names no directory, so a
 		// vector nobody filled in reaches for nothing — which matters more
 		// here than it does above, because the file is root's.
-		SystemStartupFiles: SystemStartupFiles{Directory: "/etc", Login: "profile"},
+		SystemStartupFiles: SystemStartupFiles{Login: "profile"},
 		// And a way to say so. All four shells in the panel take `-l`, so
 		// the common denominator has it even though the standard does not
 		// — which is the one respect in which this differs from

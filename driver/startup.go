@@ -139,7 +139,20 @@ func (sh Shell) systemStartupFile(r *interp.Runner, in source, name string) int 
 	if in.startup.noSystem {
 		return 0
 	}
-	return sh.sourceFile(r, sh.Semantics.SystemStartupFiles.Path(name))
+	return sh.sourceFile(r, sh.systemStartupPath(name))
+}
+
+// systemStartupPath names one of the system-wide files, or nothing when this
+// shell has no system-wide directory or no file in that slot.
+//
+// Nothing rather than a path built on an empty directory, for the reason
+// startupPath answers nothing for an empty home: joining would give
+// `/profile`, which is a real path on a real machine and belongs to root.
+func (sh Shell) systemStartupPath(name string) string {
+	if sh.SystemStartupDirectory == "" || name == "" {
+		return ""
+	}
+	return sh.SystemStartupDirectory + "/" + name
 }
 
 // loginProfile sources the profile a login shell reads, which is the half of

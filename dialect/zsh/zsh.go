@@ -629,7 +629,6 @@ func Semantics() interp.Semantics {
 	// can see them read. The slot each occupies *is* measured, because the
 	// two files that do exist each land first in theirs.
 	s.SystemStartupFiles = interp.SystemStartupFiles{
-		Directory:     "/etc",
 		Unconditional: "zshenv",
 		Login:         "zprofile",
 		Interactive:   "zshrc",

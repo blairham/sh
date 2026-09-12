@@ -214,7 +214,7 @@ func Semantics() interp.Semantics {
 	// answers `off` in 3.2. So bash reaches `/etc/bashrc` only through
 	// `/etc/profile`, which sources it by hand for a login shell, and a
 	// shell that named it here would read it twice.
-	s.SystemStartupFiles = interp.SystemStartupFiles{Directory: "/etc", Login: "profile"}
+	s.SystemStartupFiles = interp.SystemStartupFiles{Login: "profile"}
 	// The panel's holdout on ordering, and the reason every bash tutorial
 	// tells a person to source `~/.bashrc` from their `~/.bash_profile` by
 	// hand: `bash -l -i` reads the profile and stops. zsh reads both.

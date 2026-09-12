@@ -754,6 +754,20 @@ func Semantics() interp.Semantics {
 	// `readonly -a` declares the array as well as freezing the name:
 	// `readonly -a a` lists as `typeset -ar a=(  )`.
 	s.ReadonlyRecordsTheCompoundAttribute = interp.Yes
+	// The integer and float letters make a name a *scalar* of that type
+	// here, so a declaration that also assigns an array literal is asking
+	// for two kinds at once and is refused fatally — `typeset -ia z=(1 2)`
+	// is `typeset: z: inconsistent type for assignment` at 1. The array
+	// letter is not what triggers it and the case letters do not: `typeset
+	// -i z=(1 2)` is the same refusal and `typeset -ua q=(ab cd)` is taken.
+	s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = interp.Yes
+	// A numeric letter takes a case attribute off — `typeset -l z; typeset
+	// -i z` is `typeset -i z=1` — and the case letter does not take the
+	// numeric one off: `typeset -i y; typeset -l y` keeps both, `typeset -il
+	// y=1`. The one column that answers the two directions differently,
+	// which is why they are two axes.
+	s.NumericAttributeReplacesTheCaseAttribute = interp.Yes
+	s.CaseAttributeReplacesTheNumericAttribute = interp.No
 	// The same reading of an undeclared name reached through a subscript:
 	// a name that is not an array here reads as a scalar, so a quoted
 	// `"${a[@]}"` on one nothing declared is the one empty field `"$a"`

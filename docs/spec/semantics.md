@@ -7147,6 +7147,85 @@ not fold an array's elements at all — `typeset -al arr=(AB Cd)` reads back
 goes through the attribute is its own measured question.
 
 
+## Which letters say what a name's values are, and how they combine
+
+Measured 2026-09-12 from a script file, `env -i PATH=/usr/bin:/bin` with a
+scratch `HOME`, `ZDOTDIR` and `HISTFILE`: zsh 5.9.2, ksh93u+, bash 5.3.15,
+bash 5.3.15 as `sh`, bash 3.2.57 and dash. bash 3.2 has neither case
+letter and dash has no `typeset`, so neither appears below.
+
+Four letters say what a name's values *are* rather than where a
+declaration lands or who may see it: `-i`, `-F`, `-l` and `-u`. Two
+questions follow, and the panel answers them differently.
+
+### One family, or two
+
+    typeset z=1; typeset -l z; typeset -i z; typeset -p z
+    typeset y=1; typeset -i y; typeset -l y; typeset -p y
+
+    shell        -l then -i         -i then -l
+    ksh93u+      typeset -i z=1     typeset -l y=1
+    zsh 5.9.2    typeset -i z=1     typeset -il y=1
+    bash 5.3.15  declare -il z="1"  declare -il y="1"
+
+ksh93 holds one family: a name carries one such letter and the last one
+written replaces the earlier. zsh replaces in **one direction only** — a
+numeric letter takes a case attribute off, a case letter leaves the
+numeric one standing — and bash replaces in neither. Two directions, three
+answers between them, which is why there are two axes rather than one.
+
+The float letter behaves as the integer letter does in both shells that
+spell it: `typeset -l v; typeset -F v` is `typeset -F v=1.0000000000`, and
+`typeset -F w; typeset -l w` is `typeset -l w=1.0000000000` in ksh93 and
+`typeset -Fl w=1.0000000000` in zsh.
+
+**The value the earlier letter produced stays.** The float rendering
+survives the letter that produced it going away, which is the same reading
+`+i` and `+F` already have: what is taken off is how the *next* store is
+written, not what is standing there.
+
+Only a listing observes any of this, so a wrong answer costs a `typeset
+-p` that says more than the shell would.
+
+### A type letter beside an array literal
+
+    typeset -ia z=(1 2); echo "st=$?"; typeset -p z; echo tail
+
+    zsh 5.9.2    typeset: z: inconsistent type for assignment, status 1,
+                 and the script ends
+    bash 5.3.15  st=0 · declare -ai z=([0]="1" [1]="2") · tail
+    ksh93u+      st=0 · typeset -a -i z=(1 2) · tail
+
+The integer letter makes a name a *scalar* of that type in zsh, so a
+declaration that also assigns an array literal asks for two kinds at once.
+Three rows say what the refusal turns on, and none of them is the array
+letter:
+
+- `typeset -i z=(1 2)`, with no `-a` at all, is the same refusal.
+- `typeset -F 3 z=(1 2)` and `typeset -E 3 z=(1 2)` are refused too, and
+  `typeset -Z 4 z=(1 2)`, `typeset -L 4 z=(ab cd)` and `typeset -R 4 z=(ab
+  cd)` are **taken**, listing as `typeset -aZ4 z=( 1 2 )` and the like. So
+  it is the letters naming a numeric *type* and not the wider
+  number-taking family.
+- `typeset -ua q=(ab cd)` is taken and lists as `typeset -au q=( ab cd )`.
+  A case letter says what happens *to* a value; only a type letter says
+  what the value is.
+
+**It is the letter on this line and never the attribute the name is
+carrying.** `typeset -i z; typeset z=(1 2)` is taken in the same shell and
+leaves `typeset -a z=( 1 2 )`, the integer letter simply lost. An
+implementation that asked about the name's attribute would refuse a line
+every shell in the panel writes an array for.
+
+All four declaration utilities refuse it, each naming itself in the
+location: `readonly:`, `export:`, `typeset:`, and `f:local:` from inside a
+function. The sentence is the one a plain word over a name already holding
+an array gets — one wording, two questions that reach it.
+
+The refusal ends the script rather than the command: inside `( … )` only
+the subshell stops, at status 1, and the line after it runs.
+
+
 ## `typeset -f` that marks rather than lists
 
 Measured 2026-09-12, `env -i` with a scratch `HOME`, zsh 5.9.2 `-f` and

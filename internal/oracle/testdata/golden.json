@@ -40419,6 +40419,50 @@
         "TimedOut": false
       }
     },
+    "declare/a-case-letter-over-a-numeric-attribute": {
+      "bash": {
+        "Stdout": "declare -il y=\"1\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -il y=\"1\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -i y=\"1\"",
+        "Stderr": "\u003cscript\u003e: line 3: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: typeset: not found~\u003cscript\u003e: 3: typeset: not found~\u003cscript\u003e: 4: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -l y=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -il y=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-child-is-told-the-folded-value": {
       "bash": {
         "Stdout": "[ab]~v=ab",
@@ -41783,6 +41827,50 @@
         "TimedOut": false
       }
     },
+    "declare/a-numeric-letter-over-a-case-attribute": {
+      "bash": {
+        "Stdout": "declare -il z=\"1\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -il z=\"1\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -i z=\"1\"",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: typeset: not found~\u003cscript\u003e: 3: typeset: not found~\u003cscript\u003e: 4: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -i z=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -i z=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-plus-signed-F-reaches-the-same-listing": {
       "bash": {
         "Stdout": "zv=1~f () ",
@@ -42267,6 +42355,50 @@
         "TimedOut": false
       }
     },
+    "declare/a-standing-type-attribute-and-a-later-array-literal": {
+      "bash": {
+        "Stdout": "st=0~declare -ai z=([0]=\"1\" [1]=\"2\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~declare -ai z=([0]=\"1\" [1]=\"2\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~declare -ai z='([0]=\"1\" [1]=\"2\")'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~typeset -a z=(1 2)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~typeset -a z=( 1 2 )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-subscripted-declaration-into-a-fresh-scope": {
       "bash": {
         "Stdout": "top [x q z]~in [q]~after [x y z]",
@@ -42659,6 +42791,50 @@
         "Stdout": "n=3 [one two three] st=0",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-type-letter-beside-an-array-literal": {
+      "bash": {
+        "Stdout": "st=0~declare -ai z=([0]=\"1\" [1]=\"2\")~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~declare -ai z=([0]=\"1\" [1]=\"2\")~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~declare -ai z='([0]=\"1\" [1]=\"2\")'~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~typeset -a -i z=(1 2)~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:typeset:1: z: inconsistent type for assignment",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -48027,6 +48203,50 @@
         "Stdout": "[AB]",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/the-array-letter-is-not-what-the-type-refusal-turns-on": {
+      "bash": {
+        "Stdout": "1 st=0~declare -au q=([0]=\"AB\" [1]=\"CD\")~2 st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1 st=0~declare -au q=([0]=\"AB\" [1]=\"CD\")~2 st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1 st=2~declare -a q='([0]=\"ab\" [1]=\"cd\")'~2 st=0~tail",
+        "Stderr": "\u003cscript\u003e: line 1: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1 st=0~typeset -a -u q=(AB CD)~2 st=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1 st=0~typeset -au q=( ab cd )",
+        "Stderr": "\u003cscript\u003e:typeset:3: z: inconsistent type for assignment",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

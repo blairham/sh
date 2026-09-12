@@ -495,6 +495,15 @@ func Semantics() interp.Semantics {
 	// `readonly -a a` freezes the name and records no kind: it lists as
 	// `declare -r a`, with no `a` in the cluster.
 	s.ReadonlyRecordsTheCompoundAttribute = interp.No
+	// A type letter and an array literal on one declaration is an array of
+	// that type: `declare -ia z=(1 2)` is `declare -ai z=([0]="1" [1]="2")`,
+	// and `declare -i z=(1 2)` with no array letter is the same line.
+	s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = interp.No
+	// The letters that say what a name's values are stand together here in
+	// both orders: `declare -l z; declare -i z` and the reverse are both
+	// `declare -il z="1"`.
+	s.NumericAttributeReplacesTheCaseAttribute = interp.No
+	s.CaseAttributeReplacesTheNumericAttribute = interp.No
 	// One reader for both: `$((010))` and `typeset -i d=010` are eight
 	// alike, where ksh93 answers eight and ten.
 	s.IntegerAssignmentReadsALeadingZeroAsDecimal = interp.No

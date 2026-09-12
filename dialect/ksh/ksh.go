@@ -464,6 +464,16 @@ func Semantics() interp.Semantics {
 	s.ValuelessDeclarationOfAHeldNameListsIt = interp.No
 	// And a plain word over a name holding an array is taken.
 	s.ScalarOverACompoundIsAnInconsistentType = interp.No
+	// So is a type letter with an array literal: `typeset -ia z=(1 2)` is
+	// `typeset -a -i z=(1 2)`, and `typeset -Fa z=(1 2)` is the float
+	// spelling of the same line.
+	s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = interp.No
+	// A name carries one letter saying what its values are, and the last one
+	// written speaks: `typeset -l z; typeset -i z` is `typeset -i z=1`, and
+	// `typeset -i y; typeset -l y` is `typeset -l y=1`. This is the one
+	// column that answers both directions yes.
+	s.NumericAttributeReplacesTheCaseAttribute = interp.Yes
+	s.CaseAttributeReplacesTheNumericAttribute = interp.Yes
 	// But an attribute added to a name that already holds a value re-reads
 	// that value at once: `FOO=bar; typeset -i FOO` stores 0 over the text,
 	// and `d=MiXeD; typeset -u d` stores MIXED. bash waits for the next

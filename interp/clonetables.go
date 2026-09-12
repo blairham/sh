@@ -96,12 +96,13 @@ func (c *Runner) ownTables(r *Runner) {
 	c.unique = maps.Clone(r.unique)
 	c.hideInScope = maps.Clone(r.hideInScope)
 	c.tied = maps.Clone(r.tied)
-	// freezing and declaring are the two that are only ever *replaced* as a
+	// freezing, literalOperands and declaring are only ever *replaced* as a
 	// whole, which makes sharing them harmless today and makes cloning them
 	// free. They are here because the rule is the struct field and not the
-	// current set of writers: a keyed write added to either one later is a
+	// current set of writers: a keyed write added to one of them later is a
 	// change nobody would think to look at this file for.
 	c.freezing = maps.Clone(r.freezing)
+	c.literalOperands = maps.Clone(r.literalOperands)
 	c.declaring = maps.Clone(r.declaring)
 	c.precommands = maps.Clone(r.precommands)
 

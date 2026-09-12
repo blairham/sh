@@ -1668,6 +1668,13 @@ type Runner struct {
 	// value — see markReadonly and applyDeferredFreeze.
 	freezing    map[string]bool
 	freezeAfter []string
+	// literalOperands is the subset of those names whose operand is an
+	// *array literal* rather than a plain word. The declaration builtin
+	// cannot see the shape for itself — the parser keeps the assignment
+	// apart and hands the utility the bare name — and one dialect refuses a
+	// type letter over exactly that shape. See
+	// Semantics.TypeLetterAndAnArrayLiteralIsAnInconsistentType.
+	literalOperands map[string]bool
 	// integer names evaluate what is assigned to them: with the attribute,
 	// `n=5+2` stores 7 rather than the four characters. It is a property of
 	// the name and not of the assignment, which is why it is recorded here.
@@ -3229,6 +3236,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// lands in the caller's scope.
 		locks := argv[0] == "readonly"
 		outerFreezing := r.freezing
+		// Recorded whichever order the two halves run in, because the
+		// refusal it feeds belongs to the *declaration* and `readonly -i
+		// z=(1 2)` is refused in the same words as `typeset -i z=(1 2)`.
+		outerLiterals := r.literalOperands
+		r.literalOperands = arrayLiteralOperands(c)
 		if locks {
 			r.assignOperands(c)
 		} else {
@@ -3272,6 +3284,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		}
 		r.applyDeferredFreeze()
 		r.freezing = outerFreezing
+		r.literalOperands = outerLiterals
 		if fatal {
 			return nil
 		}

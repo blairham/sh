@@ -594,6 +594,15 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
+		if r.typeLetterOverAnArrayLiteralRefused(name, f) {
+			// Ahead of everything else this operand would do, because the
+			// shell that refuses declares nothing: the name is not brought
+			// into being, no attribute is recorded, and the script stops.
+			return r.status
+		}
+		if r.unspecified {
+			return r.status
+		}
 		// The letters this operand is declared under, which are the line's
 		// plus whatever the *name* makes of them: the export letter asks for
 		// `-g` too in one dialect, and that is a question about this name's
@@ -950,6 +959,41 @@ func (r *Runner) inconsistentTypeRefused(name string, fresh bool) bool {
 		"a plain word declared over a name holding an array") {
 		return false
 	}
+	return r.refuseInconsistentType(name)
+}
+
+// typeLetterOverAnArrayLiteralRefused reports whether a declaration is refused
+// for naming a *type* — the integer or the float letter — while assigning an
+// array literal to the same name, having said so and ended the script. See
+// Semantics.TypeLetterAndAnArrayLiteralIsAnInconsistentType.
+//
+// The letter on this line and not the attribute the name is carrying, which is
+// what the measurement says: `typeset -i z; typeset z=(1 2)` is taken in the
+// shell that refuses, so a check against r.integer would refuse a line that
+// shell writes an array for.
+//
+// One gate for `typeset`, `local`, `readonly` and `export` alike, because the
+// shell that refuses refuses all four in the same words with its own name in
+// the location — the same shape inconsistentTypeRefused already has, and they
+// share the sentence for the same reason.
+func (r *Runner) typeLetterOverAnArrayLiteralRefused(name string, f declareFlags) bool {
+	if f.remove || !r.literalOperands[name] {
+		return false
+	}
+	if !f.integer && !f.float {
+		return false
+	}
+	if !r.ask(r.sem().TypeLetterAndAnArrayLiteralIsAnInconsistentType,
+		"a type letter on a declaration whose value is an array literal") {
+		return false
+	}
+	return r.refuseInconsistentType(name)
+}
+
+// refuseInconsistentType writes the one sentence two questions reach and ends
+// the script. Folded out of the two rather than written twice: the wording is
+// the dialect's and there is one of it.
+func (r *Runner) refuseInconsistentType(name string) bool {
 	r.fatal("%s\n", Wording(r.diag().InconsistentType,
 		"%s: inconsistent type for assignment", name))
 	return true
@@ -1017,6 +1061,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			// See the float branch below: the later declaration speaks, and
 			// `typeset -F 3 x=1.5; typeset -i x` reads `1`.
 			delete(r.floatPrecision, name)
+			r.numericLetterReplacesTheCase(name)
 			switch {
 			case f.baseNamed && f.base == 10 && r.integerBaseTenIsNone():
 				// Ten written down where ten is the letter's default
@@ -1091,6 +1136,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			// AttributeRereadsTheValueItFinds and evaluate through the
 			// arithmetic. A re-render of its own read the standing text with
 			// strconv, which left `16#FF` exactly where it was.
+			r.numericLetterReplacesTheCase(name)
 		}
 	}
 	if f.export {
@@ -1115,6 +1161,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			// The two case attributes cannot both stand: the later one
 			// speaks, which is what both shells measured do.
 			delete(r.uppered, name)
+			r.caseLetterReplacesTheNumeric(name)
 		}
 	}
 	if f.upper {
@@ -1126,6 +1173,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		} else {
 			r.uppered[name] = true
 			delete(r.lowered, name)
+			r.caseLetterReplacesTheNumeric(name)
 		}
 	}
 	if f.unique {
@@ -1163,6 +1211,55 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			r.hidden[name] = true
 		}
 	}
+}
+
+// numericLetterReplacesTheCase takes a case attribute off a name the integer
+// or float letter has just been given, where that letter *replaces* what says
+// what the name's values are rather than joining it — see
+// Semantics.NumericAttributeReplacesTheCaseAttribute.
+//
+// Asked only where the name is carrying one, which is the narrowest point the
+// two answers differ: a plain `typeset -i n` has no case attribute to lose and
+// must meet no question at all.
+//
+// One function for both letters, called from the integer branch and from the
+// float branch, because the two are one family and a second copy is where they
+// would come apart.
+func (r *Runner) numericLetterReplacesTheCase(name string) {
+	if !r.lowered[name] && !r.uppered[name] {
+		return
+	}
+	if !r.ask(r.sem().NumericAttributeReplacesTheCaseAttribute,
+		"a numeric letter taking a case attribute off the name") {
+		return
+	}
+	delete(r.lowered, name)
+	delete(r.uppered, name)
+}
+
+// caseLetterReplacesTheNumeric is the other direction, and its own axis
+// because one shell answers the two differently — see
+// Semantics.CaseAttributeReplacesTheNumericAttribute.
+//
+// The base goes with the integer letter and the precision with the float one,
+// for the reason `+i` and `+F` already have: what a type letter leaves behind
+// is the text the name is holding, and only the rendering of what comes next
+// is taken away.
+func (r *Runner) caseLetterReplacesTheNumeric(name string) {
+	// The float attribute is a precision, and zero is one a script may write
+	// — `typeset -F 0 x` — so the presence of the key is the question and not
+	// the number under it, the same distinction precisionNamed draws.
+	_, float := r.floatPrecision[name]
+	if !r.integer[name] && !float {
+		return
+	}
+	if !r.ask(r.sem().CaseAttributeReplacesTheNumericAttribute,
+		"a case letter taking the integer or float attribute off the name") {
+		return
+	}
+	delete(r.integer, name)
+	delete(r.integerBase, name)
+	delete(r.floatPrecision, name)
 }
 
 // setGlobalVar assigns to a name's global cell, past any local shadowing it.
@@ -1551,6 +1648,28 @@ func operandNames(c *syntax.SimpleCmd) map[string]bool {
 	var names map[string]bool
 	for _, a := range c.Assigns {
 		if !a.Operand {
+			continue
+		}
+		if names == nil {
+			names = map[string]bool{}
+		}
+		names[a.Name] = true
+	}
+	return names
+}
+
+// arrayLiteralOperands is the subset of operandNames whose operand is an
+// array literal — `typeset -i z=(1 2)` rather than `typeset -i z=1`.
+//
+// Beside operandNames rather than folded into it because the two answer
+// different questions of the same list: that one is "which names is this
+// declaration about to assign", which decides when a freeze may land, and
+// this one is "what shape is the value", which decides whether the letters
+// and the value are the same kind. See Runner.literalOperands.
+func arrayLiteralOperands(c *syntax.SimpleCmd) map[string]bool {
+	var names map[string]bool
+	for _, a := range c.Assigns {
+		if !a.Operand || !a.IsArray {
 			continue
 		}
 		if names == nil {

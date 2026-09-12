@@ -3599,6 +3599,16 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
+		if r.typeLetterOverAnArrayLiteralRefused(name, f) {
+			// `local -i z=(1 2)` is refused in the same words `typeset -i
+			// z=(1 2)` is, with `local` in the location — see
+			// typeLetterOverAnArrayLiteralRefused, which is one gate for all
+			// four declaration utilities.
+			return r.status
+		}
+		if r.unspecified {
+			return r.status
+		}
 		if base, sub, subscripted := r.subscriptOperand(name); subscripted && hasValue {
 			// `local a[1]=v` is `typeset a[1]=v` under the other word, and
 			// the scope is the whole of what it adds — see declareelement.go.

@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -231,16 +232,76 @@ func TestAPairWhoseEndsAreTheSameSubscriptAsksNothing(t *testing.T) {
 }
 
 func TestARangeEndpointThatWillNotEvaluateIsReported(t *testing.T) {
-	// Each end is an expression and each is reported where it fails, with
-	// nothing done to the array — the same answer the single subscript gives,
-	// and it has to be given at both ends rather than at whichever one is
-	// read first.
+	// Each end is an expression and each is reported where it fails, at both
+	// ends rather than at whichever one is read first. What is *done* about
+	// it differs by end, which is the pair of tests below; here only the
+	// report is asserted, and the start is the end that also leaves the array
+	// alone.
 	for _, sub := range []string{"x+,2", "1,x+"} {
+		out, _ := rangeUnsetRun(t, `a=(x y z); unset "a[`+sub+`]"`+showArray,
+			func(s *Semantics) { s.BadSubscriptToUnsetFatal = No })
+		if !strings.HasPrefix(out, "sh: x+: operand expected\nst=1 ") {
+			t.Errorf("a[%s]: got %q, want the expression reported at 1", sub, out)
+		}
+	}
+}
+
+// An endpoint that is no expression is answered differently at the two ends,
+// and the asymmetry is the whole of it. Measured 2026-09-12 on the one shell
+// that reads a comma as a range: a bad **start** is reported and nothing is
+// done, and a bad **end** is reported and the range is then acted on with the
+// end carrying 0 (#1001).
+//
+// Every want below is what the same range with a written 0 produces, which is
+// what says the 0 is a value and not a rule of its own: `[1,x+]` is `[1,0]`,
+// and a reversed range in this policy leaves an empty element where the span
+// would have begun.
+func TestARangeEndThatWillNotEvaluateCarriesZero(t *testing.T) {
+	const bad = "sh: x+: operand expected\n"
+	for _, tc := range []struct{ sub, want string }{
+		{"1,x+", bad + "st=1 [][x][y][z] n=4\n"},
+		{"2,x+", bad + "st=1 [x][][y][z] n=4\n"},
+		{"3,x+", bad + "st=1 [x][y][][z] n=4\n"},
+		{"-1,x+", bad + "st=1 [x][y][][z] n=4\n"},
+		// A start past the last element has nothing to stand in front of, so
+		// the carried 0 changes nothing — the same as a written `[4,0]`.
+		{"4,x+", bad + "st=1 [x][y][z] n=3\n"},
+	} {
+		out, st := rangeUnsetRun(t, `a=(x y z); unset "a[`+tc.sub+`]"`+showArray,
+			func(s *Semantics) { s.BadSubscriptToUnsetFatal = No })
+		if st != 0 || out != tc.want {
+			t.Errorf("a[%s]: got %q status %d, want %q", tc.sub, out, st, tc.want)
+		}
+	}
+}
+
+// The start carries nothing forward: it is reported and the array is left
+// alone, which is the single subscript's rule. Asserted beside the end's
+// answer, because a fix that made the two agree would look right on either
+// one alone.
+func TestARangeStartThatWillNotEvaluateDoesNothing(t *testing.T) {
+	const bad = "sh: x+: operand expected\n"
+	for _, sub := range []string{"x+,2", "x+,y+"} {
 		out, st := rangeUnsetRun(t, `a=(x y z); unset "a[`+sub+`]"`+showArray,
 			func(s *Semantics) { s.BadSubscriptToUnsetFatal = No })
-		if st != 0 || out != "sh: x+: operand expected\nst=1 [x][y][z] n=3\n" {
-			t.Errorf("a[%s]: got %q status %d, want the expression reported and the array whole", sub, out, st)
+		if st != 0 || out != bad+"st=1 [x][y][z] n=3\n" {
+			t.Errorf("a[%s]: got %q status %d, want the array whole", sub, out, st)
 		}
+	}
+}
+
+// One failed subscript, one sentence. `[0,x+]` carries 0 and becomes `[0,0]`,
+// a span wholly below the first element — and the shell writes the math error
+// *alone*, where a written `a[0,0]` also writes the bad-subscript refusal.
+//
+// This is the row that says the carried 0 is not simply substituted and then
+// forgotten: an implementation that reported and fell into the ordinary path
+// writes two diagnostics for one mistake.
+func TestASecondComplaintIsSwallowedOnceTheEndpointIsReported(t *testing.T) {
+	out, st := rangeUnsetRun(t, `a=(x y z); unset "a[0,x+]"`+showArray,
+		func(s *Semantics) { s.BadSubscriptToUnsetFatal = No })
+	if st != 0 || out != "sh: x+: operand expected\nst=1 [x][y][z] n=3\n" {
+		t.Errorf("a[0,x+]: got %q status %d, want one sentence and the array whole", out, st)
 	}
 }
 

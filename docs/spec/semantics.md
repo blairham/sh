@@ -13167,6 +13167,34 @@ exactly where the single subscript's do: every negative within reach acts
 because an empty character put where the span would have begun leaves the
 string as it was.
 
+**An endpoint that will not evaluate is answered differently at the two
+ends**, and this is one shell's asymmetry rather than an axis: only the
+dialect that reads a comma as a range can be asked the question at all, so
+there is no second answer to switch between. Measured 2026-09-12 on zsh
+5.9.2 with `a=(x y z)`:
+
+    unset "a[x+,2]"   complains, 1, [x][y][z]      nothing done
+    unset "a[1,x+]"   complains, 1, [][x][y][z]    the end carried 0
+    unset "a[2,x+]"   complains, 1, [x][][y][z]
+    unset "a[-1,x+]"  complains, 1, [x][y][][z]
+    unset "a[4,x+]"   complains, 1, [x][y][z]      the start is past the end
+    unset "a[0,x+]"   complains, 1, [x][y][z]      one sentence, not two
+
+A bad **start** is reported and nothing is done, which is what the single
+subscript already does. A bad **end** is reported and the range is then
+acted on with the end at 0 — so `[1,x+]` is the reversed range `[1,0]`, and
+a reversed range leaves an empty element where it would have begun. Every
+row above is exactly what the same range with a written 0 does, so nothing
+new is being said about ranges; the divergence was reporting and returning,
+which is a plausible reading and the wrong one (#1001).
+
+The last row is why the 0 is not simply substituted and forgotten. `[0,x+]`
+becomes `[0,0]`, a span wholly below the first element, and the shell writes
+the math error **alone** where a written `a[0,0]` also writes `invalid
+subscript range`. One failed subscript, one sentence — so anything further
+the span has to complain about is swallowed once the endpoint has been
+reported.
+
 **The below-the-first-element refusal is a rule about the span**, and
 that is what tells `a[0]` from `a[0,1]`. A range that begins out of reach
 and ends inside is not refused — the start is the first element — and one

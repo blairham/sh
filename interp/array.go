@@ -670,24 +670,64 @@ func (r *Runner) unsetSubscriptRange(name, sub string) (handled bool, code int) 
 		return false, 0
 	}
 	if errLo != nil {
+		// A start that will not evaluate is reported and *nothing is done*,
+		// which is the single subscript's rule and the opposite of the end's
+		// below. Measured 2026-09-12 on zsh 5.9.2, the one shell with ranges:
+		// `unset "a[x+,2]"` on `(x y z)` complains at 1 and leaves three
+		// elements.
 		return true, r.badSubscriptToUnset(lo, errLo)
 	}
+	// A *end* that will not evaluate is reported and then carries 0 forward,
+	// and the range is acted on with it. Measured the same day on the same
+	// shell, and it is the row that would not have been guessed:
+	//
+	//	unset "a[1,x+]"   complains at 1 and leaves ["", x, y, z]
+	//	unset "a[2,x+]"   complains at 1 and leaves [x, "", y, z]
+	//	unset "a[-1,x+]"  complains at 1 and leaves [x, y, "", z]
+	//	unset "a[4,x+]"   complains at 1 and leaves the three alone
+	//
+	// Every one of those is what the same range with a written 0 does, so
+	// there is no second rule here: `[1,0]` is a reversed range, a reversed
+	// range leaves an empty element where it would have begun, and the
+	// fourth element in the first row is that. The whole of the divergence
+	// was reporting and then returning (#1001).
+	//
+	// Not an axis. An axis records a *disagreement* between shells over the
+	// same syntax, and only the shell that reads a comma as a range can be
+	// asked this at all — the other four never reach here, since the reading
+	// itself is already the question asked above. The asymmetry between the
+	// two ends is one shell's and is written down rather than switched on.
+	reported := 0
 	if errHi != nil {
-		return true, r.badSubscriptToUnset(hi, errHi)
+		reported = r.badSubscriptToUnset(hi, errHi)
+		to = 0
+	}
+	// Anything further to complain about is swallowed once the endpoint has
+	// been reported: measured, `unset "a[0,x+]"` writes the math error and
+	// *not* the `invalid subscript range` a written `a[0,0]` also writes.
+	// One failed subscript, one sentence.
+	quietly := func(code int) (bool, int) {
+		if reported != 0 {
+			return true, reported
+		}
+		return true, code
 	}
 	if r.spanIsBelowTheFirstElement(from, to) {
+		if reported != 0 {
+			return true, reported
+		}
 		return true, r.refuseSubscriptToUnset(name, sub)
 	}
 	if a, isArray := r.Arrays[name]; isArray {
-		return true, r.unsetElementSpan(name, a, from, to)
+		return quietly(r.unsetElementSpan(name, a, from, to))
 	}
 	v, held := r.getVar(name)
 	if !held {
 		// Neither an element nor a character for any span to reach.
-		return true, 0
+		return quietly(0)
 	}
 	if r.scalarUnsetReadsAsCharacters(v, sub) {
-		return true, r.unsetCharacterSpan(name, v, from, to)
+		return quietly(r.unsetCharacterSpan(name, v, from, to))
 	}
 	// The element reading, where a scalar is the one element at the base: a
 	// span that reaches it takes the whole name away, exactly as the single
@@ -697,7 +737,10 @@ func (r *Runner) unsetSubscriptRange(name, sub string) (handled bool, code int) 
 	// than a column of its own.
 	if first, tail, within := r.spanOver(1, from, to); within && tail > first {
 		r.unsetName(name)
-		return true, 0
+		return quietly(0)
+	}
+	if reported != 0 {
+		return true, reported
 	}
 	return true, r.refuseSubscriptOnAScalar(name)
 }

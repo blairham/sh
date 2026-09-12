@@ -121,6 +121,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/blairham/sh/dialect/ash"
 	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/dialect/dash"
 	"github.com/blairham/sh/dialect/ksh"
@@ -547,9 +548,18 @@ func pickDialect(name string) (driver.Shell, error) {
 			Diagnostics: dash.Diagnostics(), Register: dash.Apply,
 			Prelude: dash.Prelude(), PromptStyle: dash.PromptStyle(),
 		}, nil
+	case "ash":
+		// The fifth, and the one no instrument grades: there is no ash on a
+		// macOS machine, so it has no oracle column and no
+		// conformance-dialects row. docs/spec/ash.md says what that costs.
+		return driver.Shell{
+			Dialect: ash.Dialect(), Semantics: ash.Semantics(),
+			Diagnostics: ash.Diagnostics(), Register: ash.Apply,
+			Prelude: ash.Prelude(), PromptStyle: ash.PromptStyle(),
+		}, nil
 	}
 	return driver.Shell{},
-		fmt.Errorf("unknown dialect %q: want core, posix, bash, zsh, ksh or dash", name)
+		fmt.Errorf("unknown dialect %q: want core, posix, bash, zsh, ksh, dash or ash", name)
 }
 
 // coreSemantics is the core's own vector with the one answer this *binary*

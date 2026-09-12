@@ -42,7 +42,7 @@ BINDIR := $(CURDIR)/build
 PREFIX ?= /usr/local
 SHELLDIR ?= $(PREFIX)/libexec/sh
 FUNCDIR ?= $(PREFIX)/share/sh/functions
-SHELLS := sh bash zsh ksh dash
+SHELLS := sh bash zsh ksh dash ash
 
 # The autoloadable functions this shell ships, and the directory they are kept
 # in within the checkout. That directory is *also* where an uninstalled build
@@ -123,7 +123,7 @@ install: ## Build the five shells and install them into $(SHELLDIR) — see docs
 	*:"$(SHELLDIR)":*) \
 		if [ "$(ALLOW_PATH_SHADOW)" != 1 ]; then \
 			echo "make install: refusing — $(SHELLDIR) is on your PATH." >&2; \
-			echo "  The binaries are named bash, zsh, ksh, dash and sh, so installing them" >&2; \
+			echo "  The binaries are named bash, zsh, ksh, dash, ash and sh, so installing them" >&2; \
 			echo "  there shadows the system shells for everything that resolves one by name." >&2; \
 			echo "  Install somewhere off PATH (the default is $(PREFIX)/libexec/sh) and name" >&2; \
 			echo "  the full path to chsh, or repeat this with ALLOW_PATH_SHADOW=1." >&2; \

@@ -19,7 +19,7 @@ import (
 // `core` is deliberately absent from the list. It is a real value for the flag
 // and the default, and it is also the answer that produced the refusal, so
 // offering it back would be offering to change nothing.
-const axisRemedy = "pass -dialect with one of posix, bash, zsh, ksh or dash"
+const axisRemedy = "pass -dialect with one of posix, bash, zsh, ksh, dash or ash"
 
 // usage writes what this binary is and how it is invoked.
 //

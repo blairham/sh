@@ -1,7 +1,7 @@
 # Installing, and running this as a login shell
 
 Five binaries come out of a build — the substrate driver `sh`, and the
-dialect binaries `bash`, `zsh`, `ksh` and `dash`. This file is how they
+dialect binaries `bash`, `zsh`, `ksh`, `dash` and `ash`. This file is how they
 get out of the build directory, and what it takes to make one of them the
 shell a terminal starts.
 
@@ -26,6 +26,7 @@ So `make install` puts them in **`$(PREFIX)/libexec/sh`**, which is off
     /usr/local/libexec/sh/zsh
     /usr/local/libexec/sh/ksh
     /usr/local/libexec/sh/dash
+    /usr/local/libexec/sh/ash
 
 **Not renamed to `sh-bash`.** The name is load-bearing at the far end.
 `login` and every terminal emulator start a login shell with `argv[0]`
@@ -61,7 +62,7 @@ Then check it runs:
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `PREFIX` | `/usr/local` | The usual prefix. `SHELLDIR` and `FUNCDIR` derive from it. |
-| `SHELLDIR` | `$(PREFIX)/libexec/sh` | Where the five binaries land. |
+| `SHELLDIR` | `$(PREFIX)/libexec/sh` | Where the six binaries land. |
 | `FUNCDIR` | `$(PREFIX)/share/sh/functions` | Where the shipped autoloadable functions land. See below — this one is not free to move, because the shell derives where it looks. |
 | `DESTDIR` | empty | Staging root for packaging. Prefixes the copy and nothing else — the `PATH` check still asks about `SHELLDIR`, because that is where a staged tree ends up. |
 | `ALLOW_PATH_SHADOW` | unset | `1` allows an install into a directory on `PATH`. |
@@ -173,7 +174,7 @@ That much works on its own. Measured against realistic agent input —
 pipelines, loops, `${PATH%%:*}`, `cd && pwd` — our bash matched real bash
 on every one.
 
-**Put the policy in `$SHELL` itself.** `--policy` is read by all five
+**Put the policy in `$SHELL` itself.** `--policy` is read by all six
 binaries, so the path can carry it:
 
     export SHELL="/usr/local/libexec/sh/bash --policy $HOME/.config/agent.policy"

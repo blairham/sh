@@ -6726,6 +6726,16 @@ echo "st=$?"`,
 		Why:     "an end before the start names a span with nothing in it, and the shell that replaces a span with one empty element still puts one there — so the array *gains* an element where it would have begun. Measured rather than guessed, and it is the strongest evidence that the reading is a replacement and not a removal",
 	},
 	{
+		ID: "array/unsetting-a-range-whose-end-will-not-evaluate", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[1,x+]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"; b=(x y z); unset "b[2,x+]"; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`,
+		Why:     "an end that is no expression is reported **and the range is then acted on**, with the end carrying 0: `[1,x+]` becomes the reversed range `[1,0]`, and a reversed range in the shell that blanks leaves an empty element where the span would have begun — so the array gains a fourth element after a failure. The second name is the same rule one place along, which is what says the 0 is a value and not a special case at the start. Reporting and returning is the plausible reading, is what the *start* does, and leaves three elements (#1001)",
+	},
+	{
+		ID: "array/unsetting-a-range-whose-start-will-not-evaluate", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[x+,2]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"; b=(x y z); unset "b[0,x+]"; echo "st=$?"; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`,
+		Why:     "the other end of the same failure, and it answers differently: a start that is no expression is reported and **nothing is done**, which is the single subscript's rule. The asymmetry is the whole of the row — one shell, one failure, two answers depending on which side of the comma it is on. The second name is why the first row's 0 is not simply substituted and forgotten: `[0,x+]` is `[0,0]`, a span wholly below the first element, and the shell writes the math error *alone* where a written `a[0,0]` also writes `invalid subscript range`. One failed subscript, one sentence",
+	},
+	{
 		ID: "array/unsetting-a-range-that-starts-past-the-end", Category: "expansion",
 		Snippet: `a=(x y z); unset "a[4,5]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"; unset "a[3,4]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
 		Why:     "the other end of the same rule, and the pair is the point: an end past the last is the last and a span of one is left, but a *start* past the last has nothing to replace and nothing to stand in front of, so nothing at all happens — where a reversed range inside the array inserts",

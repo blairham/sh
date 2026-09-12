@@ -1199,7 +1199,7 @@ func Semantics() interp.Semantics {
 	// answer there rather than no answer at all. Measured 2026-09-12 in a
 	// directory holding `a\b` and `a*`: `v='a\*'; print -r -- ${~v}` is
 	// `a\*`, so the `*` behind the backslash was not live (#1367).
-	s.ValueBackslashQuotesWhatFollows = interp.Yes
+	s.ValueBackslashInAPattern = interp.ValueBackslashDisarmsWhatFollows
 	// ksh93's answer for the trim at the end of a `read` value, measured the
 	// same way: `printf 'a b\\ \n' | read x y` leaves `b` here (#1360).
 	s.ReadTrailingEscapedSeparator = interp.ReadTrailingEscapedSeparatorTrimmed

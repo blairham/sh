@@ -44,12 +44,40 @@ import (
 // has to contain. The third is the same value with the flag that asks for
 // the other reading, which is where an alternation from a value does come
 // from.
+// valueBackslashMark stands where a backslash that arrived in a **value**
+// stood, under the reading that has it quote the character behind it and not
+// be matched itself.
+//
+// It is a byte of its own because the escaped form has one meaning per byte
+// and this needs two at once: for the *match* the backslash is a quote and
+// contributes nothing, and for the text a failed match restores it is a
+// backslash. A marked backslash followed by a marked character cannot say
+// that -- it is a literal backslash in front of a quoted one, which is a
+// different reading that another column holds -- so a third symbol is the
+// whole of the difference (#1370).
+//
+// Always written immediately in front of an ordinary escape, so a reader
+// that has not learned it sees a stray character and a *correctly quoted*
+// one behind it. That failure is a pattern matching nothing and a word
+// restored by globUnescape, which is far cheaper than the other
+// arrangement's: a metacharacter quietly going live.
+//
+// NUL is available because globEscape marks one, so a NUL that was *data*
+// carries a mark and a bare one can only be this. A shell value is not
+// supposed to hold one at all, and this implementation lets one through in
+// places the panel does not -- "not supposed to" is not a guarantee to build
+// an alphabet on.
+const valueBackslashMark = '\x00'
+
 // markedByGlobEscape is the alphabet above, named because two readers need
-// it: globEscape, which puts the marks on, and
-// valueBackslashDisarmsAMetacharacter, which asks whether a mark on one of
-// these could change what a field means. A second spelling of the set is how
-// the two would come apart.
-const markedByGlobEscape = `*?[\<()|` + extendedPatternMeta
+// it: globEscape, which puts the marks on, and the value-backslash escaping,
+// which asks whether a mark on one of these could change what a field means.
+// A second spelling of the set is how the two would come apart.
+//
+// NUL is in it for valueBackslashMark's sake and for nothing else: marking a
+// byte no pattern reads costs nothing, and it is what makes a bare mark
+// unambiguous.
+const markedByGlobEscape = "*?[\\<()|\x00" + extendedPatternMeta
 
 func globEscape(s string) string {
 	var b strings.Builder
@@ -66,82 +94,146 @@ func globEscape(s string) string {
 // without touching its live metacharacters.
 //
 // The escaped form spells "this character was quoted" as a backslash in front
-// of it, so `\` is the one byte a value cannot carry unmarked: a backslash
+// of it, so a backslash is the one byte a value cannot carry unmarked: one
 // that was *in the value* is otherwise read as the mark for whatever follows
-// it and removed with the marks, which is how `v='a\b'; w=$v` assigned `ab`
-// and `v='a\\b'` assigned one backslash where every shell in the panel keeps
-// both (#1222). Only globEscape's caller knew to mark them, and it is the
-// caller that runs when the result is *not* a pattern — so the loss was
-// exactly on the path where the value stays live.
+// it and removed with the marks, which is how `v='a\\b'; w=$v` assigned `ab`
+// and a doubled one assigned a single backslash where every shell in the
+// panel keeps both (#1222). Only globEscape's caller knew to mark them, and
+// it is the caller that runs when the result is *not* a pattern -- so the
+// loss was exactly on the path where the value stays live.
 //
-// The character behind the backslash is marked too, and that is measured
-// rather than symmetry. With files `a\b` and `a*` present, `v='a\*'; echo $v`
-// prints `a\*` in bash, bash 3.2, bash-as-sh, dash and zsh: the `*` matched
-// neither the name holding a backslash nor the name holding an asterisk, so a
-// value's backslash takes the metacharacter status off what follows it while
-// staying in the text itself. ksh93 is the one shell that reads it the other
-// way, matching `a\b`; that difference is an axis and is #1367's.
+// What such a backslash does to the character behind it is three readings and
+// not one, and none of them is decided here: the answer depends on whether
+// the *field* is globbed, and a field is a word rather than one expansion --
+// `v='a\\b'; echo $v*` puts a live star next to this result from a span that
+// is not this one. So the backslash is written as valueBackslashMark, which
+// records that a value put one there and commits to nothing, and
+// resolveValueBackslashes reads it once the whole field exists. The mark is
+// what globUnescape restores from, so the *text* is right under every
+// reading whether the field is ever globbed or not.
 //
-// What this form cannot express is #1370: where a live metacharacter is still
-// beside the backslash the field *is* globbed, and bash and dash want the
-// backslash to quote for the match and to reappear in the text a failed match
-// restores. One string cannot be both, since the fallback is the unescape of
-// the pattern — a backslash that quotes is removed by it, which was this bug.
-//
-// quotes is Semantics.ValueBackslashQuotesWhatFollows, resolved by the caller
-// because the axis is asked only where the two readings part. False leaves
-// the character behind the backslash live, which is the one column that reads
-// a value's backslash as data.
-func escapeValueBackslashes(s string, quotes bool) string {
+// A backslash at the end of a value has nothing behind it and is an ordinary
+// marked backslash: all three readings agree about it.
+func escapeValueBackslashes(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
+		if s[i] == valueBackslashMark {
+			// A NUL that is *data*, marked so that a bare mark can only be the
+			// one this function writes. See valueBackslashMark.
+			b.WriteByte('\\')
+			b.WriteByte(s[i])
+			continue
+		}
 		if s[i] != '\\' {
 			b.WriteByte(s[i])
 			continue
 		}
-		b.WriteString(`\\`)
-		if quotes && i+1 < len(s) {
-			i++
-			b.WriteByte('\\')
-			b.WriteByte(s[i])
+		if i+1 >= len(s) {
+			b.WriteString(`\\`)
+			continue
+		}
+		b.WriteByte(valueBackslashMark)
+		i++
+		b.WriteByte('\\')
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// rewriteValueBackslashes replaces every valueBackslashMark with the reading
+// p gives it, leaving a field the matcher can read.
+//
+// The mark always stands in front of a marked character, and that character
+// is re-marked here rather than carried over: a mark is only *needed* on a
+// metacharacter, and one on an ordinary character is not free. A marked
+// letter is a backslash the matcher may not read as an escape at all --
+// Semantics.PatternEscapeReaches decides which characters an escape reaches,
+// and where it does not reach a letter the two bytes are a backslash and a
+// letter, which matches nothing. globEscape is the one place that knows
+// which characters need a mark, so it is the one that puts them on.
+//
+// A backslash behind the mark is the doubled case and is marked under every
+// reading, because a lone one would escape whatever came after it.
+func rewriteValueBackslashes(field string, p ValueBackslashPolicy) string {
+	if strings.IndexByte(field, valueBackslashMark) < 0 {
+		return field
+	}
+	var b strings.Builder
+	for i := 0; i < len(field); i++ {
+		if field[i] != valueBackslashMark {
+			b.WriteByte(field[i])
+			if field[i] == '\\' && i+1 < len(field) {
+				i++
+				b.WriteByte(field[i])
+			}
+			continue
+		}
+		// The mark, and the marked character it stands in front of.
+		quoted, has := byte(0), false
+		if i+2 < len(field) {
+			quoted, has = field[i+2], true
+			i += 2
+		}
+		switch p {
+		case ValueBackslashQuotesWhatFollows:
+			// The backslash quotes and is gone; only what follows is left,
+			// marked if it needs to be.
+		case ValueBackslashIsData:
+			// The backslash is a character and what follows it stays live.
+			b.WriteString(`\\`)
+			if has && quoted != '\\' {
+				b.WriteByte(quoted)
+				continue
+			}
+		default:
+			// The backslash is a character and what follows it is not live,
+			// which is the same field the text written literally produces.
+			b.WriteString(`\\`)
+		}
+		if has {
+			b.WriteString(globEscape(string(quoted)))
 		}
 	}
 	return b.String()
 }
 
-// valueBackslashDisarmsAMetacharacter reports whether s has a backslash
-// directly in front of a character the matcher would otherwise read as a
-// metacharacter — the one shape the two readings of a value's backslash
-// answer differently.
+// resolveValueBackslashes turns the marks a field carries into the reading
+// this dialect has, and is where Semantics.ValueBackslashInAPattern is asked.
 //
-// Everything else is encoded identically or matches identically: an ordinary
-// character marked is that character, a backslash at the end of the value has
-// nothing behind it, and a backslash behind a backslash is consumed by the
-// pair before it under either reading. So this is the whole of where
-// Semantics.ValueBackslashQuotesWhatFollows may be asked.
+// Here rather than where the escaping happened, because here is the first
+// point the *whole field* exists: a value is one span of a word and the
+// metacharacter that makes the field a pattern may come from another --
+// `v='a\\b'; echo $v*` is `ab` in bash and `a\\bc` in ksh93, and the value
+// alone has nothing live in it at all.
 //
-// Walked in pairs, which is the quoting reading's own walk: in `a\\*` the
-// second backslash is what the first one quotes, so the `*` is not behind a
-// backslash at all and both readings leave it live.
+// Asked only where the readings put different patterns on the wire. A field
+// none of them makes a pattern is one nothing will glob, and the word it
+// restores is globUnescape of the *unresolved* field, which is the same text
+// under all three -- so the common shape, a value carrying a backslash in an
+// ordinary word, demands no dialect.
 //
-// The alphabet is globEscape's rather than a per-dialect one, and that is a
-// *wider* question rather than a wrong one: a `(` is not a metacharacter in
-// every dialect, so the axis is occasionally asked where the two readings
-// would have agreed. Every preset that globs an expansion result answers it,
-// so the only consequence is which lines a vector with no answer refuses —
-// and a second, dialect-aware copy of the set is how two alphabets drift
-// apart, which costs more than the width does.
-func valueBackslashDisarmsAMetacharacter(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] != '\\' || i+1 >= len(s) {
-			continue
-		}
-		if c := s[i+1]; c != '\\' && strings.IndexByte(markedByGlobEscape, c) >= 0 {
-			return true
-		}
-		i++
+// The second result is false only for an unanswered axis, which has already
+// been reported: the field is not globbed and the caller restores it.
+func (r *Runner) resolveValueBackslashes(field string) (string, bool) {
+	if strings.IndexByte(field, valueBackslashMark) < 0 {
+		return field, true
 	}
-	return false
+	quotes := rewriteValueBackslashes(field, ValueBackslashQuotesWhatFollows)
+	disarms := rewriteValueBackslashes(field, ValueBackslashDisarmsWhatFollows)
+	data := rewriteValueBackslashes(field, ValueBackslashIsData)
+	if !r.resultReadsAsPattern(quotes) && !r.resultReadsAsPattern(disarms) &&
+		!r.resultReadsAsPattern(data) {
+		return disarms, true
+	}
+	switch r.valueBackslashInAPattern() {
+	case ValueBackslashQuotesWhatFollows:
+		return quotes, true
+	case ValueBackslashDisarmsWhatFollows:
+		return disarms, true
+	case ValueBackslashIsData:
+		return data, true
+	}
+	return field, false
 }
 
 // escapedMarks says which bytes of a field in the escaped form are marks
@@ -177,16 +269,20 @@ func escapedMarks(s string) []bool {
 }
 
 // globUnescape removes the marks, giving the literal field.
+//
+// valueBackslashMark is the one mark that leaves something behind: it stands
+// where a value's backslash stood and is a backslash in the text, which is
+// the half of #1370 the pattern side cannot also carry. The escape behind it
+// is then read as any other mark is.
 func globUnescape(s string) string {
-	marks := escapedMarks(s)
-	if marks == nil {
-		return s
-	}
 	var b strings.Builder
-	b.Grow(len(s))
 	for i := 0; i < len(s); i++ {
-		if marks[i] {
+		if s[i] == valueBackslashMark {
+			b.WriteByte('\\')
 			continue
+		}
+		if s[i] == '\\' && i+1 < len(s) {
+			i++
 		}
 		b.WriteByte(s[i])
 	}
@@ -406,6 +502,15 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		// filesystem half is switched off: a pattern in a `case` arm or
 		// after `==` still matches, which is measured and is why this is
 		// here rather than in the matcher.
+		return nil, false
+	}
+	// A value's backslash is a mark until here, because until here there is
+	// no whole field to ask the question of. Resolved once, in front of
+	// everything that reads the field, so nothing below this line has to
+	// know the mark exists — and the caller keeps the unresolved field for
+	// the word a failed match restores. See resolveValueBackslashes.
+	field, ok := r.resolveValueBackslashes(field)
+	if !ok {
 		return nil, false
 	}
 	// The qualifier list a pattern may carry at its end, read before

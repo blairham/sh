@@ -672,7 +672,7 @@ func Semantics() interp.Semantics {
 	// present because a directory holding neither prints the same word under
 	// either reading, which is what makes the arrangement discriminating
 	// (#1367).
-	s.ValueBackslashQuotesWhatFollows = interp.No
+	s.ValueBackslashInAPattern = interp.ValueBackslashIsData
 	// The trim ignores the mask and reaches the last name's value however it
 	// was arrived at. Measured 2026-09-12: `printf 'a b\\ \n' | read x y`
 	// leaves `b` here and `b ` in dash and the three bashes — one field per

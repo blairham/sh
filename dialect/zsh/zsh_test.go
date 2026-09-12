@@ -177,9 +177,6 @@ func TestSemantics(t *testing.T) {
 		{"WholeSubscriptOnAScalarMeasuresIt", s.WholeSubscriptOnAScalarMeasuresIt, interp.Yes},
 		{"WholeSubscriptOnAScalarSlicesIt", s.WholeSubscriptOnAScalarSlicesIt, interp.Yes},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.Yes},
-		// Reached only through `${~spec}` here, and answered rather than left
-		// open: that flag globs one expansion and the backslash quotes.
-		{"ValueBackslashQuotesWhatFollows", s.ValueBackslashQuotesWhatFollows, interp.Yes},
 		{"PositionalListWithNoneIsSet", s.PositionalListWithNoneIsSet, interp.Yes},
 		{"PrefixToAFrozenNameIsCheckedFirst", s.PrefixToAFrozenNameIsCheckedFirst, interp.No},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.No},

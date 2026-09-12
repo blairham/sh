@@ -284,49 +284,62 @@ type Semantics struct {
 	// expansion and is not an option — see interp/tildeflag.go, where the two
 	// meet.
 	GlobExpansionResults Answer
-	// ValueBackslashQuotesWhatFollows takes the metacharacter status off the
-	// character behind a backslash that arrived in a **value**, where the
-	// field is then matched as a pattern. `No` says the backslash is data of
-	// its own and what follows it stays live.
+	// ValueBackslashInAPattern is what a backslash that arrived in a **value**
+	// does to the character behind it when the field is then matched as a
+	// pattern. Three readings, and no two of them can stand in for each other.
 	//
-	// Measured 2026-09-12 from a script file, in a directory holding exactly
-	// `a\b` and `a*` so that either reading has a name to find — a directory
-	// holding neither prints the same word whichever rule is in force, which
-	// is what makes this arrangement discriminating rather than merely
-	// plausible:
+	// Measured 2026-09-12 from a script file, in directories holding exactly
+	// the names either reading would find -- a directory holding neither
+	// prints the same word whichever rule is in force, which is what makes
+	// these arrangements discriminating rather than merely plausible.
 	//
-	//	v='a\*'; set -- $v; printf "[%s]" "$@"
+	// With `a\\b` and `a*` present:
 	//
-	//	dash, bash 5.3.15, bash-as-`sh`, bash 3.2.57   [a\*]
-	//	zsh 5.9.2                                      [a\*]
-	//	ksh93u+                                        [a\b]
+	//	v='a\\*'; set -- $v
 	//
-	// Five to one, and neither column matched `a*`, so nobody reads the
-	// backslash as a quote that is then *removed*: the two live readings are
-	// "quotes what follows and stays in the text" and "is an ordinary
-	// character and what follows is live" (#1367).
+	//	dash, bash 5.3.15, bash-as-`sh`, bash 3.2.57, zsh 5.9.2   [a\\*]
+	//	ksh93u+                                                  [a\\b]
 	//
-	// **Asked only where a value's backslash stands directly before a
-	// metacharacter, and only in a dialect that globs the result of an
-	// expansion at all.** Everything around that shape is unanimous: a
-	// backslash before an ordinary character globs the same either way — the
-	// mark is invisible to the matcher — and a backslash at the end of a
-	// value, or before another backslash, is encoded identically under both
-	// readings. Asking on the common path would make the bare core refuse an
-	// ordinary line that all six shells agree about.
+	// With `a\\bc` and `ab` present:
 	//
-	// GlobExpansionResults is *read* rather than asked here for the same
-	// reason: where the result is never globbed the two readings put the
-	// same text on the wire, so there is nothing to disagree about. That is
-	// not the same as zsh having no answer — `${~v}` globs one expansion in
-	// that shell, and measured 2026-09-12 in the same directory,
-	// `v='a\*'; print -r -- ${~v}` is `a\*`, which is Yes.
+	//	v='a\\b*'; set -- $v
 	//
-	// A backslash before an *ordinary* character is a further question this
-	// does not settle: bash and dash want it to quote for the match and to
-	// come back in the text a failed match restores, which the escaped form
-	// cannot say (#1370). Both readings here get that row wrong the same way.
-	ValueBackslashQuotesWhatFollows Answer
+	//	dash, bash 5.3.15, bash-as-`sh`, bash 3.2.57   [ab]
+	//	ksh93u+                                       [a\\bc]
+	//	zsh 5.9.2                                     [a\\b*]
+	//
+	// The second probe is what makes it three answers. bash reads the
+	// backslash as a quote that is **not itself matched**, so the pattern is
+	// `ab*`; ksh93 reads it as data with the `b` live; and zsh -- reached
+	// through `${~spec}`, since it globs no expansion result otherwise --
+	// reads it as data with the `b` *disarmed*, which is the same match a
+	// literal `a\\b*` makes. The first probe cannot tell bash from zsh, because a
+	// disarmed `*` and a quoted one both leave nothing to glob.
+	//
+	// Neither live reading removes the backslash from the *text*: a shell
+	// performs no quote removal on the result of an expansion, so a failed
+	// match restores the word with the backslash in it. `v='a\\b[c]'` is
+	// `a\\b[c]` in bash and dash for that reason and `a\\bc` in ksh93, which
+	// found a name.
+	//
+	// The doubled backslash is the row that says a quoting backslash needs a
+	// symbol of its own rather than the marked-backslash-plus-marked-character
+	// the escaped form already had: `v='a\\\\*'` is `a\\b` in bash -- the first
+	// backslash quoting the second and vanishing from the pattern -- and
+	// `a\\\\*` in ksh93 and zsh. The same four characters written *literally*,
+	// `'a\\\\b'*`, match the two-backslash name in every column, so the two
+	// provenances are told apart and one alphabet cannot carry both.
+	//
+	// **Asked only where the three encodings put different fields on the
+	// wire**, and only in a dialect that globs the result of an expansion at
+	// all. valueBackslashReadingsDiffer computes that rather than describing
+	// it: a value with a backslash but nothing live beside it encodes three
+	// ways and restores one text, which is why `v='a\\b'; echo $v` demands no
+	// dialect. GlobExpansionResults is *read* rather than asked for the same
+	// reason -- where nothing is globbed the three readings agree -- and that
+	// is not the shell without it having no answer: `${~spec}` globs one
+	// expansion there and has the third reading (#1367, #1370).
+	ValueBackslashInAPattern ValueBackslashPolicy
 
 	// GlobNoMatchIsError makes a pattern matching nothing an error instead of
 	// passing it through. True only in zsh.
@@ -9657,6 +9670,55 @@ func (r *Runner) readTrailingEscapedSeparator() ReadTrailingEscapedSeparatorPoli
 	if p == ReadTrailingEscapedSeparatorUnspecified {
 		r.diagf("%s\n", r.unanswered(
 			"an escaped IFS whitespace character closing a `read` value"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// ValueBackslashPolicy is what a backslash that arrived in a value does to
+// the character behind it when the field is matched as a pattern. See
+// Semantics.ValueBackslashInAPattern for the measurements.
+type ValueBackslashPolicy int
+
+const (
+	// ValueBackslashUnspecified is no answer, and is refused: the three
+	// below match different names and restore different words.
+	ValueBackslashUnspecified ValueBackslashPolicy = iota
+	// ValueBackslashQuotesWhatFollows makes the backslash a quote: what
+	// follows it is not a metacharacter, the backslash is not matched, and
+	// it is still in the word a failed match restores. dash, bash 5.3, that
+	// build as `sh`, and bash 3.2.
+	ValueBackslashQuotesWhatFollows
+	// ValueBackslashDisarmsWhatFollows keeps the backslash as a character of
+	// the pattern and takes the metacharacter status off what follows it, so
+	// the field matches what the same text written literally would. zsh,
+	// through `${~spec}`.
+	ValueBackslashDisarmsWhatFollows
+	// ValueBackslashIsData keeps the backslash as a character and leaves
+	// what follows it live. ksh93.
+	ValueBackslashIsData
+)
+
+func (p ValueBackslashPolicy) String() string {
+	switch p {
+	case ValueBackslashQuotesWhatFollows:
+		return "quotes what follows"
+	case ValueBackslashDisarmsWhatFollows:
+		return "disarms what follows"
+	case ValueBackslashIsData:
+		return "data"
+	}
+	return "unspecified"
+}
+
+// valueBackslashInAPattern resolves the axis, and is reached only where the
+// three readings put different fields on the wire.
+func (r *Runner) valueBackslashInAPattern() ValueBackslashPolicy {
+	p := r.sem().ValueBackslashInAPattern
+	if p == ValueBackslashUnspecified {
+		r.diagf("%s\n", r.unanswered(
+			"what a value's backslash does to the metacharacter behind it"))
 		r.status = 2
 		r.unspecified = true
 	}

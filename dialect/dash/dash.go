@@ -201,6 +201,10 @@ func Semantics() interp.Semantics {
 	// way and on the same day: `v='a\*'; set -- $v` is `a\*` here, so the
 	// `*` behind the backslash is not a metacharacter (#1367).
 	s.ValueBackslashQuotesWhatFollows = interp.Yes
+	// An empty positional list is a set parameter here, with zsh: measured
+	// 2026-09-12, `set --; "${@-word}"` is empty and `"${@+word}"` is
+	// `word`, where bash and ksh93 answer the other way round (#1941).
+	s.PositionalListWithNoneIsSet = interp.Yes
 	// The mask reaches the trim, so an escaped IFS whitespace character
 	// closing a `read` value is data and stays — this shell alone.
 	// Measured 2026-09-12: `printf 'a b c\\ \n' | read x y` leaves `b c `

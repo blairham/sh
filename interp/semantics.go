@@ -7235,6 +7235,42 @@ type Semantics struct {
 	// parameters go in before the expression is read. See
 	// EmptyArithSubscriptPolicy.
 	EmptyArithSubscript EmptyArithSubscriptPolicy
+	// PositionalListWithNoneIsSet calls `$@` — and `$*` — a **set** parameter
+	// when there are no positional parameters at all. `No` says the list is
+	// unset until something is in it, so a colon-less conditional fires.
+	//
+	// Measured 2026-09-11 and again 2026-09-12, `-c` and a script file,
+	// after `set --`:
+	//
+	//	                       dash, zsh 5.9.2   bash 5.3/as-sh/3.2, ksh93u+
+	//	"${@-word}"            (empty)           word
+	//	"${@+word}"            word              (empty)
+	//	"${*-word}"            (empty)           word
+	//	"${@?}"                (empty), 0        `@: parameter not set`
+	//	${@=abc}               (empty), 0        the operator fires, and is
+	//	                                         refused: `$@: cannot assign
+	//	                                         in this way` in bash,
+	//	                                         `${@=abc}: bad substitution`
+	//	                                         in ksh93
+	//
+	// Two columns say set and four say unset, and `$*` splits exactly as
+	// `$@` does, so one axis answers the family rather than one operator.
+	// The refusal in the last row is not this question — #1541 put that in
+	// and every dialect reaches it the moment the operator fires — this is
+	// the step before it, which decides whether it fires at all.
+	//
+	// The **colon** form is unanimous and asks nothing: `${@:-word}` is
+	// `word` and `${@:+word}` is empty in all six, because an empty value
+	// fires the test whichever way the set-ness reads. `${1-word}` is
+	// `word` everywhere too, so this is about the list and not about a
+	// positional parameter that is not there.
+	//
+	// Asked at the disagreement: a colon-less conditional, on `$@` or `$*`
+	// itself, with no positional parameters. With any parameter at all every
+	// column calls the list set, and a subscripted name that happens to be
+	// spelled `@` is an array and answers elsewhere (#1941).
+	PositionalListWithNoneIsSet Answer
+
 	// EmptyParamSubscriptIsAnError refuses `${a[]}` — a subscript written
 	// with nothing at all between the brackets — where a *parameter
 	// expansion* reads it. The same text one level over from

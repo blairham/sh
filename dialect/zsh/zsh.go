@@ -1408,6 +1408,10 @@ func Semantics() interp.Semantics {
 	// arithmetic site is a silent zero on a name nothing declared. The
 	// expansion is refused and the input ends (#1763).
 	s.EmptyParamSubscriptIsAnError = interp.Yes
+	// An empty positional list is a **set** parameter here, with dash and
+	// against the four bash-and-ksh columns: measured 2026-09-12, `set --;
+	// "${@-word}"` is empty and `"${@+word}"` is `word` (#1941).
+	s.PositionalListWithNoneIsSet = interp.Yes
 	// A `*` or `@` subscript inside an expression is the slice, joined and
 	// then read as an expression: measured 2026-09-11 on 5.9.2, `typeset -A
 	// m; m[k]=9; $(( m[*] ))` is 9 and `a=(1+1); $(( a[*] * 3 ))` is 6.

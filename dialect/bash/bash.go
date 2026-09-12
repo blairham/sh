@@ -860,6 +860,11 @@ func Semantics() interp.Semantics {
 	// naming the quoting run — where the arithmetic site reports and carries
 	// on with zero. Identical in 3.2.57 and under argv[0] of `sh` (#1763).
 	s.EmptyParamSubscriptIsAnError = interp.Yes
+	// `$@` with no positional parameters is **unset** here, so a colon-less
+	// conditional fires: measured 2026-09-12 after `set --`, `"${@-word}"`
+	// is `word` and `"${@+word}"` is empty in 5.3.15, 3.2.57 and as `sh`,
+	// where dash and zsh answer the other way round (#1941).
+	s.PositionalListWithNoneIsSet = interp.No
 	// The brackets of an arithmetic subscript hold an expression, and `*` is
 	// not one: measured 2026-09-11 on 5.3.15, `typeset -A m; m[k]=9;
 	// $(( m[*] ))` is 0, where the expansion `"${m[*]}"` is 9.

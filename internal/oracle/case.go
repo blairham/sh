@@ -8296,6 +8296,21 @@ echo "st=$?"`,
 		Why:     "replace first versus replace every; absent from dash",
 	},
 	{
+		ID: "param/an-empty-positional-list-under-a-colonless-test", Category: "parameter expansion",
+		Snippet: `set --; printf '[%s]' "${@-word}" "${@+word}" "${*-word}" "${*+word}" "${@:-word}" "${@:+word}" "${1-word}"; echo`,
+		Why:     "whether `$@` with no positional parameters is a **set** parameter, which is what a colon-less conditional asks. dash and zsh call it set — the `-` supplies nothing and the `+` supplies the word — and bash in all three builds and ksh93 call it unset, which is the other way round. `$*` splits the same way, so one answer decides the family rather than one spelling. The fifth and sixth fields are the colon forms, unanimous because an empty value fires the test whichever way the set-ness reads, and the last is a positional parameter that is not there, which is unset in every column — the two controls that say the axis belongs to the colon-less test on the list and nowhere near them. Answered by Semantics.PositionalListWithNoneIsSet (#1941)",
+	},
+	{
+		ID: "param/an-empty-positional-list-under-the-assignment", Category: "parameter expansion",
+		Snippet: `set --; printf '<%s>' ${@=abc}; echo after`,
+		Why:     "the loudest face of the same answer: where the list is unset the operator fires, and `$@` is a name no assignment can land on, so bash stops with `$@: cannot assign in this way` and ksh93 with `${@=abc}: bad substitution`. dash and zsh call the list set, the operator never fires, and the line prints `<>` and carries on at status 0. The refusal itself is #1541's and every dialect reaches it once the operator fires; what divides the panel here is whether it fires (#1941)",
+	},
+	{
+		ID: "param/an-empty-positional-list-under-the-error-form", Category: "parameter expansion",
+		Snippet: `set --; ( printf '[%s]' "${@?}"; echo " st=$?" ) 2>&1; ( printf '[%s]' "${@:?}"; echo " st=$?" ) 2>&1; echo done`,
+		Why:     "the same set-ness read through `?`, which is where it reaches a *wording* as well as a firing. The plain form fires only where the list is unset: bash and ksh93 report `@: parameter not set` and dash and zsh print an empty field at status 0. The colon form fires everywhere — an empty value is null — and the sentence then depends on the same answer: the two columns that call the list unset say so, and the two that call it set name the null the way each of them does. Recorded together because a fix that moved the firing and left the wording would pass the first field and fail the second (#1941)",
+	},
+	{
 		ID: "param/bang-with-an-operator-is-the-parameter", Category: "parameter expansion",
 		Snippet: `true & echo "${!:+set}"`,
 		Why:     "a `!` with an operator right after it is $! — not the start of an indirection that then has no name. All four shells print set",

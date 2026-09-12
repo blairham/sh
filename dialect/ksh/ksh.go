@@ -890,6 +890,11 @@ func Semantics() interp.Semantics {
 	// `a=(5 6 7); ${a[]}` is `5`, `s=hi; ${s[]}` is `hi` and `${m[]}` is the
 	// value under the empty key (#1763).
 	s.EmptyParamSubscriptIsAnError = interp.No
+	// The bash column's answer for whether an empty positional list is a set
+	// parameter: measured 2026-09-12, `set --; "${@-word}"` is `word` here
+	// and `${@=abc}` is `${@=abc}: bad substitution` because the operator
+	// fires at all (#1941).
+	s.PositionalListWithNoneIsSet = interp.No
 	// The same as the bash column: measured 2026-09-11 on ksh93u+,
 	// `typeset -A m; m[k]=9; $(( m[*] ))` is 0.
 	s.ArithWholeArraySubscriptIsTheSlice = interp.No

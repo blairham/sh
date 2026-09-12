@@ -645,10 +645,42 @@ func (r *Runner) yieldsTheArray(e *syntax.ParamExpr) bool {
 // source, so the joined and the split paths cannot disagree.
 func (r *Runner) testFires(e *syntax.ParamExpr) bool {
 	value, set, _ := r.paramSource(e)
+	return r.conditionalFires(e, value, set)
+}
+
+// conditionalFires is the test the four conditional operators share: unset,
+// or unset-or-empty where a colon was written.
+//
+// One function because the joined path and the split path both ask it, and
+// because the colon-less form asks a Semantics axis that the colon form must
+// not — see listOfNoPositionalsIsSet.
+func (r *Runner) conditionalFires(e *syntax.ParamExpr, value string, set bool) bool {
 	if e.Colon {
 		return !set || value == ""
 	}
-	return !set
+	return !r.listOfNoPositionalsIsSet(e, set)
+}
+
+// listOfNoPositionalsIsSet resolves Semantics.PositionalListWithNoneIsSet for
+// one colon-less conditional, and leaves every other parameter as it found
+// it.
+//
+// Three guards, and each is a place the panel agrees:
+//
+//   - the parameter has to be `$@` or `$*` itself. A name with a subscript
+//     that happens to be `@` is an array and answers elsewhere.
+//   - there have to be **no** positional parameters. With any, all six
+//     columns call the list set.
+//   - the colon form never gets here, because it fires on the empty value
+//     whichever way the set-ness question is answered. `${@:=abc}` is
+//     refused in all six (#1541) and needs no axis to be.
+func (r *Runner) listOfNoPositionalsIsSet(e *syntax.ParamExpr, set bool) bool {
+	if !set || len(r.Params) > 0 || e.Subscript() != nil ||
+		(e.Name != "@" && e.Name != "*") {
+		return set
+	}
+	return r.ask(r.sem().PositionalListWithNoneIsSet,
+		"whether `$@` with no positional parameters is a set parameter")
 }
 
 // expandAssignValue expands the value of an assignment.
@@ -1916,9 +1948,15 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 
 	// The colon extends the test from "unset" to "unset or empty". That one
 	// rule is the whole difference between the two rows of conditionals.
-	fires := !set
-	if e.Colon {
-		fires = !set || value == ""
+	//
+	// Read for the four operators that have a test and not before the
+	// switch, because a colon-less test on `$@` asks an axis: computing it
+	// for every expansion would put that question in front of `${@}` and
+	// `${@%x}`, which no shell disagrees about. See conditionalFires.
+	fires := false
+	switch e.Op {
+	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamAlternate, syntax.ParamError:
+		fires = r.conditionalFires(e, value, set)
 	}
 
 	switch e.Op {
@@ -4233,6 +4271,21 @@ func (r *Runner) paramErrorWord(e *syntax.ParamExpr, set bool) string {
 		return notSet
 	}
 	d := r.diag()
+	// Whether an empty positional list counts as set is the axis
+	// PositionalListWithNoneIsSet, and it reaches the *wording* of a colon
+	// form as well as the firing of a colon-less one: `set --; ${@:?}` says
+	// `parameter not set` in the column that calls the list unset and names
+	// the null in the columns that do not.
+	//
+	// Read rather than asked, which is the split unsetBlanksInPlace makes
+	// for the same reason: the colon form fires either way, so there is no
+	// behavior to refuse — only which of a dialect's own two sentences it
+	// picks, and a vector with no dialect has neither.
+	if e.Name == "@" || e.Name == "*" {
+		if e.Subscript() == nil && len(r.Params) == 0 {
+			set = r.sem().PositionalListWithNoneIsSet == Yes
+		}
+	}
 	if set && d.ParamNull != "" {
 		// There and empty, which one dialect distinguishes from absent.
 		return d.ParamNull

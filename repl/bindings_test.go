@@ -297,3 +297,19 @@ func TestASequenceNeitherTableAnswersToIsDroppedWhole(t *testing.T) {
 		t.Errorf("line = %q, want %q — the whole sequence goes, tail included", got, want)
 	}
 }
+
+// A rebinding of several bytes runs even when nothing in the editor's own
+// table shares its prefix.
+//
+// `^G` is the first byte because the editor does nothing with it and no
+// default sequence begins with it, so the read-ahead that finds the second
+// byte can only be the override table's own. A mutation run asked for this
+// one: with the override's look-ahead disabled, every other test here still
+// passed, because their sequences start with `\e` and the *default* table kept
+// the read going to the same place.
+func TestAMultiByteRebindingRunsWithNoDefaultSharingItsPrefix(t *testing.T) {
+	table := map[string]Binding{"\a\a": {Widget: WidgetBeginningOfLine}}
+	if got, want := typedBound(t, table, "world\a\aecho hello \n"), "echo hello world"; got != want {
+		t.Errorf("line = %q, want %q", got, want)
+	}
+}

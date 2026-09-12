@@ -40,7 +40,18 @@ func enableBuiltin(name string, on bool) interp.Builtin {
 		}
 		status := 0
 		for _, a := range rest {
-			if !r.KnownBuiltin(a) {
+			// A withdrawn name is not in the table to switch either way: a
+			// module selection took it out, and until the selection puts it
+			// back it is no more a hash table element than a name this shell
+			// never had. Measured on zsh 5.9.2, 2026-09-12, after `zmodload
+			// -F zsh/zutil -b:zparseopts`, both `enable zparseopts` and
+			// `disable zparseopts` are `no such hash table element` at 1.
+			//
+			// KnownBuiltin goes on saying yes for it on purpose — `+b:` has
+			// to be able to put it back, and zmodloadHasFeature leans on
+			// that — so the two questions are asked separately here rather
+			// than folded into one.
+			if !r.KnownBuiltin(a) || r.BuiltinWithdrawn(a) {
 				r.Diagnosef("%s: no such hash table element: %s\n", name, a)
 				status = 1
 				continue

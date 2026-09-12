@@ -291,6 +291,16 @@ func (r *Runner) BuiltinNames() []string {
 	for name := range r.disabledBuiltins {
 		delete(seen, name)
 	}
+	// A withdrawn one is not either, and it is out for a stronger reason: a
+	// module selection took the name out of the table altogether, so it is
+	// not a builtin at all until the selection puts it back. Measured on zsh
+	// 5.9.2, 2026-09-12, after `zmodload -F zsh/zutil -b:zparseopts`, the
+	// name is absent from `enable`'s listing and from `$builtins` alike —
+	// and absent from `disable`'s too, which is the whole difference between
+	// this state and `enable -n` (see withdrawnbuiltin.go).
+	for name := range r.withdrawnBuiltins {
+		delete(seen, name)
+	}
 	return sortedNames(seen)
 }
 

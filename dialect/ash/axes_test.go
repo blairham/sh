@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/ash"
+	"github.com/blairham/sh/internal/dialecttest"
 )
 
 // The regression guard for #2272, and the shape it guards against is worth
@@ -34,6 +35,22 @@ import (
 // on a path hides the next question along it, so it was re-run until it
 // stopped moving. Three remain unanswered on purpose and are named in
 // ash.go and in docs/spec/ash.md: #2276, #2277 and #2278.
+// runIn is run() with a working directory of its own. Two of the snippets
+// below write a file — a `read -t 0` has to have a stream that is always
+// ready, which is what a file is and a pipe is not — and run() leaves the
+// runner's Dir empty, which is the package directory. A `dialect/ash/f`
+// committed by this very test is how that was found.
+func runIn(t *testing.T, src string) (string, int) {
+	t.Helper()
+	out, st, err := preset.Combined(t, dialecttest.Base{
+		Name: "ash", Dir: t.TempDir(), Env: []string{"PATH=/usr/bin:/bin"},
+	}, src)
+	if err != nil {
+		return out + "unsupported: " + err.Error(), -1
+	}
+	return out, st
+}
+
 func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 	for _, tc := range []struct{ name, src, why string }{
 		{
@@ -126,7 +143,7 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 		if strings.Contains(tc.src, "sleep") && testing.Short() {
 			continue
 		}
-		out, _ := run(t, tc.src)
+		out, _ := runIn(t, tc.src)
 		if strings.Contains(out, "no dialect was chosen") {
 			t.Errorf("%s: %s\n\nrefused: %s\n\nthis dialect has no value for the axis "+
 				"the snippet reaches. Measure it against BusyBox — docs/spec/ash.md "+
@@ -147,7 +164,7 @@ func TestTheThreeAxesLeftUnansweredStillRefuse(t *testing.T) {
 		{"a NUL inside $'…'", `x=$'a\0b'; echo ${#x}`, "#2276"},
 		{"the array letter on readonly", `f() { readonly -a a; }; f`, "#2277"},
 	} {
-		out, _ := run(t, tc.src)
+		out, _ := runIn(t, tc.src)
 		if !strings.Contains(out, "no dialect was chosen") {
 			t.Errorf("%s (%s): %q answered rather than refusing.\n\n"+
 				"If it was measured and closed, move the row into "+

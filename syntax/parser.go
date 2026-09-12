@@ -999,6 +999,18 @@ func (p *Parser) requireBody(list []*Stmt) []*Stmt {
 	if len(list) != 0 || p.dialect.EmptyCompoundBody || p.err != nil {
 		return list
 	}
+	if p.dialect.SteppedOverSeparatorIsABody && p.separatorStood.IsValid() &&
+		(p.atStopWord() || p.at(TokRightParen)) {
+		// The body was written as a `;` this dialect steps over, and the
+		// construct's closer is what came next: `{ ; }` runs where `{ }` is
+		// refused. The closer has to be there for it — `{ ; ; }` leaves the
+		// parse sitting on the second `;`, which is one more than the
+		// dialect's count steps over and is refused there too.
+		//
+		// End of input is not a closer, so it falls through to the caller
+		// below, which is what reports an unterminated construct.
+		return list
+	}
 	if p.at(TokEOF) {
 		// The input ran out rather than the body being empty, and what is
 		// waiting for more is the caller's to report — it knows which
@@ -3855,9 +3867,16 @@ func (p *Parser) parseCase() Command {
 	defer func() { p.lex.inCaseArm = false }()
 	p.expectWord("in")
 	c.Header = p.slice(c.Start, inEnd)
+	// Where the dialect says so, an `esac` standing here — after the `in`,
+	// before any newline — is the first arm's first pattern and not the
+	// terminator. A newline takes the reading away again, so this is asked
+	// before the newlines are skipped and cleared if any were.
+	// See Dialect.CaseTerminatorIsAPatternAfterIn.
+	esacIsAPattern := p.dialect.CaseTerminatorIsAPatternAfterIn && !p.at(TokNewline)
 	p.skipNewlines()
 
-	for p.err == nil && !p.atWord("esac") && !p.at(TokEOF) {
+	for p.err == nil && !(p.atWord("esac") && !esacIsAPattern) && !p.at(TokEOF) {
+		esacIsAPattern = false
 		p.lex.inCaseArm = false
 		it := &CaseItem{Start: p.tok.Pos}
 		// A pattern may carry a leading open paren. Where the paren opened

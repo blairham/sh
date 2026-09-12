@@ -223,6 +223,56 @@ same position through `OpenEndedAndOr`, which drops the operator instead,
 and setting both would accept lines neither shell does — ksh93 refuses
 `false ||` and `{ false || ⏎ }` outright.
 
+**A skipped separator may be the whole of a body.** ksh93 alone, and it
+is the shape that says the step-over is not only about operators.
+Measured 2026-09-12 with `-n`, `env -i PATH=/usr/bin:/bin` and a scratch
+`HOME`:
+
+| probe | dash | bash 3.2 | bash 5 | bash as sh | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{ }` | error | error | error | error | error | **runs** |
+| `{ ; }` | error | error | error | error | **runs** | **runs** |
+| `{ ; ; }` | error | error | error | error | error | **runs** |
+| `( ; )` | error | error | error | error | **runs** | **runs** |
+| `if :; then ; fi` | error | error | error | error | **runs** | **runs** |
+| `if :; then :; else ; fi` | error | error | error | error | **runs** | **runs** |
+| `while :; do ; done` | error | error | error | error | **runs** | **runs** |
+| `for i in a; do ; done` | error | error | error | error | **runs** | **runs** |
+
+The first row is the control and it is what keeps this apart from
+`EmptyCompoundBody`: the shell that takes `{ ; }` refuses `{ }`, so the
+two spellings are measurably different things there. The third row is
+the other control — only as many separators as
+`SeparatorWhereACommandBelongs` steps over may stand, so a body written
+as two is refused by the count that already exists.
+
+Grammar flag: `SteppedOverSeparatorIsABody` — core and `zsh`: **off**;
+`ksh`: on.
+
+One neighbor is recorded and deliberately **not** modeled: after such a
+`;` ksh93 takes a simple command and refuses a compound one, so `{ ; :`
+runs while `{ ; { :`, `{ ; ( :`, `{ ; if :; then :; fi`, `{ ; while …`
+and `{ ; ! :` each name their own first keyword. That is a fact about
+what may follow a stepped-over separator rather than about a body
+written as one, it predates the flag, and it looks like a parser's
+internal state rather than a grammar (#2231).
+
+**A body with nothing in it succeeds**, whichever spelling reached it.
+The failure in front of each probe is what makes it a measurement — a
+body the interpreter merely skipped would leave the 1 alone:
+
+    false; { } ; echo $?          →  0   zsh
+    false; { ; } ; echo $?        →  0   ksh93 and zsh
+    false; ( ; ) ; echo $?        →  0   ksh93 and zsh
+    false; for i in a; do ; done; echo $?
+                                  →  0   ksh93 and zsh
+
+That is the interpreter's and not a dialect's: an empty list sets the
+status to 0 wherever one can be written. The constructs that answer 0
+for a body they never *entered* — a `case` with no matching arm, an `if`
+with no `else`, a loop with no iterations — already did so on their own
+paths and agree in all six columns.
+
 **And the end of input is a route question for one of them and not the
 other**, which is measured through a pty rather than assumed:
 
@@ -1655,6 +1705,42 @@ same size**:
 `;&` is core; `;;&` is bash-only and belongs to the bash dialect. Lumping
 them together as "case extensions" would put a bash-only construct in the
 core language.
+
+### `esac` directly after `in` is a pattern in one shell
+
+A `case` may have no arms at all — in five of the six columns. ksh93
+refuses the one-line spelling and runs the same `case` with a newline in
+front of the `esac`, and that pair is the whole rule: the word straight
+after `in`, before any newline, is the first arm's **pattern** there.
+
+Measured 2026-09-12, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`,
+over `-c` and a script file alike:
+
+| probe | dash | bash 3.2 | bash 5 | bash as sh | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `case x in esac` | runs | runs | runs | runs | **error** | runs |
+| `case x in esac; echo done` | `done` | `done` | `done` | `done` | **error** | `done` |
+| `case x in ⏎ esac` | runs | runs | runs | runs | runs | runs |
+| `case esac in esac) echo hit;; esac` | error | error | error | error | **`hit`** | error |
+| `case x in y) ;; esac) echo …;; esac` | error | error | error | error | error | error |
+| `case x in \ ⏎ esac` | runs | runs | runs | runs | **error** | runs |
+| `case x in # c ⏎ esac` | runs | runs | runs | runs | runs | runs |
+| `case esac in (esac) echo hit;; esac` | `hit` | `hit` | `hit` | `hit` | `hit` | `hit` |
+
+The fourth row is the discriminator and it is an **acceptance**: ksh93
+matches a subject spelled `esac`, which no other column will. The
+refusal in the first two rows follows from it — with the word taken as a
+pattern there is no terminator left — so writing this the other way
+round, as "a `case` must have an arm", would also have refused the third
+row, which ksh93 runs.
+
+A line continuation is not a newline (row six) and a comment ends the
+line so the newline after it counts (row seven). A leading `(` takes the
+reservation away in every column and needs no flag (row eight), which is
+the same carve-out `CasePatternAcceptsOperator` already relies on.
+
+Grammar flag: `CaseTerminatorIsAPatternAfterIn` — core: **off**; `ksh`:
+on.
 
 ### The two spellings of "keep testing" are mutually exclusive
 

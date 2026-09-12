@@ -513,6 +513,45 @@ type Dialect struct {
 	// have such an alternative written into it.
 	CasePatternMayBeEmpty bool
 
+	// CaseTerminatorIsAPatternAfterIn makes `esac` an ordinary word where the
+	// *first* arm's pattern list begins, so a `case` whose subject list is
+	// written on one line has no terminator until a newline has been read.
+	//
+	// ksh93u+ alone, and it is not the rule #773 filed it as. That issue read
+	// `case x in esac` being refused there as "a case must have an arm", and
+	// the discriminator says otherwise. Measured 2026-09-12, `env -i
+	// PATH=/usr/bin:/bin` with a scratch HOME, over `-c` and a script file
+	// alike:
+	//
+	//	case x in esac                    `case' unmatched     — a pattern,
+	//	                                  and then no `)`
+	//	case x in esac; echo done         `;' unexpected       — the same
+	//	case x in⏎esac                    runs                 — a newline
+	//	                                  makes it the terminator again
+	//	case esac in esac) echo hit;; esac
+	//	                                  prints `hit`         — so it really
+	//	                                  is being read as a pattern
+	//	case x in y) ;; esac) echo hit;; esac
+	//	                                  `)' unexpected       — only the
+	//	                                  first arm's position, not after a
+	//	                                  `;;`
+	//	case x in \⏎esac                  `newline' unexpected — a line
+	//	                                  continuation is not a newline
+	//	case x in # c⏎esac                runs                 — a comment
+	//	                                  ends the line and the newline counts
+	//	case esac in (esac) echo hit;; esac
+	//	                                  prints `hit` in all six — a paren in
+	//	                                  front takes the reservation away
+	//	                                  everywhere and needs no flag
+	//
+	// The fourth row is what makes this additive rather than a refusal: the
+	// shell *accepts* a program the other five refuse, and the one-line
+	// `case x in esac` is refused as a consequence of that acceptance rather
+	// than as a rule of its own. Writing it the other way round — a flag that
+	// simply refused an armless `case` — would have refused `case x in⏎esac`
+	// too, which ksh93 runs.
+	CaseTerminatorIsAPatternAfterIn bool
+
 	// CasePatternListSpansNewlines makes a newline inside a `case` arm's
 	// **parenthesized** pattern list an ordinary character of the pattern
 	// rather than the end of a word or a statement.
@@ -2201,12 +2240,16 @@ type Dialect struct {
 	// that set because four of the five refuse it. A dialect adds it back,
 	// which is the additive direction a grammar flag is for.
 	//
-	// Two neighbors are deliberately not this flag. A `case` with no arms —
+	// Three neighbors are deliberately not this flag. A `case` with no arms —
 	// `case x in esac` — is a list of *arms* rather than a command list, and
-	// the panel splits the other way there: dash, bash and zsh take it and
-	// ksh93 alone refuses. A command substitution's body — `x=$( )` — is a
-	// whole program rather than a compound command's body, and every shell
-	// in the panel takes an empty one.
+	// the one shell that refuses it on one line runs the same `case` with a
+	// newline in front of the `esac`, which is
+	// [Dialect.CaseTerminatorIsAPatternAfterIn] and not an emptiness rule at
+	// all. A command substitution's body — `x=$( )` — is a whole program
+	// rather than a compound command's body, and every shell in the panel
+	// takes an empty one. And a body written as a single stepped-over `;` —
+	// `{ ; }` — is [Dialect.SteppedOverSeparatorIsABody]: ksh93 takes that
+	// one and refuses `{ }`, so the two are measurably apart.
 	EmptyCompoundBody bool
 
 	// OpenEndedAndOr lets an and-or list end with its operator: the
@@ -2310,6 +2353,49 @@ type Dialect struct {
 	// with its operator there — so this is not that shell's spelling of
 	// OpenEndedAndOr, and setting both would accept lines neither shell does.
 	AbsentAndOrOperandIsAnEmptyCommand bool
+
+	// SteppedOverSeparatorIsABody lets a `;` the dialect stepped over stand
+	// for a compound command's whole body, so `{ ; }` is a brace group that
+	// runs nothing.
+	//
+	// ksh93u+ alone, and it is measurably not [Dialect.EmptyCompoundBody] in
+	// another spelling: that shell takes `{ ; }` and refuses `{ }`, where the
+	// shell with the other flag takes both. Measured 2026-09-12 with `-n`,
+	// `env -i PATH=/usr/bin:/bin` and a scratch HOME:
+	//
+	//	{ }                        `}' unexpected  — the control
+	//	{ ; }                      runs
+	//	{ ; ; }                    `;' unexpected  — only one is stepped over
+	//	( ; )                      runs
+	//	if :; then ; fi            runs
+	//	if :; then :; else ; fi    runs
+	//	if :; then :; elif :; then ; fi   runs
+	//	while :; do ; done         runs
+	//	until :; do ; done         runs
+	//	for i in a; do ; done      runs
+	//	select i in a; do ; done   runs
+	//
+	// The third row is why this reads the step-over rather than the token:
+	// how many separators may stand there is
+	// [Dialect.SeparatorWhereACommandBelongs]'s count, which for this shell
+	// is one, and a body written as two `;` is refused by the same rule that
+	// refuses `a ; ; ; b`.
+	//
+	// It runs nothing and sets no status of its own — `{ ; }; echo $?` is 0
+	// and `false; { ; }; echo $?` is 0 as well — so the parser leaves the
+	// body empty and nothing downstream needs a value for it.
+	//
+	// **One neighbor is deliberately not modeled.** After such a `;` that
+	// shell takes a simple command and refuses a *compound* one: `{ ; :` runs
+	// where `{ ; { :`, `{ ; ( :`, `{ ; if :; then :; fi`, `{ ; while …` and
+	// `{ ; ! :` each name their own first keyword. That is a fact about what
+	// may follow a stepped-over separator rather than about a body written as
+	// one, it predates this flag — the same lines were accepted here before
+	// it — and it looks like a parser's internal state rather than a grammar
+	// anybody would write down. A reader comparing against ksh93 will find
+	// it, so it is written down here rather than left to be rediscovered
+	// (#2231).
+	SteppedOverSeparatorIsABody bool
 
 	// RegexTakesAlternation makes a bare `|` part of a `=~` operand rather
 	// than the end of the word. bash and ksh93 say yes, so `[[ ab =~ a|b ]]`

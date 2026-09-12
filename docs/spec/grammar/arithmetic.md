@@ -561,6 +561,40 @@ end of the expression — `1/0 ` blames `0 `, `1/0 + 2 ` blames `0 + 2 ` — whe
 a literal the reader refused blames itself alone (`8#9`). Ours names the
 operand without the tail, on every route equally.
 
+### A stray `:` is one shell's one reversal
+
+Every math complaint ksh93 makes is `<expression>: <reason>` — except for a
+`:` with no `?` in front of it, where the offending byte comes first and the
+expression comes last. Measured 2026-09-12:
+
+| written | ksh93u+ |
+| --- | --- |
+| `$(( 1 : ))` | ``:: invalid character in expression -  1 : `` |
+| `$(( 1 : 2 ))` | ``:: invalid character in expression -  1 : 2 `` |
+| `$(( 1 ? 2 : 3 : 4 ))` | ``:: invalid character in expression -  1 ? 2 : 3 : 4 `` |
+| `$(( 1 2 ))` | `` 1 2 : arithmetic syntax error`` |
+| `$(( 1 @ ))` | `` 1 @ : arithmetic syntax error`` |
+| `$(( : 1 ))` | `` : 1 : arithmetic syntax error`` |
+
+The last three are the controls that make it the byte's shape and not
+leftover text's. **`:` is the only byte that takes this order**, established
+by measuring `$(( 1 <byte> ))` over every printable one: `@`, `$`, `;`, `\`,
+`'`, `{`, `]`, `.`, `_` and `~` are all the ordinary shape, `?` has a
+sentence of its own in the ordinary order, and `,`, `"`, `#` and `||` are not
+failures there at all. A *leading* colon is ordinary too, because that one
+wants a value and never reaches the leftover reading.
+
+It applies wherever the colon stands, a complete conditional in front of it
+included, and inside a subscript — which is an expression like any other.
+
+The parser gives a stray colon a kind of its own, `ErrArithColonWithoutQuestion`,
+by both roads to it: the dialect that reads `:` as a math token
+(`ArithColonIsAToken`, zsh) arrives after it has found the second value, and
+the rest arrive through leftover text. A dialect with no sentence for the byte
+falls back to the one it gives any leftover text, which is what bash and dash
+say. Diagnostics: `ArithColonWithoutQuestion` for the reason, zsh; and
+`ArithColonWithoutQuestionLine` for the whole reversed line, ksh93 alone.
+
 A variable whose value is not a number splits three ways:
 
 | `x=abc; $((x+1))` | result |

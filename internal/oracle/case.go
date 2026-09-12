@@ -10402,12 +10402,17 @@ echo unreachable`,
 	{
 		ID: "arith/a-colon-with-no-question-and-nothing-after-it", Category: "arithmetic",
 		Snippet: `echo "v=$((1 :))"; echo "st=$?"`,
-		Why:     "a `:` where no `?` opened a conditional, which zsh reads as a math *token* — it takes the byte and then wants a value, so the complaint is `operand expected at end of string` and not one about the colon. bash blames the leftover text with the sentence it gives any of it, and ksh93 calls it an invalid character, which is a fourth shape and is recorded rather than modeled",
+		Why:     "a `:` where no `?` opened a conditional, which zsh reads as a math *token* — it takes the byte and then wants a value, so the complaint is `operand expected at end of string` and not one about the colon. bash blames the leftover text with the sentence it gives any of it, and ksh93 reverses the whole line: the byte, then the reason, then the expression after a ` - `, where every other math complaint it makes is `<expression>: <reason>` (#2224)",
 	},
 	{
 		ID: "arith/a-colon-with-no-question-and-a-value-after-it", Category: "arithmetic",
 		Snippet: `echo "v=$((1 : 2))"; echo "st=$?"`,
-		Why:     "the pair with the row above, and the whole evidence that the byte is read rather than refused: with something after the colon zsh gets far enough to say `':' without '?'`, which a reader that stopped at the byte could not — it would give both rows the same complaint, as ours did. bash blames `: 2` rather than `:`, which says its reader ran on too",
+		Why:     "the pair with the row above, and the whole evidence that the byte is read rather than refused: with something after the colon zsh gets far enough to say `':' without '?'`, which a reader that stopped at the byte could not — it would give both rows the same complaint, as ours did. bash blames `: 2` rather than `:`, which says its reader ran on too, and ksh93's reversed line is the same in both rows",
+	},
+	{
+		ID: "arith/a-colon-after-a-complete-conditional", Category: "arithmetic",
+		Snippet: `echo "v=$((1 ? 2 : 3 : 4))"; echo "st=$?"; echo "w=$((1 2))"; echo "st=$?"`,
+		Why:     "the two halves of ksh93's reversed line, which one field cannot be read without the other. A second colon after a conditional that already has one is a *stray* colon like any other there — `:: invalid character in expression -  1 ? 2 : 3 : 4 ` — and a leftover that is not a colon is the ordinary `<expression>: <reason>` in the same shell, which is what says the shape belongs to the byte and not to leftover text. zsh gets far enough to name the colon in the first field and wants an operator in the second; bash and dash word both the same way and only the blamed token moves (#2224)",
 	},
 	{
 		ID: "arith/compound-arithmetic-assignment", Category: "arithmetic",

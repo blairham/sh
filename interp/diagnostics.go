@@ -3089,6 +3089,29 @@ type Diagnostics struct {
 	// gets a reader far enough to know a second value was there. Everywhere
 	// else the colon is leftover text and earns ErrArithOperator's sentence.
 	ArithColonWithoutQuestion string
+	// ArithColonWithoutQuestionLine is the *whole* line one dialect writes
+	// for a stray `:`, in place of the `<expression>: <reason>` shape
+	// ArithError holds. It takes the expression as `%[1]s`.
+	//
+	// ksh93 alone, and it is one construct reversing that shell's own order:
+	// `$(( 1 : ))` there is `:: invalid character in expression -  1 : ` —
+	// the offending byte first, then the reason, then the expression after a
+	// ` - `. Every other math complaint it makes is `<expression>:
+	// <reason>`, which is what ArithError holds, so this is a shape and not
+	// a wording.
+	//
+	// Measured 2026-09-12 over every printable byte in `$(( 1 <byte> ))`:
+	// `:` is the only one that takes this order. `@`, `$`, `;`, `\`, `'`,
+	// `{`, `]`, `.`, `_` and `~` are all the ordinary `<expression>:
+	// arithmetic syntax error`, `?` has a sentence of its own in the
+	// ordinary order, and `,`, `"`, `#` and `||` are not failures there at
+	// all. A leading colon is ordinary too — `$(( : 1 ))` is ` : 1 :
+	// arithmetic syntax error` — because that one wants a *value* and never
+	// reaches the leftover reading.
+	//
+	// Empty means the dialect writes the ordinary shape, which is five of
+	// the six columns.
+	ArithColonWithoutQuestionLine string
 	// ArithCharacterMissing is the reason when the character-code operator
 	// has nothing after it to take the code of: `$((##))`.
 	//
@@ -3953,6 +3976,17 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 		reason, fallback = d.ArithConditionalColon, "expected : in an arithmetic conditional"
 	case syntax.ErrArithColonWithoutQuestion:
 		reason, fallback = d.ArithColonWithoutQuestion, "expected : in an arithmetic conditional"
+		if reason == "" {
+			// A dialect with no sentence for a stray colon reads the byte as
+			// text left over and says what it says about any of it, which is
+			// what it said before this kind reached it.
+			reason, fallback = d.ArithOperatorExpected, "operator expected"
+		}
+		if d.ArithColonWithoutQuestionLine != "" {
+			// And one dialect reverses the whole line for it — see the
+			// field.
+			return Wording(d.ArithColonWithoutQuestionLine, "", d.arithBlamedText(expr))
+		}
 	}
 	return Wording(d.ArithError, "%[1]s: %[2]s",
 		d.arithBlamedText(expr), Wording(reason, fallback, se.Token), se.Token)

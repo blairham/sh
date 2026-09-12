@@ -14766,6 +14766,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/the-export-listing-writes-a-compound-value` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -ax A5=([0]="1" [1]="2")` | `export -a A5=([0]="1" [1]="2")` | `declare -ax A5='([0]="1" [1]="2")'` | `export A5=(1 2)` | `typeset -ax A5=( 1 2 )` |
 | `declare/a-lone-plus-given-to-export` | `st=1` **2>** `<shell>: 1: export: +: bad variable name` | `st=1` **2>** `<shell>: line 1: export: `+': not a valid identifier` | `st=1` **2>** `<shell>: line 1: export: `+': not a valid identifier` | `st=1` **2>** `<shell>: line 0: export: `+': not a valid identifier` | `st=1` **2>** `<shell>: export: +: is not an identifier` | `q~r~st=0` |
 | `declare/a-lone-plus-given-to-readonly` | `st=1` **2>** `<shell>: 1: typeset: not found~<shell>: 1: readonly: +: bad variable name` | `st=1` **2>** `<shell>: line 1: readonly: `+': not a valid identifier` | `st=1` **2>** `<shell>: line 1: readonly: `+': not a valid identifier` | `st=1` **2>** `<shell>: line 0: readonly: `+': not a valid identifier` | `st=1` **2>** `<shell>: readonly: +: invalid variable name` | `rr~st=0` |
+| `declare/a-plus-signed-f-with-an-operand` | `st=127` **2>** `<shell>: 1: typeset: not found` | `st=0` | `st=0` | `st=0` | `f()~st=0` | `f~st=0` |
+| `declare/a-plus-signed-f-with-no-operand-reaches-the-bare-listing` | **2>** `<shell>: 1: typeset: not found` *(status 1)* | `zv=1~f () ` | `zv=1` | `zv=1~f () ` | `f()` | `f` |
+| `declare/a-plus-signed-F-reaches-the-same-listing` | **2>** `<shell>: 1: typeset: not found` *(status 1)* | `zv=1~f () ` | `zv=1` | `zv=1~f () ` | *(no output, status 1)* | *(no output, status 1)* |
 | `declare/listing-a-control-byte` | `st=127` **2>** `<shell>: 1: typeset: not found` | `declare -- v=$'a\001b'~st=0` | `declare -- v=$'a\001b'~st=0` | `declare -- v="ab"~st=0` | `v=$'a\x01b'~st=0` | `typeset v=$'a\C-Ab'~st=0` |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
@@ -16053,6 +16056,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/a-lone-plus-given-to-readonly` — the same sign under the other attribute word, and the row that says the *filter* is the builtin's own: the frozen name is written and the plain one is not, where `export +` on the same table writes the exported one. The four columns that refuse it do so in four different wordings, each its own builtin's. The grep is narrow because the shell that answers has read-only parameters of its own with lowercase names
   ```sh
   p=1; typeset -r rr=4; readonly + | grep -E "^(p|rr)$"; echo "st=$?"
+  ```
+- `declare/a-plus-signed-f-with-an-operand` — the same sign with a *name* after it, which separates the three readings the sign has. zsh writes the bare name, ksh93 writes `f()` -- the spelling the function was declared with -- and bash writes nothing at all at 0: there the plus takes the function attribute off, and a name that is no longer a function is nothing the builtin has to say. This engine wrote the body in the bash column, which is neither of the three and is the reading `declare +f` had for want of a bare listing to fall through to (#1754). dash has no `typeset`
+  ```sh
+  f() { :; }; typeset +f f; echo "st=$?"
+  ```
+- `declare/a-plus-signed-f-with-no-operand-reaches-the-bare-listing` — and with no name, where the same three readings answer with three different *listings*. The `zv=1` is the discriminator: bash writes the variable and then the function, because taking the function attribute off leaves the bare `declare`, which is that shell's `set` listing to the byte -- so a row carrying a variable is not a function listing at all. zsh and ksh93 write only the name, each in its own spelling. The grep keeps the environment and this shell's own parameters out of the record, since they differ by column and by run
+  ```sh
+  zv=1; f() { :; }; typeset +f | grep -E "^(zv=1|f)"
+  ```
+- `declare/a-plus-signed-F-reaches-the-same-listing` — the other function letter under the same sign, and it lands in the same place: bash's `declare +F` is the bare listing again. That is what says the reading is about the *sign* rather than about which letter carries it -- a fix that special-cased `+f` alone would pass the row above and leave this one writing bodies. In the two shells where `F` is a float's precision instead the line is a listing narrowed to a letter no name here carries, which is empty; dash has no `typeset`
+  ```sh
+  zv=1; f() { :; }; typeset +F | grep -E "^(zv=1|f)"
   ```
 - `declare/listing-a-control-byte` — how a listing spells a byte below 0x20 inside `$'...'`: an octal escape, a hex one, and a caret pair are three answers from three columns that otherwise quote alike, which is why the control escape is a field of its own rather than part of the quoting style. The fourth has no such builtin (#2057)
   ```sh

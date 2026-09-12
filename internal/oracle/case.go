@@ -17868,6 +17868,21 @@ echo "st=$?"`,
 		Why:     "the same sign under the other attribute word, and the row that says the *filter* is the builtin's own: the frozen name is written and the plain one is not, where `export +` on the same table writes the exported one. The four columns that refuse it do so in four different wordings, each its own builtin's. The grep is narrow because the shell that answers has read-only parameters of its own with lowercase names",
 	},
 	{
+		ID: "declare/a-plus-signed-f-with-an-operand", Category: "declarations",
+		Snippet: `f() { :; }; typeset +f f; echo "st=$?"`,
+		Why:     "the same sign with a *name* after it, which separates the three readings the sign has. zsh writes the bare name, ksh93 writes `f()` -- the spelling the function was declared with -- and bash writes nothing at all at 0: there the plus takes the function attribute off, and a name that is no longer a function is nothing the builtin has to say. This engine wrote the body in the bash column, which is neither of the three and is the reading `declare +f` had for want of a bare listing to fall through to (#1754). dash has no `typeset`",
+	},
+	{
+		ID: "declare/a-plus-signed-f-with-no-operand-reaches-the-bare-listing", Category: "declarations",
+		Snippet: `zv=1; f() { :; }; typeset +f | grep -E "^(zv=1|f)"`,
+		Why:     "and with no name, where the same three readings answer with three different *listings*. The `zv=1` is the discriminator: bash writes the variable and then the function, because taking the function attribute off leaves the bare `declare`, which is that shell's `set` listing to the byte -- so a row carrying a variable is not a function listing at all. zsh and ksh93 write only the name, each in its own spelling. The grep keeps the environment and this shell's own parameters out of the record, since they differ by column and by run",
+	},
+	{
+		ID: "declare/a-plus-signed-F-reaches-the-same-listing", Category: "declarations",
+		Snippet: `zv=1; f() { :; }; typeset +F | grep -E "^(zv=1|f)"`,
+		Why:     "the other function letter under the same sign, and it lands in the same place: bash's `declare +F` is the bare listing again. That is what says the reading is about the *sign* rather than about which letter carries it -- a fix that special-cased `+f` alone would pass the row above and leave this one writing bodies. In the two shells where `F` is a float's precision instead the line is a listing narrowed to a letter no name here carries, which is empty; dash has no `typeset`",
+	},
+	{
 		ID: "shopt/patsub-replacement-reports-on", Category: "shell options",
 		Snippet: `shopt -p patsub_replacement 2>/dev/null; echo s=$?`,
 		Why:     "the reissuable line for the option that gates the ampersand reading, and its status. bash 5.3 writes `shopt -s patsub_replacement` at 0 because the option is on with nothing said; bash 3.2 has no such name and answers 1 with its complaint suppressed, and the three shells without the builtin answer 127. It is a capture surface -- a harness snapshots a shell with `shopt -p` and sources the result back -- so a shell reporting the wrong state here re-applies it to every later command (#1712, #1862)",

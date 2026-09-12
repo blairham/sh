@@ -70,9 +70,14 @@ type declareFlags struct {
 	// writes names, so the sign of the word the `m` rode in on decides
 	// nothing here. See declareMatching.
 	functionOff bool
-	funcNames   bool
-	remove      bool
-	print       bool
+	// funcNamesOff is the same for the `F` letter, and it exists for the
+	// same reason: under a plus that letter is not a listing at all in the
+	// one dialect that spells it, it is the function attribute being taken
+	// off — which leaves the bare word. See the plus branch in declareNames.
+	funcNamesOff bool
+	funcNames    bool
+	remove       bool
+	print        bool
 	// matching is the `m` letter — the operands are patterns rather than
 	// names — and matchNames is its sign, which chooses between the two
 	// listings it has: `-m` writes each match's value and `+m` writes each
@@ -316,6 +321,7 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 					break
 				}
 				f.funcNames = true
+				f.funcNamesOff = f.remove
 			case 'p':
 				// Print rather than declare. `+p` prints too — measured in
 				// both shells that spell the option at all.
@@ -447,8 +453,33 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// `typeset +fm '_*'` names its matches and `typeset -fm '_*'` writes
 		// their bodies. Asking `f.funcNames` alone here is what left the
 		// plus form printing bodies while the pattern form printed names.
-		namesOnly := f.funcNames
-		if f.functionOff && r.ask(r.sem().FunctionNamesUnderPlus, "`typeset +f` naming its functions") {
+		namesOnly := f.funcNames && !f.funcNamesOff
+		if f.functionOff || f.funcNamesOff {
+			if !r.ask(r.sem().FunctionNamesUnderPlus, "`typeset +f` naming its functions") {
+				if r.unspecified {
+					return r.status
+				}
+				// The sign is not a request for names here: it takes the
+				// function attribute *off*, and a name that is no longer a
+				// function is nothing this builtin has to say. What is left
+				// is the bare word, whose listing is a different command
+				// entirely.
+				//
+				// Measured 2026-09-12 on bash 5.3.15: `declare +f` with no
+				// operands is byte-identical to `declare` — `diff <(declare
+				// +f) <(declare)` is empty — and `declare +F` is the same
+				// line again. With operands it is a silent 0 that leaves the
+				// function defined, which `declare -F` afterwards shows. So
+				// the letter reaches the listing rather than writing one of
+				// its own (#1754).
+				if len(args) == 0 {
+					return r.bareDeclarationListing()
+				}
+				return 0
+			}
+			if r.unspecified {
+				return r.status
+			}
 			namesOnly = true
 		}
 		if r.unspecified {

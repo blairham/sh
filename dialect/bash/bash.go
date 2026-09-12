@@ -1025,6 +1025,15 @@ func Semantics() interp.Semantics {
 	// A bare `local` writes the running function's own locals, each as a
 	// clustered declaration — `declare -i n`, `declare -- x`.
 	s.BareLocalListing = interp.BareLocalListsLocals
+	// The *declaration* word lists something else again, and it is this
+	// shell's `set` listing exactly: every variable as an assignment, then
+	// every function. Measured 2026-09-12 with a scrubbed environment,
+	// `diff <(declare) <(set)` empty. It was left unanswered while the two
+	// values the form carried were neither of those, so a bare `declare`
+	// refused; `declare +f` and `declare +F` are the same listing reached by
+	// taking the function attribute off, and had nothing to fall through to
+	// (#1754).
+	s.BareTypesetListing = interp.BareLocalListsWhatSetLists
 	// A bare `set` writes the variables and then every defined function,
 	// values quoted only where they must be, `'\''` for an embedded quote
 	// and `$'...'` once a control character appears.

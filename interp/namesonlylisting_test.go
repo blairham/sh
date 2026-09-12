@@ -59,20 +59,52 @@ func TestAPlusSignedFunctionLetterNamesItsFunctions(t *testing.T) {
 	}
 }
 
-// The other answer to the same axis: a dialect whose plus form is not a
-// names-only listing goes on writing the bodies, and its own `-F` letter is
-// unaffected. Both answers are asserted because a fix that ignored the axis
-// would pass the row above and fail this one.
+// The other answer to the same axis, and it is not "the bodies instead": a
+// dialect that says No is one where the sign takes the function attribute
+// *off*, so there is no function listing left to write. With an operand that
+// is a silent 0 — the name is still a function afterwards, which the `-F`
+// line here shows — and with none it falls through to the bare word's own
+// listing.
+//
+// Both answers are asserted because a fix that ignored the axis would pass
+// the row above and fail this one.
 func TestAPlusSignedFunctionLetterOnlyNamesWhereTheDialectSaysSo(t *testing.T) {
-	src := "pa() { echo one; }\ntypeset +f pa"
-	out, errs, st := declRun(t, src, func(s *Semantics) {
+	saysNo := func(s *Semantics) {
 		withNamesOnly(s)
 		s.FunctionNamesUnderPlus = No
-	}, Diagnostics{})
-	want := "pa () \n{ \n  echo one\n}\n"
-	if out != want || errs != "" || st != 0 {
-		t.Errorf("typeset +f pa = %q (stderr %q, status %d), want the body %q", out, errs, st, want)
+		s.BareTypesetListing = BareLocalListsWhatSetLists
+		s.SetListing = SetListingAssignmentsThenFunctions
+		s.SetListingQuoting = ListingQuoteWhenNeededPlain
 	}
+	out, errs, st := declRun(t, "pa() { echo one; }\ntypeset +f pa\npa", saysNo, Diagnostics{})
+	if want := "one\n"; out != want || errs != "" || st != 0 {
+		t.Errorf("typeset +f pa = %q (stderr %q, status %d), want silence and the name still a function", out, errs, st)
+	}
+	// With no operand there is nothing to take the attribute off, and the
+	// bare word's listing is what is left. The `v=1` is what says this is
+	// that listing and not the function one: a names-only listing has no
+	// variables in it. The rows about the environment this test process
+	// happens to hold are dropped, since the subject is the shape.
+	out, errs, st = declRun(t, "v=1\npa() { echo one; }\ntypeset +f", saysNo, Diagnostics{})
+	want := "v=1\npa () \n{ \n  echo one\n}\n"
+	if got := scriptRowsOnly(out, "v=", "pa"); got != want || errs != "" || st != 0 {
+		t.Errorf("typeset +f = %q (stderr %q, status %d), want the bare listing %q", got, errs, st, want)
+	}
+}
+
+// scriptRowsOnly keeps the rows of a whole-table listing that are about names
+// the snippet made, and everything after the first of them — the function
+// bodies at the end run over several lines and are not name-prefixed.
+func scriptRowsOnly(out string, prefixes ...string) string {
+	lines := strings.SplitAfter(out, "\n")
+	for i, line := range lines {
+		for _, p := range prefixes {
+			if strings.HasPrefix(line, p) {
+				return strings.Join(lines[i:], "")
+			}
+		}
+	}
+	return out
 }
 
 // A status the sign does not touch: a name nobody defined is silent at 1, and

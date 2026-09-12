@@ -14099,6 +14099,11 @@ echo "st=$? alive"`,
 		Why:     "the same idea under two names, and the membership is not the clean split it looks like: bash has hashall alone, ksh93 trackall alone, and zsh has *both* — so a dialect table that gives trackall to ksh93 only is wrong, which is how this row came to exist",
 	},
 	{
+		ID: "opt/command-tracking-starts-on-where-the-letter-says-so", Category: "shell options",
+		Snippet: `trk() { set -o 2>/dev/null | grep -E "^(hashall|trackall)" | tr -s "[:blank:]" "="; }; trk; case $- in *h*) echo "letter=in";; *) echo "letter=out";; esac; case $- in *h*) set +h;; esac; trk; case $- in *h*) echo "after=in";; *) echo "after=out";; esac`,
+		Why:     "the letter and the listing are one fact, asked in both spellings and on both sides of a withdrawal: the three bash columns and ksh93 start command tracking *on*, carry `h` in `$-` for it, and drop both together on `set +h`, where dash has no such option and zsh has the name under a spelling this grep does not match and no `h` to lose. Ours had the letter without the state — `$-` said `h` and `set -o` said off in a shell that had run nothing, and `set +h` could not take the letter back out because nothing stood behind it (#1951). The withdrawal is guarded by the letter rather than written outright because dash makes `set +h` a fatal usage error and the row would end there",
+	},
+	{
 		ID: "opt/an-unknown-long-name-is-refused", Category: "shell options",
 		Snippet: `set -o zzznosuch; echo "on=$?"; set +o zzznosuch; echo "off=$?"`,
 		Why:     "a name outside the shell's table is refused in both directions, with four different wordings and two different statuses — the boundary the accept-off policy stops at, since a name that does not exist is not a state anything is already in",

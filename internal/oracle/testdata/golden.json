@@ -81874,6 +81874,50 @@
         "TimedOut": false
       }
     },
+    "opt/command-tracking-starts-on-where-the-letter-says-so": {
+      "bash": {
+        "Stdout": "hashall=on~letter=in~hashall=off~after=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "hashall=on~letter=in~hashall=off~after=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "hashall=on~letter=in~hashall=off~after=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "letter=out~after=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "trackall=on~letter=in~trackall=off~after=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "letter=out~after=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "opt/dollar-dash-drops-a-letter-turned-back-off": {
       "bash": {
         "Stdout": "no-e",

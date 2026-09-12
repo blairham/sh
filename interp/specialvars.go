@@ -244,13 +244,32 @@ func orderedOptionLetters(letters, order string) string {
 // and are not in either string: `i` for being interactive at all, `c` and `s`
 // for the route, and `m` for a monitor that is really running.
 func (r *Runner) startupOptionLetters() string {
-	letters := r.sem().DefaultOptionLetters
+	return withdrawnStartupLetters(r, r.declaredStartupLetters())
+}
+
+// declaredStartupLetters is startupOptionLetters before anything the script
+// did is taken back out of it: the set this shell would have shown on its
+// first line.
+//
+// Separate because it is also read from the other side. A startup letter is
+// a claim that an option is *on* before a script has run, so it answers the
+// question a state behind that letter would otherwise have to be told
+// separately — see Runner.commandTracking, which reads it rather than take a
+// second declaration of the same fact from the dialect. Reading the withdrawn
+// string there would ask the state about itself.
+func (r *Runner) declaredStartupLetters() string {
 	if r.Interactive {
 		if interactive := r.sem().InteractiveOptionLetters; interactive != "" {
-			letters = interactive
+			return interactive
 		}
 	}
-	return withdrawnStartupLetters(r, letters)
+	return r.sem().DefaultOptionLetters
+}
+
+// startsWithOptionLetter reports whether this shell turned the option behind
+// a letter on for itself, before the script.
+func (r *Runner) startsWithOptionLetter(letter byte) bool {
+	return strings.IndexByte(r.declaredStartupLetters(), letter) >= 0
 }
 
 // startupLetterIsOn holds, per startup letter, whether the option behind it is
@@ -268,6 +287,18 @@ func (r *Runner) startupOptionLetters() string {
 // earning a state is an entry here and not a second mechanism.
 var startupLetterIsOn = map[byte]func(*Runner) bool{
 	'B': func(r *Runner) bool { return !r.noBraceExpand },
+	'h': func(r *Runner) bool {
+		// Only where the letter means command tracking. One shell in the
+		// panel spells a history option with `h`, and although it has no
+		// `h` among its startup letters today, a letter withdrawn on the
+		// strength of a state it does not name would be the wrong answer
+		// the moment one did — see Semantics.SetHLetterTracksCommands,
+		// which is the same question `set -h` asks from the writing side.
+		if r.sem().SetHLetterTracksCommands != Yes {
+			return true
+		}
+		return r.commandTracking()
+	},
 }
 
 // withdrawnStartupLetters drops the startup letters whose option this script

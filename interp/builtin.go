@@ -598,7 +598,7 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			if r.ask(r.sem().SetHLetterTracksCommands, "which option `set -h` abbreviates") {
 				// The same state the hashall and trackall table entries
 				// write, so the letter and the names cannot disagree.
-				r.tracksCommands = on
+				r.setCommandTracking(on)
 			} else if r.unspecified {
 				return false
 			} else {

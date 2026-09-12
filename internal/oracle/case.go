@@ -15277,6 +15277,26 @@ exit 7`,
 		Why:     "the check is on the *expanded* word rather than on what was typed, which is what says it cannot be the lexer's: dash refuses `>&$n` once `n` holds two digits and takes it when `n` holds one. Standard error is put aside first because the shells name the target differently here — as written or as expanded — and the question is which of them stops",
 	},
 	{
+		ID: "redir/the-number-the-shell-picks-first", Category: "redirection",
+		Snippet: `printf 'x\n' > f; exec {fd}< f; echo "fd=$fd"`,
+		Why:     "the base the shell counts up from, which is not the same number everywhere: bash 5.3 and ksh93 start at 10 and zsh at 11, and dash and bash 3.2 have no `{name}` token to ask with. It is a number a script can print and compare, and it is also what `zsocket` puts in `$REPLY` and what `sysopen -u name` writes — rows about either of those had to avoid printing the number until this was an axis (#1752)",
+	},
+	{
+		ID: "redir/a-file-substitution-that-reads-a-directory", Category: "redirection",
+		Snippet: `mkdir d; v=$(<d); echo "st=$? v=[$v]"`,
+		Why:     "the read *after* a successful open, which the panel answers three ways: zsh fails it and says `error when reading d: is a directory`, bash 3.2 fails it in silence, and bash 5.3 and ksh93 leave the status at 0 with nothing said. bash 3.2 is what makes the status and the sentence two questions rather than one. An open that fails is a different event with a different answer — `$(<nosuch)` is 1 in the same shell that leaves this at 0 (#1778)",
+	},
+	{
+		ID: "redir/a-write-to-a-stream-exec-parked-closed", Category: "redirection",
+		Snippet: `( exec 1>&-; echo hi ) 2>e; echo "st=$?"; cat e`,
+		Why:     "the route `redir/a-write-to-a-closed-stream` cannot reach: the close is parked by `exec` rather than written on the command that writes. Three shells report 1 and word it exactly as they word the per-command close, ksh93 fails silently — and zsh, which says nothing for `echo hi >&-`, says `write error: bad file descriptor` here and still answers 0. The subshell is what lets the status be printed at all, since the close would otherwise outlive the command that could report it (#1363)",
+	},
+	{
+		ID: "redir/a-parked-close-the-writing-command-restates", Category: "redirection",
+		Snippet: `( exec 1>&-; echo hi >&- ) 2>e; echo "st=$?"; test -s e && echo said || echo silent`,
+		Why:     "the pair to `redir/a-write-to-a-stream-exec-parked-closed`, and the row that says where zsh draws its line: restating the close on the command that writes puts it back to silence, though the stream was already closed and nothing about the write changed. So it is not `exec` against a per-command redirection but whether the *writing command's own* redirection list closed the stream — which is also why a close written on a group does not quiet the commands inside it. The other three word it here exactly as they do without the `exec` (#1363)",
+	},
+	{
 		ID: "pipe/both-streams-is-a-pipe-in-two-shells-and-a-coprocess-in-one", Category: "redirection",
 		Script: true,
 		Snippet: `f() { echo O; echo E >&2; }

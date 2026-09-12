@@ -145,6 +145,11 @@ func Semantics() interp.Semantics {
 	// trailing separator makes no field — so this one answer is what the
 	// panel's two shapes of disagreement both come from.
 	s.UnquotedListJoinsOnIFS = interp.Yes
+	// A here-document whose delimiter never arrived gains the newline its
+	// last line never had: `printf 'cat <<X\nbody'` writes five bytes here
+	// and four in dash, ksh93 and zsh. Both bash builds measured agree
+	// (#1020).
+	s.UnterminatedHeredocGainsATrailingNewline = interp.Yes
 	// An associative array's subscript is a quoting context here: the key is
 	// the text inside its quotes, so `m["k"]=W` stores under `k` and
 	// `${m["k"]}` reads it back. zsh takes the subscript as written and

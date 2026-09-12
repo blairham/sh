@@ -6,6 +6,7 @@ package interp
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"strings"
 
@@ -107,10 +108,13 @@ func (r *Runner) readFileSubst(ctx context.Context, rd *syntax.Redirect, span sy
 		// back and the rest close the file this is reading.
 		//
 		// A read that fails part way — the file is a directory, which is the
-		// case that reaches here — keeps what it got and says nothing, which
-		// is what bash 5.3, ksh93 and dash do. zsh has a sentence for it and
-		// that is a disagreement of its own rather than part of this form.
-		_, _ = io.Copy(&out, sub.Stdin)
+		// case that reaches here — keeps what it got, and what happens next
+		// is a disagreement of its own rather than part of this form: three
+		// of the four say nothing and two of those keep the status at 0.
+		// See readFailed.
+		if _, cerr := io.Copy(&out, sub.Stdin); cerr != nil {
+			sub.readFailed(cerr)
+		}
 	}
 	for _, cl := range closers {
 		_ = cl.Close()
@@ -124,4 +128,25 @@ func (r *Runner) readFileSubst(ctx context.Context, rd *syntax.Redirect, span sy
 	// measured to be the same one: a file holding `A\n\n\n` substitutes as
 	// `A` in all five shells that have the form.
 	return strings.TrimRight(out.String(), "\n")
+}
+
+// readFailed is what `$(<file)` does when the read fails after the open
+// worked.
+//
+// Two questions, and the panel separates them: whether the substitution is
+// said to have failed, and whether anything is said at all. bash 3.2 answers
+// the first Yes and the second no, so neither can carry the other — see
+// Semantics.ReadFailureInAFileSubstitutionFailsIt and
+// Diagnostics.FileSubstitutionReadError (#1778).
+//
+// On the clone, whose status readFileSubst hands back, and whose openedName
+// is the word the redirection actually opened.
+func (r *Runner) readFailed(err error) {
+	if w := r.diag().FileSubstitutionReadError; w != "" {
+		r.diagf("%s\n", fmt.Sprintf(w, r.openedName, r.diag().reasonText(reason(err))))
+	}
+	if r.ask(r.sem().ReadFailureInAFileSubstitutionFailsIt,
+		"a read that failed inside `$(<file)` failing the substitution") {
+		r.status = 1
+	}
 }

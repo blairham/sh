@@ -47,6 +47,10 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	r.redirErr = false
 	r.badDupTarget = false
 	r.redirFds = nil
+	// Cleared for every command, including one with no redirections at all,
+	// which is what makes the answer *this* command's rather than whatever
+	// was last true. See Runner.outputClosedByThisCommand.
+	r.outputClosedByThisCommand = false
 	// This is where a pipeline element's pipe counts as installed, so the
 	// input it replaced stops being available to anything from here on —
 	// including a process substitution written as a redirection *operand*,
@@ -482,6 +486,10 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// trail fed by the error path alone held every file the shell could
 		// not open and none it could.
 		r.emit(ctx, Event{Kind: EventAccess, Action: action})
+		// The name as the script named it, kept for the one caller that has
+		// to word a failure of its own *after* this succeeded. See
+		// Runner.openedName.
+		r.openedName = name
 		// And only now the number, because the order is measured: under a
 		// limit of twenty, `exec 20>fresh` complains and the file is there
 		// afterwards. The open happens and the descriptor it produces is what
@@ -688,6 +696,24 @@ func (r *Runner) heredocText(rd *syntax.Redirect) string {
 		return ""
 	}
 	body := rd.Heredoc.Literal()
+	// A body that ran to the end of the input is the one that may not end in
+	// a newline, and whether the shell supplies the missing one is a
+	// disagreement — see UnterminatedHeredocGainsATrailingNewline. Asked here
+	// rather than in the lexer because the two shells read the same text and
+	// hand the command different bytes, which is a semantics question and not
+	// a grammar one.
+	if rd.HeredocAtEOF && !strings.HasSuffix(body, "\n") {
+		if r.ask(r.sem().UnterminatedHeredocGainsATrailingNewline,
+			"a newline on an unterminated here-document's last line") {
+			body += "\n"
+		} else if r.unspecified {
+			// Refused, so the command must not run on either reading — the
+			// same rule redirectTarget follows, and for the same reason:
+			// handing the body over after saying the shells disagree would
+			// be answering the question anyway.
+			r.redirErr = true
+		}
+	}
 	if rd.Heredoc.Spans[0].Quoting != syntax.Unquoted {
 		return body
 	}
@@ -865,6 +891,10 @@ func (r *Runner) dupFd(fd int, target string, opened map[int]io.Writer) error {
 			r.Stderr = closedFd{}
 		case 1:
 			r.Stdout = closedFd{}
+			// Recorded, because one dialect stays quiet about a failed write
+			// exactly when the command that wrote closed the stream itself.
+			// See Runner.outputClosedByThisCommand.
+			r.outputClosedByThisCommand = true
 		default:
 			// Closing a descriptor that was never open is not an error in
 			// any shell measured, so neither is deleting a missing entry.
@@ -937,9 +967,11 @@ func (r *Runner) dupFd(fd int, target string, opened map[int]io.Writer) error {
 }
 
 // nextFreeFd is the number the shell picks for `{name}>f`: the first free
-// entry from ten up, clear of the single digits a script addresses itself.
+// entry from the dialect's base up, clear of the single digits a script
+// addresses itself. Where that base is is a disagreement — see
+// Semantics.FirstAllocatedDescriptor.
 func (r *Runner) nextFreeFd() int {
-	fd := 10
+	fd := r.sem().FirstAllocatedDescriptor.number()
 	for {
 		if _, held := r.fds[fd]; !held {
 			return fd
@@ -1055,6 +1087,25 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 		// so: signalArranged read the element's own table, so an inherited
 		// handler was never one of these.
 		r.brokenPipeAbsorbed(arranged == signalHandledBy)
+	}
+	// Before the axis, and that is the whole reason this is a second wording.
+	// zsh answers the axis No and returns below without reaching
+	// BuiltinWriteError; it still says something on every route but one, and
+	// the route it stays quiet on is the one where the writing command's own
+	// redirections closed the stream. See
+	// Diagnostics.InheritedClosedStreamWriteError for the measurements, and
+	// for why moving BuiltinWriteError in front of the axis instead would be
+	// wrong.
+	if w := r.diag().InheritedClosedStreamWriteError; w != "" && !r.outputClosedByThisCommand {
+		// Not the builtin's own complaint, and the dialect that has this
+		// sentence says so by leaving the builtin out of the location:
+		// `exec 1>&-; echo hi` is `zsh:1: write error: …` where echo's own
+		// messages are `zsh:echo:1: …`, and inside a function it is
+		// `f: write error: …`. Measured 2026-09-12.
+		outer := r.inBuiltin
+		r.inBuiltin = ""
+		r.diagf("%s\n", fmt.Sprintf(w, name, r.diag().reasonText(reason(err))))
+		r.inBuiltin = outer
 	}
 	if !r.ask(r.sem().BuiltinWriteErrorFailsTheCommand, "a builtin's failed write failing the command") {
 		return st

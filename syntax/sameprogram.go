@@ -183,9 +183,28 @@ func sameRedirect(a, b reflect.Value, path string) (string, bool) {
 	if (!closing || aop != TokLessAmp || bop != TokGreatAmp) && aop != bop {
 		return fmt.Sprintf("%s.Op: %s against %s", path, aop, bop), false
 	}
+	// HeredocAtEOF is the input having run out, and finishing it is the
+	// printer's job on that shape: #962 has it supply the delimiter the text
+	// never had, so printed source is a finished program by construction.
+	// Allowed in that direction alone — a printer that turned a *terminated*
+	// here-document into one running to the end of the input would have
+	// swallowed the delimiter, which is the bug #962 was.
+	//
+	// It is not free, and writing it down is the point of not simply
+	// skipping the field. The flag decides whether the body gains the newline
+	// its last line never had — see
+	// interp.Semantics.UnterminatedHeredocGainsATrailingNewline — so under
+	// the three dialects that supply none, `cat <<X` / `body` prints to a
+	// program whose body is one byte longer. A printer cannot both end the
+	// input and keep that byte, because the delimiter needs a line of its
+	// own.
+	if !a.FieldByName("HeredocAtEOF").Bool() && b.FieldByName("HeredocAtEOF").Bool() {
+		return path + ".HeredocAtEOF: the printer left the here-document running to the end of the input", false
+	}
 	for i := range a.NumField() {
 		f := a.Type().Field(i)
-		if !f.IsExported() || f.Name == "N" || f.Name == "Op" || spellingOnly(redirType, f.Name) {
+		if !f.IsExported() || f.Name == "N" || f.Name == "Op" ||
+			f.Name == "HeredocAtEOF" || spellingOnly(redirType, f.Name) {
 			continue
 		}
 		if why, ok := sameNode(a.Field(i), b.Field(i), path+"."+f.Name); !ok {

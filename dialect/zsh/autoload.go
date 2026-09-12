@@ -395,6 +395,9 @@ func autoloadBodyValue(r *interp.Runner, name string) (string, bool) {
 // here as much as the minus, which is the shape `typeset` has and no other
 // builtin outside the declarations.
 func autoloadOptions(r *interp.Runner, args []string) (opts autoloadOpts, rest []string, code int) {
+	if code := autoloadStyleConflict(r, autoloadOptionLetters(args)); code != 0 {
+		return opts, nil, code
+	}
 	rest = args
 	for len(rest) > 0 && len(rest[0]) > 1 &&
 		(strings.HasPrefix(rest[0], "-") || strings.HasPrefix(rest[0], "+")) {
@@ -433,6 +436,55 @@ func autoloadOptions(r *interp.Runner, args []string) (opts autoloadOpts, rest [
 		}
 	}
 	return opts, rest, 0
+}
+
+// autoloadOptionLetters is every letter the leading option words carried,
+// read the way autoloadOptions reads them and with the signs dropped.
+//
+// A second walk of the same words rather than a field filled in by the first,
+// because what it feeds is a refusal of a *pair* — and the pair has to be
+// refused before either letter is read on its own, which is the one thing the
+// reading loop cannot do while it is still reading. See autoloadStyleConflict.
+func autoloadOptionLetters(args []string) string {
+	letters := ""
+	for len(args) > 0 && len(args[0]) > 1 &&
+		(strings.HasPrefix(args[0], "-") || strings.HasPrefix(args[0], "+")) {
+		word := args[0]
+		args = args[1:]
+		if word == "--" {
+			break
+		}
+		letters += word[1:]
+	}
+	return letters
+}
+
+// autoloadStyleConflict refuses the two autoload *styles* written on one line.
+//
+// `-z` is zsh's — the file **is** the body — and `-k` is ksh's, where the file
+// is sourced and is expected to define the function itself. They are
+// mutually exclusive, and zsh says so before it says anything about either
+// letter. Measured 2026-09-12 on zsh 5.9.2:
+//
+//	autoload -k kf      st=0, silent, and the stub records `-Xk`
+//	autoload -Uzk kf    zsh:autoload:1: invalid option(s)   st=1
+//	autoload -zk kf     the same
+//	autoload -kz kf     the same — the order does not matter
+//	autoload -kU kf     st=0, and the stub records `-XUk`
+//
+// This shell has the zsh style and not the ksh one, so `-k` alone is still
+// refused by name a few lines below — the honest answer, and the one that
+// lets a script tell a shell lacking the letter from a typo. What was wrong
+// was the *pair*: `-Uzk` met the by-name refusal, which is this
+// implementation confessing to something zsh itself rejects, and `add-zsh-hook`
+// hands its letters straight to `autoload`, so the status reaches a caller
+// (#2149).
+func autoloadStyleConflict(r *interp.Runner, letters string) int {
+	if strings.ContainsRune(letters, 'k') && strings.ContainsRune(letters, 'z') {
+		r.Diagnosef("invalid option(s)\n")
+		return 1
+	}
+	return 0
 }
 
 // autoloadResolveNow is `-X` and `+X`.
@@ -869,16 +921,23 @@ func autoloadFile(r *interp.Runner, name string) (path, text string, ok bool) {
 // The path is resolved against the shell's directory through shellPath, since
 // a `-r` records it and reads it again later, after the shell may have moved.
 // The text is what was read here and now, so it needs no such care.
+//
+// **A name with a separator in it is not looked for anywhere.** There was a
+// branch here that read such a name as a path — "`autoload /path/to/fn` means
+// look where it says" — and the measurement it claimed does not reproduce.
+// Measured 2026-09-12 on zsh 5.9.2 with `fns/rf` on disk under the shell's
+// own directory and `fns` deliberately not on `$fpath`:
+//
+//	autoload -Uz fns/rf; 'fns/rf'   zsh:1: fns/rf: function definition file not found
+//	autoload -rUz fns/rf            the same, at the call
+//	autoload -RUz fns/rf            the same, at the declaration
+//
+// so zsh refuses in all three spellings with the file right there. Nothing
+// stands in for the branch, because nothing has to: a name holding a
+// separator matches no `$fpath` entry joined with it, so the refusal falls
+// out of the ordinary walk and there is one road again rather than two
+// (#1999).
 func autoloadLocate(r *interp.Runner, name string) (path, text string, ok bool) {
-	if strings.ContainsRune(name, filepath.Separator) {
-		// A name with a directory in it is looked for where it says and
-		// nowhere else, which is what `autoload /path/to/fn` means.
-		body, err := r.ReadFileGated(name)
-		if err != nil {
-			return "", "", false
-		}
-		return shellPath(r, name), string(body), true
-	}
 	dirs, _ := r.GetArray("fpath")
 	for _, dir := range dirs {
 		if dir == "" {

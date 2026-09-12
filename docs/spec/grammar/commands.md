@@ -1237,13 +1237,27 @@ and zsh). Kind: `ErrForArithSeparator`. Pinned:
 `core/c-style-for-with-four-expressions` and
 `core/c-style-for-with-three-separators-reaches-the-leftover`.
 
-**The counting is textual, as the split is.** `(( … ))` arrives from the
-lexer whole and the parts are cut on its semicolons, so the check counts
-the same semicolons the split uses. A `;` inside a command substitution
-in the header is therefore counted — and that header does not reach this
-check at all today, because the lexer's paren matching stops first: `for
-(( i=$(echo 1;true) ;; ))` runs in bash and is an unmatched `)` here,
-which is a separate defect of the lexer rather than of the count.
+**The counting is textual, as the split is**, and the text it counts is
+the header's own. `(( … ))` arrives from the lexer whole and one pass
+over it does both jobs, so the check can never count a semicolon the
+split did not cut on. That pass separates only where nothing encloses
+the `;`: not inside a quotation, not inside a command substitution in
+either spelling, not inside a group, a subscript or a brace expansion.
+
+    for (( i=$(echo 1;true) ;; ))              two separators
+    for (( i=0; i<`x=1; echo 2`; i++ ))        two separators
+    for (( ${ case q in q) true;; esac; };; ))        two separators
+
+All three run in bash 5.3.15, ksh93u+ and zsh 5.9.2, unanimously.
+Counting every `;` made each of them a header holding three or four, and
+refused the script. The two substitution forms are stepped over by
+*reading* them rather than by counting parentheses, for the reason
+`$( )` is read that way everywhere else: a `case` arm's pattern ends in
+a `)` that closes nothing. A header whose nesting does not come out even
+is cut the naive way instead, so a malformed one draws the complaint it
+always drew. Pinned:
+`core/c-style-for-with-a-separator-inside-a-substitution` and
+`core/c-style-for-with-a-substitution-in-the-condition`.
 
 **The other `(( … ))` sites are not this.** `while (( ))`, `if (( ))`
 and a bare `(( ))` command take an empty expression and answer 1, and

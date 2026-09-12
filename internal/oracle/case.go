@@ -1786,6 +1786,16 @@ var Corpus = []Case{
 		Why:     "more separators than the three sections need, and the panel divides: bash refuses the whole script and words it differently from the rows above — `` `;' unexpected `` rather than the expression being required — where ksh93 and zsh take the header, fold everything past the second `;` into the third section, and print `body`. So too few is a correction and too many is a dialect's, which is syntax.Dialect.ForArithExtraSeparators. The `break` matters twice here: it terminates the row, and it is what stops the two shells that accept reaching the leftover text (#2225)",
 	},
 	{
+		ID: "core/c-style-for-with-a-separator-inside-a-substitution", Category: "command language",
+		Snippet: `for (( i=$(echo 1;true) ;; )); do echo body; break; done; echo after`,
+		Why:     "the header's separators are counted textually, and this is the row that says which semicolons count: the one inside the command substitution is that substitution's, so the header holds two and not three. The whole panel runs the body. Counting it made this the `` `;' unexpected `` of the rows above — a header refused for holding a separator nobody wrote — and it stopped a whole file of a third-party corpus sweep at its first occurrence (#2296)",
+	},
+	{
+		ID: "core/c-style-for-with-a-substitution-in-the-condition", Category: "command language",
+		Snippet: "for (( i=0; i<$(x=1; echo 2); i++ )); do echo b=$i; done\nfor (( j=0; j<`x=1; echo 2`; j++ )); do echo c=$j; done\necho after",
+		Why:     "the same rule where the substitution is in the middle section rather than the first, and in both spellings of a substitution, because the cut is one pass over the text and a rule that knows only `$(` would leave the backquote form refused. Two passes each, unanimous",
+	},
+	{
 		ID: "core/c-style-for-with-four-expressions", Category: "command language", SyntaxError: true,
 		Snippet: `for ((1;2;3;4)); do echo body; break; done; echo after`,
 		Why:     "the same split with text in every section, which is what says the extra separator is folded into the third expression rather than ignored: the two shells that accept this run the body, and the one row below reaches the folded text and shows what it comes to",
@@ -13543,6 +13553,26 @@ printf "[%s]" .@(hid); echo`,
 		ID: "pat/the-shortest-match-of-a-group-may-be-nothing", Category: "pattern matching", SyntaxError: true,
 		Snippet: "shopt -s extglob 2>/dev/null\nv=abc; echo \"[${v#@(|a)}][${v##@(|a)}]\"\ncase b in @(|a)b) echo m;; *) echo no;; esac",
 		Why:     "the same rule reaching the trim operators, where it is the whole difference between the two of them: `#` takes the shortest match an alternative offers and the empty one is the shortest there is, so it trims nothing, while `##` takes the longest and trims the `a`. This trimmed the `a` for both — a wrong *value* rather than a match not made, which is the failure mode a status can never show. `shopt` is on a line of its own because the option is not in force until the next line is parsed, and silenced because two panel shells have no such builtin and one of those reads the group natively anyway",
+	},
+	{
+		ID: "pat/a-bracket-expression-inside-a-quantified-group", Category: "pattern matching", SyntaxError: true,
+		Snippet: "shopt -s extglob 2>/dev/null\ncase \"x;y\" in x@([;])y) echo semi;; *) echo no-semi;; esac\ncase \"x<y\" in x@([<])y) echo lt;; *) echo no-lt;; esac\ncase \"x&y\" in x@([&])y) echo amp;; *) echo no-amp;; esac",
+		Why:     "a group's brackets hold its own text, operators included, which is what says the four word-ending characters are read by the group rather than by the word around it. bash with the option on and ksh93 match all three. The row below is what keeps this from being read as \"brackets protect\": the identical brackets outside a group are a syntax error in every column, so it is the group doing the protecting",
+	},
+	{
+		ID: "pat/a-bracket-expression-outside-a-group-does-not-protect", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case "x;y" in x[;]y) echo semi;; *) echo no-semi;; esac`,
+		Why:     "the control for the row above, and the reason the reading is scoped to the group: a `;` inside brackets and outside a group ends the word where it stands, so the whole line is refused — unanimously, and with no option involved",
+	},
+	{
+		ID: "pat/an-empty-quantified-group", Category: "pattern matching", SyntaxError: true,
+		Snippet: "shopt -s extglob 2>/dev/null\ncase z in +()z) echo hit;; *) echo miss;; esac\ncase \"\" in @()) echo empty;; *) echo no;; esac\n[[ pqr == *()pqr ]] && echo star || echo no-star",
+		Why:     "a quantified group with nothing in it, which is the one shape of group this parser refused outright at its `(`. A group standing for no arms stands for nothing, so quantifying it changes nothing either — `+()z` matches `z` and `@()` matches the empty subject. The guard that refused it was the one that keeps `f() { … }` from being read as a bare group, and it had no business here: a quantifier in front of the parenthesis is what opens the group, so there is no name for a definition to be made of. Refusing it forfeited two whole files of a third-party corpus sweep (#2296). `shopt` is on a line of its own because the option is not in force until the next line is parsed, and silenced because two panel shells have no such builtin",
+	},
+	{
+		ID: "pat/an-empty-quantified-group-is-not-a-function-definition", Category: "pattern matching",
+		Snippet: "shopt -s extglob 2>/dev/null\na+() { echo fn; }\na+\necho after",
+		Why:     "the other side of the same reading, and the row that says the group wins rather than merely being allowed: with the quantified groups in force `a+(` opens one, which leaves the name `a` standing alone in front of a brace group and makes the whole line a syntax error. bash and ksh93 both refuse it and both take it without the option, so this is the option changing what a *definition* means and not only what a pattern means. Written with a following `echo` so that a shell which accepts the definition is visibly a different answer from one that stops",
 	},
 	{
 		ID: "pat/a-nested-group-needs-no-quantifier", Category: "pattern matching", SyntaxError: true,

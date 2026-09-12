@@ -3154,7 +3154,7 @@ func (p *Parser) parseForArith(start Pos) Command {
 	at := p.tok.Pos
 	p.next()
 
-	init, cond, post := splitForArith(text)
+	init, cond, post := splitForArith(text, p.dialect)
 	c.InitText, c.CondText, c.PostText = init, cond, post
 	p.checkForArithSeparators(text, at)
 	// The deferred trees are built from the parts *as written* rather than
@@ -3304,7 +3304,11 @@ func (p *Parser) shortFormBody() (body []*Stmt, stop Pos) {
 func (c *ForArithClause) PartsAsWritten() (init, cond, post string) {
 	text, ok := strings.CutPrefix(c.Header, "for ((")
 	if text, ok2 := strings.CutSuffix(text, "))"); ok && ok2 {
-		parts := strings.SplitN(text, ";", 3)
+		// The core grammar, because this is not a parse: the split needs a
+		// dialect only to find where a command substitution ends, and a
+		// header whose substitution this cannot follow falls back to the
+		// fields below rather than to a different answer.
+		parts := forArithSplit(text, Dialect{})
 		if len(parts) == 3 {
 			return parts[0], parts[1], parts[2]
 		}
@@ -3334,7 +3338,7 @@ func (p *Parser) checkForArithSeparators(text string, at Pos) {
 	// them: one dialect names the last part's text, and a header with one
 	// part has that part as its last where the padded three have an empty
 	// string there.
-	parts := strings.Split(text, ";")
+	parts := forArithSplit(text, p.dialect)
 	kind, msg := ErrForArithHeader, "arithmetic expression required"
 	switch seps := len(parts) - 1; {
 	case seps == 2:
@@ -3356,14 +3360,157 @@ func (p *Parser) checkForArithSeparators(text string, at Pos) {
 	}
 }
 
+// forArithSplit cuts a C-style `for` header on the semicolons that are the
+// header's own, and on no others.
+//
+// A `;` reached through a command substitution, a parenthesized group, a
+// brace expansion or a quotation belongs to whatever encloses it, and is not
+// one of the two separators the header is counted by. Measured 2026-09-12 on
+// bash 5.3.15, ksh93u+ and zsh 5.9.2, which are unanimous: `for (( i=$(echo
+// 1;true) ;; ))` runs the body in all three, and `for (( i=0; i<$(echo
+// 1;echo 2); i++ ))` reaches all three's *arithmetic* reader with a
+// two-line value rather than any of their parsers. A naive cut on every `;`
+// counted four separators there and refused the script, which forfeited the
+// whole file this was found in.
+//
+// A header whose nesting does not come out even is cut the old way instead.
+// That is deliberate: an unbalanced header is a malformed one, the counting
+// is what reports it, and a scanner that gave up in the middle would change
+// which complaint a broken header draws.
+func forArithSplit(text string, d Dialect) []string {
+	if parts := forArithParts(text, d); parts != nil {
+		return parts
+	}
+	return strings.Split(text, ";")
+}
+
+// endOfSubstitution reports the index of the `)` closing a `$( … )` that
+// begins at text[i], and false where text[i] does not begin one or where what
+// stands between the parentheses is not a program this dialect reads.
+//
+// False is the safe answer in both cases: the caller carries on counting
+// parentheses, which is what it did for every construct before this.
+func endOfSubstitution(text string, i int, d Dialect) (int, bool) {
+	if i+2 > len(text)-1 || text[i+1] != '(' {
+		return 0, false
+	}
+	if text[i+2] == '(' {
+		// `$((` is an expression and not a program, and its parentheses
+		// balance, so the counting reads it correctly on its own.
+		return 0, false
+	}
+	sub := NewParserAt(text[i+2:], d, 1)
+	sub.parseList()
+	if sub.err != nil || !sub.at(TokRightParen) {
+		return 0, false
+	}
+	return i + 2 + int(sub.tok.Pos.Offset), true
+}
+
+// endOfBraces reports the index of the `}` closing a `${ … }` that begins at
+// text[i], and false where text[i] does not begin one or where the scan ran
+// out of input before the brace arrived.
+func endOfBraces(text string, i int, d Dialect) (int, bool) {
+	if i+1 > len(text)-1 || text[i+1] != '{' {
+		return 0, false
+	}
+	sub := NewLexer(text[i:], d)
+	sub.scanBraces(Unquoted)
+	if sub.Err() != nil {
+		return 0, false
+	}
+	return i + sub.off - 1, true
+}
+
+// forArithParts is forArithSplit's scan, and nil where the header's quoting
+// or nesting does not come out even.
+//
+// Nothing here interprets the header — it is one pass over the bytes that
+// knows only which of them open and close something. The arithmetic grammar
+// reads the parts afterwards, exactly as it did when the cut was a
+// [strings.Split].
+func forArithParts(text string, d Dialect) []string {
+	var parts []string
+	start, depth := 0, 0
+	var quote byte
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		switch {
+		case quote == '\'':
+			// A single-quoted run ends at its own quote and holds no escape.
+			if c == '\'' {
+				quote = 0
+			}
+		case quote != 0:
+			switch c {
+			case '\\':
+				i++
+			case quote:
+				quote = 0
+			}
+		default:
+			switch c {
+			case '\\':
+				i++
+			case '$':
+				// A command substitution is stepped over by *parsing* it,
+				// because a `)` inside one is not always a closer: a `case`
+				// arm's pattern ends in one, and counting that as a closer
+				// unbalanced the header and fell back to the naive cut —
+				// which is how `for (( $(case q in q) echo 7;; esac) ;; ))`
+				// came to be refused for holding three separators where
+				// bash 5.3.15, ksh93u+ and zsh 5.9.2 all run the body.
+				// `$((` is arithmetic rather than a program and balances on
+				// its own parentheses, so it is left to the counting below.
+				if n, ok := endOfSubstitution(text, i, d); ok {
+					i = n
+					break
+				}
+				// A `${ … }` ends at its own brace, and the form holding a
+				// program may put a `)` inside that closes nothing — the
+				// same shape one construct out. scanBraces is the scanner
+				// that knows where one ends.
+				if n, ok := endOfBraces(text, i, d); ok {
+					i = n
+				}
+			case '\'', '"', '`':
+				quote = c
+			case '(', '{', '[':
+				depth++
+			case ')', '}', ']':
+				depth--
+				if depth < 0 {
+					return nil
+				}
+			case ';':
+				if depth == 0 {
+					parts = append(parts, text[start:i])
+					start = i + 1
+				}
+			}
+		}
+	}
+	if depth != 0 || quote != 0 {
+		return nil
+	}
+	return append(parts, text[start:])
+}
+
 // splitForArith cuts the header into its three parts.
 //
 // An omitted part is empty, and an omitted *condition* means true — which is
 // what makes `for ((;;))` an endless loop rather than one that never runs.
-func splitForArith(text string) (string, string, string) {
-	parts := strings.SplitN(text, ";", 3)
+func splitForArith(text string, d Dialect) (string, string, string) {
+	parts := forArithSplit(text, d)
 	for len(parts) < 3 {
 		parts = append(parts, "")
+	}
+	if len(parts) > 3 {
+		// Everything past the second separator is the third expression, and
+		// it keeps the semicolons it was written with: that is what the two
+		// dialects taking such a header do with it, and the arithmetic
+		// reader is what complains about it if the loop ever gets there.
+		parts = append(parts[:2:2], strings.Join(parts[2:], ";"))
 	}
 	// Trimmed, and that costs one blank in one diagnostic: bash quotes a
 	// failing part back as it was written, so `for (( $x ;;))` with

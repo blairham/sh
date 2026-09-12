@@ -7969,6 +7969,37 @@ type Semantics struct {
 	// `export`, `readonly` and `unset`.
 	BadOptionToSpecialBuiltinFatal Answer
 
+	// AliasBadOptionFatal ends the script when `alias` or `unalias` is given
+	// an option it does not have. True in ksh93 alone.
+	//
+	// Its own field rather than a widening of the axis above, for the same
+	// reason TypesetBadOptionFatal is: `alias` is not a special builtin in
+	// POSIX, and the substrate's table is POSIX's. What ksh93 has is a
+	// *longer* list of its own — `alias`, `typeset` and `unalias` beside the
+	// fifteen — and a dialect saying "these too" is a measurement about
+	// three names, not a claim that the standard's list is wrong.
+	//
+	// Measured 2026-09-12 on ksh93u+ 2012-08-01: `alias -g x; echo after`
+	// prints the complaint, the usage block, and nothing else, with status
+	// 2. The zsh-flavored `alias -g` and `alias -s` are how a real script
+	// reaches it, and sixteen corpus rows did (#2345).
+	AliasBadOptionFatal Answer
+
+	// BuiltinReportsEveryBadOption reports every letter of a bundle the
+	// builtin does not have, rather than stopping at the first. True in
+	// ksh93 alone: `typeset -Uz f` says `-U` and then `-z`, and `cd -dash`
+	// names all four letters, with **one** usage block under the lot.
+	//
+	// SetReportsEveryBadOption is the same question asked about `set`, and
+	// stays separate because `set` reads its words through its own reader —
+	// option *names* as well as letters, and a refusal it owes until the
+	// last word is read.
+	//
+	// The walk stops at a letter the builtin does have and that takes an
+	// argument, because the rest of the word is then that argument rather
+	// than more letters.
+	BuiltinReportsEveryBadOption Answer
+
 	// MultiDigitDuplicationTargetIsAnError refuses `>&10` — a duplication
 	// whose *target* is written with more than one digit. True in dash
 	// alone; the other four read the number and fail at run time with `10:
@@ -9219,8 +9250,11 @@ func PosixSemantics() Semantics {
 		// The standard describes one refusal and says nothing about a
 		// second, so the preset stops at the first the way three of the
 		// panel do.
-		SetReportsEveryBadOption:  No,
-		ReadonlyReassignmentFatal: Yes,
+		SetReportsEveryBadOption: No,
+		// The same sentence covers a bundle handed to any other builtin:
+		// one refusal, and the standard says nothing about a second.
+		BuiltinReportsEveryBadOption: No,
+		ReadonlyReassignmentFatal:    Yes,
 		// XCU makes an assignment to a readonly name an error, and an error
 		// in a special builtin or in an assignment ends a non-interactive
 		// shell — which is what a prefix assignment's refusal is. dash is
@@ -9275,6 +9309,9 @@ func PosixSemantics() Semantics {
 		// POSIX makes a special builtin's failure fatal, and a bad option is
 		// one.
 		BadOptionToSpecialBuiltinFatal: Yes,
+		// `alias` is not one of the fifteen the standard marks special, so
+		// the refusal is an ordinary one and the script goes on.
+		AliasBadOptionFatal: No,
 		// XCU's `[n]>&word` takes "one or more digits", so the standard
 		// admits `>&10` and the preset follows it. The shell that refuses is
 		// the dissenter here, which is worth noting because it is usually

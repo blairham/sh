@@ -408,6 +408,9 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.No
 	s.UlimitSetsBothLimits = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.Yes
+	// `alias` is no more special here than POSIX makes it: the complaint is
+	// said and the next command runs. Measured with `alias -g x`.
+	s.AliasBadOptionFatal = interp.No
 	// And so is a redirection that cannot be made, which is POSIX's rule
 	// verbatim: `exec 3>/nope/x` stops the script, at 2 like every other
 	// fatal error here.

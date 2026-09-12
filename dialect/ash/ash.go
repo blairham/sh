@@ -253,6 +253,9 @@ func Semantics() interp.Semantics {
 	s.BadNameToUnsetFatal = interp.Yes
 	s.UnsetReadonlyFatal = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.Yes
+	// `alias` is no more special here than POSIX makes it: the complaint is
+	// said and the next command runs. Measured with `alias -g x`.
+	s.AliasBadOptionFatal = interp.No
 	s.BadSetOptionNameFatal = interp.Yes
 	// `read` is not one of the three: `printf 'x\n' | read 1bad` reports at 1
 	// — not dash's 2 — and the script carries on.

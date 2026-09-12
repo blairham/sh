@@ -889,6 +889,9 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.No
+	// `alias` is no more special here than POSIX makes it: the complaint is
+	// said and the next command runs. Measured with `alias -g x`.
+	s.AliasBadOptionFatal = interp.No
 	// A redirection that cannot be made is where bash parts from POSIX and
 	// from three of the panel: `exec 3>/nope/x; echo after` complains and
 	// prints `after` at status 0. It is the starting value rather than a

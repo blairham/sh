@@ -2548,6 +2548,23 @@ func (r *Runner) cdOptions(args []string) (rest []string, opts cdFlags, code int
 				if !r.ask(r.sem().CdRefusesUnknownOption, "an option `cd` does not have") {
 					return done(args, 0)
 				}
+				// The dialect that names every letter of a bundle it cannot
+				// use names them here too: `cd -dash` is four complaints and
+				// one usage block. The letters `cd` has are the cases above,
+				// and the two conditional ones are asked of the dialect
+				// rather than assumed, so a shell with `-q` is not told it
+				// lacks one. See Semantics.BuiltinReportsEveryBadOption.
+				known := "LP"
+				if r.sem().CdHasQuietOption != No {
+					known += "q"
+				}
+				if r.sem().CdHasSymlinkFreeOption != No {
+					known += "s"
+				}
+				if bad := r.everyBadOption(a, known); len(bad) > 1 &&
+					r.ask(r.sem().BuiltinReportsEveryBadOption, "`cd` naming every bad letter of a bundle") {
+					return nil, opts, r.badBuiltinOption("cd", bad...)
+				}
 				return nil, opts, r.badBuiltinOption("cd", "-"+string(a[i]))
 			}
 		}

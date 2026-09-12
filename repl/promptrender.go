@@ -334,33 +334,6 @@ func (s Shell) askRunner(f PromptField, arg string, braced bool) string {
 // zero o'clock keeps a digit.
 func unpadHour(clock string) string { return strings.TrimPrefix(clock, "0") }
 
-// abbreviate writes the home directory as `~`.
-//
-// The home directory exactly, or a path inside it — not any path that merely
-// starts with the same letters, which is why the boundary is checked.
-func abbreviate(dir, home string) string {
-	if home == "" || dir == "" {
-		return dir
-	}
-	if dir == home {
-		return "~"
-	}
-	if strings.HasPrefix(dir, home) && (strings.HasSuffix(home, "/") || dir[len(home)] == '/') {
-		return "~" + dir[len(home):]
-	}
-	return dir
-}
-
-func (s Shell) varOr(name, fallback string) string {
-	if s.Runner == nil {
-		return fallback
-	}
-	if v, ok := s.Runner.GetVar(name); ok && v != "" {
-		return v
-	}
-	return fallback
-}
-
 // now is the clock a prompt with the time in it reads.
 //
 // Injectable because a prompt that draws the time cannot otherwise be tested

@@ -341,7 +341,14 @@ func TestTheTableIsReadBeforeExpansion(t *testing.T) {
 
 // The home directory is written `~` when the directory is it or is inside it,
 // and not when it merely starts with the same letters.
+//
+// Asked of the drawn field rather than of a helper. It used to be asked of a
+// copy of the helper that lived in this package, and the copy was the problem
+// #1699 is about — a second implementation of the directory codes, correct on
+// everything anybody tested and missing the count. What is worth pinning here
+// is that the *drawer* answers this, whoever does the arithmetic.
 func TestAbbreviatingTheHomeDirectory(t *testing.T) {
+	style := PromptStyle{Escape: '%', Codes: map[rune]PromptField{'~': FieldCwd}}
 	for _, tc := range []struct{ dir, home, want string }{
 		{"/home/someone", "/home/someone", "~"},
 		{"/home/someone/work", "/home/someone", "~/work"},
@@ -350,8 +357,12 @@ func TestAbbreviatingTheHomeDirectory(t *testing.T) {
 		{"/home/someone", "", "/home/someone"},
 		{"/", "/home/someone", "/"},
 	} {
-		if got := abbreviate(tc.dir, tc.home); got != tc.want {
-			t.Errorf("abbreviate(%q, %q) = %q, want %q", tc.dir, tc.home, got, tc.want)
+		s := Shell{
+			Runner: newTestRunner(map[string]string{"PWD": tc.dir, "HOME": tc.home}),
+			Style:  style,
+		}
+		if got := s.render("%~"); got != tc.want {
+			t.Errorf("%q under home %q drew %q, want %q", tc.dir, tc.home, got, tc.want)
 		}
 	}
 }

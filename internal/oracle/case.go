@@ -1748,6 +1748,36 @@ var Corpus = []Case{
 		Why:     "the arms take the body by the rule the `if` did, and the whole thing ends where the last one does: there is no `fi`. A `;` between them would end the command instead, which is the same separator that puts a brace group into a `while`'s condition. From a file, for the reason above",
 	},
 	{
+		ID: "core/a-long-if-may-carry-a-brace-bodied-elif", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `if (( 0 )); then echo A; elif (( 1 )) { echo B }`,
+		Why:     "the two `if` spellings compose in either direction, which the row above only showed one way round: a long header with its `then` may carry an `elif` whose condition ended itself and whose body is braces, and from there the chain is a short one with no `fi`. One shell takes it and the other five call the `{` a syntax error. From a file, for the reason the neighbors give",
+	},
+	{
+		ID: "core/a-long-else-takes-no-brace-body", Category: "command language",
+		Script: true, SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `if (( 0 )); then echo A; else { echo C }`,
+		Why:     "the boundary of the row above, and it is refused by all six including the shell that takes every other brace body: an `else` in a long `if` is followed by an ordinary brace group rather than by a clause body, so the `fi` is still required. Graded on the refusal because the six word it six ways; what is pinned is that all six decline",
+	},
+	{
+		ID: "core/a-case-written-with-braces", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `case x { x) echo hit;; *) echo no;; }`,
+		Why:     "one shell writes a `case` header with braces as well as with `in` … `esac`, the same shape as the short loop forms. The other five refuse the `{` while still expecting `in`, so this is additive grammar for one dialect rather than a divergence about shared text",
+	},
+	{
+		ID: "core/a-case-mixes-its-two-spellings", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `case x { x) echo one;; esac; case y in y) echo two;; }`,
+		Why:     "the opener and the closer are independent in the shell that has both, which is what says this is two words added to a grammar rather than one paired construct: a brace-opened `case` may close with `esac` and a keyword-opened one with `}`. Without this row a parser could pair them and match on the case above",
+	},
+	{
+		ID: "core/esac-is-reserved-after-a-brace-opened-case", Category: "command language",
+		Script: true, SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `case esac { esac) echo hit;; }`,
+		Why:     "and the brace opener does not bring the other lenient shell's reading of that word with it — `esac` stays reserved after the `{`, so this is refused by all six while ksh93 runs the same arm written after `in`. The pair is what keeps CaseBraceBody and CaseTerminatorIsAPatternAfterIn from being read as one rule",
+	},
+	{
 		ID: "core/a-short-if-body-is-one-command", Category: "command language",
 		Script: true, SyntaxError: true,
 		Snippet: `if [[ -n x ]] echo A; echo after`,

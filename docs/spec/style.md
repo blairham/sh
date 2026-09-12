@@ -161,6 +161,7 @@ the keyword form:
     for f ( a b c ) { … }
     while (( i-- )) { … }
     repeat 3 { … }
+    case x { x) … ;; }
 
 Measured occurrences across 335 zsh files: **317** `if … {`, **120**
 `} else {`, **61** `for … ( ) {`, and none outside zsh. That last clause was checked
@@ -230,6 +231,16 @@ one question in this document where the dialects genuinely disagree:
 `Style.BraceShortForm` is the field. Flipping zsh to `ExpandShortForm`
 is a one-line change to a dialect package if the preference turns out
 to be the other way; it is deliberately not a branch in the printer.
+
+**The `case` is two words rather than one paired construct**, and it is
+the one member of the family where the opener and the closer have to be
+read back separately. Measured 2026-09-12 on zsh 5.9.2: `case x { … esac`
+and `case x in … }` both run there, so a printer that recovered one word
+and derived the other from it would rewrite half the mixed spellings. The
+brace form is the same silent, tree-identical rewrite the `if` is — a
+`CaseClause` carries no marker either — so both words come out of the
+source, the opener by looking at the first non-blank byte after the
+subject and the closer by looking at the byte before the clause's end.
 
 ### Case-arm terminators
 

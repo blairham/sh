@@ -1185,6 +1185,64 @@ they are separate questions: a shell could spell a `repeat` body only as
 `do … done`, and the words `repeat`, `foreach`, `end` and `()` are
 constructs rather than body spellings.
 
+### The two `if` spellings compose in either direction
+
+The table above has the all-short chain. The **mixed** one is the same
+rule reached from the long form, and it was missing: a long
+`if … ; then …` may carry an `elif` whose condition ended itself and
+whose body is braces, and from there the chain is a short one with no
+`fi`. Measured 2026-09-12 on zsh 5.9.2, from a file:
+
+| probe | zsh 5.9 | the other five |
+| --- | --- | --- |
+| `if (( 0 )); then echo A; elif (( 1 )) { echo B }` | `B` | error |
+| `if [[ -n x ]]; then echo A; elif [[ -n y ]] { echo B }` | `A` | error |
+| `if (( 0 )); then echo A; elif (( 1 )) { echo B } else { echo C }` | `B` | error |
+| `if (( 0 )); then echo A; elif (( 1 )) { echo B } elif (( 1 )) { echo C }` | `B` | error |
+| `if :; then echo A; elif : { echo B }` | error | error |
+| `if (( 0 )); then echo A; else { echo C }` | error | error |
+
+Row 5 is `ShortForm`'s own test showing through — the condition still has
+to end itself — and row 6 is the boundary that keeps this from being "a
+clause may take a brace body": a long `if`'s `else` is followed by an
+ordinary brace *group*, so the `fi` is still required and every column
+refuses the line without one. It was reached in `F-Sy-H`'s chroma file,
+which a prompt framework loads (#1880).
+
+## A `case` written with braces
+
+The `case` header has the same second spelling, and unlike the `if` it is
+two independent words rather than one paired construct. Measured
+2026-09-12 on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin` with a scratch
+`HOME`:
+
+| probe | zsh 5.9 | the other five |
+| --- | --- | --- |
+| `case x { x) echo hit;; }` | `hit` | error at the `{` |
+| `case x { x) echo hit;; esac` | `hit` | error at the `{` |
+| `case x in x) echo hit;; }` | `hit` | error |
+| `case x { x) echo hit }` | `hit` | error at the `{` |
+| `case x { }` | runs | error at the `{` |
+| `case x {x) echo hit;; }` | `hit` | error |
+| `case {a,b} {*) echo star;; }` | `star` | error at the `{` |
+| `case esac { esac) echo hit;; }` | error at the `)` | error |
+
+Rows 2 and 3 are why the flag is not a paired construct: either opener
+composes with either closer there, so nothing needs to remember which was
+written. Row 6 is `OpenBraceNeedsNoBlank` reaching this position as it
+reaches command position. Row 8 is the one worth having beside ksh93's
+answer: `esac` stays **reserved** after the `{` here, where that shell
+reads the word after `in` as a pattern — the two lenient shells are
+answering different questions and
+`CaseTerminatorIsAPatternAfterIn` is not this flag under another name.
+
+Grammar flag: `CaseBraceBody` — core off, `zsh` on.
+
+The tree is a `CaseClause` either way and nothing in it records the
+spelling, which is `Style.BraceShortForm`'s question exactly as it is for
+the short loop bodies: the formatter reads both words back out of the
+source. See `../style.md`.
+
 ## What may stand where a loop's name does
 
 Two questions, and the panel splits on only one of them.

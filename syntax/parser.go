@@ -3191,6 +3191,20 @@ func (p *Parser) parseIf() Command {
 		p.opensClause("elif")
 		p.next()
 		e.Cond = p.parseCondition()
+		if body, stop, short := p.shortIf(e.Cond); short {
+			// The two spellings compose: a long `if … ; then …` may carry an
+			// `elif` whose condition ended itself and whose body is written
+			// with braces. Measured on zsh 5.9.2 — `if (( 0 )); then echo A;
+			// elif (( 1 )) { echo B }; echo tail` prints `B` then `tail`
+			// there, and `elif [[ -n y ]] { … }` does the same while
+			// `elif : { … }` is refused, which is shortIf's own test showing
+			// through. From here the chain is a short one and there is no
+			// `fi` left to read, so the rest of it is shortElse's (#1880).
+			e.Then, c.Stop = body, stop
+			c.Elifs = append(c.Elifs, e)
+			p.shortElse(c)
+			return c
+		}
 		p.requireSep("then")
 		p.expectWord("then")
 		e.Then = p.parseBody()
@@ -3865,7 +3879,15 @@ func (p *Parser) parseCase() Command {
 	// is an expression. See Lexer.inCaseArm.
 	p.lex.inCaseArm = true
 	defer func() { p.lex.inCaseArm = false }()
-	p.expectWord("in")
+	if p.dialect.CaseBraceBody && p.atWord("{") {
+		// The brace spelling of the same header. The two halves are
+		// independent — `case x { … esac` and `case x in … }` both run in
+		// the shell that has this — so the closer is not remembered from
+		// here. See Dialect.CaseBraceBody.
+		p.next()
+	} else {
+		p.expectWord("in")
+	}
 	c.Header = p.slice(c.Start, inEnd)
 	// Where the dialect says so, an `esac` standing here — after the `in`,
 	// before any newline — is the first arm's first pattern and not the
@@ -3875,7 +3897,7 @@ func (p *Parser) parseCase() Command {
 	esacIsAPattern := p.dialect.CaseTerminatorIsAPatternAfterIn && !p.at(TokNewline)
 	p.skipNewlines()
 
-	for p.err == nil && !p.at(TokEOF) && (esacIsAPattern || !p.atWord("esac")) {
+	for p.err == nil && !p.at(TokEOF) && (esacIsAPattern || !p.atCaseEnd()) {
 		esacIsAPattern = false
 		p.lex.inCaseArm = false
 		it := &CaseItem{Start: p.tok.Pos}
@@ -3944,7 +3966,7 @@ func (p *Parser) parseCase() Command {
 		default:
 			// The last arm may omit its terminator before `esac`.
 			it.TermPos = p.tok.Pos
-			if !p.atWord("esac") {
+			if !p.atCaseEnd() {
 				if p.at(TokEOF) {
 					// The panel expects `;;` here rather than `esac`: an arm
 					// that has not been closed is what ran out, not the case.
@@ -3968,8 +3990,22 @@ func (p *Parser) parseCase() Command {
 	}
 	p.lex.inCaseArm = false
 	c.Stop = p.tok.End
-	p.expectWord("esac")
+	if p.dialect.CaseBraceBody && p.atWord("}") {
+		p.next()
+	} else {
+		p.expectWord("esac")
+	}
 	return c
+}
+
+// atCaseEnd reports whether the current token closes a `case`.
+//
+// Two words can, and only in the dialect that writes the brace spelling of
+// the header. They are asked together rather than paired with the opener
+// because the shell that has them does not pair them either: `case x { …
+// esac` and `case x in … }` both run there. See Dialect.CaseBraceBody.
+func (p *Parser) atCaseEnd() bool {
+	return p.atWord("esac") || (p.dialect.CaseBraceBody && p.atWord("}"))
 }
 
 // casePatterns reads one arm's pattern list, `a | b | c`, and reports whether

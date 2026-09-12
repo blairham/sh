@@ -552,6 +552,38 @@ type Dialect struct {
 	// too, which ksh93 runs.
 	CaseTerminatorIsAPatternAfterIn bool
 
+	// CaseBraceBody lets a `case` be written with braces in place of `in` …
+	// `esac`: `case x { x) echo hit;; }`.
+	//
+	// zsh alone, the same shape as the short loop forms that flag already
+	// carries — dash, bash 5.3, that binary as `sh`, bash 3.2 and ksh93 all
+	// refuse the `{`, so this is additive grammar for one dialect rather
+	// than a divergence about shared text.
+	//
+	// **The two halves are independent**, which is measured rather than
+	// assumed and is why nothing here remembers which opener was used.
+	// Measured 2026-09-12 on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin`
+	// with a scratch HOME:
+	//
+	//	case x { x) echo hit;; }        hit
+	//	case x { x) echo hit;; esac     hit   — brace open, keyword close
+	//	case x in x) echo hit;; }       hit   — keyword open, brace close
+	//	case x { x) echo hit }          hit   — the last arm still needs no
+	//	                                        terminator
+	//	case x { }                      runs  — and no arm at all
+	//	case x {x) echo hit;; }         hit   — the `{` needs no blank after
+	//	                                        it, as in command position
+	//	case esac { esac) echo hit;; }  parse error near `)` — `esac` is
+	//	                                        still reserved after the `{`,
+	//	                                        unlike ksh93's answer after
+	//	                                        `in`
+	//
+	// The last row is the one worth having: the brace opener does *not*
+	// carry [Dialect.CaseTerminatorIsAPatternAfterIn] with it, so the two
+	// dialects' answers about the word after a `case` header are different
+	// answers to different questions.
+	CaseBraceBody bool
+
 	// CasePatternListSpansNewlines makes a newline inside a `case` arm's
 	// **parenthesized** pattern list an ordinary character of the pattern
 	// rather than the end of a word or a statement.

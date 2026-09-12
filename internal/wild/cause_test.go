@@ -26,18 +26,20 @@ func TestCausesGroupsAndRanks(t *testing.T) {
 		// something the parser still refuses.
 		write(t, dir, name, "#!/bin/zsh\n[[ -prefix - ]]\n")
 	}
-	// A different gap: zsh writes a `case` with braces as well as with `in`
-	// … `esac`, and this grammar reads only the second. Measured 2026-09-11
-	// on zsh 5.9.2 — `case x { x) echo hit;; }` prints `hit` there — and
-	// this parser stops at the `{`. Filed as #1928, so that whoever closes
-	// it knows this fixture has to be replaced with it.
+	// A different gap: a short `if` with no `else` may be closed with one
+	// redundant `fi` in that shell, and this grammar has nothing left to
+	// read once the brace body has ended. Measured 2026-09-12 on zsh 5.9.2 —
+	// `if (( 1 )) { echo A } fi` prints `A` there — and this parser stops at
+	// the `fi`. Filed as #2242, so that whoever closes it knows this fixture
+	// has to be replaced with it.
 	//
 	// It was `repeat 3 { echo x; }` until #827 implemented that,
 	// `echo (aa|bb)` until #995 made a bare group where a *word* stands part
 	// of the word, `if true; then; fi` until #1142 let a `;` stand where a
 	// command belongs, `case x in a) : ;| …` until #1188 read that
-	// terminator, and `cat =(echo hi)` until #1878 implemented the temp-file
-	// process substitution — **five times now** the fixture has been
+	// terminator, `cat =(echo hi)` until #1878 implemented the temp-file
+	// process substitution, and `case x { x) echo hit;; }` until #1928 read
+	// the brace-spelled header — **six times now** the fixture has been
 	// overtaken by the thing it was standing in for, which is the hazard
 	// this comment exists to pass on. Whatever replaces this one, check it
 	// against the real shell and against this parser before trusting it.
@@ -48,10 +50,10 @@ func TestCausesGroupsAndRanks(t *testing.T) {
 	// word with "a word", so `{ … } always { … }` is no use here: it is
 	// refused at `always`, which is an ordinary word to this grammar and
 	// collapses onto the same reason as the `-` of the first three. The
-	// brace-spelled `case` is refused at the `{`, which is kept, so it has a
-	// reason of its own and the report has the two causes this test is
+	// redundant `fi` is refused at a reserved word, which is kept, so it has
+	// a reason of its own and the report has the two causes this test is
 	// about.
-	write(t, dir, "d", "#!/bin/zsh\ncase x { x) echo hit;; }\n")
+	write(t, dir, "d", "#!/bin/zsh\nif (( 1 )) { echo A } fi\n")
 
 	rep := wild.Sweep(context.Background(), wild.Scope{Dirs: []string{dir}, Shells: wild.ZshScope},
 		zsh.Dialect(), "/usr/bin/true")

@@ -14616,6 +14616,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pat/bracket-caret-is-an-extension` | `no-caret` | `caret` | `caret` | `caret` | `caret` | `caret` | `caret` |
 | `pat/character-class` | `class` | `class` | `class` | `class` | `class` | `class` | `class` |
 | `pat/the-remaining-character-classes` | `cntrl blank graph print` | `cntrl blank graph print` | `cntrl blank graph print` | `cntrl blank graph print` | `cntrl blank graph print` | `cntrl blank graph print` | `cntrl blank graph print` |
+| `pat/alnum-outside-ascii-is-a-letter-or-a-decimal-digit` | `nnnn nnnn` | `nnYY nnnY` | `nnYY nnnY` | `nnYY nnnY` | `nnnn YnYY` | `nnYY nnnY` | `YnYY YnYY` |
 | `pat/classes-that-overlap-and-differ` | `blank noprint nograph` | `blank noprint nograph` | `blank noprint nograph` | `blank noprint nograph` | `blank noprint nograph` | `blank noprint nograph` | `blank noprint nograph` |
 | `pat/an-unknown-character-class` | `no no` | `no no` | `no no` | `no lit` | `no no` | `no no` | `no no` |
 | `pat/the-identifier-character-class` | `a-no u-no d-no low-no` | `a-no u-no d-no low-no` | `a-no u-no d-no low-no` | `a-no u-no d-no low-no` | `a-no u-no d-no low-no` | `a-yes u-yes d-no low-no` | `a-no u-no d-no low-no` |
@@ -14971,6 +14972,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pat/the-remaining-character-classes` — the four classes the matcher grew last, unanimous like the other eight — pinned because they were silently matching nothing while every panel shell answered
   ```sh
   case "$(printf '\1')" in [[:cntrl:]]) printf cntrl;; esac; case " " in [[:blank:]]) printf " blank";; esac; case x in [[:graph:]]) printf " graph";; esac; case " " in [[:print:]]) printf " print";; esac
+  ```
+- `pat/alnum-outside-ascii-is-a-letter-or-a-decimal-digit` — which kinds of Unicode number are alphanumeric, which is four categories and not one: `Ⅷ` U+2167 is `Nl`, `½` U+00BD is `No`, `٣` U+0663 is `Nd` and `é` U+00E9 is `Ll`. `No` is alphanumeric in no column, `Nl` in BusyBox ash alone, and `Nd` splits the panel — three different answers where `unicode.IsNumber` gave one, which is why this shell called every roman numeral and vulgar fraction alnum (#2465). The `Nd` pair is what keeps the row from being satisfied by dropping numbers altogether; which way it should go is #956's question and not this row's. The `Nl` cell is the reason this row exists rather than a unit test: ash is the only column that says yes and it is the one column no probe on the machine that wrote this can reach. The characters are built by `printf` octal rather than written, so dash — which has no `$'…'` — is matching the same bytes as the rest; the locale is pinned because under `LC_ALL=C` every column answers no to everything
+  ```sh
+  n=$(printf '\342\205\247'); o=$(printf '\302\275'); d=$(printf '\331\243'); l=$(printf '\303\251'); for v in "$n" "$o" "$d" "$l"; do case $v in [[:alnum:]]) printf Y;; *) printf n;; esac; done; printf ' '; for v in "$n" "$o" "$d" "$l"; do case $v in [[:alpha:]]) printf Y;; *) printf n;; esac; done; echo
   ```
 - `pat/classes-that-overlap-and-differ` — the edges that tell the four apart in the C locale the panel runs under: a tab is blank but not printable, and a space is printable but not graphic — unanimous, and the pair an implementation that aliases print to graph gets wrong
   ```sh

@@ -1655,6 +1655,10 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		}
+		// `export` is an attribute word, so naming a name a previous
+		// declaration left with no value of its own gives it the empty in
+		// its own right — see declarationOwnsTheStandingEmpty.
+		r.declarationOwnsTheStandingEmpty(name)
 		// Recorded either way rather than deleted for `-n`: a name that came
 		// in through the environment is exported by having done so, and only
 		// an explicit "no" can take that off. Deleting the record put the
@@ -3838,7 +3842,8 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// always makes one. Adding a guard would change what the axes
 			// this builtin has always reached do, which is not this change's
 			// business, and nothing could exercise it either way.
-			r.declareEmpty(name, fresh, f.export || f.readonly)
+			r.declareEmpty(name, fresh, f.export || f.readonly,
+				withoutMatching(f) != (declareFlags{}))
 		}
 		if f.readonly && !f.readonlyOff {
 			r.markReadonly(name)
@@ -4010,6 +4015,9 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		}
+		// `readonly` is an attribute word too — see biExport and
+		// declarationOwnsTheStandingEmpty.
+		r.declarationOwnsTheStandingEmpty(name)
 		r.markReadonly(name)
 	}
 	if ended {

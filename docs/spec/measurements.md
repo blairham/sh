@@ -15449,6 +15449,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/a-standing-type-attribute-and-a-later-array-literal` | **2>** `<script>: 1: typeset: not found~<script>: 2: Syntax error: "(" unexpected` *(status 2)* | `st=0~declare -ai z=([0]="1" [1]="2")` | `st=0~declare -ai z=([0]="1" [1]="2")` | `st=0~declare -ai z='([0]="1" [1]="2")'` | `st=0~typeset -a z=(1 2)` | `st=0~typeset -a z=( 1 2 )` |
 | `declare/a-numeric-letter-over-a-case-attribute` | **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found~<script>: 3: typeset: not found~<script>: 4: typeset: not found` *(status 127)* | `declare -il z="1"` | `declare -il z="1"` | `declare -i z="1"` **2>** `<script>: line 2: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -i z=1` | `typeset -i z=1` |
 | `declare/a-case-letter-over-a-numeric-attribute` | **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found~<script>: 3: typeset: not found~<script>: 4: typeset: not found` *(status 127)* | `declare -il y="1"` | `declare -il y="1"` | `declare -i y="1"` **2>** `<script>: line 3: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -l y=1` | `typeset -il y=1` |
+| `declare/an-exported-name-of-a-numeric-type-with-no-value` | `read=[UNSET]~(nothing)` **2>** `<script>: 1: typeset: not found` | `read=[UNSET]~(nothing)` | `read=[UNSET]~(nothing)` | `read=[]~Z=` | `read=[UNSET]~Z=0` | `read=[0]~(nothing)` |
+| `declare/which-letters-put-a-valueless-exported-name-in-the-environment` | `0` **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found` *(status 1)* | `0` *(status 1)* | `0` *(status 1)* | `1` **2>** `<script>: line 1: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `0` *(status 1)* | `2` |
+| `declare/a-second-declaration-owns-the-empty-a-first-one-left` | `1 (nothing)~2 (nothing)~3 (nothing)` **2>** `<script>: 1: typeset: not found~<script>: 3: typeset: not found~<script>: 6: typeset: not found~<script>: 7: typeset: not found` | `1 (nothing)~2 (nothing)~3 (nothing)` | `1 (nothing)~2 (nothing)~3 (nothing)` | `F1=~F2=~F3=` | `1 (nothing)~2 (nothing)~3 (nothing)` | `1 (nothing)~F2=~3 (nothing)` |
 | `declare/listing-a-control-byte` | `st=127` **2>** `<shell>: 1: typeset: not found` | `declare -- v=$'a\001b'~st=0` | `declare -- v=$'a\001b'~st=0` | `declare -- v="ab"~st=0` | `v=$'a\x01b'~st=0` | `typeset v=$'a\C-Ab'~st=0` |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
@@ -16834,6 +16837,29 @@ grades it and nothing drift-checks it either, for the same reason.
   typeset -i y
   typeset -l y
   typeset -p y
+  ```
+- `declare/an-exported-name-of-a-numeric-type-with-no-value` — what a child is told about an exported name whose declaration named a numeric *type* and gave it nothing. ksh93 hands over `Z=0` while reading the name as unset itself — the zero is what the type makes of nothing rather than a value the store holds, and no listing shows it — where bash and zsh tell the child nothing at all. Only a real child can see the difference, which is why the row runs `env` rather than reading the parameter. The `read=` half is the discriminating one: a shell that had simply *set* the name to zero would answer `read=[0]`, and ksh93 answers `read=[UNSET]` beside its `Z=0`
+  ```sh
+  typeset -ix Z
+  echo "read=[${Z-UNSET}]"
+  env | grep '^Z=' || echo '(nothing)'
+  ```
+- `declare/which-letters-put-a-valueless-exported-name-in-the-environment` — the control beside the row above, and the reason it is about a numeric *type* rather than about any letter a valueless declaration wrote: a case letter and no letter at all put nothing in a child's environment in ksh93, the shell that hands the integer one over, and bash writes nothing for either. zsh counts both, because a valueless declaration sets the name there and a second declaration then gives it to the child. A count rather than the lines, because the order `env` writes them in is not a fact about the shell. The array letter would belong here too and is left out: `typeset -ax A` is `invalid variable name` in ksh93 and would end the row before it reached anything
+  ```sh
+  typeset -ux U; export U
+  typeset P; export P
+  env | grep -c '^[UP]='
+  ```
+- `declare/a-second-declaration-owns-the-empty-a-first-one-left` — in the shell where a valueless declaration *sets* the name, the child is told about it only once a **second** declaration has named an attribute. zsh writes nothing for `typeset -x F1` alone, `F2=` once `export F2` follows, and nothing again for a bare `typeset F3`, which is a listing there rather than a declaration — so it is the attribute being named and not merely a second command. bash and ksh93 answer all three the same way, with nothing, since a valueless declaration leaves the name unset in both. `typeset -x V` followed by `export V` is how a script declares an exported name it means to fill in later, and every one of them reached a child as absent here (#1263)
+  ```sh
+  typeset -x F1
+  env | grep '^F1=' || echo '1 (nothing)'
+  typeset -x F2
+  export F2
+  env | grep '^F2=' || echo '2 (nothing)'
+  typeset -x F3
+  typeset F3 >/dev/null
+  env | grep '^F3=' || echo '3 (nothing)'
   ```
 - `declare/listing-a-control-byte` — how a listing spells a byte below 0x20 inside `$'...'`: an octal escape, a hex one, and a caret pair are three answers from three columns that otherwise quote alike, which is why the control escape is a field of its own rather than part of the quoting style. The fourth has no such builtin (#2057)
   ```sh

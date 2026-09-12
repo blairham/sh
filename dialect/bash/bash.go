@@ -495,6 +495,9 @@ func Semantics() interp.Semantics {
 	// `readonly -a a` freezes the name and records no kind: it lists as
 	// `declare -r a`, with no `a` in the cluster.
 	s.ReadonlyRecordsTheCompoundAttribute = interp.No
+	// And an exported name with no value reaches no child, whatever letters
+	// its declaration wrote: `declare -ix Z; env` hands over nothing.
+	s.NumericTypeWithNoValueReachesAChildAsZero = interp.No
 	// A type letter and an array literal on one declaration is an array of
 	// that type: `declare -ia z=(1 2)` is `declare -ai z=([0]="1" [1]="2")`,
 	// and `declare -i z=(1 2)` with no array letter is the same line.

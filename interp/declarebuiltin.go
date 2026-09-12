@@ -758,7 +758,8 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// reaches the operands after it, and
 			// TestAnUnansweredInheritedTypeAxisRefusesTheNamesAfterItToo
 			// pins that rather than the guard that appeared to do it.
-			r.declareEmpty(name, fresh, df.export || df.readonly)
+			r.declareEmpty(name, fresh, df.export || df.readonly,
+				withoutMatching(df) != (declareFlags{}))
 		}
 		if df.readonly && !df.readonlyOff {
 			r.markReadonly(name)
@@ -1728,6 +1729,43 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 	return v, true
 }
 
+// declarationOwnsTheStandingEmpty is what a declaration naming an attribute
+// does to a name a *previous* declaration left with no value of its own: the
+// name now holds the empty string in its own right, and a child is told about
+// it.
+//
+// Only reachable where a valueless declaration sets the name at all — see
+// Semantics.DeclaredNameWithoutValueIsEmpty and Runner.declaredEmpty — so it
+// is core rather than an axis: the dialects that leave such a name unset have
+// no record here to clear.
+//
+// Measured 2026-09-12 on zsh 5.9.2, `-f`, `env -i`, reading a real child's
+// environment with `env`:
+//
+//	typeset -x A; env                        nothing
+//	typeset -x A; typeset -x A; env          A=
+//	typeset -x A; export A; env              A=
+//	typeset -x A; readonly A; env            A=
+//	typeset -x A; typeset +r A; env          A=
+//	typeset A;    export A; env              A=
+//	typeset -x A; typeset A; env             nothing
+//	typeset -x A; typeset -p A; env          nothing
+//
+// The last two are what the guard is for and what makes this "naming an
+// attribute" rather than "a second command": a bare `typeset A` over a name
+// that already holds something is a *listing* in that shell rather than a
+// declaration, and so is `typeset -p`. Neither changes what the child is
+// told; every line that writes a letter, or is spelled with one of the words
+// that is an attribute, does.
+//
+// It is a real difference and not a corner. `typeset -x V` then `export V` is
+// how a script declares an exported name it means to fill in later, and the
+// child was told nothing about it here — a `make`-style wrapper that exports
+// its variables up front handed them all over as absent.
+func (r *Runner) declarationOwnsTheStandingEmpty(name string) {
+	delete(r.declaredEmpty, name)
+}
+
 // zeroPaddedInteger answers a value written as a digit string with a leading
 // zero, where the dialect reads one in decimal — see
 // Semantics.IntegerAssignmentReadsALeadingZeroAsDecimal. The second result is
@@ -1847,7 +1885,7 @@ func (r *Runner) floatValue(text string) (float64, bool) {
 // The name is now local, or attributed, or both — but whether it also *exists*
 // is a dialect's answer, so this is the one place that decides it and both
 // `local` and `typeset` come through here.
-func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry bool) {
+func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, namesAnAttribute bool) {
 	// A name that already holds a value is not one this declaration is
 	// bringing into being, and nothing about being declared empties it:
 	// `typeset -x v` on a `v=abc` leaves `abc` alone in all four shells that
@@ -1859,6 +1897,16 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry bool)
 	// caller held, which is what fresh says — measured, `v=5; function f {
 	// typeset -i v; echo "[${v-UNSET}]"; }` reads UNSET in bash and ksh93 and
 	// `0` in zsh, against `[5]` for the same line at the top.
+	// A *second* declaration naming an attribute, over a name the first one
+	// left with no value of its own. Read before anything else because the
+	// paths below return early on their own — a re-read that changes nothing
+	// stops there — and this is true whichever of them the line takes. Not
+	// for a fresh cell: the record is keyed by name, so a local shadowing an
+	// outer declared-empty name is the first declaration of *its* cell.
+	owned := namesAnAttribute && !fresh && r.declaredEmpty[name]
+	if owned {
+		r.declarationOwnsTheStandingEmpty(name)
+	}
 	if !fresh && r.declaredNameHolds(name) {
 		if r.declarationStartsAnInheritedNameOver(name, keepsTheEnvironmentEntry) {
 			// The name is being started over rather than added to, so it
@@ -1897,6 +1945,11 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry bool)
 		// replace the compound the same declaration had brought into being,
 		// and in the dialect that replaces, `local -a opts` left a string.
 		r.setVarAs(name, "", assignedAsTheCompoundView)
+		if owned {
+			// Cleared above, and this is the branch that would put it
+			// straight back.
+			return
+		}
 		// Set by a declaration and not by an assignment, which the shell's
 		// own reads cannot tell apart and a child can: see
 		// Runner.declaredEmpty.

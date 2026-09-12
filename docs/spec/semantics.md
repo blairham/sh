@@ -7226,6 +7226,70 @@ The refusal ends the script rather than the command: inside `( … )` only
 the subshell stops, at status 1, and the line after it runs.
 
 
+## What a child is told about a declared name with no value
+
+Measured 2026-09-12 from a script file, `env -i` with a scratch `HOME`,
+reading a real child's environment with `env`: zsh 5.9.2, ksh93u+ and bash
+5.3.15. Only a child can see any of this — every listing spells the two
+cases the same way.
+
+    typeset -x A;  env | grep '^A='
+
+    zsh 5.9.2    nothing
+    ksh93u+      nothing
+    bash 5.3.15  nothing
+
+That is the agreement the record exists for, and each shell reaches it for
+its own reason: bash and ksh93 leave a valueless declaration's name unset,
+while zsh sets it to the empty string and still tells no child. Two things
+break the agreement.
+
+### A second declaration gives the name the empty in its own right
+
+In the shell whose valueless declaration sets the name, a *later*
+declaration naming an attribute makes the name hold the empty for itself,
+and the child is then told:
+
+    typeset -x A; typeset -x A     A=
+    typeset -x A; export A         A=
+    typeset -x A; readonly A       A=
+    typeset -x A; typeset +r A     A=
+    typeset -x A; typeset -u A     A=
+    typeset A;    export A         A=
+    typeset -x A; typeset A        nothing
+    typeset -x A; typeset -p A     nothing
+
+The last two are what makes this *naming an attribute* rather than *a
+second command*: a bare `typeset A` over a name that already holds
+something is a listing in that shell, and so is `typeset -p`. It is not a
+corner — `typeset -x V` followed later by `export V` is how a script
+declares an exported name it means to fill in, and every one of them
+reached a child as absent here.
+
+### A numeric type hands the child a zero the shell does not hold
+
+    typeset -ix Z; echo "read=[${Z-UNSET}]"; env | grep '^Z='
+
+    ksh93u+      read=[UNSET]   ·   Z=0
+    bash 5.3.15  read=[UNSET]   ·   nothing
+    zsh 5.9.2    read=[]        ·   nothing
+
+The `read=` half is what says the zero is not a value: ksh93 reports the
+name as unset in the same breath, and `typeset -p Z` writes `typeset -x -i
+Z` with nothing after it. The zero is what the *type* makes of nothing, and
+it is produced for the child alone.
+
+It is the numeric letters and no others. `typeset -ux U; export U` and a
+plain `typeset P; export P` tell that child nothing, and the float letter
+does the same as the integer one without carrying its precision —
+`typeset -F 3 F; export F` hands over `F=0` rather than `0.000`.
+
+Two recorded and not modeled, both in ksh93. Taking the letter off does not
+take the zero away — `typeset -ix Z; typeset +i Z` still hands over `Z=0` —
+and an output base does not reach the child either: `typeset -i8 D; export
+D` is `D=0` there where zsh, by the other route, writes `D=8#0`.
+
+
 ## `typeset -f` that marks rather than lists
 
 Measured 2026-09-12, `env -i` with a scratch `HOME`, zsh 5.9.2 `-f` and

@@ -42795,6 +42795,50 @@
         "TimedOut": false
       }
     },
+    "declare/a-second-declaration-owns-the-empty-a-first-one-left": {
+      "bash": {
+        "Stdout": "1 (nothing)~2 (nothing)~3 (nothing)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1 (nothing)~2 (nothing)~3 (nothing)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "F1=~F2=~F3=",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "1 (nothing)~2 (nothing)~3 (nothing)",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 3: typeset: not found~\u003cscript\u003e: 6: typeset: not found~\u003cscript\u003e: 7: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1 (nothing)~2 (nothing)~3 (nothing)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1 (nothing)~F2=~3 (nothing)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-standing-type-attribute-and-a-later-array-literal": {
       "bash": {
         "Stdout": "st=0~declare -ai z=([0]=\"1\" [1]=\"2\")",
@@ -44507,6 +44551,50 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:typeset:1: a: inconsistent type for assignment",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-exported-name-of-a-numeric-type-with-no-value": {
+      "bash": {
+        "Stdout": "read=[UNSET]~(nothing)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "read=[UNSET]~(nothing)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "read=[]~Z=",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "read=[UNSET]~(nothing)",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "read=[UNSET]~Z=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "read=[0]~(nothing)",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -50885,6 +50973,50 @@
       },
       "zsh": {
         "Stdout": "typeset -l lo=AB~typeset -u up=ab~[ab][AB]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/which-letters-put-a-valueless-exported-name-in-the-environment": {
+      "bash": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1",
+        "Stderr": "\u003cscript\u003e: line 1: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "0",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: typeset: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "2",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

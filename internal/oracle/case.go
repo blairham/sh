@@ -5565,6 +5565,16 @@ echo "st=$?"`,
 		Why:     "`##` is spelled `the longest match` and one shell does not search for one: it tries the arms in the order they were written and keeps the first that lets the pattern match, so the first two brackets differ from each other there and are the same everywhere else. The next three say it is a search order rather than a second length rule — the chosen arm still takes as much as it can, a later arm is taken where the rest of the pattern needs it, and an empty arm is an arm. The last is the boundary: the *suffix* trim takes the longest in every column, so an axis worded for trims in general would have moved a row the panel agrees about. The other five read the parentheses as ordinary characters and trim nothing at all, which is a fact about the grammar rather than about this axis",
 	},
 	{
+		ID: "axis/which-arm-a-substitution-takes", Category: "semantics axes",
+		Snippet: `x=abc; echo "[${x//(a|ab)/X}][${x//(ab|a)/X}][${x/(b|bc)/X}][${x/(bc|b)/X}][${x/(|a)/X}][${x//(|a)/X}]"`,
+		Why:     "the same axis on the operator that *replaces*, which asks it at every position rather than once. A substitution takes the longest match at each position exactly as `##` does, so the shell that tries the arms in the order they were written does it here too: the first two brackets differ from each other and the next two say the question survives a match that does not start at the value's beginning. The last two are the shape that separates a search order from a length rule — an empty arm is an arm, so `(|a)` replaces nothing and leaves the `a` standing, where a longest reading eats it, and the global spelling shows the scan still making progress over the unit an empty match did not take. The other five read the parentheses as ordinary characters and replace nothing at all, which is a fact about the grammar rather than about this axis",
+	},
+	{
+		ID: "axis/where-a-substitution-has-no-arm-to-choose", Category: "semantics axes",
+		Snippet: `x=abc; echo "[${x/#(a|ab)/X}][${x/#(ab|a)/X}][${x/%(c|bc)/X}][${x/%(bc|c)/X}][${(S)x//(a|ab)/X}][${(S)x//(ab|a)/X}]"`,
+		Why:     "and the boundary, which is what says the axis is about the *shape of the match* rather than about an operator's name. The anchored-at-the-start pair splits exactly as the unanchored one does, because pinning the beginning leaves the end free. The anchored-at-the-end pair does not: every match at a given start is then the same length, so the arms have nothing to disagree about and both written orders answer `aX`. The last pair is the flag that asks for the shortest match, which is the minimum over every arm — so the first arm that matches at all matches exactly there, in either written order",
+	},
+	{
 		ID: "axis/which-arm-an-extended-group-hands-a-trim", Category: "semantics axes",
 		Snippet: `shopt -s extglob 2>/dev/null; x=abc; echo "[${x##@(a|ab)}][${x##@(ab|a)}][${x#@(ab|a)}]"`,
 		Why:     "the same question in the spelling the other grammars have, which is what makes it an axis rather than one shell's curiosity: with extended patterns on, bash and ksh93 answer the first two identically — the longest arm, whichever order it was written in — where the bare-group spelling above splits them. The third is the control: the single `#` takes the shortest match in every column that reads the group at all",

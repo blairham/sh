@@ -31,7 +31,7 @@ package interp
 // the pattern the script wrote rather than a variant of it — and see the same
 // arm, because matchGroup prefers a written arm on its own.
 //
-// Which reading a dialect uses is Semantics.LongestPrefixTrimTakesTheWrittenArm,
+// Which reading a dialect uses is Semantics.LongestMatchTakesTheWrittenArm,
 // and it is asked only where the two readings land in different places.
 //
 // **The prefix trim is where it is reachable without a flag, not where it
@@ -43,7 +43,10 @@ package interp
 // `${(S)w%%(bc|b)}` is `a` — which is why writtenArmReaches asks about the
 // *shape of the match* rather than naming the operator.
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // armOrder is the axis and the question that resolves it.
 //
@@ -61,6 +64,13 @@ type armOrder struct {
 	ask    func() bool
 }
 
+// reaches is whether asking is worth the preparation: a dialect that reads
+// the longest match has already answered, and the zero value is what a caller
+// that is not a parameter trim or substitution passes.
+func (a armOrder) reaches() bool {
+	return a.answer != No && a.ask != nil
+}
+
 // armVariantLimit is how many resolved patterns the search will consider.
 //
 // A pattern with n alternations of k arms has k^n of them, and the point of
@@ -70,47 +80,131 @@ type armOrder struct {
 // worth measuring.
 const armVariantLimit = 64
 
-// writtenArmEnd is where a longest trim's match stops when the arms are
-// searched in the order they were written, given where the search has already
-// settled that the match begins.
+// armSearch is the written-arm reading prepared for one pattern: the arms
+// resolved to one variant each, in preference order, with what each variant
+// requires of a piece beside it.
 //
-// start is 0 for the unflagged prefix trim, which is where this reading was
-// first needed. Under `(S)` the match may begin anywhere and the position is
-// chosen before the arm is — measured, `v=abcbc` and `${(S)v%%(bc|cbc)}` is
-// `abc` in both written orders, the arm that starts closest to the end rather
-// than the arm that was written first. So the position is an argument here
-// and never something this reading gets to move.
+// Prepared once and asked many times, because a **substitution** asks this
+// question at every position of the subject where a trim asks it once.
+// Resolving the alternations is a rewrite of the pattern text and an
+// allocation per variant; doing that per position turned a linear scan into
+// one that rebuilt the same four strings for every character of a prompt.
+type armSearch struct {
+	variants []string
+	bounds   []armBound
+	// where is a memo of this search's own, one per variant.
+	//
+	// **The matcher's memo is dropped whenever the pattern moves** — see
+	// matchPatternIn — so asking about a variant through the caller's
+	// matchWhere throws away everything the whole pattern's scan had learned,
+	// and the next question about the whole pattern rebuilds it. Measured on
+	// the prompt theme's pattern that #1383 and #1398 are about: sharing the
+	// caller's memo cost the substitution 22% where a memo per variant costs
+	// nothing measurable, and the matcher questions were never the expense.
+	//
+	// A capture plan of the variant's own goes with it. The search discards
+	// the report it gets, so the plan only has to be the right *shape* for
+	// the pattern being matched rather than for the one the script wrote.
+	where []*matchWhere
+}
+
+// armBound is what one resolved variant requires of a piece, so that a
+// candidate the variant could not match is skipped rather than handed to the
+// matcher.
 //
-// The second result is whether the question could be answered at all. It is
-// false for a pattern with no alternation to resolve, and for one whose
-// alternations cannot be resolved by rewriting — see armVariants — in which
-// case the caller keeps the length reading it already has.
-func writtenArmEnd(value, pattern string, o patternOpts, start int) (int, bool) {
+// The same two analyses interp/patternspan.go already performs for the length
+// reading, asked of the rewritten pattern rather than of the one the script
+// wrote — which is the only pattern this search ever matches against. Without
+// them the arm reading is a full scan of the subject at every position, so a
+// bounded pattern that costs the length reading one question would cost this
+// one thousands.
+type armBound struct {
+	least, most int
+	bounded     bool
+	head, tail  string
+	edges       bool
+}
+
+// newArmSearch prepares the reading, or reports that there is none to have.
+//
+// The second result is false for a pattern with no alternation to resolve,
+// and for one whose alternations cannot be resolved by rewriting — see
+// armVariants — in which case the caller keeps the length reading it has.
+func newArmSearch(pattern string, o patternOpts) (armSearch, bool) {
 	// The cheap half of the question first: a pattern with no bar in it
 	// anywhere has one reading, and that is nearly every pattern a script
 	// writes. A bar inside a bracket expression is an ordinary member and
 	// reaches the scan below, which reads it as one.
 	if !strings.ContainsRune(pattern, '|') {
-		return 0, false
+		return armSearch{}, false
 	}
 	variants, ok := armVariants(pattern, o)
 	if !ok || len(variants) < 2 {
-		return 0, false
+		return armSearch{}, false
 	}
-	// The same candidate order a longest trim uses, because the arm decides
+	bounds := make([]armBound, len(variants))
+	where := make([]*matchWhere, len(variants))
+	for i, v := range variants {
+		var b armBound
+		b.least, b.most, b.bounded = patternSpanBytes(v, o)
+		b.head, b.tail, b.edges = patternEdgeLiterals(v, o)
+		bounds[i] = b
+		where[i] = &matchWhere{plan: planCapturesFor(v, o)}
+	}
+	return armSearch{variants: variants, bounds: bounds, where: where}, true
+}
+
+// endAt is where the match beginning at start stops when the arms are
+// searched in the order they were written.
+//
+// start is 0 for the unflagged prefix trim, which is where this reading was
+// first needed. Under `(S)` the match may begin anywhere, and a substitution
+// asks at every position — in both cases the position is chosen before the
+// arm is, measured: `v=abcbc` and `${(S)v%%(bc|cbc)}` is `abc` in both
+// written orders, the arm that starts closest to the end rather than the arm
+// that was written first. So the position is an argument here and never
+// something this reading gets to move.
+//
+// # limit is the length reading's answer, and it bounds this one
+//
+// A variant is the pattern with one arm chosen at each alternation, so every
+// piece a variant matches is a piece the **whole pattern** matches — and the
+// length reading has already found the longest of those. So no arm can reach
+// past it, and the search starts there rather than at the end of the value.
+//
+// That is what keeps this affordable at every position of a substitution
+// rather than only once at a trim. The common case becomes one question: the
+// first variant is asked about the length reading's own edge, and where it
+// matches there the two readings agree and nothing more is asked. Without the
+// bound, a prompt theme's pattern over the 82-byte message it is written for
+// cost **2.3x** the substitution with the reading switched off; with it, the
+// difference is in the noise.
+//
+// The second result is whether any arm matched there at all.
+func (s armSearch) endAt(value string, o patternOpts, start, limit int) (int, bool) {
+	// The same candidate order a longest match uses, because the arm decides
 	// *which* match and not how much of it: within one resolved pattern the
 	// longest piece still wins.
-	idx := unitStops(value, o)
-	for l, r := 0, len(idx)-1; l < r; l, r = l+1, r-1 {
-		idx[l], idx[r] = idx[r], idx[l]
-	}
-	for _, v := range variants {
-		for _, i := range idx {
-			if i < start {
+	stops := unitStops(value, o)
+	from := sort.SearchInts(stops, start)
+	top := sort.SearchInts(stops, limit+1) - 1
+	for n, v := range s.variants {
+		b := s.bounds[n]
+		o.where = s.where[n]
+		last := top
+		if b.bounded {
+			last = min(last, sort.SearchInts(stops, start+b.most+1)-1)
+		}
+		for k := last; k >= from; k-- {
+			if b.bounded && stops[k]-start < b.least {
+				break
+			}
+			piece := value[start:stops[k]]
+			if !edgeLiteralsFit(piece, b.head, b.tail, b.edges) {
 				continue
 			}
-			if ok, _ := matchPatternIn(v, value[start:i], value, start, o); ok {
-				return i, true
+			if ok, _ := matchPatternIn(v, piece, value, start, o); ok {
+				return stops[k], true
 			}
 		}
 	}

@@ -1109,9 +1109,11 @@ func Semantics() interp.Semantics {
 	// The arm written first, which is this shell alone in the panel:
 	// measured 2026-09-11 on 5.9.2, `x=abc`, `${x##(a|ab)}` is `bc` where
 	// `${x##(ab|a)}` is `c`. The same order decides what a `(#b)` reports,
-	// which the matcher already followed — see
-	// Semantics.LongestPrefixTrimTakesTheWrittenArm.
-	s.LongestPrefixTrimTakesTheWrittenArm = interp.Yes
+	// which the matcher already followed — and it decides a **substitution**
+	// too, measured 2026-09-12: `${x//(a|ab)/X}` is `Xbc` and
+	// `${x//(ab|a)/X}` is `Xc`. See
+	// Semantics.LongestMatchTakesTheWrittenArm.
+	s.LongestMatchTakesTheWrittenArm = interp.Yes
 	s.ExitTrapIsFunctionLocal = interp.Yes
 	s.SignalHandlerSeesEarlierStatus = interp.Yes
 	// The operand of `exit` and of `return` is an arithmetic expression here,

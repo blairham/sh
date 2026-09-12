@@ -420,7 +420,7 @@ beside `hasUnescapedMeta` rather than counted by it — the same composition
 where the split is made: at the one entry point every surface's match goes
 through, so a condition, a `case`, a trim and a glob all take it.
 
-### Which arm a longest prefix trim takes
+### Which arm a longest match takes
 
 `${x##pat}` is spelled "the longest match", and the panel does not agree on
 what that means once the pattern holds an alternation whose arms take
@@ -447,20 +447,52 @@ So it is a search order — the arms tried left to right, the first that lets
 the whole pattern match kept, and the greediest reading taken inside it —
 rather than a second rule about length.
 
-**The other three trims ask nothing**, which is why the axis is worded for
-this one. The single `#` takes the shortest match in every column whichever
-arm came first, and both suffix trims take the longest:
+**The other three trims ask nothing**, which is why the axis is not worded
+for trims in general. The single `#` takes the shortest match in every column
+whichever arm came first, and both unflagged suffix trims take the longest:
 
     ${x#(a|ab)}      zsh 5.9.2   bc
     ${x#(ab|a)}      zsh 5.9.2   bc
     ${x%%(|bc)}      zsh 5.9.2   a         an empty first arm does not stop it
     ${x%(c|bc)}      zsh 5.9.2   ab
 
-`Semantics.LongestPrefixTrimTakesTheWrittenArm` is the answer, and it is
-asked **only where the two readings land in different places**: `(ab|a)` —
-the arms in decreasing length — has two readings that agree, and a pattern
-with no alternation has one. A live top-level bar is read the same way as a
+**The substitution asks the same question**, and that is the second operator
+rather than a second axis: it takes the longest match at each position
+exactly as `##` does, so the arm the matcher would have preferred is decided
+before the matcher is consulted there too. Measured 2026-09-12 with `x=abc`,
+and every row splits the same way the trim's do:
+
+    ${x//(a|ab)/X}   zsh 5.9.2   Xbc       the arm written first
+    ${x//(ab|a)/X}   zsh 5.9.2   Xc
+    ${x/(b|bc)/X}    zsh 5.9.2   aXc       and not only at the start
+    ${x/(|a)/X}      zsh 5.9.2   Xabc      an empty arm is an arm
+    ${x//(|a)/X}     zsh 5.9.2   XaXbXc    the scan still makes progress
+    ${x/#(a|ab)/X}   zsh 5.9.2   Xbc       `/#` pins the start, not the end
+    ${x//@(a|ab)/X}  bash 5.3    Xc        the longest arm
+
+**The boundary is the shape of the match and not the operator's name.** The
+question is there wherever the *longest* match is wanted **and** the end of
+that match is free to move. `/%` pins the end, so every match at a given
+start is the same length and the arms have nothing to disagree about; zsh's
+`(S)` flag asks for the shortest match, which is the minimum over every arm,
+so the first arm that matches at all matches exactly there:
+
+    ${x/%(c|bc)/X}      zsh 5.9.2   aX
+    ${x/%(bc|c)/X}      zsh 5.9.2   aX
+    ${(S)x//(a|ab)/X}   zsh 5.9.2   Xbc
+    ${(S)x//(ab|a)/X}   zsh 5.9.2   Xbc
+
+`Semantics.LongestMatchTakesTheWrittenArm` is the answer, and it is asked
+**only where the two readings land in different places**: `(ab|a)` — the
+arms in decreasing length — has two readings that agree, and a pattern with
+no alternation has one. A live top-level bar is read the same way as a
 written group, measured through `${~L}`.
+
+The field was called `LongestPrefixTrimTakesTheWrittenArm` while only the
+trim consulted it, and the substitution went its own way at status 0 for as
+long as the name said the question was the trim's — a differential sweep of
+8800 flag × pattern × operator combinations found 76 differences against zsh
+5.9.2 and every one of them was this (#2152).
 
 The same order decides what a `(#b)` group reports and what the `(M)` flag
 keeps, because they are the one match seen from the other side:

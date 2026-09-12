@@ -1379,64 +1379,57 @@ type Semantics struct {
 	// question about the *format*, and never about a `%b` argument: that site
 	// has its own axis, PrintfBUnicodeEscape below.
 	PrintfUnicodeEscape PrintfUnicodeEscapePolicy
-	// PrintfBUnicodeEscape is how a `%b` argument reads `\u` and `\U`, which
-	// is a different question from the one PrintfUnicodeEscape answers, and
-	// ksh93 is again the shell that separates them:
+	// PrintfBUnicodeEscape is how a `%b` argument reads `\u` and `\U`, which is
+	// a different question from the one PrintfUnicodeEscape answers: an
+	// implementation can read the escape in a format and write the characters as
+	// they stand in a `%b`, exactly as it can for `\x`.
 	//
-	//	printf '%b' 'a\u0041Z'  bash 5.3, zsh  aAZ
-	//	                         bash 3.2, dash, ksh93  as written
-	//
-	// So ksh93 reads the escape in a format and writes the characters as
-	// they stand in a `%b`, exactly as it does for `\x`. No dialect in the
-	// panel answers this site with the truncating reading; the enumeration is
-	// shared because a shell that has the escape here reads its digits the
-	// way it reads a format's.
+	// Not every reading is reachable at this site — nothing answers it with the
+	// truncating one — and the enumeration is shared because an implementation
+	// that has the escape here reads its digits the way it reads a format's.
 	//
 	// Asked only where a `%b` argument actually carries a `\u` or a `\U`.
 	PrintfBUnicodeEscape PrintfUnicodeEscapePolicy
-	// PrintfBEscEscape admits `\e` in a `%b` argument for the escape
-	// character: bash and zsh do, dash and ksh93 write the two characters.
+	// PrintfBEscEscape admits `\e` in a `%b` argument for the escape character,
+	// rather than writing the two characters.
 	//
-	// It is a separate axis from PrintfBCapitalEscEscape below because the
-	// two shells that split them split them in opposite directions, so no
-	// single answer describes either one: ksh93 has `\E` and not `\e`, and
-	// zsh has `\e` and not `\E`.
+	// A separate axis from PrintfBCapitalEscEscape below because the
+	// implementations that split the two letters split them in opposite
+	// directions, so no single answer describes either one.
 	//
 	// Asked only where a `%b` argument actually carries a `\e`.
 	PrintfBEscEscape Answer
-	// PrintfBCapitalEscEscape admits `\E` in a `%b` argument: bash and ksh93
-	// do, dash and zsh write the two characters. See PrintfBEscEscape for
-	// why the two letters are two questions.
+	// PrintfBCapitalEscEscape admits `\E` in a `%b` argument, rather than
+	// writing the two characters. See PrintfBEscEscape for why the two letters
+	// are two questions.
 	//
 	// Asked only where a `%b` argument actually carries a `\E`.
 	PrintfBCapitalEscEscape Answer
 	// PrintfBStopIsPadded puts what a `\c` left of a `%b` argument through the
 	// conversion's field all the same — the width, the precision and the
-	// left-justifying flag. bash, dash and zsh do; ksh93 alone writes the
-	// partial text as it stands:
+	// left-justifying flag. Answering No writes the partial text as it stands:
 	//
-	//	printf '[%5b]'   'a\cb'   five  [    a      ksh93  [a
-	//	printf '[%-5b]'  'a\cb'   five  [a          ksh93  [a
-	//	printf '[%.1b]'  'ab\cc'  five  [a          ksh93  [ab
+	//	printf '[%5b]'   'a\cb'   Yes  [    a      No  [a
+	//	printf '[%-5b]'  'a\cb'   Yes  [a          No  [a
+	//	printf '[%.1b]'  'ab\cc'  Yes  [a          No  [ab
 	//
 	// It is a property of the *stop* and not of the conversion: with nothing
-	// stopping it ksh93 pads and truncates like the rest, so `printf '[%5b]'
-	// 'ab'` is `[   ab` in all six.
+	// stopping it both answers pad and truncate alike, so `printf '[%5b]' 'ab'`
+	// is `[   ab` either way.
 	//
 	// Asked only where a `\c` actually stopped a `%b` *and* the field would
-	// change the text, so an ordinary `printf '%b' 'a\cb'` needs no dialect.
+	// change the text, so an ordinary `printf '%b' 'a\cb'` needs no answer.
 	PrintfBStopIsPadded Answer
 	// PrintfBOctalWithoutZero reads a `%b` argument's `\nnn` as octal with no
-	// leading zero to introduce it. bash and dash do; ksh93 and zsh want the
-	// `\0` and write `\101` as the four characters it is.
+	// leading zero to introduce it. Answering No wants the `\0` and writes
+	// `\101` as the four characters it is.
 	//
 	// The `\0nnn` form itself is unanimous and asks nothing — it is the XSI
-	// escape `echo` expands, and reading it as a format's octal is what put
-	// a backspace and a `1` where every shell writes an `A` (#798).
+	// escape `echo` expands, and reading it as a format's octal is what puts a
+	// backspace and a `1` where the shell writes an `A`.
 	//
-	// This one is not `echo`'s answer at the other site: an `echo` argument's
-	// `\101` is an escape in dash alone, where a `%b` argument's is an escape
-	// in bash too.
+	// This one is not `echo`'s answer at the other site: the two sites are
+	// answered by different sets of presets.
 	//
 	// Asked only where a `%b` argument actually carries such an escape.
 	PrintfBOctalWithoutZero Answer
@@ -6629,179 +6622,151 @@ type Semantics struct {
 	// name.
 	EmptyAssociativeKeyIsReportedWhenRead Answer
 
-	// EmptyParamSubscriptIsAnError refuses `${a[]}` — a subscript written
-	// with nothing at all between the brackets — where a *parameter
-	// expansion* reads it. The same text one level over from
-	// EmptyArithSubscript, and a different answer.
+	// EmptyParamSubscriptIsAnError refuses `${a[]}` — a subscript written with
+	// nothing at all between the brackets — where a *parameter expansion* reads
+	// it. The same text one level over from EmptyArithSubscript, and a different
+	// answer.
 	//
-	// Measured 2026-09-11, `-c`, with `a=(5 6 7)` so no other axis answers
-	// first:
-	//
-	//	bash 5.3 / as-sh / 3.2   `[${a[]}]: bad substitution`, and the shell ends
-	//	dash                     `Bad substitution`, and the shell ends
-	//	ksh93u+                  `5` — the element the empty expression names
-	//	zsh 5.9.2                `invalid subscript`, and the shell ends
-	//
-	// Five columns refuse and one reads it, which is what makes this an axis
-	// and not a diagnostic: ksh93 takes the brackets as holding an expression
+	// With `a=(5 6 7)` so no other axis answers first, Yes is a bad substitution
+	// or an invalid subscript and the shell ends; No reads it as an expression
 	// that happens to be empty, so `${a[]}` is element zero, `${s[]}` on a
-	// scalar is the scalar, and `${m[]}` is the value under the empty key.
-	// That is the same reading EmptyArithSubscriptIsTheEmptyExpression
-	// records for the same shell one construct over.
+	// scalar is the scalar, and `${m[]}` is the value under the empty key. That
+	// is the same reading EmptyArithSubscriptIsTheEmptyExpression records one
+	// construct over.
 	//
 	// **It is the *written* brackets and not an empty subscript that arrived
-	// through one.** `w=; ${m[$w]}` is `[]` at status 0 in zsh, because the
-	// subscript text is `$w` and the expansion happens inside the subscript
-	// rather than before it — which is the opposite of the arithmetic case,
-	// where the parameters go in first and `m[$w]` really does become `m[]`.
-	// So the question is asked of the node and answered before anything is
-	// expanded.
+	// through one.** `w=; ${m[$w]}` is `[]` at status 0, because the subscript
+	// text is `$w` and the expansion happens inside the subscript rather than
+	// before it — which is the opposite of the arithmetic case, where the
+	// parameters go in first and `m[$w]` really does become `m[]`. So the
+	// question is asked of the node and answered before anything is expanded.
 	//
-	// The operator makes no difference in any column: `${#a[]}`, `${a[]-d}`,
-	// `${a[]:-d}`, `${a[]/x/y}` and `${a[]%x}` all answer as the bare shape
-	// does, which is why this is asked where the subscript is read rather
-	// than once per operator.
+	// The operator makes no difference: `${#a[]}`, `${a[]-d}`, `${a[]:-d}`,
+	// `${a[]/x/y}` and `${a[]%x}` all answer as the bare shape does, which is
+	// why this is asked where the subscript is read rather than once per
+	// operator.
 	//
-	// dash is in the table for completeness and does not answer it: no
-	// subscript reaches a parameter expansion there at all — `${a[0]}` is
-	// `Bad substitution` too — so the grammar has already refused before this
+	// A grammar that reaches no subscript in a parameter expansion at all —
+	// where `${a[0]}` is already a bad substitution — has refused before this
 	// could be asked.
 	//
-	// The wording is Diagnostics.EmptyParamSubscript, which is empty for
-	// every column whose sentence is its ordinary bad-substitution one.
+	// The wording is Diagnostics.EmptyParamSubscript, which is empty for any
+	// preset whose sentence is its ordinary bad-substitution one.
 	EmptyParamSubscriptIsAnError Answer
 
-	// ArithWholeArraySubscriptIsTheSlice reads a `*` or `@` subscript inside
-	// an arithmetic expression as the *slice* the same subscript takes in an
+	// ArithWholeArraySubscriptIsTheSlice reads a `*` or `@` subscript inside an
+	// arithmetic expression as the *slice* the same subscript takes in an
 	// expansion — the elements joined on the first character of IFS — rather
 	// than as an ordinary subscript.
 	//
-	// Measured 2026-09-11, `-c`:
+	//	probe                                Yes                  No
+	//	typeset -A m; m[k]=9; $(( m[*] ))    9                    0
+	//	a=(3); $(( a[*] + 1 ))               4                    a bad subscript
+	//	a=(3 4 5); $(( a[*] ))               an operator expected a bad subscript
 	//
-	//	probe                                    bash 5.3   ksh93u+   zsh 5.9.2
-	//	typeset -A m; m[k]=9; $(( m[*] ))        0          0         9
-	//	typeset -A m; m[k]=9; $(( m[@] ))        0          0         9
-	//	a=(3); $(( a[*] + 1 ))                   1, and `a[*]: bad array subscript`   syntax error   4
-	//	a=(3 4 5); $(( a[*] ))                   0, reported   syntax error   `operator expected at `4 5''
+	// So Yes expands the slice first, and No reads the brackets as arithmetic,
+	// fails to make a subscript of `*`, and answers zero. The expansion route
+	// already agrees everywhere — `"${m[*]}"` is `9` under both — which is what
+	// says this is a missing *reading* here rather than a missing feature.
 	//
-	// So one column expands the slice first and the other two read the
-	// brackets as arithmetic, fail to make a subscript of `*`, and answer
-	// zero. The expansion route already agrees everywhere — `"${m[*]}"` is
-	// `9` in all three — which is what says this is a missing *reading* here
-	// rather than a missing feature.
+	// The joined text is then read as an expression, not as a numeral, which is
+	// the same reading an element's value gets: `a=(1+1); $(( a[*] * 3 ))` is 6
+	// where `$(( a[1] * 3 ))` is 6. A slice of more than one element is
+	// therefore usually a failure rather than a number, and an empty array joins
+	// to nothing and is zero.
 	//
-	// The joined text is then read as an expression, not as a numeral, which
-	// is the same reading an element's value gets: `a=(1+1); $(( a[*] * 3 ))`
-	// is 6 where `$(( a[1] * 3 ))` is 6. A slice of more than one element is
-	// therefore usually a failure rather than a number, and an empty array
-	// joins to nothing and is zero.
-	//
-	// `@` joins on IFS here exactly as `*` does — measured, `a=(3 4);
-	// IFS=:` gives both spellings `3:4` to read — so this is not the
-	// unquoted-`@` question, which is about field splitting and has none to
-	// be about inside an expression.
+	// `@` joins on IFS here exactly as `*` does — with `a=(3 4); IFS=:` both
+	// spellings give `3:4` to read — so this is not the unquoted-`@` question,
+	// which is about field splitting and has none to be about inside an
+	// expression.
 	//
 	// Asked **before** the association is consulted, because the key `*` is
-	// precisely what the other answer makes of the same text: a table read
-	// first would answer the key and the two readings would collapse into
-	// one. That is the ordering #1875 established for a subscript that is
-	// not a number, with this question inserted at its front.
+	// precisely what the other answer makes of the same text: a table read first
+	// would answer the key and the two readings would collapse into one.
 	//
-	// The two columns that answer no *report* the subscript on an indexed
-	// name — `a[*]: bad array subscript` in bash, a syntax error in ksh93 —
-	// and are silent on an associative one. That is a diagnostic of its own
-	// and is #1978 rather than this axis, which is about the value.
+	// A No that *reports* the subscript on an indexed name and is silent on an
+	// associative one is a diagnostic of its own rather than this axis, which is
+	// about the value.
 	//
-	// The joined text is read as an expression by the same route an
-	// element's value takes, so it inherits that route's own gap: a value
-	// that is an expression rather than a numeral is refused here where
-	// every column re-reads it (#1977). `$(( a[*] ))` over `a=(1+1)` is 6
-	// there and a refusal here for that reason and not for this one.
+	// The joined text is read as an expression by the same route an element's
+	// value takes, so it inherits that route's own gap: a value that is an
+	// expression rather than a numeral is refused here where an expansion
+	// re-reads it.
 	ArithWholeArraySubscriptIsTheSlice Answer
 
 	// ArithWholeArraySubscriptIsReportedAsBad reports a `*` or `@` subscript
-	// inside an expression and answers **zero** for it, where the dialect
-	// does not read it as the slice — so the expression survives instead of
-	// being abandoned.
+	// inside an expression and answers **zero** for it, where the preset does
+	// not read it as the slice — so the expression survives instead of being
+	// abandoned. On an *indexed* name:
 	//
-	// Measured 2026-09-11 and again 2026-09-12, `-c`, on an *indexed* name:
+	//	probe                       Yes                            No
+	//	a=(3 4 5); $(( a[*] ))      `a[*]: bad array subscript`,   an arithmetic
+	//	                            0, status 0                    syntax error,
+	//	                                                           status 1
+	//	a=(3); $(( a[*] + 1 ))      the same sentence, then 1      the same refusal
+	//	a=(3); $(( a[@] + 1 ))      `a[@]: …`, then 1              the same refusal
+	//	$(( nodecl[*] ))            `nodecl[*]: …`, then 0         the same refusal
+	//	s=7; $(( s[*] ))            `s[*]: …`, then 0              the same refusal
+	//	(( a[*] = 5 ))              the sentence, nothing written  the same refusal
 	//
-	//	probe                       bash 5.3.15 / as-sh / 3.2      ksh93u+
-	//	a=(3 4 5); $(( a[*] ))      `a[*]: bad array subscript`, 0, st 0   `*: arithmetic syntax error`, st 1
-	//	a=(3); $(( a[*] + 1 ))      the same sentence, then 1              the same refusal
-	//	a=(3); $(( a[@] + 1 ))      `a[@]: …`, then 1                      the same refusal
-	//	$(( nodecl[*] ))            `nodecl[*]: …`, then 0                 the same refusal
-	//	s=7; $(( s[*] ))            `s[*]: …`, then 0                      the same refusal
-	//	(( a[*] = 5 ))              the sentence, nothing written, st 0    the same refusal
+	// So two presets that agree about the *value* can disagree about the report
+	// and about whether the expression survives, which is why this is an axis of
+	// its own rather than a wording. No is the ordinary answer: the brackets
+	// hold a text that is no expression and the arithmetic says so, which is
+	// what happens with no answer here at all.
 	//
-	// So the two columns that agree about the *value* disagree about the
-	// report and about whether the expression survives, which is why this is
-	// an axis of its own rather than a wording. The refusing answer is the
-	// ordinary one: the brackets hold a text that is no expression and the
-	// arithmetic says so, which is what happens with no answer here at all.
+	// It is the **indexed** reading alone. An association reads the brackets as
+	// the key `*`, finds nothing under it and answers zero silently under both,
+	// so the table is consulted first and this is never asked there — the same
+	// ordering ArithWholeArraySubscriptIsTheSlice keeps, and asked one step
+	// behind it: a preset that reads the slice never reaches this at all.
 	//
-	// It is the **indexed** reading alone. An association reads the brackets
-	// as the key `*`, finds nothing under it and answers zero silently in
-	// both columns, so the table is consulted first and this is never asked
-	// there — the same ordering ArithWholeArraySubscriptIsTheSlice keeps, and
-	// asked one step behind it: a dialect that reads the slice never reaches
-	// this at all.
-	//
-	// **The spelling has to be exact.** `$(( a[ * ] ))` is an arithmetic
-	// syntax error in every column measured, bash and zsh alike, so the
-	// brackets are the whole-array spelling only when they hold the one
-	// character and nothing else. A blank subscript is a question of its own
-	// — BlankArithSubscriptIsTheEmptyExpression — and trimming here answered
-	// it wrongly for both.
+	// **The spelling has to be exact.** `$(( a[ * ] ))` is an arithmetic syntax
+	// error under every answer, so the brackets are the whole-array spelling
+	// only when they hold the one character and nothing else. A blank subscript
+	// is a question of its own — BlankArithSubscriptIsTheEmptyExpression — and
+	// trimming here answers it wrongly for both.
 	//
 	// Reported once per evaluation, and the write reports too: `(( a[*]++ ))`
-	// writes the sentence twice in the column that reports, once for the read
-	// and once for the store, and leaves every element as it was.
+	// writes the sentence twice under Yes, once for the read and once for the
+	// store, and leaves every element as it was.
 	//
 	// The wording is Diagnostics.ArithWholeArraySubscript, whose two verbs are
-	// the name and the subscript (#1978).
+	// the name and the subscript.
 	ArithWholeArraySubscriptIsReportedAsBad Answer
 
-	// EmptySubscriptTextIsAMathError refuses a subscript whose text is
-	// *empty or blank once it has been expanded* — `${a[$w]}` with an empty
-	// `$w`, and `${a[ ]}` beside it — where an expression reads it.
+	// EmptySubscriptTextIsAMathError refuses a subscript whose text is *empty or
+	// blank once it has been expanded* — `${a[$w]}` with an empty `$w`, and
+	// `${a[ ]}` beside it — where an expression reads it.
 	//
-	// Measured 2026-09-11, `-c`, with `a=(5 6 7)` and `w=`:
-	//
-	//	probe             bash 5.3   ksh93u+   zsh 5.9.2
-	//	${a[$w]}          `5`, 0     `5`, 0    bad math expression: empty string, and the shell ends
-	//	${a[ ]}           `5`, 0     `5`, 0    bad math expression: operand expected at end of string
-	//	${a[$w]} on a scalar  —      —         the same as the first row
-	//	a[$w]=z           assigns    assigns   the same as the first row
-	//	${#a[$w]}         `1`, 0     `1`, 0    the same as the first row
-	//
-	// So two columns read the empty text as the expression that is zero and
-	// one will not read it at all. dash has no subscript in a parameter
-	// expansion to ask about.
+	// With `a=(5 6 7)` and `w=`, No reads the empty text as the expression that
+	// is zero and answers `5`; Yes will not read it at all and reports a bad
+	// math expression, on the plain read, on a scalar, on an assignment target
+	// and under a length alike. A grammar with no subscript in a parameter
+	// expansion cannot be asked.
 	//
 	// **It is the expanded text and not the written brackets.** `${a[]}` —
-	// nothing between them as written — is EmptyParamSubscriptIsAnError, and
-	// the shell that refuses both gives them *different* sentences: `invalid
-	// subscript` for the written pair, the arithmetic reader's complaint
-	// here. One axis for both would have had to give one of those answers to
-	// the other.
+	// nothing between them as written — is EmptyParamSubscriptIsAnError, and a
+	// preset that refuses both gives them *different* sentences: an invalid
+	// subscript for the written pair, the arithmetic reader's complaint here.
+	// One axis for both would have had to give one of those answers to the
+	// other.
 	//
 	// **And it is the subscript and not every number a parameter expansion
-	// reads.** A substring's offset is the neighbor that says so: measured,
-	// `x=abcdef; ${x:$w:2}` with the same empty `$w` is `ab` in every column,
-	// the refusing one included. So the question is asked where a subscript
-	// is evaluated and not in the arithmetic the two sites share.
+	// reads.** A substring's offset is the neighbor that says so:
+	// `x=abcdef; ${x:$w:2}` with the same empty `$w` is `ab` under every answer,
+	// the refusing one included. So the question is asked where a subscript is
+	// evaluated and not in the arithmetic the two sites share.
 	//
 	// **Nor is it an association's subscript**, which is a key and never an
-	// expression: `typeset -A m; ${m[$w]}` is the empty string at status 0 in
-	// every column that has the attribute, so the key path is reached before
-	// this is asked — the same ordering arithElement keeps for the same
-	// reason (#1875). bash writes `m: bad array subscript` beside that empty
-	// string and still answers it, which is a diagnostic of its own and is
-	// #1972 rather than this axis.
+	// expression: `typeset -A m; ${m[$w]}` is the empty string at status 0
+	// wherever the attribute exists, so the key path is reached before this is
+	// asked — the same ordering arithElement keeps for the same reason. A
+	// complaint written beside that empty string is a diagnostic of its own
+	// rather than this axis.
 	//
-	// The arithmetic site is a different partition of the panel again and
-	// has axes of its own: EmptyArithSubscript for `$(( a[] ))` and
+	// The arithmetic site splits differently again and has axes of its own:
+	// EmptyArithSubscript for `$(( a[] ))` and
 	// BlankArithSubscriptIsTheEmptyExpression for the blank one.
 	//
 	// The wording of the empty half is Diagnostics.EmptySubscriptTextExpanded;
@@ -6811,41 +6776,32 @@ type Semantics struct {
 
 	// BlankArithSubscriptIsTheEmptyExpression reads a subscript holding
 	// whitespace and nothing else — `$(( a[ ] ))` — as the blank expression,
-	// which is zero, so the operand is the *element that subscript names*
-	// rather than a flat zero. Yes in bash and ksh93; No in zsh, where the
-	// subscript's reader wants a value and reports that it reached the end of
-	// the text instead.
+	// which is zero, so the operand is the *element that subscript names* rather
+	// than a flat zero. Answering No has the subscript's reader want a value and
+	// report that it reached the end of the text instead.
 	//
 	// A separate axis from EmptyArithSubscript, and asked one text further
-	// along, because bash answers the two apart: `a[]` is `bad array
-	// subscript` and a flat zero there, while `a[ ]` is silently element
-	// zero. One axis worded for both would have had to give one of those
-	// answers to the other.
+	// along, because a preset can answer the two apart: `a[]` a bad array
+	// subscript and a flat zero, while `a[ ]` is silently element zero. One axis
+	// worded for both would have had to give one of those answers to the other.
 	//
 	// Asked at the subscript and not at the expression, which is where the
-	// panel actually splits: `$((   ))` with nothing but spaces in it is zero
-	// in all three of those shells, so an axis placed on the blank
-	// *expression* would move a row the panel agrees about.
+	// answers actually split: `$((   ))` with nothing but spaces in it is zero
+	// under every answer, so an axis placed on the blank *expression* would move
+	// a row that is agreed about.
 	//
-	// Not reached on an associative name, where a subscript is a key and
-	// never an expression — `$(( m[ ] ))` looks up the one-space key — and
-	// not reached on a name that is not set where
-	// ArithSubscriptSkippedWhenNameUnset answers first. See #1762.
-	//
-	// Measured 2026-09-10, `a=(1 2 3)` then `echo $(( a[ ] ))`:
-	//
-	//	bash 5.3, bash 3.2   1, the first element, silently
-	//	ksh93u+              1, the same
-	//	zsh 5.9.2            bad math expression: operand expected at end
-	//	                     of string, and no value at all
+	// Not reached on an associative name, where a subscript is a key and never
+	// an expression — `$(( m[ ] ))` looks up the one-space key — and not reached
+	// on a name that is not set, where ArithSubscriptSkippedWhenNameUnset
+	// answers first.
 	//
 	// The same split, unchanged, with the subscript standing as an assignment
-	// target: `(( a[ ] = 9 ))` writes element zero in bash and ksh93 and is
-	// refused with that sentence in zsh.
+	// target: `(( a[ ] = 9 ))` writes element zero under Yes and is refused
+	// under No.
 	BlankArithSubscriptIsTheEmptyExpression Answer
 
 	// SubscriptedArrayLiteral is what `a[i]=(p q)` does — an array literal
-	// standing where one element's value goes. The panel disagrees about it
+	// standing where one element's value goes. The readings disagree about it
 	// completely; see SubscriptedArrayLiteralPolicy.
 	SubscriptedArrayLiteral SubscriptedArrayLiteralPolicy
 }
@@ -6864,37 +6820,36 @@ type Semantics struct {
 // reached from Semantics makes the whole vector uncomparable, and an option
 // spelling has no whitespace in it to lose.
 //
-// Measured 2026-09-05 across the panel with a scratch home directory. bash has
-// three of the four and spells them long; zsh has only the first and spells it
-// both ways; dash and ksh93 have none, so a startup file that breaks them is
-// escaped by moving the file. The shell that has no escape is the reason the
-// other two are worth carrying.
+// Measured with a scratch home directory. A preset may have several of these
+// and spell them long, have only the first and spell it both ways, or have
+// none at all — in which case a startup file that breaks the shell is escaped
+// by moving the file. That last case is the reason the others are worth
+// carrying.
 type StartupFileOptions struct {
-	// SuppressAll names the options that suppress every startup file. zsh's
-	// `-f` and `--no-rcs`, and measured they mean *every* one: `zsh -f -l -i`
-	// reads no `.zshenv`, no `.zprofile`, no `.zshrc` and no `.zlogin`.
+	// SuppressAll names the options that suppress every startup file — `-f` and
+	// `--no-rcs`, say — and they mean *every* one: with the option given, no
+	// unconditional file, no profile, no interactive file and no late login file
+	// is read.
 	//
-	// It is not the POSIX `-f`, which turns globbing off. zsh gives the
-	// letter this meaning instead — measured, `zsh -f -c 'echo /etc/pas*'`
-	// still expands the pattern — which is why the letter is a per-dialect
-	// spelling here rather than a set option every shell shares.
+	// It is not the POSIX `-f`, which turns globbing off. A preset may give the
+	// letter this meaning instead — the option given, a pattern still expands —
+	// which is why the letter is a per-preset spelling here rather than a set
+	// option everything shares.
 	SuppressAll string
 
 	// Login names the options that make this a login shell whatever argv[0]
-	// said. `-l` in all four, and `--login` in three of them — dash refuses
-	// the long spelling outright, with `Illegal option --` at status 2.
+	// said — `-l`, and `--login` where the long spelling exists; a preset
+	// without it refuses the long form outright.
 	//
 	// It is not simply a second way to set the same bit, and that is why it
-	// belongs here rather than beside LoginShell: the option reads the
-	// profile **even with a script to run**, where login-ness inferred from
-	// argv[0] does not in every dialect. Measured 2026-09-05: `bash --login
-	// -c cmd` reads its profile and `exec -a -bash bash -c cmd` reads
-	// nothing, so an explicit option makes the panel unanimous where
-	// LoginProfileWhenNonInteractive says it is not.
+	// belongs here rather than beside LoginShell: the option reads the profile
+	// **even with a script to run**, where login-ness inferred from argv[0] does
+	// not under every preset. An explicit option makes the answer unanimous
+	// where LoginProfileWhenNonInteractive says it is not.
 	//
-	// Without it a login shell can only be started by exec'ing with a
-	// dashed argv[0], which is what `login` does and what a person at a
-	// terminal cannot.
+	// Without it a login shell can only be started by exec'ing with a dashed
+	// argv[0], which is what `login` does and what a person at a terminal
+	// cannot.
 	Login string
 
 	// SuppressLogin names the options that suppress the login profile and

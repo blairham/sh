@@ -30,6 +30,14 @@ import (
 // Neither is a verdict. Both are lists to re-measure, for the reason the
 // unpinned list is: the shells have to be asked again before anything is
 // concluded about what they do.
+//
+// And the verdict, once measured, goes on the axis — `unexhibited Value:
+// who holds it` in the field's own doc comment, read back by FieldNotes.
+// Triaging the first 25 (#2060) found no fiction at all: every entry was a
+// reading reached by a run-time mode, a value the type shares with a sibling
+// axis, a reading the panel has at an axis that is read rather than asked, or
+// the null hypothesis of a one-sided question. So neither list shrinks, and
+// the number that means anything is Untriaged.
 
 // ValueUse is what the presets do with one axis.
 type ValueUse struct {
@@ -43,6 +51,13 @@ type ValueUse struct {
 	// other than the unspecified one, which means the absence of an answer
 	// rather than an answer.
 	Unexhibited []string `json:"unexhibited,omitempty"`
+	// Why is why the axis is an axis even though the four answer alike,
+	// from the field's own comment. Empty means nobody has said.
+	Why string `json:"why,omitempty"`
+	// Explained is, per unexhibited value, who does hold it — again from
+	// the field's comment. A value missing from this map is one nobody has
+	// re-measured since the sweep first named it.
+	Explained map[string]string `json:"explained,omitempty"`
 	// Nowhere are the ones no dialect holds for *any* axis of that type.
 	// The distinction matters: a reading another axis of the same type
 	// exhibits is a reading some shell has, just not here, and that is a
@@ -87,9 +102,13 @@ func PresetUse() ([]ValueUse, error) {
 			anywhere[f.Type][literalOf(cur)] = true
 		}
 	}
+	notes, err := FieldNotes()
+	if err != nil {
+		return nil, err
+	}
 	out := make([]ValueUse, 0, len(fields))
 	for _, f := range fields {
-		use := ValueUse{Field: f.Path, Type: f.Type, Held: map[string]string{}}
+		use := ValueUse{Field: f.Path, Type: f.Type, Held: map[string]string{}, Why: notes[f.Path].Unanimous}
 		held := map[string]bool{}
 		for _, name := range names {
 			cur, err := At(reflect.ValueOf(presets[name]), f.Path)
@@ -109,6 +128,12 @@ func PresetUse() ([]ValueUse, error) {
 				continue
 			}
 			use.Unexhibited = append(use.Unexhibited, v.Name)
+			if why, ok := notes[f.Path].Value[v.Name]; ok {
+				if use.Explained == nil {
+					use.Explained = map[string]string{}
+				}
+				use.Explained[v.Name] = why
+			}
 			if !anywhere[f.Type][v.Literal] {
 				use.Nowhere = append(use.Nowhere, v.Name)
 			}
@@ -116,6 +141,30 @@ func PresetUse() ([]ValueUse, error) {
 		out = append(out, use)
 	}
 	return out, nil
+}
+
+// Untriaged are the entries of the two preset lists that no field comment
+// has answered yet.
+//
+// This is the number the instrument is for after #2060. The lists themselves
+// do not shrink — a shared enumeration will always have values one axis of it
+// does not hold, and a run-time option will always be a reading no preset
+// carries — so counting entries measures the shape of the struct rather than
+// the state of the work. Counting the ones nobody has re-measured measures
+// the work.
+func Untriaged(uses []ValueUse) []string {
+	var out []string
+	for _, u := range uses {
+		if u.Unanimous && u.Why == "" {
+			out = append(out, u.Field+": answered alike by all four and nothing says why it is an axis")
+		}
+		for _, v := range u.Unexhibited {
+			if _, ok := u.Explained[v]; !ok {
+				out = append(out, u.Field+": nothing says who holds "+v)
+			}
+		}
+	}
+	return out
 }
 
 // PresetReport renders the two lists.
@@ -136,6 +185,7 @@ func PresetReport(uses []ValueUse) string {
 		"  columns and two of them (bash 3.2, bash as sh) have no dialect here.\n")
 	for _, u := range unanimous {
 		fmt.Fprintf(&b, "  %-52s all four: %s\n", u.Field, u.Held["bash"])
+		b.WriteString(wrapNote(u.Why))
 	}
 	fmt.Fprintf(&b, "\naxes with a legal value no dialect holds (%d):\n", len(fictional))
 	b.WriteString("  a value nothing exhibits is a reading that may belong to no shell —\n" +
@@ -158,6 +208,48 @@ func PresetReport(uses []ValueUse) string {
 			marked = append(marked, v)
 		}
 		fmt.Fprintf(&b, "  %-52s %-30s unexhibited: %s\n", u.Field, u.Type, strings.Join(marked, ", "))
+		for _, v := range u.Unexhibited {
+			if why, ok := u.Explained[v]; ok {
+				b.WriteString(wrapNote(v + " — " + why))
+			}
+		}
+	}
+	untriaged := Untriaged(uses)
+	fmt.Fprintf(&b, "\nuntriaged (%d):\n", len(untriaged))
+	b.WriteString("  every entry above is one of four things, and only re-measuring the\n" +
+		"  panel tells them apart: a reading reached by a run-time mode rather\n" +
+		"  than a preset, a value the type shares with a sibling axis that does\n" +
+		"  hold it, a reading the panel has that the axis is *read* rather than\n" +
+		"  asked for, or a fiction that should come out. The verdict goes in the\n" +
+		"  field's own comment — `unexhibited NAME: who holds it` — so the next\n" +
+		"  sweep reports it rather than re-opening it. These have no verdict:\n")
+	for _, line := range untriaged {
+		fmt.Fprintf(&b, "  %s\n", line)
+	}
+	return b.String()
+}
+
+// wrapNote prints a triage verdict under the entry it answers, folded to
+// something a terminal can read.
+func wrapNote(s string) string {
+	if s == "" {
+		return ""
+	}
+	const width = 68
+	var b strings.Builder
+	line := ""
+	for _, word := range strings.Fields(s) {
+		if line != "" && len(line)+1+len(word) > width {
+			fmt.Fprintf(&b, "      %s\n", line)
+			line = ""
+		}
+		if line != "" {
+			line += " "
+		}
+		line += word
+	}
+	if line != "" {
+		fmt.Fprintf(&b, "      %s\n", line)
 	}
 	return b.String()
 }

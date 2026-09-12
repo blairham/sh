@@ -12924,6 +12924,99 @@ four presets and its other value is held by none of them, and it is
 nonetheless real — zsh reaches it through the `localtraps` option at run
 time. Both lists are things to re-measure, exactly like the unpinned list.
 
+### What the triage found, and where a verdict lives
+
+The first run of `-presets` reported 2 axes every dialect answers alike
+and 25 holding a legal value no dialect holds. **Neither number is the
+number to drive to zero, and that is the finding.** Both lists measure
+the *shape* of the vector rather than the state of the work:
+
+- an axis whose other answer is reached by a run-time option is
+  permanently a value no preset holds, because a preset is not the whole
+  of a dialect; and
+- a type shared by several axes — one enumeration so that two questions
+  are asked in the same words — permanently has values each single axis
+  does not hold.
+
+So counting entries counts the design. What counts the work is how many
+entries **nobody has re-measured**, and the two used to be spelled
+identically. They no longer are: a verdict is a line in the field's own
+doc comment, `unexhibited SomeValue: who holds it, and what measured
+that`, or `unanimous: why the axis records something even so`, and the
+sweep reads them back and reports what is left. `-presets` exits nonzero
+while anything is untriaged, on the same rule as the corpus half: the
+instrument exits nonzero when it has found something.
+
+It is **not** wired into `make check`. A brand-new axis legitimately has
+no verdict yet — the measurement is the work — and a gate that failed
+every commit adding one would buy tidiness with the thing the axis is
+for.
+
+Triaging all 25 — the two unanimous entries are axes that appear on
+both lists — separated four kinds (2026-09-12, panel as above):
+
+1. **Reached by a run-time mode, not a preset.** Four, including all
+   three of the strong form — the values no axis of that type holds
+   anywhere. `TrapsGoBackAtTheReturn` is zsh under `setopt localtraps`;
+   `ForNameEndsTheScriptAsASyntaxError` and
+   `FuncNameEndsTheScriptAsASyntaxError` are bash in POSIX mode, moved by
+   `Runner.SetPosixMode`; and `BareSubscriptIsASubscript` answers `No`
+   under zsh's `ksharrays`. All four are real and none can ever appear in
+   a preset.
+2. **A value the type shares with a sibling axis.** Fifteen of the 25,
+   and every one of them was traced to the sibling that does hold it:
+   the four `DeclarationListingForm` fields, the four
+   `ListingQuotingStyle` fields, the three `NameOperands` fields, both
+   `Printf…EscapePolicy` pairs, `ScalarUnderATableDeclaration` against
+   its array twin, and `BareTypesetListing` against `BareLocalListing`.
+   The shared vocabulary is deliberate and the unheld value is what
+   makes the two fields worth separating.
+3. **A reading the panel has, at an axis that is *read* rather than
+   asked.** `ArithSubscriptSkippedWhenNameUnset`,
+   `PrintfOutputPrecedesComplaint` and `SetArrayLetter` are consulted as
+   `== Yes`, so `No` and silence reach the same code. The majority
+   reading is measured and recorded on the field; writing `No` into
+   those presets would add a line and no fact, and for `set -A` it would
+   replace a shell's own `invalid option` with a dialect's complaint.
+4. **The other side of a binary `Answer` that nothing in the panel
+   holds.** `SplitCommandSubstitution`,
+   `TransformLetterCheckedOnlyWhenValued` and
+   `ImmovableOptionsSetAtInvocation` — the first because all six columns
+   answer alike, the other two because one column has the construct at
+   all and the rest never reach the question. The value stays because it
+   is the other side of a question a dialect has to be able to answer:
+   `No` is the null hypothesis these axes exist to make the odd shell
+   argue against, and deleting it would leave the odd answer looking
+   like the rule.
+
+**Nothing was deleted.** The fiction the fourth kind was supposed to
+catch — a value belonging to no shell — did not turn up once; what
+looked like one was always a mode, a sibling, or the null hypothesis of
+a one-sided question. That is a result about the vector and not a
+formality: #2029 was real, and the same shape did not repeat.
+
+Three things came out of re-measuring that the lists themselves did not
+say:
+
+- **bash in POSIX mode writes `export V="1"` where the default writes
+  `declare -x V="1"`.** `export -p`, `readonly -p` and both bare forms
+  move; `declare -p` does not. It is the mode and not the build — `set
+  +o posix` puts the clustered form back on 5.3.15 and 3.2.57 alike — so
+  three more axes belong in `SetPosixMode`, which moves four today and
+  none of these. Filed as #2154.
+- **`read ?` was a contaminated probe, and this document's field comment
+  cited it.** A leading `?` argument is a *prompt* in zsh, so the value
+  lands in `REPLY` and the word never stood where a name belongs. Worse,
+  an unquoted `?` is a glob there and fails as `no matches found` before
+  any builtin sees it — which makes every unquoted probe of the
+  name-operand axes a measurement of globbing. `read 'a-b'` against
+  `read '1'` is what discriminates.
+- **`UnsetNameOperands` splits bash 5 from bash 3.2**: 5.3.15 takes
+  `unset '?'`, `'-'`, `'1'` and `'12'` and 3.2.57 refuses all four. The
+  preset holds bash 5's reading, which is right, and the older column is
+  `PlainNamesOnly` — the exact trap the report's own header warns about,
+  found by looking.
+
 ### A flip to `Unspecified` asks a different question
 
 Moving a specified axis to `Unspecified` makes the shell refuse wherever

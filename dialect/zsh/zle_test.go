@@ -183,6 +183,129 @@ func TestALetterThisShellHasNotGotSaysSo(t *testing.T) {
 	}
 }
 
+// Two operation letters is a refusal, where this shell used to take whichever
+// its `switch` reached first and do it in silence.
+//
+// Measured 2026-09-12 against zsh 5.9.2. The wording is one sentence for every
+// pair and never names the letters, so the assertion is on the whole of what
+// came back rather than on a substring.
+//
+// The last two rows are the ones that say *where* in the parse this happens.
+// `zle -ND` with nothing after it answers this rather than `not enough
+// arguments for -N`, so it is before the operands are counted; `zle -N -D w`
+// answers it with the pair split over two words, so it is about the letters
+// and not about one word of them. #1648.
+func TestTwoOperationLettersAreRefused(t *testing.T) {
+	const want = "zsh:zle:1: incompatible operation selection options\n"
+	for _, src := range []string{
+		"zle -ND w",
+		"zle -NA a b",
+		"zle -Dl",
+		"zle -NC w complete-word f",
+		"zle -NF 8 h",
+		"zle -lD",
+		"zle -AN a b",
+		"zle -ND",
+		"zle -N -D w",
+	} {
+		out, st := runZsh(t, t.TempDir(), src+"\n")
+		if out != want || st != 1 {
+			t.Errorf("%s = %q status %d, want %q at 1", src, out, st, want)
+		}
+	}
+}
+
+// And the three checks are in the order zsh answers them in.
+//
+// A letter this builtin does not have at all wins over the pair — measured,
+// `zle -Nx w` and `zle -xN w` are both `bad option: -x` — and the pair wins
+// over a letter this shell has not built, which is this shell's own stage and
+// is why the order had to be chosen rather than fallen into. `zle -Nf w` is
+// two operations to zsh and would be `-f is not implemented yet` here if the
+// letters were not all read before either question is asked.
+func TestTheThreeRefusalsComeInTheOrderZshAnswersThemIn(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{"zle -Nx w", "zsh:zle:1: bad option: -x\n"},
+		{"zle -xN w", "zsh:zle:1: bad option: -x\n"},
+		{"zle -Nf w", "zsh:zle:1: incompatible operation selection options\n"},
+		{"zle -f w", "zsh:zle:1: -f is not implemented yet\n"},
+	} {
+		out, st := runZsh(t, t.TempDir(), c.src+"\n")
+		if out != c.want || st != 1 {
+			t.Errorf("%s = %q status %d, want %q at 1", c.src, out, st, c.want)
+		}
+	}
+}
+
+// A repeated letter is one operation and not two, and a modifier is not an
+// operation at all.
+//
+// The counter-case to the test above, and what stops it being a rule that
+// refuses everything with two letters in it. Every row here is status 0 in
+// zsh 5.9.2, measured the same day: `-NN` and `-N -N` define a widget, and
+// `-a`, `-w` and `-L` sit beside an operation without being one.
+func TestARepeatedLetterAndAModifierAreNotASecondOperation(t *testing.T) {
+	for _, src := range []string{
+		"zle -NN w",
+		"zle -N -N w",
+		"zle -aC w complete-word f",
+		"zle -C -w w complete-word f",
+		"zle -NL w f",
+		"zle -Naw w f",
+		"zle -NwaL w f",
+	} {
+		out, st := runZsh(t, t.TempDir(), src+"\n")
+		if out != "" || st != 0 {
+			t.Errorf("%s = %q status %d, want silence at 0", src, out, st)
+		}
+	}
+}
+
+// A widget function is called with nothing at all.
+//
+// Measured 2026-09-12 through a pseudo-terminal against zsh 5.9.2, a key bound
+// to each of the three kinds — a `-N` widget naming another function, a `-N`
+// widget backed by a function of its own name, and a `-C` completion widget —
+// with `$#` reported from inside. All three are 0. This shell passed the
+// widget's name as `$1` until #1649, so a function that did `shift` or tested
+// `$#` behaved differently here.
+//
+// `$#` and not `$WIDGET` is the discriminating probe: the name is available
+// either way, and reading it back proves nothing about how it got there. The
+// name is asserted alongside because it is what a wrapper shared between
+// bindings is supposed to read instead.
+func TestAWidgetFunctionIsCalledWithNoArguments(t *testing.T) {
+	for _, c := range []struct{ name, src, widget string }{
+		{
+			"a widget naming another function",
+			"nf() { print -r -- \"argc=$# args=[$*] widget=$WIDGET\"; }\nzle -N nnn nf\n",
+			"nnn",
+		},
+		{
+			"a widget backed by a function of its own name",
+			"same() { print -r -- \"argc=$# args=[$*] widget=$WIDGET\"; }\nzle -N same\n",
+			"same",
+		},
+		{
+			"a completion widget",
+			"cf() { print -r -- \"argc=$# args=[$*] widget=$WIDGET\"; }\nzle -C ccc complete-word cf\n",
+			"ccc",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r, out := zleRunner(t, c.src)
+			_, ok, printed := runWidget(t, r, out, c.widget, repl.Line{Buffer: "abc", Cursor: 3})
+			if !ok {
+				t.Fatal("the widget did not run")
+			}
+			want := "argc=0 args=[] widget=" + c.widget + "\n"
+			if printed != want {
+				t.Errorf("the widget saw %q, want %q", printed, want)
+			}
+		})
+	}
+}
+
 // `-D` takes several, and a name nothing answers to costs the status rather
 // than the rest of the list.
 func TestDeletingWidgets(t *testing.T) {

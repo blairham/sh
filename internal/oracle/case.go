@@ -16462,6 +16462,26 @@ echo "st=$?"`,
 		Why:     "one table and not two: `-A` copies a completion widget completer and all, rather than quietly returning an ordinary one; `-D` removes one out of the middle and leaves the rest; the two kinds sort together into one listing; and redefining across the kinds replaces the whole definition rather than merging it, so `-N` over a `-C` leaves no trace of the completer",
 	},
 	{
+		ID: "zle/two-operation-letters-are-refused", Category: "builtins",
+		Snippet: `f() { :; }; zle -ND w; echo "nd=$?"; zle -NA a b; echo "na=$?"; zle -Dl; echo "dl=$?"; zle -N -D w; echo "split=$?"; zle -ND; echo "noargs=$?"; zle -l`,
+		Why:     "the letters that choose what this builtin does are mutually exclusive, and two of them is one sentence at 1 that never names either. `zle -ND` with nothing after it says it rather than `not enough arguments for -N`, so the check is before the operands are counted, and the pair split over two words says it too, so it is about the letters and not about one word of them. The listing at the end is the half that matters: a shell that took whichever operation it reached first would define a widget here in silence, from a line that also asked for a deletion",
+	},
+	{
+		ID: "zle/a-repeated-operation-letter-is-one-operation", Category: "builtins",
+		Snippet: `f() { :; }; zle -NN w f; echo "nn=$?"; zle -N -N x f; echo "split=$?"; zle -DD w; echo "dd=$?"; zle -l`,
+		Why:     "the counter-case that stops the rule above being \"two letters is a refusal\": it is the *set* of operations that has to hold one member, so a letter written twice still defines a widget, and `-DD` gets as far as complaining about the widget rather than about the pair. A shell counting letters instead of distinct ones would refuse all three",
+	},
+	{
+		ID: "zle/an-unknown-letter-wins-over-an-incompatible-pair", Category: "builtins",
+		Snippet: `zle -Nx w; echo "after=$?"; zle -xN w; echo "before=$?"; zle -Nf w; echo "twoops=$?"`,
+		Why:     "which refusal comes out when a line has earned two. A letter this builtin does not have at all is answered where it is read — `bad option: -x` whichever side of the operation it is written on — and the pair is answered once every letter has been read, which is what puts `-Nf` on the other wording. The order is the whole reason the letters cannot be acted on one at a time",
+	},
+	{
+		ID: "zle/modifiers-sit-beside-an-operation", Category: "builtins",
+		Snippet: `f() { :; }; zle -aC a complete-word f; echo "ac=$?"; zle -C -w b complete-word f; echo "cw=$?"; zle -NL c f; echo "nl=$?"; zle -NwaL d f; echo "many=$?"; zle -l`,
+		Why:     "`-a`, `-w`, `-G` and `-L` are modifiers rather than operations, so any number of them is welcome alongside one — measured a letter at a time by pairing every letter this builtin has with `-N`, which is what separated the two sets. Without this row the exclusivity above would read as a rule about how many letters a line may carry, and a shell that implemented it that way would refuse the completion loader's own `zle -aC`",
+	},
+	{
 		ID: "zle/a-minus-then-a-digit-is-an-operand", Category: "builtins",
 		Snippet: `zle -0; echo "st=$?"; zle -5 x; echo "two=$?"`,
 		Why:     "where option parsing stops: a word of `-` and then a digit is an operand, so `zle -0` is an attempt to *call* a widget of that name and says `widgets can only be called when ZLE is active` rather than `bad option`. It is the rule underneath `zle -F -3` reaching the descriptor parser at all",

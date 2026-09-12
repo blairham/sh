@@ -101,8 +101,28 @@ import (
 //   - **`$WIDGET` is the widget the editor ran, and it does not change for a
 //     widget invoked from inside it**: `zle b` from `a` leaves `$WIDGET` as
 //     `a` inside `b`.
-//   - **The wordings.** `bad option: -x`, `not enough arguments for -N`, `too
-//     many arguments for -N`, "no such widget `name'" — this builtin's
+//   - **A widget function is called with no arguments at all**, which is what
+//     makes `$WIDGET` the answer to "which binding ran me" rather than a
+//     convenience. Measured through a pseudo-terminal with a key bound to each
+//     of the three kinds — `zle -N nnn nf`, `zle -N same` backed by a function
+//     of its own name, and `zle -C ccc complete-word cf` — `$#` is 0 in every
+//     one. The descriptor callback is the exception and is measured the same
+//     way: `zle -F 8 h` and `zle -F -w 7 h` both hand the function the
+//     descriptor as `$1`. See RunWidget and zlewatch.go. #1649.
+//   - **At most one operation letter.** `-f -l -A -C -D -F -I -K -M -N -R -T
+//     -U` each choose what this builtin does, and two of them together is
+//     `incompatible operation selection options` at status 1 — before the
+//     operands are counted, so `zle -ND` with nothing after it says that
+//     rather than `not enough arguments`. Repetition is not two: `zle -NN w`
+//     defines a widget. `-a -c -g -m -r -w -G -L` are modifiers and stay
+//     welcome alongside an operation, which is measured rather than assumed:
+//     `zle -aC w complete-word f`, `zle -C -w w complete-word f` and
+//     `zle -NL w f` are all status 0. This shell took whichever operation its
+//     `switch` reached first, in silence, until #1648 — a wrong answer with
+//     nothing said, which is the class this file exists to avoid.
+//   - **The wordings.** `bad option: -x`, `incompatible operation selection
+//     options`, `not enough arguments for -N`, `too many arguments for -N`,
+//     "no such widget `name'" — this builtin's
 //     `bad option` is bindkey's and zmodload's and not zstyle's `invalid
 //     option`, and its usage complaints name the letter that was short, which
 //     zstyle's do not. `zle` with no arguments at all is status 1 and no
@@ -278,6 +298,18 @@ func registerZle(r *interp.Runner) {
 const (
 	zleLetters            = "acfglmrwACDFGIKLMNRTU"
 	zleLettersImplemented = "aACDFLNlw"
+	// zleOperationLetters are the letters that choose what this builtin
+	// *does*. At most one may be given, and two is a refusal rather than a
+	// preference — see zleBuiltin.
+	//
+	// Measured 2026-09-12 against zsh 5.9.2 by pairing every letter in
+	// zleLetters with `-N`: `f l A C D F I K M N R T U` each answered
+	// `incompatible operation selection options`, and `a c g m r w G L` each
+	// went through as a modifier. So the split is measured across the whole
+	// alphabet this builtin has rather than read off the six operations this
+	// shell happens to implement, and a letter promoted out of
+	// zleLettersImplemented later is already on the right side of it.
+	zleOperationLetters = "flACDFIKMNRTU"
 )
 
 // zleOpts is what the letters asked for.
@@ -296,6 +328,10 @@ type zleOpts struct {
 func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	var opts zleOpts
 	rest := args
+	// Every letter first, then the questions that are about the whole of what
+	// was asked for. The order is measured rather than convenient — see the
+	// three checks below, each of which zsh answers at a different point.
+	var letters []rune
 	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") && rest[0] != "-" {
 		if rest[0] == "--" {
 			rest = rest[1:]
@@ -312,19 +348,40 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 			break
 		}
 		for _, letter := range rest[0][1:] {
+			// A letter this builtin does not have at all is refused where it
+			// is read, and it wins over everything below: measured, both
+			// `zle -Nx w` and `zle -xN w` are `bad option: -x` rather than a
+			// complaint about the pair.
 			if !strings.ContainsRune(zleLetters, letter) {
 				r.Diagnosef("bad option: -%c\n", letter)
 				return 1
 			}
-			if !strings.ContainsRune(zleLettersImplemented, letter) {
-				// A letter this shell has not got says so, rather than being
-				// accepted and doing nothing — see the file comment.
-				r.Diagnosef("-%c is not implemented yet\n", letter)
-				return 1
-			}
-			setZleLetter(&opts, letter)
+			letters = append(letters, letter)
 		}
 		rest = rest[1:]
+	}
+	if operationsAsked(letters) > 1 {
+		// Two operations is a refusal and not a preference. Measured: `zle
+		// -ND w`, `zle -NA a b`, `zle -Dl` and the same pair split over two
+		// words are all this wording at status 1, where this shell used to
+		// take whichever the switch below reached first and do it in silence
+		// — a widget defined by a line that asked for a deletion. #1648.
+		//
+		// Before the operands are counted, also measured: `zle -ND` with
+		// nothing after it says this rather than `not enough arguments`.
+		// After the bad-option check above and before the unimplemented one
+		// below, which is the whole reason the letters are collected first.
+		r.Diagnosef("incompatible operation selection options\n")
+		return 1
+	}
+	for _, letter := range letters {
+		if !strings.ContainsRune(zleLettersImplemented, letter) {
+			// A letter this shell has not got says so, rather than being
+			// accepted and doing nothing — see the file comment.
+			r.Diagnosef("-%c is not implemented yet\n", letter)
+			return 1
+		}
+		setZleLetter(&opts, letter)
 	}
 	switch {
 	case opts.define:
@@ -344,6 +401,22 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return 1
 	}
 	return callWidget(r, ctx, rest[0], rest[1:])
+}
+
+// operationsAsked is how many *distinct* operations the letters chose.
+//
+// Distinct, because a letter repeated is not two operations: measured, `zle
+// -NN w` and `zle -N -N w` both define a widget at status 0, where `zle -DD w`
+// gets as far as `no such widget` — so it is the set that has to hold one
+// member and not the count of letters given.
+func operationsAsked(letters []rune) int {
+	var seen []rune
+	for _, letter := range letters {
+		if strings.ContainsRune(zleOperationLetters, letter) && !slices.Contains(seen, letter) {
+			seen = append(seen, letter)
+		}
+	}
+	return len(seen)
 }
 
 func setZleLetter(opts *zleOpts, letter rune) {
@@ -676,10 +749,20 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 // the session, which is what `${(t)BUFFER}` reporting them `local` means from
 // the outside: a script that is not running a widget must find them unset.
 func RunWidget(r *interp.Runner, ctx context.Context, name string, in repl.Line) (repl.Line, bool) {
-	// The name the key was bound to is what the function is called with,
-	// which is the one thing a descriptor callback differs in — there the
-	// argument is the descriptor. See zlewatch.go.
-	return runWidgetFunction(r, ctx, name, in, name)
+	// A widget function is called with **nothing**, which is the one thing a
+	// descriptor callback differs in — there the single argument is the
+	// descriptor. See zlewatch.go.
+	//
+	// Measured 2026-09-12 through a pseudo-terminal against zsh 5.9.2, a key
+	// bound to each of the three kinds: `zle -N nnn nf`, `zle -N same` backed
+	// by a function of its own name, and `zle -C ccc complete-word cf` all
+	// report `$#` of 0 inside the function. The widget's own name is `$WIDGET`
+	// — which the same probe read back correctly — and that is how a wrapper
+	// shared between several bindings actually asks which one ran. This shell
+	// passed the name as `$1` until #1649, so a function that did `shift` or
+	// tested `$#`, or one shared with a non-widget caller that dispatches on
+	// `$1`, behaved differently here.
+	return runWidgetFunction(r, ctx, name, in)
 }
 
 // runWidgetFunction is the round trip itself, with what the function is called
@@ -689,8 +772,14 @@ func RunWidget(r *interp.Runner, ctx context.Context, name string, in repl.Line)
 // of them needs is the same: the widget table, the five parameters, the status
 // discipline and the deferred close. The second caller arrived with `zle -F -w`
 // and would have been written without the defer.
+//
+// The arguments are variadic because the two callers disagree about whether
+// there are any, which is measured on both sides: a widget the editor ran gets
+// none and a `-w` descriptor callback gets the descriptor. A signature that
+// took one string could only express the second, which is how the widget side
+// came to be handed its own name (#1649).
 func runWidgetFunction(
-	r *interp.Runner, ctx context.Context, name string, in repl.Line, arg string,
+	r *interp.Runner, ctx context.Context, name string, in repl.Line, args ...string,
 ) (repl.Line, bool) {
 	def, defined := widgetDefinitionOf(r, name)
 	if !defined || !r.HasFunction(def.function) {
@@ -716,7 +805,7 @@ func runWidgetFunction(
 	// what the last command left, and what the function leaves is not what the
 	// next command reads.
 	status := r.ExitStatus()
-	_, err := r.CallFunction(ctx, def.function, arg)
+	_, err := r.CallFunction(ctx, def.function, args...)
 	r.SetExitStatus(status)
 	if err != nil {
 		return in, false

@@ -1182,6 +1182,20 @@ type Semantics struct {
 	// any of them and still compile. An axis with three answers gets a type
 	// with three values; the binary ones keep the type that says so.
 	UnterminatedBracket BracketPolicy
+	// UnknownCharacterClass is what a bracket does with a `[:name:]` whose
+	// name this shell has never heard of — including the empty one, `[::]`,
+	// which every column answers the same way it answers a name.
+	//
+	// Three answers, and none of them is a variation on the others, so it is
+	// a policy type. Measured 2026-09-12 with `[a[:nope:]b]`:
+	//
+	//	bash 5.3, bash-as-sh, zsh, ash   a and b both match
+	//	dash                             a matches and b does not
+	//	ksh93                            neither matches
+	//
+	// The class is properly closed here, which is what makes this a question
+	// of its own rather than part of #1431's unterminated `[:`.
+	UnknownCharacterClass UnknownClassPolicy
 	// TraceAssignmentsSeparately gives each assignment of `a=1 b=2` its own
 	// trace line. True in bash and ksh93; dash and zsh put them on one.
 	TraceAssignmentsSeparately Answer
@@ -10188,6 +10202,73 @@ func (r *Runner) killListAcceptsName() Answer {
 	return a
 }
 
+// UnknownClassPolicy is what a bracket does with a character class whose name
+// the shell does not know — `[[:nope:]]`, and the empty `[[::]]` with it.
+//
+// Measured 2026-09-12 across the seven-column panel, with the discriminating
+// patterns rather than with one: a single `[[:nope:]]` answers "no match" in
+// every column and separates nobody, because there is no other member for the
+// unknown class to have an effect *on*.
+//
+//	pattern                  subject   bash 5.3  dash  ksh93  zsh  ash
+//	[a[:nope:]b]             a         Y         Y     n      Y    Y
+//	[a[:nope:]b]             b         Y         n     n      Y    Y
+//	[a[:upper:][:nope:]b]    A         Y         Y     n      Y    Y
+//	[[:nope:]a]              a         Y         n     n      Y    Y
+//	[!a[:nope:]b]            q         Y         n     n      Y    Y
+//
+// bash-as-sh answers with bash 5.3 and bash 3.2 answers with dash, which is
+// dated rather than a fourth reading.
+type UnknownClassPolicy int
+
+const (
+	// UnknownClassUnspecified is no answer, and is refused like any other.
+	UnknownClassUnspecified UnknownClassPolicy = iota
+	// UnknownClassIsInert leaves the rest of the bracket alone: the name
+	// holds nothing, every other member still counts, and a `!` still
+	// negates. bash, zsh and ash.
+	UnknownClassIsInert
+	// UnknownClassEndsTheScan stops the bracket where the name stands: a
+	// member written *before* it still matches and nothing after it does,
+	// and a negated bracket matches nothing at all. dash.
+	//
+	// The three follow from one implementation and are recorded as one
+	// value because no column has any two of them without the third: the
+	// scan answers yes the moment a member matches and gives up entirely
+	// when it reaches a name it cannot answer, so what survives is exactly
+	// what was decided before the name was reached — and a negation, which
+	// is decided after, does not survive.
+	UnknownClassEndsTheScan
+	// UnknownClassEmptiesTheBracket makes the whole bracket match nothing,
+	// wherever the name stands and whatever else is in it. ksh93.
+	UnknownClassEmptiesTheBracket
+)
+
+func (u UnknownClassPolicy) String() string {
+	switch u {
+	case UnknownClassIsInert:
+		return "inert"
+	case UnknownClassEndsTheScan:
+		return "ends the scan"
+	case UnknownClassEmptiesTheBracket:
+		return "empties the bracket"
+	}
+	return "unspecified"
+}
+
+// unknownCharacterClass resolves the axis, and only for a bracket that
+// actually holds a name this shell has not got.
+func (r *Runner) unknownCharacterClass() UnknownClassPolicy {
+	p := r.sem().UnknownCharacterClass
+	if p == UnknownClassUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("a character class this shell has not got")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
 // BracketPolicy is what an unterminated bracket expression means.
 type BracketPolicy int
 
@@ -10997,10 +11078,11 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		// serves — `case` and `[[ ]]` — and neither of the others: pathname
 		// expansion has a fold of its own, and parameter expansion stays
 		// exact. Which is why the fold sits here and not in patternOpts.
-		fold:    r.MatchOption(MatchFoldsCase),
-		chars:   r.patternCountsCharacters(pattern, s),
-		escapes: r.sem().PatternEscapeReaches,
-		classes: r.patternClasses(pattern),
+		fold:         r.MatchOption(MatchFoldsCase),
+		chars:        r.patternCountsCharacters(pattern, s),
+		escapes:      r.sem().PatternEscapeReaches,
+		classes:      r.patternClasses(pattern),
+		unknownClass: r.unknownClassPolicy(pattern),
 	}
 	// The status a rejected pattern exits with is the surface's, and the two
 	// this function serves do not agree: measured, `[[ x == (#Z)a ]]` exits 2

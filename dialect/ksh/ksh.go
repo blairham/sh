@@ -750,6 +750,7 @@ func Semantics() interp.Semantics {
 	// for `(( ))`, so the two constructs do not group.
 	s.ArithCommandErrorIsFatal = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
+	s.UnknownCharacterClass = interp.UnknownClassEmptiesTheBracket
 	// A value's backslash is **data**, and the metacharacter behind it stays
 	// live — this shell against the other five. Measured 2026-09-12 in a
 	// directory holding `a\b` and `a*`, `v='a\*'; set -- $v` matches `a\b`

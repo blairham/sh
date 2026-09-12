@@ -138,6 +138,17 @@ func TestTheAnswersThatSideWithBashRatherThanDash(t *testing.T) {
 	if !strings.Contains(out, "negates") {
 		t.Errorf("[^a] = %q, want it to negate", out)
 	}
+	// A sixth, measured 2026-09-12 in the container: a character class name
+	// this shell has not got is *inert* — bash's and zsh's answer — where
+	// dash stops the bracket's scan at it. `[a[:nope:]b]` matches `b` here
+	// and does not in dash (#2383).
+	if got, want := s.UnknownCharacterClass, interp.UnknownClassIsInert; got != want {
+		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
+	}
+	out, _ = run(t, `case b in [a[:nope:]b]) echo in ;; *) echo out ;; esac`)
+	if !strings.Contains(out, "in") {
+		t.Errorf("[a[:nope:]b] against b = %q, want the unknown name inert", out)
+	}
 }
 
 // TestDiagnosticsAreWordedThisShellsWay pins the two shapes that run through

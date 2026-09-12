@@ -1864,6 +1864,54 @@ named answers — the non-binary shape this section describes rather than
 another bool, and the subject of the section below on what writing it
 showed.
 
+### A class name the shell has not got
+
+A *closed* `[:name:]` whose name the shell does not recognize is a second
+axis over the same brackets, `UnknownCharacterClass`, and it took the same
+shape for the same reason: three answers, none a variation on the others.
+It is not the unterminated `[:` of #1431 — the syntax here is unambiguous
+and every column parses it identically. Measured 2026-09-12 across the
+seven columns:
+
+| pattern | subject | bash 5.3 | bash 3.2 | dash | ksh93 | zsh | ash |
+|---|---|---|---|---|---|---|---|
+| `[a[:nope:]b]` | `a` | Y | Y | Y | **n** | Y | Y |
+| `[a[:nope:]b]` | `b` | Y | **n** | **n** | **n** | Y | Y |
+| `[a[:upper:][:nope:]b]` | `A` | Y | Y | Y | **n** | Y | Y |
+| `[[:nope:]a]` | `a` | Y | n | **n** | **n** | Y | Y |
+| `[!a[:nope:]b]` | `q` | Y | Y | **n** | **n** | Y | Y |
+
+- **Inert** — bash 5.3, bash-as-sh, zsh, ash. The name holds no character,
+  every other member still counts, and `!` still negates.
+- **The scan stops there** — dash. A member written before the name still
+  matches, nothing after it does, and a negated bracket matches nothing at
+  all. Those three travel together because they are one implementation: the
+  scan answers yes the moment a member matches and gives up when it reaches
+  a name it cannot answer, so what survives is exactly what was decided
+  before the name was reached — and a negation, decided after, is not.
+- **The whole bracket matches nothing** — ksh93, wherever the name stands.
+  `[a[:upper:][:nope:]b]` misses `A` there, which is what separates it from
+  dash; `[a[:nope:]b]` alone does not.
+
+bash 3.2 answers with dash on the rows that separate the readings, and is
+dated rather than a fourth value.
+
+**The empty name is the same question.** `[a[::]b]` answers exactly as
+`[a[:nope:]b]` in every column, so "unknown" covers it.
+
+**A single-member probe finds none of this.** `[[:nope:]]` on its own is a
+miss in all seven — there is nothing for the unknown name to have an effect
+*on* — which is why it went unnoticed while every plausible test of an
+unknown class agreed everywhere. The discriminating patterns are the ones
+with a member beside the name, and the negated one.
+
+The rosters make it a question about the **pair** and not about a list of
+names: `[[:IDENT:]]` is a class in the shells that declare it and an unknown
+name in the rest, so the same pattern takes a different reading per dialect.
+`interp.classKnown` is the one place "has this shell got such a class" is
+asked, and it is deliberately separate from `inClass`, which asks whether a
+character is in one — only the first can be asked with no character to hand.
+
 A second candidate appeared and turned out to belong elsewhere: **the exit
 status of a syntax error** is 2 in dash and bash, 3 in ksh93 and 1 in zsh.
 That is a value, not a side, and it went to `Diagnostics` — a shell that

@@ -736,6 +736,7 @@ func Semantics() interp.Semantics {
 	s.PipefailSubstitutesTheBareSignal = interp.No
 	s.ErrexitSeesPipefailFailure = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
+	s.UnknownCharacterClass = interp.UnknownClassIsInert
 	// A backslash that arrived in a value takes the metacharacter status off
 	// what follows it and stays in the text itself: measured 2026-09-12 in a
 	// directory holding `a\b` and `a*`, `v='a\*'; set -- $v` is the word

@@ -1937,6 +1937,41 @@ type Dialect struct {
 	// is a daily-driver blocker rather than a corner (#1529).
 	NamelessParamExpansion bool
 
+	// ParamLengthOverASpecialNameIsFinal keeps the length reading of `${#-…}`
+	// and `${#?…}` when text is left over behind the name, instead of
+	// re-reading the `#` as the parameter `$#`.
+	//
+	// zsh alone. All six shells read a *bare* `${#-}` and `${#?}` as a length
+	// over the special name — which is measured rather than assumed, and it
+	// takes a probe where the two readings differ, since `$-` happens to be
+	// two characters in bash and ksh93 and `$#` was two in the run that filed
+	// this. With `set -- p q r`, so `$#` is 3:
+	//
+	//	probe        bash 5.3   dash   ksh93   zsh 5.9.2
+	//	${#-}        2          0      2       4          the length of `$-`
+	//	${#?}        1          1      1       1          the length of `$?`
+	//	${#-w}       3          3      3       bad substitution
+	//	${#?w}       3          3      3       bad substitution
+	//	${#-:-x}     3          3      3       4
+	//	${#?:-x}     3          3      3       1
+	//
+	// So the divergence is not which reading is *reached* — every shell reads
+	// the `-` as a name — but what happens when that reading cannot use the
+	// whole expansion. Five of them fall back and take the `#` as the
+	// parameter, so `-w` and `?:-x` become an operator on `$#` and answer 3;
+	// zsh keeps the name and either applies a real operator to it (`${#-:-x}`
+	// is the length of `${-:-x}`, which is `$-`, so 4) or refuses the stray
+	// word.
+	//
+	// **It is `-` and `?` and no other special name**, which is what makes it
+	// a rule about operators rather than about specials: `${#$w}` and
+	// `${#!w}` are bad substitutions in all six, because `$` and `!` are not
+	// operators and there is no second reading to fall back to. That is the
+	// same test the `%`, `/` and `#` rows in hashIsTheParameter already make
+	// — an operator with an operand takes the `#` — and these two were the
+	// entries missing from it because they can begin a name as well (#1242).
+	ParamLengthOverASpecialNameIsFinal bool
+
 	// BareBraceNestsInExpansion makes an unquoted `{` inside `${…}` open a
 	// nesting level, so the expansion ends at the brace that *balances* it
 	// rather than at the first `}`.

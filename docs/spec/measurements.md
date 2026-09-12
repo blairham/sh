@@ -660,6 +660,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `length/a-hash-with-a-trim-a-replacement-and-a-substring` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][][X][2]` | `[][][X][2]` | `[][][X][2]` | `[][][X][2]` | `[][][X][2]` | `[][][X][2]` |
 | `length/a-hash-then-a-name-is-a-length` | `[1][1][0][0]` | `[1][1][0][0]` | `[1][1][0][0]` | `[1][1][0][0]` | `[1][1][0][0]` | `[1][1][0][0]` | `[1][1][0][0]` |
 | `length/a-hash-then-a-name-and-a-word` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` | **2>** `<shell>:1: bad substitution` *(status 1)* | `[2]` |
+| `length/a-hash-then-a-name-and-a-word-with-a-count-nothing-matches` | `[][5]` | `[hBc][5]` | `[hBc][5]` | `[hBc][5]` | `[chsB][5]` | **2>** `<shell>:1: bad substitution` *(status 1)* | `[c][5]` |
+| `length/a-hash-then-a-question-and-a-word` | `[5]` | `[5]` | `[5]` | `[5]` | `[5]` | **2>** `<shell>:1: bad substitution` *(status 1)* | `[5]` |
+| `length/a-bare-hash-then-a-name` | `[][0][1]` | `[hBc][3][1]` | `[hBc][3][1]` | `[hBc][3][1]` | `[chsB][4][1]` | `[569X][4][1]` | `[c][1][1]` |
+| `length/a-hash-then-a-name-and-an-operator` | `[5]` | `[5]` | `[5]` | `[5]` | `[5]` | `[4]` | `[5]` |
+| `length/a-hash-then-a-special-that-is-not-an-operator` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${#$w}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${#$w}: bad substitution` *(status 127)* | **2>** `<shell>: ${#$w}: bad substitution` *(status 1)* | **2>** `<shell>: "${#$w}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
 | `param/an-ampersand-in-a-replacement` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a[b]c][a[b]c][a[&]c]` | `[a[b]c][a[b]c][a[&]c]` | `[a[&]c][a[&]c][a[\&]c]` | `[a[&]c][a[&]c][a[&]c]` | `[a[&]c][a[&]c][a[\&]c]` | `[a[&]c][a[&]c][a[&]c]` |
 | `param/the-replacement-ampersand-is-the-span-the-pattern-took` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a<XbX>c][<a><b>c<a><b>c][<a>bcabc][abcab<c>]` | `[a<XbX>c][<a><b>c<a><b>c][<a>bcabc][abcab<c>]` | `[a<&>c][<&><&>c<&><&>c][<&>bcabc][abcab<&>]` | `[a<&>c][<&><&>c<&><&>c][<&>bcabc][abcab<&>]` | `[a<&>c][<&><&>c<&><&>c][<&>bcabc][abcab<&>]` | `[a<&>c][<&><&>c<&><&>c][abcabc][abcabc]` |
 | `param/quoting-a-replacement-ampersand` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a&c][abc][a&c]` | `[a&c][abc][a&c]` | `[a&c][a&c][a&c]` | `[a&c][a&c][a&c]` | `[a&c][a&c][a&c]` | `[a&c][a&c][a&c]` |
@@ -2192,9 +2197,29 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf '[%s]' "${##}" "${#?}" "${#@}" "${#*}"; echo
   ```
-- `length/a-hash-then-a-name-and-a-word` — where the panel parts, and it parts on the *parse* rather than on a value: five shells read the `#` as the parameter and answer `$#`, and zsh reads a length over `$-` with a stray `w` after it and refuses. This implementation refuses with zsh — taking the five-shell side would replace one shell's loud refusal with a plausible number, which is the trade the spec entry names as open
+- `length/a-hash-then-a-name-and-a-word` — where the panel parts, and it parts on the *parse* rather than on a value: five shells read the `#` as the parameter and answer `$#`, and zsh reads a length over `$-` with a stray `w` after it and refuses. Each side is now its own dialect's answer (#1242). The `2` is the parameter and not a coincidence — `$-` is three characters in bash under `-c` and four in ksh93 — but only just, and the rows below set a count that no column's option letters can equal
   ```sh
   set -- p q; printf '[%s]' "${#-w}"; echo
+  ```
+- `length/a-hash-then-a-name-and-a-word-with-a-count-nothing-matches` — the same probe with the two readings forced apart, and with the evidence in the row: `$#` is 5 and no column's `$-` is five characters — 0 in dash, 3 in the bash family, 4 in ksh93 and zsh, 1 in ash — so a `5` can only be the parameter. The issue that filed this measured `${#-}` from a script file with two parameters, where `$-` is also two characters in bash and ksh93; that reading could not have detected a divergence in either column
+  ```sh
+  set -- p q r s t; printf '[%s][%s]' "$-" "${#-w}"; echo
+  ```
+- `length/a-hash-then-a-question-and-a-word` — the other special name that is also an operator, and it moves with the first: five shells read `$#` with `?w` applied and answer 5, zsh keeps the length over `$?` and refuses the stray `w`. Worth its own row because `?` and `-` reach the decision by different characters, and a fix naming one of them would leave the other
+  ```sh
+  set -- p q r s t; printf '[%s]' "${#?w}"; echo
+  ```
+- `length/a-bare-hash-then-a-name` — the control that says the divergence is about the text *left over* and not about the name. With nothing behind it, `-` and `?` are the name in all seven: no column answers 5, the second cell is the length of the first, and the third is the length of `$?`. Printing `$-` beside it is what makes the row self-checking, since the number it should equal differs by shell
+  ```sh
+  set -- p q r s t; printf '[%s][%s][%s]' "$-" "${#-}" "${#?}"; echo
+  ```
+- `length/a-hash-then-a-name-and-an-operator` — and the leftover need not be a stray. Five shells fall back to the parameter and read `-:-x` as an operator on `$#`, answering 5; zsh keeps the name and applies the `:-` to `$-`, which is set, so it answers the length of `$-` instead. Both readings are well-formed here, which is what rules out `is the rest a valid word` as the rule
+  ```sh
+  set -- p q r s t; printf '[%s]' "${#-:-x}"; echo
+  ```
+- `length/a-hash-then-a-special-that-is-not-an-operator` — the boundary. `$` is a special name and is not an operator, so there is no second reading to fall back to and all seven refuse — which is what makes the rows above a rule about operators rather than about special names. `${#!w}` behaves the same way for the same reason
+  ```sh
+  set -- p q r s t; printf '[%s]' "${#$w}"; echo after
   ```
 - `param/an-ampersand-in-a-replacement` — whether an unescaped `&` in a pattern substitution's replacement is the text the pattern matched. bash 5.3 and that build as `sh` read it -- `a[b]c` for the first two -- and nothing else in the panel does, so it is a run-time option (`shopt patsub_replacement`, on with nothing said there) rather than an axis. The third field is the escape half, and it divides the four columns that do not read the `&` as well: bash 3.2 and zsh keep the backslash and ksh93 removes it, which is why a fix that only added the reading would still owe that column an answer. bash 3.2 has neither the behavior nor the option name. dash has no operator and refuses the line (#1862)
   ```sh

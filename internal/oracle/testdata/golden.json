@@ -177103,6 +177103,159 @@
         "TimedOut": false
       }
     },
+    "xtrace/a-pattern-metacharacter-is-quoted": {
+      "ash": {
+        "Stdout": "[1] a*b a?b {a,b}",
+        "Stderr": "+ echo '[1]' 'a*b' 'a?b' '{a,b}'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[1] a*b a?b {a,b}",
+        "Stderr": "+ echo '[1]' 'a*b' 'a?b' '{a,b}'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1] a*b a?b {a,b}",
+        "Stderr": "+ echo '[1]' 'a*b' 'a?b' '{a,b}'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[1] a*b a?b {a,b}",
+        "Stderr": "+ echo '[1]' 'a*b' 'a?b' '{a,b}'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[1] a*b a?b {a,b}",
+        "Stderr": "+ echo [1] a*b a?b {a,b}",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1] a*b a?b {a,b}",
+        "Stderr": "+ echo '[1]' 'a*b' 'a?b' '{a,b}'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1] a*b a?b {a,b}",
+        "Stderr": "+\u003cshell\u003e:1\u003e echo '[1]' 'a*b' 'a?b' '{a,b}'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/a-tilde-or-hash-is-quoted-by-position": {
+      "ash": {
+        "Stdout": "~a a~b #a a#b",
+        "Stderr": "+ echo '~a' 'a~b' '#a' 'a#b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "~a a~b #a a#b",
+        "Stderr": "+ echo '~a' a~b '#a' a#b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "~a a~b #a a#b",
+        "Stderr": "+ echo '~a' a~b '#a' a#b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "~a a~b #a a#b",
+        "Stderr": "+ echo '~a' a~b '#a' a#b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "~a a~b #a a#b",
+        "Stderr": "+ echo ~a a~b #a a#b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "~a a~b #a a#b",
+        "Stderr": "+ echo '~a' 'a~b' '#a' 'a#b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "~a a~b #a a#b",
+        "Stderr": "+\u003cshell\u003e:1\u003e echo '~a' 'a~b' '#a' 'a#b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/an-interior-closing-bracket-is-not-the-closer": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "+ '[' -n ] ]~+ '[' 1 -lt 2 x~\u003cshell\u003e: missing ]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ '[' -n ']' ']'~+ '[' 1 -lt 2 x~\u003cshell\u003e: line 1: [: missing `]'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ '[' -n ']' ']'~+ '[' 1 -lt 2 x~\u003cshell\u003e: line 1: [: missing `]'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ '[' -n ']' ']'~+ '[' 1 -lt 2 x~\u003cshell\u003e: line 0: [: missing `]'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ [ -n ] ]~+ [ 1 -lt 2 x~\u003cshell\u003e: 1: [: missing ]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ [ -n ']' ]~+ [ 1 -lt 2 x~\u003cshell\u003e: [: ']' missing",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e [ -n ']' ']'~+\u003cshell\u003e:1\u003e [ 1 -lt 2 x~\u003cshell\u003e:[:1: ']' expected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "xtrace/append-assignment-keeps-its-operator": {
       "ash": {
         "Stdout": "",
@@ -179342,6 +179495,108 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "+\u003cshell\u003e:1\u003e :~+\u003cshell\u003e:1\u003e :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/the-brackets-of-a-test-are-exempt": {
+      "ash": {
+        "Stdout": "] [ a[b",
+        "Stderr": "+ '[' 1 -lt 2 ]~+ echo ] '[' 'a[b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "] [ a[b",
+        "Stderr": "+ '[' 1 -lt 2 ']'~+ echo ']' '[' 'a[b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "] [ a[b",
+        "Stderr": "+ '[' 1 -lt 2 ']'~+ echo ']' '[' 'a[b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "] [ a[b",
+        "Stderr": "+ '[' 1 -lt 2 ']'~+ echo ']' '[' 'a[b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "] [ a[b",
+        "Stderr": "+ [ 1 -lt 2 ]~+ echo ] [ a[b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "] [ a[b",
+        "Stderr": "+ [ 1 -lt 2 ]~+ echo ']' '[' 'a[b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "] [ a[b",
+        "Stderr": "+\u003cshell\u003e:1\u003e [ 1 -lt 2 ']'~+\u003cshell\u003e:1\u003e echo ']' '[' 'a[b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/the-caret-bang-and-equals-split-three-ways": {
+      "ash": {
+        "Stdout": "^ab !ab =ab ab= a=b",
+        "Stderr": "+ echo ^ab '!ab' '=ab' 'ab=' 'a=b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "^ab !ab =ab ab= a=b",
+        "Stderr": "+ echo '^ab' '!ab' =ab ab= a=b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "^ab !ab =ab ab= a=b",
+        "Stderr": "+ echo '^ab' '!ab' =ab ab= a=b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "^ab !ab =ab ab= a=b",
+        "Stderr": "+ echo '^ab' '!ab' =ab ab= a=b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "^ab !ab =ab ab= a=b",
+        "Stderr": "+ echo ^ab !ab =ab ab= a=b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "^ab !ab =ab ab= a=b",
+        "Stderr": "+ echo ^ab !ab '=ab' ab= a=b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "^ab !ab =ab ab= a=b",
+        "Stderr": "+\u003cshell\u003e:1\u003e echo '^ab' !ab '=ab' 'ab=' 'a=b'",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

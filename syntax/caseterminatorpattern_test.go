@@ -7,7 +7,7 @@ import "testing"
 
 func withEsacAsAPattern() Dialect {
 	d := Core()
-	d.CaseTerminatorIsAPatternAfterIn = true
+	d.CaseTerminatorIsAPatternAfterTheHeader = true
 	return d
 }
 

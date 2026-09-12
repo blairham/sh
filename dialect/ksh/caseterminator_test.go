@@ -18,8 +18,8 @@ import (
 //
 //	$ ksh s.sh          # case esac in esac) echo hit;; esac
 //	hit
-func TestTheCaseTerminatorIsAPatternAfterInHere(t *testing.T) {
-	if !ksh.Dialect().CaseTerminatorIsAPatternAfterIn {
+func TestTheCaseTerminatorIsAPatternAfterTheHeaderHere(t *testing.T) {
+	if !ksh.Dialect().CaseTerminatorIsAPatternAfterTheHeader {
 		t.Error("ksh93 reads the word after `in` as a pattern")
 	}
 	out, st, err := preset.Combined(t, dialecttest.Base{}, "case esac in esac) echo hit;; esac")

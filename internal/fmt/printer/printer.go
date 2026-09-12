@@ -1085,6 +1085,42 @@ func (p *printer) forArith(x *syntax.ForArithClause) {
 	p.b.WriteString("done")
 }
 
+// caseSpelling is the pair of words the author opened and closed a `case`
+// with. One dialect writes `case x { … }` beside `case x in … esac`, and the
+// two halves are independent there — `case x { … esac` and `case x in … }`
+// both run — so each is read from the source on its own.
+//
+// The tree cannot say: a brace-spelled `case` parses to exactly the
+// CaseClause the keyword spelling parses to, which is the same reason
+// [printer.shortForm] exists and is why [syntax.Style.BraceShortForm] is what
+// decides whether to look.
+//
+// A comment in the header makes the brace spelling unwritable, because a
+// one-line reprint would put the `{` after a `#`. The keyword layout is the
+// fallback and is correct for every input — just not the author's.
+func (p *printer) caseSpelling(x *syntax.CaseClause) (opener, closer string) {
+	opener, closer = "in", "esac"
+	if p.style.BraceShortForm != syntax.PreserveShortForm {
+		return opener, closer
+	}
+	from := int(x.Word.End().Offset)
+	for i := from; i < len(p.src); i++ {
+		switch p.src[i] {
+		case ' ', '\t', '\n', '\r':
+			continue
+		case '{':
+			if !p.commentIn(from, i) {
+				opener = "{"
+			}
+		}
+		break
+	}
+	if to := int(x.Stop.Offset); to > 0 && to <= len(p.src) && p.src[to-1] == '}' {
+		closer = "}"
+	}
+	return opener, closer
+}
+
 func (p *printer) caseClause(x *syntax.CaseClause) {
 	if hasNewlineInAPattern(p.src, x) {
 		// A newline *inside* a pattern list — `case a in (a\n|b) …` — is
@@ -1095,10 +1131,11 @@ func (p *printer) caseClause(x *syntax.CaseClause) {
 		p.verbatim(x)
 		return
 	}
+	opener, closer := p.caseSpelling(x)
 	if oneLine(x.Start, x.Stop) {
 		p.b.WriteString("case ")
 		p.node(x.Word)
-		p.b.WriteString(" in")
+		p.b.WriteString(" " + opener)
 		for _, it := range x.Items {
 			p.b.WriteByte(' ')
 			if armNeedsParen(it) {
@@ -1123,12 +1160,12 @@ func (p *printer) caseClause(x *syntax.CaseClause) {
 				p.b.WriteByte(';')
 			}
 		}
-		p.b.WriteString(" esac")
+		p.b.WriteString(" " + closer)
 		return
 	}
 	p.b.WriteString("case ")
 	p.node(x.Word)
-	p.b.WriteString(" in")
+	p.b.WriteString(" " + opener)
 	p.newline()
 	p.indent++
 	p.lastLine = 0
@@ -1192,7 +1229,7 @@ func (p *printer) caseClause(x *syntax.CaseClause) {
 	p.ownLineComments(int(x.Stop.Offset))
 	p.indent--
 	p.pad()
-	p.b.WriteString("esac")
+	p.b.WriteString(closer)
 }
 
 // funcDecl normalizes the header's spacing and keeps its dialect's spelling:

@@ -1185,6 +1185,80 @@ they are separate questions: a shell could spell a `repeat` body only as
 `do … done`, and the words `repeat`, `foreach`, `end` and `()` are
 constructs rather than body spellings.
 
+### The two `if` spellings compose in either direction
+
+The table above has the all-short chain. The **mixed** one is the same
+rule reached from the long form, and it was missing: a long
+`if … ; then …` may carry an `elif` whose condition ended itself and
+whose body is braces, and from there the chain is a short one with no
+`fi`. Measured 2026-09-12 on zsh 5.9.2, from a file:
+
+| probe | zsh 5.9 | the other five |
+| --- | --- | --- |
+| `if (( 0 )); then echo A; elif (( 1 )) { echo B }` | `B` | error |
+| `if [[ -n x ]]; then echo A; elif [[ -n y ]] { echo B }` | `A` | error |
+| `if (( 0 )); then echo A; elif (( 1 )) { echo B } else { echo C }` | `B` | error |
+| `if (( 0 )); then echo A; elif (( 1 )) { echo B } elif (( 1 )) { echo C }` | `B` | error |
+| `if :; then echo A; elif : { echo B }` | error | error |
+| `if (( 0 )); then echo A; else { echo C }` | error | error |
+
+Row 5 is `ShortForm`'s own test showing through — the condition still has
+to end itself — and row 6 is the boundary that keeps this from being "a
+clause may take a brace body": a long `if`'s `else` is followed by an
+ordinary brace *group*, so the `fi` is still required and every column
+refuses the line without one. It was reached in `F-Sy-H`'s chroma file,
+which a prompt framework loads (#1880).
+
+## A `case` written with braces
+
+The `case` header has a second spelling too, and **two** shells have it —
+which the first measurement of this missed, because it looked only at
+zsh. They do not draw it the same way. Measured 2026-09-12 under `env -i
+PATH=/usr/bin:/bin` with a scratch `HOME`; dash, bash 5.3, that binary as
+`sh` and bash 3.2 refuse every row.
+
+| probe | ksh93 | zsh 5.9 |
+| --- | --- | --- |
+| `case x { x) echo hit;; }` | `hit` | `hit` |
+| `case x { }` | runs | runs |
+| `case x { (x) echo hit;; }` | `hit` | `hit` |
+| `case x { x) echo hit;; esac` | `` `case' unmatched `` | `hit` |
+| `case x in x) echo hit;; }` | `` `case' unmatched `` | `hit` |
+| `case esac { esac) echo hit;; }` | `hit` | parse error at `)` |
+| `case x { x) echo hit }` | `` `case' unmatched `` | `hit` |
+| `case x {x) echo hit;; }` | `` `{x' unexpected `` | `hit` |
+
+Rows 4 and 5 are the split: ksh93 **pairs** the two words — a `{` closes
+with a `}` and an `in` with an `esac` — and zsh takes either closer after
+either opener. Grammar flag: `CaseBraceBody`, whose type is a spelling
+rather than a bool for that reason — `NoCaseBraceBody` in the core,
+`CaseBraceBodyPairsWithItsOpener` for `ksh`,
+`CaseBraceBodyMixesWithTheKeyword` for `zsh`.
+
+The last three rows are **other flags showing through**, and each is one
+the two shells already disagreed about:
+
+- Row 6 is `CaseTerminatorIsAPatternAfterTheHeader`, which ksh93 has: the
+  word straight after the header opener is the first arm's pattern there,
+  and the reading follows the *position* rather than the word `in`. The
+  `}` is never taken that way, which row 2 is the control for.
+- Row 7 is `CloseBraceAlwaysReserved`, which zsh has: a `}` at the end of
+  an unquoted word closes the clause there and is an argument to `echo`
+  in ksh93, so the arm needs its `;;`.
+- Row 8 is `OpenBraceNeedsNoBlank`, which zsh has: a bare `{` is the
+  reserved word however the text runs on there, and `{x` is one word in
+  ksh93.
+
+ksh93 prints a **warning** beside the run — `` `{' instead of `in' is
+obsolete `` — so the spelling is deliberate legacy in that shell rather
+than an accident of its grammar.
+
+The tree is a `CaseClause` whichever way it was written and nothing in it
+records the spelling, which is `Style.BraceShortForm`'s question exactly
+as it is for the short loop bodies: the formatter reads both words back
+out of the source, separately, because they are not paired everywhere.
+See `../style.md`.
+
 ## What may stand where a loop's name does
 
 Two questions, and the panel splits on only one of them.

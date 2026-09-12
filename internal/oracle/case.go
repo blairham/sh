@@ -17604,7 +17604,7 @@ echo "st=$?"`,
 	{
 		ID: "fnlib/is-at-least-component-counts", Category: "function library",
 		Snippet: `autoload -Uz is-at-least 2>/dev/null; is-at-least 5.9 5.9.2; printf "[%s]" $?; is-at-least 5.9.2 5.9; printf "[%s]" $?; is-at-least 5.9 5.9; printf "[%s]" $?; echo`,
-		Why:     "the shape every `is-at-least 5.1 && setopt …` in a startup file is: a two-component requirement against a three-component version, both ways round, and the equal case that says the comparison is not strict. A missing component counts as zero rather than as less than anything, so `5.9` is satisfied by `5.9.2` and `5.9.2` is not satisfied by `5.9`. Four columns have no such function and answer 127 three times over, which is the row's other half — the name is zsh's, and pointing $fpath at a directory does not give it to the rest",
+		Why:     "the shape every `is-at-least 5.1 && setopt …` in a startup file is: a two-component requirement against a three-component version, both ways round, and the equal case that says the comparison is not strict. A missing component counts as zero rather than as less than anything, so `5.9` is satisfied by `5.9.2` and `5.9.2` is not satisfied by `5.9`. The three columns that reach the call answer 127 three times over, and ksh93 never reaches it — `autoload` is `typeset -fu` there and stops at the letters — which is the row's other half: the name is zsh's, and pointing $fpath at a directory does not give it to the rest",
 	},
 	{
 		ID: "fnlib/is-at-least-segments-are-numbers", Category: "function library",

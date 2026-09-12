@@ -25,7 +25,7 @@ func braceScanExtent(t *testing.T, src string, d Dialect) (body, tail string) {
 		var after strings.Builder
 		for _, s := range w.Spans {
 			switch {
-			case s.Kind == ParamExp && !seen:
+			case (s.Kind == ParamExp || (s.Kind == CommandSubst && s.CurrentShell)) && !seen:
 				seen, body = true, s.Value
 			case seen:
 				after.WriteString(s.Value)
@@ -35,7 +35,7 @@ func braceScanExtent(t *testing.T, src string, d Dialect) (body, tail string) {
 			return body, after.String()
 		}
 	}
-	t.Fatalf("no parameter expansion in %q", src)
+	t.Fatalf("no braced expansion in %q", src)
 	return "", ""
 }
 
@@ -169,5 +169,41 @@ func TestAHereDocumentBodyTakesTheQuotedReading(t *testing.T) {
 		if body != tc.body || after.String() != tc.tail {
 			t.Errorf("%v: body %q tail %q, want body %q tail %q", tc.policy, body, after.String(), tc.body, tc.tail)
 		}
+	}
+}
+
+// The `${ cmd;}` command form keeps its own rule, in every reading of the
+// flag: its body is a program, so its quotes are that program's for the same
+// reason its braces are. Measured `printf '[%s]' "${ echo '}' ;}"`, which is
+// `[}]` in the two panel columns that have the construct.
+func TestTheCommandFormsQuotesAreItsProgramsInEveryReading(t *testing.T) {
+	for _, p := range []BraceQuotePolicy{
+		BraceQuoteProtectsAPatternOnly, BraceQuoteProtectsNothing, BraceQuoteProtectsEveryOperand,
+	} {
+		d := Core()
+		d.CurrentShellSubstitution = true
+		d.QuoteProtectsTheClosingBrace = p
+		body, tail := braceScanExtent(t, `echo "[${ echo '}' ;}]"`, d)
+		if body != ` echo '}' ;` || tail != `]` {
+			t.Errorf("%v: body %q tail %q, want the program read whole", p, body, tail)
+		}
+	}
+}
+
+// A subscript belongs to the name, so the operator a quote is judged against
+// is what follows the `]` rather than the `[`. Measured
+// `a=(p a}b); printf '[%s]' "${a[1]#'a}'}"`, which is `[b]` in every column
+// with the construct but zsh.
+func TestASubscriptIsPartOfTheNameNotTheOperand(t *testing.T) {
+	d := Core()
+	d.QuoteProtectsTheClosingBrace = BraceQuoteProtectsAPatternOnly
+	if body, tail := braceScanExtent(t, `echo "[${a[1]#'a}b'}]"`, d); body != `a[1]#'a}b'` || tail != `]` {
+		t.Errorf("body %q tail %q, want the operator read after the subscript", body, tail)
+	}
+	// The word operand through a subscript is the other side of the same
+	// reading, so a fix that skipped to the end of the body would pass the
+	// row above and fail this one.
+	if body, tail := braceScanExtent(t, `echo "[${a[1]-'a}b'}]"`, d); body != `a[1]-'a` || tail != `b'}]` {
+		t.Errorf("body %q tail %q, want the quote ordinary in a word operand", body, tail)
 	}
 }

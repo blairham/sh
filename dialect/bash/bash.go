@@ -2070,6 +2070,10 @@ func Apply(r *interp.Runner) {
 	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {
 		return strconv.Itoa(int(rr.SecondsFrom()))
 	})
+	// The clock, as this shell reads it since 5.0. In a file of its own
+	// because it is not the `zsh/datetime` registration under another name —
+	// see epoch.go for the row-by-row measurement (#1158).
+	registerEpochClock(r)
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
 	}

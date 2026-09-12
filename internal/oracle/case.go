@@ -3723,52 +3723,53 @@ echo "reached-after st=$?"`,
 	{
 		ID: "shopt/globstar-does-not-enter-a-symbolic-link", Category: "shell options",
 		Snippet: `mkdir -p g/r && cd g && : > r/x && ln -s r s && ` +
-			`{ shopt -s globstar || command set -o globstar; } 2>/dev/null; echo **/x`,
+			`shopt -s globstar 2>/dev/null; echo **/x`,
 		Why: "a `**` that crosses levels still never goes inside a symbolic link " +
-			"to a directory: `r/x` in bash 5.3 with the option, in ksh93 with its " +
-			"own spelling of it and in zsh with none, against `r/x s/x` in bash 3.2, " +
-			"dash and ash, where `**` is an ordinary `*` and an ordinary component " +
-			"follows a link. So the three shells that have the construct agree, and " +
-			"the option is what the refusal belongs to rather than the walk. The " +
-			"enabling is written twice because the name is: `shopt` is bash's and " +
-			"`set -o` is ksh93's, and `command` is what keeps a special builtin's " +
-			"refusal from ending the script in the shells that have neither (#2360)",
+			"to a directory: `r/x` in bash 5.3 with the option and in zsh with " +
+			"none, against `r/x s/x` in bash 3.2, dash, ksh93 and ash, where `**` " +
+			"is an ordinary `*` and an ordinary component does follow a link — so " +
+			"the refusal belongs to the crossing rather than to the walk. ksh93 has " +
+			"the construct under `set -o globstar` and answers `r/x` there too, " +
+			"measured 2026-09-12 and not reachable from this snippet: `set` is a " +
+			"special builtin, so a name it does not know ends the script in dash " +
+			"and in zsh, and the enabling has to be one every column can survive " +
+			"(#2360)",
 	},
 	{
 		ID: "shopt/globstar-lists-a-symbolic-link-it-will-not-enter", Category: "shell options",
 		Snippet: `mkdir -p g/r && cd g && : > r/x && ln -s r s && ` +
-			`{ shopt -s globstar || command set -o globstar; } 2>/dev/null; echo **/`,
+			`shopt -s globstar 2>/dev/null; echo **/`,
 		Why: "and here the panel splits, on what `**/` **lists** rather than on " +
 			"where it goes: `r/ s/` in bash and ksh93, where `**` matches the " +
 			"entries beneath a directory and the trailing slash keeps the ones that " +
 			"are directories, against `r/` in zsh, where the component stands for " +
-			"the levels the walk crossed and a link is not one of them. bash 3.2, " +
-			"dash and ash answer `r/ s/` as a plain `*/`, which is the same list " +
-			"for a different reason and is why the row above is the one that " +
-			"separates the two questions (#2360)",
+			"the levels the walk crossed and a link is not one of them. The four " +
+			"columns without the crossing answer `r/ s/` as a plain `*/` — the same " +
+			"list for a different reason, which is why the row above rather than " +
+			"this one is what separates the two questions (#2360)",
 	},
 	{
 		ID: "shopt/globstar-is-bounded-by-a-link-to-its-own-ancestor", Category: "shell options",
 		Snippet: `mkdir -p g && cd g && : > y && ln -s . up && ` +
-			`{ shopt -s globstar || command set -o globstar; } 2>/dev/null; echo **/y`,
+			`shopt -s globstar 2>/dev/null; echo **/y`,
 		Why: "the shape the refusal exists for. `up` points at the directory " +
 			"holding it, so a `**` that followed it would keep finding the same " +
 			"file under longer and longer names and would be stopped by a depth " +
 			"limit rather than by a rule — exponential in link density before it is " +
-			"anything else. bash 5.3 with the option, ksh93 with its own and zsh " +
-			"with none all answer `y`; the three without the construct answer " +
-			"`up/y`, which is one level of an ordinary `*` and terminates for that " +
-			"reason rather than for this one (#2360)",
+			"anything else. bash 5.3 with the option and zsh with none both answer " +
+			"`y`; the columns without the crossing answer `up/y`, which is one " +
+			"level of an ordinary `*` and terminates for that reason rather than " +
+			"for this one (#2360)",
 	},
 	{
 		ID: "shopt/globstar-enters-a-link-when-it-does-not-lead-the-pattern", Category: "shell options",
 		Snippet: `mkdir -p g/r && cd g && : > r/x && ln -s r s && ` +
-			`{ shopt -s globstar || command set -o globstar; } 2>/dev/null; echo ./**/x`,
+			`shopt -s globstar 2>/dev/null; echo ./**/x`,
 		Why: "bash alone, and **recorded rather than implemented**. The same " +
 			"pattern with one directory component in front of the `**` answers " +
 			"`./r/x ./s/x` in bash 5.3 where `**/x` answers `r/x`, so the shell " +
-			"disagrees with its own leading form; ksh93 and zsh answer `./r/x` " +
-			"either way. Following it would mean reproducing a walk that is " +
+			"disagrees with its own leading form; zsh answers `./r/x` either way, " +
+			"and so does ksh93 once `set -o globstar` reaches it. Following it would mean reproducing a walk that is " +
 			"unbounded on a tree holding a link to its own ancestor — measured, " +
 			"`w/**/y` under `ln -s . w/up` is `w/up/y w/y` there — so this walk " +
 			"answers what the other two answer and what bash itself answers where " +

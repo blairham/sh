@@ -152363,7 +152363,7 @@
         "TimedOut": false
       },
       "ksh93": {
-        "Stdout": "r/x",
+        "Stdout": "r/x s/x",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -152414,7 +152414,7 @@
         "TimedOut": false
       },
       "ksh93": {
-        "Stdout": "./r/x",
+        "Stdout": "./r/x ./s/x",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -152516,7 +152516,7 @@
         "TimedOut": false
       },
       "ksh93": {
-        "Stdout": "y",
+        "Stdout": "up/y",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

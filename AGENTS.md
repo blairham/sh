@@ -352,7 +352,9 @@ fault shows only in a real terminal, use the pty harness and say so.
 ## Conventions
 
 - **Formatter**: gofumpt, pinned in `go.mod`'s `tool` block, run as
-  `go tool gofumpt`.
+  `go tool gofumpt` — by `make fmt`, and at commit time by a pre-commit
+  hook that runs the same pinned binary and *reports* rather than
+  rewrites (`-l -d`, never `-w`).
 - **Linter**: golangci-lint v2, also `go tool`-pinned, config in
   `.golangci.yml` — the same file in every Go repository here. **It is
   invoked by CI's `Lint` job and by nothing else** — not by a pre-commit
@@ -376,9 +378,16 @@ fault shows only in a real terminal, use the pty harness and say so.
   arriving without its linter is an incomplete change. The reverse holds
   too: when the last use of a dependency goes, its linter goes with it.
 - **US English, everywhere.** Comments, documentation, commit messages and
-  identifiers. It is enforced rather than agreed — `misspell` is configured
-  with `locale: US` in `.golangci.yml`, so British spelling fails the build
-  rather than accumulating until someone minds.
+  identifiers. Enforced rather than agreed, and enforced in **two** places,
+  because one was never enough: `misspell` with `locale: US` in
+  `.golangci.yml` reaches Go and only Go, so every `.md` under `docs/` —
+  which is most of the prose this rule was written for — sat outside the
+  rule it was cited for, and British spellings accumulated in the spec with
+  the linter green (#541). A `misspell` pre-commit hook covers `.md` and the
+  YAML configs; it reports and does not rewrite, because unlike gofumpt it
+  can reach inside a string literal. Two words are exempt and neither is
+  prose: `colour`, one shell's parameter **name**, and `cancelled`, the
+  Agent Client Protocol's spelling of a `stopReason`.
 - **Toolchain pin**: `go.mod`'s `go` directive and `.tool-versions`'
   `golang` must match exactly; `go.mod` is authoritative.
 - **Tests**: `go test -race ./...`. Tests never touch real user state —
@@ -420,17 +429,21 @@ cannot.
 
 **Local, on every commit.** The hooks in `.pre-commit-config.yaml`:
 hygiene, secrets, license headers, `go mod tidy`, the toolchain-pin
-invariant, and the conflict-marker scan. golangci-lint is **not** among
-them, on purpose; the measurement that took it out is recorded in
-`.pre-commit-config.yaml`. Seconds, not minutes, and it is the only
-feedback that arrives before the code leaves the machine.
+invariant, the conflict-marker scan, gofumpt, and misspell over prose.
+golangci-lint is **not** among them, on purpose; the measurement that took
+it out is recorded in `.pre-commit-config.yaml`. Seconds, not minutes, and
+it is the only feedback that arrives before the code leaves the machine.
 
-**Neither is a formatter, and this file used to say otherwise.** The hooks
-that applied gofumpt and goimports went with golangci-lint in #1495, on the
-understanding that `go-fumpt-repo` would carry them — and that hook has
-never been in this repository's config. `make fmt` runs first in `make
-check` and the `Lint` job checks formatting on a pull request, which is why
-nothing has drifted; #1903 is whether the hook should be there as well.
+**The formatter is back, and this file used to be wrong about it twice
+over.** The hook that applied gofumpt and goimports went with golangci-lint
+in #1495, on the understanding that `go-fumpt-repo` would carry them — and
+that hook had never been in this repository's config, so for the year that
+followed there was no formatter on the commit path at all while two files
+said there was. #1903 put one there. It is `my-cmd-repo` running `go tool
+gofumpt`, not `go-fumpt-repo`, because that hook wants a `gofumpt` on PATH
+and this repository deliberately has none: the pin in `go.mod` is what makes
+the hook, `make fmt` and CI the same formatter. Neither new hook rewrites
+anything — both report — so neither reopens the window #1267 is about.
 
 **On a pull request.** The gate, in two tiers.
 
@@ -444,17 +457,25 @@ installed one, which is why it runs here as well as there.
 Linting happens in a **job of its own**, `Lint`, and only there — it does
 not belong at `git commit` time, for the cost recorded above.
 
-It diffs from the **merge base**, not `--new-from-rev HEAD`. On a runner
-the checkout is clean, so `HEAD` diffs against nothing and the linter
-reports nothing at all — which is exactly what it had been doing here,
-silently, while being expensive on a laptop. The merge base is the commit
-this branch actually departed from, so what it prints is what this change
-introduced.
+It lints the **whole tree**, on a pull request and on a push to `main`
+alike. It used to diff from the merge base, so that a branch was graded on
+its own change and not on debt it inherited, and that had a cost that was
+invisible in the worst direction: on `main` the merge base *is* HEAD, the
+diff is empty, and the run examines nothing — so a finding that arrives
+through a merge is never reported by anything again. Five accumulated that
+way and were found by a hand-run linter (#1640), and the same scoping is
+why `make lint` used to fail on a clean checkout for reasons that were
+nobody's, which is what teaches people to discount a linter (#1302).
 
-That job needs `fetch-depth: 0`, and the reason is worth keeping: a merge
-base cannot be computed from a shallow clone, and without it the base
-resolves to nothing and the linter exits 0 having examined nothing. A
-green check that means the opposite of green.
+A diff-scoped run also fails **green**. golangci-lint prints `0 issues` and
+exits 0 when the base ref does not resolve — a shallow clone, a renamed
+base — so the strictest check is the one that passes when it is broken. A
+full-tree run has no such mode. It also no longer needs `fetch-depth: 0`,
+since nothing computes a merge base.
+
+The trade is that inherited debt now blocks a pull request, which is
+affordable only while the tree is clean. Keeping it clean is the point: if
+a finding lands, fix it rather than narrowing the run again.
 
 Only once pre-commit passes is it worth asking the expensive question.
 `Detect changed files` gates build and test with `-race` on Linux and
@@ -466,12 +487,17 @@ pre-commit builds an environment for a hook even when `SKIP` tells it not
 to run one, which cost two and a half minutes a build installing a linter
 this job then declines to use.
 
-**After a merge.** Nothing, currently — and that is a gap rather than a
-decision. `main-canary.yml` was **deleted in #53** (`280f8394`); the run
-history simply stops there, so it reads like a lapsed schedule and is not
-one. `drift.yml` does not fill it: that is weekly, deliberately
-non-gating, and watches the oracle *panel* for drift rather than this
-tree. See the note under *Why not re-run on `main`* below.
+**After a merge.** The same full set, on `main`. `ci.yml` fires on `push`
+to `main` as well as on pull requests, and every job runs — a merge is not
+narrowed by diff, because the thing a post-merge run is protecting against
+is an earlier merge nobody has exercised since. `main`'s concurrency group
+is keyed on the commit, so merges do not cancel each other (#1900). This
+was a genuine gap for a long time: `main-canary.yml` was deleted in #53
+(`280f8394`) and nothing replaced it until #1905 put the push trigger on
+`ci.yml`, and `Lint` was still blind on `main` until #1640 made it a
+full-tree run. `drift.yml` is a different question again: weekly,
+deliberately non-gating, and watching the oracle *panel* rather than this
+tree.
 
 `go vet` is deliberately not a step of its own: `govet` is one of the
 linters `.golangci.yml` enables, so the lint job already runs it over the
@@ -519,37 +545,21 @@ pending forever, not as passed**, so a paths-filtered required check makes
 a docs-only pull request permanently unmergeable. The jobs always run and
 report; only the expensive steps are skipped.
 
-**Checks run on pull requests, not on pushes to `main`.** The argument for
-that was: a branch has to be up to date before merging, so a squash lands
-the tree that was already tested and re-running deterministic checks
-afterwards tests nothing new.
+**Why the run on `main` is not redundant.** The argument for testing only
+pull requests was that a branch has to be up to date before it merges, so a
+squash lands a tree that was already tested. That premise is false here:
+`strict` is `false`, so a branch may merge from behind, and a pull request
+is tested against its **merge base** rather than against the tree the squash
+produces. A defect arising from the *interaction* of two separately-green
+pull requests has nothing else to catch it. Races make the same point
+without needing two branches — a test can pass on a branch and fail on
+`main` with the same tree, and that has happened here.
 
-**That premise is false.** `strict` is `false`, so a branch may merge from
-behind. A pull request is tested against its **merge base**, and the squash
-produces a tree that may never have been tested in that combination at all.
-Which makes the gap below a real one rather than an accepted trade.
-
-**The exception that argument allows is currently missing.** Determinism
-is the whole case above, and races are not deterministic: a test can pass
-on a branch and fail on `main` with the same tree. That has happened here,
-and only a post-merge run caught it. `main-canary.yml` was that job — one
-cheap run on `ubuntu-latest`, only when a merge touched Go — and it was
-deleted in #53, so nothing plays that part today.
-
-There is a second hole in the same place, and the two compound.
-`ci.yml`'s `concurrency` is `group: ci-${{ github.ref }}` with
-`cancel-in-progress: true`, unscoped. That is right for a pull-request
-branch, where a superseded push is not worth finishing. It is wrong for
-`main`, where every merge is a *different* change, so cancelling does not
-discard a stale answer — it discards the only answer that commit will ever
-get. Measured 2026-09-11 with several agents merging: **nine of the last
-ten `main` runs were `cancelled`**, one succeeded.
-
-Why that matters beyond tidiness: a green check on a pull request tested
-the branch against its **merge base**, not the tree the squash produced.
-The run on `main` is the only thing that tests what actually landed, so a
-defect arising from the *interaction* of two separately-green PRs has
-nothing left to catch it. Tracked as **#1900**.
+That is also why `main`'s concurrency group is keyed on the commit rather
+than on the ref. Canceling a superseded pull-request run discards a stale
+answer; canceling a `main` run discards the only answer that commit will
+ever get. Measured 2026-09-11, before #1900 fixed it: **nine of the last ten
+`main` runs were `cancelled`**, one succeeded.
 
 **So `conclusion: cancelled` is not `success`.** Before saying `main` is
 green, check that the run completed — `gh run list --branch main --json

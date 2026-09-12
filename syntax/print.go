@@ -889,7 +889,7 @@ func (p *printer) caseArms(x *CaseClause) {
 // whether leaving it out would hand back a different program.
 //
 // The arm's paren is ordinarily optional and the printer drops it, which is
-// the normalisation the round trip is written to allow. It stops being
+// the normalization the round trip is written to allow. It stops being
 // optional where a pattern holds a bare blank: that is a grammar one dialect
 // has only *inside* the parentheses — see
 // [Dialect.CasePatternListSpansBlanks] — so `(a b)` printed as `a b)` is a

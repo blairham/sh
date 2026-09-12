@@ -32,7 +32,7 @@ concurrency:
   # iterating on: every merge is a *different* change, and the run it starts
   # is the only verification that commit will ever get — the pull request was
   # tested against its merge base, not against the tree the squash produced.
-  # Cancelling it discards the answer rather than a stale one. Keying main's
+  # Canceling it discards the answer rather than a stale one. Keying main's
   # group on the commit gives every merge a group of its own, so there is
   # nothing to cancel it and nothing for it to queue behind; a pull request
   # ref is already unique per pull request, so it keeps superseding itself.
@@ -42,7 +42,7 @@ concurrency:
 jobs:
   # Runs for every commit that reaches GitHub — every push to a pull request,
   # draft or not, and every push to main. It is the only job that looks at
-  # *every* file rather than at Go: trailing whitespace, licence headers,
+  # *every* file rather than at Go: trailing whitespace, license headers,
   # secrets, the toolchain pin. None of that is worth detecting changes for,
   # and a secret committed to a draft is committed.
   pre-commit:
@@ -65,15 +65,29 @@ jobs:
   # commit` time: it type-checks the whole module and cost ~3GB and 300% CPU
   # per run on a developer's machine.
   #
-  # `--new-from-merge-base` and not `--new-from-rev HEAD`. On a runner the
-  # checkout is clean, so `HEAD` diffs against nothing and the linter reports
-  # nothing at all -- which is exactly what it had been doing here, silently,
-  # while being expensive locally. The merge base is the commit this branch
-  # actually departed from, so what it prints is what this change introduced.
+  # **The whole tree, every run.** This used to be `--new-from-merge-base`, so
+  # that a pull request was graded on its own diff and not blocked by debt it
+  # did not introduce. The cost of that was invisible in exactly the direction
+  # that matters: on `main` the merge base *is* HEAD, so the diff is empty and
+  # the run examines nothing, and from the moment a finding lands through a
+  # merge nothing reports it ever again. Five accumulated that way and were
+  # found by hand rather than by CI (#1640), and a linter that failed on a
+  # clean checkout for reasons that were nobody's is what taught people to
+  # discount it (#1302).
   #
-  # fetch-depth: 0 because a merge base cannot be computed from a shallow
-  # clone. Without it the base resolves to nothing and the linter exits 0
-  # having examined nothing -- a green check that means the opposite of green.
+  # A diff-scoped run also fails silently in the green direction. golangci-lint
+  # prints `0 issues` and exits 0 when the base ref does not resolve -- a
+  # shallow clone, a renamed base -- so the check that is meant to be strictest
+  # is the one that passes when it is broken. A full-tree run has no such mode:
+  # it either examines the tree or it errors.
+  #
+  # What this trades away is that inherited debt now does block a pull request.
+  # That is affordable only because the tree is clean, and keeping it clean is
+  # the point; if a finding lands anyway, the answer is to fix it rather than
+  # to narrow the run again.
+  #
+  # No `fetch-depth: 0` any more: nothing here computes a merge base, so the
+  # default shallow checkout is enough and is faster.
   lint:
     name: Lint
     needs: changes
@@ -81,25 +95,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
     - uses: actions/setup-go@v6
       with:
         go-version-file: go.mod
         check-latest: true
         cache: true
-    - name: What did this change introduce?
-      run: |
-        set -euo pipefail
-        base=$(git merge-base origin/${{ github.base_ref || 'main' }} HEAD)
-        echo "merge base: $base"
-        test -n "$base"
-        go tool golangci-lint run --new-from-rev "$base"
+    - name: Is the whole tree clean?
+      run: go tool golangci-lint run
 
   # Gating happens inside the jobs, never with a workflow-level `paths:`
   # filter: a required check that never runs reports as *pending forever*
   # rather than as passed, which makes a docs-only pull request unmergeable.
-  # Anything unrecognised counts as code, so when this is wrong it is wrong in
+  # Anything unrecognized counts as code, so when this is wrong it is wrong in
   # the direction of running the tests.
   # Only after the cheap universal checks have passed is it worth asking the
   # expensive question, so this waits on pre-commit.

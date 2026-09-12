@@ -1640,7 +1640,7 @@ once that it is not upstream.
 
 **The first line and no more.** The real bash follows its version with a
 copyright notice and a statement of the GPL; reproducing that would be a false
-statement about this code's licence as well as its authorship. The first line
+statement about this code's license as well as its authorship. The first line
 is the one `--version | head -1` reads anyway.
 
 **The substrate's own line is the binary's, not a dialect's.** `interp` holds
@@ -1849,7 +1849,7 @@ Recorded as `startup/a-return-in-a-startup-file-stops-it`,
 `startup/a-startup-files-return-argument`, `startup/a-startup-files-bare-return`
 and `startup/a-startup-file-carries-its-status-out`.
 
-### The neighbouring routes, for contrast
+### The neighboring routes, for contrast
 
 | where the `return` is | bash 5.3.15 / bash32 | bash-as-sh | dash / ksh93 / zsh |
 |---|---|---|---|

@@ -23,11 +23,11 @@ compromise the licensing of the whole project.
 If you are stuck, the escalation path is in `CLEANROOM.md` — it ends at
 an oracle run, never at someone else's source.
 
-## 2. The Contributor Licence Agreement
+## 2. The Contributor License Agreement
 
 Contributions require a signed CLA. The automated check is **currently
 turned off** — the workflow that prompted for a signature and recorded it
-has been removed while the pipeline is reorganised, and will come back. The
+has been removed while the pipeline is reorganized, and will come back. The
 requirement stands in the meantime; the agreement text is in `CLA.md` and
 the signatures already collected are on the `cla-signatures` branch.
 
@@ -39,7 +39,7 @@ that option — not because the contribution was unwelcome, but because
 nobody could relicense it later.
 
 The CLA does **not** take your copyright. You keep it. You grant a
-licence broad enough to include sublicensing, and you affirm the work is
+license broad enough to include sublicensing, and you affirm the work is
 your own.
 
 The agreement text is in `CLA.md`.

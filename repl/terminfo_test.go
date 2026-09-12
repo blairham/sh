@@ -405,7 +405,7 @@ func TestNoEnvironmentIsNoDescription(t *testing.T) {
 //
 // What this catches is the edit the tables invite: a capability inserted in
 // the middle to keep the file alphabetical, which silently renames every slot
-// after it — `cuu1` would then answer with its neighbour's bytes and nothing
+// after it — `cuu1` would then answer with its neighbor's bytes and nothing
 // would fail. The counts are the measurement in terminfonames.go.
 func TestTheNameTablesAreWholeAndUnique(t *testing.T) {
 	for _, tc := range []struct {

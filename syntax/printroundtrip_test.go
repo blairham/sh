@@ -25,7 +25,7 @@ import (
 // 2,010 snippets someone wrote to pin down a *behavior*, and they are read
 // here under the grammar that has to read every one of them.
 //
-// Comparing trees rather than text is the point. Normalisation is legitimate
+// Comparing trees rather than text is the point. Normalization is legitimate
 // and there is a lot of it — a `case` arm's optional `(` is dropped, `;;`
 // gets a space, a dup's implicit descriptor is written out — and a test that
 // demanded the text back would be a test of taste. What may not change is

@@ -66,7 +66,7 @@ Nothing here was inferred from an SDK's source.
 
 A version 2 exists and is **not** targeted. It is `2.0.0-alpha.3`, it
 reshapes authentication and drops the `fs/*` and `terminal/*` client
-surface in favour of a different one, and shipping against an alpha
+surface in favor of a different one, and shipping against an alpha
 would mean re-cutting the mapping when it moves. Every agent we have
 measured speaks version 1. The wire types live in one file for exactly
 this reason: when v2 stabilizes, the mapping below is unchanged and only
@@ -759,7 +759,7 @@ and offering a bad one is worse than saying so.
 
 A required field left empty declines the whole elicitation, because a form
 returned without what it required is not an answer to it. Declining and
-cancelling are answers too — the agent is owed one either way — and, as with a
+canceling are answers too — the agent is owed one either way — and, as with a
 permission request, the input ending is a decline rather than a hang.
 
 #### Why the agent side still cannot ask
@@ -875,7 +875,7 @@ which is visible.
 ### Reading the event schema, not only writing to it
 
 The schema's stability rules bind a consumer as much as a producer, and
-this side honours them: an event kind this shell does not know is
+this side honors them: an event kind this shell does not know is
 **reported** rather than dropped, which is rule four — a consumer must
 not fail on a name it has not seen, and the useful default is to record
 it and carry on. `ActionSignal` arriving after the other five is the
@@ -975,7 +975,7 @@ is marked as such there.
 Gemini CLI is still unmeasured and #729 is still the reason: this machine
 has a `~/.gemini` with no credential in it. That is worth stating plainly
 rather than leaving as an old row, because Gemini is the one agent whose
-behaviour the client-side thesis most wants to know.
+behavior the client-side thesis most wants to know.
 
 Four things a client has to be built around, none of which is visible
 from the specification alone:

@@ -103,7 +103,7 @@ func TestARunIsContained(t *testing.T) {
 // different ones, so it is replaced — but only the whole path. Replacing the
 // base name as well turned `GNU bashbug` into `GNU <shell>bug` and reported
 // two identical outputs as a difference.
-func TestNormalisingDoesNotEatTheScriptsOwnWords(t *testing.T) {
+func TestNormalizingDoesNotEatTheScriptsOwnWords(t *testing.T) {
 	dir := t.TempDir()
 	// Prints a word that contains the reference shell's base name.
 	script := write(t, dir, "s", "#!/bin/sh\necho 'GNU shbug 1.0'\n")
@@ -112,7 +112,7 @@ func TestNormalisingDoesNotEatTheScriptsOwnWords(t *testing.T) {
 	if len(rep.Mismatches) != 0 {
 		t.Errorf("a word containing the shell's name was reported as a difference: %+v", rep.Mismatches)
 	}
-	// And the path *is* replaced, which is what the normalising is for: two
+	// And the path *is* replaced, which is what the normalizing is for: two
 	// shells whose diagnostics name themselves must still compare equal.
 	odd := shellThat(t, "sh", `echo "$0: bad"; exit 2`)
 	other := shellThat(t, "sh2", `echo "$0: bad"; exit 2`)
@@ -126,7 +126,7 @@ func TestNormalisingDoesNotEatTheScriptsOwnWords(t *testing.T) {
 // scripts' output.
 //
 // The reference shell is named on the command line and defaults to `bash`, so
-// normalise was handed a bare word and replaced every occurrence of it — a
+// normalize was handed a bare word and replaced every occurrence of it — a
 // word that appears in a great many scripts' own output for reasons that have
 // nothing to do with which shell is running. `GNU bashbug` became
 // `GNU <shell>bug` on one side and stayed as it was on the other, and two

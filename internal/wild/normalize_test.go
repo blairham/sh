@@ -5,11 +5,11 @@ package wild
 
 import "testing"
 
-// What normalising must remove is what is true of the machine rather than of
+// What normalizing must remove is what is true of the machine rather than of
 // the shell, and nothing else. It is tested in-package because the two shells
 // under comparison usually live in a temporary directory, and the rule that
 // hides *those* names would hide the difference this one is for.
-func TestNormaliseRemovesOnlyTheMachine(t *testing.T) {
+func TestNormalizeRemovesOnlyTheMachine(t *testing.T) {
 	const shell = "/opt/somewhere/bin/myshell"
 	const script = "/usr/bin/thing"
 
@@ -46,7 +46,7 @@ func TestNormaliseRemovesOnlyTheMachine(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := normalise(tc.in, shell, script); got != tc.want {
+			if got := normalize(tc.in, shell, script); got != tc.want {
 				t.Errorf("got %q, want %q", got, tc.want)
 			}
 		})

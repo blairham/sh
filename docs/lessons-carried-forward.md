@@ -28,7 +28,7 @@ A translation layer is a bug with a delay on it.
 
 ## Anything universal must live inside the interpreter
 
-The reason the heredoc rewrite failed generalises: **`source` and `eval`
+The reason the heredoc rewrite failed generalizes: **`source` and `eval`
 re-parse inside the interpreter**, so nothing applied to the tree the
 shell parsed reaches them. This is the load-bearing argument for the
 gate and event seams being interpreter-internal (`design.md`), and it
@@ -52,7 +52,7 @@ Two warts worth not reproducing:
 
 - **A positional option table** — constants indexing into it, so rows
   cannot be reordered. Option identity should be a name.
-- **"Not implemented" needs to be a real answer, not a pretence.**
+- **"Not implemented" needs to be a real answer, not a pretense.**
   Distinguish implemented, state-only (the bit is tracked; the behavior
   belongs to the layer above), and startup facts (login shell,
   restricted). Requests to move an unsupported option are refused and
@@ -86,7 +86,7 @@ Scoreboard rules that carry over unchanged:
 
 bash's own test suite is GPLv3, so it is **fetched and never committed**
 — vendoring would relicense the repository by accident. Same rule here,
-and it generalises to every third-party corpus.
+and it generalizes to every third-party corpus.
 
 ## Costs to pay up front
 

@@ -1455,7 +1455,7 @@ Details, each measured:
   carries `(@)`**, which turns that join off so each element is split on
   its own: `a=(a b); ${(@s.:.)a}` is the two fields `a` and `b` where
   `${(s.:.)a}` is the one field `a b`, and `"${(@s.:.)a}"` is two as well.
-  `(f)` is exempted with it. Three neighbours say how narrow this is: a
+  `(f)` is exempted with it. Three neighbors say how narrow this is: a
   `j` separator asked for by name puts the join back
   (`${(@j:-:s.:.)a}` is `a-b`), the `@` *letter* is what exempts and not
   everything else that keeps fields (`${(s.:.)a[@]}` and `${(s.:.)@}` both

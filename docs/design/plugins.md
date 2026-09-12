@@ -246,7 +246,7 @@ handful of instructions, and one **non-blocking** channel send. There is
 no path in it that waits for the plugin, the connection, or anything
 else with a peer at the other end, so the cost is a constant this
 repository chose rather than one a plugin author chooses. Everything
-that can wait — the marshalling, the write, and any waiting on the
+that can wait — the marshaling, the write, and any waiting on the
 plugin at all — is on a goroutine of the host's own.
 
 So the answer to "should there be a timeout" is that there is nothing

@@ -342,16 +342,6 @@ func TestTwoAttributeLettersAreRefusedWhereNoDialectChose(t *testing.T) {
 	}
 }
 
-// containsDeclLine reports whether a listing holds exactly this line.
-func containsDeclLine(out, line string) bool {
-	for _, have := range strings.SplitAfter(out, "\n") {
-		if have == line {
-			return true
-		}
-	}
-	return false
-}
-
 // A letter the dialect spells and this engine records nothing for is still an
 // attribute to select on: nothing carries it, so the listing is empty rather
 // than whole. The control is the letter that says where a declaration lands

@@ -360,7 +360,7 @@ func TestDeniedRefusesEveryShapeOfTestDirectory(t *testing.T) {
 		{"jest's __mocks__", "/opt/proj/src/__mocks__/git.sh", wild.ReasonTestData},
 
 		// Case is a convention, not an identifier. zsh's own directory is
-		// Test, singular and capitalised, and a project vendored from
+		// Test, singular and capitalized, and a project vendored from
 		// elsewhere carries TestData.
 		{"Test", "/opt/proj/Test/A01grammar.sh", wild.ReasonTestData},
 		{"TESTS", "/opt/proj/TESTS/run.sh", wild.ReasonTestData},

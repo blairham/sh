@@ -8493,6 +8493,26 @@ type Semantics struct {
 	// level never reaches it.
 	SubscriptedOperandTakesALocalDeclaration Answer
 
+	// ExpansionResultSuppliesGroupSyntax reads `(`, `)` and `|` arriving out
+	// of an expansion as the syntax of a pattern group rather than as three
+	// literal characters, when the result is matched against the filesystem.
+	//
+	// The second half of GlobExpansionResults, and read only where that one
+	// says yes: ksh93u+ globs a result — `*`, `?` and a bracket expression
+	// out of a value are all live, inside a group as much as outside one —
+	// and does not let a result build the group. bash 5.3 reads both.
+	//
+	// Measured 2026-09-12 with a file literally named `ice|other.zsh` in the
+	// directory, which is what makes the claim falsifiable: `L='ice|other';
+	// echo @($L).zsh` *matches that file* in ksh93, so the group is a group
+	// whose one branch holds a literal bar, not text. `Q='@'; echo
+	// ${Q}(ice|other).zsh` reads the group, so it is the source text that
+	// fixes the shape and the value that fills the leaves.
+	//
+	// Not asked on the condition surface: `L='a|b'; [[ a == @($L) ]]` matches
+	// in ksh93 as in bash, and that path never reaches this.
+	ExpansionResultSuppliesGroupSyntax Answer
+
 	// TableLetterReachesItsOwnOperandsSubscript reads a subscripted operand's
 	// subscript as a *key* when the table letter that would make it one is
 	// written on the same command — `typeset -A m[k]=v`.

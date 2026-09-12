@@ -76,6 +76,7 @@ ash   EmptySubscriptTextIsAMathError
 ash   ErrTrapRunsInSubshells
 ash   ErrTrapRunsInsideFunctions
 ash   ExitTrapFiresPastTheEnd
+ash   ExpansionResultSuppliesGroupSyntax
 ash   ExportLetterDeclaresAGlobal
 ash   ExportedCompoundReachesAChildAsItsFirstValue
 ash   ForNameWhenTheLoopRuns
@@ -220,6 +221,7 @@ dash  ErrTrapRunsInSubshells
 dash  ErrTrapRunsInsideFunctions
 dash  ErrexitSeesPipefailFailure
 dash  ExitTrapFiresPastTheEnd
+dash  ExpansionResultSuppliesGroupSyntax
 dash  ExportLetterDeclaresAGlobal
 dash  ExportedCompoundReachesAChildAsItsFirstValue
 dash  ForNameWhenTheLoopRuns
@@ -327,6 +329,7 @@ ksh   TrapReportsAnUnknownSingleCondition
 ksh   TrapSingleUnknownConditionIsUsage
 ksh   UnsetEndsTheProducedPipelineStatus
 
+zsh   ExpansionResultSuppliesGroupSyntax
 zsh   ForNameWhenTheLoopRuns
 zsh   FunctionNameWhenTheDefinitionRuns
 zsh   IndirectionYieldsName

@@ -325,6 +325,9 @@ func Semantics() interp.Semantics {
 	s.ArrayLiteralSubscriptIsAKey = interp.No
 	// `typeset -A m[k]=v` — see Semantics.TableLetterReachesItsOwnOperandsSubscript.
 	s.TableLetterReachesItsOwnOperandsSubscript = interp.Yes
+	// bash reads a group built out of an expansion — see
+	// Semantics.ExpansionResultSuppliesGroupSyntax.
+	s.ExpansionResultSuppliesGroupSyntax = interp.Yes
 	// `typeset -r a[1]=v` freezes the array and then loses the element write
 	// to the freeze — see Semantics.ReadonlyElement. `readonly a[1]=v` never
 	// reaches it here: that spelling is refused as a bad name first.

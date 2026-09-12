@@ -385,6 +385,9 @@ func Semantics() interp.Semantics {
 	s.ArrayLiteralSubscriptIsAKey = interp.Yes
 	// `typeset -A m[k]=v` — see Semantics.TableLetterReachesItsOwnOperandsSubscript.
 	s.TableLetterReachesItsOwnOperandsSubscript = interp.No
+	// ksh93 globs a result but will not let one build a group — see
+	// Semantics.ExpansionResultSuppliesGroupSyntax.
+	s.ExpansionResultSuppliesGroupSyntax = interp.No
 	s.SelectLayout = interp.SelectMenuVertical
 	s.SelectPromptNeedsTerminal = interp.Yes
 	s.AliasParsesOptions = interp.Yes

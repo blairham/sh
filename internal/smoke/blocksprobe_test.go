@@ -132,7 +132,7 @@ func TestBlocksEveryShell(t *testing.T) {
 // rule in different kinds of thing — zsh in an option, bash in a variable —
 // and a field holding only the name would have to be read differently per
 // dialect anyway. A dialect with no entry has no spelling for the rule and is
-// not asked: `sh` has neither, so there is nothing there to honour.
+// not asked: `sh` has neither, so there is nothing there to honor.
 var ignoreSpaceSetting = map[string]string{
 	"zsh":  "setopt hist_ignore_space\n",
 	"bash": "HISTCONTROL=ignorespace\n",
@@ -156,7 +156,7 @@ var (
 //
 // The gesture is a leading space and it means "run this but do not write it
 // down" — the same sentence an empty HISTFILE says about a whole session,
-// scoped to one line. The store honoured the session-wide version from the
+// scoped to one line. The store honored the session-wide version from the
 // day it was written and not this one, so a line a person had deliberately
 // hidden was kept anyway, with its output, for as long as the store lived.
 //

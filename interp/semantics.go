@@ -7261,8 +7261,7 @@ func PosixSemantics() Semantics {
 		TrapActionIsParsedWhenSet: No,
 		// A shell runs what it has read rather than reading everything
 		// first, which is unanimous for a script and is the same reading
-		// applied to a trap's body. ksh93 is the one that reads a trap
-		// body whole.
+		// applied to a trap's body. Reading a trap body whole is the departure.
 		TrapBodyRunsWhatParsed: Yes,
 		// And it names where the failure was, not where the trap fired,
 		// which is what three of the four do.
@@ -7455,8 +7454,8 @@ func PosixSemantics() Semantics {
 		// POSIX has no -nt or -ot at all; its closest reading wants both files to
 		// exist.
 		MissingFileIsOlder: No,
-		// POSIX gives -t a file descriptor, and dash refuses anything that
-		// is not a number.
+		// POSIX gives -t a file descriptor, so anything that is not a number is
+		// refused.
 		TerminalTestRequiresANumber: Yes,
 		// POSIX gives the one-argument form of `test` to the string rule
 		// with no exception in it.
@@ -7478,9 +7477,8 @@ func PosixSemantics() Semantics {
 		// nothing about a body the input cut short, so this follows the common
 		// answer: the last line is left as it was written.
 		UnterminatedHeredocGainsATrailingNewline: No,
-		// The standard has no `$(<file)` form at all, so this follows the
-		// panel: bash 5.3 and ksh93 read a directory to status 0, and only
-		// zsh and bash 3.2 fail (#1778).
+		// The standard has no `$(<file)` form at all, so this follows the common
+		// answer: a directory reads to status 0.
 		ReadFailureInAFileSubstitutionFailsIt: No,
 		FdVariableBadCloseIsAnError:           Yes,
 		// The standard says nothing about a ceiling, so this follows the
@@ -7553,8 +7551,9 @@ func PosixSemantics() Semantics {
 // spells out how an entry is required to name the field that governs it.
 //
 // The pairing this implies is not an inconsistency: accept the constructs
-// every real shell accepts, and mean what the shell most scripts were written
-// against means — syntax.Core() with the Semantics() of dialect/bash. Which
+// every real shell accepts, and mean what most scripts were written against
+// means — syntax.Core() with the Semantics() of the preset those scripts
+// assume. Which
 // pairing to use is not this package's decision. This is the substrate: it
 // owns the *mechanism*, and a shell built on it owns the policy, the same way
 // the gate and the event stream are defined here and the sandbox backends and
@@ -7567,9 +7566,9 @@ func CoreSemantics() Semantics {
 		// Every shell in the panel reads a profile for a login shell, so the
 		// core reads one too; the disagreement is only over what it is
 		// called. `.profile` is the standard's name and nobody's brand,
-		// which is the same choice `$ENV` is for the interactive file and
-		// made for the same reason — this binary is not bash and must not
-		// claim `.bashrc`.
+		// which is the same choice `$ENV` is for the interactive file and made
+		// for the same reason — this binary is nobody else's and must not claim a
+		// file named after one.
 		//
 		// The zero Semantics still names nothing, and that is the split
 		// worth keeping: a vector nobody filled in belongs to a library
@@ -7625,10 +7624,10 @@ const (
 	// BackgroundJobInputEmpty rather than being refused — see the field.
 	BackgroundJobInputUnspecified BackgroundJobInputPolicy = iota
 	// BackgroundJobInputEmpty hands the job an empty stream whatever the
-	// shell's own input was, a closed descriptor included: dash and bash.
+	// shell's own input was, a closed descriptor included.
 	BackgroundJobInputEmpty
 	// BackgroundJobInputEmptyUnlessClosed hands the job an empty stream, but
-	// leaves a closed descriptor closed so the job reports EBADF: ksh93.
+	// leaves a closed descriptor closed so the job reports EBADF.
 	BackgroundJobInputEmptyUnlessClosed
 	// BackgroundJobInputIsTheShells hands the job the shell's own standard
 	// input, which is the descriptor the script goes on reading: zsh.
@@ -7653,8 +7652,8 @@ func (b BackgroundJobInputPolicy) String() string {
 // A form rather than a flag, because the shells that scope a function's traps
 // at all do not agree on what *asks* for the scoping. One has an option that
 // turns it on for every call while it is set. The other keys it on the
-// definition style: measured against ksh93 (AT&T 93u+ 2012-08-01), `function
-// g { trap "echo I" USR1; }` puts the caller's trap back at the return and
+// definition style: `function g { trap "echo I" USR1; }` puts the caller's
+// trap back at the return and
 // `g() { trap "echo I" USR1; }`, the same body written the other way, leaves
 // the new one installed. That second answer is a third value here rather than
 // a rewrite of a boolean, and it is left for its own issue — the shell that
@@ -7704,7 +7703,7 @@ const (
 	StatusArgUnspecified StatusArgumentPolicy = iota
 	// StatusArgStrict takes decimal digits and refuses everything else —
 	// no sign and no text — and the refusal ends the script, because a
-	// special builtin's failure is fatal there: dash. It does not mask, so
+	// special builtin's failure is fatal there. It does not mask, so
 	// `return 300` leaves 300 behind rather than 44.
 	StatusArgStrict
 	// StatusArgNumeric refuses text but takes a sign, and masks to eight
@@ -7714,14 +7713,14 @@ const (
 	// the POSIX rule rather than a second reading of the operand.
 	StatusArgNumeric
 	// StatusArgLeadingDigits reads the number the operand begins with and
-	// ignores whatever follows, masking to eight bits: ksh93. `return 3abc`
+	// ignores whatever follows, masking to eight bits. `return 3abc`
 	// is 3, `return r` is 0 whatever `r` holds, `return " -5x"` is 251, and
 	// nothing is ever refused. Not arithmetic: `return 010` is 10 there
 	// while `$((010))` is 8, so the operand is not going through the
 	// arithmetic reader.
 	StatusArgLeadingDigits
 	// StatusArgArithmetic evaluates the operand as an arithmetic expression
-	// and does not mask: zsh. `return r` is the value of `r`, `return r+1`
+	// and does not mask. `return r` is the value of `r`, `return r+1`
 	// is one more, `return "(r+1)*2"` is six for r=2, `return 0x10` is 16,
 	// and `return 300` leaves 300 behind. Nothing is refused either, but an
 	// expression that will not parse is a math error rather than a status.
@@ -7769,11 +7768,11 @@ type PrintfBackslashCPolicy int
 const (
 	// PrintfBackslashCUnspecified is no answer, and is refused like any other.
 	PrintfBackslashCUnspecified PrintfBackslashCPolicy = iota
-	// PrintfBackslashCLiteral writes the two characters: bash, dash.
+	// PrintfBackslashCLiteral writes the two characters.
 	PrintfBackslashCLiteral
-	// PrintfBackslashCControl reads `\cX` as control-X: ksh93.
+	// PrintfBackslashCControl reads `\cX` as control-X.
 	PrintfBackslashCControl
-	// PrintfBackslashCStops ends the output there: zsh.
+	// PrintfBackslashCStops ends the output there.
 	PrintfBackslashCStops
 )
 
@@ -7808,31 +7807,31 @@ func (r *Runner) backslashC() PrintfBackslashCPolicy {
 // details and each split falls in a different place, which is why this is one
 // enumeration and not a bool:
 //
-//   - Whether the escape exists. dash has no `\x`, so `printf 'a\x41Z'` is
-//     the four characters as written.
-//   - How wide the digit run is. bash and zsh stop at two and the value is a
-//     byte, so `\x0ff` is 0x0f followed by an `f`. ksh93 takes every digit
+//   - Whether the escape exists. Without `\x`, `printf 'a\x41Z'` is the four
+//     characters as written.
+//   - How wide the digit run is. One reading stops at two and the value is a
+//     byte, so `\x0ff` is 0x0f followed by an `f`. Another takes every digit
 //     that follows and the value is a *code point* once there are more than
 //     two of them: `\xff` is one byte and `\x0ff` is U+00FF in UTF-8.
-//   - What an empty digit run means. bash leaves `\x` standing and says so
-//     on standard error; ksh93 and zsh read it as zero and write a NUL.
+//   - What an empty digit run means. One reading leaves `\x` standing and says
+//     so on standard error; another reads it as zero and writes a NUL.
 type PrintfHexEscapePolicy int
 
 const (
 	// PrintfHexEscapeUnspecified is no answer, and is refused like any other.
 	PrintfHexEscapeUnspecified PrintfHexEscapePolicy = iota
 	// PrintfHexEscapeAbsent has no `\x` at all, so the backslash and the
-	// letter stand as written: dash.
+	// letter stand as written.
 	PrintfHexEscapeAbsent
 	// PrintfHexEscapeByte reads at most two digits as one byte, and leaves
-	// `\x` with no digit after it as written: bash 3.2 and bash 5.3.
+	// `\x` with no digit after it as written.
 	PrintfHexEscapeByte
 	// PrintfHexEscapeByteOrNul reads the same two digits, and an empty digit
 	// run as a zero: zsh.
 	PrintfHexEscapeByteOrNul
 	// PrintfHexEscapeCodePoint reads every digit that follows. Up to two of
 	// them is a byte and three or more is a code point written in UTF-8, and
-	// an empty run is a zero: ksh93.
+	// an empty run is a zero.
 	PrintfHexEscapeCodePoint
 )
 
@@ -7865,9 +7864,9 @@ func (r *Runner) hexEscape() PrintfHexEscapePolicy {
 // bHexEscape resolves the `%b` site's `\x` reading, and only for an argument
 // that has a `\x` in it.
 //
-// Separate from hexEscape because the site is half the question: ksh93 reads
-// every digit of a format's `\x41` and writes the four characters as they
-// stand in a `%b`.
+// Separate from hexEscape because the site is half the question: an
+// implementation can read every digit of a format's `\x41` and write the four
+// characters as they stand in a `%b`.
 func (r *Runner) bHexEscape() PrintfHexEscapePolicy {
 	p := r.sem().PrintfBHexEscape
 	if p == PrintfHexEscapeUnspecified {
@@ -7885,17 +7884,17 @@ func (r *Runner) bHexEscape() PrintfHexEscapePolicy {
 // Four answers, and they are not PrintfHexEscapePolicy's four. The two escapes
 // ask the same three questions and the panel answers them in different places:
 //
-//   - Whether the escape exists. bash 3.2 and dash have no `\u` at all, so
-//     `printf 'a\u0041Z'` is the ten characters as written. bash 5.3 has it
-//     under either argv[0], so the panel's `bash` and `bash-as-sh` columns
-//     agree here and it is the *version* that decides rather than the name.
+//   - Whether the escape exists. Without `\u`, `printf 'a\u0041Z'` is the ten
+//     characters as written. Builds of one implementation differ here while
+//     its two argv[0] columns agree, so it is the *version* that decides
+//     rather than the name.
 //   - How wide the digit run is. Unanimous among the three that have it, and
 //     the one question `\x` splits on that this one does not: four digits
 //     after `\u` and eight after `\U`, with fewer accepted and the run ending
 //     at the first character that is not a digit.
-//   - What an empty digit run means. bash 5.3 leaves the escape standing and
-//     says so on standard error; zsh reads it as a zero and writes a NUL;
-//     ksh93 drops the rest of that pass over the format.
+//   - What an empty digit run means. One reading leaves the escape standing
+//     and says so on standard error; another reads it as a zero and writes a
+//     NUL; a third drops the rest of that pass over the format.
 //
 // The last of those is the reading no `\x` has anywhere in the panel, and it
 // is why this is its own enumeration rather than the hexadecimal one reused.
@@ -7909,17 +7908,17 @@ const (
 	// other.
 	PrintfUnicodeEscapeUnspecified PrintfUnicodeEscapePolicy = iota
 	// PrintfUnicodeEscapeAbsent has no `\u` or `\U` at all, so the backslash
-	// and the letter stand as written: bash 3.2 and dash.
+	// and the letter stand as written.
 	PrintfUnicodeEscapeAbsent
 	// PrintfUnicodeEscapeCodePoint reads the digits and leaves an escape with
 	// no digit after it as written, with a complaint that does not change the
-	// status: bash 5.3.
+	// status.
 	PrintfUnicodeEscapeCodePoint
 	// PrintfUnicodeEscapeCodePointOrNul reads the same digits, and an empty
-	// digit run as a zero: zsh.
+	// digit run as a zero.
 	PrintfUnicodeEscapeCodePointOrNul
 	// PrintfUnicodeEscapeCodePointOrTruncate reads the same digits, and an
-	// empty digit run ends this pass over the format: ksh93.
+	// empty digit run ends this pass over the format.
 	PrintfUnicodeEscapeCodePointOrTruncate
 )
 

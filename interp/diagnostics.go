@@ -1825,84 +1825,84 @@ type Diagnostics struct {
 	// name in front of it. ksh93 alone.
 	KillUsageUnprefixed bool
 	// KillTargetUnprefixed does the same for a target that could not be
-	// signaled. Also ksh93 alone, and the two are separate fields because
-	// they are separate questions with the same answer only here: ksh93
-	// prints `kill: 999999: no such process` bare and
-	// `/bin/ksh: kill: abc: Arguments must be …` prefixed, so what decides
-	// it is whether the complaint is about a target or about an argument.
+	// signaled. The two are separate fields because they are separate questions
+	// that happen to share an answer here: a preset may print
+	// `kill: 999999: no such process` bare and
+	// `<shell>: kill: abc: Arguments must be …` prefixed, so what decides it is
+	// whether the complaint is about a target or about an argument.
 	KillTargetUnprefixed bool
 	// KillMissingSignalArgument is `-s` with nothing after it. One verb: the
-	// option, since two dialects name it and two do not.
+	// option, since some presets name it and some do not.
 	KillMissingSignalArgument string
 	// KillUnknownSignalHint is a second line after an unrecognized signal,
-	// pointing at `kill -l`. zsh alone; empty means no second line.
+	// pointing at `kill -l`; empty means no second line.
 	KillUnknownSignalHint string
-	// KillUsageStatus is the status for `kill` with no operands: 2 in bash,
-	// dash and ksh93, and 1 in zsh. Zero means the substrate's own, 2.
+	// KillUsageStatus is the status for `kill` with no operands — 1 and 2 are
+	// both measured. Zero means the substrate's own, 2.
 	KillUsageStatus int
-	// KillBadOptionStatus is the status for an unknown or incomplete option.
-	// bash and zsh report 1 where dash and ksh93 report 2 — ksh93 treating
-	// an unknown option as a usage error, which is also why it prints its
-	// usage after one. Zero means the substrate's own, 1.
+	// KillBadOptionStatus is the status for an unknown or incomplete option — 1
+	// and 2 are both measured, the second from treating an unknown option as a
+	// usage error, which is also why such a preset prints its usage after one.
+	// Zero means the substrate's own, 1.
 	KillBadOptionStatus int
-	// KillArgumentStatus is the status for an operand that is not a target
-	// and a signal name that is not a signal. dash alone reports 2, and it
-	// is the one dialect for which this is not the same question as the
-	// option status. Zero means the substrate's own, 1.
+	// KillArgumentStatus is the status for an operand that is not a target and a
+	// signal name that is not a signal. A preset may report 2, which is the one
+	// case where this is not the same question as the option status. Zero means
+	// the substrate's own, 1.
 	KillArgumentStatus int
 
-	// FileNotFound is how this dialect spells the reason a file was not
-	// there, when it does not quote the operating system's own text. No
-	// verbs.
+	// FileNotFound is how this preset spells the reason a file was not there,
+	// when it does not quote the operating system's own text. No verbs.
 	//
-	// dash alone: `cannot open b: No such file` where the C string is "No
-	// such file or directory". It is a *reason* rather than a message for the
-	// same purpose the arithmetic ones are — every message that quotes a
-	// reason gets it, rather than each of them spelling it out.
+	// `cannot open b: No such file` where the C string is "No such file or
+	// directory". It is a *reason* rather than a message for the same purpose
+	// the arithmetic ones are — every message that quotes a reason gets it,
+	// rather than each of them spelling it out.
 	FileNotFound string
 
 	// LowercaseReason lowercases the strerror text this dialect quotes.
 	//
-	// zsh alone: `permission denied` where the other three print the C
-	// string's own `Permission denied`. It is a property of the shell rather
-	// than of any one message, which is why it is a flag here instead of
-	// being spelled out in every format that carries a reason.
+	// `permission denied` where the C string's own is `Permission denied`. It is
+	// a property of the preset rather than of any one message, which is why it
+	// is a flag here instead of being spelled out in every format that carries a
+	// reason.
 	LowercaseReason bool
 
 	// DotNotFound is what `.` says when the operand had no slash in it and
 	// PATH did not have it — as opposed to a path that would not open.
 	//
-	// Same two verbs. Only dash sets it: it says ".: name: not found" for a
-	// bare name and ".: cannot open path: …" for a path, where bash, ksh93 and
-	// zsh use one message for both. Empty means "the same as DotCannotOpen".
+	// Same two verbs. Only a preset that tells the two apart sets it — ".: name:
+	// not found" for a bare name against ".: cannot open path: …" for a path,
+	// where others use one message for both. Empty means "the same as
+	// DotCannotOpen".
 	DotNotFound string
 	// DotIsADirectory is what `.` says when the operand names a **directory**,
-	// for a dialect that answers DotDirectoryOperandIsAnError yes and does not
+	// for a preset that answers DotDirectoryOperandIsAnError yes and does not
 	// reuse DotCannotOpen for it.
 	//
-	// Three verbs rather than two, because bash names the builtin here and
-	// names it nowhere else on this builtin: measured 2026-09-08, `. ./` is
-	// `.: ./: is a directory` and `source ./` is `source: ./: is a directory`,
-	// where the same bash reports a path that is not there as plain
+	// Three verbs rather than two, because a preset may name the builtin here
+	// and name it nowhere else on this builtin: `. ./` as
+	// `.: ./: is a directory` and `source ./` as `source: ./: is a directory`,
+	// where the same preset reports a path that is not there as plain
 	// `./nope.sh: No such file or directory` through DotCannotOpen for both
-	// spellings. So %[1]s is the operand as written, %[2]s the reason, and
-	// %[3]s the builtin as it was invoked.
+	// spellings. So %[1]s is the operand as written, %[2]s the reason, and %[3]s
+	// the builtin as it was invoked.
 	//
-	// Empty means "the same as DotCannotOpen", which is what ksh93 wants: it
-	// says `.: ./: cannot open [Is a directory]`, the one sentence it uses for
-	// every failure, with the reason filling the bracket. The two shells that
-	// call a directory no error at all never reach this.
+	// Empty means "the same as DotCannotOpen", which is what a preset saying
+	// `.: ./: cannot open [Is a directory]` wants — one sentence for every
+	// failure, with the reason filling the bracket. A preset that calls a
+	// directory no error at all never reaches this.
 	DotIsADirectory string
 	// DotCannotOpenStatus is the status that carries when the failure is not
-	// fatal: bash says 1 and zsh says 127. dash and ksh93 end the script
-	// instead, so this never speaks for them.
+	// fatal — 1 and 127 are both measured. A preset that ends the script instead
+	// never reaches this.
 	//
 	// Zero means the substrate's own, which is 1.
 	DotCannotOpenStatus int
 
 	// ParseFailureNamesItsOwnLine says the parse-failure wording already
-	// carries the line, so the location must not carry it as well. ksh93
-	// writes `syntax error at line 3` and would otherwise be prefixed into
+	// carries the line, so the location must not carry it as well: a preset
+	// writing `syntax error at line 3` would otherwise be prefixed into
 	// `line 3: syntax error at line 3`.
 	//
 	// It is only the parse failure. A runtime diagnostic in a script is
@@ -1913,24 +1913,23 @@ type Diagnostics struct {
 	// MissingFuncBodyOmitsTheLine drops the line from the location of a parse
 	// failure where a function's body was expected and never began.
 	//
-	//	zsh -c 'f() ;'     zsh: parse error near `;'
-	//	zsh -c 'f()'       zsh: parse error near `()'
-	//	zsh -c 'if true'   zsh:1: parse error near `true'
+	//	sh -c 'f() ;'     <shell>: parse error near `;'
+	//	sh -c 'f()'       <shell>: parse error near `()'
+	//	sh -c 'if true'   <shell>:1: parse error near `true'
 	//
-	// zsh alone, and only for that one failure: the last of the three is an
-	// input that ran out too, so this is not "an end of input" and not the
-	// kind of failure either. What it is, is `syntax.Error.FuncBody`, which
+	// Only for that one failure: the last of the three is an input that ran out
+	// too, so this is not "an end of input" and not the kind of failure either. What it is, is `syntax.Error.FuncBody`, which
 	// the parser sets where it knows — see there for the corner a newline
 	// between the parens and the failure opens up.
 	MissingFuncBodyOmitsTheLine bool
 	// NotABuiltin is `builtin`'s refusal of a name that is not one. One verb:
 	// %[1]s the name.
 	NotABuiltin string
-	// CommandStringParsedWhole reads all of a `-c` command before running any
-	// of it. zsh alone does, so `sh -c 'echo one
-	// { fi; }'` prints one everywhere else and nothing there. A *script* is
-	// read a line at a time in all four, which is why this asks only about
-	// the command string.
+	// CommandStringParsedWhole reads all of a `-c` command before running any of
+	// it, so `sh -c 'echo one
+	// { fi; }'` prints one under false and nothing under true. A *script* is
+	// read a line at a time under every preset, which is why this asks only
+	// about the command string.
 	CommandStringParsedWhole bool
 
 	// StdinProgramSurvivesAParseFailure reports a line that did not parse and
@@ -1939,10 +1938,10 @@ type Diagnostics struct {
 	//
 	//	printf 'echo one\n{ fi; }\necho three\n' | sh
 	//
-	// prints one, the complaint, and *three* in zsh, and exits 0. bash, dash
-	// and ksh93 stop at the complaint and exit with their parse status. It is
-	// the route rather than the text that decides: the same three lines in a
-	// file stop zsh too, and exit 1.
+	// prints one, the complaint, and *three* under true, and exits 0. False
+	// stops at the complaint and exits with its parse status. It is the route
+	// rather than the text that decides: the same three lines in a file stop
+	// every preset, and exit 1.
 	//
 	// The status is not forced. What ran last reports as it always would —
 	// `false` at the end is 1 and `exit 7` is 7 — and where nothing runs after
@@ -1951,8 +1950,8 @@ type Diagnostics struct {
 	// line after it exits 0. Two failures in one program are two complaints
 	// and two recoveries.
 	//
-	// Beside CommandStringParsedWhole because it is the same kind of question
-	// — how the front end reads a program, per route, for one dialect — and
+	// Beside CommandStringParsedWhole because it is the same kind of question —
+	// how the front end reads a program, per route, for one preset — and
 	// this is the route that one does not cover.
 	StdinProgramSurvivesAParseFailure bool
 	// NamesTheInputInLocation puts *where the script came from* between the

@@ -8293,15 +8293,42 @@ next command.** With a coprocess that has certainly ended:
     /usr/bin/true             0
     wait                      0
 
-So the notice rides on the shell reaping a job, which a real shell gets
-from SIGCHLD and this one has to place by hand: at the subshell, the
-pipeline, the external command and `wait`, and nowhere else. Putting it
-at the top of every statement instead is the mistake worth naming,
-because it passes every row above and breaks the ordinary idiom —
-`coproc CP { echo hi; }; read -r a <&${CP[0]}` answers `hi` in bash, and
-would answer an ambiguous redirect. Six corpus rows are controls for
-exactly that, and a build with the retirement moved to the statement
-boundary fails all six while passing every row that measures the fix.
+**bash's own rule is asynchronous and racy, and the shapes above are the
+deterministic ends of it.** It has no rule about forking: a `for
+((i=0;i<500;i++)); do :; done` answers 0 five times out of five with no
+fork in it at all, five iterations of the same loop answers 2 five times
+out of five, and between 10 and 200 the same line answers both ways on
+one machine in one minute. Nor is it elapsed time: `read -t 1` spends a
+whole second in one command and answers 2. What bash has is SIGCHLD
+arriving whenever the child gets round to exiting and the notice landing
+at the next command boundary after it — so a construct wins the race by
+taking long enough *and* running commands, which a fork does and a line
+of builtins does not.
+
+So this shell places the notice where it reaps a job, deterministically:
+at the subshell, the pipeline element, the external command and `wait`.
+That matches every shape bash answers the same way twice and refuses to
+reproduce the ones it does not. **Two things follow and both are worth
+stating.**
+
+The first is what the placement must not become. Putting it at the top
+of every statement instead passes every row above and breaks the
+ordinary idiom — `coproc CP { echo hi; }; read -r a <&${CP[0]}` answers
+`hi` in bash, and would answer an ambiguous redirect. Six corpus rows
+are controls for exactly that, and a build with the retirement moved to
+the statement boundary fails all six while passing every row that
+measures the fix.
+
+The second is the residue: a long loop of builtins is a shape bash
+*does* answer deterministically and this shell does not follow it there.
+`coproc CP { exit 0; }; for ((i=0;i<500;i++)); do :; done; echo x
+>&${CP[1]}` is an ambiguous redirect at 1 in bash and is still SIGPIPE
+here, and it is why the one `-1 / 0` file in `make bash-suite` — the
+file this issue was derived from, confirmed to be the coprocess one and
+confirmed to die on SIGPIPE — is unchanged by the fix. Following bash
+there means a notice on a loop's back edge, which would answer 0 for the
+five-iteration loop bash answers 2 for; that is a trade to measure
+rather than to assume, and it is #2468.
 
 **A read that finds end-of-file is a different rule and is shared.**
 Both shells with the coprocess letters forget the *whole* coprocess

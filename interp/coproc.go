@@ -211,12 +211,22 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 //	/usr/bin/…   0      so is an external command
 //	wait         0
 //
-// So the trigger is the shell reaping *anything*, which is what a real shell
-// gets for free from SIGCHLD and what this one has to place by hand. Placing
-// it at the top of every statement instead would have retired a coprocess
-// before the very next line could read what it wrote — `coproc CP { echo hi;
-// }; read -r a <&${CP[0]}` answers `hi` in bash and would have answered an
-// ambiguous redirect here.
+// So the trigger is the shell reaping *anything*, and that is a deterministic
+// stand-in for a rule that is not: bash's notice rides on SIGCHLD arriving
+// whenever the child gets round to exiting and landing at the next command
+// boundary after that, so a construct wins the race by taking long enough
+// *and* running commands. Five iterations of `for ((i=0;i<n;i++)); do :;
+// done` answer 2 five times running and five hundred answer 0 five times
+// running, with no fork in either; `read -t 1` spends a whole second in one
+// command and answers 2. The four places here match every shape bash answers
+// the same way twice, and the long-loop shape it also answers the same way
+// twice is the one they miss — recorded in docs/spec/semantics.md and filed
+// as #2468, because following bash there costs the short-loop shape.
+//
+// Placing it at the top of every statement instead would have retired a
+// coprocess before the very next line could read what it wrote — `coproc CP {
+// echo hi; }; read -r a <&${CP[0]}` answers `hi` in bash and would have
+// answered an ambiguous redirect here.
 //
 // The main thread is the only thread that runs it. The reaping itself happens
 // on the goroutine running the coprocess body, and all this reads of that is

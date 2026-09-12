@@ -110,6 +110,14 @@ func TestASubscriptFlagGroupSelectsTheElementItNames(t *testing.T) {
 		{"b below the first element is the first", `${a[(ib:0:)*a]}`, "1"},
 		{"b past the end searches nothing", `${a[(ib:6:)*a]}`, "6"},
 		{"and nothing in reverse either", `${a[(Ib:6:)*a]}`, "0"},
+		// The other side of that boundary, which is not its mirror: a start
+		// counted back past the *first* element gives the forward search the
+		// backward miss rather than its own. Both rows are needed, because
+		// the backward one is unchanged by it and an implementation that
+		// answered `I` everywhere would still pass on its own.
+		{"b below the first element misses backwards", `${a[(ib:-6:)*a]}`, "0"},
+		{"which is what the reverse search already answered", `${a[(Ib:-6:)*a]}`, "0"},
+		{"and the element forms find nothing either way", `${a[(rb:-6:)*a]}${a[(Rb:-6:)*a]}`, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, status := runSub(t, subArray+`printf "[%s]" "`+tc.src+`"`)

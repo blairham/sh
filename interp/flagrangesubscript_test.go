@@ -335,3 +335,85 @@ func TestAnOperatorOverARangeJoinsInQuotesAndDistributesOutside(t *testing.T) {
 		})
 	}
 }
+
+// A range whose start is outside the array is not always nothing: two shapes
+// of it name **one empty element**, which is the answer a length counts as 1
+// and the fields flag makes a field of. The two edges are not mirror images —
+// above the array the ends must differ, below it they may be equal — and how
+// the start was *written* decides which rule it takes, since a negative that
+// normalizes onto the same position as a literal `0` does not answer as that
+// `0` does.
+//
+// Every row is a measurement on zsh 5.9.2, 2026-09-12, over `a=(1 2 3 4 5)`
+// unless it says otherwise.
+func TestARangeStartingOutsideTheArrayNamesOneEmptyElement(t *testing.T) {
+	const a = `a=(1 2 3 4 5); `
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"above the array with ends apart, one empty element",
+			a + `f "${#a[6,7]}"`,
+			`1:[1]`,
+		},
+		{
+			"and the same start with equal ends, none",
+			a + `f "${#a[6,6]}"`,
+			`1:[0]`,
+		},
+		{
+			// The pair above measured further out, which is what says the
+			// rule is the strictness rather than how far past the end the
+			// start is.
+			"the distance past the end does not decide it",
+			a + `f "${#a[7,9]}" "${#a[9,9]}"`,
+			`2:[1][0]`,
+		},
+		{
+			"below the array with equal ends, one empty element",
+			a + `f "${#a[-8,-8]}"`,
+			`1:[1]`,
+		},
+		{
+			"and with the end below the start, none",
+			a + `f "${#a[-6,-8]}"`,
+			`1:[0]`,
+		},
+		{
+			// `-6` normalizes onto the position a literal `0` does on five
+			// elements, and the two answer differently — so the reading
+			// cannot be "normalize and reuse the rule".
+			"a negative start and the literal it normalizes to differ",
+			a + `f "${#a[-6,0]}" "${#a[0,0]}"`,
+			`2:[1][0]`,
+		},
+		{
+			"the fields flag makes a field of the one empty element",
+			a + `f "${(@)a[6,7]}"`,
+			`1:[]`,
+		},
+		{
+			"and none where the range names nothing",
+			a + `f "${(@)a[6,6]}"`,
+			`0:[]`,
+		},
+		{
+			// The reading that must not move with it: a range over a
+			// scalar's characters answers nothing in both shapes, so this
+			// is the element reading's rule alone.
+			"a character range answers nothing in either shape",
+			`s=hello; f "${#s[6,7]}" "${#s[-8,-8]}"`,
+			`2:[0][0]`,
+		},
+		{
+			"everything in bounds is untouched",
+			a + `f "${#a[2,4]}" "${#a[-5,-1]}" "${#a[0,3]}" "${#a[3,1]}"`,
+			`4:[3][5][3][0]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runFlagRange(t, count+tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

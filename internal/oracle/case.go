@@ -5272,6 +5272,16 @@ echo "st=$?"`,
 		Why:     "`n` asks for the nth match rather than the first and `b` moves where the search starts, forwards for `r` and backwards for `R`. The last of the four is the one worth a row of its own: a start past the end is *not* clamped to the end, so a reverse search from 6 over five elements finds nothing rather than finding the fifth",
 	},
 	{
+		ID: "array/a-subscript-flag-group-start-below-the-first-element", Category: "expansion",
+		Snippet: `a=(p q r p t); printf "[%s]" "${a[(ib:-6:)p]}" "${a[(Ib:-6:)p]}" "${a[(ib:6:)p]}" "${a[(Ib:6:)p]}"; s="hello world"; printf "[%s]" "${s[(ib:-12:)l]}"; echo`,
+		Why:     "the row beside `(b:6:)` and not its mirror: a start past the *end* leaves each letter the miss its own direction names, and a start counted back past the *first* element gives the forward search the backward one. So the first two fields are both 0 while the next two are 6 and 0, and an implementation reading `outside the array` as one condition answers 6 to the first. The scalar is the fifth field and the control — a string's characters do not move with it, and `${s[(ib:-12:)l]}` is the ordinary forward miss — which is what places the rule in the element walk rather than in where a search begins. The other five columns have no flag group in a subscript and read the whole thing as arithmetic (#1534)",
+	},
+	{
+		ID: "array/a-range-starting-outside-the-array-names-one-empty-element", Category: "expansion",
+		Snippet: `a=(1 2 3 4 5); printf "[%s]" "${#a[6,7]}" "${#a[6,6]}" "${#a[7,9]}" "${#a[9,9]}" "${#a[-8,-8]}" "${#a[-6,0]}" "${#a[0,0]}"; set -- "${(@)a[6,7]}"; printf "[n=%s]" "$#"; s=hello; printf "[%s]" "${#s[6,7]}" "${#s[-8,-8]}"; echo`,
+		Why:     "a range whose start is outside the array is not always nothing: zsh answers some of those shapes with one empty element, which a length counts as 1 and `(@)` makes a field of. The two edges are not mirror images and each field is one that moves without the other — above the array the ends must differ strictly (`[6,7]` is 1, `[6,6]` is 0, and `[7,9]`/`[9,9]` say the same at a distance, so it is the strictness and not how far past the end), below it equal ends still count (`[-8,-8]` is 1). The sixth and seventh fields are the pair that refuses the obvious fix: `-6` and `0` normalize onto the same position on five elements and answer 1 and 0, so how the start was *written* decides which rule it takes. The last two are the control — a character range does neither — and the other five columns read the comma as arithmetic and have no range at all (#1544)",
+	},
+	{
 		ID: "array/a-subscript-pair-is-a-range", Category: "expansion",
 		Snippet: `a=(w x y z); echo "[${a[1,3]}]"`,
 		Why:     "the comma in a subscript, which is two readings of one spelling: zsh separates a range and gives `w x y`, while bash 5.3, bash 3.2, bash as sh and ksh93 read the whole text as arithmetic, take the comma operator's right operand and name element 3 alone. Both answer and neither reports, so a script cannot tell which shell it is on except by the value — the definition of a semantics axis rather than a construct one grammar has",

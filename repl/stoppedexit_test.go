@@ -67,6 +67,13 @@ func stoppedSession(t *testing.T, script string) (Shell, *strings.Builder) {
 	t.Helper()
 	sh, errs := plainSession(t, script)
 	sh.Runner.JobControl = true
+	// And a terminal, and the monitor that goes with one. A session has both
+	// — see driver's interactive route — and after #2227 the monitor is what
+	// makes a stop an *answer*: a shell that is not watching jobs waits the
+	// stopped command out instead, which is what the whole panel does and
+	// which this fake, saying `stopped` for ever, would never let it finish.
+	sh.Runner.Terminal = true
+	sh.Runner.SetInteractiveMonitor()
 	sh.Runner.WaitForCommand = func(int) (interp.Wait, error) {
 		return interp.Wait{Signal: syscall.SIGTSTP, Stopped: true}, nil
 	}

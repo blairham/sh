@@ -2226,6 +2226,28 @@ empty — and an **association** is outside it, `[0]` being a key there like
 any other. A corner no script can depend on, reproduced because the
 alternative is an empty at status 0.
 
+**The write side reads the same node.** An assignment through the flag goes
+through the resolved text read as the parameter expansion it spells, so every
+subscript the read answers the write answers too. Measured 2026-09-12 on zsh
+5.9.2, with the resolved text on the left:
+
+    a=(p q);   v='a[(r)q]'; ${(P)v::=Z}   →  a is `p Z`   a search names the element
+    a=(p q);   v='a[(i)q]'; ${(P)v::=Z}   →  a is `p Z`   and its index form
+    x=(p q r); v='x[1,2]';  ${(P)v::=Z}   →  x is `Z r`   a range names a *span*
+    s=abc;     v='s[2]';    ${(P)v::=Z}   →  s is `aZc`   the control
+    x=(p q r); v='x[2]';    ${(P)v::=Z}   →  x is `p Z r`
+
+Taken apart by hand into a name plus one arithmetic index, the first two
+failed in the arithmetic and the third was **silent**: `1,2` reached the
+reader as one expression, the comma operator answered its right operand, and
+the write landed on element 2 instead of replacing the span — a plausible
+array back at status 0 (#2169).
+
+`[@]` and `[*]` on the left are not answered by either spelling and are
+refused as they were: the shell replaces the whole array with the one value,
+and the *direct* `x[@]=Z` does not do that here either, so answering only the
+indirect one would put the two spellings out of step.
+
 ### `(P)` beside an operator that assigns
 
 `(P)` moves the whole expansion one step along, and that includes the

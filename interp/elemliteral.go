@@ -73,7 +73,7 @@ func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
 		r.spliceElementSpan(a.Name, subject, elems, from, to, words)
 		return
 	}
-	idx, err := r.subscriptValue(text)
+	idx, err := r.subscriptValueAsWritten(subject, text)
 	if err != nil {
 		// The same failure, worded the same way, as the scalar element
 		// assignment beside it: `a[1/0]=(p q)` is `division by zero` and ends

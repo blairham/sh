@@ -5121,7 +5121,12 @@ func (r *Runner) assign(a *syntax.Assign) {
 				r.assignValue(a), false)
 			return
 		}
-		idx, err := r.subscriptValue(text)
+		// Told what the source spelled, because that is what decides whether
+		// a comma still in the expanded text separates anything: measured,
+		// `a=(p q r s); i="1,2"; a[$i]=Z` writes the *first* element in the
+		// shell with ranges, where a written `a[2,3]+=(x)` reads the comma
+		// as the operator it is (#2160).
+		idx, err := r.subscriptValueAsWritten(subject, text)
 		if err != nil {
 			r.fatal("%s\n", r.subscriptFailure(text, err))
 			return

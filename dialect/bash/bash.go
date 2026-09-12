@@ -946,6 +946,12 @@ func Semantics() interp.Semantics {
 	// on 5.3.15, `a=(5 6 7); w=; ${a[$w]}` is `5` at status 0, and `${a[ ]}`
 	// beside it is too.
 	s.EmptySubscriptTextIsAMathError = interp.No
+	// The comma inside a subscript is the arithmetic operator here, as it is
+	// everywhere else: measured 2026-09-12, `a=(p q r s); i="2,3";
+	// ${a[$i]}` is the *third* element, which is the operator's right
+	// operand. This dialect has no ranges for the question to be about
+	// (#2160).
+	s.SubscriptExpressionStopsAtASeparator = interp.No
 	// Whitespace between the brackets is not that text and is not answered
 	// by it: measured 2026-09-10 in 5.3.15 and in 3.2.57, `a=(1 2 3); echo
 	// $(( a[ ] ))` is `1` with a clean stream — the blank expression is

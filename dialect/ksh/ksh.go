@@ -983,6 +983,9 @@ func Semantics() interp.Semantics {
 	// shell reads as the empty expression exactly as it reads the written
 	// `${a[]}`: measured 2026-09-11 on ksh93u+, both are element zero.
 	s.EmptySubscriptTextIsAMathError = interp.No
+	// The comma is the operator here too, and there are no ranges for the
+	// question to be about (#2160).
+	s.SubscriptExpressionStopsAtASeparator = interp.No
 	// And so is whitespace between them, which is the same reading one text
 	// further along: measured 2026-09-10, `a=(1 2 3); echo $(( a[ ] ))` is
 	// `1` and `(( a[ ] = 9 ))` writes element zero. The two texts coincide

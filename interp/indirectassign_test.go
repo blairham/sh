@@ -214,3 +214,91 @@ func TestTheIndirectionFlagRefusesWhatItResolvedTo(t *testing.T) {
 		})
 	}
 }
+
+// A write through `(P)` goes through the resolved text read as the parameter
+// expansion it **spells**, which is the same node the read side uses.
+//
+// It used to be taken apart by hand into a name and one arithmetic subscript.
+// A search failed in the arithmetic, and a *range* was silently wrong: `1,2`
+// reached the reader as one expression, the comma operator answered its right
+// operand, and the write landed on element 2 instead of replacing the span —
+// a plausible array back at status 0 (#2169).
+func TestAWriteThroughAReferenceReachesEverySubscript(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a search names the element",
+			`a=(p q); v='a[(r)q]'; : ${(P)v::=Z}; printf "[%s]" "${a[@]}"`,
+			"[p][Z]",
+		},
+		{
+			"and its index form names the same one",
+			`a=(p q); v='a[(i)q]'; : ${(P)v::=Z}; printf "[%s]" "${a[@]}"`,
+			"[p][Z]",
+		},
+		{
+			// The silent one: the span is replaced, so the array shrinks.
+			"a range names a span",
+			`x=(p q r); v='x[1,2]'; : ${(P)v::=Z}; printf "[%s]" "${x[@]}"`,
+			"[Z][r]",
+		},
+		{
+			"a range that grows the array",
+			`x=(p q r); v='x[2,3]'; : ${(P)v::=Z}; printf "[%s]" "${x[@]}"`,
+			"[p][Z]",
+		},
+		{
+			// The control, which already worked: one element by index.
+			"one element by index",
+			`x=(p q r); v='x[2]'; : ${(P)v::=Z}; printf "[%s]" "${x[@]}"`,
+			"[p][Z][r]",
+		},
+		{
+			// And a character of a scalar, the other control.
+			"a character of a string",
+			`s=abc; v='s[2]'; : ${(P)v::=Z}; printf "[%s]" "$s"`,
+			"[aZc]",
+		},
+		{
+			"a key on a table",
+			`typeset -A m; m[k]=old; w='m[k]'; : ${(P)w::=Z}; printf "[%s]" "${m[k]}"`,
+			"[Z]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := indirectSpanRun(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// indirectSpanRun is indirectAssignRun with the two answers a subscript that
+// names a *span* depends on, which the rows above are about: the comma is a
+// range, and a span on the left replaces the elements it covers.
+func indirectSpanRun(t *testing.T, src string) (string, int) {
+	t.Helper()
+	d := syntax.Core()
+	alwaysAssigning(&d)
+	d.ArraySubscriptFlags = true
+	f, err := syntax.Parse(src, d)
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	sem := permissive()
+	sem.SplitParamExpansion = No
+	sem.GlobExpansionResults = No
+	sem.FatalErrorStatusIsOne = Yes
+	sem.DeclaredNameWithoutValueIsEmpty = Yes
+	sem.ArrayBaseIsZero = No
+	sem.SubscriptCommaIsARange = Yes
+	sem.SubscriptExpressionStopsAtASeparator = Yes
+	sem.ScalarSubscriptIsACharacter = Yes
+	var buf bytes.Buffer
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Dialect: &d, Semantics: &sem, Name: "testsh"})
+	st, rerr := r.Run(context.Background(), f)
+	if rerr != nil {
+		t.Fatalf("run %q: %v", src, rerr)
+	}
+	return buf.String(), st
+}

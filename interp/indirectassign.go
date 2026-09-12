@@ -233,6 +233,9 @@ func (r *Runner) referenceNode(text string, outer *syntax.ParamExpr, src string)
 // and the array's base is answered in one place rather than twice.
 func (r *Runner) assignIndirect(written string, t *indirectTarget, v string) bool {
 	name := t.name(written)
+	if e, ok := r.reference(name); ok {
+		return r.assignThroughReference(e, v)
+	}
 	if base, sub, ok := r.indirectElement(name); ok {
 		if r.assocDeclared(base) {
 			r.setAssocElem(base, sub, v)
@@ -257,6 +260,83 @@ func (r *Runner) assignIndirect(written string, t *indirectTarget, v string) boo
 		return false
 	}
 	r.setVar(name, v)
+	return true
+}
+
+// assignThroughReference writes through a resolved text read as the parameter
+// expansion it spells, which is the same node the *read* side uses.
+//
+// The text used to be taken apart by hand into a name and one arithmetic
+// subscript, and every other shape either fell through to that reading or
+// failed in the arithmetic. Measured on zsh 5.9.2, 2026-09-12, with the
+// resolved text on the left:
+//
+//	a=(p q);   v='a[(r)q]'   `p Z`     a search names the element
+//	x=(p q r); v='x[1,2]'    `Z r`     a range names a *span*
+//	s=abc;     v='s[2]'      `aZc`     the control, already right
+//
+// The middle row is the one that was silent: `1,2` reached the arithmetic as
+// one expression, the comma operator answered its right operand, and the
+// write landed on element 2 instead of replacing the span — a plausible
+// array back at status 0 (#2169).
+//
+// A whole-array subscript is *not* answered here and is refused as it was:
+// `x[@]=Z` replaces the array with one element in that shell, and the direct
+// spelling of it refuses too, so answering only the indirect one would put
+// the two spellings out of step.
+func (r *Runner) assignThroughReference(e *syntax.ParamExpr, v string) bool {
+	if e.IndexFlags != nil {
+		// A search names the element, on this side exactly as `a[(r)y]=Q`
+		// does — and through flaggedTargetIndex, so the refusal is the fatal
+		// one an assignment earns rather than the per-operand one `unset`
+		// gets.
+		idx, ok := r.flaggedTargetIndex(e, true)
+		if !ok {
+			return false
+		}
+		r.setArrayElem(e.Name, idx, r.subscriptText(e.Subscript()), v)
+		return true
+	}
+	if e.IndexRange != nil {
+		return r.assignReferenceSpan(e, v)
+	}
+	sub := r.subscriptText(e.Index)
+	if r.assocDeclared(e.Name) {
+		r.setAssocElem(e.Name, r.assocKey(e.Index), v)
+		return true
+	}
+	idx, err := r.subscriptValue(sub)
+	if err != nil {
+		r.fatal("%s\n", r.subscriptFailure(sub, err))
+		return false
+	}
+	r.setArrayElem(e.Name, idx, sub, v)
+	return true
+}
+
+// assignReferenceSpan is a resolved text naming a **range**, where the value
+// replaces the whole span rather than one element of it.
+//
+// The same store the direct `a[1,2]=Z` reaches, so a span that grows, shrinks
+// or holds does the same thing by both spellings. Measured, `x=(p q r);
+// v='x[1,2]'; ${(P)v::=Z}` leaves `Z r`.
+func (r *Runner) assignReferenceSpan(e *syntax.ParamExpr, v string) bool {
+	lo, ok := r.rangeEnd(e, e.IndexRange.Lo, subscriptSource{name: e.Name}, true)
+	if !ok {
+		return false
+	}
+	hi, ok := r.rangeEnd(e, e.IndexRange.Hi, subscriptSource{name: e.Name}, false)
+	if !ok {
+		return false
+	}
+	if !r.spanReplacesElements(e.Name) {
+		// A dialect without the range reading has nothing to replace, and a
+		// table has no span at all. Left to the ordinary element store, which
+		// is what the text spells everywhere else.
+		return false
+	}
+	elems, _ := r.arrayElemsOfTheName(e.Name)
+	r.spliceElementSpan(e.Name, r.subscriptText(e.Index), elems, lo, hi, []string{v})
 	return true
 }
 

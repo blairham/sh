@@ -841,7 +841,22 @@ const (
 // span 2 through 3 with something put after it. `a[2,3]+=x` gives `[1][2][3x]`
 // for the same reason: it appends to element *3*.
 func (r *Runner) assignSpan(a *syntax.Assign, text string) (from, to int, outcome spanOutcome) {
+	if a.IndexText != "" && !pairIsWritten(a.IndexText) {
+		// The comma has to have been **written** to separate a pair, and the
+		// source says it was not: measured on zsh 5.9.2, 2026-09-12,
+		// `a=(p q r s); i="1,2"; a[$i]=Z` writes the *first element* there
+		// and leaves the rest, where splitting the expanded text replaced
+		// the span (#2160).
+		return 0, 0, spanNotARange
+	}
 	return r.subscriptSpan(text, a.Append)
+}
+
+// pairIsWritten reports whether the source spelled a top-level comma in this
+// subscript, which is what makes it a pair at all.
+func pairIsWritten(written string) bool {
+	at, _ := topLevelComma(written)
+	return at >= 0
 }
 
 // subscriptSpan is assignSpan with the operator handed over rather than read
@@ -1483,18 +1498,10 @@ type subscriptSource struct {
 func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]string, bool) {
 	elems, scalar := src.elems, src.scalar
 	if e.IndexRange != nil {
-		// A pair whose ends carry flag groups of their own, separated by the
-		// parser because the comma has to have been *written* to separate
-		// one. Ahead of everything below, which reads the subscript as one
-		// piece of text and would hand a group's letters to the arithmetic.
-		return r.flaggedRangeSubscript(e, src)
-	}
-	written := r.subscriptTextAsWritten(e.Subscript())
-	idx := trimSubscript(written)
-	if r.wholeArrayIndex(e) {
-		return elems, true
-	}
-	if lo, hi, isRange := splitSubscriptRange(idx); isRange {
+		// A pair the parser separated, because the comma has to have been
+		// *written* to separate one. Ahead of everything below, which reads
+		// the subscript as one piece of text and would hand a group's
+		// letters to the arithmetic.
 		if r.subscriptIsReadAsItsIndex(e, src) &&
 			r.ask(r.sem().SubscriptCommaIsARange, "`${a[1,3]}` naming a range rather than one subscript") {
 			// A range names a span and `(k)` wants the one index a subscript
@@ -1502,9 +1509,28 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 			// `${(k)x[1,2]}` is `invalid subscript` and the line ends at 1.
 			return nil, r.reportIndexAndRange()
 		}
+		return r.flaggedRangeSubscript(e, src)
+	}
+	written := r.subscriptTextAsWritten(e.Subscript())
+	idx := trimSubscript(written)
+	if r.wholeArrayIndex(e) {
+		return elems, true
+	}
+	if lo, hi, isRange := splitSubscriptRange(idx); isRange && !r.pairsAreSplitWhenWritten() {
+		// A grammar whose parser does not separate a written pair, where the
+		// only text there is to split is the expanded one. See
+		// pairsAreSplitWhenWritten, which is the whole of the difference.
+		if r.subscriptIsReadAsItsIndex(e, src) &&
+			r.ask(r.sem().SubscriptCommaIsARange, "`${a[1,3]}` naming a range rather than one subscript") {
+			return nil, r.reportIndexAndRange()
+		}
 		return r.rangeSubscript(src, idx, lo, hi)
 	}
-	if at, extra := topLevelComma(idx); at >= 0 && extra &&
+	// The *written* text, because a third comma is a fact about what was
+	// typed: `${a[1,2,3]}` is a bad substitution in the shell with ranges,
+	// where the same three numerals arriving through a parameter are read as
+	// one expression that stops at the first comma (#2160).
+	if at, extra := topLevelComma(r.writtenSubscript(e, idx)); at >= 0 && extra &&
 		r.sem().SubscriptCommaIsARange == Yes {
 		// A range has two ends. The dialect that reads the comma that way
 		// has no reading for a third — measured, `${a[1,2,3]}` is a bad
@@ -1527,7 +1553,7 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 	// Read from the text as written, blanks and all, because a complaint
 	// quotes it back and one column quotes the blanks with it (#2010). The
 	// value is the same either way — the expression reader skips them.
-	n, ok := r.subscriptIndex(written)
+	n, ok := r.subscriptIndexAsWritten(r.writtenSubscript(e, idx), written)
 	if !ok {
 		return nil, true
 	}
@@ -1696,6 +1722,32 @@ func splitSubscriptPair(idx string) (lo, hi string, ok bool) {
 		return "", "", false
 	}
 	return idx[:at], idx[at+1:], true
+}
+
+// pairsAreSplitWhenWritten reports whether the parser separates a written pair
+// into two ends, which is where the split belongs: **a comma has to have been
+// written to separate one.** Measured on zsh 5.9.2, 2026-09-12,
+// `i="1,2"; ${a[$i]}` is the *first* element there and not the range `1,2`.
+//
+// Asked of the grammar rather than of the semantics vector, because it is a
+// fact about what the parser did with the source: where the grammar has
+// subscript flag groups it has ranges too — no dialect measured has one
+// without the other — and syntax.Parser.subscriptRange separates every pair
+// it finds. A grammar without them never produced a SubscriptRange, so the
+// run-time split over the expanded text is what it still gets, and for it
+// that text and the written one are the same thing.
+func (r *Runner) pairsAreSplitWhenWritten() bool {
+	return r.dialect().ArraySubscriptFlags
+}
+
+// writtenSubscript is the subscript as the source spelled it, falling back to
+// the text the caller has where the node carries none — a subscript on an
+// expansion's result, or one this shell built at the run.
+func (r *Runner) writtenSubscript(e *syntax.ParamExpr, expanded string) string {
+	if e.IndexText != "" {
+		return e.IndexText
+	}
+	return expanded
 }
 
 // splitSubscriptRange splits `1,3` into its two halves, reporting whether the
@@ -1974,8 +2026,18 @@ func (r *Runner) subscriptIsARange(e *syntax.ParamExpr) bool {
 	if e.Index == nil {
 		return false
 	}
-	if _, _, ok := splitSubscriptRange(r.subscriptText(e.Subscript())); !ok {
-		return false
+	if e.IndexRange == nil {
+		if r.pairsAreSplitWhenWritten() {
+			// The parser had the chance and did not take it, so no pair was
+			// written and the text is one subscript however many commas an
+			// expansion put in it. Asking the expanded text instead made
+			// `i="2,3"; ${a[$i,4]}` no range at all — three commas there —
+			// and a quoted range that is not a range keeps its fields.
+			return false
+		}
+		if _, _, ok := splitSubscriptRange(r.subscriptText(e.Subscript())); !ok {
+			return false
+		}
 	}
 	return r.sem().SubscriptCommaIsARange == Yes
 }
@@ -2135,10 +2197,47 @@ func trimSubscript(text string) string {
 // about any bare name — `${a[k]}` with `k` unset is the first element in every
 // shell on the panel that has arrays.
 func (r *Runner) subscriptValue(text string) (int, error) {
+	return r.subscriptValueAsWritten(text, text)
+}
+
+// subscriptValueAsWritten is subscriptValue told what the *source* spelled,
+// which decides whether a separator still in the expanded text ends the
+// expression or is the arithmetic operator — see subscriptExpression.
+func (r *Runner) subscriptValueAsWritten(written, text string) (int, error) {
 	if err := r.emptySubscriptText(text); err != nil {
 		return 0, err
 	}
-	return r.expressionValue(text)
+	return r.expressionValue(r.subscriptExpression(written, text))
+}
+
+// subscriptExpression is the part of a subscript's text an expression reads,
+// which is not always the whole of it: one dialect stops at the first
+// top-level `,` or `;` and discards the rest. See
+// Semantics.SubscriptExpressionStopsAtASeparator, where the measurements are.
+//
+// A separator standing *first* leaves the text whole, because truncating it
+// would make the empty expression — which is zero and an answer — where the
+// shell complains about the character.
+//
+// A **comma the source wrote** is the operator and does not end anything:
+// measured, `a=(1 2 3); a[1,2,3]=(x y)` on zsh 5.9.2 is the span 1 through
+// the arithmetic `2,3`, which is 3. So only a comma that arrived through a
+// substitution ends the expression, which is the same rule that decides
+// where a *pair* is separated. A `;` ends it either way — it is no part of
+// any arithmetic — and that is what gives `${a[2,3;5]}` its second end of 3.
+func (r *Runner) subscriptExpression(written, text string) string {
+	at := syntax.SubscriptExpressionEnd(text)
+	if at <= 0 {
+		return text
+	}
+	if text[at] == ',' && syntax.SubscriptExpressionEnd(written) >= 0 {
+		return text
+	}
+	if !r.ask(r.sem().SubscriptExpressionStopsAtASeparator,
+		"a subscript's expression ending at a separator the source did not write") {
+		return text
+	}
+	return text[:at]
 }
 
 // emptySubscriptText is a subscript whose text came out empty or blank once
@@ -2247,7 +2346,13 @@ func (r *Runner) subscriptFailure(text string, err error) string {
 // bash draws that line itself, exiting 1 under `-c` for a bad expression where
 // `${x@QQ}` from the same invocation exits 127.
 func (r *Runner) subscriptIndex(text string) (int, bool) {
-	n, err := r.subscriptValue(text)
+	return r.subscriptIndexAsWritten(text, text)
+}
+
+// subscriptIndexAsWritten is subscriptIndex told what the source spelled, for
+// the reason subscriptValueAsWritten exists.
+func (r *Runner) subscriptIndexAsWritten(written, text string) (int, bool) {
+	n, err := r.subscriptValueAsWritten(written, text)
 	if err != nil {
 		r.diagf("%s\n", r.subscriptFailure(text, err))
 		r.expandErr = true

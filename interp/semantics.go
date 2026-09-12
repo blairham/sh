@@ -7914,6 +7914,46 @@ type Semantics struct {
 	// Diagnostics.ArithExpressionRanOut, which already words `$(( a[ ] ))`.
 	EmptySubscriptTextIsAMathError Answer
 
+	// SubscriptExpressionStopsAtASeparator ends a subscript's expression at
+	// the first top-level `,` or `;` and discards the rest of the text,
+	// rather than reading the comma as the arithmetic operator it is
+	// everywhere else.
+	//
+	// It is the other half of "a comma has to have been *written* to
+	// separate a range". The parser separates a written pair, so what
+	// reaches an expression with a separator still in it is a separator that
+	// arrived through a substitution — and the shell with ranges does not
+	// take it as an operator there either. Measured on zsh 5.9.2,
+	// 2026-09-12, with `a=(p q r s)`:
+	//
+	//	probe                        zsh 5.9.2   the comma operator would give
+	//	i="2,3";   ${a[$i]}          `q`         `r`
+	//	i="1+1,3"; ${a[$i]}          `q`         `r`
+	//	i="2,";    ${a[$i]}          `q`         a complaint
+	//	i="2;3";   ${a[$i]}          `q`         a complaint
+	//	i="2,3,4"; ${a[$i]}          `q`         `s`
+	//	i="2,n=9"; ${a[$i]}          `q`, and `n` is still 0
+	//	i="(1,2)"; ${a[$i]}          `r`         `r` — nested, so it applies
+	//	${a[2,3;5]}                  `q r`       the pair, second end `3`
+	//
+	// So the tail is not evaluated at all — the sixth row is the
+	// discriminator, since a reading that evaluated it and threw the value
+	// away would leave `n` at 9 — and the seventh says it is the *top level*
+	// of a subscript rather than the character: inside parentheses the
+	// operator applies.
+	//
+	// And it is the **subscript** and nowhere else. `$(( 1,2 ))` is 2 in
+	// every column, zsh included, and a substring's offset takes the
+	// operator too: measured, `x=abcdef; ${x:1,2:2}` is `cd` there, which is
+	// offset 2. So this is asked where a subscript is read as a number and
+	// not in the arithmetic the two sites share.
+	//
+	// A separator standing *first* is not truncated to nothing: `i=",3"` is
+	// `operand expected at ,3` there, so the text is left whole for the
+	// arithmetic to complain about rather than made into the empty
+	// expression, which is a different answer again (#2160).
+	SubscriptExpressionStopsAtASeparator Answer
+
 	// BlankArithSubscriptIsTheEmptyExpression reads a subscript holding
 	// whitespace and nothing else — `$(( a[ ] ))` — as the blank expression,
 	// which is zero, so the operand is the *element that subscript names*

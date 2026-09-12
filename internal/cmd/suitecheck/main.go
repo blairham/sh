@@ -173,82 +173,94 @@ func skip(what, why string) {
 // stands next to. That is not fastidiousness — the header carried a sentence
 // for months saying a refused parse forfeited a whole file, which this
 // instrument's own per-file results disprove on every run (#2381).
+// out is the report's writer, and it drops the error every write returns.
+//
+// A report goes to a terminal or to a descriptor somebody already opened. A
+// short write there is not something this program can do anything about, and
+// checking one at every line would bury the wording — which is the part of
+// this function that has to be right — under the handling.
+type out struct{ w io.Writer }
+
+func (o out) printf(format string, a ...any) { _, _ = fmt.Fprintf(o.w, format, a...) }
+func (o out) println(a ...any)               { _, _ = fmt.Fprintln(o.w, a...) }
+
 func printReport(w io.Writer, rep suite.Report) {
+	o := out{w}
 	s := rep.Suite
-	fmt.Fprintf(w, "%s's own suite, %s — %d files (%s)\n", s.Name, s.Version, rep.Files, s.Ext)
-	fmt.Fprintf(w, "  oracle   %s — %s\n", rep.Reference, rep.ReferenceVersion)
-	fmt.Fprintf(w, "  ours     %s\n", rep.Ours)
+	o.printf("%s's own suite, %s — %d files (%s)\n", s.Name, s.Version, rep.Files, s.Ext)
+	o.printf("  oracle   %s — %s\n", rep.Reference, rep.ReferenceVersion)
+	o.printf("  ours     %s\n", rep.Ours)
 	if len(rep.Helpers) > 0 {
-		fmt.Fprintf(w, "  helpers  %s, built from the suite's own C\n", strings.Join(rep.Helpers, ", "))
+		o.printf("  helpers  %s, built from the suite's own C\n", strings.Join(rep.Helpers, ", "))
 	}
-	fmt.Fprintln(w)
+	o.println()
 
-	fmt.Fprintf(w, "  static read     %-9s %5.1f%%   the whole file parsed at once, in the dialect's\n",
+	o.printf("  static read     %-9s %5.1f%%   the whole file parsed at once, in the dialect's\n",
 		fmt.Sprintf("%d/%d", rep.Parsed, rep.Files), 100*rep.ParseRate())
-	fmt.Fprintf(w, "                                    defaults — a read the shell itself never performs\n")
-	fmt.Fprintf(w, "  strict          %-9s %5.1f%%   output and status identical, once each shell's own\n",
+	o.printf("                                     defaults — a read the shell itself never performs\n")
+	o.printf("  strict          %-9s %5.1f%%   output and status identical, once each shell's own\n",
 		fmt.Sprintf("%d/%d", rep.Strict, rep.Scored), 100*rep.StrictRate())
-	fmt.Fprintf(w, "                                    path and the run's temp directory are taken out\n")
-	fmt.Fprintf(w, "  line agreement  %-9s %5.1f%%   longest common subsequence of the two outputs'\n",
+	o.printf("                                     path and the run's temp directory are taken out\n")
+	o.printf("  line agreement  %-9s %5.1f%%   longest common subsequence of the two outputs'\n",
 		"", 100*rep.LineRate())
-	fmt.Fprintf(w, "                                    lines over the longer side, scored files only\n")
-	fmt.Fprintf(w, "                  %-9s %5.1f%%   the same, unweighted per file\n",
+	o.printf("                                     lines over the longer side, scored files only\n")
+	o.printf("                  %-9s %5.1f%%   the same, unweighted per file\n",
 		"", 100*rep.MeanFile)
-	fmt.Fprintln(w)
+	o.println()
 
-	printRefused(w, rep)
+	printRefused(o, rep)
 
-	fmt.Fprintf(w, "  not scored       %d unstable · %d oracle hung · %d dialect hung\n",
+	o.printf("  not scored       %d unstable · %d oracle hung · %d dialect hung\n",
 		rep.Unstable, rep.OracleHung, rep.DialectHung)
-	fmt.Fprintln(w, "                   unstable: the oracle did not repeat itself, so the file is")
-	fmt.Fprintln(w, "                     evidence about neither shell — a pid, a clock, an order.")
-	fmt.Fprintln(w, "                   oracle hung: a harness fault. The shell that wrote the file")
-	fmt.Fprintln(w, "                     does not hang on it, so this is load or too tight a bound.")
-	fmt.Fprintln(w, "                   dialect hung: a hang we published. Different finding, kept apart.")
+	o.println("                   unstable: the oracle did not repeat itself, so the file is")
+	o.println("                     evidence about neither shell — a pid, a clock, an order.")
+	o.println("                   oracle hung: a harness fault. The shell that wrote the file")
+	o.println("                     does not hang on it, so this is load or too tight a bound.")
+	o.println("                   dialect hung: a hang we published. Different finding, kept apart.")
 	if rep.LineCapped > 0 {
-		fmt.Fprintf(w, "  capped           %d files printed more lines than the comparison's bound\n", rep.LineCapped)
+		o.printf("  capped           %d files printed more lines than the comparison's bound\n", rep.LineCapped)
 	}
-	fmt.Fprintln(w)
+	o.println()
 
-	fmt.Fprintln(w, "  Each number misleads on its own. Strict reads as catastrophe — a suite file")
-	fmt.Fprintln(w, "  is hundreds of assertions and one disagreement forfeits all of them. Line")
-	fmt.Fprintln(w, "  agreement reads as triumph for the mirror-image reason, since most lines of")
-	fmt.Fprintln(w, "  most files are text a shell echoed back.")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  The static read does not explain either of them, and this header used to say")
-	fmt.Fprintln(w, "  it did. This shell parses incrementally, exactly as the reference does: a")
-	fmt.Fprintln(w, "  file runs up to the construct that stopped the read, so a refusal costs the")
-	fmt.Fprintln(w, "  rest of one file rather than the file, and a refused file is run and scored")
-	fmt.Fprintln(w, "  above like any other. What the refusals cost is the band, measured. The")
-	fmt.Fprintln(w, "  static read is about the other route — `-n`, a formatter, an editor — which")
-	fmt.Fprintln(w, "  is a real property with real consumers in this tree and is simply not what")
-	fmt.Fprintln(w, "  the two runtime numbers are made of.")
-	fmt.Fprintln(w)
+	o.println("  Each number misleads on its own. Strict reads as catastrophe — a suite file")
+	o.println("  is hundreds of assertions and one disagreement forfeits all of them. Line")
+	o.println("  agreement reads as triumph for the mirror-image reason, since most lines of")
+	o.println("  most files are text a shell echoed back.")
+	o.println()
+	o.println("  The static read does not explain either of them, and this header used to say")
+	o.println("  it did. This shell parses incrementally, exactly as the reference does: a")
+	o.println("  file runs up to the construct that stopped the read, so a refusal costs the")
+	o.println("  rest of one file rather than the file, and a refused file is run and scored")
+	o.println("  above like any other. What the refusals cost is the band, measured. The")
+	o.println("  static read is about the other route — `-n`, a formatter, an editor — which")
+	o.println("  is a real property with real consumers in this tree and is simply not what")
+	o.println("  the two runtime numbers are made of.")
+	o.println()
 
 	if len(rep.Causes) == 0 {
-		fmt.Fprintln(w, "  nothing was refused by the static read")
+		o.println("  nothing was refused by the static read")
 	} else {
-		fmt.Fprintln(w, "  constructs the static read refused, by files")
-		fmt.Fprintln(w, "  (this parser's own diagnostic, with the position and any word from the")
-		fmt.Fprintln(w, "   file removed — the fetched text that provoked it is never printed)")
+		o.println("  constructs the static read refused, by files")
+		o.println("  (this parser's own diagnostic, with the position and any word from the")
+		o.println("   file removed — the fetched text that provoked it is never printed)")
 		for _, c := range rep.Causes {
-			fmt.Fprintf(w, "    %4d  %s", c.Files, c.Reason)
+			o.printf("    %4d  %s", c.Files, c.Reason)
 			if c.ReferenceRefuses > 0 {
-				fmt.Fprintf(w, "   (%d of them the reference's own -n refuses too)", c.ReferenceRefuses)
+				o.printf("   (%d of them the reference's own -n refuses too)", c.ReferenceRefuses)
 			}
-			fmt.Fprintln(w)
+			o.println()
 		}
 	}
-	fmt.Fprintln(w)
+	o.println()
 
 	if len(rep.StatusPairs) > 0 {
-		fmt.Fprintln(w, "  exit status of the files that ran and disagreed  (ours / oracle)")
-		fmt.Fprintln(w, "  (numbers, because our runtime diagnostics would quote the file back;")
-		fmt.Fprintln(w, "   -1 is a run that ended on a signal or never started)")
+		o.println("  exit status of the files that ran and disagreed  (ours / oracle)")
+		o.println("  (numbers, because our runtime diagnostics would quote the file back;")
+		o.println("   -1 is a run that ended on a signal or never started)")
 		for _, p := range rep.StatusPairs {
-			fmt.Fprintf(w, "    %4d  %d / %d\n", p.Files, p.Ours, p.Reference)
+			o.printf("    %4d  %d / %d\n", p.Files, p.Ours, p.Reference)
 		}
-		fmt.Fprintln(w)
+		o.println()
 	}
 }
 
@@ -260,20 +272,20 @@ func printReport(w io.Writer, rep suite.Report) {
 // score; and two constructs wearing this one row are different findings —
 // one this parser cannot read, which is a defect, and one no static read can
 // reach, which is not. The reference shell's own `-n` tells them apart.
-func printRefused(w io.Writer, rep suite.Report) {
+func printRefused(o out, rep suite.Report) {
 	if rep.Refused.Files == 0 {
 		return
 	}
-	fmt.Fprintf(w, "  of the %d files the static read refused\n", rep.Refused.Files)
-	fmt.Fprintf(w, "    %4d  ran and were scored anyway, at %d/%d strict and %.1f%% line agreement:\n",
+	o.printf("  of the %d files the static read refused\n", rep.Refused.Files)
+	o.printf("    %4d  ran and were scored anyway, at %d/%d strict and %.1f%% line agreement:\n",
 		rep.Refused.Scored, rep.Refused.Strict, rep.Refused.Scored, 100*rep.Refused.LineRate())
-	fmt.Fprintln(w, "          a refused read forfeits no evidence, because the shell never takes")
-	fmt.Fprintln(w, "          that route — it parses incrementally, as the reference does")
-	fmt.Fprintf(w, "    %4d  the reference's own -n refuses too, so no static read of the file\n",
+	o.println("          a refused read forfeits no evidence, because the shell never takes")
+	o.println("          that route — it parses incrementally, as the reference does")
+	o.printf("    %4d  the reference's own -n refuses too, so no static read of the file\n",
 		rep.ReferenceRefuses)
-	fmt.Fprintln(w, "          succeeds and this is not a gap in this parser: an option set at run")
-	fmt.Fprintln(w, "          time decides what a later line means, and a static read has no run time")
-	fmt.Fprintln(w)
+	o.println("          succeeds and this is not a gap in this parser: an option set at run")
+	o.println("          time decides what a later line means, and a static read has no run time")
+	o.println()
 }
 
 // printPanel prints every column, built and unbuilt, every time.

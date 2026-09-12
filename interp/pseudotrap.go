@@ -187,9 +187,10 @@ func (r *Runner) runDebugTrap(ctx context.Context) {
 		return
 	}
 	// And functrace carries it into a subshell for the same reason errtrace
-	// does above: measured, `trap 'echo D' DEBUG; (echo s)` writes `s` and
-	// then one D — the subshell group fires nothing of its own — where
-	// `set -T` in front of it writes a D before the `echo s` inside.
+	// does above: measured, `trap 'echo D' DEBUG; (echo s); echo x` writes
+	// `s`, one D and `x` — the group itself fires nothing, and the D belongs
+	// to the command after it — where `set -T` in front of the same line
+	// puts a second D ahead of the `echo s` inside.
 	if r.debugTrapInherited && !r.functrace &&
 		!r.ask(r.sem().DebugTrapRunsInSubshells, "the DEBUG trap inside a subshell") {
 		return

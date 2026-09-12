@@ -10478,6 +10478,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shopt/lastpipe-reaches-only-the-last-element` | `[]` | `[]` | `[]` | `[]` | `[]` | `[]` | `[]` |
 | `shopt/lastpipe-lets-an-exit-end-the-shell` | `after=3` | *(no output, status 3)* | *(no output, status 3)* | `after=3` | *(no output, status 3)* | *(no output, status 3)* | `after=3` |
 | `shopt/lastpipe-keeps-a-read-loops-count` | `n=[]` | `n=[3]` | `n=[3]` | `n=[]` | `n=[3]` | `n=[3]` | `n=[]` |
+| `opt/set-o-functrace-carries-the-debug-trap-into-a-call` | **2>** `<shell>: 2: set: Illegal option -o functrace` *(status 2)* | `D~D~S1~D~after` | `D~D~S1~D~after` | `D~D~S1~D~after` | **2>** `<shell>[2]: set: functrace: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:2: no such option: functrace` *(status 1)* | `S1~after` **2>** `<shell>: set: line 1: illegal option -o functrace~<shell>: trap: line 1: DEBUG: invalid signal specification` |
+| `opt/set-o-functrace-carries-the-debug-trap-into-a-subshell` | **2>** `<shell>: 1: set: Illegal option -o functrace` *(status 2)* | `D~s~D~after` | `D~s~D~after` | `D~s~D~after` | **2>** `<shell>: set: functrace: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: functrace` *(status 1)* | `s~after` **2>** `<shell>: set: line 0: illegal option -o functrace~<shell>: trap: line 0: DEBUG: invalid signal specification` |
+| `opt/set-o-errtrace-carries-the-err-trap-into-a-function` | **2>** `<shell>: 1: set: Illegal option -o errtrace` *(status 2)* | `E~E~done` | `E~E~done` | `E~E~done` | **2>** `<shell>: set: errtrace: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: errtrace` *(status 1)* | `E~E~done` |
+| `shopt/extdebug-is-taken-and-reads-back` | `st=127` **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found~<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` *(status 127)* | `st=0~shopt -s extdebug~shopt -u extdebug` *(status 1)* | `st=0~shopt -s extdebug~shopt -u extdebug` *(status 1)* | `st=0~shopt -s extdebug~shopt -u extdebug` *(status 1)* | `st=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found` *(status 127)* | `st=127` **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt~<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` *(status 127)* | `st=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found` *(status 127)* |
+| `shopt/extdebug-turns-on-function-tracing` | `S1~after` **2>** `<shell>: 2: shopt: not found~trap: DEBUG: bad trap` | `D~D~S1~D~after` | `D~D~S1~D~after` | `D~S1~D~after` | `D~D~S1~D~after` **2>** `<shell>: line 2: shopt: not found` | `D~D~S1~D~after` **2>** `<shell>:2: command not found: shopt` | `S1~after` **2>** `<shell>: shopt: not found~<shell>: trap: line 1: DEBUG: invalid signal specification` |
 | `nounset/defaults-are-exempt` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` |
 | `nounset/empty-is-not-unset` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` |
 | `nounset/no-parameters-is-not-unset` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` |
@@ -10883,6 +10888,28 @@ grades it and nothing drift-checks it either, for the same reason.
   shopt -s lastpipe 2>/dev/null
   printf "a\nb\nc\n" | while read l; do n=$((n+1)); done
   echo "n=[$n]"
+  ```
+- `opt/set-o-functrace-carries-the-debug-trap-into-a-call` — what the option is *for*, asked through the trap rather than through a status: without it a DEBUG trap sees the `.` and nothing the dotted file does, so a tracing or debugging script watches its own call and none of the work. The three bash columns take the name at 0 and write a D for the source, one for each line inside it and one for the command after; dash and ksh93 have no such name and each ends the shell on the `set`, and zsh refuses it with `no such option` and carries on. Ours refused the name as `not implemented`, left the option off and traced nothing inside the file (#2426)
+  ```sh
+  printf 'echo S1
+  ' > lib.sh; set -o functrace; trap 'echo D' DEBUG; . ./lib.sh; echo after
+  ```
+- `opt/set-o-functrace-carries-the-debug-trap-into-a-subshell` — the other boundary the same option crosses, and the half a function-only implementation passes the row above without: a subshell group fires nothing of its own — with the trap set and the option off the bash columns write `s` and then a single D for the command after — and with the option on a D arrives ahead of the `echo s` inside. dash and ksh93 stop on the `set` and zsh refuses the name
+  ```sh
+  set -o functrace; trap 'echo D' DEBUG; (echo s); echo after
+  ```
+- `opt/set-o-errtrace-carries-the-err-trap-into-a-function` — the ERR half of the same pair, and it is a pair rather than one option with two names: this one says nothing about DEBUG and moves a trap the bash columns otherwise bound to the frame that set it. With it on the failure inside `f` and the failing call itself each fire, so two E lines arrive where the option off gives one. The refusals are the same three: dash and ksh93 end the shell on the `set`, zsh says `no such option`
+  ```sh
+  set -o errtrace; trap 'echo E' ERR; f() { false; }; f; echo done
+  ```
+- `shopt/extdebug-is-taken-and-reads-back` — the name a debugger's preamble sets, and it has to survive the round trip a capture depends on: all three bash columns take it at 0, write `shopt -s extdebug` back, take the unset and write `shopt -u extdebug` — the closing query answering 1 because the name is off, which is what makes the status a reading rather than a formality. Ours said `not implemented` at 1 and omitted the name from what it wrote back
+  ```sh
+  shopt -s extdebug; echo "st=$?"; shopt -p extdebug; shopt -u extdebug; shopt -p extdebug
+  ```
+- `shopt/extdebug-turns-on-function-tracing` — the name is not only an indicator: in bash 5.3 — under either argv[0] — it turns both trap-carriage options on with it, so this traces the dotted file exactly as `set -o functrace` does above. bash 3.2 moves the indicator alone and traces nothing inside the file, which is a change within bash rather than a difference between shells and the reason the `bash32` column is one D short here on purpose. The other three have no `shopt` at all, and two of them run the DEBUG trap inside a sourced file with nothing asked
+  ```sh
+  printf 'echo S1
+  ' > lib.sh; shopt -s extdebug; trap 'echo D' DEBUG; . ./lib.sh; echo after
   ```
 - `nounset/defaults-are-exempt` — a form that supplies a value, or asks whether one is set, is not a use of an unset one
   ```sh

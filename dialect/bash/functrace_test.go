@@ -100,6 +100,11 @@ func TestErrtraceCarriesTheErrTrapIntoACall(t *testing.T) {
 		{"by name", `set -o errtrace; trap 'echo E' ERR; f() { false; }; f; echo done`, "E\nE\ndone\n"},
 		{"a subshell, off", `trap 'echo E' ERR; (false); echo done`, "E\ndone\n"},
 		{"a subshell, on", `set -E; trap 'echo E' ERR; (false); echo done`, "E\nE\ndone\n"},
+		// And the listing follows the firing here too: a modification drops
+		// the inherited snapshot the trap would otherwise be listed from,
+		// and the option keeps it listed because it keeps it firing.
+		{"an inherited listing, off", `trap 'echo E' ERR; (trap '' USR2; trap)`, "trap -- '' SIGUSR2\n"},
+		{"an inherited listing, on", `set -E; trap 'echo E' ERR; (trap '' USR2; trap)`, "trap -- '' SIGUSR2\ntrap -- 'echo E' ERR\n"},
 		// functrace is not errtrace: the DEBUG option leaves the ERR trap
 		// where the dialect bounds it.
 		{"functrace does not move it", `set -o functrace; trap 'echo E' ERR; f() { false; }; f; echo done`, "E\ndone\n"},

@@ -13373,11 +13373,40 @@ element. And a range's negative start takes the same "only `-1` acts"
 rule this shell's single subscript already takes, so `[-2,-1]` leaves the
 array whole where `[-1,-1]` blanks the last element.
 
-Over a *string* the same span names characters, and the two halves part
-exactly where the single subscript's do: every negative within reach acts
-(`a=hello; unset "a[-2,-1]"` is `hel`), and a reversed range is invisible
-because an empty character put where the span would have begun leaves the
-string as it was.
+Over a *string* the same span names characters, and every negative within
+reach acts (`a=hello; unset "a[-2,-1]"` is `hel`) where an array's only
+does at `-1`.
+
+**But the string reading is a cut and not a deletion**, which is where it
+parts company with the array for good. What comes back is what lies in
+front of the start joined to what lies behind the end, each endpoint
+resolved and then clamped **on its own** — so when the end is before the
+start the two halves *overlap* and the string grows. Measured 2026-09-12
+on zsh 5.9.2 with `v=hello`:
+
+    v[2,0]    hhello      "h" and "hello"
+    v[3,0]    hehello     "he" and "hello"
+    v[3,1]    heello      "he" and "ello"
+    v[4,2]    helllo      "hel" and "llo"
+    v[5,1]    hellello    "hell" and "ello"
+    v[9,0]    hellohello  a start past the last is the whole string
+    v[9,3]    hellolo     and the end is still read where it is written
+    v[-1,1]   hellello    a negative start counts back from the last
+    v[-2,-4]  helllo      and so does a negative end
+    v[2,-6]   hhello      an end before the first is the first
+
+This document said the opposite until #2373 — that a reversed range "is
+invisible" over a string, because an empty character inserted changes
+nothing. The sentence was written from `v[3,2]`, the one step of reversal
+where `he` and `llo` reconstruct the word, which is also the only depth
+the corpus had a row for. One step further and the halves overlap.
+
+`v[9,0]` is the other row worth keeping: it says the *clamping* is
+per-endpoint too, and it is where the array and the string give opposite
+answers for the same range. An array's span is **replaced** by one empty
+element, so a start past the last element has nothing to stand in front of
+and `unset "a[9,0]"` leaves `(x y z)` alone; a cut has no such case, and
+the whole string is joined to the suffix.
 
 **An endpoint that will not evaluate is answered differently at the two
 ends**, and this is one shell's asymmetry rather than an axis: only the

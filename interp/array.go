@@ -832,17 +832,71 @@ func (r *Runner) unsetElementSpan(name string, a Array, from, to int) int {
 
 // unsetCharacterSpan takes the characters a range names out of a string.
 //
-// The same span over characters, and the empty-span case says nothing here:
-// an empty character inserted leaves the string as it was, so `unset "a[3,2]"`
-// is a no-op where the same reversed range on an array gains an element.
+// **This is a cut and not a deletion**, which is the whole of what the string
+// reading is and is not the array's rule with the element left off. What comes
+// back is what lies in front of the start joined to what lies behind the end,
+// each endpoint resolved and then clamped on its own — so when the end is
+// before the start the two halves *overlap* and the string grows. Measured on
+// zsh 5.9.2 with `v=hello`, 2026-09-12:
+//
+//	v[2,0]    hhello      "h" and "hello"
+//	v[3,0]    hehello     "he" and "hello"
+//	v[3,1]    heello      "he" and "ello"
+//	v[4,2]    helllo      "hel" and "llo"
+//	v[5,1]    hellello    "hell" and "ello"
+//	v[9,0]    hellohello  a start past the last clamps to the whole string
+//	v[9,3]    hellolo     and the end is still read where it is written
+//	v[-1,1]   hellello    a negative start is counted back from the last
+//	v[-2,-4]  helllo      and so is a negative end
+//	v[2,-6]   hhello      an end before the first is the first
+//
+// `v[3,2]` — the reversed range one step deep — is the one that comes back
+// unchanged, and it is the row the corpus had: "he" and "llo" reconstruct
+// `hello`. That is why this looked like "a reversed range is invisible over a
+// string" for as long as it did (#2373). It is not invisible; it is a cut
+// whose halves happened to meet.
+//
+// So this does not go through spanOver, and the difference is deliberate: an
+// array's span *replaces* what it names with one empty element, so a start
+// past the last element has nothing to stand in front of and the array is left
+// alone. A cut has no such case — a start past the last is the whole string,
+// and joining it to a suffix is what `v[9,0]` shows.
 func (r *Runner) unsetCharacterSpan(name, v string, from, to int) int {
 	chars := r.units(v)
-	first, tail, within := r.spanOver(len(chars), from, to)
-	if !within {
-		return 0
-	}
+	first, tail := r.charSpanCut(len(chars), from, to)
 	r.setVar(name, strings.Join(chars[:first], "")+strings.Join(chars[tail:], ""))
 	return 0
+}
+
+// charSpanCut resolves a written range over n characters into the two points a
+// cut joins: everything before first, and everything from tail on.
+//
+// Each endpoint takes the subscript rules — counted from the dialect's base,
+// or back from the end when negative — and is then clamped to the string on
+// its own. Clamping them *separately* is what leaves tail below first for a
+// reversed range, which is the overlap unsetCharacterSpan's table records.
+func (r *Runner) charSpanCut(n, from, to int) (first, tail int) {
+	base := r.arrayBase()
+	first = from - base
+	if from < 0 {
+		first = n + from
+	}
+	tail = to - base + 1
+	if to < 0 {
+		tail = n + to + 1
+	}
+	return clampToLength(first, n), clampToLength(tail, n)
+}
+
+// clampToLength brings a resolved character position inside [0, n].
+func clampToLength(pos, n int) int {
+	if pos < 0 {
+		return 0
+	}
+	if pos > n {
+		return n
+	}
+	return pos
 }
 
 // spanOutcome is what resolving a range on the left of an assignment came to.

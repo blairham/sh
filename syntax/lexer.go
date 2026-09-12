@@ -2822,6 +2822,12 @@ func isBraceCommandStart(c byte) bool {
 // supported but never recommended.
 func (l *Lexer) scanBackticks(q Quoting) Span {
 	open := l.pos()
+	// Said out loud by one shell and passed over by four, so it is recorded
+	// here and worded — or not — by the front end. It is recorded before the
+	// body is read rather than after, because a substitution that never
+	// closes draws the remark as well as the refusal, and warning first is
+	// the order the one shell that says both writes them in.
+	l.remarks = append(l.remarks, Remark{Kind: RemarkBackquoteSubstitution, Pos: open, At: open})
 	l.advance() // `
 	start := l.off
 	for {

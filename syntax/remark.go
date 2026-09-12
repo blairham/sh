@@ -46,11 +46,22 @@ const (
 	// RemarkHeredocAtEOF is a here-document whose delimiter never arrived.
 	// The body is everything to the end of the input, and the command runs.
 	RemarkHeredocAtEOF
+	// RemarkBackquoteSubstitution is the older command substitution, read
+	// and run exactly as it is written. One shell remarks on every one of
+	// them; the others say nothing.
+	//
+	// It carries no Token and its two positions are the same one: the
+	// backquote that opened the substitution, which is both where the
+	// remark is located and what it is about.
+	RemarkBackquoteSubstitution
 )
 
 func (k RemarkKind) String() string {
-	if k == RemarkHeredocAtEOF {
+	switch k {
+	case RemarkHeredocAtEOF:
 		return "RemarkHeredocAtEOF"
+	case RemarkBackquoteSubstitution:
+		return "RemarkBackquoteSubstitution"
 	}
 	return "RemarkNone"
 }

@@ -162,6 +162,18 @@ func (pr *program) fill(retire bool) bool {
 	if pr.more == nil {
 		return false
 	}
+	// Read first and retire second. Retiring hands the parser's remarks to
+	// carried, and a retire that then finds no more input leaves the same
+	// remarks in *both* places — `remarks` reads carried and the parser it
+	// did not replace, so the last one is said twice. Nothing exhibited that
+	// until a remark arrived that a whole one-line program can raise: a
+	// program that ends part-way through a construct never gets here, which
+	// is the shape the here-document remark has.
+	text, ok := pr.more()
+	if !ok {
+		pr.more = nil
+		return false
+	}
 	if retire {
 		if pr.p != nil {
 			pr.carried = append(pr.carried, pr.p.Remarks()...)
@@ -175,11 +187,6 @@ func (pr *program) fill(retire bool) bool {
 			pr.base += pr.p.LineShift()
 		}
 		pr.pending, pr.ran = "", 0
-	}
-	text, ok := pr.more()
-	if !ok {
-		pr.more = nil
-		return false
 	}
 	pr.take(text)
 	// A line ending in a backslash is joined to the one after it, and only

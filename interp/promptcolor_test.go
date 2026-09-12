@@ -355,3 +355,57 @@ func TestWithoutANumericArgumentTheDigitIsTheCode(t *testing.T) {
 		t.Errorf("refused %q, want %q — the digit is the code where nothing reads it as a count", refused, "3")
 	}
 }
+
+// A negative count in front of a color is no color at all.
+//
+// Measured 2026-09-12 against zsh 5.9.2 with `TERM=xterm-256color`, and it is
+// the one place the two readings of a color's argument part company: `%F{-1}`
+// writes the terminal's default, because `-1` is a number out of range, while
+// `%-1F` writes **nothing whatever**. A bare `%-F` is minus one and writes
+// nothing too, and `%-0F` is nought and writes the first color — so the sign
+// decides and not the presence of the minus.
+//
+// It still clears the layer, which is the half that cannot be inferred from
+// "it writes nothing" and is what the last three rows are for: after `%-2F`
+// the reset has no foreground to write back, and after `%-2K` it has the
+// foreground and not the background. A shell that skipped the code entirely
+// would pass every row above and fail those.
+func TestANegativeCountInFrontOfAColorIsNoColor(t *testing.T) {
+	style := PromptStyle{
+		Escape:          '%',
+		NumericArgument: true,
+		Colors:          map[rune]PromptColor{'F': Foreground, 'K': Background},
+		Sequences:       map[rune]string{'b': "\x1b[0m"},
+		Visual:          map[rune]PromptVisual{'b': {Attribute: AttributeBold, Off: true, Restores: true}},
+	}
+	for _, tc := range []struct{ text, want string }{
+		{"%-1F", ""},
+		{"%-2F", ""},
+		{"%-9F", ""},
+		{"%-F", ""},
+		{"%-2K", ""},
+		// The text after it is still text, so the code was read and not left
+		// half-consumed.
+		{"%-2Fx", "x"},
+		// Nought is not negative, and braces beat the count as they do
+		// everywhere else.
+		{"%-0F", "\x1b[30m"},
+		{"%-2F{red}", "\x1b[31m"},
+		// It clears the layer it names, and only that one.
+		{"%F{red}a%-2Fb%b", "\x1b[31mab\x1b[0m"},
+		{"%K{blue}%F{red}%-2Fa%b", "\x1b[44m\x1b[31ma\x1b[0m\x1b[44m"},
+		{"%K{blue}%F{red}%-2Ka%b", "\x1b[44m\x1b[31ma\x1b[0m\x1b[31m"},
+	} {
+		t.Run(tc.text, func(t *testing.T) {
+			got, refused, ok := ExpandPromptStyle(style, tc.text, func(PromptField, string, bool) (string, bool) {
+				return "", false
+			}, nil)
+			if !ok {
+				t.Fatalf("%q was refused at %q", tc.text, refused)
+			}
+			if got != tc.want {
+				t.Errorf("%q drew %q, want %q", tc.text, got, tc.want)
+			}
+		})
+	}
+}

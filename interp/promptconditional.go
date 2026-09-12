@@ -272,25 +272,27 @@ func (w *promptWalk) skipEscape(runes []rune, i int) int {
 // share is an arm that ends in the wrong place, and nothing about the drawn
 // text says which of the two was wrong.
 //
-// **A minus is read only in front of the code that has an answer for one.**
-// zsh takes it for every code that counts — measured, `%-2~` is the *leading*
-// two components of the working directory where `%2~` is the trailing two —
-// and this shell carries it for the conditional alone. Every other code still
-// refuses `%-` by name, which is #1699, and a plausible wrong answer in place
-// of that refusal would be worse than the gap.
+// **A minus is part of the count, in front of every code**, which is what
+// #1699 changed. It was read for the conditional alone, on the grounds that a
+// plausible wrong answer is worse than a by-name refusal — and that was the
+// right trade only for as long as nothing else had an answer for one.
+//
+// Everything now does. Measured 2026-09-12 across the table: a path code reads
+// it as the *leading* components where a positive count is the trailing ones,
+// a color code with a negative index draws nothing at all, and every code that
+// counts nothing ignores it exactly as it ignores a positive count — `%-2n` is
+// the login name and `%-2j` the job count, both as though the digits were not
+// there. So the minus is read here and answered per code, which is where the
+// difference actually lives.
 func (w *promptWalk) countAt(runes []rune, i int) (string, int) {
 	if !w.st.NumericArgument || i >= len(runes) {
 		return "", i
 	}
 	j := i
-	signed := runes[j] == '-'
-	if signed {
+	if runes[j] == '-' {
 		j++
 	}
 	j = skipDigits(runes, j)
-	if signed && (w.st.Conditional == 0 || j >= len(runes) || runes[j] != w.st.Conditional) {
-		return "", i
-	}
 	return string(runes[i:j]), j
 }
 

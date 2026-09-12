@@ -56,9 +56,13 @@ func PromptStyle() interp.PromptStyle {
 			// `%c` and `%.` are the last component of the abbreviated path and
 			// `%C` of the unabbreviated one: in the home directory itself the
 			// first two drew `~` and the third drew the directory's own name.
-			'c': interp.FieldCwdBase,
-			'.': interp.FieldCwdBase,
-			'C': interp.FieldCwdBaseFull,
+			// The count these three take is the whole of what separates
+			// them from `%~` and `%d`: measured 2026-09-12, `%2c` is `b/c`
+			// exactly as `%2~` is, and only the *absent* count differs — one
+			// component here where `%~` is the whole path. #1699.
+			'c': interp.FieldCwdCounted,
+			'.': interp.FieldCwdCounted,
+			'C': interp.FieldCwdCountedFull,
 			'#': interp.FieldPrivilege,
 			'%': interp.FieldEscape,
 			't': interp.FieldTime12Padded,

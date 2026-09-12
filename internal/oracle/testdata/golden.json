@@ -104402,6 +104402,94 @@
         "TimedOut": false
       }
     },
+    "print/a-negative-count-in-front-of-a-color-is-no-color": {
+      "bash": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " x 033 [ 3 0 m 033 [ 3 1 m ~~ 033 [ 3 1 m a b 033 [ 0 m ~~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "print/a-negative-count-is-the-leading-components": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: print: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[~/a/b/c/d][c/d][~][~/a][~/a/b][~/a/b/c][~/a/b/c/d][~][~/a/b/c/d]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "print/a-prompt-escape-this-shell-has-not": {
       "bash": {
         "Stdout": "st=127",
@@ -105100,6 +105188,50 @@
       },
       "zsh": {
         "Stdout": "B C a~a C B~abc axy",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "print/the-base-directory-codes-take-a-count": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: print: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: print: -P: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[d][d][d][c/d][a/b/c/d][~/a/b/c/d][~][~/a][~][d][d][c/d][d][c/d]~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

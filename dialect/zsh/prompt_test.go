@@ -49,7 +49,7 @@ func TestPromptCodes(t *testing.T) {
 	for code, want := range map[rune]repl.PromptField{
 		'n': repl.FieldUser, 'm': repl.FieldHost, 'M': repl.FieldHostFull,
 		'~': repl.FieldCwd, 'd': repl.FieldCwdFull, '/': repl.FieldCwdFull,
-		'c': repl.FieldCwdBase, '.': repl.FieldCwdBase, 'C': repl.FieldCwdBaseFull,
+		'c': repl.FieldCwdCounted, '.': repl.FieldCwdCounted, 'C': repl.FieldCwdCountedFull,
 		'#': repl.FieldPrivilege, '%': repl.FieldEscape,
 		't': repl.FieldTime12Padded, '@': repl.FieldTime12Padded,
 		'*': repl.FieldTime24Unpadded, 'T': repl.FieldTime24HMUnpadded,
@@ -69,10 +69,19 @@ func TestPromptCodes(t *testing.T) {
 		t.Error("%* pads the hour, and zsh does not")
 	}
 	// `%c` and `%C` are two codes of one shell that disagree, which is what
-	// says the abbreviated base and the plain one are two fields: in the home
-	// directory itself the first drew `~` and the second drew its own name.
+	// says the abbreviated reading and the plain one are two fields: in the
+	// home directory itself the first drew `~` and the second drew its own
+	// name.
 	if st.Codes['c'] == st.Codes['C'] {
 		t.Error("the two directory-base codes draw the same field, and they differ at $HOME")
+	}
+	// And neither is bash's `\W`, which is the third answer of the three.
+	// Measured 2026-09-12 in `/tmp`: `\W` draws `tmp` where `%c` and `%C`
+	// both draw `/tmp`, because a single leading component keeps the `/` in
+	// front of it. Sharing the field looked right for as long as nobody stood
+	// one directory below the root (#1699).
+	if st.Codes['c'] == repl.FieldCwdBase || st.Codes['C'] == repl.FieldCwdBaseFull {
+		t.Error("a directory code draws bash's basename field, which answers `tmp` in /tmp")
 	}
 }
 

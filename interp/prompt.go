@@ -443,19 +443,40 @@ const (
 	// it. bash and zsh both distinguish the two.
 	FieldHost
 	FieldHostFull
-	// FieldCwd is the working directory with the home directory written `~`,
-	// FieldCwdFull is the path untouched, FieldCwdBase is the last component
-	// of the abbreviated one and FieldCwdBaseFull the last component of the
-	// untouched one.
-	//
-	// The last two differ only at the home directory itself, and there they
-	// differ every time a prompt is drawn there: measured in it, bash's `\W`
-	// and zsh's `%c` draw `~`, while zsh's `%C` draws the directory's name.
-	// Two codes of one shell disagreeing is what says this is two fields.
+	// FieldCwd is the working directory with the home directory written `~`
+	// and FieldCwdFull is the path untouched. Both count: the argument keeps
+	// that many components from the right, or — written with a minus — that
+	// many from the left.
 	FieldCwd
 	FieldCwdFull
+	// FieldCwdBase is the last component of the abbreviated path and
+	// FieldCwdBaseFull the last component of the untouched one. Neither
+	// counts: this is bash's `\W`, which has no numeric argument at all.
+	//
+	// The two differ only at the home directory itself, and there they differ
+	// every time a prompt is drawn there: measured in it, bash's `\W` draws
+	// `~` where the directory's own name is what the unabbreviated reading
+	// gives. Two readings of one path disagreeing is what says this is two
+	// fields.
 	FieldCwdBase
 	FieldCwdBaseFull
+	// FieldCwdCounted and FieldCwdCountedFull are FieldCwd and FieldCwdFull
+	// with the count defaulting to **one** instead of to the whole path:
+	// zsh's `%c`/`%.` and `%C`.
+	//
+	// A separate pair rather than a flag on the first two, and separate from
+	// FieldCwdBase as well, because all three answers are different and two
+	// shells hold them at once. Measured 2026-09-12 in `/tmp`: bash's `\W`
+	// draws `tmp`, and zsh's `%c` and `%C` both draw `/tmp` — because a
+	// single leading component keeps the `/` in front of it, which is the
+	// same rule `%1d` follows and which taking the *basename* cannot express.
+	// One directory down all three agree, which is why sharing the field
+	// looked right for as long as it did (#1699).
+	//
+	// `%Nc` for N of 1 or more is exactly `%N~`, and `%0c` is `%1c`; the only
+	// thing separating `%c` from `%~` is what an absent count means.
+	FieldCwdCounted
+	FieldCwdCountedFull
 	// FieldPrivilege says whether this is root: `#` when it is, and the
 	// dialect's own character when it is not.
 	FieldPrivilege
@@ -949,6 +970,23 @@ func (w *promptWalk) walk(runes []rune) {
 			arg, next, braced := promptArgument(runes, i+1)
 			i = next
 			if !braced {
+				if promptCount(num) < 0 {
+					// A *negative* index is not a color out of range, it is
+					// no color at all: measured, `%-2F` and `%-1F` write
+					// nothing whatever — where `%F{-1}` writes the terminal's
+					// default. So the two readings of the argument part
+					// company here and only here, and a bare `%-F` is minus
+					// one and writes nothing too.
+					//
+					// It still **clears the layer**, which is the half that
+					// cannot be inferred from "it writes nothing" and is
+					// measured on its own: `%F{red}a%-2Fb%b` restores nothing
+					// after the reset, where `%F{red}ab%b` restores the red —
+					// and `%K{blue}%F{red}%-2Ka%b` restores the foreground
+					// alone, so it is that layer and not both. #1699.
+					w.visual[attributeOf(layer)] = ""
+					continue
+				}
 				arg = num
 			}
 			seq := colorSequence(layer, arg)
@@ -1437,13 +1475,17 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 		full := r.askPromptHost()
 		return full, full != ""
 	case FieldCwd:
-		return trailingComponents(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME")), arg), true
+		return countedComponents(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME")), arg, 0), true
 	case FieldCwdFull:
-		return trailingComponents(r.promptVar("PWD"), arg), true
+		return countedComponents(r.promptVar("PWD"), arg, 0), true
 	case FieldCwdBase:
 		return lastPathComponent(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME"))), true
 	case FieldCwdBaseFull:
 		return lastPathComponent(r.promptVar("PWD")), true
+	case FieldCwdCounted:
+		return countedComponents(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME")), arg, 1), true
+	case FieldCwdCountedFull:
+		return countedComponents(r.promptVar("PWD"), arg, 1), true
 	case FieldPrivilege:
 		// A read of the process's identity, which is the class .golangci.yml
 		// blesses beside `$$` and `$UID`: nothing a script does changes it,
@@ -1749,6 +1791,95 @@ func abbreviateHome(dir, home string) string {
 	return dir
 }
 
+// countedComponents is the whole of what a count in front of a path code
+// means: from the right for a positive one and from the left for a negative
+// one.
+//
+// Measured on zsh 5.9.2, 2026-09-12, in `/tmp/a/b/c` and in a directory three
+// levels under a home. `%2~` is `b/c` and `%-2~` is `/tmp/a` — trailing and
+// leading halves of the same path — and a bare minus is minus one, which is
+// promptCount's reading and the same one the conditional already took.
+//
+// whenNought is what a count of nought means, and it is the *only* thing that
+// separates the two families of path code. `%~` and `%d` read it as no limit;
+// `%c`, `%C` and `%.` read it as one, so `%c` is the last component and `%0c`
+// is the same component again. Measured both ways round, including the
+// spellings that reach nought sideways: `%-0c` is the trailing component and
+// not the leading one.
+//
+// The minus was refused by name everywhere but the conditional until #1699, on
+// the grounds that a plausible wrong answer is worse than a gap. It is not a
+// gap any more, so the refusal has nothing left to protect.
+func countedComponents(path, arg string, whenNought int) string {
+	n := promptCount(arg)
+	if n == 0 {
+		n = whenNought
+	}
+	switch {
+	case n < 0:
+		return leadingComponents(path, -n)
+	case n == 0:
+		return path
+	default:
+		return trailingComponents(path, n)
+	}
+}
+
+// leadingComponents keeps the first n components of a path, which is what a
+// *negative* count in front of a path code asks for.
+//
+// The mirror of trailingComponents and measured the same way, in `/tmp/a/b/c`
+// and in `~/tmpprobe/x/y` on zsh 5.9.2, 2026-09-12. Two rules, and the second
+// is the asymmetry this shares with its sibling rather than one of its own:
+//
+//   - `n` counts components from the left, with the leading marker kept:
+//     `%-1~` of `/tmp/a/b/c` is `/tmp` and `%-2~` is `/tmp/a`.
+//   - **The tilde is a unit and the slash is not.** `%-1~` of `~/tmpprobe/x/y`
+//     is `~` alone, where `%-1d` of the same directory spelled out is
+//     `/Users` — the first *segment* with its slash in front of it. So a home
+//     path of three segments is four units and an absolute one of five
+//     segments is five, and `n` at or past that count is the whole path.
+func leadingComponents(path string, n int) string {
+	if path == "" || n <= 0 {
+		return path
+	}
+	lead, rest := pathLeader(path)
+	if rest == "" {
+		return path
+	}
+	parts := strings.Split(rest, "/")
+	if lead == "~" {
+		// The tilde is the first unit, so `%-1~` is the marker on its own and
+		// the segments start at two.
+		if n > len(parts) {
+			return path
+		}
+		if n == 1 {
+			return lead
+		}
+		return lead + "/" + strings.Join(parts[:n-1], "/")
+	}
+	if n >= len(parts) {
+		return path
+	}
+	return lead + strings.Join(parts[:n], "/")
+}
+
+// pathLeader splits a path's leading marker off the segments after it.
+//
+// One reader for both directions of the count, because the marker's two
+// readings are exactly what the two of them share: a `~` is a unit and a `/`
+// is not, and a helper each is how one of them would come to disagree.
+func pathLeader(path string) (lead, rest string) {
+	switch {
+	case strings.HasPrefix(path, "~"):
+		return "~", strings.TrimPrefix(path[1:], "/")
+	case strings.HasPrefix(path, "/"):
+		return "/", path[1:]
+	}
+	return "", path
+}
+
 // trailingComponents keeps the last n components of a path, where n is the
 // numeric argument a prompt code was written with.
 //
@@ -1764,30 +1895,16 @@ func abbreviateHome(dir, home string) string {
 //     is a plausible path to the wrong place rather than a visible failure.
 //     The tilde is one of the units on the abbreviated side, so `%9~` of a
 //     six-unit path is the whole thing, tilde included.
-//   - `0`, and no argument at all, mean no limit.
-//
-// An argument that is not a number is no limit either. The walker only ever
-// passes digits, so that is a guard on a case this package cannot reach rather
-// than a reading of anything.
-func trailingComponents(path, arg string) string {
-	if arg == "" || path == "" {
-		return path
-	}
-	n, err := strconv.Atoi(arg)
-	if err != nil || n <= 0 {
+//   - `0`, and no argument at all, mean no limit — which countedComponents
+//     answers before this is called, since `%c` reads nought as one instead.
+func trailingComponents(path string, n int) string {
+	if path == "" || n <= 0 {
 		return path
 	}
 	// The leading marker is not a component to be counted from the right, but
 	// it is one of the units that decides whether the whole path is asked
 	// for: `/` and `~` each stand for a level above the segments after them.
-	lead := ""
-	rest := path
-	switch {
-	case strings.HasPrefix(path, "~"):
-		lead, rest = "~", strings.TrimPrefix(path[1:], "/")
-	case strings.HasPrefix(path, "/"):
-		lead, rest = "/", path[1:]
-	}
+	lead, rest := pathLeader(path)
 	if rest == "" {
 		return path
 	}

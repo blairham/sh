@@ -49,6 +49,20 @@ func Dialect() syntax.Dialect {
 	// agrees in both — 1 either way, because the left-hand side failed — so
 	// the `||` is the only shape that tells the two readings apart.
 	d.AbsentAndOrOperandIsAnEmptyCommand = true
+	// And where a separator was stepped over and the construct closed right
+	// after it, that separator is the whole body: `{ ; }`, `( ; )`,
+	// `if :; then ; fi`, `while :; do ; done` and the rest all run here. The
+	// control is `{ }`, which is refused — so this is not zsh's
+	// EmptyCompoundBody, which takes both — and `{ ; ; }`, refused by the
+	// count above (#775, #2231).
+	d.SteppedOverSeparatorIsABody = true
+	// `esac` written straight after a `case`'s `in`, with no newline between
+	// them, is the first arm's pattern here rather than the terminator:
+	// `case esac in esac) echo hit;; esac` prints `hit`, and `case x in esac`
+	// on one line is refused as a consequence. A newline gives the word back
+	// its reservation — `case x in⏎esac` runs — which is what says this is
+	// not "a case must have an arm" (#773).
+	d.CaseTerminatorIsAPatternAfterIn = true
 	// A loop's variable may be written with quoting or an escape in it, and
 	// the quoting comes off before the word is read as a name: `for "i" in a
 	// b` binds `i` here and is refused by the other four. `for 'i'`,

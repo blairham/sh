@@ -6496,8 +6496,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/an-empty-brace-group` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `{ }; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `{ }; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `{ }; echo ok'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | `ok` |
 | `cmd/an-empty-subshell` | **2>** `<shell>: 1: Syntax error: ")" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `( ); echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `( ); echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `)'~<shell>: -c: line 0: `( ); echo ok'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `)' unexpected` *(status 3)* | `ok` |
 | `cmd/an-empty-loop-body` | **2>** `<shell>: 1: Syntax error: "done" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `done'~<shell>: -c: line 1: `while false; do done; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `done'~<shell>: -c: line 1: `while false; do done; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `done'~<shell>: -c: line 0: `while false; do done; echo ok'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `done' unexpected` *(status 3)* | `ok` |
+| `cmd/a-body-written-as-one-separator` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `{ ; }; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `{ ; }; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `{ ; }; echo ok'` *(status 2)* | `ok` | `ok` |
+| `cmd/a-body-written-as-two-separators` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `{ ; ; }; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `{ ; ; }; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `{ ; ; }; echo ok'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | `ok` |
+| `cmd/a-body-written-as-one-separator-succeeds` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `false; { ; }; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `false; { ; }; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `false; { ; }; echo "st=$?"'` *(status 2)* | `st=0` | `st=0` |
+| `cmd/an-empty-body-succeeds` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `false; { }; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `false; { }; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `false; { }; echo "st=$?"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | `st=0` |
 | `cmd/an-empty-command-substitution` | `[] ok` | `[] ok` | `[] ok` | `[] ok` | `[] ok` | `[] ok` |
 | `cmd/a-case-with-no-arms` | `ok` | `ok` | `ok` | `ok` | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | `ok` |
+| `cmd/a-case-with-no-arms-after-a-newline` | `ok` | `ok` | `ok` | `ok` | `ok` | `ok` |
+| `cmd/a-case-arm-pattern-spelled-esac` | **2>** `<shell>: 1: Syntax error: ")" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `case esac in esac) echo hit;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `case esac in esac) echo hit;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `)'~<shell>: -c: line 0: `case esac in esac) echo hit;; esac'` *(status 2)* | `hit` | **2>** `<shell>:1: parse error near `)'` *(status 1)* |
 | `cmd/close-brace-as-an-ordinary-word` | `}` | `}` | `}` | `}` | `}` | **2>** `<shell>:1: parse error near `}'` *(status 1)* |
 | `cmd/reserved-word-inside-a-brace-group` | **2>** `<shell>: 1: Syntax error: "do" unexpected (expecting "}")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `do'~<shell>: -c: line 1: `{ echo a; do :; done; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `do'~<shell>: -c: line 1: `{ echo a; do :; done; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `do'~<shell>: -c: line 0: `{ echo a; do :; done; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `do' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `do'` *(status 1)* |
 | `cmd/reserved-word-in-an-empty-brace-group` | **2>** `<shell>: 1: Syntax error: "fi" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `{ fi; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `{ fi; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `fi'~<shell>: -c: line 0: `{ fi; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `fi' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `fi'` *(status 1)* |
@@ -7263,13 +7269,38 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   while false; do done; echo ok
   ```
+- `cmd/a-body-written-as-one-separator` — the shape between an empty body and an ordinary one, and it splits the panel differently from either: the shell that refuses `{ }` above takes this, because a `;` where a command belongs is stepped over there and what is left may be nothing at all. dash and every bash column refuse both, and the shell that takes empty bodies takes both
+  ```sh
+  { ; }; echo ok
+  ```
+- `cmd/a-body-written-as-two-separators` — the control for the case above, and the reason it is a step-over rule rather than a new kind of body: only one `;` is stepped over in the shell that takes the single one, so the second is refused there and named. Without this row a shell could take any number and match on the case above
+  ```sh
+  { ; ; }; echo ok
+  ```
+- `cmd/a-body-written-as-one-separator-succeeds` — what a body written as nothing answers, asked after a failure so that leaving the status alone and setting it to 0 are told apart. Both shells that parse it say 0, so an empty body is a success rather than a transparency — a parser that produced the body and an interpreter that never touched `$?` would print 1 here
+  ```sh
+  false; { ; }; echo "st=$?"
+  ```
+- `cmd/an-empty-body-succeeds` — the same question for the body written as literally nothing, which only one shell parses. It answers 0 there too, so the two spellings agree on the status wherever each of them is legal — the pair is what says the status is a fact about an empty body and not about the separator
+  ```sh
+  false; { }; echo "st=$?"
+  ```
 - `cmd/an-empty-command-substitution` — the counter-case, and the line the rule stops at: a command substitution's body is a whole program rather than a compound command's body, and every shell in the panel takes an empty one. Without it a shell could refuse every empty thing and look right on four cases out of four
   ```sh
   x=$( ); echo "[$x] ok"
   ```
-- `cmd/a-case-with-no-arms` — the other line the rule stops at, and the panel splits the other way here: a `case` with no arms is a list of *arms* rather than a command list, and dash, bash and zsh take it where ksh93 alone refuses. Recorded so the empty-body rule is not quietly widened to cover it
+- `cmd/a-case-with-no-arms` — the other line the rule stops at, and the panel splits the other way here: dash, bash and zsh take a `case` with no arms where ksh93 alone refuses. Recorded so the empty-body rule is not quietly widened to cover it — and the two cases below say why the refusal is not an emptiness rule at all
   ```sh
   case x in esac; echo ok
+  ```
+- `cmd/a-case-with-no-arms-after-a-newline` — the same `case` with a newline in front of the `esac`, and it is what says the row above is not about arms: the one shell that refuses the single line runs this one. So an armless `case` is legal in all six and the divergence is about where the terminator is recognized
+  ```sh
+  case x in
+  esac; echo ok
+  ```
+- `cmd/a-case-arm-pattern-spelled-esac` — the discriminator, and it is an acceptance rather than a refusal: one shell reads the word straight after `in` as the first arm's pattern instead of the terminator, so this matches and prints `hit` there where the other five refuse the `)`. Both halves of that shell's answer come from one rule, which is why the single-line `case x in esac` is refused by it
+  ```sh
+  case esac in esac) echo hit;; esac
   ```
 - `cmd/close-brace-as-an-ordinary-word` — `}` is reserved only where a command may begin in three of the four, so as an argument it is an ordinary brace — and in zsh it is reserved wherever a word may stand, which is a parse error here and is the same rule that lets `{ echo a }` close without a terminator
   ```sh

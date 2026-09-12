@@ -63,6 +63,27 @@ func (r *Runner) condList(ctx context.Context, list []*syntax.Stmt) error {
 // runList executes a list of statements, stopping early if one of them
 // transferred control.
 func (r *Runner) runList(ctx context.Context, list []*syntax.Stmt) error {
+	if len(list) == 0 {
+		// A body written as nothing succeeds rather than leaving the status
+		// the command before it set. Only two dialects can write one — `{ }`
+		// and `( ; )` are parse errors in the other four — and both measure
+		// the same, 2026-09-12 with `env -i PATH=/usr/bin:/bin` and a scratch
+		// HOME:
+		//
+		//	false; { }; echo $?                 0   zsh
+		//	false; { ; }; echo $?               0   ksh93 and zsh
+		//	false; ( ; ); echo $?               0   ksh93 and zsh
+		//	false; for i in a; do ; done; echo $?
+		//	                                    0   ksh93 and zsh
+		//
+		// Here rather than at each construct, because every one of them
+		// reaches this and the answer is the same for all of them. The
+		// constructs that set 0 for a body they never *entered* — a `case`
+		// with no matching arm, an `if` with no `else`, a loop with no
+		// iterations — already do so on their own paths and are unaffected;
+		// those agree in all six columns and always did.
+		r.status = 0
+	}
 	for _, st := range list {
 		if err := r.stmt(ctx, st); err != nil {
 			return err

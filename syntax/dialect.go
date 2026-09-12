@@ -568,15 +568,14 @@ type Dialect struct {
 	// Off, `1=abc` is a command name exactly as it was, which is what keeps
 	// the five refusing columns byte-identical.
 	//
-	// The plugin manager in `~/.zi` writes it: `.zi-any-to-user-plugin` and
-	// `.zi-formatter-pid` both assign their own positionals, so a startup
-	// that reads them printed twelve `no such file or directory:
-	// 1=username/reponame` lines and never reached a prompt (#1438).
+	// Installed plugin managers write it: functions that assign their own
+	// positionals, so a startup that reads them prints a `no such file or
+	// directory: 1=…` line per call and never reaches a prompt.
 	PositionalAssignment bool
 
-	// CurrentShellSubstitution reads `${ cmd;}` as a command substitution
-	// that runs in the current shell. bash 5.3 and ksh93 have it; dash and
-	// zsh call it a bad substitution.
+	// CurrentShellSubstitution reads `${ cmd;}` as a command substitution that
+	// runs in the current shell. Where it is off, the text is a bad
+	// substitution.
 	//
 	// The space after the brace is load-bearing and is the whole of the
 	// grammar: `${x}` is a parameter and `${ x}` is a command.
@@ -587,52 +586,48 @@ type Dialect struct {
 	//
 	// Measured rather than inferred from the error it causes, because the
 	// error is not the whole of it: `case a in & ) echo hit;; *) echo miss;;
-	// esac` *parses and runs* in dash, and prints miss — the `&` is consumed
-	// and the arm it opens matches nothing, not even `&` and not even the
-	// empty string. `&a )` then fails at the word and `a& )` at the `&`, so
-	// what dash accepts is one operator where the pattern list would start
-	// and nothing else.
+	// esac` *parses and runs* where the flag is on, and prints miss — the `&` is
+	// consumed and the arm it opens matches nothing, not even `&` and not even
+	// the empty string. `&a )` then fails at the word and `a& )` at the `&`, so
+	// what is accepted is one operator where the pattern list would start and
+	// nothing else.
 	//
-	// The other three reject it outright, which is why `;;&` in a dialect
-	// without that terminator reaches a different diagnosis there: dash is
-	// already past the `&` and complaining about the `esac` where the `)`
-	// should be.
+	// Where it is off the operator is rejected outright, which is why `;;&`
+	// under a preset without that terminator reaches a different diagnosis: the
+	// parser is already past the `&` and complaining about the `esac` where the
+	// `)` should be.
 	CasePatternAcceptsOperator bool
 
 	// CasePatternMayBeEmpty lets a `case` arm's pattern list carry a pattern
 	// written as nothing, which then matches only the empty string:
-	// `(|https|git|ftp)` is the idiom for "one of these schemes, or none",
-	// and it is what a widely installed zsh library's own startup path is
-	// written with.
+	// `(|https|git|ftp)` is the idiom for "one of these schemes, or none", and
+	// widely installed libraries write their own startup paths with it.
 	//
-	// Measured 2026-09-06 with `-n` over a script file, because the question
-	// is whether it parses. zsh 5.9.2 accepts it; bash 5.3.15, the same
-	// binary as `sh`, bash 3.2.57, ksh93u+ and dash all refuse, at three
-	// statuses and in three wordings, and each blames a different token
-	// depending on where the emptiness is.
+	// Measured with `-n` over a script file, because the question is whether it
+	// parses. A false preset refuses, and the refusals come at three statuses
+	// and in three wordings, each blaming a different token depending on where
+	// the emptiness is.
 	//
 	// Every place a separator can put one is allowed: `(|a|b)`, `(a||b)`,
 	// `(a|b|)`, `(|)` and `(||)` all parse there, with or without the arm's
 	// optional open paren.
 	//
-	// So is the whole list, where the arm's parentheses are there to hold
-	// it. `case "" in ( ) echo em;; (*) echo star;; esac` prints `em` on zsh
-	// 5.9.2 and prints `star` for a subject of one blank, measured
-	// 2026-09-12 — the empty string, not the blank, that dialect trimming
-	// blanks either side of a list. Written *without* the parentheses there
-	// is nowhere for an empty list to be and `case a in ) …` is refused.
+	// So is the whole list, where the arm's parentheses are there to hold it.
+	// `case "" in ( ) echo em;; (*) echo star;; esac` prints `em` where the flag
+	// is on, and prints `star` for a subject of one blank — the empty string,
+	// not the blank, that preset trimming blanks either side of a list. Written
+	// *without* the parentheses there is nowhere for an empty list to be and
+	// `case a in ) …` is refused.
 	//
-	// `()` is refused as well, and this file said for a while that the
-	// reason was the missing separator. It is not: the pair is one token to
-	// the same dialect — see [Dialect.EmptyParensAreOneToken] — so the `(`
-	// never opens an arm, and the two characters with a blank between them
-	// are the line above (#1111).
+	// `()` is refused as well, and not for want of a separator: the pair is one
+	// token to the same preset — see [Dialect.EmptyParensAreOneToken] — so the
+	// `(` never opens an arm, and the two characters with a blank between them
+	// are the line above.
 	//
 	// It is a grammar flag and not a matching rule. A group with an arm that
-	// matches nothing already stands for nothing in every shell that has the
-	// construct at all — `@(|a)b` matches `b` in bash and ksh93 alike — so
-	// what divides the panel here is only whether the pattern *list* may
-	// have such an alternative written into it.
+	// matches nothing already stands for nothing wherever the construct exists —
+	// `@(|a)b` matches `b` — so what divides the presets here is only whether
+	// the pattern *list* may have such an alternative written into it.
 	CasePatternMayBeEmpty bool
 
 	// CaseTerminatorIsAPatternAfterTheHeader makes `esac` an ordinary word
@@ -640,14 +635,13 @@ type Dialect struct {
 	// list is written on one line has no terminator until a newline has been
 	// read.
 	//
-	// "The header" is either opener: this shell writes `case x { … }` as well
-	// as `case x in … esac` — see [Dialect.CaseBraceBody] — and the reading
-	// follows the position rather than the word. `case esac { esac) echo
+	// "The header" is either opener: a preset with this also writes `case x { …
+	// }` as well as `case x in … esac` — see [Dialect.CaseBraceBody] — and the
+	// reading follows the position rather than the word. `case esac { esac) echo
 	// hit;; }` prints `hit` there too.
 	//
-	// ksh93u+ alone, and it is not the rule #773 filed it as. That issue read
-	// `case x in esac` being refused there as "a case must have an arm", and
-	// the discriminator says otherwise. Measured 2026-09-12, `env -i
+	// It is not "a case must have an arm", which is what refusing
+	// `case x in esac` looks like from one probe. Measured under `env -i
 	// PATH=/usr/bin:/bin` with a scratch HOME, over `-c` and a script file
 	// alike:
 	//
@@ -668,27 +662,26 @@ type Dialect struct {
 	//	case x in # c⏎esac                runs                 — a comment
 	//	                                  ends the line and the newline counts
 	//	case esac in (esac) echo hit;; esac
-	//	                                  prints `hit` in all six — a paren in
-	//	                                  front takes the reservation away
-	//	                                  everywhere and needs no flag
+	//	                                  prints `hit` under every preset — a
+	//	                                  paren in front takes the reservation
+	//	                                  away everywhere and needs no flag
 	//
-	// The fourth row is what makes this additive rather than a refusal: the
-	// shell *accepts* a program the other five refuse, and the one-line
+	// The fourth row is what makes this additive rather than a refusal: a true
+	// preset *accepts* a program a false one refuses, and the one-line
 	// `case x in esac` is refused as a consequence of that acceptance rather
 	// than as a rule of its own. Writing it the other way round — a flag that
-	// simply refused an armless `case` — would have refused `case x in⏎esac`
-	// too, which ksh93 runs.
+	// simply refused an armless `case` — would refuse `case x in⏎esac` too,
+	// which a true preset runs.
 	CaseTerminatorIsAPatternAfterTheHeader bool
 
 	// CaseBraceBody lets a `case` be written with braces in place of `in` …
 	// `esac`: `case x { x) echo hit;; }`.
 	//
-	// **Two shells have it and they draw it differently**, which is why this
-	// is a spelling rather than a bool. Measured 2026-09-12 under `env -i
-	// PATH=/usr/bin:/bin` with a scratch HOME, ksh93u+ and zsh 5.9.2; dash,
-	// bash 5.3, that binary as `sh` and bash 3.2 refuse every row.
+	// **The presets that have it draw it differently**, which is why this is a
+	// spelling rather than a bool. Measured under `env -i PATH=/usr/bin:/bin`
+	// with a scratch HOME; a preset without the construct refuses every row.
 	//
-	//	probe                              ksh93            zsh
+	//	probe                              paired           mixing
 	//	case x { x) echo hit;; }           hit              hit
 	//	case x { }                         runs             runs
 	//	case x { (x) echo hit;; }          hit              hit

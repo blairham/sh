@@ -2455,6 +2455,30 @@ type Diagnostics struct {
 	// the token failed in the report's leading position — `08+1` is blamed
 	// as `08`, `1+08` as `1+08` — rather than the whole expression.
 	ArithErrorNamesThePrefix bool
+	// ArithRecursionLimit is the reason a name resolved through its own value
+	// too many times — `x=x; $(( x ))`, and `a=b; b=a` through two. One verb:
+	// the name blamed, which ArithRecursionBlamesTheWrittenName chooses.
+	//
+	// Measured 2026-09-12. Every shell that re-reads a value at all has a
+	// sentence for it and no two agree, in wording or in shape:
+	//
+	//	bash 5.3.15  x: expression recursion level exceeded (error token is "x")
+	//	ksh93u+      x: recursion too deep
+	//	zsh 5.9.2    math recursion limit exceeded: x
+	//
+	// bash and ksh93 put the name in front through ArithError and say the
+	// reason after, so their wording takes no verb; zsh writes the name
+	// after its own reason and takes one. dash never recurses — its
+	// ArithNameValueRecurses is No — so it has no row.
+	ArithRecursionLimit string
+	// ArithRecursionBlamesTheWrittenName reports the bound against the name
+	// the *expression* held rather than the one it stopped on. zsh alone.
+	//
+	// Unreachable with a name that points at itself, which is why `x=x` is
+	// not the probe: measured on `a=b; b=a; $(( a ))`, bash 5.3.15 and
+	// ksh93u+ both name `b` and zsh names `a`. A fix tested only against
+	// `x=x` cannot tell the two apart, both being `x`.
+	ArithRecursionBlamesTheWrittenName bool
 	// ArithErrorSkipsLeadingSpace quotes the expression back from its first
 	// non-blank character, where the rest quote back exactly the text the
 	// construct held. Measured 2026-09-11 on `x=$(( 1+ ))`, whose expression

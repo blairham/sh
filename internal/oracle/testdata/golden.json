@@ -5042,6 +5042,50 @@
         "TimedOut": false
       }
     },
+    "arith/a-value-that-names-itself": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x: expression recursion level exceeded (error token is \"x\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x: expression recursion level exceeded (error token is \"x\")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: x: expression recursion level exceeded (error token is \"x\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Illegal number: x",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: x: recursion too deep",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: math recursion limit exceeded: x",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arith/a-value-whose-expression-will-not-parse": {
       "bash": {
         "Stdout": "",
@@ -7942,6 +7986,50 @@
         "Stdout": "st=2",
         "Stderr": "\u003cshell\u003e:1: bad math expression: operator expected at `hi'",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/two-values-that-name-each-other": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: b: expression recursion level exceeded (error token is \"b\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: b: expression recursion level exceeded (error token is \"b\")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: b: expression recursion level exceeded (error token is \"b\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Illegal number: b",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: b: recursion too deep",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: math recursion limit exceeded: a",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

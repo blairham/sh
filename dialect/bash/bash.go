@@ -1260,6 +1260,7 @@ func Diagnostics() interp.Diagnostics {
 		ArithByteIsNoDigit: "invalid number",
 		// And a base outside 2..64 is a third: `$(( 1#0 ))`.
 		ArithInvalidBase:         "invalid arithmetic base",
+		ArithRecursionLimit:      "expression recursion level exceeded",
 		ArithErrorNamesThePrefix: true,
 		// set -o pads to fifteen and tabs; kill -l numbers five to a row.
 		// The width is named rather than written, because `shopt -o -s`

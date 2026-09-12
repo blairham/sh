@@ -2127,13 +2127,18 @@ func Diagnostics() interp.Diagnostics {
 		// a function still names the function, which the answer above wins.
 		LocationNamesTheCurrentFile: true,
 		// zsh does not quote the expression, where the other three do.
-		ArithError:                   "%[2]s",
-		ArithInvalidBase:             "invalid base (must be 2 to 36 inclusive): %[1]s",
-		OptionListingWidth:           22,
-		KillListing:                  interp.KillListingSpaceJoined,
-		FcNoSuchEvent:                "no such event: 1",
-		NoJobControl:                 "no job control in this shell.",
-		FdVariableWithoutADescriptor: "parameter %[1]s does not contain a file descriptor",
+		ArithError:          "%[2]s",
+		ArithInvalidBase:    "invalid base (must be 2 to 36 inclusive): %[1]s",
+		ArithRecursionLimit: "math recursion limit exceeded: %[1]s",
+		// And it is the name the expression was written with, not the one the
+		// bound stopped on: `a=b; b=a` is blamed on `a` here and on `b` in the
+		// two shells above.
+		ArithRecursionBlamesTheWrittenName: true,
+		OptionListingWidth:                 22,
+		KillListing:                        interp.KillListingSpaceJoined,
+		FcNoSuchEvent:                      "no such event: 1",
+		NoJobControl:                       "no job control in this shell.",
+		FdVariableWithoutADescriptor:       "parameter %[1]s does not contain a file descriptor",
 		// The same split ksh93 makes, said the other way round: the text
 		// that could not be an operand is named where there is one, and the
 		// end of the string is named where there is not.

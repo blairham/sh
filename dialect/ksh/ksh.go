@@ -1301,7 +1301,8 @@ func Diagnostics() interp.Diagnostics {
 		DigitTooGreatForBase: "arithmetic syntax error",
 		// The same sentence for a base outside 2..64: `$(( 1#0 ))` is
 		// ` 1#0 : arithmetic syntax error` here, as everything else is.
-		ArithInvalidBase: "arithmetic syntax error",
+		ArithInvalidBase:    "arithmetic syntax error",
+		ArithRecursionLimit: "recursion too deep",
 		// Except for the `@` operator family, the one bad substitution ksh93
 		// defers to run time — measured, `${x@Q}` in a branch never taken is
 		// silent — and when reached it is reported as a bad substitution

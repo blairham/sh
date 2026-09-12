@@ -99,7 +99,7 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 	// The end this shell keeps is counted rather than closed on the body's
 	// return, and the count starts at one for the body itself. What else can
 	// join it, and why the body is not always the last, is in substEnd.
-	keep := &substEnd{held: 1, anchor: newProcAnchor(r.ProcessAnchor)}
+	keep := &substEnd{held: 1, anchor: newProcAnchor(r.ProcessAnchor), done: make(chan struct{})}
 	if kind != syntax.ProcSubstOut {
 		// Only the writing end delivers an end-of-file by closing, so only
 		// that direction has a nudge to repeat. See nudgeFifoEOF.
@@ -184,7 +184,15 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 		})
 	}
 
-	r.procSubs = append(r.procSubs, procSubPipe{path: path, hold: hold})
+	// The body travels with the path for `>(cmd)` only, because that is the
+	// direction whose body writes into the shell's own output rather than
+	// into the pipe — see removeProcSubs for what the command that named it
+	// waits for and why.
+	var body <-chan struct{}
+	if kind == syntax.ProcSubstOut {
+		body = keep.finished()
+	}
+	r.procSubs = append(r.procSubs, procSubPipe{path: path, hold: hold, body: body})
 	return path, true
 }
 
@@ -620,6 +628,12 @@ func (r *Runner) tempHome() string {
 type procSubPipe struct {
 	path string
 	hold *os.File
+	// body answers when a `>(cmd)`'s body has finished writing. Nil for the
+	// other two forms, which have nothing to wait for: `<(cmd)`'s body
+	// writes into the pipe, so the command that named the path has already
+	// read it to its end, and `=(cmd)`'s has run to completion before the
+	// path was handed over at all.
+	body <-chan struct{}
 }
 
 // takeProcSubs hands over the paths a command's substitutions made, and
@@ -670,6 +684,46 @@ func (r *Runner) takeProcSubs() []procSubPipe {
 // once. The placeholder is closed either way — a `>(cmd)` whose writing end
 // the script now holds gets its end-of-file from the script closing that,
 // which is where it belongs.
+//
+// # And a `>(cmd)`'s body is waited for here
+//
+// A writing substitution's body writes into the shell's *own* output, not
+// into the pipe, so nothing downstream reads it to an end and nothing else in
+// the shell is waiting for it. Where a real shell forks, that costs nothing:
+// the body is a process holding the shell's standard output, so whatever is
+// reading that stream reads until the body has closed it too, and the bytes
+// cannot be lost however late they are. Here the body is a goroutine and the
+// output is the caller's io.Writer, which stops being read the moment the
+// shell is done — so the descriptor's lifetime has to be reconstructed as a
+// wait, the way AGENTS.md describes for every other place a fork is standing
+// in for a process.
+//
+// **It is not lost anywhere.** Measured 2026-09-12 on Linux,
+//
+//	printf "PIPE\n" | tee >(read -r v; printf "[%s]" "$v") >/dev/null
+//
+// is `[PIPE]` in bash 5.2, zsh 5.9 and ksh93 — 200 runs each, idle and again
+// with the machine oversubscribed two to one, 1200 answers and not one of
+// them empty. This shell answered the empty string in 1 run in 100 of the
+// binary and in 4 of 60 of the test that covers it (#2183): a race, not an
+// ordering, and it is the shell that loses it.
+//
+// **When the shell stops is a disagreement, and this takes the zsh side.**
+// With a body that outlives its input — `printf x | tee >(sleep 3) >/dev/null`
+// — zsh 5.9 takes three seconds and bash and ksh93 take none, and the same
+// split holds for `echo >(sleep 3)` and `echo hi > >(sleep 3)`. bash and
+// ksh93 can afford it because the body is a process; a goroutine cannot
+// outlive the shell that is about to stop reading its output, so the choice
+// here is between zsh's timing and losing the bytes. It takes zsh's. The
+// ordering that costs — `AFTER[PIPE]` in bash and ksh93 against `[PIPE]AFTER`
+// in zsh — is a real axis and is filed as one.
+//
+// **Except where the shell still holds the pipe**, which is the clause above
+// and needs no second test: `exec > >(cat)` is the shape, and zsh does not
+// wait for it either — 0 seconds there against 3 for every other spelling.
+// It is the same reason in both shells. The body is reading until the write
+// end closes, the script is now the one holding that end, and a shell waiting
+// for its own descriptor to be closed is a shell that has stopped.
 func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 	for _, p := range pipes {
 		if p.hold != nil {
@@ -677,6 +731,12 @@ func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 		}
 		if r.holdsDescriptorOnto(p.path) {
 			continue
+		}
+		if p.body != nil {
+			// After the placeholder above, which is what delivers the
+			// end-of-file the body is reading until: waiting first would be
+			// waiting for a reader this shell has not finished feeding.
+			<-p.body
 		}
 		_ = os.Remove(p.path)
 	}
@@ -693,13 +753,29 @@ func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 // A file's name is what it was opened by, which is this path exactly — both
 // routes that put one in the table open it from the word the substitution
 // expanded to.
+//
+// **The three named streams are asked as well as the table**, and leaving
+// them out was a hole with two floors. `exec > >(cat)` puts the pipe's
+// writing end on the shell's standard output, which is a field rather than a
+// numbered entry — `fds` is "the descriptors beyond the three named streams"
+// by its own definition — so the shell answered that it was not holding a
+// pipe it was in fact about to write everything through. The name going away
+// was the harmless half; the wait above is the other, and a shell waiting for
+// a body to finish reading a pipe only that shell can close does not come
+// back. `exec 3> >(cat)` was answered correctly throughout, which is what
+// says the hole is the streams and not the question. fdAliased next door asks
+// the same three for the same reason.
 func (r *Runner) holdsDescriptorOnto(path string) bool {
+	named := func(v any) bool {
+		f, ok := v.(*os.File)
+		return ok && f.Name() == path
+	}
 	for _, v := range r.fds {
-		if f, ok := v.(*os.File); ok && f.Name() == path {
+		if named(v) {
 			return true
 		}
 	}
-	return false
+	return named(r.Stdin) || named(r.Stdout) || named(r.Stderr)
 }
 
 // CleanUp removes what this shell made for itself.
@@ -809,6 +885,12 @@ type substEnd struct {
 	// end-of-file — `<(cmd)`, where the shell is the writer. Empty for
 	// `>(cmd)`, whose reader has a placeholder instead. See openFifoReadEnd.
 	nudge string
+	// done is closed when the last holder has let go, which is the moment
+	// the body — and any job it backgrounded — has finished with this end
+	// and so has finished writing. It is what removeProcSubs waits on for a
+	// `>(cmd)`; see there for why the command that named the pipe waits at
+	// all, and for the one shape that does not.
+	done chan struct{}
 }
 
 // opened records the descriptor the count is guarding.
@@ -842,7 +924,7 @@ func (e *substEnd) letGo() {
 	e.mu.Lock()
 	e.held--
 	last := e.held == 0
-	f, nudge, a := e.file, e.nudge, e.anchor
+	f, nudge, a, done := e.file, e.nudge, e.anchor, e.done
 	e.mu.Unlock()
 	if !last {
 		return
@@ -853,6 +935,14 @@ func (e *substEnd) letGo() {
 	// to let go, since `echo <(true)` names a path nothing opens and a body
 	// may have asked which process it was all the same.
 	a.stop()
+	// Whatever else the last letting-go does, it says so: the close below is
+	// conditional on there having been a descriptor, and the announcement is
+	// not — a body that never opened one has still finished writing.
+	defer func() {
+		if done != nil {
+			close(done)
+		}
+	}()
 	if f == nil {
 		return
 	}
@@ -860,6 +950,22 @@ func (e *substEnd) letGo() {
 	if nudge != "" {
 		nudgeFifoEOF(nudge)
 	}
+}
+
+// finished answers when the last holder has let go, or at once for an end
+// nobody is counting.
+//
+// A nil channel would block forever, which is the one answer this must never
+// give: the two directions and the file form do not all make one, and a
+// caller waiting on a substitution that never had a body is a shell that
+// stops.
+func (e *substEnd) finished() <-chan struct{} {
+	if e == nil || e.done == nil {
+		closed := make(chan struct{})
+		close(closed)
+		return closed
+	}
+	return e.done
 }
 
 // holdPipeEnd keeps this shell's process-substitution end open for something

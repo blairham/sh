@@ -50,13 +50,22 @@ import "github.com/blairham/sh/repl"
 // filed against HIST_IGNORE_SPACE, which is the knob it is not true of.
 func HistoryStyle() repl.HistoryStyle {
 	return repl.HistoryStyle{
-		SearchPrompt:                 "bck-i-search: %s_",
-		SearchFailedPrompt:           "failing bck-i-search: %s_",
-		SearchBelowTheLine:           true,
-		IgnoreSpaceOption:            "HIST_IGNORE_SPACE",
-		IgnoreDupsOption:             "HIST_IGNORE_DUPS",
-		Ignore:                       "HISTORY_IGNORE",
-		IgnoreIsOnePattern:           true,
-		PatternIgnoredStaysInSession: true,
+		SearchPrompt:       "bck-i-search: %s_",
+		SearchFailedPrompt: "failing bck-i-search: %s_",
+		SearchBelowTheLine: true,
+		// The file's own encoding, measured 2026-09-12 by driving zsh 5.9.2
+		// through a pseudo-terminal and reading what it left behind. Both
+		// answers are yes, and they are two answers: a multi-line command is
+		// stored across lines joined by a trailing backslash **whether or not**
+		// `EXTENDED_HISTORY` is on, and the `: <start>:<elapsed>;` header
+		// appears when it is. A reader with only the second still hands back
+		// the last line of a `for` loop as an entry of its own (#2452).
+		EntriesContinueOnABackslash:     true,
+		EntriesMayCarryATimestampHeader: true,
+		IgnoreSpaceOption:               "HIST_IGNORE_SPACE",
+		IgnoreDupsOption:                "HIST_IGNORE_DUPS",
+		Ignore:                          "HISTORY_IGNORE",
+		IgnoreIsOnePattern:              true,
+		PatternIgnoredStaysInSession:    true,
 	}
 }

@@ -57,6 +57,22 @@ type historyFile struct {
 	// A zero Boundary allows and records nothing, which is every session that
 	// was never given a policy.
 	bound boundary.Boundary
+
+	// encoding is how the file spells an entry — see decodeEntries, and
+	// HistoryStyle, where the two facts it holds were measured. The zero value
+	// is one entry per line, which is what every reader of this file did
+	// before the encoding was a question.
+	encoding historyEncoding
+}
+
+// historyEncoding is the pair of answers HistoryStyle gives about the file.
+//
+// A struct of its own rather than two fields on historyFile, so that the thing
+// passed to decodeEntries is the whole of what decides the answer and a third
+// fact added later has one place to go.
+type historyEncoding struct {
+	continuesOnABackslash bool
+	mayCarryATimestamp    bool
 }
 
 // historyFrom reads the settings a session should use.
@@ -133,14 +149,108 @@ func (h historyFile) load(ctx context.Context) []string {
 	// file; a pasted command can be very long.
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	for sc.Scan() {
-		if line := sc.Text(); strings.TrimSpace(line) != "" {
-			lines = append(lines, line)
+		lines = append(lines, sc.Text())
+	}
+	// Blank lines are dropped *after* the decoding and not before it, because
+	// a blank line can be the inside of a multi-line entry — a `for` loop with
+	// an empty line in it is one command — and dropping it first would join
+	// the halves into a line the person never typed.
+	entries := nonBlank(decodeEntries(lines, h.encoding))
+	if len(entries) > h.size {
+		entries = entries[len(entries)-h.size:]
+	}
+	return entries
+}
+
+// decodeEntries turns the file's physical lines into the entries a person
+// typed. See HistoryStyle, where both facts were measured.
+//
+// The order is the file's own: an entry is gathered across its continuation
+// lines *first*, and the timestamp header comes off the front of what that
+// produced. Doing it the other way round would strip a header, then join, and
+// a continuation line that happened to begin `: 1:0;` would lose its text.
+func decodeEntries(lines []string, enc historyEncoding) []string {
+	var out []string
+	var held strings.Builder
+	continuing := false
+	for _, line := range lines {
+		if enc.continuesOnABackslash && strings.HasSuffix(line, `\`) {
+			// The backslash is the mark and not part of the command: what was
+			// typed had a newline there.
+			held.WriteString(strings.TrimSuffix(line, `\`))
+			held.WriteByte('\n')
+			continuing = true
+			continue
+		}
+		if continuing {
+			held.WriteString(line)
+			out = append(out, withoutTimestamp(held.String(), enc))
+			held.Reset()
+			continuing = false
+			continue
+		}
+		out = append(out, withoutTimestamp(line, enc))
+	}
+	if continuing {
+		// A file whose last line ends in a backslash — a session killed
+		// mid-write, or a trim that cut inside an entry. What there is of it
+		// is an entry rather than nothing.
+		out = append(out, withoutTimestamp(strings.TrimSuffix(held.String(), "\n"), enc))
+	}
+	return out
+}
+
+// withoutTimestamp takes the `: <start>:<elapsed>;` off the front of an entry,
+// where the file is one that may carry it and this entry does.
+//
+// A line that does not match is the command itself, which is the whole reason
+// this is a match and not a split: the same file holds both kinds, because the
+// option can be turned on part-way through its life.
+func withoutTimestamp(entry string, enc historyEncoding) string {
+	if !enc.mayCarryATimestamp {
+		return entry
+	}
+	rest, ok := strings.CutPrefix(entry, ": ")
+	if !ok {
+		return entry
+	}
+	start, rest, ok := strings.Cut(rest, ":")
+	if !ok || !allDigits(start) {
+		return entry
+	}
+	// Only the first `;` after the numbers ends the header, measured: an entry
+	// whose command contains a `;` keeps it.
+	elapsed, command, ok := strings.Cut(rest, ";")
+	if !ok || !allDigits(elapsed) {
+		return entry
+	}
+	return command
+}
+
+// allDigits reports whether s is a run of at least one digit. A header with an
+// empty or non-numeric field is not a header, and the line stands as it is.
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := range len(s) {
+		if s[i] < '0' || s[i] > '9' {
+			return false
 		}
 	}
-	if len(lines) > h.size {
-		lines = lines[len(lines)-h.size:]
+	return true
+}
+
+// nonBlank drops the entries that are only whitespace, which is what the read
+// has always done and is now done last. See load.
+func nonBlank(entries []string) []string {
+	out := entries[:0]
+	for _, e := range entries {
+		if strings.TrimSpace(e) != "" {
+			out = append(out, e)
+		}
 	}
-	return lines
+	return out
 }
 
 // save appends what this session added.

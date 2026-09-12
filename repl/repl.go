@@ -1254,6 +1254,12 @@ func (s Shell) historyFile() historyFile {
 	// The session's boundary, so an open this package makes is asked about
 	// the same way one the interpreter makes is.
 	h.bound = boundary.Boundary{Gate: s.Gate, Events: s.Events, Session: s.Session}
+	// How this shell's file spells an entry, which is the dialect's answer —
+	// see HistoryStyle, and decodeEntries for what is done with it.
+	h.encoding = historyEncoding{
+		continuesOnABackslash: s.History.EntriesContinueOnABackslash,
+		mayCarryATimestamp:    s.History.EntriesMayCarryATimestampHeader,
+	}
 	return h
 }
 

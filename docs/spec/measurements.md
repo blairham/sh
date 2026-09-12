@@ -8367,6 +8367,18 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/a-single-quoted-character-is-a-code-point` | **2>** `<shell>: 1: arithmetic expression: expecting primary: " '1' + 1 "` *(status 2)* | **2>** `<shell>: line 1: '1' + 1 : arithmetic syntax error: operand expected (error token is "'1' + 1 ")` *(status 1)* | **2>** `<shell>: line 1: '1' + 1 : arithmetic syntax error: operand expected (error token is "'1' + 1 ")` *(status 127)* | **2>** `<shell>: '1' + 1 : syntax error: operand expected (error token is "'1' + 1 ")` *(status 1)* | `[50][97] st=0` | **2>** `<shell>:1: bad math expression: illegal character: '` *(status 1)* |
 | `arith/the-error-names-what-was-consumed` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "1+08"` *(status 2)* | **2>** `<shell>: line 1: 1+08: value too great for base (error token is "08")` *(status 1)* | **2>** `<shell>: line 1: 1+08: value too great for base (error token is "08")` *(status 127)* | **2>** `<shell>: 1+08: value too great for base (error token is "08")` *(status 1)* | `9~st=0` | `9~st=0` |
 | `arith/explicit-base` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "2#101"` *(status 2)* | `[5][16]` | `[5][16]` | `[5][16]` | `[5][16]` | `[5][16]` |
+| `arith/a-base-written-with-a-leading-zero` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "010#5"` *(status 2)* | **2>** `<shell>: line 1: 010#5: invalid number (error token is "010#5")` *(status 1)* | **2>** `<shell>: line 1: 010#5: invalid number (error token is "010#5")` *(status 127)* | **2>** `<shell>: 010#5: invalid number (error token is "010#5")` *(status 1)* | **2>** `<shell>: 010#5: arithmetic syntax error` *(status 1)* | `5~st=0` |
+| `arith/a-padded-base-read-in-decimal-or-in-octal` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "010#9"` *(status 2)* | **2>** `<shell>: line 1: 010#9: invalid number (error token is "010#9")` *(status 1)* | **2>** `<shell>: line 1: 010#9: invalid number (error token is "010#9")` *(status 127)* | **2>** `<shell>: 010#9: invalid number (error token is "010#9")` *(status 1)* | **2>** `<shell>: 010#9: arithmetic syntax error` *(status 1)* | `9~11~st=0` |
+| `arith/a-two-character-base-with-a-leading-zero` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "08#7"` *(status 2)* | **2>** `<shell>: line 1: 08#7: value too great for base (error token is "08#7")` *(status 1)* | **2>** `<shell>: line 1: 08#7: value too great for base (error token is "08#7")` *(status 127)* | **2>** `<shell>: 08#7: value too great for base (error token is "08#7")` *(status 1)* | `7~3~st=0` | `7~3~st=0` |
+| `arith/a-base-longer-than-two-characters` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "0010#5"` *(status 2)* | **2>** `<shell>: line 1: 0010#5: invalid number (error token is "0010#5")` *(status 1)* | **2>** `<shell>: line 1: 0010#5: invalid number (error token is "0010#5")` *(status 127)* | **2>** `<shell>: 0010#5: invalid number (error token is "0010#5")` *(status 1)* | **2>** `<shell>: 0010#5: arithmetic syntax error` *(status 1)* | `5~3~st=0` |
+| `arith/a-base-of-zero` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "0#5"` *(status 2)* | **2>** `<shell>: line 1: 0#5: invalid number (error token is "0#5")` *(status 1)* | **2>** `<shell>: line 1: 0#5: invalid number (error token is "0#5")` *(status 127)* | **2>** `<shell>: 0#5: invalid number (error token is "0#5")` *(status 1)* | **2>** `<shell>: 0#5: arithmetic syntax error` *(status 1)* | `5~st=0` |
+| `arith/a-base-below-two` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "1#0"` *(status 2)* | **2>** `<shell>: line 1: 1#0: invalid arithmetic base (error token is "1#0")` *(status 1)* | **2>** `<shell>: line 1: 1#0: invalid arithmetic base (error token is "1#0")` *(status 127)* | **2>** `<shell>: 1#0: invalid arithmetic base (error token is "1#0")` *(status 1)* | **2>** `<shell>: 1#0: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: invalid base (must be 2 to 36 inclusive): 1` *(status 1)* |
+| `arith/a-base-above-thirty-six-written-padded` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "064#10"` *(status 2)* | **2>** `<shell>: line 1: 064#10: invalid number (error token is "064#10")` *(status 1)* | **2>** `<shell>: line 1: 064#10: invalid number (error token is "064#10")` *(status 127)* | **2>** `<shell>: 064#10: invalid number (error token is "064#10")` *(status 1)* | **2>** `<shell>: 064#10: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: invalid base (must be 2 to 36 inclusive): 64` *(status 1)* |
+| `arith/a-radix-prefix-with-no-digits` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: " 0x "` *(status 2)* | `1[0] 2[0] st=0` | `1[0] 2[0] st=0` | `1[0] 2[0] st=0` | **2>** `<shell>:  0x : arithmetic syntax error` *(status 1)* | `1[0] 2[0] st=0` |
+| `arith/a-radix-prefix-with-no-digits-goes-on` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: " 0x+1 "` *(status 2)* | `[1]` | `[1]` | `[1]` | **2>** `<shell>:  0x+1 : arithmetic syntax error` *(status 1)* | `[1]` |
+| `arith/a-binary-radix-prefix` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: " 0b101 "` *(status 2)* | **2>** `<shell>: line 1: 0b101: value too great for base (error token is "0b101")` *(status 1)* | **2>** `<shell>: line 1: 0b101: value too great for base (error token is "0b101")` *(status 127)* | **2>** `<shell>: 0b101: value too great for base (error token is "0b101")` *(status 1)* | **2>** `<shell>:  0b101 : arithmetic syntax error` *(status 1)* | `1[5] 2[5] st=0` |
+| `arith/a-binary-radix-prefix-with-no-digits` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: " 0b "` *(status 2)* | **2>** `<shell>: line 1: 0b: value too great for base (error token is "0b")` *(status 1)* | **2>** `<shell>: line 1: 0b: value too great for base (error token is "0b")` *(status 127)* | **2>** `<shell>: 0b: value too great for base (error token is "0b")` *(status 1)* | **2>** `<shell>:  0b : arithmetic syntax error` *(status 1)* | `1[0] 2[1] st=0` |
+| `arith/an-integer-name-given-a-bare-radix-prefix` | `[0x]~st=127` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `[0]~declare -i b="0"~st=0` | `[0]~declare -i b="0"~st=0` | `[0]~declare -i b="0"~st=0` | **2>** `<shell>: 0x: arithmetic syntax error` *(status 1)* | `[16#0]~typeset -i16 b=0~st=0` |
 | `arith/comparison-yields-one-or-zero` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` |
 | `arith/logical-yields-one-not-an-operand` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` |
 | `arith/short-circuit-is-observable` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` |
@@ -8686,6 +8698,54 @@ grades it and nothing drift-checks it either, for the same reason.
 - `arith/explicit-base` — hex is universal; the base#number form is absent from dash
   ```sh
   printf "[%s]" "$((2#101))" "$((0x10))"
+  ```
+- `arith/a-base-written-with-a-leading-zero` — a zero in front of the base, which the panel splits three ways for three different reasons: zsh reads the base in plain decimal and answers 5, bash refuses because the zero opens an *octal constant* there so the `#` is never a base marker at all, and ksh93 refuses for a reason of its own — the row below. dash has no bases. The digit is deliberately one both readings of the base agree about, which is what the row after this one is for (#2006)
+  ```sh
+  echo $((010#5)); echo "st=$?"
+  ```
+- `arith/a-padded-base-read-in-decimal-or-in-octal` — the control the row above cannot be read without: `010#5` is 5 whether the base is eight or ten, so it says nothing about *which* base zsh chose. Nine is no octal digit and eleven is two of them, and zsh answers 9 and 11 — plain decimal, padding and all. A shell reading `010` as octal would refuse the first and answer 9 to the second
+  ```sh
+  echo $((010#9)); echo $((010#11)); echo "st=$?"
+  ```
+- `arith/a-two-character-base-with-a-leading-zero` — ksh93's answer, and the one that says its refusal above is not about the zero: `08#7` is 7 and `02#11` is 3 there, so a padded base is read in decimal — but only two characters of it, which is as many as base 64 needs. bash refuses both, the leading zero being octal for it; zsh takes both by the general rule
+  ```sh
+  echo $((08#7)); echo $((02#11)); echo "st=$?"
+  ```
+- `arith/a-base-longer-than-two-characters` — the same two bases with one more zero in front, which is what separates ksh93's length rule from a rule about padding: `02#11` is 3 there and `0002#11` is refused. zsh answers both. Three hypotheses were live for ksh93 — an octal base, a decimal base and a two-character cap — and only the cap explains this row beside the one above
+  ```sh
+  echo $((0010#5)); echo $((0002#11)); echo "st=$?"
+  ```
+- `arith/a-base-of-zero` — zero named as a base, which is not a base anywhere and is nevertheless 5 in zsh: that shell falls back to reading the digits as an ordinary constant, so `$(( 0#0x10 ))` is 16 there too. bash never sees a base here at all — the zero is its octal prefix and the `#` a byte no numeral can hold, hence `invalid number` rather than the `invalid arithmetic base` it writes for `1#0`. Ours refuses it in every dialect, which is one column short
+  ```sh
+  echo $((0#5)); echo "st=$?"
+  ```
+- `arith/a-base-below-two` — the neighboring refusal, and the reason the row above is about zero rather than about small bases: `1#0` *is* read as a base in bash and refused with a third sentence, `invalid arithmetic base`, where `0#5` gets the numeral reader's. zsh names the range it takes and ksh93 says what it says about everything
+  ```sh
+  echo $((1#0)); echo "st=$?"
+  ```
+- `arith/a-base-above-thirty-six-written-padded` — the base that is both padded and out of one shell's range, which is what pins the *number* in zsh's refusal: it writes `64` where the script wrote `064`, so the sentence names the base it read rather than the text. bash reads no base here and ksh93's cap has already taken `06`
+  ```sh
+  echo $((064#10)); echo "st=$?"
+  ```
+- `arith/a-radix-prefix-with-no-digits` — a radix prefix with an empty digit run, which bash 5.3, bash 3.2, bash-as-sh and zsh all read as a complete number worth zero and ksh93 and dash refuse. Both letter cases in one row because the panel answers them alike and a rule written for one is a rule that missed the other (#1328)
+  ```sh
+  echo "1[$(( 0x ))] 2[$(( 0X ))] st=$?"
+  ```
+- `arith/a-radix-prefix-with-no-digits-goes-on` — the control for the row above, and what makes `0` an answer rather than an artifact: the four columns that take `0x` answer 1 here, so the prefix is a *finished* number and the `+1` is an addition to it — where a digit scan that swallowed the `+` looking for digits would answer something else or refuse
+  ```sh
+  echo "[$(( 0x+1 ))]"
+  ```
+- `arith/a-binary-radix-prefix` — the third radix prefix, which zsh alone has: 5 there in both cases, and `0b101: value too great for base` in bash 5.3, bash 3.2 and bash-as-sh, which read it as an octal constant carrying a `b`. ksh93 and dash refuse it too. It is beside the hex rows because the empty-digit question is the same question for it — the row below
+  ```sh
+  echo "1[$(( 0b101 ))] 2[$(( 0B101 ))] st=$?"
+  ```
+- `arith/a-binary-radix-prefix-with-no-digits` — and the empty digit run under the prefix only one shell has, which answers 0 and 1 there exactly as `0x` does — so the rule is about a radix prefix rather than about hexadecimal. The other five refuse both cells
+  ```sh
+  echo "1[$(( 0b ))] 2[$(( 0b+1 ))] st=$?"
+  ```
+- `arith/an-integer-name-given-a-bare-radix-prefix` — the same empty digit run arriving through an assignment rather than through an expansion, which is the route that shows what the name kept: bash lists `declare -i b="0"` and zsh `typeset -i16 b=0`, its empty prefix having taught the name a base as a full one would. ksh93 refuses the assignment. Nothing here was reachable while the number itself was refused, which is why #1328 carried it
+  ```sh
+  typeset -i b; b=0x; echo "[$b]"; typeset -p b; echo "st=$?"
   ```
 - `arith/comparison-yields-one-or-zero` — comparisons yield 1 or 0
   ```sh

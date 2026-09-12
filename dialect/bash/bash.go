@@ -500,6 +500,16 @@ func Semantics() interp.Semantics {
 	s.IntegerAssignmentReadsALeadingZeroAsDecimal = interp.No
 	// And one reader for a value too: `k=010; $((k))` is eight here.
 	s.ArithStoredValueReadsALeadingZeroAsDecimal = interp.No
+	// The same octal rule is why `010#5` is not base ten here: the zero opens
+	// an octal constant, so the `#` behind it is a byte no numeral can hold
+	// and the literal fails — `010#5: invalid number`, where `08#5` is
+	// `value too great for base` because the `8` is a digit the base cannot
+	// reach. Both readings fall out of this one answer.
+	s.ArithBaseMayHaveALeadingZero = interp.No
+	s.ArithBaseIsAtMostTwoDigits = interp.No
+	// A radix prefix with nothing after it is a finished number worth zero:
+	// `$(( 0x ))` is 0 and `$(( 0x+1 ))` is 1, in 5.3 and 3.2 alike.
+	s.ArithEmptyRadixDigitsAreZero = interp.Yes
 	// An attribute added to a name that already holds a value waits for the
 	// next assignment: `FOO=bar; typeset -i FOO` still reads `bar`, and
 	// `d=MiXeD; typeset -u d` still reads `MiXeD`. ksh93 and zsh re-read on
@@ -1230,7 +1240,13 @@ func Diagnostics() interp.Diagnostics {
 
 		// bash reserves its generic arithmetic wording for operands that are
 		// not literals, so a bad digit gets a reason of its own.
-		DigitTooGreatForBase:     "value too great for base",
+		DigitTooGreatForBase: "value too great for base",
+		// A byte that is no digit in any base is a second sentence here:
+		// `010#5` and `0#5` are `invalid number` where `08#5` and `1@2` are
+		// the one above. See Diagnostics.ArithByteIsNoDigit.
+		ArithByteIsNoDigit: "invalid number",
+		// And a base outside 2..64 is a third: `$(( 1#0 ))`.
+		ArithInvalidBase:         "invalid arithmetic base",
 		ArithErrorNamesThePrefix: true,
 		// set -o pads to fifteen and tabs; kill -l numbers five to a row.
 		// The width is named rather than written, because `shopt -o -s`

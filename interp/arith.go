@@ -1323,56 +1323,75 @@ func (r *Runner) parseNum(s string) (int, error) {
 	// digit that base does not allow. bash words that separately from an
 	// operand that is not a literal at all, and wraps it where it reports
 	// the other bare.
-	badDigit := false
+	// digits is what the conversion actually read, and base what it read them
+	// in. Both are kept so that a failure can be blamed the way bash blames
+	// one: it parts a digit the base cannot reach from a byte that is no
+	// digit at all, and only the pair says which happened.
+	digits, base := s, 10
 	switch {
-	case strings.Contains(s, "#"):
-		base, digits, _ := strings.Cut(s, "#")
-		b, berr := strconv.Atoi(base)
-		if berr != nil || b < 2 || b > 64 {
-			return 0, arithError{msg: "invalid base: " + base}
+	case r.spellsANamedBase(s):
+		text, rest, _ := strings.Cut(s, "#")
+		b, _ := strconv.Atoi(text)
+		if b < 2 || b > 64 {
+			// Below two is no base at all and above 64 is past the alphabet.
+			// Worded the same way as a base the dialect stops short of,
+			// because it is the same refusal: bash writes `invalid
+			// arithmetic base` for `1#0` and ksh93 its one sentence.
+			return 0, arithError{msg: Wording(r.diag().ArithInvalidBase,
+				"invalid base: %[1]s", strconv.Itoa(b)), token: s}
 		}
 		if b > 36 && !r.ask(r.sem().ArithBaseAbove36, "a base above 36") {
 			if r.unspecified {
 				return 0, arithError{msg: r.unanswered("a base above 36")}
 			}
-			// One dialect stops at 36 and says so, naming the base.
+			// One dialect stops at 36 and says so, naming the base — as a
+			// number rather than as written, which is what it prints for a
+			// padded one: `064#10` is `invalid base (must be 2 to 36
+			// inclusive): 64` there.
 			return 0, arithError{msg: Wording(r.diag().ArithInvalidBase,
-				"invalid base: %[1]s", base)}
+				"invalid base: %[1]s", strconv.Itoa(b)), token: s}
 		}
+		digits, base = rest, b
 		var bad bool
-		n, bad = parseBaseDigits(digits, b)
-		if bad {
+		if n, bad = parseBaseDigits(digits, base); bad {
 			err = strconv.ErrSyntax
-			badDigit = true
 		}
 	case strings.HasPrefix(s, "0x"), strings.HasPrefix(s, "0X"):
-		n, err = strconv.ParseInt(s[2:], 16, 64)
-	case len(s) > 1 && s[0] == '0' && !strings.ContainsAny(s, "xX#") && r.octalLeadingZero():
-		n, err = strconv.ParseInt(s[1:], 8, 64)
-		badDigit = err != nil
+		digits, base = s[2:], 16
+		n, err = r.parseRadixDigits(digits, base)
+	case r.dialect().ArithBinaryLiteral &&
+		(strings.HasPrefix(s, "0b") || strings.HasPrefix(s, "0B")):
+		digits, base = s[2:], 2
+		n, err = r.parseRadixDigits(digits, base)
+	case len(s) > 1 && s[0] == '0' && !strings.ContainsAny(s, "xX") && r.octalLeadingZero():
+		digits, base = s[1:], 8
+		n, err = strconv.ParseInt(digits, 8, 64)
 		if err != nil && !r.ask(r.sem().ArithInvalidOctalDigitIsError, "an invalid octal digit being an error") {
 			// ksh93 is octal *and* tolerant: `08` is 8 there, not a
 			// failure. Asked only once the octal read has actually failed,
 			// so a dialect that never sees a bad digit is never questioned.
-			n, err = strconv.ParseInt(s, 10, 64)
+			digits, base = s, 10
+			n, err = strconv.ParseInt(digits, 10, 64)
 		}
 	default:
-		n, err = strconv.ParseInt(s, 10, 64)
+		n, err = strconv.ParseInt(digits, base, 64)
 	}
 	if err != nil {
-		if badDigit {
-			return 0, arithError{
-				msg:   Wording(r.diag().DigitTooGreatForBase, "invalid number"),
-				token: s,
-			}
-		}
-		msg := r.wordInvalidNumber(s)
 		if w := r.diag().DigitTooGreatForBase; w != "" {
-			// One dialect calls every unreadable literal the same thing —
-			// `1e3` and `2#12` fail with the octal digit's own sentence.
-			msg = w
+			// Three dialects word every unreadable literal through the same
+			// wrapper, and one of them parts two diagnoses inside it: a
+			// digit the base cannot reach — `08`, `2#12`, and `1@2` whose
+			// `@` is digit 62 — from a byte that is no digit anywhere, which
+			// is the `#` left behind when a leading zero made the text an
+			// octal constant. See Diagnostics.ArithByteIsNoDigit.
+			if _, isDigit, found := firstByteTheBaseCannotUse(digits, base); found && !isDigit {
+				if n := r.diag().ArithByteIsNoDigit; n != "" {
+					w = n
+				}
+			}
+			return 0, arithError{msg: w, token: s}
 		}
-		return 0, arithError{msg: msg, token: s, complete: msg != r.diag().DigitTooGreatForBase}
+		return 0, arithError{msg: r.wordInvalidNumber(s), token: s, complete: true}
 	}
 	if neg {
 		n = -n
@@ -1380,42 +1399,109 @@ func (r *Runner) parseNum(s string) (int, error) {
 	return int(n), nil
 }
 
-// parseBaseDigits reads digits in a base up to 64: 0-9, then letters — one
-// case as good as the other through 36, and apart above it, where a-z is
-// 10..35, A-Z 36..61, `@` 62 and `_` 63. The second result reports a digit
-// the base does not have, which each dialect words its own way.
+// parseBaseDigits reads digits in a base up to 64. The second result reports
+// a digit the base cannot use, which each dialect words its own way.
 func parseBaseDigits(digits string, base int) (int64, bool) {
 	if digits == "" {
 		return 0, true
 	}
 	var n int64
 	for i := 0; i < len(digits); i++ {
-		c := digits[i]
-		var v int
-		switch {
-		case c >= '0' && c <= '9':
-			v = int(c - '0')
-		case c >= 'a' && c <= 'z':
-			v = int(c-'a') + 10
-		case c >= 'A' && c <= 'Z':
-			if base <= 36 {
-				v = int(c-'A') + 10
-			} else {
-				v = int(c-'A') + 36
-			}
-		case c == '@':
-			v = 62
-		case c == '_':
-			v = 63
-		default:
-			return 0, true
-		}
-		if v >= base {
+		v, known := baseDigitValue(digits[i], base)
+		if !known || v >= base {
 			return 0, true
 		}
 		n = n*int64(base) + int64(v)
 	}
 	return n, false
+}
+
+// baseDigitValue is the base-64 alphabet, in one place: 0-9, then letters —
+// one case as good as the other through 36, and apart above it, where a-z is
+// 10..35, A-Z 36..61, `@` 62 and `_` 63.
+//
+// The second result says the byte is a digit *somewhere* in that alphabet,
+// even where this base cannot reach it. That is the distinction a complaint
+// turns on and the reason the two questions share one function: a digit the
+// base does not have and a byte that is no digit at all are two diagnoses,
+// and an alphabet written down twice is the way they stop agreeing.
+func baseDigitValue(c byte, base int) (int, bool) {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0'), true
+	case c >= 'a' && c <= 'z':
+		return int(c-'a') + 10, true
+	case c >= 'A' && c <= 'Z':
+		if base <= 36 {
+			return int(c-'A') + 10, true
+		}
+		return int(c-'A') + 36, true
+	case c == '@':
+		return 62, true
+	case c == '_':
+		return 63, true
+	}
+	return 0, false
+}
+
+// firstByteTheBaseCannotUse finds what stopped a conversion: the byte, whether
+// the alphabet knows it as a digit at all, and whether there was one.
+func firstByteTheBaseCannotUse(digits string, base int) (byte, bool, bool) {
+	for i := 0; i < len(digits); i++ {
+		v, known := baseDigitValue(digits[i], base)
+		if !known || v >= base {
+			return digits[i], known, true
+		}
+	}
+	return 0, false, false
+}
+
+// spellsANamedBase reports whether the text is the `base#digits` form *as this
+// dialect spells it*, rather than a numeral that happens to hold a `#`.
+//
+// Where it is not, the text falls through to the ordinary numeral reading and
+// the `#` is simply a byte no base can use — which is not a fallback but
+// bash's whole rule: a leading zero opens an octal constant there, so
+// `010#5` is the octal `010` with `#5` behind it and fails as a number.
+func (r *Runner) spellsANamedBase(s string) bool {
+	text, _, ok := strings.Cut(s, "#")
+	if !ok || text == "" || !allDecimalDigits(text) {
+		// Only decimal digits name a base in any shell in the panel:
+		// `0x10#5` is a hex literal with a `#` after it, not base sixteen of
+		// something.
+		return false
+	}
+	if text[0] == '0' && !r.ask(r.sem().ArithBaseMayHaveALeadingZero,
+		"a base written with a leading zero") {
+		return false
+	}
+	if len(text) > 2 && r.ask(r.sem().ArithBaseIsAtMostTwoDigits,
+		"a base longer than two characters") {
+		return false
+	}
+	return true
+}
+
+func allDecimalDigits(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// parseRadixDigits reads the digits after a radix prefix, where an empty run
+// is a question rather than a failure: `$(( 0x ))` is zero in bash and zsh and
+// refused in ksh93 and dash — see Semantics.ArithEmptyRadixDigitsAreZero.
+func (r *Runner) parseRadixDigits(digits string, base int) (int64, error) {
+	if digits == "" {
+		if r.ask(r.sem().ArithEmptyRadixDigitsAreZero, "a radix prefix with no digits after it") {
+			return 0, nil
+		}
+		return 0, strconv.ErrSyntax
+	}
+	return strconv.ParseInt(digits, base, 64)
 }
 
 // octalLeadingZero is the dialect answer, and the quietest divergence

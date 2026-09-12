@@ -2463,8 +2463,11 @@ type Diagnostics struct {
 	// verbs.
 	ReadArgCount string
 
-	// ArithInvalidBase refuses a base the dialect does not go up to. One
-	// verb: the base as written.
+	// ArithInvalidBase refuses a base a `base#digits` literal may not name —
+	// one below two, or one above what the dialect goes up to. One verb: the
+	// base, as a decimal number rather than as written, which is what the
+	// shell that prints it prints: `$(( 064#10 ))` is `invalid base (must be
+	// 2 to 36 inclusive): 64` in zsh 5.9.2.
 	ArithInvalidBase string
 	// ArithEmptyExpression is `$(( ))` in the dialect that wants a primary
 	// there. No verbs.
@@ -2476,6 +2479,24 @@ type Diagnostics struct {
 	// two differently: `08` is "value too great for base" where a name-shaped
 	// operand is an arithmetic syntax error.
 	DigitTooGreatForBase string
+	// ArithByteIsNoDigit is the reason a literal holds a byte that is not a
+	// digit in *any* base — the `#` in `010#5`, which is no base marker in a
+	// dialect whose leading zero has already made the text an octal
+	// constant. No verbs.
+	//
+	// bash alone parts it from DigitTooGreatForBase, and the line between
+	// them is the base-64 alphabet rather than the base in hand. Measured
+	// 2026-09-12 on bash 5.3.15:
+	//
+	//	08#5    value too great for base    `8` is a digit, base eight has none
+	//	1@2     value too great for base    `@` is digit 62
+	//	1_      value too great for base    `_` is digit 63
+	//	010#5   invalid number              `#` is no digit at all
+	//	0#5     invalid number              the same
+	//
+	// Empty means the dialect words both the same way, which ksh93 and dash
+	// do — and where it is empty DigitTooGreatForBase answers both.
+	ArithByteIsNoDigit string
 	// NumericArgument is a builtin given an argument that is not a number,
 	// such as `exit abc`. Two verbs, positional because the shells order them
 	// differently: %[1]s is the builtin's name and %[2]s the argument.

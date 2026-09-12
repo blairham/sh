@@ -3773,6 +3773,61 @@ type Semantics struct {
 	// `-A`, so no column answers *this* letter with the scalar (#2060).
 	ScalarUnderATableDeclaration ScalarUnderACompoundPolicy
 
+	// ExportedCompoundReachesAChildAsItsFirstValue hands a child an entry for
+	// an exported name holding an **array or a table**, whose value is the
+	// array's first element or the table's first value.
+	//
+	// The alternative is no entry at all, which is not a nicety: a name and
+	// no name are different things to the program that reads the
+	// environment, and a compound has no environment representation for the
+	// other columns to have chosen a different one of.
+	//
+	// Measured 2026-09-12 from a script file, counting what a child sees:
+	//
+	//	probe                                bash 5.3.15 / 3.2 / as-sh   ksh93u+   zsh 5.9.2
+	//	typeset -x a=(p q); env | grep ^a=   nothing                     `a=p`     nothing
+	//	a=(p q); export a                    nothing                     `a=p`     nothing
+	//	typeset -Ax m; m[k]=v                nothing                     `m=v`     nothing
+	//	export b=1; typeset -x c=(p)         `b=1` alone                 both      `b=1` alone
+	//
+	// The last row is the control that says the *scalar* half is unaffected:
+	// an ordinary exported name reaches a child in every column, so what
+	// this axis moves is the compound and nothing beside it.
+	//
+	// An **empty** compound is a third shape and is not this: ksh93 refuses
+	// `typeset -x a=()` outright — `only simple variables can be exported` —
+	// where bash and zsh accept it and hand a child nothing. Both answers
+	// here give a child nothing, so the refusal is a wording and a status
+	// this does not carry.
+	//
+	// This shell handed a child `a=p` in every dialect, which is one
+	// column's answer given to three, and handed `a=` for an *empty* array,
+	// which is nobody's: a name arriving with an empty value where the
+	// script exported an array is the quiet kind of wrong, since a program
+	// reading it cannot tell an empty array from an empty string (#1380).
+	ExportedCompoundReachesAChildAsItsFirstValue Answer
+
+	// SubscriptedOperandCarriesTheAttributes gives a declaration's letters to
+	// the *name* when the operand is subscripted — `typeset -x a[1]=v` —
+	// rather than to the element alone.
+	//
+	// Measured 2026-09-12 from a script file:
+	//
+	//	probe                        bash 5.3.15 / 3.2   ksh93u+                zsh 5.9.2
+	//	typeset -x a[1]=v; typeset -p a   `declare -ax a=([1]="v")`   `typeset -x -a a=([1]=v)`   `typeset -a a=( v )`
+	//	export a[1]=v                     refused as a bad name        `typeset -x -a a=([1]=v)`   `typeset -a a=( v )`
+	//	typeset -x a=(p q)                `declare -ax`                `typeset -x -a`             `typeset -ax`
+	//
+	// The third row is the control and it is unanimous: a *whole-name*
+	// declaration records the letter everywhere, so what the axis is about
+	// is the subscripted operand alone. zsh records nothing there, by either
+	// spelling, and lists the name without the `x`.
+	//
+	// Listing-only where the compound never reaches a child anyway — see
+	// ExportedCompoundReachesAChildAsItsFirstValue, which is why the column
+	// that answers no here is also a column a child sees nothing from.
+	SubscriptedOperandCarriesTheAttributes Answer
+
 	// TableUnderAnArrayDeclaration is what `typeset -a` makes of a name
 	// already declared a **table** — see CompoundKindChangePolicy, where the
 	// four answers are.

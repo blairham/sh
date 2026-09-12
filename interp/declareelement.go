@@ -46,6 +46,23 @@ func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows
 	}
 	// After the shadow, for the reason biDeclare gives: these are the local
 	// array's attributes and not the caller's (#1673).
+	//
+	// Where the dialect records them at all: one column gives a subscripted
+	// operand's letters to nothing, so `typeset -x a[1]=v` there lists the
+	// name without the `x` while a whole-name `typeset -x a=(p q)` lists it
+	// with one. See Semantics.SubscriptedOperandCarriesTheAttributes.
+	if f != (declareFlags{}) {
+		// Asked only where there is a letter to record. `typeset a[1]=v`
+		// names no attribute at all, so the two answers cannot part over it
+		// and a dialect need not have one.
+		if !r.ask(r.sem().SubscriptedOperandCarriesTheAttributes,
+			"a subscripted operand's declaration recording its letters on the name") {
+			f = declareFlags{}
+		}
+		if r.unspecified {
+			return
+		}
+	}
 	r.applyAttributes(base, f)
 	// And the cell that shadow made holds none of the caller's elements, so
 	// the subscript this declaration writes is the only one in it: measured,

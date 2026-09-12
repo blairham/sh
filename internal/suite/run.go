@@ -6,6 +6,7 @@ package suite
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -147,3 +148,35 @@ func runVersion(ctx context.Context, shell string) (string, error) {
 	out, err := cmd.Output()
 	return string(out), err
 }
+
+// staticParse asks a shell to read a file without running any of it — the
+// POSIX `-n` — and reports only whether it accepted.
+//
+// The verdict and never the diagnostic. A shell's complaint about a suite
+// file quotes the file back, and this instrument may not print that; a
+// verdict is a fact about a binary, which is what the whole oracle rests on.
+//
+// It is what tells a construct this parser cannot read from a construct no
+// static read can reach. An option set at run time decides what a later line
+// means — `shopt -s extglob` is the worked example — and a static read has no
+// run time, so the reference refuses its own suite's file while running that
+// same file to completion. No parser change moves such a file into the parsed
+// column, and counting it as a gap in this parser would be counting a gap
+// nobody can close.
+func staticParse(ctx context.Context, shell, path string, timeout time.Duration) bool {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, shell, "-n", path)
+	// None of the run's environment: `-n` executes nothing, so the only
+	// thing an environment could decide here is where the shell looks for
+	// what it is not going to run.
+	cmd.Env = []string{"PATH=/usr/bin:/bin", "LC_ALL=C", "LANG=C"}
+	cmd.Stdin = nil
+	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
+	return cmd.Run() == nil
+}
+
+// staticTimeout bounds that read. Reading a file without running it is
+// bounded by the file's size and nothing else, so this is short where the
+// per-file run timeout is generous.
+const staticTimeout = 15 * time.Second

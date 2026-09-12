@@ -163,10 +163,13 @@ func TestEachRunGetsTheSuiteFresh(t *testing.T) {
 	}
 }
 
-func TestCausesAreRankedByFilesForfeited(t *testing.T) {
-	got := rank(map[string]int{"rare": 1, "common": 9, "middling": 4, "also rare": 1})
+func TestCausesAreRankedByFilesRefused(t *testing.T) {
+	got := rank(
+		map[string]int{"rare": 1, "common": 9, "middling": 4, "also rare": 1},
+		map[string]int{"common": 3, "rare": 1},
+	)
 	want := []Cause{
-		{"common", 9}, {"middling", 4}, {"also rare", 1}, {"rare", 1},
+		{"common", 9, 3}, {"middling", 4, 0}, {"also rare", 1, 0}, {"rare", 1, 1},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v — ties break on the wording so two runs print the same report", got, want)

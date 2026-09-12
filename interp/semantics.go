@@ -1077,13 +1077,10 @@ type Semantics struct {
 	// removed again, the signal may still be ignored or may become fatal.
 	QuitIgnoredWhenNotInteractive Answer
 
-	// SubshellRunsOnAfterSignalingTheShell lets the rest of a subshell's
-	// body run after something inside it has sent the whole shell a fatal
-	// signal — `(kill -TERM $$; echo inner)`. True in bash, dash and zsh;
-	// false in ksh93.
+	// SubshellRunsOnAfterSignalingTheShell lets the rest of a subshell's body
+	// run after something inside it has sent the whole shell a fatal signal —
+	// `(kill -TERM $$; echo inner)`.
 	//
-	// The shell ends either way, and that half is unanimous. Measured
-	// 2026-09-05, `(kill -TERM $$; echo inner); echo outer` ends the shell by
 	// The shell ends either way, and that half is unanimous: `outer` is never
 	// printed, and the answer holds under load, so this is not a delivery race.
 	// What splits is `inner`.

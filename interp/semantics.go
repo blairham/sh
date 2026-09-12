@@ -3132,45 +3132,40 @@ type Semantics struct {
 	// leaves the attribute alone, and so do the valueless declarations that
 	// change the value anyway — `typeset -i FOO` stores 0 and `typeset -u
 	// FOO` folds what is there, and a child is told about both. `readonly
-	// FOO=baz` clears it, because in the shell that does this `readonly` is
-	// that shell's `typeset -r`; `export FOO=baz` does not, because it names
-	// the attribute. A plain `FOO=baz` does not either, in any shell — this
-	// is a declaration utility's doing and not an assignment's.
+	// FOO=baz` clears it, where `readonly` is the declaration builtin with the
+	// readonly letter; `export FOO=baz` does not, because it names the
+	// attribute. A plain `FOO=baz` does not either, under any answer — this is a
+	// declaration utility's doing and not an assignment's.
 	//
-	// The preset is no: POSIX has an exported name keep the attribute for
-	// the life of the shell, and the two other shells with the builtin
-	// agree.
+	// The preset is no: POSIX has an exported name keep the attribute for the
+	// life of the shell.
 	DeclarationAssignmentClearsTheExportAttribute Answer
 
 	// LocalInheritsTheExportAttribute gives a local declaration the export
-	// attribute of the name it shadows, so a child sees the local's value
-	// under the shadowed name. bash and dash say yes; zsh says no and hands
-	// the child nothing at all under that name for as long as the function
-	// runs.
+	// attribute of the name it shadows, so a child sees the local's value under
+	// the shadowed name. Answering No hands the child nothing at all under that
+	// name for as long as the function runs.
 	//
-	// Asked only where the shadowed name is exported — explicitly or by
-	// having been inherited — and only where a scope was actually taken.
-	// Declaring a name nothing has exported asks nothing, and a local
-	// declared `-x` says so outright and asks nothing either.
+	// Asked only where the shadowed name is exported — explicitly or by having
+	// been inherited — and only where a scope was actually taken. Declaring a
+	// name nothing has exported asks nothing, and a local declared `-x` says so
+	// outright and asks nothing either.
 	//
-	// The value is not the question: the local's own value is what a child
-	// is told in the dialects that answer yes, and whether a valueless
-	// declaration still shows the outer value is
-	// ValuelessDeclarationHidesTheOuterValue rather than this.
+	// The value is not the question: under Yes the local's own value is what a
+	// child is told, and whether a valueless declaration still shows the outer
+	// value is ValuelessDeclarationHidesTheOuterValue rather than this.
 	//
-	// ksh93 has no `local`, so the question reaches it only through
-	// `typeset` in a keyword-defined function, where a child is told
-	// nothing — the same answer as zsh by a different road, because that
-	// shell's `typeset` takes the attribute off any name it assigns, at the
-	// top level as well as in a function. Only the local half is modeled.
+	// An implementation with no `local` reaches the question only through its
+	// declaration keyword in a keyword-defined function. Where that keyword
+	// takes the attribute off any name it assigns — at the top level as well as
+	// in a function — the child is told nothing by that route instead, which is
+	// the same answer arrived at another way. Only the local half is modeled.
 	LocalInheritsTheExportAttribute Answer
 	// TypesetLocalNeedsKeywordFunction restricts `typeset`'s local scope to
-	// functions defined with the `function` word. ksh93 says yes: in
-	// `f() { typeset x=1; }` the assignment reaches the caller's `x`, and in
-	// `function f { typeset x=1; }` it does not. bash and zsh make no such
-	// distinction, which is why the two definition forms are interchangeable
-	// there and are not in ksh93. dash has no `typeset` at all, which is why
-	// the axis is absent rather than false there.
+	// functions defined with the `function` word. Under Yes, `f() { typeset x=1;
+	// }` reaches the caller's `x` and `function f { typeset x=1; }` does not;
+	// under No the two definition forms are interchangeable. An implementation
+	// with no `typeset` at all leaves the axis absent rather than false.
 	//
 	// It asks about `typeset` and not about `local` because `local` is
 	TypesetLocalNeedsKeywordFunction Answer
@@ -3180,70 +3175,68 @@ type Semantics struct {
 	// DeclarationListingForm.
 	DeclareListing DeclarationListingForm
 
-	// DeclareValueQuoting is how a listed declaration spells its value. A
-	// field of its own over the shared vocabulary because it does not follow
-	// the dialect's other listings: the engine that single-quotes its
-	// aliases and traps double-quotes its declarations.
+	// DeclareValueQuoting is how a listed declaration spells its value. A field
+	// of its own over the shared vocabulary because it does not follow a
+	// preset's other listings: an engine that single-quotes its aliases and
+	// traps may double-quote its declarations.
 	DeclareValueQuoting ListingQuotingStyle
 
-	// ExportListing is the shape `export -p` writes: bash spells each name
-	// as a clustered declaration (`declare -x V="1"`), and the other three
-	// repeat the command word (`export V='1'`).
+	// ExportListing is the shape `export -p` writes: each name as a clustered
+	// declaration (`declare -x V="1"`), or the command word repeated
+	// (`export V='1'`).
 	ExportListing DeclarationListingForm
-	// ReadonlyListing is the same question from `readonly -p`, where zsh
-	// parts ways with its own export listing and writes `typeset -r R=2`.
+	// ReadonlyListing is the same question from `readonly -p`, where a preset
+	// may part ways with its own export listing and write `typeset -r R=2`.
 	ReadonlyListing DeclarationListingForm
 
-	// CoprocEndsInAnArray publishes a started coprocess's near ends as the
-	// two elements of an array — `${COPROC[0]}` to read and `${COPROC[1]}` to
-	// write, with the process in `COPROC_PID` — which is bash's model and the
-	// reason its `coproc` takes a name. zsh answers no: it has no name for a
-	// coprocess and no array, and a script reaches the ends with `print -p`
-	// and `read -p` instead. Asked only when a coprocess is started, so a
-	// dialect without the word never meets it.
+	// CoprocEndsInAnArray publishes a started coprocess's near ends as the two
+	// elements of an array — `${COPROC[0]}` to read and `${COPROC[1]}` to write,
+	// with the process in `COPROC_PID` — which is the model whose `coproc` takes
+	// a name.
+	//
+	// Answering No has no name for a coprocess and no array, and a script
+	// reaches the ends with `print -p` and `read -p` instead. Asked only when a
+	// coprocess is started, so a preset without the word never meets it.
 	CoprocEndsInAnArray Answer
 
-	// BareDeclarationListing is the shape `export` and `readonly` write with
-	// no operands and no `-p` — which is not always the shape `-p` writes.
-	// dash and both bash builds answer the bare form exactly as they answer
-	// `-p`; ksh93 and zsh drop the command word for the bare form alone and
-	// write a plain `V='a b'`, which no `-p` anywhere writes because it could
-	// not be read back as a declaration. Measured across the panel from one
-	// exported and one readonly name.
+	// BareDeclarationListing is the shape `export` and `readonly` write with no
+	// operands and no `-p` — which is not always the shape `-p` writes. A preset
+	// may answer the bare form exactly as it answers `-p`, or drop the command
+	// word for the bare form alone and write a plain `V='a b'`, which no `-p`
+	// anywhere writes because it could not be read back as a declaration.
 	//
-	// One field for both builtins, because no shell in the panel splits them:
-	// where the bare form differs from `-p` it differs for both, and by the
-	// same rule.
+	// One field for both builtins, because nothing splits them: where the bare
+	// form differs from `-p` it differs for both, and by the same rule.
 	//
-	// It is the *filtered* listing's row as well — `declare -x` and
-	// `typeset -a` with no names — which is measured and not assumed: bash
-	// writes `declare -x e="1"` for both, and ksh93 and zsh drop the command
-	// word for both, `e=1`. So the filter chooses the names and this chooses
-	// the row, and neither builtin needs a form of its own.
+	// It is the *filtered* listing's row as well — `declare -x` and `typeset -a`
+	// with no names — which is measured and not assumed: a preset writes the
+	// same row for both, whichever row that is. So the filter chooses the names
+	// and this chooses the row, and neither builtin needs a form of its own.
 	BareDeclarationListing DeclarationListingForm
 
 	// DeclarationListingFilter is how a `declare` or `typeset` with attribute
 	// letters and no names combines them when more than one is written —
-	// `declare -ir`, `typeset -ax`. See DeclarationFilterForm, which carries
-	// the three shells' three answers and the measurements.
+	// `declare -ir`, `typeset -ax`. See DeclarationFilterForm for the readings.
 	//
-	// Asked only where two letters were written: all three readings agree on
-	// one letter, so a dialect that has not answered still lists `declare -x`.
+	// Asked only where two letters were written: every reading agrees on one
+	// letter, so a preset that has not answered still lists `declare -x`.
 	DeclarationListingFilter DeclarationFilterForm
 
-	// DeclarePrintReportsAMissingName makes `typeset -p nosuch` say so and
-	// fail. bash and zsh report it (with their own wording — see
-	// Diagnostics.DeclareNoSuchVariable) and answer 1 even when other names
-	// listed fine; ksh93 prints nothing for the missing name and answers 0.
+	// DeclarePrintReportsAMissingName makes `typeset -p nosuch` say so and fail
+	// — with its own wording, see Diagnostics.DeclareNoSuchVariable — and answer
+	// 1 even when other names listed fine. Answering No prints nothing for the
+	// missing name and answers 0.
 	DeclarePrintReportsAMissingName Answer
 
-	// DeclareOptions is the set of letters `declare` and `typeset` take,
-	// spelled the way ReadOptions is. The letters are the dialect's own:
-	// `-g` declares a global in the two shells that have the letter and is
-	// an unknown option in ksh93, whose bad typeset options are fatal, and
-	// `-F` names functions in bash while it sets a float's precision in the
-	// other two. Empty means `aAiprx`, the set the substrate implemented
-	// before the letters were a question.
+	// DeclareOptions is the set of letters `declare` and `typeset` take, spelled
+	// the way ReadOptions is. The letters belong to the preset, and so do their
+	// meanings: `-g` declares a global where the letter exists and is an unknown
+	// option elsewhere — fatally, where bad `typeset` options are fatal — and
+	// `-F` names functions under one preset while it sets a float's precision
+	// under another.
+	//
+	// Empty means `aAiprx`, the set the substrate implemented before the letters
+	// were a question.
 	DeclareOptions string
 
 	// DeclareOptionsWithoutEffect names letters out of DeclareOptions that
@@ -3262,13 +3255,12 @@ type Semantics struct {
 	// ends a script under `set -e`; a letter accepted here changes what a
 	// value looks like when it is printed back and nothing else.
 	//
-	// zsh's `-F` is the letter this was written for and no dialect sets it
-	// today: the letter is a *float's* precision there rather than bash's
-	// function listing, and silence was the smaller lie only for as long as
-	// there was no float attribute to record the precision in. There is one
-	// now — see DeclareOptionsTakingANumber — so `-F` graduated out of here
-	// and the field stands for the next letter of that shape rather than
-	// being deleted with its one user.
+	// The letter this was written for is one whose meaning under some preset is
+	// a *float's* precision rather than a function listing, and silence was the
+	// smaller lie only for as long as there was no float attribute to record the
+	// precision in. There is one now — see DeclareOptionsTakingANumber — so that
+	// letter graduated out of here, and the field stands for the next letter of
+	// that shape rather than being deleted with its one user.
 	//
 	// A letter listed here that is not in DeclareOptions does nothing: the
 	// dialect has to have the letter before this can decide what it means,

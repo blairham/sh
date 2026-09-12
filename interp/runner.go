@@ -4009,6 +4009,23 @@ type scope struct {
 	// `( … )` written inside the same function.
 	owner *Runner
 
+	// optindShadowed says a declaration in this call made OPTIND local, and
+	// savedOptChar and savedOptindAssigned are the half of the `getopts`
+	// position that is not a parameter: how far into a clustered word the
+	// scan had read, and whether the number standing there was one the
+	// script wrote.
+	//
+	// Saved beside the value rather than with it, because it is not in Vars
+	// and a scope that shadowed Vars alone handed the caller a cursor
+	// pointing at the start of a word it had already part-read. What that
+	// costs is not a wrong letter: a loop whose body calls a function
+	// declaring `local OPTIND` starts the same word over every time round
+	// and never runs out of options (#2226). Scalars rather than a map
+	// because there is one name — see Semantics.GetoptsLocalOptindRestoresTheCursor.
+	optindShadowed      bool
+	savedOptChar        int
+	savedOptindAssigned bool
+
 	// savedTraps is what this call displaced while its dialect was scoping
 	// traps to the function, keyed by the canonical condition. Nil until the
 	// first such modification, so a call that traps nothing carries nothing.

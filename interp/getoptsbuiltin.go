@@ -372,3 +372,57 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 // getoptsLocalAxis names the axis in a diagnostic, in one place because two
 // call sites ask it about the same call.
 const getoptsLocalAxis = "the `getopts` cursor being local to a function"
+
+// shadowGetoptsCursor makes the intra-word half of the scan position part of
+// what a declaration of OPTIND shadows.
+//
+// OPTIND is a number of *words*, and it is only half of where the scan has
+// got to: the other half is how far into a clustered word the letters have
+// been read, and that half is not a parameter, so a `local OPTIND` that
+// shadowed the parameter alone left it standing. The callee then read its own
+// `-cd` from the middle, and — the part that matters — the caller came back to
+// a cursor pointing at the start of a word it had already part-read, so
+// `while getopts` around a call that declares one never runs out of options
+// (#2226).
+//
+// Two things happen here and only one of them is an axis:
+//
+//   - Entering the call resets the position, and that is the core's answer
+//     rather than a dialect's: every panel shell with a local scope at all
+//     hands the callee a cursor at the start of a word, whether or not the
+//     declaration carried a value. So it is not asked.
+//   - Handing the caller its position back is where the panel splits, and it
+//     is asked at the return — where a body that never moved the cursor
+//     leaves the two answers nothing to disagree about.
+//
+// Called only for the declaration that *takes* the scope's copy. A second
+// declaration of the same name in the same call is writing over a cell that
+// is already its own, and re-recording the position there would save a cursor
+// the call had already moved.
+func (r *Runner) shadowGetoptsCursor(sc *scope) {
+	if sc.optindShadowed {
+		return
+	}
+	sc.optindShadowed = true
+	sc.savedOptChar, sc.savedOptindAssigned = r.optChar, r.optindAssigned
+	r.optChar, r.optindAssigned = 1, false
+}
+
+// restoreGetoptsCursor puts the caller's scan position back when a call that
+// declared a local OPTIND unwinds. See shadowGetoptsCursor for why the
+// question is asked here and not on the way in.
+func (r *Runner) restoreGetoptsCursor(sc *scope) {
+	if !sc.optindShadowed {
+		return
+	}
+	if r.optChar == sc.savedOptChar && r.optindAssigned == sc.savedOptindAssigned {
+		// The body left the position where the declaration put it, so both
+		// answers produce the same cursor and there is nothing to ask about.
+		return
+	}
+	if !r.ask(r.sem().GetoptsLocalOptindRestoresTheCursor,
+		"a local `OPTIND` handing back the caller's position inside a word") {
+		return
+	}
+	r.optChar, r.optindAssigned = sc.savedOptChar, sc.savedOptindAssigned
+}

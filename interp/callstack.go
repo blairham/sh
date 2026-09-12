@@ -251,3 +251,42 @@ func (r *Runner) locationFile() string {
 	}
 	return r.scriptFile
 }
+
+// locationIsInsideAFunctionBody reports whether the line a diagnostic is
+// about was read from a function's body rather than from a file the shell is
+// reading, which is what decides between the two ways a location can be
+// written: the dialect that names a function names it for a line the function
+// contains, and names a file for every other line.
+//
+// The innermost frame is what answers, and that is measured rather than
+// reasoned: a function that sources a file is still the innermost *function*
+// while the file runs, so `r.inFunc` alone named the function for a line it
+// never contained — `q:1:` where zsh 5.9.2 writes `/tmp/inc:2:` (#2037). The
+// stack already tells the two kinds apart, so the question is which frame to
+// ask rather than what to remember.
+//
+// A frame the location has stepped out of does not answer — see
+// [Runner.LocatedAtTheCall] — so this counts from the same depth
+// [Runner.locationFile] names the file at, and the two cannot disagree.
+//
+// Nesting either way is the same question asked once: a file sourced by a
+// sourced file inside a function is a file, and a function defined *in* a
+// sourced file is a function wherever it was read from. Both measured.
+func (r *Runner) locationIsInsideAFunctionBody() bool {
+	if r.inFunc == "" {
+		return false
+	}
+	n := len(r.frames) - r.outsideCall
+	if n <= 0 {
+		// Nothing left to ask, which is the top level: r.inFunc is empty
+		// there, so this is reached only if a frame recorded an enclosing
+		// function the stack no longer holds.
+		return true
+	}
+	return !r.frames[n-1].readsAFile()
+}
+
+// readsAFile reports whether this frame is a file the shell is reading — a
+// sourced file, or a startup file it read for itself — rather than a function
+// body it is running.
+func (f Frame) readsAFile() bool { return f.Name == sourceFrameName || f.Startup }

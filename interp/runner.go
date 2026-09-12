@@ -1971,13 +1971,19 @@ func (r *Runner) builtinIsSpeaking() bool {
 // file is not mentioned at all, and the count is the offset from the line
 // the function was written on — so a body on the same line as its `f() {`
 // is offset zero and the number is left out entirely.
+//
+// Which of the two applies is the innermost *frame*'s to say and not
+// r.inFunc's — see [Runner.locationIsInsideAFunctionBody]. A function that
+// sources a file is still the innermost function while the file runs, so
+// asking the name gave that dialect's function rule to a line the function
+// never contained (#2037).
 func (r *Runner) locationPrefix() string {
 	d := r.diag()
 	// The dialect's own function is located the way a builtin is: at the line
 	// the script called it on, and never as a function — the dialect that
 	// names a function in place of a file names the builtin there instead,
 	// because to the script there is no function to name.
-	if r.inFunc == "" || r.speaker != "" || !d.LocationNamesTheFunction {
+	if !r.locationIsInsideAFunctionBody() || r.speaker != "" || !d.LocationNamesTheFunction {
 		name := r.name()
 		if d.LocationNamesTheCurrentFile {
 			// The file the failing line was read from: the sourced file while

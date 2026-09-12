@@ -23,6 +23,15 @@ import "github.com/blairham/sh/interp"
 //	typeset -T CDPATH cdpath       typeset -T MODULE_PATH module_path
 //	typeset -T PSVAR psvar         typeset -T FIGNORE fignore
 //
+// **They are the shell's own, and `unset` does not dissolve them.** `unset
+// PATH` takes both names away, and the next assignment to either half
+// re-makes the other: `PATH=/y` splits into `path`, and `path=(/q)` writes
+// `PATH`. A tie a script made with `typeset -T` is forgotten instead, which
+// is the difference the `special` flag on interp's tie records — one map held
+// both kinds with one answer, and a script that pinned its search path with
+// `unset PATH; PATH=…` ran the rest of the shell with an empty `$path` that
+// nothing would refill (#1631).
+//
 // **The export attribute is inherited, never conferred.** `PATH` lists as
 // `export -T` when the environment supplied it and as plain `typeset -T`
 // when it did not — measured both ways, `env -i` with and without a `PATH`

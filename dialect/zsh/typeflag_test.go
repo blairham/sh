@@ -31,6 +31,18 @@ func TestTheTypeFlagWordsWhatANameIs(t *testing.T) {
 		{"local", `f() { local l=1; print -r -- ${(t)l}; }; f`, "scalar-local\n"},
 		{"local before readonly", `f() { typeset -ir l=1; print -r -- ${(t)l}; }; f`, "integer-local-readonly\n"},
 		{"a tied pair", `typeset -T TV tv; print -r -- ${(t)TV} ${(t)tv}`, "scalar-tied array-tied\n"},
+		// The two hiding letters are two attributes with two words, which
+		// is the whole of #2042: a parameter given only `-H` is `hideval`
+		// and not `hide`, so the four rows are the two letters alone, the
+		// pair, and where the pair sits among the other words.
+		{"the value-hiding letter", `typeset -H hv=1; print -r -- ${(t)hv}`, "scalar-hideval\n"},
+		{"the scope-hiding letter", `typeset -h hs=1; print -r -- ${(t)hs}`, "scalar-hide\n"},
+		{"hide before hideval", `typeset -hH b=1; print -r -- ${(t)b}`, "scalar-hide-hideval\n"},
+		{
+			"and both after unique",
+			`typeset -rHhU -a c=(1 2); print -r -- ${(t)c}`,
+			"array-readonly-unique-hide-hideval\n",
+		},
 		{"the container wins over the numeric attribute", `typeset -ia ia; ia=(1 2); print -r -- ${(t)ia}`, "array\n"},
 		{"an unset name is empty, and unset", `unset u; print -r -- "[${(t)u}][${(t)u-D}]"`, "[][D]\n"},
 		{

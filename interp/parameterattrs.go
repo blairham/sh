@@ -59,7 +59,21 @@ type ParameterAttributes struct {
 	Unique bool
 	// Tied is one half of a scalar-and-array pair that share a value.
 	Tied bool
-	// Hidden keeps the name out of a listing.
+	// HideValue withholds a name's *value* from a listing — the name is
+	// declared, holds what it holds and reads back exactly as it would
+	// without the letter, and only a listing that would have written
+	// `=value` writes the bare name instead. `-H` in the one shell that
+	// spells it, which calls the attribute `hideval`.
+	HideValue bool
+	// Hidden hides the parameter's specialness from a *function scope*: a
+	// local declaration of a name carrying it is an ordinary parameter
+	// rather than the special one it is spelled like. `-h` there, and the
+	// shell calls this one `hide`.
+	//
+	// Two letters and two attributes, which is measured rather than assumed:
+	// a parameter given only `-H` describes as `hideval` and not as `hide`,
+	// and one given both describes as `hide-hideval`. Recording them as one
+	// bit told a script switching on the word about the wrong letter (#2042).
 	Hidden bool
 	// Provided is the shell's own rather than a script's: a parameter whose
 	// value is produced on being read, or one the shell has registered a
@@ -86,13 +100,14 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		// tri-state and a name the *environment* supplied is spoken for by
 		// neither entry: reading it directly reported `$PATH` as an ordinary
 		// scalar, where the shell being described calls it exported.
-		Exported: r.isExported(name),
-		Readonly: r.readonly[name],
-		Lower:    r.lowered[name],
-		Upper:    r.uppered[name],
-		Unique:   r.unique[name],
-		Hidden:   r.hidden[name],
-		Provided: r.DynamicParameter(name) || r.AbsentParameter(name),
+		Exported:  r.isExported(name),
+		Readonly:  r.readonly[name],
+		Lower:     r.lowered[name],
+		Upper:     r.uppered[name],
+		Unique:    r.unique[name],
+		HideValue: r.hidden[name],
+		Hidden:    r.hideInScope[name],
+		Provided:  r.DynamicParameter(name) || r.AbsentParameter(name),
 	}
 	_, a.Tied = r.tied[name]
 	if !a.Provided && !r.parameterExists(name) {

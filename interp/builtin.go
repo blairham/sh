@@ -1405,19 +1405,39 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 func (r *Runner) unsetName(name string) {
 	if t, tied := r.tieOf(name); tied {
 		// Half a tie is not a state this shell has: `unset SCA` leaves `sca`
-		// with no elements *and* unset, and `unset sca` leaves `$SCA`
-		// unset. Measured, and the tie itself goes too — a later `SCA=a:b`
-		// is a plain scalar and `${#sca}` stays 0.
+		// with no elements *and* unset, and `unset sca` leaves `$SCA` unset.
 		//
-		// Untied first, so the two calls below do not mirror into each
-		// other, and only the *other* name is recursed into.
-		r.untie(name)
+		// **Whether the tie survives is the difference between the two kinds
+		// of tie**, and it was one answer for both until #1631. A tie a
+		// script made with the letter is forgotten — measured, `typeset -T
+		// SCA sca; SCA=a:b; unset SCA; SCA=c:d` leaves `sca` with no
+		// elements — where a pair the *shell* installed is its own and comes
+		// back: `unset PATH; PATH=/y` splits into `path` again, and `unset
+		// path; path=(/q)` writes `PATH` again from the other side. Both
+		// names still go away in both cases, which is what `${+path}` being
+		// 0 after `unset PATH` says; it is only the pairing that is kept.
+		//
+		// The two names are removed here rather than by recursing, because
+		// the recursion was standing on the untie: with the tie left in
+		// place the second call would find it and come straight back.
+		if !t.special {
+			r.untie(name)
+		}
 		other := t.scalar
 		if name == t.scalar {
 			other = t.array
 		}
-		r.unsetName(other)
+		r.unsetOneName(other)
 	}
+	r.unsetOneName(name)
+}
+
+// unsetOneName is unsetName for a name whose tie, if it had one, has already
+// been dealt with by the caller.
+//
+// Split out rather than reached by recursion so that a tie which *survives*
+// the unset cannot send the removal round again — see unsetName.
+func (r *Runner) unsetOneName(name string) {
 	delete(r.Vars, name)
 	// Recorded off rather than deleted, which the tri-state is there for:
 	// deleting the record puts the question back to the environment, and the
@@ -1486,16 +1506,31 @@ func (r *Runner) clearAttributes(name string) {
 		// integer letter and its base came back with the parameter rather
 		// than having been removed with it. Dropping them made the same line
 		// store the three characters `3+4` as a scalar.
-		delete(r.hideInScope, name)
 		return
 	}
 	// The list itself is shared with the shadow, which takes the same
 	// attributes off for a reason of its own — see localattributes.go.
 	r.dropNameAttributes(name)
-	// Measured: `typeset -h PATH; unset PATH; PATH=/y` leaves a later
-	// `local PATH` tied to `path` again, so the letter does not survive the
-	// name it was written about — see hideinscope.go.
-	delete(r.hideInScope, name)
+	// **The hide-in-scope letter is not in that list**, and it used to be
+	// taken off here. Measured 2026-09-12 on zsh 5.9.2, `-f`, `env -i` with
+	// `PATH=/bin`, where a `local` of a hidden name is the only thing that
+	// observes the letter at all:
+	//
+	//	f(){ local PATH=/c; print -r ${(j:,:)path}; }
+	//
+	//	f                                      /c    the control
+	//	typeset -h PATH; f                     /bin  detached, so the local
+	//	                                             does not drive `path`
+	//	unset PATH; PATH=/y; f                 /y    still detached
+	//	typeset +h PATH; f                     /w    and the plus form is
+	//	                                             what takes it off
+	//
+	// The third row is this one, and it was previously recorded the other
+	// way round. That reading could not have been taken from the shell: the
+	// letter shows only over one of the shell's own ties, and this engine's
+	// `unset` forgot the tie too — so the name that came back was untied
+	// whatever the letter said, and both answers looked alike. Fixing the
+	// tie (#1631) is what made the row measurable, and it disagreed.
 	// Runner.declaredEmpty is deliberately *not* cleared here. It looked like
 	// one of these and is not: nothing can observe it for a removed name.
 	// hiddenExports is its only reader and it walks the exported set, which

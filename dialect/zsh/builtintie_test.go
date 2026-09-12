@@ -129,8 +129,8 @@ print -r -- "module_path n=${#module_path[@]}"`)
 	}
 }
 
-// `unset` of either half of a built-in tie takes both, the same rule a
-// `typeset -T` tie follows — there is one mechanism, not two.
+// `unset` of either half of a built-in tie takes both *names*, the same rule
+// a `typeset -T` tie follows.
 func TestUnsettingHalfABuiltInTieTakesBoth(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `CDPATH=a:b
 unset cdpath
@@ -138,6 +138,33 @@ print -r -- "CDPATH=[${CDPATH-UNSET}] n=${#cdpath[@]}"`)
 	want := "CDPATH=[UNSET] n=0\n"
 	if out != want || st != 0 {
 		t.Errorf("unsetting half a built-in tie = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// **The pairing is what it does not take.** This is where the two kinds of
+// tie part company: a `typeset -T` tie is forgotten by `unset` and the next
+// assignment writes a plain scalar, where one of the shell's own pairs is
+// still a pair and the next assignment to either half re-makes the other.
+//
+// Measured 2026-09-12 against zsh 5.9.2 under `-f` with `PATH=/bin:/usr/bin`.
+// It is not a corner: `unset PATH; PATH=…` is how a script pins a search
+// path from scratch, and without this the rest of the run had an empty
+// `$path` that nothing would refill (#1631).
+func TestTheBuiltInPairingSurvivesAnUnset(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `unset PATH
+PATH=/y
+print -r -- "1=[${(j:,:)path}]"
+unset path
+path=(/q /r)
+print -r -- "2=[$PATH]"
+typeset -T MYS mys
+MYS=a:b
+unset MYS
+MYS=c:d
+print -r -- "3=[${#mys[@]}][$MYS]"`)
+	want := "1=[/y]\n2=[/q:/r]\n3=[0][c:d]\n"
+	if out != want || st != 0 {
+		t.Errorf("a built-in pairing across an unset = %q (status %d), want %q", out, st, want)
 	}
 }
 

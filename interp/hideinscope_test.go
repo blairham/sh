@@ -116,6 +116,27 @@ echo "top=[${s[@]}]"`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 	}
 }
 
+// `unset` does **not** take the letter off, which is the row this file said
+// the other way round until the tie survived an unset and made it measurable
+// (#1631). The name goes away, comes back on the next assignment still tied,
+// and is still detached from that tie inside a local — only the plus form
+// puts it back.
+func TestUnsetDoesNotTakeTheHideAttributeOff(t *testing.T) {
+	out, errs, st := declRunTied(t, `typeset -h S
+unset S
+S=one:two
+f() { local S=zzz; echo "in=[${s[*]}]"; }
+f
+typeset +h S
+g() { local S=www; echo "then=[${s[*]}]"; }
+g`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
+	want := "in=[one two]\nthen=[www]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("the hide letter across an unset = %q (stderr %q, status %d), want %q",
+			out, errs, st, want)
+	}
+}
+
 // An attribute a call added goes away with the call, the way a freeze does:
 // the caller's name is the special one again the moment the function returns.
 func TestTheHideAttributeAddedByACallGoesAwayWithIt(t *testing.T) {

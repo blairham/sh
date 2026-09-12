@@ -584,6 +584,7 @@ func Semantics() interp.Semantics {
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No
 	s.ReadTimeoutKeepsWhatArrived = interp.No
+	s.ReadTimeoutBoundsReadability = interp.No
 	// typeset in a keyword function hides the caller's value, as bash's
 	// local does.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes

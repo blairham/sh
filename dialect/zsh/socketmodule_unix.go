@@ -130,7 +130,7 @@ func zsocketConnect(r *interp.Runner, ctx context.Context, opts zsocketOpts, pat
 		return syscall.Connect(fd, addr)
 	})
 	if err != nil {
-		r.Diagnosef("connection failed: %s\n", sysErrnoText(err))
+		r.Diagnosef("connection failed: %s\n", sysErrnoText(r, err))
 		return 1
 	}
 	return zsocketPublish(r, opts, f, path+" is now on fd")
@@ -160,7 +160,7 @@ func zsocketListen(r *interp.Runner, ctx context.Context, opts zsocketOpts, path
 		return syscall.Listen(fd, zsocketBacklog)
 	})
 	if err != nil {
-		r.Diagnosef("could not bind to %s: %s\n", path, sysErrnoText(err))
+		r.Diagnosef("could not bind to %s: %s\n", path, sysErrnoText(r, err))
 		return 1
 	}
 	return zsocketPublish(r, opts, f, path+" listener is on fd")
@@ -200,7 +200,7 @@ func zsocketAccept(r *interp.Runner, opts zsocketOpts, arg string) int {
 		// comes back, so a listener left over from `-l` is the same listener
 		// afterwards and a later `zsocket -a` without `-t` still waits.
 		if err := syscall.SetNonblock(sys, true); err != nil {
-			r.Diagnosef("could not accept connection: %s\n", sysErrnoText(err))
+			r.Diagnosef("could not accept connection: %s\n", sysErrnoText(r, err))
 			return 1
 		}
 		defer func() { _ = syscall.SetNonblock(sys, false) }()
@@ -210,7 +210,7 @@ func zsocketAccept(r *interp.Runner, opts zsocketOpts, arg string) int {
 		if opts.nowait && zsocketWouldBlock(err) {
 			return 1
 		}
-		r.Diagnosef("could not accept connection: %s\n", sysErrnoText(err))
+		r.Diagnosef("could not accept connection: %s\n", sysErrnoText(r, err))
 		return 1
 	}
 	syscall.CloseOnExec(taken)

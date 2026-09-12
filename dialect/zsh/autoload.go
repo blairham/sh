@@ -686,7 +686,8 @@ func autoloadResolve(r *interp.Runner, name string, keepAliases bool) int {
 // `$fpath` would have had it.
 func autoloadResolveIn(r *interp.Runner, name string, dirs []string, keepAliases, forCall bool) int {
 	if len(dirs) == 1 {
-		body, err := r.ReadFileGated(filepath.Join(dirs[0], name))
+		path := filepath.Join(dirs[0], name)
+		body, err := r.ReadFileGated(path)
 		if err != nil {
 			return autoloadFileNotFound(r, name, forCall)
 		}
@@ -694,20 +695,20 @@ func autoloadResolveIn(r *interp.Runner, name string, dirs []string, keepAliases
 		if inner, lone := autoloadLoneDefinition(name, text); lone {
 			text = inner
 		}
-		if !zshDefineFromText(r, name, text, keepAliases) {
+		if !zshDefineFromText(r, name, text, path, keepAliases) {
 			r.DiagnoseAsTheShellf("%s: bad function definition\n", name)
 			return 1
 		}
 		return 0
 	}
-	body, ok := autoloadFile(r, name)
+	path, body, ok := autoloadFile(r, name)
 	if !ok {
 		return autoloadFileNotFound(r, name, forCall)
 	}
 	if inner, lone := autoloadLoneDefinition(name, body); lone {
 		body = inner
 	}
-	if !zshDefineFromText(r, name, body, keepAliases) {
+	if !zshDefineFromText(r, name, body, path, keepAliases) {
 		// The file is not something this shell can read as a body. Its own
 		// complaint rather than "not found", because the file *was* found
 		// and saying otherwise would send somebody looking for it.
@@ -741,11 +742,24 @@ func autoloadResolveIn(r *interp.Runner, name string, dirs []string, keepAliases
 // Both ways into a function file come here, and so does `functions[f]=body`:
 // this file's recurring defect is a second route that omits what the first
 // one carries (#1993).
-func zshDefineFromText(r *interp.Runner, name, body string, keepAliases bool) bool {
+//
+// file is where the body was read from, and is the second thing every route
+// through here has to carry for the same reason: `whence -v` names it as the
+// function's origin, and a route that passed nothing left an autoloaded
+// function saying it came from the shell (#1706). Empty is a body that came
+// from no file — `functions[f]=…` — and leaves the origin where the
+// definition itself put it.
+func zshDefineFromText(r *interp.Runner, name, body, file string, keepAliases bool) bool {
+	defined := false
 	if keepAliases || recordedDeviates(r, "aliases") {
-		return r.DefineFunction(name, body)
+		defined = r.DefineFunction(name, body)
+	} else {
+		defined = r.DefineFunctionExpandingAliases(name, body)
 	}
-	return r.DefineFunctionExpandingAliases(name, body)
+	if defined && file != "" {
+		r.SetFunctionFile(name, file)
+	}
+	return defined
 }
 
 // autoloadLoneDefinition reports a function file that holds **nothing but a
@@ -822,17 +836,18 @@ func autoloadLoneDefinition(name, body string) (inner string, lone bool) {
 	return body[start:end], true
 }
 
-// autoloadFile reads the first file named `name` on `$fpath`.
-func autoloadFile(r *interp.Runner, name string) (string, bool) {
-	if path, ok := autoloadFixedPath(r, name); ok {
+// autoloadFile reads the first file named `name` on `$fpath`, and says which
+// file it was — the path is what `whence -v` names as the function's origin
+// once the body has been read (#1706).
+func autoloadFile(r *interp.Runner, name string) (path, text string, ok bool) {
+	if fixed, chosen := autoloadFixedPath(r, name); chosen {
 		// `-r` or `-R` already chose, and the choice holds: no fresh search
 		// behind it, so a fixed file that has gone is not found rather than
 		// found somewhere else. Measured — see autoloadFixPath.
-		text, err := r.ReadFileGated(path)
-		return string(text), err == nil
+		body, err := r.ReadFileGated(fixed)
+		return fixed, string(body), err == nil
 	}
-	_, text, ok := autoloadLocate(r, name)
-	return text, ok
+	return autoloadLocate(r, name)
 }
 
 // autoloadLocate is the one walk of `$fpath`, and everything that asks where

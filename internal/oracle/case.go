@@ -4352,6 +4352,16 @@ echo "st=$?"`,
 		Why:     "the deadline the two zero-timeout cases cannot reach: a pipe held open with nothing in it, so the read has to wait and then give up. The panel splits three ways rather than agreeing — bash 5.3 answers 142, which is 128 plus the alarm, and clears the variable; bash 3.2, ksh93 and zsh answer 1 and leave what was there; dash has no -t at all. A fifo opened read-write is what makes it a deadline instead of an end of input, since the harness closes standard input and any file is already at its end",
 	},
 	{
+		ID: "read/what-a-timeout-is-a-deadline-for", Category: "builtins",
+		Snippet: `mkfifo p; exec 3<>p; { printf a; sleep 0.4; printf "bc\n"; } >p & l=keep; read -t 0.1 -r l <&3; echo "st=$? l=[$l]"; wait`,
+		Why:     "not *whether* the deadline expires but what it is a deadline for. One byte arrives at once and the rest of the line four tenths of a second later, under a tenth-of-a-second timeout: zsh answers 0 with the whole line, because its `-t` bounds the wait for the stream to become readable and nothing after that; bash answers 142 with the one byte it had, ksh93 answers 1 and leaves the variable alone, and dash has no letter. The two readings agree for every timeout a normal script writes and disagree about *when* it expires, which is why this was a divergence nobody noticed (#644)",
+	},
+	{
+		ID: "read/a-fractional-timeout", Category: "builtins",
+		Snippet: `printf "hi\n" | { read -t 0.2 v; echo "st=$? [$v]"; }`,
+		Why:     "whether the letter takes a fraction at all: bash 5.3, ksh93 and zsh read the line, bash 3.2 refuses the operand outright — `read: 0.2: invalid timeout specification` at 1, whole seconds only — and dash has no letter to give one to. A dated answer rather than a disputed one, recorded because a script that wants a sub-second timeout has one shell it cannot have it on (#644)",
+	},
+	{
 		ID: "read/a-descriptor-to-read-from", Category: "builtins",
 		Snippet: `printf "hello\nworld\n" > f; exec 8< f; l=keep; read -u 8 -r l; echo "st=$? l=[$l]"; read -u 8 -r l; echo "st=$? l=[$l]"`,
 		Why:     "-u reads from a descriptor the script opened rather than from standard input, and the second read is what says the descriptor keeps its position between calls rather than being reopened. Five accept it and dash calls the letter illegal, which is the same shape its -t and -n answers have",
@@ -15866,6 +15876,16 @@ echo "read=[$l]"`,
 		Why:     "-p is the PATH search with functions and builtins invisible: the file answers with its path — matched rather than printed, because zsh spells the temp directory through /private and ksh93 does not — and the function is nobody, status 1",
 	},
 	{
+		ID: "whence/where-a-function-was-defined", Category: "builtins",
+		Script: true,
+		Snippet: `printf 'sf() { :; }\n' > lib.zsh
+. ./lib.zsh
+own() { :; }
+whence -v sf 2>&1 || type sf
+whence -v own 2>&1 || type own`,
+		Why: "one shell names the *file* a function was defined in and only says its own name for one the shell itself defined — so a function from a sourced library and a function from the script are two different sentences there and one sentence everywhere else. Run from a script rather than `-c` so that both origins exist to be told apart; the `|| type` is for the four shells with no `whence`, which answer the same question under the other word (#1706)",
+	},
+	{
 		ID: "whence/an-alias-answers-as-its-value", Category: "builtins",
 		Snippet: `alias ll="ls -l"; whence ll; whence -v ll`,
 		Why:     "the one resolution that is the parser's fact rather than the runner's: ksh93 prints the value quoted and the -v sentence calls it an alias; zsh words the same answer its own way",
@@ -16443,6 +16463,11 @@ echo "st=$?"`,
 		ID: "system/the-exclusive-flag-brings-creation-with-it", Category: "builtins",
 		Snippet: `zmodload zsh/system; sysopen -w -o excl -u a lock; echo "first=$?"; sysopen -w -o excl -u b lock; echo "second=$?"; sysopen -r -o bogus -u c lock; echo "unsupported=$?"`,
 		Why:     "`-o excl` on its own *creates* the file and then refuses it, which is not what the name says and is what makes it usable as a lock — O_EXCL without O_CREAT is ignored by the system, so a shell passing the one flag through opens the existing file at status 0 and a guard written this way claims a lock somebody holds. The third line is what a name outside the list gets",
+	},
+	{
+		ID: "system/an-errno-of-the-shells-own", Category: "builtins",
+		Snippet: `zmodload zsh/system 2>/dev/null; ERRNO=13; syserror; echo "st=$?"; echo "[$ERRNO]"`,
+		Why:     "`$ERRNO` is assignable and `syserror` with no operand reports it: the one part of that parameter a row can pin, since the shell's own answer with nothing set is whatever its last library call happened to leave. The four without the module meet two commands they do not have. Ours keeps the error the last system call it made for the script saw, which is narrower than the shell's and is the honest reading — see interp/errno.go (#1802)",
 	},
 	{
 		ID: "system/what-sysopen-refuses", Category: "builtins",

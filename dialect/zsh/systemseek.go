@@ -170,9 +170,19 @@ func syserrorBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 // sysErrorNumber is which error `syserror` was asked about.
 //
 // A number or a name from `$errnos` where there is an operand — status 2 and
-// nothing said for a word that is neither, measured — and `$ERRNO` where there
-// is not. See the note at the top of this file for why the last of those is a
-// refusal here rather than the zero it would otherwise read as.
+// nothing said for a word that is neither, measured — and the number the last
+// system call left where there is not.
+//
+// That last case used to refuse by name, because this shell kept no errno at
+// all and reading the absent parameter as zero would have printed `Undefined
+// error: 0` — the sentence that means *nothing went wrong* — at status 0 to a
+// script asking what did. There is a number now (interp/errno.go), so zero
+// here means what it says: no system call this shell made for the script has
+// failed. Which is the answer the shell being modeled gives in a fresh
+// session, byte for byte (#1802).
+//
+// It reads the *number* and not `$ERRNO`, and the two are not the same: the
+// parameter is empty until a script assigns it, and this is not.
 func sysErrorNumber(r *interp.Runner, rest []string) (int, int) {
 	if len(rest) == 1 {
 		number, known := errnoNumber(rest[0])
@@ -181,14 +191,5 @@ func sysErrorNumber(r *interp.Runner, rest []string) (int, int) {
 		}
 		return number, 0
 	}
-	value, set := r.GetVar("ERRNO")
-	if !set || value == "" {
-		r.Diagnosef("this shell keeps no errno of its own; name one, or set ERRNO\n")
-		return 0, 1
-	}
-	number, known := errnoNumber(value)
-	if !known {
-		return 0, 2
-	}
-	return number, 0
+	return r.LastErrno(), 0
 }

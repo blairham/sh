@@ -265,7 +265,12 @@ func TestDiagnostics(t *testing.T) {
 	if got, want := zsh.Diagnostics().TypeKeyword, "%[1]s is a reserved word"; got != want {
 		t.Errorf("TypeKeyword = %q, want %q", got, want)
 	}
-	if got, want := zsh.Diagnostics().TypeFunction, "%[1]s is a shell function from zsh"; got != want {
+	// Two of them for a function: the clause naming where it came from, and
+	// the clause-less form for the one route with no origin (#1706).
+	if got, want := zsh.Diagnostics().TypeFunctionFrom, "%[1]s is a shell function from %[2]s"; got != want {
+		t.Errorf("TypeFunctionFrom = %q, want %q", got, want)
+	}
+	if got, want := zsh.Diagnostics().TypeFunction, "%[1]s is a shell function"; got != want {
 		t.Errorf("TypeFunction = %q, want %q", got, want)
 	}
 	if !zsh.Diagnostics().TypeNotFoundUnprefixed {

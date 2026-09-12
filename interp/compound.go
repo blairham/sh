@@ -764,10 +764,7 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 	// Where it was defined, which is the file its frame reports — a function
 	// declared in a sourced library and called from the script names the
 	// library, not the script.
-	if r.funcFiles == nil {
-		r.funcFiles = map[string]string{}
-	}
-	r.funcFiles[c.Name] = r.currentFile()
+	r.recordFunctionFile(c.Name, r.currentFile())
 	r.status = 0
 	return nil
 }

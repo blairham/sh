@@ -1079,6 +1079,7 @@ func Semantics() interp.Semantics {
 	s.UnsetOptions = "vfm"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutFinishesWhatItStarted
 	s.ReadTimeoutKeepsWhatArrived = interp.No
+	s.ReadTimeoutBoundsReadability = interp.Yes
 	s.ArithLeadingZeroIsOctal = interp.No
 	// Nothing makes a leading zero octal here, so `let` and `(( ))` read one
 	// alike and the axis that parts them elsewhere has nothing to change.
@@ -1905,8 +1906,15 @@ func Diagnostics() interp.Diagnostics {
 		// The other three shells print argv[0] whole.
 		SelfName:    "zsh",
 		TypeKeyword: "%[1]s is a reserved word",
-		// The only one that names itself in the line.
-		TypeFunction: "%[1]s is a shell function from zsh",
+		// The only one that names where the function came from. The second
+		// verb is the file it was defined in, or the shell's own name where
+		// the shell itself defined it — see Diagnostics.TypeFunctionFrom.
+		// It was the fixed string `… from zsh` until #1706, which is the
+		// answer for one of the three cases given to all of them.
+		TypeFunctionFrom: "%[1]s is a shell function from %[2]s",
+		// And the clause-less form, for the one route with no origin: a
+		// program on standard input.
+		TypeFunction: "%[1]s is a shell function",
 		// The three kinds, each with its own sentence. A suffix alias names
 		// the *extension*: `whence -v p.txt` is `txt is a suffix alias for
 		// cat`.

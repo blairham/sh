@@ -176,7 +176,7 @@ func sysopenBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	}
 	f, err := sysOpenFile(path, flags, perm)
 	if err != nil {
-		r.Diagnosef("can't open file %s: %s\n", rest[0], sysErrnoText(err))
+		r.Diagnosef("can't open file %s: %s\n", rest[0], sysErrnoText(r, err))
 		return 1
 	}
 	// And asked again about where the name went, which is what makes the
@@ -605,7 +605,13 @@ func sysSubscriptEnd(text string) (sub string, closed bool) {
 // sysErrnoText is the system's own sentence for a failure, without the
 // operation and path the standard library wraps round it — each of these
 // builtins has already said what it was doing.
-func sysErrnoText(err error) string {
+// The runner is taken so that the number is recorded on the way past: these
+// builtins are the ones `syserror` exists beside, and every one of their
+// failures goes through here — one door rather than eight, which is what
+// keeps `$ERRNO` from holding whichever of them somebody remembered to wire
+// (#1802).
+func sysErrnoText(r *interp.Runner, err error) string {
+	r.NoteErrno(err)
 	var errno syscall.Errno
 	if errors.As(err, &errno) {
 		return errno.Error()

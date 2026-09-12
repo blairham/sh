@@ -393,6 +393,7 @@ func Semantics() interp.Semantics {
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
 	s.ReadTimeoutKeepsWhatArrived = interp.Yes
+	s.ReadTimeoutBoundsReadability = interp.No
 	// A directory the PATH search walked past leaves no trace: with nothing
 	// runnable anywhere, bash says the name was never found at all.
 	s.DirectoryOnPathIsACandidate = interp.No

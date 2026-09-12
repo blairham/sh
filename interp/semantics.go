@@ -627,6 +627,26 @@ type Semantics struct {
 	// it assigns.
 	ReadTimeoutKeepsWhatArrived Answer
 
+	// ReadTimeoutBoundsReadability makes `read -t` bound the wait for the
+	// stream to become *readable* rather than the whole read: once a byte has
+	// arrived the line is read to its end however long that takes, and the
+	// answer is 0.
+	//
+	// zsh alone. Measured with a byte dripping every 0.1s under `-t 0.25`:
+	// zsh returns 0 with the whole line after 0.6s, and a whole-read deadline
+	// returns 1 with a partial one. The two agree for every timeout a normal
+	// script writes and disagree about *when* it expires, which is why this
+	// was recorded as a divergence rather than noticed as a bug (#644).
+	//
+	// It is also the axis behind a fifo that holds an unterminated line: zsh
+	// never returns there, because the first byte arrived and the delimiter
+	// never does. That is the same rule and not a second one (#784).
+	//
+	// Asked only where a timeout was written and is not zero — a `read` with
+	// no `-t` has no deadline to place, and `-t 0` is a question about the
+	// stream rather than a deadline at all (ReadZeroTimeout).
+	ReadTimeoutBoundsReadability Answer
+
 	// BuiltinWriteErrorFailsTheCommand makes a builtin whose output write
 	// failed — into a descriptor closed with `>&-`, most plainly — report
 	// status 1. True in bash, dash and ksh93; zsh keeps the builtin's own

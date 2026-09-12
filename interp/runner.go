@@ -365,6 +365,10 @@ type Runner struct {
 	// scriptFile is the file the shell was given, which only the front end
 	// knows. Empty for `-c` and for a Runner nobody told.
 	scriptFile string
+	// lastErrno is the number the last system call this shell made on a
+	// script's behalf failed with. See interp/errno.go.
+	lastErrno int
+
 	// funcFiles is where each function was defined, because that is the file
 	// its frame reports rather than the one that called it.
 	funcFiles map[string]string

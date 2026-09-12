@@ -4,6 +4,7 @@
 package zsh
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/interp"
@@ -130,6 +131,12 @@ func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssocWriter("galiases", writeZshGlobalAlias)
 	r.SetDynamicAssoc("saliases", zshSuffixAliasesView)
 	r.SetDynamicAssocWriter("saliases", writeZshSuffixAlias)
+	// `$ERRNO`, which is this shell's own parameter rather than one the
+	// `zsh/system` module brings: measured, `ERRNO=13; cat /no/such; echo
+	// $ERRNO` answers with the number the *call* left and not the 13, in a
+	// shell that has loaded nothing.
+	r.SetDynamic("ERRNO", zshErrnoValue)
+	r.SetDynamicWriter("ERRNO", writeZshErrno)
 	r.SetDynamicArray("funcstack", funcstackNames)
 	r.SetDynamicAssoc("parameters", zshParametersView)
 	r.SetDynamicAssocElement("parameters", zshParameterValue)
@@ -412,7 +419,9 @@ func writeZshFunction(r *interp.Runner, name, body string, set bool) {
 		r.RemoveFunction(name)
 		return
 	}
-	if !zshDefineFromText(r, name, body, false) {
+	// No file: the body is the script's own text, so the origin stays
+	// whatever the definition itself recorded.
+	if !zshDefineFromText(r, name, body, "", false) {
 		r.Diagnosef("%s: not a function body this shell can read\n", name)
 	}
 }
@@ -663,4 +672,36 @@ func aliasAssoc(table map[string]string) interp.AssocArray {
 		out[name] = text
 	}
 	return out
+}
+
+// zshErrnoValue is `$ERRNO`: the number the last system call this shell made
+// on the script's behalf failed with — see interp/errno.go for what that is
+// and is not.
+//
+// **Empty until something has assigned it**, which is measured rather than a
+// simplification: `zmodload zsh/system; cat /no/such 2>/dev/null; echo
+// "[$ERRNO]"` is `[]` in zsh 5.9.2, and `${+ERRNO}` is 0, while
+// `ERRNO=13; cat /no/such 2>/dev/null; echo $ERRNO` answers with the call's
+// number and not with 13. So the parameter starts unset and reads live once a
+// script has touched it, and the two states are told apart by the assignment
+// rather than by whether a call has failed.
+//
+// The builtin does not follow it: `syserror` with no operand answers
+// `Undefined error: 0` in a fresh shell, where `$ERRNO` is empty. It reads
+// the number and this reads the parameter, which is why they differ.
+func zshErrnoValue(r *interp.Runner) string {
+	if _, assigned := r.Assigned("ERRNO"); !assigned {
+		return ""
+	}
+	return strconv.Itoa(r.LastErrno())
+}
+
+// writeZshErrno is `ERRNO=13`, which sets the number the parameter and the
+// builtin both report. A value that is not a number leaves it alone rather
+// than clearing it — the assignment is still recorded, so the parameter stops
+// being unset either way, which is what the shell does.
+func writeZshErrno(r *interp.Runner, value string) {
+	if n, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+		r.SetLastErrno(n)
+	}
 }

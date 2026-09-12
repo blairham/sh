@@ -356,18 +356,13 @@ func verboseSentence(r *interp.Runner, name string, kind interp.NameKind, path s
 	}
 	switch kind {
 	case interp.NameFunction:
-		if autoloadPending(r, name) {
-			// A name declared with `autoload` and not yet called is not an
-			// ordinary function and does not say it is — measured,
-			// `whence -v myfn` is `myfn is an autoload shell function` and
-			// becomes `myfn is a shell function from …` after one call. The
-			// question is the dialect's own bookkeeping rather than
-			// interp's, which is why it is asked here; the wording is still
-			// the table's, so this and `type` cannot say it differently.
-			return interp.Wording(dg.TypeUndefinedFunction,
-				"%[1]s is an undefined function", name)
-		}
-		return interp.Wording(dg.TypeFunction, "%[1]s is a function", name)
+		// The whole sentence from the core, autoload stub and origin alike —
+		// `myfn is an autoload shell function` before the first call and
+		// `myfn is a shell function from /…/myfn` after it. Written there
+		// rather than here because `type` writes the identical line, and the
+		// two spelling it separately is exactly how they came to disagree
+		// about the origin (#1706).
+		return r.FunctionSentence(name)
 	case interp.NameBuiltin:
 		return interp.Wording(dg.TypeBuiltin, "%[1]s is a shell builtin", name)
 	case interp.NameReserved:

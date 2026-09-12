@@ -162,30 +162,65 @@ print -r -- "st=$?"`)
 	}
 }
 
-// **`syserror` with no operand refuses by name rather than inventing a zero.**
+// **`syserror` with no operand reports the number the last system call left**,
+// which is a number this shell keeps now (#1802).
 //
-// In zsh the operand defaults to the C library's `errno` at that instant,
-// which is not a behavior a shell can be held to — measured twice in one
-// session it was `No such file or directory` and then `Interrupted system
-// call`. This shell has no such variable, and the sentence for zero is
-// `Undefined error: 0`, which *means nothing went wrong*: printing it at
-// status 0 to a script asking what went wrong is the accepting-and-inert
-// failure this module has produced twice.
+// It used to refuse by name, because there was nothing behind it and reading
+// the absent parameter as zero would have printed `Undefined error: 0` — the
+// sentence that means *nothing went wrong* — at status 0 to a script asking
+// what did. Zero now means what it says: no system call this shell made for
+// the script has failed, which is the state a fresh session is in and the
+// sentence zsh 5.9.2 prints there.
 //
-// The part that can be answered honestly is: zsh's `ERRNO` is writable, so a
-// script that has put a number there gets that number's sentence.
-func TestSyserrorWithNoOperandRefusesUnlessErrnoWasSet(t *testing.T) {
-	out, st, errs := runZshSplit(t, t.TempDir(), `syserror
+// A script that has put a number in `ERRNO` still gets that number's
+// sentence, which is byte-identical to zsh.
+func TestSyserrorWithNoOperandReportsTheLastNumber(t *testing.T) {
+	out, st, errs := runZshSplit(t, t.TempDir(), `syserror 0
+syserror
 print -r -- "bare=$?"
 ERRNO=13
 syserror
 print -r -- "set=$?"`)
-	want := "bare=1\nset=0\n"
+	want := "bare=0\nset=0\n"
 	if out != want || st != 0 {
 		t.Errorf("syserror with no operand = %q (status %d), want %q", out, st, want)
 	}
-	wantWholeLines(t, errs,
-		"zsh:syserror:1: this shell keeps no errno of its own; name one, or set ERRNO",
-		"Permission denied",
-	)
+	// Against `syserror 0` rather than against a sentence written here: the
+	// wording for zero is the platform's and not this shell's — `Undefined
+	// error: 0` on darwin and `Success` on Linux, which errnotable_darwin.go
+	// and errnotable_linux.go already record. What this asserts is that the
+	// no-operand form in a fresh shell *is* the zero answer.
+	lines := splitLines(errs)
+	if len(lines) != 3 {
+		t.Fatalf("stderr = %q, want three sentences", errs)
+	}
+	if lines[0] != lines[1] {
+		t.Errorf("stderr = %q, want the bare form to answer as `syserror 0` does", errs)
+	}
+	if lines[2] != "Permission denied" {
+		t.Errorf("stderr = %q, want the assigned number's sentence last", errs)
+	}
+}
+
+// **A failed system call is what puts a number there**, which is the half
+// that makes the builtin worth calling with no operand at all.
+//
+// `cd` into a path that is not there is the plainest one a script makes, and
+// the number it leaves is the one both the builtin and the parameter report.
+// The parameter is read *after* an assignment because it is unset until one —
+// measured, `cat /no/such; echo "[$ERRNO]"` is `[]` in zsh 5.9.2 — and the
+// builtin needs no such thing, which is the row that says the two read
+// different things.
+func TestAFailedCallLeavesItsNumber(t *testing.T) {
+	out, st, errs := runZshSplit(t, t.TempDir(), `cd /no/such/directory 2>/dev/null
+syserror
+print -r -- "before=[$ERRNO]"
+ERRNO=0
+cd /no/such/directory 2>/dev/null
+print -r -- "after=[$ERRNO]"`)
+	want := "before=[]\nafter=[2]\n"
+	if out != want || st != 0 {
+		t.Errorf("a failed call = %q (status %d), want %q", out, st, want)
+	}
+	wantWholeLines(t, errs, "No such file or directory")
 }

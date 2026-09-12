@@ -56,7 +56,7 @@ SHELLS := sh bash zsh ksh dash ash
 FUNCSRC := share/sh/functions
 FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage coverage wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
 
 all: build
 
@@ -214,6 +214,15 @@ acp-wire: ## Print a real annotated ACP session, message by message, for showing
 # Deliberately not in `check`, and the comment is the rule: this is thousands
 # of shell processes against a 3000-row corpus, on demand. See the `lint`
 # comment above for what wiring a slow thing into every commit costs here.
+# The denominator axis-sweep does not cover: what nothing ever *asks* about.
+# Report-only and cheap — it parses the corpus and reads the tree's own
+# tables, and starts no shell at all — so unlike the sweep above there is
+# nothing here to schedule around. Still not in `check`: it is a work-list
+# rather than a gate, and an element nobody has written a case for yet is not
+# a broken build.
+coverage: ## Report, per dialect, every builtin, node kind and operator no case mentions (#2293)
+	@go run ./internal/cmd/coverage $(ARGS)
+
 axis-sweep: ## Move every axis in interp.Semantics and report the ones nothing objected to (#2031)
 	@mkdir -p $(BINDIR)
 	@go build -tags shaxissweep -o $(BINDIR)/axis-sh ./cmd/sh

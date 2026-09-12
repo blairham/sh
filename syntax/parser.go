@@ -3267,6 +3267,17 @@ func (p *Parser) shortFormBody() (body []*Stmt, stop Pos) {
 	}
 	st := p.parseStmt()
 	if st == nil {
+		if p.err == nil {
+			// A token no command can begin with, standing where the short
+			// body does: `while & do :; done`. Named here rather than left
+			// for the caller, because leaving it named the `do` — the loop
+			// closed with an empty body, the `&` was stepped past, and the
+			// stop word two tokens later was the first thing anything
+			// refused. Measured on zsh 5.9.2, 2026-09-12: that shell says
+			// ``parse error near `&' `` for both `while` and `until`, which
+			// is the token that is actually there.
+			p.failUnexpected("")
+		}
 		return nil, p.tok.Pos
 	}
 	// The separator the body just took is the loop's as well: there is

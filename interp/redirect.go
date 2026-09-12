@@ -1238,14 +1238,34 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 		// handler was never one of these.
 		r.brokenPipeAbsorbed(arranged == signalHandledBy)
 	}
-	// Before the axis, and that is the whole reason this is a second wording.
-	// zsh answers the axis No and returns below without reaching
-	// BuiltinWriteError; it still says something on every route but one, and
-	// the route it stays quiet on is the one where the writing command's own
-	// redirections closed the stream. See
-	// Diagnostics.InheritedClosedStreamWriteError for the measurements, and
-	// for why moving BuiltinWriteError in front of the axis instead would be
-	// wrong.
+	// Which axis decides is the errno's, not one axis for every failed write:
+	// a closed descriptor and a pipe nobody is reading are the same event to
+	// five of the panel and opposite events to the other two. See
+	// Semantics.BrokenPipeWriteErrorFailsTheCommand for the measurement.
+	fails := false
+	if errors.Is(err, syscall.EPIPE) {
+		fails = r.ask(r.sem().BrokenPipeWriteErrorFailsTheCommand,
+			"a builtin's failed write into a broken pipe failing the command")
+	} else {
+		fails = r.ask(r.sem().BuiltinWriteErrorFailsTheCommand,
+			"a builtin's failed write failing the command")
+	}
+	// The builtin's own complaint comes first where both are said. Measured
+	// 2026-09-12 on the one dialect that has both sentences, writing into a
+	// broken pipe: `zsh:echo:6: write error: broken pipe` and then
+	// `zsh:6: write error: broken pipe`, in that order and for `printf` as
+	// well as `echo`.
+	if fails {
+		if w := r.diag().BuiltinWriteError; w != "" {
+			r.diagf("%s\n", fmt.Sprintf(w, name, r.diag().reasonText(reason(err))))
+		}
+	}
+	// Said whether or not the axis failed the command, and that is the whole
+	// reason this is a second wording. zsh answers the closed-descriptor axis
+	// No and would otherwise never reach BuiltinWriteError; it still says
+	// something on every route but one, and the route it stays quiet on is
+	// the one where the writing command's own redirections closed the stream.
+	// See Diagnostics.InheritedClosedStreamWriteError for the measurements.
 	if w := r.diag().InheritedClosedStreamWriteError; w != "" && !r.outputClosedByThisCommand {
 		// Not the builtin's own complaint, and the dialect that has this
 		// sentence says so by leaving the builtin out of the location:
@@ -1257,11 +1277,8 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 		r.diagf("%s\n", fmt.Sprintf(w, name, r.diag().reasonText(reason(err))))
 		r.inBuiltin = outer
 	}
-	if !r.ask(r.sem().BuiltinWriteErrorFailsTheCommand, "a builtin's failed write failing the command") {
+	if !fails {
 		return st
-	}
-	if w := r.diag().BuiltinWriteError; w != "" {
-		r.diagf("%s\n", fmt.Sprintf(w, name, r.diag().reasonText(reason(err))))
 	}
 	if st == 0 {
 		st = 1

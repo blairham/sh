@@ -703,6 +703,13 @@ func Semantics() interp.Semantics {
 	// closed by `exec >&-` instead — a `write error` with the status still 0
 	// — is measured in docs/spec/semantics.md and not reproduced.
 	s.BuiltinWriteErrorFailsTheCommand = interp.No
+	// And the opposite answer for the other errno, which is the half of the
+	// pair this shell reverses. A builtin writing into a pipe nobody is
+	// reading, with SIGPIPE disarmed, reports 1 here -- where `echo hi >&-`
+	// reports 0 -- and says so twice: `zsh:echo:N: write error: broken pipe`
+	// from the builtin, then `zsh:N: write error: broken pipe` from the
+	// stream. ksh93 is the mirror image of both rows (#770).
+	s.BrokenPipeWriteErrorFailsTheCommand = interp.Yes
 	s.ArithIntegerOperatorRefusesFloat = interp.No
 	// A negative exponent is a float answer here, not a refusal: `2**-1`
 	// is 0.5.
@@ -2450,6 +2457,13 @@ func Diagnostics() interp.Diagnostics {
 		// Neither the builtin nor the number is named, so the format has one
 		// verb where the others have two (#1363).
 		InheritedClosedStreamWriteError: "write error: %[2]s",
+		// The builtin's own complaint, reached only where the write failed
+		// with EPIPE -- the closed-descriptor axis answers No above and
+		// returns before this is read, which is why one wording serves both
+		// errnos here without making the quiet route speak. The builtin is
+		// named by the location rather than by a verb, so the format uses
+		// only the reason, exactly as the sentence above it does (#770).
+		BuiltinWriteError: "write error: %[2]s",
 		// A conditional with no `:` is its own sentence; a conditional
 		// missing either value is the ordinary end of input, so
 		// ArithConditionalThen and ArithConditionalElse stay empty and fall

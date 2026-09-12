@@ -239,6 +239,12 @@ func Dialect() syntax.Dialect {
 // Semantics is what ksh93 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	// A builtin's write into a pipe nobody is reading, with SIGPIPE
+	// disarmed, leaves the command at status 0 here -- silently, where the
+	// same shell reports 1 just as silently for `echo hi >&-`. The two errnos
+	// are one answer in five of the panel, and this shell and zsh split them
+	// in opposite directions (#770).
+	s.BrokenPipeWriteErrorFailsTheCommand = interp.No
 	// An unquoted list is its elements taken one at a time, never their
 	// join: `IFS=:; set -- "x:" y; printf "[%s]" $@` is `[x][y]` here and
 	// `[x][][y]` in bash, which joins to `x::y` first.
@@ -1474,7 +1480,9 @@ func Diagnostics() interp.Diagnostics {
 		DuplicationSourceNotOpen: "%[1]s: cannot open [%[2]s]",
 		// No BuiltinWriteError: `echo hi >&-` reports 1 here and says
 		// nothing, which is the semantics axis answering and the wording
-		// staying empty.
+		// staying empty. A broken pipe is silent as well, and there the
+		// status is 0 -- see BrokenPipeWriteErrorFailsTheCommand, the axis
+		// this shell and zsh answer the opposite way round.
 		// Measured: ksh93 reports a failed open at the line before the redirect.
 		RedirectFailureLine: interp.LineBeforeRedirect,
 		// A descriptor number the process cannot hold names the thing rather

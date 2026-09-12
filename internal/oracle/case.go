@@ -7737,6 +7737,11 @@ echo "st=$?"`,
 		Why:     "`>&-` closes stdout before the builtin writes, and a write that went nowhere is not a command that worked: three shells report 1 — two of them with a message naming the builtin, ksh93 silently — and zsh alone keeps 0 and quietly loses the text",
 	},
 	{
+		ID: "redir/a-write-into-a-broken-pipe-with-the-signal-disarmed", Category: "redirection",
+		Snippet: `trap "" PIPE; s=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; i=0; while [ $i -lt 12 ]; do s="$s$s"; i=$((i+1)); done; { echo "$s"; echo "ws=$?" > ws.txt; } | true; cat ws.txt; echo done`,
+		Why:     "the other errno, and the row that says the two are not one question. The string is 256 KiB, four times any pipe buffer, so the write blocks and then fails once `true` has gone without reading; `trap \"\" PIPE` disarms the signal, so this is an ordinary failed write and not a death -- the reason the shell is still there to report a status at all. Against `redir/a-write-to-a-closed-descriptor-fails` directly above, five columns give one answer twice and two swap places: ksh93 reports 1 for the closed descriptor and **0** here, both in silence, while zsh reports 0 there and **1** here and says so *twice* -- `zsh:echo:N: write error: broken pipe` from the builtin, then `zsh:N: write error: broken pipe` from the stream, in that order. dash, both bash builds and ash answer 1 to both and word this one the way they word that one. So the status is the errno's question and not the shell's, which is what makes it a second axis rather than a reading of the first (#770). The status is carried out through a file because it belongs to a command inside the pipeline, and bash 3.2 puts a newline in front of it: a partial write to the broken pipe leaves the trailing byte pending on fd 1, and it lands at the front of the next thing written there. That is stable across runs and is bash 3.2's, not the harness's",
+	},
+	{
 		ID: "redir/a-group-writing-to-a-closed-descriptor", Category: "redirection",
 		Snippet: `{ echo a; echo b; } >&-; echo "st=$?"`,
 		Why:     "the failure is per write, never fatal: each echo inside the group fails on its own — bash and dash complain twice — and the group reports the last one. zsh says `write error` here where it said nothing for a simple command's own `>&-`, and still answers 0",

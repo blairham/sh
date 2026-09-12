@@ -6956,8 +6956,8 @@ const (
 	// ReadPromptOperandUnspecified is no answer, and is refused like any
 	// other.
 	ReadPromptOperandUnspecified ReadPromptOperand = iota
-	// ReadOperandIsAllName reads the whole word as the name: bash and dash,
-	// where `read "v?p"` is the bad name `v?p` and nothing else.
+	// ReadOperandIsAllName reads the whole word as the name, so `read "v?p"` is
+	// the bad name `v?p` and nothing else.
 	ReadOperandIsAllName
 	// ReadPromptNeedsANameBeforeIt takes the part in front of the `?` as the
 	// name and the rest as a prompt, and still wants a name there, so
@@ -7096,25 +7096,25 @@ func PosixSemantics() Semantics {
 		SignalHandlerSeesEarlierStatus:      No,
 		// POSIX says a bare `exit` reports the status of the last command,
 		// and in an EXIT trap it names the value `$?` had when the trap was
-		// entered — which is what three of the four do.
+		// entered.
 		ExitInTrapReportsEarlierStatus: Yes,
 		UnsetPositionalIsAllowed:       No,
 		TraceShowsItsOwnDisabling:      Yes,
 		TraceAssignmentsSeparately:     No,
 		StatusArgument:                 StatusArgStrict,
 		EqualsExpansion:                No,
-		// POSIX gives `test` one spelling of string equality, so `==` is not
-		// an operator; the three shells that accept it added it.
+		// POSIX gives `test` one spelling of string equality, so `==` is not an
+		// operator; a preset that accepts it added it.
 		TestAcceptsDoubleEqual: No,
 		// POSIX requires only "greater than 128" for a command killed by a
-		// signal, which decides nothing; three of the four use 128.
+		// signal, which decides nothing, so the preset takes the common encoding.
 		SignalDeathStatusIsTwoFiftySix: No,
 		// POSIX gives printf no options at all, so there is nothing to
 		// assign with and a leading `-` word is not one.
 		PrintfAssignsWithV:         No,
 		PrintfRejectsUnknownOption: Yes,
-		// POSIX shows the mask in a form that can be read back; three of the
-		// four write four octal digits.
+		// POSIX shows the mask in a form that can be read back, which four octal
+		// digits are.
 		UmaskPrintsFourDigits: Yes,
 		// POSIX says setting the mask writes nothing.
 		UmaskSetWithSPrints: No,
@@ -7132,52 +7132,48 @@ func PosixSemantics() Semantics {
 		// that said nothing would refuse `export -n` as an unchosen axis
 		// rather than as the unknown option the standard makes it.
 		ExportTakesTheAttributeOff: No,
-		// POSIX names the noglob letter itself: `set -f`, reported in `$-`
-		// as `f`. Only zsh answers otherwise.
+		// POSIX names the noglob letter itself: `set -f`, reported in `$-` as
+		// `f`.
 		NoglobLetterIsF: Yes,
 		// POSIX defines `$-` as the option flags specified on invocation,
 		// and `-c` is one of them; `-s` is not, when it was not written.
 		// The preset takes the text rather than a vote, which is the rule
-		// everywhere here, and the panel splits two against two anyway.
+		// everywhere here, and the answers split evenly anyway.
 		CommandStringShowsCInDollarDash: Yes,
 		CommandStringShowsSInDollarDash: No,
 		ArithInvalidOctalDigitIsError:   Yes,
 		RegexQuotingMakesLiteral:        No,
 		ProcessSubstitutionInCondition:  No,
-		// POSIX has no process substitution, so there is no text to read
-		// here either: the base takes the answer every panel member but one
-		// gives, which is that the body reads the input of the command the
-		// word stands in like any other child of it.
+		// POSIX has no process substitution, so there is no text to read here
+		// either: the base takes the common answer, which is that the body reads
+		// the input of the command the word stands in like any other child of it.
 		ProcessSubstitutionBodyReadsTheShellsInput: No,
 		// POSIX has no `[[ ]]` to fail in, so this is the substrate's floor
 		// rather than a reading of the text: an error is diagnosed and the
 		// shell goes on, which is what POSIX asks of every failure that is
 		// not a special builtin's.
 		ConditionArithmeticErrorIsFatal: No,
-		// The standard has no `(( ))` at all, so nothing here is POSIX's to
-		// say; 1 is what the shells that do have it say, bar one.
+		// The standard has no `(( ))` at all, so nothing here is POSIX's to say;
+		// 1 is the common answer among the presets that do have it.
 		ArithCommandErrorStatusIsTwo: No,
-		// POSIX has no `(( ))` at all — it is an extension every shell but
-		// dash carries — so there is no text to read here and the base takes
-		// the answer three of the four give: the status is left for the next
-		// line, which runs.
+		// POSIX has no `(( ))` at all — it is an extension — so there is no text
+		// to read here and the base takes the common answer: the status is left
+		// for the next line, which runs.
 		ArithCommandErrorIsFatal: No,
-		// POSIX has no `let` either, and the answer three of the four give is
-		// that a failed expression leaves nothing behind: the status is 1.
+		// POSIX has no `let` either, and the common answer is that a failed
+		// expression leaves nothing behind: the status is 1.
 		LetKeepsTheValueBeforeAnIllegalByte: No,
 		LastPipelineElementInCurrentShell:   No,
 		ShiftPastEndFatal:                   Yes,
-		// The standard describes one refusal and says nothing about a
-		// second, so the preset stops at the first the way three of the
-		// panel do.
+		// The standard describes one refusal and says nothing about a second, so
+		// the preset stops at the first.
 		SetReportsEveryBadOption:  No,
 		ReadonlyReassignmentFatal: Yes,
 		// XCU makes an assignment to a readonly name an error, and an error
-		// in a special builtin or in an assignment ends a non-interactive
-		// shell — which is what a prefix assignment's refusal is. dash is
-		// the panel member that follows it here, and it follows it for every
-		// kind of command. The command's fate is not asked once the script
-		// is over, so PrefixRefusalCostsTheCommand stays unanswered (#1219).
+		// in a special builtin or in an assignment ends a non-interactive shell —
+		// which is what a prefix assignment's refusal is, for every kind of
+		// command. The command's fate is not asked once the script is over, so
+		// PrefixRefusalCostsTheCommand stays unanswered.
 		PrefixToARegularBuiltinIsRefused: Yes,
 		PrefixRefusalFatality:            PrefixRefusalAlwaysFatal,
 		// XCU makes an expansion error fatal to a non-interactive shell, so
@@ -7186,35 +7182,32 @@ func PosixSemantics() Semantics {
 		ReadonlyReassignmentByDeclarationFatal: Yes,
 		ArrayBaseIsZero:                        Yes,
 		// The standard has no subscript, and the nearest reading it does
-		// have is its arithmetic: a comma there is the operator whose value
-		// is its right operand, and a string is not a sequence a subscript
-		// reaches into. Both are also what every panel member but one does.
+		// have is its arithmetic: a comma there is the operator whose value is
+		// its right operand, and a string is not a sequence a subscript reaches
+		// into. Both are also the common answer.
 		SubscriptCommaIsARange:      No,
 		ScalarSubscriptIsACharacter: No,
 		// XCU defines ${#parameter} as the length of the value "in
 		// characters", and defines a character as what the locale's
-		// LC_CTYPE category says one is. So the standard's answer is yes,
-		// and it is also what every panel member but dash does.
+		// LC_CTYPE category says one is. So the standard's answer is yes, and it
+		// is also the common one.
 		MultibyteEncodingIsHonored: Yes,
 		// XBD ranks the locale variables and then leaves the case where none
 		// of them is set to the implementation: what applies is the
 		// implementation-defined default locale. The default a C program
 		// starts in is the C locale, and asking for the environment's when
 		// the environment names none leaves it there — so the standard's
-		// preset reads an unset locale as C. It is also what every panel
-		// member but one does.
+		// preset reads an unset locale as C. It is also the common answer.
 		UnsetLocaleIsUnicodeAware:       No,
 		DollarZeroNamesTheInnermostCall: No,
-		// A special builtin's failure is fatal to a non-interactive shell,
-		// which the standard states outright. dash is the only member of the
-		// panel that still does it, and the preset follows the standard
-		// rather than the majority.
+		// A special builtin's failure is fatal to a non-interactive shell, which
+		// the standard states outright. Few implementations still do it, and the
+		// preset follows the standard rather than the majority.
 		BuiltinSyntaxErrorFatal: Yes,
 		// An expansion error ends a non-interactive shell, which XCU states
 		// outright, and it says the same of an error in a special builtin —
-		// `.` is one. So the standard's answer is that nothing is caught at
-		// a `.`, and dash, the panel member that targets this text,
-		// complies. ksh93 and zsh are the departure.
+		// `.` is one. So the standard's answer is that nothing is caught at a
+		// `.`; catching it there is the departure.
 		FatalErrorEndsBorrowedTextOnly: No,
 		// XCU's `${parameter?word}` says the shell writes the word and
 		// *exits*, in those words, so the standard reads the operator as a
@@ -7250,8 +7243,8 @@ func PosixSemantics() Semantics {
 		// three of the four do — the substrate keeps the answer it had
 		// before the question was one.
 		LocalOutsideAFunctionIsAnError: Yes,
-		// The standard has no `local`; dash is the closest reading, and it
-		// leaves the outer value visible until the first assignment.
+		// The standard has no `local`, so the preset follows the closest reading
+		// of it, which leaves the outer value visible until the first assignment.
 		ValuelessDeclarationHidesTheOuterValue: No,
 		// The standard has no `local` either, and it does have the export
 		// attribute belong to the *name* for the life of the shell — so a
@@ -7264,8 +7257,7 @@ func PosixSemantics() Semantics {
 		// it where it was. Both other shells with the builtin agree.
 		DeclarationAssignmentClearsTheExportAttribute: No,
 		// POSIX has `trap` save the action and execute it when the
-		// condition arises, so the text is not read until then. Three of
-		// the four agree; zsh reads it as the trap is set.
+		// condition arises, so the text is not read until then.
 		TrapActionIsParsedWhenSet: No,
 		// A shell runs what it has read rather than reading everything
 		// first, which is unanimous for a script and is the same reading
@@ -7276,8 +7268,7 @@ func PosixSemantics() Semantics {
 		// which is what three of the four do.
 		TrapParseFailureNamesWhereItFired: No,
 		// POSIX gives `trap` the signals and EXIT, and nothing else — ERR,
-		// DEBUG and RETURN are conditions the shells added. dash still
-		// refuses all three.
+		// DEBUG and RETURN are conditions implementations added.
 		TrapHasErrCondition:    No,
 		TrapHasDebugCondition:  No,
 		TrapHasReturnCondition: No,
@@ -7331,13 +7322,12 @@ func PosixSemantics() Semantics {
 		// The core has arrays — they are in the common denominator even
 		// though POSIX has none — so `unset a[0]` names an element and
 		// removes it, which is what three of the four do and the only part
-		// of this anybody writes. A *declaration* still names a variable
-		// rather than an element, which is bash's and dash's answer.
+		// of this anybody writes. A *declaration* still names a variable rather
+		// than an element.
 		DeclarationTakesASubscript: No,
 		UnsetTakesASubscript:       Yes,
 		// A fatal refusal takes the rest of the operand list with it, which
-		// is the standard's reading — the builtin stops where it failed —
-		// and dash's and bash-as-`sh`'s measured answer.
+		// is the standard's reading — the builtin stops where it failed.
 		BadNameDeclaresTheOperandsAfterIt: No,
 		// `local` reads the declaration question rather than the export one,
 		// and the standard gives it to nobody, so the core answers it the
@@ -7351,16 +7341,16 @@ func PosixSemantics() Semantics {
 		// subscript is the quiet answer.
 		UnsetSubscriptOnAScalarIsAnError: No,
 		// POSIX has `set` write each variable as an assignment "in a format
-		// that can be reused as input", and dash — its closest reading —
-		// single-quotes every value and lists no functions. The standard
+		// that can be reused as input", and its closest reading single-quotes
+		// every value and lists no functions. The standard
 		// gives `local` to nobody and `typeset` no options, so those two
 		// keep their zero values: no option letters, and a bad one reported
 		// rather than fatal — `typeset` is not one of the builtins POSIX
 		// marks special.
 		SetListing:        SetListingAssignments,
 		SetListingQuoting: ListingQuoteAlwaysDoubled,
-		// dash quotes every listed value and never reaches `$'...'`, so the
-		// numeric fallback is never asked for there; the octal one is what
+		// Quoting every listed value never reaches `$'...'`, so the numeric
+		// fallback is never asked for under this preset; the octal one is what
 		// POSIX's own `printf` writes, and is the reading to start from.
 		ListingControlEscape: ControlEscapeOctal,
 		// POSIX has the operand-less `export` and `readonly` write output
@@ -7393,9 +7383,9 @@ func PosixSemantics() Semantics {
 		DotMissingFileFatal:             Yes,
 		DotWithNoOperandIsAnError:       Yes,
 		// The standard gives `.` a file to read commands from and says nothing
-		// about a directory. dash, the panel's POSIX-faithful member, reads it
-		// to its end, finds no commands and reports success — so the preset
-		// follows the shell rather than the silence, the same way the `exec`
+		// about a directory. Its closest reading reads the directory to its end,
+		// finds no commands and reports success — so the preset follows that
+		// rather than the silence, the same way the `exec`
 		// exit-trap answer below does.
 		DotDirectoryOperandIsAnError: No,
 		// The standard gives `.` a filename and nothing else; passing
@@ -7405,9 +7395,8 @@ func PosixSemantics() Semantics {
 		DotPassesArguments:             No,
 		DotFallsBackToCurrentDirectory: No,
 		// The standard says a special builtin's failure is fatal and says
-		// nothing about a trap on the way out; dash, the panel's
-		// POSIX-faithful member, runs it, so the preset follows the shell
-		// rather than the silence. `exec` takes no options in the standard —
+		// nothing about a trap on the way out; its closest reading runs it, so
+		// the preset follows that rather than the silence. `exec` takes no options in the standard —
 		// -a is an extension three of the four grew.
 		ExecFailureRunsExitTrap: Yes,
 		ExecTakesOptions:        No,
@@ -7418,21 +7407,21 @@ func PosixSemantics() Semantics {
 		// The standard's 126 is for a command that was found and cannot be
 		// executed; a directory qualifies, and three of the four report it.
 		DirectoryOnPathIsACandidate: Yes,
-		// POSIX's hash concerns utilities, and dash — its closest reading —
-		// counts builtins and functions too, and reports a missing name.
+		// POSIX's hash concerns utilities, and its closest reading counts
+		// builtins and functions too, and reports a missing name.
 		HashReportsAMissingName: Yes,
 		HashSearchesPathAlone:   No,
 		// POSIX has no such names; refusal is one shell's own answer.
 		PunctuatedFunctionNameIsRefused: No,
 		SetHasTraceLetters:              No,
 		// The standard's `set` has no -t and neither does its `sh`, so the
-		// preset follows the text; the two shells that grew the letter
-		// override. dash — the closest reading of the standard here — is the
-		// one that refuses it outright, which is the same answer.
+		// preset follows the text; a preset that grew the letter overrides. The
+		// closest reading of the standard refuses it outright, which is the same
+		// answer.
 		SetHasTheTLetter: No,
 		// POSIX names -h itself, as command tracking: "locate and remember
 		// utilities invoked by functions as those functions are defined".
-		// dash is the one shell that refuses the letter, and overrides.
+		// A preset that refuses the letter overrides.
 		SetHasTheHLetter:         Yes,
 		SetHLetterTracksCommands: Yes,
 		// POSIX ties -m to process groups and job notices, not to a
@@ -7449,9 +7438,9 @@ func PosixSemantics() Semantics {
 		InteractiveMonitorNeedsATerminal: Yes,
 		// The standard says nothing about announcing a job to a shell that
 		// was handed a script to run, so the preset claims less and says
-		// nothing. It is the intersection as well: bash is silent here and
-		// the other three are not, and a core made of what they all do is
-		// the quiet one.
+		// nothing. It is the intersection as well: one implementation is silent
+		// here and the rest are not, and a core made of what they all do is the
+		// quiet one.
 		InteractiveScriptAnnouncesJobs:  No,
 		TildePlusMinusExpands:           No,
 		UnderscoreTracksTheLastArgument: No,
@@ -7463,14 +7452,14 @@ func PosixSemantics() Semantics {
 		// The majority answers: full bases, wrapping overflow, zero for an
 		// empty expression.
 		TestIntegerRefusalIsSilent: No,
-		// POSIX has no -nt or -ot at all; dash, its closest reading, wants
-		// both files to exist.
+		// POSIX has no -nt or -ot at all; its closest reading wants both files to
+		// exist.
 		MissingFileIsOlder: No,
 		// POSIX gives -t a file descriptor, and dash refuses anything that
 		// is not a number.
 		TerminalTestRequiresANumber: Yes,
 		// POSIX gives the one-argument form of `test` to the string rule
-		// with no exception in it, which is dash's reading and bash's.
+		// with no exception in it.
 		BareTerminalTestIsDescriptorOne:  No,
 		FcEmptyHistoryIsAnError:          No,
 		JobControlAbsenceIsReportedFirst: No,
@@ -7480,15 +7469,14 @@ func PosixSemantics() Semantics {
 		// Five of the six as well.
 		SubshellRunsOnAfterSignalingTheShell: Yes,
 		// The standard describes `exit` as exiting and says nothing about a
-		// job left stopped, so the base leaves; bash and zsh, which stay and
-		// warn, override.
+		// job left stopped, so the base leaves; a preset that stays and warns
+		// overrides.
 		StoppedJobsHoldTheExit:       No,
 		CdpathAnnouncesTheDirectory:  Yes,
 		FdVariableOutlivesTheCommand: Yes,
 		// The standard has the here-document end at the delimiter and says
-		// nothing about a body the input cut short, so this follows the
-		// panel: three of the five leave the last line as it was written and
-		// only bash supplies the newline (#1020).
+		// nothing about a body the input cut short, so this follows the common
+		// answer: the last line is left as it was written.
 		UnterminatedHeredocGainsATrailingNewline: No,
 		// The standard has no `$(<file)` form at all, so this follows the
 		// panel: bash 5.3 and ksh93 read a directory to status 0, and only
@@ -7496,8 +7484,8 @@ func PosixSemantics() Semantics {
 		ReadFailureInAFileSubstitutionFailsIt: No,
 		FdVariableBadCloseIsAnError:           Yes,
 		// The standard says nothing about a ceiling, so this follows the
-		// panel: bash and ksh93 hand the kernel's refusal back, dash and zsh
-		// report success on a number the process cannot hold.
+		// measured answers: some hand the kernel's refusal back, others report
+		// success on a number the process cannot hold.
 		FdNumberBoundedByOpenFileLimit: Yes,
 		// The standard is silent and four of the five hand the descriptor
 		// over, which is what the flock and shared-log idioms are built on.
@@ -7507,10 +7495,10 @@ func PosixSemantics() Semantics {
 		// An empty scalar is one empty element to every shell in the panel
 		// but the one that spells the construct as a list of its own.
 		WholeSubscriptOnAScalarMeasuresIt: No,
-		// The other way round: four of the five shells that have the
-		// construct slice the value's characters, and only ksh93 slices a
-		// list of one. POSIX has neither arrays nor substrings, so the
-		// panel is all there is to follow.
+		// The other way round: most implementations with the construct slice the
+		// value's characters, and one slices a list of one. POSIX has neither
+		// arrays nor substrings, so the measured answers are all there is to
+		// follow.
 		WholeSubscriptOnAScalarSlicesIt: Yes,
 		UnsetNameAtIsOneEmptyField:      No,
 		SubstringNegativeLengthIsEmpty:  No,

@@ -43675,6 +43675,50 @@
         "TimedOut": false
       }
     },
+    "declare/a-hash-in-a-listed-value": {
+      "bash": {
+        "Stdout": "declare -- a=\"16#ff\"~declare -- b=\"#lead\"~declare -- c=\"tail#\"~declare -- d=\"a#b\"~declare -- e=\"99#zz\"~declare -- f=\"1a#b\"~declare -- g=\"a.b#c\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -- a=\"16#ff\"~declare -- b=\"#lead\"~declare -- c=\"tail#\"~declare -- d=\"a#b\"~declare -- e=\"99#zz\"~declare -- f=\"1a#b\"~declare -- g=\"a.b#c\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -- a=\"16#ff\"~declare -- b=\"#lead\"~declare -- c=\"tail#\"~declare -- d=\"a#b\"~declare -- e=\"99#zz\"~declare -- f=\"1a#b\"~declare -- g=\"a.b#c\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a=16#ff~b='#lead'~c='tail#'~d='a#b'~e=99#zz~f=1a#b~g=a.b#c",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset a='16#ff'~typeset b='#lead'~typeset c='tail#'~typeset d='a#b'~typeset e='99#zz'~typeset f='1a#b'~typeset g='a.b#c'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-keyed-table-replaced-keeps-its-attribute": {
       "bash": {
         "Stdout": "[6][4]",
@@ -47630,6 +47674,50 @@
       "zsh": {
         "Stdout": "st=1",
         "Stderr": "\u003cshell\u003e:typeset:1: bad option: +q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-output-base-at-the-ends-of-the-alphabet": {
+      "bash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: -6: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: d: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: b: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -0: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: e: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: a: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: -6: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: d: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: b: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -0: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: e: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: a: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -6: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: d: not found~\u003cshell\u003e: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: b: not found~\u003cshell\u003e: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: -0: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: e: not found~\u003cshell\u003e: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: a: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[10#100]~typeset -i 65 d=10#100~typeset -i b=5~typeset -i 16 e=16#ff~typeset -i a=255",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[]~typeset -i16 e=255~typeset -i16 a=255",
+        "Stderr": "\u003cshell\u003e:typeset:1: invalid base (must be 2 to 36 inclusive): 65~\u003cshell\u003e:typeset:1: no such variable: d~\u003cshell\u003e:typeset:1: invalid base (must be 2 to 36 inclusive): 1~\u003cshell\u003e:typeset:1: no such variable: b~\u003cshell\u003e:typeset:1: invalid base (must be 2 to 36 inclusive): 0~\u003cshell\u003e:typeset:1: invalid base (must be 2 to 36 inclusive): 1",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

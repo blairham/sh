@@ -374,6 +374,10 @@ func Semantics() interp.Semantics {
 	// silence, status 0, which is measured rather than a shortcut.
 	s.DeclareListing = interp.DeclareListingBareAssignments
 	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededDollar
+	// And a `#` in a listed value is left bare unless a name stands in front
+	// of the first one: `16#ff`, `99#zz` and `1a#b` all list unquoted here
+	// and `a#b` and `#lead` do not (#1271).
+	s.ListedHashIsBareAfterANonName = interp.Yes
 	s.ListingControlEscape = interp.ControlEscapeHex
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord

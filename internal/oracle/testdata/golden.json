@@ -129681,6 +129681,57 @@
         "TimedOut": false
       }
     },
+    "prefix/append-joins-the-value-that-is-there": {
+      "ash": {
+        "Stdout": "after=[1]",
+        "Stderr": "\u003cshell\u003e: v+=4: not found~\u003cshell\u003e: v+=5: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "v=145~after=[14]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "v=145~after=[14]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "v=5~after=[14]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "after=[1]",
+        "Stderr": "\u003cshell\u003e: 1: v+=4: not found~\u003cshell\u003e: 1: v+=5: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "v=145~after=[14]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "v=145~after=[14]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "print/a-code-point-escape-is-not-a-meta-target": {
       "ash": {
         "Stdout": "",

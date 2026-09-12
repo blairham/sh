@@ -192,17 +192,24 @@ smoke: ## Drive a realistic interactive session through a pty and report, per fe
 	@go build -o $(BINDIR)/smoke-zsh ./cmd/zsh
 	@go run ./internal/cmd/smoke -bash $(BINDIR)/smoke-bash -zsh $(BINDIR)/smoke-zsh $(ARGS)
 
-acp: ## Drive the Agent Client Protocol front end as a client would, and report what works, what it costs, and what a pipe would have seen
+# Every dialect a person actually runs the shell as, because the binary's
+# default is `core` and a grade of the core alone was a grade of the one
+# dialect nobody uses (#2258). Narrow it with `make acp ACP_DIALECTS=zsh`.
+ACP_DIALECTS ?= bash zsh core
+
+acp: ## Drive the Agent Client Protocol front end as a client would, in every dialect, and report what works, what it costs, and what a pipe would have seen
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/acp-sh ./cmd/sh
 	@go build -o $(BINDIR)/acpcheck ./internal/cmd/acpcheck
-	@$(BINDIR)/acpcheck -bin $(BINDIR)/acp-sh $(ARGS)
+	@rc=0; for d in $(ACP_DIALECTS); do \
+		$(BINDIR)/acpcheck -bin $(BINDIR)/acp-sh -dialect $$d $(ARGS) || rc=1; \
+	done; exit $$rc
 
 acp-wire: ## Print a real annotated ACP session, message by message, for showing somebody
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/acp-sh ./cmd/sh
 	@go build -o $(BINDIR)/acpcheck ./internal/cmd/acpcheck
-	@$(BINDIR)/acpcheck -bin $(BINDIR)/acp-sh -wire $(ARGS)
+	@$(BINDIR)/acpcheck -bin $(BINDIR)/acp-sh -dialect $(firstword $(ACP_DIALECTS)) -wire $(ARGS)
 
 # Deliberately not in `check`, and the comment is the rule: this is thousands
 # of shell processes against a 3000-row corpus, on demand. See the `lint`

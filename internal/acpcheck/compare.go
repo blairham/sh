@@ -91,7 +91,19 @@ func TrueCommand() string {
 }
 
 // Compare runs the script both ways and times both arrangements.
-func Compare(ctx context.Context, bin, dir string) (Comparison, error) {
+//
+// dialect is which shell the binary should be, and it goes to both sides:
+// timing one dialect against another dialect's pipe would make the ratio a
+// measurement of the two dialects rather than of the two arrangements.
+func Compare(ctx context.Context, bin, dir, dialect string) (Comparison, error) {
+	// The flags every way of starting the shell here begins with.
+	var pre []string
+	if dialect != "" {
+		pre = []string{"-dialect", dialect}
+	}
+	shArgs := func(extra ...string) []string {
+		return append(append([]string{}, pre...), extra...)
+	}
 	c := Comparison{Script: strings.TrimSpace(compareScript), Samples: 25}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return c, err
@@ -104,7 +116,7 @@ func Compare(ctx context.Context, bin, dir string) (Comparison, error) {
 	if err := os.MkdirAll(pipeDir, 0o755); err != nil {
 		return c, err
 	}
-	cmd := exec.CommandContext(ctx, bin, "-c", c.Script)
+	cmd := exec.CommandContext(ctx, bin, shArgs("-c", c.Script)...)
 	cmd.Dir = pipeDir
 	out, err := cmd.Output()
 	if err != nil {
@@ -121,7 +133,7 @@ func Compare(ctx context.Context, bin, dir string) (Comparison, error) {
 	if err := os.MkdirAll(acpDir, 0o755); err != nil {
 		return c, err
 	}
-	client, err := Dial(bin, Options{Args: []string{"-acp"}, Dir: acpDir, Answer: always(AllowOnce)})
+	client, err := Dial(bin, Options{Args: shArgs("-acp"), Dir: acpDir, Answer: always(AllowOnce)})
 	if err != nil {
 		return c, err
 	}
@@ -166,7 +178,7 @@ func Compare(ctx context.Context, bin, dir string) (Comparison, error) {
 	if prog != "" {
 		var spawnErr error
 		c.SpawnOurs = median(c.Samples, func() {
-			if err := exec.CommandContext(ctx, bin, "-c", prog).Run(); err != nil {
+			if err := exec.CommandContext(ctx, bin, shArgs("-c", prog)...).Run(); err != nil {
 				spawnErr = err
 			}
 		})

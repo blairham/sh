@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"time"
 )
@@ -64,15 +66,40 @@ type check struct {
 // harness is what a row is given: the binary, a directory of its own, and a
 // context with the deadline the whole run shares.
 type harness struct {
-	ctx context.Context
-	bin string
-	dir string
+	ctx     context.Context
+	bin     string
+	dir     string
+	dialect string
+}
+
+// args puts the dialect in front of a row's own flags, so that every way a
+// row has of starting the shell starts the same shell. Empty means the
+// binary's default, which is what `-dialect` being absent has always meant.
+//
+// It returns a fresh slice: rows build on the result, and a shared backing
+// array is how one row's flags end up on another's command line.
+func (t *harness) args(extra ...string) []string {
+	var args []string
+	if t.dialect != "" {
+		args = append(args, "-dialect", t.dialect)
+	}
+	return append(args, extra...)
+}
+
+// dialectOr is args for a row that needs a particular dialect when the run
+// did not name one. The run's choice wins: a row that forces bash on a zsh
+// run would be grading a shell nobody asked about.
+func (t *harness) dialectOr(fallback string) []string {
+	if t.dialect == "" {
+		return []string{"-dialect", fallback}
+	}
+	return t.args()
 }
 
 // dial opens a connection with the given flags and answer policy, already
 // through the handshake and with a session open.
 func (t *harness) dial(args []string, answer func(Ask) string) (*Client, string, error) {
-	c, err := Dial(t.bin, Options{Args: append(args, "-acp"), Dir: t.dir, Answer: answer})
+	c, err := Dial(t.bin, Options{Args: t.args(append(args, "-acp")...), Dir: t.dir, Answer: answer})
 	if err != nil {
 		return nil, "", err
 	}
@@ -88,31 +115,75 @@ func (t *harness) dial(args []string, answer func(Ask) string) (*Client, string,
 	return c, s, nil
 }
 
+// sameLines reports whether two runs said the same things, disregarding the
+// order they came in. The `-c` route's streams are interleaved as they were
+// written and a session's arrive as two named streams, so comparing the two
+// as text would report a difference that is only an artifact of how each
+// route reports itself.
+func sameLines(a, b string) bool {
+	split := func(s string) []string {
+		var out []string
+		for _, l := range strings.Split(s, "\n") {
+			if l = strings.TrimRight(l, "\r"); l != "" {
+				out = append(out, unprefixed(l))
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
+	return slices.Equal(split(a), split(b))
+}
+
+// unprefixed drops the name a shell puts in front of its own diagnostics.
+//
+// The two routes are entitled to disagree about that name and only that name:
+// a `-c` run is invoked by path and says so, the way every shell does, while
+// the one behind a session calls itself `sh`. Comparing the lines whole made
+// the row report that difference as two different shells, which is who was
+// speaking rather than what was said.
+func unprefixed(line string) string {
+	head, rest, ok := strings.Cut(line, ": ")
+	if !ok || strings.ContainsAny(head, " \t") {
+		return line
+	}
+	return rest
+}
+
 // always answers every request with the same option.
 func always(option string) func(Ask) string {
 	return func(Ask) string { return option }
 }
 
-// Run grades the binary and returns the table.
+// Config is what a run is given beside its context.
 //
-// root is where each row's scratch directory is made; the caller owns it, so
+// Root is where each row's scratch directory is made; the caller owns it, so
 // a run whose files are worth looking at can be pointed at somewhere that
-// survives.
-func Run(ctx context.Context, bin, root, self, only string) Result {
+// survives. Dialect is which shell the binary should be — empty for its
+// default, which for the multi-call binary is the core.
+type Config struct {
+	Bin     string
+	Root    string
+	Self    string
+	Only    string
+	Dialect string
+}
+
+// Run grades the binary and returns the table.
+func Run(ctx context.Context, cfg Config) Result {
 	var res Result
 	all := checks()
 	// The client rows need a second process that speaks ACP, and this binary
 	// is it — re-executed with -as-agent. A run given no path to itself
 	// grades the agent direction only, and says so by leaving the rows out
 	// rather than by passing them.
-	if self != "" {
-		all = append(all, clientChecks(self)...)
+	if cfg.Self != "" {
+		all = append(all, clientChecks(cfg.Self)...)
 	}
 	for _, ch := range all {
-		if only != "" && !strings.Contains(ch.name, only) {
+		if cfg.Only != "" && !strings.Contains(ch.name, cfg.Only) {
 			continue
 		}
-		dir := filepath.Join(root, ch.name)
+		dir := filepath.Join(cfg.Root, ch.name)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			res.Rows = append(res.Rows, Row{Name: ch.name, Claim: ch.claim, Detail: err.Error(), Known: ch.known})
 			continue
@@ -120,7 +191,7 @@ func Run(ctx context.Context, bin, root, self, only string) Result {
 		// Each row gets its own deadline. A hung agent is a failure of the
 		// row rather than of the run, so the rest still report.
 		rowCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		pass, detail := ch.run(&harness{ctx: rowCtx, bin: bin, dir: dir})
+		pass, detail := ch.run(&harness{ctx: rowCtx, bin: cfg.Bin, dir: dir, dialect: cfg.Dialect})
 		cancel()
 		res.Rows = append(res.Rows, Row{Name: ch.name, Claim: ch.claim, Pass: pass, Detail: detail, Known: ch.known})
 	}
@@ -132,7 +203,7 @@ func checks() []check {
 		name:  "handshake",
 		claim: "the shipped binary answers protocol version 1 and names itself",
 		run: func(t *harness) (bool, string) {
-			c, err := Dial(t.bin, Options{Args: []string{"-acp"}, Dir: t.dir})
+			c, err := Dial(t.bin, Options{Args: t.args("-acp"), Dir: t.dir})
 			if err != nil {
 				return false, err.Error()
 			}
@@ -153,7 +224,7 @@ func checks() []check {
 		name:  "handshake-first",
 		claim: "a session asked for before the handshake is refused, not served",
 		run: func(t *harness) (bool, string) {
-			c, err := Dial(t.bin, Options{Args: []string{"-acp"}, Dir: t.dir})
+			c, err := Dial(t.bin, Options{Args: t.args("-acp"), Dir: t.dir})
 			if err != nil {
 				return false, err.Error()
 			}
@@ -481,22 +552,27 @@ func checks() []check {
 			//
 			// `kill -0` delivers nothing, so what is measured is whether the
 			// job could be *named*; the job is ended after, so the row leaves
-			// nothing running. The dialect is named because a shell with no
-			// terminal refuses `set -m` as an unanswered axis in the core.
-			// The job's own streams go nowhere, so the `-c` run's pipes
-			// close when its shell does: a background child that inherited
-			// them would hold the read open for as long as it ran, and a
-			// regression here would then be reported thirty seconds late
-			// rather than at once.
+			// nothing running. The job's own streams go nowhere, so the `-c`
+			// run's pipes close when its shell does: a background child that
+			// inherited them would hold the read open for as long as it ran,
+			// and a regression here would then be reported thirty seconds
+			// late rather than at once.
 			const script = `set -m; sleep 30 >/dev/null 2>&1 & kill -0 %1; echo "probe=$?"; kill %1`
-			args := []string{"-dialect", "bash"}
+			// A dialect is named because the *core* refuses `set -m` as an
+			// axis nothing answered, which is this binary talking rather than
+			// a shell behaving. A run that chose a dialect keeps it: this row
+			// used to force bash unconditionally, so inside a zsh run it was
+			// reporting on a shell nobody had asked about (#2258).
+			args := t.dialectOr("bash")
 
 			cmd := exec.CommandContext(t.ctx, t.bin, append(append([]string{}, args...), "-c", script)...)
 			cmd.Dir = t.dir
-			piped, err := cmd.CombinedOutput()
-			if err != nil {
-				return false, "the -c run failed: " + err.Error()
-			}
+			// The status is deliberately not checked. A shell with no
+			// terminal is entitled to refuse the monitor — real zsh answers
+			// `can't change option: -m` and exits 1, and ours matches it — and
+			// that refusal is one of the two answers this row compares, not a
+			// broken run.
+			piped, _ := cmd.CombinedOutput()
 
 			c, s, err := t.dial(args, always(AllowOnce))
 			if err != nil {
@@ -508,13 +584,20 @@ func checks() []check {
 			}
 			session := c.Output("stdout") + c.Output("stderr")
 
-			if !strings.Contains(string(piped), "probe=0") {
-				return false, fmt.Sprintf("the -c route did not reach the job either: %q", string(piped))
+			// The claim is that the route does not change which shell you
+			// get, so the two are compared against each other rather than
+			// against one hardcoded answer. That holds the row to something
+			// falsifiable in a dialect that cannot turn the monitor on: a
+			// session that swallowed the refusal, or worded it differently,
+			// or hung, is a difference between the routes exactly as much as
+			// a lost job is.
+			if !sameLines(string(piped), session) {
+				return false, fmt.Sprintf("the routes gave the same script different shells: -c said %q, the session said %q", string(piped), session)
 			}
-			if !strings.Contains(session, "probe=0") {
-				return false, fmt.Sprintf("-c reached the job and the session did not: %q", session)
+			if strings.Contains(string(piped), "probe=0") {
+				return true, "both routes named the job and signaled it"
 			}
-			return true, "both routes named the job and signaled it"
+			return true, "this dialect refuses the monitor without a terminal, as the shell it imitates does, and both routes refuse it alike: " + strings.TrimSpace(string(piped))
 		},
 	}, {
 		name:  "exited-session-refuses-the-next-prompt",
@@ -646,7 +729,7 @@ func driveAgent(t *harness, self, script, target string, flags []string) (AgentR
 	var r AgentReport
 	out := filepath.Join(t.dir, script+"-report.json")
 	_ = os.Remove(out)
-	args := append(append([]string{}, flags...),
+	args := append(t.args(flags...),
 		// -acp-allow answers the questions a person would be asked, because
 		// there is no person here. A policy refusal is not one of those
 		// questions, which is the point of the row that uses both.

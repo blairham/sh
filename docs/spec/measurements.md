@@ -14270,6 +14270,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `posassign/in-front-of-an-external-command-it-does-not` | `[a b]` **2>** `<shell>: 1: 1=X: not found` | `[a b]` **2>** `<shell>: line 1: 1=X: command not found` | `[a b]` **2>** `<shell>: line 1: 1=X: command not found` | `[a b]` **2>** `<shell>: 1=X: command not found` | `[a b]` **2>** `<shell>: 1=X: not found` | `hi~[a b]` |
 | `posassign/leading-zeros-are-read-as-a-number` | `[a] n=1` **2>** `<shell>: 1: 01=z: not found` | `[a] n=1` **2>** `<shell>: line 1: 01=z: command not found` | `[a] n=1` **2>** `<shell>: line 1: 01=z: command not found` | `[a] n=1` **2>** `<shell>: 01=z: command not found` | `[a] n=1` **2>** `<shell>: 01=z: not found` | `[z] n=1` |
 | `posassign/a-digit-with-a-letter-is-not-a-name` | `st=127` **2>** `<shell>: 1: 1a=z: not found` | `st=127` **2>** `<shell>: line 1: 1a=z: command not found` | `st=127` **2>** `<shell>: line 1: 1a=z: command not found` | `st=127` **2>** `<shell>: 1a=z: command not found` | `st=127` **2>** `<shell>: 1a=z: not found` | `st=127` **2>** `<shell>:1: command not found: 1a=z` |
+| `variable/a-module-parameter-a-script-may-not-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~tail` | `st=0~tail` | `st=0~tail` | `st=0~tail` | **2>** `<script>:1: read-only variable: jobstates` *(status 1)* |
+| `variable/the-module-parameter-a-script-may-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` |
 
 - `variable/a-shell-tie-keeps-its-pairing-across-an-unset` — the pairs the shell arrives with are its own and an `unset` does not dissolve them: in zsh both names go away and the next assignment to either half re-makes the other, from the scalar end and from the array end alike, where the other shells have no such pair and the array name is an ordinary one nothing reads. A tie a *script* made with `typeset -T` is the opposite and is forgotten -- two kinds behind one letter, held in one map here until #1631. `unset PATH` would be the natural probe and is not usable in a corpus row, since the shells then cannot find a command; `CDPATH` is the same mechanism with nothing depending on it
   ```sh
@@ -14459,6 +14461,17 @@ grades it and nothing drift-checks it either, for the same reason.
 - `posassign/a-digit-with-a-letter-is-not-a-name` — the control the whole group needs: a name that merely *starts* with a digit is not admitted anywhere, so all six columns answer `command not found` at 127. Without it a flag that let any word beginning with a digit be an assignment would pass every other row here
   ```sh
   set -- a; 1a=z; echo "st=$?"
+  ```
+- `variable/a-module-parameter-a-script-may-not-own` — a name one shell's module owns, written by a script that has not loaded the module. zsh refuses it as `read-only variable: jobstates` at status 1 and ends the script, whether or not `zsh/parameter` was ever loaded -- the freeze is a property of the name and not of the module being there. Every shell without the module takes the assignment and makes an ordinary array, which is also what this engine did: a script probing for the module by writing the name got a value where it should have been stopped (#1604). `dirstack` is the one name in the same set that zsh does let a script assign, which is the row below
+  ```sh
+  jobstates=(a b c)
+  echo "st=$?"
+  echo tail
+  ```
+- `variable/the-module-parameter-a-script-may-own` — the control for the row above, and the reason the freeze is a list rather than a rule about the module: `dirstack` is the directory stack and assigning it is how a script sets one, so zsh takes it in silence at 0 where it refuses the fifteen names beside it. Every other shell takes it too, for the different reason that the name means nothing to them
+  ```sh
+  dirstack=(a b c)
+  echo "st=$? [${dirstack[*]}]"
   ```
 
 ## traps

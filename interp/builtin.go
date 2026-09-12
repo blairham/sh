@@ -1069,6 +1069,16 @@ func (r *Runner) unsetReadonly(name string) int {
 	if !r.readonly[name] {
 		return 0
 	}
+	if r.AbsentParameter(name) {
+		// A parameter the dialect names and this shell has not got is frozen
+		// against a *write* and not against `unset`, which is measured
+		// rather than a tidiness: the shell being modeled refuses
+		// `jobstates=(a b c)` as a read-only variable and answers `unset
+		// jobstates` with a silent 0 on the very next line. The two are one
+		// attribute here, so the exemption is written down where the
+		// difference is — see the dialect's registerAbsentParameters.
+		return 0
+	}
 	// The builtin has been named in the sentence by three of the four
 	// dialects, so it must not be named in the *location* by the one that
 	// puts every other builtin's name there: zsh writes `zsh:1: read-only

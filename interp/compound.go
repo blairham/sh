@@ -335,13 +335,17 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 		// division and then a second complaint about the `i=` that was left
 		// (#1215).
 		r.beginHeading()
-		if _, ok := r.forArithPart(c.Init, c.InitText); !ok {
+		// The three parts as the script wrote them, blanks and all: what a
+		// complaint quotes back is the text of the part, and the fields are
+		// trimmed for the printer's sake. See ForArithClause.PartsAsWritten.
+		initText, condText, postText := c.PartsAsWritten()
+		if _, ok := r.forArithPart(c.Init, initText); !ok {
 			return nil
 		}
 		defer r.enteringLoop()()
 		for {
 			if c.Cond != nil || c.CondText != "" {
-				v, ok := r.forArithPart(c.Cond, c.CondText)
+				v, ok := r.forArithPart(c.Cond, condText)
 				if !ok {
 					return nil
 				}
@@ -366,7 +370,7 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 			// it, so a step that fails does not decide whether the job
 			// settled.
 			r.settleBackgroundJobAtALoopsBackEdge()
-			if _, ok := r.forArithPart(c.Post, c.PostText); !ok {
+			if _, ok := r.forArithPart(c.Post, postText); !ok {
 				return nil
 			}
 		}
@@ -391,8 +395,15 @@ func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
 	// not the one `(( ))` reads: zsh writes a loop header's parts bare where
 	// it wraps a `(( ))` command in parentheses. An absent part is traced by
 	// nobody, which is what makes `for ((;;))` silent between its iterations.
-	if expanded != "" {
-		r.traceArithCommand(expanded, r.diag().TraceArithForPart)
+	if strings.TrimSpace(expanded) != "" {
+		// Traced with the blanks *after* it and not the ones before, which
+		// is what both shells that trace a header part do: measured
+		// 2026-09-12 on `set -x; for (( i=0 ; i<1 ; i++ ))`, bash 5.3.15
+		// writes `+ (( i=0  ))` — two blanks before the close, one after the
+		// open — and zsh 5.9.2 `+zsh:1> i=0 `. ksh93 is a third answer that
+		// no reading of the parts reproduces: it keeps the leading blank on
+		// the first two parts and the trailing one on the third.
+		r.traceArithCommand(strings.TrimLeft(expanded, " \t"), r.diag().TraceArithForPart)
 	}
 	if perr != nil {
 		r.diagf("%s\n", r.diag().arithConstructFailure("((", r.diag().ParseFailure(perr)))
@@ -404,7 +415,7 @@ func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
 		// The part is named, the way the construct it is part of names one:
 		// `((: i<1/0: division by 0` and not a bare `division by 0`, which
 		// said nothing about which of the three parts had failed (#1985).
-		r.diagf("%s\n", r.diag().arithConstructFailure("((", r.arithFailure(text, err)))
+		r.diagf("%s\n", r.diag().arithConstructFailure("((", r.arithFailure(expanded, err)))
 		r.status = 1
 		return 0, false
 	}

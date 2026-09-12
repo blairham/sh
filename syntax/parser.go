@@ -2858,18 +2858,25 @@ func (p *Parser) parseForArith(start Pos) Command {
 
 	init, cond, post := splitForArith(text)
 	c.InitText, c.CondText, c.PostText = init, cond, post
+	// The deferred trees are built from the parts *as written* rather than
+	// from the trimmed fields, so that an offset one of them records — the
+	// `YStart` a division's blame is sliced from — indexes the same string
+	// the interpreter later quotes back. Parsing the trimmed text and
+	// quoting the untrimmed one moves every offset by the leading blanks,
+	// which blamed `for (( i=1/0 ;; ))` on `/0 ` instead of `0 `.
+	rawInit, rawCond, rawPost := c.PartsAsWritten()
 	// The three parts defer too, and measured rather than assumed to: bash,
 	// ksh93 and zsh all take `for ((echo hi;;))` under `-n` and all reach
 	// past one in a branch that never runs. forArithPart already reads a
 	// part from its text where there is no tree (#865).
 	if init != "" {
-		c.Init = p.parseArithLater(init, at)
+		c.Init = p.parseArithLater(rawInit, at)
 	}
 	if cond != "" {
-		c.Cond = p.parseArithLater(cond, at)
+		c.Cond = p.parseArithLater(rawCond, at)
 	}
 	if post != "" {
-		c.Post = p.parseArithLater(post, at)
+		c.Post = p.parseArithLater(rawPost, at)
 	}
 
 	// This header ends itself, so the terminator before the body is optional
@@ -2968,6 +2975,31 @@ func (p *Parser) shortFormBody() (body []*Stmt, stop Pos) {
 	// on after the loop where it could not after a `done` or a `}`.
 	p.bodyTookTerm = st.Semi
 	return []*Stmt{st}, st.End()
+}
+
+// PartsAsWritten is the three parts with the blanks the script wrote around
+// them, which the fields do not keep.
+//
+// [ForArithClause].InitText, CondText and PostText are trimmed because they
+// are also what the printer lays a header out from, and untrimmed parts print
+// back with their blanks doubled — see syntax/printroundtrip_test.go, whose
+// promise is that printing a program gives the same program. A diagnostic
+// wants the other answer: bash quotes a failing part back as it was written,
+// so `for (( $x ;;))` with x=`echo hi` is `((: echo hi : …` there. So the
+// spelling is re-split from [ForArithClause].Header, which already holds the
+// header verbatim and which SameProgram already skips for being a spelling.
+//
+// Empty parts and a Header that is not this clause's both come back as the
+// trimmed fields, so a tree built by hand answers as it always did.
+func (c *ForArithClause) PartsAsWritten() (init, cond, post string) {
+	text, ok := strings.CutPrefix(c.Header, "for ((")
+	if text, ok2 := strings.CutSuffix(text, "))"); ok && ok2 {
+		parts := strings.SplitN(text, ";", 3)
+		if len(parts) == 3 {
+			return parts[0], parts[1], parts[2]
+		}
+	}
+	return c.InitText, c.CondText, c.PostText
 }
 
 // splitForArith cuts the header into its three parts.

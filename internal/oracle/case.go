@@ -2953,6 +2953,22 @@ echo "reached-after st=$?"`,
 		Why:     "three expressions in one header, so a complaint with no expression in it cannot say which of them failed: bash and ksh93 name `i<1/0`. The loop body must not run either, which is the half a diagnostic alone would not show",
 	},
 	{
+		ID: "arith/a-for-header-part-is-blamed-as-it-was-written", Category: "arithmetic",
+		Snippet: `x="echo hi"; for (( $x ;;)); do :; done; echo "st=$?"`,
+		// The blanks in the header are the case, and the printer's zero
+		// layout has none of them.
+		LayoutSensitive: true,
+		Why:             "the one position of #1025's eight that still lost a blank: the part was written ` $x ` and bash quotes the space before the `;` — `((: echo hi : … (error token is \"hi \")`. The three part texts on the clause are trimmed because the printer lays a header out from them, so the spelling has to come back from the header the parser kept verbatim (#2164). ksh93 is a third answer here and not modeled: it drops the trailing blank on a header part where it keeps one on `(( ))`",
+	},
+	{
+		ID: "arith/a-for-header-part-with-blanks-that-will-not-evaluate", Category: "arithmetic",
+		Snippet: `for (( i=1/0 ;; )); do :; done; echo "st=$?"`,
+		// The blanks in the header are the case, and the printer's zero
+		// layout has none of them.
+		LayoutSensitive: true,
+		Why:             "the same blanks on the *evaluation* side, which is where an offset can go wrong rather than a text: bash blames `0 ` and not `/0 `, so the position the divisor was written at has to index the same string the complaint quotes. A tree parsed from the trimmed part and quoted from the untrimmed one moves every offset by the leading blanks, which is what made this row a character wide of it",
+	},
+	{
 		ID: "arith/an-evaluation-failure-blames-the-rest-of-the-expression", Category: "arithmetic",
 		Snippet: `q=$(( 1/0 + 2 )); echo "st=$?"`,
 		Why:     "how far the blame runs. bash 5.3 names the text from the failing operand to the *end* of the expression — `error token is \"0 + 2 \"` — where ours named the operand alone, and because the same shell quotes the expression back up to and including the token, the quoted expression carried the tail with it. bash 3.2 starts the same tail one token further along and names `+ 2 `, which is what says the extent is the version's rather than the family's; ksh93 quotes the whole expression untrimmed and names nothing inside it, zsh names neither, and dash quotes the text as written after its own reason",
@@ -3398,6 +3414,14 @@ echo "reached-after st=$?"`,
 		ID: "xtrace/for-arithmetic-parts-are-traced", Category: "shell options",
 		Snippet: `set -x; for ((i=0;i<2;i++)); do :; done`,
 		Why:     "the loop header the issue asked about, and the one place a shell contradicts its own `(( ))` spelling: bash writes `(( i=0 ))`, ksh93 writes `((i=0))`, and zsh writes `i=0` bare — the same shell that wraps a `(( ))` command in spaced parentheses. Which is why TraceArithForPart is a field of its own. No column prints the header itself once per pass; this shell did, and also wrote `=''` every iteration, because the list loop's per-iteration line was being borrowed by a loop that binds no name",
+	},
+	{
+		ID: "xtrace/for-arithmetic-parts-keep-their-trailing-blanks", Category: "shell options",
+		Snippet: `set -x; for (( i=0 ; i<1 ; i++ )); do :; done`,
+		// The blanks in the header are the case, and the printer's zero
+		// layout has none of them.
+		LayoutSensitive: true,
+		Why:             "the row above with blanks in the header, which it has none of and so cannot see: bash writes `(( i=0  ))` with two blanks before the close and zsh `i=0 `, so both keep what followed the part and drop what came before it. ksh93 is a third answer no reading of the parts reproduces — ` i=0` for the first two and `i++ ` for the third — and is recorded rather than modeled",
 	},
 	{
 		ID: "xtrace/case-header-diverges", Category: "shell options",

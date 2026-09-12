@@ -108,3 +108,23 @@ func (r *Runner) setHideInScope(name string, f declareFlags) {
 func (r *Runner) hidesItsTie(t tie) bool {
 	return r.hideInScope[t.scalar] || r.hideInScope[t.array]
 }
+
+// MarkHideInScope gives a name the hide-in-scope attribute from outside the
+// package, which is how a dialect says that one of its *module* parameters is
+// spelled the way the shell it models spells them.
+//
+// Distinct from [Runner.MarkHidden], and the pair is measured rather than
+// assumed — see [ParameterAttributes.Hidden]. A module parameter in the shell
+// this models carries both: `${(t)mapfile}` is
+// `association-hide-hideval-special`, where `hideval` keeps the value out of a
+// listing and `hide` is what makes `local mapfile` inside a function an
+// ordinary parameter rather than a second view of the filesystem. A name given
+// only one of them describes with only that word, so a dialect that set one
+// and meant both would be telling a script switching on `${(t)…}` about the
+// wrong letter (#2042).
+func (r *Runner) MarkHideInScope(name string) {
+	if r.hideInScope == nil {
+		r.hideInScope = map[string]bool{}
+	}
+	r.hideInScope[name] = true
+}

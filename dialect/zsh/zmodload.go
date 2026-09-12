@@ -214,6 +214,12 @@ var zmodloadFeatures = map[string][]string{
 	// One builtin, and a Unix-domain socket is the whole of it. See
 	// socketmodule.go.
 	"zsh/net/socket": {"b:zsocket"},
+	// One parameter and the whole of the module: the filesystem read and
+	// written as an association. Measured — `zmodload -lF zsh/mapfile` is
+	// `+p:mapfile` and nothing else. See mapfile.go, where the gates are,
+	// and note that this is the one module whose every route into the
+	// filesystem arrives through *expansion* rather than through a command.
+	"zsh/mapfile": {"p:mapfile"},
 	// Nine file operations under eighteen names: the plain spellings and the
 	// `zf_` ones, which are the same commands. The `zf_` half is implemented
 	// and the plain half is not, for the reason `zsh/stat` gives — see

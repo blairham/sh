@@ -935,11 +935,20 @@ design and a second run against what it left would be measuring the
 leftovers.
 
 **`inert` is a ledger, not a skip.** It is a route this shell cannot take
-*yet* — `zsh/mapfile` is not implemented, bash's `history -w` still falls
-through to a refused exec — which is the state #1808 calls "safe by
+*yet* — bash's `history -w` still falls through to a refused exec, and zsh's
+`fc -W` does not accept the letter — which is the state #1808 calls "safe by
 accident". Those are the rows that become escapes the day the feature lands,
 so they are printed rather than hidden, and each moves to `contained` or
 `ESCAPED` on its own when it starts working.
+
+**The ledger works, and `zsh/mapfile` is the proof.** Its two rows sat inert
+with the note "will need a gate when it is" until #2260 implemented the
+module — and the gate arrived in the same change, so they moved to
+`contained` rather than to `ESCAPED`. Reading the ledger before writing a
+feature is what makes that the easy path; a third row for the module's
+`${(k)mapfile}` roster went in at the same time, because implementing it is
+what revealed that the enumerating form is a readdir with no path in it to
+hang a check on.
 
 The instrument was checked against a shell known to be broken, which is the
 only way to know a green table means anything: pointed at the commit before

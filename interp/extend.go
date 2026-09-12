@@ -1523,3 +1523,29 @@ func (r *Runner) AllowProbe(ctx context.Context, path string) bool {
 func (r *Runner) AllowList(ctx context.Context, path string) bool {
 	return !r.probeDenied(r.act(Action{Kind: ActionReadDir, Path: path}))
 }
+
+// ShellContext is the context of the command this shell is running, for a
+// dialect's callback that needs one and was not handed one.
+//
+// A dynamic association's producer and its writer are the callers, and the
+// shape is the one `interp/mathfunc.go` already settled: a read of
+// `${mapfile[p]}` is an *expansion* and a write to it is an *assignment*, and
+// neither is a command with a context of its own. Threading one through every
+// expander signature to reach two callbacks would be worse than saying here
+// that the shell has exactly one context at a time and this is it.
+//
+// It matters because the gate takes a context — [Runner.AllowReadPath] and
+// the rest pass it straight to [Gate.Allow] and to every event the access
+// raises. Handing those [context.Background] instead would leave a policy's
+// own deadline and a front end's cancellation off the one kind of access that
+// reaches the filesystem through a parameter.
+//
+// Background before the first Run, which is not a state a script can observe:
+// a callback registered by a dialect runs when a script reads the name, and a
+// script is running by then.
+func (r *Runner) ShellContext() context.Context {
+	if r.ctx == nil {
+		return context.Background()
+	}
+	return r.ctx
+}

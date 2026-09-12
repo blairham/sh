@@ -537,6 +537,35 @@ func (r *Runner) assocElementProducer(name string) (func(*Runner, string) (strin
 	return produce, ok
 }
 
+// assocElemCurrent is what `m[k]` holds at this moment, by the same route a
+// *read* of it takes.
+//
+// It exists for `m[k]+=v`, which has to join the value that is there — and
+// which read the stored table directly until #2260, so on a **produced**
+// association it always joined onto nothing. A produced name has no stored
+// table, so `functions[f]+=…` replaced the function it meant to extend and
+// `mapfile[p]+=…` truncated the file it meant to append to, each silently and
+// each looking exactly like a correct append of an empty original.
+//
+// The order is assocFor's order and must stay it: a stored table shadows a
+// producer, so a name something has already written to joins onto its own
+// value, and the keyed producer is preferred over the whole-table one for the
+// reason SetDynamicAssocElement gives — building every function body to read
+// one is what that seam exists to avoid, and an append is a read.
+func (r *Runner) assocElemCurrent(name, key string) string {
+	if a, stored := r.AssocArrays[name]; stored {
+		return a[key]
+	}
+	if produce, ok := r.dynamicAssocElements[name]; ok {
+		v, _ := produce(r, key)
+		return v
+	}
+	if produce, ok := r.DynamicAssocs[name]; ok {
+		return produce(r)[key]
+	}
+	return ""
+}
+
 // assocFor is the associative table a name reads as, produced or stored.
 //
 // The stored table is asked first, which is the order the produced scalars and

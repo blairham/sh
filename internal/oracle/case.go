@@ -13083,6 +13083,11 @@ printf 'TWO=still-running\n'`,
 		Why:     "one listing, three spellings of the same three values: bare-until-needed with `'\\''` for the embedded quote, always-single-quoted with the quote doubled out, and `$'...'` — filtered to the script's own names because the rest of the listing is the machine's",
 	},
 	{
+		ID: "prefix/append-joins-the-value-that-is-there", Category: "commands",
+		Snippet: `v=1; v+=4; v+=5 env | grep "^v="; echo "after=[$v]"`,
+		Why:     "an assignment prefix written as an append joins what the name already holds, and unanimously: every column shows the child `v=145` and leaves the shell's own `v` at `14`. The operator is on the assignment either way, so a route that expands the value and stores it loses the append without failing anything — we handed the child the tail alone, which for the idiom the construct exists for, `PATH+=:/x cmd`, is a PATH of one entry (#2299)",
+	},
+	{
 		ID: "set/listed-value-with-a-quote-at-an-end", Category: "builtins",
 		Snippet: `v1="x'"; v2="'x"; v3="'"; set | grep "^v[123]"; echo "st=$?"`,
 		Why:     "where the two single-quoting listings part, and the only place they can: a quote at an *end* of the value. bash wraps the whole value in one pair and keeps the empty run its escape leaves behind, zsh cuts the value at each quote and wraps only the non-empty pieces, and bash 5 writes the lone-quote value with no quotes at all where 3.2 wraps it. All of them read back as the value, which is why a spelling belonging to neither survived here until a listing was compared byte for byte (#2299)",

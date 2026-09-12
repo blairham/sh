@@ -3489,7 +3489,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 				// x=2 env`.
 				continue
 			}
-			v := strings.Join(r.expandWord(a.Value), " ")
+			v := r.prefixValue(a)
 			if !specialBuiltins[argv[0]] || !r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting") {
 				undo = append(undo, r.saveVar(a.Name))
 			}
@@ -3611,7 +3611,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			// same as below.
 			continue
 		}
-		value := strings.Join(r.expandWord(a.Value), " ")
+		value := r.prefixValue(a)
 		// The report waits for the value to have expanded, because the order
 		// of the two is a dialect question and not this change's: bash checks
 		// the prefix before it expands anything and before it opens a
@@ -3636,6 +3636,29 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		return nil
 	}
 	return r.exec(ctx, argv, env)
+}
+
+// prefixValue is what an assignment prefix hands the command it stands in
+// front of.
+//
+// The expansion, and — where the prefix was written `name+=value` — the
+// name's current value in front of it. Unanimous: with `v` holding `14`,
+// `v+=5 env` shows the child `v=145` in bash 5.3, bash 3.2, ksh93 and zsh,
+// and every one of them leaves the shell's own `v` at `14` afterwards. We
+// read the append operator on the assignment and then ignored it here, so
+// the child was shown the tail alone — `PATH+=:/x cmd` handed the command a
+// PATH of `:/x` (#2299).
+//
+// The name's value and not the environment's: an append reads what the shell
+// holds, whether or not the name is exported, which is what the panel shows
+// for a name that was never exported at all.
+func (r *Runner) prefixValue(a *syntax.Assign) string {
+	value := strings.Join(r.expandWord(a.Value), " ")
+	if !a.Append {
+		return value
+	}
+	old, _ := r.getVar(a.Name)
+	return old + value
 }
 
 func (r *Runner) exec(ctx context.Context, argv, env []string) error {

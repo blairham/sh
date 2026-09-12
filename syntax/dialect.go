@@ -1302,32 +1302,29 @@ type Dialect struct {
 	// a flag rather than always on.
 	DollarDoubleQuote bool
 
-	// Herestring enables `<<<`. Absent from dash.
+	// Herestring enables `<<<`.
 	Herestring bool
 
 	// ClobberOverrideMarker generalizes the clobber-override marker. Core
 	// takes `|` after `>` alone, which is `>|`; this makes the marker `|`
 	// *or* `!` and lets it follow any of the four write operators, so it
-	// enables all seven of `>!`, `>>|`, `>>!`, `&>|`, `&>!`, `&>>|` and
-	// `&>>!`. The last four need AmpersandRedirect as well, since a marker
-	// cannot attach to an operator the dialect does not read.
+	// enables all seven of `>!`, `>>|`, `>>!`, `&>|`, `&>!`, `&>>|` and `&>>!`.
+	// The last four need AmpersandRedirect as well, since a marker cannot attach
+	// to an operator the preset does not read.
 	//
-	// Measured 2026-09-07 across the panel, and it moves as one thing: zsh
-	// 5.9.2 accepts all seven, and dash, bash 5.3, bash 5.3 as sh, bash 3.2
-	// and ksh93 accept none of them — they have `>|` and nothing else. That
-	// is why it is one flag rather than one per spelling; there is no column
-	// that takes some and refuses others.
+	// It moves as one thing: a preset accepts all seven or none of them, having
+	// `>|` and nothing else. That is why it is one flag rather than one per
+	// spelling; no preset takes some and refuses others.
 	//
-	// The two fallbacks are different and both are what the shells do, which
-	// is the reason to be careful here. A `|` marker falls back to a pipe
-	// with nothing on its left, so `echo hi >>| f` is a *refusal* in the
-	// five — a syntax error at the `|`, each in its own words. A `!` marker
-	// falls back to a word, and that one is silent: `echo hi >! f` in all
-	// five writes a file whose name is the single character `!`, holding
-	// `hi f`, and reports 0. This is the AmpersandRedirect hazard exactly —
-	// one spelling, two meanings, no diagnostic — so accepting the union
-	// here would quietly pick zsh's reading for text that legitimately has
-	// the other one.
+	// The two fallbacks are different and both are measured, which is the reason
+	// to be careful here. A `|` marker falls back to a pipe with nothing on its
+	// left, so `echo hi >>| f` is a *refusal* where the flag is off — a syntax
+	// error at the `|`. A `!` marker falls back to a word, and that one is
+	// silent: `echo hi >! f` writes a file whose name is the single character
+	// `!`, holding `hi f`, and reports 0. This is the AmpersandRedirect hazard
+	// exactly — one spelling, two meanings, no diagnostic — so accepting the
+	// union here would quietly pick one reading for text that legitimately has
+	// the other.
 	ClobberOverrideMarker bool
 
 	// HeredocEndsAtClosingParen lets a here-document's body end at the
@@ -1338,19 +1335,18 @@ type Dialect struct {
 	//	a
 	//	EOF)
 	//
-	// Where it is set — bash and ksh93 — the parentheses are found first and
-	// the body is read from what is between them, so `EOF)` is the last line
-	// the body could have had and the document ends there. Where it is not —
-	// dash and zsh, and so the core — a body is read from the whole input,
-	// takes the `)` with it, and the construct is left unclosed. Neither of
-	// those two needs new wording for that: the complaint is the one each
-	// already makes for a plainly unterminated `(`, word for word, which is
-	// what the control `v=$(echo hi` shows.
+	// Where it is set the parentheses are found first and the body is read from
+	// what is between them, so `EOF)` is the last line the body could have had
+	// and the document ends there. Where it is not — and so in the core — a body
+	// is read from the whole input, takes the `)` with it, and the construct is
+	// left unclosed. No new wording is needed for that: the complaint is the one
+	// already made for a plainly unterminated `(`, word for word, which is what
+	// the control `v=$(echo hi` shows.
 	//
-	// It is not a question about `$( )`. Any parentheses holding a program
-	// are the same shape, and real zsh refuses `cat <(cat <<EOF` … `EOF)`
-	// with the same complaint pointing at the `<(`. Backquotes are not: a
-	// body cannot contain the mark that closes them, so all six shells take
+	// It is not a question about `$( )`. Any parentheses holding a program are
+	// the same shape, and a false preset refuses `cat <(cat <<EOF` … `EOF)` with
+	// the same complaint pointing at the `<(`. Backquotes are not: a body cannot
+	// contain the mark that closes them, so every preset takes
 	// `` v=`cat <<E ... E` `` and there is nothing to ask.
 	//
 	// The one place it is *not* additive is where the body's delimiter also
@@ -1361,61 +1357,55 @@ type Dialect struct {
 
 	// ArithCommand enables `(( expr ))` as a command. Consumed by the lexer,
 	// which scans the expression as raw text: what is inside is an arithmetic
-	// expression rather than a command list, so the token stream would lose
-	// it. Where this is off, `(( 1+1 ))` is two nested subshells running
-	// `1+1` as a command name, which is what dash does — not an error, a
-	// different program.
+	// expression rather than a command list, so the token stream would lose it.
+	// Where this is off, `(( 1+1 ))` is two nested subshells running `1+1` as a
+	// command name — not an error, a different program.
 	ArithCommand bool
 
-	// FunctionKeyword enables `function name { ... }`. Absent from dash,
-	// present in bash, ksh93 and zsh.
+	// FunctionKeyword enables `function name { ... }`.
 	FunctionKeyword bool
 
-	// FunctionKeywordParens enables the hybrid `function name() { ... }`.
-	// bash and zsh accept it; ksh93 — where the keyword originated — rejects
-	// it, so it is not core.
+	// FunctionKeywordParens enables the hybrid `function name() { ... }`. The
+	// preset the keyword originated in rejects it, so it is not core.
 	//
-	// It is a second flag rather than part of FunctionKeyword because the
-	// two forms are accepted by different sets of shells, and a flag that
-	// answers for both cannot be given a value for ksh93. The distinction
-	// was documented on FunctionKeyword before anything enforced it, which
-	// is how ksh93 came to accept a form it rejects.
+	// It is a second flag rather than part of FunctionKeyword because the two
+	// forms are accepted by different sets of presets, and a flag that answers
+	// for both cannot be given a value for one of them. Documenting the
+	// distinction without enforcing it is how a preset comes to accept a form it
+	// rejects.
 	FunctionKeywordParens bool
 
 	// ParamSubstitution enables `${x/pat/rep}` and its anchored forms.
-	// Absent from dash.
 	ParamSubstitution bool
 
 	// BadSubstitutionAtParseTime refuses a `${...}` with an unrecognized
 	// operator while reading the script, rather than when the expansion is
-	// reached. ksh93 alone diagnoses it at parse time; bash, dash and zsh
-	// treat a bad substitution as a runtime error, so one inside a branch
-	// that is never taken is never diagnosed at all. The zero value is the
-	// majority: defer to runtime.
+	// reached. A false preset treats a bad substitution as a runtime error, so
+	// one inside a branch that is never taken is never diagnosed at all. The
+	// zero value is the common answer: defer to runtime.
 	//
-	// This is not a corner case in the wild — Terraform templates carry
-	// `${name ~}` interpolations bash never evaluates, and refusing them at
+	// This is not a corner case in the wild — templating systems carry
+	// `${name ~}` interpolations a shell never evaluates, and refusing them at
 	// parse time refuses the whole file.
 	BadSubstitutionAtParseTime bool
 
-	// ParamSubstring enables `${x:off:len}`. Absent from dash.
+	// ParamSubstring enables `${x:off:len}`.
 	ParamSubstring bool
 
-	// ParamCaseChange enables `${x^^}` and `${x,,}`. **bash alone**: ksh93
-	// reports a syntax error and zsh a bad substitution, so a construct one
-	// panel shell supports is not a common denominator and this is off for
-	// the core.
+	// ParamCaseChange enables `${x^^}` and `${x,,}`. Only one preset has it —
+	// elsewhere it is a syntax error or a bad substitution — so a construct one
+	// preset supports is not a common denominator and this is off for the core.
 	ParamCaseChange bool
 
 	// ParamTransformations enables `${x@Q}` and the rest of the letter
-	// family — Q E P A a K k L U u — which transform the value rather than
-	// test or edit it. **bash alone**: dash and zsh call the construct a bad
-	// substitution when the expansion is reached, and so does ksh93, whose
-	// refusal of every *other* unrecognized operator while reading makes the
-	// `@` family its one deferred bad substitution. Off for the core.
+	// family — Q E P A a K k L U u — which transform the value rather than test
+	// or edit it. Only one preset has it: elsewhere the construct is a bad
+	// substitution when the expansion is reached, and a preset that refuses
+	// every *other* unrecognized operator while reading makes the `@` family its
+	// one deferred bad substitution. Off for the core.
 	//
 	// The letter set is fixed. `${x@}`, `${x@QQ}` and `${x@Z}` are bad
-	// substitutions in the shell that has the form, so where the flag is on
+	// substitutions under the preset that has the form, so where the flag is on
 	// they stay exactly what they are where it is off.
 	ParamTransformations bool
 

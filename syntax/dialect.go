@@ -18,9 +18,9 @@ package syntax
 //
 // `eval` is a command string. It is not an invocation route at all, but it is
 // a program handed over as a *string* rather than read from a file or a
-// descriptor, and that is the distinction ksh93 draws — measured 2026-09-07,
-// `eval "echo 'abc"` inside a script file prints abc there where the same
-// text as the script itself is refused.
+// descriptor, and that is the distinction a preset drawing this line makes —
+// `eval "echo 'abc"` inside a script file prints abc where the same text as
+// the script itself is refused.
 type ProgramRoutes uint8
 
 const (
@@ -34,10 +34,10 @@ const (
 	// RouteOnStandardInput is a program read from the descriptor, whether
 	// by `-s` or by there being no operand and no terminal.
 	RouteOnStandardInput
-	// RouteOnEveryRoute is what a dialect that does not distinguish them
+	// RouteOnEveryRoute is what a preset that does not distinguish them
 	// answers.
 	RouteOnEveryRoute = RouteFromCommandString | RouteFromScriptFile | RouteOnStandardInput
-	// RouteOnNoRoute is the empty set, spelled so a dialect can say it
+	// RouteOnNoRoute is the empty set, spelled so a preset can say it
 	// deliberately rather than by leaving a field out.
 	RouteOnNoRoute ProgramRoutes = 0
 )
@@ -47,15 +47,15 @@ const (
 //
 // The empty route is in no set, which is what makes the strict answer the
 // default: a parse that was never told how its program arrived — a function
-// body being re-read, a prelude, a tree dump — gets the grammar every shell
-// agrees on rather than one shell's leniency.
+// body being re-read, a prelude, a tree dump — gets the grammar every preset
+// agrees on rather than one preset's leniency.
 func (a ProgramRoutes) Has(route ProgramRoutes) bool { return a&route != 0 }
 
-// SeparatorSkip is how far a dialect will step over a `;` written where the
+// SeparatorSkip is how far a preset will step over a `;` written where the
 // grammar wants a command. See [Dialect.SeparatorWhereACommandBelongs].
 //
-// A count and a place rather than a bool, because the two shells that allow
-// this draw it differently and a single yes/no could not be given a value for
+// A count and a place rather than a bool, because the presets that allow this
+// draw it differently and a single yes/no could not be given a value for
 // either of them without accepting lines the other refuses.
 type SeparatorSkip uint8
 
@@ -1218,11 +1218,11 @@ type Dialect struct {
 	//	function a { echo X; } && echo Y ⏎ a  Y then X — `&&` is the
 	//	                                      declaration's continuation
 	//
-	// A pipeline is inside the body too — `function a; echo X | cat && echo
-	// Y` prints X then Y — and so is every other compound, which is what
-	// says the brace group is special rather than "compound" being: an `if`
-	// takes the `&&` after it, `function a; if true; then echo X; fi &&
-	// echo Y` printing X then Y from the call.
+	// A pipeline is inside the body too — `function a; echo X | cat && echo Y`
+	// prints X then Y — and so is every other compound, which is what says the
+	// brace group is special rather than "compound" being: an `if` takes the
+	// `&&` after it, `function a; if true; then echo X; fi && echo Y` printing X
+	// then Y from the call.
 	//
 	// The hybrid form goes with the keyword and not with the parentheses:
 	// `function a() echo X && echo Y` prints X then Y, where the bare
@@ -1230,8 +1230,8 @@ type Dialect struct {
 	// keyword was written, and [Parser.parseFuncParensAndBody] never asks it.
 	//
 	// A `&` ends the list as it ends any and-or, and it then backgrounds the
-	// whole declaration: `function a; echo X &` leaves `a` undefined in the
-	// shell that ran it, the definition having happened in the subshell.
+	// whole declaration: `function a; echo X &` leaves `a` undefined in the shell
+	// that ran it, the definition having happened in the subshell.
 	//
 	// [syntax.FuncDecl.Body] is a Command and an and-or list is an Expr, so
 	// a body of more than one pipeline is wrapped in a [Group]. That is the
@@ -1244,60 +1244,58 @@ type Dialect struct {
 
 	// TimeKeyword makes `time` a reserved word at the start of a pipeline,
 	// timing the whole pipeline — `time true | wc -l` measures both elements
-	// — with the report going to the shell's own standard error. Absent from
-	// dash, where `time` is an ordinary name resolved from PATH.
+	// — with the report going to the shell's own standard error. Where it is
+	// off, `time` is an ordinary name resolved from PATH.
 	//
-	// Only at the front: `echo hi | time wc -c` keeps `time` an ordinary
-	// word, which is what bash and dash do there. It sits on either side of
-	// `!`, and a bare `time` with no pipeline parses too.
+	// Only at the front: `echo hi | time wc -c` keeps `time` an ordinary word
+	// under every preset. It sits on either side of `!`, and a bare `time` with
+	// no pipeline parses too.
 	TimeKeyword bool
 
-	// TimePosixFlag lets that keyword read `-p`, which switches the report
-	// to the POSIX line format. bash and ksh93 read it; zsh does not — there
-	// `-p` is the first word of the timed pipeline, a command that is not
-	// found — so it is not core, and where it is off the word is left to the
-	// pipeline exactly as zsh leaves it.
+	// TimePosixFlag lets that keyword read `-p`, which switches the report to
+	// the POSIX line format. Where it is off, `-p` is the first word of the
+	// timed pipeline, a command that is not found — so it is not core, and the
+	// word is left to the pipeline.
 	TimePosixFlag bool
 
 	// TimesIsReserved makes `times` a reserved word rather than a builtin,
 	// so a word after it is a syntax error rather than an argument it
-	// ignores. ksh93 alone, and the only place in the panel where *which*
-	// builtin a shell has changes what parses.
+	// ignores. The only place where *which* builtin a shell has changes what
+	// parses.
 	TimesIsReserved bool
 
-	// CaseContinue enables `;;&`, which keeps testing later patterns. bash
-	// only: ksh93 and zsh both reject it, so it is not core.
+	// CaseContinue enables `;;&`, which keeps testing later patterns. Not every
+	// preset has it, so it is not core.
 	CaseContinue bool
 
-	// CaseContinuePipe enables `;|`, which is zsh's spelling of `;;&` — the
-	// same terminator, measured to the same output: an arm runs and the
-	// *later patterns keep being tested*, which a five-arm program with a
-	// `;&` in it confirms letter for letter against bash's `;;&`.
+	// CaseContinuePipe enables `;|`, the other spelling of `;;&` — the same
+	// terminator, measured to the same output: an arm runs and the *later
+	// patterns keep being tested*, which a five-arm program with a `;&` in it
+	// confirms letter for letter against the other spelling.
 	//
-	// A second flag beside CaseContinue rather than a second value of it,
-	// for the reason PipeBothStreams already records about `|&`: the two
-	// spellings are mutually exclusive, so no single flag could be given a
-	// value. zsh takes `;|` and refuses `;;&` with ``parse error near `&'``;
-	// bash 4-and-later takes `;;&` and refuses `;|`; dash, bash 3.2 and
-	// ksh93 have neither.
+	// A second flag beside CaseContinue rather than a second value of it, for
+	// the reason PipeBothStreams already records about `|&`: the two spellings
+	// are mutually exclusive, so no single flag could be given a value. A preset
+	// takes one and refuses the other with ``parse error near `&'``, or has
+	// neither.
 	//
-	// The token is not confined to a `case` arm, because zsh's is not:
-	// measured, `echo a ;| echo b` is ``parse error near `;|'`` there and
-	// ``near `|'`` in the other four, so the two bytes are one operator
-	// wherever they stand. Where the flag is off the operator table falls
-	// back to `;` and then `|`, which is what those four lex — so the
-	// refusal lands on the `|` where theirs does, and the diagnostic follows
-	// from the lexing rather than being written twice.
+	// The token is not confined to a `case` arm: `echo a ;| echo b` is
+	// ``parse error near `;|'`` where the flag is on and ``near `|'`` where it
+	// is off, so the two bytes are one operator wherever they stand. Where the
+	// flag is off the operator table falls back to `;` and then `|`, which is
+	// what a preset without it lexes — so the refusal lands on the `|` where its
+	// does, and the diagnostic follows from the lexing rather than being written
+	// twice.
 	CaseContinuePipe bool
 
 	// DollarSingleQuote enables `$'...'`, where backslash escapes are
-	// interpreted. Absent from dash.
+	// interpreted.
 	DollarSingleQuote bool
 
 	// DollarDoubleQuote enables `$"..."`, the locale-translatable string.
-	// With no message catalog — the only condition the panel can measure —
-	// bash and ksh93 strip the `$` and read a plain double-quoted string,
-	// same escapes and same expansions. It is not core because dash and zsh
+	// With no message catalog — the only condition that can be measured — a
+	// preset with the construct strips the `$` and reads a plain double-quoted
+	// string, same escapes and same expansions. It is not core because
 	// are on the other side: there the `$` stays a literal character in
 	// front of an ordinary double-quoted string — no error, an extra byte in
 	// the word, which is the `&>` failure mode again and the reason this is

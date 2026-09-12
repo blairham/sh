@@ -320,6 +320,15 @@ type Dialect struct {
 	// CaseFallthrough enables `;&`, which runs the next case body. Absent
 	// from dash, and from bash before 4.0 — so it cannot be reached through
 	// macOS's /bin/sh.
+	//
+	// Where it is off the two characters lex apart, exactly as
+	// PipeBothStreams' do, and the consequence is visible wherever the pair
+	// stands somewhere the grammar refuses it: `;& echo hi` names `;` in
+	// bash 3.2 and `;&` in bash 5.3. Turning this flag and PipeBothStreams
+	// off the bash preset is the whole of what "bash 3.2 has neither" needs
+	// the grammar to say, which is measured against that build in
+	// dialect/bash's TestTheGrammarSaysWhenAShellHasNeitherPipeAmpersandNorCaseFallthrough
+	// (#2406).
 	CaseFallthrough bool
 
 	// CStyleFor enables `for ((init; cond; post))`. Absent from dash, where

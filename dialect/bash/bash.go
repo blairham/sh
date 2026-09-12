@@ -602,6 +602,13 @@ func Semantics() interp.Semantics {
 	s.PipefailSubstitutesTheBareSignal = interp.No
 	s.ErrexitSeesPipefailFailure = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
+	// A backslash that arrived in a value takes the metacharacter status off
+	// what follows it and stays in the text itself: measured 2026-09-12 in a
+	// directory holding `a\b` and `a*`, `v='a\*'; set -- $v` is the word
+	// `a\*` in 5.3.15, in 3.2.57 and as `sh` — neither name matched, so the
+	// `*` was not live and the backslash was not removed. ksh93 is the one
+	// column that reads it the other way (#1367).
+	s.ValueBackslashQuotesWhatFollows = interp.Yes
 	// A longest match over an alternation takes the longest arm, whichever
 	// order the arms were written in. Measured 2026-09-11 with extended
 	// patterns on, `x=abc`: `${x##@(a|ab)}` and `${x##@(ab|a)}` are both `c`

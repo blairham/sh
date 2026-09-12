@@ -197,6 +197,10 @@ func Semantics() interp.Semantics {
 	s.EchoExpandsCapitalEscEscape = interp.No
 	s.LengthOfSpecialIsCount = interp.No
 	s.UnterminatedBracket = interp.BracketNoMatch
+	// The bash column's reading of a value's backslash, measured the same
+	// way and on the same day: `v='a\*'; set -- $v` is `a\*` here, so the
+	// `*` behind the backslash is not a metacharacter (#1367).
+	s.ValueBackslashQuotesWhatFollows = interp.Yes
 	// `.` with no filename at all is not an error here: dash does nothing and
 	// reports success, where the other three complain. Everything else about
 	// `.` and `eval` is the POSIX answer, which dash keeps and the others have

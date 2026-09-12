@@ -6,6 +6,7 @@ package interp_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -60,24 +61,23 @@ func TestAValueKeepsItsBackslashThroughAWord(t *testing.T) {
 	}
 }
 
-// The character a value's backslash precedes is not a metacharacter, and the
-// backslash stays in the text.
+// Whether the character a value's backslash precedes is a metacharacter, and
+// the axis that decides it.
 //
 // The other half of the same marking, and it needs a directory because it is
-// only observable against real names. Measured 2026-09-07 in a directory
-// holding exactly `a\b` and `a*`: bash 5.3.15, bash-as-`sh`, bash 3.2.57,
-// dash and zsh 5.9.2 all leave the word as `a\*`, matching neither name — so
-// the `*` behind the backslash is not live and the backslash is still there
-// to be printed. Both files are present on purpose: a directory holding
-// neither would print `a\*` whatever the rule was, and could not tell the
-// readings apart.
+// only observable against real names. Measured 2026-09-07 and again
+// 2026-09-12 in a directory holding exactly `a\b` and `a*`: bash 5.3.15,
+// bash-as-`sh`, bash 3.2.57, dash and zsh 5.9.2 all leave the word as `a\*`,
+// matching neither name — so the `*` behind the backslash is not live and the
+// backslash is still there to be printed. ksh93u+ takes the backslash as data
+// and the `*` as live, and answers `a\b`.
 //
-// ksh93u+ is the one shell that reads it the other way, taking the backslash
-// as data and the `*` as live, and it answers `a\b`. That divergence is a
-// dialect's to hold and needs an axis, which is #1367; it is recorded in the
-// corpus rather than decided here, so this asserts the five-shell reading;
-// what this pins is that the majority reading is what the escaped form
-// produces, and that the backslash is not eaten either way.
+// Both files are present on purpose: a directory holding neither would print
+// `a\*` whatever the rule was, and could not tell the readings apart. Which
+// is also why the assertion is over both answers of
+// Semantics.ValueBackslashQuotesWhatFollows rather than over the majority
+// one — a row that pinned only the five-shell reading would pass with the
+// axis wired to nothing (#1367).
 func TestAValueBackslashTakesTheMetacharacterOffWhatFollowsIt(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{`a\b`, `a*`} {
@@ -88,19 +88,94 @@ func TestAValueBackslashTakesTheMetacharacterOffWhatFollowsIt(t *testing.T) {
 	// The control runs in the same directory and against the same two names:
 	// an unmarked `*` matches both, so a fix that simply stopped globbing
 	// expansion results would pass the row above and fail this one.
-	for _, tc := range []struct{ name, src, want string }{
-		{"a backslash before the metacharacter", `v='a\*'; set -- $v; printf '[%s]' "$@"`, `[a\*]`},
-		{"the metacharacter alone", `v='a*'; set -- $v; printf '[%s]' "$@"`, `[a*][a\b]`},
+	for _, tc := range []struct{ name, src, quotes, data string }{
+		{"a backslash before the metacharacter", `v='a\*'; set -- $v; printf '[%s]' "$@"`, `[a\*]`, `[a\b]`},
+		// The two readings answer these alike, which is what says the axis
+		// belongs at the row above and nowhere near them.
+		{"the metacharacter alone", `v='a*'; set -- $v; printf '[%s]' "$@"`, `[a*][a\b]`, `[a*][a\b]`},
+		{"a backslash before an ordinary character", `v='a\b'; set -- $v; printf '[%s]' "$@"`, `[a\b]`, `[a\b]`},
+		{"a backslash at the end of the value", `v='a\'; set -- $v; printf '[%s]' "$@"`, `[a\]`, `[a\]`},
+		// The second backslash is what the first one quotes, so the `*` is
+		// not behind a backslash at all and stays live under both readings.
+		{"a doubled backslash in front of the metacharacter", `v='a\\*'; set -- $v; printf '[%s]' "$@"`, `[a\\*]`, `[a\\*]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := run(t, tc.src, func(r *Runner) { r.Dir = dir })
-			if out != tc.want {
-				t.Errorf("out = %q, want %q", out, tc.want)
-			}
-			if st != 0 {
-				t.Errorf("status = %d, want 0", st)
+			for _, side := range []struct {
+				answer Answer
+				want   string
+			}{{Yes, tc.quotes}, {No, tc.data}} {
+				out, st := run(t, tc.src, func(r *Runner) {
+					sem := testSemantics()
+					sem.ValueBackslashQuotesWhatFollows = side.answer
+					r.Semantics, r.Dir = &sem, dir
+				})
+				if out != side.want || st != 0 {
+					t.Errorf("%v: out = %q (status %d), want %q at 0", side.answer, out, st, side.want)
+				}
 			}
 		})
+	}
+}
+
+// The axis is asked where the two readings part and nowhere else.
+//
+// Both halves matter. An unanswered vector must refuse the row the panel
+// divides on — otherwise the axis is decoration — and must **not** refuse the
+// rows around it, which are unanimous across all six columns: a backslash
+// before an ordinary character, one at the end of a value, and a value with
+// no backslash in it at all.
+func TestTheValueBackslashAxisIsAskedOnlyBeforeAMetacharacter(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{`a\b`, `a*`} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
+			t.Fatalf("write %q: %v", name, err)
+		}
+	}
+	for _, tc := range []struct {
+		name, src string
+		refused   bool
+		want      string
+	}{
+		{"before a metacharacter", `v='a\*'; set -- $v; printf '[%s]' "$@"`, true, ""},
+		{"before an ordinary character", `v='a\b'; set -- $v; printf '[%s]' "$@"`, false, `[a\b]`},
+		{"at the end of the value", `v='a\'; set -- $v; printf '[%s]' "$@"`, false, `[a\]`},
+		{"no backslash at all", `v='xy'; set -- $v; printf '[%s]' "$@"`, false, `[xy]`},
+		{"a doubled backslash before a metacharacter", `v='a\\*'; set -- $v; printf '[%s]' "$@"`, false, `[a\\*]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, tc.src, func(r *Runner) {
+				sem := testSemantics()
+				sem.ValueBackslashQuotesWhatFollows = Unspecified
+				r.Semantics, r.Dir = &sem, dir
+			})
+			if tc.refused {
+				// The refusal is what is asserted, not the status: the
+				// `printf` that follows it in the snippet succeeds and the
+				// shell's status is that command's.
+				if !strings.Contains(out, "value's backslash") {
+					t.Fatalf("got %q (status %d), want a refusal naming the axis", out, st)
+				}
+				return
+			}
+			if out != tc.want || st != 0 {
+				t.Fatalf("got %q (status %d), want %q at 0 — the axis was asked "+
+					"where the panel agrees", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// Where the result is never globbed, the axis is not asked at all: the two
+// readings put the same text on the wire, so there is nothing to disagree
+// about. Asserted with the axis left unanswered, which is what would report
+// the question if it were still being put.
+func TestTheValueBackslashAxisIsNotAskedWhereNothingIsGlobbed(t *testing.T) {
+	out, st := axisRun(t, `v='a\*'; set -- $v; printf '[%s]' "$@"`, func(s *Semantics) {
+		s.GlobExpansionResults = No
+		s.ValueBackslashQuotesWhatFollows = Unspecified
+	})
+	if out != `[a\*]` || st != 0 {
+		t.Fatalf("got %q (status %d), want %q at 0", out, st, `[a\*]`)
 	}
 }
 

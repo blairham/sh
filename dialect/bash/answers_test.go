@@ -109,6 +109,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"UnsplitAtListJoinsOnIFS", s.UnsplitAtListJoinsOnIFS, interp.No},
 		{"TrailingSeparatorEndsAField", s.TrailingSeparatorEndsAField, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
+		{"ValueBackslashQuotesWhatFollows", s.ValueBackslashQuotesWhatFollows, interp.Yes},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.No},
 		{"EmptyParamSubscriptIsAnError", s.EmptyParamSubscriptIsAnError, interp.Yes},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},

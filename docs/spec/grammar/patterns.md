@@ -285,6 +285,53 @@ stood does not change the answer:
 and `abcdabcd` in zsh — the same split as `p='a*a'; ${v##$p}` and as
 `x='et*'; echo $x`. One axis, observed in three places.
 
+#### A backslash that arrived in a value
+
+A **backslash** in such a result is not a metacharacter, but it decides
+what happens to the character behind it, and the panel divides five to one.
+`Semantics.ValueBackslashQuotesWhatFollows` is the answer.
+
+Measured 2026-09-12 from a script file, in a directory holding exactly
+`a\b` and `a*` — both names, because a directory holding neither prints
+the same word whichever rule is in force and could not tell the readings
+apart:
+
+    v='a\*'; set -- $v; printf "[%s]" "$@"
+
+    dash, bash 5.3.15, bash-as-`sh`, bash 3.2.57, zsh 5.9.2   [a\*]
+    ksh93u+                                                  [a\b]
+
+Neither column matched `a*`, so nobody reads the backslash as a quote that
+is then *removed*: the two live readings are "quotes what follows and stays
+in the text" and "is an ordinary character and what follows is live". zsh
+reaches the majority answer the other way, since it globs no expansion
+result at all — and it has an answer of its own for the one route that
+does, `${~spec}`, where `v='a\*'; print -r -- ${~v}` is `a\*`.
+
+The axis is asked where a value's backslash stands directly in front of a
+metacharacter, and only in a dialect that globs the result. Everything
+around that shape is unanimous and asks nothing:
+
+- **a backslash before an ordinary character.** The mark is invisible to
+  the matcher — `\b` and `b` match the same text — so both readings put
+  the same pattern on the wire.
+- **a backslash at the end of a value.** Nothing follows it.
+- **a doubled backslash.** The second is what the first one quotes, so the
+  `*` in `a\\*` is not behind a backslash at all and is live either way.
+  Both readings answer `a\\*` there, and bash answers `a\b` — the first
+  backslash quoting the second *and vanishing from the pattern*, which is
+  the separate question below.
+- **a dialect that globs no expansion result.** The two readings produce
+  the same text, so there is nothing to disagree about.
+
+What neither reading gets right is a value's backslash before an
+**ordinary** character with a live metacharacter still beside it: bash and
+dash want the backslash to quote for the match *and* to come back in the
+text a failed match restores, and the escaped form carries one meaning per
+byte. `v='a\b*'` is `ab` there and `a\bc` here. That is #1370, and it is
+recorded in `expand/a-value-backslash-before-an-ordinary-character-in-a-pattern`
+rather than fixed.
+
 **Process substitution is three questions, not one**, and the panel
 splits differently on each. The rules are in `parameter-expansion.md` and
 `conditions.md`; in short:
@@ -348,9 +395,10 @@ question, and here the panel divides. Measured with
 
 So the directory is text in two, a pattern in two, and in bash 5.3 neither
 — it keeps the escape character itself in the pattern, which is the
-unbuilt question of #1367 rather than this one. This is **not** an axis
-yet: the core writes the directory escaped, which is zsh's and dash's
-answer, and the tail after it live. A home directory holding a
+question `ValueBackslashQuotesWhatFollows` answers rather than this one.
+The tilde's own reading is still **not** an axis: the core writes the
+directory escaped, which is zsh's and dash's answer, and the tail after
+it live. A home directory holding a
 metacharacter is the only thing that can tell the readings apart.
 
 A tilde that arrives as a *value* is not a written one and is left alone —

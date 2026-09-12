@@ -1130,6 +1130,12 @@ func Semantics() interp.Semantics {
 	// Alone in refusing an argument to `times`; dash and bash ignore it.
 	s.TimesRejectsArguments = interp.Yes
 	s.UnterminatedBracket = interp.BracketBadPattern
+	// This shell does not glob the result of an expansion, so the axis is
+	// reached only through `${~spec}` and `setopt globsubst` — and it has an
+	// answer there rather than no answer at all. Measured 2026-09-12 in a
+	// directory holding `a\b` and `a*`: `v='a\*'; print -r -- ${~v}` is
+	// `a\*`, so the `*` behind the backslash was not live (#1367).
+	s.ValueBackslashQuotesWhatFollows = interp.Yes
 	// The arm written first, which is this shell alone in the panel:
 	// measured 2026-09-11 on 5.9.2, `x=abc`, `${x##(a|ab)}` is `bc` where
 	// `${x##(ab|a)}` is `c`. The same order decides what a `(#b)` reports,

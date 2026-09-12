@@ -214,16 +214,6 @@ func (s armSearch) endAt(value string, o patternOpts, start, limit int) (int, bo
 	return 0, false
 }
 
-// writtenArmEnd is endAt for a caller that asks once: the trims, each of
-// which has exactly one position to ask about.
-func writtenArmEnd(value, pattern string, o patternOpts, start, limit int) (int, bool) {
-	s, ok := newArmSearch(pattern, o)
-	if !ok {
-		return 0, false
-	}
-	return s.endAt(value, o, start, limit)
-}
-
 // armVariants is the pattern with its alternations resolved to one arm each,
 // ordered so that a written arm comes before a later one.
 //

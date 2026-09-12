@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -605,6 +606,73 @@ func TestAMarkSplitAcrossTwoReadsIsStillFound(t *testing.T) {
 	if got := sink.String(); got != "lead" {
 		t.Errorf("the terminal saw %q, want %q — part of the mark was forwarded", got, "lead")
 	}
+}
+
+// The mark is the last thing the pump does with a read that ends on one.
+//
+// Passing a mark signals the drain, and the drain is what releases
+// Shell.inLineDiscipline to take the terminal back into raw mode. So a write
+// the pump issues *after* the signal is one it makes while the editor owns the
+// terminal again — and the pump made exactly one: an empty slice, a few
+// instructions later, from the unconditional write of what was left after the
+// mark. Nothing was in it, so nothing was ever drawn wrongly; what it cost was
+// the invariant. The mode-recording test in hooksterminal_test.go measures
+// every write the shell makes while it holds the terminal, and this one raced
+// the makeRaw its own signal had released — usually winning, once losing on a
+// loaded Linux runner and reporting one of two writes with the newline
+// translation off (#2078).
+//
+// Asked of `forward` directly, and asked as *how many writes* rather than as
+// what came out. The bytes are identical either way, which is exactly why the
+// flake reproduced on nothing and why a test written against the sink's
+// contents would have gone on passing.
+//
+// The last two rows are the ones a length check alone would miss: a read that
+// is nothing but a partial mark, and a read that is nothing at all, both of
+// which reach the tail write with an empty slice by a different route.
+func TestPassingAMarkIsNotFollowedByAWriteOfNothing(t *testing.T) {
+	mark := newConduitMark()
+	for _, tc := range []struct {
+		name  string
+		in    []byte
+		want  []int
+		after bool
+	}{
+		{"output then a mark", append([]byte("line-000\n"), mark...), []int{9}, true},
+		{"a mark on its own", mark, nil, true},
+		{"output with no mark", []byte("line-000\n"), []int{9}, false},
+		{"output on both sides of a mark", append(append([]byte("a"), mark...), 'b'), []int{1, 1}, true},
+		{"nothing but a partial mark", mark[:4], nil, false},
+		{"nothing at all", nil, nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &ptyConduit{mark: mark, reached: make(chan struct{}, 1)}
+			w := &writeSizes{}
+			c.forward(w, tc.in)
+			if !slices.Equal(w.sizes, tc.want) {
+				t.Errorf("the pump made writes of %v, want %v — a write of nothing after "+
+					"the mark is a write made after the drain was released", w.sizes, tc.want)
+			}
+			signalled := false
+			select {
+			case <-c.reached:
+				signalled = true
+			default:
+			}
+			if signalled != tc.after {
+				t.Errorf("the drain was signalled = %v, want %v", signalled, tc.after)
+			}
+		})
+	}
+}
+
+// writeSizes records the length of every write it is given, including the
+// empty ones — which are the whole point, so it must not fold them away.
+type writeSizes struct{ sizes []int }
+
+func (w *writeSizes) Write(p []byte) (int, error) {
+	w.sizes = append(w.sizes, len(p))
+	return len(p), nil
 }
 
 // newTestConduit is a conduit writing into a sink of the caller's choosing,

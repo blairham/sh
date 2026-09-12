@@ -262,6 +262,23 @@ func (c *ptyConduit) pump(out io.Writer) {
 
 // forward writes everything up to a possible partial mark and returns what it
 // held back.
+//
+// **Nothing is written when there is nothing to write**, and that is a
+// correctness rule rather than a saving. Passing the mark signals the drain,
+// which is what lets Shell.inLineDiscipline take the terminal back into raw
+// mode; a write issued *after* that signal is one this pump makes while the
+// editor owns the terminal again. It is harmless when it carries no bytes and
+// it is not harmless to have made it: the write is what conduitOut reads the
+// terminal's mode for, and it is what the invariant "every byte the shell
+// hands the terminal while it holds it is written with the translation on" is
+// measured over.
+//
+// A read ending on a mark left exactly that write — an empty slice, a few
+// instructions after the signal, racing the makeRaw the signal releases. The
+// pump usually won and the write was recorded with the translation still on;
+// once, on a loaded Linux runner, the drain won and the test reported one of
+// two writes with the translation off (#2078). Two goroutines, no bytes, and a
+// failure that reproduced on nothing.
 func (c *ptyConduit) forward(out io.Writer, b []byte) []byte {
 	for {
 		i := bytes.Index(b, c.mark)
@@ -283,11 +300,19 @@ func (c *ptyConduit) forward(out io.Writer, b []byte) []byte {
 	// prints nothing else still reaches the terminal on the next write.
 	keep := partialSuffix(b, c.mark)
 	if keep > 0 {
-		_, _ = out.Write(b[:len(b)-keep])
+		writeSome(out, b[:len(b)-keep])
 		return append([]byte(nil), b[len(b)-keep:]...)
 	}
-	_, _ = out.Write(b)
+	writeSome(out, b)
 	return nil
+}
+
+// writeSome writes b unless there is nothing in it. See forward.
+func writeSome(out io.Writer, b []byte) {
+	if len(b) == 0 {
+		return
+	}
+	_, _ = out.Write(b)
 }
 
 // partialSuffix is how many trailing bytes of b could still become a mark.

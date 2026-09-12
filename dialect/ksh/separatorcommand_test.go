@@ -17,7 +17,7 @@ import (
 // dash, bash 5.3, bash 3.2 and bash-as-`sh` refuse every line below.
 func TestThisShellStepsOverOneSeparator(t *testing.T) {
 	d := ksh.Dialect()
-	if d.SeparatorWhereACommandBelongs != syntax.OneSeparatorExceptAfterABar {
+	if d.SeparatorWhereACommandBelongs != syntax.OneSeparatorExceptAfterABarOrBeforeACondition {
 		t.Errorf("ksh93 steps over one `;` and not one after a bar, got %v",
 			d.SeparatorWhereACommandBelongs)
 	}

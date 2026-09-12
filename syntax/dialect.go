@@ -65,13 +65,34 @@ const (
 	// bash-as-`sh`.
 	NoSeparatorWhereACommandBelongs SeparatorSkip = iota
 
-	// OneSeparatorExceptAfterABar steps over a single `;`, and not at all
-	// after a `|`. ksh93, and both halves are measured rather than assumed:
-	// `a || ; ; b` is `` `;' unexpected `` there where `a || ; b` runs, and
-	// `a | ; b` is refused where `a || ; b` and `a |& ; b` are taken — the
-	// same asymmetry #1115 found for that shell's `|&`, and the probe that
-	// says the bar is a separate question from the and-or.
-	OneSeparatorExceptAfterABar
+	// OneSeparatorExceptAfterABarOrBeforeACondition steps over a single `;`,
+	// and not at all after a `|` or where a *condition* begins. ksh93, and
+	// every part is measured rather than assumed: `a || ; ; b` is
+	// `` `;' unexpected `` there where `a || ; b` runs, and `a | ; b` is
+	// refused where `a || ; b` and `a |& ; b` are taken — the same asymmetry
+	// #1115 found for that shell's `|&`, and the probe that says the bar is a
+	// separate question from the and-or.
+	//
+	// The condition is the third exception and was missing, so `if; then`
+	// parsed here and was blamed on the `then` where ksh93 blames the `;`.
+	// Measured 2026-09-12 over a script file:
+	//
+	//	if; then :; fi                 `;' unexpected
+	//	while; do :; done              `;' unexpected
+	//	until; do :; done              `;' unexpected
+	//	if :; then :; elif; then :; fi `;' unexpected
+	//	if :; ; then :; fi             `;' unexpected — the whole list, not
+	//	                               only the position after the keyword
+	//	if : ; :; then :; fi           runs — a `;` *terminating* a statement
+	//	                               of the condition is not this
+	//	if false || ; then :; fi       runs — where an and-or's right-hand
+	//	                               side belongs is still the and-or's
+	//	if :; then : ; ; fi            runs — a body is not a condition
+	//
+	// So it is the position where a *statement of a condition list* begins,
+	// and neither "anywhere in the header" nor "the token after the keyword".
+	// The wider value takes all nine: zsh parses every line above (#2023).
+	OneSeparatorExceptAfterABarOrBeforeACondition
 
 	// AnySeparatorWhereACommandBelongs steps over as many as are written,
 	// anywhere, the bar included. zsh: `echo one | ; ; cat -n` numbers the

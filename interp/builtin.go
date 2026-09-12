@@ -3226,7 +3226,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// split, which is why the mask rides along rather than the processing
 	// being a pre-pass over the string.
 	ifs, set := r.ifs()
-	fields, at := splitFieldsAt(text, lits, ifs, set, false)
+	fields, at := splitFieldsAt(text, lits, ifs, set, false, false)
 	if array != "" {
 		// An array target takes the fields *as* fields, so the tail of the
 		// splitting rule is live here: `IFS=:; read -A a` on `a:b:` fills

@@ -144,12 +144,49 @@ func valueBackslashDisarmsAMetacharacter(s string) bool {
 	return false
 }
 
-// globUnescape removes the marks, giving the literal field.
-func globUnescape(s string) string {
-	var b strings.Builder
+// escapedMarks says which bytes of a field in the escaped form are marks
+// rather than data: marks[i] is true when s[i] is the backslash that marks
+// s[i+1], so s[i] is not a byte of the field at all and s[i+1] is data
+// whatever it looks like.
+//
+// It is the one reader of the escaped form, and it exists because there were
+// two. The form's rule is not "a backslash is a mark" but "a backslash and
+// the byte behind it are one unit", which is the only way to tell the mark in
+// `\\:` — a value's colon, marked — from the value's own backslash in `\\\\`,
+// where the second backslash is data and the colon behind *it* is not marked
+// at all. A walk that looks at one byte at a time cannot tell those apart,
+// and splitFieldsAt walked the escaped form exactly that way: it cut at a
+// marked separator and left the mark on the end of the field in front of it,
+// where the unescape then read it as a marked backslash and handed back a
+// field one character longer than the value (#2212).
+//
+// nil for a field holding no backslash, which is nearly every field: there is
+// nothing to mark, and the callers read nil as "every byte is data".
+func escapedMarks(s string) []bool {
+	if strings.IndexByte(s, '\\') < 0 {
+		return nil
+	}
+	marks := make([]bool, len(s))
 	for i := 0; i < len(s); i++ {
 		if s[i] == '\\' && i+1 < len(s) {
+			marks[i] = true
 			i++
+		}
+	}
+	return marks
+}
+
+// globUnescape removes the marks, giving the literal field.
+func globUnescape(s string) string {
+	marks := escapedMarks(s)
+	if marks == nil {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if marks[i] {
+			continue
 		}
 		b.WriteByte(s[i])
 	}

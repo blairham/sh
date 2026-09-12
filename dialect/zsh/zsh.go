@@ -1474,6 +1474,13 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-12, both store and the table ends with two elements
 	// (#1938).
 	s.EmptyAssociativeKeyIsAnError = interp.No
+	// Either letter takes a name that is already the other kind, and the
+	// elements are gone: measured 2026-09-12, `typeset -A h; h[k]=v;
+	// typeset -a h` is `typeset -a h=(  )` at status 0 and the reverse is
+	// `typeset -A a=( )`. The one column that converts in both directions,
+	// and the only one that loses the values doing it (#1375).
+	s.TableUnderAnArrayDeclaration = interp.CompoundKindChangeEmptiesTheName
+	s.ArrayUnderATableDeclaration = interp.CompoundKindChangeEmptiesTheName
 	// Nor is reading one reported: measured 2026-09-12, `typeset -A m;
 	// m[k]=v; w=; ${m[$w]}` is the empty string at status 0 and silent
 	// (#1972).

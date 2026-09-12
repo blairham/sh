@@ -3836,7 +3836,13 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// mark rather than an `if` of its own, because the copy that stood
 		// here had the table's half and not the array's — see
 		// markDeclaredCompound and #1535.
-		r.markDeclaredCompound(name, fresh, f)
+		if !r.markDeclaredCompound(name, fresh, f, hasValue) {
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			r.assignFailed = true
+			continue
+		}
 		if f.readonly && f.readonlyOff {
 			// `local +r y` after this same call's `local -r y=1`, which is
 			// the one shape that reaches this with a freeze still standing:
@@ -4016,7 +4022,13 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			// loop keeps: the letters say what the name is and the value
 			// then lands in it. `fresh` is false because this builtin takes
 			// no scope of its own.
-			r.markDeclaredCompound(name, false, f)
+			if !r.markDeclaredCompound(name, false, f, hasValue) {
+				if r.unspecified || r.ctl == controlExit {
+					return r.status
+				}
+				r.assignFailed = true
+				continue
+			}
 		}
 		if r.unspecified {
 			return r.status

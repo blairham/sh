@@ -950,6 +950,14 @@ func Semantics() interp.Semantics {
 	// leaves one element under the empty key here and is refused in bash
 	// (#1938).
 	s.EmptyAssociativeKeyIsAnError = interp.No
+	// The two directions part here, which is why they are two axes. Measured
+	// 2026-09-12: `typeset -A h; h[k]=v; typeset -a h` is `typeset: cannot
+	// change associative array h to index array` and the **script ends**,
+	// where `typeset -a a=(x y); typeset -A a` converts and carries the
+	// elements over as the keys `0` and `1` — `typeset -A a=([0]=x [1]=y)`,
+	// with `${a[0]}` reading `x` afterwards (#1375).
+	s.TableUnderAnArrayDeclaration = interp.CompoundKindChangeEndsTheScript
+	s.ArrayUnderATableDeclaration = interp.CompoundKindChangeKeepsTheElements
 	// And reading one says nothing either: measured 2026-09-12, `typeset -A
 	// m; m[k]=v; w=; ${m[$w]}` is the empty string at status 0 with no
 	// diagnostic, where bash names the table (#1972).
@@ -1282,7 +1290,8 @@ func Diagnostics() interp.Diagnostics {
 		KilledCommandNotice: "%[1]d: %[2]s",
 		ParamNull:           "parameter null",
 		// The array alone is named, not the subscript that was written.
-		BadArraySubscript: "%[1]s: subscript out of range",
+		BadArraySubscript:         "%[1]s: subscript out of range",
+		CannotConvertTableToArray: "%[2]s: cannot change associative array %[1]s to index array",
 		// The same sentence from `unset`, with the builtin named in front of
 		// it as this shell names it in front of the arithmetic one below.
 		UnsetSubscriptBeforeTheFirstElement: "unset: %[1]s: subscript out of range",

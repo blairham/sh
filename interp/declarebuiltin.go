@@ -688,7 +688,17 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// After the shadow, which is what lets the scope put back the outer
 		// name's attribute rather than the one this line just gave it.
 		r.setHideInScope(name, df)
-		r.markDeclaredCompound(name, fresh, df)
+		if !r.markDeclaredCompound(name, fresh, df, hasValue) {
+			// One kind of array declared over the other, and the dialect
+			// will not have it: the operand is refused and the next one is
+			// still declared, which is the shape every other per-operand
+			// refusal in this loop takes.
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			r.assignFailed = true
+			continue
+		}
 		if df.readonly && df.readonlyOff {
 			if code := r.removeReadonly(name, hasValue); code != 0 {
 				return code
@@ -816,22 +826,28 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 // it is not — `f() { local -a a; echo ${#a[@]}; }` is 0 in bash 5.3.15,
 // bash 3.2.57 and zsh 5.9.2, and the ksh93 spelling `typeset -a a` is 0 too,
 // where a one-element scalar answers 1.
-func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags) {
+func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, hasValue bool) bool {
 	// Ahead of the `remove` return, because a fresh cell holds nothing
 	// whatever the declaration's letters say: `local +a arr` is still a
 	// declaration into a cell this call made.
 	r.dropTheOuterCompound(name, fresh)
 	if f.remove {
-		return
+		return true
 	}
 	if r.typeLetterTakesTheCompoundLetter(f) {
 		// The declaration wrote both a numeric type letter and a container
 		// one, and in this dialect the type wins: the name is a scalar of
 		// that type and no compound is declared at all.
-		return
+		return true
 	}
 	if r.unspecified {
-		return
+		return true
+	}
+	if !r.compoundKindChanged(name, f, hasValue) {
+		return false
+	}
+	if r.unspecified {
+		return true
 	}
 	if f.array {
 		v, p := r.declaredCompoundOverAScalar(name, f, r.sem().ScalarUnderAnArrayDeclaration,
@@ -868,6 +884,118 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags) {
 			// ksh93 answers them differently.
 		}
 	}
+	return true
+}
+
+// compoundKindChanged is a declaration naming one kind of array over a name
+// that is already the *other* kind, and it reports whether the declaration may
+// go on — see Semantics.TableUnderAnArrayDeclaration and
+// ArrayUnderATableDeclaration, where the four answers and the panel are.
+//
+// **Only a declaration carrying no value of its own.** That is the shape the
+// three columns disagree about, and a declaration with a value is a second
+// question the panel splits differently again: measured 2026-09-12 with a
+// declared table holding `k`, `typeset -a h=(x)` ends the script in bash —
+// from the *assignment*, which is why the sentence has no builtin in front of
+// it — where ksh93 converts and zsh converts, both leaving the one element.
+// So the value form is left exactly as it was rather than given this axis's
+// answer, and it is recorded rather than guessed at.
+//
+// A name that is neither compound, or is already the kind being declared,
+// asks nothing: `typeset -A m; typeset -A m` is a redeclaration in every
+// column and `typeset -a b` over a scalar is ScalarUnderAnArrayDeclaration.
+func (r *Runner) compoundKindChanged(name string, f declareFlags, hasValue bool) bool {
+	// literalOperands beside hasValue, because an *array literal* operand is
+	// not a `name=value` word: `typeset -a h=(x)` reaches the loop as the
+	// bare name with the parentheses held aside, so the string would say the
+	// operand carried nothing.
+	if hasValue || r.literalOperands[name] {
+		return true
+	}
+	switch {
+	case f.array && r.assocDeclared(name):
+		return r.changeCompoundKind(name, r.sem().TableUnderAnArrayDeclaration,
+			"an array declaration over a name already declared a table",
+			r.diag().CannotConvertTableToArray,
+			"%[2]s: %[1]s: cannot convert associative to indexed array",
+			func() { r.tableBecomesAnArray(name) })
+	case f.assoc && r.arrayDeclared(name):
+		return r.changeCompoundKind(name, r.sem().ArrayUnderATableDeclaration,
+			"a table declaration over a name already holding an array",
+			r.diag().CannotConvertArrayToTable,
+			"%[2]s: %[1]s: cannot convert indexed to associative array",
+			func() { r.arrayBecomesATable(name) })
+	}
+	return true
+}
+
+// changeCompoundKind resolves one of the two axes and does what it says,
+// reporting whether the declaration survives it.
+func (r *Runner) changeCompoundKind(name string, p CompoundKindChangePolicy,
+	what, wording, fallback string, convert func(),
+) bool {
+	switch p {
+	case CompoundKindChangeRefused:
+		r.diagf("%s\n", Wording(wording, fallback, name, r.inBuiltin))
+		// The refusal costs the operand and the builtin's status, and
+		// nothing else: measured, `declare -A h; declare -a h; echo A`
+		// prints the sentence, then `A`, and `$?` is 1 in between.
+		r.assignFailed = true
+		return false
+	case CompoundKindChangeEndsTheScript:
+		r.fatal("%s\n", Wording(wording, fallback, name, r.inBuiltin))
+		return false
+	case CompoundKindChangeKeepsTheElements, CompoundKindChangeEmptiesTheName:
+		convert()
+		return true
+	}
+	r.diagf("%s\n", r.unanswered(what))
+	r.status = 2
+	r.unspecified = true
+	return false
+}
+
+// tableBecomesAnArray is the converting answer for `typeset -a` over a table.
+//
+// Only the emptying column reaches it — no shell measured carries a table's
+// values over to an indexed array, there being no order to carry them in —
+// so the table goes and an empty array takes its place.
+func (r *Runner) tableBecomesAnArray(name string) {
+	delete(r.AssocArrays, name)
+	r.markIndexed(name)
+}
+
+// arrayBecomesATable is the converting answer for `typeset -A` over an array,
+// and the two converting columns part over what happens to the elements.
+//
+// ksh93 carries them across under the keys `0`, `1`, … — measured
+// 2026-09-12, `typeset -a a=(x y); typeset -A a` lists `typeset -A a=([0]=x
+// [1]=y)` and `${a[0]}` reads `x` afterwards, so they are really there and
+// not merely printed. zsh takes them away.
+//
+// The keys are the *subscripts* the array held and not a run from zero, so a
+// sparse array keeps its gaps as the keys it had.
+func (r *Runner) arrayBecomesATable(name string) {
+	kept := r.sem().ArrayUnderATableDeclaration == CompoundKindChangeKeepsTheElements
+	held := r.Arrays[name]
+	delete(r.Arrays, name)
+	r.markAssoc(name)
+	if !kept {
+		return
+	}
+	for idx, v := range held {
+		r.setAssocElem(name, itoa(idx), v)
+	}
+}
+
+// arrayDeclared reports whether the name is holding an indexed array, which
+// is the question assocDeclared asks about the other kind.
+func (r *Runner) arrayDeclared(name string) bool {
+	if _, produced := r.DynamicArrays[name]; produced {
+		return true
+	}
+	_, ok := r.Arrays[name]
+	return ok
 }
 
 // typeLetterTakesTheCompoundLetter reports whether a declaration writing both

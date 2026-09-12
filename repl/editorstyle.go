@@ -151,6 +151,25 @@ type EditorStyle struct {
 	// nothing in its place.
 	LastArgumentStaysOnTheOldestLine bool
 
+	// ViInsertAtStartOfLineSkipsLeadingBlanks is where `I` puts the cursor in
+	// vi command mode.
+	//
+	// Measured under a pty on `   ab` — three leading spaces — with Escape,
+	// `$`, `I` and a marker character:
+	//
+	//	bash    X   ab
+	//	zsh        Xab
+	//
+	// bash inserts at column 0 and zsh inserts at the first character that is
+	// not a blank, which is what `^` does in both. The two agree about `^`
+	// itself and part company only here.
+	//
+	// The rest of the command mode agrees across bash 5.3, bash 3.2 and zsh,
+	// which is why this is the only field it adds. See docs/spec/editing.md
+	// for the table and for the four places the shells disagree about a key
+	// this editor does not offer yet.
+	ViInsertAtStartOfLineSkipsLeadingBlanks bool
+
 	// CompletionMatchesHiddenFiles offers names beginning with a dot to a
 	// word that does not begin with one.
 	//

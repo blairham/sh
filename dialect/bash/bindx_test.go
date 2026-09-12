@@ -41,9 +41,9 @@ func bindxRunner(t *testing.T, src string) (*interp.Runner, *strings.Builder) {
 // test and half of it is that table.
 func press(t *testing.T, r *interp.Runner, seq string, in repl.Line) (repl.Line, bool) {
 	t.Helper()
-	bound, ok := bash.KeyBindings(r)[seq]
+	bound, ok := bash.KeyBindings(r, repl.KeymapMain)[seq]
 	if !ok {
-		t.Fatalf("no binding on %q: the table is %v", seq, bash.KeyBindings(r))
+		t.Fatalf("no binding on %q: the table is %v", seq, bash.KeyBindings(r, repl.KeymapMain))
 	}
 	if bound.Function == "" {
 		t.Fatalf("%q reached the editor as %v, want a shell command on it", seq, bound)
@@ -328,9 +328,9 @@ func TestOneSlotPerKey(t *testing.T) {
 // what this shell puts on it is the command text itself.
 func TestTheCommandReachesTheEditorOnFunction(t *testing.T) {
 	r, _ := bindxRunner(t, `bind -x '"\C-x\C-r": echo one; echo two'`)
-	got, bound := bash.KeyBindings(r)["\x18\x12"]
+	got, bound := bash.KeyBindings(r, repl.KeymapMain)["\x18\x12"]
 	if !bound {
-		t.Fatalf("^X^R reached the editor as nothing: %v", bash.KeyBindings(r))
+		t.Fatalf("^X^R reached the editor as nothing: %v", bash.KeyBindings(r, repl.KeymapMain))
 	}
 	want := repl.Binding{Function: "echo one; echo two"}
 	if got != want {

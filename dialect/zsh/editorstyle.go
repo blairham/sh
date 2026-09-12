@@ -42,6 +42,11 @@ func EditorStyle() repl.EditorStyle {
 		UndoTakesBackOneKeystrokeAtATime:  true,
 		UndoRestoresTheCursorToWhereItWas: true,
 		LastArgumentStaysOnTheOldestLine:  true,
+		// And one about vi command mode: measured on `   ab` with Escape,
+		// `$` and `I`, zsh puts the cursor at the first character that is not
+		// a blank and bash puts it at column 0. It is the only place the two
+		// shells' command modes disagree about a key this editor offers.
+		ViInsertAtStartOfLineSkipsLeadingBlanks: true,
 		// Measured: a bare Tab in a directory holding a `.hidden` lists
 		// everything except it, and `.` completes it outright because it is
 		// then the only match. Left false rather than written out, so that

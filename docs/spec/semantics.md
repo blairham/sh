@@ -6122,9 +6122,12 @@ than missing:
   bool could not hold. Turning one on is the only way back. What the mode
   selects here is which keymap `bind` acts on without `-m`: `set -o vi`
   makes `vi-insert` current, measured, which is what makes an rc file's `set
-  -o vi` followed by `bind -m vi-insert` do what it says. It selects nothing
-  else, because this editor has no command mode — the same documented
-  partial as zsh's `vicmd`.
+  -o vi` followed by `bind -m vi-insert` do what it says. It now selects one
+  thing more: whether Escape leaves insert mode for the **command mode**,
+  which repl gained in #1427 and both dialects reach — `docs/spec/editing.md`
+  has the measured key table. The other shell asks for the same mode a second
+  way that leaves this option alone (`bindkey -v`, measured), which is why
+  what repl reads is a dialect's answer rather than this state.
 
   **Nothing is selected until something selects it** (#1858). A
   non-interactive bash reports both `vi` and `emacs` off, and so does this

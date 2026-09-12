@@ -47,7 +47,7 @@ func (e *editor) matchBinding(first byte) (Binding, bool, keyRead) {
 	if e.bindings == nil {
 		return Binding{}, false, keyContinues
 	}
-	table := e.bindings()
+	table := e.bindings(e.keymap())
 	if len(table) == 0 {
 		return Binding{}, false, keyContinues
 	}
@@ -78,6 +78,20 @@ func (e *editor) matchBinding(first byte) (Binding, bool, keyRead) {
 			return Binding{}, true, keyContinues
 		}
 	}
+}
+
+// keymap is which of the editor's two key tables is current.
+//
+// **This is the structural half of a command mode.** Before it, a shell's
+// binding builtin kept a table per keymap and the editor read one of them: a
+// binding written into the command map was stored and never fired, because the
+// map was never current. The mode is what makes a keymap current, and this is
+// where the editor says which.
+func (e *editor) keymap() Keymap {
+	if e.viCommand {
+		return KeymapViCommand
+	}
+	return KeymapMain
 }
 
 // anyBindingStartsWith reports whether the table holds a sequence beginning

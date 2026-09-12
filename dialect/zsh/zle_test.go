@@ -646,7 +646,7 @@ func TestTheSourceListingLeavesTheEditorsOwnActionsAlone(t *testing.T) {
 // one of the editor's actions.
 func TestAKeyBoundToADefinedWidgetReachesTheFrontEndAsOne(t *testing.T) {
 	r, _ := zleRunner(t, "f(){:}; zle -N mine f\nbindkey '^G' mine\n")
-	got := zsh.KeyBindings(r)
+	got := zsh.KeyBindings(r, repl.KeymapMain)
 	if want := (repl.Binding{Function: "mine"}); got["\a"] != want {
 		t.Errorf("table = %v, want %v for ^G", got, want)
 	}
@@ -654,13 +654,13 @@ func TestAKeyBoundToADefinedWidgetReachesTheFrontEndAsOne(t *testing.T) {
 	// what stops the key doing what it used to — bindkey.go's own rule, and
 	// unchanged by this.
 	r, _ = zleRunner(t, "bindkey '^G' history-substring-search-up\n")
-	if got := zsh.KeyBindings(r); got["\a"] != (repl.Binding{}) {
+	if got := zsh.KeyBindings(r, repl.KeymapMain); got["\a"] != (repl.Binding{}) {
 		t.Errorf("table = %v, want ^G present and doing nothing", got)
 	}
 	// And a definition wins over one of the editor's own names, which is what
 	// redefining one means and the only order a plugin's wrapper can work in.
 	r, _ = zleRunner(t, "f(){:}; zle -N end-of-line f\nbindkey '^G' end-of-line\n")
-	if got, want := zsh.KeyBindings(r)["\a"], (repl.Binding{Function: "end-of-line"}); got != want {
+	if got, want := zsh.KeyBindings(r, repl.KeymapMain)["\a"], (repl.Binding{Function: "end-of-line"}); got != want {
 		t.Errorf("table = %v, want %v", got, want)
 	}
 }

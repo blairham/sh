@@ -125,7 +125,7 @@ func bindingsAfter(t *testing.T, src string) map[string]repl.Binding {
 	if _, err := r.Run(t.Context(), preset.Parse(t, src)); err != nil {
 		t.Fatalf("run %q: %v", src, err)
 	}
-	return bash.KeyBindings(r)
+	return bash.KeyBindings(r, repl.KeymapMain)
 }
 
 // TestBindRefusesByNameRatherThanAcceptingSilently is the rule the whole
@@ -279,7 +279,7 @@ func TestKeyBindingsReportsOnlyWhatChanged(t *testing.T) {
 	if _, err := r.Run(t.Context(), preset.Parse(t, `bind '"\C-g": clear-screen'`)); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	table := bash.KeyBindings(r)
+	table := bash.KeyBindings(r, repl.KeymapMain)
 	if got, want := table["\a"], (repl.Binding{Widget: repl.WidgetClearScreen}); got != want {
 		t.Errorf("^G = %v, want %v", got, want)
 	}
@@ -327,6 +327,16 @@ func TestBindWarnsWhereThereIsNoLineEditorAndAnswersAnyway(t *testing.T) {
 // dialect has no name for something the editor does, and `bind -p` would
 // report a working key as unbound. The reverse, a name with no action behind
 // it, is what repl/widgets.go says is worse than a name not offered.
+//
+// With one measured exception, which is the three actions that move between
+// insert and command mode. They are reached from the command mode's own
+// dispatch — `i`, `a` and `I` — rather than from a key in the map a person
+// types in, so this listing has nothing to print for them, and real bash
+// prints the same thing: `bind -P` in bash 5.3.15 says `vi-movement-mode is
+// not bound to any keys` and the same for `vi-insertion-mode` and
+// `vi-append-mode`, in emacs mode and in vi mode alike. (In vi mode it does
+// find `vi-movement-mode` on `\e`; that row is viUnbound's open half — see
+// the note there.)
 func TestEveryActionThisEditorPerformsHasANameAndAKey(t *testing.T) {
 	rows, _ := bindRun(t, "bind -P")
 	offered := map[string]bool{}
@@ -340,7 +350,7 @@ func TestEveryActionThisEditorPerformsHasANameAndAKey(t *testing.T) {
 		if len(fields) == 0 {
 			continue
 		}
-		if strings.Contains(line, "is not bound to any keys") {
+		if strings.Contains(line, "is not bound to any keys") && !viUnbound[fields[0]] {
 			t.Errorf("%q, in a shell where nothing was rebound — "+
 				"either the editor has an action with no key or this dialect has no name for one", line)
 		}
@@ -356,9 +366,26 @@ func TestEveryActionThisEditorPerformsHasANameAndAKey(t *testing.T) {
 	// And the count is the actions plus the one control key, so a listing
 	// that quietly stopped printing rows fails here rather than passing the
 	// loop above by having nothing to check.
-	if want := len(bindActionNames()) + 1; named != want {
+	if want := len(bindActionNames()) + 1 + len(viUnbound); named != want {
 		t.Errorf("bind -P printed %d rows, want %d", named, want)
 	}
+}
+
+// viUnbound are the three actions this listing has no key for, and the reason
+// the test above has an exception at all.
+//
+// They are how a person gets between the editor's two states, and the keys
+// that do it live in the command mode's own dispatch rather than in the map
+// this listing prints. Measured, real bash prints them as unbound too.
+//
+// The open half: in vi mode real bash reports `vi-movement-mode can be found
+// on "\e"`, because Escape is what selects command mode there. This listing
+// does not say so, which is one row of one listing and not a key that fails to
+// work — Escape leaves insert mode here whether or not `bind -P` mentions it.
+var viUnbound = map[string]bool{
+	"vi-movement-mode":  true,
+	"vi-insertion-mode": true,
+	"vi-append-mode":    true,
 }
 
 // bindActionNames is every action the editor performs, as the set of widgets
@@ -370,4 +397,119 @@ func bindActionNames() map[repl.Widget]bool {
 		out[w] = true
 	}
 	return out
+}
+
+// TestTheCommandKeymapIsReadWhenTheEditorIsInIt closes the hole #1427 was
+// filed for: `bind -m vi-command` was stored and the map was never current, so
+// the binding could not fire.
+//
+// Measured under a pty against bash 5.3.15, with `set -o vi` and `bind -m
+// vi-command '"\C-xz": beginning-of-line'`: in command mode the key moves the
+// cursor to the start of the line, and in insert mode the same key does
+// nothing at all.
+func TestTheCommandKeymapIsReadWhenTheEditorIsInIt(t *testing.T) {
+	var buf strings.Builder
+	r := preset.Runner(dialecttest.Base{Stdout: &buf, Stderr: &buf})
+	r.Interactive = true
+	src := "set -o vi\n" +
+		`bind -m vi-command '"\C-xz": beginning-of-line'` + "\n" +
+		`bind -m vi-insert '"\C-xy": end-of-line'`
+	if _, err := r.Run(t.Context(), preset.Parse(t, src)); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	command := bash.KeyBindings(r, repl.KeymapViCommand)
+	if got, want := command["\x18z"], (repl.Binding{Widget: repl.WidgetBeginningOfLine}); got != want {
+		t.Errorf("^Xz in the command keymap = %v, want %v", got, want)
+	}
+	if _, present := command["\x18y"]; present {
+		t.Errorf("the insert map's key is in the command map: %v", command)
+	}
+	typing := bash.KeyBindings(r, repl.KeymapMain)
+	if got, want := typing["\x18y"], (repl.Binding{Widget: repl.WidgetEndOfLine}); got != want {
+		t.Errorf("^Xy in the typing keymap = %v, want %v", got, want)
+	}
+	if _, present := typing["\x18z"]; present {
+		t.Errorf("the command map's key is in the typing map: %v", typing)
+	}
+}
+
+// TestACommandKeyBoundToItsEmacsDefaultIsStillReported is the narrow case the
+// override filter used to swallow.
+//
+// The filter exists so that a key nobody touched reaches the editor's own
+// dispatch, and it compares against what the editor does *while typing*. In
+// command mode the same key means something else, so a person who writes
+// `bind -m vi-command '"\C-a": beginning-of-line'` has rebound something — and
+// dropping it as "already the default" would leave the key dead.
+func TestACommandKeyBoundToItsEmacsDefaultIsStillReported(t *testing.T) {
+	var buf strings.Builder
+	r := preset.Runner(dialecttest.Base{Stdout: &buf, Stderr: &buf})
+	r.Interactive = true
+	src := `bind -m vi-command '"\C-a": beginning-of-line'`
+	if _, err := r.Run(t.Context(), preset.Parse(t, src)); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	got, bound := bash.KeyBindings(r, repl.KeymapViCommand)["\x01"]
+	if !bound || got != (repl.Binding{Widget: repl.WidgetBeginningOfLine}) {
+		t.Errorf("^A in the command keymap = %v, %v, want the binding that was written", got, bound)
+	}
+}
+
+// TestViEditingIsTheOption — in this shell there is one way to ask for a
+// command mode and it is the editing mode, which is not true of the other
+// shell with an editor.
+func TestViEditingIsTheOption(t *testing.T) {
+	for _, c := range []struct {
+		src  string
+		want bool
+	}{
+		{src: "set -o vi", want: true},
+		{src: "set -o vi; set +o vi", want: false},
+		{src: "set -o vi; set -o emacs", want: false},
+		{src: ":", want: false},
+	} {
+		var buf strings.Builder
+		r := preset.Runner(dialecttest.Base{Stdout: &buf, Stderr: &buf})
+		r.Interactive = true
+		if _, err := r.Run(t.Context(), preset.Parse(t, c.src)); err != nil {
+			t.Fatalf("run %q: %v", c.src, err)
+		}
+		if got := bash.ViEditing(r); got != c.want {
+			t.Errorf("after %q, ViEditing = %v, want %v", c.src, got, c.want)
+		}
+	}
+}
+
+// TestTheCommandKeymapIsTheChangesAndNothingElse is the guard on the bug that
+// only the shipped binary showed.
+//
+// The table handed to the editor is an *override layer*, and the command map
+// has nothing to be an override of: what the editor does with a key there is
+// the mode itself. Built from the same defaults as the typing map, it handed
+// the editor an override for every key in that table — and Return stopped
+// accepting the line, because `accept-line` is the editor's own control flow
+// and has no widget for an override to carry.
+func TestTheCommandKeymapIsTheChangesAndNothingElse(t *testing.T) {
+	var buf strings.Builder
+	r := preset.Runner(dialecttest.Base{Stdout: &buf, Stderr: &buf})
+	r.Interactive = true
+	if _, err := r.Run(t.Context(), preset.Parse(t, "set -o vi")); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got := bash.KeyBindings(r, repl.KeymapViCommand); len(got) != 0 {
+		t.Errorf("with nothing bound into it the command keymap = %v, want empty", got)
+	}
+	// Return above all: a key with no widget behind it, present in the table,
+	// is a key bound to nothing.
+	if _, present := bash.KeyBindings(r, repl.KeymapViCommand)["\r"]; present {
+		t.Errorf("Return is in the command keymap, and nobody put it there")
+	}
+	// And the control: one binding written into it is one entry.
+	if _, err := r.Run(t.Context(), preset.Parse(t, `bind -m vi-command '"\C-g": clear-screen'`)); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	got := bash.KeyBindings(r, repl.KeymapViCommand)
+	if len(got) != 1 || got["\a"] != (repl.Binding{Widget: repl.WidgetClearScreen}) {
+		t.Errorf("command keymap = %v, want only the key that was bound", got)
+	}
 }

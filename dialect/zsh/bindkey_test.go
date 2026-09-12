@@ -236,18 +236,18 @@ func TestBindingsAreASubshellsOwn(t *testing.T) {
 // that is what stops the key doing what it used to.
 func TestOnlyTheChangesReachTheEditor(t *testing.T) {
 	r := bindkeyRunner(t, "")
-	if got := zsh.KeyBindings(r); len(got) != 0 {
+	if got := zsh.KeyBindings(r, repl.KeymapMain); len(got) != 0 {
 		t.Errorf("with nothing rebound the table = %v, want empty", got)
 	}
 
 	r = bindkeyRunner(t, "bindkey '^G' beginning-of-line\n")
-	got := zsh.KeyBindings(r)
+	got := zsh.KeyBindings(r, repl.KeymapMain)
 	if want := (map[string]repl.Binding{"\a": {Widget: repl.WidgetBeginningOfLine}}); len(got) != 1 || got["\a"] != want["\a"] {
 		t.Errorf("table = %v, want %v", got, want)
 	}
 
 	r = bindkeyRunner(t, "bindkey '^G' history-substring-search-up\n")
-	got = zsh.KeyBindings(r)
+	got = zsh.KeyBindings(r, repl.KeymapMain)
 	if b, present := got["\a"]; !present || b != (repl.Binding{}) {
 		t.Errorf("table = %v, want the unknown widget present and doing nothing", got)
 	}
@@ -255,14 +255,14 @@ func TestOnlyTheChangesReachTheEditor(t *testing.T) {
 	// A key removed is present and does nothing, which is different from
 	// absent: absent would leave the editor's own default running.
 	r = bindkeyRunner(t, "bindkey -r '^A'\n")
-	got = zsh.KeyBindings(r)
+	got = zsh.KeyBindings(r, repl.KeymapMain)
 	if b, present := got["\x01"]; !present || b != (repl.Binding{}) {
 		t.Errorf("table = %v, want the removed key present and doing nothing", got)
 	}
 
 	// And a key rebound back to what it already did is not a change at all.
 	r = bindkeyRunner(t, "bindkey '^A' beginning-of-line\n")
-	if got := zsh.KeyBindings(r); len(got) != 0 {
+	if got := zsh.KeyBindings(r, repl.KeymapMain); len(got) != 0 {
 		t.Errorf("table = %v, want nothing for a key rebound to its own default", got)
 	}
 }
@@ -289,4 +289,92 @@ func bindkeyRunner(t *testing.T, src string) *interp.Runner {
 		t.Fatalf("run %q: %v", src, err)
 	}
 	return r
+}
+
+// TestTheCommandKeymapIsReadWhenTheEditorIsInIt closes the hole #1427 was
+// filed for: `bindkey -M vicmd` was stored and `vicmd` was never current, so
+// the binding could not fire.
+//
+// Measured under a pty against zsh 5.9.2, with `bindkey -v` and `bindkey -M
+// vicmd '^Xz' beginning-of-line`: in command mode the key moves the cursor to
+// the start of the line, and in insert mode the same key does nothing.
+func TestTheCommandKeymapIsReadWhenTheEditorIsInIt(t *testing.T) {
+	r := bindkeyRunner(t, "bindkey -v\n"+
+		"bindkey -M vicmd '^Xz' beginning-of-line\n"+
+		"bindkey -M viins '^Xy' end-of-line\n")
+	command := zsh.KeyBindings(r, repl.KeymapViCommand)
+	if got, want := command["\x18z"], (repl.Binding{Widget: repl.WidgetBeginningOfLine}); got != want {
+		t.Errorf("^Xz in vicmd = %v, want %v", got, want)
+	}
+	if _, present := command["\x18y"]; present {
+		t.Errorf("the viins key is in vicmd: %v", command)
+	}
+	typing := zsh.KeyBindings(r, repl.KeymapMain)
+	if got, want := typing["\x18y"], (repl.Binding{Widget: repl.WidgetEndOfLine}); got != want {
+		t.Errorf("^Xy in viins = %v, want %v", got, want)
+	}
+	if _, present := typing["\x18z"]; present {
+		t.Errorf("the vicmd key is in viins: %v", typing)
+	}
+}
+
+// TestACommandKeyBoundToItsEmacsDefaultIsStillReported is the narrow case the
+// override filter used to swallow: the filter compares against what this
+// editor does *while typing*, and in command mode the same key means something
+// else, so dropping it as "already the default" would leave the key dead.
+func TestACommandKeyBoundToItsEmacsDefaultIsStillReported(t *testing.T) {
+	r := bindkeyRunner(t, "bindkey -M vicmd '^A' beginning-of-line\n")
+	got, bound := zsh.KeyBindings(r, repl.KeymapViCommand)["\x01"]
+	if !bound || got != (repl.Binding{Widget: repl.WidgetBeginningOfLine}) {
+		t.Errorf("^A in vicmd = %v, %v, want the binding that was written", got, bound)
+	}
+}
+
+// TestViEditingIsAskedOfTwoCommands is the measurement that decided the seam's
+// shape.
+//
+// Under a pty against zsh 5.9.2: `bindkey -v` gives a working command mode and
+// leaves `set -o` reporting `emacs off` and `vi off`, while `set -o vi` gives
+// the same command mode and reports `vi on`. So the option cannot be read for
+// the answer and neither can the keymap alone — which is why repl asks the
+// dialect rather than reading interp's editing mode itself.
+func TestViEditingIsAskedOfTwoCommands(t *testing.T) {
+	for _, c := range []struct {
+		src  string
+		want bool
+	}{
+		{src: "bindkey -v\n", want: true},
+		{src: "set -o vi\n", want: true},
+		{src: "bindkey -v\nbindkey -e\n", want: false},
+		{src: "bindkey -e\n", want: false},
+		{src: ":\n", want: false},
+	} {
+		if got := zsh.ViEditing(bindkeyRunner(t, c.src)); got != c.want {
+			t.Errorf("after %q, ViEditing = %v, want %v", c.src, got, c.want)
+		}
+	}
+}
+
+// TestTheCommandKeymapIsTheChangesAndNothingElse is the guard on the bug that
+// only the shipped binary showed.
+//
+// The table handed to the editor is an *override layer*, and `vicmd` has
+// nothing to be an override of: what the editor does with a key there is the
+// mode itself. Built from the same defaults as the typing map, it handed the
+// editor an override for every key in that table — and Return stopped
+// accepting the line, because `accept-line` is the editor's own control flow
+// and has no widget for an override to carry.
+func TestTheCommandKeymapIsTheChangesAndNothingElse(t *testing.T) {
+	r := bindkeyRunner(t, "bindkey -v\n")
+	if got := zsh.KeyBindings(r, repl.KeymapViCommand); len(got) != 0 {
+		t.Errorf("with nothing bound into it, vicmd = %v, want empty", got)
+	}
+	if _, present := zsh.KeyBindings(r, repl.KeymapViCommand)["\r"]; present {
+		t.Errorf("Return is in vicmd, and nobody put it there")
+	}
+	r = bindkeyRunner(t, "bindkey -v\nbindkey -M vicmd '^G' clear-screen\n")
+	got := zsh.KeyBindings(r, repl.KeymapViCommand)
+	if len(got) != 1 || got["\a"] != (repl.Binding{Widget: repl.WidgetClearScreen}) {
+		t.Errorf("vicmd = %v, want only the key that was bound", got)
+	}
 }

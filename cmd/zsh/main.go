@@ -33,6 +33,7 @@ func shell() driver.Shell {
 		PromptStyle:  zsh.PromptStyle(),
 		EditorStyle:  zsh.EditorStyle(),
 		KeyBindings:  zsh.KeyBindings,
+		ViEditing:    zsh.ViEditing,
 		RunWidget:    zsh.RunWidget,
 		RunScheduled: zsh.RunScheduled,
 		// What the editor waits on beside the terminal, and what happens when

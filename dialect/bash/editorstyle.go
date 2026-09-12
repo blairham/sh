@@ -32,6 +32,12 @@ func EditorStyle() repl.EditorStyle {
 		// back off. zsh disagrees with all three of those too, and both bash
 		// 5.3.15 and bash 3.2.57 give these answers.
 		//
+		// And the one field vi command mode adds is left at its zero value
+		// for the same reason: measured on `   ab` with Escape, `$` and `I`,
+		// bash inserts at column 0 where zsh skips the indent. The rest of
+		// the command mode agrees between the two shells and between bash
+		// 5.3.15 and bash 3.2.57.
+		//
 		// Measured: a bare Tab in a directory holding a `.hidden` lists it
 		// along with everything else. readline calls this
 		// `match-hidden-files` and documents it as on by default, which is

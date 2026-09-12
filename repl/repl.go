@@ -132,7 +132,33 @@ type Shell struct {
 	// command that changes it is one a person runs at the prompt, and a value
 	// read once at the start of a session would take effect on the next
 	// shell. See bindings.go for what the editor does with it.
-	KeyBindings func() map[string]Binding
+	//
+	// **Asked for a keymap, which is what makes a command map live.** Both
+	// shells with an editor keep a table per keymap, and both already accepted
+	// bindings into the vi command map before this editor had a command mode
+	// to read it in — so what was written there was stored and never fired.
+	// The editor says which map it is in and the dialect answers for that one;
+	// see Keymap, and vi.go for the mode itself.
+	KeyBindings func(Keymap) map[string]Binding
+
+	// ViEditing reports whether this session edits the vi way — whether
+	// Escape leaves insert mode for a command mode, and whether
+	// KeymapViCommand is ever asked for.
+	//
+	// Nil is a session with no command mode, which is what a front end that
+	// has not said gets and what both dialects without a line editor are.
+	//
+	// **A dialect's answer and not the core's**, although the core has an
+	// editing mode of its own. Measured under a pty: `bindkey -v` in zsh 5.9.2
+	// turns the command mode on and leaves `set -o` reporting `vi off`, while
+	// `set -o vi` in the same shell turns it on and reports it. Two commands,
+	// one of which the core knows about, and either is enough — so the shell
+	// has to be asked rather than the option read. In bash there is one
+	// command and it is the option.
+	//
+	// A function for the reason KeyBindings is one: both spellings are
+	// commands a person runs at the prompt.
+	ViEditing func() bool
 
 	// RunWidget runs one of the shell's own editing actions — a key bound to
 	// something the shell was told about at run time rather than to one of
@@ -1591,6 +1617,9 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		lastArgStaysOnOldest: s.Editor.LastArgumentStaysOnTheOldestLine,
 		// And what a person rebound, asked fresh for every key.
 		bindings: s.KeyBindings,
+		vi:       s.ViEditing,
+
+		viInsertSkipsBlanks: s.Editor.ViInsertAtStartOfLineSkipsLeadingBlanks,
 		// And how one of the shell's own actions is run, with this session's
 		// context closed over.
 		runFunc: s.shellWidgets(ctx),

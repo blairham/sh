@@ -146,11 +146,19 @@ func (sh Shell) session(argv []string, in source) int {
 //
 // A nil function rather than one returning an empty table, because repl tells
 // the two apart to skip the lookup entirely — see bindings.go.
-func (sh Shell) keyBindings(r *interp.Runner) func() map[string]repl.Binding {
+func (sh Shell) keyBindings(r *interp.Runner) func(repl.Keymap) map[string]repl.Binding {
 	if sh.KeyBindings == nil {
 		return nil
 	}
-	return func() map[string]repl.Binding { return sh.KeyBindings(r) }
+	return func(km repl.Keymap) map[string]repl.Binding { return sh.KeyBindings(r, km) }
+}
+
+// viEditing is the same for whether this session has a command mode at all.
+func (sh Shell) viEditing(r *interp.Runner) func() bool {
+	if sh.ViEditing == nil {
+		return nil
+	}
+	return func() bool { return sh.ViEditing(r) }
 }
 
 // runWidget and runScheduled do the same for the other two seams a dialect
@@ -344,6 +352,7 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// at the prompt takes effect on the next line rather than the next
 		// shell.
 		KeyBindings: sh.keyBindings(r),
+		ViEditing:   sh.viEditing(r),
 		// And how a key bound to one of the dialect's own actions runs, and
 		// what it had set aside for a time that has passed. Both bound to
 		// this runner, for the reason the bindings are.

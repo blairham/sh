@@ -4954,6 +4954,50 @@
         "TimedOut": false
       }
     },
+    "arith/an-output-format-teaches-an-integer-name-nothing": {
+      "bash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 1: ((: i = [#16] 255 : arithmetic syntax error: operand expected (error token is \"[#16] 255 \")~\u003cshell\u003e: line 1: [#16] 255 : arithmetic syntax error: operand expected (error token is \"[#16] 255 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 1: ((: i = [#16] 255 : arithmetic syntax error: operand expected (error token is \"[#16] 255 \")~\u003cshell\u003e: line 1: [#16] 255 : arithmetic syntax error: operand expected (error token is \"[#16] 255 \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: ((: i = [#16] 255 : syntax error: operand expected (error token is \"[#16] 255 \")~\u003cshell\u003e: [#16] 255 : syntax error: operand expected (error token is \"[#16] 255 \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: i: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" [#16] 255 \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:  i = [#16] 255 : arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[255]~[16#FF]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arith/an-output-format-that-will-not-read": {
       "bash": {
         "Stdout": "",

@@ -200,6 +200,30 @@ subscript of that same assignment is not formatted —
 which is what tells the value apart from every other text the write
 touches.
 
+### And it teaches an integer name nothing
+
+The integer attribute writes a base with the same six characters, so the
+two constructs meet. Measured:
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `typeset -i i; (( i = [#16] 255 )); echo $i` | `255` |
+| `typeset -i i; (( i = [#16] 0x1f )); typeset -p i` | `typeset -i16 i=31` |
+| `typeset -i i; i=$(( [#16] 255 )); typeset -p i` | `typeset -i16 i=255` |
+| `typeset -i16 i; (( i = [#8] 255 )); echo $i` | `16#FF` |
+
+So `IntegerBaseComesFromTheValueAssigned` reads the **literal the script
+wrote** and not what a format rendered: the second row learns 16 from the
+`0x1f` beside it, and the first learns nothing at all. The third is the
+boundary — the same characters arriving as the text of an ordinary
+assignment do teach a base, because there they *are* the text the name was
+given. The fourth says a base the name already holds stands, which it does
+for every other route too.
+
+Getting this wrong is silent: reading the base back out of the rendered
+text answers `16#FF` for the first row, which is a base the script never
+wrote down.
+
 ### The three refusals
 
 | probe | zsh 5.9.2 |

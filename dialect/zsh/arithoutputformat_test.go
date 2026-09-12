@@ -126,6 +126,27 @@ func TestTheArithmeticOutputBaseReachesTheValueAndNotTheKey(t *testing.T) {
 	}
 }
 
+// The boundary with the integer attribute, which is the other construct that
+// spells a base the same way. A name that already has the attribute does not
+// take its base from an expression's format — the format renders an answer, it
+// does not write a literal — where the same characters arriving as the text of
+// an ordinary assignment do teach one.
+func TestTheArithmeticOutputBaseTeachesAnIntegerNameNothing(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"an arithmetic assignment teaches nothing", `typeset -i i; (( i = [#16] 255 )); typeset -p i; echo $i`, "typeset -i i=255\n255\n"},
+		{"an ordinary assignment still does", `typeset -i i; i=$(( [#16] 255 )); typeset -p i`, "typeset -i16 i=255\n"},
+		{"a base the name already has stands", `typeset -i16 i; (( i = [#8] 255 )); typeset -p i; echo $i`, "typeset -i16 i=255\n16#FF\n"},
+		{"and a loop counter stays plain", `typeset -i i; for (( i=[#16] 0; i<2; i++ )); do echo $i; done`, "0\n1\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s gave %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
 // The three refusals, which are three different sentences: a base outside the
 // range, a bracketed group that is not a specifier at all, and one holding
 // nothing but digits — the last two being one character apart.

@@ -13053,6 +13053,11 @@ echo "st=$? alive"`,
 		Why:     "the second text the format reaches, which is not the one anybody expects: an assignment *inside* the expression stores the formatted characters, so the name holds `16#FF` and reads back as 255 through the based literal. An implementation that formatted only the expansion's result would answer `[255][255]` here and pass every probe written on `$(( ))` alone",
 	},
 	{
+		ID: "arith/an-output-format-teaches-an-integer-name-nothing", Category: "arithmetic",
+		Snippet: `typeset -i i; (( i = [#16] 255 )); echo "[$i]"; typeset -i j; j=$(( [#16] 255 )); echo "[$j]"`,
+		Why:     "the boundary between the output format and the integer attribute, which are the two constructs that spell a base the same way. A name that already has the attribute does *not* take its base from an expression's format — the first half is a plain `255` — where the same six characters arriving as the text of an ordinary assignment do, and the second half reads back `16#FF`. Ours learned from the rendered text and answered `16#FF` twice, which is a base the script never wrote down (#2095)",
+	},
+	{
 		ID: "arith/an-output-base-outside-the-range", Category: "arithmetic",
 		Snippet: `echo "[$(( [#37] 5 ))]"; echo after`,
 		Why:     "the range the one shell with the construct allows, and the sentence it refuses with — `invalid base (must be 2 to 36 inclusive)`, which is the same complaint `typeset -i37` makes without the builtin's name in front of it. One probe to a case rather than a pair, because a refused expansion gives up the input in that column and a second probe on the same line would never be reached — which is exactly how a half-measured case reads as a measured one",

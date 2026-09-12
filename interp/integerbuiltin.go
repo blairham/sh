@@ -408,6 +408,20 @@ func (r *Runner) integerRenderedText(name, decimal string) string {
 // integer name never reaches the dialect — which matters, because that is
 // nearly every assignment there is.
 func (r *Runner) learnIntegerBase(name, text string) {
+	if r.arithOutput != nil {
+		// The text was *rendered* by an expression's output format rather
+		// than written by the script, so there is no literal here to learn a
+		// base from. Measured: `typeset -i i; (( i = [#16] 255 ))` leaves the
+		// name plain, where `(( i = [#16] 0x1f ))` takes 16 — from the `0x1f`
+		// and not from the specifier that spelled the answer.
+		//
+		// Only this route, and the boundary is the point: the same six
+		// characters arriving the ordinary way *do* teach a base, because
+		// there they are the text an assignment was given —
+		// `typeset -i i; i=$(( [#16] 255 ))` is `typeset -i16 i=255`. The
+		// field is nil by then, the expansion having finished.
+		return
+	}
 	if r.integerBase[name] != 0 {
 		// The name has one, from the letter or from an earlier assignment,
 		// and it sticks: measured, a name that learned 16 renders a later

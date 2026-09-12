@@ -97,6 +97,32 @@ func TestTheOutputFormatDoesNotLeak(t *testing.T) {
 	}
 }
 
+// The boundary with the integer attribute, which is the other construct that
+// writes a base the same way.
+//
+// A name that already has the attribute does not take its base from an
+// expression's format: the format renders an answer, it does not write a
+// literal for IntegerBaseComesFromTheValueAssigned to read. The same six
+// characters arriving as the text of an ordinary assignment do teach one,
+// which is the half that makes this a boundary rather than a rule — without
+// it, "the format never teaches a base" would be indistinguishable from the
+// axis being off.
+func TestTheOutputFormatTeachesAnIntegerNameNothing(t *testing.T) {
+	out, st := runGrammar(t,
+		`typeset -i i; (( i = [#16] 255 )); echo "[$i]"; typeset -i j; j=$(( [#16] 255 )); echo "[$j]"`,
+		func(d *syntax.Dialect) { d.ArithOutputFormat = true },
+		func(r *interp.Runner) {
+			r.Semantics.IntegerBaseDigits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+			r.Semantics.IntegerBaseNegativeIsTwosComplement = interp.No
+			r.Semantics.IntegerAttributeTakesABase = interp.Yes
+			r.Semantics.IntegerBaseComesFromTheValueAssigned = interp.Yes
+			r.Semantics.IntegerBaseTenIsNoBase = interp.No
+		})
+	if out != "[255]\n[16#FF]\n" || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, "[255]\n[16#FF]\n")
+	}
+}
+
 // A base the alphabet cannot spell is refused, with the base quoted back and
 // the expansion producing nothing. The range is the alphabet's length rather
 // than a constant here, which is why this is an interpreter question and the

@@ -1919,49 +1919,58 @@ type Dialect struct {
 	// written in one has to balance the way the program's braces do.
 	BareBraceNestsInExpansion bool
 
-	// OperandIsReadWhenTheExpansionReachesIt defers the **second read** of a
-	// `${ … }` operand from the parse to the run, so that a branch nothing
-	// takes is never read and a failure there gives up the line rather than
-	// the file.
-	//
-	// The second read is not new. A `${ … }` written inside double quotes is
-	// scanned once for its closing brace, with the quotes inside the braces
-	// honored, and the operand is then read again with those quotes standing
-	// for themselves — which is why `"${v+'bar}"` is `unexpected EOF while
-	// looking for matching '` here and in every column that has the reading.
-	// This flag says **when** the second read happens.
-	//
-	// Measured 2026-09-12 with `echo "${v-'$('}"`, where the first read
-	// closes the braces and the second finds a `$(` nothing closes:
-	//
-	//	                        v set                v unset
-	//	bash 5.3.15             SET, nothing said    a run-time complaint, next line runs
-	//	bash 3.2.57             SET, nothing said    a run-time complaint, next line runs
-	//	bash 5.3.15 as `sh`     refused at parse     refused at parse
-	//	zsh 5.9.2               refused              refused
-	//	ksh93u+                 refused              refused
-	//	dash                    refused              refused
-	//
-	// So the panel splits two against four, and `bash -n` takes what bash
-	// takes: a function body holding one is defined in silence.
-	//
-	// The three that refuse do it for a reason **upstream of any operand**:
-	// their brace scan does not honor the quotes either, so the expansion
-	// ends at the first `}` and what is left is a stray quote. That is a
-	// difference of its own and this shell does not have it yet — every
-	// dialect here honors the quotes in the scan — so the flag records the
-	// observable the columns actually produce rather than the mechanism each
-	// reaches it by. Without it, turning the deferral on everywhere would
-	// answer `SET` where zsh, ksh93 and dash all refuse the line.
+	// QuoteProtectsTheClosingBrace says which of a `${ … }` operand's kinds a
+	// single quote written inside **double quotes** protects the closing brace
+	// in, so that the expansion ends at the brace *after* the quoted text
+	// rather than at the one inside it.
 	//
 	// A grammar flag rather than a semantics axis for the reason
-	// NestedParamExpansion is one: it settles whether the *file* parses, and
-	// a file that does not parse has no tree for a semantics vector to be
-	// consulted over. The `sh` row is therefore recorded and not modeled:
-	// POSIX mode is a Semantics question here — see Runner.SetPosixMode for
-	// the four axes it moves — and `set -o posix` cannot reach a grammar flag
-	// through it.
-	OperandIsReadWhenTheExpansionReachesIt bool
+	// BareBraceNestsInExpansion is one: it decides where the word is cut.
+	// `"[${v-'}'}]"` is one expansion whose operand is `'}'` where the quote
+	// protects, and the expansion `${v-'}` followed by two more characters of
+	// the enclosing word where it does not. Those are different words, not one
+	// word two values could disagree about.
+	//
+	// Measured 2026-09-12 with `v=Vx}y; echo "[${v<op>'a}b'}]"`, where the
+	// leaked `b'}` is the scan having stopped at the quoted brace:
+	//
+	//	                   `-` `:-` `=` `+` `?` `:1:`   `#` `##` `%` `%%` `/`
+	//	bash 5.3.15        [Vx}y]                       [Vx}y]
+	//	bash 3.2.57        [Vx}y]                       [Vx}y]
+	//	bash 5.3.15 as sh  [Vx}yb'}]                    [Vx}y]
+	//	ksh93u+            [Vx}yb'}]                    [Vx}y]
+	//	dash               [Vx}yb'}]                    [Vx}y]
+	//	BusyBox ash        [Vx}yb'}]                    [Vx}y]
+	//	zsh 5.9.2          [Vx}yb'}]                    [Vx}yb'}]
+	//
+	// So the panel splits three ways rather than two, and the line it splits
+	// on is the **kind of the operand** rather than the shell: a word operand
+	// inherits the enclosing double quoting, where a single quote stands for
+	// itself and cannot quote anything, and a pattern operand does not, so its
+	// quotes are quotes. Only bash reads a word operand's quote as quoting,
+	// and only zsh declines to read a pattern's that way.
+	//
+	// Three boundaries, all measured and none of them this:
+	//
+	//   - **Unquoted, every column protects**, in both kinds — the divergence
+	//     is inside double quotes only. A here-document body answers with the
+	//     double-quoted columns, which is the reading its spans already carry.
+	//   - **A double quote protects in every column**, in both kinds:
+	//     `v=SET; echo "[${v-"a}b"}]"` is `[SET]` in all seven. So this is
+	//     about the single quote, and the `"` case of the scan is unanimous.
+	//   - **The `${ cmd;}` command form keeps its own rule.** Its body is a
+	//     program, so its quotes are that program's for the same reason its
+	//     braces are.
+	//
+	// A dialect without `${x/pat/rep}` has no `/` operator to introduce a
+	// pattern with, so `/` is read as a pattern only where ParamSubstitution
+	// says the form exists — which is what keeps dash, the one panel member
+	// without it, refusing `"${v/'$('/z}"` where ksh93 and ash accept it.
+	//
+	// The `sh` row is recorded and not modeled, as it is for every grammar
+	// flag: POSIX mode is a Semantics question here, and `set -o posix` cannot
+	// reach a grammar flag through it (#2399).
+	QuoteProtectsTheClosingBrace BraceQuotePolicy
 
 	// CompoundAssignmentErrorGivesUpTheLine makes a syntax error inside
 	// `a=( … )` end the line it was written on rather than the file, so the
@@ -3439,4 +3448,40 @@ func (p ArithDoubleQuotePolicy) String() string {
 		return "removed"
 	}
 	return "refused"
+}
+
+// BraceQuotePolicy is what a single quote written inside a double-quoted
+// `${ … }` does to the scan for the closing brace.
+//
+// Three readings rather than two, because the panel splits three ways and the
+// line runs through the *operand* rather than through the shell. See
+// Dialect.QuoteProtectsTheClosingBrace for the measurement.
+type BraceQuotePolicy int
+
+const (
+	// BraceQuoteProtectsAPatternOnly reads the quote as quoting in a `#`,
+	// `##`, `%`, `%%` or `/` operand and as an ordinary character in the
+	// word operands, which is where a `}` it stands in front of closes the
+	// expansion. Five of the seven columns, and the core: a pattern's quotes
+	// are its own, and a word operand's belong to the double quote around
+	// the whole expansion, where a single quote quotes nothing.
+	BraceQuoteProtectsAPatternOnly BraceQuotePolicy = iota
+	// BraceQuoteProtectsNothing reads it as an ordinary character in every
+	// operand, so the expansion always ends at the first `}`. zsh 5.9.2.
+	BraceQuoteProtectsNothing
+	// BraceQuoteProtectsEveryOperand reads it as quoting wherever it is
+	// written, so `"${v-'}'}"` runs to the second brace. bash 5.3.15 and
+	// 3.2.57 — and not the same build invoked as `sh`, which answers with
+	// the other five.
+	BraceQuoteProtectsEveryOperand
+)
+
+func (p BraceQuotePolicy) String() string {
+	switch p {
+	case BraceQuoteProtectsNothing:
+		return "nothing"
+	case BraceQuoteProtectsEveryOperand:
+		return "every operand"
+	}
+	return "a pattern only"
 }

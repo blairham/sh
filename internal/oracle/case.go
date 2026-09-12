@@ -1496,10 +1496,44 @@ var Corpus = []Case{
 	{
 		ID: "core/an-unreadable-operand-with-nothing-to-defer-behind", Category: "quoting",
 		Script:          true,
-		SyntaxError:     true,
 		LayoutSensitive: true,
 		Snippet:         "echo one\necho \"${v+'bar}\"\necho two\n",
-		Why:             "the control that keeps the deferral from being read as a license. Here the quote is not balanced *inside* the braces either, so the scan for the closing brace runs off the end and there is no operand to defer: every column refuses the file and `two` is never printed. A shell that answered this one by carrying on would have widened the rule rather than moved it",
+		Why:             "the control that keeps the deferral from being read as a license, and the row whose reading the deferral cannot reach: here the quote is not balanced *inside* the braces either, so what happens depends entirely on whether the scan for the closing brace honors it. bash 5.3 and 3.2 run off the end of the file looking for the closer and refuse it, printing neither line; the other five stop at the `}`, read `'bar` as the ordinary characters it is there, and print it and `two`. It was recorded as a unanimous refusal on the strength of the two bash columns, and the record said otherwise all along (#2399)",
+	},
+	{
+		ID: "core/a-quoted-brace-in-a-word-operand", Category: "quoting",
+		Snippet: `v=Vx}y; printf '[%s]' "${v-'a}b'}" "${u-'a}b'}"; echo`,
+		Why:     "whether a single quote written in a *word* operand of a double-quoted `${ … }` protects the `}` between its two halves from the scan. bash 5.3 and bash 3.2 answer `[Vx}y]['a}b']` — one expansion running to the second brace — and the same build invoked as `sh`, zsh, ksh93, dash and ash answer `[Vx}yb'}]['ab'}]`, where the expansion ended at the first `}` and `b'}` arrived as three more characters of the enclosing word. Those are different *words*, which is why this is a grammar flag and not a value two shells disagree about: QuoteProtectsTheClosingBrace. The second field is the branch that takes the operand, so the row measures the scan whether the operand is expanded or not (#2399)",
+	},
+	{
+		ID: "core/a-quoted-brace-in-a-pattern-operand", Category: "quoting",
+		Snippet: `s=a}b; printf '[%s]' "${s#'a}'}" "${s%'}b'}"; echo`,
+		Why:     "the same question one operator over, where the panel splits the *other* way: six columns protect the brace and trim, answering `[b][a]`, and zsh alone reads the quote as an ordinary character and answers `[a}b'}][a}bb'}]` — the pattern `'a` matching nothing and the leftover half-quote falling out into the word. So the line the panel splits on is the kind of the operand rather than the shell: a word operand is read in the quoting that encloses the whole expansion, where a single quote quotes nothing, and a pattern is read on its own terms. Both trim directions, so the rule is the operand's and not one operator's (#2399)",
+	},
+	{
+		ID: "core/a-quoted-brace-in-an-unquoted-operand", Category: "quoting",
+		Snippet: `v=Vx}y; printf '[%s]' ${v-'a}b'} ${u-'a}b'} ${v#'V}'}; echo`,
+		Why:     "the control that bounds the split above to double quotes: written bare, the quote protects the brace in all seven columns and in both kinds of operand, so every one of them answers `[Vx}y][a}b][Vx}y]`. A fix that made the quote ordinary everywhere passes the quoted rows and fails this one, which is the whole reason it is here",
+	},
+	{
+		ID: "core/a-double-quoted-brace-in-an-expansion-operand", Category: "quoting",
+		Snippet: `v=SET; printf '[%s]' "${v-"a}b"}" "${u-"a}b"}" "${u#"a}"}"; echo`,
+		Why:     "the other quote character in the same position, and the control that says this is about the single quote: a `\"` inside a double-quoted `${ … }` protects the brace in all seven columns, in a word operand and a pattern alike, so every one answers `[SET][a}b][]`. The first field is the branch that never reads the operand, which is what keeps the row measuring the scan rather than the expansion",
+	},
+	{
+		ID: "core/a-quoted-brace-in-a-replacement-operands-pattern", Category: "quoting",
+		Snippet: `v=xay; printf '[%s]' "${v/'a}'/z}"; echo`,
+		Why:     "the pattern of a replacement, which is a pattern operand in every column that has the operator: bash 5.3, that build as `sh`, bash 3.2, ksh93 and ash all protect the brace and answer `[xay]` — the pattern `a}` matching nothing in `xay` — and zsh answers `[xay'/z}]`. dash is the row's other half: it has no `${x/pat/rep}` at all, so nothing there introduces a pattern and it refuses the line. A `/` read as a pattern operator in a dialect without the form would answer dash's row with the other five's reading",
+	},
+	{
+		ID: "core/a-quoted-brace-in-a-nested-operand", Category: "quoting",
+		Snippet: `w=Wq}r; printf '[%s]' "${u-${w#'W}'}}"; echo`,
+		Why:     "which operand a quote belongs to when one expansion is written inside another's. The quote is in a *pattern* operand of the inner expansion and inside a *word* operand of the outer, and the inner one governs: six columns answer `[Wq}r]` and zsh `[Wq}r'}]`, the same split the pattern row above records. A reader that asked the outermost expansion instead answers this row with the word operand's rule and stays right about every un-nested one",
+	},
+	{
+		ID: "core/a-quoted-brace-in-a-here-document-body", Category: "quoting",
+		Snippet: "v=Vx}y\ncat <<EOF\n[${v-'a}b'}]\nEOF\necho after",
+		Why:     "the route with no enclosing quote in it at all, which answers with the double-quoted columns rather than with the bare ones: bash 5.3 and 3.2 write `[Vx}y]` and the other five `[Vx}yb'}]`, exactly as they do inside `\"\"`. A body is double-quoted content by the same rule that substitutes `$v` in it, so the scan reads it that way too — and `after` is on the output because this route raises no diagnostic either way, so a fix graded on exit status would pass before and after",
 	},
 	{
 		ID: "core/single-quotes-in-an-unquoted-expansion-body", Category: "quoting",

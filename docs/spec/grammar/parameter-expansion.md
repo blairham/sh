@@ -297,16 +297,71 @@ inside: a single quote in a double-quoted operand is still an ordinary
 character by the rule above, so `"${x:-"${y:-'"'}"}"` is still refused
 by five of the six and still refused here.
 
+### Whether a quote inside the braces protects the closing brace
+
+A `${ … }` written inside double quotes is scanned for its closing brace
+before anything reads its operand, and **whether a single quote written
+in it protects a `}` from that scan splits the panel three ways.**
+Measured 2026-09-12 with `v=Vx}y; echo "[${v<op>'a}b'}]"`, where a
+leaked `b'}` is the scan having stopped at the quoted brace:
+
+| | `-` `:-` `=` `+` `?` `:1:` | `#` `##` `%` `%%` `/` |
+| --- | --- | --- |
+| bash 5.3.15 | `[Vx}y]` | `[Vx}y]` |
+| bash 3.2.57 | `[Vx}y]` | `[Vx}y]` |
+| bash 5.3.15 as `sh` | `[Vx}yb'}]` | `[Vx}y]` |
+| ksh93u+ | `[Vx}yb'}]` | `[Vx}y]` |
+| dash | `[Vx}yb'}]` | `[Vx}y]` |
+| BusyBox ash | `[Vx}yb'}]` | `[Vx}y]` |
+| zsh 5.9.2 | `[Vx}yb'}]` | `[Vx}yb'}]` |
+
+The line it splits on is **the kind of the operand**, not the shell. A
+word operand is read in the quoting that encloses the whole expansion,
+where a single quote stands for itself and cannot quote a brace; a
+pattern operand is read on its own terms, so its quotes are quotes. Only
+bash reads a word operand's quote as quoting, and only zsh declines to
+read a pattern's that way.
+
+Three boundaries, and none of them is this:
+
+- **Unquoted, every column protects**, in both kinds. The divergence is
+  inside double quotes only. A here-document body answers with the
+  double-quoted columns, which is the reading its spans already carry.
+- **A double quote protects in every column**, in both kinds:
+  `v=SET; echo "[${v-"a}b"}]"` is `[SET]` in all seven. This is about
+  the single quote; the `"` case of the scan is unanimous.
+- **The `${ cmd;}` command form keeps its own rule.** Its body is a
+  program, so its quotes are that program's for the same reason its
+  braces are.
+
+A dialect without `${x/pat/rep}` has no `/` operator to introduce a
+pattern with, so `/` is read as a pattern only where the form exists —
+which is what keeps dash, the one panel member without it, refusing
+`"${v/'$('/z}"` where ksh93 and ash accept it.
+
+`QuoteProtectsTheClosingBrace`, a grammar flag with three readings: the
+core protects a pattern operand only, bash protects every operand, zsh
+protects none. Measured: `core/a-quoted-brace-in-a-word-operand`,
+`core/a-quoted-brace-in-a-pattern-operand`,
+`core/a-quoted-brace-in-an-unquoted-operand`,
+`core/a-double-quoted-brace-in-an-expansion-operand`,
+`core/a-quoted-brace-in-a-replacement-operands-pattern`,
+`core/a-quoted-brace-in-a-nested-operand`,
+`core/a-quoted-brace-in-a-here-document-body` (#2399).
+
+One consequence has to be carried through to the operand: where the
+scan leaves a quote unread, the half-quote after the closing brace is
+part of the **pattern**, not a quote that ran out of input.
+`s=a}b; printf '[%s]' "${s#'a}'}"` is `a}b'}` in zsh — the pattern `'a`
+matching nothing — and dropping the stray quote makes the pattern `a`,
+strips it and answers `}b'}` with no diagnostic anywhere.
+
 ### When the second read happens
 
-A `${ … }` written inside double quotes is read **twice**, and the two
-reads do not agree about the quotes inside it. The scan for the closing
-brace honors them — `"${v-'}'}"` is the three characters `'}'` in bash
-5.3.15 and 3.2.57, where zsh, ksh93 and dash end the expansion at the
-first `}` and answer `''}`. The operand is then read again as content of
-the quoting around the expansion, where a single quote is an ordinary
-character. So an operand may close its braces on the first read and
-refuse to read on the second:
+The operand of a `${ … }` written inside double quotes is read a second
+time, as content of the quoting around the expansion, where a single
+quote is an ordinary character. So an operand may close its braces on
+the first read and refuse to read on the second:
 
     echo "${v-'$('}"
 
@@ -325,28 +380,34 @@ So the two bash columns read the operand **when the expansion reaches
 it**: a branch nothing takes is never read at all, and what a taken
 branch raises is a run-time failure — the wording carries the run-time
 prefix `command substitution:` or `bad substitution` — which gives up its
-line and lets the next one run. The three that refuse do it for a reason
-*upstream of any operand*: their brace scan does not honor the quotes
-either, so there is no operand by the time this question could be asked.
+line and lets the next one run.
+
+**The deferral is unconditional here, and the columns that refuse are
+not a vote against it.** They refuse *upstream of any operand*: this is
+a word operand, their scan does not protect the quote, and the `$(` the
+quote was hiding is what the scan itself runs out of input on. The
+deferral was gated on a dialect flag for one release, which was the
+same mechanism recorded twice (#2399).
 
 The same deferral covers the backquote and brace spellings —
 `"${v-'\`'}"` and `"${v-'${'}"` — and stops at the operands that are
-read as words of their own, where a quote quotes and there is no second
+read as patterns, where the quote is honored and there is no second
 read: `"${v#'$('}"` and `"${v/'$('/x}"` are the unchanged value in bash
-5.3, bash 3.2 and ksh93 alike.
+5.3, bash 3.2, ksh93 and ash alike.
 
-It is not a license to accept an operand nothing can read. `"${v+'bar}"`
-is refused by every column and refused here, because there the quote is
-unbalanced *inside* the braces too, so the first read runs off the end
-and there is no operand to defer.
+It is not a license to accept an operand nothing can read, and the
+control that says so is the same construct with the quote unbalanced
+*inside* the braces: `"${v+'bar}"` runs the first read off the end of
+the file in the two columns whose scan protects the quote, and they
+refuse it. The other five stop at the `}` and print `'bar`, which is the
+scan's answer and not the deferral's.
 
-`OperandIsReadWhenTheExpansionReachesIt`, on in bash alone; the failure
-is kept on the node (`syntax.ParamExpr.OperandUnreadable`) and raised
-where something asks for the operand's value, which puts it under
-`FailedExpansionAbandonsTheLine`. Measured:
+`syntax.ParamExpr.OperandUnreadable` keeps the failure on the node; it
+is raised where something asks for the operand's value, which puts it
+under `FailedExpansionAbandonsTheLine`. Measured:
 `core/an-unreadable-operand-a-branch-does-not-take`,
 `core/an-unreadable-operand-a-branch-takes`,
-`core/an-unreadable-operand-with-nothing-to-defer-behind` (#2380).
+`core/an-unreadable-operand-with-nothing-to-defer-behind` (#2380, #2399).
 
 ### Where a word operand is matched
 

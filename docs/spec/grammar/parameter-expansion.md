@@ -509,12 +509,45 @@ by nothing else — `${#:+w}` is `w` and `${#:=w}` and `${#:?w}` are `2` in
 all six, so the exception is exactly one operator wide. See "An expansion
 with no name at all" below.
 
-The first two are still open. Separating them needs a **backtracking**
-parse rather than a lookahead — `${#-}` is a length and `${#-w}` is the
-parameter, so the reading is decided by what fails rather than by what
-follows — and this implementation refuses both, which is zsh's answer.
-Taking the five-shell side would replace one shell's loud refusal with a
-plausible number, so it is still filed rather than guessed.
+The first two are answered too, and answering them started by finding the
+table above under-measured. `set -- p q` makes `$#` **2**, and `$-` is
+also two characters in bash and ksh93 — so the `2` in those columns is
+two readings agreeing by accident, and the row could not have detected a
+divergence in either. Re-measured 2026-09-12 with `set -- p q r`, so `$#`
+is 3:
+
+| probe | bash 5.3 | dash | ksh93 | zsh 5.9.2 |
+| --- | --- | --- | --- | --- |
+| `${#-}` | `2` | `0` | `2` | `4` |
+| `${#?}` | `1` | `1` | `1` | `1` |
+| `${#-w}` | `3` | `3` | `3` | `bad substitution` |
+| `${#?w}` | `3` | `3` | `3` | `bad substitution` |
+| `${#-:-x}` | `3` | `3` | `3` | `4` |
+| `${#?:-x}` | `3` | `3` | `3` | `1` |
+| `${#$w}` | `bad substitution` | the same | the same | the same |
+| `${#!w}` | `bad substitution` | the same | the same | the same |
+
+So the divergence is **not which reading is reached**. Every shell reads
+a bare `${#-}` as a length over `$-` — dash's `0` is the length of its
+empty `$-`, and zsh's `4` is the length of its own option letters — and
+`${#?}` is the length of `$?` in all six. What differs is what happens
+when that reading cannot use the whole expansion: five shells fall back
+and take the `#` as the parameter, so `-w` and `?:-x` become an operator
+on `$#`; zsh keeps the name and either applies a real operator to it
+(`${#-:-x}` is the length of `${-:-x}`, which is `$-`) or refuses the
+stray word.
+
+The last two rows are the boundary, and they are what make this a rule
+about **operators** rather than about special names: `$` and `!` are
+names and are not operators, so there is no second reading to fall back
+to and all six refuse. `-` and `?` are simply the two entries missing
+from the operator-with-an-operand set that `%`, `/` and `#` were already
+in — they were left out because they can begin a name as well.
+
+Grammar flag: `ParamLengthOverASpecialNameIsFinal` — zsh yes, everyone
+else no. It is a grammar flag for the reason the third row's is: the two
+readings produce different *nodes*, one `ParamExpr{Name: "#", Op: …}` and
+the other `ParamExpr{Name: "-", Length: true}` (#1242).
 
 ### An expansion with no name at all
 

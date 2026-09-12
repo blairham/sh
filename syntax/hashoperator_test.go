@@ -74,25 +74,37 @@ func TestAHashIsTheParameterOrTheLengthPrefix(t *testing.T) {
 //
 // `${#%}` is a bad substitution in five of the six — the trim reading needs an
 // operand and the name reading has no name — and zsh alone answers `$#`.
-// `${#-w}` and `${#?w}` are a length over `$-` and `$?` with a stray word
-// after them, which is zsh's refusal exactly; the other five read the `#` as
-// the parameter there and answer 2, and taking their side would hand zsh a
-// plausible number in place of a refusal. Separating those two needs a
-// backtracking parse — `${#-}` is a length and `${#-w}` is not — so they are
-// still filed rather than guessed.
+// `${#$w}` and `${#!w}` are a length over `$$` and `$!` with a stray word
+// after them, and `$` and `!` are not operators, so there is no second reading
+// to fall back to: all six refuse, and so does every value of every flag.
 //
-// `${#:-w}` used to sit here as a third unreadable shape and no longer does:
-// it is decided by NamelessParamExpansion, in both directions, and the two
-// tests either side of this one hold the two answers.
+// Two shapes have left this list, each to a flag rather than to a guess.
+// `${#:-w}` is decided by NamelessParamExpansion in both directions, and the
+// two tests either side of this one hold its two answers. `${#-w}` and
+// `${#?w}` are decided by ParamLengthOverASpecialNameIsFinal — a length over
+// `$-` with a stray word after it where the flag is on, and the parameter `$#`
+// with an operator on it where it is off, which is what six of the seven
+// columns answer and so what the core takes (#1242).
 func TestAHashWithNoReadingStaysABadSubstitution(t *testing.T) {
 	d := Core()
 	for _, src := range []string{
 		`echo ${#%}`,
+		`echo ${#$w}`,
+		`echo ${#!w}`,
+	} {
+		if e := firstParam(t, src, d); !e.Bad {
+			t.Errorf("%s: read as %+v, want a bad substitution", src, e)
+		}
+	}
+	// And with the flag on, the two that left this list come back to it —
+	// the length reading stands and the stray word has nowhere to go.
+	d.ParamLengthOverASpecialNameIsFinal = true
+	for _, src := range []string{
 		`echo ${#-w}`,
 		`echo ${#?w}`,
 	} {
 		if e := firstParam(t, src, d); !e.Bad {
-			t.Errorf("%s: read as %+v, want a bad substitution", src, e)
+			t.Errorf("%s with the length final: read as %+v, want a bad substitution", src, e)
 		}
 	}
 }

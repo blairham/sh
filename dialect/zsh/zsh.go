@@ -110,6 +110,14 @@ func Dialect() syntax.Dialect {
 	// reserved after the `{`, so `case esac { esac) … }` is a parse error
 	// here and prints `hit` there (#1928).
 	d.CaseBraceBody = syntax.CaseBraceBodyMixesWithTheKeyword
+	// A `-` or `?` behind a `${#` is the name here and stays the name when
+	// text is left over behind it, where the other five re-read the `#` as
+	// the parameter `$#`. With `set -- p q r`: `${#-w}` and `${#?w}` are bad
+	// substitutions here and `3` there, and `${#-:-x}` is the length of
+	// `${-:-x}` — 4 — where the five answer 3. A *bare* `${#-}` is the length
+	// of `$-` in all six, which is why the flag is about the leftover rather
+	// than about the name (#1242).
+	d.ParamLengthOverASpecialNameIsFinal = true
 	// A `;` between the parentheses of an array literal stands exactly where a
 	// newline already does: `a=( x; y )` holds two elements here, `a=( ; )` is
 	// the empty array, and `a=( x; ; )` holds one. ksh93 takes only a single

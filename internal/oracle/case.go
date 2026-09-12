@@ -17845,7 +17845,32 @@ echo "st=$?"`,
 	{
 		ID: "length/a-hash-then-a-name-and-a-word", Category: "expansion",
 		Snippet: `set -- p q; printf '[%s]' "${#-w}"; echo`,
-		Why:     "where the panel parts, and it parts on the *parse* rather than on a value: five shells read the `#` as the parameter and answer `$#`, and zsh reads a length over `$-` with a stray `w` after it and refuses. This implementation refuses with zsh — taking the five-shell side would replace one shell's loud refusal with a plausible number, which is the trade the spec entry names as open",
+		Why:     "where the panel parts, and it parts on the *parse* rather than on a value: five shells read the `#` as the parameter and answer `$#`, and zsh reads a length over `$-` with a stray `w` after it and refuses. Each side is now its own dialect's answer (#1242). The `2` is the parameter and not a coincidence — `$-` is three characters in bash under `-c` and four in ksh93 — but only just, and the rows below set a count that no column's option letters can equal",
+	},
+	{
+		ID: "length/a-hash-then-a-name-and-a-word-with-a-count-nothing-matches", Category: "expansion",
+		Snippet: `set -- p q r s t; printf '[%s][%s]' "$-" "${#-w}"; echo`,
+		Why:     "the same probe with the two readings forced apart, and with the evidence in the row: `$#` is 5 and no column's `$-` is five characters — 0 in dash, 3 in the bash family, 4 in ksh93 and zsh, 1 in ash — so a `5` can only be the parameter. The issue that filed this measured `${#-}` from a script file with two parameters, where `$-` is also two characters in bash and ksh93; that reading could not have detected a divergence in either column",
+	},
+	{
+		ID: "length/a-hash-then-a-question-and-a-word", Category: "expansion",
+		Snippet: `set -- p q r s t; printf '[%s]' "${#?w}"; echo`,
+		Why:     "the other special name that is also an operator, and it moves with the first: five shells read `$#` with `?w` applied and answer 5, zsh keeps the length over `$?` and refuses the stray `w`. Worth its own row because `?` and `-` reach the decision by different characters, and a fix naming one of them would leave the other",
+	},
+	{
+		ID: "length/a-bare-hash-then-a-name", Category: "expansion",
+		Snippet: `set -- p q r s t; printf '[%s][%s][%s]' "$-" "${#-}" "${#?}"; echo`,
+		Why:     "the control that says the divergence is about the text *left over* and not about the name. With nothing behind it, `-` and `?` are the name in all seven: no column answers 5, the second cell is the length of the first, and the third is the length of `$?`. Printing `$-` beside it is what makes the row self-checking, since the number it should equal differs by shell",
+	},
+	{
+		ID: "length/a-hash-then-a-name-and-an-operator", Category: "expansion",
+		Snippet: `set -- p q r s t; printf '[%s]' "${#-:-x}"; echo`,
+		Why:     "and the leftover need not be a stray. Five shells fall back to the parameter and read `-:-x` as an operator on `$#`, answering 5; zsh keeps the name and applies the `:-` to `$-`, which is set, so it answers the length of `$-` instead. Both readings are well-formed here, which is what rules out `is the rest a valid word` as the rule",
+	},
+	{
+		ID: "length/a-hash-then-a-special-that-is-not-an-operator", Category: "expansion",
+		Snippet: `set -- p q r s t; printf '[%s]' "${#$w}"; echo after`,
+		Why:     "the boundary. `$` is a special name and is not an operator, so there is no second reading to fall back to and all seven refuse — which is what makes the rows above a rule about operators rather than about special names. `${#!w}` behaves the same way for the same reason",
 	},
 	{
 		ID: "zparseopts/an-argument-in-an-element-of-its-own", Category: "builtins",

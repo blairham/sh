@@ -708,7 +708,8 @@ scan:
 
 	switch {
 	case strings.HasPrefix(s, "#") && len(s) > 1 &&
-		!hashIsTheParameter(s[1:], p.dialect.NamelessParamExpansion):
+		!hashIsTheParameter(s[1:], p.dialect.NamelessParamExpansion,
+			p.dialect.ParamLengthOverASpecialNameIsFinal):
 		e.Length = true
 		s = s[1:]
 	case strings.HasPrefix(s, "!") && len(s) > 1 && !strings.ContainsAny(s[1:2], ":-+=?"):
@@ -1234,7 +1235,7 @@ func matchingFlagDelimiter(open byte) byte {
 // five shells without the nameless form and `1` in the one with it, while
 // `${#:+w}` is `w`, `${#:=w}` is `2` and `${#:?w}` is `2` in all six — so
 // the divergence is `:-` alone and not the colon.
-func hashIsTheParameter(s string, nameless bool) bool {
+func hashIsTheParameter(s string, nameless, lengthFinal bool) bool {
 	switch {
 	case s == "":
 		return false
@@ -1263,10 +1264,20 @@ func hashIsTheParameter(s string, nameless bool) bool {
 		// with a `2` stripped off its front, and `${##}` is the *length* of
 		// `$#` — the same two characters resolved the other way, unanimously.
 		return len(s) > 1
+	case s[0] == '-' || s[0] == '?':
+		// The two that are an operator *and* a name. Bare, they are the name
+		// in all six — `${#-}` is the length of `$-` and `${#?}` the length
+		// of `$?` — so the operand is required here as it is above. With one,
+		// five shells fall back and read the `#` as the parameter, which
+		// makes `${#-w}` and `${#?:-x}` an operator on `$#`; the shell that
+		// does not keeps the name, and either applies the operator to *it* or
+		// refuses the stray word. See
+		// [Dialect.ParamLengthOverASpecialNameIsFinal].
+		return len(s) > 1 && !lengthFinal
 	}
-	// Anything else begins a name, including the special ones: `${#-}` and
-	// `${#?}` are lengths, so `${#-w}` and `${#?w}` are a length with a
-	// stray word after it.
+	// Anything else begins a name, including the specials that are not also
+	// operators: `${#$w}` and `${#!w}` are a length with a stray word after
+	// it in all six, because there is no second reading to fall back to.
 	return false
 }
 

@@ -3323,7 +3323,7 @@ echo "reached-after st=$?"`,
 	{
 		ID: "signal-death/an-ignore-written-after-a-reset-stands", Category: "traps and exit",
 		Snippet: `trap - QUIT; trap '' QUIT; kill -QUIT $$; echo after`,
-		Why:     "the control for the row above, and what makes it a disposition rather than a latch: zsh prints after here, so the reset is undone by writing the ignore back rather than being a fact about the shell from then on. bash, ash and the three that die are unmoved either way",
+		Why:     "the control for the row above, and what makes it a disposition rather than a latch: zsh prints after here, so the reset is undone by writing the ignore back rather than being a fact about the shell from then on. All seven print it, which is the other half of the point: `trap '' QUIT` is an ignore any shell will honor, so the row above is about the disposition a shell was *born* with and not about whether SIGQUIT can be ignored at all",
 	},
 	{
 		ID: "signal-death/hangup-is-an-exit-in-one-shell", Category: "traps and exit",

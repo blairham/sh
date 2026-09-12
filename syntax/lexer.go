@@ -2688,6 +2688,16 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 				// made — and that one is not this construct's form.
 				se.HoldsProgram = true
 			}
+			if se, ok := l.err.(*Error); ok && !brace && se.Pos == open {
+				// What stood where the parameter form stopped, for the two
+				// dialects that answer `${x` and `${x:-a}` differently. See
+				// Error.BraceNameStop. The position guard is what keeps an
+				// enclosing `${` from overwriting the answer an inner one
+				// already recorded: failUnmatched keeps the innermost
+				// report, and the stop belongs to whichever construct that
+				// report is about.
+				se.BraceNameStop, se.BraceNameStopFollowsAPrefix = braceNameStop(l.src[start:])
+			}
 			break
 		}
 		switch c := l.peek(); c {
@@ -3617,4 +3627,66 @@ func closingOf(kind SpanKind) string {
 		return ")"
 	}
 	return kind.String()
+}
+
+// braceNameStop reads the body of an unterminated `${…}` — everything after
+// the brace, which is everything left of the input — and reports the token
+// that stood where the parameter form could read no further, together with
+// whether a prefix stood in front of the name.
+//
+// Empty where the body ran out mid-name at the true end of the input, and
+// empty once an operator has been read, because what follows an operator is a
+// word and a word may hold anything. See Error.BraceNameStop for the panel
+// this answers for.
+func braceNameStop(body string) (stop string, prefixed bool) {
+	i := 0
+	// `#`, `##` and `!` in front of a name are operators on it; the same
+	// characters standing alone are parameters in their own right — `${#}`
+	// is the count of the positional parameters — so the run is counted
+	// first and its last character handed back to the name when the run has
+	// nothing to operate on.
+	for i < len(body) && (body[i] == '#' || body[i] == '!') {
+		i++
+	}
+	if i > 0 && braceName(body[i:]) == "" {
+		i--
+	}
+	prefixed = i > 0
+	i += len(braceName(body[i:]))
+	if i < len(body) && body[i] == '@' {
+		// An operator letter this expansion has not read yet: `${x@` is
+		// still reading, where `${x:-` has read its operator and is reading
+		// a word.
+		i, prefixed = i+1, true
+	}
+	if i >= len(body) {
+		return "", prefixed
+	}
+	switch body[i] {
+	case '\n':
+		return "newline", prefixed
+	case ' ', '\t':
+		return string(body[i]), prefixed
+	}
+	return "", prefixed
+}
+
+// braceName is the parameter name at the front of s: a run of name characters
+// or one of the single characters that names a parameter on its own.
+func braceName(s string) string {
+	if s == "" {
+		return ""
+	}
+	if isNameStart(s[0]) || (s[0] >= '0' && s[0] <= '9') {
+		i := 0
+		for i < len(s) && (isNameStart(s[i]) || (s[i] >= '0' && s[i] <= '9')) {
+			i++
+		}
+		return s[:i]
+	}
+	switch s[0] {
+	case '@', '*', '?', '$', '!', '-', '#':
+		return s[:1]
+	}
+	return ""
 }

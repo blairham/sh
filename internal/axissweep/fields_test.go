@@ -15,7 +15,7 @@ import (
 	"github.com/blairham/sh/interp"
 )
 
-func init() { SetSourceDir("../../interp") }
+func init() { SetModuleRoot("../..") }
 
 // TestEveryAxisCanBeMoved is the totality claim, and it is the whole reason
 // this package enumerates rather than lists.

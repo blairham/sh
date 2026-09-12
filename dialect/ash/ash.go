@@ -19,6 +19,11 @@
 // *measured* but not *maintained*: nothing in `make check` notices when one
 // of them drifts. #2263 is the follow-on that fixes it.
 //
+// One thing `make check` does notice, since #2340: an axis this dialect has
+// no value for *at all*. That is absence rather than drift, it costs no shell
+// processes, and it is the shape #2272 shipped — so `make axis-coverage`
+// asks it of every dialect and the same check fails in `go test ./...`.
+//
 // Read a comment that cites a measurement as evidence; read the absence of
 // one as an unanswered question rather than as agreement with dash.
 package ash
@@ -607,26 +612,34 @@ func Semantics() interp.Semantics {
 	// it down. None is a guess deferred; each is a measurement the vector
 	// cannot yet hold.
 	//
-	//   DollarSingleNulTruncates — a *third* reading (#2276). `x=$'a\0b'` leaves
-	//   `ab` at length 2: the NUL is neither kept (zsh, length 3) nor the
-	//   end of the span (bash and ksh93, length 1) but dropped, and the
-	//   octal and hex spellings agree. `Answer` has no room for it, so a
-	//   value here would have to be one of the two wrong ones.
+	// The first two are written as `unanswered <axis>:` lines, which is the
+	// spelling internal/axissweep reads back (#2340). The coverage check
+	// prints them under the entry they answer, so what this dialect has not
+	// measured is stated by the instrument rather than only here — and a
+	// value quietly appearing for one of them, copied from a neighbor to
+	// quiet the refusal, fails that check instead of passing quietly.
 	//
-	//   ReadonlyRecordsTheCompoundAttribute — this shell has no letter to
-	//   ask it with (#2277). `readonly -a a` is `readonly: illegal option -a` and
-	//   there is no `typeset` at all. The refusal our binary reaches is
-	//   `readonly`'s option set being fixed in the interpreter rather than
-	//   the dialect's, which is a gap ksh93 has today for the same reason —
-	//   it refuses the same corpus row, on `main`, for want of the same
-	//   letter.
+	// unanswered DollarSingleNulTruncates: a *third* reading (#2276).
+	// `x=$'a\0b'` leaves `ab` at length 2: the NUL is neither kept (zsh,
+	// length 3) nor the end of the span (bash and ksh93, length 1) but
+	// dropped, and the octal and hex spellings agree. `Answer` has no room
+	// for it, so a value here would have to be one of the two wrong ones.
 	//
-	//   Diagnostics.UlimitListing — measured in full (#2278: fifteen rows, `core
-	//   file size (blocks)         (-c) unlimited` and its fellows), and
-	//   five of them — `-e`, `-i`, `-q`, `-r`, `-x` — name resources no
-	//   [interp.Resource] constant does. It was also measured on Linux,
-	//   where those five exist; the table a macOS build should print is a
-	//   second measurement and not this one.
+	// unanswered ReadonlyRecordsTheCompoundAttribute: this shell has no
+	// letter to ask it with (#2277). `readonly -a a` is `readonly: illegal
+	// option -a` and there is no `typeset` at all. The refusal our binary
+	// reaches is `readonly`'s option set being fixed in the interpreter
+	// rather than the dialect's, which is a gap ksh93 has today for the same
+	// reason — it refuses the same corpus row, on `main`, for want of the
+	// same letter.
+	//
+	// The third is not an axis of the semantics vector at all, so it carries
+	// no marker: Diagnostics.UlimitListing — measured in full (#2278:
+	// fifteen rows, `core file size (blocks)         (-c) unlimited` and its
+	// fellows), and five of them — `-e`, `-i`, `-q`, `-r`, `-x` — name
+	// resources no [interp.Resource] constant does. It was also measured on
+	// Linux, where those five exist; the table a macOS build should print is
+	// a second measurement and not this one.
 
 	return s
 }

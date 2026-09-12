@@ -109,9 +109,12 @@ has no spelling in `oracle.Shell`. So:
   because the row would be graded against a column that is not there;
 - **`make axis-sweep` has no ash target**, for the same reason — a
   target names the panel column its answers are graded against;
-- **`make check` therefore says nothing about this dialect** beyond the
-  unit tests in `dialect/ash`, which assert what somebody already
-  believed.
+- **`make check` therefore says almost nothing about this dialect**
+  beyond the unit tests in `dialect/ash`, which assert what somebody
+  already believed. The one exception is stated below: `make check` now
+  fails when this dialect has *no value at all* for an axis (#2340).
+  That is absence, and it needs no shell to detect; a wrong answer is
+  drift, and detecting that still needs the binary #2263 is about.
 
 `make conformance-dialects` exists precisely to stop a dialect drifting
 from the shell it claims to be. This one is exempt from it, and the
@@ -146,6 +149,43 @@ are items 4, 5 and 6 under *What could not be said*.
 That sweep is worth re-running whenever an axis is added, and it is three
 lines over `oracle.Corpus` and a built binary. It does not need a
 container: the *refusals* are our own, and only the answers need BusyBox.
+
+### What now catches it, and what still does not
+
+`make axis-coverage` (#2340) asks every dialect, of every axis, whether it
+has an answer — ash included, and with no shell run at all. It is a test,
+so it is in `make check`, and it fails on the commit that adds an axis
+rather than in somebody's terminal a week later. `internal/axissweep/`
+`testdata/unanswered.txt` records what is unanswered today, because most
+of it should be: 113 of the 429 askable axes have no ash value and many
+of them are questions BusyBox is never asked.
+
+Two things it deliberately does not do, and both are why the empirical
+sweep above is still worth running:
+
+- **It cannot say whether the dialect *reaches* an unanswered axis.** The
+  113 include the ones that matter and the ones that never will, and only
+  running the corpus through the binary separates them. That run found
+  nineteen; a static count cannot.
+- **It cannot say whether an answer is right.** A value copied from dash
+  to quiet a refusal satisfies it perfectly. That is what an oracle
+  column is for, and it remains #2263.
+
+What it does do is make the #2272 shape impossible to ship quietly, which
+was the specific failure: an axis added elsewhere, unanswered here,
+refusing at run time with the test suite green.
+
+An axis this dialect genuinely cannot answer is recorded where the
+omission is, as a line in `ash.go`:
+
+    // unanswered DollarSingleNulTruncates: a *third* reading (#2276). …
+
+which the coverage report prints under the entry it answers. So the check
+states what is unmeasured rather than being switched off — and, the other
+way round, a value quietly appearing for one of the three items under
+*What could not be said* now **fails** the check while its note still
+stands, which is exactly the "copied from a neighboring dialect to make
+the message go away" move this file forbids.
 
 ### Where it stood when it landed
 

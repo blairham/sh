@@ -15,10 +15,18 @@
 //	make axis-sweep ARGS='-dialects zsh'     # one column
 //	make axis-sweep ARGS='-json out.json'    # the flips, for a later pass
 //	make axis-sweep ARGS=-presets            # the two lists, no shell run
+//	make axis-coverage                       # what no dialect answers, no shell run
 //
 // It is **not** in `make check` and must not be: it is thousands of shell
 // processes, and this repository already deleted a gate for costing every
 // commit too much. It runs on demand, and its output is a backlog.
+//
+// `-coverage` is the exception and is in `make check`, as a test rather than
+// as this command — it runs no shells at all. It asks the other question
+// (#2340): not whether anything objects when an axis moves, but whether each
+// dialect answers the axis in the first place. A `Semantics` axis with no
+// value in a dialect refuses at run time in the shipped binary while `go test
+// ./...` stays green, which is how #2272 reached a release.
 //
 // The exit status is 1 while anything is **untriaged** — a backlog entry no
 // field comment has answered — because "fail if nothing fails" is the whole
@@ -49,7 +57,34 @@ func main() {
 	unspecified := flag.Bool("unspecified", false, "also flip to and from the unspecified constant, which measures reachability rather than disagreement")
 	quiet := flag.Bool("quiet", false, "only print the report")
 	presets := flag.Bool("presets", false, "only ask the presets what they hold — no shell is run, which takes a second rather than an hour")
+	coverage := flag.Bool("coverage", false, "only report the axes each dialect does not answer — no shell is run")
+	write := flag.Bool("write", false, "with -coverage, rewrite the committed ledger of what is unanswered")
 	flag.Parse()
+
+	if *coverage {
+		cov, err := axissweep.Coverage()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "axissweep:", err)
+			os.Exit(2)
+		}
+		if *write {
+			path, err := cov.WriteLedger()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "axissweep:", err)
+				os.Exit(2)
+			}
+			fmt.Fprintf(os.Stderr, "wrote %d unanswered pairs to %s\n", len(cov.Gaps), path)
+			// Deliberately still nonzero when the run had findings. A
+			// regeneration is how a real gap gets recorded *and* how one
+			// gets buried, and the difference is whether somebody read the
+			// list — so the exit status keeps saying there was one.
+		}
+		fmt.Print(cov.Report())
+		if cov.Failures() > 0 {
+			os.Exit(1)
+		}
+		return
+	}
 
 	uses, err := axissweep.PresetUse()
 	if err != nil {
@@ -57,6 +92,9 @@ func main() {
 		os.Exit(2)
 	}
 	if *presets {
+		if cov, err := axissweep.Coverage(); err == nil {
+			fmt.Print(cov.Report())
+		}
 		fmt.Print(axissweep.PresetReport(uses))
 		// Same rule as the corpus half: the instrument exits nonzero when
 		// it has found something, and what it finds here is an entry no

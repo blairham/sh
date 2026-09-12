@@ -457,7 +457,7 @@ func TestParametersDashDoesNotProvide(t *testing.T) {
 		}
 		var out bytes.Buffer
 		sem := dash.Semantics()
-		r := &interp.Runner{Stdout: &out, Semantics: &sem, Dialect: presetDialect()}
+		r := &interp.Runner{Name: preset.Name, Stdout: &out, Semantics: &sem, Dialect: presetDialect()}
 		dash.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -478,7 +478,7 @@ func TestDashHasNeitherDeclarationName(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := dash.Semantics(), dash.Diagnostics()
-		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+		r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
 		dash.Apply(r)
 		status, err := r.Run(context.Background(), f)
 		if err != nil {

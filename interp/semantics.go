@@ -3711,143 +3711,132 @@ type Semantics struct {
 	// byte differently.
 	ListingControlEscape ControlEscapeStyle
 
-	// SetListingQuoting is how that listing spells a value. The styles are
-	// the shared listing vocabulary: bash quotes only where it must and
-	// closes-reopens with a backslash, dash single-quotes everything, and
-	// ksh93 reaches for `$'...'`.
+	// SetListingQuoting is how that listing spells a value, over the shared
+	// listing vocabulary: quoting only where it must and closing-reopening with
+	// a backslash, single-quoting everything, or reaching for `$'...'`.
 	SetListingQuoting ListingQuotingStyle
 
 	// SelectLayout is how `select` draws its menu. Three engines rather than
 	// two answers, which is why it has its own type.
 	SelectLayout SelectMenuLayout
 
-	// AliasParsesOptions lets `alias` read leading `-` words as options. True
-	// in bash, ksh93 and zsh; dash reads none, so `alias -p` is a name there
-	// and the answer is "-p not found" rather than a refusal.
+	// AliasParsesOptions lets `alias` read leading `-` words as options.
+	// Answering No reads none, so `alias -p` is a name and the answer is
+	// "-p not found" rather than a refusal.
 	AliasParsesOptions Answer
 
 	// AliasHasPrintOption gives `alias` a `-p`, which prints the listing with
-	// `alias ` in front of every line. bash and ksh93 have it — and it is
-	// what bash's plain listing already looks like, so it is only visible in
-	// ksh93. dash parses no options for `alias` at all, so `-p` is a *name*
-	// there and the answer is "not found"; zsh has options and refuses it.
+	// `alias ` in front of every line.
+	//
+	// It is only visible where the plain listing does not already look like
+	// that. A preset that parses no options for `alias` at all makes `-p` a
+	// *name* and answers "not found"; one that has options may refuse it.
 	AliasHasPrintOption Answer
 
-	// GlobalAliases gives this dialect the second kind of alias: `alias -g
-	// name=value` defines one, and a word naming one is expanded *wherever
-	// it stands* rather than only where a command word does — in an
-	// argument, a `for` list, a `case` pattern, a redirection target, a
-	// heredoc delimiter, a `[[ ]]` word. The value is spliced as tokens like
-	// any other alias body, so `alias -g UP="| tr a-z A-Z"` puts a pipeline
-	// in the middle of a line.
+	// GlobalAliases gives this preset the second kind of alias: `alias -g
+	// name=value` defines one, and a word naming one is expanded *wherever it
+	// stands* rather than only where a command word does — in an argument, a
+	// `for` list, a `case` pattern, a redirection target, a heredoc delimiter, a
+	// `[[ ]]` word. The value is spliced as tokens like any other alias body, so
+	// `alias -g UP="| tr a-z A-Z"` puts a pipeline in the middle of a line.
 	//
-	// zsh alone, measured: bash calls `-g` an invalid option, ksh93 an
-	// unknown one, and dash reads no options at all and looks for an alias
-	// called `-g`. It shares a table with the regular kind there — `alias -g`
-	// over a regular name replaces it — and the plain listing shows both,
-	// which is why the two are one field rather than one table each.
+	// It shares a table with the regular kind — `alias -g` over a regular name
+	// replaces it — and the plain listing shows both, which is why the two are
+	// one field rather than one table each.
 	//
-	// The letter is the visible half; the expansion is the feature. A
-	// dialect answering Yes and expanding nothing would list an alias it
-	// never uses, which is the shape #2081 was filed against in reverse.
+	// The letter is the visible half; the expansion is the feature. A preset
+	// answering Yes and expanding nothing would list an alias it never uses.
 	//
-	// `make axis-sweep` pins this in three of the four dialects and cannot
-	// in dash, which is a fact about dash rather than a gap: `alias` there
-	// reads no options at all — AliasParsesOptions is No — so the accepted
-	// set is never consulted, and no shell in the panel has an `unalias -g`
-	// for it to be consulted from either. The answer has no reachable
-	// consequence in that dialect, which is the third of the four triages
-	// docs/spec/semantics.md lists. SuffixAliases is pinned in all four,
-	// because `unalias -s` reads the axis whatever `alias` does with its
-	// operands.
+	// `make axis-sweep` cannot pin this where `alias` reads no options at all —
+	// AliasParsesOptions is No there, so the accepted set is never consulted,
+	// and nothing has an `unalias -g` for it to be consulted from either. The
+	// answer has no reachable consequence in such a preset, which is the third
+	// of the four triages docs/spec/semantics.md lists. SuffixAliases is pinned
+	// everywhere, because `unalias -s` reads the axis whatever `alias` does with
+	// its operands.
 	GlobalAliases Answer
 
-	// SuffixAliases gives this dialect the third kind, which is a second
-	// *namespace*: `alias -s ext=value` keys on a command word's extension,
-	// and a command word `text.ext` — text non-empty, ext the run after the
-	// last dot — is replaced by the text `value text.ext`. So `alias -s
-	// txt=cat` makes `./x.txt` into `cat ./x.txt`.
+	// SuffixAliases gives this preset the third kind, which is a second
+	// *namespace*: `alias -s ext=value` keys on a command word's extension, and
+	// a command word `text.ext` — text non-empty, ext the run after the last dot
+	// — is replaced by the text `value text.ext`. So `alias -s txt=cat` makes
+	// `./x.txt` into `cat ./x.txt`.
 	//
-	// zsh alone, measured, and it is a parse-time substitution there rather
-	// than a fallback for a command that was not found: it beats an
-	// executable of that name on PATH and a function of that name, and loses
-	// to a regular alias of that name, which is exactly the order a
-	// substitution done while reading the line produces. A value holding a
-	// pipeline splices one in.
+	// It is a parse-time substitution rather than a fallback for a command that
+	// was not found: it beats an executable of that name on PATH and a function
+	// of that name, and loses to a regular alias of that name, which is exactly
+	// the order a substitution done while reading the line produces. A value
+	// holding a pipeline splices one in.
 	//
-	// The namespace is the half a single flag could not say: the two sets
-	// are never listed together, `unalias -a` empties the other table and
-	// leaves this one, and `unalias -s` is the only way to remove one —
-	// which is also why this field is read by `unalias` as well.
+	// The namespace is the half a single flag could not say: the two sets are
+	// never listed together, `unalias -a` empties the other table and leaves
+	// this one, and `unalias -s` is the only way to remove one — which is also
+	// why this field is read by `unalias` as well.
 	SuffixAliases Answer
 
-	// AliasListsAsDefinitions gives `alias` a `-L`, which writes every line
-	// as a command that would define the alias back: `alias ` in front, and
-	// the kind's own letter where the entry is not the regular kind — `alias
-	// -g UP='| tr a-z A-Z'`, `alias -s txt=cat`.
+	// AliasListsAsDefinitions gives `alias` a `-L`, which writes every line as a
+	// command that would define the alias back: `alias ` in front, and the
+	// kind's own letter where the entry is not the regular kind — `alias -g
+	// UP='| tr a-z A-Z'`, `alias -s txt=cat`.
 	//
-	// zsh alone, measured 2026-09-12. It is what a startup file wants and
-	// what the plain listing cannot be, since the plain listing is `name=value`
-	// there and says nothing about which kind an entry is. The letter is a
-	// listing form and not a filter: `alias -L`, `alias -g -L` and `alias -s
-	// -L` each list what the kind letter alone would have listed.
+	// It is what a startup file wants and what a plain `name=value` listing
+	// cannot be, since that says nothing about which kind an entry is. The
+	// letter is a listing form and not a filter: `alias -L`, `alias -g -L` and
+	// `alias -s -L` each list what the kind letter alone would have listed.
 	AliasListsAsDefinitions Answer
 
 	// AliasRestrictsToRegularKind gives `alias` a `-r`, the kind letter for
 	// "neither global nor suffix".
 	//
-	// zsh alone, and it exists there because the other two kind letters
-	// leave no way to ask for the plain ones: the shared table holds the
-	// regular and the global aliases together and the plain listing shows
-	// both. It is a kind like `-g` and `-s` rather than a modifier on them,
-	// so `alias -r -g` and `alias -rs` are `illegal combination of options`
-	// exactly as `alias -gs` is.
+	// It exists because the other two kind letters leave no way to ask for the
+	// plain ones: the shared table holds the regular and the global aliases
+	// together and the plain listing shows both. It is a kind like `-g` and `-s`
+	// rather than a modifier on them, so `alias -r -g` and `alias -rs` are
+	// `illegal combination of options` exactly as `alias -gs` is.
 	AliasRestrictsToRegularKind Answer
 
-	// AliasOperandsCanBePatterns gives `alias` and `unalias` a `-m`, which
-	// reads every operand as a pattern rather than as a name.
+	// AliasOperandsCanBePatterns gives `alias` and `unalias` a `-m`, which reads
+	// every operand as a pattern rather than as a name.
 	//
-	// zsh alone. Read by both builtins because one letter serves both there,
-	// and they differ in what an absent operand means: `alias -m` with
-	// nothing after it is the plain listing at 0, and `unalias -m` with
-	// nothing after it is `not enough arguments` at 1 — a removal with no
-	// pattern would be a removal of everything, which is what `-a` is for.
+	// Read by both builtins because one letter serves both, and they differ in
+	// what an absent operand means: `alias -m` with nothing after it is the
+	// plain listing at 0, and `unalias -m` with nothing after it is `not enough
+	// arguments` at 1 — a removal with no pattern would be a removal of
+	// everything, which is what `-a` is for.
 	//
-	// A pattern that matches nothing is 0 for `alias` and 1 for `unalias`,
-	// which is the same shape as a name that is not there.
+	// A pattern that matches nothing is 0 for `alias` and 1 for `unalias`, which
+	// is the same shape as a name that is not there.
 	AliasOperandsCanBePatterns Answer
 
 	// AliasPlusPrintsNamesOnly makes `+g`, `+r`, `+s` and a bare `+` list the
 	// names without the values.
 	//
-	// zsh alone, and the plus words are not option letters in the ordinary
-	// sense: a bare `+` also *ends* the option list, so `alias + -L` looks up
-	// an alias called `-L` where `alias -L +` lists everything in the `-L`
-	// form. `-L` wins over the names-only reading when both are written,
-	// measured: `alias -L +g` is the full definition line.
+	// The plus words are not option letters in the ordinary sense: a bare `+`
+	// also *ends* the option list, so `alias + -L` looks up an alias called `-L`
+	// where `alias -L +` lists everything in the `-L` form. `-L` wins over the
+	// names-only reading when both are written: `alias -L +g` is the full
+	// definition line.
 	//
-	// `unalias` has none of them — `unalias +m x` looks for hash table
-	// elements called `+m` and `x` — so this is read by `alias` alone.
+	// `unalias` has none of them — `unalias +m x` looks for hash table elements
+	// called `+m` and `x` — so this is read by `alias` alone.
 	AliasPlusPrintsNamesOnly Answer
 
 	// TypeNamesAnAliasOnlyWhenExpanded holds `type`, `command -v` and
 	// `command -V` silent about an alias while alias expansion is off.
 	//
-	// bash alone, and it is a real difference rather than a detail of how a
-	// program arrived: `alias a='echo hi'; type a` in a `-c` string is
-	// `type: a: not found` there while `alias` lists the entry one line
-	// earlier, and `shopt -s expand_aliases` in front of it makes the same
-	// call answer. The other three answer from the table whatever the switch
-	// says — zsh names one after `unsetopt aliases`.
+	// A real difference rather than a detail of how a program arrived: under Yes
+	// `alias a='echo hi'; type a` in a `-c` string is `type: a: not found` while
+	// `alias` lists the entry one line earlier, and turning expansion on in
+	// front of it makes the same call answer. Under No the table answers
+	// whatever the switch says.
 	//
-	// So the three builtins report what *would run*, in the dialect where an
-	// alias that cannot expand would not run, and report what the table
-	// holds in the dialects where the two are never apart.
+	// So the three builtins report what *would run* under Yes, where an alias
+	// that cannot expand would not run, and report what the table holds under
+	// No, where the two are never apart.
 	TypeNamesAnAliasOnlyWhenExpanded Answer
 
 	// AliasReportsNotFound says something when `alias` is given a name the
-	// table does not hold. True in bash, dash and ksh93; zsh reports 1 and
-	// prints nothing.
+	// table does not hold. Answering No reports 1 and prints nothing.
 	AliasReportsNotFound Answer
 
 	// UnaliasReportsNotFound is that question for `unalias`, and the panel
@@ -3856,163 +3845,155 @@ type Semantics struct {
 	// not say that.
 	UnaliasReportsNotFound Answer
 
-	// AliasNotFoundStatusCounts makes `alias` report how many names it could
-	// not find rather than a plain 1: `alias n1 n2 n3` is 3 in ksh93 and 1 in
-	// the other three.
+	// AliasNotFoundStatusCounts makes `alias` report how many names it could not
+	// find rather than a plain 1, so `alias n1 n2 n3` is 3.
 	//
-	// About `alias` alone — ksh93's own `unalias` answers 1 however many were
-	// missing — so it is asked where the count is known and not where the
+	// About `alias` alone — the same preset's `unalias` answers 1 however many
+	// were missing — so it is asked where the count is known and not where the
 	// complaint is printed.
 	AliasNotFoundStatusCounts Answer
 
 	// UnaliasAllRefusesOperands makes `unalias -a name` an error that clears
-	// nothing. zsh alone: "-a: too many arguments", status 1, table intact.
-	// The other three take the `-a`, ignore the names and empty the table.
+	// nothing: "-a: too many arguments", status 1, table intact. Answering No
+	// takes the `-a`, ignores the names and empties the table.
 	UnaliasAllRefusesOperands Answer
 
-	// AliasQuoting is how a value is spelled in a listing — four engines, no
+	// AliasQuoting is how a value is spelled in a listing — several engines, no
 	// two alike. See ListingQuotingStyle.
 	AliasQuoting ListingQuotingStyle
 
-	// TrapQuoting is that same question asked of `trap`, and it is a
-	// separate field because one dialect answers the two differently: zsh
-	// writes an alias holding a tab as `$'a\tb'` and a trap holding one as
-	// a plainly quoted `'a<tab>b'`.
+	// TrapQuoting is that same question asked of `trap`, and it is a separate
+	// field because a preset may answer the two differently — writing an alias
+	// holding a tab as `$'a\tb'` and a trap holding one as a plainly quoted
+	// `'a<tab>b'`.
 	TrapQuoting ListingQuotingStyle
 
 	// TrapActionIsParsedWhenSet reads a trap's action when the trap is set
-	// rather than when it fires, and refuses a trap whose action will not
-	// parse.
+	// rather than when it fires, and refuses a trap whose action will not parse.
 	//
-	// zsh alone. The other three store the text: `trap "if" EXIT` is taken
-	// and complains at the end, and `trap "if" INT` is taken and never
-	// complains at all, because the trap never fires.
+	// Answering No stores the text: `trap "if" EXIT` is taken and complains at
+	// the end, and `trap "if" INT` is taken and never complains at all, because
+	// the trap never fires.
 	TrapActionIsParsedWhenSet Answer
 
-	// TrapBodyRunsWhatParsed runs each line of a trap's body as it parses,
-	// so the part before a syntax error has already run by the time the
-	// error is reported.
+	// TrapBodyRunsWhatParsed runs each line of a trap's body as it parses, so
+	// the part before a syntax error has already run by the time the error is
+	// reported: `trap "echo a\nif" EXIT` prints `a` and then complains.
+	// Answering No reads the whole body first and prints nothing.
 	//
-	// bash and dash do — `trap "echo a
-	// if" EXIT` prints `a` and then complains. ksh93 reads the whole body
-	// first and prints nothing. zsh answers no by construction rather than
-	// by measurement: it reads the action when the trap is set, so by the
-	// time a trap fires the whole body has parsed and there is no partial
-	// run to have. The two answers cannot be told apart there.
+	// Where TrapActionIsParsedWhenSet is Yes this answers No by construction
+	// rather than by measurement: the whole body has parsed before the trap can
+	// fire, so there is no partial run to have and the two answers cannot be
+	// told apart.
 	TrapBodyRunsWhatParsed Answer
 
-	// TrapParseFailureNamesWhereItFired puts the runtime location in front
-	// of a trap body's parse failure — where the trap fired — rather than
-	// the line the parse gave out on.
+	// TrapParseFailureNamesWhereItFired puts the runtime location in front of a
+	// trap body's parse failure — where the trap fired — rather than the line
+	// the parse gave out on.
 	//
-	// ksh93 alone, and the two are different numbers: a body set on line 2
-	// and fired from line 5 reports `w5.sh: line 5: syntax error at line 6`.
-	// bash and dash name the parse position in both places. zsh is not
-	// asked, because it reads the action when the trap is set and never
-	// reaches a parse failure at fire time.
+	// The two are different numbers: a body set on line 2 and fired from line 5
+	// reports `w5.sh: line 5: syntax error at line 6` under Yes, and names the
+	// parse position in both places under No.
+	//
+	// Not asked where the action is read when the trap is set, since a parse
+	// failure is never reached at fire time there.
 	TrapParseFailureNamesWhereItFired Answer
 
 	// SymbolicMaskTakesMoreThanOneOperator lets one `umask` clause turn on
-	// several: `umask u+rw-x` is 0122 from 022 in three of the four. zsh
-	// takes a single operator per clause and names the second one.
+	// several: `umask u+rw-x` is 0122 from 022. Answering No takes a single
+	// operator per clause and names the second one.
 	SymbolicMaskTakesMoreThanOneOperator Answer
 
 	// SymbolicMaskWhoAloneSetsIt reads `umask g` as `umask g=`, denying that
-	// group everything. ksh93 alone. bash and dash refuse it, and zsh
-	// answers it with the complaint it gives a number it could not read.
+	// group everything. Answering No refuses it, or answers it with the
+	// complaint a number that could not be read draws.
 	SymbolicMaskWhoAloneSetsIt Answer
 
-	// SymbolicMaskTakesTheSetuidLetter accepts `s` in a clause, which
-	// changes no bits — a umask has no setuid bit to deny — and is accepted
-	// by three of the four all the same. zsh refuses it.
+	// SymbolicMaskTakesTheSetuidLetter accepts `s` in a clause, which changes no
+	// bits — a umask has no setuid bit to deny — and is accepted all the same.
 	SymbolicMaskTakesTheSetuidLetter Answer
 
 	// SymbolicMaskTakesTheStickyLetter is the same question about `t`, and a
-	// different set of shells: bash and ksh93 take it, dash and zsh do not.
-	// Two fields because the two letters are not answered together.
+	// different set of answers. Two fields because the two letters are not
+	// answered together.
 	SymbolicMaskTakesTheStickyLetter Answer
 
 	// ShiftOptionWords is which leading-`-` words `shift` reads as options
-	// rather than as its count, and it is three answers rather than a
-	// presence — see ShiftOptionWordPolicy.
+	// rather than as its count, and it is three answers rather than a presence —
+	// see ShiftOptionWordPolicy.
 	//
-	//	shift -x   bash, dash  -x: the count, and not a number
-	//	           ksh93, zsh  -x: an option, and not one they have
-	//	shift -1   bash, dash, zsh  -1: the count
-	//	           ksh93            -1: an option, and not one it has
+	//	shift -x   the count, and not a number
+	//	           an option, and not one this preset has
+	//	shift -1   the count
+	//	           an option, and not one this preset has
 	//
-	// zsh is what makes this three: it refuses `-x` as an option and reads
-	// `-1` as a count that is out of range, so "reads options" and "reads
-	// every dash word as an option" are not the same answer.
+	// The third reading is what makes it three: refusing `-x` as an option while
+	// reading `-1` as a count that is out of range, so "reads options" and
+	// "reads every dash word as an option" are not the same answer.
 	//
-	// A lone `-` is not a dash word in any reading here and reaches the
-	// count, which is bash's and dash's answer for it; ksh93 and zsh each
-	// do something else with that one word and neither is modeled — see
+	// A lone `-` is not a dash word in any reading here and reaches the count.
+	// Other readings of that one word exist and are not modeled — see
 	// docs/spec/semantics.md. Nor is `--` a dash word, which is asked about
 	// separately — see ShiftDoubleDashEndsOptions.
 	//
 	// Asked only for a word that actually begins with a `-`.
 	ShiftOptionWords ShiftOptionWordPolicy
 	// ShiftDoubleDashEndsOptions takes `--` as the end-of-options marker and
-	// reads what follows as the count. bash, ksh93 and zsh do; dash calls
-	// `--` an illegal number, having no option parsing here for a marker to
-	// end.
+	// reads what follows as the count. Answering No calls `--` an illegal
+	// number, having no option parsing here for a marker to end.
 	//
-	// It is not ShiftOptionWords: bash reads no dash word as an option and
-	// still honors the marker, so the two questions have different answers
-	// in the same shell. Only the *first* `--` is the marker —
-	// `shift -- --` complains about the second in all three that take it.
+	// It is not ShiftOptionWords: a preset may read no dash word as an option
+	// and still honor the marker, so the two questions have different answers in
+	// the same implementation. Only the *first* `--` is the marker —
+	// `shift -- --` complains about the second wherever the marker is taken.
 	//
 	// Asked only where the operand actually is `--`.
 	ShiftDoubleDashEndsOptions Answer
 	// ShiftNamesAreArrays reads `shift`'s operands as the names of arrays to
-	// shift, instead of the positional parameters. Only zsh, whose synopsis
-	// is `shift [ n ] [ name ... ]`; bash calls a name a `numeric argument
-	// required` and a second operand `too many arguments`, and ksh93
-	// evaluates the word arithmetically, reaching either the array's first
-	// element or a `bad number`.
+	// shift, instead of the positional parameters — the synopsis
+	// `shift [ n ] [ name ... ]`. Answering No calls a name a `numeric argument
+	// required` and a second operand `too many arguments`, or evaluates the word
+	// arithmetically.
 	//
-	// The count stays optional in front of them, so the first word is
-	// ambiguous — and zsh settles it by *type*, measured:
+	// The count stays optional in front of them, so the first word is ambiguous
+	// — and Yes settles it by *type*:
 	//
 	//	q=5;   a=(1 2 3 4 5 6); shift q a   # a=(6)          — q is a count
 	//	q=(5); a=(1 2 3 4 5 6); shift q a   # q=() a=(2 … 6) — q is a name
 	//
 	// So a word that names an array is a name and every other word is an
-	// arithmetic count, which is why `shift a a` shifts `a` twice rather
-	// than once by its first element: arithmetic on an array name is a `bad
-	// math expression` in zsh, so an array can only ever have been a name.
+	// arithmetic count, which is why `shift a a` shifts `a` twice rather than
+	// once by its first element: arithmetic on an array name is a bad math
+	// expression, so an array can only ever have been a name.
 	//
-	// A name that is not an array — unset, a scalar, an association — is
-	// left alone and not complained about, at status 0. What protects the
-	// positional parameters is giving *any* operand, not the operand turning
-	// out to name an array: `set -- x y z; shift 1 nosuch` leaves `$@` where
-	// it is. A first word that is a scalar is the count, though, and shifts
-	// them like a literal one — `s=9; shift s` overruns three positional
-	// parameters and says so. A count past the end
-	// of one array is reported (Diagnostics.ShiftTooMany) and the remaining
-	// names are still shifted, so `shift 2 a b` with a one-element `a` is
-	// status 1 with `b` shifted. That carrying-on is why this may only be
-	// answered where ShiftPastEndFatal is No, which is zsh.
+	// A name that is not an array — unset, a scalar, an association — is left
+	// alone and not complained about, at status 0. What protects the positional
+	// parameters is giving *any* operand, not the operand turning out to name an
+	// array: `set -- x y z; shift 1 nosuch` leaves `$@` where it is. A first
+	// word that is a scalar is the count, though, and shifts them like a literal
+	// one. A count past the end of one array is reported
+	// (Diagnostics.ShiftTooMany) and the remaining names are still shifted, so
+	// `shift 2 a b` with a one-element `a` is status 1 with `b` shifted. That
+	// carrying-on is why this may only be answered where ShiftPastEndFatal is
+	// No.
 	ShiftNamesAreArrays Answer
-	// ShiftNegativeIsOutOfRange reads a negative count as a number that is
-	// out of range rather than as a word that is not a number. bash, ksh93
-	// and zsh do, at status 1 and in three different wordings
-	// (Diagnostics.ShiftNegativeCount); dash calls `-1` an illegal number,
-	// which is the same complaint it makes about `-x`.
+	// ShiftNegativeIsOutOfRange reads a negative count as a number that is out
+	// of range rather than as a word that is not a number, at status 1 and in
+	// each preset's own wording (Diagnostics.ShiftNegativeCount). Answering No
+	// calls `-1` an illegal number, which is the same complaint it makes about
+	// `-x`.
 	//
 	// It is the other end of ShiftTooMany — one count, out of range in two
 	// directions — so the same ShiftPastEndFatal decides whether it ends the
-	// script, and it does: fatal in dash and ksh93, survivable in bash and
-	// zsh, with `$#` untouched either way.
+	// script, with `$#` untouched either way.
 	//
-	// Asked only where the count really is negative, which in ksh93 means
-	// only after a `--`: a bare `-1` is an option there.
+	// Asked only where the count really is negative, which where a bare `-1` is
+	// an option means only after a `--`.
 	ShiftNegativeIsOutOfRange Answer
 
-	// WaitReadsOptions reads a leading `-` word as an option rather than as
-	// a job to wait for. Three of the four do; zsh has none, and answers
-	// `wait -x` with the job it could not find.
+	// WaitReadsOptions reads a leading `-` word as an option rather than as a
+	// job to wait for. Answering No has none, and answers `wait -x` with the job
+	// it could not find.
 	WaitReadsOptions Answer
 
 	// CommandRejectsUnknownOption refuses a leading `-` word that is not one

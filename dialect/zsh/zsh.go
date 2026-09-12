@@ -1151,6 +1151,9 @@ func Semantics() interp.Semantics {
 	// alone; `-n` is not here, and that is measured rather than an
 	// omission — `unset -n x` is `bad option: -n` in zsh 5.9.2 where bash
 	// 5.3 and ksh93 take it.
+	// unanswered UnsetReferenceLetterRemovesANonReference: `-n` is not one of
+	// this shell's letters. Measured 2026-09-12, `unset -n x` is
+	// `unset: bad option: -n` at 1 and `x` keeps its value (#932).
 	s.UnsetOptions = "vfm"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutFinishesWhatItStarted
 	s.ReadTimeoutKeepsWhatArrived = interp.No

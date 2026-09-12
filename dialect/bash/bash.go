@@ -432,6 +432,12 @@ func Semantics() interp.Semantics {
 	// `unset -n x` is an invalid option there and under `--posix` — so
 	// this is 5.3's set, which is the binary the panel measures.
 	s.UnsetOptions = "vfn"
+	// Measured 2026-09-12: `x=1; unset -n x` leaves `x` at 1 and reports 0,
+	// where ksh93 removes it. `-n` names the reference and this shell reads a
+	// name that is not one as naming nothing at all — far enough that
+	// `unset -n 1x` is silent at 0 while plain `unset 1x` refuses the
+	// identifier, though a readonly name is still refused (#932).
+	s.UnsetReferenceLetterRemovesANonReference = interp.No
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes

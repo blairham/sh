@@ -2537,7 +2537,26 @@ echo "reached-after st=$?"`,
 	{
 		ID: "unset/the-n-option-splits-the-panel", Category: "parameters",
 		Snippet: `x=1; unset -n x; echo "st=$?"`,
-		Why:     "the letter beside it, and the row that says `unset`'s options are the dialect's rather than one set: bash 5.3 and ksh93 take `-n` where bash 3.2, bash-as-`sh`, dash and zsh refuse it, at three statuses and in four wordings. The *value* is deliberately not printed: what `-n` then does to a name that is not a reference splits the two shells that have the letter — bash removes nothing at all and ksh93 removes the variable — which is a second question, and one this shell does not yet answer",
+		// The value is not printed here on purpose: this row is about which
+		// shells take the letter, and the row below is about what the letter
+		// then does. Splitting them keeps a shell that stops taking `-n` from
+		// looking like a shell that changed its mind about references.
+		Why: "the letter beside it, and the row that says `unset`'s options are the dialect's rather than one set: bash 5.3, bash-as-`sh` and ksh93 take `-n` where bash 3.2, dash and zsh refuse it, at three statuses and in three wordings",
+	},
+	{
+		ID: "unset/the-n-letter-on-a-name-that-is-not-a-reference", Category: "parameters",
+		Snippet: `x=1; unset -n x; echo "st=$? [${x-gone}]"`,
+		Why:     "the value the row above leaves out, and it splits the shells that have the letter: `-n` names the reference rather than what it points at, and bash reads a name that is not a reference as naming nothing at all — removing nothing, at 0 — where ksh93 removes the variable like any other name, also at 0. Both report success, which is what makes the value the only way to see it (#932)",
+	},
+	{
+		ID: "unset/the-n-letter-skips-the-identifier-check", Category: "parameters",
+		Snippet: `unset -n 1x; echo "st=$?"`,
+		Why:     "how far the reading above reaches: in bash the letter skips the name check too, so a digit-led operand is silent at 0 where plain `unset 1x` refuses it, while ksh93 — which removes the name — still refuses to be handed one that is not an identifier",
+	},
+	{
+		ID: "unset/the-n-letter-still-refuses-a-readonly", Category: "parameters",
+		Snippet: `readonly r=1; unset -n r; echo "st=$? [${r-gone}]"`,
+		Why:     "the one thing the letter does not excuse in either shell that has it: a readonly name is refused in the same words and at the same status as without it, so `-n` is not a quiet way to ask whether a name can be unset",
 	},
 
 	// --- printf: the last builtin that was not one ------------------------

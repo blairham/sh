@@ -637,6 +637,10 @@ func Semantics() interp.Semantics {
 	s.ReadOptions = "rspAd:n:N:t:u:"
 	// ksh93 takes `-n` and refuses `-m`, with its own usage line after it.
 	s.UnsetOptions = "vfn"
+	// Measured 2026-09-12: `x=1; unset -n x` leaves `x` gone at 0, which is
+	// what `unset x` does — the letter changes nothing for a name that is not
+	// a reference, where bash removes nothing at all (#932).
+	s.UnsetReferenceLetterRemovesANonReference = interp.Yes
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutTakesWhatIsWaiting
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No

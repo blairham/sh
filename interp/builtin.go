@@ -1136,6 +1136,32 @@ func (r *Runner) unsetReadonly(name string) int {
 // and, `unset` being one of its special builtins, ends the script. That is
 // the usage-line shape rather than this sentence, and it is left recorded in
 // the corpus rather than guessed at here.
+// unsetOnlyRefusingReadonly is `unset -n` in the shell that reads a name which
+// is not a reference as naming nothing: no name is removed, and the one thing
+// the letter does not excuse is still refused.
+//
+// Measured 2026-09-12 on bash 5.3.15: `readonly r=1; unset -n r` answers
+// `unset: r: cannot unset: readonly variable` at 1, which is word for word
+// what the same shell says without the letter — so the refusal is not skipped
+// along with the removal, and a script cannot use `-n` to find out quietly
+// whether a name is readonly.
+func (r *Runner) unsetOnlyRefusingReadonly(names []string) int {
+	status := 0
+	for _, name := range names {
+		base, _, subscripted := r.subscriptOperand(name)
+		if !subscripted {
+			base = name
+		}
+		if code := r.unsetReadonly(base); code != 0 {
+			status = code
+			if r.ctl == controlExit {
+				return status
+			}
+		}
+	}
+	return status
+}
+
 func (r *Runner) unsetWithoutOperands(name string) int {
 	wording := r.diag().UnsetNoOperands
 	if wording == "" {
@@ -1310,6 +1336,19 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		// parameter whose *name* matches one. Ahead of the name check,
 		// because a pattern is not a name and would not survive it.
 		return r.unsetMatching(args)
+	}
+	if strings.ContainsRune(opts, 'n') &&
+		!r.ask(r.sem().UnsetReferenceLetterRemovesANonReference,
+			"`unset -n` on a name that is not a name reference") {
+		if r.unspecified {
+			return r.status
+		}
+		// The letter names the reference rather than what it points at, and
+		// this shell has no name references — so under this answer there is
+		// nothing here for `unset` to remove. Ahead of the name check because
+		// the shell that answers this way skips that too: `unset -n 1x` is
+		// silent at 0 where plain `unset 1x` refuses the identifier.
+		return r.unsetOnlyRefusingReadonly(args)
 	}
 	// After `-f`, so that a function name keeps its own laxer rule: bash
 	// takes `unset -f 1x` without a word where it refuses `unset 1x`.

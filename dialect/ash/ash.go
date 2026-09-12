@@ -200,6 +200,10 @@ func Semantics() interp.Semantics {
 	s.ReadOptions = "rp:t:n:"
 	// `unset` has the two POSIX letters and calls anything else illegal:
 	// `unset -q x` is `illegal option -q`.
+	// unanswered UnsetReferenceLetterRemovesANonReference: no `-n` on `unset`
+	// here either. Measured 2026-09-12 on BusyBox v1.37.0, `unset -n x` is
+	// `unset: line 0: illegal option -n`, and the shell ends at 2 without
+	// reading the operand (#932).
 	s.UnsetOptions = "vf"
 	// `export -n` is accepted and reports 0, which dash refuses outright.
 	s.ExportTakesTheAttributeOff = interp.Yes

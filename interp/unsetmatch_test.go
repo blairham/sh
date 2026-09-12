@@ -20,6 +20,11 @@ func unsetSem(letters string) Semantics {
 	// in two of the four. These cases are about which letters are *there*,
 	// so the shell has to still be running to say what the value is.
 	s.BadOptionToSpecialBuiltinFatal = No
+	// `-n` on a name that is not a reference is its own axis (#932) and not
+	// this one. Answered Yes here so a case about the *letter* still sees the
+	// name go; what the letter does to such a name is
+	// TestUnsetReferenceLetterOnANameThatIsNotOne's question.
+	s.UnsetReferenceLetterRemovesANonReference = Yes
 	return s
 }
 
@@ -120,6 +125,7 @@ func TestUnsetsLettersAreTheDialects(t *testing.T) {
 	// both leave the first alone.
 	base := permissive()
 	base.BadOptionToSpecialBuiltinFatal = No
+	base.UnsetReferenceLetterRemovesANonReference = Yes
 	out, _ = run(t, `x=1; unset -n x; echo "[${x-gone}]"`, withSem(base))
 	if !strings.Contains(out, "[1]") {
 		t.Errorf("out %q, want `-n` refused by the POSIX letter set", out)

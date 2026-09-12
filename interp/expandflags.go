@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULfsj@kvP%qMuoOniaQbcwWA~Zze-lr0VtS"
+const implementedParamFlags = "ULfsj@kvP%qMuoOniaQbcwWA~Zze-lr0VtSm"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -170,6 +170,30 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 			r.expandErr = true
 			return nil, false, false, false
 		}
+	}
+	if strings.ContainsRune(e.Flags, 'm') && padApplies(e) {
+		// `(m)` is carried for the length operator and not for the padding
+		// pair — see interp/lengthflags.go for the one and this refusal for
+		// the other. The two are one letter and two behaviors: a length is a
+		// number, and a field measured in columns has to decide what to do
+		// when a wide character straddles the edge of it, which is measured
+		// and is *not* symmetrical. On zsh 5.9.2 with `w=$'日本'`, four
+		// columns of word:
+		//
+		//	${(ml:3:)w}   `本`     the left field keeps what fits
+		//	${(mr:3:)w}   `日本`   the right one keeps what crosses
+		//	${(ml:1:)w}   empty
+		//	${(mr:1:)w}   `日`
+		//	${(ml:7::日:)w}  empty, where `${(mr:7::日:)w}` is `日本日日`
+		//
+		// The last row is that shell's own edge and not a rule. Building the
+		// first four from the last would be inventing one, and a field of the
+		// wrong width at status 0 is exactly the shape this refusal exists to
+		// prevent: it is a prompt drawing off the end of a line, with nothing
+		// anywhere saying which measurement was wrong.
+		r.diagf("${%s}: the (m) expansion flag is not implemented beside a padding flag\n", e.Src)
+		r.expandErr = true
+		return nil, false, false, false
 	}
 	if extendedQuoteRefusal(e) {
 		// The one legal `q+` group this slice does not carry. See

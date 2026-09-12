@@ -3,12 +3,7 @@
 
 package interp
 
-import (
-	"strconv"
-	"unicode"
-
-	"github.com/blairham/sh/internal/eastasian"
-)
+import "strconv"
 
 // The conditional prompt escape: `%(x.true.false)`, a question about the
 // shell and two texts to choose between.
@@ -402,20 +397,20 @@ func (w *promptWalk) lineWidth() int {
 // line and counts as one column here — `\e[31m` written literally is five —
 // while a combining mark is nought in both and an East Asian wide character
 // is two. A tab reaches the next multiple of eight.
+//
+// The per-character part of that is displayWidth, shared with the `(m)`
+// expansion flag, which measures the same three classes the same way. The tab
+// is this reader's own: it is a fact about where the column already stands,
+// which a length has no answer for.
 func (w *promptWalk) cell(r rune) {
 	if r == '\n' {
 		w.col = 0
 		return
 	}
 	width := w.lineWidth()
-	d := 1
-	switch {
-	case r == '\t':
+	d := displayWidth(r)
+	if r == '\t' {
 		d = 8 - w.col%8
-	case unicode.In(r, unicode.Mn, unicode.Me):
-		d = 0
-	case eastasian.Wide(r):
-		d = 2
 	}
 	if w.col+d > width {
 		w.col = 0

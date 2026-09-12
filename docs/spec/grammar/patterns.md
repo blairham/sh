@@ -604,6 +604,53 @@ exempt from the leading-period rule in either of them. That divergence is
 ksh93's alone and is what `pat/a-trailing-group-is-a-list-of-qualifiers`
 records in its column.
 
+### A bare group's alternatives are each a place the pattern begins
+
+The rows above are about a **quantified** group, which is bash's and
+ksh93's. The dialect with **bare** groups answers the same question its
+own way, and it looks inside. Measured 2026-09-12 on zsh 5.9.2 with
+`extendedglob` on, in a directory holding `.hidden` and `plain`:
+
+| written | matched |
+| --- | --- |
+| `.hidden` | `.hidden` |
+| `\.hidden` | `.hidden` — an escaped period is still a period |
+| `.(hidden\|x)` | `.hidden` — the period stands outside the group |
+| `(.hidden\|plain)` | `.hidden plain` |
+| `(x\|.hidden)` | `.hidden` — a later alternative counts |
+| `(.\|x)hidden` | `.hidden` — the alternative need not be the whole name |
+| `(.hidden)` | `.hidden` — a group of one |
+| `((.hidden))` | `.hidden` — and one nested in another |
+| `(.h*)` | `.hidden` |
+| `(\|.hidden)` | `.hidden` — past an empty alternative |
+| `(#i)(.HIDDEN\|x)` | `.hidden` — past a pattern-flag group |
+| `(.hidden\|plain)*` | `.hidden plain` |
+| `[.]hidden` | *nothing* |
+| `?hidden` | *nothing* |
+| `*` | `plain` |
+
+So the period has to be a **literal** one the pattern could match first,
+and the places a pattern can begin are: the front of it, the front of
+every alternative of a group standing there, and whatever follows a
+`(#…)` flag group, which matches nothing itself.
+
+The bracket row is what says this is not "could this pattern match a
+leading period" — `[.]hidden` plainly could — but "is one written there".
+
+This shell answers all fifteen. It is the bare-group reading only: the
+quantified spelling keeps the bash 3.2 answer recorded above, and the two
+are separate flags on the matcher for the reason they are separate in the
+panel.
+
+**It is load-bearing well beyond dotfile listings.** powerlevel10k builds
+one alternation out of every anchor file it knows — `.git`,
+`.tool-versions`, `go.mod`, `package.json` and the rest — and asks
+`[[ -n $dir/${~MARKER}(#qN) ]]` of each component of the working
+directory. A reading that looks only at the pattern's first byte finds
+`(` there, refuses every dotfile in the alternation, and answers "no
+anchor" for every directory whose marker is a dotfile — which is most of
+them (#2119).
+
 ### A group may stand for no text at all
 
 One repetition of an arm that matches nothing is nothing, so a group with

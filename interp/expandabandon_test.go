@@ -197,3 +197,72 @@ func TestGivingUpTheLineDoesNotDependOnHowTheShellWasStarted(t *testing.T) {
 		}
 	}
 }
+
+// The rows above vary the *failure*; these vary the **position** the failed
+// expansion stood in, which is the other half and the one that was wrong.
+//
+// Each position is expanded by different code — a command word by the word
+// expander, an assignment's right-hand side by the assignment, a `[` operand
+// by the word expander inside a compound, and a `for` list before the loop
+// has done anything — so the axis is read at three separate sites and a rule
+// applied at one of them leaves the others running on. That is what happened:
+// a word and a `[` operand stopped while an assignment and a `for` list
+// carried on at status 0, in every dialect, so two rows were wrong against
+// the whole panel and two against bash alone (#1229).
+//
+// Written with the line boundary in the source, because that is the only
+// place the two answers differ: within one line every shell abandons the rest
+// of the list, and the control above says so.
+func TestAFailedExpansionReachesTheSameFarInEveryPositionItCanStandIn(t *testing.T) {
+	for _, p := range []struct{ name, line string }{
+		{"a command word", `printf "[%s]" $((1/0))`},
+		{"an assignment", `x=$((1/0))`},
+		{"a test operand", `if [ x = $((1/0)) ]; then echo t; else echo f; fi`},
+		{"a for list", `for i in $((1/0)); do echo "i=$i"; done`},
+	} {
+		t.Run(p.name, func(t *testing.T) {
+			src := "echo one\n" + p.line + "\necho two"
+
+			out, errs, st := expandAbandonRun(t, src, Yes)
+			if !strings.Contains(out, "one") || errs == "" {
+				t.Fatalf("giving up the line: output %q errs %q, want the failure reached", out, errs)
+			}
+			if !strings.Contains(out, "two") {
+				t.Errorf("giving up the line: output %q, want the next line to run", out)
+			}
+			if st != 0 {
+				t.Errorf("giving up the line: status %d, want the next line's 0", st)
+			}
+
+			out, errs, st = expandAbandonRun(t, src, No)
+			if !strings.Contains(out, "one") || errs == "" {
+				t.Fatalf("ending the shell: output %q errs %q, want the failure reached", out, errs)
+			}
+			if strings.Contains(out, "two") {
+				t.Errorf("ending the shell: output %q, want nothing after it to have run", out)
+			}
+			if st == 0 {
+				t.Errorf("ending the shell: status 0, want the failure's own")
+			}
+		})
+	}
+}
+
+// And the control that says the four positions are positions rather than four
+// spellings of a command word: none of them gets as far as producing a value,
+// so nothing downstream of the expansion runs. Without it a `for` list that
+// expanded to no fields and a `for` list that was abandoned read the same, and
+// so do a condition that was skipped and one that came out false.
+func TestAFailedExpansionProducesNothingDownstreamOfIt(t *testing.T) {
+	for _, tc := range []struct{ src, unwanted string }{
+		{"echo one\nif [ x = $((1/0)) ]; then echo t; else echo f; fi\necho two", "f"},
+		{"echo one\nfor i in $((1/0)); do echo \"i=$i\"; done\necho two", "i="},
+		{"echo one\nx=$((1/0))\necho \"x=[$x]\"", "x=[0]"},
+	} {
+		out, _, _ := expandAbandonRun(t, tc.src, Yes)
+		if strings.Contains(out, tc.unwanted) {
+			t.Errorf("%q got %q, want no %q — the expansion never produced a value",
+				tc.src, out, tc.unwanted)
+		}
+	}
+}

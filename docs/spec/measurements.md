@@ -8354,6 +8354,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/a-substitution-in-a-branch-that-never-runs` | `reached st=1` | `reached st=1` | `reached st=1` | `reached st=1` | `reached st=1` | `reached st=1` |
 | `arith/a-for-header-in-a-branch-that-never-runs` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `reached st=1` | `reached st=1` | `reached st=1` | `reached st=1` | `reached st=1` |
 | `arith/a-substitution-that-will-not-read-is-fatal` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "echo hi"` *(status 2)* | **2>** `<shell>: line 1: echo hi: arithmetic syntax error in expression (error token is "hi")` *(status 1)* | **2>** `<shell>: line 1: echo hi: arithmetic syntax error in expression (error token is "hi")` *(status 127)* | **2>** `<shell>: echo hi: syntax error in expression (error token is "hi")` *(status 1)* | **2>** `<shell>: echo hi: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `hi'` *(status 1)* |
+| `arith/a-failed-expansion-abandons-the-rest-of-the-line` | `one` **2>** `<script>: 1: arithmetic expression: division by zero: "1/0"` *(status 2)* | `one` **2>** `<script>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | `one` **2>** `<script>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | `one` **2>** `<script>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | `one` **2>** `<script>: line 1: 1/0: divide by zero` *(status 1)* | `one` **2>** `<script>:1: division by zero` *(status 1)* |
+| `arith/a-failed-expansion-in-a-word` | `one` **2>** `<script>: 2: arithmetic expression: division by zero: "1/0"` *(status 2)* | `one~two st=1` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` *(status 1)* | `one~two st=1` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: divide by zero` *(status 1)* | `one` **2>** `<script>:2: division by zero` *(status 1)* |
+| `arith/a-failed-expansion-in-an-assignment` | `one` **2>** `<script>: 2: arithmetic expression: division by zero: "1/0"` *(status 2)* | `one~two st=1 x=[]` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` *(status 1)* | `one~two st=1 x=[]` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: divide by zero` *(status 1)* | `one` **2>** `<script>:2: division by zero` *(status 1)* |
+| `arith/a-failed-expansion-in-a-test-operand` | `one` **2>** `<script>: 2: arithmetic expression: division by zero: "1/0"` *(status 2)* | `one~two st=1` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` *(status 1)* | `one~two st=1` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: divide by zero` *(status 1)* | `one` **2>** `<script>:2: division by zero` *(status 1)* |
+| `arith/a-failed-expansion-in-a-for-list` | `one` **2>** `<script>: 2: arithmetic expression: division by zero: "1/0"` *(status 2)* | `one~two st=1` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` *(status 1)* | `one~two st=1` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: divide by zero` *(status 1)* | `one` **2>** `<script>:2: division by zero` *(status 1)* |
 | `arith/bare-name-is-a-variable` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` |
 | `arith/unset-is-zero` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
 | `arith/precedence-follows-c` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` |
@@ -8574,6 +8579,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `arith/a-substitution-that-will-not-read-is-fatal` — and when it is reached, the two spellings part on how far the damage goes: a failed *expansion* ends the script in bash, ksh93 and zsh alike, so the line after it never runs, where the row above's failed arithmetic *command* is one failed command and the script carries on. dash reports its own wording and stops at 2
   ```sh
   echo "$((echo hi))"; echo "reached st=$?"
+  ```
+- `arith/a-failed-expansion-abandons-the-rest-of-the-line` — the whole panel abandons the rest of the list a failed arithmetic expansion stood in, and none of them prints `two`. It is the control for the four rows below, and it is the row that says what those four are actually measuring: written on one line the six columns agree, so a claim about bash carrying on has to be made across a *line* boundary or it is measuring the line rule instead (#1229)
+  ```sh
+  echo one; printf "[%s]" $((1/0)); echo two st=$?
+  ```
+- `arith/a-failed-expansion-in-a-word` — the same failure with the next command on its own line, which is where the panel splits: bash 5.3 and bash 3.2 abandon the line and run the next one, and the same bash as `sh` gives up the script along with dash, ksh93 and zsh. The FailedExpansionAbandonsTheLine axis, at the first of the four positions #1229 tabulates — and the pair with the row above is the whole evidence, since either row alone reads as the other rule
+  ```sh
+  echo one
+  printf "[%s]" $((1/0))
+  echo two st=$?
+  ```
+- `arith/a-failed-expansion-in-an-assignment` — the second position, and the one that used to answer differently from the other three here: an assignment's right-hand side is expanded by code of its own, so a rule applied at the word expander alone left this one running on at status 0 in every dialect. The `x=[]` says the name was not assigned in the columns that carry on
+  ```sh
+  echo one
+  x=$((1/0))
+  echo two st=$? x=[$x]
+  ```
+- `arith/a-failed-expansion-in-a-test-operand` — the third position: inside a compound command, where the give-up has to unwind the `if` as well as the line. Neither `t` nor `f` is printed anywhere in the panel, which is what separates abandoning the command from letting the condition be false
+  ```sh
+  echo one
+  if [ x = $((1/0)) ]; then echo t; else echo f; fi
+  echo two st=$?
+  ```
+- `arith/a-failed-expansion-in-a-for-list` — the fourth position, and the one where the expansion happens before the construct has done anything: a `for` list is expanded to decide how many iterations there are. No column prints an `i=` line, so no shell treats the failed word as an empty list and runs zero iterations quietly
+  ```sh
+  echo one
+  for i in $((1/0)); do echo "i=$i"; done
+  echo two st=$?
   ```
 - `arith/bare-name-is-a-variable` — a bare name inside arithmetic is a variable reference, which is why the contents cannot be lexed as ordinary words
   ```sh

@@ -7185,6 +7185,52 @@ lists back as `typeset -fu nm`. The two bashes have no `-u` on `declare`
 and refuse the letter; dash has no `typeset`.
 
 
+## A function said back, and the word it was declared with
+
+Measured 2026-09-12 on ksh93u+ 2012-08-01 through `od -c`, from a script
+file so that what follows each definition is a newline.
+
+`functions` is a builtin in ksh93 as well as in zsh, and there it is
+`typeset -f` under a second word: same listing, same status, and `-p`
+alongside changes nothing.
+
+    f(){ :; }                    f(){ :; }
+    function g { typeset x=1; }  function g { typeset x=1; }
+    f(){ echo a; echo b; }       f(){ echo a; echo b; }
+    f(){ :; }; g(){ :; }         f(){ :; } and g(){ :; }, a line each
+
+**The keyword is not cosmetic here.** `typeset` declares a local in a
+`function f { … }` body and assigns the global in an `f() { … }` one, so
+the two spellings are two programs: a listing that wrote `f () ` back for
+a keyword function hands over code whose variables are global where the
+original's were local. The test that says so is the round trip — `eval
+"$(functions f)"` and then call it — because a comparison of strings would
+pass against a word written where the grammar reads something else.
+
+bash 5.3, bash 3.2 and zsh 5.9.2 write `f () ` back for either spelling,
+which they may because `typeset` declares a local in both bodies there.
+
+The **names-only** listing keeps the same distinction with punctuation
+instead of a word: `f() { :; }; function g { :; }; typeset +f` writes
+`f()` and then `g`. zsh writes both bare.
+
+### What this listing does not promise
+
+**ksh93 prints the source text back verbatim.** `f(){    echo     a   ;
+  }` lists with every one of those spaces, and a definition written on a
+`-c` line ends its listing with the `;` that followed it rather than with
+a newline. This implementation keeps a tree and not the source, so what it
+writes is a *layout* — the compact one, with the source's own separators —
+that reproduces that text for a definition written the way anybody writes
+one, and normalizes the spacing of one that is not.
+
+Byte-identical, measured: a one-line body, either header spelling, several
+statements separated by `;`, and a bare listing of two functions. The one
+shape that differs is a body whose statements were separated by
+**newlines**, where the real shell keeps the last newline before the
+closing brace and this writes `; }`.
+
+
 ## The job and lookup long tail: type's letters, job specs, wait -n, disown, ulimit -a, the directory stack
 
 Oracle runs, 2026-09-04, bash 5.3, dash, ksh93u+, zsh 5.9.2. Corpus rows

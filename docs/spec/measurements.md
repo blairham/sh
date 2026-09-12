@@ -14962,6 +14962,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/the-f-letter-with-u-marks-rather-than-lists` | `st=127~then=127` **2>** `<shell>: 1: typeset: not found` | `st=1~then=127` | `st=1~then=127` | `st=2~then=127` **2>** `<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `st=0~typeset -fu nm~then=0` | `st=0~nm () {~	# undefined~	builtin autoload -X~}~then=0` |
 | `declare/the-decorating-letter-does-not-mark-on-its-own` | `st=127~then=127` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` *(status 127)* | `st=2~then=127` **2>** `<shell>: line 1: typeset: -z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~<shell>: line 1: typeset: -z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` *(status 127)* | `st=2~then=127` **2>** `<shell>: line 1: typeset: -z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~<shell>: line 1: typeset: -z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` *(status 127)* | `st=2~then=127` **2>** `<shell>: line 0: typeset: -z: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` *(status 127)* | **2>** `<shell>: typeset: -z: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `st=1~then=1~nm () {~	# undefined~	builtin autoload -Xz~}` |
 | `declare/marking-a-name-that-is-already-a-function` | `body` **2>** `<shell>: 1: typeset: not found~<shell>: 1: functions: not found` *(status 127)* | `body` **2>** `<shell>: line 1: functions: command not found` *(status 127)* | `body` **2>** `<shell>: line 1: functions: command not found` *(status 127)* | `body` **2>** `<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: functions: command not found` *(status 127)* | `body~f(){ echo body; };` | `body~f () {~	echo body~}` |
+| `declare/the-function-listing-keeps-the-declarations-keyword` | **2>** `<script>: 2: Syntax error: "}" unexpected` *(status 2)* | **2>** `<script>: line 3: functions: command not found~<script>: line 4: functions: command not found` *(status 127)* | **2>** `<script>: line 3: functions: command not found~<script>: line 4: functions: command not found` *(status 127)* | **2>** `<script>: line 3: functions: command not found~<script>: line 4: functions: command not found` *(status 127)* | `f(){ :; }~function g { echo x; }` | `f () {~	:~}~g () {~	echo x~}` |
+| `declare/a-listed-function-still-declares-its-locals` | **2>** `<script>: 2: Syntax error: "}" unexpected` *(status 2)* | `out=g` **2>** `<script>: line 3: functions: command not found` | `out=g` **2>** `<script>: line 3: functions: command not found` | `out=g` **2>** `<script>: line 3: functions: command not found` | `out=g` | `out=g` |
+| `declare/the-function-listing-under-its-other-word` | **2>** `<script>: 2: typeset: not found~<script>: 3: typeset: not found` *(status 127)* | `f () ~{ ~    echo a;~    echo b~}~f () ~{ ~    echo a;~    echo b~}` | `f () ~{ ~    echo a;~    echo b~}~f () ~{ ~    echo a;~    echo b~}` | `f () ~{ ~    echo a;~    echo b~}` **2>** `<script>: line 3: typeset: f: not found` *(status 1)* | `f(){ echo a; echo b; }~f(){ echo a; echo b; }` | `f () {~	echo a~	echo b~}~f () {~	echo a~	echo b~}` |
 | `declare/listing-a-control-byte` | `st=127` **2>** `<shell>: 1: typeset: not found` | `declare -- v=$'a\001b'~st=0` | `declare -- v=$'a\001b'~st=0` | `declare -- v="ab"~st=0` | `v=$'a\x01b'~st=0` | `typeset v=$'a\C-Ab'~st=0` |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
@@ -16293,6 +16296,27 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/marking-a-name-that-is-already-a-function` — a declaration does not replace a definition. The body still runs and still lists, which matters more than the corner suggests: a real startup file declares a name it may already have -- a plugin manager writes the same marking on every reload -- and a shell that wrote a stub over the definition would turn a working function into a file that cannot be found at the next call
   ```sh
   f(){ echo body; }; typeset -fu f; f; functions f
+  ```
+- `declare/the-function-listing-keeps-the-declarations-keyword` — a function said back whole, in the two spellings a declaration has. ksh93 writes each one back as it was declared -- `f(){ :; }` and `function g { echo x; }` -- and there it is not cosmetic: `typeset` declares a local in a keyword body and assigns the global in a parenthesised one, so the two spellings are two programs and a listing that wrote the wrong one hands back code whose variables leak. zsh writes `g () {` for both, which it may because the two bodies run alike there. bash has no `functions` at all and dash has no braces after a keyword to parse. Run from a script rather than `-c` because that shell copies the source text back, terminator and all, so a `-c` line ends the listing with the `;` that followed the definition
+  ```sh
+  f(){ :; }
+  function g { echo x; }
+  functions f
+  functions g
+  ```
+- `declare/a-listed-function-still-declares-its-locals` — the round trip, asserted on what the function *does* rather than on what the listing says -- which is the only assertion that can tell a correct listing from a plausible one. The definition goes out through `functions`, comes back through `eval`, and the `typeset` inside it still declares a local: `out=g`. A listing that dropped the keyword in the shell that reads the two bodies differently answers `out=in` here, having quietly turned a local into a global. bash's column is that answer for a different reason -- it has no `functions`, so the `eval` redefines nothing and the original still runs
+  ```sh
+  v=g
+  function f { typeset v=in; }
+  eval "$(functions f)"
+  f
+  echo "out=$v"
+  ```
+- `declare/the-function-listing-under-its-other-word` — `functions` and `typeset -f` are one listing under two words, and `-p` alongside changes nothing -- the letters already mean print. Three shells answer and each with its own arrangement: ksh93 compact on one line, bash with the brace on a line of its own and four spaces, zsh with a tab and no terminators. bash 3.2 is the odd column and worth the row on its own: it has `typeset -f` and not `typeset -fp`, which it answers with `typeset: f: not found`
+  ```sh
+  f(){ echo a; echo b; }
+  typeset -f f
+  typeset -fp f
   ```
 - `declare/listing-a-control-byte` — how a listing spells a byte below 0x20 inside `$'...'`: an octal escape, a hex one, and a caret pair are three answers from three columns that otherwise quote alike, which is why the control escape is a field of its own rather than part of the quoting style. The fourth has no such builtin (#2057)
   ```sh

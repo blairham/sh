@@ -1349,7 +1349,7 @@ func (r *Runner) declareFunctions(names []string, namesOnly, asDeclarations bool
 		case !namesOnly:
 			r.printf("%s\n", r.listedFunction(name, fn))
 		case named || !asDeclarations:
-			r.printf("%s\n", name)
+			r.printf("%s\n", r.listedFunctionNameOnly(name, fn))
 		default:
 			r.printf("declare -f %s\n", name)
 		}
@@ -1384,8 +1384,37 @@ func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
 		// name that needs quoting gets it here and in one place.
 		body = text
 	}
-	return Wording(r.diag().FunctionListingHeader, "%[1]s () \n%[2]s",
-		listedFunctionName(name), body)
+	header := r.diag().FunctionListingHeader
+	if fn.Keyword && r.diag().FunctionListingKeywordHeader != "" {
+		// The word the declaration was written with, put back — see
+		// Diagnostics.FunctionListingKeywordHeader. Only the dialect that
+		// runs the two bodies differently answers this, and it is the whole
+		// of why the header is not one wording: the body goes through
+		// syntax.Print, which keeps the keyword, and the header never
+		// reaches it.
+		header = r.diag().FunctionListingKeywordHeader
+	}
+	return Wording(header, "%[1]s () \n%[2]s", listedFunctionName(name), body)
+}
+
+// listedFunctionNameOnly is one row of a **names-only** function listing.
+//
+// Raw, and that is measured rather than inherited from listedFunctionName:
+// `function "a b" { :; }; typeset +f` writes `a b` with no quotes in zsh
+// 5.9.2, where the same shell's body listing writes `'a b' () {`. A listing
+// of names is a list and not a program that reads back (#1576).
+//
+// What the dialect may add is *punctuation that says which declaration this
+// was*, which is one shell's answer alone: measured on ksh93u+, `f() { :; };
+// function g { :; }; typeset +f` writes `f()` and then `g`. See
+// Diagnostics.FunctionNameListing and its keyword half — the same pair the
+// body listing's header is, for the same reason.
+func (r *Runner) listedFunctionNameOnly(name string, fn *syntax.FuncDecl) string {
+	spelling := r.diag().FunctionNameListing
+	if fn != nil && fn.Keyword && r.diag().FunctionNameListingKeyword != "" {
+		spelling = r.diag().FunctionNameListingKeyword
+	}
+	return Wording(spelling, "%[1]s", name)
 }
 
 // listedFunctionName is the name half of that header, written so the listing

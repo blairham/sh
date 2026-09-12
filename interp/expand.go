@@ -1916,7 +1916,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 
 	case syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong,
 		syntax.ParamTrimSuffix, syntax.ParamTrimSuffixLong:
-		return r.trimWith(value, r.patternOf(e.Arg), e.Op)
+		return r.trimWith(value, r.patternOf(e.Arg), e)
 
 	case syntax.ParamReplace:
 		return r.replaceWith(value, r.patternOf(e.Arg), e)
@@ -2537,7 +2537,7 @@ func (r *Runner) elementOpApplier(e *syntax.ParamExpr) func(string) string {
 	case syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong,
 		syntax.ParamTrimSuffix, syntax.ParamTrimSuffixLong:
 		pattern := r.patternOf(e.Arg)
-		return func(v string) string { return r.trimWith(v, pattern, e.Op) }
+		return func(v string) string { return r.trimWith(v, pattern, e) }
 	case syntax.ParamReplace:
 		pattern := r.patternOf(e.Arg)
 		return func(v string) string { return r.replaceWith(v, pattern, e) }
@@ -2801,8 +2801,9 @@ func toggleCase(c rune) rune {
 	return unicode.ToUpper(c)
 }
 
-func (r *Runner) trimWith(value, pattern string, op syntax.ParamOp) string {
-	out, m := trim(value, pattern, op, r.patternOpts(pattern, value), r.armOrder())
+func (r *Runner) trimWith(value, pattern string, e *syntax.ParamExpr) string {
+	out, m := trim(value, pattern, e.Op, r.patternOpts(pattern, value),
+		r.armOrder(), searchingFlag(e))
 	r.publishMatch(m)
 	return out
 }
@@ -2821,8 +2822,9 @@ func (r *Runner) armOrder() armOrder {
 }
 
 // matchedWith is trimWith with the flag that keeps what the pattern took.
-func (r *Runner) matchedWith(value, pattern string, op syntax.ParamOp) string {
-	out, m := matched(value, pattern, op, r.patternOpts(pattern), r.armOrder())
+func (r *Runner) matchedWith(value, pattern string, e *syntax.ParamExpr) string {
+	out, m := matched(value, pattern, e.Op, r.patternOpts(pattern),
+		r.armOrder(), searchingFlag(e))
 	r.publishMatch(m)
 	return out
 }
@@ -2913,115 +2915,208 @@ func (r *Runner) patternReports(pattern string) bool {
 	return reportsAMatch(r.patternOpts(pattern))
 }
 
-func trim(value, pattern string, op syntax.ParamOp, o patternOpts, arm armOrder) (string, matchReport) {
-	i, m, ok := trimEdge(value, pattern, op, o, arm)
+func trim(value, pattern string, op syntax.ParamOp, o patternOpts, arm armOrder, search bool) (string, matchReport) {
+	lo, hi, m, ok := trimSpan(value, pattern, op, o, arm, search)
 	if !ok {
 		return value, matchReport{}
 	}
-	if trimsPrefix(op) {
-		return value[i:], m
+	// A span touching either end leaves a slice of the value rather than a
+	// new string, and every trim without `(S)` on it touches one — a prefix
+	// trim's span begins at 0 and a suffix trim's ends at the length. Named
+	// rather than left to the general expression, which is not free:
+	// concatenating `"" + value[hi:]` copies what the slice would have
+	// shared, 13KB a call on the prompt cache that
+	// BenchmarkLongestPrefixTrimOnAPromptCache is cut from.
+	switch {
+	case lo == 0:
+		return value[hi:], m
+	case hi == len(value):
+		return value[:lo], m
 	}
-	return value[:i], m
+	return value[:lo] + value[hi:], m
 }
 
 // matched is trim's other half: the part the pattern took rather than the part
 // it left, and nothing at all when it took none.
 //
 // One flag turns a trim into this — the same operator, the same match, the
-// other side of the same split — which is why it shares trimEdge rather than
+// other side of the same split — which is why it shares trimSpan rather than
 // scanning again. Measured: `${(M)v#h*l}` on `hello` is `hel` where
 // `${v#h*l}` is `lo`, and `${(M)v#zzz}` is empty where `${v#zzz}` is `hello`.
-func matched(value, pattern string, op syntax.ParamOp, o patternOpts, arm armOrder) (string, matchReport) {
-	i, m, ok := trimEdge(value, pattern, op, o, arm)
+//
+// The span is what makes the pair hold under `(S)` for nothing: a searching
+// trim takes a piece out of the middle, and the two halves of the split are
+// still "the value without it" and "it". Measured, `${(SM)str%%X*}` on
+// `aXbXc` is `Xc` beside `${(S)str%%X*}`'s `aXb`.
+func matched(value, pattern string, op syntax.ParamOp, o patternOpts, arm armOrder, search bool) (string, matchReport) {
+	lo, hi, m, ok := trimSpan(value, pattern, op, o, arm, search)
 	if !ok {
 		return "", matchReport{}
 	}
-	if trimsPrefix(op) {
-		return value[:i], m
-	}
-	return value[i:], m
+	return value[lo:hi], m
 }
 
 func trimsPrefix(op syntax.ParamOp) bool {
 	return op == syntax.ParamTrimPrefix || op == syntax.ParamTrimPrefixLong
 }
 
-// trimEdge is where a trim's pattern stops: the split point, and whether the
-// pattern matched at all.
+// trimTakesLongest is the doubled spelling of either trim: the operator that
+// asks for as much match as it can have where the single one asks for as
+// little.
+func trimTakesLongest(op syntax.ParamOp) bool {
+	return op == syntax.ParamTrimPrefixLong || op == syntax.ParamTrimSuffixLong
+}
+
+// trimSpan is the piece of the value a trim's pattern took: where it begins,
+// where it ends, and whether the pattern matched at all.
 //
-// Two readings rather than one, and only for the longest *prefix* trim, which
-// is the one place the panel disagrees about which match is taken: the length
+// A span rather than a split point, because `(S)` lets the piece come out of
+// the middle — see interp/searchflag.go. The unflagged operators are the same
+// span with one end pinned, so both readings leave through here and a fix to
+// one cannot miss the other.
+//
+// Two readings of *which* match, rather than one, where the operator asks for
+// the longest and the right-hand end of the match is free to move: the length
 // reading below, and the written-arm reading in interp/trimarm.go. Both are
 // found and the axis is asked only where they land in different places, so a
 // pattern with no alternation — and one whose arms agree — never reaches an
 // unanswered dialect's refusal.
-func trimEdge(value, pattern string, op syntax.ParamOp, o patternOpts, arm armOrder) (int, matchReport, bool) {
-	i, m, ok := edgeByLength(value, pattern, op, o)
-	if !ok || op != syntax.ParamTrimPrefixLong || arm.answer == No || arm.ask == nil {
-		return i, m, ok
+func trimSpan(value, pattern string, op syntax.ParamOp, o patternOpts, arm armOrder,
+	search bool,
+) (int, int, matchReport, bool) {
+	lo, hi, m, ok := spanByLength(value, pattern, op, o, search)
+	if !ok || !writtenArmReaches(op, search) || arm.answer == No || arm.ask == nil {
+		return lo, hi, m, ok
 	}
-	j, decided := writtenArmEdge(value, pattern, o)
-	if !decided || j == i {
-		return i, m, ok
+	j, decided := writtenArmEnd(value, pattern, o, lo)
+	if !decided || j == hi {
+		return lo, hi, m, ok
 	}
 	if !arm.ask() {
-		return i, m, ok
+		return lo, hi, m, ok
 	}
 	// The edge is the written arm's and the report is the whole pattern's:
 	// matchGroup prefers a written arm on its own, so matching the pattern
 	// the script wrote against the piece this reading chose fills `$match`
 	// with the same arm the search took.
-	if armOK, armReport := matchPatternIn(pattern, value[:j], value, 0, o); armOK {
-		return j, armReport, true
+	if armOK, armReport := matchPatternIn(pattern, value[lo:j], value, lo, o); armOK {
+		return lo, j, armReport, true
 	}
-	return i, m, ok
+	return lo, hi, m, ok
 }
 
-// edgeByLength is trimEdge's length reading: the shortest or longest piece of
-// the value the pattern matches, whichever the operator asked for.
-func edgeByLength(value, pattern string, op syntax.ParamOp, o patternOpts) (int, matchReport, bool) {
-	prefix := trimsPrefix(op)
-	longest := op == syntax.ParamTrimPrefixLong || op == syntax.ParamTrimSuffixLong
+// writtenArmReaches is where the two readings can land in different places at
+// all: the operator asks for the longest match, and the end of that match is
+// free rather than pinned to the end of the value.
+//
+// A longest *prefix* trim is the unflagged case, and `(S)` adds the searching
+// suffix trim to it — under that flag a suffix match need not reach the end,
+// so the arms have a length to disagree about. The unflagged suffix trim is
+// the boundary and is measured rather than reasoned: `v=abcbc`, and both
+// `${v%%(bc|cbc)}` and `${v%%(cbc|bc)}` are `ab` on zsh 5.9.2, the longest
+// match in either written order, where `${(S)v%%(b|bc)}` on `abc` is `ac` and
+// `${(S)v%%(bc|b)}` is `a`.
+func writtenArmReaches(op syntax.ParamOp, search bool) bool {
+	return trimTakesLongest(op) && (trimsPrefix(op) || search)
+}
 
-	// Candidate split points, ordered so the first match found is the one
-	// wanted: shortest first for the single operators, longest first for the
-	// doubled ones.
-	idx := unitStops(value, o)
-	if (prefix && longest) || (!prefix && !longest) {
-		for l, r := 0, len(idx)-1; l < r; l, r = l+1, r-1 {
-			idx[l], idx[r] = idx[r], idx[l]
+// spanByLength is trimSpan's length reading: the piece of the value the
+// pattern matches, chosen by where a match may begin and by how much of one
+// the operator asked for.
+//
+// One walk with two orders on it, and the orders are the whole of what the
+// four operators and the `(S)` flag disagree about:
+//
+//	where a match may begin   a prefix trim pins it to 0 and a suffix trim
+//	                          lets it move; under (S) both let it move, and
+//	                          the search runs from the start for `#` and
+//	                          from the end for `%`
+//	where it may end          a suffix trim pins it to the end of the value
+//	                          and a prefix trim lets it move; under (S) both
+//	                          let it move
+//
+// With one end pinned the other carries the length choice, which is why an
+// unflagged suffix trim walks its *starts* shortest-first for `%` where the
+// prefix trim walks its ends that way. Under the flag the start order is the
+// search direction and the end order is the length choice, both at once.
+func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
+	search bool,
+) (int, int, matchReport, bool) {
+	prefix := trimsPrefix(op)
+	longest := trimTakesLongest(op)
+	stops := unitStops(value, o)
+	last := len(stops) - 1
+
+	// What each end of the pattern requires of a piece, and how much subject
+	// it could consume at all, so that a candidate the pattern could not
+	// match whatever the subject holds is skipped rather than handed to the
+	// matcher. See interp/patternspan.go for why both are allowed to ask too
+	// little and never too much.
+	head, tail, edges := patternEdgeLiterals(pattern, o)
+	least, most, bounded := patternSpanBytes(pattern, o)
+
+	first, final, step := 0, last, 1
+	switch {
+	case !search && prefix:
+		// Pinned at the start: there is one place a match may begin.
+		final = 0
+	case !search && !prefix:
+		// Pinned at the end, so the start is the length choice: the longest
+		// suffix begins earliest and the shortest begins latest.
+		if !longest {
+			first, final, step = last, 0, -1
 		}
+	case search && !prefix:
+		// The match that begins closest to the end, which the vendor manual
+		// is explicit is not the one that *ends* closest to it.
+		first, final, step = last, 0, -1
 	}
 
-	// What each end of the pattern requires of a piece, so that a candidate
-	// the pattern could not match whatever the subject holds is skipped
-	// rather than handed to the matcher. See interp/patternspan.go for why
-	// this is allowed to ask too little and never too much.
-	head, tail, edges := patternEdgeLiterals(pattern, o)
-
-	for _, i := range idx {
-		if prefix {
-			if !edgeLiteralsFit(value[:i], head, tail, edges) {
+	for a := first; ; a += step {
+		lo := stops[a]
+		// The ends this start admits, narrowed to the ones the pattern could
+		// fill. A bounded pattern of n bytes leaves exactly one candidate at
+		// each start rather than one per remaining unit.
+		low, high := a, last
+		if !search && !prefix {
+			low, high = last, last
+		}
+		if bounded {
+			low = max(low, sort.SearchInts(stops, lo+least))
+			high = min(high, sort.SearchInts(stops, lo+most+1)-1)
+		}
+		// The candidate ends, walked in the order the operator asked for.
+		// `at` rather than a range so that one loop serves both directions;
+		// on the 13.5KB subject BenchmarkLongestPrefixTrimOnAPromptCache
+		// carries, that indexing costs this trim about 15% against the two
+		// hard-coded walks it replaces — measured, and kept, because the
+		// alternative is a second walk for `(S)` to drift away from and the
+		// figure it is 15% of is 57us against the 2139ms the analysis in
+		// interp/patternspan.go took off this same expansion.
+		at, ahead := low, 1
+		if longest {
+			at, ahead = high, -1
+		}
+		for n := high - low; n >= 0; n-- {
+			hi := stops[at]
+			at += ahead
+			piece := value[lo:hi]
+			if !edgeLiteralsFit(piece, head, tail, edges) {
 				continue
 			}
-			// The piece is a prefix of value, so the matcher is told where
-			// it sits: a trial is at the start of the subject and reaches
-			// its end only when it is the whole of it. Measured on zsh
-			// 5.9.2, `x=abcd; ${x#ab(#e)}` leaves `abcd` alone where
-			// `${x#abcd(#e)}` empties it.
-			if ok, m := matchPatternIn(pattern, value[:i], value, 0, o); ok {
-				return i, m, true
+			// The piece is matched where it sits, so a `(#s)` matches only a
+			// piece starting at 0 and a `(#e)` only one ending at the last
+			// unit. Measured on zsh 5.9.2, `x=abcd; ${x#ab(#e)}` leaves
+			// `abcd` alone where `${x#abcd(#e)}` empties it.
+			if ok, m := matchPatternIn(pattern, piece, value, lo, o); ok {
+				return lo, hi, m, true
 			}
-			continue
 		}
-		if !edgeLiteralsFit(value[i:], head, tail, edges) {
-			continue
-		}
-		if ok, m := matchPatternIn(pattern, value[i:], value, i, o); ok {
-			return i, m, true
+		if a == final {
+			break
 		}
 	}
-	return 0, matchReport{}, false
+	return 0, 0, matchReport{}, false
 }
 
 // replace substitutes a matching span, once or everywhere.
@@ -3032,6 +3127,12 @@ func edgeByLength(value, pattern string, op syntax.ParamOp, o patternOpts) (int,
 // text is passed rather than read back off the report because the report
 // carries a span only where the pattern asked for one — a plain `b` fills
 // nothing — and the ampersand is read whatever the pattern was.
+//
+// `(S)` is the order the spans at a position are walked in and nothing else:
+// shortest first where the operator otherwise takes the longest, and the same
+// turn for the two anchored forms. Every rule below about empty matches and
+// about making progress is written against whichever span came back, so the
+// flag inherits all of them — see interp/searchflag.go.
 func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with func(matchReport, string) string) string {
 	// Every position a match may start or end at, in order, and there is one
 	// more of them than there are units. They are unit boundaries rather than
@@ -3046,50 +3147,71 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 	// why the bound is allowed to be too wide and never too narrow.
 	lo, hi, bounded := patternSpanBytes(pattern, o)
 
+	shortest := searchingFlag(e)
+
 	switch e.Anchor {
 	case '#':
-		for k := len(stops) - 1; k >= 0; k-- {
-			if !spanCouldMatch(stops[k], lo, hi, bounded) {
-				continue
+		// Anchored at the start, so the end is the length choice: measured,
+		// `v=abcabc` gives `${v/#a*b/X}` as `Xc` and `${(S)v/#a*b/X}` as
+		// `Xcabc`.
+		first, final, step := len(stops)-1, 0, -1
+		if shortest {
+			first, final, step = 0, len(stops)-1, 1
+		}
+		for k := first; ; k += step {
+			if spanCouldMatch(stops[k], lo, hi, bounded) {
+				if ok, m := matchPatternIn(pattern, value[:stops[k]], value, 0, o); ok {
+					return with(m, value[:stops[k]]) + value[stops[k]:]
+				}
 			}
-			if ok, m := matchPatternIn(pattern, value[:stops[k]], value, 0, o); ok {
-				return with(m, value[:stops[k]]) + value[stops[k]:]
+			if k == final {
+				return value
 			}
 		}
-		return value
 	case '%':
-		for _, i := range stops {
-			if !spanCouldMatch(len(value)-i, lo, hi, bounded) {
-				continue
+		// And anchored at the end, so the start is: `${v/%b*c/X}` is `aX`
+		// and `${(S)v/%b*c/X}` is `abcaX`.
+		first, final, step := 0, len(stops)-1, 1
+		if shortest {
+			first, final, step = len(stops)-1, 0, -1
+		}
+		for k := first; ; k += step {
+			i := stops[k]
+			if spanCouldMatch(len(value)-i, lo, hi, bounded) {
+				if ok, m := matchPatternIn(pattern, value[i:], value, i, o); ok {
+					return value[:i] + with(m, value[i:])
+				}
 			}
-			if ok, m := matchPatternIn(pattern, value[i:], value, i, o); ok {
-				return value[:i] + with(m, value[i:])
+			if k == final {
+				return value
 			}
 		}
-		return value
 	}
 
 	var b strings.Builder
 	for k := 0; k < len(stops); {
 		i := stops[k]
-		// The longest match at this position, so `*` behaves as it does
-		// everywhere else rather than matching empty and looping.
+		// The match at this position the operator asked for, so `*` behaves
+		// as it does everywhere else rather than matching empty and looping.
 		end := -1
 		var rep matchReport
-		// The longest span first, but starting from the longest the pattern
-		// could *fill* rather than from the end of the subject. For a
-		// pattern of four ordinary characters that is one span instead of
-		// one per remaining unit, which is the whole of #1398.
+		// Bounded to the spans the pattern could *fill* rather than running
+		// to the end of the subject. For a pattern of four ordinary
+		// characters that is one span instead of one per remaining unit,
+		// which is the whole of #1398.
 		top := len(stops) - 1
 		if bounded {
 			top = sort.SearchInts(stops, i+hi+1) - 1
 		}
-		for m := top; m >= k; m-- {
-			if bounded && stops[m]-i < lo {
-				// Shorter than the pattern's shortest, and every span left
-				// is shorter still.
-				break
-			}
+		bottom := k
+		if bounded {
+			bottom = max(k, sort.SearchInts(stops, i+lo))
+		}
+		mFirst, mFinal, mStep := top, bottom, -1
+		if shortest {
+			mFirst, mFinal, mStep = bottom, top, 1
+		}
+		for m := mFirst; bottom <= top; m += mStep {
 			// Every span tried is a piece of value and is matched as one,
 			// so a `(#s)` matches only the span starting at 0 and a `(#e)`
 			// only the one ending at the last unit. Measured:
@@ -3097,6 +3219,9 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 			ok, got := matchPatternIn(pattern, value[i:stops[m]], value, i, o)
 			if ok {
 				end, rep = stops[m], got
+				break
+			}
+			if m == mFinal {
 				break
 			}
 		}
@@ -3121,11 +3246,33 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with fun
 			return b.String()
 		}
 		if end == i {
-			// An empty match must still make progress.
+			// An empty match must still make progress, and the unit it steps
+			// over may be the last one — in which case the scan is over
+			// rather than reaching the end of the value as one more position
+			// to try.
+			//
+			// **The same position reached by a failed match is still tried**,
+			// which is what makes this a rule about the step and not about
+			// the position. Measured on zsh 5.9.2 with extended_glob and
+			// `v=abc`, four patterns that differ only in what happens at the
+			// `c`:
+			//
+			//	${v//x#/-}          -a-b-c   empty at 2, so 3 is not a
+			//	                             position — not `-a-b-c-`
+			//	${v//(#e)/-}        abc-     nothing matched at 2, so 3 is
+			//	${v//(x#|(#e))/-}   -a-b-c   empty at 2 again, and the arm
+			//	                             that could fire at 3 does not
+			//	${v//((#s)|(#e))/-} -abc-    empty at 0, nothing at 1 or 2
+			//
+			// A value with no units at all has no preceding step and keeps
+			// its one match: `${(q):-}`'s empty string under `//x#/-` is `-`.
 			if i < len(value) {
 				b.WriteString(value[i:stops[k+1]])
 			}
 			k++
+			if k < len(stops) && stops[k] == len(value) {
+				return b.String()
+			}
 			continue
 		}
 		for stops[k] < end {

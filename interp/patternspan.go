@@ -109,9 +109,11 @@ func spanCouldMatch(n, lo, hi int, bounded bool) bool {
 // A trim's half of the same bound: the characters a match has to end with.
 //
 // `${v##pat}` is the other quadratic loop in this file's family.
-// [edgeByLength] asks the matcher about every prefix of the subject, longest
+// [spanByLength] asks the matcher about every prefix of the subject, longest
 // first, and takes the first that the whole pattern matches — so a subject of
-// n units is n match attempts, each of which may read the whole prefix.
+// n units is n match attempts, each of which may read the whole prefix. Under
+// the searching flag it asks about every *span* rather than every prefix, so
+// the same analysis is what keeps that from being quadratic as well.
 //
 // Measured on this machine's powerlevel10k instant-prompt cache, which is
 // where it was found: `${content##*$rs$key$us}`, one expansion against a

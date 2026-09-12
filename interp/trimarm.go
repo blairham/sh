@@ -3,8 +3,8 @@
 
 package interp
 
-// The longest prefix trim's second reading: which arm of an alternation the
-// pattern takes when the arms take different lengths.
+// A longest trim's second reading: which arm of an alternation the pattern
+// takes when the arms take different lengths.
 //
 // `${x##pat}` is spelled "the longest match", and one shell in the panel does
 // not search for one. It tries the arms of an alternation in the order they
@@ -18,7 +18,7 @@ package interp
 // The matcher already knows this rule on the half of it that reports: a
 // written arm beats a longer one for what `(#b)` captures, which matchGroup
 // states and pins. What it cannot do is say so through a yes/no answer, which
-// is all trimEdge asks it — the search there drives the *candidate* order,
+// is all trimSpan asks it — the search there drives the *candidate* order,
 // longest piece first, so the arm the matcher would have preferred is decided
 // before the matcher is ever consulted.
 //
@@ -33,6 +33,15 @@ package interp
 //
 // Which reading a dialect uses is Semantics.LongestPrefixTrimTakesTheWrittenArm,
 // and it is asked only where the two readings land in different places.
+//
+// **The prefix trim is where it is reachable without a flag, not where it
+// stops.** A longest *suffix* trim pins the end of the match to the end of
+// the value, so the arms have no length to disagree about and the panel
+// answers alike: measured, `v=abcbc` gives `ab` for both `${v%%(bc|cbc)}`
+// and `${v%%(cbc|bc)}`. Under the `(S)` flag that end comes loose and the
+// same split appears — `w=abc`, `${(S)w%%(b|bc)}` is `ac` and
+// `${(S)w%%(bc|b)}` is `a` — which is why writtenArmReaches asks about the
+// *shape of the match* rather than naming the operator.
 
 import "strings"
 
@@ -61,14 +70,22 @@ type armOrder struct {
 // worth measuring.
 const armVariantLimit = 64
 
-// writtenArmEdge is where a longest prefix trim stops when the arms are
-// searched in the order they were written.
+// writtenArmEnd is where a longest trim's match stops when the arms are
+// searched in the order they were written, given where the search has already
+// settled that the match begins.
+//
+// start is 0 for the unflagged prefix trim, which is where this reading was
+// first needed. Under `(S)` the match may begin anywhere and the position is
+// chosen before the arm is — measured, `v=abcbc` and `${(S)v%%(bc|cbc)}` is
+// `abc` in both written orders, the arm that starts closest to the end rather
+// than the arm that was written first. So the position is an argument here
+// and never something this reading gets to move.
 //
 // The second result is whether the question could be answered at all. It is
 // false for a pattern with no alternation to resolve, and for one whose
 // alternations cannot be resolved by rewriting — see armVariants — in which
 // case the caller keeps the length reading it already has.
-func writtenArmEdge(value, pattern string, o patternOpts) (int, bool) {
+func writtenArmEnd(value, pattern string, o patternOpts, start int) (int, bool) {
 	// The cheap half of the question first: a pattern with no bar in it
 	// anywhere has one reading, and that is nearly every pattern a script
 	// writes. A bar inside a bracket expression is an ordinary member and
@@ -80,16 +97,19 @@ func writtenArmEdge(value, pattern string, o patternOpts) (int, bool) {
 	if !ok || len(variants) < 2 {
 		return 0, false
 	}
-	// The same candidate order a longest prefix trim uses, because the arm
-	// decides *which* match and not how much of it: within one resolved
-	// pattern the longest piece still wins.
+	// The same candidate order a longest trim uses, because the arm decides
+	// *which* match and not how much of it: within one resolved pattern the
+	// longest piece still wins.
 	idx := unitStops(value, o)
 	for l, r := 0, len(idx)-1; l < r; l, r = l+1, r-1 {
 		idx[l], idx[r] = idx[r], idx[l]
 	}
 	for _, v := range variants {
 		for _, i := range idx {
-			if ok, _ := matchPatternIn(v, value[:i], value, 0, o); ok {
+			if i < start {
+				continue
+			}
+			if ok, _ := matchPatternIn(v, value[start:i], value, start, o); ok {
 				return i, true
 			}
 		}

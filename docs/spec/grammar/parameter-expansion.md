@@ -616,6 +616,37 @@ one declines every empty match at the end of the value and the other
 declines one adjacent to the match before it. Both agree on the rows
 above, which is the whole of what this section claims.
 
+### The end of the value is a position, but not after an empty match
+
+The rule above is about a match that *reached* the end. There is a second
+question underneath it: whether the end of the value is a position a match
+may **begin** at, once the scan has arrived there with nothing consumed.
+
+It is, and it is not, and which one depends on the step that got there.
+Measured 2026-09-12 on zsh 5.9.2 with `extended_glob` and `v=abc`, because
+`(#e)` is the only spelling in the panel that can match empty at the end and
+nowhere else:
+
+    ${v//x#/-}            →  -a-b-c     and not -a-b-c-
+    ${v//c#/-}            →  -a-b-      the final - took the c
+    ${v//(#e)/-}          →  abc-       nothing matched before it
+    ${v//(x#|(#e))/-}     →  -a-b-c     the arm that could fire does not
+    ${v//((#s)|(#e))/-}   →  -abc-      arrived after a failed match
+
+So the end is offered to the matcher when the scan reached it by stepping
+over a unit **no match claimed**, and is not when it reached it by the step
+an empty match takes to make progress. A rule written about the position
+rather than about the step gets one of the first and third rows wrong
+whichever way it is stated, and this implementation had the first: it left
+`-a-b-c-`, one replacement more than the shell makes.
+
+A value with no units at all has no preceding step, and keeps its one
+match: the empty string under `${e//x#/-}` is `-`.
+
+The other columns cannot ask the question — no grammar in the panel but
+zsh's has an end anchor — so this is one shell's answer rather than an axis,
+and the rows the rest *can* reach are the ones above.
+
 ## The `!` that lists names instead of following one
 
 Two more spellings open with `!` and are not indirection:
@@ -1229,6 +1260,7 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(v)` | with `(k)`: key and value pairs | `${(kv)m}` | `k1 v1` interleaved |
 | `(%)` | expand prompt `%` escapes | `${(%):-%x}` | see below |
 | `(M)` | substitute what the pattern took | `v=hello; ${(M)v#h*l}` | `hel` |
+| `(S)` | take the shortest match, and search for it | `s=abab; ${(S)s/*b/_}` | `_ab` |
 | `(o)` / `(O)` | sort a list up / down | `a=(c a b); ${(@o)a}` | `a b c` |
 | `(n)` | sort by the numbers in the words | `a=(10 9 1); ${(@n)a}` | `1 9 10` |
 | `(i)` | sort with case folded away | `a=(B a); ${(@i)a}` | `a B` |
@@ -1247,6 +1279,59 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(e)` | read the result again as shell text | `w=zz; v='$w'; ${(e)v}` | `zz` |
 
 Details, each measured:
+
+- **`(S)` is which match, not what to do with it.** Against a
+  substitution it is non-greedy: `s=abab` gives `${s/*b/_}` as `_` and
+  `${(S)s/*b/_}` as `_ab`, and the global spelling separates a length rule
+  from a position rule — `${s//*b/_}` is `_` where `${(S)s//*b/_}` is `__`.
+  It reaches the anchored forms too, which a reading that only touched the
+  unanchored loop would leave alone: with `v=abcabc`, `${v/#a*b/X}` is `Xc`
+  and `${(S)v/#a*b/X}` is `Xcabc`, `${v/%b*c/X}` is `aX` and
+  `${(S)v/%b*c/X}` is `abcaX`.
+
+  **Against a trim it is a substring search**, which the name does not give
+  away. The vendor manual states it as a position rather than a length: `#`
+  and `##` take the match that starts closest to the *start* of the value,
+  `%` and `%%` the one that starts closest to the end — explicitly not the
+  one that *ends* closest to it — and the operator still chooses how much at
+  whichever position the search settled on. With `str=aXbXc`:
+
+  | probe | zsh 5.9.2 | without the flag |
+  | --- | --- | --- |
+  | `${(S)str#X*}` | `abXc` | `aXbXc` |
+  | `${(S)str##X*}` | `a` | `aXbXc` |
+  | `${(S)str%X*}` | `aXbc` | `aXb` |
+  | `${(S)str%%X*}` | `aXb` | `a` |
+
+  So a trim under the flag takes a piece out of the **middle** and is no
+  longer a prefix or a suffix removal — `${(S)str%%X*}` answering `aXb` is a
+  match that stopped short of the end. That is why this implementation's
+  trim answers with a *span*: the unflagged operators are the same span with
+  one end pinned, and `(M)` reads the other side of whichever one it is, so
+  `${(SM)str%%X*}` is `Xc`.
+
+  **It composes with the written-arm reading and widens where that applies.**
+  A longest *prefix* trim already takes the arm that was written first;
+  under the flag a longest *suffix* trim does too, where without it the
+  longest match wins in either written order. Measured with `w=abc` and
+  `v=abcbc`: `${(S)w%%(b|bc)}` is `ac` and `${(S)w%%(bc|b)}` is `a`, while
+  `${v%%(bc|cbc)}` and `${v%%(cbc|bc)}` are both `ab`. The position is
+  settled before the arm is — `${(S)v%%(bc|cbc)}` is `abc` in both written
+  orders, the match nearest the end rather than the arm written first.
+
+  **And it reaches nothing else**, measured one operator at a time rather
+  than reasoned from the name. With `str=aXbXc`, `${(S)str}`, `${(S)str:1}`,
+  `${(S)str:-alt}`, `${(S)str:#a*}`, `${(S)#str}` and `${(S)str[(i)X]}` are
+  each what they would be with no flag at all. The exclusion is the row
+  worth naming, because it *is* a pattern operator: it is a whole-value test
+  rather than a search, so there is no second match to prefer.
+
+  One measured binding is deliberately not reproduced.
+  `w=aXbXc; ${(S)w%(#b)(X*)}` fills `$match[1]` with `X` and sets
+  `$mbegin[1]` and `$mend[1]` to **6** — an index past the end of a
+  five-character value, disagreeing with the match reported beside it. Every
+  other spelling of the pair agrees and is carried; this one is recorded as a
+  measurement rather than copied.
 
 - **The ordering flags are one step, and `u` is not a sort.** `o` and `O`
   order a list up and down, `n` reads each run of digits in a word as a

@@ -4341,7 +4341,7 @@ type Semantics struct {
 	// Asked only where the two readings land in different places, which is
 	// why an ordinary pattern never reaches it: a pattern with no
 	// alternation has one reading, and `(ab|a)` — the arms in decreasing
-	// length — has two that agree. See trimEdge, which finds both edges and
+	// length — has two that agree. See trimSpan, which finds both edges and
 	// asks only when they differ, and interp/trimarm.go for the search.
 	LongestPrefixTrimTakesTheWrittenArm Answer
 

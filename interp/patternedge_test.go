@@ -10,7 +10,7 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
-// trimOps is every operator edgeByLength orders candidates for, so a
+// trimOps is every operator spanByLength orders candidates for, so a
 // difference that shows up in only one of the four readings is still caught.
 var trimOps = []syntax.ParamOp{
 	syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong,
@@ -145,14 +145,82 @@ func TestTheEdgeLiteralsGiveUpOnWhatCouldBypassThem(t *testing.T) {
 // shows up as a different string. Compared against the same run with the
 // analysis forced off, which is the only reference that cannot drift from
 // the code.
+//
+// **Both length orders**, because the searching one asks the analysis a
+// question the anchored one never does: it narrows the *ends* available at
+// every start rather than only at 0, so a bound that is a unit out shows up
+// there and nowhere else.
 func TestTrimAnswersTheSameWithTheEdgeLiteralsAsWithout(t *testing.T) {
 	for _, tc := range append(spanCases, edgeCases...) {
 		for _, op := range trimOps {
-			got := trimForTest(tc.pattern, tc.subject, op, true)
-			want := trimForTest(tc.pattern, tc.subject, op, false)
-			if got != want {
-				t.Errorf("pattern %q on %q op %v: with edges %q, without %q",
-					tc.pattern, tc.subject, op, got, want)
+			for _, search := range []bool{false, true} {
+				got := trimForTest(tc.pattern, tc.subject, op, true, search)
+				want := trimForTest(tc.pattern, tc.subject, op, false, search)
+				if got != want {
+					t.Errorf("pattern %q on %q op %v search=%v: with edges %q, without %q",
+						tc.pattern, tc.subject, op, search, got, want)
+				}
+			}
+		}
+	}
+}
+
+// A searching trim takes a span, and the two flags that read it take the two
+// halves of one split — so the piece removed and the piece kept must put the
+// value back together, whatever the pattern and whichever end was searched.
+//
+// Written as an invariant rather than as a table because the failure it
+// guards against is the one a table cannot hold: an implementation that kept
+// a split point answers one of the pair correctly and the other by
+// accident, and only a piece taken from the *middle* tells them apart.
+func TestASearchingTrimAndItsMatchAreTheTwoHalvesOfOneSpan(t *testing.T) {
+	for _, tc := range append(spanCases, edgeCases...) {
+		for _, op := range trimOps {
+			o := spanOptsForTest()
+			o.where = &matchWhere{}
+			lo, hi, _, ok := spanByLength(tc.subject, tc.pattern, op, o, true)
+			if !ok {
+				continue
+			}
+			left, _ := trim(tc.subject, tc.pattern, op, o, armOrder{}, true)
+			took, _ := matched(tc.subject, tc.pattern, op, o, armOrder{}, true)
+			if want := tc.subject[:lo] + took + tc.subject[hi:]; want != tc.subject {
+				t.Errorf("pattern %q on %q op %v: the span %d..%d does not rebuild the value",
+					tc.pattern, tc.subject, op, lo, hi)
+			}
+			if left != tc.subject[:lo]+tc.subject[hi:] || took != tc.subject[lo:hi] {
+				t.Errorf("pattern %q on %q op %v: trim %q and match %q are not the span %d..%d",
+					tc.pattern, tc.subject, op, left, took, lo, hi)
+			}
+		}
+	}
+}
+
+// And the searching walk must find a match wherever one exists at all.
+//
+// The pruned walk is compared against an enumeration of every span, which is
+// the reference that cannot share a bug with it: the walk skips spans the
+// analysis rules out and visits the rest in an order, and this asks only
+// whether the *set* it can reach is the whole set.
+func TestASearchingTrimFindsAMatchWhereverOneExists(t *testing.T) {
+	for _, tc := range append(spanCases, edgeCases...) {
+		for _, op := range trimOps {
+			o := spanOptsForTest()
+			o.where = &matchWhere{}
+			_, _, _, found := spanByLength(tc.subject, tc.pattern, op, o, true)
+			any := false
+			for i := 0; i <= len(tc.subject) && !any; i++ {
+				for j := i; j <= len(tc.subject); j++ {
+					o.where = &matchWhere{}
+					if ok, _ := matchPatternIn(tc.pattern, tc.subject[i:j], tc.subject, i, o); ok {
+						any = true
+						break
+					}
+				}
+			}
+			if found != any {
+				t.Errorf("pattern %q on %q op %v: the search found %v, an enumeration of every span found %v",
+					tc.pattern, tc.subject, op, found, any)
 			}
 		}
 	}
@@ -162,12 +230,12 @@ func TestTrimAnswersTheSameWithTheEdgeLiteralsAsWithout(t *testing.T) {
 // two can be compared. Disabling is a rewrite of the pattern's analysis
 // rather than a flag on the code under test: spanBoundDisabled is read by
 // patternEdgeLiterals and patternSpanBytes and by nothing else.
-func trimForTest(pattern, subject string, op syntax.ParamOp, edges bool) string {
+func trimForTest(pattern, subject string, op syntax.ParamOp, edges, search bool) string {
 	defer func(prev bool) { spanBoundDisabled = prev }(spanBoundDisabled)
 	spanBoundDisabled = !edges
 	o := spanOptsForTest()
 	o.where = &matchWhere{}
-	out, _ := trim(subject, pattern, op, o, armOrder{})
+	out, _ := trim(subject, pattern, op, o, armOrder{}, search)
 	return out
 }
 
@@ -191,7 +259,7 @@ func TestTheLongestPrefixTrimOnARealPromptCache(t *testing.T) {
 
 	o := spanOptsForTest()
 	o.where = &matchWhere{}
-	got, _ := trim(subject, "*"+key, syntax.ParamTrimPrefixLong, o, armOrder{})
+	got, _ := trim(subject, "*"+key, syntax.ParamTrimPrefixLong, o, armOrder{}, false)
 	if got != want {
 		t.Errorf("trim left %d bytes, want %d", len(got), len(want))
 	}
@@ -209,6 +277,6 @@ func BenchmarkLongestPrefixTrimOnAPromptCache(b *testing.B) {
 	for b.Loop() {
 		o := spanOptsForTest()
 		o.where = &matchWhere{}
-		trim(subject, "*"+key, syntax.ParamTrimPrefixLong, o, armOrder{})
+		trim(subject, "*"+key, syntax.ParamTrimPrefixLong, o, armOrder{}, false)
 	}
 }

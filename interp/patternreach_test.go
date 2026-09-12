@@ -250,7 +250,7 @@ func TestATrimOverALongValueAsksALinearNumberOfQuestions(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			o := reachTestOpts(c.pattern)
-			got, _ := trim(value, c.pattern, c.op, o, armOrder{})
+			got, _ := trim(value, c.pattern, c.op, o, armOrder{}, false)
 			if got != value {
 				t.Fatalf("trim removed %d bytes; no run of backslashes matches %q",
 					len(value)-len(got), c.pattern)

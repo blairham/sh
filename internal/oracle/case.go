@@ -5446,6 +5446,36 @@ echo "st=$?"`,
 		Why:     "the same question in the spelling the other grammars have, which is what makes it an axis rather than one shell's curiosity: with extended patterns on, bash and ksh93 answer the first two identically — the longest arm, whichever order it was written in — where the bare-group spelling above splits them. The third is the control: the single `#` takes the shortest match in every column that reads the group at all",
 	},
 	{
+		ID: "param/the-searching-flag-turns-a-substitution-non-greedy", Category: "parameter expansion",
+		Snippet: `s=abab; v=abcabc; echo "[${s/*b/_}][${(S)s/*b/_}][${s//*b/_}][${(S)s//*b/_}][${v/#a*b/X}][${(S)v/#a*b/X}][${v/%b*c/X}][${(S)v/%b*c/X}]"`,
+		Why:     "one flag turns the length choice over: a substitution takes the longest match at each position and this takes the shortest, which is the whole of what `non-greedy` means. The pair is on one row because either half alone is a number rather than a comparison — `_ab` says nothing without `_` beside it. The global spelling is the row that separates a length rule from a *position* rule: shortest-first finds two matches in `abab` where longest-first finds one that eats the string. The last four are the anchored spellings, which the flag reaches as well and which a reading that only touched the unanchored loop would leave alone. The other five have no flag group and call the whole expansion a bad substitution",
+	},
+	{
+		ID: "param/the-searching-flag-makes-a-trim-a-substring-search", Category: "parameter expansion",
+		Snippet: `str=aXbXc; echo "[${(S)str#X*}][${(S)str##X*}][${(S)str%X*}][${(S)str%%X*}][${str#X*}][${(S)str#zz}]"`,
+		Why:     "the half of the flag a reader would not guess from `non-greedy`: against a trim it is a *substring search*, so the piece taken may come out of the middle and a trim is no longer a prefix or a suffix removal. The vendor manual states it as a position rather than a length — `#` and `##` take the match that starts closest to the start, `%` and `%%` the one that starts closest to the *end*, explicitly not the one that ends closest to it — and the operator still chooses how much at whichever position the search settled on. `%%` is the sharpest: it answers `aXb`, so the match stopped short of the end, which the unflagged suffix trim cannot do. The fifth bracket is the control with no flag, which leaves the value alone because `X*` is not a prefix of it, and the sixth is a pattern that matches nothing",
+	},
+	{
+		ID: "param/the-searching-and-matching-flags-compose", Category: "parameter expansion",
+		Snippet: `str=aXbXc; echo "[${(SM)str#X*}][${(SM)str##X*}][${(SM)str%X*}][${(SM)str%%X*}][${(SM)str#zz}][${(S)str##X*}]"`,
+		Why:     "the two flags that read a trim's match are one span and not two mechanisms: `(S)` chooses which match and `(M)` says which side of it to keep, so every pair here is the other half of the same split — `${(SM)str%%X*}` is `Xc` where `${(S)str%%X*}` is `aXb`. It is worth a row because a searching trim removes a piece from the *middle*, so the two sides are `the value without it` and `it` rather than a prefix and a suffix, and an implementation that kept a split point instead of a span can answer one of them and not the other. The fifth is the boundary the matching flag already has on its own: a pattern that matches nothing leaves nothing rather than leaving the value",
+	},
+	{
+		ID: "param/the-searching-flag-reaches-only-the-pattern-operators", Category: "parameter expansion",
+		Snippet: `str=aXbXc; echo "[${(S)str}][${(S)str:1}][${(S)str:-alt}][${(S)str:#a*}][${(S)#str}][${(S)str[(i)X]}]"`,
+		Why:     "and the boundary, measured one operator at a time rather than reasoned from the name, the same way the matching flag's was. A flag that chooses between a longest and a shortest match has nothing to say where there is no choice: no operator at all, a substring, a default, the element exclusion, a length, and a subscript search are all what they would have been without it. The exclusion is the one worth having on the row, because it *is* a pattern operator — it is a whole-value test rather than a search, so there is no second match to prefer",
+	},
+	{
+		ID: "param/a-searching-trim-and-the-arms-of-an-alternation", Category: "parameter expansion",
+		Snippet: `w=abc; v=abcbc; echo "[${(S)w##(a|ab)}][${(S)w##(ab|a)}][${(S)w%%(b|bc)}][${(S)w%%(bc|b)}][${v%%(bc|cbc)}][${(S)v%%(bc|cbc)}]"`,
+		Why:     "the searching flag composes with the arm-order reading rather than standing beside it, and it widens where that reading applies: the first two are the familiar split a longest *prefix* trim shows, and the next two are the same split on a longest *suffix* trim, which without the flag takes the longest match in either written order — the fifth bracket is that control. The last is the boundary that says the position is chosen before the arm is: with the flag, `abcbc` gives up its final `bc` in both written orders, because the match that starts closest to the end wins over the arm that was written first",
+	},
+	{
+		ID: "param/an-empty-match-at-the-end-of-a-substitution", Category: "parameter expansion",
+		Snippet: `setopt extendedglob 2>/dev/null; v=abc; echo "[${v//x#/-}][${v//c#/-}][${v//(#e)/-}][${v//(x#|(#e))/-}][${v//((#s)|(#e))/-}]"`,
+		Why:     "where a global substitution stops, for a pattern that can match nothing at all. The end of the value is a position a match may start at — the third bracket is an anchor that matches only there and it fires — but it is *not* one after the step that an empty match takes to make progress: the first leaves `-a-b-c` and not `-a-b-c-`, where the second's final `-` stands for a match that took the `c`. The fourth is the pair in one pattern, and the arm that could fire at the end does not; the fifth reaches the end after a failed match instead and does fire. So it is a rule about the step and not about the position, which is the distinction an implementation guessing from `do not loop forever` gets wrong in one direction or the other. The other five have no `#` closure and read the pattern literally",
+	},
+	{
 		ID: "param/the-matching-flag-inverts-the-exclusion", Category: "parameter expansion",
 		Snippet: `a=(f1 f22 f333); printf "[%s]" "${(M@)a:#f2*}"; echo; printf "[%s]" "${(@)a:#f2*}"; echo`,
 		Why:     "the same flag on the operator that chooses *elements* rather than characters, and the same inversion: keep what the pattern matched instead of dropping it. Both spellings on one row, because the pair is what says it is an inversion and not an unrelated second operator — and the `(@)` is load-bearing, since quoted without it the array joins to one string first and the whole-match rule then takes all of it or none",

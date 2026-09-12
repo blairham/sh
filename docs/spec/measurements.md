@@ -601,6 +601,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/the-replacement-ampersand-is-the-span-the-pattern-took` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a<XbX>c][<a><b>c<a><b>c][<a>bcabc][abcab<c>]` | `[a<XbX>c][<a><b>c<a><b>c][<a>bcabc][abcab<c>]` | `[a<&>c][<&><&>c<&><&>c][<&>bcabc][abcab<&>]` | `[a<&>c][<&><&>c<&><&>c][<&>bcabc][abcab<&>]` | `[a<&>c][<&><&>c<&><&>c][<&>bcabc][abcab<&>]` |
 | `param/quoting-a-replacement-ampersand` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a&c][abc][a&c]` | `[a&c][abc][a&c]` | `[a&c][a&c][a&c]` | `[a&c][a&c][a&c]` | `[a&c][a&c][a&c]` |
 | `param/a-backslash-in-an-expanded-replacement` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a[&]c][a[\b]c][a[\a]c]` | `[a[&]c][a[\b]c][a[\a]c]` | `[a[\&]c][a[\\&]c][a[\a]c]` | `[a[\&]c][a[\&]c][a[\a]c]` | `[a[\&]c][a[\\&]c][a[\a]c]` |
+| `expand/equals-names-a-command` | `=nosuchcmd_zz~st=0` | `=nosuchcmd_zz~st=0` | `=nosuchcmd_zz~st=0` | `=nosuchcmd_zz~st=0` | `=nosuchcmd_zz~st=0` | **2>** `<shell>:1: nosuchcmd_zz not found` *(status 1)* |
 
 - `expand/results-not-rescanned-quote` — a quote in expanded text is a literal quote
   ```sh
@@ -2035,6 +2036,10 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   v=abc; p='[\&]'; q='[\\&]'; r='[\a]'; printf "[%s]" "${v/b/$p}" "${v/b/$q}" "${v/b/$r}"; echo
   ```
+- `expand/equals-names-a-command` — one shell reads an unquoted word beginning with `=` as the path of the command it names, and the other five read it as a word. A name nothing resolves is what makes it machine-independent: the one that expands reports `nosuchcmd_zz not found` and fails, and the rest echo the word unchanged. This is the row `umask/symbolic-set-with-no-who` was accidentally carrying, and carrying under the wrong axis (#2057)
+  ```sh
+  echo =nosuchcmd_zz; echo "st=$?"
+  ```
 
 ## semantics axes
 
@@ -3240,6 +3245,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `caller/from-a-function-under-dash-c` | `st=127~st0=127` **2>** `<shell>: 1: caller: not found~<shell>: 1: caller: not found` | `1 NULL~st=0~st0=1` | `1 NULL~st=0~st0=1` | `st=1~st0=1` | `st=127~st0=127` **2>** `<shell>: caller: not found~<shell>: caller: not found` | `st=127~st0=127` **2>** `f: command not found: caller~f: command not found: caller` |
 | `caller/walks-a-script-s-stack` | `st=127` **2>** `<script>: 1: caller: not found~<script>: 1: caller: not found~<script>: 1: caller: not found~<script>: 1: caller: not found` | `2 <script>~2 g <script>~3 main <script>~st=1` | `2 <script>~2 g <script>~3 main <script>~st=1` | `2 <script>~2 g <script>~3 main <script>~st=1` | `st=127` **2>** `<script>: line 1: caller: not found~<script>: line 1: caller: not found~<script>: line 1: caller: not found~<script>: line 1: caller: not found` | `st=127` **2>** `f: command not found: caller~f: command not found: caller~f: command not found: caller~f: command not found: caller` |
 | `caller/refuses-what-is-not-a-depth` | `st=127` **2>** `<shell>: 1: caller: not found` | `st=2` **2>** `<shell>: line 1: caller: x: invalid number~caller: usage: caller [expr]` | `st=2` **2>** `<shell>: line 1: caller: x: invalid number~caller: usage: caller [expr]` | `st=1` | `st=127` **2>** `<shell>: caller: not found` | `st=127` **2>** `f: command not found: caller` |
+| `alias/the-print-option` | `st=1` **2>** `alias: -p not found` | `alias a='1'~st=0` | `alias a='1'~st=0` | `alias a='1'~st=0` | `alias a=1~st=0` | `st=1` **2>** `<shell>:alias:1: bad option: -p` |
+| `alias/unalias-all-with-a-name-after-it` | `st=0~after=1` **2>** `alias: a not found` | `st=0~after=1` **2>** `<shell>: line 1: alias: a: not found` | `st=0~after=1` **2>** `<shell>: line 1: alias: a: not found` | `st=0~after=1` **2>** `<shell>: line 0: alias: a: not found` | `st=0~after=1` **2>** `a: alias not found` | `st=1~a=1~after=0` **2>** `<shell>:unalias:1: -a: too many arguments` |
+| `type/p-on-a-name-the-shell-answers-itself` | `-p: not found~f is a shell function~st=127` | `st=0` | `st=0` | `st=0` | `st=1` | `f not found~st=1` |
+| `getopts/optarg-after-a-bad-option` | `o=[?] optarg=[UNSET]` **2>** `Illegal option -x` | `o=[?] optarg=[UNSET]` **2>** `<shell>: illegal option -- x` | `o=[?] optarg=[UNSET]` **2>** `<shell>: illegal option -- x` | `o=[?] optarg=[UNSET]` **2>** `<shell>: illegal option -- x` | `o=[?] optarg=[UNSET]` **2>** `<shell>: -x: unknown option` | `o=[?] optarg=[]` **2>** `<shell>:1: bad option: -x` |
 
 - `echo/dash-e-and-capital-e` — -e turns escapes on where the shell has the letter and -E off where it has that one: dash has neither and prints them, ksh93 has only -e
   ```sh
@@ -5364,6 +5373,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `caller/refuses-what-is-not-a-depth` — the expression is a plain number despite the manual's word for it — 1+1 is refused the same way — and bash answers `invalid number` with its caller usage at 2
   ```sh
   f() { caller x; echo "st=$?"; }; f
+  ```
+- `alias/the-print-option` — `alias -p` prints the listing with the command word in front of every line, which is what two of the columns' plain listing already looks like -- so the letter is only visible where it is *refused*: zsh calls it a bad option and dash, which parses no options here at all, reads it as a name and answers not found. The table is cleared first because one column arrives with two dozen aliases of its own (#2057)
+  ```sh
+  unalias -a 2>/dev/null; alias a=1; alias -p; echo "st=$?"
+  ```
+- `alias/unalias-all-with-a-name-after-it` — `unalias -a` with an operand behind it: three columns take the letter, ignore the name and empty the table, and one refuses the line as too many arguments and leaves the table standing. The second listing is what tells those apart -- the status alone does not, since the refusal and a successful clear both leave `alias a` failing in three of them (#2057)
+  ```sh
+  unalias -a 2>/dev/null; alias a=1; unalias -a a; echo "st=$?"; alias a; echo "after=$?"
+  ```
+- `type/p-on-a-name-the-shell-answers-itself` — `-p` on a name the shell would have answered itself. One column's `-p` speaks only when the plain answer would have been a file, so a function is silence at 0; the two that search PATH anyway find nothing under that name and fail, one of them with a sentence. A function rather than a builtin keeps the row machine-independent -- `type -p echo` would have printed whatever path this machine keeps it at (#2057)
+  ```sh
+  f() { :; }; type -p f; echo "st=$?"
+  ```
+- `getopts/optarg-after-a-bad-option` — what `getopts` leaves in OPTARG when it reports an option the string does not have. One column empties it and the other three leave it unset, which a script reading `${OPTARG-}` can tell apart -- and the `o=[?]` half says the two are agreeing about everything else (#2057)
+  ```sh
+  set -- -x; getopts "a:" o; echo "o=[$o] optarg=[${OPTARG-UNSET}]"
   ```
 
 ## quoting
@@ -13686,11 +13711,26 @@ grades it and nothing drift-checks it either, for the same reason.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `trap/a-bare-exit-in-an-exit-trap` | `unreachable` | `unreachable` | `unreachable` | `unreachable` | `unreachable` | `unreachable` *(status 1)* |
+| `trap/l-lists-the-signals` | **2>** `<shell>: 1: trap: Illegal option -l` *(status 2)* | `st=0` | `st=0` | `st=0` | **2>** `<shell>: trap: -l: unknown option~Usage: trap [-p] [action condition ...]` *(status 2)* | `st=0` |
+| `trap/capital-p-prints-the-action-alone` | **2>** `<shell>: 1: trap: Illegal option -P` *(status 2)* | `echo hi~st=0` | `echo hi~st=0` | `st=2` **2>** `<shell>: line 0: trap: -P: invalid option~trap: usage: trap [-lp] [arg signal_spec ...]` | **2>** `<shell>: trap: -P: unknown option~Usage: trap [-p] [action condition ...]` *(status 2)* | `st=0` |
+| `trap/p-with-a-condition-named` | **2>** `<shell>: 1: trap: Illegal option -p` *(status 2)* | `trap -- 'echo hi' SIGUSR1~st=0` | `trap -- 'echo hi' USR1~st=0` | `trap -- 'echo hi' SIGUSR1~st=0` | `echo hi~st=0` | `st=0` |
 
 - `trap/a-bare-exit-in-an-exit-trap` — a bare `exit` in an EXIT trap reports the status the shell had when the trap began, not the trap's own last command — 0 in bash, dash and ksh93 and 1 in zsh. Found by `make wild-run`: /usr/bin/bzless traps `stty …; exit` and with no terminal the `stty` fails, so the script exited 1 where every shell exits 0, with identical output. Only a *run* comparison can see that
   ```sh
   trap "false; exit" 0; true
   echo unreachable
+  ```
+- `trap/l-lists-the-signals` — whether `trap` has a `-l` at all. The listing itself is a platform's signal table and is not comparable, so it goes to /dev/null and what is graded is the status and the refusal: two columns take the letter, and ksh93 and dash each answer with their own complaint and usage line (#2057)
+  ```sh
+  trap -l >/dev/null; echo "st=$?"
+  ```
+- `trap/capital-p-prints-the-action-alone` — `-P` writes the action with no `trap --` around it, in the one shell that has the letter; ksh93 and dash refuse it and the fourth prints nothing for a condition it has no `-P` for. The pair with the row below is the point -- one shell reaches this output through `-P` and another through `-p` with an operand (#2057)
+  ```sh
+  trap "echo hi" USR1; trap -P USR1; echo "st=$?"
+  ```
+- `trap/p-with-a-condition-named` — the same question through `-p`: one column writes the whole reissuable `trap -- action condition` line and another writes the action alone, which is why the bare form and the capital letter are two axes and not one (#2057)
+  ```sh
+  trap "echo hi" USR1; trap -p USR1; echo "st=$?"
   ```
 
 ## conditions
@@ -14691,6 +14731,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/the-export-listing-writes-a-compound-value` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -ax A5=([0]="1" [1]="2")` | `export -a A5=([0]="1" [1]="2")` | `declare -ax A5='([0]="1" [1]="2")'` | `export A5=(1 2)` | `typeset -ax A5=( 1 2 )` |
 | `declare/a-lone-plus-given-to-export` | `st=1` **2>** `<shell>: 1: export: +: bad variable name` | `st=1` **2>** `<shell>: line 1: export: `+': not a valid identifier` | `st=1` **2>** `<shell>: line 1: export: `+': not a valid identifier` | `st=1` **2>** `<shell>: line 0: export: `+': not a valid identifier` | `st=1` **2>** `<shell>: export: +: is not an identifier` | `q~r~st=0` |
 | `declare/a-lone-plus-given-to-readonly` | `st=1` **2>** `<shell>: 1: typeset: not found~<shell>: 1: readonly: +: bad variable name` | `st=1` **2>** `<shell>: line 1: readonly: `+': not a valid identifier` | `st=1` **2>** `<shell>: line 1: readonly: `+': not a valid identifier` | `st=1` **2>** `<shell>: line 0: readonly: `+': not a valid identifier` | `st=1` **2>** `<shell>: readonly: +: invalid variable name` | `rr~st=0` |
+| `declare/listing-a-control-byte` | `st=127` **2>** `<shell>: 1: typeset: not found` | `declare -- v=$'a\001b'~st=0` | `declare -- v=$'a\001b'~st=0` | `declare -- v="ab"~st=0` | `v=$'a\x01b'~st=0` | `typeset v=$'a\C-Ab'~st=0` |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
   ```sh
@@ -15978,6 +16019,10 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   p=1; typeset -r rr=4; readonly + | grep -E "^(p|rr)$"; echo "st=$?"
   ```
+- `declare/listing-a-control-byte` — how a listing spells a byte below 0x20 inside `$'...'`: an octal escape, a hex one, and a caret pair are three answers from three columns that otherwise quote alike, which is why the control escape is a field of its own rather than part of the quoting style. The fourth has no such builtin (#2057)
+  ```sh
+  v=$'ab'; typeset -p v; echo "st=$?"
+  ```
 
 ## select
 
@@ -16375,7 +16420,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `umask/symbolic-two-operators-in-one-clause` | `0122` | `0122` | `0122` | `0022` **2>** `<shell>: line 0: umask: `-': invalid symbolic mode character` | `0122` | `022` **2>** `<shell>:umask:1: bad symbolic mode permission: -` |
-| `umask/symbolic-set-with-no-who` | `0555` | `0555` | `0555` | `0555` | `0555` | `022` **2>** `<shell>:umask:1: bad symbolic mode operator: /` |
+| `umask/symbolic-set-with-no-who` | `0555` | `0555` | `0555` | `0555` | `0555` | `0555` |
 | `umask/symbolic-a-who-with-no-operator` | `0022` **2>** `<shell>: 1: umask: Illegal mode: g` | `0022` **2>** `<shell>: line 1: umask: ` ': invalid symbolic mode operator` | `0022` **2>** `<shell>: line 1: umask: ` ': invalid symbolic mode operator` | `0022` **2>** `<shell>: line 0: umask: ` ': invalid symbolic mode operator` | `0072` | `022` **2>** `<shell>:umask:1: bad umask` |
 | `umask/symbolic-the-setuid-letter` | `0322` | `0322` | `0322` | `0022` **2>** `<shell>: line 0: umask: `s': invalid symbolic mode character` | `0322` | `022` **2>** `<shell>:umask:1: bad symbolic mode permission: s` |
 | `umask/symbolic-the-sticky-letter` | `0022` **2>** `<shell>: 1: umask: Illegal mode: u=rt` | `0322` | `0322` | `0022` **2>** `<shell>: line 0: umask: `t': invalid symbolic mode character` | `0322` | `022` **2>** `<shell>:umask:1: bad symbolic mode permission: t` |
@@ -16391,9 +16436,9 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   umask 022; umask u+rw-x; umask
   ```
-- `umask/symbolic-set-with-no-who` — an omitted who before `=` means all three in three of the four. zsh wants one, and names a character that is not in the input at all
+- `umask/symbolic-set-with-no-who` — an omitted who before `=` means all three groups, in every column. It was written unquoted and recorded as a divergence -- zsh refusing it and naming a `/` nobody had typed -- and the operand was the whole of that: `=w` unquoted is zsh's `=cmd` expansion and reaches `umask` as `/usr/bin/w`, so the `/` was in the input after all. Quoted, the six agree, and `Semantics.SymbolicMaskSetsWithoutAWho` came out with them (#2057)
   ```sh
-  umask 022; umask -- =w; umask
+  umask 022; umask -- "=w"; umask
   ```
 - `umask/symbolic-a-who-with-no-operator` — four answers: ksh93 reads it as `g=`, bash and dash refuse it in their own words, and zsh answers with the complaint it gives a number it could not read
   ```sh
@@ -17453,6 +17498,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `scalarsubscript/a-pair-names-a-span-of-characters` | `[abc]~[abc]~[abc]` **2>** `<shell>: 1: v[2,3]=XY: not found~<shell>: 1: v[3,2]=X: not found~<shell>: 1: v[-1]=X: not found` | `[abc]~[abc]~[abc]` | `[abc]~[abc]~[abc]` | `[abc]~[abc]` **2>** `<shell>: v[-1]: bad array subscript` *(status 1)* | `[abc]~[abc]~[abc]` | `[aXY]~[abXc]~[abX]` |
 | `scalarsubscript/only-a-name-already-holding-a-string-splices` | **2>** `<shell>: 1: v[2]=X: not found~<shell>: 1: typeset: not found~<shell>: 1: u[2]=X: not found~<shell>: 1: typeset: not found~<shell>: 1: typeset: not found~<shell>: 1: w[2]=X: not found~<shell>: 1: typeset: not found` *(status 127)* | `declare -a v=([0]="abc" [2]="X")~declare -a u=([2]="X")~declare -a w=([2]="X")` | `declare -a v=([0]="abc" [2]="X")~declare -a u=([2]="X")~declare -a w=([2]="X")` | `declare -a v='([0]="abc" [2]="X")'~declare -a u='([2]="X")'~declare -a w='([0]="" [2]="X")'` | `typeset -a v=([0]=abc [2]=X)~typeset -a u=([2]=X)~typeset -a w=([2]=X)` | `typeset v=aXc~typeset -a u=( '' X )~typeset w=X` |
 | `scalarsubscript/read-fills-a-subscripted-operand` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a a=([0]="x" [1]="y" [2]="z")` | `declare -a a=([0]="x" [1]="y" [2]="z")` | `declare -a a='([0]="x" [1]="y" [2]="z")'` | `typeset -a a=(x y Q)` | `typeset -a a=( x Q z )` |
+| `param/keyed-table-as-a-scalar` | `[]~st=0` **2>** `<shell>: 1: m[a]=1: not found~<shell>: 1: m[b]=2: not found` | `[]~st=0` | `[]~st=0` | `[2]~st=0` | `[]~st=0` | `[1]~st=0` |
 
 - `ksharrays/the-brackets-after-an-unbraced-name` — the option is described as moving the array base and what it does is make an array read the way the ksh family reads one, which shows here as four answers moving together. The discriminating one is the first: `$a[1]` is `xx[1]` under the option — the element at the base position and then the three characters — where the same text without it is `xx`, and where reading the subscript against a zero base would be `yy`. So a wrong answer here is wrong in both halves at once, which is why the row prints the braced spelling beside it: `${a[1]}` *is* `yy`, because the braces settle where the expansion ends and only the base moves. The column with the option answers exactly what the three bashes and ksh93 answer without needing one, which is the point of the option and is also what makes the row hard to fake — a shell that only moved the base matches nothing here (#1726)
   ```sh
@@ -17489,6 +17535,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `scalarsubscript/read-fills-a-subscripted-operand` — the same store reached from a builtin, and the half that is nobody's dialect: every column with arrays fills the element, so a shell that resolved the operand as a whole name and never looked at the brackets is alone. It created a parameter *called* `a[2]` and left the array alone -- nothing assigned, nothing said, status 0. Recorded on an array rather than on a string so that the row is about the operand and not about the splice
   ```sh
   a=(x y z); printf Q | read "a[2]"; typeset -p a 2>/dev/null || declare -p a
+  ```
+- `param/keyed-table-as-a-scalar` — a plain `$m` where `m` is a keyed table and the dialect has already said a bare name is one element. Two columns look up the key `0` and hand back nothing; the shell that reads a table as an ordered list hands back the first value in its own order. The `setopt` is what puts that shell in the state where a bare name is one element at all -- without it the same name is the whole table and the question is never asked -- and it is guarded because the other five have no such builtin (#2057)
+  ```sh
+  setopt ksharrays 2>/dev/null; typeset -A m 2>/dev/null; m[a]=1; m[b]=2; echo "[$m]"; echo "st=$?"
   ```
 
 ## function library
@@ -17555,4 +17605,15 @@ grades it and nothing drift-checks it either, for the same reason.
 - `fnlib/add-zsh-hook-autoload-letters` — the letters are handed to `autoload` rather than interpreted here, so what they answer is the *builtin's* answer arriving through the function. `-k` alone is accepted and `-Uzk` is not, because `-z` and `-k` name two different autoload styles and asking for both is a refusal at status 1 — and the hook is still installed either way, which is the part that makes the status the only thing to measure. Standard error is suppressed on purpose: the diagnostic names a line number in the function file, which is a fact about whose file it is rather than about the behavior. `-q` is the unknown letter, refused by `getopts` before anything is installed. This shell answers 0 for `-Uzk`, because its `autoload` has no `-k` to conflict with `-z` (#2149)
   ```sh
   autoload -Uz add-zsh-hook 2>/dev/null; { add-zsh-hook -k precmd kf; } 2>/dev/null; echo "k=$? [${precmd_functions[*]}]"; { add-zsh-hook -Uzk precmd kf2; } 2>/dev/null; echo "Uzk=$? [${precmd_functions[*]}]"; { add-zsh-hook -q precmd kf3; } 2>/dev/null; echo "q=$?"
+  ```
+
+## locale
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `locale/an-unset-locale-and-a-multibyte-length` | `len=6` | `len=5` | `len=5` | `len=6` | `len=6` | `len=6` |
+
+- `locale/an-unset-locale-and-a-multibyte-length` — what a locale nothing names is: one column reads an unset locale as the environment's UTF-8 and counts five characters, and the other five read it as C and count the six bytes. The empty `LC_ALL` is how the case reaches the question at all -- the harness sets `LC_ALL=C` for every row, and an empty value is ignored by the locale machinery exactly as an absent one is, which is measured and not assumed (#2057)
+  ```sh
+  s=héllo; echo "len=${#s}"
   ```

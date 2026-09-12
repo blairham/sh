@@ -138,6 +138,18 @@ type Result struct {
 	// was moved, per dialect. A field can only be pinned by a row that was
 	// passing, so this bounds what the sweep could possibly have found.
 	Baseline map[string]int `json:"baseline"`
+	// Reached says, for each pair nothing objected to, whether the axis is
+	// consulted by that dialect at all — "dialect field" to true or false.
+	//
+	// This is the discriminator the backlog needed. An unpinned pair is
+	// either a missing corpus row or a disagreement that is not there, and
+	// the two want opposite fixes; but there is a third thing it can be, and
+	// it looks identical from here: an axis the dialect's own code never
+	// reaches, where no row could object however it was written. Moving such
+	// an axis to the "no answer" constant makes the shell refuse *wherever
+	// it is consulted*, so a dialect that does not notice that either is one
+	// the axis never reaches. Two flips tell three states apart.
+	Reached map[string]bool `json:"reached,omitempty"`
 }
 
 // sweepState is what one flip learns and the next one reuses.
@@ -254,6 +266,9 @@ func Run(ctx context.Context, o Options) (*Result, error) {
 			return nil, err
 		}
 	}
+	if err := o.sweepReach(ctx, targets, byName, fields, res, state); err != nil {
+		return nil, err
+	}
 	flaky := state.flaky
 	for id := range flaky {
 		res.Flaky = append(res.Flaky, id)
@@ -338,6 +353,68 @@ func (o *Options) sweepTarget(ctx context.Context, t Target, ref oracle.Found, f
 			res.Flips = append(res.Flips, out)
 			if out.Outcome == Unpinned {
 				o.logf("  UNPINNED %s %s: %s -> %s (%d rows, %s)\n", t.Dialect, f.Path, held, v.Name, out.Scanned, out.Elapsed)
+			}
+		}
+	}
+	return nil
+}
+
+// sweepReach asks, of every pair nothing objected to, whether the axis is
+// consulted by that dialect at all.
+//
+// It runs only over the backlog, so it costs what the backlog costs and
+// shrinks with it — and it is the difference between a list of 111 things to
+// look at and a list of the ones somebody could actually do something about.
+// A field with no "no answer" constant cannot be asked: a string axis spells
+// absence as the empty string, which is an answer, so those are left unknown
+// rather than guessed at.
+func (o *Options) sweepReach(ctx context.Context, targets []Target, byName map[string]oracle.Found, fields []Field, res *Result, state *sweepState) error {
+	unpinned := res.Unpinned()
+	if len(unpinned) == 0 {
+		return nil
+	}
+	res.Reached = map[string]bool{}
+	byPath := map[string]Field{}
+	for _, f := range fields {
+		byPath[f.Path] = f
+	}
+	consts, err := typeConstants()
+	if err != nil {
+		return err
+	}
+	for i, t := range targets {
+		ref, ok := byName[t.Against]
+		if !ok {
+			continue
+		}
+		sem := reflect.ValueOf(t.Semantics)
+		for _, flip := range unpinned {
+			if flip.Dialect != t.Dialect {
+				continue
+			}
+			f := byPath[flip.Field]
+			var none *Value
+			for _, v := range consts[f.Type] {
+				if v.Unspecified {
+					none = &v
+					break
+				}
+			}
+			if none == nil {
+				continue
+			}
+			cur, err := At(sem, f.Path)
+			if err != nil {
+				return err
+			}
+			if literalOf(cur) == none.Literal {
+				continue
+			}
+			spec := axismutate.Spec{Path: f.Path, Value: none.Literal}.String()
+			by, _ := o.firstObjection(ctx, t, ref, spec, order(state.pass[i], f, state))
+			res.Reached[t.Dialect+" "+f.Path] = by != ""
+			if by == "" {
+				o.logf("  UNREACHED %s %s: nothing objects to the axis having no answer at all\n", t.Dialect, f.Path)
 			}
 		}
 	}
@@ -534,14 +611,33 @@ func (r *Result) Report() string {
 		fmt.Fprintf(&b, "baseline %s: %d rows agree\n", d, r.Baseline[d])
 	}
 	unpinned := r.Unpinned()
+	notes, _ := FieldNotes()
 	b.WriteString("\nnothing objected — the backlog:\n")
+	b.WriteString("  before adding a row to any of these, re-measure: an unpinned axis\n" +
+		"  is either a missing corpus row or a disagreement that is not there,\n" +
+		"  and an axis nobody exercises is exactly where a mistaken measurement\n" +
+		"  survives. A pair marked `never reached` is a third thing: the\n" +
+		"  dialect's own code does not consult the axis, so no row could object\n" +
+		"  however it was written.\n")
+	var untriaged int
 	for _, f := range unpinned {
-		fmt.Fprintf(&b, "  %-8s %-52s %s -> %s\n", f.Dialect, f.Field, f.From, f.To)
+		mark := ""
+		if reached, ok := r.Reached[f.Dialect+" "+f.Field]; ok && !reached {
+			mark = "   (never reached)"
+		}
+		fmt.Fprintf(&b, "  %-8s %-52s %s -> %s%s\n", f.Dialect, f.Field, f.From, f.To, mark)
+		why := verdict(notes[f.Field], f.Dialect)
+		if why == "" {
+			untriaged++
+			continue
+		}
+		b.WriteString(wrapNote(why))
 	}
 	if len(unpinned) == 0 {
 		b.WriteString("  (none — every axis has a row that fails when it moves)\n")
 	}
-	fmt.Fprintf(&b, "\n%d axis/dialect pairs nothing objected to\n", len(unpinned))
+	fmt.Fprintf(&b, "\n%d axis/dialect pairs nothing objected to, %d of them with no\nrecorded reason. The second number is the one to drive down: a pair\nthat stays needs a standing verdict on the axis — `unpinned %s: why` in\nthe field's doc comment — and a pair a row now catches leaves on its own.\n",
+		len(unpinned), untriaged, "<dialect>")
 	if len(r.Flaky) > 0 {
 		fmt.Fprintf(&b, "\nrows whose own answer moved between two unmutated runs (%d):\n", len(r.Flaky))
 		for _, id := range r.Flaky {
@@ -549,6 +645,29 @@ func (r *Result) Report() string {
 		}
 	}
 	return b.String()
+}
+
+// verdict is the standing reason this pair is still on the list, from the
+// field's own comment: the dialect's own line if it has one, otherwise the
+// one written for every dialect.
+func verdict(n Notes, dialect string) string {
+	if why, ok := n.Unpinned[dialect]; ok {
+		return why
+	}
+	return n.Unpinned[""]
+}
+
+// Untriaged counts the backlog entries no field comment has answered, which
+// is what the exit status is for.
+func (r *Result) Untriaged() int {
+	notes, _ := FieldNotes()
+	n := 0
+	for _, f := range r.Unpinned() {
+		if verdict(notes[f.Field], f.Dialect) == "" {
+			n++
+		}
+	}
+	return n
 }
 
 func sortedKeys[V any](m map[string]V) []string {

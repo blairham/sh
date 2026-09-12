@@ -14158,8 +14158,8 @@ echo after`,
 	},
 	{
 		ID: "umask/symbolic-set-with-no-who", Category: "umask",
-		Snippet: "umask 022; umask -- =w; umask",
-		Why:     "an omitted who before `=` means all three in three of the four. zsh wants one, and names a character that is not in the input at all",
+		Snippet: `umask 022; umask -- "=w"; umask`,
+		Why:     "an omitted who before `=` means all three groups, in every column. It was written unquoted and recorded as a divergence -- zsh refusing it and naming a `/` nobody had typed -- and the operand was the whole of that: `=w` unquoted is zsh's `=cmd` expansion and reaches `umask` as `/usr/bin/w`, so the `/` was in the input after all. Quoted, the six agree, and `Semantics.SymbolicMaskSetsWithoutAWho` came out with them (#2057)",
 	},
 	{
 		ID: "umask/symbolic-a-who-with-no-operator", Category: "umask",
@@ -17919,5 +17919,61 @@ echo "st=$?"`,
 		ID: "fnlib/add-zsh-hook-autoload-letters", Category: "function library",
 		Snippet: `autoload -Uz add-zsh-hook 2>/dev/null; { add-zsh-hook -k precmd kf; } 2>/dev/null; echo "k=$? [${precmd_functions[*]}]"; { add-zsh-hook -Uzk precmd kf2; } 2>/dev/null; echo "Uzk=$? [${precmd_functions[*]}]"; { add-zsh-hook -q precmd kf3; } 2>/dev/null; echo "q=$?"`,
 		Why:     "the letters are handed to `autoload` rather than interpreted here, so what they answer is the *builtin's* answer arriving through the function. `-k` alone is accepted and `-Uzk` is not, because `-z` and `-k` name two different autoload styles and asking for both is a refusal at status 1 — and the hook is still installed either way, which is the part that makes the status the only thing to measure. Standard error is suppressed on purpose: the diagnostic names a line number in the function file, which is a fact about whose file it is rather than about the behavior. `-q` is the unknown letter, refused by `getopts` before anything is installed. This shell answers 0 for `-Uzk`, because its `autoload` has no `-k` to conflict with `-z` (#2149)",
+	},
+	{
+		ID: "expand/equals-names-a-command", Category: "expansion",
+		Snippet: `echo =nosuchcmd_zz; echo "st=$?"`,
+		Why:     "one shell reads an unquoted word beginning with `=` as the path of the command it names, and the other five read it as a word. A name nothing resolves is what makes it machine-independent: the one that expands reports `nosuchcmd_zz not found` and fails, and the rest echo the word unchanged. This is the row `umask/symbolic-set-with-no-who` was accidentally carrying, and carrying under the wrong axis (#2057)",
+	},
+	{
+		ID: "alias/the-print-option", Category: "builtins",
+		Snippet: `unalias -a 2>/dev/null; alias a=1; alias -p; echo "st=$?"`,
+		Why:     "`alias -p` prints the listing with the command word in front of every line, which is what two of the columns' plain listing already looks like -- so the letter is only visible where it is *refused*: zsh calls it a bad option and dash, which parses no options here at all, reads it as a name and answers not found. The table is cleared first because one column arrives with two dozen aliases of its own (#2057)",
+	},
+	{
+		ID: "alias/unalias-all-with-a-name-after-it", Category: "builtins",
+		Snippet: `unalias -a 2>/dev/null; alias a=1; unalias -a a; echo "st=$?"; alias a; echo "after=$?"`,
+		Why:     "`unalias -a` with an operand behind it: three columns take the letter, ignore the name and empty the table, and one refuses the line as too many arguments and leaves the table standing. The second listing is what tells those apart -- the status alone does not, since the refusal and a successful clear both leave `alias a` failing in three of them (#2057)",
+	},
+	{
+		ID: "type/p-on-a-name-the-shell-answers-itself", Category: "builtins",
+		Snippet: `f() { :; }; type -p f; echo "st=$?"`,
+		Why:     "`-p` on a name the shell would have answered itself. One column's `-p` speaks only when the plain answer would have been a file, so a function is silence at 0; the two that search PATH anyway find nothing under that name and fail, one of them with a sentence. A function rather than a builtin keeps the row machine-independent -- `type -p echo` would have printed whatever path this machine keeps it at (#2057)",
+	},
+	{
+		ID: "trap/l-lists-the-signals", Category: "traps",
+		Snippet: `trap -l >/dev/null; echo "st=$?"`,
+		Why:     "whether `trap` has a `-l` at all. The listing itself is a platform's signal table and is not comparable, so it goes to /dev/null and what is graded is the status and the refusal: two columns take the letter, and ksh93 and dash each answer with their own complaint and usage line (#2057)",
+	},
+	{
+		ID: "trap/capital-p-prints-the-action-alone", Category: "traps",
+		Snippet: `trap "echo hi" USR1; trap -P USR1; echo "st=$?"`,
+		Why:     "`-P` writes the action with no `trap --` around it, in the one shell that has the letter; ksh93 and dash refuse it and the fourth prints nothing for a condition it has no `-P` for. The pair with the row below is the point -- one shell reaches this output through `-P` and another through `-p` with an operand (#2057)",
+	},
+	{
+		ID: "trap/p-with-a-condition-named", Category: "traps",
+		Snippet: `trap "echo hi" USR1; trap -p USR1; echo "st=$?"`,
+		Why:     "the same question through `-p`: one column writes the whole reissuable `trap -- action condition` line and another writes the action alone, which is why the bare form and the capital letter are two axes and not one (#2057)",
+	},
+	{
+		ID: "param/keyed-table-as-a-scalar", Category: "arrays",
+		Snippet: `setopt ksharrays 2>/dev/null; typeset -A m 2>/dev/null; m[a]=1; m[b]=2; echo "[$m]"; echo "st=$?"`,
+		Why:     "a plain `$m` where `m` is a keyed table and the dialect has already said a bare name is one element. Two columns look up the key `0` and hand back nothing; the shell that reads a table as an ordered list hands back the first value in its own order. The `setopt` is what puts that shell in the state where a bare name is one element at all -- without it the same name is the whole table and the question is never asked -- and it is guarded because the other five have no such builtin (#2057)",
+	},
+	{
+		ID: "declare/listing-a-control-byte", Category: "declarations",
+		Snippet: "v=$'a\001b'; typeset -p v; echo \"st=$?\"",
+		Why:     "how a listing spells a byte below 0x20 inside `$'...'`: an octal escape, a hex one, and a caret pair are three answers from three columns that otherwise quote alike, which is why the control escape is a field of its own rather than part of the quoting style. The fourth has no such builtin (#2057)",
+	},
+	{
+		ID: "locale/an-unset-locale-and-a-multibyte-length", Category: "locale",
+		Snippet: `s=héllo; echo "len=${#s}"`,
+		Env:     []string{"LC_ALL="},
+		Why:     "what a locale nothing names is: one column reads an unset locale as the environment's UTF-8 and counts five characters, and the other five read it as C and count the six bytes. The empty `LC_ALL` is how the case reaches the question at all -- the harness sets `LC_ALL=C` for every row, and an empty value is ignored by the locale machinery exactly as an absent one is, which is measured and not assumed (#2057)",
+	},
+	{
+		ID: "getopts/optarg-after-a-bad-option", Category: "builtins",
+		Snippet: `set -- -x; getopts "a:" o; echo "o=[$o] optarg=[${OPTARG-UNSET}]"`,
+		Why:     "what `getopts` leaves in OPTARG when it reports an option the string does not have. One column empties it and the other three leave it unset, which a script reading `${OPTARG-}` can tell apart -- and the `o=[?]` half says the two are agreeing about everything else (#2057)",
 	},
 }

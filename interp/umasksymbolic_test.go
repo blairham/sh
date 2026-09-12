@@ -190,21 +190,17 @@ func TestASecondOperatorInAClauseIsAsked(t *testing.T) {
 	}
 }
 
-// TestSettingWithNoWhoIsAsked, and the dialect that refuses it names a
-// character that is not in the input — which is measured, not a mistake.
-func TestSettingWithNoWhoIsAsked(t *testing.T) {
-	_, _, held := umaskRun(t, 0o022, nil, `umask -- =w`)
+// TestSettingWithNoWhoMeansAllThree. This was an axis until #2057, and the
+// shape of how it stopped being one is worth keeping: zsh was recorded
+// wanting a who before `=`, on the strength of `umask -- =w` written
+// unquoted — which is not that operand in zsh at all. `=w` is that shell's
+// `=cmd` expansion and arrives as `/usr/bin/w`, which is why the complaint
+// named a `/` nobody had typed. Quoted, every column in the panel gives
+// 0555.
+func TestSettingWithNoWhoMeansAllThree(t *testing.T) {
+	_, _, held := umaskRun(t, 0o022, nil, `umask -- "=w"`)
 	if held != 0o555 {
 		t.Errorf("mask %#o, want %#o", held, 0o555)
-	}
-
-	need := func(s *Semantics) { s.SymbolicMaskSetsWithoutAWho = No }
-	out, _, held := umaskRun(t, 0o022, need, `umask -- =w`)
-	if held != 0o022 {
-		t.Errorf("mask %#o, want it left alone (%q)", held, out)
-	}
-	if out == "" {
-		t.Error("said nothing, want a complaint")
 	}
 }
 
@@ -273,33 +269,6 @@ func TestAnOrdinaryClauseAsksNothing(t *testing.T) {
 	// u=rw,g=r,o= allows 0640, so the mask is its complement.
 	if held != 0o137 {
 		t.Errorf("mask %#o, want %#o", held, 0o137)
-	}
-}
-
-// TestTheCharacterNamedForASetWithNoWho records the oddest of these corners:
-// the dialect that refuses `umask -- =w` names `/`, which is nowhere in the
-// input. Written down because it reads like a bug in this implementation
-// otherwise — it is what the shell says.
-func TestTheCharacterNamedForASetWithNoWho(t *testing.T) {
-	f, err := syntax.Parse(`umask -- =w`, syntax.Core())
-	if err != nil {
-		t.Fatal(err)
-	}
-	var buf bytes.Buffer
-	sem := permissive()
-	sem.SymbolicMaskSetsWithoutAWho = No
-	dg := Diagnostics{UmaskBadSymbolicOperator: "umask: bad symbolic mode operator: %[2]s"}
-	held := 0o022
-	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
-	r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
-	if _, err := r.Run(context.Background(), f); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(buf.String(), "operator: /") {
-		t.Errorf("said %q, want the character the dialect names", buf.String())
-	}
-	if held != 0o022 {
-		t.Errorf("mask %#o, want it left alone", held)
 	}
 }
 

@@ -1492,6 +1492,16 @@ type Semantics struct {
 	// operand that is present and empty. bash alone: `printf '%d' ""` is an
 	// error there and a zero in the other three, all of which print the zero
 	// anyway. An argument that is *missing* is never an error in any of them.
+	//
+	// unpinned zsh: reached, and both answers print the same thing there.
+	// Measured 2026-09-12: moving it to `Unspecified` in the zsh dialect
+	// *does* change `printf '%d' ""`, so the axis is consulted — but `Yes`
+	// only sends the empty operand on to the bad-number complaint, and
+	// zsh's `PrintfReportsBadNumber` is `No`, so the complaint is
+	// swallowed and the bare `0` comes out either way. `printf '%d' abc`
+	// is a silent `0` in real zsh too, which is the same fact from the
+	// other side. No row can separate the two until that second axis moves
+	// (#2057).
 	PrintfEmptyIsNotANumber Answer
 
 	// PrintfTimeConversion gives `printf` a `%(fmt)T`: an epoch through a
@@ -1666,6 +1676,15 @@ type Semantics struct {
 	// Asked only where the letter is written, like SetFTurnsOffGlobbing: the
 	// long name `braceexpand` raises no question, because a shell either
 	// declares it or has never heard of it.
+	//
+	// unpinned zsh: every row that reaches it fails at baseline, so none
+	// can pin it. This dialect refuses the `B` letter as unimplemented —
+	// the bell it means there is not built (#1856) — while real zsh takes
+	// `set +B` silently and goes on expanding braces. Measured 2026-09-12:
+	// `set +B; echo {a,b}` is `a b` at 0 in zsh 5.9.2 and `+B is not
+	// implemented yet` at 1 here, so a corpus row would record a
+	// divergence this axis is not about. It pins in bash and ksh, where
+	// the letter is real (#2057).
 	SetBTurnsOffBraceExpansion Answer
 
 	// NoglobLetterIsF puts `f` in `$-` while noglob is on, which is the
@@ -2021,6 +2040,16 @@ type Semantics struct {
 	// rather than a sentence to parse. True in bash alone; ksh93 and zsh
 	// refuse the letter the way they refuse any option they do not have,
 	// and dash reads it as a name like the rest of its operands.
+	//
+	// unpinned bash: never reached, so no row could catch it however it
+	// was written. The letter is already in bash's `TypeOptions`
+	// (`afpPt`), and this axis — which predates the optstring — is
+	// consulted only where the optstring does *not* carry a `t`. Measured
+	// 2026-09-12 by moving it in the bash dialect: `type -t f`, `type -t
+	// while` and `type -t nosuch` answer the same under `Yes`, under `No`
+	// and under `Unspecified` alike. The three dialects that do reach it
+	// all answer `No`, so the `Yes` this one holds is a value nothing
+	// consults — see #2180 (#2057).
 	TypeNamesTheKindWithDashT Answer
 
 	// TypeOptions is the rest of `type`'s letters, in the getopts spelling
@@ -3106,6 +3135,14 @@ type Semantics struct {
 	// assignment. This is the shape used to declare a local before
 	// assigning it conditionally, so the difference is silent: the function
 	// reads the caller's value where it expected nothing.
+	//
+	// unpinned zsh: never reached. It is asked only where
+	// `DeclaredNameWithoutValueIsEmpty` said no, and this dialect says yes
+	// — a `local u` there exists holding the empty string, so there is no
+	// outer value left to hide. Measured 2026-09-12: `u=out; f() { local
+	// u; echo "[${u-UNSET}]"; }; f` is `[]` in zsh 5.9.2 and here, and
+	// moving this axis to `Yes` or to `Unspecified` changes neither
+	// (#2057).
 	ValuelessDeclarationHidesTheOuterValue Answer
 
 	// DeclarationAssignmentClearsTheExportAttribute takes the export
@@ -4000,12 +4037,6 @@ type Semantics struct {
 	// several: `umask u+rw-x` is 0122 from 022 in three of the four. zsh
 	// takes a single operator per clause and names the second one.
 	SymbolicMaskTakesMoreThanOneOperator Answer
-
-	// SymbolicMaskSetsWithoutAWho takes `umask -- =w`, where `=` has no who
-	// before it and means all three groups. Three of the four do; zsh wants
-	// one, and names a character that is not in the input when it does not
-	// get one.
-	SymbolicMaskSetsWithoutAWho Answer
 
 	// SymbolicMaskWhoAloneSetsIt reads `umask g` as `umask g=`, denying that
 	// group everything. ksh93 alone. bash and dash refuse it, and zsh
@@ -7441,7 +7472,6 @@ func PosixSemantics() Semantics {
 		// with no action at all, or a letter that is neither, is not a
 		// symbolic mode. The preset follows the grammar.
 		SymbolicMaskTakesMoreThanOneOperator: Yes,
-		SymbolicMaskSetsWithoutAWho:          Yes,
 		SymbolicMaskWhoAloneSetsIt:           No,
 		SymbolicMaskTakesTheSetuidLetter:     Yes,
 		SymbolicMaskTakesTheStickyLetter:     Yes,

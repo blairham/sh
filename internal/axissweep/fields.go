@@ -375,6 +375,7 @@ var (
 //
 //	// unanimous: why the axis records something even so.
 //	// unexhibited SomeConstant: who holds it, and what measured that.
+//	// unpinned zsh: why no corpus row objects when it moves (#2057).
 //
 // A field with no such line is **untriaged**, which is the state worth
 // reporting: it separates the axes somebody has re-measured from the ones
@@ -385,6 +386,18 @@ type Notes struct {
 	Unanimous string
 	// Value is, per legal value no dialect holds, who does hold it.
 	Value map[string]string
+	// Unpinned is, per dialect, why the graded corpus does not object when
+	// this axis moves — keyed by dialect name, or by "" for a reason that
+	// holds for every dialect.
+	//
+	// The verdict a flip needs is not the one a preset list needs. There the
+	// question was who holds a value; here it is which of two opposite fixes
+	// applies, because an unpinned axis is *either* a missing corpus row or
+	// a disagreement that is not there. A row landed answers it by making
+	// the pair disappear from the list; what stays needs a standing reason,
+	// and the reason worth writing is the one that says the corpus cannot
+	// reach it rather than that nobody has got to it.
+	Unpinned map[string]string
 }
 
 // fieldDocs is each field's leading comment, trimmed to its first sentence.
@@ -444,10 +457,11 @@ func readDocs() {
 	noteCache = notes
 }
 
-// markerLine matches the two triage lines a field comment may carry. The
-// value name is required to look like a Go constant so that a sentence
-// beginning with the word cannot be mistaken for one.
-var markerLine = regexp.MustCompile(`^(unanimous|unexhibited ([A-Za-z_][A-Za-z0-9_]*)):[ \t]*(.*)$`)
+// markerLine matches the triage lines a field comment may carry. The value
+// name is required to look like a Go constant, and the dialect to be one of
+// the four, so that a sentence beginning with the word cannot be mistaken for
+// a marker.
+var markerLine = regexp.MustCompile(`^(?:(unanimous)|unexhibited ([A-Za-z_][A-Za-z0-9_]*)|unpinned(?: (bash|zsh|ksh|dash))?):[ \t]*(.*)$`)
 
 // parseNotes reads the triage lines out of one field's comment.
 //
@@ -462,7 +476,7 @@ func parseNotes(text string) Notes {
 		if m == nil {
 			continue
 		}
-		body := []string{m[3]}
+		body := []string{m[4]}
 		for i+1 < len(lines) {
 			next := strings.TrimSpace(lines[i+1])
 			if next == "" || markerLine.MatchString(next) {
@@ -472,14 +486,20 @@ func parseNotes(text string) Notes {
 			i++
 		}
 		joined := strings.TrimSpace(strings.Join(body, " "))
-		if m[2] == "" {
+		switch {
+		case m[1] != "":
 			out.Unanimous = joined
-			continue
+		case m[2] != "":
+			if out.Value == nil {
+				out.Value = map[string]string{}
+			}
+			out.Value[m[2]] = joined
+		default:
+			if out.Unpinned == nil {
+				out.Unpinned = map[string]string{}
+			}
+			out.Unpinned[m[3]] = joined
 		}
-		if out.Value == nil {
-			out.Value = map[string]string{}
-		}
-		out.Value[m[2]] = joined
 	}
 	return out
 }

@@ -434,3 +434,96 @@ func TestTheTildeFlagInTheContextsThatAreNotAWord(t *testing.T) {
 		t.Errorf("a nested inner = %q (status %d), want [HOME/zz]", got, st)
 	}
 }
+
+// TestTheTildeFlagTakesAnAssignmentsColonAsAHead is the other position a
+// tilde is at a head in — and it is a position rather than a second rule.
+//
+// An assignment's value is the one context where a colon begins a tilde
+// segment, which is what makes `PATH=~/bin:~/sbin` name two directories. The
+// flag's tilde half follows it, and the rows below are what separates that
+// from the three readings it could have been confused with: the colon does
+// nothing in an ordinary word, it does nothing without the flag, and it does
+// not survive quoting the expansion.
+//
+// Measured on zsh 5.9.2, 2026-09-12, the one grammar in the panel with the
+// flag; `docs/spec/grammar/parameter-expansion.md` carries the table.
+func TestTheTildeFlagTakesAnAssignmentsColonAsAHead(t *testing.T) {
+	home, dir := tildeFixture(t)
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"an ordinary word's colon is not a head",
+			`t='~/zz'; printf "[%s]" x:${~t}`,
+			`[x:~/zz]`,
+		},
+		{
+			"an assignment's is",
+			`t='~/zz'; q=x:${~t}; printf "[%s]" "$q"`,
+			`[x:HOME/zz]`,
+		},
+		{
+			"and only with the flag — the colon alone changes nothing",
+			`t='~/zz'; q=x:${t}; printf "[%s]" "$q"`,
+			`[x:~/zz]`,
+		},
+		{
+			"quoting the expansion suppresses it, here as everywhere",
+			`t='~/zz'; q=x:"${~t}"; printf "[%s]" "$q"`,
+			`[x:~/zz]`,
+		},
+		{
+			"a colon inside the substituted text counts too",
+			`u='a:~/zz'; q=${~u}; printf "[%s]" "$q"`,
+			`[a:HOME/zz]`,
+		},
+		{
+			// The head and the inner colons are two separate questions:
+			// this value's first tilde is not at a head and stays, and its
+			// second follows a colon and goes.
+			"and counts with no head at all",
+			`p='~/x:~/y'; q=a${~p}; printf "[%s]" "$q"`,
+			`[a~/x:HOME/y]`,
+		},
+		{
+			"both at once",
+			`p='~/x:~/y'; q=a:${~p}; printf "[%s]" "$q"`,
+			`[a:HOME/x:HOME/y]`,
+		},
+		{
+			"the colon may come from another expansion",
+			`c=':'; t='~/zz'; q=a$c${~t}; printf "[%s]" "$q"`,
+			`[a:HOME/zz]`,
+		},
+		{
+			// It is the character that counts and not how it was written:
+			// a quoted colon is still a colon.
+			"or from inside quotes",
+			`t='~/zz'; q="a:"${~t}; printf "[%s]" "$q"`,
+			`[a:HOME/zz]`,
+		},
+		{
+			"the segment may be finished by what follows the expansion",
+			`y='~'; q=a:${~y}/b; printf "[%s]" "$q"`,
+			`[a:HOME/b]`,
+		},
+		{
+			// Only the expansion the colon precedes. The second starts
+			// mid-segment, so its tilde is text.
+			"and only that one",
+			`t='~/zz'; q=a:${~t}${~t}; printf "[%s]" "$q"`,
+			`[a:HOME/zz~/zz]`,
+		},
+		{
+			"an operator's substituted word reaches it as well",
+			`q=a:${~nosuch:-"~/zz"}; printf "[%s]" "$q"`,
+			`[a:HOME/zz]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runTilde(t, home, dir, tc.src)
+			got := strings.ReplaceAll(strings.ReplaceAll(out, dir, "DIR"), home, "HOME")
+			if got != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, got, st, tc.want)
+			}
+		})
+	}
+}

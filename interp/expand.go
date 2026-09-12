@@ -360,7 +360,7 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 // boundary. Doing it here is what lets mark see the text a script would, and
 // lets the marks it adds of its own survive to the caller.
 func (r *Runner) wordTextNoSplit(w *syntax.Word, mark func(string, syntax.Quoting) string) string {
-	return r.wordTextUnsplit(w, mark, false)
+	return r.wordTextUnsplit(w, mark, false, false)
 }
 
 // wordTextGlobMarked is the same one word, the same one pass, with the glob
@@ -381,12 +381,13 @@ func (r *Runner) wordTextGlobMarked(w *syntax.Word) string {
 	if w == nil {
 		return ""
 	}
-	return r.wordTextUnsplit(w, nil, true)
+	return r.wordTextUnsplit(w, nil, true, false)
 }
 
-// wordTextUnsplit is the loop both of those share. keepMarks says the glob
-// marks survive it, which is the whole of the difference.
-func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(string, syntax.Quoting) string, keepMarks bool) string {
+// wordTextUnsplit is the loop all three share. keepMarks says the glob
+// marks survive it; colonTildes says the word is an assignment's value, where
+// a colon begins a tilde segment of its own.
+func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(string, syntax.Quoting) string, keepMarks, colonTildes bool) string {
 	r.expandTilde(w)
 	failed := r.expandErr
 	// "Without globbing" has to reach the *nested* expansions too, and it did
@@ -405,6 +406,16 @@ func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(string, syntax.Quotin
 		}
 		r.expandingSpan = i
 		head := b.Len() == 0
+		// An assignment's colon begins a tilde segment, so a substituted
+		// tilde is at a head after one as surely as at the front of the
+		// value: `q=a:${~t}` with `t='~/zz'` is the home directory, and
+		// `q=a:${t}` — the same value without the flag — is not. Measured on
+		// zsh 5.9.2, the one grammar in the panel with the flag. The colon
+		// counts whatever it came from, a literal or another expansion, and
+		// counts through quotes: `q="a:"${~t}` expands too.
+		if colonTildes && !head && strings.HasSuffix(b.String(), ":") {
+			head = true
+		}
 		var text string
 		if parts, ok := r.expandAt(s, splitNever, head); ok {
 			text = r.joinUnsplit(s.Param, parts)
@@ -413,6 +424,13 @@ func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(string, syntax.Quotin
 		}
 		if !keepMarks {
 			text = globUnescape(text)
+		}
+		// The colons *inside* the substituted text begin segments of their
+		// own, and those do not depend on the head: `q=a${~p}` with
+		// `p='~/x:~/y'` keeps the first tilde, which is not at a head, and
+		// expands the second, which follows a colon.
+		if colonTildes && tildeFlagOn(s) {
+			text = r.substitutedColonTildes(text)
 		}
 		if mark != nil {
 			text = mark(text, s.Quoting)
@@ -732,7 +750,7 @@ func (r *Runner) expandAssignValue(w *syntax.Word) string {
 	}
 	r.expandTilde(w)
 	r.expandColonTildes(w)
-	return strings.Join(r.expandWordNoSplit(w), "")
+	return r.wordTextUnsplit(w, nil, false, true)
 }
 
 // expandColonTildes expands the tildes only an assignment has: one after each

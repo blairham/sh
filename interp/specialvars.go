@@ -76,7 +76,13 @@ func (r *Runner) ensureSpecials() {
 			// One dialect numbers lines inside a function from the line the
 			// function was written on; the rest count from the file, which
 			// r.line already is. Asked only inside a function.
-			if r.inFunc != "" && r.funcLine > 0 &&
+			//
+			// Inside, meaning the line being run is one the function body
+			// holds — the innermost frame decides, exactly as it does for a
+			// diagnostic's location. A file the function sourced counts from
+			// itself: measured on zsh 5.9.2, `$LINENO` on the first line of
+			// such a file is 1 and not the offset into the function (#2037).
+			if r.locationIsInsideAFunctionBody() && r.funcLine > 0 &&
 				r.ask(r.sem().LinenoCountsFromTheFunction, "`$LINENO` inside a function counting from it") {
 				return strconv.Itoa(r.line - r.funcLine)
 			}

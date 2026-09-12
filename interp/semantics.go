@@ -5533,6 +5533,11 @@ type Semantics struct {
 	// LinenoCountsFromTheFunction numbers `$LINENO` inside a function from
 	// the line the function was written on: zsh; the other three count from
 	// the file.
+	//
+	// Inside means the line is one the body holds. A file the function
+	// sourced counts from its own top, because the line is the file's — the
+	// same innermost-frame rule Diagnostics.LocationNamesTheFunction is read
+	// by, and measured the same way (#2037).
 	LinenoCountsFromTheFunction Answer
 
 	// ArithBaseAbove36 admits `37#…` through `64#…`, whose letters split

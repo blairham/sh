@@ -4125,6 +4125,27 @@ echo "st=$?"`,
 		Why:     "bash names the file the function was *defined* in, zsh names the function, and dash and ksh93 name the script — while all four count the defining file's lines, so three of the panel report a line the named file does not have",
 	},
 	{
+		ID: "location/a-message-from-a-file-a-function-sourced", Category: "diagnostics",
+		// The case above sources at the top level and calls the function
+		// afterwards; this one sources *from inside* the function, so both
+		// kinds of frame are on the stack when the message is written and
+		// only the innermost can decide which rule applies.
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "printf 'nosuchcmd-xyz\\n' > inc.sh\nf() {\n  . ./inc.sh\n}\nf\necho st=$?",
+		Why:             "a loader function sourcing a file is what every plugin manager does, so this is where a diagnostic from inside a plugin is located. Every shell answers exactly what it answers for `location/a-message-from-inside-a-sourced-file` — the enclosing function changes nothing but ksh93's outer line number — so the dialect that names a function names it for a line the function *holds*, and naming it here would name a line the function never contained (#2037)",
+	},
+	{
+		ID: "location/a-message-from-a-file-sourced-by-a-file-a-function-sourced", Category: "diagnostics",
+		// Two source frames above a function frame, which is what says the
+		// rule is about the innermost frame rather than about there being a
+		// sourced file anywhere above the function.
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "printf 'nosuchcmd-xyz\\n' > inner.sh\nprintf '. ./inner.sh\\n' > outer.sh\nf() {\n  . ./outer.sh\n}\nf\necho st=$?",
+		Why:             "the nesting check beside `location/a-message-from-a-file-a-function-sourced`: the innermost file being read is what is named, not the outer one the function asked for and not the function. bash and zsh name `./inner.sh`; dash and ksh93 keep the script's own name and still count the innermost file's lines, ksh93 writing the whole chain of dots it came through",
+	},
+	{
 		ID: "name/a-lone-dash-given-to-a-builtin", Category: "builtins",
 		Snippet: `unalias -; echo "st=$?"`,
 		Why:     "a `-` on its own is an operand in three of the panel and an option in zsh, which eats it. `unalias` is where that shows: the three complain about an alias called `-`, each in its own words, and the fourth complains that it was given nothing to unalias at all. `unset -` looks the same in bash for a different reason — its bare form validates no operand — which is why the case is not written with that one",
@@ -7852,6 +7873,16 @@ echo "st=$?"`,
 		LayoutSensitive: true,
 		Snippet:         "f(){\necho $LINENO\n}\nf\n",
 		Why:             "zsh numbers a function's lines from the line the function was written on; the other three count from the file",
+	},
+	{
+		ID: "special/lineno-in-a-file-a-function-sourced", Category: "parameters",
+		// The other side of the case above. A script rather than -c because
+		// the sourced file has to be written before it is read, and the
+		// numbers are the whole answer, so the layout is part of the case.
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "printf 'echo a=$LINENO\\necho b=$LINENO\\n' > inc.sh\nf(){\n. ./inc.sh\n}\nf\n",
+		Why:             "the one dialect that counts a function's lines from the function counts a *sourced* file's from the file, even when a function sourced it — 1 and 2 rather than an offset into the caller, which is what asking whether a function is anywhere below produced instead (#2037). dash alone is a line low, and only inside a function: the same two lines sourced at the top level of the same script are 1 and 2 there too, so that is its counter and not this rule",
 	},
 	{
 		ID: "param/substring", Category: "parameter expansion",

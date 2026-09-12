@@ -5522,6 +5522,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `unset/the-m-option-unsets-by-pattern` | **2>** `<shell>: 1: unset: Illegal option -m` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` | **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 0: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]` | **2>** `<shell>: unset: -m: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `st=0 [gone][gone][3]` |
 | `unset/the-n-option-splits-the-panel` | **2>** `<shell>: 1: unset: Illegal option -n` *(status 2)* | `st=0` | `st=0` | `st=2` **2>** `<shell>: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]` | `st=0` | `st=1` **2>** `<shell>:unset:1: bad option: -n` |
 | `special/lineno-in-a-function-diverges` | `2` | `2` | `2` | `2` | `2` | `1` |
+| `special/lineno-in-a-file-a-function-sourced` | `a=0~b=1` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` |
 | `param/an-unbraced-flag-sigil-before-a-name` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[1]~[hello]~[hello]~[5]` |
 | `param/the-existence-sigil-needs-a-name-or-a-digit` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[1]~[$+@]~[$++v]~[$+]` |
 | `core/a-bare-brace-inside-a-quoted-expansion` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[{y][xr}]` | `[{y][xr}]` | `[{y][xr}]` | `[{y}; printf [%s] x; echo]` | `[{y][xr}]` |
@@ -5690,6 +5691,14 @@ grades it and nothing drift-checks it either, for the same reason.
   }
   f
   ```
+- `special/lineno-in-a-file-a-function-sourced` — the one dialect that counts a function's lines from the function counts a *sourced* file's from the file, even when a function sourced it — 1 and 2 rather than an offset into the caller, which is what asking whether a function is anywhere below produced instead (#2037). dash alone is a line low, and only inside a function: the same two lines sourced at the top level of the same script are 1 and 2 there too, so that is its counter and not this rule
+  ```sh
+  printf 'echo a=$LINENO\necho b=$LINENO\n' > inc.sh
+  f(){
+  . ./inc.sh
+  }
+  f
+  ```
 - `param/an-unbraced-flag-sigil-before-a-name` — one column reads a flag character between the `$` and the name and the other five read text. `$+v` is `1` there and the literal `$+v` everywhere else, and `$=v` and `$~v` are `hello` against themselves — while `$#v` is `5` in the one and `0v` in the rest — the length sigil, which is a *different* flag (BareSubscript) and is here as the control that says this column had one such form already. A grammar question rather than a semantic one: the word boundary moves, and once the spans are cut nothing downstream can tell the two readings apart
   ```sh
   v=hello; echo "[$+v]"; echo "[$=v]"; echo "[$~v]"; echo "[$#v]"
@@ -5738,6 +5747,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `location/a-message-from-inside-a-function` | **2>** `<shell>: 2: nosuchcmd: not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 1: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: not found` *(status 127)* | **2>** `f:1: command not found: nosuchcmd` *(status 127)* |
 | `location/a-message-from-inside-a-sourced-file` | `st=127` **2>** `<script>: 1: ./inc.sh: nosuchcmd-xyz: not found` | `st=127` **2>** `./inc.sh: line 1: nosuchcmd-xyz: command not found` | `st=127` **2>** `./inc.sh: line 1: nosuchcmd-xyz: command not found` | `st=127` **2>** `./inc.sh: line 1: nosuchcmd-xyz: command not found` | `st=127` **2>** `<script>[2]: .: line 1: nosuchcmd-xyz: not found` | `st=127` **2>** `./inc.sh:1: command not found: nosuchcmd-xyz` |
 | `location/a-message-from-a-function-a-sourced-file-defined` | `st=127` **2>** `<script>: 2: nosuchcmd-xyz: not found` | `st=127` **2>** `./inc.sh: line 2: nosuchcmd-xyz: command not found` | `st=127` **2>** `./inc.sh: line 2: nosuchcmd-xyz: command not found` | `st=127` **2>** `./inc.sh: line 2: nosuchcmd-xyz: command not found` | `st=127` **2>** `<script>: line 2: nosuchcmd-xyz: not found` | `st=127` **2>** `f:1: command not found: nosuchcmd-xyz` |
+| `location/a-message-from-a-file-a-function-sourced` | `st=127` **2>** `<script>: 1: ./inc.sh: nosuchcmd-xyz: not found` | `st=127` **2>** `./inc.sh: line 1: nosuchcmd-xyz: command not found` | `st=127` **2>** `./inc.sh: line 1: nosuchcmd-xyz: command not found` | `st=127` **2>** `./inc.sh: line 1: nosuchcmd-xyz: command not found` | `st=127` **2>** `<script>[3]: .: line 1: nosuchcmd-xyz: not found` | `st=127` **2>** `./inc.sh:1: command not found: nosuchcmd-xyz` |
+| `location/a-message-from-a-file-sourced-by-a-file-a-function-sourced` | `st=127` **2>** `<script>: 1: ./inner.sh: nosuchcmd-xyz: not found` | `st=127` **2>** `./inner.sh: line 1: nosuchcmd-xyz: command not found` | `st=127` **2>** `./inner.sh: line 1: nosuchcmd-xyz: command not found` | `st=127` **2>** `./inner.sh: line 1: nosuchcmd-xyz: command not found` | `st=127` **2>** `<script>[4]: .[1]: .: line 1: nosuchcmd-xyz: not found` | `st=127` **2>** `./inner.sh:1: command not found: nosuchcmd-xyz` |
 | `unterminated/a-substitution-is-quoted-back-with-its-word` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `a$(echo hi'` *(status 1)* |
 | `unterminated/a-substitution-in-a-word-of-its-own-quotes-only-itself` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `$(echo hi'` *(status 1)* |
 | `unterminated/a-word-is-not-cut-at-a-quoted-blank` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `"a b"$(echo hi'` *(status 1)* |
@@ -5846,6 +5857,25 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf 'f() {\n  nosuchcmd-xyz\n}\n' > inc.sh
   . ./inc.sh
+  f
+  echo st=$?
+  ```
+- `location/a-message-from-a-file-a-function-sourced` — a loader function sourcing a file is what every plugin manager does, so this is where a diagnostic from inside a plugin is located. Every shell answers exactly what it answers for `location/a-message-from-inside-a-sourced-file` — the enclosing function changes nothing but ksh93's outer line number — so the dialect that names a function names it for a line the function *holds*, and naming it here would name a line the function never contained (#2037)
+  ```sh
+  printf 'nosuchcmd-xyz\n' > inc.sh
+  f() {
+    . ./inc.sh
+  }
+  f
+  echo st=$?
+  ```
+- `location/a-message-from-a-file-sourced-by-a-file-a-function-sourced` — the nesting check beside `location/a-message-from-a-file-a-function-sourced`: the innermost file being read is what is named, not the outer one the function asked for and not the function. bash and zsh name `./inner.sh`; dash and ksh93 keep the script's own name and still count the innermost file's lines, ksh93 writing the whole chain of dots it came through
+  ```sh
+  printf 'nosuchcmd-xyz\n' > inner.sh
+  printf '. ./inner.sh\n' > outer.sh
+  f() {
+    . ./outer.sh
+  }
   f
   echo st=$?
   ```

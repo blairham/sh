@@ -1331,8 +1331,10 @@ type Diagnostics struct {
 	// shell constructed it — `./inc.sh` as written, the joined path for a
 	// PATH hit — never the resolved absolute path.
 	//
-	// bash and zsh, and in zsh only outside a function, where
-	// LocationNamesTheFunction has not already replaced the name. dash and
+	// bash and zsh, and in zsh only where the failing line was not read from
+	// a function body, which is where LocationNamesTheFunction replaces the
+	// name instead. A file sourced *from* a function is named here: the
+	// innermost frame is the file's. dash and
 	// ksh93 keep the script's own name in both cases while still counting
 	// the sourced file's lines; while the sourced file runs each also labels
 	// it in its own place — dash writes the path after the location,
@@ -1348,6 +1350,13 @@ type Diagnostics struct {
 	// The count is the offset from the line the function was written on, so
 	// a body on the same line as its `f() {` is offset zero — and zsh leaves
 	// the number out entirely there rather than writing a nought.
+	//
+	// It applies to a line the function body *holds*, which is not the same
+	// as every line run while the function is on the stack. A file the
+	// function sourced is named by LocationNamesTheCurrentFile as if it had
+	// been sourced at the top level, because the innermost frame is the
+	// file's — so the two fields are read off the call stack rather than one
+	// overriding the other wherever a function is anywhere below (#2037).
 	LocationNamesTheFunction bool
 
 	// SetInvalidOptionName is a long `set -o` name this shell does not have.

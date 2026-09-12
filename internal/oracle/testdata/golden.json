@@ -69818,6 +69818,94 @@
         "TimedOut": false
       }
     },
+    "location/a-message-from-a-file-a-function-sourced": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "./inc.sh: line 1: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "./inc.sh: line 1: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "./inc.sh: line 1: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: 1: ./inc.sh: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e[3]: .: line 1: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127",
+        "Stderr": "./inc.sh:1: command not found: nosuchcmd-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "location/a-message-from-a-file-sourced-by-a-file-a-function-sourced": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "./inner.sh: line 1: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "./inner.sh: line 1: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "./inner.sh: line 1: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: 1: ./inner.sh: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e[4]: .[1]: .: line 1: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127",
+        "Stderr": "./inner.sh:1: command not found: nosuchcmd-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "location/a-message-from-a-function-a-sourced-file-defined": {
       "bash": {
         "Stdout": "st=127",
@@ -119997,6 +120085,50 @@
       },
       "zsh": {
         "Stdout": " \\t \\n \\0 ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "special/lineno-in-a-file-a-function-sourced": {
+      "bash": {
+        "Stdout": "a=1~b=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=1~b=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a=1~b=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a=0~b=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a=1~b=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a=1~b=2",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

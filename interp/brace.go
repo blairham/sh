@@ -75,16 +75,24 @@ func (r *Runner) braceWords(w *syntax.Word, endpoints bool) []*syntax.Word {
 				return r.braceProduct(w, open, close, alts, endpoints)
 			}
 		}
-		enter := r.askBrace(r.sem().BraceRescanEntersFailedGroup,
-			"the scan entering a brace group that did not expand")
-		if r.unspecified {
-			return []*syntax.Word{w}
-		}
-		if enter {
+		// The two readings only part where there is a brace *inside* the
+		// group that failed — that is the whole of what one reading reaches
+		// and the other steps over. A `{` behind the group is found either
+		// way, and a word with no further brace at all is finished either
+		// way, so the axis is not asked about `{a}` or `{a..5}`: a question
+		// whose two answers are the same answer must not be the thing that
+		// refuses a script no shell disagrees about.
+		inner, hasInner := findBraceFrom(w.Spans, next(open), '{')
+		diverges := hasInner && (!matched || before(inner, close))
+		if diverges && r.askBrace(r.sem().BraceRescanEntersFailedGroup,
+			"the scan entering a brace group that did not expand") {
 			// bash and zsh resume one byte past the open brace, so a list
 			// nested inside the failed group is still found.
 			from = next(open)
 			continue
+		}
+		if r.unspecified {
+			return []*syntax.Word{w}
 		}
 		// ksh93 steps over the whole group instead, and has nowhere to
 		// resume when the group was never closed.
@@ -122,6 +130,11 @@ func (r *Runner) braceProduct(w *syntax.Word, open, close cursor, alts [][]synta
 type cursor struct{ span, off int }
 
 func next(c cursor) cursor { return cursor{c.span, c.off + 1} }
+
+// before reports whether one cursor comes strictly before another.
+func before(a, b cursor) bool {
+	return a.span < b.span || (a.span == b.span && a.off < b.off)
+}
 
 // braceable reports whether a span's text takes part in brace syntax. Only
 // unquoted literals do: `"{a,b}"` is one word, because quoting decides whether

@@ -345,6 +345,15 @@ func (r *Runner) condArith(text string) (int, error) {
 	// whose complaint quotes the text as the condition held it. Reading the
 	// trimmed text instead lost ksh93's blanks — ` 1/0 : divide by zero`
 	// against `1/0: divide by zero` (#2010).
+	// An operand arrives here already expanded, so a zero-padded numeral in
+	// it is text the *word* carried rather than a literal the arithmetic
+	// lexer read — which is the shape one shell reads in decimal. Measured
+	// 2026-09-12 on ksh93u+: `[[ 010 -eq 10 ]]` holds and `(( 010 == 10 ))`
+	// does not, and `[[ 1+010 -eq 9 ]]` holds too, so it is the *leading*
+	// numeral alone and not the whole operand. That is exactly the stored
+	// value's reader, which is why this is the same axis read at a site that
+	// was missing it rather than one of its own (#1867).
+	text = r.decimalLeadingNumeral(text)
 	p := syntax.NewParser("", r.dialect())
 	tree := p.ParseArithFor(text, syntax.Pos{})
 	if perr := p.Err(); perr != nil {

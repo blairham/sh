@@ -8445,6 +8445,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/a-failure-inside-a-value` | **2>** `<shell>: 1: Illegal number: 1/0` *(status 2)* | **2>** `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | **2>** `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 127)* | **2>** `<shell>: 1/0: division by 0 (error token is "0")` *(status 1)* | **2>** `<shell>: 1/0: divide by zero` *(status 1)* | **2>** `<shell>:1: division by zero` *(status 1)* |
 | `arith/a-zero-padded-value-against-the-same-literal` | `8 8` | `8 8` | `8 8` | `8 8` | `10 8` | `10 10` |
 | `arith/a-zero-padded-value-with-more-expression-after-it` | **2>** `<shell>: 1: Illegal number: 010+1` *(status 2)* | `9 9 9` | `9 9 9` | `9 9 9` | `11 9 9` | `11 11 11` |
+| `arith/a-zero-padded-numeral-in-a-let-word` | `let= arith=` **2>** `<shell>: 1: let: not found` | `let=8 arith=8` | `let=8 arith=8` | `let=8 arith=8` | `let=10 arith=8` | `let=10 arith=10` |
+| `arith/a-zero-padded-numeral-a-let-word-carries-along` | **2>** `<shell>: 1: let: not found~<shell>: 1: let: not found~<shell>: 1: Illegal number: 1+010` *(status 2)* | `9 9 9` | `9 9 9` | `9 9 9` | `11 11 9` | `11 11 11` |
+| `arith/a-zero-padded-operand-in-a-word-comparison` | **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` *(status 127)* | `eight~nine` | `eight~nine` | `eight~nine` | `ten~nine` | `ten` *(status 1)* |
+| `arith/an-arithmetic-assignment-declares-an-integer` | `[2+3]` **2>** `<shell>: 1: x: not found~<shell>: 1: typeset: not found` | `declare -- x="5"~[2+3]` | `declare -- x="5"~[2+3]` | `declare -- x="5"~[2+3]` | `x=5~[2+3]` | `typeset -i x=5~[5]` |
+| `arith/an-arithmetic-assignment-over-a-name-that-exists` | `[2+3]` **2>** `<shell>: 1: x: not found~<shell>: 1: typeset: not found` | `declare -- x="5"~[2+3]` | `declare -- x="5"~[2+3]` | `declare -- x="5"~[2+3]` | `x=5~[2+3]` | `typeset x=5~[2+3]` |
+| `arith/an-arithmetic-assignment-learns-a-base` | `v=` **2>** `<shell>: 1: y: not found~<shell>: 1: typeset: not found~<shell>: 1: z: not found~<shell>: 1: typeset: not found` *(status 127)* | `declare -- y="31"~v=31~declare -- z="32"` | `declare -- y="31"~v=31~declare -- z="32"` | `declare -- y="31"~v=31~declare -- z="32"` | `y=31~v=31~z=32` | `typeset -i16 y=31~v=16#1F~typeset -i16 z=32` |
+| `arith/an-arithmetic-assignment-through-a-value-learns-no-base` | **2>** `<shell>: 1: z: not found~<shell>: 1: typeset: not found` *(status 127)* | `declare -- z="31"` | `declare -- z="31"` | `declare -- z="31"` | `z=31` | `typeset -i z=31` |
 | `arith/an-operand-the-expression-ran-out-of` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "1+"` *(status 2)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 127)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `arith/an-operand-the-expression-found` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "%"` *(status 2)* | **2>** `<shell>: line 1: %: arithmetic syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: line 1: %: arithmetic syntax error: operand expected (error token is "%")` *(status 127)* | **2>** `<shell>: %: syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: %: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at `%'` *(status 1)* |
 | `arith/an-operand-found-after-an-operator` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "1+&2"` *(status 2)* | **2>** `<shell>: line 1: 1+&2: arithmetic syntax error: operand expected (error token is "&2")` *(status 1)* | **2>** `<shell>: line 1: 1+&2: arithmetic syntax error: operand expected (error token is "&2")` *(status 127)* | **2>** `<shell>: 1+&2: syntax error: operand expected (error token is "&2")` *(status 1)* | **2>** `<shell>: 1+&2: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at `&2'` *(status 1)* |
@@ -8776,6 +8783,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `arith/a-zero-padded-value-with-more-expression-after-it` — how far the decimal reading reaches: on the shell that splits it is the value's *leading* numeral only, so `010+1` is 11 where `1+010` and the written literal are both 9. Without the second and third fields a rule that read every numeral in a value decimally would pass
   ```sh
   k=010+1; j=1+010; echo "$((k)) $((j)) $((010+1))"
+  ```
+- `arith/a-zero-padded-numeral-in-a-let-word` — a third reader for a leading zero, and the pair is what makes it one: in ksh93 `let "x=010"` is 10 and `(( y=010 ))` is 8, in the same shell and the same line. bash is 8 twice and zsh 10 twice, so it is neither the lexer's answer nor the value's but `let`'s own — the documentation says the two constructs are the same evaluation and they are not (#1867). dash has no `let` at all
+  ```sh
+  let "x=010"; (( y=010 )); echo "let=$x arith=$y"
+  ```
+- `arith/a-zero-padded-numeral-a-let-word-carries-along` — how far `let`'s reading reaches, and it is further than the value's: 11 and 11 on the shell that splits, where the same text stored in a name is 9. So every numeral in the word goes decimal rather than only the leading one — which is what says the fix is the octal rule turned off for the word and not the stored value's rewrite reused. bash answers 9 9 9 and zsh 11 11 11
+  ```sh
+  let "x=1+010"; let "y=010+1"; k=1+010; echo "$x $y $((k))"
+  ```
+- `arith/a-zero-padded-operand-in-a-word-comparison` — the fourth site, and it turns out to be the value's reader rather than a fourth answer: ksh93 prints `ten` and `nine`, so a bare operand is read in decimal and a numeral standing later in an expression is not. That is exactly the leading-numeral rewrite a stored value gets, which is why this is the same axis at a site that was missing it. bash prints `eight` and `nine`, zsh `ten` and nothing — its `1+010` is 11
+  ```sh
+  [[ 010 -eq 10 ]] && echo ten; [[ 010 -eq 8 ]] && echo eight; [[ 1+010 -eq 9 ]] && echo nine
+  ```
+- `arith/an-arithmetic-assignment-declares-an-integer` — what an arithmetic assignment leaves behind on the name, which zsh alone makes an integer: `typeset -i x=5` there against bash's `declare -- x="5"` and ksh93's bare `x=5`. The second half is why it is not a listing difference — the attribute changes what a *later* plain assignment means, so `x=2+3` is 5 in zsh and the three characters everywhere else (#2139)
+  ```sh
+  (( x = 5 )); typeset -p x; x=2+3; echo "[$x]"
+  ```
+- `arith/an-arithmetic-assignment-over-a-name-that-exists` — the control, and the half of the rule a fresh-shell probe cannot see: the same assignment over a name that already exists leaves an ordinary scalar in every column, zsh included — so it is a *declaration* the arithmetic makes and not an attribute the operator applies. Without this row a fix that marked the name on every write would pass
+  ```sh
+  x=3; (( x = 5 )); typeset -p x; x=2+3; echo "[$x]"
+  ```
+- `arith/an-arithmetic-assignment-learns-a-base` — and the base comes with the attribute, from a radix literal the *expression* was written with rather than from the answer, which is decimal by the time it is stored: zsh lists `typeset -i16 y=31` and reads it back as `16#1F`. The third field says the literal need not stand alone — `1 + 0x1f` teaches 16 too. bash and ksh93 have neither the attribute nor the base
+  ```sh
+  (( y = 0x1f )); typeset -p y; echo "v=$y"; (( z = 1 + 0x1f )); typeset -p z
+  ```
+- `arith/an-arithmetic-assignment-through-a-value-learns-no-base` — the boundary of the row above: the same prefix arriving through a *value* teaches nothing, so zsh leaves `typeset -i z=31` with the attribute and no base. It is the same line #2095 drew for the ordinary assignment, and a rule that searched the stored text rather than the expression would cross it
+  ```sh
+  y=0x1f; (( z = y )); typeset -p z
   ```
 - `arith/an-operand-the-expression-ran-out-of` — an operand was wanted and the text ended, which two of the panel word apart from an operand that was wanted and found: ksh93 says more tokens expected and zsh names the end of the string. The pair with `arith/an-operand-the-expression-found` is the whole of it — either row alone passes under one wording for both, which is what let the end-of-input sentence stand for every operand failure in two dialects
   ```sh

@@ -1007,6 +1007,14 @@ func Semantics() interp.Semantics {
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutFinishesWhatItStarted
 	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ArithLeadingZeroIsOctal = interp.No
+	// Nothing makes a leading zero octal here, so `let` and `(( ))` read one
+	// alike and the axis that parts them elsewhere has nothing to change.
+	s.LetReadsALeadingZeroAsDecimal = interp.No
+	// A name an arithmetic assignment *creates* is an integer here, which
+	// outlives the expression: `(( x = 5 )); x=2+3` is 5 where the same two
+	// commands leave the three characters `2+3` everywhere else. Only a name
+	// it creates — `x=3; (( x = 5 ))` leaves an ordinary scalar.
+	s.ArithmeticAssignmentDeclaresAnInteger = interp.Yes
 	s.FatalErrorStatusIsOne = interp.Yes
 	// Except for one refusal, which leaves 0 behind when the program came
 	// from an argument rather than from a file. Measured on every

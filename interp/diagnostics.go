@@ -3309,6 +3309,13 @@ type Diagnostics struct {
 	// say both.
 	SubstringRangeError string
 
+	// ListSliceNegativeLength is the refusal a negative length draws on a
+	// *list* slice in the one dialect that refuses it — the string spelling
+	// of the same length is accepted there and counts from the end. One
+	// verb: the length as it was written, which is what is blamed rather
+	// than the number it came to, so `${a[@]:1:1-$n}` names `1-$n`.
+	ListSliceNegativeLength string
+
 	// UnrecognizedModifier is the reason when a substring range read as a
 	// modifier list names one the dialect does not have. One verb: the
 	// segment as written.

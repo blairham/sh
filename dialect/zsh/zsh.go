@@ -1180,6 +1180,10 @@ func Semantics() interp.Semantics {
 	// ksh93 is the panel's holdout, where it is a fatal `parameter not set`.
 	s.ArithRecursedNameMustBeSet = interp.No
 	s.BraceExpansion = interp.Yes
+	// Agrees with bash on where the scan resumes after a group that did not
+	// expand: one byte past its open brace, so `{a{b,c}}` is `{ab} {ac}`
+	// and `@{x}{a,b}@` is two words.
+	s.BraceRescanEntersFailedGroup = interp.Yes
 	// Pads like bash — `{01..3}` is `01 02 03` — but a negative step
 	// reverses the walk the endpoints chose: `{3..1..-1}` is `1 2 3` and
 	// `{1..10..-4}` is `9 5 1`, bash's `1 5 9` backwards rather than the
@@ -1199,6 +1203,13 @@ func Semantics() interp.Semantics {
 	// refusal that came after the expansion would get wrong. Measured
 	// 2026-09-05: `[[ x == <(x) ]]` is `process substitution <(x) cannot be
 	// used here` here and runs the command in bash.
+	// An empty right operand is refused, as in bash, though with this
+	// shell's own wording and status: `failed to compile regex: empty
+	// (sub)expression`, status 1. It is the engine underneath showing
+	// through — POSIX ERE has no empty expression — and it is visible in
+	// the shipped `regexp-replace`, where an accepted empty pattern would
+	// write the replacement between every pair of characters (#2043).
+	s.EmptyRegexOperandIsAnError = interp.Yes
 	s.ProcessSubstitutionInCondition = interp.No
 	// A substitution's body reads what the *shell* is reading, and this shell
 	// is alone in it. `printf "PIPE\n" | cat <(cat)` with the shell's own

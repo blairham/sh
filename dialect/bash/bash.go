@@ -518,6 +518,11 @@ func Semantics() interp.Semantics {
 	s.ArithNegativeExponentIsError = interp.Yes
 	s.IndirectionYieldsName = interp.No
 	s.BraceExpansion = interp.Yes
+	// A group that does not expand does not end the word, and the scan
+	// resumes one byte past its open brace rather than past its close, so a
+	// list nested inside it is still found: `@{x}{a,b}@` is `@{x}a@ @{x}b@`,
+	// `{a{b,c}}` is `{ab} {ac}`, and the unclosed `{a{b,c}` is `{ab} {ac`.
+	s.BraceRescanEntersFailedGroup = interp.Yes
 	// `{01..3}` is `01 02 03`; `{10..1..3}` is `10 7 4 1` and `{1..10..-3}`
 	// climbs anyway — the endpoints decide the direction and a step
 	// contributes magnitude alone, so `{3..1..-1}` stays `3 2 1`.
@@ -534,7 +539,19 @@ func Semantics() interp.Semantics {
 	// have no such name and match nothing with it, silently, which is what
 	// this shell does with any other name outside the roster.
 	s.PatternClasses = "ascii"
+	// A negative *length* is refused for a list where it is accepted for a
+	// string: `${a[@]:1:-1}` and `${@:1:-1}` are `-1: substring expression
+	// < 0` at status 1, while `${v:1:-1}` of `abcdef` is `bcde`. The
+	// subject decides, not the sign (#1735). bash 3.2 refuses the list form
+	// the same way and the string form as well, which is a version
+	// difference rather than a dialect's.
+	s.ListSliceNegativeLengthIsAnError = interp.Yes
 	s.RegexQuotingMakesLiteral = interp.Yes
+	// An empty right operand is refused rather than matched: `[[ abc =~ "" ]]`
+	// names an empty subexpression and exits 2, where Go's engine would
+	// compile it and match at every position. bash 3.2 refuses it too, with
+	// the same status and no diagnostic.
+	s.EmptyRegexOperandIsAnError = interp.Yes
 	// A process substitution may stand as a condition's operand here, and is
 	// performed there: `[[ $v == <(cmd) ]]` runs cmd and matches against the
 	// path, which is false for anything a script would have written down.
@@ -1535,12 +1552,16 @@ func Diagnostics() interp.Diagnostics {
 		UnterminatedEndsOnNextLine:  true,
 		// A substring range puts the parameter in front of the sentence, where
 		// the same shell blames a bad *subscript* on the expression alone.
-		SubstringRangeError:   "%[1]s: %[2]s",
-		ArithOperandExpected:  "arithmetic syntax error: operand expected",
-		ArithOperatorExpected: "arithmetic syntax error in expression",
-		ArithBadOperator:      "arithmetic syntax error: invalid arithmetic operator",
-		ArithFailureStatus:    1,
-		SyntaxUnexpected:      "syntax error near unexpected token `%[1]s'",
+		SubstringRangeError: "%[1]s: %[2]s",
+		// And the negative length a list slice refuses names the length
+		// alone, with no parameter in front of it: `-1: substring
+		// expression < 0`.
+		ListSliceNegativeLength: "%[1]s: substring expression < 0",
+		ArithOperandExpected:    "arithmetic syntax error: operand expected",
+		ArithOperatorExpected:   "arithmetic syntax error in expression",
+		ArithBadOperator:        "arithmetic syntax error: invalid arithmetic operator",
+		ArithFailureStatus:      1,
+		SyntaxUnexpected:        "syntax error near unexpected token `%[1]s'",
 		// A refused word is echoed as it was written: `"zzz"` keeps its
 		// quotes and `$x` is not the name `x`. See UnexpectedWordNaming.
 		UnexpectedWordNaming: interp.UnexpectedWordIsSourceText,

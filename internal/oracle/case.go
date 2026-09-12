@@ -690,6 +690,21 @@ var Corpus = []Case{
 		Why:     "an alternative may itself be a brace expansion, and a prefix and suffix distribute over the flattened result — {a,{b,c}} is three words, not a word containing braces",
 	},
 	{
+		ID: "expand/brace-after-a-group-that-did-not-expand", Category: "expansion",
+		Snippet: `printf "[%s]" @{x}{a,b}@; echo; printf "[%s]" {a}{b}{c,d}; echo`,
+		Why:     "a group with no comma and no range is literal text, and the list behind it is still a list: every shell that expands braces carries the scan past a group that produced nothing rather than abandoning the word. Ours gave up at the first `{` and wrote the word back whole (#1693)",
+	},
+	{
+		ID: "expand/brace-inside-a-group-that-did-not-expand", Category: "expansion",
+		Snippet: `printf "[%s]" {a{b,c}}; echo; printf "[%s]" {a}{b{c,d}}; echo; printf "[%s]" {a{b,c}}{d,e}; echo`,
+		Why:     "how far the scan steps past a group that did not expand, which is where the panel parts: bash and zsh resume one byte past its open brace and find the list nested inside it, ksh93 resumes past its close brace and leaves the first two whole while still expanding the third, whose list is outside the failed group. BraceRescanEntersFailedGroup",
+	},
+	{
+		ID: "expand/brace-inside-an-unclosed-group", Category: "expansion",
+		Snippet: `printf "[%s]" {a{b,c}; echo`,
+		Why:     "the same axis where there is no close brace to step over: bash and zsh still enter and write `{ab {ac`, ksh93 has nowhere to resume and ends the scan. The pair matters because a rule written as \"skip to the close brace\" has to say what it does without one",
+	},
+	{
 		ID: "expand/brace-before-param", Category: "expansion",
 		Snippet: `a=1; echo {$a,2}`,
 		Why:     "braces resolve before parameter expansion, so variable ranges cannot work",
@@ -8743,6 +8758,21 @@ echo "st=$?"`,
 		Why:     "the pair, on one line and one starting value: the always-assign leaves `new` and the colon-assign leaves `old`. Written as a pair rather than as two values because a recorded value would pass for an implementation that had read `::=` as `:=` — which is exactly the reading a grammar without the operator falls back to",
 	},
 	{
+		ID: "param/an-assignment-through-an-expansion-reaches-the-positional", Category: "parameter expansion",
+		Snippet: `set --; printf "[%s]" "${1:=new}"; printf "[%s][%s]" "$1" "$#"; echo " st=$?"`,
+		Why:     "where the value actually lands in the one shell that allows the assignment: the positional list, so `$#` moves to 1. The other five refuse the name — four wordings and one status apiece, which is AssignThroughExpansionMayNameAPositional — and this row is the far side of that axis. Storing through the variable table instead left `$#` at 0 and `$1` reading back only because a variable named `1` shadowed an out-of-range positional (#1389)",
+	},
+	{
+		ID: "param/an-assignment-through-an-expansion-replaces-a-positional-that-is-there", Category: "parameter expansion",
+		Snippet: `set -- p q; printf "[%s]" "${1::=new}"; printf "[%s][%s][%s]" "$1" "$2" "$#"; echo " st=$?"`,
+		Why:     "the same store seen where the positional *is* there, which is the half a variable of that name cannot fake: the real `$1` wins over the variable on the read, so the value the expansion substituted and the value the parameter held used to disagree. Written with `::=` because that is the operator whose test cannot decline to fire",
+	},
+	{
+		ID: "param/an-assignment-through-an-expansion-widens-the-positional-list", Category: "parameter expansion",
+		Snippet: `set -- p; printf "[%s]" "${3:=new}"; printf "[%s][%s][%s][%s]" "$1" "$2" "$3" "$#"; echo " st=$?"`,
+		Why:     "a position past the end widens the list with empty parameters rather than being dropped, so `$#` becomes 3 and `$2` is an empty parameter that is nonetheless there. The row that says the store is the list and not a slot: an implementation that only replaced an existing element would answer this one with `$#` still 1",
+	},
+	{
 		ID: "param/only-the-equals-makes-the-always-assign", Category: "parameter expansion",
 		Snippet: `v=old; printf "[%s]" "${v::-D}" "${v::+D}" "$v"; echo`,
 		Why:     "the disambiguation is one character wide, and this is the row that says so: with a second colon in front of them `-` and `+` are *not* operators, they are an offset of nothing and a length of `-D`, so the answer is empty and `v` is untouched. A grammar that widened `::` by one character would answer `D` here and pass every row above",
@@ -9652,6 +9682,26 @@ echo "st=$?"`,
 		ID: "param/array-slice-keeps-its-fields", Category: "parameter expansion",
 		Snippet: `a=("a b" c d); printf "[%s]" "${a[@]:0:2}"`,
 		Why:     "the slice is a list, so an element holding a space stays one field — which is the whole reason this is not a substring of the joined text",
+	},
+	{
+		ID: "param/a-negative-length-splits-string-from-list", Category: "parameter expansion",
+		Snippet: `v=abcdef; printf "[%s]" "${v:1:-1}"; echo; a=(ax bx cx); printf "[%s]" "${a[@]:1:-1}"; echo " st=$?"`,
+		Why:     "the same -1 is a valid length for a string and a refusal for a list, in one shell: bash prints bcde and then stops on `-1: substring expression < 0` at status 1, so the discriminator is the subject and not the sign. zsh counts from the end for both, ksh93 answers both with nothing, and bash 3.2 refuses the string half too, which is a version difference rather than a dialect's. #342 settled the string half; this is the list half nobody had measured. ListSliceNegativeLengthIsAnError",
+	},
+	{
+		ID: "param/a-negative-length-on-the-positionals", Category: "parameter expansion",
+		Snippet: `set -- ax bx cx; printf "[%s]" "${@:1:-1}"; echo " st=$?"`,
+		Why:     "the positional spelling of the same slice, which is the one an ordinary script writes. It reaches the same refusal in bash and the same three answers across the panel, and it is worth its own row because the two spellings only started sharing a path in the #1589 fix — before that the positional form gave a third wrong answer of its own",
+	},
+	{
+		ID: "param/a-negative-length-past-the-end-is-not-refused", Category: "parameter expansion",
+		Snippet: `a=(ax bx cx); printf "[%s]" "${a[@]:3:-1}"; echo " st=$?"; b=(); printf "[%s]" "${b[@]:0:-1}"; echo " st=$?"`,
+		Why:     "the bound on the refusal, and the row that says it is not simply \"a negative length is an error here\": an offset at or past the end of the list is empty at status 0 in every column, bash included, so the sign is only looked at where there is something to slice",
+	},
+	{
+		ID: "param/a-negative-length-is-blamed-as-written", Category: "parameter expansion",
+		Snippet: `a=(ax bx cx); n=3; printf "[%s]" "${a[@]:1:1-$n}"; echo " st=$?"`,
+		Why:     "what the refusal names: the length as it was written, `1-$n`, and not the -2 it came to — so the diagnostic points at the script rather than at the arithmetic. The other two columns answer the same as they do for a literal -2, which is what makes this a row about the wording and not about the value",
 	},
 	{
 		ID: "param/a-negative-subscript-counts-from-the-end", Category: "parameter expansion",
@@ -10636,6 +10686,16 @@ echo unreachable`,
 		ID: "cond/quoted-regex-diverges", Category: "conditions",
 		Snippet: `[[ abc =~ "^a.c$" ]] && echo still-regex || echo literal`,
 		Why:     "bash treats a quoted right operand as a literal string where ksh93 and zsh keep it a regex, so quoting a regex is not portable in either direction",
+	},
+	{
+		ID: "cond/regex-empty-operand", Category: "conditions",
+		Snippet: `[[ abc =~ "" ]]; echo "quoted=$?"; p=; [[ abc =~ $p ]]; echo "unquoted=$?"`,
+		Why:     "whether an empty right operand is a regular expression at all. POSIX ERE has no empty expression and two of the three refuse it — bash names an empty subexpression and exits 2, zsh names it and exits 1 — while ksh93 accepts it and reports a match. The quoted and unquoted spellings are one row because bash's quoting rule turns the operand literal and cannot make it non-empty, so both reach the same refusal. Go's regexp compiles the empty pattern and matches at every position, so without the axis a snippet two of the three refuse succeeded here (#2043)",
+	},
+	{
+		ID: "cond/regex-that-will-not-compile", Category: "conditions",
+		Snippet: `p='['; [[ 'a[' =~ $p ]]; echo "st=$?"`,
+		Why:     "the control beside the empty-operand row, and the reason ksh93's answer there is not \"a regex that will not compile is quietly a non-match\": an unbalanced bracket does fail in ksh93, silently, at status 1. bash diagnoses and exits 2, zsh diagnoses and exits 1 — so the three differ on the wording and the status of a refusal as well as on whether the empty pattern is one, and the empty operand is the only one of the two the panel disagrees about at all",
 	},
 	{
 		ID: "cond/regex-captures-are-recorded", Category: "conditions",

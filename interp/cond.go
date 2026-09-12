@@ -285,6 +285,17 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		if x.Y.IsQuoted() && r.ask(r.sem().RegexQuotingMakesLiteral, "quoting a =~ regex making it literal") {
 			pat = regexp.QuoteMeta(pat)
 		}
+		// An empty right operand is where the engine underneath shows
+		// through. POSIX ERE, which the shells that refuse this are built
+		// on, has no empty expression; Go's regexp compiles `` happily and
+		// then matches the empty string at every position, so a global
+		// replace over `abc` writes between every pair of characters
+		// instead of doing nothing. The compile cannot report it, so the
+		// emptiness is asked about before the compile rather than by it.
+		if pat == "" && r.ask(r.sem().EmptyRegexOperandIsAnError,
+			"an empty =~ right operand being an error") {
+			return false, arithError{msg: "invalid regular expression: empty (sub)expression"}
+		}
 		re, err := regexp.Compile(pat)
 		if err != nil {
 			return false, arithError{msg: "invalid regular expression: " + pat}

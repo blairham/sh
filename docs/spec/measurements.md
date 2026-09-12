@@ -322,6 +322,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expand/brace-range-expanded-endpoint-refused` | `[@{1..abc}@]~[@{1..2][3}@]~[@{1..3,5}@]` | `[@{1..abc}@]~[@{1..2][3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2][3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2][3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2 3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2 3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2][3}@]~[@{1..3,5}@]` |
 | `expand/brace-range-alpha-stepped` | `{a..e..2}` | `a c e` | `a c e` | `{a..e..2}` | `a c e` | `{a..e..2}` | `{a..e..2}` |
 | `expand/brace-nested` | `{a,{b,c}}~x{1,{2,3}}y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `{a,{b,c}}~x{1,{2,3}}y` |
+| `expand/brace-after-a-group-that-did-not-expand` | `[@{x}{a,b}@]~[{a}{b}{c,d}]` | `[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]` | `[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]` | `[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]` | `[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]` | `[@{x}a@][@{x}b@]~[{a}{b}c][{a}{b}d]` | `[@{x}{a,b}@]~[{a}{b}{c,d}]` |
+| `expand/brace-inside-a-group-that-did-not-expand` | `[{a{b,c}}]~[{a}{b{c,d}}]~[{a{b,c}}{d,e}]` | `[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]` | `[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]` | `[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]` | `[{a{b,c}}]~[{a}{b{c,d}}]~[{a{b,c}}d][{a{b,c}}e]` | `[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]` | `[{a{b,c}}]~[{a}{b{c,d}}]~[{a{b,c}}{d,e}]` |
+| `expand/brace-inside-an-unclosed-group` | `[{a{b,c}]` | `[{ab][{ac]` | `[{ab][{ac]` | `[{ab][{ac]` | `[{a{b,c}]` | `[{ab][{ac]` | `[{a{b,c}]` |
 | `expand/brace-before-param` | `{1,2}` | `1 2` | `1 2` | `1 2` | `1 2` | `1 2` | `{1,2}` |
 | `expand/tilde-unquoted` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
 | `expand/tilde-quoted` | `literal` | `literal` | `literal` | `literal` | `literal` | `literal` | `literal` |
@@ -817,6 +820,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expand/brace-nested` — an alternative may itself be a brace expansion, and a prefix and suffix distribute over the flattened result — {a,{b,c}} is three words, not a word containing braces
   ```sh
   echo {a,{b,c}}; echo x{1,{2,3}}y
+  ```
+- `expand/brace-after-a-group-that-did-not-expand` — a group with no comma and no range is literal text, and the list behind it is still a list: every shell that expands braces carries the scan past a group that produced nothing rather than abandoning the word. Ours gave up at the first `{` and wrote the word back whole (#1693)
+  ```sh
+  printf "[%s]" @{x}{a,b}@; echo; printf "[%s]" {a}{b}{c,d}; echo
+  ```
+- `expand/brace-inside-a-group-that-did-not-expand` — how far the scan steps past a group that did not expand, which is where the panel parts: bash and zsh resume one byte past its open brace and find the list nested inside it, ksh93 resumes past its close brace and leaves the first two whole while still expanding the third, whose list is outside the failed group. BraceRescanEntersFailedGroup
+  ```sh
+  printf "[%s]" {a{b,c}}; echo; printf "[%s]" {a}{b{c,d}}; echo; printf "[%s]" {a{b,c}}{d,e}; echo
+  ```
+- `expand/brace-inside-an-unclosed-group` — the same axis where there is no close brace to step over: bash and zsh still enter and write `{ab {ac`, ksh93 has nowhere to resume and ends the scan. The pair matters because a rule written as "skip to the close brace" has to say what it does without one
+  ```sh
+  printf "[%s]" {a{b,c}; echo
   ```
 - `expand/brace-before-param` — braces resolve before parameter expansion, so variable ranges cannot work
   ```sh
@@ -10813,6 +10828,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/assign-has-a-side-effect` | `[V][V]` | `[V][V]` | `[V][V]` | `[V][V]` | `[V][V]` | `[V][V]` | `[V][V]` |
 | `param/the-always-assign-operator` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][]` **2>** `<shell>: line 1: e: =B: arithmetic syntax error: operand expected (error token is "=B")` *(status 1)* | `[][]` **2>** `<shell>: line 1: e: =B: arithmetic syntax error: operand expected (error token is "=B")` *(status 1)* | `[][]` **2>** `<shell>: e: =B: syntax error: operand expected (error token is "=B")` *(status 1)* | **2>** `<shell>: :=A: arithmetic syntax error` *(status 1)* | `[A][A][B][B][C][C]` | `[][]` **2>** `<shell>: arithmetic syntax error` *(status 2)* |
 | `param/the-always-assign-operator-beside-the-conditional` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: a: =new: arithmetic syntax error: operand expected (error token is "=new")` *(status 1)* | **2>** `<shell>: line 1: a: =new: arithmetic syntax error: operand expected (error token is "=new")` *(status 1)* | **2>** `<shell>: a: =new: syntax error: operand expected (error token is "=new")` *(status 1)* | **2>** `<shell>: :=new: arithmetic syntax error` *(status 1)* | `[new][new][old][old]` | **2>** `<shell>: arithmetic syntax error` *(status 2)* |
+| `param/an-assignment-through-an-expansion-reaches-the-positional` | **2>** `<shell>: 1: 1: bad variable name` *(status 2)* | **2>** `<shell>: line 1: $1: cannot assign in this way` *(status 1)* | **2>** `<shell>: line 1: $1: cannot assign in this way` *(status 1)* | **2>** `<shell>: $1: cannot assign in this way` *(status 1)* | **2>** `<shell>: "${1:=new}": bad substitution` *(status 1)* | `[new][new][1] st=0` | **2>** `<shell>: 1: bad variable name` *(status 2)* |
+| `param/an-assignment-through-an-expansion-replaces-a-positional-that-is-there` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: 1: =new: arithmetic syntax error: operand expected (error token is "=new")` *(status 1)* | **2>** `<shell>: line 1: 1: =new: arithmetic syntax error: operand expected (error token is "=new")` *(status 1)* | **2>** `<shell>: 1: =new: syntax error: operand expected (error token is "=new")` *(status 1)* | **2>** `<shell>: :=new: arithmetic syntax error` *(status 1)* | `[new][new][q][2] st=0` | **2>** `<shell>: arithmetic syntax error` *(status 2)* |
+| `param/an-assignment-through-an-expansion-widens-the-positional-list` | **2>** `<shell>: 1: 3: bad variable name` *(status 2)* | **2>** `<shell>: line 1: $3: cannot assign in this way` *(status 1)* | **2>** `<shell>: line 1: $3: cannot assign in this way` *(status 1)* | **2>** `<shell>: $3: cannot assign in this way` *(status 1)* | **2>** `<shell>: "${3:=new}": bad substitution` *(status 1)* | `[new][p][][new][3] st=0` | **2>** `<shell>: 3: bad variable name` *(status 2)* |
 | `param/only-the-equals-makes-the-always-assign` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][][old]` | `[][][old]` | `[][][old]` | **2>** `<shell>: :-D: arithmetic syntax error` *(status 1)* | `[][][old]` | `[][][old]` |
 | `param/word-is-itself-expanded` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` |
 | `param/prefix-shortest-and-longest` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` |
@@ -10981,6 +10999,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/argv-is-the-positional-parameters` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][0][][][a b][zz][2][a b][2]` | `[][0][][][a b][zz][2][a b][2]` | `[][0][][][a b][zz][2][a b][2]` | `[][0][][][a b][zz][2][a b][2]` | `[a b c][2][a b][c][zz][q][2][zz][2]` | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
 | `param/array-slice` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[q][r][s][q][r][r][s]` | `[q][r][s][q][r][r][s]` | `[q][r][s][q][r][r][s]` | `[q][r][s][q][r][r][s]` | `[q][r][s][q][r][r][s]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `param/array-slice-keeps-its-fields` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `param/a-negative-length-splits-string-from-list` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[bcde]` **2>** `<shell>: line 1: -1: substring expression < 0` *(status 1)* | `[bcde]` **2>** `<shell>: line 1: -1: substring expression < 0` *(status 1)* | **2>** `<shell>: -1: substring expression < 0` *(status 1)* | `[]~[] st=0` | `[bcde]~[bx] st=0` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `param/a-negative-length-on-the-positionals` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: -1: substring expression < 0` *(status 1)* | **2>** `<shell>: line 1: -1: substring expression < 0` *(status 1)* | **2>** `<shell>: -1: substring expression < 0` *(status 1)* | `[] st=0` | `[ax][bx] st=0` | `[x][bx][c] st=0` |
+| `param/a-negative-length-past-the-end-is-not-refused` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[] st=0~[] st=0` | `[] st=0~[] st=0` | `[] st=0~[] st=0` | `[] st=0~[] st=0` | **2>** `<shell>:1: substring expression: 2 < 3` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `param/a-negative-length-is-blamed-as-written` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: 1-$n: substring expression < 0` *(status 1)* | **2>** `<shell>: line 1: 1-$n: substring expression < 0` *(status 1)* | **2>** `<shell>: 1-$n: substring expression < 0` *(status 1)* | `[] st=0` | `[] st=0` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `param/a-negative-subscript-counts-from-the-end` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[30][20][10]` | `[30][20][10]` | `[][][0]` **2>** `<shell>: a: bad array subscript~<shell>: a: bad array subscript~<shell>: a: bad array subscript` | `[30][20][10]` | `[30][20][10]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `param/assigning-through-a-negative-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `one two X` | `one two X` | **2>** `<shell>: a[-1]: bad array subscript` *(status 1)* | `one two X` | `one two X` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `param/an-operator-distributes-over-the-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
@@ -11354,6 +11376,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/the-always-assign-operator-beside-the-conditional` — the pair, on one line and one starting value: the always-assign leaves `new` and the colon-assign leaves `old`. Written as a pair rather than as two values because a recorded value would pass for an implementation that had read `::=` as `:=` — which is exactly the reading a grammar without the operator falls back to
   ```sh
   a=old; b=old; printf "[%s]" "${a::=new}" "$a" "${b:=new}" "$b"; echo
+  ```
+- `param/an-assignment-through-an-expansion-reaches-the-positional` — where the value actually lands in the one shell that allows the assignment: the positional list, so `$#` moves to 1. The other five refuse the name — four wordings and one status apiece, which is AssignThroughExpansionMayNameAPositional — and this row is the far side of that axis. Storing through the variable table instead left `$#` at 0 and `$1` reading back only because a variable named `1` shadowed an out-of-range positional (#1389)
+  ```sh
+  set --; printf "[%s]" "${1:=new}"; printf "[%s][%s]" "$1" "$#"; echo " st=$?"
+  ```
+- `param/an-assignment-through-an-expansion-replaces-a-positional-that-is-there` — the same store seen where the positional *is* there, which is the half a variable of that name cannot fake: the real `$1` wins over the variable on the read, so the value the expansion substituted and the value the parameter held used to disagree. Written with `::=` because that is the operator whose test cannot decline to fire
+  ```sh
+  set -- p q; printf "[%s]" "${1::=new}"; printf "[%s][%s][%s]" "$1" "$2" "$#"; echo " st=$?"
+  ```
+- `param/an-assignment-through-an-expansion-widens-the-positional-list` — a position past the end widens the list with empty parameters rather than being dropped, so `$#` becomes 3 and `$2` is an empty parameter that is nonetheless there. The row that says the store is the list and not a slot: an implementation that only replaced an existing element would answer this one with `$#` still 1
+  ```sh
+  set -- p; printf "[%s]" "${3:=new}"; printf "[%s][%s][%s][%s]" "$1" "$2" "$3" "$#"; echo " st=$?"
   ```
 - `param/only-the-equals-makes-the-always-assign` — the disambiguation is one character wide, and this is the row that says so: with a second colon in front of them `-` and `+` are *not* operators, they are an offset of nothing and a length of `-D`, so the answer is empty and `v` is untouched. A grammar that widened `::` by one character would answer `D` here and pass every row above
   ```sh
@@ -12032,6 +12066,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/array-slice-keeps-its-fields` — the slice is a list, so an element holding a space stays one field — which is the whole reason this is not a substring of the joined text
   ```sh
   a=("a b" c d); printf "[%s]" "${a[@]:0:2}"
+  ```
+- `param/a-negative-length-splits-string-from-list` — the same -1 is a valid length for a string and a refusal for a list, in one shell: bash prints bcde and then stops on `-1: substring expression < 0` at status 1, so the discriminator is the subject and not the sign. zsh counts from the end for both, ksh93 answers both with nothing, and bash 3.2 refuses the string half too, which is a version difference rather than a dialect's. #342 settled the string half; this is the list half nobody had measured. ListSliceNegativeLengthIsAnError
+  ```sh
+  v=abcdef; printf "[%s]" "${v:1:-1}"; echo; a=(ax bx cx); printf "[%s]" "${a[@]:1:-1}"; echo " st=$?"
+  ```
+- `param/a-negative-length-on-the-positionals` — the positional spelling of the same slice, which is the one an ordinary script writes. It reaches the same refusal in bash and the same three answers across the panel, and it is worth its own row because the two spellings only started sharing a path in the #1589 fix — before that the positional form gave a third wrong answer of its own
+  ```sh
+  set -- ax bx cx; printf "[%s]" "${@:1:-1}"; echo " st=$?"
+  ```
+- `param/a-negative-length-past-the-end-is-not-refused` — the bound on the refusal, and the row that says it is not simply "a negative length is an error here": an offset at or past the end of the list is empty at status 0 in every column, bash included, so the sign is only looked at where there is something to slice
+  ```sh
+  a=(ax bx cx); printf "[%s]" "${a[@]:3:-1}"; echo " st=$?"; b=(); printf "[%s]" "${b[@]:0:-1}"; echo " st=$?"
+  ```
+- `param/a-negative-length-is-blamed-as-written` — what the refusal names: the length as it was written, `1-$n`, and not the -2 it came to — so the diagnostic points at the script rather than at the arithmetic. The other two columns answer the same as they do for a literal -2, which is what makes this a row about the wording and not about the value
+  ```sh
+  a=(ax bx cx); n=3; printf "[%s]" "${a[@]:1:1-$n}"; echo " st=$?"
   ```
 - `param/a-negative-subscript-counts-from-the-end` — a negative subscript is end-relative in bash, ksh93 and zsh — zsh included, whose positive subscripts count from 1 — so it does not inherit the base axis, in an expansion or in arithmetic. bash 3.2 predates the form and refuses it. We expanded it to nothing
   ```sh
@@ -15052,6 +15102,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/a-fatal-math-error-gives-up-the-sourced-file-alone` | `insrc~after` **2>** `<shell>: 1: ./s.sh: 1+: not found` | `insrc~after` **2>** `./s.sh: line 1: ((: 1+ : arithmetic syntax error: operand expected (error token is "+ ")` | `insrc~after` **2>** `./s.sh: line 1: ((: 1+ : arithmetic syntax error: operand expected (error token is "+ ")` | `insrc~after` **2>** `./s.sh: line 1: ((: 1+ : syntax error: operand expected (error token is " ")` | `after` **2>** `<shell>: .: line 1:  1+ : more tokens expected` | `insrc~after` **2>** `./s.sh:1: bad math expression: operand expected at end of string` | `insrc~after` **2>** `<shell>: ./s.sh: line 1: 1+: not found` |
 | `cond/regex-match` | `no-regex` **2>** `<shell>: 1: [[: not found` | `regex` | `regex` | `regex` | `regex` | `regex` | `regex` |
 | `cond/quoted-regex-diverges` | `literal` **2>** `<shell>: 1: [[: not found` | `literal` | `literal` | `literal` | `still-regex` | `still-regex` | `still-regex` |
+| `cond/regex-empty-operand` | `quoted=127~unquoted=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `quoted=2~unquoted=2` **2>** `<shell>: line 1: [[: invalid regular expression `': empty (sub)expression~<shell>: line 1: [[: invalid regular expression `': empty (sub)expression` | `quoted=2~unquoted=2` **2>** `<shell>: line 1: [[: invalid regular expression `': empty (sub)expression~<shell>: line 1: [[: invalid regular expression `': empty (sub)expression` | `quoted=2~unquoted=2` | `quoted=0~unquoted=0` | `quoted=1~unquoted=1` **2>** `<shell>:1: failed to compile regex: empty (sub)expression~<shell>:1: failed to compile regex: empty (sub)expression` | `quoted=0~unquoted=2` **2>** `<shell>: =~: argument expected` |
+| `cond/regex-that-will-not-compile` | `st=127` **2>** `<shell>: 1: [[: not found` | `st=2` **2>** `<shell>: line 1: [[: invalid regular expression `[': brackets ([ ]) not balanced` | `st=2` **2>** `<shell>: line 1: [[: invalid regular expression `[': brackets ([ ]) not balanced` | `st=2` | `st=1` | `st=1` **2>** `<shell>:1: failed to compile regex: brackets ([ ]) not balanced` | `st=2` |
 | `cond/regex-captures-are-recorded` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[bc\|b\|c]` | `[bc\|b\|c]` | `[bc\|b\|c]` | `[\|\|]` | `[\|\|]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `cond/regex-failure-empties-the-record` | **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: Bad substitution` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=0` | `n=0` | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
 | `cond/logical-and-grouping` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `grouped` | `grouped` | `grouped` | `grouped` | `grouped` | **2>** `<shell>: syntax error: unexpected word (expecting ")")` *(status 2)* |
@@ -15141,6 +15193,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cond/quoted-regex-diverges` — bash treats a quoted right operand as a literal string where ksh93 and zsh keep it a regex, so quoting a regex is not portable in either direction
   ```sh
   [[ abc =~ "^a.c$" ]] && echo still-regex || echo literal
+  ```
+- `cond/regex-empty-operand` — whether an empty right operand is a regular expression at all. POSIX ERE has no empty expression and two of the three refuse it — bash names an empty subexpression and exits 2, zsh names it and exits 1 — while ksh93 accepts it and reports a match. The quoted and unquoted spellings are one row because bash's quoting rule turns the operand literal and cannot make it non-empty, so both reach the same refusal. Go's regexp compiles the empty pattern and matches at every position, so without the axis a snippet two of the three refuse succeeded here (#2043)
+  ```sh
+  [[ abc =~ "" ]]; echo "quoted=$?"; p=; [[ abc =~ $p ]]; echo "unquoted=$?"
+  ```
+- `cond/regex-that-will-not-compile` — the control beside the empty-operand row, and the reason ksh93's answer there is not "a regex that will not compile is quietly a non-match": an unbalanced bracket does fail in ksh93, silently, at status 1. bash diagnoses and exits 2, zsh diagnoses and exits 1 — so the three differ on the wording and the status of a refusal as well as on whether the empty pattern is one, and the empty operand is the only one of the two the panel disagrees about at all
+  ```sh
+  p='['; [[ 'a[' =~ $p ]]; echo "st=$?"
   ```
 - `cond/regex-captures-are-recorded` — a successful =~ records the whole match at 0 and the groups after it, under bash's name for the record; ksh93 and zsh keep their captures under names of their own and leave this one unset
   ```sh

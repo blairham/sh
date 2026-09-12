@@ -52,6 +52,49 @@ type HistoryStyle struct {
 	// from a sentence.
 	SearchBelowTheLine bool
 
+	// How the history *file* encodes an entry, which is two facts and not
+	// one — they were measured separately and one shell has both while the
+	// default has neither.
+	//
+	// Measured 2026-09-12 by driving zsh 5.9.2 through a pseudo-terminal,
+	// typing a `for` loop and a one-liner, once with `setopt
+	// EXTENDED_HISTORY` and once without, and reading the file it left.
+	//
+	// EntriesContinueOnABackslash says a physical line ending in a backslash
+	// is joined to the one after it, so an entry may span several lines. This
+	// is what a multi-line command is stored as, and it appears in **both**
+	// files — with the option and without — which is why it is its own field
+	// rather than part of the timestamp answer:
+	//
+	//	for i in 1 2\
+	//	do\
+	//	echo $i\
+	//	done
+	//
+	// A reader that handled only the header would still hand back `done` as an
+	// entry of its own, which is what this shell did.
+	EntriesContinueOnABackslash bool
+
+	// EntriesMayCarryATimestampHeader says an entry may begin with two
+	// numbers and a `;` before the command — when the shell was told to record
+	// when each line ran:
+	//
+	//	: 1789247571:0;go run ./cmd/zsh
+	//
+	// *May*, not does: a file usually holds both kinds, because the option can
+	// be turned on part-way through a file's life and a session that writes
+	// without it appends bare lines to a file full of headers. So this is
+	// permission to read one, and a line that does not match is the command
+	// itself.
+	//
+	// Only the first `;` after the numbers ends the header, measured: `:
+	// 1789253048:0;print 'a;b'` is one entry whose command contains a `;`.
+	//
+	// The other shell with a history file writes its times differently — a
+	// `#<epoch>` line *before* the command — so this is not a constant the
+	// substrate could hold. It is here for the reason SearchPrompt is.
+	EntriesMayCarryATimestampHeader bool
+
 	// Control names the variable holding a colon-separated list of what not
 	// to record — `ignorespace`, `ignoredups`, `ignoreboth`. bash calls it
 	// HISTCONTROL. zsh spells the same two rules as options rather than as a

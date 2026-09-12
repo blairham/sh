@@ -115,6 +115,11 @@ func run(ctx context.Context, dialect, bin, buildDir string, timeout time.Durati
 		fmt.Fprintln(os.Stderr, "suitecheck: -bin is required: the dialect binary to grade")
 		return 2
 	}
+	bin, err := suite.Shell(bin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "suitecheck: -bin: %v\n", err)
+		return 2
+	}
 
 	reference, found := suite.Locate(s.Lookup)
 	if !found {
@@ -219,6 +224,10 @@ func printReport(rep suite.Report) {
 
 	fmt.Printf("  not scored       %d unstable · %d oracle hung · %d dialect hung\n",
 		rep.Unstable, rep.OracleHung, rep.DialectHung)
+	if rep.OracleFailed+rep.DialectFailed > 0 {
+		fmt.Printf("                   %d oracle · %d dialect never started at all\n",
+			rep.OracleFailed, rep.DialectFailed)
+	}
 	fmt.Println("                   unstable: the oracle did not repeat itself, so the file is")
 	fmt.Println("                     evidence about neither shell — a pid, a clock, an order.")
 	fmt.Println("                   oracle hung: a harness fault. The shell that wrote the file")

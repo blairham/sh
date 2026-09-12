@@ -66,10 +66,21 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 				s.Name, s.Name, strings.Join(s.Lookup, ", ")))
 			continue
 		}
-		bin, ok := bins[s.Dialect]
+		named, ok := bins[s.Dialect]
 		if !ok {
-			skipped = append(skipped, fmt.Sprintf("%s — no -bin %s=… was given, so cmd/%s was not graded",
+			skipped = append(skipped, fmt.Sprintf("%s — no -own-bin %s=… was given, so cmd/%s was not graded",
 				s.Name, s.Dialect, s.Dialect))
+			continue
+		}
+		// Resolved here, where the person who typed it is, and absolute:
+		// every run gets a directory of its own to ruin, so a relative path
+		// to the binary under test resolves against that directory instead.
+		// It used to resolve to nothing and the column reported 0/10 strict
+		// rather than an error — a harness fault wearing a shell's failure.
+		bin, err := suite.Shell(named)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "suitecheck: -own-bin %s=%s: %v\n", s.Dialect, named, err)
+			code = 1
 			continue
 		}
 		if missing := s.Missing(root); len(missing) > 0 {
@@ -93,14 +104,18 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 		printOwnColumn(rep)
 	}
 	printOwnTable(reports)
-	fmt.Println("  The tiers are claims, not filing. core/ is what a script may assume in any")
-	fmt.Println("  of these shells; ext/ is this substrate's core language beyond POSIX —")
-	fmt.Println("  arrays, [[ ]], $'…', +=, substrings — which dash and ash are the measured")
-	fmt.Println("  holdouts on; <shell>/ is the answer only that shell has. A cross-check runs")
-	fmt.Println("  a tier through the references alone and asks whether they agree, which is")
-	fmt.Println("  the half no fetched suite can have: grading our binary against one reference")
-	fmt.Println("  proves that dialect right, while the references agreeing proves the")
-	fmt.Println("  construct common — the claim docs/spec/shell-matrix.md makes in prose.")
+	fmt.Println("  A tier is a claim, not filing. core/ is what a script may assume in any of")
+	fmt.Println("  these shells. A cross-check runs a tier through the references alone and")
+	fmt.Println("  asks whether they agree, which is the half no fetched suite can have:")
+	fmt.Println("  grading our binary against one reference proves that dialect right, while")
+	fmt.Println("  the references agreeing proves the construct common — the claim")
+	fmt.Println("  docs/spec/shell-matrix.md makes in prose and nothing until now measured.")
+	fmt.Println()
+	fmt.Println("  core/ is the only tier written so far, and the count above is the whole of")
+	fmt.Println("  what this instrument asks. ext/ — the substrate's core language beyond")
+	fmt.Println("  POSIX — and the per-dialect directories are the rest of #2291, and they")
+	fmt.Println("  arrive as cases rather than as empty directories: a directory with no files")
+	fmt.Println("  in it would report a column that ran and agreed.")
 	fmt.Println()
 
 	for _, name := range suite.Tiers {
@@ -145,6 +160,12 @@ func printOwnColumn(rep suite.Report) {
 		fmt.Printf("  not scored %d unstable · %d reference hung · %d ours hung\n",
 			rep.Unstable, rep.OracleHung, rep.DialectHung)
 	}
+	if rep.OracleFailed+rep.DialectFailed > 0 {
+		// Loud, and never folded into the score. A run that did not start
+		// agreed with nothing and disagreed with nothing.
+		fmt.Printf("  NOT MEASURED %d reference · %d ours never started at all — a harness fault\n",
+			rep.OracleFailed, rep.DialectFailed)
+	}
 	failed := rep.NotStrict()
 	if len(failed) == 0 {
 		fmt.Println("  every case agreed")
@@ -162,6 +183,10 @@ func printOwnColumn(rep suite.Report) {
 			fmt.Printf("    %-28s the reference never finished — a harness fault, not a finding\n", c.Name)
 		case c.Result.Unstable:
 			fmt.Printf("    %-28s the reference would not repeat it — a pid, a clock, an order\n", c.Name)
+		case c.Result.DialectFailed:
+			fmt.Printf("    %-28s ours never started — a harness fault, not a finding\n", c.Name)
+		case c.Result.OracleFailed:
+			fmt.Printf("    %-28s the reference never started — a harness fault, not a finding\n", c.Name)
 		default:
 			fmt.Printf("    %-28s %d/%d lines · status %d, reference %d\n",
 				c.Name, c.Result.Common, c.Result.Longest, c.Result.OurStatus, c.Result.RefStatus)

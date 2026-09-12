@@ -5,6 +5,7 @@ package suite
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -51,6 +52,15 @@ type Result struct {
 	// killed dialect binary is a hang we published, and a killed reference is
 	// the harness's fault — the shell that wrote the file does not hang on it.
 	OracleHung, DialectHung bool
+	// OracleFailed and DialectFailed say the shell never started at all: the
+	// binary is missing, is not executable, or the harness could not lay out
+	// a directory to run it in. Neither is a finding about a shell, and both
+	// are kept out of the score for the same reason a hung run is — a run
+	// that did not happen agreed with nothing and disagreed with nothing.
+	// The pair is kept apart from the hung pair because the cause is
+	// different: a hang is something the shell did, a failure to start is
+	// something the harness or the machine did before the shell was reached.
+	OracleFailed, DialectFailed bool
 	// Unstable says the reference did not produce the same run twice, so the
 	// file says nothing about either shell.
 	Unstable bool
@@ -96,9 +106,11 @@ type Report struct {
 	// bound and were compared on their first lines.
 	LineCapped int
 
-	OracleHung  int
-	DialectHung int
-	Unstable    int
+	OracleHung    int
+	DialectHung   int
+	OracleFailed  int
+	DialectFailed int
+	Unstable      int
 
 	Causes      []Cause
 	StatusPairs []StatusPair
@@ -216,6 +228,10 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 			causes[res.Cause]++
 		}
 		switch {
+		case res.OracleFailed:
+			rep.OracleFailed++
+		case res.DialectFailed:
+			rep.DialectFailed++
 		case res.OracleHung:
 			rep.OracleHung++
 		case res.DialectHung:
@@ -307,12 +323,20 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 	}
 
 	ref := runIn(ctx, s, tests, name, reference, timeout)
-	if ref.TimedOut {
+	switch {
+	case ref.Failed:
+		res.OracleFailed = true
+		return res
+	case ref.TimedOut:
 		res.OracleHung = true
 		return res
 	}
 	own := runIn(ctx, s, tests, name, ours, timeout)
-	if own.TimedOut {
+	switch {
+	case own.Failed:
+		res.DialectFailed = true
+		return res
+	case own.TimedOut:
 		res.DialectHung = true
 		return res
 	}
@@ -366,12 +390,12 @@ type placed struct {
 func runIn(ctx context.Context, s Suite, tests, name, shell string, timeout time.Duration) placed {
 	dir, err := os.MkdirTemp("", "suite")
 	if err != nil {
-		return placed{Outcome: Outcome{Output: err.Error(), Status: -1}}
+		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}}
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 	run := filepath.Join(dir, "t")
 	if err := copyTree(tests, run); err != nil {
-		return placed{Outcome: Outcome{Output: err.Error(), Status: -1}, Dir: run}
+		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}, Dir: run}
 	}
 	out := runFile(ctx, shell, run, name, environ(s, run, shell), timeout)
 	return placed{Outcome: out, Dir: run}
@@ -500,6 +524,36 @@ func rankStatuses(counts map[[2]int]int) []StatusPair {
 		return pairs[i].Reference < pairs[j].Reference
 	})
 	return pairs
+}
+
+// Shell is the path a run may be handed a shell by, resolved once, where the
+// person naming it is.
+//
+// Absolute, because [runIn] gives every run a directory of its own and runs
+// the file from inside it — so a relative path to the binary under test is
+// resolved against that directory and not against the caller's. It resolves
+// to nothing, every run fails to start, and the column reports a score. The
+// cost of that being caught late is on record: `make suite` passes absolute
+// paths and worked, while the same command typed by hand with `-own-bin
+// bash=build/own-bash` reported 0/10 strict for four dialects, which is a
+// wrong answer rather than an error.
+//
+// Existence is checked here for the same reason. A missing binary is a fact
+// about the invocation and belongs in the invocation's diagnostic, not spread
+// across a per-file column of failures.
+func Shell(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("%s is a directory, not a shell", abs)
+	}
+	return abs, nil
 }
 
 // Locate is the first of a suite's reference paths that exists.

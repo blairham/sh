@@ -63,6 +63,11 @@ import (
 //	         ash, which are the measured holdouts.
 //	<shell>/ the answer only that shell has.
 //
+// Only core/ is written today, and [Tiers] and each column's Dirs say so
+// rather than claiming the other two and finding them empty. An empty tier
+// would report a column that ran and agreed, which is the failure this
+// instrument is arranged to make impossible.
+//
 // [CrossCheck] runs a tier through the *reference shells alone* and asks
 // whether they all wrote the same bytes. That is the half no fetched suite
 // can have: grading our binary against one reference proves that dialect
@@ -91,7 +96,7 @@ var Ours = []Suite{
 		Name:    "bash",
 		Dialect: "bash",
 		Ours:    true,
-		Dirs:    []string{"core", "ext", "bash"},
+		Dirs:    []string{"core"},
 		Ext:     OurExt,
 		Lookup:  []string{"/opt/homebrew/bin/bash", "/usr/local/bin/bash", "/bin/bash", "/usr/bin/bash"},
 	},
@@ -99,7 +104,7 @@ var Ours = []Suite{
 		Name:    "zsh",
 		Dialect: "zsh",
 		Ours:    true,
-		Dirs:    []string{"core", "ext", "zsh"},
+		Dirs:    []string{"core"},
 		Ext:     OurExt,
 		Lookup:  []string{"/opt/homebrew/bin/zsh", "/usr/local/bin/zsh", "/bin/zsh", "/usr/bin/zsh"},
 	},
@@ -107,7 +112,7 @@ var Ours = []Suite{
 		Name:    "ksh93",
 		Dialect: "ksh",
 		Ours:    true,
-		Dirs:    []string{"core", "ext", "ksh"},
+		Dirs:    []string{"core"},
 		Ext:     OurExt,
 		Lookup:  []string{"/bin/ksh", "/usr/bin/ksh", "/opt/homebrew/bin/ksh93"},
 	},
@@ -117,7 +122,7 @@ var Ours = []Suite{
 		Name:    "dash",
 		Dialect: "dash",
 		Ours:    true,
-		Dirs:    []string{"core", "dash"},
+		Dirs:    []string{"core"},
 		Ext:     OurExt,
 		Lookup:  []string{"/bin/dash", "/usr/bin/dash", "/opt/homebrew/bin/dash"},
 	},
@@ -125,7 +130,7 @@ var Ours = []Suite{
 		Name:    "ash",
 		Dialect: "ash",
 		Ours:    true,
-		Dirs:    []string{"core", "ash"},
+		Dirs:    []string{"core"},
 		Ext:     OurExt,
 		Lookup:  []string{"/bin/busybox", "/usr/bin/busybox", "/opt/homebrew/bin/busybox"},
 		NotYet: "there is no BusyBox on a stock macOS machine, so cmd/ash has no reference " +
@@ -151,7 +156,14 @@ func FindOurs(dialect string) (Suite, bool) {
 //
 // Each is cross-checked against the references that are supposed to agree
 // about it: every column for core/, everything but dash and ash for ext/.
-var Tiers = []string{"core", "ext"}
+//
+// Only core/ is written today. ext/ and the per-dialect directories are the
+// rest of the campaign and arrive with cases rather than with an empty
+// directory — a directory with no files in it would report a column that ran
+// and agreed, which is the mistake this whole instrument is arranged to
+// avoid. [Suite.Missing] is what makes the omission structural: a column may
+// not claim a directory that is not there.
+var Tiers = []string{"core"}
 
 // tier is the suite a cross-check run uses.
 //

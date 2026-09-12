@@ -664,6 +664,11 @@ type source struct {
 	// `sh -s -c cmd` runs the command string and still shows `s` in `$-`,
 	// unanimously across the panel.
 	stdinOption bool
+	// thenStdin says this is a command string that standard input follows:
+	// `-c` and `-s` together, in the one dialect that reads `-s` as still
+	// meaning "and then read standard input". See
+	// Semantics.StdinOptionSurvivesTheCommandString.
+	thenStdin bool
 	// startup is what the invocation said about which startup files to read:
 	// `-l`, `--norc`, `--noprofile`, `--rcfile FILE`, `-f`. Carried here for
 	// the reason login and posix are — deciding it is part of reading an
@@ -1129,6 +1134,8 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 			return source{}, errors.New("-c requires an argument")
 		}
 		if inv.fromStdin && len(args) > 1 {
+			// The operand question, and the standard-input half below is
+			// answered inside it for the same invocation.
 			// Both routes were named, and there is an operand for them to
 			// disagree about. Which route the *program* comes from is
 			// settled above and is unanimous; which route's rule names the
@@ -1138,6 +1145,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 			return sh.commandWithStdinOption(args[0], args[1:], inv)
 		}
 		s := commandSource(sh, args[0], args[1:])
+		s.thenStdin = inv.fromStdin && sh.Semantics.StdinOptionSurvivesTheCommandString
 		if inv.plusC && sh.Semantics.PlusSignedCommandStringIsDollarZero {
 			// The plus spelling keeps `$0` for the command string, so no
 			// operand is named by it and every one is a parameter. Applied
@@ -1206,15 +1214,16 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 // Semantics.StdinOptionNamesTheOperands, which is the whole of it: nothing
 // else about the invocation changes.
 func (sh Shell) commandWithStdinOption(cmd string, operands []string, inv invocation) (source, error) {
+	survives := sh.Semantics.StdinOptionSurvivesTheCommandString
 	switch sh.Semantics.StdinOptionNamesTheOperands {
 	case interp.Yes:
 		// The standard-input rule: no operand is `$0`.
 		s := commandSource(sh, cmd, nil)
-		s.params, s.opts = operands, inv.opts
+		s.params, s.opts, s.thenStdin = operands, inv.opts, survives
 		return s, nil
 	case interp.No:
 		s := commandSource(sh, cmd, operands)
-		s.opts = inv.opts
+		s.opts, s.thenStdin = inv.opts, survives
 		return s, nil
 	}
 	// Refused rather than given one side's answer, the way an unanswered
@@ -1562,20 +1571,34 @@ func (sh Shell) runInput(in source) int {
 	// every shell has — an alias is never expanded on the line that defines
 	// it.
 	//
+	// **Two questions, and they were one field until #2109.** Whether this
+	// shell expands aliases at all is the option, and it is the whole gate on
+	// every text the runner reads later — `eval`'s string, a substitution's,
+	// a sourced file's, a trap body's. Whether *this program's own text*
+	// expands is the route, and one dialect answers it differently from the
+	// option: zsh reads a `-c` string whole, so an `alias` on line 1 has not
+	// run when line 2 is parsed, and nothing on the string can expand — while
+	// every `eval` and `$( )` inside that same string does. Deriving the
+	// runner's answer from the route turned the table off for all of them.
+	//
 	// An interactive shell expands them whatever the dialect says, which is
 	// measured unanimous: all four expand an alias in `sh -i script.sh`, and
-	// bash is the one that would not have in `sh script.sh`. This arm was
-	// unreachable until now — the field it read meant "took the prompt
-	// route", and the prompt route does not come through here.
+	// bash is the one that would not have in `sh script.sh`.
 	//
-	// The hook goes on unconditionally and the route's answer is handed to
-	// the runner instead, because the switch has to be movable from inside
-	// the script: `shopt -s expand_aliases` and POSIX mode both turn it on
-	// partway through. See Runner.ExpandingAlias.
-	r.SetAliasExpansionBase(sh.Dialect.ExpandAliases.Has(in.programRoute()) || in.interactive)
-	pr.aliases = r.ExpandingAlias
-	pr.globalAliases = r.ExpandingGlobalAlias
-	pr.suffixAliases = r.ExpandingSuffixAlias
+	// The option goes to the runner rather than being resolved here, because
+	// the switch has to be movable from inside the script: `shopt -s
+	// expand_aliases` and POSIX mode both turn it on partway through. See
+	// Runner.ExpandingAlias.
+	r.SetAliasExpansionBase(sh.Dialect.AliasesExpandUnlessTold || in.interactive)
+	if sh.Dialect.ExpandAliasesInProgramText.Has(in.programRoute()) || in.interactive {
+		// Left nil where the route says no, which is what a parser reads as
+		// "there is no table" — and it stays nil for the whole run, because
+		// the route is a fact about how this program arrived rather than
+		// state a line of it can move.
+		pr.aliases = r.ExpandingAlias
+		pr.globalAliases = r.ExpandingGlobalAlias
+		pr.suffixAliases = r.ExpandingSuffixAlias
+	}
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
 			return code
@@ -1693,6 +1716,18 @@ func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 	ctx := sh.context()
 	status, how := sh.executeLines(ctx, r, pr, in)
+	if how == endingRanOut && in.thenStdin && !r.Exited() {
+		// `-c` with `-s`, in the one dialect that goes on to read standard
+		// input as a program once the command string has run. See
+		// Semantics.StdinOptionSurvivesTheCommandString.
+		//
+		// The same runner, which is measured rather than convenient: a
+		// variable, an alias, a function, a `cd` and a `set -e` from the
+		// command string are all in effect here, `$0` and the positional
+		// parameters are the ones it was given, and the EXIT trap fires once
+		// at the end of both.
+		status, how = sh.executeLines(ctx, r, sh.stdinAfterCommandString(r), in.asStandardInput(sh))
+	}
 	switch how {
 	case endingParseFailure, endingRefused:
 		// The EXIT trap fires even when the last thing read would not parse,
@@ -1705,6 +1740,34 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 		return status
 	}
 	return r.Finish(ctx)
+}
+
+// stdinAfterCommandString is the program the standard-input half reads, which
+// is the ordinary standard-input route and not a third way of running one.
+//
+// Measured: the half numbers its own lines from 1, reports through the
+// standard-input diagnostics, and takes its input in whatever size this
+// dialect's StdinProgramReadInBlocks says — so a `read` in it finds what a
+// `read` on a plain `sh -s` would.
+func (sh Shell) stdinAfterCommandString(r *interp.Runner) *program {
+	pr := wholeProgram("", sh.Dialect.On(syntax.RouteOnStandardInput))
+	pr.more = stdinProgram(r, sh.Semantics.StdinProgramReadInBlocks)
+	if sh.Dialect.ExpandAliasesInProgramText.Has(syntax.RouteOnStandardInput) {
+		pr.aliases = r.ExpandingAlias
+		pr.globalAliases = r.ExpandingGlobalAlias
+		pr.suffixAliases = r.ExpandingSuffixAlias
+	}
+	return pr
+}
+
+// asStandardInput is this source relabeled as the standard-input half that
+// follows it: the same shell and the same parameters, reported the way the
+// standard-input route reports.
+func (in source) asStandardInput(sh Shell) source {
+	in.src, in.input, in.wholeFirst = "", "", false
+	in.onStdin, in.thenStdin = true, false
+	in.dg = sh.Diagnostics.ForStdin()
+	return in
 }
 
 // ending is how a run of lines stopped, which decides what the caller owes the

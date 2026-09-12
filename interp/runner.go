@@ -706,14 +706,22 @@ type Runner struct {
 	// this shell started with.
 	//
 	// Two fields rather than one because the pair is what a mode needs. The
-	// route a program arrived by decides the base — a dialect's
-	// syntax.Dialect.ExpandAliases, which the front end reads and hands here
-	// — and two things move the live one off it: `shopt -s expand_aliases`
+	// dialect decides the base — syntax.Dialect.AliasesExpandUnlessTold,
+	// which the front end reads and hands here — and two things move the live
+	// one off it: `shopt -s expand_aliases`
 	// in the one dialect with the name, and POSIX mode, which turns it on for
 	// as long as the mode lasts. Measured, and the reason leaving the mode
 	// restores the *base* rather than what was set before entering it: `shopt
 	// -s expand_aliases; set -o posix; set +o posix; shopt expand_aliases`
 	// answers `off` in bash 5.3.
+	//
+	// **This is the option and nothing else** — not the option modulated by
+	// the route the program arrived by, which is what it was until #2109.
+	// Measured 2026-09-12: the route governs the shell's own program text and
+	// nothing nested inside it, so an `eval`, a command substitution, a
+	// sourced file and a trap body under a zsh `-c` string all expand while
+	// the string itself does not. A runner that had been handed the route's
+	// answer turned the table off for all four.
 	//
 	// Plain bools, so a subshell clone carries its own copy: `(shopt -s
 	// expand_aliases)` is the subshell's business, the same as every other

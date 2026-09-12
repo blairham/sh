@@ -25,11 +25,18 @@ func Dialect() syntax.Dialect {
 	// which is how a prompt theme's scheduler closes the one it was handed.
 	// zsh alone — see the flag for what bash and ksh93 answer instead.
 	d.FdVariablePositional = true
-	// zsh does not expand under `-c` even with the option set.
-	// Measured 2026-09-05: `zsh -c 'alias hi=...; hi'` does not expand and
-	// the same two lines in a file, or on standard input, do. The route is
-	// the whole of the difference — nothing about the shell changes.
-	d.ExpandAliases = syntax.RouteFromScriptFile | syntax.RouteOnStandardInput
+	// zsh expands with nobody asking; `unsetopt aliases` is how it is turned
+	// off, and measured 2026-09-12 that option is the only gate on `eval`, a
+	// command substitution, a sourced file and a trap body alike — under a
+	// `-c` string as much as anywhere else.
+	d.AliasesExpandUnlessTold = true
+	// The shell's own program text is the one place the route matters, and
+	// the reason is not aliases: a `-c` string is read *whole* here — see
+	// Diagnostics.CommandStringParsedWhole — so the `alias` on line 1 has not
+	// run when line 2 is parsed. Measured 2026-09-11, `zsh -fc $'printf
+	// A\nif; then'` prints no A at all. This front end reads a command string
+	// a line at a time, so the route set is what stands in for that.
+	d.ExpandAliasesInProgramText = syntax.RouteFromScriptFile | syntax.RouteOnStandardInput
 	// And a body's newlines are lines of the program, as they are in the two
 	// that expand by every route.
 	d.AliasBodyCountsLines = true

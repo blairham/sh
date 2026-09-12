@@ -17997,6 +17997,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/a-substitution-uses-the-shells-aliases` | `v=SUB~w=BACK` | `v=~w=` **2>** `<script>: line 2: t: command not found~<script>: line 4: t: command not found` | `v=SUB~w=BACK` | `v=~w=` **2>** `<script>: line 2: t: command not found~<script>: line 4: t: command not found` | `v=SUB~w=BACK` | `v=SUB~w=BACK` |
 | `alias/a-trap-body-uses-the-shells-aliases` | `end~TRAP` | `end` **2>** `<script>: line 1: t: command not found` | `end~TRAP` | `end` **2>** `<script>: line 4: t: command not found` | `end~TRAP` | `end~TRAP` |
 | `alias/nested-text-expands-where-the-command-string-did-not` | `E~v=` **2>** `<shell>: 1: t: not found` | `v=` **2>** `<shell>: line 1: t: command not found~<shell>: line 1: t: command not found` | `E~v=` **2>** `<shell>: line 1: t: command not found` | `v=` **2>** `<shell>: t: command not found~<shell>: t: command not found` | `E~v=S` | `E~v=S` |
+| `alias/a-trap-body-under-a-command-string-expands-too` | `end~TRAP` | `end` **2>** `<shell>: line 1: t: command not found` | `end~TRAP` | `end` **2>** `<shell>: t: command not found` | `end~TRAP` | `end~TRAP` |
 | `alias/neither-kind-is-accepted-where-the-shell-has-not-got-it` | `ag=1~as=1~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=0~as=0~us=1` |
 | `alias/the-letters-alias-still-has-not-got` | `L=1~r=1~m=1` **2>** `alias: -L not found~alias: -r not found~alias: -m not found~alias: z* not found` | `L=2~r=2~m=2` **2>** `<shell>: line 1: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `L=2~r=2~m=2` **2>** `<shell>: line 1: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | `L=2~r=2~m=2` **2>** `<shell>: line 0: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 0: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 0: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]` | **2>** `alias: -L: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `L=0~r=0~m=0` |
 
@@ -18244,9 +18245,15 @@ grades it and nothing drift-checks it either, for the same reason.
   trap 't' EXIT
   echo end
   ```
-- `alias/nested-text-expands-where-the-command-string-did-not` — the row this shell does not pass yet, kept because it is the evidence: zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases — the option is the only gate, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. `Dialect.ExpandAliases` records the symptom; #2109 is the model
+- `alias/nested-text-expands-where-the-command-string-did-not` — zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases: the option is the only gate on a nested text, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. This is the row #2109 split `Dialect.ExpandAliases` in two for — one field held both the option's default and the route rule, and the front end derived the nested texts' answer from the route, which turned the table off for every `eval` and `$( )` under a zsh command string. The dash column is a *different* fault and still misses: that shell parses a substitution with the line that holds it, so its `$( )` here is read before the `alias` beside it has run — #2357
   ```sh
   alias t=echo; eval "t E"; v=$(t S); echo "v=$v"
+  ```
+- `alias/a-trap-body-under-a-command-string-expands-too` — the third door into the room the row above opens, and the one furthest from the `-c` string's own text: a trap action is read when it fires, so the table it reads is the shell's and not the route's. zsh writes TRAP here while refusing to expand the two lines that set it up, which is the whole of #2109 in one case — the route governs the program text and nothing nested inside it. `alias/a-trap-body-uses-the-shells-aliases` asks the same thing from a script file, where the route agrees with the option and so cannot tell them apart
+  ```sh
+  alias t=echo
+  trap 't TRAP' EXIT
+  echo end
   ```
 - `alias/neither-kind-is-accepted-where-the-shell-has-not-got-it` — the three refusals as a status each — the complaint discarded and the call in a subshell, so the one column where a bad option to a special builtin is fatal loses only the subshell. Written that way because it is the only shape that can grade the *letters* in the four columns that do not have them: the wording and the usage line under it are measured elsewhere and differ from ours in one column, so any row carrying that text disagrees there whatever the letters do, and could never notice one being wrongly accepted. Three statuses and three answers — 2, 1 and 0 — which is `alias` reading options at all, then reading them and having none, then having both
   ```sh
@@ -18283,6 +18290,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `invoke/c-with-s-unbundled` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `<shell>\|2\|name a` | `<shell>\|2\|name a` |
 | `invoke/c-before-s-names-the-operands` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `<shell>\|2\|name a` | `<shell>\|2\|name a` |
 | `invoke/c-with-s-and-no-operands` | `<shell>\|0\|` | `<shell>\|0\|` | `sh\|0\|` | `<shell>\|0\|` | `<shell>\|0\|` | `<shell>\|0\|` |
+| `invoke/standard-input-still-follows-the-command-string` | `FROM-C~LINE1~LINE2` | `FROM-C` | `FROM-C` | `FROM-C` | `FROM-C` | `FROM-C` |
+| `invoke/standard-input-follows-only-where-the-option-said-so` | `FROM-C` | `FROM-C` | `FROM-C` | `FROM-C` | `FROM-C` | `FROM-C` |
+| `invoke/the-command-string-and-what-follows-it-are-one-shell` | `c=[1] 0=NAME 1=a~in=[1] 0=NAME 1=a~BYE` | `c=[1] 0=NAME 1=a~BYE` | `c=[1] 0=NAME 1=a~BYE` | `c=[1] 0=NAME 1=a~BYE` | `c=[1] 0=<shell> 1=NAME~BYE` | `c=[1] 0=<shell> 1=NAME~BYE` |
 | `invoke/standard-input-that-is-not-a-terminal` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `invoke/the-program-arrives-on-standard-input` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[sh]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` |
 | `invoke/dash-s-makes-every-operand-a-parameter` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[sh]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` |
@@ -18393,7 +18403,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   echo hi
   ```
-- `invoke/c-outranks-standard-input` — -s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0
+- `invoke/c-outranks-standard-input` — -s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0. It is the *first* program that is unanimous, and only because this case leaves standard input closed — `invoke/standard-input-still-follows-the-command-string` gives it something to read and one shell goes on to read it (#625)
   ```sh
   echo "hi|$#"
   ```
@@ -18424,6 +18434,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `invoke/c-with-s-and-no-operands` — the same invocation with nothing for the two rules to disagree about: with no operand past the command string all four keep the shell's own name and no parameters, which is why the question is only asked where an operand follows
   ```sh
   echo "$0|$#|$*"
+  ```
+- `invoke/standard-input-still-follows-the-command-string` — the half of `-sc` that is not unanimous, and it read as unanimous because every case before this one left standard input closed. dash reads `-s` as still meaning *and then read standard input*, so it writes FROM-C and then LINE1 and LINE2 where the other five stop after the command string. The order the two letters are written in makes no difference to it — `-cs`, `-sc` and `-s -c` all go on (#625)
+  ```sh
+  echo FROM-C
+  ```
+- `invoke/standard-input-follows-only-where-the-option-said-so` — the control for the row above, and the reason this is the two options together rather than a rule about `-c`: with the same program waiting on standard input and no `-s`, every shell in the panel — dash included — stops after the command string
+  ```sh
+  echo FROM-C
+  ```
+- `invoke/the-command-string-and-what-follows-it-are-one-shell` — what the shell that goes on carries with it, which is everything: the variable the command string set, the `$0` and the parameters the invocation named, and one EXIT trap that fires once at the end of both halves rather than once per program. Five of the six never reach the second line at all, so their column is the command string alone and the trap firing after it — which is what makes the one that does reach it legible (#625)
+  ```sh
+  x=1; trap 'echo BYE' EXIT; echo "c=[$x] 0=$0 1=$1"
   ```
 - `invoke/standard-input-that-is-not-a-terminal` — the harness gives every child the null device for standard input, and the null device is a character device — which is exactly what made the prompt decision say terminal, ask it for raw mode, and exit 2 with `operation not supported by device` (#509). No shell in the panel prompts here: -s says read standard input, standard input ends at once, and the shell exits 0 having said nothing. Deliberately no placeholder — what is pinned is what a shell does before it reads anything, and the snippet is written down as the thing that would have run
   ```sh

@@ -421,30 +421,43 @@ are in no text at all, so a caller reading a program in pieces asks
 `Parser.LineShift` for them; counting newlines cannot find them, and
 without it the numbering resets at the first refill.
 
-### Which shells expand in a script
+### Two questions, and they were one field until #2109
+
+**The option: does this shell expand aliases with nobody having asked.**
+bash is the holdout and needs `shopt -s expand_aliases`; every other shell
+in the panel expands out of the box and turns it off with an option of its
+own — zsh's `unsetopt aliases`. `Dialect.AliasesExpandUnlessTold`.
+
+**The route: which routes' own program text expands, once the option has
+said there is anything to expand.** `Dialect.ExpandAliasesInProgramText`.
+
+They were one `ProgramRoutes` field, and the two readings it held were not
+the same thing: bash's empty set meant "off until asked" and zsh's partial
+set meant "not on this route". A front end that derived one answer from
+that field got both jobs wrong at once — see the section below.
 
 | shell | `-c` | script file | standard input |
 | --- | --- | --- | --- |
-| bash | no | no | no |
+| bash *(with the option on)* | yes | yes | yes |
 | bash as `sh` | yes | yes | yes |
 | dash | yes | yes | yes |
 | ksh93 | yes | yes | yes |
 | zsh | **no** | **yes** | **yes** |
 
-bash needs `shopt -s expand_aliases` and then expands by every route; the
-`no` row is bash without it. The same binary invoked as `sh` expands by
-every route with no `shopt` anywhere — POSIX mode turns alias expansion
-on for a non-interactive shell, which is why the panel runs bash twice.
-All of them expand interactively, which the front end decides rather than
-the grammar.
+Measured 2026-09-12 with the option turned on where the shell has it off
+by default: `bash -c $'shopt -s expand_aliases\nalias t=echo\nt TOP'`
+writes `TOP`, and so do the same three lines in a file and on standard
+input. The same binary invoked as `sh` expands by every route with no
+`shopt` anywhere — POSIX mode turns alias expansion on for a
+non-interactive shell, which is why the panel runs bash twice. All of them
+expand interactively, which the front end decides rather than the grammar.
 
-The table above is therefore the *base* and not the whole answer. Whether
-a word expands is a run-time switch on the runner that starts at what
-this table says for the route the program arrived by, and the two things
-that move it are `shopt -s`/`-u expand_aliases` and POSIX mode; leaving
-the mode restores the base rather than what was set before entering it.
-See `interp.Runner.ExpandingAlias`, which is the hook the front end hands
-the parser, and the `shopt/expand-aliases-*` corpus cases.
+The option is a run-time switch on the runner that starts at what
+`AliasesExpandUnlessTold` says, and the two things that move it are `shopt
+-s`/`-u expand_aliases` and POSIX mode; leaving the mode restores the base
+rather than what was set before entering it. See
+`interp.Runner.ExpandingAlias`, which is the hook the front end hands the
+parser, and the `shopt/expand-aliases-*` corpus cases.
 
 **zsh does not fit a boolean**, and this was measured rather than
 inferred: the answer depends on how the program arrived, not on whether
@@ -462,12 +475,23 @@ every shell reports `a` as not found. That measures same-line-versus-next
 line, which is what `alias/not-on-the-line-that-defines-it` covers. The
 route only shows itself when the `-c` string carries a real newline.
 
-So `Dialect.ExpandAliases` is a **set of routes**, `ProgramRoutes`, and
-the front end asks it with the route it read: a command string, a file,
-or standard input. That is the same three-way split `$0` already turns
-on, and for the same reason — how a program arrived is the front end's
-fact and nothing else knows it. The parser never reads *this* set;
-whoever knows the route hands the table of aliases in, or leaves it nil.
+So `Dialect.ExpandAliasesInProgramText` is a **set of routes**,
+`ProgramRoutes`, and the front end asks it with the route it read: a
+command string, a file, or standard input. That is the same three-way
+split `$0` already turns on, and for the same reason — how a program
+arrived is the front end's fact and nothing else knows it. The parser
+never reads *this* set; whoever knows the route hands the table of aliases
+in, or leaves it nil.
+
+**And the one cell in it is not really about aliases.** zsh reads a `-c`
+string *whole* before running any of it — `Diagnostics.CommandStringParsedWhole`,
+measured 2026-09-11 with `zsh -fc $'printf A\nif; then'`, which prints no
+`A` at all — so the `alias` on line 1 has not run when line 2 is parsed and
+nothing on the string can expand. This front end parses a command string a
+line at a time, so the route set is what stands in for the reading strategy.
+The `ash` column holds the same value and #2338 is the doubt about it: the
+probe it was recorded from was a one-liner, which the paragraph above
+explains dash answers identically while expanding on every route.
 
 It is no longer the only question of that shape. `CloseQuotesAtEOF` is a
 set of the same routes, and the parser does read that one: ksh93 ends an
@@ -497,7 +521,7 @@ that expand aliases in scripts:
 - **A value that is empty or all blanks leaves nothing behind**, and the
   command becomes whatever followed it.
 
-### The table reaches every text this shell reads
+### The table reaches every text this shell reads, and the *option* is its only gate
 
 Alias expansion is not a property of the *outermost* parse. Every place this
 shell reads shell source is a place an alias is expanded, measured 2026-09-11
@@ -528,6 +552,40 @@ the same either way.
 
 `$( )` is the route with no question attached: every column parses a
 substitution through before running it.
+
+**The route does not reach any of them**, which is #2109 and was measured
+2026-09-12 by asking the whole table under a zsh `-c` string — the one
+place where the route and the option disagree:
+
+```console
+$ zsh -fc $'alias t=echo\nt TOP'          # the program's own text
+zsh:2: command not found: t
+$ zsh -fc 'alias t=echo; eval "t E"'       # and everything nested in it
+E
+$ zsh -fc $'alias t=echo\nv=$(t S)\necho "v=$v"'
+v=S
+$ zsh -fc 'alias t=echo; . ./f.sh'         # f.sh holds `t hi-from-file`
+hi-from-file
+$ zsh -fc $'alias t=echo\ntrap "t TRAP" USR1\nkill -USR1 $$\nsleep 0.2'
+TRAP
+```
+
+`unsetopt aliases` turns all four off, which is what says the option is the
+gate. The same shape holds in bash: nothing nested expands until `shopt -s
+expand_aliases`, and everything does once it is on.
+
+Deriving the nested texts' answer from the route is what #2109 fixed. The
+front end handed the runner "the option modulated by the route", so a zsh
+`-c` string — which really does expand nothing of its own — turned the alias
+table off for every `eval`, `$( )`, `.` and trap body inside it. The runner's
+switch is now the option alone, and the route is the front end's own and
+decides one thing: whether the *program's* parser is handed a table at all.
+
+`alias/nested-text-expands-where-the-command-string-did-not` and
+`alias/a-trap-body-under-a-command-string-expands-too` are the corpus rows.
+One column of the first still misses, and for an unrelated reason: dash
+parses a command substitution with the line that holds it rather than when
+it runs, so its `$( )` there is read before the `alias` beside it — #2357.
 
 ### Three kinds of alias, and two namespaces
 

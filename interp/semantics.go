@@ -6630,6 +6630,51 @@ type Semantics struct {
 	// standard to break it is refused until a dialect chooses.
 	StdinOptionNamesTheOperands Answer
 
+	// StdinOptionSurvivesTheCommandString has a shell go on to read standard
+	// input as a *program* once the `-c` string has run, when `-s` was given
+	// as well.
+	//
+	// Measured 2026-09-12 with a scratch HOME:
+	//
+	//	$ printf 'echo LINE1\necho LINE2\n' | <shell> -sc 'echo FROM-C'
+	//
+	//	shell        writes
+	//	bash 5.3     FROM-C
+	//	bash 3.2     FROM-C
+	//	bash as sh   FROM-C
+	//	ksh93        FROM-C
+	//	zsh          FROM-C
+	//	dash         FROM-C, then LINE1, then LINE2
+	//
+	// So the unanimity recorded in #522 and #524 — that `-c` wins about where
+	// the program comes from — is about the *first* program. dash reads `-s`
+	// as still meaning "and then read standard input", and the order the two
+	// options are written in does not change it: `-cs`, `-sc` and `-s -c` all
+	// go on. Plain `-c` without `-s` stops after the string in all six, so
+	// this is the two options together.
+	//
+	// **One shell and one runner**, which is measured and is what makes this
+	// a second program rather than a second shell: a variable, an alias, a
+	// function, a `cd` and a `set -e` from the command string are all in
+	// effect for the standard-input half, `$0` and the positional parameters
+	// are the ones the command string was given, and a single EXIT trap fires
+	// at the very end. The half itself is the ordinary standard-input route —
+	// same diagnostics, same line numbers restarting at 1, same block reading
+	// — so nothing here is a third way of running a program.
+	//
+	// A bool rather than an Answer, and false is the majority: five of the
+	// six stop, and a Semantics nobody filled in should not reach for a
+	// descriptor it was not told to read.
+	//
+	// Also measured and deliberately unmodeled: an `exit` in the command
+	// string ends the shell with standard input unread, and a parse failure
+	// in the command string does too — both fall out of the shell having
+	// exited rather than needing a rule. A neighboring corner belongs with
+	// this one and is also unmodeled: `ksh -s +c CMD name a` runs nothing and
+	// reads standard input instead, so a minus-signed `-s` outranks a
+	// plus-signed `c` in ksh93 alone. docs/spec/invocation.md has it.
+	StdinOptionSurvivesTheCommandString bool
+
 	// PlusSignedCommandStringIsDollarZero gives a plus-signed command string
 	// `$0` for itself: `sh +c CMD name a` leaves `$0` as CMD and makes every
 	// operand a positional parameter, where the minus spelling would have

@@ -862,6 +862,50 @@
         "TimedOut": false
       }
     },
+    "alias/a-trap-body-under-a-command-string-expands-too": {
+      "bash": {
+        "Stdout": "end",
+        "Stderr": "\u003cshell\u003e: line 1: t: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "end~TRAP",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "end",
+        "Stderr": "\u003cshell\u003e: t: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "end~TRAP",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "end~TRAP",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "end~TRAP",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/a-trap-body-uses-the-shells-aliases": {
       "bash": {
         "Stdout": "end",
@@ -75487,6 +75531,94 @@
         "TimedOut": false
       }
     },
+    "invoke/standard-input-follows-only-where-the-option-said-so": {
+      "bash": {
+        "Stdout": "FROM-C",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "FROM-C",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "FROM-C",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "FROM-C",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "FROM-C",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "FROM-C",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/standard-input-still-follows-the-command-string": {
+      "bash": {
+        "Stdout": "FROM-C",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "FROM-C",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "FROM-C",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "FROM-C~LINE1~LINE2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "FROM-C",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "FROM-C",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/standard-input-that-is-not-a-terminal": {
       "bash": {
         "Stdout": "",
@@ -75525,6 +75657,50 @@
       },
       "zsh": {
         "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/the-command-string-and-what-follows-it-are-one-shell": {
+      "bash": {
+        "Stdout": "c=[1] 0=NAME 1=a~BYE",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "c=[1] 0=NAME 1=a~BYE",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "c=[1] 0=NAME 1=a~BYE",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "c=[1] 0=NAME 1=a~in=[1] 0=NAME 1=a~BYE",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "c=[1] 0=\u003cshell\u003e 1=NAME~BYE",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "c=[1] 0=\u003cshell\u003e 1=NAME~BYE",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

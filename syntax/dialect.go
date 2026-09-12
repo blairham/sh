@@ -1466,32 +1466,72 @@ type Dialect struct {
 	// they stay exactly what they are where it is off.
 	ParamTransformations bool
 
-	// ExpandAliases is the set of *non-interactive* routes this dialect
-	// expands an alias on. dash and ksh93 answer every route; bash answers
-	// none without `shopt -s expand_aliases`. All four expand interactively,
-	// which is the front end's to know rather than this — it is what decides
-	// there is a person at the keyboard.
+	// AliasesExpandUnlessTold is whether this shell expands aliases with
+	// nobody having asked it to. bash is the holdout and needs `shopt -s
+	// expand_aliases`; every other shell in the panel expands out of the box,
+	// and turns it off with an option of its own — zsh's `unsetopt aliases`.
 	//
-	// A set rather than a boolean because one answer is not a property of
-	// the shell at all. Measured 2026-09-05, the same two lines by all three
-	// routes:
+	// It is the **whole** gate on every text the shell reads that is not its
+	// own program: `eval`'s string, a command substitution's, a sourced
+	// file's, a trap body's. Measured 2026-09-12 under `-c`, with the alias
+	// defined on a line of its own so that the probe is not measuring the
+	// rule that an alias never expands on the line that defines it:
 	//
-	//	shell   -c    script file   standard input
-	//	bash    no    no            no
-	//	dash    yes   yes           yes
-	//	ksh93   yes   yes           yes
-	//	zsh     no    yes           yes
+	//	shell        eval  $( )  .  trap
+	//	bash          no    no   no  no
+	//	bash +shopt  yes   yes   —   —
+	//	bash as sh   yes   yes  yes   —
+	//	dash         yes   yes  yes  yes
+	//	ksh93        yes   yes  yes  yes
+	//	zsh          yes   yes  yes  yes
 	//
-	// A boolean gets one of zsh's three right and the two it gets wrong are
-	// the ones a real script uses. The same measurement found bash in POSIX
-	// mode splitting the other way — `sh -c` expands and `sh script.sh` does
-	// not — so the route is a dimension of the question rather than one
-	// shell's quirk.
+	// A one-liner is the trap here, and it caught the earlier measurement of
+	// this and the one behind ash's route set (#2338): `sh -c 'alias t=echo;
+	// t X'` answers `t: not found` in *every* shell, because the alias has
+	// not run when the line holding its use is parsed. Two lines, or nothing
+	// is being measured.
+	//
+	// **Not a route set.** That is what ExpandAliasesInProgramText below is,
+	// and separating them is #2109: one field holding both made bash's "off
+	// until asked" indistinguishable from zsh's "not under `-c`", and the
+	// front end derived the nested texts' answer from the same value — so a
+	// zsh `-c` string, which really does not expand its own text, turned the
+	// alias table off for every `eval` and `$( )` inside it as well.
+	AliasesExpandUnlessTold bool
+
+	// ExpandAliasesInProgramText is the set of *non-interactive* routes on
+	// which the shell's **own program text** expands an alias, when
+	// AliasesExpandUnlessTold has said there is anything to expand. All the
+	// shells expand interactively, which is the front end's to know rather
+	// than this — it is what decides there is a person at the keyboard.
+	//
+	// Measured 2026-09-12, the same two lines by all three routes, with the
+	// option turned on where the shell has it off by default:
+	//
+	//	shell        -c    script file   standard input
+	//	bash        yes    yes           yes
+	//	bash as sh  yes    yes           yes
+	//	dash        yes    yes           yes
+	//	ksh93       yes    yes           yes
+	//	zsh         *no*   yes           yes
+	//
+	// **One cell, and it is zsh's.** The row is not really about aliases:
+	// zsh reads a `-c` string *whole* before running any of it — see
+	// Diagnostics.CommandStringParsedWhole — so the `alias` on line 1 has not
+	// run when line 2 is parsed, and nothing on the string can expand. The
+	// route set stands in for that here because this front end parses a
+	// command string a line at a time and would otherwise expand where zsh
+	// does not.
+	//
+	// ash holds the same value and #2338 is the doubt about it: the probe it
+	// was recorded from was a one-liner, which dash — recorded as expanding
+	// on every route — answers exactly the same way. Left as measured rather
+	// than changed on a guess; there is no BusyBox here to ask.
 	//
 	// Whether a word *is* expanded, and into what, is not a dialect question:
 	// every shell that expands agrees on the whole algorithm, so that is the
 	// core's behavior and lives in alias.go.
-	ExpandAliases ProgramRoutes
+	ExpandAliasesInProgramText ProgramRoutes
 
 	// AliasBodyCountsLines counts the newlines inside a substituted alias
 	// body as lines of the input, so that every later line shifts by one per

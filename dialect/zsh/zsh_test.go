@@ -24,14 +24,21 @@ func parses(t *testing.T, src string) bool {
 }
 
 func TestGrammar(t *testing.T) {
-	// The route decides: measured 2026-09-05, `zsh -c` leaves an alias
-	// alone and a script file and standard input both expand it. The prompt
-	// is a fourth question and the front end answers it.
-	if got, want := zsh.Dialect().ExpandAliases, syntax.RouteFromScriptFile|syntax.RouteOnStandardInput; got != want {
-		t.Errorf("ExpandAliases = %v, want %v", got, want)
+	// The option is on with nobody asking, which is what gates every nested
+	// text: measured 2026-09-12, an `eval`, a substitution, a sourced file
+	// and a trap body all expand under a `-c` string that expands nothing of
+	// its own.
+	if !zsh.Dialect().AliasesExpandUnlessTold {
+		t.Error("AliasesExpandUnlessTold = false, want true")
 	}
-	if !zsh.Dialect().ExpandAliases.Has(syntax.RouteFromScriptFile) ||
-		zsh.Dialect().ExpandAliases.Has(syntax.RouteFromCommandString) {
+	// And the program text is where the route decides: `zsh -c` leaves an
+	// alias alone and a script file and standard input both expand it. The
+	// prompt is a fourth question and the front end answers it.
+	if got, want := zsh.Dialect().ExpandAliasesInProgramText, syntax.RouteFromScriptFile|syntax.RouteOnStandardInput; got != want {
+		t.Errorf("ExpandAliasesInProgramText = %v, want %v", got, want)
+	}
+	if !zsh.Dialect().ExpandAliasesInProgramText.Has(syntax.RouteFromScriptFile) ||
+		zsh.Dialect().ExpandAliasesInProgramText.Has(syntax.RouteFromCommandString) {
 		t.Error("the two routes that differ are what the set is for")
 	}
 	// The length may carry an operator here, and this shell is the only one

@@ -83,11 +83,18 @@ func Dialect() syntax.Dialect {
 	// `for ; do :; done` and `for "i" in a; …` are both `bad for loop
 	// variable`.
 	d.ForNonWordIsANameError = true
-	// Aliases expand in a script and on standard input and *not* under `-c`:
-	// `ash -c 'alias foo=echo; foo'` answers `foo: not found`, while the same
-	// two lines in a file and piped in both expand. dash expands on every
-	// route, which is the measured split between the two siblings.
-	d.ExpandAliases = syntax.RouteFromScriptFile | syntax.RouteOnStandardInput
+	// Aliases expand with nobody asking, as they do in dash: `alias foo=echo`
+	// on one line and `foo` on the next expands in a file and on standard
+	// input, and there is no option to turn on.
+	d.AliasesExpandUnlessTold = true
+	// The route set is kept exactly as it was recorded, and **it is in
+	// doubt** — see #2338. The probe it came from was `ash -c 'alias
+	// foo=echo; foo'`, one line, and an alias never expands on the line that
+	// defines it, so dash answers that probe the same way while expanding on
+	// every route. The two-line probe is the one that would settle it, and
+	// there is no BusyBox here to run it. Left as measured rather than
+	// changed on a guess.
+	d.ExpandAliasesInProgramText = syntax.RouteFromScriptFile | syntax.RouteOnStandardInput
 	// And a body's newlines are input lines, the answer three of the four
 	// existing dialects give.
 	d.AliasBodyCountsLines = true

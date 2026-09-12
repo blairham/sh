@@ -16,24 +16,6 @@
 // a line, a token or a path from a fetched file: those are another project's
 // expression, CLEANROOM.md's red list covers them, and the carve-out this
 // stands on is a carve-out for running a suite rather than for reading one.
-//
-// # -own: our own suite, the same grader
-//
-// `make suite` runs this with -own, over the files committed under
-// share/suite. It is the same instrument and deliberately so: a column there
-// is a suite.Suite with Ours set and its files on disk instead of in an
-// archive, and it is graded by the same suite.Sweep, against the same
-// reference shell, with the same three numbers. Nothing in -own mode computes
-// a score of its own. A second scorer that drifted from the first is a
-// failure this repository has made before.
-//
-// Two things do differ, and both follow from whose files they are. Ours are
-// committed and Apache-2.0, so the report names the cases that failed — a
-// report that would not say which of our own cases to go and fix is not a
-// work list. And core/ runs in every column, so -own additionally asks
-// whether the reference shells themselves all wrote the same bytes: that is
-// the common-denominator claim in docs/spec/shell-matrix.md turned into a
-// measurement rather than an assertion.
 package main
 
 import (
@@ -66,14 +48,7 @@ func main() {
 		only = flag.String("only", "",
 			"comma-separated file names to run, for working on the harness itself")
 		panel = flag.Bool("panel", false, "print the panel of columns and stop")
-		own   = flag.Bool("own", false,
-			"grade our own committed suite instead of a fetched one, every column at once")
-		ownRoot = flag.String("root", suite.OurRoot,
-			"where our own suite lives in the tree")
-		ownBins = binSet{}
 	)
-	flag.Var(ownBins, "own-bin",
-		"in -own mode, a dialect binary to grade: dialect=path, repeated")
 	flag.Parse()
 
 	if *panel {
@@ -83,13 +58,6 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	if *own {
-		if code := runOwn(ctx, *ownRoot, ownBins, *timeout, *jobs, *only); code != 0 {
-			os.Exit(code)
-		}
-		return
-	}
 
 	if code := run(ctx, *dialect, *bin, *buildDir, *timeout, *jobs, *refetch, *only); code != 0 {
 		os.Exit(code)
@@ -113,11 +81,6 @@ func run(ctx context.Context, dialect, bin, buildDir string, timeout time.Durati
 	}
 	if bin == "" {
 		fmt.Fprintln(os.Stderr, "suitecheck: -bin is required: the dialect binary to grade")
-		return 2
-	}
-	bin, err := suite.Shell(bin)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "suitecheck: -bin: %v\n", err)
 		return 2
 	}
 
@@ -224,10 +187,6 @@ func printReport(rep suite.Report) {
 
 	fmt.Printf("  not scored       %d unstable · %d oracle hung · %d dialect hung\n",
 		rep.Unstable, rep.OracleHung, rep.DialectHung)
-	if rep.OracleFailed+rep.DialectFailed > 0 {
-		fmt.Printf("                   %d oracle · %d dialect never started at all\n",
-			rep.OracleFailed, rep.DialectFailed)
-	}
 	fmt.Println("                   unstable: the oracle did not repeat itself, so the file is")
 	fmt.Println("                     evidence about neither shell — a pid, a clock, an order.")
 	fmt.Println("                   oracle hung: a harness fault. The shell that wrote the file")

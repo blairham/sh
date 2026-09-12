@@ -29,7 +29,8 @@ const aliasProgram = "alias hi='echo aliased'\nhi\n"
 func aliasShell(routes syntax.ProgramRoutes) driver.Shell {
 	sh := shell()
 	d := syntax.Core()
-	d.ExpandAliases = routes
+	d.AliasesExpandUnlessTold = true
+	d.ExpandAliasesInProgramText = routes
 	sh.Dialect = d
 	sem := interp.CoreSemantics()
 	sem.AliasParsesOptions = interp.No

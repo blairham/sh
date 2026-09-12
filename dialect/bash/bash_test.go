@@ -26,11 +26,17 @@ func parses(t *testing.T, src string) bool {
 }
 
 func TestGrammar(t *testing.T) {
-	// Expands on no route at all without `shopt -s expand_aliases`, which
-	// is not modeled: measured on all three. The prompt is a different
-	// question and the front end answers it.
-	if got, want := bash.Dialect().ExpandAliases, syntax.RouteOnNoRoute; got != want {
-		t.Errorf("ExpandAliases = %v, want %v", got, want)
+	// The panel's holdout: nothing expands without `shopt -s expand_aliases`.
+	// The prompt is a different question and the front end answers it.
+	if bash.Dialect().AliasesExpandUnlessTold {
+		t.Error("AliasesExpandUnlessTold = true, want false")
+	}
+	// And once the option is on, the program text expands by every route —
+	// measured 2026-09-12 with the option set, under `-c`, from a file and on
+	// standard input. An empty set here would say the shell has a rule about
+	// routes, which it has not (#2109).
+	if got, want := bash.Dialect().ExpandAliasesInProgramText, syntax.RouteOnEveryRoute; got != want {
+		t.Errorf("ExpandAliasesInProgramText = %v, want %v", got, want)
 	}
 	// And a body's newlines are *not* lines of the program: this shell
 	// alone leaves the whole of an expanded body on the alias word's

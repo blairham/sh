@@ -1415,7 +1415,7 @@ func (r *Runner) arithSpanValue(s syntax.Span) (string, bool) {
 		r.expandErr = true
 		return "", false
 	}
-	tree, perr := r.arithTree(s.Arith, s.Value)
+	tree, text, perr := r.arithTreeOver(s.Arith, s.Value)
 	if perr != nil {
 		// A failure to *read* the expression, which can only happen once
 		// it has been expanded — so it is reported here rather than by
@@ -1426,7 +1426,7 @@ func (r *Runner) arithSpanValue(s syntax.Span) (string, bool) {
 	}
 	v, err := r.evalNum(tree)
 	if err != nil {
-		r.diagf("%s\n", r.arithFailure(s.Value, err))
+		r.diagf("%s\n", r.arithFailure(text, err))
 		// The command must not run: `echo $((1/0))` fails in every shell
 		// in the panel rather than echoing an empty string.
 		r.expandErr = true

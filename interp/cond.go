@@ -328,10 +328,14 @@ func (r *Runner) condOperand(w *syntax.Word) string {
 // the expression parser has no primary to offer for nothing at all, so the
 // case is answered before it is asked.
 func (r *Runner) condArith(text string) (int, error) {
-	text = strings.TrimSpace(text)
-	if text == "" {
+	if strings.TrimSpace(text) == "" {
 		return 0, nil
 	}
+	// Asked of the trimmed text and read from the untrimmed one: the answer
+	// for an all-blank operand is zero, and everything else is an expression
+	// whose complaint quotes the text as the condition held it. Reading the
+	// trimmed text instead lost ksh93's blanks — ` 1/0 : divide by zero`
+	// against `1/0: divide by zero` (#2010).
 	p := syntax.NewParser("", r.dialect())
 	tree := p.ParseArithFor(text, syntax.Pos{})
 	if perr := p.Err(); perr != nil {

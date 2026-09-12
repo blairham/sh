@@ -126,7 +126,7 @@ func (r *Runner) padFlagged(e *syntax.ParamExpr, words []string) ([]string, bool
 // it is a **measured gap** here rather than something reproduced: a width this
 // side cannot serve is an allocation neither shell can serve.
 func (r *Runner) padWidth(text string) (int, bool) {
-	tree, perr := r.arithTree(nil, text)
+	tree, text, perr := r.arithTreeOver(nil, text)
 	if perr != nil {
 		// A failure to *read* the expression, which can only happen once it
 		// has been expanded, so it is reported here rather than by the

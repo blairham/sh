@@ -2762,6 +2762,13 @@ func splitForArith(text string) (string, string, string) {
 	for len(parts) < 3 {
 		parts = append(parts, "")
 	}
+	// Trimmed, and that costs one blank in one diagnostic: bash quotes a
+	// failing part back as it was written, so `for (( $x ;;))` with
+	// x=`echo hi` is `((: echo hi : …` there and `((: echo hi: …` here. The
+	// blanks are not kept because the tree is also what the printer reads,
+	// and a header printed from untrimmed parts comes back with the blanks
+	// doubled — see syntax/printroundtrip_test.go, whose promise is that
+	// printing a program gives the same program.
 	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), strings.TrimSpace(parts[2])
 }
 

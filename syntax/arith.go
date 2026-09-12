@@ -153,6 +153,19 @@ func (n *ArithUnary) arithNode() {}
 type ArithBinary struct {
 	Op   string
 	X, Y ArithExpr
+	// YStart is the byte offset, within the expression's own text, where the
+	// right operand was written — after the operator and after the blanks
+	// behind it.
+	//
+	// It is here because the tree cannot answer the question a diagnostic
+	// asks. A shell that blames a division by zero blames the *divisor as
+	// written*, parentheses and sign included — `1/((0))` names `((0))` and
+	// `1/-0` names `-0` — and the tree records what an operand is rather than
+	// the characters it was spelled with, so a parenthesised divisor has no
+	// text of its own to name and a signed one has the wrong text. Searching
+	// the expression for the operand's leaf text answers neither, and answers
+	// `0/0` with the dividend. The offset is the only thing that does.
+	YStart int
 }
 
 func (n *ArithBinary) Pos() Pos   { return n.X.Pos() }
@@ -651,6 +664,7 @@ func (a *arithParser) assign() ArithExpr {
 			if op == "=" && a.has("==") {
 				break
 			}
+			at := a.off
 			if a.take(op) {
 				if sub.Empty {
 					// An assignment *target* with nothing between the
@@ -665,7 +679,7 @@ func (a *arithParser) assign() ArithExpr {
 				}
 				v := a.assign()
 				if v == nil {
-					a.failArith(ErrArithOperandEnd, op)
+					a.failArith(ErrArithOperandEnd, a.src[at:])
 					return nil
 				}
 				return &ArithAssign{Name: name, Index: sub.Index, Sub: sub.Text, Op: op, Value: v, Start: start}
@@ -725,13 +739,16 @@ func (a *arithParser) binary(level int) ArithExpr {
 		if op == "" {
 			return x
 		}
+		at := a.off
 		a.off += len(op)
+		a.space()
+		yStart := a.off
 		y := a.binary(level + 1)
 		if y == nil {
-			a.failArith(ErrArithOperandEnd, op)
+			a.failArith(ErrArithOperandEnd, a.src[at:])
 			return x
 		}
-		x = &ArithBinary{Op: op, X: x, Y: y}
+		x = &ArithBinary{Op: op, X: x, Y: y, YStart: yStart}
 	}
 }
 
@@ -762,15 +779,18 @@ func (a *arithParser) power() ArithExpr {
 		return nil
 	}
 	a.space()
+	at := a.off
 	if !a.dial.ArithExponent || !a.take("**") {
 		return x
 	}
+	a.space()
+	yStart := a.off
 	y := a.power()
 	if y == nil {
-		a.failArith(ErrArithOperandEnd, "**")
+		a.failArith(ErrArithOperandEnd, a.src[at:])
 		return x
 	}
-	return &ArithBinary{Op: "**", X: x, Y: y}
+	return &ArithBinary{Op: "**", X: x, Y: y, YStart: yStart}
 }
 
 func (a *arithParser) unary() ArithExpr {
@@ -790,11 +810,12 @@ func (a *arithParser) unary() ArithExpr {
 		}
 		return &ArithUnary{Op: op, X: x, Start: start}
 	case a.has("+"), a.has("-"), a.has("~"), a.has("!"):
+		at := a.off
 		op := a.src[a.off : a.off+1]
 		a.off++
 		x := a.unary()
 		if x == nil {
-			a.failArith(ErrArithOperandEnd, op)
+			a.failArith(ErrArithOperandEnd, a.src[at:])
 			return nil
 		}
 		return &ArithUnary{Op: op, X: x, Start: start}

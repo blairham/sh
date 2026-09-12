@@ -346,6 +346,11 @@ var reservedWords = map[string]bool{
 	"for": true, "while": true, "until": true, "do": true, "done": true,
 	"case": true, "in": true, "esac": true, "{": true, "}": true,
 	"function": true, "select": true, "time": true,
+	// `!` is one too, and it was missing. It shows only where a refusal
+	// names it — a second `!` in a dialect that will not toggle them — and
+	// the shell that draws the class distinction quotes it there:
+	// `` "!" unexpected `` in dash, against `word unexpected` for a name.
+	"!": true,
 }
 
 // atReservedWord reports whether the current token is one of the words the
@@ -403,6 +408,30 @@ func (p *Parser) atListEnd() bool {
 		return true
 	}
 	return p.atStopWord()
+}
+
+// bareNegationStandsHere reports whether a `!` that has just been read may be
+// the whole of the pipeline, the dialect's reach deciding where.
+//
+// The end of input is in every accepting set, and it is in this one flag
+// rather than behind a route question the way [Dialect.OpenEndedAndOr]'s is:
+// `!` at the end of a `-c` string and at the end of a script file answer
+// alike in all three shells that take it, measured 2026-09-12. What a
+// *terminal* does with it has not been measured, and nothing here depends on
+// it — a bare `!` is a finished pipeline either way, where an and-or ending
+// on its operator is a line a shell may still be waiting to complete.
+func (p *Parser) bareNegationStandsHere() bool {
+	terminator := p.at(TokSemi) || p.at(TokNewline) || p.at(TokEOF)
+	switch p.dialect.BareNegationReach {
+	case BareNegationBeforeATerminator:
+		return terminator || p.at(TokAmp)
+	case BareNegationWhereAListEnds:
+		return terminator || p.atListEnd() || p.at(TokAndAnd) || p.at(TokOrOr)
+	case BareNegationAtEitherPlace:
+		return terminator || p.at(TokAmp) || p.atListEnd() ||
+			p.at(TokAndAnd) || p.at(TokOrOr)
+	}
+	return false
 }
 
 // tokenText names a token the way a diagnostic should: the word itself when
@@ -1214,8 +1243,31 @@ func (p *Parser) parsePipeline() Expr {
 		pl.Negated = true
 		pl.Bang = p.tok.Pos
 		p.next()
+		// Each further `!` inverts the one before it where the dialect says
+		// so, which is why one flag on the tree is enough: an even count is
+		// no negation and an odd one is a single negation, measured.
+		for p.dialect.RepeatedNegationToggles && p.atWord("!") {
+			pl.Negated = !pl.Negated
+			p.next()
+		}
 		if p.dialect.TimeKeyword && p.atWord("time") {
 			return p.parseTime(true, pl.Bang)
+		}
+		if p.atWord("!") {
+			// A second one, where the dialect does not toggle. It is a
+			// reserved word standing where a command belongs and the panel
+			// names it: `` "!" unexpected `` in dash and ``parse error near
+			// `!'`` in zsh, both of which quote it rather than calling it a
+			// word.
+			p.failUnexpected("")
+			return pl
+		}
+		if p.bareNegationStandsHere() {
+			// A pipeline with no commands in it. Nothing runs and the
+			// negation inverts a success, so the status is 1 — which is what
+			// the three shells that take the line answer, whatever `$?` held
+			// before it. See Dialect.BareNegationReach.
+			return pl
 		}
 	}
 	// A bar is recorded while the command after it is being looked for, so
@@ -1226,6 +1278,16 @@ func (p *Parser) parsePipeline() Expr {
 		cmd := p.parseCommand()
 		if cmd == nil {
 			if len(pl.Cmds) == 0 {
+				if pl.Negated && p.err == nil {
+					// A `!` was read and nothing the dialect will let it
+					// stand in front of came after it. Returning nil here
+					// swallowed the `!` outright and left an empty program,
+					// so `dash -c '!'` exited 0 where that shell says
+					// `` end of file unexpected `` — the refusal names what
+					// it found, which is this token.
+					p.failUnexpected("")
+					return pl
+				}
 				return nil
 			}
 			// The token that stopped it is named, not the bar behind it.

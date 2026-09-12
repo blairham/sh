@@ -307,7 +307,13 @@ func (p *printer) expr(e Expr) {
 		p.expr(x.Y)
 	case *Pipeline:
 		if x.Negated {
-			p.str("! ")
+			p.str("!")
+			if len(x.Cmds) > 0 {
+				// A negation with no pipeline after it is the whole
+				// command, so there is nothing for a blank to separate it
+				// from and a trailing one would not reparse the same.
+				p.str(" ")
+			}
 		}
 		for i, c := range x.Cmds {
 			if i > 0 {

@@ -124,6 +124,63 @@ const (
 	CaseBraceBodyMixesWithTheKeyword
 )
 
+// BareNegationReach is how far a `!` written with no pipeline after it may
+// stand. See [Dialect.BareNegationReach].
+//
+// A place rather than a bool, for the reason [SeparatorSkip] is one: the three
+// shells that take a bare `!` draw its boundary in three different sets, and a
+// single yes/no could not be given a value for any of them without accepting
+// lines another refuses.
+//
+// Measured 2026-09-12, `env -i PATH=/usr/bin:/bin` with a scratch HOME, over
+// `-c` and a script file alike. `st=` is what `echo "st=$?"` printed after it.
+//
+//	after the `!`      dash   bash 3.2   bash 5.3   bash as sh   ksh93   zsh
+//	`;`                error  error      st=1       st=1         st=1    st=1
+//	a newline          error  error      st=1       st=1         st=1    st=1
+//	the end of input   error  error      st=1       st=1         st=1    st=1
+//	`&`                error  error      st=0       st=0         runs    error
+//	`)` of a subshell  error  error      error      error        st=1    st=1
+//	`}` of a group     error  error      error      error        runs    runs
+//	`;;` of a case arm error  error      error      error        st=1    st=1
+//	`&&`               error  error      error      error        runs    runs
+//	`||`               error  error      error      error        runs    runs
+//	`|`                error  error      error      error        error   error
+//
+// bash-as-`sh` follows bash 5.3 and not bash 3.2, which #948 suspected might
+// be POSIX mode rather than the version. It is the version: `bash --posix -c
+// '!'` answers 1 on the same binary.
+type BareNegationReach uint8
+
+const (
+	// NoBareNegation is the core answer: a `!` needs a pipeline after it.
+	// dash and bash 3.2.
+	NoBareNegation BareNegationReach = iota
+
+	// BareNegationBeforeATerminator takes a `!` that a statement terminator
+	// or the end of input follows — `;`, a newline, `&`, EOF — and nothing
+	// else. bash 5.3 and that binary as `sh`: `{ ! ; echo "st=$?"; }` prints
+	// `st=1` there where `{ ! }`, `( ! )` and `! && echo two` are all
+	// refused.
+	BareNegationBeforeATerminator
+
+	// BareNegationWhereAListEnds takes it where the *list* ends instead —
+	// a closer, a `case` terminator, or an and-or operator whose right-hand
+	// side is where the `!` stood — as well as before `;`, a newline and the
+	// end of input. Not before `&`, which is the one row that separates this
+	// from the value below: zsh refuses `! & echo x` and takes `( ! )`,
+	// where bash 5.3 does the opposite of both.
+	//
+	// The `&` exception is the same boundary [Dialect.OpenEndedAndOr] has in
+	// that shell, where `true || & b` is a parse error and `( true || )`
+	// runs.
+	BareNegationWhereAListEnds
+
+	// BareNegationAtEitherPlace takes both sets, which is ksh93: it is the
+	// union rather than a third rule, and every row above says so.
+	BareNegationAtEitherPlace
+)
+
 // Dialect says which constructs the lexer accepts.
 //
 // Fields are named for the construct rather than for the shell that wants it,
@@ -146,6 +203,39 @@ type Dialect struct {
 	// here would silently pick one meaning for text that legitimately has
 	// two.
 	AmpersandRedirect bool
+
+	// BareNegationReach says where a `!` written with no pipeline after it
+	// may stand, and how far the shell will look for one.
+	//
+	// It is a *pipeline with no commands*, which is the reading the status
+	// settles: `true; !` and `false; !` both answer 1 wherever the line is
+	// taken, so nothing ran and a success was inverted. It is not "the `!`
+	// negates the next line's pipeline", which #948 read it as — that would
+	// make `! ⏎ echo x; echo "st=$?"` print `st=1`, and it prints `st=0` in
+	// all three shells that take the line.
+	//
+	// The values carry the measurements; see [BareNegationReach].
+	BareNegationReach BareNegationReach
+
+	// RepeatedNegationToggles lets a pipeline carry more than one `!`, each
+	// inverting the one before it.
+	//
+	// bash 5.3, that binary as `sh`, and ksh93. Measured 2026-09-12, and it
+	// really is a toggle rather than an idempotent mark:
+	//
+	//	! ! true    st=0     ! ! false   st=1
+	//	! ! !       st=1     ! ! ! true  st=1
+	//	! !         st=0
+	//
+	// dash and zsh refuse a second `!` outright, which is what makes this a
+	// question of its own rather than part of [Dialect.BareNegationReach]:
+	// zsh takes a bare `!` and refuses `! !`, so a dialect answering one
+	// answers nothing about the other.
+	//
+	// The tree carries one flag and not a count, which the toggle is what
+	// permits: an even number of them is no negation and an odd number is
+	// one, so `! ! !` and `!` are the same program and print back the same.
+	RepeatedNegationToggles bool
 
 	// PipeBothStreams enables `|&`, a pipe that carries the left command's
 	// standard error along with its standard output. Measured identical to

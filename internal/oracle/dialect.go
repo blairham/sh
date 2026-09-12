@@ -28,6 +28,17 @@ func Dialect() syntax.Dialect {
 	// HeredocEndsAtClosingParen below: the grammar that has to *read* every
 	// case is the one that takes the construct.
 	d.DollarBracketArith = true
+	// `!` with no pipeline after it, and a second `!` that toggles the first.
+	// Three of the six take a bare negation and three take the toggle, in two
+	// different groupings, so the widest reading here would be
+	// BareNegationAtEitherPlace — and it is deliberately **not** taken. This
+	// dialect is the one SyntaxError names, so a case it reads is a case the
+	// printer has to write back; the two rows recording a bare `!` at a
+	// *closer* and before an and-or are refusals in this column and stay
+	// refusals, exactly as the three empty-body rows do above. The
+	// terminator reading is bash's, which is the column the flag answers for.
+	d.BareNegationReach = syntax.BareNegationBeforeATerminator
+	d.RepeatedNegationToggles = true
 	// `;;&` — the case-continue cases.
 	d.CaseContinue = true
 	// `;|` — the same terminator spelled zsh's way, which no shell has

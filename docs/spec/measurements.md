@@ -6428,6 +6428,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/andor-left-to-right-success` | `A` | `A` | `A` | `A` | `A` | `A` |
 | `cmd/andor-left-to-right-failure` | `B` | `B` | `B` | `B` | `B` | `B` |
 | `cmd/bang-negates-the-pipeline` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `cmd/a-negation-with-no-pipeline` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | `st=1` | `st=1` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `true; !; echo "st=$?"'` *(status 2)* | `st=1` | `st=1` |
+| `cmd/a-negation-with-no-pipeline-after-a-failure` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | `st=1` | `st=1` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `false; !; echo "st=$?"'` *(status 2)* | `st=1` | `st=1` |
+| `cmd/a-negation-with-no-pipeline-at-a-closer` | **2>** `<shell>: 1: Syntax error: ")" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `( ! ); echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `( ! ); echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `)'~<shell>: -c: line 0: `( ! ); echo "st=$?"'` *(status 2)* | `st=1` | `st=1` |
+| `cmd/a-negation-with-no-pipeline-before-an-and-or` | **2>** `<shell>: 1: Syntax error: "\|\|" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|\|'~<shell>: -c: line 1: `! \|\| echo two'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|\|'~<shell>: -c: line 1: `! \|\| echo two'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `\|\|'~<shell>: -c: line 0: `! \|\| echo two'` *(status 2)* | `two` | `two` |
+| `cmd/a-negation-with-no-pipeline-before-a-bar` **(refusal)** | **2>** `<shell>: 1: Syntax error: "\|" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `! \| cat'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `! \| cat'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `\|'~<shell>: -c: line 0: `! \| cat'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `\|' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `\|'` *(status 1)* |
+| `cmd/a-repeated-negation-toggles` | **2>** `<shell>: 1: Syntax error: "!" unexpected` *(status 2)* | `st=1` | `st=1` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `!'~<shell>: -c: line 0: `! ! false; echo "st=$?"'` *(status 2)* | `st=1` | **2>** `<shell>:1: parse error near `!'` *(status 1)* |
 | `cmd/pipeline-status-is-last` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `cmd/pipeline-status-is-last-failing` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
 | `cmd/redirect-before-command-name` | `[hi]` | `[hi]` | `[hi]` | `[hi]` | `[hi]` | `[hi]` |
@@ -6945,6 +6951,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cmd/bang-negates-the-pipeline` — the pipeline's status is false's, so ! yields 0; binding ! to true alone would give 1
   ```sh
   ! true | false; echo "st=$?"
+  ```
+- `cmd/a-negation-with-no-pipeline` — a `!` written with no pipeline after it. Three of the six take it and answer 1 — the negation of a success, since nothing ran — and dash and bash 3.2 refuse the line. The `true` in front is what makes the status a measurement rather than an accident: a shell that dropped the `!` and carried the previous status through would print `st=0` here
+  ```sh
+  true; !; echo "st=$?"
+  ```
+- `cmd/a-negation-with-no-pipeline-after-a-failure` — the other half of the pair, and the one that says the answer is a fixed 1 rather than an inversion of what came before: a shell inverting `$?` would print `st=0`. Both rows are 1 wherever the line parses
+  ```sh
+  false; !; echo "st=$?"
+  ```
+- `cmd/a-negation-with-no-pipeline-at-a-closer` — how far the `!` may look for its pipeline, which splits the three accepting shells: two of them take it where a *list* ends — a closer, a `case` terminator, an and-or operator — and the third takes only a statement terminator and refuses this. Without this row a single flag would have been given a value for all three
+  ```sh
+  ( ! ); echo "st=$?"
+  ```
+- `cmd/a-negation-with-no-pipeline-before-an-and-or` — the same reach at the other position it reaches: where an and-or's right-hand side belongs. Two shells run `two` and the rest refuse the `||`, which is the same pair as the row above and is what says the two positions are one answer rather than two
+  ```sh
+  ! || echo two
+  ```
+- `cmd/a-negation-with-no-pipeline-before-a-bar` **(refusal)** — the discriminating half, refused by all six: whatever a shell will let a bare `!` stand in front of, a bar is not it. A reach written for operators in general would take this line in three columns that reject it. Graded on the refusal because the six word it six ways
+  ```sh
+  ! | cat
+  ```
+- `cmd/a-repeated-negation-toggles` — a second `!` inverts the first rather than being refused or ignored. Three of the six answer 1 here and 0 for the same line with `true`, so it is a toggle; dash and zsh refuse a second `!` outright, which is what makes this a separate question from whether a bare `!` may stand at all — zsh has that one and not this
+  ```sh
+  ! ! false; echo "st=$?"
   ```
 - `cmd/pipeline-status-is-last` — a pipeline reports its last command, not its first failure
   ```sh

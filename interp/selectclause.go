@@ -60,6 +60,14 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 			return nil
 		}
 
+		// The header, once, for the dialect that reprints one — and nothing
+		// for the other two, which is what the empty name says: bash traces
+		// `+ select x in a b` above the menu and prints it no more, where
+		// zsh and ksh93 print nothing for the construct at all and zsh's
+		// per-iteration assignment line, which a `for` loop gets, has no
+		// counterpart here. Measured 2026-09-12 with two replies: one header
+		// line and two bodies.
+		r.traceForIteration(c.Header, "", "")
 		// A loop, the same way `repeat` is one: zsh names `select` among
 		// the loops a `break` may be in, and the count is what says so.
 		defer r.enteringLoop()()

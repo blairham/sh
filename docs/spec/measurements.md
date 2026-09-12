@@ -8811,6 +8811,25 @@ grades it and nothing drift-checks it either, for the same reason.
 | `xtrace/append-assignment-keeps-its-operator` | **2>** `+ x=1~+ x+=b~<shell>: 1: x+=b: not found` *(status 127)* | **2>** `+ x=1~+ x+=b` | **2>** `+ x=1~+ x+=b` | **2>** `+ x=1~+ x+=b` | **2>** `+ x=1~+ x+=b` | **2>** `+<shell>:1> x=1 ~+<shell>:1> x+=b ` |
 | `xtrace/disabling-set-diverges` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` | `done` **2>** `+<shell>:1> set +x` |
 | `xtrace/compound-header-diverges` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+<shell>:1> i=1~+<shell>:1> echo 1~+<shell>:1> i=2~+<shell>:1> echo 2` |
+| `xtrace/condition-is-traced` | **2>** `+ [[ -n abc ]]~<shell>: 1: [[: not found` *(status 127)* | **2>** `+ [[ -n abc ]]` | **2>** `+ [[ -n abc ]]` | **2>** `+ [[ -n abc ]]` | **2>** `+ [[ -n abc ]]` | **2>** `+<shell>:1> [[ -n abc ]]` |
+| `xtrace/condition-line-count-diverges` | **2>** `+ [[ -n a~<shell>: 1: [[: not found` *(status 127)* | **2>** `+ [[ -n a ]]~+ [[ -n b ]]~+ [[ -n c ]]` | **2>** `+ [[ -n a ]]~+ [[ -n b ]]~+ [[ -n c ]]` | **2>** `+ [[ -n a ]]~+ [[ -n b ]]~+ [[ -n c ]]` | **2>** `+ [[ -n a ]]~+ [[ -n b ]]~+ [[ -n c ]]` | **2>** `+<shell>:1> [[ -n a && -n b && -n c ]]` |
+| `xtrace/condition-short-circuit-is-not-traced` | **2>** `+ [[ -n a~<shell>: 1: [[: not found~+ -n b ]]~<shell>: 1: -n: not found~+ [[ -z a~<shell>: 1: [[: not found` *(status 127)* | **2>** `+ [[ -n a ]]~+ [[ -z a ]]` *(status 1)* | **2>** `+ [[ -n a ]]~+ [[ -z a ]]` *(status 1)* | **2>** `+ [[ -n a ]]~+ [[ -z a ]]` *(status 1)* | **2>** `+ [[ -n a ]]~+ [[ -z a ]]` *(status 1)* | **2>** `+<shell>:1> [[ -n a ]]~+<shell>:1> [[ -z a ]]` *(status 1)* |
+| `xtrace/condition-group-and-negation` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | **2>** `+ [[ ! -z a ]]~+ [[ -n b ]]` | **2>** `+ [[ ! -z a ]]~+ [[ -n b ]]` | **2>** `+ [[ ! -z a ]]~+ [[ -n b ]]` | **2>** `+ [[ ! -z a ]]~+ [[ -n b ]]` | **2>** `+<shell>:1> [[ ! -z a && -n b ]]` |
+| `xtrace/condition-operand-quoting-diverges` | **2>** `+ x=a b~+ [[ a b == a b ]]~<shell>: 1: [[: not found` *(status 127)* | **2>** `+ x='a b'~+ [[ a b == a b ]]` | **2>** `+ x='a b'~+ [[ a b == a b ]]` | **2>** `+ x='a b'~+ [[ a b == \a\ \b ]]` | **2>** `+ x='a b'~+ [[ 'a b' == 'a b' ]]` | **2>** `+<shell>:1> x='a b' ~+<shell>:1> [[ 'a b' == a\ b ]]` |
+| `xtrace/condition-pattern-keeps-its-escapes` | **2>** `+ p=a*~+ [[ abc == a* ]]~<shell>: 1: [[: not found~+ [[ abc == a* ]]~<shell>: 1: [[: not found` *(status 127)* | **2>** `+ p='a*'~+ [[ abc == a* ]]~+ [[ abc == a* ]]` | **2>** `+ p='a*'~+ [[ abc == a* ]]~+ [[ abc == a* ]]` | **2>** `+ p='a*'~+ [[ abc == a* ]]~+ [[ abc == a* ]]` | **2>** `+ p='a*'~+ [[ abc == a* ]]~+ [[ abc == a* ]]` | **2>** `+<shell>:1> p='a*' ~+<shell>:1> [[ abc == a\* ]]~+<shell>:1> [[ abc == a* ]]` |
+| `xtrace/condition-empty-operand-is-quoted` | **2>** `+ [[ -z  ]]~<shell>: 1: [[: not found` *(status 127)* | **2>** `+ [[ -z '' ]]` | **2>** `+ [[ -z '' ]]` | **2>** `+ [[ -z '' ]]` | **2>** `+ [[ -z '' ]]` | **2>** `+<shell>:1> [[ -z '' ]]` |
+| `xtrace/condition-regex-operator-diverges` | **2>** `+ [[ abc =~ ^a.c$ ]]~<shell>: 1: [[: not found` *(status 127)* | **2>** `+ [[ abc =~ ^a.c$ ]]` | **2>** `+ [[ abc =~ ^a.c$ ]]` | **2>** `+ [[ abc =~ ^a.c$ ]]` | **2>** `+ [[ abc == ~(E)^a.c\$ ]]` | **2>** `+<shell>:1> [[ abc -regex-match ^a.c$ ]]` |
+| `xtrace/arithmetic-command-is-traced` | **2>** `+ n=3~+ n + 1~<shell>: 1: n: not found` *(status 127)* | **2>** `+ n=3~+ ((  n + 1  ))` | **2>** `+ n=3~+ ((  n + 1  ))` | **2>** `+ n=3~+ ((  n + 1  ))` | **2>** `+ n=3~+ (( n + 1 ))` | **2>** `+<shell>:1> n=3 ~+<shell>:1> ((  n + 1  ))` |
+| `xtrace/arithmetic-spelling-diverges` | **2>** `+ n=1~+ n~<shell>: 1: n: not found~+ n~<shell>: 1: n: not found` *(status 127)* | **2>** `+ n=1~+ (( n ))~+ ((  n  ))` | **2>** `+ n=1~+ (( n ))~+ ((  n  ))` | **2>** `+ n=1~+ (( n ))~+ ((  n  ))` | **2>** `+ n=1~+ ((n))~+ (( n ))` | **2>** `+<shell>:1> n=1 ~+<shell>:1> (( n ))~+<shell>:1> ((  n  ))` |
+| `xtrace/arithmetic-traces-the-expanded-text` | **2>** `+ n=3~+ 3 + 1~<shell>: 1: 3: not found` *(status 127)* | **2>** `+ n=3~+ ((  3 + 1  ))` | **2>** `+ n=3~+ ((  3 + 1  ))` | **2>** `+ n=3~+ ((  3 + 1  ))` | **2>** `+ n=3~+ (( 3 + 1 ))` | **2>** `+<shell>:1> n=3 ~+<shell>:1> ((  3 + 1  ))` |
+| `xtrace/for-arithmetic-parts-are-traced` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | **2>** `+ (( i=0 ))~+ (( i<2 ))~+ :~+ (( i++ ))~+ (( i<2 ))~+ :~+ (( i++ ))~+ (( i<2 ))` | **2>** `+ (( i=0 ))~+ (( i<2 ))~+ :~+ (( i++ ))~+ (( i<2 ))~+ :~+ (( i++ ))~+ (( i<2 ))` | **2>** `+ (( i=0 ))~+ (( i<2 ))~+ :~+ (( i++ ))~+ (( i<2 ))~+ :~+ (( i++ ))~+ (( i<2 ))` | **2>** `+ ((i=0))~+ ((i<2))~+ :~+ ((i++))~+ ((i<2))~+ :~+ ((i++))~+ ((i<2))` | **2>** `+<shell>:1> i=0~+<shell>:1> i<2~+<shell>:1> :~+<shell>:1> i++~+<shell>:1> i<2~+<shell>:1> :~+<shell>:1> i++~+<shell>:1> i<2` |
+| `xtrace/case-header-diverges` | **2>** `+ x=abc~+ :` | **2>** `+ x=abc~+ case $x in~+ :` | **2>** `+ x=abc~+ case $x in~+ :` | **2>** `+ x=abc~+ case $x in~+ :` | **2>** `+ x=abc~+ :` | **2>** `+<shell>:1> x=abc ~+<shell>:1> case abc (ab \| abc)~+<shell>:1> :` |
+| `xtrace/case-arms-tried-are-traced` | **2>** `+ :` | **2>** `+ case c in~+ :` | **2>** `+ case c in~+ :` | **2>** `+ case c in~+ :` | **2>** `+ :` | **2>** `+<shell>:1> case c (a)~+<shell>:1> case c (b)~+<shell>:1> case c (c)~+<shell>:1> :` |
+| `xtrace/case-arm-patterns-are-not-expanded-past-the-match` | **2>** `+ echo a~+ :` | **2>** `+ case a in~++ echo a~+ :` | **2>** `+ case a in~++ echo a~+ :` | **2>** `+ case a in~++ echo a~+ :` | **2>** `+ echo b~+ echo a~+ :` | **2>** `+<shell>:1> case a (+zsh:1> echo a~+<shell>:1> case a (a)~+<shell>:1> :` |
+| `xtrace/loop-and-branch-headers-are-not-traced` | **2>** `+ i=0~+ [ 0 -lt 1 ]~+ i=1~+ [ 1 -lt 1 ]~+ [ 1 -gt 0 ]~+ true~+ :` | **2>** `+ i=0~+ '[' 0 -lt 1 ']'~+ i=1~+ '[' 1 -lt 1 ']'~+ '[' 1 -gt 0 ']'~+ true~+ :` | **2>** `+ i=0~+ '[' 0 -lt 1 ']'~+ i=1~+ '[' 1 -lt 1 ']'~+ '[' 1 -gt 0 ']'~+ true~+ :` | **2>** `+ i=0~+ '[' 0 -lt 1 ']'~+ i=1~+ '[' 1 -lt 1 ']'~+ '[' 1 -gt 0 ']'~+ true~+ :` | **2>** `+ i=0~+ [ 0 -lt 1 ]~+ i=1~+ [ 1 -lt 1 ]~+ [ 1 -gt 0 ]~+ true~+ :` | **2>** `+<shell>:1> i=0 ~+<shell>:1> [ 0 -lt 1 ']'~+<shell>:1> i=1 ~+<shell>:1> [ 1 -lt 1 ']'~+<shell>:1> [ 1 -gt 0 ']'~+<shell>:1> true~+<shell>:1> :` |
+| `xtrace/select-header-diverges` | **2>** `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | **2>** `+ select x in a b~1) a~2) b~#? ` *(status 1)* | **2>** `+ select x in a b~1) a~2) b~#? ` *(status 1)* | **2>** `+ select x in a b~1) a~2) b~#? ` *(status 1)* | **2>** `+ 0< /dev/null~1) a~2) b` *(status 1)* | **2>** `1) a  2) b  ~?# ` |
+| `xtrace/function-definition-is-not-traced` | **2>** `+ f~+ :` | **2>** `+ f~+ :` | **2>** `+ f~+ :` | **2>** `+ f~+ :` | **2>** `+ f~+ :` | **2>** `+<shell>:1> f~+f:0> :` |
+| `xtrace/subshell-and-group-are-not-traced` | **2>** `+ :~+ :` | **2>** `+ :~+ :` | **2>** `+ :~+ :` | **2>** `+ :~+ :` | **2>** `+ :~+ :` | **2>** `+<shell>:1> :~+<shell>:1> :` |
 | `xtrace/pipeline-order-diverges` **(unordered)** | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ cat~+ echo a` | `a` **2>** `+<shell>:1> echo a~+<shell>:1> cat` |
 | `nounset/unset-variable-is-an-error` | **2>** `<script>: 2: NOPE: parameter not set` *(status 2)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: parameter not set` *(status 1)* | **2>** `<script>:2: NOPE: parameter not set` *(status 1)* |
 | `shopt/nullglob-empties-a-miss` | `zz*zz~done` | `~done` | `~done` | `~done` | `zz*zz~done` | **2>** `<shell>:1: no matches found: zz*zz` *(status 1)* |
@@ -9013,6 +9032,82 @@ grades it and nothing drift-checks it either, for the same reason.
 - `xtrace/compound-header-diverges` — three answers, not two: dash and ksh93 print only the commands inside, bash reprints the header as written once per iteration, and zsh prints neither but shows the assignment the iteration made
   ```sh
   set -x; for i in 1 2; do echo $i; done
+  ```
+- `xtrace/condition-is-traced` — the row #2126 is about: every shell that has `[[ ]]` traces it, and this one traced nothing at all. A trace that silently drops a whole command *kind* cannot be read backwards, which is the only way anybody uses one — the gap in gitstatus's own xtrace log was read here as a function returning early, and the diagnosis built on it was wrong. dash has no `[[ ]]`, so it reads the words as an ordinary command, traces them as one and then cannot find `[[` — the column that says what it lacks is the construct and not the tracing
+  ```sh
+  set -x; [[ -n abc ]]
+  ```
+- `xtrace/condition-line-count-diverges` — how many lines one condition is worth, and the panel splits two ways: bash and ksh93 write a line per primary as they evaluate it, zsh writes one line for the whole condition once it is finished. Three primaries rather than two is what separates the readings from a shell that simply prints the source — Diagnostics.TraceCondition
+  ```sh
+  set -x; [[ -n a && -n b && -n c ]]
+  ```
+- `xtrace/condition-short-circuit-is-not-traced` — both readings print only what was *evaluated*: the right-hand operand of a satisfied `||` and of a failed `&&` appears in no column. That is what makes the trace evidence about the run rather than an echo of the script — a line holding the whole condition would say `-n b` ran when it did not, which is the same wrong reading as a missing line and harder to notice
+  ```sh
+  set -x; [[ -n a || -n b ]]; [[ -z a && -n b ]]
+  ```
+- `xtrace/condition-group-and-negation` — the two operators that are not primaries, and they go opposite ways: a `( )` group is dropped by every shell that traces the construct, and a `!` prints with the primary it negates rather than on a line of its own. So the parentheses are not part of what is written down and the negation is
+  ```sh
+  set -x; [[ ( ! -z a ) && -n b ]]
+  ```
+- `xtrace/condition-operand-quoting-diverges` — the one place bash uses two renderings for the same value: `echo "$x"` traces `echo 'a b'` and this traces `[[ a b == a b ]]`, where ksh93 quotes in both places and zsh quotes the left operand and backslash-escapes the right — and bash 3.2 escapes every character of it, `\a\ \b`, which is a fourth answer with no dialect here to hold it. Diagnostics.TraceConditionQuoting is the field, and it is separate from TraceQuoting because one shell answers the two differently. The remaining half — zsh's `a\ b` and ksh93's `'a b'` on the *pattern* side — is recorded here and not modeled: the pattern is printed from the string the matcher was handed, which is the next row
+  ```sh
+  set -x; x="a b"; [[ $x == "a b" ]]
+  ```
+- `xtrace/condition-pattern-keeps-its-escapes` — the same two characters traced two ways in one run, and the reason the pattern operand is printed from the matcher's string rather than from a quoted value: bash traces `a*` for both lines, because an expansion there *is* a pattern in bash, and zsh traces `a\*` then `a*`, because there it is not. The backslash is the trace saying which characters were live — the one fact a reader of the line cannot get anywhere else. Printing it costs nothing, where re-expanding the word to quote it would run a substitution in it twice (#1915). ksh93 prints `a*` on both lines as well, and this row cannot say which reading that is: it quotes rather than escapes, and a pattern with nothing to quote looks the same under either. Where its answer separates is `xtrace/condition-operand-quoting-diverges`, and that half is recorded rather than modeled
+  ```sh
+  set -x; p='a*'; [[ abc == $p ]]; [[ abc == a* ]]
+  ```
+- `xtrace/condition-empty-operand-is-quoted` — unanimous, and not what the quoting answer gives on its own: `[[ -z '' ]]` in bash, bash 3.2, ksh93 and zsh alike, including in the shell that quotes nothing else in this position. An operand rendered as nothing would leave `[[ -z ]]`, which is a condition no shell would accept — a trace line that cannot be pasted back is a trace line that misreports
+  ```sh
+  set -x; [[ -z "" ]]
+  ```
+- `xtrace/condition-regex-operator-diverges` — the operator itself is rewritten by two of the three: bash prints `=~` as written, zsh prints `-regex-match` and ksh93 prints `== ~(E)…`, so the traced line is in each shell's own vocabulary rather than the script's. Recorded and not modeled — the operator as written is bash's answer and the one a reader of the script recognizes, and a table of three spellings for one operator would be decoration nothing else reads
+  ```sh
+  set -x; [[ abc =~ ^a.c$ ]]
+  ```
+- `xtrace/arithmetic-command-is-traced` — the second kind #2126 asked about and the second one missing: `(( ))` is traced by every shell that has it. dash has no arithmetic command and reads the line as nested subshells, which is the column that says so
+  ```sh
+  set -x; n=3; (( n + 1 ))
+  ```
+- `xtrace/arithmetic-spelling-diverges` — two spellings of one expression in one run, which is what separates the two readings: bash and zsh write `(( ` and ` ))` around the text, so a header already carrying spaces comes out with two, and ksh93 reprints the text between the parentheses and adds nothing. Written with both a tight and a spaced source because either alone is ambiguous — Diagnostics.TraceArithCommand
+  ```sh
+  set -x; n=1; ((n)); (( n ))
+  ```
+- `xtrace/arithmetic-traces-the-expanded-text` — unanimous among the three that have the construct: the line holds `3 + 1` and not `$n + 1`, so the trace is written from the string the evaluator was handed rather than from the source. It is also what makes printing it free — the expansion has already happened, and expanding again to print would run a substitution in the expression twice
+  ```sh
+  set -x; n=3; (( $n + 1 ))
+  ```
+- `xtrace/for-arithmetic-parts-are-traced` — the loop header the issue asked about, and the one place a shell contradicts its own `(( ))` spelling: bash writes `(( i=0 ))`, ksh93 writes `((i=0))`, and zsh writes `i=0` bare — the same shell that wraps a `(( ))` command in spaced parentheses. Which is why TraceArithForPart is a field of its own. No column prints the header itself once per pass; this shell did, and also wrote `=''` every iteration, because the list loop's per-iteration line was being borrowed by a loop that binds no name
+  ```sh
+  set -x; for ((i=0;i<2;i++)); do :; done
+  ```
+- `xtrace/case-header-diverges` — three answers, the shape `for` divides into: dash and ksh93 print nothing, bash prints `case $x in` once as written and before the subject is expanded, and zsh prints `case abc (ab | abc)` — the expanded subject and the arm's patterns — once per arm it tries. Diagnostics.TraceCaseHeader
+  ```sh
+  set -x; x=abc; case $x in ab|abc) : ;; esac
+  ```
+- `xtrace/case-arms-tried-are-traced` — the half of zsh's answer that is information rather than decoration: one line per arm *tried*, stopping at the one that matched, so the line count says how far down the arms the subject got. Four arms and three lines, which is the point — the fourth is below the match and contributes nothing, where a shell printing the arms it *has* would write four. bash's single header cannot say it and the other two say nothing at all, which is why a reader of a third-party zsh trace can follow a dispatch and a reader of a bash one cannot
+  ```sh
+  set -x; case c in a) : ;; b) : ;; c) : ;; d) : ;; esac
+  ```
+- `xtrace/case-arm-patterns-are-not-expanded-past-the-match` — the row that says the arm line is built as the match goes rather than up front: zsh traces `case a (a)` and runs only the first substitution, where a shell that expanded the arm's patterns to print them would run the second as well and show `(a | b)` for a match the second pattern took no part in. Not unanimous as a behavior, which is what makes the trace worth having here — dash, both bashes and zsh stop at the pattern that matched, and ksh93 expands the whole arm *and does it right to left*, running `echo b` before `echo a`. Only the column that prints the patterns shows which of the two a shell did
+  ```sh
+  set -x; case a in $(echo a)|$(echo b)) : ;; esac
+  ```
+- `xtrace/loop-and-branch-headers-are-not-traced` — the other half of the sweep #2126 asked for, and the answer is that there is nothing to fix: no shell in the panel prints a `while`, `until` or `if` header, only the commands of the condition and the body. That makes the rule for a reader of a trace exact — a conditional loop is recognizable by its condition repeating and by nothing else — and it is worth a row rather than a silence, because "nobody traces it" and "we do not trace it" are indistinguishable without one
+  ```sh
+  set -x; i=0; while [ $i -lt 1 ]; do i=1; done; until [ $i -gt 0 ]; do :; done; if true; then :; fi
+  ```
+- `xtrace/select-header-diverges` — the menu loop takes the `for` header's answer and only half of it: bash reprints `select x in a b`, and zsh — which writes the *assignment* an ordinary `for` pass made — writes nothing here, because a pass of this loop binds its name from a reply rather than from the list. So the shell with a per-iteration line has none, and the shell with a header has one. Redirected from /dev/null so the menu ends at once and the row records the trace rather than a prompt; and the header is written once above the menu, not once per reply
+  ```sh
+  set -x; select x in a b; do break; done < /dev/null
+  ```
+- `xtrace/function-definition-is-not-traced` — a definition is invisible in every column and the call is not, which is the last of the kinds #2126 asked about and the only one where the answer is unanimous silence. Worth a row because it is the shape most easily mistaken for the bug: a script whose functions are all defined at the top traces nothing for its first fifty lines, and that gap is correct
+  ```sh
+  set -x; f() { :; }; f
+  ```
+- `xtrace/subshell-and-group-are-not-traced` — the same finding for the two bracketing commands: `( )` and `{ }` are invisible in every column, which is consistent with the depth counting bash does — a subshell adds no level to the trace prefix either, because nothing is being read again. So a trace says what ran and never how deeply it was nested, in every shell
+  ```sh
+  set -x; ( : ); { :; }
   ```
 - `xtrace/pipeline-order-diverges` **(unordered)** — ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 41 runs in 400 come out the other way. Nor is that ksh93's alone, which is what the row looked like until every column was counted rather than the loudest one: bash 5 reorders 5 times in 200, bash 3.2 once in 400 and zsh once in 200, so four of the six columns were seen to answer both ways and only dash held still. A pipeline's elements are separate processes and nothing sequences their trace points, so the order is the scheduler's and not the shell's — a fact about how the trace is emitted rather than about anything measured against it
   ```sh

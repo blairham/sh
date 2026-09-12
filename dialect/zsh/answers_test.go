@@ -139,6 +139,23 @@ func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 	if got, want := d.TraceForHeader, interp.TraceForAssign; got != want {
 		t.Errorf("TraceForHeader = %v, want %v", got, want)
 	}
+	if got, want := d.TraceCaseHeader, interp.TraceCaseArm; got != want {
+		t.Errorf("TraceCaseHeader = %v, want %v", got, want)
+	}
+	if got, want := d.TraceCondition, interp.TraceCondWhole; got != want {
+		t.Errorf("TraceCondition = %v, want %v", got, want)
+	}
+	if got, want := d.TraceConditionQuoting, interp.QuoteShell; got != want {
+		t.Errorf("TraceConditionQuoting = %v, want %v", got, want)
+	}
+	// The two arithmetic sites disagree in this dialect alone: a `(( ))`
+	// command keeps its parentheses and a `for ((;;))` part does not.
+	if got, want := d.TraceArithCommand, interp.TraceArithSpaced; got != want {
+		t.Errorf("TraceArithCommand = %v, want %v", got, want)
+	}
+	if got, want := d.TraceArithForPart, interp.TraceArithBare; got != want {
+		t.Errorf("TraceArithForPart = %v, want %v", got, want)
+	}
 	if got, want := d.Location, interp.LocationTightLine; got != want {
 		t.Errorf("Location = %v, want %v", got, want)
 	}

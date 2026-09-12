@@ -1375,7 +1375,13 @@ func (r *Runner) octalLeadingZero() bool {
 func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
 		r.unspecified = false
-		tree, perr := r.arithTree(c.Parsed, c.Expr)
+		tree, text, perr := r.arithTreeOver(c.Parsed, c.Expr)
+		// Traced from the expanded text and after the expansion, which is
+		// where the shells put it: `(( $(echo 1) ))` traces the substitution
+		// first and then `((  1  ))`. Before the parse, so an expression that
+		// will not parse is still reported as having been reached — a trace
+		// that skips what failed is the gap #2126 is about.
+		r.traceArithCommand(text, r.diag().TraceArithCommand)
 		if perr != nil {
 			r.diagf("%s\n", r.diag().arithConstructFailure("((", r.diag().ParseFailure(perr)))
 			r.status = r.arithCmdFailed(r.diag().StatusForParseError(perr))

@@ -1539,6 +1539,8 @@ type Runner struct {
 	traceOnce *sync.Once
 	// xtrace is `set -x`: every simple command is printed before it runs.
 	xtrace bool
+	// condTrace is the `[[ … ]]` being traced, or nil. See condTrace.
+	condTrace *condTrace
 	// nounset is `set -u`: expanding an unset parameter is an error.
 	nounset bool
 	// errexit is `set -e`: a command that fails ends the script.

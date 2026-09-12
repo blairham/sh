@@ -1188,7 +1188,15 @@ func Diagnostics() interp.Diagnostics {
 		Location:                interp.LocationLineWordAfterFirst,
 		TraceQuoting:            interp.QuoteDollar,
 		TraceArrayLiteral:       interp.TraceArraySpaced,
-		ScriptLocation:          interp.LocationLineWord,
+		// The same quoting inside a condition as outside it, which is where
+		// this shell parts from bash: `[[ "a b" == "a b" ]]` traces
+		// `[[ 'a b' == 'a b' ]]` here and `[[ a b == a b ]]` there.
+		TraceConditionQuoting: interp.QuoteDollar,
+		// `((n))` and `(( n + 1 ))`: the text between the parentheses, with
+		// nothing added. bash and zsh add a space on each side.
+		TraceArithCommand: interp.TraceArithTight,
+		TraceArithForPart: interp.TraceArithTight,
+		ScriptLocation:    interp.LocationLineWord,
 		// At a prompt this shell names no line at all — see
 		// withPromptWordings, where the sentences it writes there are
 		// measured. The location is already name-only for line 1 under `-c`;

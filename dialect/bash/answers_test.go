@@ -156,6 +156,23 @@ func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 	if got, want := d.TraceForHeader, interp.TraceForSource; got != want {
 		t.Errorf("TraceForHeader = %v, want %v", got, want)
 	}
+	if got, want := d.TraceCaseHeader, interp.TraceCaseSource; got != want {
+		t.Errorf("TraceCaseHeader = %v, want %v", got, want)
+	}
+	if got, want := d.TraceCondition, interp.TraceCondPrimary; got != want {
+		t.Errorf("TraceCondition = %v, want %v", got, want)
+	}
+	// The one place this dialect uses two renderings for one value: a
+	// command's word is quoted and a condition's operand is not.
+	if got, want := d.TraceConditionQuoting, interp.QuoteNever; got != want {
+		t.Errorf("TraceConditionQuoting = %v, want %v", got, want)
+	}
+	if got, want := d.TraceArithCommand, interp.TraceArithSpaced; got != want {
+		t.Errorf("TraceArithCommand = %v, want %v", got, want)
+	}
+	if got, want := d.TraceArithForPart, interp.TraceArithSpaced; got != want {
+		t.Errorf("TraceArithForPart = %v, want %v", got, want)
+	}
 	if got, want := d.Location, interp.LocationLineWord; got != want {
 		t.Errorf("Location = %v, want %v", got, want)
 	}

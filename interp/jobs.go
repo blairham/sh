@@ -628,6 +628,12 @@ func (r *Runner) waitFor(j *Job) (status int, sig syscall.Signal, interrupted, s
 	// only waiter, so blocking on the process is not racing anything.
 	r.waitOutPolledJob(j)
 	giveUp := r.stoppedJobEndsAWait(j)
+	if r.unspecified {
+		// The axis went unanswered and this shell has said so. Waiting after
+		// that would be picking one of the two answers anyway — and the one
+		// that can wait for ever.
+		return 0, 0, false, false
+	}
 	if giveUp != nil && r.noticeStoppedJob(j) {
 		// Already standing stopped when the wait was asked for, which is the
 		// ordinary shape: a script stops a job and then waits for it.
@@ -714,6 +720,9 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 	if len(args) == 0 {
 		for _, j := range r.jobs {
 			_, sig, hit, stopped := r.waitFor(j)
+			if r.unspecified {
+				return r.status
+			}
 			if hit {
 				// The jobs are left alone: the wait did not finish, so a
 				// later `wait` still has them to wait for.
@@ -762,6 +771,9 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		for _, j := range r.jobs {
 			if j.PID == pid {
 				st, sig, hit, stopped := r.waitFor(j)
+				if r.unspecified {
+					return r.status
+				}
 				if hit {
 					return r.interruptedWaitStatus(sig, true)
 				}
@@ -896,6 +908,9 @@ func (r *Runner) waitJobSpec(spec string) int {
 	switch code {
 	case jobFound:
 		st, sig, hit, stopped := r.waitFor(j)
+		if r.unspecified {
+			return r.status
+		}
 		if hit {
 			// The wait did not finish, so the job is not finished with
 			// either and stays in the table for the next one.

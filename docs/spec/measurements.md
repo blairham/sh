@@ -2860,6 +2860,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `jobs/dash-r-lists-the-running-ones` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -r` | `[1]+  Running                    sleep 0.4 &~st=0` | `[1]+  Running                    sleep 0.4 &~st=0` | `[1]+  Running                 sleep 0.4 &~st=0` | `st=2` **2>** `<shell>: jobs: -r: unknown option~Usage: jobs [-lnp] [job ...]` | `[1]  + running    sleep 0.4~st=0` |
 | `jobs/dash-s-is-a-letter-two-shells-do-not-have` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -s` | `st=0` | `st=0` | `st=0` | `st=2` **2>** `<shell>: jobs: -s: unknown option~Usage: jobs [-lnp] [job ...]` | `st=0` |
 | `jobs/an-option-no-shell-has` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -Q` | `st=2` **2>** `<shell>: line 1: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: line 1: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: line 0: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: jobs: -Q: unknown option~Usage: jobs [-lnp] [job ...]` | `st=1` **2>** `<shell>:jobs:1: bad option: -Q` |
+| `jobs/a-signal-number-joined-to-kill-s-option` | `st=2 said=1` | `st=0 said=0` | `st=0 said=0` | `st=1 said=1` | `st=0 said=0` | `st=1 said=2` |
+| `jobs/a-signal-name-joined-to-kill-s-option` | `st=0 said=0` | `st=0 said=0` | `st=0 said=0` | `st=1 said=1` | `st=0 said=0` | `st=1 said=2` |
+| `jobs/a-signal-name-joined-to-kill-n-option` | `st=2` **2>** `<shell>: 1: kill: Illegal option -n` | `st=1` **2>** `<shell>: line 1: kill: nKILL: invalid signal specification` | `st=1` **2>** `<shell>: line 1: kill: nKILL: invalid signal specification` | `st=1` **2>** `<shell>: line 0: kill: nKILL: invalid signal specification` | `st=2` **2>** `Usage: kill [-lL] [-n signum] [-s signame] job ...~   Or: kill [ options ] -l [arg ...]` | `st=1` **2>** `<shell>:kill:1: unknown signal: SIGNKILL~<shell>:kill:1: type kill -L for a list of signals` |
+| `jobs/a-signal-number-joined-to-kill-s-option-is-not-read` | `st=0` | `st=1` **2>** `<shell>: line 1: kill: s9: invalid signal specification` | `st=1` **2>** `<shell>: line 1: kill: s9: invalid signal specification` | `st=1` **2>** `<shell>: line 0: kill: s9: invalid signal specification` | `st=0` | `st=1` **2>** `<shell>:kill:1: unknown signal: SIGS9~<shell>:kill:1: type kill -L for a list of signals` |
+| `jobs/wait-for-a-stopped-job-under-the-monitor` | `st=0` | `st=145` | `st=145` | `st=0` **2>** `[1]-  Done                    sleep 0.8~[2]+  Done                    { sleep 0.4; kill -CONT $p; }` | `st=0` | *(no output, status 1)* |
+| `jobs/a-stopped-background-job-in-the-listing` | `[1] - Running                    ` | `[1]+  Stopped                    sleep 0.8` | `[1]+  Stopped(SIGSTOP)           sleep 0.8` | `[1]-  Running                 sleep 0.8 &` | `[1] + Stopped (SIGSTOP)        <command unknown>` | *(no output, status 1)* |
 | `jobs/a-subshell-and-the-parents-jobs` | `no jobs` | `no jobs` | `no jobs` | `no jobs` | `the parent's job` | `no jobs` |
 | `jobs/a-pipeline-element-and-the-parents-jobs` | `no jobs` | `the parent's job` | `the parent's job` | `the parent's job` | `the parent's job` | `no jobs` |
 | `jobs/a-group-in-a-pipeline-and-the-parents-jobs` | `no jobs` | `no jobs` | `no jobs` | `no jobs` | `the parent's job` | `no jobs` |
@@ -3496,6 +3502,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `jobs/an-option-no-shell-has` — the refusal itself: four wordings, two of them with a usage line naming the letters that shell really does have, and 2 everywhere but zsh. An option silently ignored is the failure this pins against
   ```sh
   jobs -Q; echo "st=$?"
+  ```
+- `jobs/a-signal-number-joined-to-kill-s-option` — the signal written onto the option with no space, which is the spelling #2227 turned on. bash 5.3 and ksh93 read it and send SIGKILL; bash 3.2 and zsh read the whole word as a signal called `n9` and refuse it. The complaint is counted rather than printed because the four that speak say four different things and none of them is the question here, and the job notice a killed job draws carries a process id, which is why the trailing `wait` is silenced. What the row is really holding down is the *stall*: a script that kills a job and then waits for it gets the job's whole lifetime back when the kill is refused, and the refusal lands on a stderr such a script has usually redirected
+  ```sh
+  sleep 0.4 & p=$!; kill -n9 $p 2>e; echo "st=$? said=$(grep -c . e)"; wait 2>/dev/null
+  ```
+- `jobs/a-signal-name-joined-to-kill-s-option` — the other half of the same reading, and it is the half that says which option joins what: `-s` joins a *name* where `-n` joins a number. Same split — bash 5.3 and ksh93 send, bash 3.2 and zsh refuse — so one answer covers both spellings
+  ```sh
+  sleep 0.4 & p=$!; kill -sKILL $p 2>e; echo "st=$? said=$(grep -c . e)"; wait 2>/dev/null
+  ```
+- `jobs/a-signal-name-joined-to-kill-n-option` — the guard on the pair above, and the reason the rule is two rules rather than one: a *name* joined to `-n` is read by nobody. bash calls it the signal `nKILL`, which is the bare `-SPEC` form having taken the whole word — so a shell that simply stripped two characters after `-n` would send SIGKILL here and pass the row above for the wrong reason
+  ```sh
+  sleep 0.4 & p=$!; kill -nKILL $p; echo "st=$?"; wait
+  ```
+- `jobs/a-signal-number-joined-to-kill-s-option-is-not-read` — and the guard in the other direction: a *number* joined to `-s` is read by ksh93 alone. bash 5.3 refuses it under the word `s9` — the same bare reading — while accepting `-sKILL` two rows up, which is what makes the digits part of the answer and not a detail of it
+  ```sh
+  sleep 0.4 & p=$!; kill -s9 $p; echo "st=$?"; wait
+  ```
+- `jobs/wait-for-a-stopped-job-under-the-monitor` — whether a `wait` that names a stopped job goes on waiting for a process that cannot finish until something outside resumes it. bash 5.3 gives up at 145 — 128 plus SIGSTOP, a command that signal killed — while bash 3.2 and ksh93 wait it out and report the job's own 0. zsh cannot be asked: `set -m` is a refusal in a non-interactive zsh, so it answers with the waiting columns for that reason rather than by choosing. The second job is what makes the row *terminate* under the shells that wait: a stopped process is not going to continue on its own, and a corpus case that hung on the answer it exists to record would be worse than no case at all
+  ```sh
+  set -m 2>/dev/null; sleep 0.8 & p=$!; { sleep 0.4; kill -CONT $p; } & sleep 0.15; kill -STOP $p; wait $p; echo "st=$?"; wait 2>/dev/null
+  ```
+- `jobs/a-stopped-background-job-in-the-listing` — the same stop asked of the listing rather than of `wait`, because a shell can know one without the other: bash 5.3 and ksh93 call the job `Stopped` and bash 3.2 still calls it `Running`, having never been told. It is the visible half of the same fault — a shell whose background jobs are waited for in a way that cannot report a stop says `Running` about a process that is going nowhere — and it is asked under the monitor because with the monitor off every bash says `Running` here by agreement rather than by oversight
+  ```sh
+  set -m 2>/dev/null; sleep 0.8 & p=$!; { sleep 0.4; kill -CONT $p; } & sleep 0.15; kill -STOP $p; jobs %1; wait 2>/dev/null
   ```
 - `jobs/a-subshell-and-the-parents-jobs` — ksh93 alone hands a subshell the jobs the shell around it started; bash, dash and zsh hand it an empty table. Through a file rather than by printing the id, because a process id is not the same twice — and with commands after the `( … )`, because a subshell that is the last thing a script does need not be a subshell at all: without them dash answers the parent's job instead
   ```sh

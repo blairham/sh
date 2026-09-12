@@ -530,3 +530,67 @@ func itoa(n int) string {
 	}
 	return string(b)
 }
+
+// TestASignalJoinedToTheOption is the reading #2227 turned on: the signal
+// written onto `-n` or `-s` with no space between them.
+//
+// The existence probe is the target throughout, so nothing here sends a
+// signal to anything: `kill -n0 $$` asks whether this process is there and is
+// exactly as good a witness of how the option was read.
+//
+// Which way round the digits go is half the test and not a detail of it. A
+// reading that simply took everything after `-n` would send SIGKILL for
+// `-nKILL`, which no shell does, and would pass a test that only asked about
+// `-n9`.
+func TestASignalJoinedToTheOption(t *testing.T) {
+	for _, c := range []struct {
+		src    string
+		joined Answer
+		want   int
+		refuse bool
+	}{
+		{src: `kill -n0 $$`, joined: Yes, want: 0},
+		{src: `kill -s0 $$`, joined: Yes, want: 1, refuse: true},
+		{src: `kill -n0 $$`, joined: No, want: 1, refuse: true},
+		{src: `kill -sCONT $$`, joined: No, want: 1, refuse: true},
+		// A name onto `-n` and a number onto `-s` are the bare `-SPEC` form
+		// under either answer, so they are refused under the word as written.
+		{src: `kill -nCONT $$`, joined: Yes, want: 1, refuse: true},
+		// And the separated spelling is nobody's question: it is read
+		// whatever the axis says.
+		{src: `kill -n 0 $$`, joined: No, want: 0},
+		{src: `kill -s 0 $$`, joined: No, want: 0},
+	} {
+		sem := killSem()
+		sem.KillReadsASignalJoinedToItsOption = c.joined
+		_, errs, st := killRun(t, c.src, sem, Diagnostics{})
+		if st != c.want {
+			t.Errorf("%s with the axis %v: status %d, want %d", c.src, c.joined, st, c.want)
+		}
+		if refused := errs != ""; refused != c.refuse {
+			t.Errorf("%s with the axis %v: said %q, want refused=%v", c.src, c.joined, errs, c.refuse)
+		}
+	}
+}
+
+// TestAJoinedSignalIsRefusedWhenUnanswered checks the axis is refused rather
+// than guessed — and only on the word it is about, so the spellings every
+// shell agrees on still work in a shell that has not chosen.
+func TestAJoinedSignalIsRefusedWhenUnanswered(t *testing.T) {
+	sem := killSem()
+	sem.KillReadsASignalJoinedToItsOption = Unspecified
+
+	_, errs, _ := killRun(t, `kill -n0 $$`, sem, Diagnostics{})
+	if !strings.Contains(errs, "no dialect was chosen") {
+		t.Errorf("joined: got %q, want a refusal naming the axis", errs)
+	}
+	if strings.Contains(errs, "invalid signal") {
+		t.Errorf("joined: got %q, want only the refusal — the signal is not this shell's to judge", errs)
+	}
+
+	for _, src := range []string{`kill -n 0 $$`, `kill -0 $$`} {
+		if _, errs, st := killRun(t, src, sem, Diagnostics{}); errs != "" || st != 0 {
+			t.Errorf("%s: got errs=%q st=%d, want silence at 0 — the panel agrees here", src, errs, st)
+		}
+	}
+}

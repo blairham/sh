@@ -7071,7 +7071,12 @@ echo "st=$?"`,
 	{
 		ID: "array/unsetting-a-reversed-range-of-characters", Category: "expansion",
 		Snippet: `a=hello; unset "a[3,2]"; echo "st=$? [${a-UNSET}]"`,
-		Why:     "the reversed range on a string, which is where the insertion the array case shows becomes invisible: an empty character put where the span would have begun leaves the string as it was. The two are one rule and only the array can see it",
+		Why:     "the reversed range on a string, one step deep, which is the one that comes back unchanged — and for a reason the row cannot show on its own: the span is a *cut*, `he` joined to `llo`, and here the two halves happen to reconstruct the word. It read as \"an empty character inserted, so nothing happens\" for as long as it did because this is the only depth where the two readings agree; the row below is what tells them apart",
+	},
+	{
+		ID: "array/unsetting-a-reversed-range-of-characters-more-than-one-step", Category: "expansion",
+		Snippet: `a=hello; unset "a[2,0]"; echo "1[$a]"; a=hello; unset "a[4,2]"; echo "2[$a]"; a=hello; unset "a[9,0]"; echo "3[$a]"; a=hello; unset "a[-1,1]"; echo "4[$a]"`,
+		Why:     "the row that says a range over a string is a **cut** and not a deletion: what is in front of the start joined to what is behind the end, each endpoint clamped on its own, so a reversed range makes the halves *overlap* and the string grows. `hhello`, `helllo`, `hellohello` and `hellello` — none of which a deletion can produce, and the third is the one that also pins the clamping, since a start past the last character is the whole string rather than nothing at all. That last part is where the string and the array part company: `unset \"a[9,0]\"` over `(x y z)` leaves the array alone, because an array's span is replaced by one empty element and a start past the last has nothing to stand in front of",
 	},
 	{
 		ID: "array/an-unset-subscript-refused-is-named-as-written", Category: "expansion",

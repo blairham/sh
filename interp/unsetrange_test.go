@@ -131,6 +131,71 @@ func TestARangesNegativeStartFollowsTheSingleSubscriptsRule(t *testing.T) {
 	}
 }
 
+// A range over a string is a **cut**: what is in front of the start joined to
+// what is behind the end, with each endpoint clamped on its own. So a reversed
+// range does not vanish — the two halves overlap and the string grows.
+//
+// `[3,2]`, one step reversed, is the row that comes back unchanged, because
+// `he` and `llo` reconstruct `hello`. It is in the table above and it is the
+// row that made this look like "a reversed range is invisible over a string"
+// for as long as it did (#2373). The rows here are the ones that tell the two
+// readings apart.
+func TestAReversedRangeOverAStringOverlaps(t *testing.T) {
+	for _, tc := range []struct{ sub, want string }{
+		{"2,0", "st=0 [hhello]\n"},
+		{"3,0", "st=0 [hehello]\n"},
+		{"3,1", "st=0 [heello]\n"},
+		{"4,2", "st=0 [helllo]\n"},
+		{"5,1", "st=0 [hellello]\n"},
+		{"9,0", "st=0 [hellohello]\n"},
+		{"9,3", "st=0 [hellolo]\n"},
+		{"-1,1", "st=0 [hellello]\n"},
+		{"-2,-4", "st=0 [helllo]\n"},
+		{"2,-6", "st=0 [hhello]\n"},
+	} {
+		out, st := rangeUnsetRun(t, `a=hello; unset "a[`+tc.sub+`]"; echo "st=$? [${a-UNSET}]"`,
+			func(s *Semantics) { s.ScalarSubscriptIsACharacter = Yes })
+		if st != 0 || out != tc.want {
+			t.Errorf("a[%s]: got %q status %d, want %q", tc.sub, out, st, tc.want)
+		}
+	}
+}
+
+// The array is the counter-case, and the pair says the two readings are not
+// one rule with the element left off: an array's span is *replaced* by one
+// empty element, so a start past the last has nothing to stand in front of and
+// the array is left alone — where the same range over a string is the whole
+// string joined to a suffix.
+func TestAStartPastTheEndCutsAStringAndLeavesAnArrayAlone(t *testing.T) {
+	out, st := rangeUnsetRun(t, `a=(x y z); unset "a[9,0]"`+showArray, nil)
+	if st != 0 || out != "st=0 [x][y][z] n=3\n" {
+		t.Errorf("a[9,0] over an array: got %q status %d, want the array left whole", out, st)
+	}
+	out, st = rangeUnsetRun(t, `a=hello; unset "a[9,0]"; echo "st=$? [${a-UNSET}]"`,
+		func(s *Semantics) { s.ScalarSubscriptIsACharacter = Yes })
+	if st != 0 || out != "st=0 [hellohello]\n" {
+		t.Errorf("a[9,0] over a string: got %q status %d, want the two halves joined", out, st)
+	}
+}
+
+// The end that will not evaluate carries 0 forward (#1001), and over a string
+// that lands on this rule rather than on a no-op: `[2,x+]` is `[2,0]`, which
+// is `h` joined to `hello`.
+func TestAnEndThatWillNotEvaluateCutsAStringAtZero(t *testing.T) {
+	out, st := rangeUnsetRun(t, `a=hello; unset "a[2,x+]"; echo "st=$? [${a-UNSET}]"`,
+		func(s *Semantics) {
+			s.ScalarSubscriptIsACharacter = Yes
+			// Answered because the *reporting* is not what this row is about
+			// and an unanswered axis stops the script before the value can
+			// be read.
+			s.BadSubscriptToUnsetFatal = No
+		})
+	want := "sh: x+: operand expected\nst=1 [hhello]\n"
+	if st != 0 || out != want {
+		t.Errorf("a[2,x+]: got %q status %d, want %q", out, st, want)
+	}
+}
+
 func TestARangeOverAStringNamesCharacters(t *testing.T) {
 	for _, tc := range []struct{ sub, want string }{
 		{"2,3", "st=0 [hlo]\n"},

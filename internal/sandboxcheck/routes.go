@@ -36,6 +36,22 @@ type Route struct {
 	Did func(f Fixture, o Outcome) bool
 	// Why says what the route is, for a row that needs explaining.
 	Why string
+	// Args is what the shell needs on its command line *before* `-c` for
+	// this route to be reachable at all.
+	//
+	// Empty for every route but one, and the exception is the reason the
+	// field exists. zsh writes a history file only when the shell is
+	// interactive — measured, and not because the list is empty: a list
+	// loaded by `fc -R` and printed by `fc -l` is still not written from a
+	// plain `-c` run. So `builtin/fc-write` graded `inert` forever, and the
+	// note beside it said the letter was not accepted, which was true and
+	// was not why (#2283).
+	//
+	// A route that needs this is saying something worth seeing in the table:
+	// the *shell's own mode* is part of what makes the route a route. It is
+	// not a way to pass a policy — the mode and the policy are separate
+	// arguments and the grader owns the second.
+	Args []string
 }
 
 func (rt Route) dialects() []string {
@@ -514,11 +530,43 @@ zf_chmod 777 ./sneaky`,
 		Did:    leaked,
 		Why:    "reads through a redirection, so it answers to the redirection's gate",
 	}, {
+		// The row that needed the instrument fixed as well as the shell.
+		//
+		// It ran `-c` and could not have gone green however `fc -W` was
+		// written: zsh writes a history file **only when the shell is
+		// interactive**, measured 2026-09-12 and not on account of an empty
+		// list — a list loaded by `fc -R` and printed by `fc -l` is still not
+		// written from a plain `-c`. So `-i` is what makes this a route, and
+		// the list has to be seeded, because an empty one writes nothing in
+		// zsh too.
+		//
+		// `-i` reads no startup file of anybody's: the grader gives every run
+		// a HOME inside the fixture. See Route.Args.
 		Name:   "builtin/fc-write",
 		Only:   zsh,
-		Script: `HISTFILE={{target}}; SAVEHIST=10; fc -W`,
+		Args:   []string{"-i"},
+		Script: `HISTFILE={{target}}; SAVEHIST=10; print -s ` + SecretMark + `; fc -W`,
 		Did:    made,
-		Why:    "-W is not accepted yet — a history file is a write to a path the script names",
+		Why:    "#2283: a history file is a write to a path the script names",
+	}, {
+		// The append letter, which opens the same path on a different flag —
+		// a gate on `-W` alone would leave it open, the same shape bash's
+		// `history -a` has beside `-w`.
+		Name:   "builtin/fc-append",
+		Only:   zsh,
+		Args:   []string{"-i"},
+		Script: `SAVEHIST=10; print -s ` + SecretMark + `; fc -A {{target}}`,
+		Did:    made,
+		Why:    "#2283: `-A` opens the same path the write letter does",
+	}, {
+		// And the read, which brings a denied file's contents into a list the
+		// script can then print with `fc -l`. No write anywhere in it.
+		Name:   "builtin/fc-read",
+		Only:   zsh,
+		Args:   []string{"-i"},
+		Script: `fc -R {{secret}}; fc -l`,
+		Did:    leaked,
+		Why:    "#2283: `-R` reads a file into a list the script can print",
 	}, {
 		Name:   "builtin/zcompile",
 		Only:   zsh,

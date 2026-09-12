@@ -2706,6 +2706,11 @@ func Apply(r *interp.Runner) {
 	// And `zsh/mapfile`'s one: the filesystem as an association, where a key
 	// is a path and the value is that file's bytes. See mapfile.go.
 	registerMapfileModule(r)
+	// And `fc`'s three file letters over a history list this dialect keeps,
+	// which is what `print -s` fills. The core `fc` stays the answer for
+	// every other letter — this registration replaces it and delegates. See
+	// fchistory.go.
+	registerFcHistory(r)
 	// And `zsh/terminfo`'s and `zsh/termcap`'s one parameter each: the
 	// terminal's capabilities under two name systems, read out of the
 	// description `$TERM` names by repl.TerminalCapabilities. See

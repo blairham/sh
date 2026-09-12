@@ -334,6 +334,50 @@
         "TimedOut": false
       }
     },
+    "alias/a-listing-that-would-define-it-back": {
+      "bash": {
+        "Stdout": "--L--~st=2~--sL--~--r--",
+        "Stderr": "\u003cshell\u003e: line 3: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 5: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "--L--~st=2~--sL--~--r--",
+        "Stderr": "\u003cshell\u003e: line 3: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 4: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 5: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "--L--~st=2~--sL--~--r--",
+        "Stderr": "\u003cshell\u003e: line 2: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 3: alias: -s: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 4: alias: -r: invalid option~alias: usage: alias [-p] [name[=value] ... ]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--L--~st=1~--sL--~--r--",
+        "Stderr": "alias: -L not found~alias: -s not found~alias: -L not found~alias: -r not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "--L--~alias -g G='b b'~alias r=y~st=0~--sL--~alias -s t=z~--r--~r=y",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/a-name-the-table-does-not-hold": {
       "bash": {
         "Stdout": "st=1",
@@ -372,6 +416,50 @@
       },
       "zsh": {
         "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-plus-word-prints-the-names": {
+      "bash": {
+        "Stdout": "--+--~st=1~--+g--~--L+--~--+L--~st=1",
+        "Stderr": "\u003cshell\u003e: line 3: alias: +: not found~\u003cshell\u003e: line 4: alias: +g: not found~\u003cshell\u003e: line 5: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 6: alias: +: not found~\u003cshell\u003e: line 6: alias: -L: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "--+--~st=1~--+g--~--L+--~--+L--~st=1",
+        "Stderr": "\u003cshell\u003e: line 3: alias: +: not found~\u003cshell\u003e: line 4: alias: +g: not found~\u003cshell\u003e: line 5: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 6: alias: +: not found~\u003cshell\u003e: line 6: alias: -L: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "--+--~st=1~--+g--~--L+--~--+L--~st=1",
+        "Stderr": "\u003cshell\u003e: line 2: alias: +: not found~\u003cshell\u003e: line 3: alias: +g: not found~\u003cshell\u003e: line 4: alias: -L: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 5: alias: +: not found~\u003cshell\u003e: line 5: alias: -L: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--+--~st=1~--+g--~--L+--~--+L--~st=1",
+        "Stderr": "alias: + not found~alias: +g not found~alias: -L not found~alias: + not found~alias: + not found~alias: -L not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "--+--~G~r~st=0~--+g--~G~--L+--~alias -g G=x~alias r=y~--+L--~st=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -1214,6 +1302,50 @@
         "TimedOut": false
       }
     },
+    "alias/naming-an-alias-follows-the-expansion-switch": {
+      "bash": {
+        "Stdout": "a is aliased to `echo hi'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a is aliased to `echo hi'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a is aliased to `echo hi'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a is an alias for echo hi~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a is an alias for 'echo hi'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a is an alias for echo hi~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/neither-kind-is-accepted-where-the-shell-has-not-got-it": {
       "bash": {
         "Stdout": "ag=2~as=2~us=2",
@@ -1346,6 +1478,50 @@
         "TimedOut": false
       }
     },
+    "alias/operands-as-patterns": {
+      "bash": {
+        "Stdout": "--m--~st=2~--none--~st=2~--rm--~st=2~alias aa='1'~alias ab='2'~alias zz='3'~--bare--~st=2",
+        "Stderr": "\u003cshell\u003e: line 3: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 4: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 5: unalias: -m: invalid option~unalias: usage: unalias [-a] name [name ...]~\u003cshell\u003e: line 6: unalias: -m: invalid option~unalias: usage: unalias [-a] name [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "--m--~st=2~--none--~st=2~--rm--~st=2~aa='1'~ab='2'~zz='3'~--bare--~st=2",
+        "Stderr": "\u003cshell\u003e: line 3: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 4: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 5: unalias: -m: invalid option~unalias: usage: unalias [-a] name [name ...]~\u003cshell\u003e: line 6: unalias: -m: invalid option~unalias: usage: unalias [-a] name [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "--m--~st=2~--none--~st=2~--rm--~st=2~alias aa='1'~alias ab='2'~alias zz='3'~--bare--~st=2",
+        "Stderr": "\u003cshell\u003e: line 2: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 3: alias: -m: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 4: unalias: -m: invalid option~unalias: usage: unalias [-a] name [name ...]~\u003cshell\u003e: line 5: unalias: -m: invalid option~unalias: usage: unalias [-a] name [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--m--~st=1~--none--~st=1~--rm--~st=2~zz='3'~aa='1'~ab='2'~--bare--~st=2",
+        "Stderr": "alias: -m not found~alias: a* not found~alias: -m not found~alias: q* not found~\u003cshell\u003e: 5: unalias: Illegal option -m~\u003cshell\u003e: 6: unalias: Illegal option -m",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "--m--",
+        "Stderr": "alias: -m: unknown option~Usage: alias [-ptx] [name[=value]...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "--m--~aa=1~ab=2~st=0~--none--~st=0~--rm--~st=0~zz=3~--bare--~st=1",
+        "Stderr": "\u003cshell\u003e:unalias:6: not enough arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "alias/standard-input-is-a-route-too": {
       "bash": {
         "Stdout": "",
@@ -1428,6 +1604,50 @@
       },
       "zsh": {
         "Stdout": "L=0~r=0~m=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/the-name-reporting-builtins-see-the-table": {
+      "bash": {
+        "Stdout": "st=1~st=1~st=1",
+        "Stderr": "\u003cshell\u003e: line 2: type: a: not found~\u003cshell\u003e: line 3: command: a: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a is aliased to `echo  hi'~st=0~a is aliased to `echo  hi'~st=0~alias a='echo  hi'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~st=1~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: type: a: not found~\u003cshell\u003e: line 2: command: a: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a is an alias for echo  hi~st=0~a is an alias for echo  hi~st=0~alias a='echo  hi'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a is an alias for 'echo  hi'~st=0~a is an alias for 'echo  hi'~st=0~'echo  hi'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a is an alias for echo  hi~st=0~a is an alias for echo  hi~st=0~alias a='echo  hi'~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -73,6 +73,16 @@ func permissive() Semantics {
 	// plain `alias` and the plain `unalias`.
 	s.GlobalAliases = No
 	s.SuffixAliases = No
+	// The letters that go with them, for the same reason: a test that is not
+	// about `alias -L`, `-r`, `-m` or the plus forms should see the plain
+	// builtins, and three of the four dialects have none of them.
+	s.AliasListsAsDefinitions = No
+	s.AliasRestrictsToRegularKind = No
+	s.AliasOperandsCanBePatterns = No
+	s.AliasPlusPrintsNamesOnly = No
+	// And whether `type` speaks about an alias only while aliases expand:
+	// three of the four answer from the table whatever the switch says.
+	s.TypeNamesAnAliasOnlyWhenExpanded = No
 	return s
 }
 

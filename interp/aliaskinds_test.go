@@ -20,6 +20,10 @@ import (
 func kindsOn(s *Semantics) {
 	s.GlobalAliases = Yes
 	s.SuffixAliases = Yes
+	s.AliasListsAsDefinitions = Yes
+	s.AliasRestrictsToRegularKind = Yes
+	s.AliasOperandsCanBePatterns = Yes
+	s.AliasPlusPrintsNamesOnly = Yes
 }
 
 func kindsRun(t *testing.T, src string) (string, int) {

@@ -279,6 +279,11 @@ func Semantics() interp.Semantics {
 	// `invalid option` here, measured on 5.3 and 3.2 alike.
 	s.GlobalAliases = interp.No
 	s.SuffixAliases = interp.No
+	s.AliasListsAsDefinitions = interp.No
+	s.AliasRestrictsToRegularKind = interp.No
+	s.AliasOperandsCanBePatterns = interp.No
+	s.AliasPlusPrintsNamesOnly = interp.No
+	s.TypeNamesAnAliasOnlyWhenExpanded = interp.Yes
 	s.AliasReportsNotFound = interp.Yes
 	s.UnaliasReportsNotFound = interp.Yes
 	s.AliasNotFoundStatusCounts = interp.No
@@ -1145,7 +1150,11 @@ func Diagnostics() interp.Diagnostics {
 		LoopControlOutsideALoop: "%[1]s: only meaningful in a `for', `while', or `until' loop",
 		TypeKeyword:             "%[1]s is a shell keyword",
 		TypeFunction:            "%[1]s is a function",
-		TypeNotFound:            "type: %[1]s: not found",
+		// The only wording in the panel that carries its own quotes, and the
+		// only verb that is not "alias".
+		TypeAlias:     "%[1]s is aliased to `%[2]s'",
+		CommandVAlias: "alias %[1]s=%[2]s",
+		TypeNotFound:  "type: %[1]s: not found",
 		// The same complaint from `command -V`, blaming `command`.
 		CommandVNotFound: "command: %[1]s: not found",
 		// The target as it was written, not as it expanded.

@@ -156,6 +156,17 @@ func biBuiltin(r *Runner, ctx context.Context, args []string) int {
 // out for itself. Nothing found is a failure with no output at all — the
 // silence is what makes `command -v x >/dev/null` the usual spelling.
 func (r *Runner) reportWhatRuns(name string) int {
+	// An alias first, and as a *definition* rather than as a bare name: the
+	// three shells that print `alias a='echo hi'` here are printing a line
+	// that would put the alias back, which is what makes `command -v`'s
+	// output usable for more than a yes-or-no. ksh93 prints the body alone.
+	if display, value, kind, ok := r.AliasForName(name); ok {
+		r.printf("%s\n", r.commandVAliasLine(display, value, kind))
+		return 0
+	}
+	if r.unspecified {
+		return r.status
+	}
 	if _, ok := r.funcs[name]; ok {
 		r.printf("%s\n", name)
 		return 0

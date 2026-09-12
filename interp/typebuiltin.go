@@ -329,6 +329,22 @@ func (r *Runner) reportNameNotFound(msg string) {
 // the one line the two spell differently, so it arrives already worded.
 func (r *Runner) describeName(name string, kind, skipFuncs bool, notFound string) int {
 	dg := r.diag()
+	// The tables come first, as they do in every shell in the panel and as
+	// the parser does when it reads a line: an alias beats a function of the
+	// same name. What "the tables hold it" means is not the plain lookup —
+	// the kind, the suffix keying and one dialect's expansion gate are all
+	// in AliasForName.
+	if display, value, akind, ok := r.AliasForName(name); ok {
+		if kind {
+			r.printf("alias\n")
+			return 0
+		}
+		r.printf("%s\n", r.AliasSentence(display, value, akind))
+		return 0
+	}
+	if r.unspecified {
+		return 2
+	}
 	if fn, ok := r.funcs[name]; ok && !skipFuncs {
 		if kind {
 			r.printf("function\n")

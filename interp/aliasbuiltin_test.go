@@ -30,6 +30,12 @@ func aliasRunArgs(t *testing.T, tweak func(*Semantics), dg Diagnostics, src stri
 	// so through tweak.
 	sem.GlobalAliases = No
 	sem.SuffixAliases = No
+	// The letters that only the dialect with the kinds has, off for the same
+	// reason: kindsOn turns them on with the kinds they are about.
+	sem.AliasListsAsDefinitions = No
+	sem.AliasRestrictsToRegularKind = No
+	sem.AliasOperandsCanBePatterns = No
+	sem.AliasPlusPrintsNamesOnly = No
 	sem.AliasReportsNotFound = Yes
 	sem.UnaliasReportsNotFound = Yes
 	sem.AliasNotFoundStatusCounts = No

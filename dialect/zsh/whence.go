@@ -211,8 +211,8 @@ func whenceOne(r *interp.Runner, ctx context.Context, name string, m whenceMode)
 	if m.all {
 		return whenceAll(r, ctx, name, m)
 	}
-	if value, ok := r.LookupAlias(name); ok {
-		writeLine(r, aliasAnswer(name, value, m))
+	if display, value, akind, ok := r.AliasForName(name); ok {
+		writeLine(r, aliasAnswer(r, display, value, akind, m))
 		return 0
 	}
 	kind, path := r.ResolveName(name)
@@ -227,9 +227,9 @@ func whenceOne(r *interp.Runner, ctx context.Context, name string, m whenceMode)
 // PATH hit — measured `x`, `ls`, `/bin/ls` for a name that is all three.
 func whenceAll(r *interp.Runner, ctx context.Context, name string, m whenceMode) int {
 	found := false
-	if value, ok := r.LookupAlias(name); ok {
+	if display, value, akind, ok := r.AliasForName(name); ok {
 		found = true
-		writeLine(r, aliasAnswer(name, value, m))
+		writeLine(r, aliasAnswer(r, display, value, akind, m))
 	}
 	switch kind, _ := r.ResolveName(name); kind {
 	case interp.NameFunction, interp.NameBuiltin, interp.NameReserved:
@@ -261,15 +261,36 @@ func whencePath(r *interp.Runner, name string, m whenceMode) int {
 	return 0
 }
 
-// aliasAnswer words an alias in whichever shape the letters asked for.
-func aliasAnswer(name, value string, m whenceMode) string {
+// aliasAnswer words an alias in whichever shape the letters asked for, and
+// for whichever of the three kinds the table found it under.
+//
+// Measured 2026-09-12 with a global `UP` and a suffix `txt`:
+//
+//	         regular              global                    suffix
+//	plain    echo hi              | tr a-z A-Z              cat
+//	-w       a: alias             UP: global alias          txt: suffix alias
+//	-c       a: aliased to …      UP: globally aliased to … txt: suffix aliased to …
+//	-v       a is an alias for …  UP is a global alias …    txt is a suffix alias …
+//
+// The `-v` sentence is the one the dialect's Diagnostics already carry, taken
+// through the core rather than written again here: `type` in this shell *is*
+// `whence -v`, so a second spelling would be a second answer to one question.
+func aliasAnswer(r *interp.Runner, name, value string, kind interp.AliasKind, m whenceMode) string {
+	word, csh := "alias", "aliased to "
+	switch kind {
+	case interp.AliasGlobalKind:
+		word, csh = "global alias", "globally aliased to "
+	case interp.AliasSuffixKind:
+		word, csh = "suffix alias", "suffix aliased to "
+	case interp.AliasAnyKind, interp.AliasRegularKind:
+	}
 	switch {
 	case m.kind:
-		return name + ": alias"
+		return name + ": " + word
 	case m.csh:
-		return name + ": aliased to " + value
+		return name + ": " + csh + value
 	case m.verbose:
-		return name + " is an alias for " + value
+		return r.AliasSentence(name, value, kind)
 	}
 	return value
 }

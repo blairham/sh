@@ -170,12 +170,12 @@ func (r *Runner) SuffixAliasTable() map[string]string {
 // replaced by a regular one rather than keeping the letter it was defined
 // with.
 func (r *Runner) SetAlias(name, value string) {
-	r.defineAlias(name, value, aliasEitherKind)
+	r.defineAlias(name, value, AliasAnyKind)
 }
 
 // RemoveAlias undefines one, and reports whether there was one.
 func (r *Runner) RemoveAlias(name string) bool {
-	return r.removeAlias(name, aliasEitherKind)
+	return r.removeAlias(name, AliasAnyKind)
 }
 
 // SetGlobalAlias and SetSuffixAlias are the pair for the other two kinds, for
@@ -183,12 +183,12 @@ func (r *Runner) RemoveAlias(name string) bool {
 // alias shares the table the regular ones are in, so this *replaces* a
 // regular alias of the same name, exactly as `alias -g` does.
 func (r *Runner) SetGlobalAlias(name, value string) {
-	r.defineAlias(name, value, aliasGlobalKind)
+	r.defineAlias(name, value, AliasGlobalKind)
 }
 
 // SetSuffixAlias writes the second namespace, keyed on the extension.
 func (r *Runner) SetSuffixAlias(suffix, value string) {
-	r.defineAlias(suffix, value, aliasSuffixKind)
+	r.defineAlias(suffix, value, AliasSuffixKind)
 }
 
 // RemoveSuffixAlias undefines one, and reports whether there was one. There
@@ -196,7 +196,7 @@ func (r *Runner) SetSuffixAlias(suffix, value string) {
 // of: RemoveAlias is the removal for both kinds, which is what `unalias`
 // having no `-g` says.
 func (r *Runner) RemoveSuffixAlias(suffix string) bool {
-	return r.removeAlias(suffix, aliasSuffixKind)
+	return r.removeAlias(suffix, AliasSuffixKind)
 }
 
 // CommandsOnPath is every name PATH would resolve, to the path it resolves to.

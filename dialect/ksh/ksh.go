@@ -308,6 +308,11 @@ func Semantics() interp.Semantics {
 	// `unknown option` on ksh93u+.
 	s.GlobalAliases = interp.No
 	s.SuffixAliases = interp.No
+	s.AliasListsAsDefinitions = interp.No
+	s.AliasRestrictsToRegularKind = interp.No
+	s.AliasOperandsCanBePatterns = interp.No
+	s.AliasPlusPrintsNamesOnly = interp.No
+	s.TypeNamesAnAliasOnlyWhenExpanded = interp.No
 	// It complains about `alias nope` and says nothing about `unalias nope`,
 	// which is why these are two questions.
 	s.AliasReportsNotFound = interp.Yes
@@ -1218,8 +1223,13 @@ func Diagnostics() interp.Diagnostics {
 		ArithErrorNamesTheBuiltin: true,
 		TypeKeyword:               "%[1]s is a keyword",
 		// ksh93's `type` is `whence -v`, and the message says so.
-		TypeExternal:            "%[1]s is a tracked alias for %[2]s",
-		TypeFunction:            "%[1]s is a function",
+		TypeExternal: "%[1]s is a tracked alias for %[2]s",
+		TypeFunction: "%[1]s is a function",
+		// The body is quoted the way this shell's own listing quotes it, and
+		// `command -v` writes that body with no `alias name=` in front of it.
+		TypeAlias:               "%[1]s is an alias for %[2]s",
+		TypeAliasQuotesValue:    true,
+		CommandVAlias:           "%[2]s",
 		TypeNotFound:            "whence: %[1]s: not found",
 		CommandVNotFound:        "command: %[1]s: not found",
 		JobStarted:              "[%[1]d]\t%[2]d",

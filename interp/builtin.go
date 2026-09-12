@@ -6,6 +6,7 @@ package interp
 import (
 	"context"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -3122,6 +3123,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// second for a keystroke and reports 1 when none comes. A source -u or -p
 	// already named is left alone: it may not be a terminal, and `read -k 2
 	// -u 3 v` on a file reads two bytes of the file.
+	keyTerminal := (*os.File)(nil)
 	if readsKeys {
 		explicit := io.Reader(nil)
 		if _, named := optArg['u']; named || coprocSource >= 0 {
@@ -3133,6 +3135,13 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			return r.readNoTerminal()
 		}
 		in = src
+		if explicit == nil {
+			// The terminal, as a file. Kept so the timed read below can wait
+			// for readability instead of parking a read on it — see
+			// pollingKeySource, and why that distinction is load-bearing here
+			// and nowhere else.
+			keyTerminal, _ = src.(*os.File)
+		}
 	}
 
 	next := directByteSource(in)
@@ -3166,6 +3175,15 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			"`read -t` bounding the wait for the first byte rather than the whole read")
 		if r.unspecified {
 			return 2
+		}
+		// `read -k` on the terminal waits for the bytes rather than parking a
+		// read on them, because the stream it would park on is the line
+		// editor's own input and an abandoned read there swallows the next
+		// key somebody presses. Every other read keeps the shared machinery,
+		// whose cost is confined to the pipe it was used on.
+		if polled, can := keyTimedSource(keyTerminal, timeout, whole); can {
+			next = polled
+			break
 		}
 		next, stop = r.timedByteSource(ctx, in, timeout, whole)
 		defer stop()

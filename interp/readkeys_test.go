@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/blairham/sh/internal/pty"
 	. "github.com/blairham/sh/interp"
@@ -250,5 +251,63 @@ func TestANamedDescriptorOverridesTheTerminal(t *testing.T) {
 	out, _ := run(t, `exec 5<`+path+`; read -k 2 -u 5 v; echo "[$v]"`, readsKeys)
 	if want := "[fi]"; !strings.Contains(out, want) {
 		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+// A `read -k` whose deadline expires must not leave a read parked on the
+// terminal, because the next key somebody presses would be swallowed by it.
+//
+// This is the one place the shared timed source cannot be used. It reads on a
+// goroutine — an io.Reader cannot be told to stop waiting — and abandons a
+// read still in flight when the deadline passes, which its own comment calls
+// "the cost of a timeout over a plain pipe […] confined to the stream the
+// timeout was used on". For `read -k` the stream is the line editor's own
+// input, so it is confined to nothing.
+//
+// Measured against the built shell through a pseudo-terminal before the fix:
+// `read -k -t 1 a; read -k b` with a key pressed after the timeout **hung** —
+// the byte went to the abandoned read and the second one waited for another
+// that never came. Real zsh answers `b=[X]`. Driving the whole shell with the
+// real plugins showed the same thing as a second Up arrow losing its escape
+// byte and typing `[A` into the line.
+//
+// A descriptor can be asked whether a read would block, which an io.Reader
+// cannot, so the terminal path waits for readability and reads only what is
+// there.
+func TestAnExpiredKeyReadDoesNotSwallowTheNextKey(t *testing.T) {
+	control, terminal, err := pty.Open()
+	if err != nil {
+		t.Skipf("no pseudo-terminal: %v", err)
+	}
+	t.Cleanup(func() { _ = control.Close(); _ = terminal.Close() })
+
+	// Written after the first read has certainly given up, from a goroutine
+	// because the second read blocks until it arrives.
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		_, _ = control.WriteString("X")
+	}()
+
+	done := make(chan string, 1)
+	go func() {
+		var out strings.Builder
+		run(t, `read -k -t 0.05 a; echo "a=[$a]"; read -k b; echo "b=[$b]"`,
+			func(r *Runner) {
+				readsKeys(r)
+				r.Stdin, r.Stdout, r.Stderr = terminal, &out, &out
+			})
+		done <- out.String()
+	}()
+
+	select {
+	case out := <-done:
+		if !strings.Contains(out, "a=[]") {
+			t.Errorf("got %q, want the first read to have timed out empty", out)
+		}
+		if !strings.Contains(out, "b=[X]") {
+			t.Errorf("got %q, want the key pressed after the timeout to reach the second read", out)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the second read never returned: the expired read swallowed the key")
 	}
 }

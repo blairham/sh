@@ -5,9 +5,12 @@ package interp
 
 import (
 	"io"
+	"os"
 	"strings"
+	"time"
 	"unicode/utf8"
 
+	"github.com/blairham/sh/internal/fdset"
 	"github.com/blairham/sh/internal/tty"
 )
 
@@ -107,6 +110,64 @@ func readKeysFrom(next func() (byte, int), count int, chars func() bool) (text s
 		read++
 	}
 	return string(out), true
+}
+
+// pollingKeySource reads a terminal a byte at a time, waiting for each byte to
+// be *there* before asking for it, and never leaving a read in flight.
+//
+// **This is not an optimization; it is the difference between a timeout that
+// works and one that eats the next keystroke.** The shared timedByteSource
+// reads on a goroutine, because an io.Reader cannot be told to stop waiting,
+// and its own comment says what that costs: a read still in flight when the
+// deadline passes is abandoned, and if its byte ever arrives it is lost —
+// "the cost of a timeout over a plain pipe, confined to the stream the timeout
+// was used on".
+//
+// For `read -k` the stream is the **editor's own input**, so it is not
+// confined to anything. The plugin this letter was implemented for ends every
+// history search with `read -k -t 1`; the timeout expires a second later with
+// the abandoned read still parked on the terminal, and the next key the person
+// presses is swallowed by it. Driving the built shell through a
+// pseudo-terminal with the real plugins, a second Up arrow arriving after one
+// such timeout lost its escape byte and typed `[A` into the line.
+//
+// A descriptor can be asked whether a read would block, which an io.Reader
+// cannot — so where the source is a file this waits for readability first and
+// reads only what is already there. Nothing is ever in flight, so nothing is
+// ever abandoned.
+//
+// asked is false where the question cannot be put to this descriptor at all,
+// and the caller then falls back to the shared machinery: a `read -k` that
+// reported a timeout it never waited for would be worse than one that loses a
+// keystroke.
+func pollingKeySource(f *os.File, deadline time.Time, bounded bool) (next func() (byte, int), asked bool) {
+	fd := int(f.Fd())
+	if _, can := fdset.ReadableWithin(fd, 0); !can {
+		return nil, false
+	}
+	var ch [1]byte
+	first := true
+	return func() (byte, int) {
+		// Where the deadline bounds only the wait for the *first* byte, the
+		// rest of the read is made without one — the axis
+		// ReadTimeoutBoundsReadability decides which this is, and it is
+		// settled by the caller and handed in.
+		if first || bounded {
+			ready, can := fdset.ReadableWithin(fd, time.Until(deadline))
+			if !can {
+				return 0, evEOF
+			}
+			if !ready {
+				return 0, evTimeout
+			}
+		}
+		first = false
+		n, err := f.Read(ch[:])
+		if n == 0 || err != nil {
+			return 0, evEOF
+		}
+		return ch[0], evByte
+	}, true
 }
 
 // readKeySource is the stream `read -k` reads: the terminal this shell holds,
@@ -211,3 +272,20 @@ func (r *Runner) readKeysInto(next func() (byte, int), count int, args []string)
 	}
 	return 0
 }
+
+// keyTimedSource is pollingKeySource with the deadline computed, and false
+// where this read is not one that can be polled.
+//
+// A nil file is every read that is not `read -k` on a terminal — a `-u`
+// descriptor, a pipe, an embedder's buffer — and those keep the shared timed
+// source. Splitting it here rather than inside the switch keeps the one
+// question the caller has to ask down to "can this be polled".
+func keyTimedSource(f *os.File, timeout time.Duration, bounded bool) (next func() (byte, int), can bool) {
+	if f == nil || timeout <= 0 {
+		return nil, false
+	}
+	return pollingKeySource(f, timeNow().Add(timeout), bounded)
+}
+
+// timeNow is time.Now, named so the deadline has one source.
+func timeNow() time.Time { return time.Now() }

@@ -103,3 +103,64 @@ func TestTheShortFormsHaveABoundary(t *testing.T) {
 		}
 	}
 }
+
+// Each arm of a short `if` chooses its own form, and the first one not
+// written the short way puts the rest of the construct in the long one.
+//
+// Measured 2026-09-12 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a
+// scratch `HOME` and `ZDOTDIR`, from a script file — every row here ran there
+// first. `if (( 0 )) { echo A }` opens each one, so the arm under test is the
+// only thing that varies (#1372).
+func TestAnArmNotWrittenShortTakesTheLongForm(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"if (( 0 )) { echo A } else echo B; fi", "B"},
+		// Its body is a list, which a short body is not.
+		{"if (( 0 )) { echo A } else echo B; echo tail; fi", "B\ntail"},
+		{"if (( 0 )) { echo A } else\necho B\necho tail\nfi", "B\ntail"},
+		{"if (( 0 )) { echo A } else ( echo B ); fi", "B"},
+		{"if (( 0 )) { echo A } elif true; then echo C; fi", "C"},
+		{"if (( 0 )) { echo A } elif (( 1 ))\nthen echo C\nfi", "C"},
+		{"if (( 0 )) { echo A } elif (( 1 )) { echo C } else echo D; fi", "C"},
+		// The long `else` arm may be empty, since the `fi` says where it
+		// ends — which is the shape #1372 read as an empty *short* arm.
+		{"if (( 1 )) { echo A } else\nfi", "A"},
+		// And the short arm is still short: a newline before its brace does
+		// not decide the form, because an `else` has no condition for one to
+		// end.
+		{"if (( 0 )) { echo A } else { echo B }", "B"},
+		{"if (( 0 )) { echo A } else\n{ echo B }", "B"},
+		{"if (( 0 )) { echo A } else\n{ echo B }; echo after", "B\nafter"},
+	} {
+		out, _ := answersRun(t, tc.src)
+		if got := strings.TrimSpace(out); got != tc.want {
+			t.Errorf("%s: said %q, want %q", tc.src, got, tc.want)
+		}
+	}
+
+	for _, src := range []string{
+		// The long arm without its `fi`. The first is #1372's own row: an
+		// `else` with nothing after it, which this shell refuses and we ran.
+		"if (( 1 )) { echo A } else\n",
+		"if (( 0 )) { echo A } else echo B\n",
+		"if (( 0 )) { echo A } else\necho B\n",
+		"if (( 0 )) { echo A } else ( echo B )\n",
+		"if (( 1 )) { echo A } elif (( 1 ))\n",
+		"if (( 0 )) { echo A } elif (( 1 ))\n{ echo C }\n",
+		// A `fi` a short arm never owed.
+		"if (( 0 )) { echo A } else { echo B }\nfi\n",
+		// A short body that took the separator took the whole construct's,
+		// so there is no arm left for an `else` to be — `parse error near
+		// \x60else\x60` there, with or without a `fi` after it.
+		"if (( 1 )) echo A; else echo B\n",
+		"if (( 1 )) echo A; else echo B; fi\n",
+		"if [[ -z x ]] echo A; else echo B; fi\n",
+		"if (( 0 )) { echo A } elif (( 1 )) echo C; else { echo D }\n",
+		// The same rule one construct out: a brace body takes no terminator
+		// with it, however deeply a short form inside it took one of its own.
+		"for i (a b) { for j (c d) echo $j; } echo end\n",
+	} {
+		if _, err := syntax.Parse(src, zsh.Dialect()); err == nil {
+			t.Errorf("%q parsed, want a syntax error", src)
+		}
+	}
+}

@@ -1415,6 +1415,88 @@ ordinary brace *group*, so the `fi` is still required and every column
 refuses the line without one. It was reached in `F-Sy-H`'s chroma file,
 which a prompt framework loads (#1880).
 
+### And in the other direction: an arm not written short takes the long form
+
+The section above is short-after-long. The reverse composes too, and it
+is the rule `#1372` filed the accepting half of. **An arm of a short `if`
+chooses its own form, and the first one not written the short way puts
+the rest of the construct in the long one — where there *is* a `fi`, and
+it is required.** Measured 2026-09-12 on zsh 5.9.2, `env -i
+PATH=/usr/bin:/bin` with a scratch `HOME` and `ZDOTDIR`, from a script
+file. Every row opens `if (( 0 )) { echo A }`, so the arm under test is
+the only thing that varies; the other six columns refuse every one of
+them, having no short form at all.
+
+| probe (after `if (( 0 )) { echo A }`) | zsh 5.9 |
+| --- | --- |
+| `else { echo B }` | `B` |
+| `else` ⏎ `{ echo B }` | `B` |
+| `else { echo B }` ⏎ `fi` | parse error at `fi` |
+| `else echo B; fi` | `B` |
+| `else echo B; echo tail; fi` | `B`, `tail` |
+| `else ( echo B ); fi` | `B` |
+| `else echo B` | parse error at `\n` |
+| `else` | parse error at `\n` |
+| `elif true; then echo C; fi` | `C` |
+| `elif (( 1 ))` ⏎ `then echo C` ⏎ `fi` | `C` |
+| `elif (( 1 ))` ⏎ `{ echo C }` | parse error at `\n` |
+| `elif (( 1 )) { echo C } else echo D; fi` | `C` |
+
+**The `{` is what makes an arm short.** Row 1 is the short `else`, and
+rows 3 and 4 are the pair that says so: a short arm owes no `fi` and
+refuses one written anyway, while an `else` that does not open a brace is
+a long arm whose `fi` is required. Row 5 adds that its body is a *list*,
+which a short body is never (see *The short body is one command* below),
+so this is the long production and not a short one that grew a
+terminator.
+
+**Row 2 is why the rule is about the brace and not about the newline.** A
+newline between a *condition* and its body is what puts an `if` or an
+`elif` in the long form — row 11, against row 12 on the same line — but
+an `else` has no condition for one to end, so the newlines in front of
+its brace decide nothing.
+
+**Row 8 is `#1372` itself.** An `else` with nothing after it was accepted
+here and is refused there, and the reason is not that an empty short arm
+is illegal: it is a *long* arm that reached the end of the input with the
+`fi` still owed. Written the other way the rule would have refused row 4
+as well, which runs. It also settles what a prompt should do — the input
+ran out inside the construct, so a reader that can fetch another line
+does, which is the `CONT> ` zsh draws before refusing the line.
+
+Note the asymmetry with row 6 of the previous section: `else { … }` after
+a **long** `then` arm still needs its `fi`, because there the brace is an
+ordinary group inside a long else. The short spelling of `else` is
+reachable only from an arm that was itself short.
+
+### A short body that took its separator took the construct's
+
+`if (( 1 )) echo A; else echo B` is `parse error near \`else\`` on zsh
+5.9.2, with or without a `fi` after it, and so is the same shape written
+after an `elif`. The `;` belongs to `echo A`, and a short body's
+separator is the whole statement's — so the `if` ended with it and there
+is nothing left for an `else` to attach to. A newline in place of the `;`
+reaches the same refusal.
+
+| probe | zsh 5.9 |
+| --- | --- |
+| `if (( 1 )) echo A; else echo B` | parse error at `else` |
+| `if (( 1 )) echo A; else echo B; fi` | parse error at `else` |
+| `if (( 1 )) echo A; else { echo B }` | parse error at `else` |
+| `if (( 1 )) echo A` ⏎ `else echo B; fi` | `A`, then parse error at `else` |
+| `if (( 0 )) { echo A } elif (( 1 )) echo C; else { echo D }` | parse error at `else` |
+| `if (( 1 )) { echo A } else { echo B }` | `B` — the control |
+
+The last row is what keeps this from being "an `else` after a short body
+is always refused": a brace body is closed by its own `}` and takes no
+separator, so the arm after it attaches.
+
+**And a brace body takes none from within, either.** `for i (a b) { echo
+$i; } echo end` is refused, which was already recorded; `for i (a b) {
+for j (c d) echo $j; } echo end` is refused for the same reason, and this
+tree ran the tail — the *inner* short loop's `;` had been left standing
+as the outer loop's terminator.
+
 ## A `case` written with braces
 
 The `case` header has a second spelling too, and **two** shells have it —

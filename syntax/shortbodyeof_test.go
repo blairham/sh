@@ -43,6 +43,14 @@ func TestAShortBodyThatNeverArrivedLeavesTheInputIncomplete(t *testing.T) {
 		// the same answer — `then` never came — and is here so that the two
 		// routes are known to agree.
 		"if (( 1 ))\n",
+		// An arm not written the short way puts the rest of the construct in
+		// the long form, so what is missing here is the `fi` — and the same
+		// answer comes back, which is what lets a prompt draw its
+		// continuation before refusing the line rather than running an arm
+		// nobody wrote (#1372).
+		"if (( 1 )) { echo A } else\n",
+		"if (( 0 )) { echo A } else echo B\n",
+		"if (( 1 )) { echo A } elif (( 1 ))\n",
 	} {
 		p := NewParser(src, shortFormDialect())
 		p.Parse()
@@ -57,6 +65,11 @@ func TestAShortBodyThatNeverArrivedLeavesTheInputIncomplete(t *testing.T) {
 
 // The same constructs, finished, are not incomplete — which is the half that
 // keeps the rule above from being "a short form is never done".
+//
+// `if (( 1 )) echo A; else echo B` was on this list and is not: the `;` ends
+// the whole `if`, so the `else` attaches to nothing and the line is a parse
+// error rather than a finished one. TestASeparatedShortArmEndsTheWholeIf has
+// it now, with the rest of that rule.
 func TestAShortFormWithItsBodyIsComplete(t *testing.T) {
 	for _, src := range []string{
 		"for i in 1 2; do echo $i; done\n",
@@ -65,7 +78,6 @@ func TestAShortFormWithItsBodyIsComplete(t *testing.T) {
 		"while false; do :; done\n",
 		"repeat 2 echo R\n",
 		"if (( 1 )) echo A\n",
-		"if (( 1 )) echo A; else echo B\n",
 		"echo A\n",
 		// A body that is empty because somebody else's token is standing
 		// there. The input did not run out — the `)` is in hand — so the

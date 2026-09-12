@@ -179,3 +179,121 @@ func TestTheShortFormsPrintBack(t *testing.T) {
 		}
 	}
 }
+
+// Each arm of a short `if` chooses its own form, and the first one not
+// written the short way puts the rest of the construct in the long one —
+// where there is a `fi`, and it is required.
+//
+// #1372 filed the accepting half of this as "a short `else` arm with no body
+// is accepted where the shell refuses it". Re-measuring found the rule one
+// step further back: the `{` is what makes an arm short, an `else` that does
+// not open one is a *long* arm, and an `else` with nothing after it is that
+// arm arriving at the end of the input with the `fi` still owed. Written as
+// "an empty short arm is an error" the first row below would have been
+// refused too, and the shell runs it.
+func TestAnArmNotWrittenShortPutsTheRestInTheLongForm(t *testing.T) {
+	short := Core()
+	short.ShortForm = true
+	short.DoubleBracket = true
+	short.ArithCommand = true
+	short.CloseBraceAlwaysReserved = true
+
+	for _, src := range []string{
+		"if (( 0 )) { echo A } else echo B; fi\n",
+		// The long arm's body is a list rather than the one command a short
+		// body is, which is what says it is the long form and not a short
+		// form that grew a terminator.
+		"if (( 0 )) { echo A } else echo B; echo tail; fi\n",
+		"if (( 0 )) { echo A } else\necho B\necho tail\nfi\n",
+		// A compound command as the body: refused as a short arm, taken as a
+		// long one, so the two readings are told apart by more than a `;`.
+		"if (( 0 )) { echo A } else ( echo B ); fi\n",
+		// The `elif` half, in both of the ways an arm stops being short: a
+		// condition that never ended itself, and one that did with the body
+		// on the next line.
+		"if (( 0 )) { echo A } elif true; then echo C; fi\n",
+		"if (( 0 )) { echo A } elif (( 1 ))\nthen echo C\nfi\n",
+		// And the two spellings mix in one chain.
+		"if (( 0 )) { echo A } elif (( 1 )) { echo C } else echo D; fi\n",
+	} {
+		mustParse(t, src, short, "a long arm after a short one")
+	}
+
+	for _, src := range []string{
+		// #1372's own row: the `fi` never came.
+		"if (( 1 )) { echo A } else\n",
+		"if (( 0 )) { echo A } else echo B\n",
+		"if (( 0 )) { echo A } else\necho B\n",
+		"if (( 0 )) { echo A } else ( echo B )\n",
+		"if (( 1 )) { echo A } elif (( 1 ))\n",
+		// A brace group on the line after an `elif`'s condition is not a
+		// short body: the newline ended the condition, so a `then` is owed
+		// and a `{` is not one.
+		"if (( 0 )) { echo A } elif (( 1 ))\n{ echo C }\n",
+	} {
+		mustFail(t, src, short, "a long arm without its `fi`")
+	}
+
+	// The short arm stays short, and the newlines in front of its brace do
+	// not decide the form — an `else` has no condition for one to end. The
+	// pair with the row below is what says so: no `fi` is owed here and one
+	// written anyway is refused.
+	mustParse(t, "if (( 0 )) { echo A } else { echo B }\n", short, "a short else")
+	mustParse(t, "if (( 0 )) { echo A } else\n{ echo B }\n", short, "a newline before the brace")
+	mustParse(t, "if (( 0 )) { echo A } else\n\n{ echo B }\n", short, "two of them")
+	mustFail(t, "if (( 0 )) { echo A } else { echo B }\nfi\n", short, "a `fi` a short arm never owed")
+}
+
+// A short body that took the separator took the whole construct's, so there
+// is no arm left for an `else` to attach to.
+//
+// The rule is the one shortIf's own doc states from the other side — the `;`
+// ends the command — and it was stated there while the parser went on taking
+// the `else`. Every row here is `parse error near `else“ on the shell with
+// the construct, with or without a `fi` after it.
+func TestASeparatedShortArmEndsTheWholeIf(t *testing.T) {
+	short := Core()
+	short.ShortForm = true
+	short.DoubleBracket = true
+	short.ArithCommand = true
+	short.CloseBraceAlwaysReserved = true
+
+	for _, src := range []string{
+		"if (( 1 )) echo A; else echo B\n",
+		"if (( 1 )) echo A; else echo B; fi\n",
+		"if [[ -z x ]] echo A; else echo B; fi\n",
+		"if (( 1 )) echo A; else { echo B }\n",
+		"if (( 0 )) { echo A } elif (( 1 )) echo C; else { echo D }\n",
+	} {
+		mustFail(t, src, short, "an `else` after a separated short body")
+	}
+
+	// The controls, and they are what keep the rule from being "an `else`
+	// after a short body is always refused": a brace body takes no separator,
+	// so the arm after it attaches. A newline in place of the `;` reaches the
+	// same refusal by a route that needed no code — it is still in hand, so
+	// the `else` on the next line is not the token being looked at.
+	mustParse(t, "if (( 1 )) { echo A } else { echo B }\n", short, "a brace body keeps the `else`")
+	mustFail(t, "if (( 1 )) echo A\nelse echo B; fi\n", short, "a newline ends it too")
+}
+
+// A brace body is closed by its own `}` and takes no terminator with it,
+// however deeply a short form written inside it took one of its own.
+func TestABraceBodyTakesNoTerminatorFromWithin(t *testing.T) {
+	short := Core()
+	short.ShortForm = true
+	short.CloseBraceAlwaysReserved = true
+
+	mustFail(t, "for i (a b) { echo $i; } echo end\n", short,
+		"a list carrying on after a brace body")
+	// The nested row is the one that was wrong: the inner short loop's `;`
+	// was left standing as the *outer* loop's terminator, so the tail ran
+	// where the shell with the construct refuses it.
+	mustFail(t, "for i (a b) { for j (c d) echo $j; } echo end\n", short,
+		"an inner short body's separator standing as the outer loop's")
+
+	// The controls: an unbraced short body does take the separator, so a list
+	// may go on after it, and the nested shape is fine with nothing after it.
+	mustParse(t, "for i (a b) echo $i; echo end\n", short, "a short body takes its separator")
+	mustParse(t, "for i (a b) { for j (c d) echo $j; }\n", short, "the nesting itself")
+}

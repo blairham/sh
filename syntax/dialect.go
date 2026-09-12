@@ -491,6 +491,25 @@ type Dialect struct {
 	// at all. `for i in a b` still needs a separator or `do`, which is the
 	// same rule that makes `for i in a b { … }` read `{` as another item.
 	//
+	// **An `if`'s arms choose the form one at a time.** The `{` is what
+	// makes an arm short, and the first arm not written that way puts the
+	// rest of the construct in the long form — where there is a `fi`, and it
+	// is required. So `if (( 0 )) { echo A } else echo B; fi` runs and
+	// `if (( 0 )) { echo A } else echo B` is refused for want of the `fi`,
+	// while `else { echo B }` owes none and refuses one written anyway. A
+	// newline before that brace decides nothing, an `else` having no
+	// condition for one to end; a newline after an `elif`'s condition
+	// decides everything, that being the long form's own rule. #1372 read
+	// the refusal of an `else` with nothing after it as a rule about empty
+	// arms, which would have refused the first shape here too.
+	//
+	// **A short body that took its separator took the construct's.** `if
+	// (( 1 )) echo A; else echo B` is refused with or without a `fi`: the
+	// `;` belongs to `echo A` and a short body's separator is the whole
+	// statement's, so the `if` ended and nothing is left for the `else`. A
+	// brace body takes no separator — not its own, and not one an inner
+	// short form took inside it.
+	//
 	// A production of the grammar and not of the printer: a body that was
 	// written short is printed as `do … done`, which parses to the same tree
 	// under any dialect. Only an *omitted* body has no long spelling, so

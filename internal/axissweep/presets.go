@@ -50,12 +50,7 @@ func Presets() []Preset {
 		{Name: "zsh", Semantics: zsh.Semantics(), Against: "zsh"},
 		{Name: "ksh", Semantics: ksh.Semantics(), Against: "ksh93"},
 		{Name: "dash", Semantics: dash.Semantics(), Against: "dash"},
-		{
-			Name: "ash", Semantics: ash.Semantics(),
-			Ungraded: "the oracle panel locates its shells with exec.LookPath and " +
-				"there is no BusyBox ash on a macOS machine, so this dialect has no " +
-				"column in the golden record (#2263)",
-		},
+		{Name: "ash", Semantics: ash.Semantics(), Against: "ash"},
 	}
 }
 

@@ -3,21 +3,24 @@
 
 // Package ash answers the substrate's questions the way BusyBox ash does.
 //
-// # What was measured, and what nothing checks
+// # What was measured, and what checks it
 //
 // Every answer below was measured by running BusyBox v1.37.0's `ash` — the
 // `/bin/ash` of the `alpine:3` image — over the whole oracle corpus and over
 // hand-written probes, on 2026-09-12. No BusyBox source was read; see
 // CLEANROOM.md, and docs/spec/ash.md for the method and the numbers.
 //
-// It is nonetheless the first dialect in this tree whose behavior **no
-// instrument grades**. The oracle panel locates its shells with
-// exec.LookPath, and there is no ash binary on a macOS machine — `brew
-// install busybox` has no formula, and BusyBox's published binaries are Linux
-// ELF — so ash has no column in the golden record and `make
-// conformance-dialects` has no row for it. The answers here are therefore
-// *measured* but not *maintained*: nothing in `make check` notices when one
-// of them drifts. #2263 is the follow-on that fixes it.
+// For its first day this was the one dialect in the tree **no instrument
+// graded**, because the oracle located its shells with exec.LookPath and
+// there is no ash binary on a macOS machine. That is over: the panel reaches
+// a member by a *route* now, and ash's is a container of a digest-pinned
+// alpine image, so it has a column in the golden record, a row in `make
+// conformance-dialects` and a target in `make axis-sweep` (#2263).
+//
+// The day it did not have them cost exactly what it looked like it would.
+// An axis was added to interp.Semantics with no answer here, `read -t`
+// started being refused by a shell that used to take it, and `go test ./...`
+// stayed green throughout (#2272). The column is what says so now.
 //
 // One thing `make check` does notice, since #2340: an axis this dialect has
 // no value for *at all*. That is absence rather than drift, it costs no shell

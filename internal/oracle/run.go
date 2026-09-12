@@ -136,6 +136,15 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 	if err := c.validate(); err != nil {
 		return harnessError(err)
 	}
+	// A member reached through a container is measured by this same function,
+	// compiled from this same tree and running inside the image. Everything
+	// below this line — the scrubs, the fixed environment, the timeout, the
+	// wait status, the normalization — is therefore one implementation for
+	// both routes rather than a container command line built to resemble it.
+	// See Reach.
+	if sh.sess != nil {
+		return sh.sess.exec(ctx, sh, c)
+	}
 	ctx, cancel := context.WithTimeout(ctx, RunTimeout)
 	defer cancel()
 

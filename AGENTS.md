@@ -76,9 +76,9 @@ refuses what every real shell accepts is a core nobody can write against.
     cmd/sh            the substrate's driver, with -dialect
     cmd/bash cmd/zsh  dialect binaries, as proof the library goal holds
     cmd/dash cmd/ksh  …
-    cmd/ash           the fifth, and the one no instrument grades — there is
-                      no BusyBox ash on a macOS machine, so it has no oracle
-                      column; docs/spec/ash.md says what that costs
+    cmd/ash           the fifth; there is no BusyBox ash on a macOS machine,
+                      so its oracle column is reached through a container of
+                      a digest-pinned alpine image rather than through a path
     cmd/shfmt         the formatter: the first thing that consumes the
                       parser as a product rather than as test scaffolding
     internal/cmd/     the instruments: not shipped, and under internal/
@@ -86,6 +86,8 @@ refuses what every real shell accepts is a core nobody can write against.
       oracle          records what real shells do
       smoke           drives a session through a terminal, per-feature
       wild            parses the shell scripts installed on this machine
+      oraclerunner    the oracle, inside a container: the far half of the
+                      ash column, and oracle.Exec rather than a lookalike
       corpusguard     fails when the corpus has lost a case
       fmtwild         lays out every script on the machine and checks
                       that nothing but the layout changed
@@ -601,7 +603,7 @@ argument was not true. "A directory of its own" is where a script is
 machine write to a temporary file they name themselves, and the policy is
 what catches them.
 
-`make conformance-dialects` grades all four dialect binaries against the
+`make conformance-dialects` grades all five dialect binaries against the
 shells they claim to be. Each scores exactly what `make conformance` scores
 for the same dialect, because both routes run the same core through the same
 front end. **If the two ever disagree, the difference is a driver bug and not

@@ -18,6 +18,48 @@ believed it did.
 | `bash` 3.2 | what macOS still ships; the oldest target that matters |
 | `ksh93` | the other ksh-family lineage |
 | `zsh` | the interactive incumbent, and the most divergent semantics |
+| `ash` | BusyBox: what Alpine and most embedded systems call `sh` |
+
+### How a member is reached
+
+Six of the seven are a binary on the machine running the harness, found
+with `exec.LookPath` over the candidate paths in the panel entry. `ash`
+is not, and cannot be: there is no BusyBox on macOS and no way to get
+one, which is why `dialect/ash` shipped measured by hand and graded by
+nothing for a day (#2263).
+
+So the route is a value — `oracle.Reach` — with two implementations, and
+everything above it asks for a `Found` and stops caring where the shell
+is. `ash`'s route is a container of the `alpine` image **pinned by
+digest**, because a tag moves and a record that moves underneath its own
+drift check detects nothing.
+
+The two routes differ in exactly one thing, and that is what keeps the
+columns comparable: the container one runs **`oracle.Exec` itself**,
+cross-compiled from this tree and sent cases over a pipe, rather than a
+`docker run` command line built to resemble what `Exec` does. The
+environment scrub, the signal-disposition scrub, the timeout, the
+wait-status reading and every normalization rule are therefore one
+implementation. A second mechanism beside the first is this repository's
+recurring failure mode; it would have drifted the first time a rule was
+added on one side only.
+
+It is one long-lived container rather than one invocation per case —
+`docker run` is a quarter of a second before any shell starts, and the
+corpus is over three thousand cases. Inside, a case is an ordinary fork
+and exec, so the column costs about four seconds on a `make oracle` that
+already takes four minutes.
+
+**A column that did not run must never read like one that agreed.** On a
+machine with no container runtime the panel table says
+
+    ash          NOT RUN — no container runtime here (docker is not on PATH)
+
+in the column the version strings are in, and `oracle -check` refuses to
+print `no drift: the panel behaves as recorded` over a panel missing a
+column the record has. That honesty was owed to `bash32` long before ash
+existed — it is absent on every Linux machine, and the verdict used to
+claim the panel behaved as recorded anyway.
 
 `bash` is run **both as `bash` and as `sh`**, because argv[0] changes the
 language: bash 3.2 has process substitution when invoked as `bash` and

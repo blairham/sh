@@ -164,10 +164,14 @@ func TestDiagnosticsAreWordedThisShellsWay(t *testing.T) {
 }
 
 // TestTheDialectRefusesNothingItWasNotMeasuredRefusing is a guard against the
-// hazard this package is most exposed to: with no oracle column, an answer
-// added by eye is indistinguishable from one that was run. The rows here are
-// the behaviors a reader is most likely to assume from dash, each measured
-// the other way.
+// hazard this package was written under: for its first day there was no
+// oracle column, so an answer added by eye was indistinguishable from one
+// that was run. There is a column now (#2263) and `make
+// conformance-dialects` grades this dialect against it, which is the wider
+// net; these rows stay because they are the behaviors a reader is most likely
+// to assume from dash, each measured the other way, and a named assertion
+// says *which* assumption is wrong where a conformance number only says how
+// many are.
 func TestTheDialectRefusesNothingItWasNotMeasuredRefusing(t *testing.T) {
 	for _, tc := range []struct {
 		src  string

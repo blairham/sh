@@ -97,35 +97,50 @@ Every number here is reproducible with:
 
     docker run --rm alpine:3 /bin/ash -c '<snippet>'
 
-## What nothing checks
+## What checks it
 
-The oracle locates a panel shell with `exec.LookPath`
-(`internal/oracle/shell.go`) and runs it as a local binary
-(`internal/oracle/run.go`). A shell that exists only inside a container
-has no spelling in `oracle.Shell`. So:
+The oracle reaches a panel member by a **route** rather than by a path
+(`oracle.Reach`). Every other member's route is a binary on this machine,
+found with `exec.LookPath`; ash's is a container of the `alpine` image
+**pinned by digest** —
+`sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b`,
+which is BusyBox v1.37.0. So:
 
-- **there is no `ash` column in `internal/oracle/testdata/golden.json`**;
-- **`make conformance-dialects` has no ash row**, and must not grow one,
-  because the row would be graded against a column that is not there;
-- **`make axis-sweep` has no ash target**, for the same reason — a
-  target names the panel column its answers are graded against;
-- **`make check` therefore says almost nothing about this dialect**
-  beyond the unit tests in `dialect/ash`, which assert what somebody
-  already believed. The one exception is stated below: `make check` now
-  fails when this dialect has *no value at all* for an axis (#2340).
-  That is absence, and it needs no shell to detect; a wrong answer is
-  drift, and detecting that still needs the binary #2263 is about.
+- **`internal/oracle/testdata/golden.json` has an `ash` column**, and
+  `docs/spec/measurements.md` prints its build string beside the others'.
+- **`make conformance-dialects` grades `cmd/ash`** against it and reports
+  a number.
+- **`make axis-sweep` has an ash target**, which it could not have while
+  the column did not exist: a sweep graded against an absent column
+  reports every axis as unpinned, which is the loudest way of saying
+  nothing.
+- **`make oracle` regenerates the column on a developer's machine**,
+  which is the property that decided the shape. The alternative — record
+  it in CI only — would have left the committed record un-regenerable
+  here, and this repository already has the scar that says a gate inert
+  on one platform reads as a pass.
 
-`make conformance-dialects` exists precisely to stop a dialect drifting
-from the shell it claims to be. This one is exempt from it, and the
-exemption is not a decision about ash — it is a fact about the machine.
-**It lasts until the oracle can reach a shell that is not on this
-machine's PATH**, which is #2263 — the two options and what each of them
-costs the golden record are written out there rather than left to be
-worked out again.
+Two costs came with that and are not hidden. The column pins the
+behavior of an **image**, not of a binary on this machine, so its
+provenance is a digest rather than a package version; and **regenerating
+it needs a container runtime**. Where there is none, the column does not
+run, and the harness says so in the words it says nothing else in:
 
-Until then, treat this package the way the repository treats a gate that
-is inert on one platform: a green `make check` is not evidence about ash.
+    ash          NOT RUN — no container runtime here (docker is not on PATH)
+
+`oracle -check` will not print `no drift: the panel behaves as recorded`
+over a panel missing a column the record has. It names what did not run
+instead — which also fixed the same dishonesty for `bash32`, absent on
+every Linux machine since long before ash existed.
+
+The run is one long-lived container spoken to over a pipe, not one
+invocation per case, and the thing inside it is **`oracle.Exec` itself**,
+cross-compiled from this tree. Not a `docker run` command line built to
+resemble what `Exec` does: the same function, so the environment scrub,
+the signal-disposition scrub, the timeout, the wait-status reading and
+every normalization rule are one implementation for both routes. Measured
+on the panel machine, the column costs about **four seconds** on a `make
+oracle` that already takes four minutes.
 
 ### The first time that cost something
 
@@ -169,7 +184,9 @@ sweep above is still worth running:
   nineteen; a static count cannot.
 - **It cannot say whether an answer is right.** A value copied from dash
   to quiet a refusal satisfies it perfectly. That is what an oracle
-  column is for, and it remains #2263.
+  column is for, and there is one now (#2263) — `make
+  conformance-dialects` is where a wrong answer shows as a number that
+  did not move, or moved the wrong way.
 
 What it does do is make the #2272 shape impossible to ship quietly, which
 was the specific failure: an axis added elsewhere, unanswered here,
@@ -195,17 +212,47 @@ Graded against the container recording — our `cmd/ash` run over the same
 day it landed. `cmd/dash` scored 97.3% against its own column on the same
 run, after a long campaign; 79% is what a first pass looks like.
 
-The number is written down here rather than in `AGENTS.md` because it
-**cannot be re-derived on this machine without Docker**, which is exactly
-the property that keeps it out of the golden record. Re-measure it before
-quoting it.
+On the day the column landed, `make conformance-dialects` scored it
+**2731/3450, 79%** — 96% behavioral. That number is re-derivable now,
+which is the difference this made: it used to be written down here
+*because* it could not be.
+
+### The column, shown red and then green on #2272
+
+Not a demonstration arranged afterwards. #2272 was **live in the tree**
+while the column was being built, so the first run of the new
+`conformance-dialects` row named it — `read/a-timeout-that-expires` and
+`read/a-fractional-timeout`, both of which BusyBox answers and `cmd/ash`
+was refusing:
+
+    want out "st=0 [hi]" err "" (status 0)
+    got  out "st=2 []"   err "`read -t` bounding the wait for the first
+                              byte rather than the whole read: the shells
+                              disagree here and no dialect was chosen"
+
+`want` is real BusyBox through the container route; `got` is our shipped
+binary. Then #2272 landed on `main` — `ReadTimeoutBoundsReadability`
+gained its ash value — the branch was rebased onto it, and **both rows
+pass**. Red with the answer missing, green with the answer present, on
+the same instrument and with nothing else changed.
+
+That is the whole argument for the column in one pair of runs. The defect
+was an axis added elsewhere with no ash value; the shipped binary stopped
+taking a flag it used to take; and `go test ./...` was green throughout,
+because nothing graded ash.
 
 ## What could not be said
 
 Six measured behaviors have no value on any existing axis. They are
 recorded here rather than approximated in code, because an invented
-answer in a dialect nothing grades is indistinguishable from a measured
-one.
+answer is indistinguishable from a measured one in a file that holds both.
+
+They were deliberately left undone while nothing graded this dialect: a
+substrate edit made for it could not be checked. **That reason has
+expired** — the column exists, `make conformance-dialects` reports a
+number, and a widening can now be shown to move it. What remains is the
+size of the edit rather than the impossibility of verifying it, so each
+is a change to make and to measure rather than a note to keep.
 
 **1. The builtin location prefix.** A message a *builtin* speaks carries
 the builtin's name and a line, separated the ordinary way:
@@ -217,9 +264,12 @@ the builtin's name and a line, separated the ordinary way:
 rides on the shell's name", and it is a `bool` whose one true value joins
 them *tight* — zsh's `zsh:shift:1:`. ash wants the same thing spaced.
 Closing it means widening that bool into a three-valued enum
-(absent / tight / spaced), which is 31 references across 14 files. Left
-undone deliberately: a substrate edit made for a dialect nothing grades
-cannot be checked, so it should land with #2263.
+(absent / tight / spaced), which is 31 references across 14 files. It is
+the one of the three that costs real corpus rows, and it is now
+measurable: the ash column is what the widening would be graded against.
+It is deliberately not part of #2263 — a 14-file substrate edit folded
+into the change that builds the instrument would be graded by the same
+commit that invented the grade.
 
 **2. `line 0` under `-c`.** On the command-string route this shell
 numbers a builtin's line from zero — `ash -c 'unset "a[0]"'` is `line 0`

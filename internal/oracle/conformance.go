@@ -121,6 +121,21 @@ func refused(r Result) bool {
 	return !r.TimedOut && (r.Status != 0 || r.Signal != 0) && r.Stderr != ""
 }
 
+// declined is the weaker claim: it complained and it produced nothing, but it
+// did not say so in its exit status.
+//
+// It is not a grading rule and must not become one — nothing in this file
+// calls it, and matchesRefusal deliberately still demands refused() on both
+// sides. It exists because the panel stopped being unanimous about the
+// *shape* of a refusal when ash joined: BusyBox answers an unknown `-o` name
+// with a diagnostic, no output, and status 0. See
+// TestGradedOnRefusalCasesAreActuallyRefused, which is the one caller, for
+// the measurement and for why the guard may take this reading where the
+// grade may not.
+func declined(r Result) bool {
+	return !r.TimedOut && r.Stdout == "" && r.Stderr != ""
+}
+
 // matchesRefusal grades a case on the refusal rather than on its wording.
 //
 // It forgives exactly one thing: the words of the diagnostic. Everything the
@@ -200,7 +215,7 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 		return nil, fmt.Errorf("no binary at %s: %w", path, err)
 	}
 
-	found, missing := Resolve(ctx)
+	found, absent := Resolve(ctx)
 	var ref Found
 	for _, f := range found {
 		if f.Name == against {
@@ -208,7 +223,15 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 		}
 	}
 	if ref.Path == "" {
-		return nil, fmt.Errorf("reference shell %q is not installed", against)
+		// Which reason is the difference between "install it" and "start
+		// Docker", and a bare "not installed" was wrong for the ash column
+		// from the day it existed.
+		for _, a := range absent {
+			if a.Name == against {
+				return nil, fmt.Errorf("reference shell %q cannot be reached here: %s", against, a.Reason)
+			}
+		}
+		return nil, fmt.Errorf("reference shell %q is not in the panel", against)
 	}
 
 	ours := Found{
@@ -239,7 +262,7 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 		Path: path,
 	}
 
-	rep := &Report{Against: against, Missing: missing}
+	rep := &Report{Against: against, Missing: Names(absent)}
 	for _, c := range cases {
 		if !graded(c) {
 			continue

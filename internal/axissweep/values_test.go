@@ -7,7 +7,8 @@ import "testing"
 
 // TestPresetUseAsksEveryAxis. The value of this check is that it is total and
 // costs no processes, so the thing to pin is that it really does cover the
-// whole vector and really does read all four dialects.
+// whole vector and really does read every dialect that claims to be a panel
+// member — five of them since ash gained a column (#2263).
 func TestPresetUseAsksEveryAxis(t *testing.T) {
 	t.Parallel()
 	uses, err := PresetUse()
@@ -18,13 +19,13 @@ func TestPresetUseAsksEveryAxis(t *testing.T) {
 		t.Fatalf("only %d axes asked about", len(uses))
 	}
 	for _, u := range uses {
-		for _, want := range []string{"bash", "zsh", "ksh", "dash"} {
+		for _, want := range []string{"bash", "zsh", "ksh", "dash", "ash"} {
 			if _, ok := u.Held[want]; !ok {
 				t.Fatalf("%s: %s was not asked what it holds", u.Field, want)
 			}
 		}
-		if len(u.Held) != 4 {
-			t.Fatalf("%s: %d vectors asked, want the four dialects", u.Field, len(u.Held))
+		if got, want := len(u.Held), len(Targets()); got != want {
+			t.Fatalf("%s: %d vectors asked, want one per target (%d)", u.Field, got, want)
 		}
 	}
 }

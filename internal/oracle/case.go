@@ -18001,7 +18001,7 @@ echo "st=$?"`,
 		Args:            []string{"-o", "nosuchoption", "-c", ArgSnippet},
 		Snippet:         `echo hi`,
 		GradedOnRefusal: true,
-		Why:             "the same question one level in: `-o` is a valid letter and its operand is not a valid name, so the refusal comes from the option table rather than from the letter table. All six decline before running the command string, which is the part that matters — a shell that warned and carried on would print `hi` and standard output would catch it",
+		Why:             "the same question one level in: `-o` is a valid letter and its operand is not a valid name, so the refusal comes from the option table rather than from the letter table. All seven decline before running the command string, which is the part that matters — a shell that warned and carried on would print `hi` and standard output would catch it. They do not agree on how to say so: BusyBox writes the diagnostic and then exits **0**, which is the one column where declining and a nonzero status come apart",
 	},
 	{
 		ID: "invoke/a-script-has-neither-route-letter", Category: "invocation",

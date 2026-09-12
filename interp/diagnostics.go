@@ -321,7 +321,7 @@ type Diagnostics struct {
 	// it cannot read. No verbs, and it is a *warning*: the conversion still
 	// writes the current time after it, and the status is 1.
 	//
-	// Only the dialect with that form has one — see
+	// Only a preset with that form has one — see
 	// Semantics.PrintfTimeOperandIsADateString.
 	PrintfBadDateOperand string
 
@@ -330,34 +330,32 @@ type Diagnostics struct {
 	GetoptsBadOption string
 	// GetoptsMissingArgument is an option whose argument is not there. Same.
 	GetoptsMissingArgument string
-	// GetoptsNamesNoLine prints those with the shell's name and no line,
-	// where this dialect gives a line to everything else. bash alone.
+	// GetoptsNamesNoLine prints those with the shell's name and no line, where
+	// this preset gives a line to everything else.
 	GetoptsNamesNoLine bool
-	// GetoptsUnprefixed prints them with neither a name nor a line. dash
-	// alone, and the only diagnostic in the panel with nothing in front of
-	// it at all.
+	// GetoptsUnprefixed prints them with neither a name nor a line — the only
+	// measured diagnostic with nothing in front of it at all.
 	GetoptsUnprefixed bool
 
 	// CdCannotChange is a directory `cd` could not move to. Two verbs,
-	// positional because the shells order them differently and one does not
-	// use the second at all: %[1]s is the operand as written and %[2]s the
-	// reason.
+	// positional because presets order them differently and one does not use the
+	// second at all: %[1]s is the operand as written and %[2]s the reason.
 	//
-	//	bash   cd: /nope: No such file or directory
-	//	dash   cd: can't cd to /nope
-	//	ksh93  cd: /nope: [No such file or directory]
-	//	zsh    no such file or directory: /nope
+	//	cd: /nope: No such file or directory
+	//	cd: can't cd to /nope
+	//	cd: /nope: [No such file or directory]
+	//	no such file or directory: /nope
 	//
-	// dash gives no reason at all, so `cd` onto a file and `cd` onto nothing
-	// read identically there — the one shell where the message cannot tell
-	// you which it was.
+	// The second gives no reason at all, so `cd` onto a file and `cd` onto
+	// nothing read identically there — the one wording that cannot tell you
+	// which it was.
 	CdCannotChange string
-	// CdStatus is what that reports. dash says 2 and the other three say 1.
-	// Zero means the substrate's own, 1.
+	// CdStatus is what that reports — 1 and 2 are both measured. Zero means the
+	// substrate's own, 1.
 	CdStatus int
-	// HashEmptyTable is what a bare `hash` says about the table this shell
-	// does not keep. bash announces it, on standard output; the other three
-	// print nothing, which the empty value means.
+	// HashEmptyTable is what a bare `hash` says about the table this shell does
+	// not keep. A preset may announce it, on standard output; printing nothing
+	// is what the empty value means.
 	HashEmptyTable string
 	// HashNotFound is a hashed name that resolves to nothing. One verb: the
 	// name. Empty means the substrate's own wording.
@@ -368,59 +366,56 @@ type Diagnostics struct {
 	CompleteNoSpec string
 
 	// FunctionNameInvalid refuses to define a function whose name carries
-	// punctuation, in the dialect that refuses one. One verb: the name.
+	// punctuation, under a preset that refuses one. One verb: the name.
 	FunctionNameInvalid string
-	// FunctionNameDiscipline replaces it when the name carries a dot, which
-	// is a discipline function to the shell that says this.
+	// FunctionNameDiscipline replaces it when the name carries a dot, which is
+	// a discipline function under the preset that says this.
 	FunctionNameDiscipline string
 
 	// DirectoryOnPathStatus is what a PATH search whose only match was a
-	// directory reports, in a dialect that keeps the directory as its
-	// answer. dash says 127 — the message names the candidate and the
-	// status says not found — where ksh93 and zsh say 126. Zero means 126.
+	// directory reports, under a preset that keeps the directory as its answer.
+	// 127 — the message naming the candidate while the status says not found —
+	// and 126 are both measured. Zero means 126.
 	DirectoryOnPathStatus int
 	// CdHomeNotSet is `cd` with no operand and no HOME. One verb: the name.
-	// Only the two dialects that treat it as an error say anything.
+	// Only a preset that treats it as an error says anything.
 	CdHomeNotSet string
 	// CdOldpwdNotSet is `cd -` with no OLDPWD. Same.
 	CdOldpwdNotSet string
 	// CdEmptyOperand is `cd ""`, and `cd` with HOME set to the empty string
-	// in the one dialect that refuses that too. No verbs.
+	// under a preset that refuses that too. No verbs.
 	//
-	// A fifth branch rather than a shade of CdCannotChange or of
-	// CdHomeNotSet: bash calls it `cd: null directory` and ksh93 `cd: bad
-	// directory`, and neither sentence names a path or mentions HOME. The
-	// three dialects that take an empty operand as somewhere say nothing, so
-	// the empty value is their whole answer.
+	// A branch of its own rather than a shade of CdCannotChange or of
+	// CdHomeNotSet: `cd: null directory` and `cd: bad directory` are both
+	// measured, and neither sentence names a path or mentions HOME. A preset
+	// that takes an empty operand as somewhere says nothing, so the empty value
+	// is its whole answer.
 	CdEmptyOperand string
-	// CdTooManyOperands is `cd` given more operands than it takes: two in
-	// the dialects without the substitution form, three in the two with it.
-	// No verbs.
+	// CdTooManyOperands is `cd` given more operands than it takes: two without
+	// the substitution form, three with it. No verbs.
 	//
-	// bash and zsh both say `cd: too many arguments` and leave different
-	// statuses behind; ksh93 says nothing here and writes its usage block
-	// instead, which is the field below.
+	// `cd: too many arguments` is the common sentence, and presets that share it
+	// may still leave different statuses behind; another says nothing here and
+	// writes its usage block instead, which is the field below.
 	CdTooManyOperands string
-	// CdTooManyOperandsShowsUsage writes BuiltinUsage["cd"] under that
-	// refusal. True in ksh93, which writes the block and no sentence.
+	// CdTooManyOperandsShowsUsage writes BuiltinUsage["cd"] under that refusal,
+	// which a preset may do instead of a sentence.
 	//
 	// Independent of the sentence rather than an alternative to it: nothing
-	// stops a dialect writing both, and the two shells that write one each
-	// write a different one.
+	// stops a preset writing both.
 	CdTooManyOperandsShowsUsage bool
-	// CdTooManyOperandsStatus is what that refusal reports. Zero means
-	// CdStatus, which is what a `cd` that could not move reports. bash and
-	// ksh93 answer 2 here where their CdStatus is 1, because it is a usage
-	// error rather than a directory that would not open; zsh answers 1 and
-	// so needs nothing.
+	// CdTooManyOperandsStatus is what that refusal reports. Zero means CdStatus,
+	// which is what a `cd` that could not move reports. A preset may answer 2
+	// here where its CdStatus is 1, because this is a usage error rather than a
+	// directory that would not open; one that answers the same number needs
+	// nothing.
 	CdTooManyOperandsStatus int
 	// CdBadSubstitution is `cd old new` where old is not in the current
 	// directory's path. One verb: the string that was not found.
 	//
-	// Only the two dialects with the form reach it, and they word it
-	// differently enough that one of them names the operand and the other
-	// does not: ksh93 says `cd: bad substitution` and zsh `cd: string not in
-	// pwd: old`.
+	// Only a preset with the form reaches it, and the wordings differ enough
+	// that one names the operand and another does not: `cd: bad substitution`
+	// against `cd: string not in pwd: old`.
 	CdBadSubstitution string
 
 	// PrintfBadNumber is a numeric conversion given something that is not a
@@ -428,10 +423,10 @@ type Diagnostics struct {
 	PrintfBadNumber string
 	// PrintfBadNumberStatus is what that reports. Zero means 1.
 	PrintfBadNumberStatus int
-	// PrintfBadVerb is a conversion this shell does not have. Two verbs, and
-	// the panel splits evenly between them: %[1]s is the conversion
-	// character alone and %[2]s is the whole directive as written, so `%lQ`
-	// is `Q` for half of them and `%lQ` for the other half.
+	// PrintfBadVerb is a conversion this shell does not have. Two verbs, and the
+	// presets split evenly between them: %[1]s is the conversion character alone
+	// and %[2]s is the whole directive as written, so `%lQ` is `Q` under half of
+	// them and `%lQ` under the other half.
 	PrintfBadVerb string
 	// PrintfBadVerbStatus is what that reports. Zero means 1.
 	PrintfBadVerbStatus int
@@ -442,108 +437,104 @@ type Diagnostics struct {
 	//
 	// It is a separate wording and not the bad-conversion one with an empty
 	// name. bash has a second complaint for it, `missing format character`,
-	// and names the directive in it where its ordinary one names the
-	// character; zsh reuses `invalid directive`; dash names nothing at all,
-	// so its wording takes no verb.
+	// and names the directive in it where its ordinary one names the character;
+	// another reuses `invalid directive`; a third names nothing at all, so its
+	// wording takes no verb.
 	PrintfMissingVerb string
 	// PrintfMissingVerbStatus is what that reports. Zero means 1.
 	PrintfMissingVerbStatus int
 	// PrintfMissingHexDigit is a `\x` in a format with no hexadecimal digit
 	// after it. No verbs.
 	//
-	// Only the dialect that leaves the escape standing says anything, and it
-	// is a warning rather than a failure: bash writes
-	// `printf: missing hex digit for \x`, writes the two characters, and
-	// still reports success. The dialects that read an empty digit run as a
-	// zero write the NUL and say nothing.
+	// Only a preset that leaves the escape standing says anything, and it is a
+	// warning rather than a failure: `printf: missing hex digit for \x`, the two
+	// characters written, and success reported. A preset that reads an empty
+	// digit run as a zero writes the NUL and says nothing.
 	PrintfMissingHexDigit string
 	// PrintfMissingUnicodeDigit is a `\u` or a `\U` with no hexadecimal digit
 	// after it. One verb: the escape letter as written, so one wording covers
 	// both spellings.
 	//
-	// Only the dialect that leaves the escape standing says anything, and it
-	// is the same warning-without-failure PrintfMissingHexDigit is: bash
-	// writes `printf: missing unicode digit for \u`, writes the two
-	// characters, and still reports success. The dialect that reads an empty
-	// run as a zero writes the NUL and the one that ends the pass ends it,
-	// and neither says a word.
+	// Only a preset that leaves the escape standing says anything, and it is the
+	// same warning-without-failure PrintfMissingHexDigit is:
+	// `printf: missing unicode digit for \u`, the two characters written, and
+	// success reported. A preset that reads an empty run as a zero writes the
+	// NUL and one that ends the pass ends it, and neither says a word.
 	PrintfMissingUnicodeDigit string
 	// PrintfUsage is `printf` with no format at all. No verbs.
-	// PrintfBadOption is a leading `-` word this dialect does not know. One
-	// verb: the word as written.
+	// PrintfBadOption is a leading `-` word this preset does not know. One verb:
+	// the word as written.
 	//
-	// bash `printf: -q: invalid option`, dash `printf: Illegal option -q`,
-	// ksh93 `printf: -q: unknown option`. zsh has none, because it takes an
-	// unknown one as the format instead.
+	// `printf: -q: invalid option`, `printf: Illegal option -q` and
+	// `printf: -q: unknown option` are all measured. A preset that takes an
+	// unknown one as the format instead has none.
 	PrintfBadOption string
 
-	// PrintfBadOptionShowsUsage follows that complaint with the usage line.
-	// bash and ksh93 do; dash prints the complaint alone.
+	// PrintfBadOptionShowsUsage follows that complaint with the usage line,
+	// rather than printing the complaint alone.
 	PrintfBadOptionShowsUsage bool
 
-	// UmaskBadMask is a mask `umask` could not read. One verb: the operand
-	// as written — except in zsh, which names nothing.
+	// UmaskBadMask is a mask `umask` could not read. One verb: the operand as
+	// written, in the wordings that name it at all.
 	//
-	// bash `umask: 9999: octal number out of range`, dash
-	// `umask: Illegal number: 9999`, ksh93 `umask: 9999: bad number`, zsh a
-	// bare `bad umask`.
+	// `umask: 9999: octal number out of range`,
+	// `umask: Illegal number: 9999`, `umask: 9999: bad number` and a bare
+	// `bad umask` are all measured.
 	UmaskBadMask string
 
-	// UmaskBadMaskStatus is what that reports. Zero means the substrate's
-	// own, which is 1 — dash alone says 2.
+	// UmaskBadMaskStatus is what that reports. Zero means the substrate's own,
+	// which is 1; 2 is also measured.
 	UmaskBadMaskStatus int
 
 	// UmaskBadSymbolicMode is a symbolic mode it could not read. Two verbs:
 	// the whole argument and the character that stopped it.
 	//
-	// The panel splits on which to name. dash and ksh93 quote the argument
-	// back — `umask: Illegal mode: u=q`, `umask: u=q: bad format` — while
-	// bash and zsh name the character and say what kind it was.
+	// The presets split on which to name. Some quote the argument back —
+	// `umask: Illegal mode: u=q`, `umask: u=q: bad format` — while others name
+	// the character and say what kind it was.
 	UmaskBadSymbolicMode string
 
 	// AliasNotFound is `alias` naming one the table does not hold. Two verbs:
 	// the builtin and the name.
 	//
-	//	bash   alias: nope: not found
-	//	dash   alias: nope not found
-	//	ksh93  nope: alias not found
+	//	alias: nope: not found
+	//	alias: nope not found
+	//	nope: alias not found
 	//
-	// zsh prints nothing, which AliasReportsNotFound answers rather than an
-	// empty string here — an empty wording means "the substrate's own".
+	// Printing nothing is what AliasReportsNotFound answers rather than an empty
+	// string here — an empty wording means "the substrate's own".
 	AliasNotFound string
 
 	// AliasNotFoundUnprefixed writes it without the shell and line in front,
-	// which dash and ksh93 do here and almost nowhere else.
+	// which a preset may do here and almost nowhere else.
 	AliasNotFoundUnprefixed bool
 
-	// UnaliasNotFound is the same for `unalias`, and is a separate field
-	// because zsh words it differently from anything its `alias` says — "no
-	// such hash table element: nope", where its `alias` says nothing at all.
+	// UnaliasNotFound is the same for `unalias`, and is a separate field because
+	// a preset may word it differently from anything its `alias` says — "no such
+	// hash table element: nope", where its `alias` says nothing at all.
 	UnaliasNotFound string
 
 	// UnaliasNotFoundUnprefixed is that question for the `unalias` wording.
 	UnaliasNotFoundUnprefixed bool
 
-	// UnaliasUsage is what `unalias` prints when given no name and no -a.
-	// Empty means it prints nothing, which is dash.
+	// UnaliasUsage is what `unalias` prints when given no name and no -a. Empty
+	// means it prints nothing.
 	UnaliasUsage string
 
 	// UnsetNoOperands is what `unset` prints when it has nothing to unset:
-	// no operand at all, no name after `-v` or `-f`, and no pattern after
-	// `-m`. One verb, the builtin's name — which is `unfunction` where the
-	// dialect renames the `-f` half, since the complaint follows the invoked
-	// word.
+	// no operand at all, no name after `-v` or `-f`, and no pattern after `-m`.
+	// One verb, the builtin's name — which is `unfunction` where the preset
+	// renames the `-f` half, since the complaint follows the invoked word.
 	//
-	// One field rather than one per spelling because the panel answers it
-	// once: measured 2026-09-08, zsh 5.9.2 writes the same `not enough
-	// arguments` for all four, and bash 5.3, bash 3.2 and dash are silent at
-	// 0 for every one they have. Empty is therefore a real answer and not a
-	// gap — the dialect says nothing and the builtin succeeds.
+	// One field rather than one per spelling because a preset answers it once:
+	// the same `not enough arguments` for all four, or silence at 0 for every
+	// one it has. Empty is therefore a real answer and not a gap — the preset
+	// says nothing and the builtin succeeds.
 	//
-	// ksh93 is the one member this does not cover: it answers with its usage
-	// line and ends the script, `unset` being one of its special builtins.
-	// That is the usage-line shape and not this sentence, so it is recorded
-	// in the corpus rather than approximated here.
+	// One shape this does not cover: answering with a usage line and ending the
+	// script, `unset` being a special builtin. That is the usage-line shape and
+	// not this sentence, so it is recorded in the corpus rather than
+	// approximated here.
 	UnsetNoOperands string
 
 	// UnaliasUsageUnprefixed writes that without the shell and line in front.
@@ -553,23 +544,23 @@ type Diagnostics struct {
 	// UnaliasUsage is empty and nothing was wrong, which is 0.
 	UnaliasNoOperandStatus int
 
-	// UnaliasNoPattern is `unalias -m` with no pattern after it. No verbs.
-	// Only the dialect with the letter has anything to say — see
-	// Semantics.AliasOperandsCanBePatterns — and it is a separate sentence
-	// from the no-operand answer above because the plain form is a usage
-	// line there and this one is not.
+	// UnaliasNoPattern is `unalias -m` with no pattern after it. No verbs. Only
+	// a preset with the letter has anything to say — see
+	// Semantics.AliasOperandsCanBePatterns — and it is a separate sentence from
+	// the no-operand answer above because the plain form is a usage line there
+	// and this one is not.
 	UnaliasNoPattern string
 
 	// UnaliasAllWithOperands is `unalias -a` given a name as well. No verbs.
-	// Only zsh refuses it, which UnaliasAllRefusesOperands answers.
+	// Whether it is refused at all is UnaliasAllRefusesOperands.
 	UnaliasAllWithOperands string
 
 	// TypeAlias is the sentence `type` and `command -V` write for a name the
 	// alias tables hold. Two verbs: the name and the body.
 	//
-	// Every dialect in the panel has one and they are not the same sentence:
-	// dash, ksh93 and zsh say `a is an alias for echo hi` and bash says
-	// ``a is aliased to `echo hi'``.
+	// Every preset has one and they are not the same sentence:
+	// `a is an alias for echo hi` and ``a is aliased to `echo hi'`` are both
+	// measured.
 	TypeAlias string
 	// TypeGlobalAlias and TypeSuffixAlias are that sentence for the two
 	// other kinds, in the one dialect that has them. Empty means the dialect

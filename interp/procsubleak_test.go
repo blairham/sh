@@ -4,12 +4,16 @@
 package interp_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // A substitution the command never opens must not leave a goroutine behind.
@@ -35,6 +39,18 @@ import (
 // beat it to the finish, and on a busy runner under -race it did not. A
 // substituted command that waits for a file the test has not written yet
 // cannot finish early, whatever the machine is doing.
+//
+// **The counting happens from outside the run**, and that moved: it used to
+// be taken after run() returned, which was only possible while a `>(cmd)`
+// could still be going then. It cannot be any more — the command that names
+// a writing substitution waits for its body, so that what the body writes
+// into the shell's output is there before the shell is done with it (see
+// removeProcSubs). A test that wants to see a body in flight has to watch
+// from somewhere the shell is not: the script runs on a goroutine of the
+// test's, and the release the body is waiting for is written by the watcher
+// after it has counted. Nothing else about the measurement changes, and the
+// reading direction — which is not waited for — is watched the same way so
+// that the three cases stay one shape.
 func TestASubstitutionNobodyOpensLeavesNoGoroutineBehind(t *testing.T) {
 	for _, tc := range []struct {
 		name, unopened string
@@ -90,27 +106,32 @@ func TestASubstitutionNobodyOpensLeavesNoGoroutineBehind(t *testing.T) {
 			}
 
 			src := strings.NewReplacer("%[1]s", started, "%[2]s", release).Replace(tc.running)
-			if _, st := run(t, src, nil); st != 0 {
+			var inFlight int
+			st := runWhileWatching(t, src, func() {
+				// Counted once the substitution has said it is running, and
+				// not merely once the command that named it has started.
+				// Those are two different moments and the gap between them
+				// is the whole bug this had: the goroutine is started before
+				// the substituted command reaches it, so a count taken too
+				// early can find the goroutine somewhere on its way in
+				// rather than in the frame this counts by. It passed on one
+				// platform and failed on the other, which is what a missing
+				// synchronization looks like from the outside. The file is
+				// written *by the substituted command*, so its existence
+				// puts the goroutine inside the run.
+				waitForStart(t, started)
+				inFlight = substitutionGoroutines()
+				if err := os.WriteFile(release, nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			})
+			if st != 0 {
 				t.Fatalf("status %d, want the substitution to run", st)
 			}
-			// Counted once the substitution has said it is running, and not
-			// merely once the command that named it has returned. Those are
-			// two different moments and the gap between them is the whole
-			// bug this had: the goroutine is started before the substituted
-			// command reaches it, so a count taken on the command's return
-			// can find the goroutine somewhere on its way in rather than in
-			// the frame this counts by. It passed on one platform and failed
-			// on the other, which is what a missing synchronization looks
-			// like from the outside. The file is written *by the substituted
-			// command*, so its existence puts the goroutine inside the run.
-			waitForStart(t, started)
-			if n := substitutionGoroutines(); n < 1 {
+			if inFlight < 1 {
 				t.Fatalf("%d goroutines in a substitution that has said it is running, "+
 					"want at least the one — the frame this counts by has moved, "+
-					"so the leak below cannot be seen either", n)
-			}
-			if err := os.WriteFile(release, nil, 0o600); err != nil {
-				t.Fatal(err)
+					"so the leak below cannot be seen either", inFlight)
 			}
 			if n := waitForGoroutines(0); n != 0 {
 				t.Fatalf("%d goroutines still in a substitution that was let go, want none", n)
@@ -127,6 +148,36 @@ func TestASubstitutionNobodyOpensLeavesNoGoroutineBehind(t *testing.T) {
 			}
 		})
 	}
+}
+
+// runWhileWatching runs src on a goroutine of its own and calls watch while it
+// is running, answering with the script's status once it has finished.
+//
+// The watcher runs on the *test's* goroutine, which is what makes it the one
+// that may report: everything it does — waiting for the substitution to say it
+// has started, counting, releasing it — is allowed to call t.Fatal, and
+// nothing in the run is.
+func runWhileWatching(t *testing.T, src string, watch func()) int {
+	t.Helper()
+	f, perr := syntax.Parse(src, syntax.Core())
+	if perr != nil {
+		t.Fatalf("parse %q: %v", src, perr)
+	}
+	// The locked writer rather than a bytes.Buffer, because a substitution's
+	// body writes to it from its own goroutine while this one is still in the
+	// run — which is the whole arrangement under test.
+	var buf output
+	sem := testSemantics()
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Env: testPATH()})
+	var status int
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		status, _ = r.Run(context.Background(), f)
+	}()
+	watch()
+	<-done
+	return status
 }
 
 // heldOpenScript is a substituted command that says when it has started and

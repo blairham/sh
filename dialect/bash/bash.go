@@ -1104,6 +1104,15 @@ func Semantics() interp.Semantics {
 	// A subscript that will not evaluate ends the script here, as a bad
 	// expression does wherever one is written.
 	s.BadSubscriptToUnsetFatal = interp.Yes
+	// But a name it has never heard of takes its brackets with it: `unset a
+	// "a[x+]"` is silent at 0 here as in zsh, and `i=0; unset "nodecl[i++]"`
+	// leaves i at 0. bash 3.2 agrees, so this is not a version split.
+	s.UnsetSubscriptSkippedWhenNameUnset = interp.Yes
+	// A failed operand's status is kept for the whole builtin rather than
+	// overwritten by a later one. The subscript route cannot ask it — a bad
+	// expression ends the command list here — but the readonly route can:
+	// `readonly r=1; x=1; unset r x` is 1 in either order.
+	s.UnsetStatusIsTheLastSubscripts = interp.No
 	// An element write over a name holding a string promotes the string
 	// first, so a subscript counting back from the end finds the element it
 	// just made: `a=abc; a[-1]=x` writes the first one.

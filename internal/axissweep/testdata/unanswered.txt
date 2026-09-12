@@ -147,6 +147,8 @@ ash   UnicodeEscapeOutsideTheLocale
 ash   UnsetArraySpan
 ash   UnsetEndsTheProducedPipelineStatus
 ash   UnsetReferenceLetterRemovesANonReference
+ash   UnsetStatusIsTheLastSubscripts
+ash   UnsetSubscriptSkippedWhenNameUnset
 
 bash  ArithIntegerOperatorRefusesFloat
 bash  ArithSubscriptSkippedWhenNameUnset
@@ -293,6 +295,8 @@ dash  UnicodeEscapeOutsideTheLocale
 dash  UnsetArraySpan
 dash  UnsetEndsTheProducedPipelineStatus
 dash  UnsetReferenceLetterRemovesANonReference
+dash  UnsetStatusIsTheLastSubscripts
+dash  UnsetSubscriptSkippedWhenNameUnset
 dash  ValuelessDeclarationOfAHeldNameListsIt
 
 ksh   ArithSubscriptSkippedWhenNameUnset

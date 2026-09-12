@@ -235,6 +235,15 @@ func Semantics() interp.Semantics {
 	// `-n` on `unset` to ask it with. Measured 2026-09-12, `unset -n x` is
 	// `unset: Illegal option -n` and the operand is never read, so there is no
 	// name for the question to be about (#932).
+	// unanswered UnsetSubscriptSkippedWhenNameUnset: there is no subscript
+	// for `unset` to skip or read. Measured 2026-09-12, `unset "nope[x+]"`
+	// is `nope[x+]: bad variable name` and ends the script, so the operand
+	// never reaches a base name and a bracket (#2373).
+	// unanswered UnsetStatusIsTheLastSubscripts: no operand here can fail
+	// and be outlived by a later one. A bad variable name, a bracketed name
+	// and a readonly all end the script, measured, so there is never a
+	// status left behind for a following operand to overwrite or keep
+	// (#2373).
 	s.UnsetOptions = "vf"
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord

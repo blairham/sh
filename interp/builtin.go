@@ -1386,6 +1386,21 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				status = 1
 				continue
 			}
+			// A name the shell has never heard of takes its brackets with
+			// it: they are not read, so the arithmetic in them neither
+			// fails nor increments anything. Read rather than asked, for
+			// ArithSubscriptSkippedWhenNameUnset's reason — the readings
+			// agree on every subscript that has no error and no side
+			// effect, so asking here would refuse `unset nope[1]` over a
+			// difference it cannot make.
+			//
+			// It carries no status either, which is the row that separates
+			// this from "the operand succeeded": under
+			// UnsetStatusIsTheLastSubscripts an earlier failure still
+			// stands behind it.
+			if r.sem().UnsetSubscriptSkippedWhenNameUnset == Yes && !r.nameIsSet(base) {
+				continue
+			}
 			// `unset a[1]` is about one element and not about the array.
 			// The subscript was read as part of the name, so the whole thing
 			// was deleted from a table it was never in and nothing happened
@@ -1402,9 +1417,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				// with arrays. The third reads the brackets as an expression
 				// here as everywhere else, and falls through to it.
 				if handled, code := r.unsetWholeArray(base); handled {
-					if code != 0 {
-						status = code
-					}
+					status = r.carryUnsetStatus(status, code)
 					continue
 				}
 			}
@@ -1414,9 +1427,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				// whose value is its right operand. Ahead of the single
 				// reading rather than inside it, because a range names a
 				// span and a span is not a subscript.
-				if code != 0 {
-					status = code
-				}
+				status = r.carryUnsetStatus(status, code)
 				if r.ctl == controlExit {
 					return status
 				}
@@ -1430,9 +1441,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				// its element by searching rather than by counting. Ahead of
 				// the arithmetic below, which is what the whole operand went
 				// to before and what made it `bad math expression`.
-				if code != 0 {
-					status = code
-				}
+				status = r.carryUnsetStatus(status, code)
 				if r.ctl == controlExit {
 					return status
 				}
@@ -1451,9 +1460,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				}
 				continue
 			}
-			if code := r.unsetArrayElem(base, idx, sub); code != 0 {
-				status = code
-			}
+			status = r.carryUnsetStatus(status, r.unsetArrayElem(base, idx, sub))
 			continue
 		}
 		r.unsetName(name)
@@ -4437,4 +4444,46 @@ func (r *Runner) badStatusArg(builtin, arg string) int {
 	r.status = 2
 	r.stopTheShell()
 	return r.status
+}
+
+// nameIsSet reports whether the shell has heard of a parameter at all, which
+// is what UnsetSubscriptSkippedWhenNameUnset asks about the base of a
+// subscripted operand.
+//
+// Set-ness and not emptiness, measured a name at a time on zsh 5.9.2: `v=`,
+// a `typeset -a` array with no elements and a bare `typeset s` all count as
+// heard of, and their subscripts *are* evaluated. Only a name that was never
+// assigned, or was assigned and then unset, is skipped. The two declared
+// forms are why getVar alone is not the answer — a table with no entries
+// holds no value for it to return.
+// The tables are consulted ahead of the read, and the order is the point
+// rather than an economy: a bare read of an array name asks
+// ArrayScalarIsTheWholeArray, and this question does not need that answer.
+// Asking it would refuse `unset "a[1]"` outright in a core with no dialect,
+// over a value nothing on this path would have looked at.
+func (r *Runner) nameIsSet(name string) bool {
+	if !r.removed[name] && (r.arrayDeclared(name) || r.assocDeclared(name)) {
+		return true
+	}
+	_, ok := r.getVar(name)
+	return ok
+}
+
+// carryUnsetStatus is how one operand's status joins the builtin's, and it is
+// the whole of UnsetStatusIsTheLastSubscripts.
+//
+// Under the last-subscript reading the operand overwrites what came before it,
+// so a success after a failure is a success; otherwise a failure sticks and
+// only another failure replaces it. Only the branches that actually read a
+// subscript call this — a plain name, an absent name and an association's key
+// leave the status alone in both readings, which is measured and is the
+// correction the issue's two-row table would have missed.
+func (r *Runner) carryUnsetStatus(status, code int) int {
+	if r.sem().UnsetStatusIsTheLastSubscripts == Yes {
+		return code
+	}
+	if code != 0 {
+		return code
+	}
+	return status
 }

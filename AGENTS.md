@@ -939,20 +939,33 @@ design and a second run against what it left would be measuring the
 leftovers.
 
 **`inert` is a ledger, not a skip.** It is a route this shell cannot take
-*yet* — bash's `history -w` still falls through to a refused exec, and zsh's
-`fc -W` does not accept the letter — which is the state #1808 calls "safe by
-accident". Those are the rows that become escapes the day the feature lands,
-so they are printed rather than hidden, and each moves to `contained` or
-`ESCAPED` on its own when it starts working.
+*yet* — zsh's `fc -W` does not accept the letter, which is the one row left on
+it — and that is the state #1808 calls "safe by accident". Those are the rows
+that become escapes the day the feature lands, so they are printed rather than
+hidden, and each moves to `contained` or `ESCAPED` on its own when it starts
+working.
 
-**The ledger works, and `zsh/mapfile` is the proof.** Its two rows sat inert
-with the note "will need a gate when it is" until #2260 implemented the
-module — and the gate arrived in the same change, so they moved to
-`contained` rather than to `ESCAPED`. Reading the ledger before writing a
-feature is what makes that the easy path; a third row for the module's
-`${(k)mapfile}` roster went in at the same time, because implementing it is
-what revealed that the enumerating form is a readdir with no path in it to
-hang a check on.
+**The ledger works, and it has now been read twice.** `zsh/mapfile`'s two rows
+sat inert with the note "will need a gate when it is" until #2260 implemented
+the module, and bash's `history -w` sat inert as "not a builtin yet" until
+#2271 implemented the builtin. Both times the gate arrived in the same change,
+so the rows moved to `contained` rather than to `ESCAPED`.
+
+**Both times, implementing the feature found routes the ledger had not
+listed** — which is the argument for doing it this way round rather than
+bolting a gate on afterwards. `${(k)mapfile}` is a readdir with no path in it
+to hang a check on; `history -a` opens the same file `-w` does on a different
+letter, and `history -r` brings a denied file's contents into a list the
+script can then print. Four rows were added beside the three that were
+waiting.
+
+**And the last row is worth knowing about, because it is not simply
+unimplemented.** `builtin/fc-write/zsh` cannot go green in the sweep's
+ordinary `-c` run however faithfully `fc -W` is written: zsh writes a history
+file **only when the shell is interactive** — measured 2026-09-12, including
+with a list loaded by `fc -R`, so it is not emptiness that stops it. bash is
+the opposite and keeps a list in a script, which is why its row was reachable.
+That row needs the *route* fixed as well as the feature.
 
 The instrument was checked against a shell known to be broken, which is the
 only way to know a green table means anything: pointed at the commit before

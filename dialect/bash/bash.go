@@ -1819,6 +1819,11 @@ func Apply(r *interp.Runner) {
 	// actions and this names them; see bind.go, and repl/widgets.go for why
 	// the two halves are apart.
 	registerBind(r)
+	// The history list and the two files it is kept in. A script has one —
+	// bash maintains a list and writes a history file with no terminal
+	// anywhere — so this is a builtin rather than something the prompt owns.
+	// See history.go.
+	registerHistory(r)
 	// A function carried to a child through the environment, under the name
 	// bash gives it. The other three do not carry functions at all.
 	r.SetFunctionExport("BASH_FUNC_", "%%")

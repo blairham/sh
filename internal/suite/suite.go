@@ -44,10 +44,28 @@
 // Strict alone reads as catastrophe: a suite file is hundreds of assertions
 // and one disagreement forfeits all of them. Line agreement alone reads as
 // triumph, because most lines of most files are prose the shell echoed back.
-// Parsed explains the other two — our parser reads a file whole before
-// running any of it, so one refused construct forfeits a file that might
-// otherwise have agreed on every line, and the gap between parsed and strict
-// is the size of *that* effect rather than of our semantics.
+//
+// Parsed is the third, and it is not the explanation of the other two that it
+// used to say it was. This shell parses incrementally, exactly as the
+// reference does, and a file whose static whole-file read is refused runs up
+// to the construct that stopped the read and is scored here like any other —
+// so a refusal forfeits nothing, and the report measures what it did cost
+// instead of claiming what it must have. Parsed is about the *static* route:
+// `-n`, a formatter, an editor, reading a whole file in the dialect's
+// defaults.
+//
+// Two things wear that one row and they are different findings, so the
+// ranking separates them: a construct this parser cannot read, which is a
+// defect, and a construct no static read can reach, which is not. The
+// discriminator is the reference shell's own `-n`, run over the same file —
+// `shopt -s extglob` is decided at run time, a static read has no run time,
+// and the reference therefore refuses its own suite's file while running that
+// same file to completion. Only the verdict is taken from it: the diagnostic
+// would quote the file back.
+//
+// The table above admits one more row for that reason — whether the reference
+// accepted a static read of a file is a number about a binary, which is the
+// same kind of fact as its exit status.
 //
 // # Never the expected-output files
 //

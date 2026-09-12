@@ -28,11 +28,22 @@ import (
 // Everything here is either a number or our own parser's diagnostic with the
 // per-file words taken out.
 type Result struct {
-	// Parsed says our parser read the file whole.
+	// Parsed says a static read of the whole file, in the dialect's
+	// defaults, succeeded. That is a route the shell itself never takes —
+	// it parses incrementally — so this decides nothing about whether the
+	// file ran or how it scored, and the fields below are filled in either
+	// way.
 	Parsed bool
 	// Cause is our own parser's reason for refusing it, with the position
 	// and any word from the file removed. Empty when Parsed.
 	Cause string
+	// ReferenceRead says the reference shell's own static read — the POSIX
+	// `-n` — accepted the file. It is asked only where this parser refused
+	// one, and it is what tells a gap in this parser from a file no static
+	// read can reach: an option set at run time decides what a later line
+	// means, and a static read has no run time. False when Parsed, where
+	// the question was never put.
+	ReferenceRead bool
 	// Scored says both shells finished and the reference repeated itself, so
 	// this file is evidence.
 	Scored bool
@@ -62,7 +73,32 @@ type Result struct {
 type Cause struct {
 	Reason string
 	Files  int
+	// ReferenceRefuses is how many of those files the reference shell's own
+	// `-n` refuses as well. Those are not a gap in this parser — no static
+	// read reaches them — and a ranking that did not separate them would
+	// send somebody to close a gap nobody can close.
+	ReferenceRefuses int
 }
+
+// Band is the scored aggregate over one subset of the files.
+//
+// There is one for the whole population, spelled out on the [Report], and one
+// for the files the static read refused. The second exists because "what did
+// a refusal cost" is a question this instrument can answer from its own run,
+// and it used to be answered in prose instead — wrongly, with a claim that a
+// refusal forfeited a whole file.
+type Band struct {
+	// Files is how many files are in the band.
+	Files int
+	// Scored, Strict, Common and Longest are the same three numbers the
+	// report carries for everything, restricted to the band.
+	Scored, Strict  int
+	Common, Longest int64
+}
+
+// StrictRate and LineRate are the band's two rates.
+func (b Band) StrictRate() float64 { return ratio(b.Strict, b.Scored) }
+func (b Band) LineRate() float64   { return ratio64(b.Common, b.Longest) }
 
 // StatusPair is a pair of exit statuses and how many files ended that way.
 // Numbers carry nothing of the file, which is why the runtime half of this
@@ -99,6 +135,15 @@ type Report struct {
 	OracleHung  int
 	DialectHung int
 	Unstable    int
+
+	// Refused is the scored aggregate over the files the static read
+	// refused, and it is the measurement that replaced a sentence. A
+	// refusal forfeits nothing here: the file is run and scored like any
+	// other, and this says what the refusals actually cost.
+	Refused Band
+	// ReferenceRefuses is how many of the refused files the reference
+	// shell's own `-n` refuses too.
+	ReferenceRefuses int
 
 	Causes      []Cause
 	StatusPairs []StatusPair
@@ -194,6 +239,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 	wg.Wait()
 
 	causes := map[string]int{}
+	shared := map[string]int{}
 	statuses := map[[2]int]int{}
 	var meanSum float64
 	for _, res := range results {
@@ -201,7 +247,12 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 		case res.Parsed:
 			rep.Parsed++
 		default:
+			rep.Refused.Files++
 			causes[res.Cause]++
+			if !res.ReferenceRead {
+				shared[res.Cause]++
+				rep.ReferenceRefuses++
+			}
 		}
 		switch {
 		case res.OracleHung:
@@ -217,6 +268,18 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 			}
 			rep.Common += int64(res.Common)
 			rep.Longest += int64(res.Longest)
+			if !res.Parsed {
+				// The refused files, scored as a set of their own. They are
+				// in the figures above as well, because they are evidence
+				// like any other file; this is the size of what a refusal
+				// costs, which is the thing the report used to assert.
+				rep.Refused.Scored++
+				if res.Strict {
+					rep.Refused.Strict++
+				}
+				rep.Refused.Common += int64(res.Common)
+				rep.Refused.Longest += int64(res.Longest)
+			}
 			meanSum += ratio(res.Common, res.Longest)
 			if res.LineCapped {
 				rep.LineCapped++
@@ -230,7 +293,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 	if rep.Scored > 0 {
 		rep.MeanFile = meanSum / float64(rep.Scored)
 	}
-	rep.Causes = rank(causes)
+	rep.Causes = rank(causes, shared)
 	rep.StatusPairs = rankStatuses(statuses)
 	return rep, nil
 }
@@ -255,6 +318,12 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 		res.Cause = wild.Reason(perr)
 	} else {
 		res.Parsed = true
+	}
+	if haveDialect && !res.Parsed {
+		// Only where this parser refused, which is the only place the answer
+		// changes anything — and it is a read rather than a run, so it costs
+		// a fraction of the two runs below.
+		res.ReferenceRead = staticParse(ctx, reference, filepath.Join(tests, name), staticTimeout)
 	}
 
 	ref := runIn(ctx, s, tests, name, reference, timeout)
@@ -418,14 +487,16 @@ func copyFile(src, dest string, d fs.DirEntry) error {
 // rank orders causes by how many files each stopped, ties broken on the
 // wording so that two runs on one machine print the same report.
 //
-// The ranking is the actionable output of this instrument and it is the
-// reason the parsed number is worth having separately: a cause here is a
-// construct that forfeits a whole file, which is a gap costed by what it
-// takes away rather than by how often it appears.
-func rank(counts map[string]int) []Cause {
+// The ranking is the actionable output of this instrument, and what makes it
+// actionable is the split rather than the count: a cause the reference's own
+// `-n` refuses as well is not a gap in this parser, because no static read
+// reaches it. Costing a cause by files is still the right unit for the static
+// consumers of this parser — a formatter refuses the file, not the line — but
+// it is a statement about that route and not about a run.
+func rank(counts, shared map[string]int) []Cause {
 	causes := make([]Cause, 0, len(counts))
 	for reason, n := range counts {
-		causes = append(causes, Cause{Reason: reason, Files: n})
+		causes = append(causes, Cause{Reason: reason, Files: n, ReferenceRefuses: shared[reason]})
 	}
 	sort.Slice(causes, func(i, j int) bool {
 		if causes[i].Files != causes[j].Files {

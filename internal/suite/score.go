@@ -23,11 +23,21 @@ import (
 // extra line near the top agrees on everything afterwards, and lining the two
 // outputs up by index would score that zero and call it a total failure.
 //
-// **Parsed** is the one that explains the other two. Our parser reads a file
-// whole before running any of it, so a single refused construct forfeits a
-// file that might have agreed line for line. The distance between parsed and
-// strict is the size of *that* effect; the distance between parsed and 100%
-// is the gap list.
+// **Parsed** is neither, and for a while it claimed to be the explanation of
+// both. It is not: this shell parses incrementally, exactly as the reference
+// does, so a file whose *static* whole-file read is refused still runs up to
+// the construct that stopped the read, and is still run and still scored
+// here. What a refusal costs is measured rather than asserted — the refused
+// files are aggregated as a band of their own, and on the run this wording
+// was written against they scored no worse for having been refused.
+//
+// What parsed measures is the static route — `-n`, a formatter, an editor —
+// reading a whole file in the dialect's defaults. That is a real property
+// with real consumers in this tree; it is simply not what the other two
+// numbers are made of. And part of its gap list can never close: an option
+// set at run time decides what a later line means, so a file the reference's
+// own `-n` refuses is refused by every static read there is, and the ranking
+// separates those out.
 
 // tempPattern matches the per-run directory, whose name differs every time
 // and would otherwise be a difference in itself.

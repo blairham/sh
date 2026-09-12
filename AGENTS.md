@@ -1024,20 +1024,44 @@ here — and mostly because it is the most expression-like part of a suite. The
 extraction excludes it outright, so that rule is a property of the tree rather
 than a promise about the code.
 
-**Three numbers, because each of them lies alone.** *Strict* — the whole file
-byte-identical, status included — reads as catastrophe, because a suite file
-is hundreds of assertions and one disagreement forfeits all of them. *Line
-agreement* reads as triumph for the mirror-image reason, since most lines of
-most files are text a shell echoed back; it is a **longest common
-subsequence**, not a positional comparison, because one extra line near the
-top must not zero a file that agrees on everything after it. *Parsed* explains
-the other two: this parser reads a file whole before running any of it, so a
-single refused construct forfeits a file that might have agreed line for line,
-and the distance between parsed and strict is the size of that effect.
+**Three numbers, because each of them lies alone.** *Strict* — output and
+status identical, once each shell's own path and the run's temp directory are
+taken out — reads as catastrophe, because a suite file is hundreds of
+assertions and one disagreement forfeits all of them. *Line agreement* reads
+as triumph for the mirror-image reason, since most lines of most files are
+text a shell echoed back; it is a **longest common subsequence** over the
+longer side, not a positional comparison, because one extra line near the top
+must not zero a file that agrees on everything after it.
 
-**The ranked list of file-stopping constructs is the actionable output**, and
-it comes free with the run. A cause there is a gap costed by what it takes
-away — a whole file — rather than by how often it appears.
+**The third column is a *static read*, and it does not explain the other
+two.** It used to say it did — "this parser reads a file whole before running
+any of it, so a single refused construct forfeits a file" — and both halves
+were false, which #2381 found after the sentence had been repeated into three
+briefs. This shell **parses incrementally, exactly as bash does**: a file with
+a syntax error on line 2 prints line 1 and exits 2, byte for byte with the
+reference. So `suite.grade` runs a refused file anyway and scores it like any
+other, and **a refusal forfeits nothing**. What the refusals cost is now a
+**band** in the report — the refused files' own scored, strict and line
+figures — measured on every run rather than asserted once.
+
+What the column does measure is the *other* route: `-n`, a formatter, an
+editor, reading a whole file in the dialect's defaults. That is a real
+property with real consumers here (`cmd/shfmt`, `make wild`, `make fmt-wild`)
+and it is simply not what the runtime numbers are made of. **A metric whose
+prose misdescribes it is worse than no metric**, because everything built on
+top inherits the error.
+
+**The ranked list of refused constructs is the actionable output**, and what
+makes it actionable is a split rather than a count. Two findings wore one row:
+a construct *this parser* cannot read, which is a defect, and a construct *no
+static read can reach*, which is not. The discriminator is the reference
+shell's own `-n` over the same file, and only its verdict is taken — the
+diagnostic would quote the file back. `shopt -s extglob` is the worked case:
+the option is decided at run time, a static read has no run time, and bash
+therefore **refuses its own suite's file at `-n` while running that same file
+to completion at status 0**. No parser change moves such a file into the read
+column, so ranking it beside a real gap sends somebody to close a gap nobody
+can close.
 
 **The suite's C helpers are built, or the whole thing scores zero for reasons
 that have nothing to do with us.** Without `recho`, `zecho` and `printenv` the

@@ -24,11 +24,17 @@ func TestAClosedStandardInputIsNotOpenInTheChild(t *testing.T) {
 	// absent. Reading from fd 0 is not, because the null device reads as end
 	// of file and so does nothing at all.
 	//
-	// The marker is read off the last line rather than the whole output: a
-	// shell that finds the descriptor missing says so on standard error, in
-	// its own words, and `2>/dev/null` on an `exec` is a redirection of the
-	// shell rather than of the command being tried.
-	const probe = `if exec 3<&0 2>/dev/null; then echo OPEN; else echo CLOSED; fi`
+	// It is run **in a subshell** because /bin/sh is not one shell. Where it
+	// is dash a failed `exec` redirection is fatal, so the shell is gone
+	// before any branch of an `if` runs and the test read the exit status of
+	// a shell that had died rather than a marker — green on macOS, where
+	// /bin/sh is bash and carries on, and red on Linux. The subshell turns
+	// both behaviors into the one thing both agree on, which is its status.
+	//
+	// The marker is read off the last line for the same reason: a shell that
+	// finds the descriptor missing says so on standard error, in its own
+	// words, and that text is not the answer.
+	const probe = `if ( exec 3<&0 ) 2>/dev/null; then echo OPEN; else echo CLOSED; fi`
 
 	for _, c := range []struct {
 		name   string

@@ -7630,7 +7630,7 @@ const (
 	// leaves a closed descriptor closed so the job reports EBADF.
 	BackgroundJobInputEmptyUnlessClosed
 	// BackgroundJobInputIsTheShells hands the job the shell's own standard
-	// input, which is the descriptor the script goes on reading: zsh.
+	// input, which is the descriptor the script goes on reading.
 	BackgroundJobInputIsTheShells
 )
 
@@ -7707,10 +7707,10 @@ const (
 	// `return 300` leaves 300 behind rather than 44.
 	StatusArgStrict
 	// StatusArgNumeric refuses text but takes a sign, and masks to eight
-	// bits: bash. `return -1` is 255 and `return 300` is 44. The refusal is
-	// reported and the function still returns, leaving 2; the script carries
-	// on. Called as `sh` the same binary ends the script instead, which is
-	// the POSIX rule rather than a second reading of the operand.
+	// bits. `return -1` is 255 and `return 300` is 44. The refusal is reported
+	// and the function still returns, leaving 2; the script carries on. Under a
+	// POSIX mode the same reading ends the script instead, which is the
+	// standard's rule rather than a second reading of the operand.
 	StatusArgNumeric
 	// StatusArgLeadingDigits reads the number the operand begins with and
 	// ignores whatever follows, masking to eight bits. `return 3abc`
@@ -7827,7 +7827,7 @@ const (
 	// `\x` with no digit after it as written.
 	PrintfHexEscapeByte
 	// PrintfHexEscapeByteOrNul reads the same two digits, and an empty digit
-	// run as a zero: zsh.
+	// run as a zero.
 	PrintfHexEscapeByteOrNul
 	// PrintfHexEscapeCodePoint reads every digit that follows. Up to two of
 	// them is a byte and three or more is a code point written in UTF-8, and
@@ -7952,9 +7952,9 @@ func (r *Runner) unicodeEscape() PrintfUnicodeEscapePolicy {
 // bUnicodeEscape resolves the `%b` site's reading, and only for an argument
 // that has a `\u` or a `\U` in it.
 //
-// Separate from unicodeEscape because the site is half the question: ksh93
-// reads a format's `\u0041` and writes the ten characters as they stand in a
-// `%b`.
+// Separate from unicodeEscape because the site is half the question: an
+// implementation can read a format's `\u0041` and write the ten characters as
+// they stand in a `%b`.
 func (r *Runner) bUnicodeEscape() PrintfUnicodeEscapePolicy {
 	p := r.sem().PrintfBUnicodeEscape
 	if p == PrintfUnicodeEscapeUnspecified {
@@ -7976,17 +7976,17 @@ const (
 	// other.
 	PrintfLengthModifiersUnspecified PrintfLengthModifierSet = iota
 	// PrintfLengthModifiersAbsent is a printf with no modifiers at all, so
-	// `%ld` is a conversion `l` that does not exist: dash.
+	// `%ld` is a conversion `l` that does not exist.
 	PrintfLengthModifiersAbsent
-	// PrintfLengthModifiersC89 is `h`, `l` and `L`, and exactly one of them:
-	// zsh, which takes `%ld` and calls `%lld` an invalid directive. The set
+	// PrintfLengthModifiersC89 is `h`, `l` and `L`, and exactly one of them, so
+	// `%ld` is taken and `%lld` is an invalid directive. The set
 	// is C89's, which is the reading that explains why `hh`, `ll`, `j`, `z`
 	// and `t` — every one of them a C99 addition — are the ones refused.
 	PrintfLengthModifiersC89
 	// PrintfLengthModifiersC99 adds `hh`, `ll`, `j`, `z` and `t`, and takes
-	// any run of the letters rather than one: bash and ksh93 read `%lll` and
-	// `%zz` as happily as `%ll`, which is what makes this a skipped run and
-	// not a list of spellings.
+	// any run of the letters rather than one, reading `%lll` and `%zz` as
+	// happily as `%ll` — which is what makes this a skipped run and not a list
+	// of spellings.
 	PrintfLengthModifiersC99
 )
 
@@ -8022,18 +8022,17 @@ const (
 	// PrintfQuoteUnspecified is no answer, and is refused like any other.
 	PrintfQuoteUnspecified PrintfQuoteStyle = iota
 	// PrintfQuoteAnsiCWord moves the whole word into one `$'…'` as soon as a
-	// byte cannot be written as itself, and backslash-escapes otherwise:
-	// bash.
+	// byte cannot be written as itself, and backslash-escapes otherwise.
 	PrintfQuoteAnsiCWord
 	// PrintfQuoteAnsiCCharacter wraps each such byte in a `$'…'` of its own
-	// and leaves the rest backslash-escaped: zsh. It is the same answer that
-	// shell's `${(q)…}` gives, measured byte for byte.
+	// and leaves the rest backslash-escaped. It is the same answer the
+	// corresponding `${(q)…}` flag gives, measured byte for byte.
 	PrintfQuoteAnsiCCharacter
 	// PrintfQuoteSingle has three shapes — bare, `'…'`, and `$'…'` with hex
-	// escapes — and picks by what the value holds: ksh93.
+	// escapes — and picks by what the value holds.
 	PrintfQuoteSingle
-	// PrintfQuoteAbsent is a dialect without `%q` at all: dash, which calls
-	// it an invalid directive like any other conversion it does not have.
+	// PrintfQuoteAbsent is a preset without `%q` at all, which calls it an
+	// invalid directive like any other conversion it does not have.
 	PrintfQuoteAbsent
 )
 
@@ -8069,8 +8068,8 @@ func (r *Runner) quoteStyle() PrintfQuoteStyle {
 // from the usual "XOR 0x40" rule, and the measurement is why there are two
 // decoding answers instead of one: the rules agree on every letter and on
 // `@ [ \ ] ^ _` — the range where masking to five bits and toggling bit 6 are
-// the same arithmetic — and part company everywhere else. `$'\c1'` is 0x11 in
-// bash and `q` in ksh93.
+// the same arithmetic — and part company everywhere else. `$'\c1'` is 0x11
+// under one and `q` under the other.
 type DollarSingleControlPolicy int
 
 const (
@@ -8078,19 +8077,20 @@ const (
 	// other.
 	DollarSingleControlUnspecified DollarSingleControlPolicy = iota
 	// DollarSingleControlMasked uppercases the character and keeps its low
-	// five bits, with `?` reading as DEL: bash.
+	// five bits, with `?` reading as DEL.
 	//
-	// The `?` is bash 5.3's answer. bash 3.2 has no special case and gives
-	// 0x1f, which is what masking alone produces — dated rather than vetoed,
+	// The `?` is the later reading. An earlier build has no special case and
+	// gives 0x1f, which is what masking alone produces — dated rather than
+	// vetoed,
 	// per docs/spec/core.md.
 	DollarSingleControlMasked
 	// DollarSingleControlToggled uppercases the character and toggles bit 6:
-	// ksh93, where `\c?` is DEL because 0x3f toggles to 0x7f rather than
-	// because anything special was said about it.
+	// so `\c?` is DEL because 0x3f toggles to 0x7f rather than because anything
+	// special was said about it.
 	DollarSingleControlToggled
-	// DollarSingleControlAbsent is a dialect with no `\c` escape at all: zsh,
-	// where the backslash falls to DollarSingleUnknownEscape like any other
-	// character no escape claims.
+	// DollarSingleControlAbsent is a preset with no `\c` escape at all, where
+	// the backslash falls to DollarSingleUnknownEscape like any other character
+	// no escape claims.
 	DollarSingleControlAbsent
 )
 
@@ -8128,10 +8128,10 @@ const (
 	// other.
 	DollarSingleUnknownUnspecified DollarSingleUnknownPolicy = iota
 	// DollarSingleUnknownKeepsBackslash keeps both characters, so `$'\q'` is
-	// a backslash and a `q`: bash.
+	// a backslash and a `q`.
 	DollarSingleUnknownKeepsBackslash
 	// DollarSingleUnknownDropsBackslash keeps the character alone, so `$'\q'`
-	// is a `q`: ksh93 and zsh.
+	// is a `q`.
 	DollarSingleUnknownDropsBackslash
 )
 
@@ -8164,11 +8164,11 @@ type KillStatusPolicy int
 const (
 	// KillStatusUnspecified is no answer, and is refused like any other.
 	KillStatusUnspecified KillStatusPolicy = iota
-	// KillStatusAnyFailure reports 1 if any target failed: dash, ksh93.
+	// KillStatusAnyFailure reports 1 if any target failed.
 	KillStatusAnyFailure
-	// KillStatusAnySuccess reports 0 if any target was signaled: bash.
+	// KillStatusAnySuccess reports 0 if any target was signaled.
 	KillStatusAnySuccess
-	// KillStatusFailureCount reports how many failed: zsh.
+	// KillStatusFailureCount reports how many failed.
 	KillStatusFailureCount
 )
 
@@ -8217,11 +8217,11 @@ type BracketPolicy int
 const (
 	// BracketUnspecified is no answer, and is refused like any other.
 	BracketUnspecified BracketPolicy = iota
-	// BracketLiteral treats the `[` as an ordinary character: bash, ksh93.
+	// BracketLiteral treats the `[` as an ordinary character.
 	BracketLiteral
-	// BracketNoMatch treats it as a class that matches nothing: dash.
+	// BracketNoMatch treats it as a class that matches nothing.
 	BracketNoMatch
-	// BracketBadPattern rejects the pattern: zsh.
+	// BracketBadPattern rejects the pattern.
 	BracketBadPattern
 )
 
@@ -8273,21 +8273,21 @@ func (r *Runner) bracketPolicy() BracketPolicy {
 // makes of a value the name is already holding when that value is *compound*
 // — an array or a keyed table.
 //
-// The scalar question is AttributeRereadsTheValueItFinds and it splits the
-// panel two ways: bash waits for the next assignment, ksh93 and zsh re-read.
-// For a compound value it splits **three** ways, and the two shells that share
-// the scalar answer disagree with each other about what reaching back into an
-// array even means. So it is a second question with its own answer per shell
+// The scalar question is AttributeRereadsTheValueItFinds and it splits two
+// ways: wait for the next assignment, or re-read. For a compound value it
+// splits **three** ways, and two presets that share the scalar answer disagree
+// with each other about what reaching back into an array even means. So it is
+// a second question with its own answer per preset
 // rather than a widening of the first, in the family ArraysAreSparse and
 // ArrayBaseIsZero already belong to.
 //
-//	arr=(a b); typeset -i arr      bash `a b`   ksh93 `0 0`   zsh `0`, one element
-//	brr=(a b); typeset -u brr      bash `a b`   ksh93 `A B`   zsh `a b`
+//	arr=(a b); typeset -i arr      `a b`   ·   `0 0`   ·   `0`, one element
+//	brr=(a b); typeset -u brr      `a b`   ·   `A B`   ·   `a b`
 //	typeset -A m; m[k]=v
-//	typeset -i m                   bash `v`     ksh93 `0`     zsh empty, and
-//	                                                          the child is told `m=0`
+//	typeset -i m                   `v`     ·   `0`     ·   empty, and the
+//	                                                       child is told `m=0`
 //
-// Measured 2026-09-07, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`,
+// Measured under `env -i PATH=/usr/bin:/bin` with a scratch `HOME`,
 // `ZDOTDIR` and `HISTFILE`, from a script file.
 type CompoundAttributePolicy int
 
@@ -8297,21 +8297,21 @@ const (
 	// and one of them leaves no array at all.
 	CompoundAttributeUnspecified CompoundAttributePolicy = iota
 	// CompoundAttributeKeepsTheElements leaves the compound value exactly as
-	// it stands and waits for the next write: bash, in both builds measured,
-	// where `arr=(a b); typeset -i arr` still reads `a b` and the listing
-	// carries the letter over untouched elements. It is the same answer that
-	// shell gives for a scalar, which is what makes bash the one column
-	// where the two questions cannot be told apart.
+	// it stands and waits for the next write, so `arr=(a b); typeset -i arr`
+	// still reads `a b` and the listing carries the letter over untouched
+	// elements. It is the same answer such a preset gives for a scalar, which is
+	// what makes it the one reading where the two questions cannot be told
+	// apart.
 	CompoundAttributeKeepsTheElements
 	// CompoundAttributeFoldsEveryElement re-reads each element through the
-	// attribute in place, keeping the shape: ksh93, where `(a b)` under `-i`
-	// becomes `0 0` and under `-u` becomes `A B`, `(0x10 9)` becomes `16 9`,
+	// attribute in place, keeping the shape, so `(a b)` under `-i` becomes
+	// `0 0` and under `-u` becomes `A B`, `(0x10 9)` becomes `16 9`,
 	// and a keyed table's `5+5` becomes 10 under its own key. The array
 	// keeps its length and the table keeps its keys.
 	CompoundAttributeFoldsEveryElement
 	// CompoundAttributeReplacesItWithAScalar discards the compound value
-	// outright and leaves the name a *fresh* scalar of the declared type:
-	// zsh, where `arr=(a b); typeset -i arr` leaves one element and
+	// outright and leaves the name a *fresh* scalar of the declared type, so
+	// `arr=(a b); typeset -i arr` leaves one element and
 	// `${#arr[@]}` is 1, a keyed table comes back empty, and a later
 	// `arr[0]=3+4` is refused because the name is no longer an array.
 	//
@@ -8359,32 +8359,31 @@ func (r *Runner) compoundAttribute() CompoundAttributePolicy {
 // holding. The converse of CompoundAttributePolicy, and it splits the panel
 // three ways as well.
 //
-// Measured 2026-09-08, panel and machine as docs/spec/oracle.md:
+// Measured as docs/spec/oracle.md describes:
 //
 //	b=1; typeset -a b; typeset -p b
-//	  bash 5.3.15   declare -a b=([0]="1")   n=1   $b is `1`
-//	  bash 3.2.57   declare -a b=([0]="1")   n=1   $b is `1`
-//	  ksh93         b=1                      n=1   $b is `1`
-//	  zsh 5.9.2     typeset -a b=( )         n=0   $b is empty
+//	  promoted   an array holding the value   n=1   $b is `1`
+//	  unchanged  the scalar it was            n=1   $b is `1`
+//	  discarded  an empty array               n=0   $b is empty
 //
 //	a=1; typeset -A a; typeset -p a
-//	  bash 5.3.15   declare -A a=([0]="1" )  n=1
-//	  ksh93         typeset -A a=([0]=1)     n=1
-//	  zsh 5.9.2     typeset -A a=( )         n=0
+//	  promoted   a table holding the value under `0`   n=1
+//	  discarded  an empty table                     n=0
 //
-// dash has neither letter and bash 3.2 has no `-A`. This implementation
-// answered every column with zsh's, which matched one shell by accident and
-// lost the value in the other two at status 0 (#1572).
+// A preset with neither letter cannot be asked, and one may have `-a` without
+// `-A`. Answering every preset with the discarding reading matches one by
+// accident and loses the value in the rest at status 0.
 //
-// ksh93's two letters are the reason there are two fields rather than one,
-// and its `-a` answer is a genuine third state rather than a rendering of
-// bash's. Two probes say so: a one-element array of ksh93's own making lists
-// *with* the letter — `b=(1); typeset -p b` is `typeset -a b=(1)` — and a
+// A preset that answers its two letters differently is the reason there are
+// two fields rather than one, and its `-a` answer is a genuine third state
+// rather than a rendering of the promotion. Two probes say so: a one-element
+// array of that preset's own making lists *with* the letter — `b=(1);
+// typeset -p b` is `typeset -a b=(1)` — and a
 // bare `typeset -a`, which lists every name carrying the attribute, prints
 // nothing at all after `b=1; typeset -a b`. So the declaration recorded
 // nothing and converted nothing; the name is still the scalar it was, and
-// ksh93 lets a scalar be subscripted, which is why `${b[0]}` and `${#b[@]}`
-// cannot tell that apart from bash's promotion.
+// where a scalar may be subscripted, `${b[0]}` and `${#b[@]}` cannot tell that
+// apart from a promotion.
 //
 // Asked only where the name is holding a scalar *in the cell being declared*.
 // An unset name has nothing to make anything of and is unanimous — `unset b;
@@ -8403,16 +8402,15 @@ const (
 	ScalarUnderACompoundUnspecified ScalarUnderACompoundPolicy = iota
 	// ScalarUnderACompoundBecomesTheFirstElement promotes: the value the name
 	// was holding becomes the array's first element, or the table's entry
-	// under the key `0`. bash for both letters, ksh93 for the table.
+	// under the key `0`.
 	//
 	// The first element rather than any particular number, which is what the
 	// store's positions already mean — no dialect that counts from 1 promotes
 	// at all, so nothing here can be asked which subscript it is.
 	ScalarUnderACompoundBecomesTheFirstElement
 	// ScalarUnderACompoundStaysAScalar converts nothing and records nothing:
-	// the name is the scalar it was, and the declaration is a no-op. ksh93
-	// for `typeset -a`, where a bare `typeset -a` afterwards does not list
-	// the name.
+	// the name is the scalar it was, and the declaration is a no-op — a bare
+	// `typeset -a` afterwards does not list the name.
 	//
 	// Not the same as promoting, even though that shell reads `${b[0]}` as
 	// the scalar and answers `${#b[@]}` with 1 either way: the listing is
@@ -8420,8 +8418,8 @@ const (
 	// out what a name is.
 	ScalarUnderACompoundStaysAScalar
 	// ScalarUnderACompoundDiscardsIt takes the value away and leaves the
-	// name an empty array or table: zsh, for both letters, where `$b` reads
-	// back empty and `${#b[@]}` is 0.
+	// name an empty array or table, so `$b` reads back empty and `${#b[@]}`
+	// is 0.
 	ScalarUnderACompoundDiscardsIt
 )
 
@@ -8460,19 +8458,19 @@ const (
 	// element and remove it.
 	UnsetArraySpanUnspecified UnsetArraySpanPolicy = iota
 	// UnsetArraySpanIsAnExpression reads the brackets as it reads any other
-	// subscript: ksh93, where `@` is not an expression and the operand is
-	// reported as a bad one. A subscript that *is* an expression names its
+	// subscript, so `@` is not an expression and the operand is reported as a
+	// bad one. A subscript that *is* an expression names its
 	// element and the element is removed.
 	UnsetArraySpanIsAnExpression
 	// UnsetArraySpanRemovesTheElements takes away every subscript the span
-	// names: bash, in both builds measured, where `a[@]` leaves the array
-	// with nothing in it and `a[3]` leaves a hole. A name that is not an
+	// names, so `a[@]` leaves the array with nothing in it and `a[3]` leaves a
+	// hole. A name that is not an
 	// array is reported rather than emptied, and one that holds nothing at
 	// all is quietly left alone.
 	UnsetArraySpanRemovesTheElements
 	// UnsetArraySpanLeavesOneEmptyElement replaces what the subscript names
-	// with a single empty element: zsh, where `unset` of a span is the span
-	// becoming one empty string rather than the subscripts going away. A
+	// with a single empty element, so `unset` of a span is the span becoming one
+	// empty string rather than the subscripts going away. A
 	// three-element array under `[@]` comes back holding one empty element, a
 	// scalar comes back empty, and a single subscript comes back blank in
 	// place with the array's length unchanged.
@@ -8522,16 +8520,15 @@ const (
 	// three below leave three different values behind.
 	EmptyReplacementPatternUnspecified EmptyReplacementPatternPolicy = iota
 	// EmptyReplacementPatternMatchesNothing declines the pattern outright,
-	// so the operator is a no-op whatever the value holds: bash, in every
-	// build measured and as `sh`.
+	// so the operator is a no-op whatever the value holds.
 	EmptyReplacementPatternMatchesNothing
 	// EmptyReplacementPatternMatchesAnEmptyValue takes it only where there
 	// is nothing to scan, so an empty value becomes the replacement and any
-	// other value is left alone: ksh93.
+	// other value is left alone.
 	EmptyReplacementPatternMatchesAnEmptyValue
 	// EmptyReplacementPatternMatchesEveryPosition treats it as the ordinary
 	// pattern that matches the empty string, so it fires wherever any such
-	// pattern would: zsh.
+	// pattern would.
 	EmptyReplacementPatternMatchesEveryPosition
 )
 
@@ -8570,10 +8567,10 @@ const (
 	EmptyMatchDeclinedUnspecified EmptyMatchDeclinedPolicy = iota
 	// EmptyMatchDeclinedAtTheEnd refuses an empty match at the end of the
 	// value reached by stepping over the last unit, and takes one adjacent
-	// to the match before it: bash and zsh.
+	// to the match before it.
 	EmptyMatchDeclinedAtTheEnd
 	// EmptyMatchDeclinedAfterAMatch refuses an empty match at the position
-	// the match before it ended, and takes one at the end: ksh93. The
+	// the match before it ended, and takes one at the end. The
 	// classic global-replace rule, where a replacement never happens twice
 	// in the same place.
 	EmptyMatchDeclinedAfterAMatch
@@ -8610,11 +8607,10 @@ func (r *Runner) emptyMatchDeclined() EmptyMatchDeclinedPolicy {
 type DescriptorAllocationBase int
 
 const (
-	// AllocateDescriptorsFromTen is bash 5.3 and ksh93, and is the zero value
-	// because it is the answer this shell gave everywhere before the axis
-	// existed.
+	// AllocateDescriptorsFromTen is the common answer, and is the zero value
+	// because it is the one this shell gives with nothing said.
 	AllocateDescriptorsFromTen DescriptorAllocationBase = iota
-	// AllocateDescriptorsFromEleven is zsh 5.9.2.
+	// AllocateDescriptorsFromEleven counts up from one higher.
 	AllocateDescriptorsFromEleven
 )
 
@@ -8638,16 +8634,14 @@ const (
 	// axis is reported and then does not move the value.
 	ReadTrailingEscapedSeparatorUnspecified ReadTrailingEscapedSeparatorPolicy = iota
 	// ReadTrailingEscapedSeparatorKept lets the mask reach the trim, so an
-	// escaped separator is data wherever it stands: dash.
+	// escaped separator is data wherever it stands.
 	ReadTrailingEscapedSeparatorKept
 	// ReadTrailingEscapedSeparatorTrimmedFromARemainder ignores the mask,
 	// and only for a last name that took the *remainder* of the line — one
-	// field per name leaves the field's own closing space alone: bash, in
-	// all three builds measured.
+	// field per name leaves the field's own closing space alone.
 	ReadTrailingEscapedSeparatorTrimmedFromARemainder
 	// ReadTrailingEscapedSeparatorTrimmed ignores the mask for the last
-	// name's value however it was reached, remainder or single field:
-	// ksh93 and zsh.
+	// name's value however it was reached, remainder or single field.
 	ReadTrailingEscapedSeparatorTrimmed
 )
 
@@ -8687,16 +8681,15 @@ const (
 	ValueBackslashUnspecified ValueBackslashPolicy = iota
 	// ValueBackslashQuotesWhatFollows makes the backslash a quote: what
 	// follows it is not a metacharacter, the backslash is not matched, and
-	// it is still in the word a failed match restores. dash, bash 5.3, that
-	// build as `sh`, and bash 3.2.
+	// it is still in the word a failed match restores.
 	ValueBackslashQuotesWhatFollows
 	// ValueBackslashDisarmsWhatFollows keeps the backslash as a character of
 	// the pattern and takes the metacharacter status off what follows it, so
-	// the field matches what the same text written literally would. zsh,
+	// the field matches what the same text written literally would, reached
 	// through `${~spec}`.
 	ValueBackslashDisarmsWhatFollows
 	// ValueBackslashIsData keeps the backslash as a character and leaves
-	// what follows it live. ksh93.
+	// what follows it live.
 	ValueBackslashIsData
 )
 
@@ -8737,7 +8730,7 @@ func (r *Runner) valueBackslashInAPattern() ValueBackslashPolicy {
 // scratch HOME and ZDOTDIR, with `readonly x=1` and then `x=2 <cmd>; echo
 // after`:
 //
-//	                  bash 5.3   dash    ksh93u+        zsh 5.9.2
+//	                  never      always  special/fn     this-shell
 //	/bin/echo RAN     R, RAN, 0  fatal   R, skip, 1     R, skip, 1
 //	true              R, run, 0  fatal   silent, 0      R, fatal 1
 //	echo E            R, E, 0    fatal   silent, E, 0   R, fatal 1
@@ -8747,17 +8740,15 @@ func (r *Runner) valueBackslashInAPattern() ValueBackslashPolicy {
 //	:                 R, 0       fatal   R, fatal 1     R, fatal 1
 //	a function        R, run, 0  fatal   R, fatal 1     R, fatal 1
 //
-// An earlier reading of this issue held `true` fixed throughout and got
-// ksh93's answer backwards for five of those rows, which is what the two
-// kind-keyed values are here to prevent: `true` is one of the least
-// representative command words available.
+// A reading that holds `true` fixed throughout gets a kind-keyed answer
+// backwards for five of those rows, which is what the two kind-keyed values
+// are here to prevent: `true` is one of the least representative command words
+// available.
 //
 // One column does give up the rest of the *command list* without ending the
-// script — bash invoked as `sh`, which reports and then reaches the next line
-// — and there is no value for it, because no preset answers for that column:
-// the `sh` invocation changes the grammar and not the semantics vector. The
-// corpus records it. What made #1219 is that the same state was *ours* in
-// bash and in ksh, which is what the `;` cells of that issue measured.
+// script — reporting and then reaching the next line — and there is no value
+// for it, because no preset answers for that column: the `sh` invocation
+// changes the grammar and not the semantics vector. The corpus records it.
 type PrefixRefusalFatalityPolicy int
 
 const (
@@ -8766,20 +8757,20 @@ const (
 	// and two for sets that do not contain one another.
 	PrefixRefusalFatalityUnspecified PrefixRefusalFatalityPolicy = iota
 	// PrefixRefusalNeverFatal reports and carries on whatever the command
-	// was: bash, in both builds measured.
+	// was.
 	PrefixRefusalNeverFatal
-	// PrefixRefusalAlwaysFatal ends the script whatever the command was:
-	// dash, which is uniform in the other direction.
+	// PrefixRefusalAlwaysFatal ends the script whatever the command was, which
+	// is uniform in the other direction.
 	PrefixRefusalAlwaysFatal
 	// PrefixRefusalFatalOnASpecialBuiltinOrFunction ends the script for the
 	// two kinds that would have *kept* the assignment and carries on for the
-	// rest: ksh93. `command` is transparent to it — what matters is the kind
+	// rest. `command` is transparent to it — what matters is the kind
 	// the word resolves to, so `command /bin/echo` is the external answer and
 	// `command true` the regular builtin's.
 	PrefixRefusalFatalOnASpecialBuiltinOrFunction
 	// PrefixRefusalFatalOnACommandThisShellRuns ends the script for every
-	// kind that runs inside the shell and carries on for an external one:
-	// zsh. `command` is *not* transparent there — it is read as the word that
+	// kind that runs inside the shell and carries on for an external one.
+	// `command` is *not* transparent there — it is read as the word that
 	// was written, and a command written with it in front carries on whatever
 	// it names, which is the row that separates this from the value above.
 	PrefixRefusalFatalOnACommandThisShellRuns
@@ -8811,9 +8802,9 @@ func (p PrefixRefusalFatalityPolicy) String() string {
 // Measured 2026-09-10, `-c`, with the name already declared so that no other
 // axis answers first:
 //
-//	bash 5.3, bash 3.2   `m[]: bad array subscript`, value 0, script goes on
-//	ksh93u+              silent 0, script goes on
-//	zsh 5.9.2            `invalid subscript`, the expression fails
+//	reported   `m[]: bad array subscript`, value 0, script goes on
+//	silent     0, script goes on
+//	refused    `invalid subscript`, the expression fails
 //
 // Three answers that part on all three of the wording, the value and whether
 // the input survives, which is the definition of a conflict rather than of a
@@ -8828,25 +8819,25 @@ const (
 	EmptyArithSubscriptUnspecified EmptyArithSubscriptPolicy = iota
 	// EmptyArithSubscriptIsTheEmptyExpression reads the brackets as holding
 	// an expression that happens to be empty, which is zero — so the operand
-	// is the *element that subscript names* and not the number zero. ksh93,
-	// where `a=(5 6 7); $(( a[] ))` is 5 rather than 0, `m[""]=4` then
+	// is the *element that subscript names* and not the number zero, so
+	// `a=(5 6 7); $(( a[] ))` is 5 rather than 0, `m[""]=4` then
 	// `$(( m[] ))` is 4, and `(( a[]++ ))` steps element zero. The stream
 	// stays clean and the status stays 0.
 	//
-	// The distinction is not pedantry: bash reports and then answers with a
-	// flat zero — `a=(5 6 7); $(( a[] ))` is 0 there — so a policy worded as
-	// "zero" would have given ksh93 bash's value and no probe written against
-	// an unset name could have told the two apart.
+	// The distinction is not pedantry: the reported reading answers with a flat
+	// zero — `a=(5 6 7); $(( a[] ))` is 0 there — so a policy worded as
+	// "zero" would have given this reading the reported one's value, and no
+	// probe written against an unset name could have told the two apart.
 	EmptyArithSubscriptIsTheEmptyExpression
 	// EmptyArithSubscriptIsReported names the subscript and carries on with
-	// zero: bash, in both builds measured, where `$(( m[] ))` writes
-	// `m[]: bad array subscript` and still expands to 0. The real shell
-	// writes that sentence twice for one subscript, which is an artifact of
+	// zero, so `$(( m[] ))` writes `m[]: bad array subscript` and still expands
+	// to 0. The real shell writes that sentence twice for one subscript, which
+	// is an artifact of
 	// how it evaluates rather than a fact about the construct; once is what
 	// this produces.
 	EmptyArithSubscriptIsReported
-	// EmptyArithSubscriptIsInvalid fails the expression: zsh, where the
-	// complaint is `invalid subscript` — the subscript machinery's own
+	// EmptyArithSubscriptIsInvalid fails the expression, and the complaint is
+	// `invalid subscript` — the subscript machinery's own
 	// sentence and not the expression parser's, with no `bad math
 	// expression` in front of it and no name after it — and the arithmetic
 	// produces no value at all.
@@ -8883,16 +8874,14 @@ const (
 	// shell in the panel builds a nested value this interpreter has no
 	// representation for at all.
 	SubscriptedArrayLiteralUnspecified SubscriptedArrayLiteralPolicy = iota
-	// SubscriptedArrayLiteralRefused reports the line and ends the script:
-	// bash, in both builds measured, where `a[1]=(p q)` is `a[1]: cannot
-	// assign list to array member` at status 1 and the rest of the command
-	// string does not run. The refusal does not depend on what the name
+	// SubscriptedArrayLiteralRefused reports the line and ends the script, so
+	// `a[1]=(p q)` is `a[1]: cannot assign list to array member` at status 1
+	// and the rest of the command string does not run. The refusal does not depend on what the name
 	// holds — an array, a scalar, a declared table and an unset name are all
 	// refused with the same sentence and the subscript quoted as written.
 	SubscriptedArrayLiteralRefused
-	// SubscriptedArrayLiteralSplices replaces the element with the words:
-	// zsh, where the array's *length* changes by the literal's count less
-	// one. `i=1; a=(x y); a[$i]=(p q)` reads back `p q y`, `a[$i]=()` removes
+	// SubscriptedArrayLiteralSplices replaces the element with the words, so
+	// the array's *length* changes by the literal's count less one. `i=1; a=(x y); a[$i]=(p q)` reads back `p q y`, `a[$i]=()` removes
 	// the element, and `a[$i]+=(p)` appends at the element rather than at the
 	// end. A subscript past the last element pads with empties on the way, a
 	// scalar name is refused as a non-array and a declared table is refused
@@ -8977,10 +8966,9 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 	}
 	matched, report := matchPatternIn(pattern, s, s, 0, o)
 	if bad {
-		// zsh abandons the script rather than failing the match.
-		// Measured: zsh abandons the script here with status 0, and with 1
-		// when the same pattern fails against the filesystem. Both are
-		// zsh's, and neither is guessable from the other.
+		// The script is abandoned rather than the match failing: measured, with
+		// status 0 here and with 1 when the same pattern fails against the
+		// filesystem. Neither is guessable from the other.
 		r.fatalPattern(pattern, 0)
 		return false
 	}
@@ -9007,9 +8995,9 @@ func (r *Runner) fatalPattern(pattern string, status int) {
 //
 // Three answers and not a bool, for the reason ReadonlyElementPolicy is not
 // one: no answer is the negation of another, and a field named for one of
-// them would read as `false` meaning another by accident. The third is
-// ksh93's, which never consults a locale at all, and it is reachable only at
-// the two sites ksh93 reads the escape at — a `printf` format and `$'…'`.
+// them would read as `false` meaning another by accident. The third never
+// consults a locale at all, and it is reachable only at the sites that preset
+// reads the escape at — a `printf` format and `$'…'`.
 //
 // The escape's reading is not in question here — see
 // Semantics.EchoExpandsUnicodeEscapes and the printf policies for that. This
@@ -9024,20 +9012,19 @@ const (
 	OutsideLocaleEscapeUnspecified OutsideLocaleEscapePolicy = iota
 	// OutsideLocaleEscapeWritten leaves the escape standing, normalized to
 	// four or eight upper-case digits — `\ue9` and `\U000000e9` both stand as
-	// `\u00E9` — and the command carries on: bash 5.3.
+	// `\u00E9` — and the command carries on.
 	OutsideLocaleEscapeWritten
 	// OutsideLocaleEscapeRefused reports `character not in range`, writes
 	// what came before the escape and nothing after it, and abandons the
-	// script with status **0**: zsh. Measured, and the pair that says so is
-	// `(exit 3); echo '...'`, which also exits 0 — so it is zero rather than
-	// whatever was already there.
+	// script with status **0**. The pair that says so is `(exit 3); echo
+	// '...'`, which also exits 0 — so it is zero rather than whatever was
+	// already there.
 	OutsideLocaleEscapeRefused
 	// OutsideLocaleEscapeEncoded writes the character whatever the locale
-	// says, which is to say it never consults one: ksh93. Measured 2026-09-11
-	// under `LC_ALL=C`, `printf 'a\u00e9Z'` and `$'a\u00e9Z'` both giving
-	// `61 c3 a9 5a` there and in a UTF-8 locale alike — the answer this shell
-	// gave everywhere before the axis existed, and the third answer that
-	// makes this a policy with two shells to tell apart rather than one.
+	// says, which is to say it never consults one. Under `LC_ALL=C`,
+	// `printf 'a\u00e9Z'` and `$'a\u00e9Z'` both give `61 c3 a9 5a` there and in
+	// a UTF-8 locale alike — the answer this shell gives with nothing said, and
+	// the third reading that makes this a policy rather than a flag.
 	OutsideLocaleEscapeEncoded
 )
 
@@ -9077,8 +9064,8 @@ func (r *Runner) outsideLocaleEscape() OutsideLocaleEscapePolicy {
 // `false` meaning the other by accident, and it would leave nowhere for that
 // third reading to be ruled out.
 //
-// Only the two shells that keep such a record reach it: ksh93 and dash have no
-// name for it, so the axis is never asked there. interp/pipestatus.go holds
+// Only a preset that keeps such a record reaches it: without a name for it the
+// axis is never asked. interp/pipestatus.go holds
 // the mechanics and Semantics.CompoundPipelineStatusRecord the measurements.
 type CompoundPipelineStatusPolicy uint8
 
@@ -9089,12 +9076,12 @@ const (
 	// CompoundPipelineStatusFromTheBody writes the compound's own status
 	// where its **body** holds anything that would write the record standing
 	// alone, and leaves the record alone otherwise — a question about the
-	// parse, answered without running any of it: zsh.
+	// parse, answered without running any of it.
 	CompoundPipelineStatusFromTheBody
 	// CompoundPipelineStatusFromWhatRan writes nothing for the compound at
 	// all, so the record is whatever the last pipeline that actually ran
 	// inside it left — and a compound that ran nothing leaves the record from
-	// before it: bash.
+	// before it.
 	CompoundPipelineStatusFromWhatRan
 )
 
@@ -9133,10 +9120,10 @@ const (
 	// ReadonlyElementUnspecified is no answer, and is refused like any other.
 	ReadonlyElementUnspecified ReadonlyElementPolicy = iota
 	// ReadonlyElementWritten writes the element and freezes the array over
-	// it, so `readonly a[1]=v` leaves `a` holding v and immutable: ksh93.
+	// it, so `readonly a[1]=v` leaves `a` holding v and immutable.
 	ReadonlyElementWritten
 	// ReadonlyElementRefused refuses the operand and ends the script,
-	// because an element cannot carry the attribute a name carries: zsh.
+	// because an element cannot carry the attribute a name carries.
 	ReadonlyElementRefused
 )
 
@@ -9150,25 +9137,25 @@ func (p ReadonlyElementPolicy) String() string {
 	return "unspecified"
 }
 
-// Three answers and not a bool, because the panel splits on *which* dash
-// words rather than on whether there are any: zsh refuses `-x` as an option
-// it does not have and reads `-1` as a count, so it is neither of the two
-// answers a bool could give.
+// Three answers and not a bool, because the split is over *which* `-` words
+// rather than over whether there are any: one reading refuses `-x` as an
+// option it does not have and reads `-1` as a count, which is neither of the
+// two answers a bool could give.
 type ShiftOptionWordPolicy int
 
 const (
 	// ShiftOptionWordsUnspecified is no answer, and is refused like any
 	// other.
 	ShiftOptionWordsUnspecified ShiftOptionWordPolicy = iota
-	// ShiftOptionWordsNone reads every dash word as the count, so `shift -x`
-	// complains about a number: bash, dash.
+	// ShiftOptionWordsNone reads every `-` word as the count, so `shift -x`
+	// complains about a number.
 	ShiftOptionWordsNone
-	// ShiftOptionWordsNonNumeric reads a dash word as an option unless what
-	// follows the dash is all digits, so `shift -x` is an option and
-	// `shift -1` is a count: zsh.
+	// ShiftOptionWordsNonNumeric reads a `-` word as an option unless what
+	// follows the `-` is all digits, so `shift -x` is an option and
+	// `shift -1` is a count.
 	ShiftOptionWordsNonNumeric
-	// ShiftOptionWordsAny reads every dash word as an option, digits and
-	// all, so `shift -1` and `shift -0` are both refused as options: ksh93.
+	// ShiftOptionWordsAny reads every `-` word as an option, digits and all, so
+	// `shift -1` and `shift -0` are both refused as options.
 	ShiftOptionWordsAny
 )
 
@@ -9185,7 +9172,7 @@ func (p ShiftOptionWordPolicy) String() string {
 }
 
 // shiftOptionWords resolves the axis, and only for a word that begins with a
-// `-` and is neither a lone dash nor the end-of-options marker.
+// `-` and is neither a lone `-` nor the end-of-options marker.
 func (r *Runner) shiftOptionWords() ShiftOptionWordPolicy {
 	p := r.sem().ShiftOptionWords
 	if p == ShiftOptionWordsUnspecified {

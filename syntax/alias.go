@@ -209,11 +209,19 @@ func (p *Parser) spliceAlias(value string) {
 	// quotes is still text that is really there.
 	counts := p.dialect.AliasBodyCountsLines
 	var toks []Token
+	// Whether each token touches the one before it, taken from the *body's*
+	// own offsets and kept, because the loop below is about to overwrite
+	// them with the alias word's. See Parser.pendingTouches for the one
+	// question in the grammar that has no other way to ask.
+	var touches []bool
+	lastEnd := -1
 	for {
 		t := sub.Next()
 		if t.Kind == TokEOF {
 			break
 		}
+		touches = append(touches, int(t.Pos.Offset) == lastEnd)
+		lastEnd = int(t.End.Offset)
 		pos, stop := at, end
 		if counts {
 			pos.Line += t.Pos.Line - 1
@@ -234,8 +242,12 @@ func (p *Parser) spliceAlias(value string) {
 		return
 	}
 	p.pending = append(toks[1:], p.pending...)
+	p.pendingTouches = append(touches[1:], p.pendingTouches...)
 	p.aliasSpliced = len(toks)
 	p.tok = toks[0]
+	// The first token of a body replaces the alias word, which stood where
+	// it stood: nothing about the body says it touches what came before.
+	p.tokTouches = false
 }
 
 // endsInBlank reports whether an alias value ends in a space or a tab, which

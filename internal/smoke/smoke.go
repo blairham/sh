@@ -74,6 +74,23 @@ type Dialect struct {
 	// synchronizing on, so that a shell honoring neither PS1 nor its rc file
 	// is still one the other checks can be run against.
 	DefaultPrompt string
+	// SuppressSystemFiles are the invocation options that keep the *machine's*
+	// startup files out of this session, in this shell's own spelling.
+	//
+	// Empty for every dialect but one, and that one is the reason the field
+	// exists. Since #1717 a shell reads the files under `/etc` as well as the
+	// person's, and macOS's `/etc/zshrc` sets `HISTFILE`, `HISTSIZE` and
+	// `SAVEHIST` — so a zsh session started here wrote its history somewhere
+	// other than the scratch home this suite gave it, and the block-store
+	// rows failed with the file simply absent. That is the suite measuring
+	// the machine rather than the shell.
+	//
+	// zsh's `-d` (`--no-globalrcs`) drops root's files and keeps the
+	// person's, which is exactly what a scratch home needs. bash has no such
+	// option, and needs none: measured, it reads no system-wide file at an
+	// interactive prompt that is not a login shell.
+	SuppressSystemFiles []string
+
 	// RebindKey is the rc-file line that binds `^G` to the action that moves
 	// the cursor to the start of the line, in this shell's own spelling and
 	// this shell's own name for that action: `bind` and `beginning-of-line`
@@ -211,6 +228,9 @@ func Zsh() Dialect {
 	// lists a job in lower case.
 	return Dialect{
 		Name: "zsh", RCFile: ".zshrc", CwdEscape: "%~", UserEscape: "%n", DefaultPrompt: "% ",
+		// See SuppressSystemFiles: /etc/zshrc would otherwise move this
+		// session's history file out of its scratch home.
+		SuppressSystemFiles: []string{"-d"},
 		// The caret notation, which is this shell's and not the other's.
 		RebindKey: "bindkey '^G' beginning-of-line",
 		// `bindkey -v` rather than `set -o vi`, which is how this shell's own

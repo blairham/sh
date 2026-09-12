@@ -104,7 +104,7 @@ func (s *session) start(ctx context.Context) error {
 	// Invoked under the name of the shell it is, because that is what a
 	// person's terminal does and because argv[0] is where a shell reads its
 	// own name — a prompt that draws it should draw the right one.
-	cmd.Args = []string{s.dialect.Name}
+	cmd.Args = append([]string{s.dialect.Name}, s.dialect.SuppressSystemFiles...)
 	cmd.Dir = s.home
 	cmd.Env = environment(s.home, s.path, s.dialect)
 	if s.unnamedStore {

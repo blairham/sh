@@ -368,7 +368,7 @@ func TestPrintfAnswers(t *testing.T) {
 		// missing one is an error in none of the four.
 		{"PrintfEmptyIsNotANumber", s.PrintfEmptyIsNotANumber, interp.Yes},
 		{"PrintfBackslashC", s.PrintfBackslashC, interp.PrintfBackslashCLiteral},
-		{"PrintfQuote", s.PrintfQuote, interp.PrintfQuoteBackslash},
+		{"PrintfQuote", s.PrintfQuote, interp.PrintfQuoteAnsiCWord},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)

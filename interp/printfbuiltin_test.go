@@ -17,7 +17,7 @@ func printfSem() Semantics {
 	s.PrintfReportsBadNumber = No
 	s.PrintfEmptyIsNotANumber = No
 	s.PrintfBackslashC = PrintfBackslashCLiteral
-	s.PrintfQuote = PrintfQuoteBackslash
+	s.PrintfQuote = PrintfQuoteAnsiCWord
 	s.PrintfLengthModifiers = PrintfLengthModifiersAbsent
 	s.PrintfUnfinishedConversionIsAPercent = No
 	s.PrintfHexEscape = PrintfHexEscapeAbsent
@@ -627,7 +627,7 @@ func TestPrintfQuoteIsThreeAnswersAndAnAbsence(t *testing.T) {
 		style PrintfQuoteStyle
 		want  string
 	}{
-		{"backslash", PrintfQuoteBackslash, `a\ b`},
+		{"backslash", PrintfQuoteAnsiCWord, `a\ b`},
 		{"single quoted", PrintfQuoteSingle, `'a b'`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

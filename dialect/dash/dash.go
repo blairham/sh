@@ -254,7 +254,9 @@ func Semantics() interp.Semantics {
 	// None: `%ld` is the conversion `l`, which dash does not have.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersAbsent
 	// No `%(fmt)T`: `%(` is a directive this shell does not have.
+	s.PidListingFinishesWithAJob = interp.No
 	s.PrintfTimeConversion = interp.No
+	s.PrintfTimeOperandIsADateString = interp.No
 	s.PrintfQuote = interp.PrintfQuoteAbsent
 	// The three `$'…'` axes are left unanswered on purpose: dash has no
 	// `$'…'` at all — `$'a\tb'` is the six characters it was written as,

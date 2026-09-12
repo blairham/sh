@@ -1283,8 +1283,10 @@ func Semantics() interp.Semantics {
 	// `%lld`, `%zX` and `%jd` are invalid directives.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC89
 	// No `%(fmt)T`: `%(` is a directive this shell does not have.
+	s.PidListingFinishesWithAJob = interp.No
 	s.PrintfTimeConversion = interp.No
-	s.PrintfQuote = interp.PrintfQuoteBackslash
+	s.PrintfTimeOperandIsADateString = interp.No
+	s.PrintfQuote = interp.PrintfQuoteAnsiCCharacter
 	// zsh is the one shell with `$'…'` and no `\c` in it, so `$'\cA'` is the
 	// two characters `cA`; and its strings are counted rather than
 	// terminated, so a decoded NUL is a byte like any other.

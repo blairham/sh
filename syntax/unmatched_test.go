@@ -25,6 +25,11 @@ func TestUnmatchedDelimitersCarryTheirState(t *testing.T) {
 	}{
 		{`echo "abc`, `"`, `"`, `"abc`, 1, 1},
 		{`echo 'abc`, `'`, `'`, `'abc`, 1, 1},
+		// The `$'…'` spelling is the same quote: every shell in the panel
+		// that has the construct names a plain `'`, the `$` having only
+		// opened it. It was worded by the lexer instead, with a sentence no
+		// shell writes at a line two of them do not name (#1468).
+		{`echo $'abc`, `'`, `'`, `$'abc`, 1, 1},
 		{"echo `echo", "`", "`", "`echo", 1, 1},
 		{`echo $(echo`, `$(`, `)`, `$(echo`, 1, 1},
 		// The two spellings that hold a program the other way. Before
@@ -73,7 +78,7 @@ func TestTheEndOfInputMayCloseAQuote(t *testing.T) {
 	d := Core()
 	d.CloseQuotesAtEOF = RouteFromCommandString
 	d = d.On(RouteFromCommandString)
-	for _, src := range []string{`echo "abc`, `echo 'abc`, "echo `echo"} {
+	for _, src := range []string{`echo "abc`, `echo 'abc`, "echo `echo", `echo $'abc`} {
 		f, err := Parse(src, d)
 		if err != nil {
 			t.Errorf("%q: %v, want the quote closed and the command kept", src, err)
@@ -98,7 +103,7 @@ func TestTheEndOfInputMayCloseAQuote(t *testing.T) {
 // defect was a flag applied where it had not been measured and a test that
 // asks about one route reintroduces exactly that.
 func TestAQuoteIsClosedOnlyOnTheRouteTheDialectNames(t *testing.T) {
-	quotes := []string{`echo "abc`, `echo 'abc`, "echo `echo"}
+	quotes := []string{`echo "abc`, `echo 'abc`, "echo `echo", `echo $'abc`}
 	for _, route := range []ProgramRoutes{RouteOnNoRoute, RouteFromScriptFile, RouteOnStandardInput} {
 		d := Core()
 		d.CloseQuotesAtEOF = RouteFromCommandString

@@ -3387,7 +3387,12 @@ func (d Diagnostics) ParseFailureLine(err error) int {
 		// The openers that hold a program, together: the dialect that puts
 		// an unmatched `$(` at the line after the input's last puts `<(`,
 		// `>(` and `=(` there too, which is measured rather than assumed.
-		if se.Token == "$(" || se.Token == "<(" || se.Token == ">(" || se.Token == "=(" {
+		//
+		// And `${ cmd;}` with them, which is the one whose opener does not
+		// say so: `${x}` is the same two characters and is blamed at the
+		// brace in that dialect, so the form travels on the error instead.
+		// See Error.HoldsProgram.
+		if se.HoldsProgram || se.Token == "$(" || se.Token == "<(" || se.Token == ">(" || se.Token == "=(" {
 			if d.CmdSubstUnmatchedAtEnd && se.EndLine > 0 {
 				return se.EndLine
 			}

@@ -212,10 +212,18 @@ axis-sweep: ## Move every axis in interp.Semantics and report the ones nothing o
 	@go build -tags shaxissweep -o $(BINDIR)/axis-sh ./cmd/sh
 	@go run ./internal/cmd/axissweep -bin $(BINDIR)/axis-sh $(ARGS)
 
-sandbox: ## Try every way a script has of reaching the filesystem, against the shipped binary, and report what the boundary stopped
+sandbox: ## Try every way a script has of reaching the filesystem, against the shipped binaries, and report what the boundary stopped
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/sandbox-sh ./cmd/sh
-	@go run ./internal/cmd/sandboxcheck -bin $(BINDIR)/sandbox-sh $(ARGS)
+	@go build -o $(BINDIR)/sandbox-bash ./cmd/bash
+	@go build -o $(BINDIR)/sandbox-zsh ./cmd/zsh
+	@go build -o $(BINDIR)/sandbox-ksh ./cmd/ksh
+	@go build -o $(BINDIR)/sandbox-dash ./cmd/dash
+	@go run ./internal/cmd/sandboxcheck -bin $(BINDIR)/sandbox-sh \
+		-dialect-bin bash=$(BINDIR)/sandbox-bash \
+		-dialect-bin zsh=$(BINDIR)/sandbox-zsh \
+		-dialect-bin ksh=$(BINDIR)/sandbox-ksh \
+		-dialect-bin posix=$(BINDIR)/sandbox-dash $(ARGS)
 
 conformance-dialects: ## Grade each dialect binary against the shell it claims to be
 	@mkdir -p $(BINDIR)

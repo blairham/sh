@@ -356,7 +356,16 @@ func MainArgs(sh Shell, argv []string) int {
 		// would silently read the test binary's input.
 		return holdProcessGroup(sh.Stdin)
 	}
-	in, err := sh.input(argv)
+	sh, in, closer, err := sh.input(argv)
+	if closer != nil {
+		// The audit file, when the invocation named one. Deferred here and
+		// not inside input, because the shell has not run yet when input
+		// returns — and closed rather than left to the kernel because a file
+		// a process holds open until it exits is untidy in the way that
+		// later reads as a leak. Nothing is lost if `exec` replaces this
+		// process before it runs: every record is written straight through.
+		defer func() { _ = closer.Close() }()
+	}
 	if err != nil {
 		var se *scriptError
 		if errors.As(err, &se) {
@@ -748,7 +757,14 @@ type invocation struct {
 	// that have one print their version for `--version -c 'echo hi'` and
 	// never run the command.
 	version bool
-	opts    []optionSpec
+	// policy names a policy file and audit names where the event stream goes
+	// — `--policy FILE`, `--audit FILE`, long form only. They are the one
+	// pair of options here that no real shell has, and they are here anyway
+	// because every real shell *refuses* them, measured; see sandbox.go for
+	// the rows and for the decision they rest on (#1826, #1334).
+	policy string
+	audit  string
+	opts   []optionSpec
 }
 
 // namesStartupOption reports whether this dialect spells a startup-file option
@@ -811,19 +827,59 @@ func (sh Shell) startupOption(spelling string, args []string, inv *invocation) (
 	return args, true, nil
 }
 
-func (sh Shell) input(argv []string) (source, error) {
+// input reads the whole argument vector: the options, then the operands.
+//
+// It hands back a Shell as well as the source because reading an invocation
+// can *change* the shell it is being read for: `--policy` installs a gate and
+// `--audit` a sink, and both have to be in place before the operands are
+// read, since a script operand is opened through the gate. The closer is the
+// audit file when the invocation named one — returned rather than deferred
+// here, because a binary's main ends with os.Exit.
+func (sh Shell) input(argv []string) (Shell, source, io.Closer, error) {
 	args := argv
 	if len(args) > 0 {
 		args = args[1:]
 	}
+	rest, inv, err := sh.options(args)
+	if err != nil {
+		return sh, source{}, nil, err
+	}
+	if inv.version {
+		// Nothing after it is read and nothing before it runs, so no gate is
+		// installed either: the route the rest of the vector would have
+		// chosen is never decided.
+		return sh, source{version: true}, nil, nil
+	}
+	sh, closer, err := sh.installSandbox(inv)
+	if err != nil {
+		return sh, source{}, nil, err
+	}
+	in, err := sh.operands(rest, inv)
+	if err != nil {
+		if closer != nil {
+			_ = closer.Close()
+		}
+		return sh, source{}, nil, err
+	}
+	return sh, in, closer, nil
+}
 
+// options reads the words before the first operand, and returns the operands
+// with what the options said about them.
+//
+// Hand-parsed rather than with the flag package, because a shell's
+// conventions are not Go's: options stop at the first operand, `-c` says the
+// first operand is a command string rather than a path, a `+` turns an option
+// off, and the words after a command string must not be claimed as more
+// flags.
+//
+// Separate from input so that the two halves happen in that order and with
+// something between them. There is exactly one thing between them — the
+// boundary the options may have asked for — and it has to be installed before
+// an operand is read rather than at each of the places an operand is read,
+// which is the shape of #472 one level up.
+func (sh Shell) options(args []string) ([]string, invocation, error) {
 	var inv invocation
-
-	// Hand-parsed rather than with the flag package, because a shell's
-	// conventions are not Go's: options stop at the first operand, `-c` says
-	// the first operand is a command string rather than a path, a `+` turns
-	// an option off, and the words after a command string must not be
-	// claimed as more flags.
 	for len(args) > 0 {
 		a := args[0]
 		switch {
@@ -832,25 +888,21 @@ func (sh Shell) input(argv []string) (source, error) {
 			// input": every shell in the panel treats `sh - a b` as running
 			// the script `a`, and only a `-` with nothing after it falls
 			// through to standard input.
-			return sh.operands(args[1:], inv)
+			return args[1:], inv, nil
 		case len(a) >= 2 && (a[0] == '-' || a[0] == '+'):
 			rest, err := sh.optionWord(a, args[1:], &inv)
 			if err != nil {
-				return source{}, err
+				return nil, inv, err
 			}
 			if inv.version {
-				// Nothing after it is read and nothing before it runs. The
-				// route the rest of the vector would have chosen is never
-				// decided, which is why this returns here rather than
-				// carrying a flag through operands.
-				return source{version: true}, nil
+				return nil, inv, nil
 			}
 			args = rest
 		default:
-			return sh.operands(args, inv)
+			return args, inv, nil
 		}
 	}
-	return sh.operands(nil, inv)
+	return nil, inv, nil
 }
 
 // optionWord reads one word of options — a single letter, a bundle, either
@@ -893,6 +945,13 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 		}
 		rest, matched, err := sh.startupOption(a, args, inv)
 		if matched {
+			return rest, err
+		}
+		// The two this front end has that no shell does. Last, so that a
+		// dialect naming either spelling for something of its own would win
+		// it — none does — and before the refusal, because the whole point
+		// of them being here is that they reach every binary.
+		if rest, matched, err = sandboxOption(a, args, inv); matched {
 			return rest, err
 		}
 		return nil, fmt.Errorf("unknown option %q", a)

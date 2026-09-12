@@ -975,26 +975,80 @@ embedding a Runner builds one in Go, or parses one from any
 `Gate` and never touches this package at all. The seam is the interface;
 this package is one implementation of it.
 
-**The invocation flag is the reachability route.** `cmd/sh` grows
-`-policy FILE`, alongside `-deny` and `-trace-events`, because a seam
-nothing reaches is a seam nothing grades. Until a shipped binary can be
-handed a policy, the conformance harness and the wild sweep run ungated
-and a hole in the boundary looks exactly like a shell that works. That
-is the same argument that put `-deny` there, and it is why this is not
-"embedder API only".
+**The invocation flag is the reachability route.** A shipped binary
+grows `--policy FILE`, because a seam nothing reaches is a seam nothing
+grades. Until a binary can be handed a policy, the conformance harness
+and the wild sweep run ungated and a hole in the boundary looks exactly
+like a shell that works. That is the same argument that put `-deny`
+there, and it is why this is not "embedder API only".
 
-It is `cmd/sh`'s own flag rather than a `driver` one. `driver` is the
-shared front end for binaries that claim to *be* bash or zsh, and no
-real shell has a `-policy`; adding it there would make `./bash -policy`
-accept a flag bash rejects, which is the rule `AGENTS.md` states about
-which flags belong where.
-
-`-audit FILE` is the other half of the same route, and writes the event
+`--audit FILE` is the other half of the same route, and writes the event
 schema below to a file — or to standard error for a lone `-`. Appended
 rather than truncated, because a trail that erases the previous run on
 the next one is not one, and written straight through rather than
 buffered, so a shell that dies mid-script has still recorded everything
 up to the action that killed it.
+
+#### The flags live in `driver`, so every binary has them
+
+Decided in #1826, which #1334 is the sharp end of. Written down here
+because the previous arrangement was not: `-policy` existed on `cmd/sh`
+and on no other binary, nothing said so, and a state nobody recorded is
+indistinguishable from an oversight — which is what it had been for
+`-c`.
+
+The argument for keeping them on `cmd/sh` was good while it stood.
+`driver` is the shared front end for binaries that claim to *be* bash or
+zsh, so a flag here is a flag `./bash` accepts, and a `./bash` that
+accepts what bash rejects is not evidence that the core is a library.
+
+What that argument could not survive is the shape of what it excluded.
+The four dialect binaries are the ones `make install` puts on disk under
+the names a shebang, `chsh` and `login` use, so `-policy` on `cmd/sh`
+alone means **`zsh` cannot be sandboxed by name at all** — not even by
+somebody willing to write a wrapper, because the `zsh` binary had no
+flag to put in one. They would have to know that `sh -dialect zsh` is
+the same shell, which is true and is not something a reader of
+`docs/install.md` would guess. And the scenario with the strongest
+external pull is precisely the one with nowhere to put a flag: a coding
+agent runs `$SHELL -c '<command>'`, and there is no argument vector a
+person controls, so the whole feature was reachable only through a shell
+script the user had to know to write (#1334).
+
+So the flags are `driver`'s, beside the rest of "how a shell is
+invoked", and every binary gets them by existing. That is the front-end
+rule this repository already states, and the thing it exists to prevent
+is exactly what had happened: `cmd/sh` learned to run a script file, the
+dialect binaries did not, and `make conformance-dialects` graded the
+drivers rather than the dialects.
+
+**What makes it safe is a measurement, not the rule.** The rule alone
+would justify putting anything here. These two are safe because every
+real shell in the panel *refuses* both spellings, so the long form
+shadows no behavior — measured 2026-09-12 on macOS 15, with and without
+a value, against `-c 'echo RAN'`, and no shell ran the command:
+
+| shell | `--policy` | status |
+| --- | --- | --- |
+| bash 5.3.15 | `--policy: invalid option` | 2 |
+| bash 3.2.57 | `--policy: invalid option` | 2 |
+| zsh 5.9.2 | `no such option: policy` | 1 |
+| ksh93u+ | `policy: bad option(s)` | 2 |
+| dash | `Illegal option --` | 2 |
+
+`--audit` is refused identically by all five.
+
+**Long form only, and that is the same measurement speaking.** Real bash
+*accepts* `-acp` as `-a -c -p` and sets `allexport` — confirmed — so a
+single-dash spelling of a word here would shadow working behavior rather
+than add a flag. `cmd/sh` keeps its own single-dash `-policy`, `-audit`,
+`-deny` and `-trace-events`, because that binary's whole flag namespace
+is already its own; the dialect binaries get the long form and nothing
+else.
+
+`-deny` and `-trace-events` stay on `cmd/sh`. They are a debug surface —
+a way to watch a refusal happen — rather than the shipped policy, and
+nothing about a coding agent or a login shell needs them.
 
 **More than one gate composes as an intersection.** `-policy` and
 `-deny` together consult both, and any refusal refuses. That is the same

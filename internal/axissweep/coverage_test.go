@@ -138,6 +138,12 @@ func TestPresetsAreEveryDialectPackage(t *testing.T) {
 // TestAGradedDialectNamesItsColumn keeps the two halves of the roster honest:
 // the difference between Presets and Targets has to be "which shells are
 // installed" and nothing else, so a dialect with no column has to say why.
+//
+// The difference is currently empty — every dialect names a column, since ash
+// stopped being the exception when the oracle learned to reach a shell that is
+// not on this machine's PATH (#2263). The Ungraded field stays, because the
+// next dialect added may well arrive before its column does; what must not
+// come back is an ungraded dialect with no reason written down.
 func TestAGradedDialectNamesItsColumn(t *testing.T) {
 	t.Parallel()
 	for _, p := range Presets() {
@@ -148,9 +154,10 @@ func TestAGradedDialectNamesItsColumn(t *testing.T) {
 			t.Errorf("%s is graded against %q and also says why it is not graded", p.Name, p.Against)
 		}
 	}
-	if len(Targets())+1 != len(Presets()) {
-		t.Errorf("%d of %d dialects are graded; ash is the one that is not, and a second\n"+
-			"ungraded dialect is worth reading about before it is accepted",
+	if len(Targets()) != len(Presets()) {
+		t.Errorf("%d of %d dialects are graded; every one of them has a panel column\n"+
+			"since ash gained its container route (#2263), so an ungraded dialect is\n"+
+			"worth reading about before it is accepted",
 			len(Targets()), len(Presets()))
 	}
 }

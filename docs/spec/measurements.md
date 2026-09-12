@@ -2924,6 +2924,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `jobs/dash-r-lists-the-running-ones` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -r` | `[1]+  Running                    sleep 0.4 &~st=0` | `[1]+  Running                    sleep 0.4 &~st=0` | `[1]+  Running                 sleep 0.4 &~st=0` | `st=2` **2>** `<shell>: jobs: -r: unknown option~Usage: jobs [-lnp] [job ...]` | `[1]  + running    sleep 0.4~st=0` | `st=2` **2>** `<shell>: jobs: line 0: illegal option -r` |
 | `jobs/dash-s-is-a-letter-two-shells-do-not-have` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -s` | `st=0` | `st=0` | `st=0` | `st=2` **2>** `<shell>: jobs: -s: unknown option~Usage: jobs [-lnp] [job ...]` | `st=0` | `st=2` **2>** `<shell>: jobs: line 0: illegal option -s` |
 | `jobs/an-option-no-shell-has` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -Q` | `st=2` **2>** `<shell>: line 1: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: line 1: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: line 0: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: jobs: -Q: unknown option~Usage: jobs [-lnp] [job ...]` | `st=1` **2>** `<shell>:jobs:1: bad option: -Q` | `st=2` **2>** `<shell>: jobs: line 0: illegal option -Q` |
+| `jobs/a-signal-number-joined-to-kill-s-option` | `st=2 said=1` | `st=0 said=0` | `st=0 said=0` | `st=1 said=1` | `st=0 said=0` | `st=1 said=2` | `st=1 said=1` |
+| `jobs/a-signal-name-joined-to-kill-s-option` | `st=0 said=0` | `st=0 said=0` | `st=0 said=0` | `st=1 said=1` | `st=0 said=0` | `st=1 said=2` | `st=1 said=1` |
+| `jobs/a-signal-name-joined-to-kill-n-option` | `st=2` **2>** `<shell>: 1: kill: Illegal option -n` | `st=1` **2>** `<shell>: line 1: kill: nKILL: invalid signal specification` | `st=1` **2>** `<shell>: line 1: kill: nKILL: invalid signal specification` | `st=1` **2>** `<shell>: line 0: kill: nKILL: invalid signal specification` | `st=2` **2>** `Usage: kill [-lL] [-n signum] [-s signame] job ...~   Or: kill [ options ] -l [arg ...]` | `st=1` **2>** `<shell>:kill:1: unknown signal: SIGNKILL~<shell>:kill:1: type kill -L for a list of signals` | `st=1` **2>** `<shell>: bad signal name 'nKILL'` |
+| `jobs/a-signal-number-joined-to-kill-s-option-is-not-read` | `st=0` | `st=1` **2>** `<shell>: line 1: kill: s9: invalid signal specification` | `st=1` **2>** `<shell>: line 1: kill: s9: invalid signal specification` | `st=1` **2>** `<shell>: line 0: kill: s9: invalid signal specification` | `st=0` | `st=1` **2>** `<shell>:kill:1: unknown signal: SIGS9~<shell>:kill:1: type kill -L for a list of signals` | `st=1` **2>** `<shell>: bad signal name 's9'` |
+| `jobs/wait-for-a-stopped-job-under-the-monitor` | `st=0` | `st=145` | `st=145` | `st=0` **2>** `[1]-  Done                    sleep 0.8~[2]+  Done                    { sleep 0.4; kill -CONT $p; }` | `st=0` | *(no output, status 1)* | `st=0` |
+| `jobs/a-stopped-background-job-in-the-listing` | `[1] - Running                    ` | `[1]+  Stopped                    sleep 0.8` | `[1]+  Stopped(SIGSTOP)           sleep 0.8` | `[1]-  Running                 sleep 0.8 &` | `[1] + Stopped (SIGSTOP)        <command unknown>` | *(no output, status 1)* | `[1]-  Running                    ` |
 | `jobs/a-subshell-and-the-parents-jobs` | `no jobs` | `no jobs` | `no jobs` | `no jobs` | `the parent's job` | `no jobs` | `no jobs` |
 | `jobs/a-pipeline-element-and-the-parents-jobs` | `no jobs` | `the parent's job` | `the parent's job` | `the parent's job` | `the parent's job` | `no jobs` | `the parent's job` |
 | `jobs/a-group-in-a-pipeline-and-the-parents-jobs` | `no jobs` | `no jobs` | `no jobs` | `no jobs` | `the parent's job` | `no jobs` | `the parent's job` |
@@ -3568,6 +3574,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `jobs/an-option-no-shell-has` — the refusal itself: four wordings, two of them with a usage line naming the letters that shell really does have, and 2 everywhere but zsh. An option silently ignored is the failure this pins against
   ```sh
   jobs -Q; echo "st=$?"
+  ```
+- `jobs/a-signal-number-joined-to-kill-s-option` — the signal written onto the option with no space, which is the spelling #2227 turned on. bash 5.3 and ksh93 read it and send SIGKILL; bash 3.2 and zsh read the whole word as a signal called `n9` and refuse it. The complaint is counted rather than printed because the four that speak say four different things and none of them is the question here, and the job notice a killed job draws carries a process id, which is why the trailing `wait` is silenced. What the row is really holding down is the *stall*: a script that kills a job and then waits for it gets the job's whole lifetime back when the kill is refused, and the refusal lands on a stderr such a script has usually redirected
+  ```sh
+  sleep 0.4 & p=$!; kill -n9 $p 2>e; echo "st=$? said=$(grep -c . e)"; wait 2>/dev/null
+  ```
+- `jobs/a-signal-name-joined-to-kill-s-option` — the other half of the same reading, and it is the half that says which option joins what: `-s` joins a *name* where `-n` joins a number. Same split — bash 5.3 and ksh93 send, bash 3.2 and zsh refuse — so one answer covers both spellings
+  ```sh
+  sleep 0.4 & p=$!; kill -sKILL $p 2>e; echo "st=$? said=$(grep -c . e)"; wait 2>/dev/null
+  ```
+- `jobs/a-signal-name-joined-to-kill-n-option` — the guard on the pair above, and the reason the rule is two rules rather than one: a *name* joined to `-n` is read by nobody. bash calls it the signal `nKILL`, which is the bare `-SPEC` form having taken the whole word — so a shell that simply stripped two characters after `-n` would send SIGKILL here and pass the row above for the wrong reason
+  ```sh
+  sleep 0.4 & p=$!; kill -nKILL $p; echo "st=$?"; wait
+  ```
+- `jobs/a-signal-number-joined-to-kill-s-option-is-not-read` — and the guard in the other direction: a *number* joined to `-s` is read by ksh93 alone. bash 5.3 refuses it under the word `s9` — the same bare reading — while accepting `-sKILL` two rows up, which is what makes the digits part of the answer and not a detail of it
+  ```sh
+  sleep 0.4 & p=$!; kill -s9 $p; echo "st=$?"; wait
+  ```
+- `jobs/wait-for-a-stopped-job-under-the-monitor` — whether a `wait` that names a stopped job goes on waiting for a process that cannot finish until something outside resumes it. bash 5.3 gives up at 145 — 128 plus SIGSTOP, a command that signal killed — while bash 3.2 and ksh93 wait it out and report the job's own 0. zsh cannot be asked: `set -m` is a refusal in a non-interactive zsh, so it answers with the waiting columns for that reason rather than by choosing. The second job is what makes the row *terminate* under the shells that wait: a stopped process is not going to continue on its own, and a corpus case that hung on the answer it exists to record would be worse than no case at all
+  ```sh
+  set -m 2>/dev/null; sleep 0.8 & p=$!; { sleep 0.4; kill -CONT $p; } & sleep 0.15; kill -STOP $p; wait $p; echo "st=$?"; wait 2>/dev/null
+  ```
+- `jobs/a-stopped-background-job-in-the-listing` — the same stop asked of the listing rather than of `wait`, because a shell can know one without the other: bash 5.3 and ksh93 call the job `Stopped` and bash 3.2 still calls it `Running`, having never been told. It is the visible half of the same fault — a shell whose background jobs are waited for in a way that cannot report a stop says `Running` about a process that is going nowhere — and it is asked under the monitor because with the monitor off every bash says `Running` here by agreement rather than by oversight
+  ```sh
+  set -m 2>/dev/null; sleep 0.8 & p=$!; { sleep 0.4; kill -CONT $p; } & sleep 0.15; kill -STOP $p; jobs %1; wait 2>/dev/null
   ```
 - `jobs/a-subshell-and-the-parents-jobs` — ksh93 alone hands a subshell the jobs the shell around it started; bash, dash and zsh hand it an empty table. Through a file rather than by printing the id, because a process id is not the same twice — and with commands after the `( … )`, because a subshell that is the last thing a script does need not be a subshell at all: without them dash answers the parent's job instead
   ```sh
@@ -5638,6 +5668,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/dollar-single-nul-ends-the-span-only` | ` [ $ a \ 0 b c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a \0 b c c c ] ` | ` [ a b c c c ]` |
 | `core/dollar-single-esc-escape` | ` [ $ \ e [ m \ E ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ \ e [ m \ E ]` |
 | `core/dollar-single-hex-escape` | ` [ $ \ x 4 1 \ x 4 a \ x 9 ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ]` |
+| `core/dollar-single-hex-reads-every-digit` | ` [ $ \ x 0 0 b ] [ $ \ x 4 1 4 ]~ [ $ \ x 0 0 4 1 ] ` | ` [ ] [ A 4 ] [ ] ` | ` [ ] [ A 4 ] [ ] ` | ` [ ] [ A 4 ] [ ] ` | ` [ \v ] [ 320 224 ] [ A ] ` | ` [ \0 b ] [ A 4 ] [ \0 4 1 ] ` | ` [ b ] [ A 4 ] [ 4 1 ]` |
+| `core/dollar-single-hex-two-digits-or-more` | ` [ $ \ x F F ] [ $ \ x 0 0 F F ]` | ` [ 377 ] [ ] ` | ` [ 377 ] [ ] ` | ` [ 377 ] [ ] ` | ` [ 377 ] [ 303 277 ] ` | ` [ 377 ] [ \0 F F ] ` | ` [ 377 ] [ F F ]` |
+| `core/dollar-single-escape-with-no-digits` | ` [ $ \ x z z ] [ $ \ x ] [ $ \ u~ Z ] ` | ` [ \ x z z ] [ \ x ] [ \ u Z ] ` | ` [ \ x z z ] [ \ x ] [ \ u Z ] ` | ` [ \ x z z ] [ \ x ] [ \ u Z ] ` | ` [ ] [ ] [ ] ` | ` [ \0 z z ] [ \0 ] [ \0 Z ] ` | ` [ \ x z z ] [ \ x ] [ \ u Z ]` |
 | `core/dollar-single-octal-escape` | ` [ $ \ 1 0 1 \ 0 1 0 1 \ 1 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ]` |
 | `core/dollar-single-unicode-escape` | ` [ $ \ u 4 1 \ u 0 0 4 1 \ U 0 0~ 0 0 0 0 5 8 ] ` | ` [ A A X ] ` | ` [ A A X ] ` | ` [ \ u 4 1 \ u 0 0 4 1 \ U 0 0 0~ 0 0 0 5 8 ] ` | ` [ A A X ] ` | ` [ A A X ] ` | ` [ \ u 4 1 \ u 0 0 4 1 \ U 0 0 0~ 0 0 0 5 8 ]` |
 | `core/dollar-single-unknown-escape` | ` [ $ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ q 8 ] ` | ` [ q 8 ] ` | ` [ \ q \ 8 ]` |
@@ -5698,6 +5731,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/dollar-single-hex-escape` — one and two hex digits both, because the length is not fixed and a reader that demands two would silently take the `\x9` of `\x9Z` as 0x9Z
   ```sh
   printf '[%s]' $'\x41\x4a\x9' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-hex-reads-every-digit` — how far the digit run of a `\x` reaches, which one shell answers alone: ksh93 takes every hexadecimal digit that follows and a run past two is a *code point*, so `\x00b` is the one byte 0x0b there and `\x414` is U+0414 in UTF-8, where bash and zsh read two digits and leave the rest as text. The first field is the sharpest of the three because the two readings do not merely differ in length — under the short one the escape is a NUL, which then truncates the whole span in the two shells that hold a word as a C string. dash has no `$'…'` at all and prints the text (#554)
+  ```sh
+  printf '[%s]' $'\x00b' $'\x414' $'\x0041' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-hex-two-digits-or-more` — the pair that says it is the digit *count* and not the value that decides. The same 0xFF written with two digits is a byte in every column, and written with four it is the code point U+00FF in ksh93 — two bytes there and a truncating NUL followed by `FF` in bash. A reading that switched on the value rather than on the length would answer the two fields alike (#554)
+  ```sh
+  printf '[%s]' $'\xFF' $'\x00FF' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-escape-with-no-digits` — a hexadecimal escape with no digit after it at all: bash keeps the two characters it was written as, and ksh93 and zsh read a zero byte and carry on with the rest. The two that agree look different in the record and are the same answer — the zero truncates the span in ksh93, which is the NUL rule and not this one, so nothing is left there. `\u` is on the line because no column splits it from `\x`, which is what makes the three escapes one question (#554)
+  ```sh
+  printf '[%s]' $'\xzz' $'\x' $'\uZ' | od -An -c | tr -s " "
   ```
 - `core/dollar-single-octal-escape` — the octal forms, and the reason they are one rule rather than two: `\0101` is not four digits after a zero but three from the zero onward, so it is a backspace and then a `1`
   ```sh
@@ -10801,6 +10846,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/assigning-through-a-negative-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `one two X` | `one two X` | **2>** `<shell>: a[-1]: bad array subscript` *(status 1)* | `one two X` | `one two X` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `param/an-operator-distributes-over-the-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `param/an-operator-on-the-star-subscript-diverges` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `a b` | `a b` | `a b` | `a b` | `a ab` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `decl/an-exported-array-in-a-child-environment` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `1~none` | `1~none` | `1~none` | `2~c=p` | `1~none` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `decl/an-exported-array-with-nothing-in-it` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~none` | `st=0~none` | `st=0~none` | **2>** `<shell>: typeset: a: only simple variables can be exported` *(status 1)* | `st=0~none` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `decl/a-subscripted-operand-with-no-value` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 n=0~declare -a a~[x][y]` | `st=0 n=0~declare -a a~[x][y]` | `st=0 n=0~declare -a a='()'~[x][y]` | `st=0 n=0~typeset -a a=([0]=)~[x][y]` | **2>** `<shell>:1: no matches found: a[3]` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `decl/an-array-letter-over-a-declared-table` | `no-attribute` | `st=1~declare -A h=([k]="v" )~after` **2>** `<shell>: line 2: typeset: h: cannot convert associative to indexed array` | `st=1~declare -A h=([k]="v" )~after` **2>** `<shell>: line 2: typeset: h: cannot convert associative to indexed array` | `no-attribute` | **2>** `<shell>[2]: typeset: cannot change associative array h to index array` *(status 1)* | `st=0~typeset -a h=(  )~after` | `no-attribute` |
 | `decl/a-table-letter-over-a-declared-array` | `no-attribute` | `st=1~[x][y] after` **2>** `<shell>: line 2: typeset: a: cannot convert indexed to associative array` | `st=1~[x][y] after` **2>** `<shell>: line 2: typeset: a: cannot convert indexed to associative array` | `no-attribute` | `st=0~[x][y] after` | `st=0~[][] after` | `no-attribute` |
 | `decl/an-array-assignment-as-an-operand` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[y]` | `[y]` | `[y]` | `[y]` | `[x]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
@@ -11857,6 +11905,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/an-operator-on-the-star-subscript-diverges` — the star form is the axis the at form is not: bash and ksh93 trim each element and join what is left (`a b`), zsh joins first and trims the joined string once (`a ab`)
   ```sh
   a=(aa ab); echo "${a[*]#a}"
+  ```
+- `decl/an-exported-array-in-a-child-environment` — what a child sees for an exported name holding an **array**, which is a name a child either has or has not -- there being no environment representation for a compound to have a different one of. bash and zsh hand it nothing; ksh93 hands it the array's *first element*. The count and the entry are both printed because the count alone cannot say which name arrived: `b=1` is the control and reaches a child in every column, so what the row separates is the compound from the export. dash has no arrays and reads the parentheses as a syntax error. This shell handed a child the first element under every dialect and an empty entry for an empty array, which is nobody's answer (#1380)
+  ```sh
+  export b=1; typeset -x c=(p q); env | grep -c '^[bc]=' ; env | grep '^c=' || echo none
+  ```
+- `decl/an-exported-array-with-nothing-in-it` — the same export with nothing to export, which is a third answer and the reason the emptiness is not folded into the row above: ksh93 refuses the declaration outright -- `only simple variables can be exported` -- where bash and zsh take it and hand a child nothing. Both of the answers the axis offers give a child nothing here, so what this row records is the refusal and its status rather than a value (#1380)
+  ```sh
+  typeset -x a=(); echo "st=$?"; env | grep '^a=' || echo none
+  ```
+- `decl/a-subscripted-operand-with-no-value` — a declaration whose operand is subscripted and carries **no value**, which declares the *name* as an array and writes no element: `${#a[@]}` is 0 in bash and ksh93 alike and an array already standing is left as it is, which the second half is the control for. zsh reaches none of it -- a declaration operand holding no `=` is a glob there, and no file is named `a[3]` -- and bash 3.2 answers as bash 5 does. It used to declare a variable literally named `a[3]`, invisible to `${a[3]}` and to `typeset -p a`, at status 0, so a script declaring an array this way had none (#1380)
+  ```sh
+  typeset a[3]; echo "st=$? n=${#a[@]}"; typeset -p a 2>&1; a=(x y); typeset a[3]; printf "[%s]" "${a[@]}"; echo
   ```
 - `decl/an-array-letter-over-a-declared-table` — one kind of array declared over the other, which the three columns with both attributes answer three ways. bash refuses, names the builtin as it was invoked and the name after it, leaves the table exactly as it was, reports 1 and runs the next command. ksh93 refuses too and **ends the script**, so neither the status nor the listing nor the `after` is reached -- which is what makes the two refusals two answers rather than one wording. zsh converts and the element is gone, at status 0. Every one of the four things printed is load-bearing: the status separates the refusal from the conversion, the listing separates a table that survived from one that did not, and `after` separates the two refusals from each other. bash 3.2 has no `-A` and dash no `typeset` (#1375)
   ```sh

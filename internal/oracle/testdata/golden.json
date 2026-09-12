@@ -47536,6 +47536,13 @@
       }
     },
     "core/dollar-single-escape-with-no-digits": {
+      "ash": {
+        "Stdout": " [ \\ x z z ] [ \\ x ] [ \\ u Z ]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": " [ \\ x z z ] [ \\ x ] [ \\ u Z ] ",
         "Stderr": "",
@@ -47682,6 +47689,13 @@
       }
     },
     "core/dollar-single-hex-reads-every-digit": {
+      "ash": {
+        "Stdout": " [ b ] [ A 4 ] [ 4 1 ]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": " [ ] [ A 4 ] [ ] ",
         "Stderr": "",
@@ -47726,6 +47740,13 @@
       }
     },
     "core/dollar-single-hex-two-digits-or-more": {
+      "ash": {
+        "Stdout": " [ 377 ] [ F F ]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": " [ 377 ] [ ] ",
         "Stderr": "",
@@ -49606,6 +49627,13 @@
       }
     },
     "decl/a-subscripted-operand-with-no-value": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=0 n=0~declare -a a~[x][y]",
         "Stderr": "",
@@ -49803,6 +49831,13 @@
       }
     },
     "decl/an-exported-array-in-a-child-environment": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "1~none",
         "Stderr": "",
@@ -49847,6 +49882,13 @@
       }
     },
     "decl/an-exported-array-with-nothing-in-it": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=0~none",
         "Stderr": "",
@@ -88514,6 +88556,13 @@
       }
     },
     "jobs/a-signal-name-joined-to-kill-n-option": {
+      "ash": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: bad signal name 'nKILL'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=1",
         "Stderr": "\u003cshell\u003e: line 1: kill: nKILL: invalid signal specification",
@@ -88558,6 +88607,13 @@
       }
     },
     "jobs/a-signal-name-joined-to-kill-s-option": {
+      "ash": {
+        "Stdout": "st=1 said=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=0 said=0",
         "Stderr": "",
@@ -88602,6 +88658,13 @@
       }
     },
     "jobs/a-signal-number-joined-to-kill-s-option": {
+      "ash": {
+        "Stdout": "st=1 said=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=0 said=0",
         "Stderr": "",
@@ -88646,6 +88709,13 @@
       }
     },
     "jobs/a-signal-number-joined-to-kill-s-option-is-not-read": {
+      "ash": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: bad signal name 's9'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=1",
         "Stderr": "\u003cshell\u003e: line 1: kill: s9: invalid signal specification",
@@ -88690,6 +88760,13 @@
       }
     },
     "jobs/a-stopped-background-job-in-the-listing": {
+      "ash": {
+        "Stdout": "[1]-  Running                    ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "[1]+  Stopped                    sleep 0.8",
         "Stderr": "",
@@ -90009,6 +90086,13 @@
       }
     },
     "jobs/wait-for-a-stopped-job-under-the-monitor": {
+      "ash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=145",
         "Stderr": "",

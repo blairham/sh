@@ -165,6 +165,45 @@ That sweep is worth re-running whenever an axis is added, and it is three
 lines over `oracle.Corpus` and a built binary. It does not need a
 container: the *refusals* are our own, and only the answers need BusyBox.
 
+### What now catches it, and what still does not
+
+`make axis-coverage` (#2340) asks every dialect, of every axis, whether it
+has an answer — ash included, and with no shell run at all. It is a test,
+so it is in `make check`, and it fails on the commit that adds an axis
+rather than in somebody's terminal a week later. `internal/axissweep/`
+`testdata/unanswered.txt` records what is unanswered today, because most
+of it should be: 113 of the 429 askable axes have no ash value and many
+of them are questions BusyBox is never asked.
+
+Two things it deliberately does not do, and both are why the empirical
+sweep above is still worth running:
+
+- **It cannot say whether the dialect *reaches* an unanswered axis.** The
+  113 include the ones that matter and the ones that never will, and only
+  running the corpus through the binary separates them. That run found
+  nineteen; a static count cannot.
+- **It cannot say whether an answer is right.** A value copied from dash
+  to quiet a refusal satisfies it perfectly. That is what an oracle
+  column is for, and there is one now (#2263) — `make
+  conformance-dialects` is where a wrong answer shows as a number that
+  did not move, or moved the wrong way.
+
+What it does do is make the #2272 shape impossible to ship quietly, which
+was the specific failure: an axis added elsewhere, unanswered here,
+refusing at run time with the test suite green.
+
+An axis this dialect genuinely cannot answer is recorded where the
+omission is, as a line in `ash.go`:
+
+    // unanswered DollarSingleNulTruncates: a *third* reading (#2276). …
+
+which the coverage report prints under the entry it answers. So the check
+states what is unmeasured rather than being switched off — and, the other
+way round, a value quietly appearing for one of the three items under
+*What could not be said* now **fails** the check while its note still
+stands, which is exactly the "copied from a neighboring dialect to make
+the message go away" move this file forbids.
+
 ### Where it stood when it landed
 
 Graded against the container recording — our `cmd/ash` run over the same
@@ -174,26 +213,33 @@ day it landed. `cmd/dash` scored 97.3% against its own column on the same
 run, after a long campaign; 79% is what a first pass looks like.
 
 On the day the column landed, `make conformance-dialects` scored it
-**2698/3421, 79%** — 96% behavioral. That number is re-derivable now,
+**2731/3450, 79%** — 96% behavioral. That number is re-derivable now,
 which is the difference this made: it used to be written down here
 *because* it could not be.
 
-### What the column caught on its first run
+### The column, shown red and then green on #2272
 
-`read/a-timeout-that-expires` and `read/a-fractional-timeout`, both of
-which BusyBox answers and `cmd/ash` refuses:
+Not a demonstration arranged afterwards. #2272 was **live in the tree**
+while the column was being built, so the first run of the new
+`conformance-dialects` row named it — `read/a-timeout-that-expires` and
+`read/a-fractional-timeout`, both of which BusyBox answers and `cmd/ash`
+was refusing:
 
     want out "st=0 [hi]" err "" (status 0)
     got  out "st=2 []"   err "`read -t` bounding the wait for the first
                               byte rather than the whole read: the shells
                               disagree here and no dialect was chosen"
 
-That is #2272, exactly: `Semantics.ReadTimeoutBoundsReadability` was
-added with an answer for bash, ksh and zsh and none for ash, so the
-shipped `ash` binary stopped taking a flag it used to take, and `go test
-./...` stayed green because nothing graded ash. It is the class of defect
-this column exists for, and it was live in the tree when the column was
-built rather than staged to demonstrate it.
+`want` is real BusyBox through the container route; `got` is our shipped
+binary. Then #2272 landed on `main` — `ReadTimeoutBoundsReadability`
+gained its ash value — the branch was rebased onto it, and **both rows
+pass**. Red with the answer missing, green with the answer present, on
+the same instrument and with nothing else changed.
+
+That is the whole argument for the column in one pair of runs. The defect
+was an axis added elsewhere with no ash value; the shipped binary stopped
+taking a flag it used to take; and `go test ./...` was green throughout,
+because nothing graded ash.
 
 ## What could not be said
 

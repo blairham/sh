@@ -13781,6 +13781,42 @@ grades it and nothing drift-checks it either, for the same reason.
   echo one &&
   ```
 
+## syntax
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh | ash |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `array/a-semicolon-ends-the-literal-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `a=( x; ); echo "n=${#a[@]} all=[${a[@]}]"; echo after'` *(status 1)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `a=( x; ); echo "n=${#a[@]} all=[${a[@]}]"; echo after'` *(status 127)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `a=( x; ); echo "n=${#a[@]} all=[${a[@]}]"; echo after'` *(status 1)* | `n=1 all=[x]~after` | `n=1 all=[x]~after` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `array/a-semicolon-between-two-literal-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `a=( x; y ); echo "n=${#a[@]} all=[${a[@]}]"; echo after'` *(status 1)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `a=( x; y ); echo "n=${#a[@]} all=[${a[@]}]"; echo after'` *(status 127)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `a=( x; y ); echo "n=${#a[@]} all=[${a[@]}]"; echo after'` *(status 1)* | **2>** `<shell>: syntax error at line 1: `y' unexpected` *(status 3)* | `n=2 all=[x y]~after` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `array/a-semicolon-with-no-element-before-it` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `a=( ; ); echo "n=${#a[@]}"; echo after'` *(status 1)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `a=( ; ); echo "n=${#a[@]}"; echo after'` *(status 127)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `a=( ; ); echo "n=${#a[@]}"; echo after'` *(status 1)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | `n=0~after` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `array/a-second-semicolon-in-a-literal` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `a=( x; ; ); echo "n=${#a[@]} all=[${a[@]}]"; echo after'` *(status 1)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `a=( x; ; ); echo "n=${#a[@]} all=[${a[@]}]"; echo after'` *(status 127)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `a=( x; ; ); echo "n=${#a[@]} all=[${a[@]}]"; echo after'` *(status 1)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | `n=1 all=[x]~after` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `array/a-double-semicolon-in-a-literal` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;;'~<shell>: -c: line 1: `a=( x;; y ); echo "n=${#a[@]}"; echo after'` *(status 1)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;;'~<shell>: -c: line 1: `a=( x;; y ); echo "n=${#a[@]}"; echo after'` *(status 127)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;;'~<shell>: -c: line 0: `a=( x;; y ); echo "n=${#a[@]}"; echo after'` *(status 1)* | **2>** `<shell>: syntax error at line 1: `;;' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `;;'` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `array/an-ampersand-in-a-literal` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `&'~<shell>: -c: line 1: `a=( x & ); echo "n=${#a[@]}"; echo after'` *(status 1)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `&'~<shell>: -c: line 1: `a=( x & ); echo "n=${#a[@]}"; echo after'` *(status 127)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `a=( x & ); echo "n=${#a[@]}"; echo after'` *(status 1)* | **2>** `<shell>: syntax error at line 1: `&' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `&'` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+
+- `array/a-semicolon-ends-the-literal-elements` — a `;` between the parentheses of an array literal, in the one position two shells agree on. Every bash column names the `;`, ksh93 and zsh both take it, and the two are reading it differently — a terminator there and a separator here — which the rows below separate. The `n=` is what makes the difference visible rather than the exit status: a shell that took the `;` as an element would answer 2
+  ```sh
+  a=( x; ); echo "n=${#a[@]} all=[${a[@]}]"; echo after
+  ```
+- `array/a-semicolon-between-two-literal-elements` — and this is the row that splits the two shells that took the one above. zsh reads the `;` where a newline already stands and holds two elements; ksh93 names the `y`, because there the `;` *ends* the element list rather than standing between two of them. Filed as `;` being a separator in both, which this measurement corrected (#1162)
+  ```sh
+  a=( x; y ); echo "n=${#a[@]} all=[${a[@]}]"; echo after
+  ```
+- `array/a-semicolon-with-no-element-before-it` — the separator reading needs no element in front of it and the terminator reading does: zsh answers the empty array, ksh93 names the `;`, and every bash column names it too. Together with the row above it is what says ksh93 has a trailing terminator rather than a lenient separator
+  ```sh
+  a=( ; ); echo "n=${#a[@]}"; echo after
+  ```
+- `array/a-second-semicolon-in-a-literal` — how many. zsh takes as many as are written, exactly as it would newlines; ksh93 takes one and names the second. The element count is still 1 in the shell that takes both, which is what says the extra separator adds no empty element
+  ```sh
+  a=( x; ; ); echo "n=${#a[@]} all=[${a[@]}]"; echo after
+  ```
+- `array/a-double-semicolon-in-a-literal` — the control that keeps `;;` its own token in the shell that takes a single `;` there. All six name it, zsh included, so a parser that took the separator by scanning for the character rather than by reading the token would be caught here
+  ```sh
+  a=( x;; y ); echo "n=${#a[@]}"; echo after
+  ```
+- `array/an-ampersand-in-a-literal` — the control that says it is the `;` specifically and not control operators in general. All six refuse this, and `a=( x && y )` with it, so the two shells that take a `;` are not simply being lenient about what may stand between elements
+  ```sh
+  a=( x & ); echo "n=${#a[@]}"; echo after
+  ```
+
 ## patterns
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh | ash |

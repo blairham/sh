@@ -5031,6 +5031,16 @@ echo "st=$?"`,
 		Why:     "the letter bundled rather than alone, which is the shape that says it is read as an option and not as a word that happens to start with a dash: in the shell that has it both letters apply and the path comes back resolved, and in the five that do not the bundle is refused at the `q` before the `P` is ever reached. Written with `-qP` rather than `-q -P` because a separate word would be answered by the operand rule alone",
 	},
 	{
+		ID: "cd/a-symlink-refusing-option-only-one-shell-has", Category: "builtins",
+		Snippet: "mkdir -p real/deep && ln -s real link\n( cd -s real; echo \"real=$?\"; ls )\n( cd -s link; echo \"link=$?\"; ls )\n( cd -s link/deep; echo \"deep=$?\"; ls )\n( cd -s nosuch; echo \"gone=$?\" )\n",
+		Why:     "`cd -s` is zsh's second letter beyond `-L` and `-P`, and it refuses an operand that crosses a symbolic link: `real` moves, `link` and `link/deep` are `not a directory` at 1, and a path that is simply not there is the ordinary `no such file or directory` — two reasons and not one, which a status alone cannot tell apart. The other five refuse the letter by name and stay where they were. `ls` rather than the path because the path is this machine's, and each line runs in a subshell so a move that should not have happened cannot carry into the next",
+	},
+	{
+		ID: "cd/a-symlink-refusing-option-reads-the-operand", Category: "builtins",
+		Snippet: "mkdir -p real/deep && ln -s real link\n( cd link; cd -s deep; echo \"under=$?\"; ls )\n( cd -s link/../real; echo \"through=$?\"; ls )\n( cd -s real/deep/..; echo \"up=$?\"; ls )\n",
+		Why:     "what the letter looks at is the *operand* and not the place arrived at, which is the reading a plausible implementation gets wrong in both directions. Having moved into the link already, `cd -s deep` moves — so it is not \"refuse to be anywhere reached through a link\". And `link/../real` is refused though it names the same directory `real` does, because the walk lstats each component where it stands rather than cleaning the path first; `real/deep/..` moves for the same reason, since `..` is no link. The five without the letter refuse all three",
+	},
+	{
 		ID: "cd/a-letter-no-shell-in-the-panel-has", Category: "builtins",
 		Snippet: "mkdir -p sub\ncd -Z sub\necho \"st=$?\"\ncase $PWD in */sub) echo moved;; *) echo stayed;; esac\n",
 		Why:     "the counter-case to the two above, and the reason the quiet letter is a question of its own rather than a loosening of this one. Five of the panel refuse a letter `cd` does not have; zsh reads the word as somewhere to go instead, because its `cd` takes two operands and a leading-dash word is the first of them there, which is why its complaint is about the *pwd* and not about an option. Probed separately: with a directory actually called `-Z` beside it, `cd -Z` moves into it there. Nobody moves here, and the columns still disagree about why — two statuses and five sentences, counting bash 3.2's shorter usage line as its own",

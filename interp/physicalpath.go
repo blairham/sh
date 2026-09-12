@@ -219,3 +219,52 @@ func joinRemainder(resolved string, pending []string) string {
 	}
 	return resolved + string(filepath.Separator) + strings.Join(pending, string(filepath.Separator))
 }
+
+// operandCrossesASymlink walks operand's own components from base and reports
+// whether any of them is a symbolic link. It is what `cd -s` refuses — see
+// Semantics.CdHasSymlinkFreeOption.
+//
+// The walk starts at base rather than at the root for a relative operand,
+// which is the measurement and not an economy: `cd link` and then `cd -s deep`
+// moves in zsh, though the directory it arrives in is reached through a link.
+// Only what the operand itself names is examined. An absolute operand has no
+// base and is walked from the root, which is what refuses `cd -s /tmp/x` on a
+// machine where `/tmp` is a link.
+//
+// `.` and `..` are components like any other and are lstatted **where they
+// stand**, which is why the path is built by concatenation rather than by
+// filepath.Join: `..` out of a linked directory is the physical parent and is
+// not itself a link, and cleaning the path first would answer a different
+// question. Measured, `cd -s ../cdtest/real` moves in a `/tmp/cdtest` whose
+// `/tmp` is a link — a lexical clean makes that operand `/tmp`, finds the
+// link, and refuses a move the shell makes.
+//
+// A component that cannot be lstatted ends the walk with no refusal. What to
+// say about a path that is not there is the ordinary failure's to say, and
+// saying it here would answer `cd -s nosuchdir` with `not a directory`, which
+// no shell does.
+//
+// Through the gate, one component at a time, for physicalPath's reason: this
+// is a walk over the filesystem that a script chose the path for, so a policy
+// has to see each step of it.
+func (r *Runner) operandCrossesASymlink(base, operand string) bool {
+	at := base
+	if filepath.IsAbs(operand) {
+		at = filepath.VolumeName(operand) + string(filepath.Separator)
+	}
+	for _, comp := range splitPathComponents(operand) {
+		if strings.HasSuffix(at, string(filepath.Separator)) {
+			at += comp
+		} else {
+			at += string(filepath.Separator) + comp
+		}
+		info, err := r.lstat(at)
+		if err != nil {
+			return false
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			return true
+		}
+	}
+	return false
+}

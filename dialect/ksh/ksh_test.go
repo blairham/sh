@@ -146,6 +146,7 @@ func TestSemantics(t *testing.T) {
 		{"ChildInterruptEndsTheScript", s.ChildInterruptEndsTheScript, interp.Yes},
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.Yes},
 		{"CdHasQuietOption", s.CdHasQuietOption, interp.No},
+		{"CdHasSymlinkFreeOption", s.CdHasSymlinkFreeOption, interp.No},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
 		// The two questions come apart here: `set -o nosuchoption` ends the

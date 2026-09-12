@@ -27520,6 +27520,108 @@
         "TimedOut": false
       }
     },
+    "cd/a-symlink-refusing-option-only-one-shell-has": {
+      "ash": {
+        "Stdout": "real=2~link~real~link=2~link~real~deep=2~link~real~gone=2",
+        "Stderr": "\u003cshell\u003e: cd: line 1: illegal option -s~\u003cshell\u003e: cd: line 2: illegal option -s~\u003cshell\u003e: cd: line 3: illegal option -s~\u003cshell\u003e: cd: line 4: illegal option -s",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "real=2~link~real~link=2~link~real~deep=2~link~real~gone=2",
+        "Stderr": "\u003cshell\u003e: line 2: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]~\u003cshell\u003e: line 3: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]~\u003cshell\u003e: line 4: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]~\u003cshell\u003e: line 5: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "real=2~link~real~link=2~link~real~deep=2~link~real~gone=2",
+        "Stderr": "\u003cshell\u003e: line 2: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]~\u003cshell\u003e: line 3: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]~\u003cshell\u003e: line 4: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]~\u003cshell\u003e: line 5: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "real=1~link~real~link=1~link~real~deep=1~link~real~gone=1",
+        "Stderr": "\u003cshell\u003e: line 1: cd: -s: invalid option~cd: usage: cd [-L|-P] [dir]~\u003cshell\u003e: line 2: cd: -s: invalid option~cd: usage: cd [-L|-P] [dir]~\u003cshell\u003e: line 3: cd: -s: invalid option~cd: usage: cd [-L|-P] [dir]~\u003cshell\u003e: line 4: cd: -s: invalid option~cd: usage: cd [-L|-P] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "real=2~link~real~link=2~link~real~deep=2~link~real~gone=2",
+        "Stderr": "\u003cshell\u003e: 2: cd: Illegal option -s~\u003cshell\u003e: 3: cd: Illegal option -s~\u003cshell\u003e: 4: cd: Illegal option -s~\u003cshell\u003e: 5: cd: Illegal option -s",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "real=2~link~real~link=2~link~real~deep=2~link~real~gone=2",
+        "Stderr": "\u003cshell\u003e[2]: cd: -s: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new~\u003cshell\u003e[3]: cd: -s: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new~\u003cshell\u003e[4]: cd: -s: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new~\u003cshell\u003e[5]: cd: -s: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "real=0~deep~link=1~link~real~deep=1~link~real~gone=1",
+        "Stderr": "\u003cshell\u003e:cd:3: not a directory: link~\u003cshell\u003e:cd:4: not a directory: link/deep~\u003cshell\u003e:cd:5: no such file or directory: nosuch",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/a-symlink-refusing-option-reads-the-operand": {
+      "ash": {
+        "Stdout": "under=2~deep~through=2~link~real~up=2~link~real",
+        "Stderr": "\u003cshell\u003e: cd: line 1: illegal option -s~\u003cshell\u003e: cd: line 2: illegal option -s~\u003cshell\u003e: cd: line 3: illegal option -s",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "under=2~deep~through=2~link~real~up=2~link~real",
+        "Stderr": "\u003cshell\u003e: line 2: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]~\u003cshell\u003e: line 3: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]~\u003cshell\u003e: line 4: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "under=2~deep~through=2~link~real~up=2~link~real",
+        "Stderr": "\u003cshell\u003e: line 2: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]~\u003cshell\u003e: line 3: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]~\u003cshell\u003e: line 4: cd: -s: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "under=1~deep~through=1~link~real~up=1~link~real",
+        "Stderr": "\u003cshell\u003e: line 1: cd: -s: invalid option~cd: usage: cd [-L|-P] [dir]~\u003cshell\u003e: line 2: cd: -s: invalid option~cd: usage: cd [-L|-P] [dir]~\u003cshell\u003e: line 3: cd: -s: invalid option~cd: usage: cd [-L|-P] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "under=2~deep~through=2~link~real~up=2~link~real",
+        "Stderr": "\u003cshell\u003e: 2: cd: Illegal option -s~\u003cshell\u003e: 3: cd: Illegal option -s~\u003cshell\u003e: 4: cd: Illegal option -s",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "under=2~deep~through=2~link~real~up=2~link~real",
+        "Stderr": "\u003cshell\u003e[2]: cd: -s: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new~\u003cshell\u003e[3]: cd: -s: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new~\u003cshell\u003e[4]: cd: -s: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "under=0~through=0~deep~up=0~deep",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cd/an-empty-home": {
       "ash": {
         "Stdout": "st=0~/",

@@ -2825,6 +2825,43 @@ type Semantics struct {
 	// is the next question when this one says no.
 	CdHasQuietOption Answer
 
+	// CdHasSymlinkFreeOption gives `cd` the `-s` of zsh, the fourth letter
+	// beyond `-L` and `-P` any of the panel has and the second that belongs
+	// to that shell alone. True in zsh; false in bash 5.3, that binary under
+	// argv[0] `sh`, bash 3.2, dash and ksh93, all of which refuse `-s` by
+	// name exactly as they refuse `-q`.
+	//
+	// What the letter asks is that the *operand* cross no symbolic link.
+	// Measured 2026-09-12 on zsh 5.9.2, in a directory holding `real/deep`
+	// and a `link` pointing at `real`:
+	//
+	//	cd -s real            moves
+	//	cd -s link            not a directory: link
+	//	cd -s link/deep       not a directory: link/deep
+	//	cd -s link/../real    not a directory: link/../real
+	//	cd -s real/../real    moves
+	//	cd -s real/deep/..    moves
+	//	cd -s nosuchdir       no such file or directory: nosuchdir
+	//
+	// Two of those rows are what says it is the operand and not the place
+	// arrived at. `cd link` and then `cd -s deep` *moves*, though the
+	// directory it lands in is reached through a link — the walk starts
+	// where the shell already is and only the operand's own components are
+	// examined. And an absolute operand is walked from the root, which is
+	// why `cd -s /tmp/x` is refused on a machine where `/tmp` is a link
+	// while `cd -s /private/tmp/x` is not.
+	//
+	// The refusal is ENOTDIR — the same sentence the kernel's own gives —
+	// and it is reached before the operand's existence is: `cd -s /tmp/no/
+	// such` names `not a directory` where `cd -s real/nosuch` names `no such
+	// file or directory`, because the walk stops at the first link it meets
+	// and a component that is not there is left to the ordinary failure.
+	//
+	// Asked only when an `s` is actually seen, for CdHasQuietOption's reason:
+	// a shell without the letter reaches CdRefusesUnknownOption instead and
+	// answers the word the way it answers any other letter it has not got.
+	CdHasSymlinkFreeOption Answer
+
 	// HookListSuffix is what a hook's list of *extra* function names is
 	// spelled by: the hook's own name plus this. zsh's is `_functions`, so
 	// `precmd` reads `precmd_functions` as well and `chpwd` reads

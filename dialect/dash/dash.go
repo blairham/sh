@@ -491,6 +491,7 @@ func Semantics() interp.Semantics {
 	s.CdRefusesExtraOperands = interp.No
 	s.CdRefusesUnknownOption = interp.Yes
 	s.CdHasQuietOption = interp.No
+	s.CdHasSymlinkFreeOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes
 	s.BadSetOptionNameFatal = interp.Yes
 	// dash has no `[[ ]]` to ask it in; answered so that a shell built from

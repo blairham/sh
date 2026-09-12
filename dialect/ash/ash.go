@@ -318,6 +318,7 @@ func Semantics() interp.Semantics {
 	s.CdRefusesExtraOperands = interp.No
 	s.CdRefusesUnknownOption = interp.Yes
 	s.CdHasQuietOption = interp.No
+	s.CdHasSymlinkFreeOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
 	// `umask` prints four digits, and `umask -S` prints the symbolic form.

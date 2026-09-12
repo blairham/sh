@@ -1187,6 +1187,7 @@ func Semantics() interp.Semantics {
 	s.CdRefusesExtraOperands = interp.Yes
 	s.CdRefusesUnknownOption = interp.Yes
 	s.CdHasQuietOption = interp.No
+	s.CdHasSymlinkFreeOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes
 	s.BadSetOptionNameFatal = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.No

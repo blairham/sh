@@ -118,6 +118,14 @@ func Dialect() syntax.Dialect {
 	// of `$-` in all six, which is why the flag is about the leftover rather
 	// than about the name (#1242).
 	d.ParamLengthOverASpecialNameIsFinal = true
+	// And a length over `$!` is not a shape this shell has at all: `${#!}` is
+	// a bad substitution here where the other six answer `0`, the length of
+	// an empty `$!`. Not because there is nothing to measure — `$!` reads
+	// here and is `0` with no background job, where the six leave it empty —
+	// and not a rule about special names, since `${#$}` and `${#?}` are
+	// lengths here as everywhere. Deferred, not fatal: `${#!}` in a branch
+	// never taken runs clean and `zsh -n` accepts the file (#2415).
+	d.ParamLengthRefusesTheBangName = true
 	// A `;` between the parentheses of an array literal stands exactly where a
 	// newline already does: `a=( x; y )` holds two elements here, `a=( ; )` is
 	// the empty array, and `a=( x; ; )` holds one. ksh93 takes only a single

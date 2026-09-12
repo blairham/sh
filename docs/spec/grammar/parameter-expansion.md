@@ -610,6 +610,52 @@ else no. It is a grammar flag for the reason the third row's is: the two
 readings produce different *nodes*, one `ParamExpr{Name: "#", Op: …}` and
 the other `ParamExpr{Name: "-", Length: true}` (#1242).
 
+### A length over `$!`
+
+One name behind a `${#` is not a shape every grammar has. zsh reads
+`$!` perfectly well — better than the rest, in fact, since it is `0`
+there with no background job where the other six leave it empty — and
+still calls `${#!}` a bad substitution. Measured 2026-09-12 from a
+script file under `env -i` with a scratch `HOME` and `ZDOTDIR`,
+`set -- p q r`, across the seven-column panel:
+
+| probe | bash 5.3 | bash 3.2 | bash-as-`sh` | dash | ksh93 | ash | zsh 5.9.2 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `${!}` | `` | `` | `` | `` | `` | `` | `0` |
+| `${#!}` | `0` | `0` | `0` | `0` | `0` | `0` | `bad substitution` |
+| `${#$}` | `5` | `5` | `5` | `5` | `5` | `5` | `5` |
+| `${#?}` | `1` | `1` | `1` | `1` | `1` | `1` | `1` |
+
+The first row is what makes the second a fact about the **shape** rather
+than about the value. A refusal could be read as "there is nothing to
+take a length of", and that reading is wrong: the shell that refuses is
+the one shell where `$!` has a value there. If the shape existed it
+would answer `1`, the length of `0`, and it would be the only column
+answering anything but `0`.
+
+The third and fourth rows are the boundary the other way. `$` and `?`
+behind the same `${#` are lengths in all seven, so this is not a rule
+about special names behind a length either. It is `!` and no other.
+
+It is also distinct from `ParamIndirection`, which is about a `!` at the
+**front** of an expansion. Behind a `#` no dialect reads indirection at
+all: the length case is taken first and the `!` is scanned as an
+ordinary name, which is why `${#!w}` is a bad substitution in all seven
+— a length with a stray word after it — rather than a length over an
+indirection.
+
+The refusal is **deferred**, not fatal at parse time, which is measured
+rather than assumed: with `${#!}` inside an `if false` branch, zsh runs
+the script to the end and exits 0, and `zsh -n` accepts the file. So it
+joins every other unreadable expansion in this grammar rather than
+becoming a parse error.
+
+Grammar flag: `ParamLengthRefusesTheBangName` — zsh yes, everyone else
+no. A grammar flag rather than a semantics axis because there is no
+value the two sides disagree about: under one the expansion is a
+`ParamExpr{Name: "!", Length: true}` and under the other it is no
+expansion at all (#2415).
+
 ### An expansion with no name at all
 
 zsh alone reads `${` with no parameter in front of the operator. The name

@@ -28,7 +28,9 @@ func TestAShellBinaryRaisesTheCollectorsThreshold(t *testing.T) {
 	// Named, then taken away, so the cleanup t.Setenv registers still puts
 	// back whatever the environment really had.
 	t.Setenv("GOGC", "100")
-	os.Unsetenv("GOGC")
+	if err := os.Unsetenv("GOGC"); err != nil {
+		t.Fatal(err)
+	}
 
 	tuneCollector()
 	got := debug.SetGCPercent(startupGCPercent)

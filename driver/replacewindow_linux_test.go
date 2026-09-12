@@ -195,7 +195,7 @@ func reportLimitAcrossAFailedExec() {
 	if err != nil {
 		return
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	_ = driver.ReplaceProcessForTest(filepath.Join(dir, "not-a-program"), []string{"x"}, nil, nil)
 	fmt.Printf("limits entry=%d seam=%d back=%d\n", entry, seam, soft())
 }

@@ -328,8 +328,15 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		}
 	}
 	subs := make([]*Runner, last)
+	releaseFds := make([]func(), last)
 	for i := 0; i < last; i++ {
 		sub := r.clone()
+		// Every element runs at once, so each one's descriptors are its own
+		// copies rather than one table's. An element that closes a parked
+		// descriptor — `{ exec {a}<&-; } | { read v <&$a; }` — is a real
+		// shell closing its own process's name for the file and nobody
+		// else's. See ownDescriptors (#2116).
+		releaseFds[i] = sub.ownDescriptors()
 		// A pipeline element is a subshell whose trap listing survives in a
 		// different pair of shells than `( … )` does, so the boundary says
 		// what kind it is.
@@ -418,6 +425,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			if readers[i] != nil {
 				_ = readers[i].Close()
 			}
+			// And this element's copies of the table, which nothing after
+			// the element is entitled to.
+			releaseFds[i]()
 		})
 	}
 	if inCurrent {

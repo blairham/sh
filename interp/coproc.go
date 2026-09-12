@@ -119,6 +119,11 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 	sub.inheritJobs(jobBoundaryBackground)
 	sub.retagTrapBoundary(trapContextBackground)
 	sub.bg = job
+	// Its own copy of the descriptor table, as a background job takes: a
+	// coprocess runs beside the shell that started it, and a descriptor the
+	// script parks and then drops is dropped underneath it otherwise. See
+	// ownDescriptors.
+	releaseFds := sub.ownDescriptors()
 	sub.Stdin = childIn
 	sub.Stdout = childOut
 	// Only the two named streams go through the pipes; complaints still
@@ -147,6 +152,7 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 		// turns its exit into end-of-file for whoever reads NAME[0].
 		_ = childIn.Close()
 		_ = childOut.Close()
+		releaseFds()
 		job.finish(status)
 	})
 	<-job.ready

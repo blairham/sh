@@ -4491,120 +4491,108 @@ type Semantics struct {
 	//
 	// It is a question about the pattern's *text* rather than about empty
 	// matches in general, and the discriminating probe is a non-empty pattern
-	// that matches only the empty string: with extglob on, `${v//@(|)/<>}` is
-	// `<>a<>b<>c` in bash and `<>a<>b<>c<>` in ksh93, so neither shell is
-	// refusing empty matches — see ReplacementEmptyMatchDeclined, which is
-	// where those two columns then part.
+	// that matches only the empty string: with extended patterns on,
+	// `${v//@(|)/<>}` replaces at every position under the readings that decline
+	// here, so neither is refusing empty matches — see
+	// ReplacementEmptyMatchDeclined, which is where those two then part.
 	//
 	// Asked only where the pattern is empty and the spelling unanchored. A
-	// pattern with anything in it never reaches it, and the anchored forms
-	// are their own row: `${v/#/X}` is `Xabc` in bash and zsh and `abc` in
-	// ksh93, which is that shell declining an *anchor* it takes nowhere else
-	// (#1857).
+	// pattern with anything in it never reaches it, and the anchored forms are
+	// their own row: `${v/#/X}` may be taken or declined independently, which is
+	// a preset declining an *anchor* it takes nowhere else.
 	EmptyReplacementPattern EmptyReplacementPatternPolicy
 
 	// ReplacementEmptyMatchDeclined is which empty match a global replacement
 	// refuses to take, once the pattern is one that can match empty at all.
 	//
-	// Every column agrees that a match reaching the end of the value ends the
+	// Every reading agrees that a match reaching the end of the value ends the
 	// scan — `${v//*/X}` is one `X` — and they part over an empty match that
-	// does not. Measured 2026-09-12, `v=abc`, the replacement written `<>` so
-	// each match shows, the pattern "empty or one letter" spelled `@(b|)`
-	// under extglob and `(b|)` under extendedglob:
+	// does not. With `v=abc`, the replacement written `<>` so each match shows,
+	// and the pattern "empty or one letter":
 	//
-	//	          bash 5.3.15  zsh 5.9.2  ksh93u+
-	//	@(b|)     <>a<><>c     <>a<><>c   <>a<>c<>
-	//	@(x|)     <>a<>b<>c    <>a<>b<>c  <>a<>b<>c<>
-	//	@(c|)     <>a<>b<>     <>a<>b<>   <>a<>b<>
-	//	@(a|)     <><>b<>c     <><>b<>c   <>b<>c<>
+	//	          after-a-match      at-the-end
+	//	(b|)      <>a<><>c           <>a<>c<>
+	//	(x|)      <>a<>b<>c          <>a<>b<>c<>
+	//	(c|)      <>a<>b<>           <>a<>b<>
+	//	(a|)      <><>b<>c           <>b<>c<>
 	//
-	// Row one is the discriminator: ksh93 has no `<>` between `b` and `c`,
-	// where the other two do, and has one after `c`, where they do not.
+	// Row one is the discriminator: one reading has no `<>` between `b` and `c`
+	// where the other does, and has one after `c` where the other does not.
 	//
-	// Row three is the control both readings answer the same way and both
-	// must keep, because it is the rule nobody disputes reached from a third
+	// Row three is the control both readings answer the same way and both must
+	// keep, because it is the rule nobody disputes reached from a third
 	// direction — `c` matches at the last unit, so the scan ends there under
 	// either policy.
 	//
-	// Asked at the two positions the readings land differently on, and
-	// nowhere else: an empty match where the match before it ended, and the
-	// end of the value stepped onto after an empty match. A pattern that
-	// cannot match empty reaches neither.
+	// Asked at the two positions the readings land differently on, and nowhere
+	// else: an empty match where the match before it ended, and the end of the
+	// value stepped onto after an empty match. A pattern that cannot match empty
+	// reaches neither.
 	ReplacementEmptyMatchDeclined EmptyMatchDeclinedPolicy
 
 	// ParameterIsSetSeesPositionals lets `-v 1` ask about a positional
 	// parameter, and `-v 0` about the shell's name.
 	//
-	// Measured 2026-09-07 on the three shells that have the operator, under
-	// `-c`: `set -- p q; [[ -v 1 ]]` is set in bash 5.3.15 and zsh 5.9.2 and
-	// **unset** in ksh93u+, and `[[ -v 0 ]]` splits the same way. It is the
-	// operator declining to treat a digit as a name rather than a lookup
-	// coming back empty — `${1+s}` is `s` in all three — which is why the
-	// answer is here rather than in the parameter table.
+	// With `set -- p q`, `[[ -v 1 ]]` is set under true and **unset** under
+	// false, and `[[ -v 0 ]]` splits the same way. It is the operator declining
+	// to treat a digit as a name rather than a lookup coming back empty —
+	// `${1+s}` is `s` under both — which is why the answer is here rather than
+	// in the parameter table.
 	//
-	// A positional past `$#` is unset everywhere and needs no axis: with two
-	// parameters set, `[[ -v 3 ]]` is unset in all three.
+	// A positional past `$#` is unset under both and needs no axis: with two
+	// parameters set, `[[ -v 3 ]]` is unset either way.
 	ParameterIsSetSeesPositionals bool
 
-	// ParameterIsSetSeesSpecials lets `-v ?` and its fellows — `#`, `$`,
-	// `!`, `*` and `-` — ask about a parameter spelled as one punctuation
-	// character.
+	// ParameterIsSetSeesSpecials lets `-v ?` and its fellows — `#`, `$`, `!`,
+	// `*` and `-` — ask about a parameter spelled as one punctuation character.
 	//
-	// zsh 5.9.2 alone answers set for every one of them; bash 5.3.15 and
-	// ksh93u+ answer unset for every one. Again the parameters are there in
-	// all three and it is the operator that does not look: `[[ -n ${?+s} ]]`
-	// and `[[ -n ${#+s} ]]` are set in bash and ksh93 as well.
+	// True answers set for every one of them and false answers unset for every
+	// one. Again the parameters are there under both and it is the operator that
+	// does not look: `[[ -n ${?+s} ]]` and `[[ -n ${#+s} ]]` are set either way.
 	//
-	// `@` is not one of them and is unset in all three — with positional
-	// parameters set, and in the shell that answers for every other
-	// character — so it is excluded outright rather than by this axis. See
-	// isSetNameKind.
+	// `@` is not one of them and is unset under both — with positional
+	// parameters set, and under the answer that sees every other character — so
+	// it is excluded outright rather than by this axis. See isSetNameKind.
 	ParameterIsSetSeesSpecials bool
 
 	// ScalarSubscriptIsACharacter reads `${s[2]}` on a plain string as its
 	// second character, rather than as an element of the one-element array a
 	// scalar reads as.
 	//
-	// Measured on `s=hello`: zsh 5.9.2 gives `h` for `${s[1]}` and `e` for
-	// `${s[2]}`, where bash 5.3.15, bash 3.2.57, bash as `sh` and ksh93 all
-	// give `hello` for `${s[0]}` and nothing for either of the others. Both
-	// readings answer, neither reports, and an empty string is a plausible
-	// element — so a script cannot tell which shell it is on except by the
-	// value it gets, which is the definition of a conflict rather than an
-	// addition.
+	// On `s=hello`, Yes gives `h` for `${s[1]}` and `e` for `${s[2]}`; No gives
+	// `hello` for `${s[0]}` and nothing for either of the others. Both readings
+	// answer, neither reports, and an empty string is a plausible element — so a
+	// script cannot tell which it is on except by the value it gets, which is
+	// the definition of a conflict rather than an addition.
 	//
-	// A range and a character go together: `${s[2,4]}` is the substring
-	// `ell` in the shell that reads characters, and the arithmetic comma's
-	// element 4 — nothing — in the shells that do not. But they are two
-	// axes, because `${a[1,3]}` on an *array* is a range without a character
-	// anywhere in it.
+	// A range and a character go together: `${s[2,4]}` is the substring `ell`
+	// under Yes, and the arithmetic comma's element 4 — nothing — under No. But
+	// they are two axes, because `${a[1,3]}` on an *array* is a range without a
+	// character anywhere in it.
 	//
-	// Asked only where the two readings differ: a one-character string at
-	// the dialect's first subscript is itself under either reading.
+	// Asked only where the two readings differ: a one-character string at the
+	// preset's first subscript is itself under either reading.
 	ScalarSubscriptIsACharacter Answer
 
 	// MultibyteEncodingIsHonored decodes the locale's character encoding, so
-	// that `${#s}`, `${s:off:len}` and a subscript on a scalar count
-	// characters rather than bytes.
+	// that `${#s}`, `${s:off:len}` and a subscript on a scalar count characters
+	// rather than bytes.
 	//
-	// Measured 2026-09-05 with `s=héllo; echo ${#s}` under
-	// `LC_ALL=en_US.UTF-8`: bash 5.3.15, bash 3.2.57, bash as `sh`, ksh93u+
-	// and zsh 5.9.2 all answer 5, and dash answers 6. Under `LC_ALL=C` every
-	// one of them answers 6, dash included — so this is not "four shells
-	// count characters", it is "four shells honor the encoding the locale
-	// names and one has no multibyte decoder at all". `s=日本語; echo ${#s}`
-	// separates them further: 3 against 9.
+	// With `s=héllo; echo ${#s}` under a UTF-8 locale, Yes answers 5 and No
+	// answers 6. Under `LC_ALL=C` every answer is 6 — so this is not "some count
+	// characters", it is "some honor the encoding the locale names and one has
+	// no multibyte decoder at all". `s=日本語; echo ${#s}` separates them
+	// further: 3 against 9.
 	//
-	// Which encoding is in force is **not** a second axis. It is state read
-	// off the runner's own variables, exactly as PATH and IFS are, and it
-	// moves inside a running shell: `LC_ALL=C; s=héllo; echo ${#s}` gives 6
-	// in every panel member with nothing exported. See interp/multibyte.go
-	// for the precedence and the codesets, and driver/startup.go for the
-	// same reasoning applied to POSIX mode (#691, #733).
+	// Which encoding is in force is **not** a second axis. It is state read off
+	// the runner's own variables, exactly as PATH and IFS are, and it moves
+	// inside a running shell: `LC_ALL=C; s=héllo; echo ${#s}` gives 6 under
+	// every answer with nothing exported. See interp/multibyte.go for the
+	// precedence and the codesets, and driver/startup.go for the same reasoning
+	// applied to POSIX mode.
 	//
-	// Silent either way, which is why it is an axis and not a bug in one
-	// place: both answers are plausible numbers and neither shell reports
-	// anything.
+	// Silent either way, which is why it is an axis and not a bug in one place:
+	// both answers are plausible numbers and nothing is reported.
 	//
 	// Asked only where the two readings differ — a value whose bytes are all
 	// ASCII is the same length and has the same positions under both — so a
@@ -4617,32 +4605,22 @@ type Semantics struct {
 	// A second question to MultibyteEncodingIsHonored above rather than a
 	// restatement of it. That one is whether this shell decodes the locale's
 	// encoding at all; this one is which locale is in force when `LC_ALL`,
-	// `LC_CTYPE` and `LANG` are all unset — which is what `env -i`, a cron
-	// job and a container have, and where a person's terminal never is.
+	// `LC_CTYPE` and `LANG` are all unset — which is what `env -i`, a cron job
+	// and a container have, and where a person's terminal never is.
 	//
-	// Measured 2026-09-11 under `env -i`, with no locale variable set
-	// anywhere, on three operators that read the same state:
+	// Three operators read the same state — a length, a case mapping, and a
+	// `\u` escape — and an implementation gives the *same* reading in all three,
+	// which is what makes this one axis rather than one per operator. Yes reads
+	// an unset locale as UTF-8-capable; No reads it as C.
 	//
-	//	                          bash 5.3.15  bash 3.2.57  ksh93u+  zsh 5.9.2  dash
-	//	s=héllo; echo ${#s}       5            6            6        6          6
-	//	s=café; upper-case it     CAFÉ         n/a          CAFé     CAFé       n/a
-	//	echo -e 'a\u00e9Z'       61 c3 a9 5a  n/a          n/a      refused    n/a
-	//
-	// So one shell reads an unset locale as UTF-8-capable and the rest read
-	// it as C, and it is the *same* reading in each of them across all three
-	// operators — which is what makes this one axis rather than one per
-	// operator. The case-mapping row is spelled per shell (`${s^^}`,
-	// `typeset -u`, `${(U)s}`), and bash 3.2.57 has none of the three
-	// spellings, which is why its cell is empty rather than measured.
-	//
-	// Silent either way: a length is a plausible number and a case-mapped
-	// word is a plausible word, so a script carried from a terminal into a
-	// container changes answer with nothing reported.
+	// Silent either way: a length is a plausible number and a case-mapped word
+	// is a plausible word, so a script carried from a terminal into a container
+	// changes answer with nothing reported.
 	//
 	// Asked only where the two readings differ — a value whose bytes are all
-	// ASCII, an ASCII code point, and case mapping below 0x80 are the same
-	// under both — and only after the operator's own axis has said the
-	// question can matter. See interp/multibyte.go for the order.
+	// ASCII, an ASCII code point, and case mapping below 0x80 are the same under
+	// both — and only after the operator's own axis has said the question can
+	// matter. See interp/multibyte.go for the order.
 	UnsetLocaleIsUnicodeAware Answer
 
 	// DeclarationTakesAnAppendOperand reads a declaration builtin's
@@ -4659,65 +4637,58 @@ type Semantics struct {
 	//	zsh 5.9.2           not valid in this context: a+
 	//	dash                export: a+: bad variable name
 	//
-	// So it is one shell's operand rather than a core one. The three that
-	// refuse it all name **`a+`** — the text in front of the `=` — and not
-	// the whole operand, which is what the two of them that otherwise quote
-	// a bad operand back do for `typeset 1x=v`. That is the tell that they
-	// read the `+=` as an operator too and then refuse the name it left.
+	// So it is one preset's operand rather than a core one. A reading that
+	// refuses it names **`a+`** — the text in front of the `=` — and not the
+	// whole operand, which is what a bad operand is otherwise quoted back as.
+	// That is the tell that the `+=` was read as an operator too, and the name
+	// it left then refused.
 	//
-	// The value joins through the name's attributes, which is the same join
-	// the bare statement performs and not a second rule: `declare -i a=1;
-	// declare a+=2` is 3, `declare -a arr=(p q); declare arr+=x` is `px q`,
-	// and a declared table joins its `0` key.
+	// The value joins through the name's attributes, which is the same join the
+	// bare statement performs and not a second rule: `declare -i a=1;
+	// declare a+=2` is 3, `declare -a arr=(p q); declare arr+=x` is `px q`, and
+	// a declared table joins its `0` key.
 	//
-	// Asked only where an operand's name ends in `+` and a value follows it.
-	// A `+` with no `=` is not this spelling — `declare a+` is refused as a
-	// name in every column, the one that takes the operator included — so
-	// nothing well formed ever reaches the question.
+	// Asked only where an operand's name ends in `+` and a value follows it. A
+	// `+` with no `=` is not this spelling — `declare a+` is refused as a name
+	// under every answer, the one that takes the operator included — so nothing
+	// well formed ever reaches the question.
 	DeclarationTakesAnAppendOperand Answer
 
-	// NegativeSubscriptCountsOverAPromotedScalar resolves a negative
-	// subscript on the left of `=` against the array a held *scalar* is
-	// about to become, rather than against the elements the name already
-	// has — of which a scalar has none.
+	// NegativeSubscriptCountsOverAPromotedScalar resolves a negative subscript
+	// on the left of `=` against the array a held *scalar* is about to become,
+	// rather than against the elements the name already has — of which a scalar
+	// has none.
 	//
 	// An element write over a name holding a string keeps the string as the
-	// first element, which is core and unanimous: `a=abc; a[1]=x` leaves
-	// `abc` beside the `x` in every shell in the panel that has arrays. When
-	// that happens relative to reading the subscript is not unanimous, and a
-	// subscript counting back from the end is the only spelling that can
-	// tell. Measured 2026-09-09 with `a=abc; a[-1]=x; typeset -p a`:
+	// first element, which is core and unanimous: `a=abc; a[1]=x` leaves `abc`
+	// beside the `x` wherever arrays exist. When that happens relative to
+	// reading the subscript is not unanimous, and a subscript counting back from
+	// the end is the only spelling that can tell. With `a=abc; a[-1]=x`, Yes
+	// promotes and then counts back over the one element it made, leaving a
+	// single `x`; No counts back first and refuses as out of range.
 	//
-	//	bash 5.3.15         declare -a a=([0]="x")
-	//	bash 5.3.15 as sh   declare -a a=([0]="x")
-	//	bash 3.2.57         a[-1]: bad array subscript
-	//	ksh93               a: subscript out of range
-	//
-	// bash promotes and then counts back over the one element it made;
-	// ksh93 counts back first and refuses. bash 3.2 has no negative
-	// subscripts at all — `a=(p q); a[-1]=x` is the same complaint there —
-	// which is the absence of the spelling rather than a third answer.
+	// A preset with no negative subscripts at all refuses the spelling outright,
+	// which is its absence rather than a third answer.
 	//
 	// Asked only where there is a scalar to promote *and* the subscript is
 	// negative. A non-negative one lands at the number it names whether the
-	// promotion happened before or after it, and an unset name has nothing
-	// to promote, so `unset a; a[-1]=x` is refused in both columns and needs
-	// no answer from either.
+	// promotion happened before or after it, and an unset name has nothing to
+	// promote, so `unset a; a[-1]=x` is refused under both and needs no answer.
 	//
-	// The dialect where a subscript on a string names a character never
-	// arrives here at all: there is no array to promote into on that side.
+	// A preset where a subscript on a string names a character never arrives
+	// here at all: there is no array to promote into on that side.
 	NegativeSubscriptCountsOverAPromotedScalar Answer
 
 	// NegativeSubscriptPastTheStartInserts places a new element in front of
 	// every other when a negative subscript counts back past the first one:
-	// `a=(p q); a[-3]=x` leaves three elements with `x` at the head, however
-	// far past the start the subscript reached. True in zsh alone; bash and
-	// ksh93 refuse the subscript and end the script.
+	// `a=(p q); a[-3]=x` leaves three elements with `x` at the head, however far
+	// past the start the subscript reached. Answering No refuses the subscript
+	// and ends the script.
 	//
-	// Asked only for a *negative* subscript that lands before the first
-	// element, which is the only spelling that can. A non-negative one below
-	// the base — `a[0]` where the first element is 1 — is refused by every
-	// shell measured, zsh included, so it needs no answer from anyone.
+	// Asked only for a *negative* subscript that lands before the first element,
+	// which is the only spelling that can. A non-negative one below the base —
+	// `a[0]` where the first element is 1 — is refused under every answer, so it
+	// needs none.
 	NegativeSubscriptPastTheStartInserts Answer
 
 	// ArrayLiteralSubscriptIsAKey reads a subscript written inside an array
@@ -4726,95 +4697,86 @@ type Semantics struct {
 	// declare a keyed array rather than an indexed one.
 	//
 	// One concept with two consequences, like whether an assignment prefix
-	// survives a special builtin. True in ksh93, where `a=([1+1]=c)` stores
-	// under the three characters and `${a[2]}` finds nothing; false in bash
-	// and zsh, where the subscript is evaluated and the value lands at 2.
+	// survives a special builtin. Under Yes, `a=([1+1]=c)` stores under the
+	// three characters and `${a[2]}` finds nothing; under No the subscript is
+	// evaluated and the value lands at 2.
 	//
 	// Asked only where the two readings differ. A plain decimal numeral
 	// evaluates to itself, so `a=([2]=c)` fills the same slot either way and
-	// never reaches the question — which is what keeps the ordinary way to
-	// build a sparse array available in a core that has chosen no shell.
+	// never reaches the question — which is what keeps the ordinary way to build
+	// a sparse array available in a core that has chosen no preset.
 	//
-	// dash has no array literal at all, so the axis is absent there rather
-	// than false.
+	// A preset with no array literal at all leaves the axis absent rather than
+	// false.
 	ArrayLiteralSubscriptIsAKey Answer
 
-	// DollarZeroNamesTheInnermostCall makes `$0` the innermost thing the
-	// shell has been called into rather than the shell's own name: the
-	// function being run, or the file being sourced.
+	// DollarZeroNamesTheInnermostCall makes `$0` the innermost thing the shell
+	// has been called into rather than the shell's own name: the function being
+	// run, or the file being sourced.
 	//
-	// One concept with two consequences, and one field because no shell
-	// splits them. zsh has both under a single option, and turning that
-	// option off takes both away together — `$0` inside a function goes back
-	// to the script's name in the same breath as `$0` inside a sourced file
-	// does. Every other member of the panel has neither: measured across
-	// dash, bash 5.3, bash-as-sh, bash 3.2 and ksh93, `$0` is the script's
-	// name inside a function, inside a file it sourced, inside a file that
-	// file sourced, and inside a function defined by one of them.
+	// One concept with two consequences, and one field because nothing splits
+	// them: where both exist they sit under a single option, and turning that
+	// option off takes both away together — `$0` inside a function goes back to
+	// the script's name in the same breath as `$0` inside a sourced file does.
+	// Under No there is neither: `$0` is the script's name inside a function,
+	// inside a file it sourced, inside a file that file sourced, and inside a
+	// function defined by one of them.
 	//
-	// Innermost is the whole of the rule and is measured rather than
-	// assumed: a function that sources a file reports the *file* while that
-	// file runs and the function's name again afterwards, and a function
-	// defined in a sourced file reports its own name and not the file it
-	// came from. So this is a question about the top of the call stack and
-	// not about whether a function is anywhere on it.
+	// Innermost is the whole of the rule and is measured rather than assumed: a
+	// function that sources a file reports the *file* while that file runs and
+	// the function's name again afterwards, and a function defined in a sourced
+	// file reports its own name and not the file it came from. So this is a
+	// question about the top of the call stack and not about whether a function
+	// is anywhere on it.
 	//
 	// The file is named as the operand was written — `. ./inc.sh` reports
-	// `./inc.sh` and a bare name found on PATH reports the bare name —
-	// which is the same spelling the call stack and the diagnostics use.
+	// `./inc.sh` and a bare name found on PATH reports the bare name — which is
+	// the same spelling the call stack and the diagnostics use.
 	//
 	// A shell's startup files are outside this. They are read by the shell
-	// rather than sourced by a script, and `$0` inside one is the shell's
-	// own name in the shell that has this: measured, a `~/.zshrc` printing
-	// `$0` under `zsh -i` prints the path of the zsh binary.
+	// rather than sourced by a script, and `$0` inside one is the shell's own
+	// name even under Yes.
 	DollarZeroNamesTheInnermostCall Answer
 
-	// BuiltinSyntaxErrorFatal ends a non-interactive shell when text handed
-	// to a special builtin does not parse — `eval "if"`, or a sourced file
-	// with an unterminated `if` in it.
+	// BuiltinSyntaxErrorFatal ends a non-interactive shell when text handed to a
+	// special builtin does not parse — `eval "if"`, or a sourced file with an
+	// unterminated `if` in it.
 	//
-	// True only in dash, which is the POSIX rule that a special builtin's
-	// failure is fatal; bash, ksh93 and zsh report it and carry on. One axis
-	// covers both callers because the answers are the same for both in every
-	// shell measured, where the *status* is not — that is two fields on
-	// Diagnostics.
+	// Yes is the POSIX rule that a special builtin's failure is fatal; No
+	// reports it and carries on. One axis covers both callers because they are
+	// answered the same way, where the *status* is not — that is two fields on
+	// [Diagnostics].
 	BuiltinSyntaxErrorFatal Answer
 
 	// EvalRunsWhatItParsed runs the commands `eval` has already read when a
-	// later line of its text will not parse, instead of reading the text
-	// through and running none of it.
+	// later line of its text will not parse, instead of reading the text through
+	// and running none of it.
 	//
-	// Measured 2026-09-11, counting a side effect rather than reading a
-	// transcript, because the transcript is what a shell's buffering can
-	// reorder:
+	// Measured by counting a side effect rather than reading a transcript,
+	// because the transcript is what buffering can reorder:
 	//
 	//	$ <shell> -c 'eval "printf x >> f
 	//	if; then"'
 	//
-	//	bash 5.3, bash 3.2, dash	f holds x
-	//	zsh, ksh93              	f does not exist
+	// leaves `f` holding `x` under Yes and no `f` at all under No.
 	//
-	// Not the same question as the wording or the status of the complaint,
-	// both of which are Diagnostics' and both of which are written either
-	// way. What this decides is whether the *work* before the offending line
-	// happened.
+	// Not the same question as the wording or the status of the complaint, both
+	// of which are [Diagnostics]' and both of which are written either way. What
+	// this decides is whether the *work* before the offending line happened.
 	//
-	// A separate field from the sourced-file one because zsh splits them: it
-	// reads a file a command at a time and reads `eval`'s text through first.
+	// A separate field from the sourced-file one because an implementation may
+	// split them — reading a file a command at a time and reading `eval`'s text
+	// through first.
 	EvalRunsWhatItParsed Answer
 
-	// SourcedFileRunsWhatItParsed is the same question for `.`, and the
-	// answer is not always the same one.
+	// SourcedFileRunsWhatItParsed is the same question for `.`, and the answer
+	// is not always the same one.
 	//
-	// Measured the same day and the same way, with a file holding `printf y
-	// >> f` and then `if; then`:
+	// Measured the same way, with a file holding `printf y >> f` and then
+	// `if; then`: `f` holds `y` under Yes and does not exist under No.
 	//
-	//	bash 5.3, bash 3.2, dash, zsh	f holds y
-	//	ksh93                        	f does not exist
-	//
-	// It is worth more here than for `eval`: a file that sets six names and
-	// has a typo on the last line leaves six names set in five of the six
-	// columns, and a shell reading it through first leaves none.
+	// It is worth more here than for `eval`: a file that sets six names and has
+	// a typo on the last line leaves six names set under Yes and none under No.
 	SourcedFileRunsWhatItParsed Answer
 
 	// FatalErrorEndsBorrowedTextOnly makes an error that would end a script

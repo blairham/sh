@@ -5962,7 +5962,9 @@ What was built, all through the extension seam — registered builtins in each
   nanosecond epoch gives — the same digits a real zsh shows. The count is a
   dialect answer and not a shape: bash has its own `$EPOCHREALTIME` from 5.0
   and writes **six**, and bash 3.2, ksh93 and dash have no such parameter.
-  This shell's bash has neither, which is recorded rather than fixed here.
+  bash's two are built in dialect/bash/epoch.go — see the entry below, which
+  is where the differences between the two shells' parameters of the same
+  name are recorded.
 
   `strftime [-n] [-r] [-s scalar] format [seconds [nanoseconds]]`. The
   letters cluster, so `-rs v` is `-r -s v`, and `-s`'s name is the rest of the
@@ -6184,6 +6186,58 @@ What was built, all through the extension seam — registered builtins in each
   not-built list for the same reason and by the same rule — see below.
 - **zsh `sched`** (dialect/zsh/sched.go): a command line put aside until a
   time. Unrelated to the line editor despite arriving with it; see below.
+- **bash `$EPOCHSECONDS` and `$EPOCHREALTIME`** (dialect/bash/epoch.go): the
+  clock as a script reads it, which bash has had since 5.0 as plain shell
+  parameters with no module to load. Measured 2026-09-12 against bash 5.3.15
+  with `env -i PATH=/usr/bin:/bin` and a scratch HOME, over a script file.
+
+  They are **not zsh's two under another name**, which is the whole reason
+  they are a file of their own rather than two lines copied from
+  dialect/zsh/datetime.go. Four rows differ and only the spelling agrees:
+
+  | probe | bash 5.3 | zsh 5.9.2 |
+  | --- | --- | --- |
+  | places in the fraction | **6** | 10 |
+  | `EPOCHSECONDS=5` | ignored, status 0, silence | fatal `read-only variable` |
+  | `unset EPOCHSECONDS` | takes it away, status 0 | refused |
+  | `declare`/`typeset -p` | `declare -- EPOCHSECONDS="…"` | `typeset -ir`, no value |
+
+  So the registration is `SetDynamic` plus a **writer that does nothing** —
+  which is `interp.Runner.SetDynamicWriter`'s stated shape for a produced
+  parameter a script may assign to — rather than `MarkReadonly`, and
+  `MarkHidden` is not called either. There is no `$epochtime` and no
+  `strftime` builtin, because this shell has neither; its formatting is
+  `printf '%(fmt)T'`, which the core already has. bash 3.2.57 has neither
+  parameter, which is a version fact and not an axis: the panel holds both
+  builds and this dialect models 5.3.
+
+  The fraction is **truncated rather than rounded**, and built from the
+  nanosecond count by hand rather than through a float64. Rounding
+  999999999ns to six places carries into a second the integer half has not
+  reached, so `$EPOCHREALTIME` would read one second ahead of an
+  `$EPOCHSECONDS` taken in the same breath; real bash reads both out of one
+  `gettimeofday` and cannot disagree with itself. A float64 of a nanosecond
+  epoch has no bits left for the sixth place either — zsh's ten places *are*
+  that noise and are kept there because zsh prints it, where six here are
+  exact.
+
+  Two divergences remain, and **neither is this parameter's**. Real bash's
+  `unset EPOCHSECONDS` removes it for good, so a later `EPOCHSECONDS=7` makes
+  an ordinary variable holding `7`; here the producer comes back on the next
+  assignment. And `declare -p EPOCHSECONDS` says `not found` here where bash
+  lists it. Both are one rule over every produced parameter rather than a
+  special case: measured the same day, `unset RANDOM; RANDOM=9; echo $RANDOM
+  $RANDOM` is `9 9` in bash 5.3, bash 3.2 and ksh93 and two different numbers
+  in zsh 5.9.2 — this shell answers zsh's way in every dialect — and
+  `declare -p RANDOM` and `declare -p SECONDS` are `not found` here and
+  `declare -i RANDOM="3899"` there. Filed as #2450 and #2451 rather than
+  patched in behind one parameter's back.
+
+  Corpus: `datetime/the-seconds-are-a-clock-read` and
+  `datetime/the-real-time-and-how-many-places-it-carries`, both of which
+  recorded the gap when zsh's module was built (#1154) and now pass for bash
+  as well.
+
 - **bash `bind`** (dialect/bash/bind.go): the same key table under
   readline's names, and the two `set -o` editing modes with it. See below
   for why this moved out of the not-built list, and for the two measured

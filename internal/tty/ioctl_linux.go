@@ -10,3 +10,5 @@ import "syscall"
 // The ioctl number differs by platform, which is the whole of what is
 // platform-specific here.
 const tcGets = syscall.TCGETS
+
+const tcSets = syscall.TCSETS

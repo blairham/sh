@@ -190,16 +190,40 @@ func (r *Runner) terminalTest(operand string) (answer, isNumber bool) {
 // not make. See TestTheTerminalIsRememberedOnceItHasBeenSeen, which asserts
 // the claim and records the limit.
 func (r *Runner) terminalSize() (rows, cols int) {
+	f, held := r.terminal()
+	if !held {
+		return 0, 0
+	}
+	return tty.Size(f)
+}
+
+// terminal is the terminal this shell holds, and false where it holds none.
+//
+// The remembering terminalSize describes, factored out because a second thing
+// needs the same answer: `read -k` reads characters from *the shell's*
+// terminal and not from the stream it was told to read, which is measured —
+// `printf abc | read -k v` is `not interactive and can't open terminal` at 1,
+// `read -k 2 v < f.txt` is the same refusal with the file untouched, and under
+// a pseudo-terminal `read -k v` works after `exec 0</dev/null` has taken the
+// terminal off standard input. All three fall out of asking this question
+// rather than asking about the descriptor the builtin is reading.
+//
+// Fresh first and remembered second, for the reason terminalSize gives: a
+// session whose stdin is still the terminal must not be answered from a stale
+// one. A remembered file that has since been closed is still handed back — the
+// ioctl on it fails, which is the caller's answer, rather than a branch here
+// second-guessing it.
+func (r *Runner) terminal() (*os.File, bool) {
 	for _, held := range []any{r.stdin(), r.stdout(), r.stderr()} {
 		f, ok := held.(*os.File)
 		if !ok || !tty.IsTerminal(f) {
 			continue
 		}
 		r.windowTerminal = f
-		return tty.Size(f)
+		return f, true
 	}
 	if r.windowTerminal != nil {
-		return tty.Size(r.windowTerminal)
+		return r.windowTerminal, true
 	}
-	return 0, 0
+	return nil, false
 }

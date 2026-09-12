@@ -3,10 +3,8 @@
 
 //go:build darwin || freebsd || netbsd || openbsd || dragonfly
 
-package tty
+package tty_test
 
 import "syscall"
 
-const tcGets = syscall.TIOCGETA
-
-const tcSets = syscall.TIOCSETA
+const probeGets = syscall.TIOCGETA

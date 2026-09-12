@@ -1026,7 +1026,9 @@ type Runner struct {
 	tracksWindowSize bool
 	// windowTerminal is the terminal this shell found, remembered so that a
 	// read after the script has redirected itself still has one to ask. See
-	// Runner.terminalSize, where the measurement that says to remember it is.
+	// Runner.terminal, which is where the remembering is and where the
+	// measurement that says to remember it is; terminalSize named it, and
+	// `read -k` now asks the same question about the same file.
 	windowTerminal *os.File
 	// windowRows and windowCols are how big that terminal was when $LINES and
 	// $COLUMNS last answered, and windowSettled says the pair has been read at

@@ -7,7 +7,4 @@ package repl
 
 import "syscall"
 
-const (
-	tcGets = syscall.TIOCGETA
-	tcSets = syscall.TIOCSETA
-)
+const probeTcGets = syscall.TIOCGETA

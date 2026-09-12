@@ -565,6 +565,14 @@ func Semantics() interp.Semantics {
 	// And a value read *out of a name* inside an expression is the same
 	// second reader: `k=010; $((k))` is 10 where `$((010))` is 8.
 	s.ArithStoredValueReadsALeadingZeroAsDecimal = interp.Yes
+	// A base is read in plain decimal here, padding and all — `08#7` is 7 —
+	// but only two characters of it, which is as many as base 64 needs. That
+	// cap is what refuses `010#5`, and it refuses `0002#11` where `02#11` is
+	// 3, so it is a length rule and not one about the zero.
+	s.ArithBaseMayHaveALeadingZero = interp.Yes
+	s.ArithBaseIsAtMostTwoDigits = interp.Yes
+	// And a radix prefix wants a digit after it: `$(( 0x ))` is refused.
+	s.ArithEmptyRadixDigitsAreZero = interp.No
 	s.IndirectionYieldsName = interp.Yes
 	s.BraceExpansion = interp.Yes
 	// The one shell that strips a range endpoint's zeros — `{01..3}` is
@@ -1263,6 +1271,9 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperatorExpected: "arithmetic syntax error",
 		// A digit the base does not have is the same sentence.
 		DigitTooGreatForBase: "arithmetic syntax error",
+		// The same sentence for a base outside 2..64: `$(( 1#0 ))` is
+		// ` 1#0 : arithmetic syntax error` here, as everything else is.
+		ArithInvalidBase: "arithmetic syntax error",
 		// Except for the `@` operator family, the one bad substitution ksh93
 		// defers to run time — measured, `${x@Q}` in a branch never taken is
 		// silent — and when reached it is reported as a bad substitution

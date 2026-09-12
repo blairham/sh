@@ -6047,6 +6047,58 @@ type Semantics struct {
 	// into cases and whose last two digits are `@` and `_`. bash and ksh93
 	// take the full 64; zsh stops at 36 and says so.
 	ArithBaseAbove36 Answer
+	// ArithBaseMayHaveALeadingZero lets `010#5` name base ten. The base is
+	// read in decimal either way; what this decides is whether a zero in
+	// front of it is padding or the start of an octal constant.
+	//
+	// Measured 2026-09-12 over the panel, with the digit chosen so the two
+	// readings could not agree — `010#5` is five under both base eight and
+	// base ten, which is the probe the issue was filed from:
+	//
+	//	          010#5   010#9   010#11   08#7   0010#5
+	//	bash 5.3  refuse  refuse  refuse   refuse refuse
+	//	ksh93u+   refuse  refuse  refuse   7      refuse
+	//	zsh 5.9.2 5       9       11       7      5
+	//
+	// So zsh reads the base in plain decimal, padding and all. bash refuses
+	// every one of them for a single reason that is not about bases at all:
+	// a leading zero makes the text an octal constant there, so the `#` is
+	// never a base marker and the literal fails as a number — which is why
+	// `08#5` is "value too great for base" and `010#5` "invalid number".
+	// ksh93 says yes to the zero and no to the length, which is
+	// ArithBaseIsAtMostTwoDigits beside this one.
+	//
+	// dash has no `base#digits` at all, so its column is the same refusal it
+	// gives `10#5`.
+	ArithBaseMayHaveALeadingZero Answer
+	// ArithBaseIsAtMostTwoDigits stops the base after two characters, which
+	// is as many as a base up to 64 needs. ksh93 alone.
+	//
+	// Measured 2026-09-12, and it is the reading that survived three
+	// hypotheses — an octal base, a decimal base, and a two-character cap:
+	//
+	//	02#11    3        base two, so the cap took `02`
+	//	0002#11  refuse   four characters, so the cap took `00`
+	//	64#10    64       two characters is enough for the widest base
+	//	012#11   refuse   the cap took `01`, which is no base
+	//	020#11   refuse   the cap took `02` and left `0#11`
+	//
+	// A decimal reading answers 13 and 21 to the last two and an octal one
+	// 11 and 17; ksh93 answers neither, and the cap explains all five.
+	ArithBaseIsAtMostTwoDigits Answer
+	// ArithEmptyRadixDigitsAreZero reads `0x` — a radix prefix with no digits
+	// after it — as a complete number worth zero, rather than refusing it.
+	//
+	// Measured 2026-09-12. `$(( 0x ))` and `$(( 0X ))` are 0 in bash 5.3,
+	// bash 3.2, bash-as-sh and zsh, and refused by ksh93 and dash. The
+	// control is `$(( 0x+1 ))`, which is 1 in the four that accept it: the
+	// prefix is a *finished* number and the `+1` goes on from it, rather
+	// than the `+` being swallowed by a digit scan that found nothing.
+	//
+	// Only a radix prefix. `$(( 8# ))` — a named base with no digits — is a
+	// separate row the panel answers differently again (bash 5.3 refuses it
+	// where bash 3.2 answers zero), and is not this axis.
+	ArithEmptyRadixDigitsAreZero Answer
 	// ArithOverflowSaturates clamps integer overflow at the edge: ksh93
 	// holds max+1 at the maximum where the other shells wrap. Asked only
 	// when an overflow actually happened.
@@ -7846,9 +7898,17 @@ func PosixSemantics() Semantics {
 		// The standard has no modifiers and no history syntax, so a range is
 		// the arithmetic it looks like — which is also what three of the four
 		// do with it.
-		SubstringRangeReadsModifiers:  No,
-		LinenoCountsFromTheFunction:   No,
-		ArithBaseAbove36:              Yes,
+		SubstringRangeReadsModifiers: No,
+		LinenoCountsFromTheFunction:  No,
+		ArithBaseAbove36:             Yes,
+		// The standard's numeral is C's, where a leading zero opens an octal
+		// constant — so a base cannot be written with one, and a radix prefix
+		// needs at least one digit after it. Neither is a base spelling the
+		// standard describes, since `base#digits` is not in it at all; what
+		// the preset follows is the constant syntax it does describe.
+		ArithBaseMayHaveALeadingZero:  No,
+		ArithBaseIsAtMostTwoDigits:    No,
+		ArithEmptyRadixDigitsAreZero:  No,
 		ArithOverflowSaturates:        No,
 		EmptyArithExpressionIsAnError: No,
 		// The standard says `times` takes no operands and does not say what to

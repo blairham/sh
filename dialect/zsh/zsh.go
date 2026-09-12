@@ -115,6 +115,9 @@ func Dialect() syntax.Dialect {
 	d.SeparatorWhereACommandBelongs = syntax.AnySeparatorWhereACommandBelongs
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
+	// And the binary radix prefix, which this shell alone has: `0b101` is 5
+	// here and an octal constant carrying a `b` everywhere else.
+	d.ArithBinaryLiteral = true
 	// A double quote inside an arithmetic expression is stepped over
 	// wherever a token may begin. Measured 2026-09-10 on zsh 5.9.2: with
 	// `n=5`, `$(( "1" + 1 ))` is 2, `$(( "n" + 1 ))` is 6 and
@@ -922,6 +925,14 @@ func Semantics() interp.Semantics {
 	s.UnderscoreInheritsFromTheEnvironment = interp.No
 	// Bases stop at 36 here, and the refusal says so.
 	s.ArithBaseAbove36 = interp.No
+	// A base is read in plain decimal and however long it is written:
+	// `010#9` is 9 and `0010#5` is 5, so the leading zeros are padding
+	// rather than the start of a constant — which they cannot be here in
+	// any case, ArithLeadingZeroIsOctal being No.
+	s.ArithBaseMayHaveALeadingZero = interp.Yes
+	s.ArithBaseIsAtMostTwoDigits = interp.No
+	// `$(( 0x ))` is 0 and `$(( 0x+1 ))` is 1, as in bash.
+	s.ArithEmptyRadixDigitsAreZero = interp.Yes
 	// ${#a} of an array counts elements, and a function's $LINENO counts
 	// from the function.
 	s.ArrayLengthWithoutSubscriptIsCount = interp.Yes

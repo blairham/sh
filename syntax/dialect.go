@@ -1655,6 +1655,17 @@ type Dialect struct {
 	// ArithExplicitBase enables the `base#digits` form. Absent from dash.
 	ArithExplicitBase bool
 
+	// ArithBinaryLiteral enables `0b101`, the binary radix prefix. zsh alone
+	// among the panel: measured 2026-09-12, `$(( 0b101 ))` is 5 there and
+	// `0b101: value too great for base` in bash 5.3, bash 3.2 and
+	// bash-as-sh, which read it as an octal constant carrying a `b`. ksh93
+	// and dash refuse it too.
+	//
+	// A grammar flag rather than an axis for the reason ArithFloat is one:
+	// the question is whether the dialect has the literal at all, not what
+	// it means where both have it.
+	ArithBinaryLiteral bool
+
 	// DollarBracketArith enables `$[expr]`, the older spelling of `$((expr))`.
 	//
 	// Measured 2026-09-06: bash 5.3.15, bash 3.2.57, bash invoked as `sh` and

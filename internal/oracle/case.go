@@ -9633,6 +9633,66 @@ echo unreachable`,
 		Why:     "hex is universal; the base#number form is absent from dash",
 	},
 	{
+		ID: "arith/a-base-written-with-a-leading-zero", Category: "arithmetic",
+		Snippet: `echo $((010#5)); echo "st=$?"`,
+		Why:     "a zero in front of the base, which the panel splits three ways for three different reasons: zsh reads the base in plain decimal and answers 5, bash refuses because the zero opens an *octal constant* there so the `#` is never a base marker at all, and ksh93 refuses for a reason of its own — the row below. dash has no bases. The digit is deliberately one both readings of the base agree about, which is what the row after this one is for (#2006)",
+	},
+	{
+		ID: "arith/a-padded-base-read-in-decimal-or-in-octal", Category: "arithmetic",
+		Snippet: `echo $((010#9)); echo $((010#11)); echo "st=$?"`,
+		Why:     "the control the row above cannot be read without: `010#5` is 5 whether the base is eight or ten, so it says nothing about *which* base zsh chose. Nine is no octal digit and eleven is two of them, and zsh answers 9 and 11 — plain decimal, padding and all. A shell reading `010` as octal would refuse the first and answer 9 to the second",
+	},
+	{
+		ID: "arith/a-two-character-base-with-a-leading-zero", Category: "arithmetic",
+		Snippet: `echo $((08#7)); echo $((02#11)); echo "st=$?"`,
+		Why:     "ksh93's answer, and the one that says its refusal above is not about the zero: `08#7` is 7 and `02#11` is 3 there, so a padded base is read in decimal — but only two characters of it, which is as many as base 64 needs. bash refuses both, the leading zero being octal for it; zsh takes both by the general rule",
+	},
+	{
+		ID: "arith/a-base-longer-than-two-characters", Category: "arithmetic",
+		Snippet: `echo $((0010#5)); echo $((0002#11)); echo "st=$?"`,
+		Why:     "the same two bases with one more zero in front, which is what separates ksh93's length rule from a rule about padding: `02#11` is 3 there and `0002#11` is refused. zsh answers both. Three hypotheses were live for ksh93 — an octal base, a decimal base and a two-character cap — and only the cap explains this row beside the one above",
+	},
+	{
+		ID: "arith/a-base-of-zero", Category: "arithmetic",
+		Snippet: `echo $((0#5)); echo "st=$?"`,
+		Why:     "zero named as a base, which is not a base anywhere and is nevertheless 5 in zsh: that shell falls back to reading the digits as an ordinary constant, so `$(( 0#0x10 ))` is 16 there too. bash never sees a base here at all — the zero is its octal prefix and the `#` a byte no numeral can hold, hence `invalid number` rather than the `invalid arithmetic base` it writes for `1#0`. Ours refuses it in every dialect, which is one column short",
+	},
+	{
+		ID: "arith/a-base-below-two", Category: "arithmetic",
+		Snippet: `echo $((1#0)); echo "st=$?"`,
+		Why:     "the neighboring refusal, and the reason the row above is about zero rather than about small bases: `1#0` *is* read as a base in bash and refused with a third sentence, `invalid arithmetic base`, where `0#5` gets the numeral reader's. zsh names the range it takes and ksh93 says what it says about everything",
+	},
+	{
+		ID: "arith/a-base-above-thirty-six-written-padded", Category: "arithmetic",
+		Snippet: `echo $((064#10)); echo "st=$?"`,
+		Why:     "the base that is both padded and out of one shell's range, which is what pins the *number* in zsh's refusal: it writes `64` where the script wrote `064`, so the sentence names the base it read rather than the text. bash reads no base here and ksh93's cap has already taken `06`",
+	},
+	{
+		ID: "arith/a-radix-prefix-with-no-digits", Category: "arithmetic",
+		Snippet: `echo "1[$(( 0x ))] 2[$(( 0X ))] st=$?"`,
+		Why:     "a radix prefix with an empty digit run, which bash 5.3, bash 3.2, bash-as-sh and zsh all read as a complete number worth zero and ksh93 and dash refuse. Both letter cases in one row because the panel answers them alike and a rule written for one is a rule that missed the other (#1328)",
+	},
+	{
+		ID: "arith/a-radix-prefix-with-no-digits-goes-on", Category: "arithmetic",
+		Snippet: `echo "[$(( 0x+1 ))]"`,
+		Why:     "the control for the row above, and what makes `0` an answer rather than an artifact: the four columns that take `0x` answer 1 here, so the prefix is a *finished* number and the `+1` is an addition to it — where a digit scan that swallowed the `+` looking for digits would answer something else or refuse",
+	},
+	{
+		ID: "arith/a-binary-radix-prefix", Category: "arithmetic",
+		Snippet: `echo "1[$(( 0b101 ))] 2[$(( 0B101 ))] st=$?"`,
+		Why:     "the third radix prefix, which zsh alone has: 5 there in both cases, and `0b101: value too great for base` in bash 5.3, bash 3.2 and bash-as-sh, which read it as an octal constant carrying a `b`. ksh93 and dash refuse it too. It is beside the hex rows because the empty-digit question is the same question for it — the row below",
+	},
+	{
+		ID: "arith/a-binary-radix-prefix-with-no-digits", Category: "arithmetic",
+		Snippet: `echo "1[$(( 0b ))] 2[$(( 0b+1 ))] st=$?"`,
+		Why:     "and the empty digit run under the prefix only one shell has, which answers 0 and 1 there exactly as `0x` does — so the rule is about a radix prefix rather than about hexadecimal. The other five refuse both cells",
+	},
+	{
+		ID: "arith/an-integer-name-given-a-bare-radix-prefix", Category: "arithmetic",
+		Snippet: `typeset -i b; b=0x; echo "[$b]"; typeset -p b; echo "st=$?"`,
+		Why:     "the same empty digit run arriving through an assignment rather than through an expansion, which is the route that shows what the name kept: bash lists `declare -i b=\"0\"` and zsh `typeset -i16 b=0`, its empty prefix having taught the name a base as a full one would. ksh93 refuses the assignment. Nothing here was reachable while the number itself was refused, which is why #1328 carried it",
+	},
+	{
 		ID: "arith/comparison-yields-one-or-zero", Category: "arithmetic",
 		Snippet: `printf "[%s]" "$((1<2))" "$((2<1))" "$((1==1))"`,
 		Why:     "comparisons yield 1 or 0",

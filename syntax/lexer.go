@@ -1264,13 +1264,7 @@ func (l *Lexer) opensSubscriptFlags() bool {
 }
 
 func (l *Lexer) opensPatternGroup() bool {
-	// An empty `()` is a function definition and not a group, which is how
-	// `f() { … }` survives the rule: the shell that takes bare groups rejects
-	// `a()` as a pattern outright, so nothing is lost by leaving it alone.
-	if l.peekAt(1) == ')' {
-		return false
-	}
-	// And a `(` straight after `=` opens an array literal, never a group —
+	// A `(` straight after `=` opens an array literal, never a group —
 	// measured, because it is the same shell: `a=(b|c)` is a parse error
 	// there rather than a pattern, so the assignment always wins.
 	//
@@ -1290,7 +1284,11 @@ func (l *Lexer) opensPatternGroup() bool {
 		return false
 	}
 	if l.dialect.PatternAlternation {
-		return true
+		// An empty `()` is a function definition and not a *bare* group,
+		// which is how `f() { … }` survives the rule: the shell that takes
+		// bare groups rejects `a()` as a pattern outright, so nothing is
+		// lost by leaving it alone.
+		return l.peekAt(1) != ')'
 	}
 	extended := l.dialect.ExtendedPattern ||
 		(l.inCondition && l.dialect.ExtendedPatternInCondition)
@@ -1299,6 +1297,17 @@ func (l *Lexer) opensPatternGroup() bool {
 	}
 	switch l.src[l.off-1] {
 	case '@', '?', '+', '*', '!':
+		// A *quantified* group may be empty, and an empty one is not the
+		// function definition the bare spelling would be: the quantifier is
+		// what opens it, so there is no name in front of the `(` for a
+		// definition to have. Measured 2026-09-12 on bash 5.3.15 with
+		// `extglob` on and on ksh93u+, which are unanimous — `echo +()z`
+		// prints `+()z` with no such file, `case z in +()z)` matches
+		// because a group standing for nothing matches nothing, and
+		// `a+() { echo fn; }` is `syntax error near unexpected token `}''
+		// in both, because the `+(` is read as the group and the name `a`
+		// is left standing on its own. Refusing the `(` here forfeited two
+		// whole files of a third-party corpus sweep (#2296).
 		return true
 	}
 	return false
@@ -1327,6 +1336,47 @@ func (l *Lexer) scanPatternGroup() string {
 	l.ranOut("pattern")
 	l.fail(l.pos(), "unterminated pattern group")
 	return l.src[start:l.off]
+}
+
+// bracketExprAt reports the width of the bracket expression at the start of
+// src, and false where src does not begin one or the `]` never arrives on
+// that line.
+//
+// The three rules that make this more than "find the next `]`" are the
+// bracket expression's own, from POSIX XCU 2.13.1: a `]` first — after the
+// negation, where there is one — is the character rather than the closer,
+// and `[:class:]`, `[.collating.]` and `[=equivalence=]` hold a `]` that
+// closes only themselves.
+//
+// A run that reaches a newline is not one. That is the bound: a `[` with no
+// partner would otherwise take the rest of the input into the group, which
+// turns a typo on one line into a refusal pages away.
+func bracketExprAt(src string) (int, bool) {
+	if len(src) == 0 || src[0] != '[' {
+		return 0, false
+	}
+	i := 1
+	if i < len(src) && (src[i] == '!' || src[i] == '^') {
+		i++
+	}
+	if i < len(src) && src[i] == ']' {
+		i++
+	}
+	for i < len(src) && src[i] != '\n' {
+		switch {
+		case src[i] == ']':
+			return i + 1, true
+		case src[i] == '[' && i+1 < len(src) && strings.IndexByte(":.=", src[i+1]) >= 0:
+			end := strings.Index(src[i+2:], string(src[i+1])+"]")
+			if end < 0 {
+				return 0, false
+			}
+			i += 2 + end + 2
+		default:
+			i++
+		}
+	}
+	return 0, false
 }
 
 // scanGroupSpans reads a `( … )` that belongs to a word and returns it as
@@ -1397,6 +1447,12 @@ func (l *Lexer) scanPatternGroup() string {
 // pattern or ordinary text — is the interpreter's GlobExpansionResults axis,
 // answered where every other expansion's is.
 func (l *Lexer) scanGroupSpans() []Span {
+	// Whether this is a *quantified* group, which decides one rule below.
+	// The quantifier is the character in front of the parenthesis, and
+	// opensPatternGroup has already read it: a bare group is opened by the
+	// parenthesis alone, in the one dialect that takes those.
+	quantified := !l.dialect.PatternAlternation && l.off > 0 &&
+		strings.IndexByte("@?+*!", l.src[l.off-1]) >= 0
 	var spans []Span
 	var lit strings.Builder
 	litPos := l.pos()
@@ -1464,6 +1520,29 @@ func (l *Lexer) scanGroupSpans() []Span {
 		// survives the suite, and that is an equivalent mutant rather than
 		// a gap — recorded here so the next reader does not go looking for
 		// the row that would kill it.
+
+		// A bracket expression inside a *quantified* group is the group's,
+		// operators and all, so it is taken whole before the four
+		// characters below get to see it — the same precedence a numeric
+		// range has just above, and for the same reason.
+		//
+		// Only the quantified group, and that is measured rather than
+		// tidied: bash 5.3.15 with `extglob` on and ksh93u+ both match
+		// `x;y` against `x@([;])y` and both refuse the identical brackets
+		// without the group — `case "x;y" in x[;]y)` is a syntax error in
+		// every column, so this is the group protecting them and not the
+		// brackets. zsh 5.9.2, whose groups are the bare ones, refuses
+		// `x([;])y` in a condition and in a `case` alike, with and without
+		// `extendedglob`, so reading the brackets there would accept what
+		// that shell will not parse.
+		if quantified && c == '[' {
+			if width, ok := bracketExprAt(l.src[l.off:]); ok {
+				for range width {
+					keep(l.peek())
+				}
+				continue
+			}
+		}
 		if depth > 0 && strings.IndexByte(";<>&", c) >= 0 {
 			flush()
 			return spans
@@ -3168,6 +3247,46 @@ func (l *Lexer) scanArithCommand(start Pos) Token {
 			if !l.eof() {
 				l.advance()
 			}
+		case '$':
+			// A command substitution holds a *program*, so where it ends is
+			// a question about the grammar and not about how many
+			// parentheses have been seen — the same rule, and the same
+			// reasoning, as scanParens above. A `case` arm's pattern ends in
+			// a `)` that closes nothing, so counting stopped an arm early
+			// and left the rest of the arithmetic looking like a stray
+			// closer: `(( $(case q in q) echo 7;; esac) ))` is refused here
+			// and runs in bash 5.3.15, ksh93u+ and zsh 5.9.2. Where the
+			// parser cannot read it — half a line at a prompt — the counting
+			// below is still the answer, which is why this falls through
+			// rather than reporting.
+			//
+			// `$((` is left to the counting deliberately: it is an
+			// expression rather than a program, and its two parentheses
+			// balance against its two closers on their own.
+			if l.peekAt(1) == '(' && l.peekAt(2) != '(' {
+				if end, remarks, ok := l.parseToClose(l.off + 2); ok {
+					l.remarks = append(l.remarks, remarks...)
+					for l.off <= end {
+						l.advance()
+					}
+					continue
+				}
+			}
+			if l.peekAt(1) == '{' {
+				// A `${ … }` ends at *its* brace and holds no parenthesis
+				// this loop has any business counting — which matters most
+				// for the form whose body is a program, where a `case` arm's
+				// `)` would otherwise close a level nothing opened:
+				// `for (( ${ case q in q) true;; esac; };; ))` is refused
+				// here and runs in bash 5.3.15. scanBraces is the scanner
+				// that knows
+				// where one ends, comments and nesting and all, and its
+				// span is discarded because this token keeps its text
+				// whole.
+				l.scanBraces(Unquoted)
+				continue
+			}
+			l.advance()
 		case '(':
 			depth++
 			l.advance()

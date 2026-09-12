@@ -3875,7 +3875,7 @@ func (p *Parser) parseCase() Command {
 	esacIsAPattern := p.dialect.CaseTerminatorIsAPatternAfterIn && !p.at(TokNewline)
 	p.skipNewlines()
 
-	for p.err == nil && !(p.atWord("esac") && !esacIsAPattern) && !p.at(TokEOF) {
+	for p.err == nil && !p.at(TokEOF) && (esacIsAPattern || !p.atWord("esac")) {
 		esacIsAPattern = false
 		p.lex.inCaseArm = false
 		it := &CaseItem{Start: p.tok.Pos}

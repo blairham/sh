@@ -183,6 +183,24 @@ func (r *Runner) validIntegerBase(base int) bool {
 func (r *Runner) integerRendered(name string, v int) string {
 	base := r.integerBase[name]
 	if !r.spellsIntegerBase(base) {
+		if alphabet := len(r.sem().IntegerBaseDigits); alphabet > 0 && base > alphabet {
+			// A base past the end of the alphabet is *kept* and only the
+			// rendering falls back — to ten, with the mark still on.
+			// Measured 2026-09-12 on ksh93u+: `typeset -i65 d=100` reads
+			// `10#100` and lists as `typeset -i 65 d=10#100`, and a later
+			// `d=200` is `10#200`, so the 65 is stored and every render
+			// goes through this. 2 through 64 spell themselves there, and
+			// 65, 66, 70, 100, 128, 256 and 1000 all give `10#`.
+			//
+			// Not an axis: the only other dialect with the attribute
+			// refuses everything outside 2 to 36 by name, so nothing can
+			// hold a base this reading would reach and a field for it would
+			// have one value nobody could take. See
+			// Semantics.IntegerBaseDigits, whose length is the alphabet —
+			// and a dialect with no alphabet at all has no base to be past
+			// the end of, so it renders plain as it always did.
+			return "10#" + itoa(v)
+		}
 		return itoa(v)
 	}
 	text, ok := r.baseRendered(v, base, true, 0)

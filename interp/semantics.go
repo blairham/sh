@@ -4056,6 +4056,43 @@ type Semantics struct {
 	// (#2060).
 	DeclareValueQuoting ListingQuotingStyle
 
+	// ListedHashIsBareAfterANonName leaves a `#` in a listed value
+	// unquoted when the text in front of the first one is there and is no
+	// name. ksh93 alone.
+	//
+	// Measured 2026-09-12 with `typeset -p` over a scalar, `env -i` and a
+	// scratch HOME:
+	//
+	//	value     ksh93u+     zsh 5.9.2     bash 5.3.15
+	//	16#ff     16#ff       '16#ff'       "16#ff"
+	//	99#zz     99#zz       '99#zz'       "99#zz"
+	//	16#gg     16#gg       '16#gg'       "16#gg"
+	//	16#       16#         '16#'         "16#"
+	//	1a#b      1a#b        '1a#b'        "1a#b"
+	//	a.b#c     a.b#c       'a.b#c'       "a.b#c"
+	//	a#b       'a#b'       'a#b'         "a#b"
+	//	ab#       'ab#'       'ab#'         "ab#"
+	//	#lead     '#lead'     '#lead'       "#lead"
+	//
+	// The rule is **not** "a value that spells a based number", which is
+	// what #1271 proposed: `99#zz` names no base and `16#gg` has no digits
+	// for the one it names, and both come out bare. What is quoted is a `#`
+	// with a name in front of it, or one that opens the value — the
+	// position where a comment would begin.
+	//
+	// The first `#` decides for the whole value: `1#b#c` is bare there and
+	// `a#b#c` is quoted, so it is the leading text that is judged and not
+	// each occurrence.
+	//
+	// Asked only where the two answers differ — a value with no `#`, and a
+	// value whose `#` a name precedes, are quoted either way, and so is one
+	// that has something else in it needing quotes.
+	//
+	// It is about a *value*. A subscript in the clustered listing form is
+	// judged by the plain predicate, which is unmeasured here and is not
+	// this question.
+	ListedHashIsBareAfterANonName Answer
+
 	// ExportListing is the shape `export -p` writes: bash spells each name
 	// as a clustered declaration (`declare -x V="1"`), and the other three
 	// repeat the command word (`export V='1'`).
@@ -9049,6 +9086,10 @@ func PosixSemantics() Semantics {
 		// POSIX gives -t a file descriptor, and dash refuses anything that
 		// is not a number.
 		TerminalTestRequiresANumber: Yes,
+		// POSIX says nothing about a listing's quoting, and the majority
+		// answer is that a `#` is quoted like any other character a word
+		// cannot carry bare.
+		ListedHashIsBareAfterANonName: No,
 		// And a descriptor the shell has nothing open at is not a terminal,
 		// however the number was spelled: no narrowing, and no value that
 		// answers true on its own.

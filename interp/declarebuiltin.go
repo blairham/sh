@@ -1245,6 +1245,22 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 				// `255` in ksh93 and lists back without a base word.
 				delete(r.integerBase, name)
 				r.rerenderInTheNewBase(name)
+			case f.baseNamed && f.base == 0:
+				// Zero is not a base and is not "no base" either: it leaves
+				// the one the name already has exactly where it is.
+				// Measured 2026-09-12 on ksh93u+, `typeset -i16 e=255;
+				// typeset -i0 e` still reads `16#ff` — where the same line
+				// with `-i1` reads `255`, which is the row that says the two
+				// are not one rule.
+			case f.baseNamed && f.base < 2:
+				// Anything else below two records nothing, so a name that
+				// had a base loses it and one that had none never gets one:
+				// `typeset -i1 b=5` lists as `typeset -i b=5` and
+				// `typeset -i-5 j=100` does too. Same shape as the ten
+				// branch above, and reached for the same reason — this is
+				// the base that is not written down.
+				delete(r.integerBase, name)
+				r.rerenderInTheNewBase(name)
 			case f.baseNamed:
 				if r.integerBase == nil {
 					r.integerBase = map[string]int{}

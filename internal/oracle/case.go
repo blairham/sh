@@ -19146,6 +19146,16 @@ echo "st=$?"`,
 		Why:     "a plain `$m` where `m` is a keyed table and the dialect has already said a bare name is one element. Two columns look up the key `0` and hand back nothing; the shell that reads a table as an ordered list hands back the first value in its own order. The `setopt` is what puts that shell in the state where a bare name is one element at all -- without it the same name is the whole table and the question is never asked -- and it is guarded because the other five have no such builtin (#2057)",
 	},
 	{
+		ID: "declare/a-hash-in-a-listed-value", Category: "declarations",
+		Snippet: `a=16#ff; typeset -p a; b="#lead"; typeset -p b; c="tail#"; typeset -p c; d="a#b"; typeset -p d; e=99#zz; typeset -p e; f=1a#b; typeset -p f; g="a.b#c"; typeset -p g`,
+		Why:     "which `#` a listing has to quote. bash and zsh quote all seven and ksh93 quotes three: what it leaves bare is a `#` with no *name* in front of the first one. That is not the same rule as `a value that spells a based number`, which is what #1271 proposed — `99#zz` names no base and `16#gg` has no digits for the one it names, and both come out bare, while `1a#b` and `a.b#c` are bare for having no name in front and `a#b` and `ab#` are quoted for having one. `#lead` is the position where a comment would begin and is quoted everywhere. dash has no `typeset` at all",
+	},
+	{
+		ID: "declare/an-output-base-at-the-ends-of-the-alphabet", Category: "declarations",
+		Snippet: `typeset -i65 d=100; echo "[$d]"; typeset -p d; typeset -i1 b=5; typeset -p b; typeset -i16 e=255; typeset -i0 e; typeset -p e; typeset -i16 a=255; typeset -i1 a; typeset -p a`,
+		Why:     "the bases at the two ends of ksh93's alphabet, which zsh reaches none of — it refuses everything outside 2 to 36 by name, and bash has no base on `-i` at all. A base **past** the end is kept and rendered in ten *with the mark on*: `typeset -i65 d=100` reads `10#100` and lists as `typeset -i 65 d=10#100`, so the 65 is stored and only the spelling gives way. A base **below** two records nothing, so `typeset -i1 b=5` lists with no base word. And 1 and 0 are not one rule — over a name that already has a base, 1 takes it off the way `-i10` and a bare `-i` do, and 0 leaves it exactly where it is, which is the last two fields. The bash 3.2 column differs from the bash one on the usage string and the line number of an invalid option, which is that build's own and older than any of this (#1308)",
+	},
+	{
 		ID: "declare/listing-a-control-byte", Category: "declarations",
 		Snippet: "v=$'a\001b'; typeset -p v; echo \"st=$?\"",
 		Why:     "how a listing spells a byte below 0x20 inside `$'...'`: an octal escape, a hex one, and a caret pair are three answers from three columns that otherwise quote alike, which is why the control escape is a field of its own rather than part of the quoting style. The fourth has no such builtin (#2057)",

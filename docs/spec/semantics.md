@@ -7030,11 +7030,44 @@ already there. The last row is the control both readings have to pass —
 another letter is not this question, and `typeset -x` over a based name
 leaves the base alone in both.
 
-Degenerate bases in ksh93 are measured and not modeled, and #1308 has
-them: `-i0` leaves a standing base alone where `-i1` takes it off, both
-list without a base word, and a base above the alphabet is kept and
-renders in ten with the mark on — `typeset -i65 d=100` is `10#100`.
-zsh reaches none of them, refusing everything outside 2 to 36.
+### The bases at the two ends of the alphabet
+
+Not an axis, and deliberately so: the only dialect that reaches any of
+this takes any base in silence, and the other one with the attribute
+refuses everything outside 2 to 36 by name — so a field here would have
+a second value nothing could hold. What decides is the alphabet's length
+and the base's, both of which the vector already carries. Measured
+2026-09-12 on ksh93u+ 2012-08-01:
+
+| written | value | listing |
+| --- | --- | --- |
+| `typeset -i64 f=100` | `64#1A` | `typeset -i 64 f=64#1A` |
+| `typeset -i65 d=100` | `10#100` | `typeset -i 65 d=10#100` |
+| `typeset -i1000 i=100` | `10#100` | `typeset -i 1000 i=10#100` |
+| `typeset -i1 b=5` | `5` | `typeset -i b=5` |
+| `typeset -i0 c=5` | `5` | `typeset -i c=5` |
+| `typeset -i-5 j=100` | `100` | `typeset -i j=100` |
+
+**A base above the alphabet is kept and renders in ten, with the mark
+on.** ksh93 spells up to 64 — `64#1A` for a hundred, 61 `Z`, 62 `@`, 63
+`_` — and everything from 65 up gives `10#` plus the decimal. It is not
+the plain decimal a shell without the base writes, and it is not base 65
+either; the listing keeps the 65, and a later `d=200` is `10#200`, so
+the base is stored and only the rendering falls back.
+
+**A base below two records nothing**, so the listing has no base word.
+
+**And 1 and 0 are not one rule**, which is the pair that settles it:
+
+    typeset -i16 a=255; typeset -i1 a    255      the base comes off
+    typeset -i16 e=255; typeset -i0 e    16#ff    the base stands
+
+So 1 takes the base off the way `-i10` and a bare `-i` do, and 0 is a
+no-op on the base a name already has. `-i-5` follows 1, which is what
+makes the rule "below two" rather than "one".
+
+Ours does not read `-i-5` at all — the option scanner takes only digits
+after the letter — so that row is recorded rather than matched (#1308).
 
 **The two listings write the base two ways**, and one of them writes the
 number rather than the text the name is holding:
@@ -12562,6 +12595,46 @@ Is how a listed declaration spells its value. A field of its own over
 the shared vocabulary because it does not follow the dialect's other
 listings: the engine that single-quotes its aliases and traps double-
 quotes its declarations.
+
+**`ListedHashIsBareAfterANonName`** — bash no · dash no · ksh93 yes · zsh no
+
+Leaves a `#` in a listed value unquoted when the text in front of the
+first one is there and is no name. Measured 2026-09-12 with `typeset -p`
+over a scalar:
+
+| value | ksh93 | zsh | bash |
+| --- | --- | --- | --- |
+| `16#ff` | `16#ff` | `'16#ff'` | `"16#ff"` |
+| `99#zz` | `99#zz` | `'99#zz'` | `"99#zz"` |
+| `16#gg` | `16#gg` | `'16#gg'` | `"16#gg"` |
+| `16#` | `16#` | `'16#'` | `"16#"` |
+| `1a#b` | `1a#b` | `'1a#b'` | `"1a#b"` |
+| `a.b#c` | `a.b#c` | `'a.b#c'` | `"a.b#c"` |
+| `a#b` | `'a#b'` | `'a#b'` | `"a#b"` |
+| `ab#` | `'ab#'` | `'ab#'` | `"ab#"` |
+| `#lead` | `'#lead'` | `'#lead'` | `"#lead"` |
+
+The rule is **not** "a value that spells a based number", which is what
+#1271 proposed: `99#zz` names no base and `16#gg` has no digits for the
+one it names, and both come out bare, while `1a#b` and `a.b#c` are bare
+for having no name in front of the `#`. What is quoted is a `#` a name
+stands in front of, or one that opens the value — the position where a
+comment would begin.
+
+The **first** `#` decides for the whole value: `1#b#c` is bare there and
+`a#b#c` is quoted, so it is the leading text that is judged and not each
+occurrence. Something else in the value needing quotes still quotes it,
+so `16#ff x` and `16#ff*` are quoted in every column. `export -p`
+agrees with `typeset -p` about all of it.
+
+Two neighboring characters were measured in the same pass and are
+**not** modeled, so ours still differs from both shells on them: with
+`a<c>b` as the value, ksh93 leaves `!`, `=` and `^` bare where zsh
+leaves only `!`, and ours leaves `^` and quotes `!`. `=` follows a
+mirror-image rule in ksh93 — `a=b` is bare and `1=2` is quoted, so a
+name in front of the `=` is what makes it safe rather than what makes
+it unsafe. Recorded here rather than fixed with #1271, which is about
+the `#`.
 
 **`DeclaredNameWithoutValueIsEmpty`** — bash no · dash no · ksh93 no · zsh yes
 

@@ -7764,6 +7764,51 @@ EOF
 		Why:        "the delimiter is compared against the *physical line as written*, so `EOF x` is body and not a terminator — unanimously, in a shape that would read as a terminator to anything matching a prefix. The body then runs to the end of the input, which is why the last line is printed rather than run, and bash 5.3 alone remarks that the document ended at end of file where bash 3.2 says nothing. Prior work of our own had this as a rule about prefixes, and the prefix reading is exactly what is false",
 	},
 	{
+		ID: "heredoc/a-continued-body-line-is-joined-before-the-delimiter-is-looked-for", Category: "redirection",
+		Snippet: "cat <<EOF\nA\\\nEOF\nB\nEOF\necho done\n",
+		Why:     "a body line ending in a backslash continues onto the line under it, and the delimiter is looked for on the joined text — so the first `EOF` here was asked for by the line above it and the second one ends the document. Unanimous across the panel, and the one this parser got wrong: it ended the document at the first `EOF` and ran `B` and `EOF` as commands (#2430)",
+	},
+	{
+		ID: "heredoc/a-quoted-delimiter-joins-no-lines", Category: "redirection",
+		Snippet: "cat <<'EOF'\nA\\\nEOF\necho done\n",
+		Why:     "the control for the row above: a quoted delimiter makes the body literal throughout, so the backslash before the newline is two ordinary characters, nothing is joined, and the first `EOF` is the delimiter. Unanimous, and already right here — which is what said the gap was in the unquoted reading and not in here-documents generally",
+	},
+	{
+		ID: "heredoc/backslashes-before-a-body-lines-newline-pair-off", Category: "redirection",
+		Snippet: "cat <<EOF\nA\\\\\nEOF\necho done\n",
+		Why:     "two backslashes are an escaped backslash and leave the newline with nothing before it, so this `EOF` *is* the delimiter and the body is a single `A\\`. Parity and not the last character, which is what the row below shows from the other side",
+	},
+	{
+		ID: "heredoc/an-odd-run-of-backslashes-still-continues-the-line", Category: "redirection",
+		Snippet: "cat <<EOF\nA\\\\\\\nEOF\nB\nEOF\necho done\n",
+		Why:     "three backslashes: the first two pair off and the third escapes the newline, so the line continues and the body is `A\\EOF` then `B`. Unanimous, and the pair of rows is what makes the rule parity rather than a last-character test",
+	},
+	{
+		ID: "heredoc/a-joined-line-that-spells-the-delimiter", Category: "redirection",
+		Snippet: "cat <<ABC\nA\\\nBC\nABC\necho tail\n",
+		Why:     "the axis. `A\\` over `BC` joins to exactly the delimiter, and the panel parts three ways over whether that ends the document: bash 5.3, bash 3.2, bash as `sh` and zsh take it, so the body is empty and the `ABC` below is a command; dash and BusyBox ash read it as body and end at the line under it; ksh93 joins nothing here at all. syntax.ContinuedHeredocDelimiter is the field (#2430)",
+	},
+	{
+		ID: "heredoc/a-continuation-before-any-text-still-reaches-the-delimiter", Category: "redirection",
+		Snippet: "cat <<ABC\n\\\nABC\nY\nABC\necho tail\n",
+		Why:     "the same axis at its other value, and the row that separates dash and BusyBox ash from ksh93: the continuation stands before any text of the line, so what the delimiter is compared against still begins where a line begins. Six of the seven columns end the document here and ksh93 alone reads `ABC` as body",
+	},
+	{
+		ID: "heredoc/tabs-are-stripped-from-the-line-and-not-from-what-it-joins-to", Category: "redirection",
+		Snippet: "cat <<-EOF\n\tA\\\n\tB\n\tEOF\necho done\n",
+		Why:     "`<<-` strips tabs from the start of the line *as written*, which is its first physical line — so the tab the second one opens with is content and the body is `A`, a tab, `B`. Unanimous, and it says the stripping and the joining are ordered rather than independent",
+	},
+	{
+		ID: "heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-first", Category: "redirection",
+		Snippet: "cat <<-EOF\n\t\\\n\tEOF\nX\n\tEOF\necho done\n",
+		Why:     "the corner below the axis, measured and deliberately not modeled. A `<<-` body line of one tab and a backslash joins to the line under it, and the columns part three ways over what the delimiter is then compared against: bash 5.3, bash 3.2 and bash as `sh` strip the tabs of the *joined* text and end the document there; zsh and ksh93 strip only the tabs the logical line opens with, so `<tab>EOF` is body and the document runs on, which is what this implementation does; dash and BusyBox ash keep the backslash-newline outright and join nothing. Three answers over tab stripping rather than over the delimiter, so a rule for the others would be three rules (#2430)",
+	},
+	{
+		ID: "heredoc/a-body-line-opening-with-the-delimiters-own-letters", Category: "redirection",
+		Snippet: "cat <<ABC\nAB\\\nX\nABC\necho tail\n",
+		Why:     "six of the seven columns join this like any other line and the body is `ABX`. ksh93u+ 2012 alone keeps the backslash and the newline, and the discriminator is that `AB` is a non-empty *prefix* of the delimiter — `B\\` over `X` and `ABCD\\` over `X` both join there. It reads as an incremental matcher failing to back out rather than as a rule, so it is recorded here and not modeled; the cost is the spelling of a body and never where one ends",
+	},
+	{
 		ID: "unterminated/a-substitution-is-quoted-back-with-its-word", Category: "diagnostics", SyntaxError: true,
 		Script:  true,
 		Snippet: "echo a$(echo hi\necho after\n",

@@ -882,6 +882,38 @@ func (p *Parser) skipNewlines() {
 	}
 }
 
+// skipArrayElementSeparators steps over what may stand between the elements of
+// an array literal: newlines everywhere, and a `;` as far as the dialect takes
+// one. See [syntax.ArraySemicolon].
+//
+// afterAnElement is what separates ksh93's reading from zsh's. There a `;`
+// *ends* the element list rather than standing between two elements, so it
+// needs an element in front of it, may be written once, and leaves nothing but
+// newlines and the closing `)` behind it — which is why this reports having
+// *ended* the list and the caller stops reading elements, rather than reading
+// on and failing later at a `)` that is present.
+func (p *Parser) skipArrayElementSeparators(afterAnElement bool) (ended bool) {
+	p.skipNewlines()
+	switch p.dialect.SemicolonInAnArrayLiteral {
+	case SemicolonSeparatesArrayElementsLikeANewline:
+		for p.at(TokSemi) {
+			p.next()
+			p.skipNewlines()
+		}
+	case OneSemicolonEndsTheArrayElements:
+		if afterAnElement && p.at(TokSemi) {
+			p.next()
+			p.skipNewlines()
+			// The list is over. Anything but the `)` is reported against the
+			// token itself, which is the shell's own answer: `a=( x; y )` is
+			// `` `y' unexpected `` there.
+			return true
+		}
+	case NoSemicolonInAnArrayLiteral:
+	}
+	return false
+}
+
 // skipSeparators steps over a `;` written where a command belongs, as far as
 // the dialect goes, and reports whether it stepped over any.
 //
@@ -2346,17 +2378,23 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		saved := p.lex.inArgument
 		p.lex.inArgument = true
 		p.next()
-		p.skipNewlines()
+		p.skipArrayElementSeparators(false)
 		for p.tok.Kind == TokWord && p.err == nil {
 			a.Elems = append(a.Elems, p.word())
-			p.skipNewlines()
+			if p.skipArrayElementSeparators(true) {
+				break
+			}
 		}
 		if !p.at(TokRightParen) && p.giveUpOnTheArray(saved) {
 			return a
 		}
 		p.lex.inArgument = saved
 		if !p.at(TokRightParen) {
-			p.fail("expected ) to close an array assignment")
+			// Named rather than described: bash answers
+			// `syntax error near unexpected token `;'` and the `)` this used
+			// to ask for is written right there, so a message demanding one
+			// points at the wrong character (#1162).
+			p.failUnexpected(")")
 			return a
 		}
 		a.Stop = p.tok.End

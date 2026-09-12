@@ -100,6 +100,62 @@ const (
 	AnySeparatorWhereACommandBelongs
 )
 
+// ArraySemicolon is how far a dialect will take a `;` inside an array
+// literal's parentheses. See [Dialect.SemicolonInAnArrayLiteral].
+//
+// A place rather than a bool, for the reason [SeparatorSkip] is one: the two
+// shells that take a `;` there draw it in two different sets, and a single
+// yes/no could not be given a value for either without accepting lines the
+// other refuses.
+//
+// Measured 2026-09-12, `env -i PATH=/usr/bin:/bin` with a scratch HOME and
+// ZDOTDIR, `-n` over a script file and then a run printing `${#a[@]}` and the
+// elements. dash and BusyBox ash have no array literal at all, so the `(` is
+// already their error and the question does not reach them.
+//
+//	probe            bash 5.3 / 3.2 / as sh   ksh93            zsh 5.9.2
+//	a=( x; )         `;' unexpected           runs, 1 element  runs, 1 element
+//	a=( x y; )       `;' unexpected           runs, 2 elements runs, 2 elements
+//	a=( x ⏎ ; )      `;' unexpected           runs             runs
+//	a=( x; ⏎ )       `;' unexpected           runs             runs
+//	a=( x; y )       `;' unexpected           `y' unexpected   runs, 2 elements
+//	a=( x; y; )      `;' unexpected           `y' unexpected   runs, 2 elements
+//	a=( x; ⏎ y )     `;' unexpected           `y' unexpected   runs, 2 elements
+//	a=( ; )          `;' unexpected           `;' unexpected   runs, 0 elements
+//	a=( x; ; )       `;' unexpected           `;' unexpected   runs, 1 element
+//	a=( x;; y )      `;;' unexpected          `;;' unexpected  `;;' error
+//	a=( x & )        `&' unexpected           `&' unexpected   `&' error
+//	a=( x && y )     `&&' unexpected          `&&' unexpected  `&&' error
+//
+// The last two rows are what say the `;` is specifically a separator rather
+// than the parser being lenient about operators, and the `;;` row says the
+// two-character token stays its own token in the shell that takes one.
+type ArraySemicolon uint8
+
+const (
+	// NoSemicolonInAnArrayLiteral is the core answer: a `;` between the
+	// parentheses is a syntax error. Every bash column, and the two shells
+	// with no array literal never reach the question.
+	NoSemicolonInAnArrayLiteral ArraySemicolon = iota
+
+	// OneSemicolonEndsTheArrayElements takes a single `;` after the last
+	// element, where nothing but newlines and the closing `)` may follow it.
+	// ksh93.
+	//
+	// It is a terminator and not a separator, which is the correction the
+	// measurement above made to the filing: `a=( x; y )` is `` `y' unexpected ``
+	// there, so the `;` does not stand between two elements. It also needs an
+	// element in front of it — `a=( ; )` is `` `;' unexpected `` — and it may
+	// be written once — `a=( x; ; )` is `` `;' unexpected `` on the second.
+	OneSemicolonEndsTheArrayElements
+
+	// SemicolonSeparatesArrayElementsLikeANewline takes as many as are
+	// written, anywhere between the parentheses, exactly where a newline
+	// already stands. zsh 5.9.2, where `a=( ; )` is the empty array and
+	// `a=( x; y )` holds two elements.
+	SemicolonSeparatesArrayElementsLikeANewline
+)
+
 // CaseBraceSpelling is how a dialect writes a `case` header's second
 // spelling, `case x { … }`. See [Dialect.CaseBraceBody], where the rows are.
 //
@@ -2531,6 +2587,15 @@ type Dialect struct {
 	// syntax error rather than a different construct — so unlike `&>`, this
 	// one is safe to be wrong about loudly.
 	ArrayLiteral bool
+
+	// SemicolonInAnArrayLiteral is how far a `;` between the parentheses of
+	// an array literal is taken. See [ArraySemicolon], where the rows are.
+	//
+	// It is a grammar flag rather than a semantics axis because the three
+	// answers are three different *parses* of the same characters: one
+	// refuses, one ends the element list, and one produces a different number
+	// of elements.
+	SemicolonInAnArrayLiteral ArraySemicolon
 
 	// CloseBraceAlwaysReserved makes `}` a reserved word wherever a word may
 	// stand, not only where a command may begin.

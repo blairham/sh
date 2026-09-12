@@ -110,6 +110,15 @@ func Dialect() syntax.Dialect {
 	// reserved after the `{`, so `case esac { esac) … }` is a parse error
 	// here and prints `hit` there (#1928).
 	d.CaseBraceBody = syntax.CaseBraceBodyMixesWithTheKeyword
+	// A `;` between the parentheses of an array literal stands exactly where a
+	// newline already does: `a=( x; y )` holds two elements here, `a=( ; )` is
+	// the empty array, and `a=( x; ; )` holds one. ksh93 takes only a single
+	// one at the very end, which is the reading the other value records, and
+	// every bash column refuses all four. `a=( x;; y )`, `a=( x & )` and
+	// `a=( x && y )` are parse errors here as everywhere, which is what says
+	// the `;` is specifically a separator rather than this shell being lenient
+	// about operators (#1162).
+	d.SemicolonInAnArrayLiteral = syntax.SemicolonSeparatesArrayElementsLikeANewline
 	// `{ … } always { … }`, the try-always block. Measured 2026-09-07: the
 	// word is positional and not reserved here — `always` alone is `command
 	// not found`, `always() { :; }` defines a function and `echo always`

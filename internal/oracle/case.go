@@ -5529,6 +5529,36 @@ echo "st=$?"`,
 		Why:     "the line that put the letter on the release bar: zsh's own `add-zsh-hook` installs a hook exactly this way, and it is the whole reason a name held in a variable has to be assignable. The `${(P)hook}` is zsh's own indirection and reaches only that shell, so this row records what each of the others makes of the line rather than claiming they all run it",
 	},
 	{
+		ID: "array/a-semicolon-ends-the-literal-elements", Category: "syntax", SyntaxError: true,
+		Snippet: `a=( x; ); echo "n=${#a[@]} all=[${a[@]}]"; echo after`,
+		Why:     "a `;` between the parentheses of an array literal, in the one position two shells agree on. Every bash column names the `;`, ksh93 and zsh both take it, and the two are reading it differently — a terminator there and a separator here — which the rows below separate. The `n=` is what makes the difference visible rather than the exit status: a shell that took the `;` as an element would answer 2",
+	},
+	{
+		ID: "array/a-semicolon-between-two-literal-elements", Category: "syntax", SyntaxError: true,
+		Snippet: `a=( x; y ); echo "n=${#a[@]} all=[${a[@]}]"; echo after`,
+		Why:     "and this is the row that splits the two shells that took the one above. zsh reads the `;` where a newline already stands and holds two elements; ksh93 names the `y`, because there the `;` *ends* the element list rather than standing between two of them. Filed as `;` being a separator in both, which this measurement corrected (#1162)",
+	},
+	{
+		ID: "array/a-semicolon-with-no-element-before-it", Category: "syntax", SyntaxError: true,
+		Snippet: `a=( ; ); echo "n=${#a[@]}"; echo after`,
+		Why:     "the separator reading needs no element in front of it and the terminator reading does: zsh answers the empty array, ksh93 names the `;`, and every bash column names it too. Together with the row above it is what says ksh93 has a trailing terminator rather than a lenient separator",
+	},
+	{
+		ID: "array/a-second-semicolon-in-a-literal", Category: "syntax", SyntaxError: true,
+		Snippet: `a=( x; ; ); echo "n=${#a[@]} all=[${a[@]}]"; echo after`,
+		Why:     "how many. zsh takes as many as are written, exactly as it would newlines; ksh93 takes one and names the second. The element count is still 1 in the shell that takes both, which is what says the extra separator adds no empty element",
+	},
+	{
+		ID: "array/a-double-semicolon-in-a-literal", Category: "syntax", SyntaxError: true,
+		Snippet: `a=( x;; y ); echo "n=${#a[@]}"; echo after`,
+		Why:     "the control that keeps `;;` its own token in the shell that takes a single `;` there. All six name it, zsh included, so a parser that took the separator by scanning for the character rather than by reading the token would be caught here",
+	},
+	{
+		ID: "array/an-ampersand-in-a-literal", Category: "syntax", SyntaxError: true,
+		Snippet: `a=( x & ); echo "n=${#a[@]}"; echo after`,
+		Why:     "the control that says it is the `;` specifically and not control operators in general. All six refuse this, and `a=( x && y )` with it, so the two shells that take a `;` are not simply being lenient about what may stand between elements",
+	},
+	{
 		ID: "array/a-subscript-past-the-end", Category: "expansion",
 		Snippet: `a=(x); a[5]=y; echo "n=${#a[@]} all=[${a[@]}]"`,
 		Why:     "whether an unassigned subscript is an element. Two shells say an array is a map from subscript to value and this is an array of two; one walks the whole extent and finds the gap empty, giving five. Counting the gap as elements is what a list representation does, and it is nobody's answer",

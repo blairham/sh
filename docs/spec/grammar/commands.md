@@ -895,6 +895,54 @@ as its answer, which is what `bash -n` reports and exits 1 for. Measured:
 `array/a-literal-holding-an-operator-in-a-function-body`,
 `array/a-literal-that-runs-out-of-input` (#2380).
 
+#### What may stand between the elements
+
+A newline stands between two elements everywhere the literal exists. A
+`;` is a question, and the panel gives three answers rather than two.
+Measured 2026-09-12, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`
+and `ZDOTDIR`, `-n` over a script file and then a run printing
+`${#a[@]}` and the elements:
+
+| probe | bash 5.3 / 3.2 / as `sh` | ksh93 | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `a=( x; )` | `` `;' unexpected `` | 1 element | 1 element |
+| `a=( x y; )` | `` `;' unexpected `` | 2 elements | 2 elements |
+| `a=( x ⏎ ; )` | `` `;' unexpected `` | runs | runs |
+| `a=( x; ⏎ )` | `` `;' unexpected `` | runs | runs |
+| `a=( x; y )` | `` `;' unexpected `` | `` `y' unexpected `` | 2 elements |
+| `a=( x; y; )` | `` `;' unexpected `` | `` `y' unexpected `` | 2 elements |
+| `a=( ; )` | `` `;' unexpected `` | `` `;' unexpected `` | 0 elements |
+| `a=( x; ; )` | `` `;' unexpected `` | `` `;' unexpected `` | 1 element |
+| `a=( x;; y )` | `` `;;' unexpected `` | `` `;;' unexpected `` | `` `;;' `` error |
+| `a=( x & )` | `` `&' unexpected `` | `` `&' unexpected `` | `` `&' `` error |
+| `a=( x && y )` | `` `&&' unexpected `` | `` `&&' unexpected `` | `` `&&' `` error |
+
+dash and BusyBox ash have no array literal at all, so the `(` is already
+their error and the question never reaches them.
+
+So zsh reads a `;` exactly where a newline already stands, and ksh93
+takes a single one that **ends** the element list — it needs an element
+in front of it, it may be written once, and nothing but newlines and the
+closing `)` may follow it. The issue that filed this had ksh93 taking the
+`;` between elements as well; `a=( x; y )` naming the `y` there is what
+says otherwise (#1162).
+
+The last two rows are the reason this is a rule about the `;` rather than
+about leniency: no other control operator stands between elements in any
+of them, and `;;` stays its own token even in the shell that takes a
+single `;`.
+
+`syntax.Dialect.SemicolonInAnArrayLiteral` is the flag, and it is a
+grammar flag rather than a semantics axis because the three answers are
+three different *parses* of the same characters — one refuses, one ends
+the list, and one produces a different number of elements.
+
+A refusal here **names the token**. It used to read `expected ) to close
+an array assignment`, which points at a character that is written right
+there; every shell in the panel names what it found instead, so this
+production now goes through the same unexpected-token path as the rest of
+the grammar and each dialect words it its own way.
+
 #### What a refusal calls the subscript
 
 A refusal that quotes a subscript back quotes what was **written**, not

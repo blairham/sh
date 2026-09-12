@@ -1165,7 +1165,9 @@ that reason.
 one left out. `files=( (#i)a )` is accepted by that shell and was
 ``expected ) to close an array assignment`` here, because the assignment
 found its closing `)` by *counting* parentheses and a group at the front
-of an element opens one that belongs to the word. So does a group on a
+of an element opens one that belongs to the word. That wording is history
+twice over: the counting went in #1149, and the message itself went in
+#1162, where the production learned to name the token it found. So does a group on a
 later element — `files=( x (#i)a )` — which is a different parser state
 and had to be asked separately.
 

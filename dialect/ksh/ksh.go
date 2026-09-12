@@ -81,6 +81,14 @@ func Dialect() syntax.Dialect {
 	// its reservation — `case x in⏎esac` runs — which is what says this is
 	// not "a case must have an arm" (#773).
 	d.CaseTerminatorIsAPatternAfterTheHeader = true
+	// A single `;` may end an array literal's element list: `a=( x; )` and
+	// `a=( x y; )` run here, and so do `a=( x ⏎ ; )` and `a=( x; ⏎ )`. It is a
+	// terminator rather than a separator, and every part of that is measured:
+	// `a=( x; y )` is `` `y' unexpected ``, so it does not stand between two
+	// elements; `a=( ; )` is `` `;' unexpected ``, so it needs one in front of
+	// it; and `a=( x; ; )` is `` `;' unexpected ``, so it may be written once.
+	// zsh takes all four, which is the reading the other value records (#1162).
+	d.SemicolonInAnArrayLiteral = syntax.OneSemicolonEndsTheArrayElements
 	// And this shell has the brace spelling of a `case` header too, with the
 	// two words **paired**: `case x { … }` and `case x in … esac` run, while
 	// `case x { … esac` and `case x in … }` are both `` `case' unmatched ``.

@@ -6794,10 +6794,13 @@ dash has none of them, ksh93 has `typeset` and `integer`, bash has
                            bash, dash  command not found
     integer -r r=5         ksh93, zsh  st=0 r=5
 
-It matters because zsh's own `add-zsh-hook` declares with it — line 26
-of that function file is `integer del list help` — so a shell without
-the word cannot install a precmd hook, which is the whole of what a zsh
-startup file does with the function (#1155).
+It matters because zsh's own `add-zsh-hook` declares with it before it
+does anything else: run that function under a shell with no `integer`
+and it fails on its opening declaration, so such a shell cannot install
+a precmd hook — which is the whole of what a zsh startup file does with
+the function (#1155). Recorded from **running** the function rather than
+from reading it; `CLEANROOM.md` has why the difference is load-bearing,
+and #2167 has what this paragraph used to say.
 
 The attribute, the arithmetic a later assignment means, the function
 shadow, the readonly refusal and every letter's meaning are the

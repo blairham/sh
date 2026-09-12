@@ -21,9 +21,12 @@ import (
 // refusal and every option letter's meaning come from the one place. A copy
 // would have drifted the first time one of those was measured again.
 //
-// zsh's own `add-zsh-hook` is why it exists: line 26 of that function file is
-// `integer del list help`, so a shell without the word cannot run the thing
-// every zsh startup file uses to install a hook.
+// zsh's own `add-zsh-hook` is why it exists. Run under a shell that has no
+// `integer`, the function fails on its own opening declaration, so a shell
+// without the word cannot install a hook — which is the whole of what a zsh
+// startup file uses that function for. Measured by running it, which is the
+// only way this tree learns what another shell's code does; see CLEANROOM.md
+// on citing observations rather than source files (#2167).
 //
 // Three things the second name decides for itself, and each of them is a
 // dialect's table rather than a branch here:

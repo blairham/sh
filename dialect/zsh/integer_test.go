@@ -17,9 +17,10 @@ import (
 // 2026-09-06 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
 // ZDOTDIR and HISTFILE, over a script file.
 //
-// It is on the release bar because this shell's *own* `add-zsh-hook` opens
-// with `integer del list help` on line 26 of its function file, so a startup
-// file that installs a precmd hook cannot run without the word.
+// It is on the release bar because `add-zsh-hook` declares integers before
+// it does anything else — run it under a shell with no `integer` and it
+// fails there — so a startup file that installs a precmd hook cannot run
+// without the word.
 
 // The declaration itself: the attribute arrives without the letter, so a
 // later assignment is an expression.

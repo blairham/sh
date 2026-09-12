@@ -23,8 +23,8 @@ package interp
 // declaration a name carrying nothing and gives the attribute back on return.
 //
 // Both halves were wrong here and the second is what #1673 was reported for.
-// `add-zsh-hook` opens with `integer del list help`, and the integer
-// attribute those three names were given outlived the call — so a plugin
+// `add-zsh-hook` declares integers in its own scope, and the integer
+// attribute those names were given outlived the call — so a plugin
 // manager's later `local -a list` inherited it, `list=( "$dir/$file" )`
 // evaluated a path as arithmetic, and a startup said
 //

@@ -80,6 +80,11 @@ type editor struct {
 	killed                []rune
 	killing, killedBefore bool
 
+	// search is the history walk restricted to what the line already said —
+	// the state that makes a run of them one walk rather than a new search per
+	// keystroke. See browseMatching, which is the whole of it.
+	search matchingWalk
+
 	// changes is the line as it was before each change, oldest first, and
 	// `^_` walks back through it. typing and typedBefore say whether this
 	// keystroke and the one before it were characters typed into the line,
@@ -244,6 +249,13 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// inserting a second copy.
 		e.typedBefore, e.typing = e.typing, false
 		e.lastArg.walkingBefore, e.lastArg.walking = e.lastArg.walking, false
+		// And whether the keystroke before this one was a history walk
+		// restricted to what the line already said, which is what decides
+		// between *continuing* that walk and starting a new one. See
+		// browseMatching, and the measurement that requires it: on an empty
+		// line the first Up walks plainly, and so must the second, though by
+		// then the line holds an entry with a first word of its own.
+		e.search.before, e.search.now = e.search.now, false
 		// What a person rebound comes first, and only for a byte that starts
 		// something they bound: a session with no bindings reaches the switch
 		// having asked one question of an empty map. It is after the bookkeeping

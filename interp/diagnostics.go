@@ -1587,105 +1587,102 @@ type Diagnostics struct {
 	// words. One verb: the spelling the script used, `-m` or `monitor`,
 	// which is the piece zsh echoes back.
 	//
-	//	dash   set: can't access tty; job control turned off
-	//	zsh    set: can't change option: -m
+	//	set: can't access tty; job control turned off
+	//	set: can't change option: -m
 	//
-	// zsh's `set:` comes from the location, as everywhere else.
+	// A leading `set:` may come from the location rather than the wording.
 	MonitorDenied string
 
-	// MonitorDeniedStatus is what that reports. Zero — dash's answer — means
-	// the denial is a remark rather than a failure: the option is left off
-	// and `set` still reports success. zsh answers 1, and fatally, the same
-	// way it treats any other `set` refusal.
+	// MonitorDeniedStatus is what that reports. Zero means the denial is a
+	// remark rather than a failure: the option is left off and `set` still
+	// reports success. A preset may answer 1 instead, and fatally, the same way
+	// it treats any other `set` refusal.
 	MonitorDeniedStatus int
 
 	// UnknownConditionOption is `[[ -o name ]]` given a name this shell does
-	// not have, in the dialect's words, for the one dialect that says
-	// anything (Semantics.UnknownConditionOptionIsAStatus). One verb: the
-	// name exactly as the script wrote it, before any of the namespace's own
-	// folding — measured, zsh echoes `Err_Exit` back with its capitals and
-	// its underscore.
+	// not have, in the preset's words, for a preset that says anything
+	// (Semantics.UnknownConditionOptionIsAStatus). One verb: the name exactly as
+	// the script wrote it, before any of the namespace's own folding —
+	// `Err_Exit` is echoed back with its capitals and its underscore.
 	//
-	//	zsh    no such option: zzz
+	//	no such option: zzz
 	//
-	// zsh's location prefix comes from the location, as everywhere else.
+	// Any location prefix comes from the location, as everywhere else.
 	UnknownConditionOption string
 
-	// UnknownConditionOptionStatus is what `[[ ]]` reports when that
-	// happened and nothing later in the condition overrode it. zsh answers
-	// 3, which is neither of the two a condition otherwise gives — that is
-	// the whole of how the third value is visible from outside.
+	// UnknownConditionOptionStatus is what `[[ ]]` reports when that happened
+	// and nothing later in the condition overrode it. The measured answer is 3,
+	// which is neither of the two a condition otherwise gives — that is the
+	// whole of how the third value is visible from outside.
 	UnknownConditionOptionStatus int
 
 	// CompletionConditionOutsideCompletion is `[[ -prefix … ]]` or
 	// `[[ -suffix … ]]` reached anywhere but a completion function, for the
-	// one dialect whose grammar has them (syntax.Dialect.CompletionConditions).
-	// No verbs: the sentence names neither the operator nor the operand.
+	// a preset whose grammar has them (syntax.Dialect.CompletionConditions). No
+	// verbs: the sentence names neither the operator nor the operand.
 	//
-	//	zsh    condition can only be used in completion function
+	//	condition can only be used in completion function
 	//
-	// zsh's location prefix comes from the location, as everywhere else, and
-	// the refusal is **fatal** — measured 2026-09-12 over a script file, the
-	// line after it does not run and the status is 1.
+	// Any location prefix comes from the location, and the refusal is **fatal** —
+	// measured over a script file, the line after it does not run and the status
+	// is 1.
 	CompletionConditionOutsideCompletion string
 
 	// KilledCommandNotice is what a shell says when a signal ended a
 	// command. Three verbs: the process id, the words for the signal, and
 	// the command written back out.
 	//
-	// All three are used by one dialect and none by all of them, which is
-	// the whole shape of this message:
+	// All three are used by one preset and none by every one, which is the whole
+	// shape of this message:
 	//
-	//	bash   <shell>: line 2: 52505 Killed: 9                  /bin/sh -c 'kill -KILL $$'
-	//	ksh93  <shell>: line 2: 52517: Killed
-	//	dash   Killed: 9
+	//	<shell>: line 2: 52505 Killed: 9                  /bin/sh -c 'kill -KILL $$'
+	//	<shell>: line 2: 52517: Killed
+	//	Killed: 9
 	//
-	// bash pads the words to a fixed twenty-seven columns and writes the
-	// command straight after them — the padding is a constant and not the
-	// width of the widest signal, which is why the same column appears on a
-	// machine whose words are much shorter. dash prints the words alone,
-	// which is what KilledCommandNoticeUnprefixed is for.
+	// The first pads the words to a fixed twenty-seven columns and writes the
+	// command straight after them — the padding is a constant and not the width
+	// of the widest signal, which is why the same column appears on a machine
+	// whose words are much shorter. The last prints the words alone, which is
+	// what KilledCommandNoticeUnprefixed is for.
 	KilledCommandNotice string
 
 	// KilledCommandNoticeBareForTerminate replaces the notice when the
 	// signal was SIGTERM, and is written with no location and no process id
 	// — the words and the command alone. Two verbs: the words, the command.
 	//
-	// bash 5.3 alone, and for that one signal alone out of the nine this was
-	// measured over. bash 3.2 writes the full prefix there, and no other
-	// shell in the panel treats SIGTERM apart, so this looks like a
-	// regression rather than a decision. Reproduced because the dialect is
-	// bash 5.3; empty leaves the ordinary notice standing, which is what
-	// every other dialect wants.
+	// One preset alone, and for that one signal alone out of the nine this was
+	// measured over. An earlier build of the same implementation writes the full
+	// prefix there, and nothing else treats SIGTERM apart, so this looks like a
+	// regression rather than a decision. Reproduced because the preset carries
+	// the version that measured it; empty leaves the ordinary notice standing.
 	KilledCommandNoticeBareForTerminate string
 
-	// KilledCommandNoticeUnprefixed writes that notice with no location in
-	// front of it. dash alone, and unlike every other message it prints:
-	// this one carries neither the shell's name nor the line.
+	// KilledCommandNoticeUnprefixed writes that notice with no location in front
+	// of it — unlike every other message such a preset prints, this one carries
+	// neither the shell's name nor the line.
 	KilledCommandNoticeUnprefixed bool
 
 	// SignalDescriptions are this shell's own words for a signal, for the
 	// ones it does not take from the machine.
 	//
-	// ksh93 alone. It says `Memory fault` where the host says `Segmentation
-	// fault`, `Abort` where the host says `Abort trap`, and carries no
-	// number after either — its table travels with the shell rather than
-	// with the platform, so it is written here rather than read from the
-	// host. A signal missing from it falls back to the host's words, which
-	// is what the other two use for every signal.
+	// A preset may say `Memory fault` where the host says `Segmentation fault`,
+	// `Abort` where the host says `Abort trap`, and carry no number after either
+	// — its table travelling with the shell rather than with the platform, so it
+	// is written here rather than read from the host. A signal missing from it
+	// falls back to the host's words, which is what a preset with no table of
+	// its own uses for every signal.
 	SignalDescriptions map[syscall.Signal]string
 
 	// BackquotedSubstitutionRestartsLines counts a backquoted substitution's
 	// body from line one rather than from where it was written.
 	//
-	// dash alone, and only for backticks — its `$( … )` is numbered from the
-	// file like everyone else's, so this is not a shell that fails to track
-	// the offset but one that keeps two different answers for the two
-	// spellings of one construct:
+	// Only for backticks — the `$( … )` spelling is numbered from the file
+	// either way, so this is not a shell that fails to track the offset but one
+	// that keeps two different answers for the two spellings of one construct:
 	//
-	//	                          bash  dash  ksh93  zsh
-	//	x=$(nosuchcmd) on line 4     4     4      4    4
-	//	x=`nosuchcmd`  on line 4     4     1      4    4
+	//	                          false  true
+	//	x=$(nosuchcmd) on line 4      4     4
+	//	x=`nosuchcmd`  on line 4      4     1
 	//
 	// Here rather than in Semantics because it is a question about where a
 	// message says something happened, which is what Location and
@@ -1696,8 +1693,8 @@ type Diagnostics struct {
 	// JobStarted announces a backgrounded job. Two verbs: the job number and
 	// the process id.
 	//
-	//	bash   [1] 13292
-	//	ksh93  [1]\t12886
+	//	[1] 13292
+	//	[1]\t12886
 	//
 	// The separator is the whole difference, and it is a tab in one of them.
 	JobStarted string
@@ -1705,9 +1702,8 @@ type Diagnostics struct {
 	// JobNoticeShowsAmpersand puts the `&` back on the command of a job the
 	// shell is reporting as finished.
 	//
-	// ksh93 alone, and not the same question as JobRunningShowsAmpersand:
-	// that one is bash, in a listing, while the job runs. Neither shell does
-	// both.
+	// Not the same question as JobRunningShowsAmpersand: that one is in a
+	// listing, while the job runs. No preset does both.
 	JobNoticeShowsAmpersand bool
 
 	// JobRunningShowsAmpersand puts the `&` back on the command of a job

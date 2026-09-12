@@ -2832,10 +2832,32 @@ type Diagnostics struct {
 	TraceQuoting TraceQuoting
 	// TraceForHeader is what a `for` loop prints at each iteration. Zero is
 	// TraceForNone, which is dash's and ksh93's answer and the substrate's
-	// own. `case` diverges the same way and is not reproduced: bash prints
-	// `case $v in` once, zsh prints `case v (pattern)` once per pattern it
-	// tries, and the corpus records the difference rather than claiming it.
+	// own.
 	TraceForHeader TraceForHeader
+	// TraceCaseHeader is what `case` prints. Zero is TraceCaseNone, which is
+	// dash's and ksh93's answer and the substrate's own; bash prints the
+	// header as written once and zsh prints the subject and one arm's
+	// patterns each time it tries an arm.
+	TraceCaseHeader TraceCaseHeader
+	// TraceCondition is how many lines one `[[ … ]]` is worth. Zero is
+	// TraceCondPrimary — a line per primary — which is bash's and ksh93's
+	// answer and the substrate's own; zsh writes one line for the condition.
+	TraceCondition TraceCondition
+	// TraceConditionQuoting is how a condition operand that needs quoting is
+	// rendered, which is not the same question as TraceQuoting: bash quotes a
+	// command's word and leaves a condition's operand bare, where ksh93 and
+	// zsh quote in both places. Zero is QuoteNever, bash's answer and the
+	// substrate's own.
+	TraceConditionQuoting TraceQuoting
+	// TraceArithCommand is how `(( … ))` is wrapped when it is traced. Zero
+	// is TraceArithSpaced, which is bash's and zsh's answer and the
+	// substrate's own; ksh93 adds nothing to the text.
+	TraceArithCommand TraceArithSpelling
+	// TraceArithForPart is the same question for the three parts of
+	// `for ((init; cond; post))`, which is a separate field because zsh
+	// answers the two differently: it wraps a `(( ))` command in spaced
+	// parentheses and writes a loop header's parts with none at all.
+	TraceArithForPart TraceArithSpelling
 	// TraceArrayLiteral is how the parenthesized list of `a=(1 2)` is
 	// rendered. Zero is TraceArrayTight, which is bash's answer and the
 	// substrate's own; ksh93 and zsh write a space inside each parenthesis.

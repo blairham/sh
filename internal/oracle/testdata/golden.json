@@ -132379,6 +132379,138 @@
         "TimedOut": false
       }
     },
+    "xtrace/arithmetic-command-is-traced": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ n=3~+ ((  n + 1  ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ n=3~+ ((  n + 1  ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ n=3~+ ((  n + 1  ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ n=3~+ n + 1~\u003cshell\u003e: 1: n: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ n=3~+ (( n + 1 ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e n=3 ~+\u003cshell\u003e:1\u003e ((  n + 1  ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/arithmetic-spelling-diverges": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ n=1~+ (( n ))~+ ((  n  ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ n=1~+ (( n ))~+ ((  n  ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ n=1~+ (( n ))~+ ((  n  ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ n=1~+ n~\u003cshell\u003e: 1: n: not found~+ n~\u003cshell\u003e: 1: n: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ n=1~+ ((n))~+ (( n ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e n=1 ~+\u003cshell\u003e:1\u003e (( n ))~+\u003cshell\u003e:1\u003e ((  n  ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/arithmetic-traces-the-expanded-text": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ n=3~+ ((  3 + 1  ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ n=3~+ ((  3 + 1  ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ n=3~+ ((  3 + 1  ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ n=3~+ 3 + 1~\u003cshell\u003e: 1: 3: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ n=3~+ (( 3 + 1 ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e n=3 ~+\u003cshell\u003e:1\u003e ((  3 + 1  ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "xtrace/array-literal-elements-diverge": {
       "bash": {
         "Stdout": "",
@@ -132643,6 +132775,138 @@
         "TimedOut": false
       }
     },
+    "xtrace/case-arm-patterns-are-not-expanded-past-the-match": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ case a in~++ echo a~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ case a in~++ echo a~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ case a in~++ echo a~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ echo a~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ echo b~+ echo a~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e case a (+zsh:1\u003e echo a~+\u003cshell\u003e:1\u003e case a (a)~+\u003cshell\u003e:1\u003e :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/case-arms-tried-are-traced": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ case c in~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ case c in~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ case c in~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e case c (a)~+\u003cshell\u003e:1\u003e case c (b)~+\u003cshell\u003e:1\u003e case c (c)~+\u003cshell\u003e:1\u003e :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/case-header-diverges": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ x=abc~+ case $x in~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ x=abc~+ case $x in~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ x=abc~+ case $x in~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ x=abc~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ x=abc~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e x=abc ~+\u003cshell\u003e:1\u003e case abc (ab | abc)~+\u003cshell\u003e:1\u003e :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "xtrace/compound-header-diverges": {
       "bash": {
         "Stdout": "1~2",
@@ -132683,6 +132947,358 @@
         "Stdout": "1~2",
         "Stderr": "+\u003cshell\u003e:1\u003e i=1~+\u003cshell\u003e:1\u003e echo 1~+\u003cshell\u003e:1\u003e i=2~+\u003cshell\u003e:1\u003e echo 2",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/condition-empty-operand-is-quoted": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ [[ -z '' ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ [[ -z '' ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ [[ -z '' ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ [[ -z  ]]~\u003cshell\u003e: 1: [[: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ [[ -z '' ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e [[ -z '' ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/condition-group-and-negation": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ [[ ! -z a ]]~+ [[ -n b ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ [[ ! -z a ]]~+ [[ -n b ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ [[ ! -z a ]]~+ [[ -n b ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ [[ ! -z a ]]~+ [[ -n b ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e [[ ! -z a \u0026\u0026 -n b ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/condition-is-traced": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n abc ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n abc ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n abc ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n abc ]]~\u003cshell\u003e: 1: [[: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n abc ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e [[ -n abc ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/condition-line-count-diverges": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n a ]]~+ [[ -n b ]]~+ [[ -n c ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n a ]]~+ [[ -n b ]]~+ [[ -n c ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n a ]]~+ [[ -n b ]]~+ [[ -n c ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n a~\u003cshell\u003e: 1: [[: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n a ]]~+ [[ -n b ]]~+ [[ -n c ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e [[ -n a \u0026\u0026 -n b \u0026\u0026 -n c ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/condition-operand-quoting-diverges": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ x='a b'~+ [[ a b == a b ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ x='a b'~+ [[ a b == a b ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ x='a b'~+ [[ a b == \\a\\ \\b ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ x=a b~+ [[ a b == a b ]]~\u003cshell\u003e: 1: [[: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ x='a b'~+ [[ 'a b' == 'a b' ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e x='a b' ~+\u003cshell\u003e:1\u003e [[ 'a b' == a\\ b ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/condition-pattern-keeps-its-escapes": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ p='a*'~+ [[ abc == a* ]]~+ [[ abc == a* ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ p='a*'~+ [[ abc == a* ]]~+ [[ abc == a* ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ p='a*'~+ [[ abc == a* ]]~+ [[ abc == a* ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ p=a*~+ [[ abc == a* ]]~\u003cshell\u003e: 1: [[: not found~+ [[ abc == a* ]]~\u003cshell\u003e: 1: [[: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ p='a*'~+ [[ abc == a* ]]~+ [[ abc == a* ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e p='a*' ~+\u003cshell\u003e:1\u003e [[ abc == a\\* ]]~+\u003cshell\u003e:1\u003e [[ abc == a* ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/condition-regex-operator-diverges": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ [[ abc =~ ^a.c$ ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ [[ abc =~ ^a.c$ ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ [[ abc =~ ^a.c$ ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ [[ abc =~ ^a.c$ ]]~\u003cshell\u003e: 1: [[: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ [[ abc == ~(E)^a.c\\$ ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e [[ abc -regex-match ^a.c$ ]]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/condition-short-circuit-is-not-traced": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n a ]]~+ [[ -z a ]]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n a ]]~+ [[ -z a ]]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n a ]]~+ [[ -z a ]]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n a~\u003cshell\u003e: 1: [[: not found~+ -n b ]]~\u003cshell\u003e: 1: -n: not found~+ [[ -z a~\u003cshell\u003e: 1: [[: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ [[ -n a ]]~+ [[ -z a ]]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e [[ -n a ]]~+\u003cshell\u003e:1\u003e [[ -z a ]]",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -132902,6 +133518,138 @@
       "zsh": {
         "Stdout": "after",
         "Stderr": "+\u003cshell\u003e:1\u003e b=( ) ~+\u003cshell\u003e:1\u003e echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/for-arithmetic-parts-are-traced": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ (( i=0 ))~+ (( i\u003c2 ))~+ :~+ (( i++ ))~+ (( i\u003c2 ))~+ :~+ (( i++ ))~+ (( i\u003c2 ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ (( i=0 ))~+ (( i\u003c2 ))~+ :~+ (( i++ ))~+ (( i\u003c2 ))~+ :~+ (( i++ ))~+ (( i\u003c2 ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ (( i=0 ))~+ (( i\u003c2 ))~+ :~+ (( i++ ))~+ (( i\u003c2 ))~+ :~+ (( i++ ))~+ (( i\u003c2 ))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: Bad for loop variable",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ ((i=0))~+ ((i\u003c2))~+ :~+ ((i++))~+ ((i\u003c2))~+ :~+ ((i++))~+ ((i\u003c2))",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e i=0~+\u003cshell\u003e:1\u003e i\u003c2~+\u003cshell\u003e:1\u003e :~+\u003cshell\u003e:1\u003e i++~+\u003cshell\u003e:1\u003e i\u003c2~+\u003cshell\u003e:1\u003e :~+\u003cshell\u003e:1\u003e i++~+\u003cshell\u003e:1\u003e i\u003c2",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/function-definition-is-not-traced": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ f~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ f~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ f~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ f~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ f~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e f~+f:0\u003e :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/loop-and-branch-headers-are-not-traced": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ i=0~+ '[' 0 -lt 1 ']'~+ i=1~+ '[' 1 -lt 1 ']'~+ '[' 1 -gt 0 ']'~+ true~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ i=0~+ '[' 0 -lt 1 ']'~+ i=1~+ '[' 1 -lt 1 ']'~+ '[' 1 -gt 0 ']'~+ true~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ i=0~+ '[' 0 -lt 1 ']'~+ i=1~+ '[' 1 -lt 1 ']'~+ '[' 1 -gt 0 ']'~+ true~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ i=0~+ [ 0 -lt 1 ]~+ i=1~+ [ 1 -lt 1 ]~+ [ 1 -gt 0 ]~+ true~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ i=0~+ [ 0 -lt 1 ]~+ i=1~+ [ 1 -lt 1 ]~+ [ 1 -gt 0 ]~+ true~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e i=0 ~+\u003cshell\u003e:1\u003e [ 0 -lt 1 ']'~+\u003cshell\u003e:1\u003e i=1 ~+\u003cshell\u003e:1\u003e [ 1 -lt 1 ']'~+\u003cshell\u003e:1\u003e [ 1 -gt 0 ']'~+\u003cshell\u003e:1\u003e true~+\u003cshell\u003e:1\u003e :",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -133386,6 +134134,94 @@
       "zsh": {
         "Stdout": "hello wor",
         "Stderr": "+\u003cshell\u003e:1\u003e x='hello wor' ~+\u003cshell\u003e:1\u003e echo 'hello wor'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/select-header-diverges": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ select x in a b~1) a~2) b~#? ",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ select x in a b~1) a~2) b~#? ",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ select x in a b~1) a~2) b~#? ",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ 0\u003c /dev/null~1) a~2) b",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "1) a  2) b  ~?# ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/subshell-and-group-are-not-traced": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "+ :~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "+ :~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "+ :~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "+ :~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "+ :~+ :",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "+\u003cshell\u003e:1\u003e :~+\u003cshell\u003e:1\u003e :",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

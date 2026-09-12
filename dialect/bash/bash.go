@@ -1217,6 +1217,17 @@ func Diagnostics() interp.Diagnostics {
 		KillListing:         interp.KillListingNumbered,
 		TraceQuoting:        interp.QuoteShell,
 		TraceForHeader:      interp.TraceForSource,
+		// The header as written, once, before the subject is expanded — the
+		// same reading the `for` header gets, and from the same field the
+		// parser keeps for it.
+		TraceCaseHeader: interp.TraceCaseSource,
+		// A condition's operands are *not* quoted here, which is the one
+		// place bash's two trace renderings part: `x="a b"; echo "$x"` traces
+		// `echo 'a b'` and `[[ $x == y ]]` traces `[[ a b == y ]]`. Measured
+		// 2026-09-12 on 5.3.15 and 3.2.57 alike; the zero value says it, and
+		// it is written out because the neighboring TraceQuoting says the
+		// opposite two lines up.
+		TraceConditionQuoting: interp.QuoteNever,
 		// The panel's only shell that says how deep the text it is reading
 		// came from: `set -x; eval :` traces `+ eval :` and then `++ :`.
 		// Measured 2026-09-11 on 5.3.15 and 3.2.57 alike.

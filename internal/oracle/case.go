@@ -3255,6 +3255,101 @@ echo "reached-after st=$?"`,
 		Why:     "three answers, not two: dash and ksh93 print only the commands inside, bash reprints the header as written once per iteration, and zsh prints neither but shows the assignment the iteration made",
 	},
 	{
+		ID: "xtrace/condition-is-traced", Category: "shell options",
+		Snippet: `set -x; [[ -n abc ]]`,
+		Why:     "the row #2126 is about: every shell that has `[[ ]]` traces it, and this one traced nothing at all. A trace that silently drops a whole command *kind* cannot be read backwards, which is the only way anybody uses one — the gap in gitstatus's own xtrace log was read here as a function returning early, and the diagnosis built on it was wrong. dash has no `[[ ]]`, so it reads the words as an ordinary command, traces them as one and then cannot find `[[` — the column that says what it lacks is the construct and not the tracing",
+	},
+	{
+		ID: "xtrace/condition-line-count-diverges", Category: "shell options",
+		Snippet: `set -x; [[ -n a && -n b && -n c ]]`,
+		Why:     "how many lines one condition is worth, and the panel splits two ways: bash and ksh93 write a line per primary as they evaluate it, zsh writes one line for the whole condition once it is finished. Three primaries rather than two is what separates the readings from a shell that simply prints the source — Diagnostics.TraceCondition",
+	},
+	{
+		ID: "xtrace/condition-short-circuit-is-not-traced", Category: "shell options",
+		Snippet: `set -x; [[ -n a || -n b ]]; [[ -z a && -n b ]]`,
+		Why:     "both readings print only what was *evaluated*: the right-hand operand of a satisfied `||` and of a failed `&&` appears in no column. That is what makes the trace evidence about the run rather than an echo of the script — a line holding the whole condition would say `-n b` ran when it did not, which is the same wrong reading as a missing line and harder to notice",
+	},
+	{
+		ID: "xtrace/condition-group-and-negation", Category: "shell options",
+		Snippet: `set -x; [[ ( ! -z a ) && -n b ]]`,
+		Why:     "the two operators that are not primaries, and they go opposite ways: a `( )` group is dropped by every shell that traces the construct, and a `!` prints with the primary it negates rather than on a line of its own. So the parentheses are not part of what is written down and the negation is",
+	},
+	{
+		ID: "xtrace/condition-operand-quoting-diverges", Category: "shell options",
+		Snippet: `set -x; x="a b"; [[ $x == "a b" ]]`,
+		Why:     "the one place bash uses two renderings for the same value: `echo \"$x\"` traces `echo 'a b'` and this traces `[[ a b == a b ]]`, where ksh93 quotes in both places and zsh quotes the left operand and backslash-escapes the right — and bash 3.2 escapes every character of it, `\\a\\ \\b`, which is a fourth answer with no dialect here to hold it. Diagnostics.TraceConditionQuoting is the field, and it is separate from TraceQuoting because one shell answers the two differently. The remaining half — zsh's `a\\ b` and ksh93's `'a b'` on the *pattern* side — is recorded here and not modeled: the pattern is printed from the string the matcher was handed, which is the next row",
+	},
+	{
+		ID: "xtrace/condition-pattern-keeps-its-escapes", Category: "shell options",
+		Snippet: `set -x; p='a*'; [[ abc == $p ]]; [[ abc == a* ]]`,
+		Why:     "the same two characters traced two ways in one run, and the reason the pattern operand is printed from the matcher's string rather than from a quoted value: bash traces `a*` for both lines, because an expansion there *is* a pattern in bash, and zsh traces `a\\*` then `a*`, because there it is not. The backslash is the trace saying which characters were live — the one fact a reader of the line cannot get anywhere else. Printing it costs nothing, where re-expanding the word to quote it would run a substitution in it twice (#1915). ksh93 prints `a*` on both lines as well, and this row cannot say which reading that is: it quotes rather than escapes, and a pattern with nothing to quote looks the same under either. Where its answer separates is `xtrace/condition-operand-quoting-diverges`, and that half is recorded rather than modeled",
+	},
+	{
+		ID: "xtrace/condition-empty-operand-is-quoted", Category: "shell options",
+		Snippet: `set -x; [[ -z "" ]]`,
+		Why:     "unanimous, and not what the quoting answer gives on its own: `[[ -z '' ]]` in bash, bash 3.2, ksh93 and zsh alike, including in the shell that quotes nothing else in this position. An operand rendered as nothing would leave `[[ -z ]]`, which is a condition no shell would accept — a trace line that cannot be pasted back is a trace line that misreports",
+	},
+	{
+		ID: "xtrace/condition-regex-operator-diverges", Category: "shell options",
+		Snippet: `set -x; [[ abc =~ ^a.c$ ]]`,
+		Why:     "the operator itself is rewritten by two of the three: bash prints `=~` as written, zsh prints `-regex-match` and ksh93 prints `== ~(E)…`, so the traced line is in each shell's own vocabulary rather than the script's. Recorded and not modeled — the operator as written is bash's answer and the one a reader of the script recognizes, and a table of three spellings for one operator would be decoration nothing else reads",
+	},
+	{
+		ID: "xtrace/arithmetic-command-is-traced", Category: "shell options",
+		Snippet: `set -x; n=3; (( n + 1 ))`,
+		Why:     "the second kind #2126 asked about and the second one missing: `(( ))` is traced by every shell that has it. dash has no arithmetic command and reads the line as nested subshells, which is the column that says so",
+	},
+	{
+		ID: "xtrace/arithmetic-spelling-diverges", Category: "shell options",
+		Snippet: `set -x; n=1; ((n)); (( n ))`,
+		Why:     "two spellings of one expression in one run, which is what separates the two readings: bash and zsh write `(( ` and ` ))` around the text, so a header already carrying spaces comes out with two, and ksh93 reprints the text between the parentheses and adds nothing. Written with both a tight and a spaced source because either alone is ambiguous — Diagnostics.TraceArithCommand",
+	},
+	{
+		ID: "xtrace/arithmetic-traces-the-expanded-text", Category: "shell options",
+		Snippet: `set -x; n=3; (( $n + 1 ))`,
+		Why:     "unanimous among the three that have the construct: the line holds `3 + 1` and not `$n + 1`, so the trace is written from the string the evaluator was handed rather than from the source. It is also what makes printing it free — the expansion has already happened, and expanding again to print would run a substitution in the expression twice",
+	},
+	{
+		ID: "xtrace/for-arithmetic-parts-are-traced", Category: "shell options",
+		Snippet: `set -x; for ((i=0;i<2;i++)); do :; done`,
+		Why:     "the loop header the issue asked about, and the one place a shell contradicts its own `(( ))` spelling: bash writes `(( i=0 ))`, ksh93 writes `((i=0))`, and zsh writes `i=0` bare — the same shell that wraps a `(( ))` command in spaced parentheses. Which is why TraceArithForPart is a field of its own. No column prints the header itself once per pass; this shell did, and also wrote `=''` every iteration, because the list loop's per-iteration line was being borrowed by a loop that binds no name",
+	},
+	{
+		ID: "xtrace/case-header-diverges", Category: "shell options",
+		Snippet: `set -x; x=abc; case $x in ab|abc) : ;; esac`,
+		Why:     "three answers, the shape `for` divides into: dash and ksh93 print nothing, bash prints `case $x in` once as written and before the subject is expanded, and zsh prints `case abc (ab | abc)` — the expanded subject and the arm's patterns — once per arm it tries. Diagnostics.TraceCaseHeader",
+	},
+	{
+		ID: "xtrace/case-arms-tried-are-traced", Category: "shell options",
+		Snippet: `set -x; case c in a) : ;; b) : ;; c) : ;; d) : ;; esac`,
+		Why:     "the half of zsh's answer that is information rather than decoration: one line per arm *tried*, stopping at the one that matched, so the line count says how far down the arms the subject got. Four arms and three lines, which is the point — the fourth is below the match and contributes nothing, where a shell printing the arms it *has* would write four. bash's single header cannot say it and the other two say nothing at all, which is why a reader of a third-party zsh trace can follow a dispatch and a reader of a bash one cannot",
+	},
+	{
+		ID: "xtrace/case-arm-patterns-are-not-expanded-past-the-match", Category: "shell options",
+		Snippet: `set -x; case a in $(echo a)|$(echo b)) : ;; esac`,
+		Why:     "the row that says the arm line is built as the match goes rather than up front: zsh traces `case a (a)` and runs only the first substitution, where a shell that expanded the arm's patterns to print them would run the second as well and show `(a | b)` for a match the second pattern took no part in. Not unanimous as a behavior, which is what makes the trace worth having here — dash, both bashes and zsh stop at the pattern that matched, and ksh93 expands the whole arm *and does it right to left*, running `echo b` before `echo a`. Only the column that prints the patterns shows which of the two a shell did",
+	},
+	{
+		ID: "xtrace/loop-and-branch-headers-are-not-traced", Category: "shell options",
+		Snippet: `set -x; i=0; while [ $i -lt 1 ]; do i=1; done; until [ $i -gt 0 ]; do :; done; if true; then :; fi`,
+		Why:     "the other half of the sweep #2126 asked for, and the answer is that there is nothing to fix: no shell in the panel prints a `while`, `until` or `if` header, only the commands of the condition and the body. That makes the rule for a reader of a trace exact — a conditional loop is recognizable by its condition repeating and by nothing else — and it is worth a row rather than a silence, because \"nobody traces it\" and \"we do not trace it\" are indistinguishable without one",
+	},
+	{
+		ID: "xtrace/select-header-diverges", Category: "shell options",
+		Snippet: `set -x; select x in a b; do break; done < /dev/null`,
+		Why:     "the menu loop takes the `for` header's answer and only half of it: bash reprints `select x in a b`, and zsh — which writes the *assignment* an ordinary `for` pass made — writes nothing here, because a pass of this loop binds its name from a reply rather than from the list. So the shell with a per-iteration line has none, and the shell with a header has one. Redirected from /dev/null so the menu ends at once and the row records the trace rather than a prompt; and the header is written once above the menu, not once per reply",
+	},
+	{
+		ID: "xtrace/function-definition-is-not-traced", Category: "shell options",
+		Snippet: `set -x; f() { :; }; f`,
+		Why:     "a definition is invisible in every column and the call is not, which is the last of the kinds #2126 asked about and the only one where the answer is unanimous silence. Worth a row because it is the shape most easily mistaken for the bug: a script whose functions are all defined at the top traces nothing for its first fifty lines, and that gap is correct",
+	},
+	{
+		ID: "xtrace/subshell-and-group-are-not-traced", Category: "shell options",
+		Snippet: `set -x; ( : ); { :; }`,
+		Why:     "the same finding for the two bracketing commands: `( )` and `{ }` are invisible in every column, which is consistent with the depth counting bash does — a subshell adds no level to the trace prefix either, because nothing is being read again. So a trace says what ran and never how deeply it was nested, in every shell",
+	},
+	{
 		ID: "xtrace/pipeline-order-diverges", Category: "shell options",
 		Snippet:        `set -x; echo a | cat`,
 		ReferenceRaces: true,

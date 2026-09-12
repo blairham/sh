@@ -349,7 +349,11 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 					return nil
 				}
 			}
-			r.traceForIteration(c.Header, "", "")
+			// Nothing is traced for the loop itself. Its header is already
+			// written down as the three arithmetic parts forArithPart
+			// traces, and no shell in the panel prints anything else for it
+			// — reprinting the header here gave bash a
+			// `+ for ((i=0;i<2;i++))` per pass that real bash does not write.
 			if err := r.runList(ctx, c.Body); err != nil {
 				return err
 			}
@@ -375,12 +379,20 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 // condition, and the caller asks about that only when there is one — which is
 // what makes `for ((;;))` endless rather than a loop that never runs.
 func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
-	resolved, perr := r.arithTree(tree, text)
+	resolved, expanded, perr := r.arithTreeOver(tree, text)
 	if r.failedHeading() {
 		// The expansion inside the part failed. Its diagnostic is written and
 		// what is left of the text is not an expression, so parsing on would
 		// complain a second time about a residue the script never wrote.
 		return 0, false
+	}
+	// Each part is traced as an arithmetic command in its own right, which is
+	// what the shells do — and in its own spelling, which is why the field is
+	// not the one `(( ))` reads: zsh writes a loop header's parts bare where
+	// it wraps a `(( ))` command in parentheses. An absent part is traced by
+	// nobody, which is what makes `for ((;;))` silent between its iterations.
+	if expanded != "" {
+		r.traceArithCommand(expanded, r.diag().TraceArithForPart)
 	}
 	if perr != nil {
 		r.diagf("%s\n", r.diag().arithConstructFailure("((", r.diag().ParseFailure(perr)))
@@ -465,6 +477,13 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 		// value with a space in it stays one subject. The ordinary word
 		// pipeline split the tab to zero fields, so the arm never fired —
 		// silently, status 0.
+
+		// The header goes out *before* the subject is expanded, which is
+		// measured rather than convenient: bash traces the header as written
+		// and then the commands of a substitution in it — `case $(echo a) in`
+		// comes out above `echo a`, not below. The shell that shows the
+		// expanded subject shows it per arm instead, from caseItemMatches.
+		r.traceCaseHeader(c.Header)
 		r.beginHeading()
 		subject := strings.Join(r.expandWordNoSplit(c.Word), "")
 		if r.failedHeading() {
@@ -583,12 +602,30 @@ func (r *Runner) caseItemMatched(item *syntax.CaseItem, subject string) (matched
 }
 
 func (r *Runner) caseItemMatches(item *syntax.CaseItem, subject string) bool {
+	// The one dialect that traces an arm prints the patterns it *reached*,
+	// which is the same accounting `[[ ]]` keeps: measured, `case a in
+	// $(echo a)|$(echo b))` traces `case a (a)` in zsh 5.9.2 and runs only
+	// the first substitution, where the arm `ab|abc` against `abc` traces
+	// `case abc (ab | abc)`. So the list is built as the loop goes rather
+	// than up front, and nothing is expanded that the match did not need.
+	tracing := r.xtrace && r.diag().TraceCaseHeader == TraceCaseArm
+	var tried []string
 	for _, p := range item.Patterns {
 		// A pattern is a word: unquoted it is a pattern, quoted a literal,
 		// and only the spans still know which.
-		if r.matchPatternR(r.patternOf(p), subject, false) {
+		pat := r.patternOf(p)
+		if tracing {
+			tried = append(tried, pat)
+		}
+		if r.matchPatternR(pat, subject, false) {
+			if tracing {
+				r.traceCaseArm(subject, tried)
+			}
 			return true
 		}
+	}
+	if tracing {
+		r.traceCaseArm(subject, tried)
 	}
 	return false
 }

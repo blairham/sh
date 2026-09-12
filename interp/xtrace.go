@@ -11,10 +11,24 @@ import (
 
 // `set -x` printing.
 //
-// The structure is unanimous: every simple command is written to stderr
-// before it runs, with its words already expanded, and compound commands are
-// not traced — only the simple ones inside them. Everything else about it is
-// decoration, and all four shells decorate differently.
+// Every simple command is written to stderr before it runs, with its words
+// already expanded. That much is unanimous. What is *not* true, and was
+// asserted here until #2126, is that compound commands are never traced:
+// every shell that has `[[ … ]]` prints it, every shell that has `(( … ))`
+// prints that, bash and zsh each print something for `case`, and the three
+// parts of a `for ((;;))` header are traced as arithmetic commands of their
+// own. The rule that holds is narrower — a `while`, `until` or `if` header,
+// a `( )` subshell and a `{ }` group are printed by nobody.
+//
+// The difference is not cosmetic. A trace that drops a whole command kind
+// reads as a script that did not reach those lines, which is how a gap in
+// gitstatus's own xtrace log became a wrong diagnosis; and `emulate -L sh`
+// legitimately turning xtrace off for the rest of a function means some gaps
+// really are real, so a spurious one has cover.
+//
+// Everything else about it is decoration, and all four shells decorate
+// differently — fifteen divergences at the last count, which
+// docs/spec/semantics.md enumerates.
 
 // TraceStyle is how a shell introduces a traced command.
 type TraceStyle int
@@ -73,6 +87,93 @@ const (
 	// TraceArraySpaced writes a space inside each parenthesis: ksh93 and
 	// zsh, which trace `a=( 1 2 )` and an empty literal as `a=( )`.
 	TraceArraySpaced
+)
+
+// TraceCondition is how a shell traces `[[ … ]]`.
+//
+// Measured 2026-09-12 on bash 5.3.15, bash 3.2.57, ksh93 and zsh 5.9.2 with
+// `set -x; [[ -n a && -n b && -n c ]]`. Every shell that has the construct
+// traces it — which is the whole of #2126, since we traced none of it — and
+// they part company only on how many lines one condition is worth:
+//
+//	bash, bash 3.2, ksh93	three lines, `[[ -n a ]]` `[[ -n b ]]` `[[ -n c ]]`
+//	zsh                  	one line, `[[ -n a && -n b && -n c ]]`
+//
+// Both print only what was *evaluated*: `[[ -n a || -n b ]]` is one line in
+// every column, because the right-hand operand never ran. And both drop a
+// `( )` group — `[[ ( -n a ) && -n b ]]` traces without the parentheses
+// everywhere — while `!` stays attached to the primary it negates.
+type TraceCondition int
+
+const (
+	// TraceCondPrimary writes one line per primary as it is evaluated: bash,
+	// ksh93, and the substrate's own.
+	TraceCondPrimary TraceCondition = iota
+	// TraceCondWhole writes one line for the condition once it has finished,
+	// holding the primaries that were reached and the operators between
+	// them: zsh.
+	TraceCondWhole
+)
+
+// TraceArithSpelling is how a traced arithmetic expression is wrapped.
+//
+// Measured 2026-09-12 with `set -x; ((n))` and `set -x; (( n + 1 ))`, which
+// separate the two readings: a shell that adds a space of its own writes
+// `((  n + 1  ))` for the second, and one that reprints the text between the
+// parentheses writes `(( n + 1 ))`.
+//
+//	bash 5.3.15, bash 3.2.57, zsh 5.9.2	`(( n ))`	`((  n + 1  ))`
+//	ksh93                              	`((n))`  	`(( n + 1 ))`
+//
+// The text is the expression *after* expansion and before evaluation —
+// `n=3; (( $n + 1 ))` traces `3 + 1` in all three — so the trace is written
+// from the string the evaluator was handed rather than from the source, and
+// nothing is expanded a second time to print it.
+type TraceArithSpelling int
+
+const (
+	// TraceArithSpaced writes `(( ` and ` ))` around the text: bash, zsh, and
+	// the substrate's own.
+	TraceArithSpaced TraceArithSpelling = iota
+	// TraceArithTight writes `((` and `))` with nothing added: ksh93.
+	TraceArithTight
+	// TraceArithBare writes the text with no parentheses at all. zsh's answer
+	// for the three parts of `for ((init; cond; post))` and for nothing else:
+	// the same shell wraps a `(( ))` *command* in spaced parentheses, so the
+	// two sites are separate fields rather than one.
+	TraceArithBare
+)
+
+// TraceCaseHeader is what `case` prints under `set -x`.
+//
+// Three answers, the same shape `for` divides into and measured the same way
+// — 2026-09-12 with `set -x; y="a b"; case $y in "a b") : ;; esac`:
+//
+//	dash, ksh93	nothing at all; only the commands in the arm that ran
+//	bash       	`case $y in`, once, as written and unexpanded
+//	zsh        	`case a b (a\ b)`, once per arm it tries, with the subject
+//	           	expanded and the arm's patterns joined by ` | `
+//
+// zsh stops at the arm that matched, so the line count says how far down the
+// arms the subject got — which is the half of the trace a reader of a third
+// party log is actually using it for.
+//
+// The subject is printed bare — `a b`, unquoted, even holding a space — and
+// the patterns come from the strings the matcher was handed, so a
+// metacharacter that was quoted carries a backslash. zsh escapes a quoted
+// *space* there as well, which is recorded in the corpus and not reproduced;
+// see xtrace/case-header-diverges.
+type TraceCaseHeader int
+
+const (
+	// TraceCaseNone prints nothing for the construct, only the commands in
+	// the arm that ran: dash, ksh93, and the substrate's own.
+	TraceCaseNone TraceCaseHeader = iota
+	// TraceCaseSource prints the header as written, once: bash.
+	TraceCaseSource
+	// TraceCaseArm prints the expanded subject and the patterns of each arm
+	// as it is tried: zsh.
+	TraceCaseArm
 )
 
 // TraceQuoting is how a shell renders a word that needs quoting.
@@ -244,6 +345,15 @@ func (r *Runner) traceForIteration(header, name, value string) {
 	case TraceForSource:
 		line = header
 	case TraceForAssign:
+		if name == "" {
+			// `for ((init; cond; post))` binds no name, so the shell that
+			// reports the *assignment* an iteration made has nothing to
+			// report and prints nothing — measured, zsh 5.9.2 traces the
+			// three arithmetic parts and no iteration line at all. This
+			// wrote `=''` once per pass, which reads as an assignment to a
+			// nameless parameter.
+			return
+		}
 		line = name + "=" + traceQuote(value, d.TraceQuoting)
 	default:
 		return
@@ -254,6 +364,160 @@ func (r *Runner) traceForIteration(header, name, value string) {
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
 	r.errf("%s%s\n", r.tracePrefix(), line)
+}
+
+// condTrace is what a `[[ … ]]` has traced so far.
+//
+// It exists because the two readings need different amounts of state: a shell
+// that writes a line per primary needs none, and one that writes a line for
+// the whole condition has to hold the primaries it reached until the
+// condition is over. One accumulator serves both, because the line-per-primary
+// reading is the same accumulator flushed at every primary.
+type condTrace struct {
+	// whole is TraceCondWhole: hold the parts and write one line at the end.
+	whole bool
+	// parts are the rendered primaries and the operators between them.
+	parts []string
+	// pending are the `!`s read since the last primary. They belong to the
+	// primary they negate under both readings — `[[ ! -z a ]]` is one line in
+	// every column — so they wait for it rather than standing as parts.
+	pending []string
+}
+
+// beginConditionTrace starts tracing one `[[ … ]]` and returns the function
+// that ends it.
+//
+// The previous tracer is restored rather than cleared, because an operand may
+// hold a command substitution that runs a condition of its own: `[[ -n
+// $(f) ]]` where `f` tests something is a condition inside a condition, and
+// the inner one must not flush its primaries into the outer one's line.
+func (r *Runner) beginConditionTrace() func() {
+	if !r.xtrace {
+		return func() {}
+	}
+	prev := r.condTrace
+	t := &condTrace{whole: r.diag().TraceCondition == TraceCondWhole}
+	r.condTrace = t
+	return func() {
+		r.condTrace = prev
+		if t.whole && len(t.parts) > 0 {
+			r.traceConditionLine(strings.Join(t.parts, " "))
+		}
+	}
+}
+
+// traceConditionPrimary records one evaluated test.
+//
+// It is called once the operands have been expanded and before the test is
+// answered, which is where the shells put it: a substitution in an operand
+// traces its own commands first, and the line reporting the test sits under
+// them holding what they came to.
+func (r *Runner) traceConditionPrimary(words ...string) {
+	t := r.condTrace
+	if t == nil {
+		return
+	}
+	text := strings.Join(append(t.pending, words...), " ")
+	t.pending = nil
+	if t.whole {
+		t.parts = append(t.parts, text)
+		return
+	}
+	r.traceConditionLine(text)
+}
+
+// traceConditionNot records a `!`, which prints with the primary it negates.
+func (r *Runner) traceConditionNot() {
+	if t := r.condTrace; t != nil {
+		t.pending = append(t.pending, "!")
+	}
+}
+
+// traceConditionOp records a `&&` or `||` that the evaluation went *through*.
+//
+// Called on the way to the right-hand side rather than on the way in, so a
+// short-circuited operator leaves nothing behind — which is what makes the
+// line say what ran. The line-per-primary reading has nowhere to put it and
+// drops it, as its shells do.
+func (r *Runner) traceConditionOp(op string) {
+	if t := r.condTrace; t != nil && t.whole {
+		t.parts = append(t.parts, op)
+	}
+}
+
+// traceConditionLine writes one `[[ … ]]` line.
+func (r *Runner) traceConditionLine(text string) {
+	r.awaitTraceTurn()
+	defer r.releaseTraceTurn()
+	r.errf("%s[[ %s ]]\n", r.tracePrefix(), text)
+}
+
+// traceCondOperand renders a condition operand that is a value rather than a
+// pattern.
+//
+// Its own quoting rather than the command trace's, because bash uses two:
+// `x="a b"; echo "$x"` traces `echo 'a b'` and `[[ $x == y ]]` traces
+// `[[ a b == y ]]`, measured 2026-09-12 on 5.3.15. ksh93 and zsh quote in both
+// places, in their own spellings.
+func (r *Runner) traceCondOperand(s string) string {
+	if s == "" {
+		// Unanimous, and not the same answer the quoting gives on its own:
+		// `[[ -z "" ]]` traces `[[ -z '' ]]` in bash 5.3.15, bash 3.2.57,
+		// ksh93 and zsh 5.9.2 alike, including in the shell that quotes
+		// nothing else here. An operand rendered as nothing at all would
+		// leave `[[ -z ]]`, which is a condition no shell would accept.
+		return "''"
+	}
+	return traceQuote(s, r.diag().TraceConditionQuoting)
+}
+
+// traceArithCommand writes the line for a traced arithmetic expression.
+//
+// The text is the expression as the evaluator received it — expanded, not the
+// source — because that is what the shells print and because it is already in
+// hand: expanding it again to print it would run a substitution in it twice.
+func (r *Runner) traceArithCommand(text string, spelling TraceArithSpelling) {
+	if !r.xtrace {
+		return
+	}
+	r.awaitTraceTurn()
+	defer r.releaseTraceTurn()
+	var line string
+	switch spelling {
+	case TraceArithTight:
+		line = "((" + text + "))"
+	case TraceArithBare:
+		line = text
+	default:
+		line = "(( " + text + " ))"
+	}
+	r.errf("%s%s\n", r.tracePrefix(), line)
+}
+
+// traceCaseHeader writes what `case` prints before it tries its arms.
+func (r *Runner) traceCaseHeader(header string) {
+	if !r.xtrace || r.diag().TraceCaseHeader != TraceCaseSource || header == "" {
+		return
+	}
+	r.awaitTraceTurn()
+	defer r.releaseTraceTurn()
+	r.errf("%s%s\n", r.tracePrefix(), header)
+}
+
+// traceCaseArm writes what `case` prints for one arm it is about to try.
+//
+// The patterns are the strings the matcher was handed — expanded, with the
+// parts that were quoted carrying a backslash, which is the rendering the one
+// shell that prints them uses: `p='a*'; case $y in $p) …` traces `(a\*)`,
+// where the same two characters written out trace `(a*)`. Taken from the very
+// strings the match used, so that nothing is expanded twice.
+func (r *Runner) traceCaseArm(subject string, patterns []string) {
+	if !r.xtrace || r.diag().TraceCaseHeader != TraceCaseArm {
+		return
+	}
+	r.awaitTraceTurn()
+	defer r.releaseTraceTurn()
+	r.errf("%scase %s (%s)\n", r.tracePrefix(), subject, strings.Join(patterns, " | "))
 }
 
 func (r *Runner) traceLine(line string, d Diagnostics) {

@@ -153,6 +153,22 @@ func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 	if got, want := d.TraceForHeader, interp.TraceForNone; got != want {
 		t.Errorf("TraceForHeader = %v, want %v", got, want)
 	}
+	if got, want := d.TraceCaseHeader, interp.TraceCaseNone; got != want {
+		t.Errorf("TraceCaseHeader = %v, want %v", got, want)
+	}
+	if got, want := d.TraceCondition, interp.TraceCondPrimary; got != want {
+		t.Errorf("TraceCondition = %v, want %v", got, want)
+	}
+	if got, want := d.TraceConditionQuoting, interp.QuoteDollar; got != want {
+		t.Errorf("TraceConditionQuoting = %v, want %v", got, want)
+	}
+	// The text between the parentheses and nothing added, at both sites.
+	if got, want := d.TraceArithCommand, interp.TraceArithTight; got != want {
+		t.Errorf("TraceArithCommand = %v, want %v", got, want)
+	}
+	if got, want := d.TraceArithForPart, interp.TraceArithTight; got != want {
+		t.Errorf("TraceArithForPart = %v, want %v", got, want)
+	}
 	if got := d.SyntaxStatus(); got != 3 {
 		t.Errorf("SyntaxStatus() = %d, want 3", got)
 	}

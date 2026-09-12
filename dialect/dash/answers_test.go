@@ -142,6 +142,11 @@ func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 	if got, want := d.TraceForHeader, interp.TraceForNone; got != want {
 		t.Errorf("TraceForHeader = %v, want %v", got, want)
 	}
+	// This dialect has neither `[[ ]]` nor `(( ))`, so the only compound
+	// trace answer it can reach is `case`, and it prints nothing for one.
+	if got, want := d.TraceCaseHeader, interp.TraceCaseNone; got != want {
+		t.Errorf("TraceCaseHeader = %v, want %v", got, want)
+	}
 	if got, want := d.Location, interp.LocationColonLine; got != want {
 		t.Errorf("Location = %v, want %v", got, want)
 	}

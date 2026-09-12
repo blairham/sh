@@ -31,6 +31,12 @@ func (c condStatus) Error() string { return "condition option status" }
 // testClause evaluates `[[ … ]]`. It exits 0 when the condition holds.
 func (r *Runner) testClause(ctx context.Context, c *syntax.TestClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
+		// The trace is opened here and closed on the way out, because the
+		// shell that writes one line for the whole condition cannot write it
+		// until the condition is over — and the shell that writes a line per
+		// primary writes each of them from inside the walk below. One tracer
+		// answers both; see condTrace.
+		defer r.beginConditionTrace()()
 		r.unspecified = false
 		ok, err := r.evalCond(c.Expr)
 		if r.unspecified {
@@ -72,6 +78,10 @@ func (r *Runner) evalCond(c syntax.CondExpr) (bool, error) {
 		return r.evalCond(x.X)
 
 	case *syntax.CondNot:
+		// The `!` prints with the primary it negates rather than as a part of
+		// its own: `[[ ! -z a ]]` is one line in every shell that has the
+		// construct.
+		r.traceConditionNot()
 		v, err := r.evalCond(x.X)
 		return !v, err
 
@@ -91,6 +101,7 @@ func (r *Runner) evalCond(c syntax.CondExpr) (bool, error) {
 			// widening this would be a change nothing measured asked for.
 			var cs condStatus
 			if x.Op == "||" && errors.As(err, &cs) {
+				r.traceConditionOp(x.Op)
 				return r.evalCond(x.Y)
 			}
 			return false, err
@@ -102,6 +113,11 @@ func (r *Runner) evalCond(c syntax.CondExpr) (bool, error) {
 		if x.Op == "||" && l {
 			return true, nil
 		}
+		// Recorded on the way *through* rather than on the way in, so an
+		// operator whose right-hand side never ran leaves nothing in the
+		// line. Measured: `[[ -n a || -n b ]]` traces `[[ -n a ]]` in zsh,
+		// the one shell whose line could have held the whole expression.
+		r.traceConditionOp(x.Op)
 		return r.evalCond(x.Y)
 
 	case *syntax.CondUnary:
@@ -118,6 +134,7 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 	// one operand however it was written — which is why `[[ -z $u ]]` needs
 	// no quoting where the `[` builtin does.
 	s := r.condOperand(x.X)
+	r.traceConditionPrimary(x.Op, r.traceCondOperand(s))
 	switch x.Op {
 	case "-n":
 		return s != "", nil
@@ -174,6 +191,42 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	left := r.condOperand(x.X)
 
+	if x.Op == "==" || x.Op == "=" || x.Op == "!=" {
+		// A process substitution in this position is one shell's alone, and
+		// the question is asked before the word is expanded: a shell that
+		// refuses it must not have started the command first, which is
+		// observable because the command has side effects.
+		if err := r.condProcSubAllowed(x.Y); err != nil {
+			return false, err
+		}
+		// Unquoted, the right operand is a pattern; quoted, a literal. Only
+		// the spans still know which, which is why the tree keeps a word.
+		pat := r.patternOf(x.Y)
+		// The trace prints the pattern the matcher is about to be handed,
+		// backslashes and all, rather than a quoted value — which is what two
+		// of the three shells do and is the more informative of the two
+		// renderings: `p='a*'; [[ abc == $p ]]` traces `a\*` where the
+		// expansion is literal and `a*` where it is live, so the line says
+		// which characters were patterns. It is also the only rendering that
+		// costs nothing, since re-expanding the word to print it would run a
+		// substitution in it twice (#1915). ksh93 quotes the unexpanded value
+		// instead and is recorded rather than modeled.
+		r.traceConditionPrimary(r.traceCondOperand(left), x.Op, pat)
+		got := r.matchPatternR(pat, left, true)
+		if x.Op == "!=" {
+			return !got, nil
+		}
+		return got, nil
+	}
+
+	// Every other operator reads its right-hand side as a value. It is
+	// expanded here rather than inside each branch because the trace holds
+	// both operands and is written before the test is answered, which is
+	// where every shell that has the construct puts it — and because the
+	// expansion must happen exactly once however many readers it has.
+	right := r.condOperand(x.Y)
+	r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.traceCondOperand(right))
+
 	switch x.Op {
 	case "-eq", "-ne", "-lt", "-le", "-gt", "-ge":
 		// The word-spelled operators compare numbers, and their operands are
@@ -188,7 +241,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		rv, err := r.condArith(r.condOperand(x.Y))
+		rv, err := r.condArith(right)
 		if err != nil {
 			return false, err
 		}
@@ -211,7 +264,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// than globs. bash treats a *quoted* right operand as a literal
 		// string; ksh93 and zsh keep it a regex. Following bash, which
 		// docs/spec/semantics.md records as the axis default.
-		pat := r.condOperand(x.Y)
+		pat := right
 		// bash treats a quoted right operand as a literal string; ksh93 and
 		// zsh keep it a regex, so quoting one is unportable either way.
 		if x.Y.IsQuoted() && r.ask(r.sem().RegexQuotingMakesLiteral, "quoting a =~ regex making it literal") {
@@ -244,29 +297,13 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		r.publishRegexCapture(left, loc)
 		return loc != nil, nil
 
-	case "==", "=", "!=":
-		// A process substitution in this position is one shell's alone, and
-		// the question is asked before the word is expanded: a shell that
-		// refuses it must not have started the command first, which is
-		// observable because the command has side effects.
-		if err := r.condProcSubAllowed(x.Y); err != nil {
-			return false, err
-		}
-		// Unquoted, the right operand is a pattern; quoted, a literal. Only
-		// the spans still know which, which is why the tree keeps a word.
-		got := r.matchPatternR(r.patternOf(x.Y), left, true)
-		if x.Op == "!=" {
-			return !got, nil
-		}
-		return got, nil
-
 	case "-nt", "-ot", "-ef":
-		return r.compareFiles(x.Op, left, r.condOperand(x.Y))
+		return r.compareFiles(x.Op, left, right)
 
 	case "<":
-		return left < r.condOperand(x.Y), nil
+		return left < right, nil
 	case ">":
-		return left > r.condOperand(x.Y), nil
+		return left > right, nil
 	}
 	return false, arithError{msg: "unsupported test " + x.Op}
 }

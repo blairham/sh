@@ -5947,6 +5947,31 @@ type Semantics struct {
 	// `exit` still warns; and a job stopping afterwards starts it over.
 	StoppedJobsHoldTheExit Answer
 
+	// WaitGivesUpOnAStoppedJob ends a `wait` for a background job that has
+	// stopped, instead of going on waiting for a process that is not going to
+	// finish until something outside the shell resumes it.
+	//
+	// bash 5.x, and only while the monitor is on. Measured 2026-09-12 with
+	// `set -m; sleep 97 & p=$!; sleep 0.3; kill -STOP $p; sleep 0.3; wait`:
+	// bash 5.3.15 and the same binary as `sh` come back inside the first
+	// second, warning `wait: warning: job 1[pid] stopped` and reporting 0 for
+	// the bare form; `wait %1` and `wait $p` report 145 there — 128 plus
+	// SIGSTOP, the status of a command that signal killed. bash 3.2.57 and
+	// ksh93u+ sit until the bound, and ksh93 prints `wait: pid: Stopped
+	// (SIGSTOP)` on its way into a wait it does not come back from, which is
+	// a wording rather than a different answer. zsh cannot be asked: `set -m`
+	// is `can't change option: -m` in a non-interactive zsh.
+	//
+	// With the monitor *off* the panel is unanimous and this is never asked:
+	// the same script without `set -m` blocks in all five, so the base's No
+	// is what every column does on the ordinary route, and the axis is only
+	// about the shell that has been told it is watching jobs.
+	//
+	// It is what #2227 was: a job-control file of bash's own suite ran three
+	// times slower here than under bash, and the whole of the difference was
+	// one wait for a job this shell had no way of knowing had stopped.
+	WaitGivesUpOnAStoppedJob Answer
+
 	// HeldExitListsTheJobs follows that warning with the job table — the
 	// same rows `jobs` writes. bash does and zsh does not: measured through a
 	// pseudo-terminal, `shopt -s checkjobs` then `exit` writes
@@ -8478,7 +8503,11 @@ func PosixSemantics() Semantics {
 		// The standard describes `exit` as exiting and says nothing about a
 		// job left stopped, so the base leaves; bash and zsh, which stay and
 		// warn, override.
-		StoppedJobsHoldTheExit:       No,
+		StoppedJobsHoldTheExit: No,
+		// The standard has `wait` wait, and says nothing about a job that
+		// stopped; bash 5.x alone gives up on one, so the base goes on
+		// waiting and that dialect overrides.
+		WaitGivesUpOnAStoppedJob:     No,
 		CdpathAnnouncesTheDirectory:  Yes,
 		FdVariableOutlivesTheCommand: Yes,
 		// The standard has the here-document end at the delimiter and says

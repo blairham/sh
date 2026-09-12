@@ -3530,8 +3530,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// why: a job that starts a second external command reaches this again,
 		// by which time the shell has already read the field.
 		r.bg.settleStartedPID(cmd.Process.Pid, r.monitor)
-		err := cmd.Wait()
-		r.status = r.exitStatus(err)
+		r.status = r.waitForBackgroundProcess(cmd)
 		r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
 		return nil
 	}
@@ -3560,6 +3559,62 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	}
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
 	return nil
+}
+
+// waitForBackgroundProcess waits for a background job's process, and — where
+// the shell is in a position to notice — sees it *stop* rather than only end.
+//
+// os/exec's own Wait is an ordinary waitpid, so a job stopped by SIGSTOP or
+// SIGTSTP never comes back from it: the process is still there, it is simply
+// never going to finish. That is the whole of #2227. A `wait` for such a job
+// blocked for as long as something outside the shell took to resume or kill
+// it, and a `jobs` listing went on calling it `Running` for the same reason —
+// nothing in this shell had been told otherwise.
+//
+// The caller's wait — the driver's, with WUNTRACED — is the one that can be
+// told, which is why this reaches for r.WaitForCommand exactly as runWatched
+// does for a foreground command. A stop is recorded on the job and the wait
+// resumed: the job has not ended, and what the shell *does* about a job it
+// now knows is stopped belongs to `wait` and to the listing rather than here.
+//
+// Only while the monitor is on, which is the same condition the job's own
+// process group is given under, a few lines above. With it off a `&` job runs
+// in the shell's own group, stopping it is not a job-control act at all, and
+// no shell in the panel gives up a `wait` for one: measured 2026-09-12 with
+// `sleep 97 & kill -STOP $!; wait`, bash 5.3.15, that bash as `sh`, bash
+// 3.2.57, ksh93u+ and zsh 5.9.2 all sit there. So with it off this stays the
+// plain os/exec wait it has always been, and nothing moves.
+func (r *Runner) waitForBackgroundProcess(cmd *exec.Cmd) int {
+	if !r.monitor || r.WaitForCommand == nil || r.bg == nil {
+		return r.exitStatus(cmd.Wait())
+	}
+	pid := cmd.Process.Pid
+	for {
+		w, err := r.WaitForCommand(pid)
+		if err != nil {
+			// Nothing to be learned from the front end's wait, so fall back
+			// to os/exec's: it is the one that still holds the child.
+			return r.exitStatus(cmd.Wait())
+		}
+		if w.Stopped {
+			r.bg.noteStopped(w.Signal)
+			// Waited for again rather than answered. A stopped job has not
+			// ended, and the next thing this wait returns is whatever
+			// happens to it after something resumes it.
+			continue
+		}
+		// The command has ended, so os/exec's bookkeeping is closed out the
+		// way runWatched closes it — the child is already reaped by the wait
+		// above, and this joins the goroutines copying its streams.
+		_ = cmd.Wait()
+		if cmd.ProcessState != nil {
+			r.addChildTime(cmd.ProcessState)
+		} else if r.elemCPU != nil {
+			r.elemCPU.add(w.User, w.System)
+		}
+		status, _ := r.waitResult(w)
+		return status
+	}
 }
 
 // runWatched runs a foreground command through the caller's own wait, which is

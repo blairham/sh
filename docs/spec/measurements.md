@@ -11719,6 +11719,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
 | `redir/file-then-merge` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` |
 | `redir/multios-is-zsh-only` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[x][x]` |
+| `redir/multios-writes-to-every-target-of-a-numbered-descriptor` | `[a=][b=hi]` | `[a=][b=hi]` | `[a=][b=hi]` | `[a=][b=hi]` | `[a=][b=hi]` | `[a=hi][b=hi]` |
+| `redir/multios-reads-from-every-source-of-a-numbered-descriptor` | `[b]` | `[b]` | `[b]` | `[b]` | `[b]` | `[a~b]` |
+| `redir/a-duplication-source-that-is-not-open-is-named-as-written` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1` **2>** `<shell>: line 1: $n: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: $n: Bad file descriptor` | `st=1` **2>** `<shell>: 0: Bad file descriptor` | `st=1` **2>** `<shell>: 10: cannot open [Bad file descriptor]` | `st=1` **2>** `<shell>:1: 10: bad file descriptor` |
 | `redir/a-duplication-joins-the-fan-out` | `[b=x]` | `[b=x]` | `[b=x]` | `[b=x]` | `[b=x]` | `x~[b=x]` |
 | `redir/a-duplication-copies-the-fan-out-so-far` | `[n=1]` | `[n=1]` | `[n=1]` | `[n=1]` | `[n=1]` | `[n=2]` |
 | `redir/a-table-descriptor-joins-the-fan-out` | `[b=][c=x]` | `[b=][c=x]` | `[b=][c=x]` | `[b=][c=x]` | `[b=][c=x]` | `[b=x][c=x]` |
@@ -12291,6 +12294,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/multios-is-zsh-only` — zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection: one spelling, two meanings, and no diagnostic to tell them apart
   ```sh
   echo x >a >b; printf "[%s][%s]" "$(cat a 2>/dev/null)" "$(cat b 2>/dev/null)"
+  ```
+- `redir/multios-writes-to-every-target-of-a-numbered-descriptor` — `redir/multios-is-zsh-only` asked about standard output; this asks the same about a number, and until #734 was closed this shell answered the two differently — the fan-out was written where the switch over the named streams happened to land rather than for every descriptor. zsh fills both files and the other five only the last, silently, at status 0
+  ```sh
+  exec 3>a 3>b; echo hi >&3; exec 3>&-; printf "[a=%s][b=%s]" "$(cat a)" "$(cat b)"
+  ```
+- `redir/multios-reads-from-every-source-of-a-numbered-descriptor` — the reading half of the same number, and the pair to `redir/multios-reads-from-every-source`: zsh arrives at both files in the order written and the other five take the last. Written as `exec` so the descriptor is one the script parked rather than one the command carried, which is the shape a script uses a number for at all
+  ```sh
+  printf 'a\n' > f; printf 'b\n' > g; exec 3<f 3<g; printf "[%s]" "$(cat <&3)"
+  ```
+- `redir/a-duplication-source-that-is-not-open-is-named-as-written` — the pair to `redir/a-duplication-target-that-expands-to-two-digits`, which had to put standard error aside to ask its question. bash quotes the word the script *wrote* — `$n: Bad file descriptor` — where ksh93 and zsh print the number it came to, and ksh93 words the errno in a bracket after a verb. The same shell names an *open* by what it expanded to, so it is not a rule about targets in general (#734)
+  ```sh
+  n=10; cat <&$n; echo "st=$?"
   ```
 - `redir/a-duplication-joins-the-fan-out` — a `>&` duplication is a target like any other and belongs in the fan-out, which is the half that was missing (#1261): zsh reaches the terminal *and* the file, and the five that write once reach the file alone. Silent in the direction that loses output — a progress line meant for the terminal and a log goes only to the log, at status 0, with nothing to detect it
   ```sh

@@ -1231,6 +1231,11 @@ func Diagnostics() interp.Diagnostics {
 		// No verb at all: the name, then the OS string. Same either way —
 		// bash does not distinguish opening from creating.
 		CannotOpen: "%[1]s: %[2]s",
+		// And a duplication whose source is not open names the word the
+		// script *wrote*: `n=10; echo x >&$n` is `$n: Bad file descriptor`
+		// here where ksh93 and zsh both say `10`. The sentence is the
+		// substrate's; only the naming moves (#734).
+		NamesTheDuplicationTargetAsWritten: true,
 		// A builtin whose write went nowhere: `echo hi >&-` is
 		// `echo: write error: Bad file descriptor`, and the same shape with
 		// printf, pwd or type in front — the builtin is a verb, not a set of

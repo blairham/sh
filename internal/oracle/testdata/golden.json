@@ -115226,6 +115226,50 @@
         "TimedOut": false
       }
     },
+    "redir/a-duplication-source-that-is-not-open-is-named-as-written": {
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: $n: Bad file descriptor",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: $n: Bad file descriptor",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: 0: Bad file descriptor",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: Bad fd number",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: 10: cannot open [Bad file descriptor]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:1: 10: bad file descriptor",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "redir/a-duplication-target-of-more-than-one-digit": {
       "bash": {
         "Stdout": "st=1",
@@ -118432,6 +118476,94 @@
       },
       "zsh": {
         "Stdout": "[a~b]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/multios-reads-from-every-source-of-a-numbered-descriptor": {
+      "bash": {
+        "Stdout": "[b]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[b]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[b]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[b]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[b]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[a~b]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/multios-writes-to-every-target-of-a-numbered-descriptor": {
+      "bash": {
+        "Stdout": "[a=][b=hi]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[a=][b=hi]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[a=][b=hi]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[a=][b=hi]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[a=][b=hi]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[a=hi][b=hi]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

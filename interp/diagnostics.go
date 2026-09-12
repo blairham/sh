@@ -2538,6 +2538,39 @@ type Diagnostics struct {
 	// line the redirection is on, with no number and no file in it.
 	MultiDigitDuplicationTarget string
 
+	// DuplicationSourceNotOpen is `>&N` and `<&N` where nothing is open at N
+	// — the failure the *duplication* reports, which is not an open and does
+	// not go through CannotOpen. Two verbs: %[1]s is the target and %[2]s the
+	// reason.
+	//
+	// Measured 2026-09-12, `cat <&10`:
+	//
+	//	bash 5.3, bash 3.2   10: Bad file descriptor
+	//	ksh93                10: cannot open [Bad file descriptor]
+	//	zsh 5.9.2            10: bad file descriptor
+	//
+	// Empty is the shape three of the four take, `%[1]s: %[2]s`, with the
+	// reason cased by the dialect. ksh93 puts the errno in a bracket after a
+	// verb, which is the same sentence it uses for `.` and for an open —
+	// and CannotOpen cannot be reused for it, because zsh's names the reason
+	// *first* and would answer `bad file descriptor: 10` here (#734).
+	DuplicationSourceNotOpen string
+
+	// NamesTheDuplicationTargetAsWritten makes that message quote the word
+	// the script wrote rather than what it expanded to.
+	//
+	// bash alone, and it is the word verbatim: `n=10; echo x >&$n` is
+	// `$n: Bad file descriptor` there, `${n}` and `"$n"` and `$((5+5))` each
+	// come back as themselves, and ksh93 and zsh both say `10`. Measured
+	// 2026-09-12.
+	//
+	// It is the naming and nothing else — #692 established that the refusal
+	// acts on the expanded word, since `n=10` is refused where `n=9` is not.
+	// The same shell names an *open* by what it expanded to, so this cannot
+	// be a rule about redirection targets in general: `n=nosuch; cat <$n` is
+	// `nosuch: No such file or directory` in bash (#734).
+	NamesTheDuplicationTargetAsWritten bool
+
 	// FdNumberOverLimit is a redirection whose descriptor number is at or
 	// above the process's limit on open files, where the dialect refuses one
 	// — see Semantics.FdNumberBoundedByOpenFileLimit. One verb: the number.

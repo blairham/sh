@@ -162,6 +162,41 @@ func TestASweepKeepsAFailedStartOutOfTheNumbers(t *testing.T) {
 	}
 }
 
+// TestEveryDialectHasANativeColumn is the guard #2336 asks for, one
+// instrument along.
+//
+// [Ours] is a hardcoded literal, and a hardcoded literal of dialects is how
+// `axissweep.Targets()` came to be missing dialect/ash with a comment
+// promising a compile error that does not exist. A dialect that is absent
+// from this list is graded by nothing at all and there is no sign of it in
+// the report: the column is not "not yet", it simply is not a column, and
+// this instrument's whole argument is that a missing column reads as a
+// column that passed.
+//
+// So the list is checked against the directories under dialect/, which is
+// where a new shell actually arrives.
+func TestEveryDialectHasANativeColumn(t *testing.T) {
+	entries, err := os.ReadDir(filepath.Join("..", "..", "dialect"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		s, ok := FindOurs(e.Name())
+		if !ok {
+			t.Errorf("dialect/%s has no native column, so `make suite` grades it with "+
+				"nothing and says nothing about not having done so", e.Name())
+			continue
+		}
+		if _, ok := s.Syntax(); !ok {
+			t.Errorf("the %s column has no parser configuration, so its parsed figure "+
+				"would be a statement about no dialect at all", s.Name)
+		}
+	}
+}
+
 // TestTheCrossCheckAsksOnlyTheShellsThatClaimTheTier keeps a tier's claim the
 // size it actually is: core/ is every reference, and a tier the measured
 // holdouts do not claim must not be failed by them.

@@ -2441,7 +2441,18 @@ func Diagnostics() interp.Diagnostics {
 			{Prefix: "-u: processes                       ", Res: interp.ResourceProcesses, Scale: 1},
 			{Prefix: "-n: file descriptors                ", Res: interp.ResourceOpenFiles, Scale: 1},
 		},
-		TraceQuoting:      interp.QuoteShell,
+		TraceQuoting: interp.QuoteShell,
+		// No position rule at all: every character it quotes it quotes
+		// anywhere, which is what makes the *shape* of this field necessary
+		// rather than a longer string in one shared set. It is the only one
+		// of the three that quotes `=`, and it quotes `^` with bash and
+		// leaves `!` bare with ksh93. Measured 2026-09-12.
+		TraceMetacharacters: interp.TraceMetacharacters{
+			Anywhere: "*?[]{}~#=^",
+		},
+		// The `[` that opens a test is bare and the `]` that closes it is an
+		// argument like any other: `[ 1 -lt 2 ']'`.
+		TraceBareBracket:  interp.TraceBracketCommandWordBare,
 		TraceStyle:        interp.TraceNameLine,
 		TraceForHeader:    interp.TraceForAssign,
 		TraceArrayLiteral: interp.TraceArraySpaced,

@@ -176,7 +176,11 @@ const (
 	TraceCaseArm
 )
 
-// TraceQuoting is how a shell renders a word that needs quoting.
+// TraceQuoting is how a shell renders a word that needs quoting. *Which*
+// words need it is a separate question with a separate answer — see
+// TraceMetacharacters, and the two are separate because the panel does not
+// split the same way on them: bash and zsh share this enum's value and
+// disagree about `!`, `=` and where a `~` counts.
 type TraceQuoting int
 
 const (
@@ -189,6 +193,47 @@ const (
 	// QuoteDollar is ksh93, which reaches for `$'…'` for an embedded quote
 	// where bash and zsh write `'it'\''s'`.
 	QuoteDollar
+)
+
+// TraceMetacharacters is the characters that make an expanded word need
+// quoting in a trace, beyond traceAlwaysQuoted, which every quoting shell
+// agrees on.
+//
+// Two fields rather than one set, because the panel has a *position* rule and
+// not only a wider alphabet: bash quotes `~a` and `#a` and leaves `a~b` and
+// `a#b` bare, where ksh93 and zsh quote all four. A single `ContainsAny`
+// cannot express that with any alphabet at all, which is why this replaced
+// one (#2141).
+type TraceMetacharacters struct {
+	// Anywhere makes a word need quoting wherever in it one of these
+	// appears.
+	Anywhere string
+	// Leading makes a word need quoting only when its first byte is one of
+	// these.
+	Leading string
+}
+
+// TraceBareBracket is how much of a `[ … ]` command escapes the quoting the
+// same characters get anywhere else.
+//
+// It exists because the exemption is real and is *not* "a command word is
+// never quoted": a command word that is the literal `a*b` is quoted in bash,
+// ksh93 and zsh alike, and a command word that is `]` is quoted in all three
+// as well. What is exempt is the `[` that opens a test, and in one shell the
+// `]` that closes it.
+type TraceBareBracket int
+
+const (
+	// TraceBracketQuotedLikeAnyWord is bash: `[ 1 -lt 2 ]` traces as
+	// `'[' 1 -lt 2 ']'`, with no exemption at all.
+	TraceBracketQuotedLikeAnyWord TraceBareBracket = iota
+	// TraceBracketCommandWordBare is zsh: the opening `[` is bare and the
+	// closing `]` is an argument like any other — `[ 1 -lt 2 ']'`.
+	TraceBracketCommandWordBare
+	// TraceBracketPairBare is ksh93: both ends of the test are bare —
+	// `[ 1 -lt 2 ]`. Only the *final* operand, measured: an interior `]`
+	// is quoted, so `[ -n "]" ]` traces as `[ -n ']' ]`.
+	TraceBracketPairBare
 )
 
 // traceCommand writes one command's trace line.
@@ -207,7 +252,11 @@ func (r *Runner) traceCommand(words []string) {
 	d := r.diag()
 	quoted := make([]string, len(words))
 	for i, w := range words {
-		quoted[i] = traceQuote(w, d.TraceQuoting)
+		if traceBracketIsBare(d.TraceBareBracket, words, i) {
+			quoted[i] = w
+			continue
+		}
+		quoted[i] = traceQuote(w, d.TraceQuoting, d.TraceMetacharacters)
 	}
 	r.errf("%s%s\n", r.tracePrefix(), strings.Join(quoted, " "))
 }
@@ -271,7 +320,7 @@ func traceAssign(a *syntax.Assign, value string, d Diagnostics) string {
 		b.WriteString(traceArrayLiteral(a.Elems, d.TraceArrayLiteral))
 		return b.String()
 	}
-	b.WriteString(traceQuote(value, d.TraceQuoting))
+	b.WriteString(traceQuote(value, d.TraceQuoting, d.TraceMetacharacters))
 	return b.String()
 }
 
@@ -354,7 +403,7 @@ func (r *Runner) traceForIteration(header, name, value string) {
 			// nameless parameter.
 			return
 		}
-		line = name + "=" + traceQuote(value, d.TraceQuoting)
+		line = name + "=" + traceQuote(value, d.TraceQuoting, d.TraceMetacharacters)
 	default:
 		return
 	}
@@ -468,7 +517,7 @@ func (r *Runner) traceCondOperand(s string) string {
 		// leave `[[ -z ]]`, which is a condition no shell would accept.
 		return "''"
 	}
-	return traceQuote(s, r.diag().TraceConditionQuoting)
+	return traceQuote(s, r.diag().TraceConditionQuoting, r.diag().TraceMetacharacters)
 }
 
 // traceArithCommand writes the line for a traced arithmetic expression.
@@ -650,8 +699,61 @@ func (r *Runner) tracePrefixDepth(prefix string) string {
 	return strings.Repeat(string(first), r.indirection) + prefix
 }
 
+// traceAlwaysQuoted is the part of the question no shell that quotes at all
+// disagrees about: whitespace, the quoting characters, and the operators that
+// would reparse as something other than one word. Everything past this is the
+// dialect's, in TraceMetacharacters.
+const traceAlwaysQuoted = " \t'\"$`\\|&;<>()"
+
+// traceNeedsQuoting reports whether one non-empty expanded word would come
+// back as something else if it were read again — which is the question `set
+// -x` asks before it quotes, and which the shells answer with three different
+// character sets and two different position rules.
+//
+// Split from traceQuote because the *decision* is the dialect's and the
+// *spelling* is TraceQuoting's: a shell that writes `$'…'` where another
+// writes `'…'` is still quoting the same words, and one enum cannot hold
+// both questions. See the table in docs/spec/xtrace.md.
+func traceNeedsQuoting(s string, meta TraceMetacharacters) bool {
+	if strings.ContainsAny(s, traceAlwaysQuoted) {
+		return true
+	}
+	if meta.Anywhere != "" && strings.ContainsAny(s, meta.Anywhere) {
+		return true
+	}
+	// A byte and not a rune: every character in either set is ASCII, and the
+	// first byte of a multi-byte rune can never match one.
+	return meta.Leading != "" && strings.IndexByte(meta.Leading, s[0]) >= 0
+}
+
+// traceBracketIsBare reports whether this word of this command is one of the
+// brackets a `[ … ]` test is written with, and so escapes the quoting the
+// same character gets everywhere else.
+//
+// Measured 2026-09-12 on ksh93u+ and zsh 5.9.2, and every clause below is a
+// row that separates this rule from a simpler one that would have fit some of
+// the evidence:
+//
+//	'a[b' x       both quote it — a command word is not exempt as such
+//	']' z         both quote it — the character is not exempt as such
+//	'[' 1 -lt 2 x both leave the `[` bare with no closer in sight, so it is
+//	              the word and not the construct being matched
+//	[ -n "]" ]    ksh93 is `[ -n ']' ]` — the *final* `]` only
+//	v='['; $v 1 -lt 2 ']'
+//	              both behave as if it were written, so it is the expanded
+//	              word rather than the source
+func traceBracketIsBare(p TraceBareBracket, words []string, i int) bool {
+	if p == TraceBracketQuotedLikeAnyWord || words[0] != "[" {
+		return false
+	}
+	if i == 0 {
+		return true
+	}
+	return p == TraceBracketPairBare && i == len(words)-1 && words[i] == "]"
+}
+
 // traceQuote renders one expanded word the way the dialect would.
-func traceQuote(s string, q TraceQuoting) string {
+func traceQuote(s string, q TraceQuoting, meta TraceMetacharacters) string {
 	if q == QuoteNever {
 		return s
 	}
@@ -661,7 +763,7 @@ func traceQuote(s string, q TraceQuoting) string {
 	if ctl := strings.IndexFunc(s, func(c rune) bool { return c < 0x20 }); ctl >= 0 {
 		return dollarQuote(s)
 	}
-	if !strings.ContainsAny(s, " \t'\"$`\\|&;<>()") {
+	if !traceNeedsQuoting(s, meta) {
 		return s
 	}
 	if strings.Contains(s, "'") && q == QuoteDollar {

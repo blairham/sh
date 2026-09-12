@@ -3653,6 +3653,17 @@ type Diagnostics struct {
 	// what happens — the same argument the wording formats make.
 	TraceStyle   TraceStyle
 	TraceQuoting TraceQuoting
+	// TraceMetacharacters is *which* words TraceQuoting is applied to,
+	// beyond the whitespace and operators every quoting shell agrees on. A
+	// separate field because the panel does not split the same way on the
+	// two questions: bash and zsh share a TraceQuoting value and disagree
+	// about `!`, about `=` and about whether a `~` counts anywhere or only
+	// at the front (#2141).
+	TraceMetacharacters TraceMetacharacters
+	// TraceBareBracket is the one exemption from all of that: how much of a
+	// `[ … ]` test is printed without quotes even though the same character
+	// is quoted everywhere else.
+	TraceBareBracket TraceBareBracket
 	// TraceForHeader is what a `for` loop prints at each iteration. Zero is
 	// TraceForNone, which is dash's and ksh93's answer and the substrate's
 	// own.

@@ -9558,6 +9558,16 @@ echo unreachable`,
 		Why:     "the failure on the row above is the *re-read expression* failing, not the value being rejected as a number, and each shell words it the way it words a written expression — `3 4` blamed by name in all three, with dash's illegal number beside it. It is also the row that says which text a complaint quotes back: the value, never the variable it came out of",
 	},
 	{
+		ID: "arith/a-value-that-names-itself", Category: "arithmetic",
+		Snippet: `x=x; echo "v=$(( x ))"; echo "st=$?"`,
+		Why:     "the end of the chase the rows above start: a value that points back at its own name recurses until a bound stops it, and every shell that chases at all has a sentence for it — bash `x: expression recursion level exceeded`, ksh93 `x: recursion too deep`, zsh `math recursion limit exceeded: x`. dash never chases, so `Illegal number` is the value not being a number. Ours wrote a fourth sentence no shell has (#2005)",
+	},
+	{
+		ID: "arith/two-values-that-name-each-other", Category: "arithmetic",
+		Snippet: `a=b; b=a; echo "v=$(( a ))"; echo "st=$?"`,
+		Why:     "the same bound reached through two names, which is the only shape that can say *which* name is blamed — with `x=x` the two candidates are one name. bash and ksh93 name `b`, the name the bound stopped on, and zsh names `a`, the one the expression was written with. So the subject is a divergence beside the wording, and a fix measured on the row above alone would have had two of the three columns wrong and no way to see it",
+	},
+	{
 		ID: "arith/a-failure-inside-a-value", Category: "arithmetic",
 		Snippet: `v=1/0; echo $((v)); echo "st=$?"`,
 		Why:     "an expression that parses and will not evaluate, reached through a value: the complaint names `1/0` and not `v` wherever it names anything, which is the same rule as the row above at the other kind of failure",

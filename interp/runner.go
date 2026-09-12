@@ -1767,6 +1767,11 @@ type Runner struct {
 	// asks whether a name was reached through a value or written in the
 	// expression itself.
 	arithValueDepth int
+
+	// arithValueTopName is the name the expression under evaluation named
+	// itself, as against the ones reached through its value. Only the
+	// recursion bound reads it, and only one dialect blames that name.
+	arithValueTopName string
 	// indirection counts how many levels of *text being read again* this
 	// runner is inside — an `eval`, a sourced file, a command substitution.
 	// One dialect repeats its trace prefix's first character once per level

@@ -83,3 +83,55 @@ func TestAnUnsetNameReachedThroughAValue(t *testing.T) {
 		}
 	})
 }
+
+// The bound itself, which is a sentence and a subject rather than only a stop.
+//
+// It was a bare string in the reader — "expression nested too deeply", which
+// no shell writes — so no dialect could answer it, and it named the name the
+// bound stopped on in every dialect where one of them names the other (#2005).
+//
+// The probe is `a=b; b=a` and not `x=x`, because the two subjects are the same
+// name in the second and a fix tested on it cannot tell them apart.
+func TestTheArithmeticRecursionBoundIsWordedAndBlamedByTheDialect(t *testing.T) {
+	const src = `a=b; b=a; echo "v=$(( a ))"`
+	sem := testSemantics()
+	sem.ArithNameValueRecurses = Yes
+
+	for _, c := range []struct {
+		name    string
+		written bool
+		want    string
+	}{
+		// The name the bound stopped on, which is what two of the three do.
+		{"the name it stopped on", false, "deep: b"},
+		// And the name the expression was written with, which is the third.
+		{"the name the expression held", true, "deep: a"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := run(t, src, func(r *Runner) {
+				s := sem
+				r.Semantics = &s
+				r.Diagnostics = &Diagnostics{
+					ArithRecursionLimit:                "deep: %[1]s",
+					ArithRecursionBlamesTheWrittenName: c.written,
+				}
+			})
+			if !strings.Contains(out, c.want) || st == 0 {
+				t.Errorf("got %q (status %d), want %q and a failure", out, st, c.want)
+			}
+			if strings.Contains(out, "v=") {
+				t.Errorf("got %q, want no value — the expression did not finish", out)
+			}
+		})
+	}
+
+	// With no wording the default stands, which is what a dialect that has
+	// not been measured gets rather than an empty sentence.
+	out, _ := run(t, src, func(r *Runner) {
+		s := sem
+		r.Semantics = &s
+	})
+	if !strings.Contains(out, "nested too deeply") {
+		t.Errorf("unworded: got %q, want the default sentence", out)
+	}
+}

@@ -1038,7 +1038,26 @@ func boolInt(b bool) int {
 // The depth bound is not decoration: `x=x` would otherwise recur forever.
 func (r *Runner) arithValueOf(name string) (arithNum, error) {
 	if r.arithValueDepth > 32 {
-		return intNum(0), arithError{msg: "expression nested too deeply: " + name}
+		// Which name the bound is reported against is itself a divergence:
+		// bash and ksh93 name the one it stopped on and zsh the one the
+		// expression was written with, which are the same name only when
+		// the value points at itself. See
+		// Diagnostics.ArithRecursionBlamesTheWrittenName.
+		blamed := name
+		if r.diag().ArithRecursionBlamesTheWrittenName && r.arithValueTopName != "" {
+			blamed = r.arithValueTopName
+		}
+		return intNum(0), arithError{
+			msg:   Wording(r.diag().ArithRecursionLimit, "expression nested too deeply: %[1]s", blamed),
+			token: blamed,
+		}
+	}
+	if r.arithValueDepth == 0 {
+		// The name the expression itself holds, kept for the sentence above.
+		// Read here rather than passed down because every frame below this
+		// one is a *value* being read again, and none of them knows how it
+		// was reached.
+		r.arithValueTopName = name
 	}
 	value, ok := r.getVar(name)
 	if !ok {

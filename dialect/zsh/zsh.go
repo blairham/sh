@@ -2177,6 +2177,10 @@ func Diagnostics() interp.Diagnostics {
 		// was written: `$((#\))` says `after ##` as readily as `$((##))`.
 		ArithCharacterMissing: "bad math expression: character missing after ##",
 		SyntaxUnexpected:      "parse error near `%[1]s'",
+		// The newline is spelled `\n` here rather than by name, and is
+		// blamed on the line it ends (#1364).
+		SyntaxUnexpectedNewline:          "parse error near `\\n'",
+		UnexpectedNewlineIsOnTheNextLine: true,
 		// The same echo bash gives, in this shell's sentence: `"zzz"` and
 		// `'a b'` come back with their quotes on (#1239).
 		UnexpectedWordNaming: interp.UnexpectedWordIsSourceText,

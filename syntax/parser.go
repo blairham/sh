@@ -611,6 +611,9 @@ func tokenOpener(tok Token) string {
 func (p *Parser) tokenClass(plain bool) TokenClass { return tokenClass(p.tok, plain) }
 
 func tokenClass(tok Token, plain bool) TokenClass {
+	if tok.Kind == TokNewline {
+		return ClassNewline
+	}
 	if tok.Kind != TokWord {
 		return ClassOperator
 	}

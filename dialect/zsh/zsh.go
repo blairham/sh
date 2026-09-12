@@ -1719,6 +1719,10 @@ func Semantics() interp.Semantics {
 	// is started in silence here, where bash and ksh93 still announce it.
 	// Measured 2026-09-10 on a pseudo-terminal (#1738).
 	s.AnnouncesBackgroundJobWithoutTheMonitor = interp.No
+	// The hole gets refilled, and here it is a real hole first: measured
+	// 2026-09-12, `jobs %2` is 127 after the middle job is killed and reaped,
+	// 0 once a fourth job is started, and `%4` is 127.
+	s.NextJobNumberRefillsAHole = interp.Yes
 	s.ReportsACommandKilledBySignal = interp.No
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.No

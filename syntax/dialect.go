@@ -1657,26 +1657,23 @@ type Dialect struct {
 
 	// ParamLengthTakesAnOperator lets `${#name}` carry an operator as well:
 	// `${#v#a}` is the length of what the trim leaves. One shell in the
-	// panel accepts it; the other four call the whole expansion a bad
-	// substitution.
+	// preset accepts it; the rest call the whole expansion a bad substitution.
 	//
 	// A grammar flag, because the disagreement is over whether the text is a
 	// construct at all rather than over what it means — `${#v#a}` is not a
-	// number bash computes differently, it is a refusal there. Modeling it
-	// as a semantics answer would mean building a node four grammars cannot
-	// read and then declining to evaluate it, which puts the refusal a stage
-	// later than the shells put it.
+	// number computed differently, it is a refusal. Modeling it as a semantics
+	// answer would mean building a node most grammars cannot read and then
+	// declining to evaluate it, which puts the refusal a stage later than the
+	// shells put it.
 	//
 	// Only with an operator. `${#v}`, `${#a[@]}`, `${#@}` and `${#*}` are
 	// unanimous and are not this flag's business.
 	//
-	// The refusal is *deferred* in every dialect, including the one that
-	// otherwise refuses an unknown operator while reading. Measured
-	// 2026-09-06: `if false; then echo ${#v#a}; fi` runs clean in bash 5.3,
-	// bash 3.2, bash as `sh`, dash and ksh93 alike, so none of them decides
-	// this before the expansion is reached — which is why the node is marked
-	// rather than failed here. The issue this came from expected dash to
-	// refuse while reading; it does not.
+	// The refusal is *deferred* under every preset, including the one that
+	// otherwise refuses an unknown operator while reading:
+	// `if false; then echo ${#v#a}; fi` runs clean everywhere, so nothing
+	// decides this before the expansion is reached — which is why the node is
+	// marked rather than failed here.
 	ParamLengthTakesAnOperator bool
 
 	// ParamAssignAlways enables `${name::=word}`, the assignment that runs
@@ -1684,10 +1681,10 @@ type Dialect struct {
 	// held, where `${name:=word}` stores it only when the parameter is unset
 	// or empty and `${name=word}` only when it is unset.
 	//
-	// One shell in the panel has it. The other four read the same characters
-	// as `${name:off:len}` with an empty offset and a length of `=word`, and
-	// fail in arithmetic there — `operand expected at \`=word'` — or, in
-	// dash, which has no substring at all, call it a bad substitution.
+	// One preset has it. The rest read the same characters as `${name:off:len}`
+	// with an empty offset and a length of `=word`, and fail in arithmetic there
+	// — `operand expected at \`=word'` — or, with no substring at all, call it a
+	// bad substitution.
 	//
 	// A grammar flag rather than a semantics axis, for the reason
 	// ParamLengthTakesAnOperator is one: the disagreement is over whether
@@ -1697,17 +1694,16 @@ type Dialect struct {
 	// what its own arithmetic error is evidence of.
 	//
 	// The flag is what tells the two readings apart *before* either is
-	// evaluated, and reading it the substring way is not a quiet
-	// mis-answer — it is the arithmetic error that stood between a real
-	// plugin manager and its own colored output for eighteen lines of one
-	// startup (#1369).
+	// evaluated, and reading it the substring way is not a quiet mis-answer — it
+	// is the arithmetic error that stands between a real plugin manager and its
+	// own coloured output, eighteen lines of it in one startup.
 	ParamAssignAlways bool
 
 	// NestedParamExpansion enables an expansion to stand where a parameter
 	// name would: `${${v}}` applies one expansion to the result of another,
-	// and `${${v}#a}` applies the outer operator to what the inner came to.
-	// One shell in the panel has it; bash and ksh93 refuse the same
-	// characters, in their own words and at their own moment.
+	// and `${${v}#a}` applies the outer operator to what the inner came to. One
+	// preset has it; the rest refuse the same characters, in their own words and
+	// at their own moment.
 	//
 	// A grammar flag rather than a semantics axis, for the reason
 	// BareSubscript is one: it decides where the word is cut. Without it
@@ -1716,45 +1712,43 @@ type Dialect struct {
 	// nothing for a value to switch between.
 	//
 	// The inner expansion is the *whole* of the name position. Measured:
-	// `${x${v}}` and `${${v}x}` are both a bad substitution in the shell that
-	// has the construct, so text either side of it is not a shape at all and
-	// an implementation that appended it would be inventing one.
+	// `${x${v}}` and `${${v}x}` are both a bad substitution under the preset
+	// that has the construct, so text either side of it is not a shape at all
+	// and an implementation that appended it would be inventing one.
 	NestedParamExpansion bool
 
 	// NamelessParamExpansion enables an expansion with no parameter name at
 	// all: `${}` is the empty string, `${:-abc}` is `abc` because the name
-	// that is not there is never set, and `${%x}` trims a suffix off the
-	// nothing in front of it. One shell in the panel has it; the other five
-	// call every one of those texts a bad substitution.
+	// that is not there is never set, and `${%x}` trims a suffix off the nothing
+	// in front of it. One preset has it; the rest call every one of those texts
+	// a bad substitution.
 	//
 	// A grammar flag rather than a semantics axis, for the reason
 	// NestedParamExpansion is one: without it there is no parameter at the
 	// front of `${:-abc}`, so the expansion is unreadable rather than
-	// differently read, and there is nothing for a value to switch between.
-	// Measured 2026-09-08 on the six-column panel:
+	// differently read, and there is nothing for a value to switch between:
 	//
-	//	${:-abc}   abc   bash, bash-as-sh, bash 3.2 and dash: bad
-	//	                 substitution; ksh93: `:' unexpected while reading
-	//	${}        ``    the same five refusals
+	//	${:-abc}   abc   elsewhere a bad substitution, or `:' unexpected
+	//	                 while reading
+	//	${}        ``    the same refusals
 	//	${%x}      ``    and again
 	//
 	// What the flag does *not* relax is a character that is a parameter or a
 	// prefix in its own right, because those are taken before the name scan
 	// ever runs and the nameless reading never competes: `${-x}` is a bad
-	// substitution in all six — `-` is the name `$-` and `x` is a stray word
-	// after it — `${?x}` is the same with `$?`, and `${#}` is `$#` in all
-	// six rather than a length over nothing. Widening the guard leaves every
+	// substitution under every preset — `-` is the name `$-` and `x` is a stray
+	// word after it — `${?x}` is the same with `$?`, and `${#}` is `$#`
+	// everywhere rather than a length over nothing. Widening the guard leaves every
 	// one of those exactly where it was, which is the measured answer.
 	//
 	// The flag also decides `${#:-w}`, which is the one place the two
-	// readings of `#` are separated by nothing else: with the nameless form
-	// the `#` is a length over `${:-w}` and zsh answers `1`, and without it
-	// the `#` is the parameter `$#` and the other five answer `2` — see
-	// hashIsTheParameter.
+	// readings of `#` are separated by nothing else: with the nameless form the
+	// `#` is a length over `${:-w}` and the answer is `1`, and without it the `#`
+	// is the parameter `$#` and the answer is `2` — see hashIsTheParameter.
 	//
-	// `~/.zi/bin/zi.zsh` writes `${:-…}` inside the nested expansion that
-	// builds the argv of every non-zsh plugin, which is why the empty name
-	// is a daily-driver blocker rather than a corner (#1529).
+	// Installed plugin managers write `${:-…}` inside the nested expansion that
+	// builds the argv of every plugin they load, which is why the empty name is
+	// a daily-driver blocker rather than a corner.
 	NamelessParamExpansion bool
 
 	// BareBraceNestsInExpansion makes an unquoted `{` inside `${…}` open a
@@ -1768,25 +1762,22 @@ type Dialect struct {
 	// characters of the enclosing word. Those are different words, not one
 	// word two values could disagree about.
 	//
-	// The panel splits two against three. Measured 2026-09-10 with
-	// `unset u; printf "[%s]" ${u:-{a,q}.z}`:
+	// Measured with `unset u; printf "[%s]" ${u:-{a,q}.z}`:
 	//
-	//	zsh 5.9.2   [a.z][q.z]   the operand ran to `.z` and the group was
-	//	ksh93       [a.z][q.z]   then expanded — two fields
-	//	bash 5.3    [{a,q.z}]    the operand stopped at the first `}` and
-	//	bash 3.2    [{a,q.z}]    `.z}` arrived as literal text — one field
-	//	dash        [{a,q.z}]
+	//	true    [a.z][q.z]   the operand ran to `.z` and the group was then
+	//	                     expanded — two fields
+	//	false   [{a,q.z}]    the operand stopped at the first `}` and `.z}`
+	//	                     arrived as literal text — one field
 	//
-	// Brace *expansion* is not what separates them: `${u:-a{b}c}` has no
-	// comma in it and splits the panel exactly the same way, `a{b}c` in the
-	// two that balance and `a{bc}` in the three that do not. So the flag is
-	// about the scan and not about what the group would have produced —
-	// which is why dash, which has no brace expansion at all, still has an
-	// answer here.
+	// Brace *expansion* is not what separates them: `${u:-a{b}c}` has no comma
+	// in it and splits exactly the same way, `a{b}c` where the braces balance
+	// and `a{bc}` where they do not. So the flag is about the scan and not about
+	// what the group would have produced — which is why a preset with no brace
+	// expansion at all still has an answer here.
 	//
 	// Off in the core, which is what the common denominator means: the wider
-	// reading takes text the other three read as belonging to the word, and
-	// a core that swallowed it would be reading a word nobody wrote.
+	// reading takes text a narrower one reads as belonging to the word, and a
+	// core that swallowed it would be reading a word nobody wrote.
 	//
 	// Only unquoted. In double quotes all six stop at the first `}` and the
 	// flag is not consulted — see the note in scanBraces, and #1586, which

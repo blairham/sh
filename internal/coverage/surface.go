@@ -67,7 +67,6 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"sort"
 	"strconv"
@@ -141,20 +140,45 @@ func readSyntaxSource() {
 		// internal/coverage/surface.go -> the module root -> syntax.
 		dir = filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(self))), "syntax")
 	}
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool {
-		return !strings.HasSuffix(fi.Name(), "_test.go")
-	}, parser.ParseComments)
+	// The files are read one at a time rather than through go/parser's
+	// directory helper, which is deprecated for a reason that matters here:
+	// it does not consider build tags when deciding which files are the
+	// package. The replacement it points at is golang.org/x/tools, and this
+	// module's dependency surface is pinned (internal/depsurface) — a
+	// reflection-free reader of one package's sources is not worth a
+	// dependency.
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		sourceErr = fmt.Errorf("coverage: reading %s: %w", dir, err)
 		return
 	}
-	p, ok := pkgs["syntax"]
-	if !ok {
-		sourceErr = fmt.Errorf("coverage: %s holds no package named syntax", dir)
+	fset := token.NewFileSet()
+	files := map[string]*ast.File{}
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		f, err := parser.ParseFile(fset, path, nil, parser.ParseComments|parser.SkipObjectResolution)
+		if err != nil {
+			sourceErr = fmt.Errorf("coverage: parsing %s: %w", path, err)
+			return
+		}
+		if f.Name == nil || f.Name.Name != "syntax" {
+			// A file under a build tag that puts it in another package, or
+			// none at all. Skipped rather than refused: what is wanted is
+			// the package, and the guards on each enumeration catch a read
+			// that came back empty.
+			continue
+		}
+		files[path] = f
+	}
+	if len(files) == 0 {
+		sourceErr = fmt.Errorf("coverage: %s holds no files of package syntax", dir)
 		return
 	}
-	syntaxPkg = p.Files
+	syntaxPkg = files
 }
 
 // NodeTypes is every type in `syntax` with a `Pos` method, which is what the
@@ -402,47 +426,6 @@ func stringLit(e ast.Expr) (string, bool) {
 		return "", false
 	}
 	return s, true
-}
-
-// operatorTypes reports the named integer types the tree actually carries, by
-// reflecting over the node types rather than by naming them.
-//
-// A type declared in `syntax` that no node holds is not part of the surface a
-// case can mention — it would be an element with no way to reach it, and a
-// permanent zero in the report is a false work item.
-func operatorTypes(nodes []reflect.Type) map[string]bool {
-	out := map[string]bool{}
-	var walk func(reflect.Type, map[reflect.Type]bool)
-	walk = func(t reflect.Type, seen map[reflect.Type]bool) {
-		for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice {
-			t = t.Elem()
-		}
-		if seen[t] {
-			return
-		}
-		seen[t] = true
-		if t.Kind() != reflect.Struct {
-			return
-		}
-		for i := range t.NumField() {
-			f := t.Field(i)
-			ft := f.Type
-			switch ft.Kind() {
-			case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-				reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				if ft.PkgPath() != "" && ft.Name() != "" && ft.PkgPath() == syntaxPkgPath {
-					out[ft.Name()] = true
-				}
-			default:
-				walk(ft, seen)
-			}
-		}
-	}
-	seen := map[reflect.Type]bool{}
-	for _, t := range nodes {
-		walk(t, seen)
-	}
-	return out
 }
 
 const syntaxPkgPath = "github.com/blairham/sh/syntax"

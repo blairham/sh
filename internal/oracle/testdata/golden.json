@@ -3390,6 +3390,13 @@
       }
     },
     "arith/a-colon-after-a-complete-conditional": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: malformed ?: operator",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: 1 ? 2 : 3 : 4: arithmetic syntax error in expression (error token is \": 4\")",
@@ -41379,6 +41386,13 @@
       }
     },
     "core/a-backquote-substitution-under-a-syntax-check": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "",
@@ -41423,6 +41437,13 @@
       }
     },
     "core/a-backquote-substitution-when-it-runs": {
+      "ash": {
+        "Stdout": "hithereb",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "hithereb",
         "Stderr": "",
@@ -50800,6 +50821,13 @@
       }
     },
     "declare/a-hash-in-a-listed-value": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "declare -- a=\"16#ff\"~declare -- b=\"#lead\"~declare -- c=\"tail#\"~declare -- d=\"a#b\"~declare -- e=\"99#zz\"~declare -- f=\"1a#b\"~declare -- g=\"a.b#c\"",
         "Stderr": "",
@@ -55434,6 +55462,13 @@
       }
     },
     "declare/an-output-base-at-the-ends-of-the-alphabet": {
+      "ash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "[]",
         "Stderr": "\u003cshell\u003e: line 1: typeset: -6: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: d: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: b: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -0: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: e: not found~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: a: not found",
@@ -95296,6 +95331,13 @@
       }
     },
     "opt/command-tracking-starts-on-where-the-letter-says-so": {
+      "ash": {
+        "Stdout": "letter=out~after=out",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "hashall=on~letter=in~hashall=off~after=out",
         "Stderr": "",
@@ -100848,6 +100890,13 @@
       }
     },
     "param/a-substring-modifier-reads-its-own-quotes": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: arithmetic syntax error",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: x: s/'.'/: arithmetic syntax error: operand expected (error token is \"'.'/\")",
@@ -136432,6 +136481,13 @@
       }
     },
     "read/keys-attached-count-must-be-a-number": {
+      "ash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: read: line 0: illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=2",
         "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
@@ -136476,6 +136532,13 @@
       }
     },
     "read/keys-count-what-the-locale-calls-a-character": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: read: line 0: illegal option -k~\u003cshell\u003e: read: line 0: illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
@@ -136520,6 +136583,13 @@
       }
     },
     "read/keys-default-to-reply": {
+      "ash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: read: line 0: illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=2 []",
         "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
@@ -136564,6 +136634,13 @@
       }
     },
     "read/keys-do-not-stop-at-a-newline": {
+      "ash": {
+        "Stdout": "st=2 len=0",
+        "Stderr": "\u003cshell\u003e: read: line 0: illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=2 len=0",
         "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
@@ -136608,6 +136685,13 @@
       }
     },
     "read/keys-fill-one-name-only": {
+      "ash": {
+        "Stdout": "st=2 [] w=[keep]",
+        "Stderr": "\u003cshell\u003e: read: line 0: illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=2 [] w=[keep]",
         "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
@@ -136652,6 +136736,13 @@
       }
     },
     "read/keys-from-a-descriptor": {
+      "ash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: read: line 0: illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=2 []",
         "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
@@ -136696,6 +136787,13 @@
       }
     },
     "read/keys-ignore-a-redirected-input": {
+      "ash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: read: line 0: illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=2 []",
         "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
@@ -136740,6 +136838,13 @@
       }
     },
     "read/keys-need-a-terminal": {
+      "ash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: read: line 0: illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=2 []",
         "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
@@ -136784,6 +136889,13 @@
       }
     },
     "read/keys-of-nought-reads-nothing": {
+      "ash": {
+        "Stdout": "st=2 [keep]",
+        "Stderr": "\u003cshell\u003e: read: line 0: illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=2 [keep]",
         "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
@@ -136828,6 +136940,13 @@
       }
     },
     "read/keys-short-read-keeps-what-came": {
+      "ash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: read: line 0: illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=2 []",
         "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
@@ -136872,6 +136991,13 @@
       }
     },
     "read/keys-without-a-count-is-one": {
+      "ash": {
+        "Stdout": "st=2 []",
+        "Stderr": "\u003cshell\u003e: read: line 0: illegal option -k",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
       "bash": {
         "Stdout": "st=2 []",
         "Stderr": "\u003cshell\u003e: line 1: read: -k: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",

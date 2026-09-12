@@ -99,7 +99,15 @@ func TestAnArrayLiteralSyntaxErrorEndsTheLineAndNotTheFile(t *testing.T) {
 		// is the ordinary unfinished construct, and a substitution's contents
 		// are the file's.
 		{"an array that reads", "echo one\na=(x y)\necho \"${a[@]}\"\n", "one\nx y\n", 0, true},
-		{"the input running out", "echo one\na=(p q\necho two\n", "one\n", 2, false},
+		{
+			// Measured against the 2 this row used to assert, which was our
+			// own answer rather than bash's: the input running out ends the
+			// *line* as well, so what is left is the 1 a refused line leaves.
+			// There is no next line to carry on to — that is what the end of
+			// the input means — so the status is the whole of the difference.
+			// See TestTheInputRunningOutInsideAnArrayLiteral (#2404).
+			"the input running out", "echo one\na=(p q\necho two\n", "one\n", 1, false,
+		},
 		{"a substitution that does not read", "echo one\necho $(if)\necho two\n", "one\n", 2, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -301,6 +309,78 @@ func TestAQuotedExpansionOperandIsReadWhenTheExpansionReachesIt(t *testing.T) {
 				t.Errorf("ran %q: said %q, want silence", c.src, errs)
 			}
 			if !c.quiet && errs == "" {
+				t.Errorf("ran %q: said nothing, want a complaint", c.src)
+			}
+		})
+	}
+}
+
+// TestTheInputRunningOutInsideAnArrayLiteral is the status half of the same
+// recovery, and it is the row above's other side.
+//
+// A syntax error between an array literal's parentheses ends the line rather
+// than the file. The input *running out* between them was excluded from that
+// on the reasoning that there is no next line to carry on to — which is true,
+// and which leaves the status still to be answered. bash answers it the same
+// way: 1, the number a refused line leaves, where the identical message
+// outside the parentheses is 2.
+//
+// Measured 2026-09-12 against bash 5.3.15, `env -i` with a scratch HOME, from
+// a script file and again with -c and with -n, all three agreeing:
+//
+//	a=( x                    1    the input ran out inside the parens
+//	a=( $(                   1    inside a construct inside them
+//	a=( "x                   1    inside a quote
+//	echo $(                  2    the same message, outside them
+//	echo "x                  2    the same
+//	set -e ⏎ a=( x           2    the refused line's own rule
+//	a=( $(if; then :; fi) )  2    a token refused deeper in is not this
+//
+// Row one against row four is the measurement: one wording, two statuses, and
+// the parentheses the only difference between them. Row six is what says this
+// is the refused *line* rather than a status of its own — `set -e` turns it
+// back into 2 exactly as it does for a token refused between the parentheses,
+// which a number attached to the failure could not have done.
+func TestTheInputRunningOutInsideAnArrayLiteral(t *testing.T) {
+	for _, c := range []struct {
+		name, src, out string
+		status         int
+	}{
+		{"between the parentheses", "echo one\na=( x", "one\n", 1},
+		{
+			// Inside a construct inside them, so the refusal is recorded
+			// deeper in than this production and is still the line's.
+			"inside a substitution inside them", "echo one\na=( $(", "one\n", 1,
+		},
+		{
+			// And inside a quote, where the failure is the lexer's rather
+			// than the parser's — a different field holding it, the same
+			// answer.
+			"inside a quote inside them", "echo one\na=( \"x", "one\n", 1,
+		},
+		{
+			// The elements the parenthesis swallowed do not run: an
+			// unterminated literal eats the rest of the file.
+			"the lines it swallowed", "echo one\na=( x\necho two\n", "one\n", 1,
+		},
+		// Controls. The same message outside an array literal is the file's,
+		// `set -e` makes this one the file's too, and a *token* the grammar
+		// refused deeper in was never this.
+		{"a substitution that runs out", "echo one\necho $(", "one\n", 2},
+		{"a quote that runs out", "echo one\necho \"x", "one\n", 2},
+		{"under set -e", "set -e\necho one\na=( x", "one\n", 2},
+		{
+			"a token refused deeper in", "echo one\na=( $(if; then :; fi) )\n",
+			"one\n", 2,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, errs, status := runScript(t, scriptFile(t, c.src))
+			if out != c.out || status != c.status {
+				t.Errorf("ran %q: out %q status %d, want %q and %d (errs %q)",
+					c.src, out, status, c.out, c.status, errs)
+			}
+			if errs == "" {
 				t.Errorf("ran %q: said nothing, want a complaint", c.src)
 			}
 		})

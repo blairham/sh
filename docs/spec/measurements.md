@@ -18043,7 +18043,7 @@ grades it and nothing drift-checks it either, for the same reason.
   f
   echo two
   ```
-- `array/a-literal-that-runs-out-of-input` — the control for the three rows above: the input running out is not the same failure and nothing carries on from it. bash words it against the parenthesis — `unexpected EOF while looking for matching )` — where the operator rows name the token, and every column stops. The distinction is real rather than incidental: the same text with more after it is an unfinished construct, which is a shell waiting rather than a shell complaining
+- `array/a-literal-that-runs-out-of-input` — the control for the three rows above: the input running out is worded differently and nothing carries on from it. bash words it against the parenthesis — `unexpected EOF while looking for matching )` — where the operator rows name the token, and every column stops. The distinction is real rather than incidental: the same text with more after it is an unfinished construct, which is a shell waiting rather than a shell complaining. What the three bash columns still say is *which* failure it was, and they say it in the status: 1 here, a refused line's, where `echo $(` and `echo "x` — the same message and the same end of input, outside an array literal — are 2. So the parentheses change the status of a failure they cannot recover from, and this row is the only place the panel records it (#2404)
   ```sh
   echo one
   a=(p q

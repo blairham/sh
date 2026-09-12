@@ -139,7 +139,7 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 // TestTheThreeAxesLeftUnansweredStillRefuse is the other half, and it is not
 // redundant: the three this dialect cannot answer are recorded as open
 // questions, and a value quietly appearing for one of them — copied from a
-// neighbouring dialect to make the message go away — is exactly what
+// neighboring dialect to make the message go away — is exactly what
 // docs/spec/ash.md forbids. When one is closed properly, its issue moves the
 // row from here to the table above.
 func TestTheThreeAxesLeftUnansweredStillRefuse(t *testing.T) {

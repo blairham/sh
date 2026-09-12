@@ -22,6 +22,24 @@ type Node interface {
 type File struct {
 	Stmts []*Stmt
 	Last  Pos
+
+	// Refused is a failure that gives up **this line** rather than the file,
+	// and it is nil for every line that read cleanly.
+	//
+	// One construct raises it: a syntax error inside a compound assignment's
+	// parentheses, where the shell that has them reads the parentheses as
+	// part of a word and their contents as a list of their own. A failure in
+	// that list is reported, the command it belongs to is thrown away
+	// unrun — the function `f() { a=(p & q); }` is *not* defined — and the
+	// shell goes on reading at the next line. See
+	// Dialect.CompoundAssignmentErrorGivesUpTheLine for the panel.
+	//
+	// Only NextLine hands one back, because only a shell reading a program as
+	// it runs it has a next line to go on to. Parse, which reads the whole
+	// file at once and runs none of it, carries the first one into the
+	// parser's own error instead: there, the refusal *is* the answer, which is
+	// what `bash -n` reports and exits 1 for.
+	Refused error
 }
 
 func (f *File) Pos() Pos {

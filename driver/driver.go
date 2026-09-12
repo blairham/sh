@@ -1898,6 +1898,23 @@ func (sh Shell) executeLines(
 			}
 			return in.dg.StatusForParseError(err), endingParseFailure
 		}
+		if line.Refused != nil {
+			// A construct inside the line did not read, and only the line
+			// goes with it — see syntax.File.Refused. The shell writes back
+			// what it read, says what was wrong, leaves the status a failed
+			// command leaves, and goes on to the next line without running
+			// any of this one.
+			say(verboseUpTo(pr.text(), line.Refused))
+			sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, line.Refused, pr.text()))
+			if r.ErrExit() {
+				// `set -e` makes it the file's after all: measured, bash 5.3
+				// stops at the refused line and exits at the parse-failure
+				// status rather than carrying on at 1.
+				return in.dg.StatusForParseError(line.Refused), endingParseFailure
+			}
+			r.SetExitStatus(1)
+			continue
+		}
 		// `set -v` — the input written back as it is read. The front end is
 		// the one holding the raw text, which is why the echo lives here: the
 		// runner only says whether the option is on. Accounted for up to the

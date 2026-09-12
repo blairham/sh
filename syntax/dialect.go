@@ -1963,6 +1963,40 @@ type Dialect struct {
 	// through it.
 	OperandIsReadWhenTheExpansionReachesIt bool
 
+	// CompoundAssignmentErrorGivesUpTheLine makes a syntax error inside
+	// `a=( … )` end the line it was written on rather than the file, so the
+	// shell reports it, throws that line away unrun, and reads on.
+	//
+	// The parentheses of a compound assignment are part of a *word*, and what
+	// stands between them is a list read on its own. That is what separates
+	// this from every other syntax error: the file around it parsed, and only
+	// the list did not.
+	//
+	// Measured 2026-09-12 from a script file, `echo one` above and `echo two`
+	// below, with `a=(p & q)` between them:
+	//
+	//	bash 5.3.15           one · the complaint · two, status 0
+	//	bash 3.2.57           one · the complaint · two, status 0
+	//	bash 5.3.15 as `sh`   one · the complaint, status 1
+	//	zsh 5.9.2             one · parse error near `&', status 1
+	//	ksh93u+               one · `&' unexpected, status 3
+	//	dash                  one · "(" unexpected, status 2 — it has no arrays
+	//
+	// So two columns carry on and four stop, and `bash -n` reports it in
+	// every one of them: this is not about *when* the error is found but
+	// about how much it ends. `$?` on the line after is 1 in the two that
+	// carry on, and a script whose last line is the bad one exits 1 — the
+	// status a failed command leaves, not the status a refused file leaves.
+	//
+	// It is not a property of nested parsing in general. `echo $(if)` is
+	// fatal at status 2 in bash, so a substitution's contents are the file's
+	// and an assignment's elements are not.
+	//
+	// A grammar flag rather than a semantics axis because the parser is what
+	// recovers: it has to read past the construct for there to be a next line
+	// at all. See Parser.giveUpOnTheArray and File.Refused.
+	CompoundAssignmentErrorGivesUpTheLine bool
+
 	// ParamIndirection enables `${!x}` to *parse*. bash and ksh93 accept it;
 	// dash and zsh reject it outright.
 	//

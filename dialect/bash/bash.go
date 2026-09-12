@@ -74,6 +74,12 @@ func Dialect() syntax.Dialect {
 	// same. See Dialect.OperandIsReadWhenTheExpansionReachesIt for the panel
 	// and for why the three that refuse are not a vote against it (#2380).
 	d.OperandIsReadWhenTheExpansionReachesIt = true
+	// A syntax error between a compound assignment's parentheses ends that
+	// line and not the file: `a=(p & q)` is reported, the line is thrown away
+	// unrun, and the next one runs. bash 3.2 answers the same; `sh`, zsh,
+	// ksh93 and dash all stop. See
+	// Dialect.CompoundAssignmentErrorGivesUpTheLine (#2380).
+	d.CompoundAssignmentErrorGivesUpTheLine = true
 	// `$"..."`, the locale-translatable string: with no catalog it is a
 	// plain double-quoted string with the `$` stripped. Not core, because
 	// dash and zsh keep the `$` as a literal.

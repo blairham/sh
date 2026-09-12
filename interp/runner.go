@@ -2053,6 +2053,11 @@ func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body fun
 // Verbose reports `set -v`, for the front end that holds the raw lines.
 func (r *Runner) Verbose() bool { return r.verbose }
 
+// ErrExit reports `set -e`, for the front end that has one thing to decide by
+// it: a line the parser refused ends the script under the option and only the
+// line without it. See syntax.File.Refused.
+func (r *Runner) ErrExit() bool { return r.errexit }
+
 // NoExec reports `set -n`: the program is read and never run.
 //
 // Exported for the front end, which has one thing to decide by it that the

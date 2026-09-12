@@ -516,6 +516,14 @@ func Semantics() interp.Semantics {
 	// The reading side of the same option: zsh's short spelling of noglob
 	// is `-F`, and that capital is what its `$-` reports.
 	s.NoglobLetterIsF = interp.No
+	// And what this shell does spend `-f` on: the startup files, whose name
+	// in its own option namespace is `norcs`. The letter and the name are
+	// one state, which is measured from both ends — `set -f` puts `norcs`
+	// in a bare `setopt` listing and `f` in `$-`, `set -o norcs` puts the
+	// letter there without the letter having been written, and `set +f` in a
+	// `zsh -f` shell takes both away again (#1542). See setopt.go's `rcs`
+	// entry, which is the same state read the other way up.
+	s.SetFLetterOption = "norcs"
 	// `set -h` is histignoredups here — a history option — not the command
 	// tracking the letter abbreviates in bash and ksh93.
 	s.SetHLetterTracksCommands = interp.No
@@ -607,6 +615,22 @@ func Semantics() interp.Semantics {
 	s.CommandStringShowsCInDollarDash = interp.No
 	s.LoginShowsLInDollarDash = interp.Yes
 	s.CommandStringShowsSInDollarDash = interp.No
+	// And the order, which is the simplest in the panel and the only sorted
+	// one: the whole string by byte, so the digits lead, the capitals follow
+	// and the lowercase letters come last. Measured 2026-09-12 on zsh 5.9.2,
+	// the interactive row through a pseudo-terminal:
+	//
+	//	set -f; set -u; set -e   569Xefu
+	//	set -C                   569CX
+	//	set -C -e                569CXe
+	//	set -o noglob            569FX
+	//	set -e -C, on stdin      569CXes
+	//	-l -c                    569Xl
+	//	-i -c, at a terminal     569XZim
+	//
+	// The `-C` rows are what make it a sort rather than an append: the
+	// letter lands in front of a startup letter this shell already held.
+	s.DollarDashLetterOrder = "569BCEFHTXZacefhilmnstuvx"
 	// The panel's holdout: `echo hi >&-` is status 0 here and 1 in the other
 	// three — the text is quietly lost and nothing is said about a simple
 	// command's own closed stream. What zsh prints when the stream was

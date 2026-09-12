@@ -1250,6 +1250,11 @@ var Corpus = []Case{
 		Why:     "three options turned on in a written order, and no shell reports them in it. bash sorts the lowercase letters and keeps its own suffix (`efhuBc`); ksh93 sorts including the letters it already had (`cefhsuB`); zsh puts its digits first (`569Xefu`); dash answers `ufe`, which is neither the order they were set in nor alphabetical but its own option table's. The order is therefore a property of the shell and never a fact about `$-`, which is worth pinning because a reader of any one row would assume otherwise",
 	},
 	{
+		ID: "special/dollar-dash-places-a-capital-among-the-letters-it-started-with", Category: "parameters",
+		Snippet: `set -C; set -e; echo "[$-]"`,
+		Why:     "the row above turns on three lowercase options; this one turns on a capital, which is where two of the four disciplines part company. bash keeps its startup letters together and puts the capital after them (`ehBCc`), ksh93 the same (`cehsBC`), and zsh sorts the capital in *front* of the startup letter it already held (`569CXe`) — so an implementation that appends capitals in the order they were set matches two shells and misses the third, which is exactly what a row of lowercase letters cannot show",
+	},
+	{
 		ID: "special/lineno-is-where-you-are", Category: "parameters",
 		Snippet: `echo "$LINENO"; echo "$LINENO"`,
 		Why:     "produced when it is read rather than stored, which is the whole of the distinction: a stored copy would be the line the shell started on",
@@ -13856,6 +13861,11 @@ echo "st=$? alive"`,
 		ID: "opt/dollar-dash-noglob-letter-diverges", Category: "shell options",
 		Snippet: `set -o noglob; case $- in *f*) echo lower;; *F*) echo upper;; *) echo neither;; esac`,
 		Why:     "the letter itself is an axis: POSIX names `f` and three of the four report it, while zsh reports the capital — `-F` being its own short spelling of noglob, the same split `set -f` measures from the writing side",
+	},
+	{
+		ID: "opt/set-f-writes-the-letter-in-the-shell-that-still-globs", Category: "shell options",
+		Snippet: `touch zz.txt; set -f; case $- in *f*) echo letter;; *) echo none;; esac; echo zz.*`,
+		Why:     "the letter and its effect asked in one breath, which is the only way this split shows. Five of the six spend `-f` on noglob and answer `letter` then the unexpanded pattern; zsh answers `letter` too and then *lists the file*, because its `-f` is about startup files and leaves globbing alone. So the letter is not evidence for the option, and a shell that took the letter to mean noglob — or that omitted it because it does not — would match half the panel either way (#1542)",
 	},
 	{
 		ID: "shopt/histappend-is-accepted", Category: "shell options",

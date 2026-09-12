@@ -630,20 +630,51 @@ in the panel builds it the same way. Measured 2026-09-05, `set -f; set
 | zsh | `569Xefu` |
 
 None of them is the order the options were written in, and only two
-resemble each other. bash sorts the lowercase letters and keeps the ones
-it started with as a suffix; ksh93 sorts everything it holds; zsh puts
-its digits first; and dash's `ufe` is neither sorted nor chronological —
-it is its own option table's order, which is a fact about a table nobody
-outside dash can see.
-
-So a script may test `case $- in *e*)` and may not compare `$-` against a
-string, and an implementation has no order to inherit: it has to pick
-one, per dialect, the way it picks the letters. The whole string is also
-recorded by route in `special/dollar-dash-in-full` and
+resemble each other. So a script may test `case $- in *e*)` and may not
+compare `$-` against a string, and an implementation has no order to
+inherit: it picks one **per dialect**, the way it picks the letters, and
+`Semantics.DollarDashLetterOrder` is where each says which. The whole
+string is also recorded by route in `special/dollar-dash-in-full` and
 `special/dollar-dash-in-full-from-a-script`, which is where the
 route-dependence above shows up as text rather than as membership — ksh93
 carries `s` for a command string and drops it for a script, landing on
 exactly bash's `hB`.
+
+Re-measured a letter at a time on 2026-09-12, each shell has a
+discipline, and no two of them are the same one:
+
+**bash** sorts the lowercase letters, then the uppercase ones, then puts
+the letter naming the route it was invoked by last. `set -C -e` is
+`ehBCc` and `set -C -e` with the program on standard input is `ehBCs`,
+which is what says the trailing letter is the route's rather than `c` in
+particular — `i` and `m` sort in with the rest (`-i -c` at a terminal is
+`himBHc`) where `s` does not.
+
+**ksh93** leads with `i`, then `c`, sorts the rest of the lowercase
+letters, then the uppercase ones, and puts `l` last of all. `-i -c` at a
+terminal is `icmsBE`, `-il -c` is `icmsBEl`, and `-l -c` is `chsBl`, so
+two letters sit outside the sort in opposite directions: `i` in front of
+a `c` it sorts after, and `l` behind capitals it sorts before.
+
+**zsh** sorts the whole string by byte, digits and capitals included.
+`set -C` is `569CX` — the capital lands *in front of* a startup letter
+the shell already held, which is what makes it a sort rather than an
+append.
+
+**dash** uses an order of its own that is neither sorted nor
+chronological: `set -a -b -C -e -f -u -v -E -I` is `ubaCEvIfe`, and
+adding the standard-input route puts `s` between `x` and `i`. It is the
+reverse of the order the same shell's `set -o` writes its rows in, which
+is the only evidence available for `n` — `set -n` stops the `echo` that
+would read `$-`, so the letter cannot be observed directly. `-i -c` at a
+terminal answers `mi`, and `m` before `i` is what that reversal
+predicts.
+
+These are recorded as one string per dialect rather than as four named
+disciplines, so that a letter's place is a measurement a reader can check
+against a shell, and so that the member whose order is its own table's
+needs no special case. A letter a dialect's string does not name follows
+the ones it does.
 
 ## Where it lives
 

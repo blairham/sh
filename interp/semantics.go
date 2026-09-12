@@ -1884,6 +1884,65 @@ type Semantics struct {
 	// SetFTurnsOffGlobbing records, seen from the reading side.
 	NoglobLetterIsF Answer
 
+	// SetFLetterOption is the `set -o` name this shell's `-f` letter is
+	// short for where SetFTurnsOffGlobbing says it is not noglob, and it is
+	// read from both sides: `set -f` moves the name, and `$-` carries `f`
+	// for as long as the name is on.
+	//
+	// A name rather than a second boolean field because the state already
+	// exists in the dialect's own option namespace, and the letter and the
+	// name have to be one state or `set -f` and the listing disagree.
+	// Measured on zsh 5.9.2, 2026-09-12, where the name is `norcs` — the
+	// startup files this shell was told to skip:
+	//
+	//	zsh -c 'set -f; setopt'              nohashdirs, norcs
+	//	zsh -c 'set -f; echo $-'             569Xf
+	//	zsh -c 'set -o norcs; echo $-'       569Xf
+	//	zsh -f -c 'echo $-'                  569Xf
+	//	zsh -f -c 'set +f; setopt'           nohashdirs
+	//	zsh -f -c 'set +f; echo $-'          569X
+	//
+	// The third row is what makes this the option's state and not a record
+	// that the letter was written: a script that never says `-f` still gets
+	// the letter once the name is on. The last two are the other half — the
+	// letter withdraws when the name does, on a route that never wrote it.
+	//
+	// Empty in the three shells that spend `-f` on globbing, where
+	// SetFTurnsOffGlobbing answers the whole question and this is never
+	// reached.
+	SetFLetterOption string
+
+	// DollarDashLetterOrder is the order this shell publishes the letters of
+	// `$-` in. Letters it does not name follow the ones it does, in the
+	// order this implementation happens to produce them.
+	//
+	// A per-dialect sequence rather than an Answer, because there is no
+	// majority to follow and no single rule to derive: measured 2026-09-12
+	// on `set -f; set -u; set -e; echo $-`, the six columns answer `ufe`,
+	// `efhuBc`, `efhuBc`, `efhuBc`, `cefhsuB` and `569Xefu` — four different
+	// disciplines, none of them the order the script wrote.
+	//
+	// Written as one string per dialect rather than as a named discipline so
+	// that a letter's place is a measurement someone can check against a
+	// shell, and so that the one member whose order is neither sorted nor
+	// chronological needs no special case.
+	//
+	// The four, each derived from the runs recorded beside the dialect's own
+	// value:
+	//
+	//   - bash sorts the lowercase letters, then the uppercase ones, and
+	//     puts the letter naming the route it was invoked by last.
+	//   - ksh93 leads with `i` and `c`, sorts the rest of the lowercase
+	//     letters, then the uppercase ones, and puts `l` last of all.
+	//   - zsh sorts the whole string by byte, digits and capitals included.
+	//   - dash uses an order of its own, which is neither.
+	//
+	// Empty leaves the letters as this implementation produces them, which
+	// is what the substrate's own preset does: POSIX says which letters `$-`
+	// holds and nothing about the order, so there is no text to read and no
+	// shell to copy.
+	DollarDashLetterOrder string
+
 	// DefaultOptionLetters is what `$-` starts with before the script has
 	// set anything: the single-letter options a shell turns on at startup.
 	// Measured identical under `-c`, a script file and standard input —

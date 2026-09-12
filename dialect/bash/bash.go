@@ -242,6 +242,25 @@ func Semantics() interp.Semantics {
 	s.CommandStringShowsCInDollarDash = interp.Yes
 	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
+	// And the order it publishes them in: the lowercase letters sorted, then
+	// the uppercase ones sorted, then the letter naming the route it was
+	// invoked by. Measured 2026-09-12 on bash 5.3.15, and every row of it is
+	// a shell disagreeing with the order the script wrote:
+	//
+	//	set -f; set -u; set -e   efhuBc
+	//	set -C                   hBCc
+	//	set -C -e                ehBCc
+	//	set -a                   ahBc
+	//	-i -c, at a terminal     himBHc
+	//	set -e -C, on stdin      ehBCs
+	//
+	// The last two are what say the trailing letter is the route's and not
+	// `c` in particular: `i` and `m` sort in with the rest where `s` does
+	// not. Which of `c` and `s` comes first is not measurable here — this
+	// shell never shows both, being the one that answers `No` to
+	// CommandStringShowsSInDollarDash — so the pair is written in the order
+	// the substrate produces them.
+	s.DollarDashLetterOrder = "aefhilmntuvxBCEHTcs"
 	s.ArrayScalarIsTheWholeArray = interp.No
 	// And the one element a plain `$m` on a keyed table gives is the one
 	// keyed `0`, which is nothing at all where no such key was written.

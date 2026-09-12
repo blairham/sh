@@ -5033,61 +5033,57 @@ type Semantics struct {
 	// about the rest, so both answers conform and there is no majority to defer
 	// to on the standard's authority.
 	//
-	// It is narrower than "the shell hands nothing over", and the boundary
-	// is measured. A descriptor the *caller* opened crosses in every shell,
-	// this one included, and closing it closes it for the child everywhere.
-	// A command's own redirection crosses everywhere too — `sh -c '… >&3'
-	// 3>f` writes, and so does `exec 3>f; sh -c '… >&3' 3>&3`, where
-	// restating the number on the command brings it back. What is withheld
-	// is what `exec` opened: the numbered form, a `{v}>f` the shell numbered
-	// itself, and a `9<&3` duplicated from an inherited descriptor, while
-	// the inherited 3 it was copied from still crosses.
+	// It is narrower than "the shell hands nothing over", and the boundary is
+	// measured. A descriptor the *caller* opened crosses under both answers, and
+	// closing it closes it for the child under both. A command's own redirection
+	// crosses under both too — `sh -c '… >&3' 3>f` writes, and so does
+	// `exec 3>f; sh -c '… >&3' 3>&3`, where restating the number on the command
+	// brings it back. What a No withholds is what `exec` opened: the numbered
+	// form, a `{v}>f` the shell numbered itself, and a `9<&3` duplicated from an
+	// inherited descriptor, while the inherited 3 it was copied from still
+	// crosses.
 	//
 	// Read where the outbound table is built, so an external command and a
-	// process replacement get the same answer — measured the same in both,
-	// which is one divergence rather than two.
+	// process replacement get the same answer — measured the same in both, which
+	// is one divergence rather than two.
 	ExecOpenedFdReachesACommand Answer
 
-	// FdVariableBadCloseIsAnError refuses `exec {name}>&-` when the name
-	// holds no descriptor number. ksh93 says nothing and reports success.
+	// FdVariableBadCloseIsAnError refuses `exec {name}>&-` when the name holds
+	// no descriptor number. Answering No says nothing and reports success.
 	FdVariableBadCloseIsAnError Answer
 
 	// FdNumberBoundedByOpenFileLimit refuses a redirection whose descriptor
-	// number is at or above the process's soft limit on open files. bash and
-	// ksh93 do; dash and zsh accept the number and let whatever comes next
-	// fail on it, or not at all.
+	// number is at or above the process's soft limit on open files. Answering No
+	// accepts the number and lets whatever comes next fail on it, or not at all.
 	//
-	// There is no *language* bound anywhere in the panel — no shell has a
-	// ceiling of its own, and the one that bites is the kernel's `ulimit -n`.
-	// bash reports the errno it gets: with the limit at 20, `exec 20>f` is
+	// There is no *language* bound anywhere — no implementation has a ceiling of
+	// its own, and the one that bites is the kernel's `ulimit -n`. A Yes reports
+	// the errno it gets: with the limit at 20, `exec 20>f` is
 	// `20: Bad file descriptor` and status 1, `exec 19>f` is silent, and
-	// lowering the limit lowers the ceiling exactly. ksh93 refuses the same
-	// numbers in its own words. dash and zsh answer 0 for `exec 8>f` under a
-	// limit of 6 and leave the descriptor unusable, which is the shape of not
-	// asking rather than of a different answer.
+	// lowering the limit lowers the ceiling exactly. A No answers 0 for
+	// `exec 8>f` under a limit of 6 and leaves the descriptor unusable, which is
+	// the shape of not asking rather than of a different answer.
 	//
-	// It is asked at the disagreement rather than on every redirection: a
-	// number below the limit is nobody's question, and a Runner with no
-	// GetRlimit has no limit to be asked about. Reached most often through
-	// MultiDigitFdNumber, which is what lets a script write a number that
-	// large at all — under the three shells that read one digit, the only way
-	// to a descriptor above nine is to let the shell pick it.
+	// It is asked at the disagreement rather than on every redirection: a number
+	// below the limit is nobody's question, and a Runner with no GetRlimit has
+	// no limit to be asked about. Reached most often through MultiDigitFdNumber,
+	// which is what lets a script write a number that large at all — where only
+	// one digit is read, the only way to a descriptor above nine is to let the
+	// shell pick it.
 	FdNumberBoundedByOpenFileLimit Answer
 
-	// JobControlAbsenceIsReportedFirst refuses `bg` and `fg` before
-	// reading the operand when there is no job control — bash and zsh; dash
-	// and ksh93 read their operands and options first and complain about
-	// those.
+	// JobControlAbsenceIsReportedFirst refuses `bg` and `fg` before reading the
+	// operand when there is no job control. Answering No reads the operands and
+	// options first and complains about those.
 	JobControlAbsenceIsReportedFirst Answer
 
-	// StoppedJobsHoldTheExit keeps an interactive shell alive when leaving
-	// would abandon a job that is stopped: the shell says so and stays, and
-	// the attempt has to be made a second time.
+	// StoppedJobsHoldTheExit keeps an interactive shell alive when leaving would
+	// abandon a job that is stopped: the shell says so and stays, and the
+	// attempt has to be made a second time. Answering No leaves at once and the
+	// job is left stopped with nothing able to name it.
 	//
-	// bash and zsh; dash and ksh93 leave at once and the job is left stopped
-	// with nothing able to name it. Measured through a pseudo-terminal —
-	// `sleep 40`, ^Z, `exit` — for `exit` and for the end of input alike,
-	// which behave the same in both shells that hold.
+	// Measured through a pseudo-terminal — a long sleep, ^Z, `exit` — for `exit`
+	// and for the end of input alike, which behave the same under Yes.
 	//
 	// What counts as having been told is measured too, and it is not simply
 	// "warned once": a `jobs` listing counts, so `exit` straight after one
@@ -5095,236 +5091,217 @@ type Semantics struct {
 	// `exit` still warns; and a job stopping afterwards starts it over.
 	StoppedJobsHoldTheExit Answer
 
-	// HeldExitListsTheJobs follows that warning with the job table — the
-	// same rows `jobs` writes. bash does and zsh does not: measured through a
-	// pseudo-terminal, `shopt -s checkjobs` then `exit` writes
-	// `There are running jobs.` and `[1]+  Running   sleep 40 &` under it,
-	// where zsh writes `you have running jobs.` and nothing else, whatever
-	// its own options are set to.
+	// HeldExitListsTheJobs follows that warning with the job table — the same
+	// rows `jobs` writes. Answering No writes the sentence and nothing else,
+	// whatever its own options are set to.
 	//
-	// Reached only in a shell that holds an exit at all, so dash and ksh93
-	// never answer it. Asked *with* Runner.ChecksRunningJobsAtExit rather
-	// than instead of it, because in bash the listing is the other half of
-	// what one `checkjobs` buys: with the option off the sentence still
-	// appears for a stopped job and the table under it does not.
+	// Reached only in a shell that holds an exit at all. Asked *with*
+	// Runner.ChecksRunningJobsAtExit rather than instead of it, because under
+	// Yes the listing is the other half of what that option buys: with the
+	// option off the sentence still appears for a stopped job and the table
+	// under it does not.
 	HeldExitListsTheJobs Answer
 
-	// CdpathAnnouncesTheDirectory prints where CDPATH sent a `cd`, when
-	// the winning entry was not a plain dot — three of the four; zsh moves
-	// in silence.
+	// CdpathAnnouncesTheDirectory prints where CDPATH sent a `cd`, when the
+	// winning entry was not a plain dot. Answering No moves in silence.
 	CdpathAnnouncesTheDirectory Answer
 
-	// AutoCdAnnouncesTheSubstitution writes the `cd` that a bare directory
-	// name was read as, before moving — bash; zsh moves in silence.
+	// AutoCdAnnouncesTheSubstitution writes the `cd` that a bare directory name
+	// was read as, before moving. Answering No moves in silence.
 	//
-	// Only the two shells that have the option at all reach this, which is
-	// why it is unanswered in the base rather than given the quieter default:
-	// dash and ksh93 have no `autocd`, so nothing can turn the capability on
-	// in them and nothing can ask. See Runner.autoCdInstead.
+	// Only a preset that has the option at all reaches this, which is why it is
+	// unanswered in the base rather than given the quieter default: where
+	// nothing can turn the capability on, nothing can ask. See
+	// Runner.autoCdInstead.
 	//
-	// Measured 2026-09-08 through a pseudo-terminal, since the name is
-	// interactive-only in both: bash 5.3.15 with `shopt -s autocd` writes
-	// `cd -- subdir` and then moves, and the line survives a `2>/dev/null` on
-	// the word itself while `exec 2>file` captures it. zsh 5.9.2 with `setopt
-	// autocd` writes nothing at all and moves.
+	// Measured through a pseudo-terminal, since the name is interactive-only:
+	// Yes writes `cd -- subdir` and then moves, and the line survives a
+	// `2>/dev/null` on the word itself while `exec 2>file` captures it.
 	//
-	// An axis rather than a bash-shaped default with a zsh exception,
-	// because the two answers are a conflict and not a subset: there is no
-	// ordering of the shells in which one derives the other's silence.
+	// An axis rather than one answer with an exception, because the two are a
+	// conflict and not a subset: there is no ordering in which one derives the
+	// other's silence.
 	AutoCdAnnouncesTheSubstitution Answer
 
-	// FcEmptyHistoryIsAnError has `fc` report the event it cannot find —
-	// zsh; bash and dash answer a script with silence at 0.
+	// FcEmptyHistoryIsAnError has `fc` report the event it cannot find.
+	// Answering No answers a script with silence at 0.
 	FcEmptyHistoryIsAnError Answer
 
 	// TestIntegerRefusalIsSilent has `[ a -eq 1 ]` fail with no sentence at
-	// status 1 — ksh93; the other three complain at 2.
+	// status 1. Answering No complains at 2.
 	TestIntegerRefusalIsSilent Answer
 
-	// MissingFileIsOlder has `-nt` and `-ot` count a path that does not
-	// exist as older than any file that does, so `f -nt missing` and
-	// `missing -ot f` hold whenever f exists. bash and ksh93; dash and zsh
-	// answer false unless both files exist. Asked only there: with both
-	// files present the comparison is unanimous, and the mirrored cases —
-	// a missing file being *newer* — are false in every shell measured.
-	// One axis for `test`, `[` and `[[ ]]` alike, because every shell
-	// answers its two constructs the same way.
+	// MissingFileIsOlder has `-nt` and `-ot` count a path that does not exist as
+	// older than any file that does, so `f -nt missing` and `missing -ot f` hold
+	// whenever f exists. Answering No is false unless both files exist.
+	//
+	// Asked only there: with both files present the comparison is unanimous, and
+	// the mirrored cases — a missing file being *newer* — are false under both.
+	// One axis for `test`, `[` and `[[ ]]` alike, because the two constructs are
+	// answered together.
 	MissingFileIsOlder Answer
 
 	// TerminalTestRequiresANumber has `-t` refuse an operand that is not a
-	// number, at status 2 with the dialect's integer wording — bash and
-	// dash; ksh93 and zsh answer a silent false at 1, and so does the bash
-	// 3.2 that macOS ships. Asked only for such an operand: a numeric
-	// descriptor is answered false the same way everywhere a terminal is
-	// absent.
+	// number, at status 2 with the preset's integer wording. Answering No is a
+	// silent false at 1.
+	//
+	// Asked only for such an operand: a numeric descriptor is answered false the
+	// same way wherever a terminal is absent.
 	TerminalTestRequiresANumber Answer
 
 	// BareTerminalTestIsDescriptorOne reads a lone `-t` — `[ -t ]` and
-	// `test -t`, where the one-argument rule would make it a non-empty
-	// string and so unconditionally true — as `-t 1` instead. ksh93 and zsh;
-	// dash, bash 5.3, bash-as-sh and bash 3.2 keep the string rule.
+	// `test -t`, where the one-argument rule would make it a non-empty string
+	// and so unconditionally true — as `-t 1` instead. Answering No keeps the
+	// string rule.
 	//
-	// Measured 2026-09-10 with `[ -t ] >/dev/null`, which pins the answer to
-	// a descriptor that is certainly not a terminal rather than to whatever
-	// the run was handed: 0 in dash, bash, bash-as-sh and bash 3.2, and 1 in
-	// ksh93 and zsh. The same line on a pseudo-terminal with no redirection
-	// is 0 in all six, which is what says the two shells are answering about
-	// descriptor 1 and not refusing the word.
+	// Measured with `[ -t ] >/dev/null`, which pins the answer to a descriptor
+	// that is certainly not a terminal rather than to whatever the run was
+	// handed: 0 under No and 1 under Yes. The same line on a pseudo-terminal
+	// with no redirection is 0 under both, which is what says Yes is answering
+	// about descriptor 1 and not refusing the word.
 	//
 	// `-t` alone among the unary operators: `[ -f ]`, `[ -n ]`, `[ -z ]` and
-	// `[ -e ]` are true in all six columns, so this is not a general "an
-	// operator with no operand is an operator" rule and is not written as
-	// one. The negated two-word form follows it — `[ ! -t ] >/dev/null` is 1
-	// in the four and 0 in the two — because that is the same one-argument
-	// rule with a `!` in front.
+	// `[ -e ]` are true under both, so this is not a general "an operator with
+	// no operand is an operator" rule and is not written as one. The negated
+	// two-word form follows it — `[ ! -t ] >/dev/null` splits the same way —
+	// because that is the same one-argument rule with a `!` in front.
 	//
-	// Nothing is asked for `[[ -t ]]`: every shell in the panel that has the
-	// construct refuses it as a syntax error.
+	// Nothing is asked for `[[ -t ]]`: a grammar with the construct refuses it
+	// as a syntax error.
 	BareTerminalTestIsDescriptorOne Answer
 
-	// ReadRequiresAVariableName refuses a bare `read`: dash's "arg count"
-	// at 2, where the other three read into REPLY.
+	// ReadRequiresAVariableName refuses a bare `read` as an argument-count error
+	// at 2, where answering No reads into REPLY.
 	ReadRequiresAVariableName Answer
 
-	// ReadRefusesABadNameBeforeReading judges `read`'s first operand as a
-	// name before it goes to the stream, rather than after.
+	// ReadRefusesABadNameBeforeReading judges `read`'s first operand as a name
+	// before it goes to the stream, rather than after.
 	//
-	// Observable, and only through the input: a refusal that comes first
-	// leaves the line for the next reader, and one that comes after has
-	// eaten it. Measured 2026-09-07 with `printf 'AAA\nBBB\n' | { read 1bad;
-	// cat; }` — bash 5.3 and ksh93 print both lines, dash and zsh print only
-	// BBB. bash 3.2 is on dash's side, which makes this a change within bash
-	// rather than a difference between shells, so the `bash32` column of a
-	// corpus case here disagrees with `bash` on purpose.
+	// Observable, and only through the input: a refusal that comes first leaves
+	// the line for the next reader, and one that comes after has eaten it. With
+	// `printf 'AAA\nBBB\n' | { read 1bad; cat; }`, Yes prints both lines and No
+	// prints only BBB. Builds of one implementation answer it differently, so a
+	// corpus case here has columns that disagree on purpose.
 	//
-	// It is the *first* operand and not the whole list. Every shell in the
-	// panel assigns the names in front of a bad one and then refuses:
+	// It is the *first* operand and not the whole list. The names in front of a
+	// bad one are assigned and then the refusal comes, under every answer:
 	// `printf 'X Y Z\n' | { c=keep; read a 1bad c; }` leaves a as X and c as
-	// keep in all six, and the line is consumed in all six, including the two
-	// that would not have read it had `1bad` come first. So a shell that
-	// checked the whole list up front would answer a=[] where every shell in
-	// the panel answers a=[X].
+	// keep, and the line is consumed, including under the answer that would not
+	// have read it had `1bad` come first. So checking the whole list up front
+	// would answer a=[] where every answer gives a=[X].
 	ReadRefusesABadNameBeforeReading Answer
 
-	// ReadCountJudgesTheNamesAfterTheFirst keeps judging `read`'s operands
-	// as names when `-n` or `-N` gave it a count.
+	// ReadCountJudgesTheNamesAfterTheFirst keeps judging `read`'s operands as
+	// names when `-n` or `-N` gave it a count. Answering No stops at the first.
 	//
-	// bash does; ksh93 stops at the first. Measured 2026-09-07 with
-	// `printf 'XYZW\n' | { read -n 3 a 1bad; }`: bash refuses `1bad` and
-	// fills a with XYZ, and ksh93 fills a with XYZ and says nothing. Without
-	// a count the two agree — `read a 1bad` is refused in both — so it is
-	// the count that moves it and not the operand.
+	// With `printf 'XYZW\n' | { read -n 3 a 1bad; }`, Yes refuses `1bad` and
+	// fills a with XYZ, and No fills a with XYZ and says nothing. Without a
+	// count the two agree — `read a 1bad` is refused either way — so it is the
+	// count that moves it and not the operand.
 	//
-	// Left unanswered in the two dialects that cannot reach it: dash has no
-	// count letter at all, and zsh's `-k` reads from the terminal rather
-	// than from the stream, so neither ever asks. An answer there would be a
-	// claim nothing measured.
+	// Left unanswered by a preset that cannot reach it: with no count letter at
+	// all, or with one that reads from the terminal rather than from the stream,
+	// the question is never asked. An answer there would be a claim nothing
+	// measured.
 	ReadCountJudgesTheNamesAfterTheFirst Answer
 
-	// ReadPromptOperand says whether `read`'s first operand may carry a
-	// prompt after a `?`, and what an operand that is nothing else names.
+	// ReadPromptOperand says whether `read`'s first operand may carry a prompt
+	// after a `?`, and what an operand that is nothing else names.
 	//
-	// The form is ksh93's and zsh inherited it: `read "v?Name: "` reads into
-	// v and writes `Name: ` at a terminal, which is `read -p` in one word and
-	// is what scripts written for either shell use. It is the *first* operand
-	// alone — `read v "w?p"` is a bad name `w?p` in both — and the prompt is
-	// written for a terminal only, so a piped `read "v?p"` is a plain read
-	// into v.
+	// The form is `read "v?Name: "`, which reads into v and writes `Name: ` at a
+	// terminal — `read -p` in one word, and what scripts written for the presets
+	// that have it use. It is the *first* operand alone — `read v "w?p"` is a
+	// bad name `w?p` — and the prompt is written for a terminal only, so a piped
+	// `read "v?p"` is a plain read into v.
 	//
-	// It has to be answered wherever the name check is, not beside it: the
-	// word a shell judges is the part in front of the `?`, so a check that
-	// did not know the form would refuse `read "v?Name: "` in the two shells
-	// that spell it that way.
+	// It has to be answered wherever the name check is, not beside it: the word
+	// being judged is the part in front of the `?`, so a check that did not know
+	// the form would refuse `read "v?Name: "` wherever it is spelled that way.
 	ReadPromptOperand ReadPromptOperand
 
-	// StdinProgramReadInBlocks takes a program arriving on standard input
-	// as much at a time as the descriptor will give, rather than a line at
-	// a time. Whatever the block swallowed has left the descriptor, so a
-	// `read`, an external command, or anything else the script points at
-	// standard input finds only what had not arrived yet.
+	// StdinProgramReadInBlocks takes a program arriving on standard input as
+	// much at a time as the descriptor will give, rather than a line at a time.
+	// Whatever the block swallowed has left the descriptor, so a `read`, an
+	// external command, or anything else the script points at standard input
+	// finds only what had not arrived yet.
 	//
-	// dash alone, measured: `printf 'read x\necho "[$x]"\nDATA\n' | sh`
-	// prints `[]` there and then runs `DATA` as a command, where bash,
-	// ksh93 and zsh hand the second line to `read` and never parse it.
-	// docs/spec/invocation.md has the grid, including the case that shows
-	// what the difference really is — `exec 0< file` mid-program replaces
-	// the *rest of the program* in the three, and only what follows the
-	// block in dash.
+	// With `printf 'read x\necho "[$x]"\nDATA\n' | sh`, true prints `[]` and
+	// then runs `DATA` as a command, where false hands the second line to `read`
+	// and never parses it. docs/spec/invocation.md has the grid, including the
+	// case that shows what the difference really is — `exec 0< file` mid-program
+	// replaces the *rest of the program* under false, and only what follows the
+	// block under true.
 	//
-	// A bool rather than an Answer, and deliberately: the panel is four to
-	// one, so a common denominator exists, and "refuse to read a piped
-	// script at all" is not an answer any shell could ship. False is
-	// reading by the line, which is what the substrate does.
+	// A bool rather than an [Answer], and deliberately: a common denominator
+	// exists, and "refuse to read a piped script at all" is not an answer
+	// anything could ship. False is reading by the line, which is what the
+	// substrate does.
 	//
 	// It is the standard-input route's question alone. A script named as an
-	// operand is opened separately from standard input, so nothing is
-	// shared and all four behave the same way; `-c` reads no descriptor at
-	// all. The sibling question for a command string is
-	// Diagnostics.CommandStringParsedWhole.
+	// operand is opened separately from standard input, so nothing is shared and
+	// the answers agree; `-c` reads no descriptor at all. The sibling question
+	// for a command string is Diagnostics.CommandStringParsedWhole.
 	StdinProgramReadInBlocks bool
 
 	// StdinOptionNamesTheOperands lets the standard-input option name the
-	// operands of an invocation that also carries a command string — `sh -sc
-	// CMD name a`. The stdin option's rule is that no operand is `$0`: the
-	// shell keeps its own name and every operand is a positional parameter,
-	// so `$0` is the shell and `$#` is 2. The command string's rule is that
-	// the first operand is `$0` and only the rest are parameters, so `$0` is
-	// `name` and `$#` is 1.
+	// operands of an invocation that also carries a command string — `sh -sc CMD
+	// name a`. The stdin option's rule is that no operand is `$0`: the shell
+	// keeps its own name and every operand is a positional parameter, so `$0` is
+	// the shell and `$#` is 2. The command string's rule is that the first
+	// operand is `$0` and only the rest are parameters, so `$0` is `name` and
+	// `$#` is 1.
 	//
-	// Yes in ksh93 and zsh, no in bash and dash — measured with `-sc`, `-s
-	// -c` and `-c -s` alike, since order and bundling change nothing.
+	// Measured with `-sc`, `-s -c` and `-c -s` alike, since order and bundling
+	// change nothing.
 	//
-	// Asked only when both are given, which is the only place the panel
-	// disagrees. Where the program comes from is not this question: all four
-	// run the command string, and the corpus pins that separately. Either
-	// option alone is unanimous too — the command string names the first
-	// operand `$0`, and standard input leaves `$0` as the shell — and with
-	// no operands at all the two rules agree by having nothing to name.
+	// Asked only when both are given, which is the only place the answers part.
+	// Where the program comes from is not this question: the command string is
+	// run under both, and the corpus pins that separately. Either option alone
+	// is unanimous too — the command string names the first operand `$0`, and
+	// standard input leaves `$0` as the shell — and with no operands at all the
+	// two rules agree by having nothing to name.
 	//
-	// It has no answer in PosixSemantics, and that is the honest zero
-	// rather than an omission: the standard gives `-c` and `-s` separate
-	// synopses and says the second is assumed only when the first is absent,
-	// so it never describes an invocation carrying both. A 2-2 split with no
-	// standard to break it is refused until a dialect chooses.
+	// It has no answer in PosixSemantics, and that is the honest zero rather
+	// than an omission: the standard gives `-c` and `-s` separate synopses and
+	// says the second is assumed only when the first is absent, so it never
+	// describes an invocation carrying both. An even split with no standard to
+	// break it is refused until a preset chooses.
 	StdinOptionNamesTheOperands Answer
 
 	// PlusSignedCommandStringIsDollarZero gives a plus-signed command string
 	// `$0` for itself: `sh +c CMD name a` leaves `$0` as CMD and makes every
-	// operand a positional parameter, where the minus spelling would have
-	// made `name` `$0` and only `a` a parameter.
+	// operand a positional parameter, where the minus spelling would have made
+	// `name` `$0` and only `a` a parameter.
 	//
-	// True in ksh93 alone. bash, dash and zsh read `+c` as `-c` in every
-	// respect, and all four *run* the command string either way — the sign
-	// changes nothing about where the program comes from, which the corpus
-	// pins separately.
+	// False reads `+c` as `-c` in every respect, and the command string is *run*
+	// either way — the sign changes nothing about where the program comes from,
+	// which the corpus pins separately.
 	//
-	// A bool rather than an Answer, for the reason
-	// StdinProgramReadInBlocks is one: the panel is three to one, so a
-	// common denominator exists, and refusing an invocation every shell
-	// runs is not an answer any shell could ship. False is the majority
-	// answer and the standard's own — POSIX has no plus spelling of the
-	// option at all, so reading it as the option it spells invents nothing.
+	// A bool rather than an [Answer], for the reason StdinProgramReadInBlocks is
+	// one: a common denominator exists, and refusing an invocation everything
+	// runs is not an answer anything could ship. False is the majority answer
+	// and the standard's own — POSIX has no plus spelling of the option at all,
+	// so reading it as the option it spells invents nothing.
 	//
-	// Two further things ksh93 does with `+c` are measured and deliberately
-	// not modeled, because they do not agree with each other and read as
-	// defects of the 2012 build rather than as a rule: the operands also
-	// reach the program as literal words appended to its last command, and
-	// a command string of a single word is looked up on PATH and run as a
-	// file. docs/spec/invocation.md records both.
+	// Two further things a true answer has been measured doing are deliberately
+	// not modeled, because they do not agree with each other and read as defects
+	// of one build rather than as a rule: the operands also reaching the program
+	// as literal words appended to its last command, and a command string of a
+	// single word being looked up on PATH and run as a file.
+	// docs/spec/invocation.md records both.
 	PlusSignedCommandStringIsDollarZero bool
 
-	// LoginProfileWhenNonInteractive has a login shell read its login
-	// profile even when there is a script to run rather than a person to
-	// prompt. A shell is a login shell when argv[0] begins with a dash,
-	// which is what `login` and every terminal emulator's "run as a login
-	// shell" does, and the question is only what that then means for a
-	// shell that is not going to prompt.
+	// LoginProfileWhenNonInteractive has a login shell read its login profile
+	// even when there is a script to run rather than a person to prompt. A shell
+	// is a login shell when argv[0] begins with a dash, which is what `login`
+	// and every terminal emulator's "run as a login shell" does, and the
+	// question is only what that then means for a shell that is not going to
+	// prompt.
 	//
-	// dash, ksh93 and zsh read theirs; bash alone reads nothing. Measured
-	// 2026-09-05 with a scratch HOME, on all four of the script-operand,
-	// `-c`, standard-input and `-s` routes, and the answer is the same on
-	// every one of them — this is a fact about the shell rather than about
-	// the route. docs/spec/invocation.md has the grid, including the two
+	// Measured with a scratch HOME, on all four of the script-operand, `-c`,
+	// standard-input and `-s` routes, and the answer is the same on every one of
+	// them — this is a fact about the implementation rather than about the
+	// route. docs/spec/invocation.md has the grid, including the two
 	// facts that keep the axis from being wider than it is: an interactive
 	// login shell reads its profile in all four, so the interactive route
 	// asks nothing, and an explicit `--login` makes bash read it too, so

@@ -56,7 +56,7 @@ SHELLS := sh bash zsh ksh dash
 FUNCSRC := share/sh/functions
 FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
 
 all: build
 
@@ -224,6 +224,36 @@ sandbox: ## Try every way a script has of reaching the filesystem, against the s
 		-dialect-bin zsh=$(BINDIR)/sandbox-zsh \
 		-dialect-bin ksh=$(BINDIR)/sandbox-ksh \
 		-dialect-bin posix=$(BINDIR)/sandbox-dash $(ARGS)
+
+# A shell's own test suite, run through that shell and through the dialect
+# binary claiming to be it. Report-only, never a gate, and never committed:
+# the suites are other projects' work — bash's is GPLv3 — so each is fetched
+# at test time into the gitignored build directory and only its tests are
+# unpacked. See internal/suite for what may be reported and what may not.
+#
+# One target per dialect from the first commit, because the multi-dialect
+# shape is the point: an instrument that could only grade bash would bend the
+# substrate toward bash. The columns that are not built yet print why.
+suite-panel: ## List the shells whose own suite this can run, and what the unbuilt columns still need
+	@go run ./internal/cmd/suitecheck -panel
+
+bash-suite: ## Run bash's own tests/ through real bash and through cmd/bash, and report where they part
+	@mkdir -p $(BINDIR)
+	@go build -o $(BINDIR)/suite-bash ./cmd/bash
+	@go run ./internal/cmd/suitecheck -dialect bash -bin $(BINDIR)/suite-bash -build $(BINDIR) $(ARGS)
+
+zsh-suite: ## Run zsh's own Test/ through real zsh and through cmd/zsh (not yet a column; prints why)
+	@mkdir -p $(BINDIR)
+	@go build -o $(BINDIR)/suite-zsh ./cmd/zsh
+	@go run ./internal/cmd/suitecheck -dialect zsh -bin $(BINDIR)/suite-zsh -build $(BINDIR) $(ARGS)
+
+ksh-suite: ## Run ksh93's own tests through real ksh93 and through cmd/ksh (not yet a column; prints why)
+	@mkdir -p $(BINDIR)
+	@go build -o $(BINDIR)/suite-ksh ./cmd/ksh
+	@go run ./internal/cmd/suitecheck -dialect ksh -bin $(BINDIR)/suite-ksh -build $(BINDIR) $(ARGS)
+
+dash-suite: ## dash has no suite of its own; prints why
+	@go run ./internal/cmd/suitecheck -dialect dash $(ARGS)
 
 conformance-dialects: ## Grade each dialect binary against the shell it claims to be
 	@mkdir -p $(BINDIR)

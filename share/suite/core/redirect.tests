@@ -1,0 +1,110 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Redirection, POSIX XCU 2.7. Every case that involves the error stream sends
+# it to a file and then prints the file, rather than letting the two streams
+# interleave on one descriptor: the order two streams arrive in is a property
+# of when a libc flushed, not of the shell, and a case whose answer moves with
+# buffering is a case that says nothing.
+
+printf 'first\n' > out
+printf 'second\n' >> out
+printf 'read back:\n'
+cat out
+printf 'redirected in: '
+cat < out | wc -l | tr -d ' '
+
+printf 'clobbered\n' > out
+printf 'truncating > left: '
+cat out
+
+# The redirection is set up before the command runs, so a file read and
+# written in the same command sees the truncation.
+printf 'a\nb\n' > two
+printf 'lines=%s\n' "$(wc -l < two | tr -d ' ')"
+
+# Order matters: 2>&1 duplicates whatever descriptor 1 is at that moment.
+{ printf 'to stdout\n'; printf 'to stderr\n' >&2; } > both 2>&1
+printf 'both, in order:\n'
+cat both
+{ printf 'out only\n'; printf 'err only\n' >&2; } > justout 2> justerr
+printf 'stdout file: '; cat justout
+printf 'stderr file: '; cat justerr
+
+# `2>&1 > file` and a write to a closed descriptor are deliberately absent.
+# Measured: zsh sends the error stream to *both* targets, because a second
+# redirection of one descriptor tees rather than replaces, and a write to a
+# closed descriptor is a diagnostic and status 1 in bash while zsh and ksh93
+# say nothing. Both are dialect answers.
+
+# /dev/null swallows, and reading it is immediately end of file.
+printf 'swallowed\n' > /dev/null
+printf 'devnull status=%s\n' "$?"
+printf 'devnull read=[%s]\n' "$(cat < /dev/null)"
+
+# Here-documents. Unquoted, the body is expanded; quoted, it is not.
+v=expanded
+cat <<HERE
+plain $v
+arith $((2 * 3))
+sub $(printf inner)
+HERE
+cat <<'HERE'
+literal $v
+literal $((2 * 3))
+HERE
+# <<- strips leading tabs from the body and the delimiter.
+cat <<-HERE
+	indented $v
+	HERE
+
+# A here-document is the command's standard input, so a reader consumes it.
+while IFS= read -r line; do printf 'from heredoc: %s\n' "$line"; done <<'HERE'
+one
+two
+HERE
+
+# Two here-documents on one command line: the last wins in bash, ksh93 and
+# dash, and zsh feeds both, so that one is asked in the dialect files.
+
+# Redirections on a compound command apply to everything inside it.
+{
+	printf 'group line 1\n'
+	printf 'group line 2\n'
+} > grouped
+printf 'grouped:\n'
+cat grouped
+for w in x y; do printf '%s\n' "$w"; done > looped
+printf 'looped: '
+tr '\n' ' ' < looped
+printf '\n'
+
+# exec moves the shell's own descriptors, and a numbered descriptor can be
+# opened, written and closed.
+exec 3> three
+printf 'via three\n' >&3
+exec 3>&-
+printf 'fd 3:\n'
+cat three
+exec 4< three
+IFS= read -r line <&4
+exec 4<&-
+printf 'read via fd 4: %s\n' "$line"
+
+# Reading from a missing file fails without running the command. The
+# diagnostic is each shell's own wording, so it goes to /dev/null — and the
+# order matters, because a redirection that fails reports on whatever the
+# error stream was when it failed. The status is kept in `rc` and not in
+# `status`, which zsh makes read-only — measured, and a case file that used it
+# would fail zsh for a reason that is about the case rather than the shell.
+cat 2> /dev/null < nosuchfile
+rc=$?
+printf 'missing input status is nonzero: '
+if [ "$rc" -ne 0 ]; then printf 'yes\n'; else printf 'no\n'; fi
+printf 'missing input ran the command: '
+if [ -e nosuchfile ]; then printf 'yes\n'; else printf 'no\n'; fi
+
+# A redirection on a null command still happens.
+: > made
+printf 'null command made the file: '
+if [ -f made ]; then printf 'yes\n'; else printf 'no\n'; fi

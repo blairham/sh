@@ -102,6 +102,27 @@ type Report struct {
 
 	Causes      []Cause
 	StatusPairs []StatusPair
+
+	// Cases is every file's result, in the order they were run. The name is
+	// filled in only for our own suite — see [Suite.attribute] — so a
+	// fetched column's cases are a list of anonymous outcomes and a native
+	// column's is a work list.
+	Cases []NamedResult
+}
+
+// NotStrict is the cases that ran and disagreed, named.
+//
+// Empty for a fetched column whatever happened, because there is nothing
+// there to name. That is the rule doing its job rather than a shortfall.
+func (r Report) NotStrict() []NamedResult {
+	var out []NamedResult
+	for _, c := range r.Cases {
+		if c.Name == "" || c.Result.Strict {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 // StrictRate, ParseRate and LineRate are the three numbers, as fractions.
@@ -162,33 +183,23 @@ func (o Options) jobs() int {
 // instrument never unpacks them.
 func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Options) (Report, error) {
 	rep := Report{Suite: s, Reference: reference, Ours: ours}
-	tests := filepath.Join(dir, filepath.FromSlash(s.TestDir))
-	names, err := Files(tests, s.Ext)
+	files, err := plan(s, dir, opts)
 	if err != nil {
 		return rep, err
 	}
-	if opts.Only != nil {
-		var kept []string
-		for _, n := range names {
-			if opts.Only[n] {
-				kept = append(kept, n)
-			}
-		}
-		names = kept
-	}
-	rep.Files = len(names)
+	rep.Files = len(files)
 
 	dial, haveDialect := s.Syntax()
-	results := make([]Result, len(names))
+	results := make([]Result, len(files))
 	sem := make(chan struct{}, opts.jobs())
 	var wg sync.WaitGroup
-	for i, name := range names {
+	for i, f := range files {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			results[i] = grade(ctx, s, tests, name, ours, reference, dial, haveDialect, opts.timeout())
+			results[i] = grade(ctx, s, f.Dir, f.Name, ours, reference, dial, haveDialect, opts.timeout())
 		}()
 	}
 	wg.Wait()
@@ -196,7 +207,8 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 	causes := map[string]int{}
 	statuses := map[[2]int]int{}
 	var meanSum float64
-	for _, res := range results {
+	for i, res := range results {
+		rep.Cases = append(rep.Cases, NamedResult{Name: s.attribute(files[i].Name), Result: res})
 		switch {
 		case res.Parsed:
 			rep.Parsed++
@@ -233,6 +245,43 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 	rep.Causes = rank(causes)
 	rep.StatusPairs = rankStatuses(statuses)
 	return rep, nil
+}
+
+// file is one runnable case: the directory it is run from and its name.
+//
+// The directory travels with the name because our own suite has two of them —
+// the shared core/ and the dialect's own — and a run copies the directory it
+// came from. A fetched suite has one and reaches here the same way.
+type file struct {
+	Dir, Name string
+}
+
+// plan is every file a column runs, in a stable order.
+//
+// A directory a column claims and does not have is an error rather than an
+// omission: a column that quietly ran core/ alone would report a healthy
+// number for half a suite, which is the same mistake as a silent skip one
+// level down.
+func plan(s Suite, dir string, opts Options) ([]file, error) {
+	dirs := s.Dirs
+	if len(dirs) == 0 {
+		dirs = []string{s.TestDir}
+	}
+	var files []file
+	for _, d := range dirs {
+		tests := filepath.Join(dir, filepath.FromSlash(d))
+		names, err := Files(tests, s.Ext)
+		if err != nil {
+			return nil, err
+		}
+		for _, n := range names {
+			if opts.Only != nil && !opts.Only[n] {
+				continue
+			}
+			files = append(files, file{Dir: tests, Name: n})
+		}
+	}
+	return files, nil
 }
 
 // grade is one file, both ways.

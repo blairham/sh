@@ -1,0 +1,86 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Function definition and invocation, POSIX XCU 2.9.5. `local` is absent on
+# purpose: ksh93 has no such builtin, which is the measured reason it is not
+# part of the core language, so it is asked in the dialect files instead.
+#
+# The names here avoid r, type, hash, integer, float and source, which ksh93
+# predefines as aliases — an alias beats a function of the same name.
+
+greet() {
+	printf 'greet: %s\n' "$1"
+}
+greet world
+greet
+
+argc() {
+	printf 'argc=%s first=[%s] all=[%s]\n' "$#" "$1" "$*"
+}
+argc
+argc a
+argc a 'b c' d
+
+# The caller's positional parameters are restored when the function returns.
+set -- outer1 outer2
+argc inner
+printf '%s\n' "restored: $# $1 $2"
+
+# return gives the status, and a bare return gives the status of the last
+# command run.
+retval() { return 3; }
+retval
+printf '%s\n' "return 3 status=$?"
+implicit() { true; }
+implicit
+printf '%s\n' "implicit status=$?"
+lastcmd() { false; }
+lastcmd
+printf '%s\n' "last command status=$?"
+bare() { false; return; }
+bare
+printf '%s\n' "bare return status=$?"
+
+# A function sees and changes the shell's variables; there is no scope.
+shared=before
+touchit() { shared=after; }
+touchit
+printf '%s\n' "shared=$shared"
+
+# Recursion.
+down() {
+	if [ "$1" -le 0 ]; then return 0; fi
+	printf 'down %s\n' "$1"
+	down $(( $1 - 1 ))
+}
+down 3
+
+# A function shadows an external command of the same name, and `command`
+# reaches past it.
+true() { printf '%s\n' 'shadowed true'; }
+true
+unset -f true
+true
+printf '%s\n' "unshadowed status=$?"
+
+# A function body may be any compound command, and it may be redirected as a
+# whole.
+listing() {
+	printf 'one\n'
+	printf 'two\n'
+}
+listing | while IFS= read -r line; do printf 'piped %s\n' "$line"; done
+count=$(listing | wc -l)
+printf '%s\n' "captured lines=$(printf '%s' "$count" | tr -d ' ')"
+
+# Arguments are words after expansion, so an unquoted empty one disappears.
+unset u
+argc "$u" x
+argc $u x
+
+# A function defined inside a function is defined when the outer one runs.
+outer() {
+	inner() { printf '%s\n' 'inner ran'; }
+}
+outer
+inner

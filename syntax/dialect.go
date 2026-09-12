@@ -703,18 +703,15 @@ type Dialect struct {
 	// **parenthesized** pattern list an ordinary character of the pattern
 	// rather than the end of a word or a statement.
 	//
-	// zsh alone. Measured 2026-09-07 over a script file, with a scratch HOME
-	// and ZDOTDIR:
+	// Measured over a script file, with a scratch HOME and startup directory:
 	//
-	//	case a in (a|      zsh: `m`, status 0
+	//	case a in (a|      true: `m`, status 0
 	//	b) echo m;; *) echo no;; esac
 	//
-	// and every other shell in the panel refuses the line — bash 5.3.15, the
-	// same binary as `sh`, and bash 3.2.57 blame the newline, dash blames the
-	// word on the next line, ksh93u+ blames the newline at line 2. Three
-	// wordings and three statuses.
+	// A false preset refuses the line — blaming the newline, or the word on the
+	// next line, or the newline at line 2. Three wordings and three statuses.
 	//
-	// What zsh matched is the *first* alternative, and the second is two
+	// What a true preset matched is the *first* alternative, and the second is two
 	// characters — a newline and a `b`. Four probes say so and no fewer will:
 	// subject `a` gives `m`, subject `b` gives `no`, subject `""` gives `no`,
 	// and a subject holding a newline before the `b` gives `m`. `functions`
@@ -722,16 +719,15 @@ type Dialect struct {
 	// pattern, which is the same fact from the writing side.
 	//
 	// It is not a rule about the `|`. A newline anywhere inside the list is
-	// text: `(a` newline `)` is the two-character pattern, so subject `a`
-	// does *not* match it, and `(a` newline `|b)` puts the newline on the end
-	// of the first alternative. And it needs the arm's **paren**: `case a in
-	// a|` newline `b)` is a parse error in zsh too, so what opens this is the
-	// parenthesis and not the position.
+	// text: `(a` newline `)` is the two-character pattern, so subject `a` does
+	// *not* match it, and `(a` newline `|b)` puts the newline on the end of the
+	// first alternative. And it needs the arm's **paren**: `case a in a|`
+	// newline `b)` is a parse error under a true preset too, so what opens this
+	// is the parenthesis and not the position.
 	//
-	// This is #1083's `|` seen from the other side and a bigger claim than
-	// that one. `CasePatternMayBeEmpty` lets an alternative be *written* as
-	// nothing, which is a rule about the list; this says the separator does
-	// not end the word at all, which reaches the lexer.
+	// A bigger claim than CasePatternMayBeEmpty, which lets an alternative be
+	// *written* as nothing and is a rule about the list; this says the separator
+	// does not end the word at all, which reaches the lexer.
 	CasePatternListSpansNewlines bool
 
 	// CasePatternListPipeIsOnlyASeparator keeps a `|` inside a `case` arm's
@@ -739,21 +735,21 @@ type Dialect struct {
 	// a two-byte operator: the pipe is the alternation separator there and
 	// nothing else.
 	//
-	// zsh alone, and only one operator can be written where it shows —
-	// `|&`, which every other member of the panel that has the operator
-	// lexes whole. Measured 2026-09-12, `-n` over a script file:
+	// Only one operator can be written where it shows — `|&`, which a preset
+	// with the operator otherwise lexes whole. Measured with `-n` over a script
+	// file:
 	//
-	//	case a in (a|&b) …    zsh `&`      bash 5.3 / ksh93 `|&`
-	//	case a in (a|&|b) …   zsh `&|`     bash 5.3 / ksh93 `|&`
-	//	case a in (a|&&b) …   zsh `&&`     — the discriminator
-	//	case a in a|&|b) …    zsh `|&`     — the control
+	//	case a in (a|&b) …    true `&`      false `|&`
+	//	case a in (a|&|b) …   true `&|`     false `|&`
+	//	case a in (a|&&b) …   true `&&`     — the discriminator
+	//	case a in a|&|b) …    true `|&`     — the control
 	//
-	// The third row is what says the rule belongs to the `|` and not to the
-	// `&`: an `&&` after the separator is still one token, so it is the pipe
-	// that stops reading rather than the ampersand that starts. The fourth is
-	// what confines it to the parentheses — written without the arm's paren,
-	// the same characters lex as `|&` in zsh too, which is the answer every
-	// other column gives everywhere.
+	// The third row is what says the rule belongs to the `|` and not to the `&`:
+	// an `&&` after the separator is still one token, so it is the pipe that
+	// stops reading rather than the ampersand that starts. The fourth is what
+	// confines it to the parentheses — written without the arm's paren, the same
+	// characters lex as `|&` under a true preset too, which is the answer a
+	// false one gives everywhere.
 	//
 	// It is a lexical rule and shows only as the token a refusal names: no
 	// line that parses is read differently, because `|&` cannot stand in a
@@ -765,24 +761,22 @@ type Dialect struct {
 	// rather than the end of a word — so `(a b)` is the three-character
 	// pattern and not two words, one of which nothing can be done with.
 	//
-	// zsh alone, and the line it is needed for is `VCS_INFO_get_data_git`,
-	// which every prompt drawing a git segment autoloads: line 234 of it is
-	// `(''(x|exec) *)`, a group, a blank and more pattern.
+	// The line it is needed for is a version-control prompt helper every prompt
+	// drawing a repository segment autoloads: a pattern of a group, a blank and
+	// more pattern, `(''(x|exec) *)`.
 	//
-	// Measured on zsh 5.9.2, 2026-09-10, `-c` under `env -i`, against
-	// bash 5.3.15 (which is also `sh`), bash 3.2.57, ksh93u+ and dash:
+	// Measured with `-c` under `env -i`:
 	//
 	//	case 'a b' in (a b) echo hit;; (*) echo no;; esac
 	//
-	//	zsh 5.9.2   `hit`, status 0
-	//	bash 5.3    `` syntax error near unexpected token `b' ``, status 2
-	//	bash 3.2    the same sentence, status 2
-	//	ksh93       `` syntax error at line 1: `b' unexpected ``, status 3
-	//	dash        `Syntax error: word unexpected (expecting ")")`, 2
+	//	true    `hit`, status 0
+	//	false   `` syntax error near unexpected token `b' ``, status 2
+	//	false   `` syntax error at line 1: `b' unexpected ``, status 3
+	//	false   `Syntax error: word unexpected (expecting ")")`, 2
 	//
-	// The paren is what licenses it, exactly as it licenses the newline
-	// above: `case 'a b' in a b) …` is `` parse error near `b' `` in zsh too,
-	// so this is a rule about the parenthesized form and not about the
+	// The paren is what licenses it, exactly as it licenses the newline above:
+	// `case 'a b' in a b) …` is `` parse error near `b' `` under a true preset
+	// too, so this is a rule about the parenthesized form and not about the
 	// position. That control is what separates it from "a word may follow a
 	// pattern".
 	//
@@ -792,42 +786,40 @@ type Dialect struct {
 	// collapsed and a tab is not a space — the pattern is the source text.
 	//
 	// And they are text only where the pattern *continues* after them. A run
-	// of blanks in front of the `|` that separates two alternatives, or in
-	// front of the `)` that closes the list, still separates nothing and is
-	// dropped: `( a b )` matches `a b` and misses ` a b ` and `a b `, and
-	// `(a b |z)` matches `a b`. That is why this is not `isBlank` losing its
-	// meaning inside the list — `(a | b)` is still two alternatives, and it
-	// is two in every shell in the panel.
+	// of blanks in front of the `|` that separates two alternatives, or in front
+	// of the `)` that closes the list, still separates nothing and is dropped:
+	// `( a b )` matches `a b` and misses ` a b ` and `a b `, and `(a b |z)`
+	// matches `a b`. That is why this is not `isBlank` losing its meaning inside
+	// the list — `(a | b)` is still two alternatives under every preset.
 	//
 	// The two flags compose the way the shell does. Where a newline is text
 	// as well, a blank beside one is text too: `(a` blank newline blank `b)`
 	// matches exactly that subject and misses `a` newline `b`.
 	//
 	// An operator is still an operator. `(a >b)` is `` parse error near `>' ``
-	// in zsh and the blank before it is no part of any pattern, so this
-	// admits the words a pattern can hold and nothing else.
+	// under a true preset too, and the blank before it is no part of any
+	// pattern, so this admits the words a pattern can hold and nothing else.
 	CasePatternListSpansBlanks bool
 
 	// FuncDefAtParen commits to a function definition as soon as a name is
 	// followed by `(`, rather than requiring the `()` pair.
 	//
-	// It decides *which token* a malformed one is blamed on, which is why it
-	// is a grammar flag and not a wording: `f ( x )` is "x" in bash and dash,
-	// which are already inside a definition looking for `)`, and "(" in
-	// ksh93, which never entered one. Reached most often through a construct
-	// a dialect does not have — `[[ ( -n x ) ]]` is a definition of a
-	// function called `[[` to a shell without `[[`.
+	// It decides *which token* a malformed one is blamed on, which is why it is
+	// a grammar flag and not a wording: `f ( x )` is "x" under a true preset,
+	// already inside a definition looking for `)`, and "(" under a false one,
+	// which never entered one. Reached most often through a construct a preset
+	// does not have — `[[ ( -n x ) ]]` is a definition of a function called `[[`
+	// to a grammar without `[[`.
 	FuncDefAtParen bool
 
-	// FuncBodyMustBeCompound refuses `f() echo hi`: bash alone wants a
-	// compound command after the parens, where dash, ksh93 and zsh take a
-	// simple command as a one-command body and run it.
+	// FuncBodyMustBeCompound refuses `f() echo hi`: a true preset wants a
+	// compound command after the parens, where a false one takes a simple
+	// command as a one-command body and runs it.
 	//
-	// The `function` keyword's body is held to the same rule where the
-	// dialect has both — measured 2026-09-11 over a file holding `function a`
-	// and `echo B`, bash 5.3.15, bash 3.2.57 and bash-as-sh all answer
-	// ``syntax error near unexpected token `echo' `` at status 2, which is
-	// the sentence and the status the parenthesized form gets from them. It
+	// The `function` keyword's body is held to the same rule where the preset
+	// has both — measured over a file holding `function a` and `echo B`, which
+	// answers ``syntax error near unexpected token `echo' `` at status 2, the
+	// sentence and the status the parenthesized form gets. It
 	// is not the whole of the keyword form's question, though, because the
 	// shell that originated the keyword is stricter still: see
 	// [Dialect.FunctionKeywordBodyMustBeBraceGroup].

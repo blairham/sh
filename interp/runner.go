@@ -3832,6 +3832,12 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		return nil
 	}
 
+	// From here the shell starts a process and waits for it, which is where a
+	// coprocess that ended is noticed — registered after the background
+	// branch above, which returns before reaching this and whose wait is on a
+	// goroutine that owns no coprocess. See Runner.retireCoproc.
+	defer r.retireCoproc()
+
 	if r.WaitForCommand != nil {
 		return r.runWatched(ctx, cmd, argv, action, ownGroup)
 	}

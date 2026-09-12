@@ -838,6 +838,12 @@ func (r *Runner) waitOutPolledJob(j *Job) {
 // trapped signal cuts the wait short, which is the one thing that gives a
 // bare `wait` a status of its own.
 func biWait(r *Runner, _ context.Context, args []string) int {
+	// Whatever this wait is for, the shell is about to reap what it can —
+	// which is where a coprocess that ended is noticed. See
+	// Runner.retireCoproc for the measurements, and note that a `wait` is one
+	// of the ways rather than the way: a subshell or an external command
+	// delivers the same notice without any wait being written.
+	defer r.retireCoproc()
 	args, next, code := r.waitOptions(args)
 	if code != 0 {
 		return code

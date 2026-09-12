@@ -1330,6 +1330,11 @@ func Semantics() interp.Semantics {
 	// The array is why this shell's `coproc` takes a name: the ends arrive in
 	// it, and a script writes `echo hi >&"${COPROC[1]}"`.
 	s.CoprocEndsInAnArray = interp.Yes
+	// And the array goes when the coprocess does. Measured 2026-09-12 with a
+	// `sleep 1` in place of any `wait`: `declare -p CP` answers `not found`,
+	// both descriptors are closed, and `echo x >&${CP[1]}` is an ambiguous
+	// redirect at 1 rather than a write into a pipe nobody is reading (#2411).
+	s.ReapedCoprocessEnds = interp.CoprocEndsGoWithTheCoprocess
 	s.SetListingQuoting = interp.ListingQuoteWhenNeededEscaped
 
 	// `[[ -v 1 ]]` and `[[ -v 0 ]]` ask about a positional parameter here,

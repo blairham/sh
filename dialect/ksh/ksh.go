@@ -1365,6 +1365,15 @@ func Semantics() interp.Semantics {
 	s.SetListing = interp.SetListingAssignments
 	s.SetListingQuoting = interp.ListingQuoteWhenNeededDollar
 
+	// The coprocess `|&` starts is half taken back when it ends: the end this
+	// shell writes goes, so `print -p` is `no query process` at 1; the end it
+	// reads stays, so whatever the coprocess left in the pipe is still there
+	// and `read -p` is a silent end-of-file at 1 — and only then does the
+	// read end go too, the next `read -p` naming the missing query process
+	// like the write. Measured 2026-09-12 with a `sleep 1` in place of any
+	// `wait` (#2411).
+	s.ReapedCoprocessEnds = interp.CoprocWriteEndGoesWithTheCoprocess
+
 	// A `{name}>f` descriptor goes back with the command's other
 	// redirections, and closing through a name that holds nothing is not
 	// worth a word here.

@@ -517,6 +517,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		}()
 	}
 	wg.Wait()
+	// Every element has been waited for, which is where a coprocess that
+	// ended is noticed. See Runner.retireCoproc for the measurements.
+	r.retireCoproc()
 
 	for _, err := range errs {
 		if err != nil {

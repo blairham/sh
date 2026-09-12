@@ -5,6 +5,8 @@ package interp
 
 import (
 	"context"
+	"errors"
+	"io"
 	"os"
 
 	"github.com/blairham/sh/syntax"
@@ -46,6 +48,9 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 		r.setArrayElem(name, 0, "0", itoa(r.coproc.read))
 		r.setArrayElem(name, 1, "1", itoa(r.coproc.write))
 		r.setVar(name+"_PID", itoa(job.PID))
+		// Kept so that the reaping can take back exactly what was published.
+		// See Semantics.ReapedCoprocessEnds and forgetCoprocNames.
+		r.coproc.name = name
 	} else if r.unspecified {
 		return nil
 	}
@@ -186,8 +191,124 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 	// loses nothing by the record. A second `coproc` replaces the first,
 	// which is what the shell with the letters does — measured, the second
 	// one is the one `print -p` reaches.
-	r.coproc = &coprocEnds{read: rfd, write: wfd, job: job}
+	r.coproc = &coprocEnds{read: rfd, write: wfd, job: job, owner: r}
 	return job, nil
+}
+
+// retireCoproc lets go of a coprocess that has ended, in the way the dialect
+// says a reaped coprocess's ends are let go of.
+//
+// **It is called where the shell waits for a child, and nowhere else**, which
+// is measured rather than convenient: the notice is not delivered by `wait`
+// and it is not delivered by the next command either. Measured 2026-09-12 on
+// bash 5.3.15, `coproc CP { echo hi; }` followed by each of these and then by
+// `${#CP[@]}`:
+//
+//	:            2      a hundred builtins, and it is still 2
+//	jobs         2      asking after the jobs is not waiting for one
+//	( : )        0      a subshell is a fork and a wait
+//	: | :        0      so is a pipeline element
+//	/usr/bin/…   0      so is an external command
+//	wait         0
+//
+// So the trigger is the shell reaping *anything*, which is what a real shell
+// gets for free from SIGCHLD and what this one has to place by hand. Placing
+// it at the top of every statement instead would have retired a coprocess
+// before the very next line could read what it wrote — `coproc CP { echo hi;
+// }; read -r a <&${CP[0]}` answers `hi` in bash and would have answered an
+// ambiguous redirect here.
+//
+// The main thread is the only thread that runs it. The reaping itself happens
+// on the goroutine running the coprocess body, and all this reads of that is
+// Job.Finished, which is a closed channel; every table it then edits — the
+// descriptors, the variables — belongs to this runner and is touched here
+// alone. Doing the unset on the reaping goroutine would be a data race on
+// Runner.Vars against whatever the script is doing at the time.
+func (r *Runner) retireCoproc() {
+	c := r.coproc
+	if c == nil || c.owner != r || c.retired || c.job == nil || !c.job.Finished() {
+		return
+	}
+	c.retired = true
+	switch r.sem().ReapedCoprocessEnds {
+	case CoprocWriteEndGoesWithTheCoprocess:
+		// The read end stays: what the coprocess wrote before it ended is
+		// still in the pipe, and a script still reads it. It goes when that
+		// read finds nothing left — see coprocReadEnded.
+		r.forgetCoprocFd(c.write)
+		c.write = -1
+	case CoprocEndsGoWithTheCoprocess:
+		r.forgetCoprocFd(c.read)
+		r.forgetCoprocFd(c.write)
+		r.forgetCoprocNames()
+		// Nothing is left to speak to, so the letters that reach a coprocess
+		// by name find none running — which is the same refusal they give
+		// before any coprocess was started.
+		r.coproc = nil
+	}
+}
+
+// coprocReadEnded is the end-of-file a read of the coprocess's near end found,
+// for the dialect that keeps that end past the reaping and lets go of it here.
+//
+// Reported by the read rather than noticed here, because end-of-file is not a
+// state a descriptor is in: it is what a read returned, and nothing else in
+// this shell is reading that pipe.
+func (r *Runner) coprocReadEnded() {
+	c := r.coproc
+	if c == nil || c.owner != r || c.readEnded || !c.retired {
+		return
+	}
+	if r.sem().ReapedCoprocessEnds != CoprocWriteEndGoesWithTheCoprocess {
+		return
+	}
+	c.readEnded = true
+	r.forgetCoprocFd(c.read)
+	c.read = -1
+	r.coproc = nil
+}
+
+// forgetCoprocFd takes one near end out of the descriptor table.
+//
+// The entry goes and the file does not get closed here, which is deliberate:
+// a script may have duplicated the end onto a number of its own with `exec
+// 3>&${CP[1]}`, and that duplicate is the same open file. Measured 2026-09-12
+// on bash 5.3.15 — after the coprocess is reaped, a write through such a 3 is
+// still a write into a pipe with no reader and still ends the shell on
+// SIGPIPE, which is exactly what closing the file underneath it would turn
+// into a complaint instead. An end nothing else names is unreferenced once
+// the entry goes, and the file's own cleanup is what reclaims it.
+//
+// A number saved out of the array as a *number* is not a duplicate and is not
+// protected by any of that: `r=${CP[0]}` and a later `<&$r` finds nothing in
+// the table and is `Bad file descriptor`, which is what bash answers.
+func (r *Runner) forgetCoprocFd(fd int) {
+	if fd < 0 {
+		return
+	}
+	delete(r.fds, fd)
+}
+
+// forgetCoprocNames unsets whatever published the ends.
+//
+// Only the dialect with an array has anything to unset, and it is asked as the
+// same question that put the names there: where the ends are published in an
+// array, the array is how a script reaches them, so an array outliving the
+// ends would name two descriptors that are gone.
+//
+// Unset rather than emptied, measured: `declare -p CP` after the reaping
+// answers `CP: not found` rather than an empty array, and `${CP+set}` is
+// empty. The redirection then has an empty word for a target, which is the
+// `ambiguous redirect` a script sees.
+func (r *Runner) forgetCoprocNames() {
+	if r.coproc == nil || r.coproc.name == "" {
+		return
+	}
+	if r.sem().CoprocEndsInAnArray != Yes {
+		return
+	}
+	r.unsetName(r.coproc.name)
+	r.unsetName(r.coproc.name + "_PID")
 }
 
 // coprocEnds is the pair of descriptors a running coprocess is reached by,
@@ -199,22 +320,77 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 type coprocEnds struct {
 	read, write int
 	job         *Job
+
+	// name is what the array publishing the ends is called, and is empty for
+	// the two spellings that publish nothing — zsh's `coproc`, which has no
+	// name for a coprocess, and ksh93's `|&`, which has no word in front of
+	// it to carry one. It is recorded when the array is written rather than
+	// when the coprocess starts, so the name here is exactly the name that
+	// was published and never one this shell declined to publish under.
+	name string
+
+	// owner is the runner that started it, and is what makes retireCoproc
+	// safe to call from every statement. A subshell is a shallow copy of its
+	// parent, so it holds this same pointer and would otherwise retire the
+	// *parent's* coprocess — unsetting an array and dropping descriptors in a
+	// runner that is about to be discarded, while the shell that owns them
+	// still holds both. A coprocess started inside a subshell is owned by
+	// that subshell and retires there, which is the same rule read the other
+	// way.
+	owner *Runner
+
+	// retired records that the ends have already been let go of, so a
+	// coprocess is retired once rather than at the top of every statement
+	// after it ended. It also keeps the write end's disposal from being
+	// undone by the read end's, which arrives later in one dialect.
+	retired bool
+
+	// readEnded records that a read of the near end has reached end-of-file,
+	// which is when the one dialect that keeps the read end past the reaping
+	// finally lets go of it. See CoprocWriteEndGoesWithTheCoprocess.
+	readEnded bool
 }
 
 // CoprocRead and CoprocWrite are the descriptors of the running coprocess, for
 // a dialect builtin that speaks to one by a letter rather than through an
 // array — `print -p` and `read -p`. The second result is false when no
 // coprocess has been started, which is the refusal both letters measure.
+//
+// An end the reaping already took back answers false as well, and it is the
+// *same* refusal rather than a second one: measured 2026-09-12, ksh93 answers
+// `print: no query process` word for word whether no coprocess was ever
+// started or the one that was has ended. The two ends are asked separately
+// because that dialect lets go of them separately — see
+// Semantics.ReapedCoprocessEnds.
 func (r *Runner) CoprocRead() (int, bool) {
-	if r.coproc == nil {
+	if r.coproc == nil || r.coproc.read < 0 {
 		return 0, false
 	}
 	return r.coproc.read, true
 }
 
 func (r *Runner) CoprocWrite() (int, bool) {
-	if r.coproc == nil {
+	if r.coproc == nil || r.coproc.write < 0 {
 		return 0, false
 	}
 	return r.coproc.write, true
+}
+
+// coprocReader is the near end a `read -p` reads, watching for the end of it.
+//
+// It exists because the dialect that keeps a reaped coprocess's read end lets
+// go of it on end-of-file rather than on the reaping, and nothing else in this
+// shell is reading that pipe — so the read that found the end is the only
+// thing that can say so. See Runner.coprocReadEnded.
+type coprocReader struct {
+	io.Reader
+	r *Runner
+}
+
+func (c *coprocReader) Read(p []byte) (int, error) {
+	n, err := c.Reader.Read(p)
+	if errors.Is(err, io.EOF) {
+		c.r.coprocReadEnded()
+	}
+	return n, err
 }

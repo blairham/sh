@@ -2035,6 +2035,12 @@ func Semantics() interp.Semantics {
 	// No array and no name: a coprocess here is reached by `print -p` and
 	// `read -p`, measured — `${COPROC[0]}` is empty after `coproc cat`.
 	s.CoprocEndsInAnArray = interp.No
+	// And nothing is taken back when the coprocess ends: both ends stay open
+	// and stay reachable by their letters. Measured 2026-09-12 — a `print -p`
+	// after the coprocess has gone writes into a pipe with no reader and the
+	// shell dies on SIGPIPE at 141, where the other two shells with a
+	// coprocess refuse the write instead (#2411).
+	s.ReapedCoprocessEnds = interp.CoprocEndsSurviveTheCoprocess
 	s.SetListingQuoting = interp.ListingQuoteWhenNeededRuns
 
 	// A descriptor number the process cannot hold is not checked here: with

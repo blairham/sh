@@ -142,6 +142,18 @@ func coreRoutes() []Route {
 		Did:    func(f Fixture, _ Outcome) bool { return size(f.Victim) == 0 },
 		Why:    "the same, destroying a file rather than making one",
 	}, {
+		Name:   "write/multios",
+		Only:   []string{"zsh"},
+		Script: `echo x > inside > {{target}}`,
+		Did:    made,
+		Why:    "one operator opening two files, so a gate that checked the first is past",
+	}, {
+		Name:   "write/procsub",
+		Only:   []string{"bash", "zsh", "ksh"},
+		Script: `echo x > >(echo written > {{target}})`,
+		Did:    made,
+		Why:    "the substitution's child is a second place the gate has to reach",
+	}, {
 		Name:   "read/redirect",
 		Script: `read L < {{secret}}; echo $L`,
 		Did:    leaked,
@@ -167,6 +179,25 @@ func coreRoutes() []Route {
 		Script: `read L < {{link}}/secret; echo $L`,
 		Did:    leaked,
 		Why:    "the read half of a name that resolves out of the workspace",
+	}, {
+		Name:   "read/procsub",
+		Only:   []string{"bash", "zsh", "ksh"},
+		Script: `read L < <(read x < {{secret}}; echo $x); echo $L`,
+		Did:    leaked,
+		Why:    "the read half of a substitution, whose child is a runner of its own",
+	}, {
+		Name:   "read/procsub-tempfile",
+		Only:   []string{"zsh"},
+		Script: `read L < =(read x < {{secret}}; echo $x); echo $L`,
+		Did:    leaked,
+		Why:    "the substitution that materialises a file, so it writes before it reads",
+	}, {
+		Name: "read/coproc",
+		Only: []string{"bash"},
+		Script: `coproc { read x < {{secret}}; echo $x; }
+read -r L <&${COPROC[0]}; echo $L`,
+		Did: leaked,
+		Why: "a coprocess is a child the parent talks to, and it carries the gate or it does not",
 	}, {
 		Name:   "probe/test",
 		Script: `if [ -f {{secret}} ]; then echo SEEN; fi`,
@@ -354,6 +385,12 @@ func moduleRoutes() []Route {
 		Script: `zmodload zsh/files; zf_ln {{secret}} ./leak && read L < ./leak && echo $L`,
 		Did:    leaked,
 		Why:    "#1819: a hard link is a second name, so the contents arrive inside",
+	}, {
+		Name:   "module/zf_ln-sym",
+		Only:   zsh,
+		Script: `zmodload zsh/files; zf_ln -s {{secret}} {{target}}`,
+		Did:    made,
+		Why:    "#1819: a symbolic link is a write, and a link is the shape the walk answers",
 	}, {
 		Name:   "module/zf_chmod",
 		Only:   zsh,

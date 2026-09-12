@@ -5485,6 +5485,30 @@ echo "st=$?"`,
 		Why:     "the same substitution written the older way, and three of the four number it exactly as they number the other spelling. dash numbers it from one instead, so it keeps two answers for two spellings of one construct — the only place in the panel where how a substitution is written changes where its contents are reported",
 	},
 	{
+		ID: "subst/a-token-refused-inside-a-body", Category: "commands",
+		// Deliberately not SyntaxError: that flag means this parser refuses
+		// the snippet, and it does not. A substitution's body is kept raw by
+		// the lexer and read at expansion time, so the file parses and the
+		// refusal arrives while it runs — which is the fact these two rows
+		// are here to record rather than an omission.
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "echo one\necho $(if; then :; fi)\necho two\n",
+		Why:             "a token the grammar refuses inside a substitution, which asks *when* the body is read rather than what it means — and the panel splits four ways on it. dash and bash 5.3 parse the body with the file, so `-n` refuses it too; bash 3.2 and ksh93 parse it at expansion time, so the script gets as far as `one` first and `-n` says nothing; and zsh neither runs it nor complains. The two that carry on split again on whether it is fatal — bash 3.2 reaches `two` at status 0 where ksh93 stops at 3. Read from a file rather than through `-c` because that is the route where the three answers are all visible at once, and this is the row that says which of them this shell gives. What it was giving until #2460 was the parser's own line and column, `1:3: \";\" unexpected`, in a message whose prefix had already named line 2",
+	},
+	{
+		ID: "subst/a-token-refused-inside-a-backquoted-body", Category: "commands",
+		// Deliberately not SyntaxError: that flag means this parser refuses
+		// the snippet, and it does not. A substitution's body is kept raw by
+		// the lexer and read at expansion time, so the file parses and the
+		// refusal arrives while it runs — which is the fact these two rows
+		// are here to record rather than an omission.
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "echo one\necho `if; then :; fi`\necho two\n",
+		Why:             "the discriminator for the row above, and it moves exactly one column: bash 5.3 parses `$( … )` with the file and this older spelling at expansion time, so the same refusal that stops the script there gets a `command substitution:` tag here, echoes the body rather than the outer line, and carries on to `two` at status 0. A shell reading both spellings the same way passes one of these two rows and fails the other, whichever way it reads them",
+	},
+	{
 		ID: "signal/an-interrupt-that-ended-a-child", Category: "commands",
 		Snippet: "/bin/sh -c 'kill -INT $$' 2>/dev/null; echo after",
 		Why:     "^C is one of the two deaths nothing remarks on, and in one shell it is also the one that ends the script — silently, and with 128 plus the signal rather than the 256 plus it that the same shell reports for a command killed by one. The others run the next command. Only SIGINT does this: QUIT, TERM, HUP, USR1 and PIPE are all carried on from by all four",

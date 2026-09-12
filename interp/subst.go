@@ -58,6 +58,21 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 	// alias defined on a substitution's first line does not reach its
 	// second in dash, ksh93 or zsh.
 	p := r.ParseWithAliases(src, r.dialect())
+	// Where the body sits in the script, so that what it reports is reported
+	// where a reader can find it. The span's own line is the body's first,
+	// because a span starts at its opening delimiter — and it accumulates,
+	// so a substitution inside a substitution is still placed in the file
+	// rather than in whichever body most recently began. One dialect numbers
+	// the older spelling from the top of the body instead, which is
+	// Diagnostics.BackquotedSubstitutionRestartsLines.
+	//
+	// **Read once and used twice**, by the refusal below and by the runner
+	// that runs what parsed. Two copies of this rule is how the refusal came
+	// to place a body its own runner would have placed correctly.
+	base := r.lineBase + int(span.Pos.Line) - 1
+	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {
+		base = 0
+	}
 	f := p.Parse()
 	if err := p.Err(); err != nil {
 		// A substitution re-parses, so the syntax-error status is the
@@ -77,12 +92,12 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 		// Its sibling helper for the other two substitution spellings has
 		// asked the dialect since it was written; this one never did.
 		//
-		// The shift is the same one the body's runner gets below: the span
-		// starts at its opening delimiter, so the body's line 1 is the
-		// script's line for the span. Without it the one dialect that writes
-		// the line *into* its sentence — `syntax error at line N:` — counted
-		// from the body and disagreed with its own prefix.
-		r.diagf("%s\n", r.diag().ParseFailure(shiftParseError(err, r.lineBase+int(span.Pos.Line)-1)))
+		// Shifted by the same base the body's runner is given, so a refusal
+		// and a command that failed in the same body are placed alike.
+		// Without the shift the one dialect that writes the line *into* its
+		// sentence — `syntax error at line N:` — counted from the body and
+		// disagreed with its own prefix.
+		r.diagf("%s\n", r.diag().ParseFailure(shiftParseError(err, base)))
 		r.status = r.diag().SyntaxStatus()
 		r.stopTheShell()
 		return ""
@@ -116,15 +131,7 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 	// measured, `set -x; echo $(:)` traces the body at `++ ` in the one
 	// dialect that counts them. See Runner.tracePrefixDepth.
 	sub.indirection = r.indirection + 1
-	// Where the body sits in the script, so that what it reports is reported
-	// where a reader can find it. The span's own line is the body's first,
-	// because a span starts at its opening delimiter — and it accumulates,
-	// so a substitution inside a substitution is still placed in the file
-	// rather than in whichever body most recently began.
-	sub.lineBase = r.lineBase + int(span.Pos.Line) - 1
-	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {
-		sub.lineBase = 0
-	}
+	sub.lineBase = base
 	sub.Stdout = &out
 	// The same group a subshell gets, and the same lifetime: the expansion
 	// does not finish until the body has. See Runner.anchorForkedBody.

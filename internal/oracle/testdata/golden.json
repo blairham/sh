@@ -163731,6 +163731,108 @@
         "TimedOut": false
       }
     },
+    "subst/a-token-refused-inside-a-backquoted-body": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error: unexpected \";\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~~two",
+        "Stderr": "\u003cscript\u003e: command substitution: line 2: syntax error near unexpected token `;'~\u003cscript\u003e: command substitution: line 2: `if; then :; fi'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~~two",
+        "Stderr": "\u003cscript\u003e: command substitution: line 2: syntax error near unexpected token `;'~\u003cscript\u003e: command substitution: line 2: `if; then :; fi'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~~two",
+        "Stderr": "\u003cscript\u003e: command substitution: line 2: syntax error near unexpected token `;'~\u003cscript\u003e: command substitution: line 2: `if; then :; fi'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \";\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error at line 2: `;' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "subst/a-token-refused-inside-a-body": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error: unexpected \";\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `;' while looking for matching `)'~\u003cscript\u003e: line 2: `echo $(if; then :; fi)'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `;' while looking for matching `)'~\u003cscript\u003e: line 2: `echo $(if; then :; fi)'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~~two",
+        "Stderr": "\u003cscript\u003e: command substitution: line 2: syntax error near unexpected token `;'~\u003cscript\u003e: command substitution: line 2: `if; then :; fi'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: Syntax error: \";\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error at line 2: `;' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "subst/arith-vs-subshell": {
       "ash": {
         "Stdout": "[3] [sub]",

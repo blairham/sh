@@ -13756,6 +13756,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `subst/the-subshell-form-loses-what-it-assigns` | `[0][hi]` | `[0][hi]` | `[0][hi]` | `[0][hi]` | `[0][hi]` | `[0][hi]` | `[0][hi]` |
 | `subst/a-body-is-placed-in-the-script` | **2>** `<shell>: 4: nosuchcmd: not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 3: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: not found` *(status 127)* | **2>** `<shell>:4: command not found: nosuchcmd` *(status 127)* | **2>** `<shell>: nosuchcmd: not found` *(status 127)* |
 | `subst/a-backquoted-body-is-placed-differently` | **2>** `<shell>: 1: nosuchcmd: not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 3: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: not found` *(status 127)* | **2>** `<shell>:4: command not found: nosuchcmd` *(status 127)* | **2>** `<shell>: nosuchcmd: not found` *(status 127)* |
+| `subst/a-token-refused-inside-a-body` | `one` **2>** `<script>: 2: Syntax error: ";" unexpected` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `;' while looking for matching `)'~<script>: line 2: `echo $(if; then :; fi)'` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `;' while looking for matching `)'~<script>: line 2: `echo $(if; then :; fi)'` *(status 2)* | `one~~two` **2>** `<script>: command substitution: line 2: syntax error near unexpected token `;'~<script>: command substitution: line 2: `if; then :; fi'` | `one` **2>** `<script>: line 2: syntax error at line 2: `;' unexpected` *(status 3)* | `one~~two` | `one` **2>** `<script>: line 2: syntax error: unexpected ";"` *(status 2)* |
+| `subst/a-token-refused-inside-a-backquoted-body` | `one` **2>** `<script>: 1: Syntax error: ";" unexpected` *(status 2)* | `one~~two` **2>** `<script>: command substitution: line 2: syntax error near unexpected token `;'~<script>: command substitution: line 2: `if; then :; fi'` | `one~~two` **2>** `<script>: command substitution: line 2: syntax error near unexpected token `;'~<script>: command substitution: line 2: `if; then :; fi'` | `one~~two` **2>** `<script>: command substitution: line 2: syntax error near unexpected token `;'~<script>: command substitution: line 2: `if; then :; fi'` | `one` **2>** `<script>: line 2: syntax error at line 2: `;' unexpected` *(status 3)* | `one~~two` | `one` **2>** `<script>: line 1: syntax error: unexpected ";"` *(status 2)* |
 | `signal/an-interrupt-that-ended-a-child` | `after` | `after` | `after` | `after` | *(no output, killed by signal 2 (interrupt))* | `after` | `after` |
 | `signal/a-command-ended-by-a-terminate` | `Terminated: N` | `Terminated: N /bin/sh -c 'kill -TERM $$'` | *(no output, status 0)* | `<shell>: line N: N Terminated: N /bin/sh -c 'kill -TERM $$'` | `<shell>: N: Terminated` | *(no output, status 0)* | `Terminated` |
 | `signal/a-pipeline-element-that-is-not-the-last` | `User defined signal N: N~after` | `after` | `after` | `after` | `after` | `after` | `User defined signal N~after` |
@@ -13830,6 +13832,18 @@ grades it and nothing drift-checks it either, for the same reason.
   true
   true
   x=`nosuchcmd`
+  ```
+- `subst/a-token-refused-inside-a-body` — a token the grammar refuses inside a substitution, which asks *when* the body is read rather than what it means — and the panel splits four ways on it. dash and bash 5.3 parse the body with the file, so `-n` refuses it too; bash 3.2 and ksh93 parse it at expansion time, so the script gets as far as `one` first and `-n` says nothing; and zsh neither runs it nor complains. The two that carry on split again on whether it is fatal — bash 3.2 reaches `two` at status 0 where ksh93 stops at 3. Read from a file rather than through `-c` because that is the route where the three answers are all visible at once, and this is the row that says which of them this shell gives. What it was giving until #2460 was the parser's own line and column, `1:3: ";" unexpected`, in a message whose prefix had already named line 2
+  ```sh
+  echo one
+  echo $(if; then :; fi)
+  echo two
+  ```
+- `subst/a-token-refused-inside-a-backquoted-body` — the discriminator for the row above, and it moves exactly one column: bash 5.3 parses `$( … )` with the file and this older spelling at expansion time, so the same refusal that stops the script there gets a `command substitution:` tag here, echoes the body rather than the outer line, and carries on to `two` at status 0. A shell reading both spellings the same way passes one of these two rows and fails the other, whichever way it reads them
+  ```sh
+  echo one
+  echo `if; then :; fi`
+  echo two
   ```
 - `signal/an-interrupt-that-ended-a-child` — ^C is one of the two deaths nothing remarks on, and in one shell it is also the one that ends the script — silently, and with 128 plus the signal rather than the 256 plus it that the same shell reports for a command killed by one. The others run the next command. Only SIGINT does this: QUIT, TERM, HUP, USR1 and PIPE are all carried on from by all four
   ```sh

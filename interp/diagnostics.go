@@ -2778,6 +2778,40 @@ type Diagnostics struct {
 	// operand standing in an operator's place; empty falls back to
 	// ArithOperatorExpected, which is what the other three want.
 	ArithBadOperator string
+	// ArithConditionalThen and ArithConditionalElse are a conditional missing
+	// one of the two values it chooses between: `$(( 1 ? ))` and
+	// `$(( 1 ? 2 : ))`. No verbs. Empty falls through to the ordinary
+	// end-of-input sentence, which is what two of the four answer with.
+	//
+	// Two fields because the panel cuts them two ways at once. Measured
+	// 2026-09-12:
+	//
+	//	              1 ?                                1 ? 2 :
+	//	bash 5.3.15   expression expected                expression expected
+	//	ksh93u+       ':' expected for '?' operator      more tokens expected
+	//	zsh 5.9.2     operand expected at end of string  the same
+	//	dash          expecting primary                  expecting primary
+	//
+	// bash parts a conditional's missing value from an ordinary one and
+	// writes the same sentence in both positions; ksh93 does the opposite,
+	// reporting the colon it is still waiting for in the first and its
+	// ordinary end of input in the second. One field cannot hold both cuts.
+	ArithConditionalThen string
+	ArithConditionalElse string
+	// ArithConditionalColon is a conditional whose two values are not parted
+	// by a `:`: `$(( 1 ? 2 ))`. No verbs. All four word it and no two agree
+	// — bash `` `:' expected for conditional expression ``, ksh93 `':'
+	// expected for '?' operator`, zsh `':' expected`, dash `expecting ':'`.
+	ArithConditionalColon string
+	// ArithColonWithoutQuestion is a `:` standing where no `?` opened a
+	// conditional, in the dialect that reads the byte as a math token
+	// wherever it is written: `$(( 1 : 2 ))` is `':' without '?'` in zsh.
+	// No verbs.
+	//
+	// Reachable only under syntax.Dialect.ArithColonIsAToken, which is what
+	// gets a reader far enough to know a second value was there. Everywhere
+	// else the colon is leftover text and earns ErrArithOperator's sentence.
+	ArithColonWithoutQuestion string
 	// ArithCharacterMissing is the reason when the character-code operator
 	// has nothing after it to take the code of: `$((##))`.
 	//
@@ -3498,9 +3532,33 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 			// wording covers both.
 			reason = d.ArithOperatorExpected
 		}
+	case syntax.ErrArithConditionalThen:
+		reason, fallback = d.ArithConditionalThen, "operand expected"
+		if reason == "" {
+			reason = d.ranOutOfOperand()
+		}
+	case syntax.ErrArithConditionalElse:
+		reason, fallback = d.ArithConditionalElse, "operand expected"
+		if reason == "" {
+			reason = d.ranOutOfOperand()
+		}
+	case syntax.ErrArithConditionalColon:
+		reason, fallback = d.ArithConditionalColon, "expected : in an arithmetic conditional"
+	case syntax.ErrArithColonWithoutQuestion:
+		reason, fallback = d.ArithColonWithoutQuestion, "expected : in an arithmetic conditional"
 	}
 	return Wording(d.ArithError, "%[1]s: %[2]s",
 		d.arithBlamedText(expr), Wording(reason, fallback, se.Token), se.Token)
+}
+
+// ranOutOfOperand is the sentence for a value that was wanted and never came,
+// which is one field for most dialects and two for the one that parts an
+// expression that ran out from an operand it found.
+func (d Diagnostics) ranOutOfOperand() string {
+	if d.ArithExpressionRanOut != "" {
+		return d.ArithExpressionRanOut
+	}
+	return d.ArithOperandExpected
 }
 
 // arithBlamedText is the expression as this dialect quotes it back.
@@ -3645,7 +3703,9 @@ func (d Diagnostics) ParseFailure(err error) string {
 	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator,
 		syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing,
 		syntax.ErrArithIllegalByte, syntax.ErrArithBadOutputFormat,
-		syntax.ErrArithBadBaseSyntax:
+		syntax.ErrArithBadBaseSyntax, syntax.ErrArithConditionalThen,
+		syntax.ErrArithConditionalColon, syntax.ErrArithConditionalElse,
+		syntax.ErrArithColonWithoutQuestion:
 		return d.arithParseFailure(se, se.Expr)
 	case syntax.ErrForName:
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)

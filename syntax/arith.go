@@ -321,6 +321,10 @@ type arithParser struct {
 	// and blaming from the cursor alone would have dropped a quote from every
 	// such sentence.
 	blame int
+	// conditionals counts how many `?` frames are open, so that the byte the
+	// dialect reads as a token wherever it stands is still the conditional's
+	// where a conditional is waiting for one.
+	conditionals int
 	// format is the output specifier the text held, and the *last* one when
 	// it held several: `$(( [#16] 255 + [#8] 1 ))` is written in base 8.
 	// Kept on the parser rather than built into the tree where it was read,
@@ -431,6 +435,15 @@ func (a *arithParser) leftoverKind() ErrorKind {
 	switch {
 	case c >= '0' && c <= '9', c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z',
 		c == '_', c == '(', c == '$':
+		return ErrArithOperator
+	case c == ':':
+		// A `:` reaches here only where the dialect does *not* take it as a
+		// math token, and both shells that word it separately still read it
+		// as one: bash gives it the sentence it gives any leftover text
+		// rather than the one it keeps for a byte that could be no operator.
+		// So it is text left over and not a byte the reader refuses — which
+		// is also the honest reading, the byte being an operator in every
+		// shell that has a conditional.
 		return ErrArithOperator
 	}
 	// Where an operator belonged is one of the two positions the byte's own
@@ -690,27 +703,82 @@ func (a *arithParser) assign() ArithExpr {
 	return a.ternary()
 }
 
+// ternary reads `cond ? then : else`, and the three ways it can be
+// incomplete.
+//
+// Each of the three is a kind of its own rather than a sentence written here,
+// because the panel words them apart in two different places — bash parts a
+// conditional's missing value from an ordinary one, and ksh93 parts the
+// *then* from the *else* — and because a bare string here reaches no dialect
+// at all, which is what `expected : in an arithmetic conditional` was.
+//
+// The token blamed is the last thing read, in every case, which is what bash
+// names: `?` for a missing then, the then itself for a missing colon, and `:`
+// for a missing else.
 func (a *arithParser) ternary() ArithExpr {
 	cond := a.binary(0)
 	if cond == nil {
 		return nil
 	}
 	a.space()
+	question := a.off
 	if !a.take("?") {
-		return cond
+		return a.colonWithoutQuestion(cond)
 	}
-	then := a.assign()
 	a.space()
-	if !a.take(":") {
-		a.p.fail("expected : in an arithmetic conditional")
+	thenAt := a.off
+	// The colon this conditional is waiting for belongs to it and not to a
+	// stray-colon reading: the then-expression is parsed at the assignment
+	// level, which recurses through here, and a nested frame that took the
+	// `:` for itself would break every `a ? b : c` in the dialect that reads
+	// the byte as a token.
+	a.conditionals++
+	then := a.assign()
+	a.conditionals--
+	if then == nil {
+		a.failArith(ErrArithConditionalThen, a.src[question:])
 		return cond
 	}
+	a.space()
+	colon := a.off
+	if !a.take(":") {
+		a.failArith(ErrArithConditionalColon, a.src[thenAt:])
+		return cond
+	}
+	a.space()
 	els := a.assign()
-	if then == nil || els == nil {
-		a.p.fail("incomplete arithmetic conditional")
+	if els == nil {
+		a.failArith(ErrArithConditionalElse, a.src[colon:])
 		return cond
 	}
 	return &ArithCond{Cond: cond, Then: then, Else: els}
+}
+
+// colonWithoutQuestion is a `:` standing where no `?` opened a conditional, in
+// the dialect whose reader takes the byte as a math token wherever it is
+// written — see Dialect.ArithColonIsAToken.
+//
+// It is read *and then* complained about, which is the whole of the
+// difference: `$(( 1 : ))` runs out of input looking for the value after the
+// colon and earns the ordinary end-of-input sentence, and `$(( 1 : 2 ))`
+// finds one and earns a sentence of its own. A reader that stopped at the
+// byte would give the same complaint to both.
+func (a *arithParser) colonWithoutQuestion(cond ArithExpr) ArithExpr {
+	if a.conditionals > 0 || !a.dial.ArithColonIsAToken || !a.has(":") {
+		return cond
+	}
+	colon := a.off
+	a.off++
+	a.space()
+	if a.off >= len(a.src) {
+		a.failArith(ErrArithOperandEnd, a.src[colon:])
+		return cond
+	}
+	if a.assign() == nil {
+		return cond
+	}
+	a.failArith(ErrArithColonWithoutQuestion, a.src[colon:])
+	return cond
 }
 
 func (a *arithParser) binary(level int) ArithExpr {
@@ -967,7 +1035,21 @@ func (a *arithParser) call(name string, start Pos, begin int) ArithExpr {
 // form where the dialect has it.
 func (a *arithParser) number(start Pos) ArithExpr {
 	begin := a.off
-	for a.off < len(a.src) && isNumByte(a.src[a.off]) {
+	if a.dial.ArithNumeralEndsAtABadDigit {
+		a.numberInItsOwnBase()
+		return &ArithNum{Text: a.src[begin:a.off], Start: start, Stop: start}
+	}
+	// Every character the base-64 alphabet knows, whatever base the literal
+	// turns out to be in: `1abc`, `0y`, `1@2` and `1_` are one numeral each
+	// in bash, which reads them all and then reports a digit its base does
+	// not have. Which digits a base really allows is decided at conversion,
+	// where the number is read.
+	//
+	// Except a byte the dialect refuses outright, which is no part of any
+	// token: `@` is digit 62 of the alphabet and is `illegal character` in
+	// the dialect that refuses it, so the two rules would otherwise disagree
+	// about the same byte.
+	for a.off < len(a.src) && isBaseDigit(a.src[a.off]) && !a.refusedOutright() {
 		a.off++
 	}
 	if a.dial.ArithFloat && !isBasedLiteral(a.src[begin:a.off]) {
@@ -975,15 +1057,100 @@ func (a *arithParser) number(start Pos) ArithExpr {
 	}
 	if a.off < len(a.src) && a.src[a.off] == '#' && a.dial.ArithExplicitBase {
 		a.off++
-		// The digit set is the base-64 alphabet, not the hex one the scan
-		// above uses: `36#z` and `64#_` are numbers where the dialect has
-		// explicit bases, and which bases a dialect accepts is decided at
-		// conversion, where the number is actually read.
 		for a.off < len(a.src) && isBaseDigit(a.src[a.off]) {
 			a.off++
 		}
 	}
 	return &ArithNum{Text: a.src[begin:a.off], Start: start, Stop: start}
+}
+
+// numberInItsOwnBase reads a numeral the way the dialect that stops at a
+// character its base cannot use reads one — see
+// Dialect.ArithNumeralEndsAtABadDigit.
+//
+// The base is known from the text: a radix prefix names it, a `base#` names
+// it, and otherwise it is ten. So the reader can stop where the shell stops,
+// which is what makes `$(( 1abc ))` two tokens there and one everywhere else.
+func (a *arithParser) numberInItsOwnBase() {
+	begin := a.off
+	base := 10
+	switch {
+	case a.hasPrefixAt("0x") || a.hasPrefixAt("0X"):
+		a.off += 2
+		base = 16
+	case a.dial.ArithBinaryLiteral && (a.hasPrefixAt("0b") || a.hasPrefixAt("0B")):
+		a.off += 2
+		base = 2
+	}
+	a.digitsIn(base)
+	if base != 10 {
+		return
+	}
+	if a.dial.ArithFloat {
+		before := a.off
+		a.floatTail(begin)
+		if a.off != before {
+			return
+		}
+	}
+	if a.off >= len(a.src) || a.src[a.off] != '#' || !a.dial.ArithExplicitBase {
+		return
+	}
+	// The digits read so far are the base, in decimal — and a base of zero is
+	// read as ten, which is what the shell that has this reader does with it:
+	// `$(( 0#5 ))` is 5 there and `$(( 0#z ))` stops at the `z`.
+	named, err := strconv.Atoi(a.src[begin:a.off])
+	if err != nil {
+		return
+	}
+	a.off++
+	if named == 0 {
+		// Zero is the base this reader goes *through*: what follows is read
+		// as an ordinary constant, radix prefix and all, so `0#0x10` is one
+		// token. Whether it comes to anything is the evaluator's question —
+		// see Semantics.ArithBaseZeroReadsTheDigitsAsWritten.
+		a.numberInItsOwnBase()
+		return
+	}
+	a.digitsIn(named)
+}
+
+// digitsIn consumes the run of characters the base can use.
+func (a *arithParser) digitsIn(base int) {
+	for a.off < len(a.src) {
+		v, known := baseDigitValue(a.src[a.off], base)
+		if !known || v >= base {
+			return
+		}
+		a.off++
+	}
+}
+
+func (a *arithParser) hasPrefixAt(p string) bool {
+	return strings.HasPrefix(a.src[a.off:], p)
+}
+
+// baseDigitValue is the base-64 alphabet: 0-9, then letters — one case as good
+// as the other through 36, and apart above it, where a-z is 10..35, A-Z 36..61,
+// `@` 62 and `_` 63. The second result says the byte is a digit somewhere in
+// that alphabet even where this base cannot reach it.
+func baseDigitValue(c byte, base int) (int, bool) {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0'), true
+	case c >= 'a' && c <= 'z':
+		return int(c-'a') + 10, true
+	case c >= 'A' && c <= 'Z':
+		if base <= 36 {
+			return int(c-'A') + 10, true
+		}
+		return int(c-'A') + 36, true
+	case c == '@':
+		return 62, true
+	case c == '_':
+		return 63, true
+	}
+	return 0, false
 }
 
 // floatTail extends a literal over the point and exponent a float may carry.
@@ -1037,11 +1204,6 @@ func isBasedLiteral(text string) bool {
 func isBaseDigit(c byte) bool {
 	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
 		(c >= 'A' && c <= 'Z') || c == '@' || c == '_'
-}
-
-func isNumByte(c byte) bool {
-	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
-		(c >= 'A' && c <= 'F') || c == 'x' || c == 'X'
 }
 
 // arithSubscript is what a bracketed subscript after a name came to.

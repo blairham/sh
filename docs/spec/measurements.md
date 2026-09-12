@@ -8510,6 +8510,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/a-chained-assignment` | `5 a=5 b=5` | `5 a=5 b=5` | `5 a=5 b=5` | `5 a=5 b=5` | `5 a=5 b=5` | `5 a=5 b=5` |
 | `arith/a-negative-modulo` | `[-1][1]` | `[-1][1]` | `[-1][1]` | `[-1][1]` | `[-1][1]` | `[-1][1]` |
 | `arith/ternary` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` |
+| `arith/a-numeral-followed-by-letters` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "1abc"` *(status 2)* | **2>** `<shell>: line 1: 1abc: value too great for base (error token is "1abc")` *(status 1)* | **2>** `<shell>: line 1: 1abc: value too great for base (error token is "1abc")` *(status 127)* | **2>** `<shell>: 1abc: value too great for base (error token is "1abc")` *(status 1)* | **2>** `<shell>: 1abc: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `abc'` *(status 1)* |
+| `arith/a-numeral-whose-letters-are-base-digits` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: " 1@2 "` *(status 2)* | **2>** `<shell>: line 1: 1@2: value too great for base (error token is "1@2")` *(status 1)* | **2>** `<shell>: line 1: 1@2: value too great for base (error token is "1@2")` *(status 127)* | **2>** `<shell>: 1@2: value too great for base (error token is "1@2")` *(status 1)* | **2>** `<shell>:  1@2 : arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: illegal character: @` *(status 1)* |
+| `arith/a-radix-prefix-with-a-digit-its-base-lacks` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: " 0b2 "` *(status 2)* | **2>** `<shell>: line 1: 0b2: value too great for base (error token is "0b2")` *(status 1)* | **2>** `<shell>: line 1: 0b2: value too great for base (error token is "0b2")` *(status 127)* | **2>** `<shell>: 0b2: value too great for base (error token is "0b2")` *(status 1)* | **2>** `<shell>:  0b2 : arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `2 '` *(status 1)* |
+| `arith/a-conditional-with-no-value-after-the-question` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "1 ?"` *(status 2)* | **2>** `<shell>: line 1: 1 ?: expression expected (error token is "?")` *(status 1)* | **2>** `<shell>: line 1: 1 ?: expression expected (error token is "?")` *(status 127)* | **2>** `<shell>: 1 ?: expression expected (error token is "?")` *(status 1)* | **2>** `<shell>: 1 ?: ':' expected for '?' operator` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `arith/a-conditional-with-no-colon` | **2>** `<shell>: 1: arithmetic expression: expecting ':': "1 ? 2"` *(status 2)* | **2>** `<shell>: line 1: 1 ? 2: `:' expected for conditional expression (error token is "2")` *(status 1)* | **2>** `<shell>: line 1: 1 ? 2: `:' expected for conditional expression (error token is "2")` *(status 127)* | **2>** `<shell>: 1 ? 2: `:' expected for conditional expression (error token is "2")` *(status 1)* | **2>** `<shell>: 1 ? 2: ':' expected for '?' operator` *(status 1)* | **2>** `<shell>:1: bad math expression: ':' expected` *(status 1)* |
+| `arith/a-conditional-with-no-value-after-the-colon` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "1 ? 2 :"` *(status 2)* | **2>** `<shell>: line 1: 1 ? 2 :: expression expected (error token is ":")` *(status 1)* | **2>** `<shell>: line 1: 1 ? 2 :: expression expected (error token is ":")` *(status 127)* | **2>** `<shell>: 1 ? 2 :: expression expected (error token is ":")` *(status 1)* | **2>** `<shell>: 1 ? 2 :: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `arith/a-colon-with-no-question-and-nothing-after-it` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "1 :"` *(status 2)* | **2>** `<shell>: line 1: 1 :: arithmetic syntax error in expression (error token is ":")` *(status 1)* | **2>** `<shell>: line 1: 1 :: arithmetic syntax error in expression (error token is ":")` *(status 127)* | **2>** `<shell>: 1 :: syntax error in expression (error token is ":")` *(status 1)* | **2>** `<shell>: :: invalid character in expression - 1 :` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `arith/a-colon-with-no-question-and-a-value-after-it` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "1 : 2"` *(status 2)* | **2>** `<shell>: line 1: 1 : 2: arithmetic syntax error in expression (error token is ": 2")` *(status 1)* | **2>** `<shell>: line 1: 1 : 2: arithmetic syntax error in expression (error token is ": 2")` *(status 127)* | **2>** `<shell>: 1 : 2: syntax error in expression (error token is ": 2")` *(status 1)* | **2>** `<shell>: :: invalid character in expression - 1 : 2` *(status 1)* | **2>** `<shell>:1: bad math expression: ':' without '?'` *(status 1)* |
 | `arith/compound-arithmetic-assignment` | `42 7 3 x=3` | `42 7 3 x=3` | `42 7 3 x=3` | `42 7 3 x=3` | `42 7 3 x=3` | `42 7 3 x=3` |
 | `arith/compound-bitwise-assignment` | `8 11 27 x=27` | `8 11 27 x=27` | `8 11 27 x=27` | `8 11 27 x=27` | `8 11 27 x=27` | `8 11 27 x=27` |
 | `arith/compound-shift-assignment` | `48 12 x=12` | `48 12 x=12` | `48 12 x=12` | `48 12 x=12` | `48 12 x=12` | `48 12 x=12` |
@@ -8970,6 +8978,38 @@ grades it and nothing drift-checks it either, for the same reason.
 - `arith/ternary` — the conditional operator
   ```sh
   printf "[%s]" "$((1?2:3))" "$((0?2:3))"
+  ```
+- `arith/a-numeral-followed-by-letters` — how many tokens `1abc` is, which is a grammar question rather than a wording one: zsh stops the number at `1` and then wants an operator, naming `abc`, where bash reads the whole run into the numeral and reports a digit base ten does not have. ksh93 and dash refuse the expression without saying which reading they took. Ours named the whole text with zsh's operand wording, which is neither (#2007)
+  ```sh
+  echo "v=$((1abc))"; echo "st=$?"
+  ```
+- `arith/a-numeral-whose-letters-are-base-digits` — the control for the row above on the other side: `@` and `_` are digits 62 and 63 of the base-64 alphabet, and bash reads them into the numeral exactly as it reads letters — `value too great for base` for both, not the `invalid arithmetic operator` it keeps for a byte no operator could be. So the swallowing reading is about the alphabet and not about letters. zsh refuses the `@` outright and is a cell short on `1_`, which it answers 1
+  ```sh
+  echo "v=$(( 1@2 ))"; echo "w=$(( 1_ ))"; echo "st=$?"
+  ```
+- `arith/a-radix-prefix-with-a-digit-its-base-lacks` — the same split reached through a base the text names rather than through plain decimal, which is what says the reader knows the base it is in: zsh stops both at the digit the base cannot use and blames what is left, so `0b2` is `operator expected at `2'` and not a complaint about the number. A reading that stopped at the first letter or at the first non-decimal digit answers neither
+  ```sh
+  echo "v=$(( 0b2 ))"; echo "w=$(( 08#9 ))"; echo "st=$?"
+  ```
+- `arith/a-conditional-with-no-value-after-the-question` — a conditional that stops at its `?`, and the panel splits two ways at once: bash parts a conditional's missing value from an ordinary one — `expression expected` rather than its `operand expected` — where ksh93 reports the *colon* it is still waiting for, and zsh and dash reuse their own end-of-input sentence. Ours wrote `expected : in an arithmetic conditional`, which is a bare string in the parser that no dialect could answer (#1190)
+  ```sh
+  echo "v=$((1 ?))"; echo "st=$?"
+  ```
+- `arith/a-conditional-with-no-colon` — the value is there and the colon is not, which all four word and no two alike: bash `` `:' expected for conditional expression `` blaming the value, ksh93 `':' expected for '?' operator`, zsh `':' expected`, dash `expecting ':'`. It is the row that says the missing colon is its own failure rather than the missing value's
+  ```sh
+  echo "v=$((1 ? 2))"; echo "st=$?"
+  ```
+- `arith/a-conditional-with-no-value-after-the-colon` — the other value missing, and the row that says the two positions are two questions: ksh93 answers this one with its ordinary `more tokens expected` where the `?` position got the colon sentence, while bash writes `expression expected` in both. So one field cannot hold the panel — bash cuts conditional from ordinary and ksh93 cuts then from else, and the two cuts cross
+  ```sh
+  echo "v=$((1 ? 2 :))"; echo "st=$?"
+  ```
+- `arith/a-colon-with-no-question-and-nothing-after-it` — a `:` where no `?` opened a conditional, which zsh reads as a math *token* — it takes the byte and then wants a value, so the complaint is `operand expected at end of string` and not one about the colon. bash blames the leftover text with the sentence it gives any of it, and ksh93 calls it an invalid character, which is a fourth shape and is recorded rather than modeled
+  ```sh
+  echo "v=$((1 :))"; echo "st=$?"
+  ```
+- `arith/a-colon-with-no-question-and-a-value-after-it` — the pair with the row above, and the whole evidence that the byte is read rather than refused: with something after the colon zsh gets far enough to say `':' without '?'`, which a reader that stopped at the byte could not — it would give both rows the same complaint, as ours did. bash blames `: 2` rather than `:`, which says its reader ran on too
+  ```sh
+  echo "v=$((1 : 2))"; echo "st=$?"
   ```
 - `arith/compound-arithmetic-assignment` — -=, /= and %= each apply their operator to the target and leave the result behind, so the chain reads 42, 7, 3 off one variable
   ```sh

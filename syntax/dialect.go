@@ -1655,6 +1655,39 @@ type Dialect struct {
 	// ArithExplicitBase enables the `base#digits` form. Absent from dash.
 	ArithExplicitBase bool
 
+	// ArithColonIsAToken reads `:` as a math token wherever it stands rather
+	// than as text no operator could be. zsh alone.
+	//
+	// Measured 2026-09-12: `$(( 1 : ))` there is `operand expected at end of
+	// string` — the reader took the colon and then wanted a value — and
+	// `$(( 1 : 2 ))` is `':' without '?'`, which is a complaint only a reader
+	// that got as far as the second value can make. The other shells stop at
+	// the byte: bash blames `:` and `: 2` with the sentence it gives any
+	// leftover text, and ksh93 calls it an invalid character.
+	//
+	// A grammar flag rather than a wording, because what differs is how far
+	// the reader gets before it complains and not what it says when it does.
+	ArithColonIsAToken bool
+
+	// ArithNumeralEndsAtABadDigit stops a numeral at the first character its
+	// own base cannot use, rather than reading every character the base-64
+	// alphabet knows and refusing the lot. zsh alone.
+	//
+	// Measured 2026-09-12. The two readings differ in *how many tokens* the
+	// text is, which is why it is a grammar flag and not a wording:
+	//
+	//	           1abc                        0y
+	//	bash 5.3   1abc: value too great …     0y: value too great …
+	//	zsh 5.9.2  operator expected at `abc'  operator expected at `y '
+	//
+	// The base is known from the text — a radix prefix names it, a `base#`
+	// names it, ten otherwise — so the reader can stop where that shell
+	// stops. It is the same rule behind three rows that look unrelated:
+	// `$(( 2#12 ))` is `operator expected at `2'` there, `$(( 08#9 ))` at
+	// `9`, and `$(( 0b2 ))` at `2`, each being a digit run that ended early
+	// with the rest left standing.
+	ArithNumeralEndsAtABadDigit bool
+
 	// ArithBinaryLiteral enables `0b101`, the binary radix prefix. zsh alone
 	// among the panel: measured 2026-09-12, `$(( 0b101 ))` is 5 there and
 	// `0b101: value too great for base` in bash 5.3, bash 3.2 and

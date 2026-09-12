@@ -516,6 +516,7 @@ func Semantics() interp.Semantics {
 	// reach. Both readings fall out of this one answer.
 	s.ArithBaseMayHaveALeadingZero = interp.No
 	s.ArithBaseIsAtMostTwoDigits = interp.No
+	s.ArithBaseZeroReadsTheDigitsAsWritten = interp.No
 	// A radix prefix with nothing after it is a finished number worth zero:
 	// `$(( 0x ))` is 0 and `$(( 0x+1 ))` is 1, in 5.3 and 3.2 alike.
 	s.ArithEmptyRadixDigitsAreZero = interp.Yes
@@ -1268,6 +1269,12 @@ func Diagnostics() interp.Diagnostics {
 		ArithError:      `%[1]s: %[2]s (error token is "%[3]s")`,
 		// The expression is quoted back from its first non-blank
 		// character, and a construct names itself in front of it.
+		// A conditional missing either of its two values is a sentence of its
+		// own here, apart from the ordinary `operand expected`: `$(( 1 ? ))`
+		// and `$(( 1 ? 2 : ))` are both `expression expected`.
+		ArithConditionalThen:        "expression expected",
+		ArithConditionalElse:        "expression expected",
+		ArithConditionalColon:       "`:' expected for conditional expression",
 		ArithErrorSkipsLeadingSpace: true,
 		ArithErrorNamesTheConstruct: true,
 		DivisionByZero:              "division by 0",

@@ -6266,6 +6266,17 @@ type Semantics struct {
 	// A decimal reading answers 13 and 21 to the last two and an octal one
 	// 11 and 17; ksh93 answers neither, and the cap explains all five.
 	ArithBaseIsAtMostTwoDigits Answer
+	// ArithBaseZeroReadsTheDigitsAsWritten answers `0#5` with 5 rather than
+	// refusing a base of zero: the digits are read as an ordinary constant,
+	// prefix and all, so `$(( 0#0x10 ))` is 16.
+	//
+	// zsh alone, and it is not the same question as a base below two:
+	// measured 2026-09-12, `$(( 1#0 ))` there is `invalid base (must be 2 to
+	// 36 inclusive): 1` while `$(( 0#5 ))` is 5 — so zero is a base it reads
+	// through rather than one it refuses. bash never sees a base at all in
+	// either, the leading zero having made the text an octal constant, and
+	// ksh93 refuses both.
+	ArithBaseZeroReadsTheDigitsAsWritten Answer
 	// ArithEmptyRadixDigitsAreZero reads `0x` — a radix prefix with no digits
 	// after it — as a complete number worth zero, rather than refusing it.
 	//
@@ -8090,11 +8101,12 @@ func PosixSemantics() Semantics {
 		// needs at least one digit after it. Neither is a base spelling the
 		// standard describes, since `base#digits` is not in it at all; what
 		// the preset follows is the constant syntax it does describe.
-		ArithBaseMayHaveALeadingZero:  No,
-		ArithBaseIsAtMostTwoDigits:    No,
-		ArithEmptyRadixDigitsAreZero:  No,
-		ArithOverflowSaturates:        No,
-		EmptyArithExpressionIsAnError: No,
+		ArithBaseMayHaveALeadingZero:         No,
+		ArithBaseIsAtMostTwoDigits:           No,
+		ArithBaseZeroReadsTheDigitsAsWritten: No,
+		ArithEmptyRadixDigitsAreZero:         No,
+		ArithOverflowSaturates:               No,
+		EmptyArithExpressionIsAnError:        No,
 		// The standard says `times` takes no operands and does not say what to
 		// do with one; the two shells that follow it most closely ignore it.
 		TimesRejectsArguments: No,

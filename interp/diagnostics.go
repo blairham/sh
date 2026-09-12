@@ -2202,6 +2202,36 @@ type Diagnostics struct {
 	// operator is `"fi" unexpected`. Empty means "the same as
 	// SyntaxUnexpected", which is three of the four.
 	SyntaxUnexpectedWord string
+	// SyntaxUnexpectedNewline is the same for the *newline*, which two
+	// dialects write differently again and for two different reasons. Same
+	// three verbs, and empty means "the same as SyntaxUnexpected", which is
+	// bash and ksh93.
+	//
+	// dash leaves it unquoted, the way it leaves an ordinary word unquoted —
+	// `newline unexpected` where an operator or a reserved word is `";;"
+	// unexpected` — and zsh spells the token `\n` rather than by name, so
+	// what it needs is the same sentence with a different word in it.
+	// Measured 2026-09-12 over a script holding `echo a`, `for` and `done`:
+	//
+	//	dash     <script>: 3: Syntax error: newline unexpected
+	//	bash 5.3 <script>: line 2: syntax error near unexpected token `newline'
+	//	ksh93    <script>: syntax error at line 3: `newline' unexpected
+	//	zsh      <script>:3: parse error near `\n'
+	//
+	// One field for both, because a sentence naming the token covers a
+	// dialect that only wanted to spell it differently (#1364).
+	SyntaxUnexpectedNewline string
+	// UnexpectedNewlineIsOnTheNextLine puts a refused newline on the line it
+	// *ends* rather than on the line it was written at the end of.
+	//
+	// Three of the four, in the same measurement: dash, ksh93 and zsh answer
+	// the script above with 3 and bash with 2, and the split is the same on
+	// the `-c` route and wherever in a longer script the newline stands. It
+	// is a fact about the token rather than about the failure, so it holds
+	// for a `for` whose name is a newline as much as for a token the grammar
+	// simply did not want — dash reports `Bad for loop variable` at 3 there
+	// too.
+	UnexpectedNewlineIsOnTheNextLine bool
 	// SyntaxRedirectUnexpected replaces the message where the unexpected
 	// token is itself a redirection operator. No verbs.
 	//
@@ -3306,6 +3336,9 @@ func (d Diagnostics) ParseFailureLine(err error) int {
 		}
 		return int(se.Pos.Line)
 	}
+	if line, moved := d.newlineLine(se); moved {
+		return line
+	}
 	if d.UnterminatedEndsOnNextLine && se.EndLine > 0 {
 		return se.EndLine
 	}
@@ -3421,6 +3454,24 @@ func readOn(se *syntax.Error, expr string) bool {
 // wrong inside `${ }` and "Syntax error: …" for everything else, and matching
 // on our own phrasing to tell those apart would break the first time the
 // phrasing changed.
+// newlineLine is the line a refused newline is blamed on in this dialect, and
+// whether that is anywhere other than where the token stands.
+//
+// The line the newline *ends* is the one after the line it was written at the
+// end of, which is a fact about the character and not about the text. See
+// UnexpectedNewlineIsOnTheNextLine.
+//
+// Two callers, and both are needed: the location a report is written at, and
+// the line verb of the one dialect that carries the number inside its
+// sentence. Those are the same number and disagreed while only the first
+// asked.
+func (d Diagnostics) newlineLine(se *syntax.Error) (int, bool) {
+	if se.Class != syntax.ClassNewline || !d.UnexpectedNewlineIsOnTheNextLine {
+		return 0, false
+	}
+	return int(se.Pos.Line) + 1, true
+}
+
 // namesTheSourceText reports whether this dialect echoes a refused word back
 // as it was written. See [UnexpectedWordNaming].
 func (d Diagnostics) namesTheSourceText(se *syntax.Error) bool {
@@ -3452,6 +3503,9 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 	if se.Class == syntax.ClassWord && d.SyntaxUnexpectedWord != "" {
 		form = d.SyntaxUnexpectedWord
 	}
+	if se.Class == syntax.ClassNewline && d.SyntaxUnexpectedNewline != "" {
+		form = d.SyntaxUnexpectedNewline
+	}
 	if se.Redirect && d.SyntaxRedirectUnexpected != "" {
 		// One dialect does not name the token here at all.
 		return d.SyntaxRedirectUnexpected
@@ -3461,7 +3515,11 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 		// something shorter than it says anywhere else.
 		form = d.CondSyntaxUnexpected
 	}
-	msg := Wording(form, `"%[1]s" unexpected`, token, se.Expected, se.Pos.Line)
+	line := int(se.Pos.Line)
+	if moved, ok := d.newlineLine(se); ok {
+		line = moved
+	}
+	msg := Wording(form, `"%[1]s" unexpected`, token, se.Expected, line)
 	if se.Expected != "" && d.SyntaxExpecting != "" {
 		msg += Wording(d.SyntaxExpecting, "", se.Expected)
 	}

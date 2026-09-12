@@ -2063,6 +2063,11 @@ echo "reached-after st=$?"`,
 		Why:     "the same header read from a file rather than through `-c`, which is the row that says the route is not the variable: every column answers it exactly as it answers the `-c` one, wording and status alike. Worth recording because the misclassification it pins reached every route — `StatusForParseError` sends the loop's error to `ForNameStatus`, so `-c`, a script, standard input and a prompt all carried the same wrong number",
 	},
 	{
+		ID: "core/a-newline-where-a-loop-variable-belongs", Category: "command language", SyntaxError: true,
+		Snippet: "for\ndo :; done",
+		Why:     "the newline as the refused token with the input *not* run out, so no column can answer it as an unfinished construct and all five that name a token name this one. Three facts about that one token show together: dash, ksh93 and zsh blame the line the newline **ends** where bash blames the line it was written at the end of; dash writes it unquoted, `newline unexpected`, beside the `\";;\" unexpected` it writes for an operator; and zsh spells it `\\n` rather than by name. We answered bash's line in all four and quoted it in every one (#1364)",
+	},
+	{
 		ID: "core/a-separator-where-a-loop-variable-belongs", Category: "command language", SyntaxError: true,
 		Snippet: `for ; in a b`,
 		Why:     "a token that is present and could never be a name, which separates the two questions the bare `for` runs together: there is no end of input here, so a shell answering it as an unfinished construct would be wrong. Three of the four name the `;` exactly as they name it anywhere else and dash gives the same bad-loop-variable sentence it gives `for` itself, which is what says the classification is the dialect's and not the token's",

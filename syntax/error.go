@@ -162,6 +162,15 @@ const (
 	ClassWord
 	// ClassReserved is a word the grammar reserves: `fi`, `do`, `esac`.
 	ClassReserved
+	// ClassNewline is the newline, which is a token here and is not
+	// punctuation: the dialect that leaves a word unquoted leaves this one
+	// unquoted too — `newline unexpected` beside `";;" unexpected` — and one
+	// other spells it `\n` rather than by name.
+	//
+	// Its own class rather than an operator because both of those facts are
+	// about the newline alone: every other member of ClassOperator is quoted
+	// by that dialect and named by the characters it was written with.
+	ClassNewline
 )
 
 // Error is a parse failure with its position, kind, and enough of the state

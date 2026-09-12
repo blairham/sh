@@ -584,7 +584,11 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperatorExpected: "expecting EOF",
 		SyntaxUnexpected:      "Syntax error: \"%[1]s\" unexpected",
 		SyntaxUnexpectedWord:  "Syntax error: word unexpected",
-		SyntaxExpecting:       " (expecting \"%[1]s\")",
+		// And the newline is unquoted with it — `newline unexpected` beside
+		// `";;" unexpected` — and blamed on the line it ends (#1364).
+		SyntaxUnexpectedNewline:          "Syntax error: newline unexpected",
+		UnexpectedNewlineIsOnTheNextLine: true,
+		SyntaxExpecting:                  " (expecting \"%[1]s\")",
 		// dash does not name the token when it is a redirection operator.
 		SyntaxRedirectUnexpected: "Syntax error: redirection unexpected",
 		ForName:                  "Syntax error: Bad for loop variable",

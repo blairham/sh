@@ -1569,6 +1569,10 @@ func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	// unless it holds an expansion, and then every quote in it stays:
 	// `"$x"` is `"$x"` and `"a"~` is `a~`. See UnexpectedWordNaming.
 	d.UnexpectedWordNaming = interp.UnexpectedWordIsSourceTextWhenItExpands
+	// A refused newline is named on the line it ends rather than on the line
+	// it was written at the end of, which is dash and zsh's answer too and
+	// leaves bash the odd one out (#1364).
+	d.UnexpectedNewlineIsOnTheNextLine = true
 	d.Unterminated, d.PromptUnterminated = parseWording(6, "`%[3]s' unmatched")
 	// Nothing is unmatched when nothing was open, so the end of input is
 	// named as the thing that was unexpected instead.

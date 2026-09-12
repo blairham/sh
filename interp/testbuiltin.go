@@ -331,6 +331,9 @@ func (p *testParser) primary() (bool, error) {
 			return ok, err
 		}
 	}
+	if err := p.unknownOperator(); err != nil {
+		return false, err
+	}
 	if p.r.isTestUnary(p.args[p.pos]) {
 		if p.pos+1 >= len(p.args) {
 			return false, &testError{kind: errOperandExpected}
@@ -342,6 +345,48 @@ func (p *testParser) primary() (bool, error) {
 	v := p.args[p.pos] != ""
 	p.pos++
 	return v, nil
+}
+
+// unknownOperator is a word spelled like an operator this dialect does not
+// have, standing where a primary begins with another word after it.
+//
+// The two short forms never reach the grammar and so already name it: two
+// words go straight to unaryTest and three to binaryTest. Here the word is
+// not in the operator table, so without this it becomes a bare string, the
+// expression parses, and the leftover words are reported as a count — which
+// says nothing about the one token that was actually wrong (#1290).
+//
+// A word standing *alone* as a primary is a non-empty string and is true, in
+// every column: `[ -Q -a -n x ]` succeeds everywhere. So the complaint needs
+// a word after it that the grammar cannot take, which is any word that is
+// neither a connective nor a closing paren.
+//
+// Which complaint it is belongs to the dialect, because the panel gives three
+// answers — see Diagnostics.TestUnknownLongOperator.
+func (p *testParser) unknownOperator() error {
+	word := p.args[p.pos]
+	if len(word) < 2 || word[0] != '-' || p.r.isTestUnary(word) {
+		return nil
+	}
+	switch next := p.pos + 1; {
+	case next >= len(p.args):
+		return nil
+	case p.args[next] == "-a", p.args[next] == "-o", p.args[next] == ")":
+		return nil
+	}
+	switch p.r.diag().TestUnknownLongOperator {
+	case TestUnknownOperatorNamed:
+		return &testError{kind: errUnaryExpected, operand: word}
+	case TestUnknownOperatorLeavesAnOperand:
+		// Two operands with no operator between them, which is the
+		// three-word complaint — including which of the two it blames.
+		blamed := p.args[p.pos+1]
+		if p.r.diag().TestNamesFirstOperand {
+			blamed = word
+		}
+		return &testError{kind: errBinaryExpected, operand: blamed}
+	}
+	return nil
 }
 
 // isTestUnary reports whether a word is one of the unary operators, which is

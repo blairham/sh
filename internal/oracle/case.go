@@ -10548,6 +10548,21 @@ printf 'TWO=still-running\n'`,
 		Why:     "2 for \"this is not an expression\", deliberately distinct from 1, \"the expression is false\" — a script that branches on $? can tell them apart, and every shell in the panel agrees on the number while wording it four ways",
 	},
 	{
+		ID: "test/an-unknown-operator-in-a-long-expression", Category: "test",
+		Snippet: `x=1; [ -Q x -a -n x ]; echo "st=$?"`,
+		Why:     "a word spelled like an operator no shell has, past the point where the argument count decides and a grammar takes over. Three answers: dash and ksh93 decline to read it as an operator and complain that the primary is two operands with nothing between them — naming the first and the second of them respectively — zsh reads it as an operator and says it has never heard of it, and bash 5.3 reports the argument count, which is the one answer that does not say which word was wrong. bash 3.2 is a fourth column and names it. `-Q` rather than a real letter on purpose: the row is about the spelling, so no dialect gaining an operator can move it (#1290)",
+	},
+	{
+		ID: "test/an-operator-spelling-standing-alone", Category: "test",
+		Snippet: `x=1; [ -Q -a -n x ]; echo "st=$?"`,
+		Why:     "the control for the row above and the reason the complaint cannot be attached to the spelling alone: the same word with no operand after it is a non-empty string, so the expression is true in every column. A refusal that fired on the spelling would turn a working expression into an error",
+	},
+	{
+		ID: "test/two-plain-words-in-a-long-expression", Category: "test",
+		Snippet: `[ a b -a c d ]; echo "st=$?"`,
+		Why:     "the same malformed primary without an operator spelling in it, and the panel divides again: dash names the first word, ksh93 the second, zsh writes a parse error naming the first, and bash counts the arguments. Recorded rather than fixed — ours answers bash's count in every dialect, which is right for one column of four (#1290)",
+	},
+	{
 		ID: "test/classification-diverges", Category: "test",
 		Snippet: `test a b c; echo "st=$?"`,
 		Why:     "all four report a malformed expression and none agrees on what it is: bash blames the middle word and says a binary operator was expected, dash blames the *first* word, ksh93 calls it an unknown operator and zsh a condition. Status 2 everywhere, so this is a wording and classification divergence rather than a behavioral one",
@@ -16977,6 +16992,11 @@ echo "st=$?"`,
 		ID: "print/a-dash-before-a-digit-is-an-operand", Category: "builtins",
 		Snippet: `print -1; print -12; print -r -1 -2; print -1x; print -n1; echo " st=$?"`,
 		Why:     "a word whose first character after the dash is a digit is the first operand and not a bundle of letters, so a negative number prints itself without `--` in front of it. One-sided: the last line is the same digit *after* a letter, which is an option nothing has, so a fix that read the whole word as a number would break it",
+	},
+	{
+		ID: "print/a-dash-inside-a-bundle-is-an-inert-letter", Category: "builtins",
+		Snippet: `print -n-r x; echo ""; print - -n x; print ---`,
+		Why:     "a dash is an option letter zsh's print accepts and does nothing with, which is not the rule the lone dash word follows. The two rows discriminate: `print -n-r x` prints `x` with no newline, so both letters applied around a dash that stopped nothing, and `print - -n x` prints `-n x`, so the *word* really did end the options. ksh93 has print too and reads neither that way, which is what makes this a dialect row rather than a wording one (#1708)",
 	},
 	{
 		ID: "print/a-lone-dash-ends-the-options", Category: "builtins",

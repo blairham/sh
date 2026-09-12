@@ -1676,15 +1676,19 @@ func Diagnostics() interp.Diagnostics {
 		KillBadOptionStatus:       2,
 		KillUsageUnprefixed:       true,
 		KillTargetUnprefixed:      true,
-		TestUnaryExpected:         "%[2]s: %[1]s: unknown operator",
-		TestBinaryExpected:        "%[2]s: %[1]s: unknown operator",
-		TestIntegerExpected:       "%[2]s: %[1]s: integer expected",
-		TestTooManyArguments:      "%[2]s: too many arguments",
-		TestOperandExpected:       "%[2]s: argument expected",
-		TestMissingBracket:        "[: ']' missing",
-		OptionListingHeader:       "Current option settings",
-		OptionListingWidth:        25,
-		PlusOListsActive:          true,
+		// `[ -Q x -a -n x ]` is `[: x: unknown operator` here: the dash word
+		// is an operand like any other, and the complaint names the second of
+		// the two the primary is left with (#1290).
+		TestUnknownLongOperator: interp.TestUnknownOperatorLeavesAnOperand,
+		TestUnaryExpected:       "%[2]s: %[1]s: unknown operator",
+		TestBinaryExpected:      "%[2]s: %[1]s: unknown operator",
+		TestIntegerExpected:     "%[2]s: %[1]s: integer expected",
+		TestTooManyArguments:    "%[2]s: too many arguments",
+		TestOperandExpected:     "%[2]s: argument expected",
+		TestMissingBracket:      "[: ']' missing",
+		OptionListingHeader:     "Current option settings",
+		OptionListingWidth:      25,
+		PlusOListsActive:        true,
 		// Labeled lines, one figure each, and no children's times at all —
 		// genuinely less information than the other three report.
 		TimesLayout:   interp.TimesUserAndSystem,

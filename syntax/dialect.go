@@ -317,10 +317,10 @@ type Dialect struct {
 	// the first is another name until the header ends: at `in`, at `(`, at a
 	// separator, at `do` or at `{`. So a short body may not follow the names
 	// directly — `for a print -r -- "[$a]"` is a parse error near `-r` in
-	// zsh, because `print` was read as a second name — where a header that
-	// ended itself still takes one: `for a b ( 1 2 ) print "$a$b"` runs. A
-	// dialect with ShortForm and not this flag keeps the older, wider
-	// reading, in which a word after the name begins the body.
+	// because `print` is read as a second name — where a header that ended
+	// itself still takes one: `for a b ( 1 2 ) print "$a$b"` runs. A preset with
+	// ShortForm and not this flag keeps the wider reading, in which a word after
+	// the name begins the body.
 	//
 	// A name must be a plain unquoted name. `for a "b" ( … )` and
 	// `for a $n ( … )` are parse errors in zsh, so the words are not
@@ -331,80 +331,71 @@ type Dialect struct {
 	// escape in it, the quoting being removed before the word is read as a
 	// name: `for "i" in a b` binds `i`.
 	//
-	// ksh93u+ alone accepts it. Measured 2026-09-06, `env -i
-	// PATH=/usr/bin:/bin` with a scratch HOME, from a script file and through
-	// `-c`: `for "i"`, `for 'i'`, `for i""`, `for "i"x` and `for \i` all run
-	// there and all five are refused by bash 5.3.15, the same binary as `sh`,
-	// bash 3.2.57, dash and zsh 5.9.2. So the escape travels with the quotes
-	// rather than being a question of its own, and the flag is one bit.
+	// Measured under `env -i PATH=/usr/bin:/bin` with a scratch HOME, from a
+	// script file and through `-c`: `for "i"`, `for 'i'`, `for i""`, `for "i"x`
+	// and `for \i` all run where the flag is on and all five are refused where
+	// it is off. So the escape travels with the quotes rather than being a
+	// question of its own, and the flag is one bit.
 	//
 	// It is the *quoting* half only. A name coming out of an expansion —
-	// `for $n`, `for ${n}`, `for "$n"`, `for $(echo n)` — is refused by all
-	// six columns including this one, so that half is core and lives in
-	// [Parser.forName] rather than here (#1076).
+	// `for $n`, `for ${n}`, `for "$n"`, `for $(echo n)` — is refused under every
+	// preset including one with this flag on, so that half is core and lives in
+	// [Parser.forName] rather than here.
 	ForNameMayBeQuoted bool
 
 	// ForNameCheckedWhenTheLoopRuns makes a `for` or `select` whose variable
 	// is not a name **parse**, with the word carried on the clause and the
 	// complaint raised when the loop is reached.
 	//
-	// A stage and not a wording, which is the point: `bash -n` accepts a
-	// script this refused. Measured 2026-09-06 and re-measured 2026-09-07,
-	// `env -i PATH=/usr/bin:/bin` with a scratch HOME, over a script file
-	// holding `n=x`, `for $n in a b; do echo body; done` and
-	// `echo "reached-after st=$?"`:
+	// A stage and not a wording, which is the point: a syntax-check run accepts
+	// a script the other reading refused. Measured under `env -i
+	// PATH=/usr/bin:/bin` with a scratch HOME, over a script file holding `n=x`,
+	// `for $n in a b; do echo body; done` and `echo "reached-after st=$?"`:
 	//
-	//	shell        -n over that file   a run
-	//	bash 5.3.15  accepts, silent, 0  the complaint, then reached-after st=1
-	//	bash-as-sh   accepts, silent, 0  the complaint, and stops at 2
-	//	bash 3.2.57  accepts, silent, 0  the complaint, then reached-after st=1
-	//	dash         refuses, 2          the complaint, and stops
-	//	ksh93u+      accepts, silent, 0  the complaint, and stops at 1
-	//	zsh 5.9.2    refuses, 1          the complaint, and stops
+	//	             -n over that file   a run
+	//	true         accepts, silent, 0  the complaint, then reached-after
+	//	true         accepts, silent, 0  the complaint, and stops
+	//	false        refuses             the complaint, and stops
 	//
-	// So four of the six parse it and `for 1x` behaves identically in every
-	// column — the expansion is not what makes the difference, which is why
-	// this is one flag and not one per spelling.
+	// Most presets parse it, and `for 1x` behaves identically under every one —
+	// the expansion is not what makes the difference, which is why this is one
+	// flag and not one per spelling.
 	//
-	// A syntax check is what a CI job runs, so a script that works reported
-	// as broken is the visible cost; and stopping where bash carries on is
-	// the worse of the two remaining directions, because the output goes
-	// missing rather than coming out wrong (#1110).
+	// A syntax check is what a CI job runs, so a script that works reported as
+	// broken is the visible cost; and stopping where the wider reading carries
+	// on is the worse of the two remaining directions, because the output goes
+	// missing rather than coming out wrong.
 	//
 	// What happens when the loop *is* reached is not this flag —
-	// interp.Semantics.ForNameWhenTheLoopRuns — because three answers among
-	// the two shells that get here is a behavior question and not a grammar
-	// one.
+	// interp.Semantics.ForNameWhenTheLoopRuns — because the answers there are a
+	// behavior question and not a grammar one.
 	ForNameCheckedWhenTheLoopRuns bool
 
 	// ForNonWordIsANameError judges whatever stands in the loop-variable
 	// position as a *name*, even when it is a token that could never be a
 	// word at all — the end of the input, a newline, a `;`.
 	//
-	// dash alone does that, and it is the whole of the difference: it answers
-	// `for`, `for` with a newline after it, `for ;` and `for ; in a b` with
-	// the one sentence it gives every bad loop variable. The other three ask
-	// the grammar first, so a token that is not a word is refused as a token
-	// and never reaches the name check:
+	// A preset that does it answers `for`, `for` with a newline after it,
+	// `for ;` and `for ; in a b` with the one sentence it gives every bad loop
+	// variable. The others ask the grammar first, so a token that is not a word
+	// is refused as a token and never reaches the name check:
 	//
-	//	              dash                    bash            ksh93            zsh
-	//	`for`         Bad for loop variable   `newline'       `for' unmatched  near `for'
-	//	`for` NL do   Bad for loop variable   `newline'       `newline'        near `\n'
-	//	`for ;`       Bad for loop variable   `;'             `;'              near `;'
+	//	              true                    false
+	//	`for`         Bad for loop variable   `newline'  /  `for' unmatched
+	//	`for` NL do   Bad for loop variable   `newline'
+	//	`for ;`       Bad for loop variable   `;'
 	//	`for 1x in a` Bad for loop variable   not a valid identifier — the name check
 	//
-	// Measured 2026-09-07, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
-	// through `-c`, from a script file and on standard input; the panel gives
-	// the same answer on all three routes, so this is not a route question
-	// (#1319). The last row is the control: a word that is present and is not
-	// a name is the [ErrForName] case in every column including this one, and
-	// stays there.
+	// Measured under `env -i PATH=/usr/bin:/bin` with a scratch HOME, through
+	// `-c`, from a script file and on standard input; the answer is the same on
+	// all three routes, so this is not a route question. The last row is the
+	// control: a word that is present and is not a name is the [ErrForName] case
+	// under every preset including this one, and stays there.
 	//
-	// The status follows the classification rather than being set beside it:
-	// a grammar failure carries the dialect's parse-error status — bash 2,
-	// ksh93 3, zsh 1 — where ErrForName carries ForNameStatus, so calling a
-	// bare `for` a bad name answered 1 in three dialects that answer 2, 3 and
-	// 1 for every other refused line.
+	// The status follows the classification rather than being set beside it: a
+	// grammar failure carries the preset's parse-error status where ErrForName
+	// carries ForNameStatus, so calling a bare `for` a bad name answers one
+	// number where the preset answers another for every other refused line.
 	ForNonWordIsANameError bool
 
 	// ForNameEndOfInputIsANewline makes the input running out where a loop's
@@ -412,20 +403,19 @@ type Dialect struct {
 	// construct left unfinished.
 	//
 	// It is the other half of the three-way split [ForNonWordIsANameError]
-	// begins, and the two together carry the three answers the panel gives a
-	// bare `for`: dash calls it a bad loop variable, bash calls it an
-	// unexpected `newline`, and ksh93 and zsh give the same unterminated
-	// wording they give a bare `while` — ``for' unmatched`` and ``parse error
-	// near `for'``.
+	// begins, and the two together carry the three answers a bare `for` gets:
+	// a bad loop variable, an unexpected `newline`, or the same unterminated
+	// wording a bare `while` gets — ``for' unmatched`` and
+	// ``parse error near `for'``.
 	//
-	// bash's answer is a fact about where its input ends. It terminates what
-	// it reads with a newline, so a position that *accepts* newlines swallows
-	// that one and reports the end of the file — a bare `while` is `unexpected
-	// end of file from `while' command on line 1` there, the same shape as
-	// every other unfinished construct. The loop-variable position accepts no
-	// newline, so the newline is what is left over and the newline is what it
-	// names. The same fact is why it puts the end of input on the line *after*
-	// the text; see Error.EndLine, which is the half of it already recorded.
+	// The newline answer is a fact about where that preset's input ends. It
+	// terminates what it reads with a newline, so a position that *accepts*
+	// newlines swallows that one and reports the end of the file — a bare
+	// `while` is `unexpected end of file from `while' command on line 1` there,
+	// the same shape as every other unfinished construct. The loop-variable
+	// position accepts no newline, so the newline is what is left over and the
+	// newline is what it names. The same fact is why it puts the end of input on
+	// the line *after* the text; see Error.EndLine.
 	//
 	// Consulted only where a newline could not have stood, which is why it is
 	// one loop's flag rather than a claim about every failure: everywhere else
@@ -434,13 +424,12 @@ type Dialect struct {
 
 	// ForBraceBody lets a `for` or `select` loop take a brace group where
 	// `do … done` stands: `for ((;;)) { echo hi; break; }`, and equally
-	// `for i in a b; { echo "$i"; }`. Absent from dash, which is the only
-	// panel shell that refuses it.
+	// `for i in a b; { echo "$i"; }`.
 	//
 	// It belongs to those two loops and to nothing else. `while cond { … }`,
-	// `until cond { … }` and `if cond { … }` are refused by every shell in
-	// the panel, which is what makes this a production of the loop rather
-	// than a general rule about bodies — and what makes it easy to miss.
+	// `until cond { … }` and `if cond { … }` are refused under every preset,
+	// which is what makes this a production of the loop rather than a general
+	// rule about bodies — and what makes it easy to miss.
 	//
 	// The separator before the brace is not optional in the list form, and
 	// not for a reason about this flag: `for i in a b { … }` reads `{` as

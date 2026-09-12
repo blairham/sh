@@ -1432,7 +1432,11 @@ func (r *Runner) arithSpanValue(s syntax.Span) (string, bool) {
 		r.expandErr = true
 		return "", false
 	}
-	return r.formatNum(v), true
+	// An output format is at the top of the tree rather than anywhere the
+	// evaluation could have left it behind, so the result is written from the
+	// node: see interp/arithoutput.go.
+	format, _ := tree.(*syntax.ArithOutput)
+	return r.formatUnder(format, v), true
 }
 
 // expansionResult applies the two axes that govern what happens to the result

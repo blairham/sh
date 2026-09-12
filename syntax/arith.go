@@ -4,6 +4,7 @@
 package syntax
 
 import (
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -84,6 +85,55 @@ type ArithCharCode struct {
 func (n *ArithCharCode) Pos() Pos   { return n.Start }
 func (n *ArithCharCode) End() Pos   { return n.Stop }
 func (n *ArithCharCode) arithNode() {}
+
+// ArithOutput is the bracketed output-format specifier — `[#16]`, `[##16]`,
+// `[#16_4]`, `[#_]` — which says the base the expression's *result* is
+// written in and how its digits are grouped.
+//
+// One node, at the top of the tree, however many specifiers the text held and
+// wherever they stood. That is not a simplification: the construct is lexical
+// in the dialect that has it, so it takes effect from a branch that is never
+// evaluated and from a position after the value it formats, and the textually
+// last one wins. A node where the specifier was written would answer all three
+// of those wrongly. See [Dialect.ArithOutputFormat] for the measurements.
+//
+// The value of the node is the value of X, unchanged — the format is a
+// side-channel to whoever writes the answer down and is not arithmetic. It
+// reaches two of them: the text an arithmetic expansion produces, and the text
+// an assignment inside the expression stores.
+type ArithOutput struct {
+	// Base is the base the result is written in, and Based says one was
+	// written at all: `[#_]` groups decimal digits and names no base, which
+	// is not the same as naming zero — `[#0]` is a base out of range and is
+	// refused. Two fields rather than a sentinel because the refusal has to
+	// quote the number back.
+	//
+	// Whether a base is one the dialect can spell is not decided here: the
+	// range is a property of the alphabet a shell renders in, so it is
+	// checked where that alphabet is, and a base out of range is a *runtime*
+	// failure rather than a parse one.
+	Base  int
+	Based bool
+	// Prefixed says the `base#` is written in front of the digits, which is
+	// the single `#` spelling: `[#16] 255` is `16#FF` and `[##16] 255` is
+	// `FF`. Base ten writes no prefix under either spelling.
+	Prefixed bool
+	// Group is how many digits stand between `_` separators, and 0 for no
+	// grouping. A bare `_` with no number after it is three.
+	Group int
+	// Text is the specifier as written, brackets included, for a diagnostic
+	// that quotes it back.
+	Text string
+	// X is the expression, and nil when the text held nothing but the
+	// specifier: `$(( [#16] ))` is `16#0`, not a failure.
+	X     ArithExpr
+	Start Pos
+	Stop  Pos
+}
+
+func (n *ArithOutput) Pos() Pos   { return n.Start }
+func (n *ArithOutput) End() Pos   { return n.Stop }
+func (n *ArithOutput) arithNode() {}
 
 // ArithUnary is a prefix or postfix operator.
 type ArithUnary struct {
@@ -258,6 +308,11 @@ type arithParser struct {
 	// and blaming from the cursor alone would have dropped a quote from every
 	// such sentence.
 	blame int
+	// format is the output specifier the text held, and the *last* one when
+	// it held several: `$(( [#16] 255 + [#8] 1 ))` is written in base 8.
+	// Kept on the parser rather than built into the tree where it was read,
+	// because the construct is lexical — see ArithOutput.
+	format *ArithOutput
 	// stopped is where the last skip ended, which makes space idempotent:
 	// several frames ask for it at the same cursor on the way down, and only
 	// the first of them may move blame. Without it the second call would
@@ -341,6 +396,13 @@ func (p *Parser) parseArith(src string, at Pos) ArithExpr {
 		}
 		a.failArith(kind, token)
 	}
+	if a.format != nil {
+		// Lifted to the top rather than left where it was written, and over
+		// the whole expression rather than over the operand beside it: the
+		// specifier formats the answer, and the answer is the whole of it.
+		a.format.X, a.format.Start, a.format.Stop = e, at, at
+		return a.format
+	}
 	return e
 }
 
@@ -405,10 +467,30 @@ func (a *arithParser) failArith(kind ErrorKind, token string) {
 	}
 }
 
+// space skips what stands between tokens: blanks, the double quote the
+// dialect reads through, and the output-format specifier.
+//
+// The specifier is skipped *here*, with the blanks, rather than parsed as an
+// operand, and that is the whole of how the construct is positioned: it is a
+// token that produces no value, so it may stand anywhere one may — before an
+// operand, after one, in a branch that is never taken — and every one of those
+// is measured. See [Dialect.ArithOutputFormat].
 func (a *arithParser) space() {
 	if a.off == a.stopped {
 		return
 	}
+	for {
+		a.blanks()
+		if !a.outputFormat() {
+			break
+		}
+	}
+	a.stopped = a.off
+}
+
+// blanks is the whitespace half of space, kept apart so that a specifier
+// consumed between two runs of it does not leave blame pointing at itself.
+func (a *arithParser) blanks() {
 	for a.off < len(a.src) && isArithSpace(a.src[a.off]) {
 		a.off++
 	}
@@ -418,8 +500,100 @@ func (a *arithParser) space() {
 			a.off++
 		}
 	}
-	a.stopped = a.off
 }
+
+// outputFormat reads one `[#…]` specifier, reporting whether there was one to
+// read. A bracketed group the dialect cannot read is consumed and refused, so
+// the failure names the specifier rather than leaving a `[` to be blamed as a
+// missing operand.
+func (a *arithParser) outputFormat() bool {
+	if !a.dial.ArithOutputFormat || a.off >= len(a.src) || a.src[a.off] != '[' {
+		return false
+	}
+	end := strings.IndexByte(a.src[a.off:], ']')
+	if end < 0 {
+		// No closing bracket at all. Unreachable from `$(( ))`, whose word
+		// scanner never hands over text with an unbalanced `[` in it, and
+		// still answered here rather than left to the operand failure: the
+		// text begins a specifier and the sentence should say so.
+		a.failArith(ErrArithBadOutputFormat, a.src[a.off:])
+		a.off = len(a.src)
+		return true
+	}
+	text := a.src[a.off : a.off+end+1]
+	a.off += end + 1
+	n, ok := parseOutputFormat(text)
+	if !ok {
+		// All digits inside the brackets is the one shape worded apart, and
+		// the two are one character from each other.
+		kind := ErrArithBadOutputFormat
+		if body := text[1 : len(text)-1]; body != "" && isAllArithDigits(body) {
+			kind = ErrArithBadBaseSyntax
+		}
+		a.failArith(kind, text)
+		return true
+	}
+	// The textually last specifier decides, so a later one simply replaces
+	// what an earlier one said.
+	a.format = n
+	return true
+}
+
+// parseOutputFormat reads the inside of a specifier: `#`, an optional second
+// `#`, an optional base, and an optional `_` with an optional group size.
+//
+// At least one of the base and the `_` has to be there — `[#]` and `[##]` are
+// both refused — and nothing may follow, so a blank anywhere in it is a
+// failure rather than something to skip.
+func parseOutputFormat(text string) (*ArithOutput, bool) {
+	body, ok := strings.CutPrefix(text[1:len(text)-1], "#")
+	if !ok {
+		return nil, false
+	}
+	n := &ArithOutput{Text: text, Prefixed: true}
+	if rest, ok := strings.CutPrefix(body, "#"); ok {
+		n.Prefixed, body = false, rest
+	}
+	digits := leadingArithDigits(body)
+	body = body[len(digits):]
+	grouped := false
+	if rest, ok := strings.CutPrefix(body, "_"); ok {
+		grouped = true
+		// A bare `_` is three, which is how a decimal thousands separator is
+		// written; `_0` is the way to turn grouping off again.
+		n.Group = 3
+		size := leadingArithDigits(rest)
+		body = rest[len(size):]
+		if size != "" {
+			g, err := strconv.Atoi(size)
+			if err != nil {
+				return nil, false
+			}
+			n.Group = g
+		}
+	}
+	if body != "" || (digits == "" && !grouped) {
+		return nil, false
+	}
+	if digits != "" {
+		b, err := strconv.Atoi(digits)
+		if err != nil {
+			return nil, false
+		}
+		n.Base, n.Based = b, true
+	}
+	return n, true
+}
+
+func leadingArithDigits(s string) string {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	return s[:i]
+}
+
+func isAllArithDigits(s string) bool { return leadingArithDigits(s) == s }
 
 func isArithSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' }
 

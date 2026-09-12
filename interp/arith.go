@@ -179,6 +179,11 @@ func (r *Runner) evalNumNode(e syntax.ArithExpr) (arithNum, error) {
 	case *syntax.ArithCharCode:
 		return intNum(r.charCode(x)), nil
 
+	case *syntax.ArithOutput:
+		// The value is the operand's, unchanged: the specifier decides how the
+		// answer is written and never what it is. See arithoutput.go.
+		return r.evalArithOutput(x)
+
 	case *syntax.ArithCall:
 		// The seam: an expression that runs a shell function. See
 		// mathfunc.go, which is where everything about it lives.
@@ -500,7 +505,10 @@ func (r *Runner) readPlace(p arithPlace) (arithNum, error) {
 // writePlace stores a value back through a target, written the way the
 // dialect writes a number — so `i+=1.5` leaves 1.5 behind and not 1.
 func (r *Runner) writePlace(p arithPlace, v arithNum) error {
-	text := r.formatNum(v)
+	// The expression's output format reaches the value an assignment stores,
+	// not only the answer an expansion produces: measured, `x=5; (( x = [#16]
+	// 255 ))` leaves x holding the six characters `16#FF`.
+	text := r.formatArith(v)
 	if p.empty {
 		// A write through brackets with nothing in them stores nothing unless
 		// the dialect reads them as the empty expression, where `(( a[]++ ))`

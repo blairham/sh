@@ -94,6 +94,30 @@ const (
 	// the text from it to the end of the expression, which is what the
 	// operand failures name.
 	ErrArithIllegalByte
+	// ErrArithBadOutputFormat is an output-format specifier the dialect that
+	// has the construct could not read: `[#]`, `[##]`, `[foo]`, `[# 16]`,
+	// `[#16 ]`. See Dialect's ArithOutputFormat for what the construct is.
+	//
+	// Its own kind because the sentence is about the *specifier* and not
+	// about an operand or an operator — `bad output format specification` —
+	// and it is raised where a value has not been wanted yet, so neither of
+	// the operand kinds could carry it. A dialect without the construct never
+	// reaches it: there, the `[` is an operand failure as it always was.
+	//
+	// Token is the specifier as written, brackets included.
+	ErrArithBadOutputFormat
+	// ErrArithBadBaseSyntax is a bracketed group holding nothing but digits —
+	// `$(( [16] 255 ))` — which the one dialect with output formats words
+	// differently again, as `bad base syntax`.
+	//
+	// Its own kind rather than a shape of ErrArithBadOutputFormat because the
+	// two are measurably apart in that dialect and are told apart by one
+	// character: `[16]` is this and `[#16]` is a format. A reading that
+	// folded them would word half of the pair wrongly and nothing else would
+	// notice, since both are failures either way.
+	//
+	// Token is the group as written, brackets included.
+	ErrArithBadBaseSyntax
 	// ErrUnexpected is a token where the grammar wanted something else. The
 	// panel names the token three ways and one of them names its *class*
 	// instead — dash says "word unexpected" for an ordinary word and quotes

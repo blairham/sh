@@ -1716,6 +1716,17 @@ type Runner struct {
 	// a registration was made is still what an implementation that evaluates
 	// nothing hands back.
 	lastArith arithNum
+	// arithOutput is the output format the expression being evaluated carries
+	// — `$(( [#16] 255 ))` — and nil for an expression with none, which is
+	// every expression in every dialect without the construct.
+	//
+	// Held here rather than passed down because it has to reach a place the
+	// value does not: an assignment *inside* the expression stores the
+	// formatted text, so `x=5; (( x = [#16] 255 ))` leaves x holding `16#FF`.
+	// Set while the expression under the specifier is evaluated and put back
+	// afterwards, so nothing leaks into the next evaluation — measured,
+	// `echo $(( [#16] 255 )); echo $(( 255 ))` is `16#FF` then `255`.
+	arithOutput *syntax.ArithOutput
 	// arithValueDepth counts how far inside a *stored value being read again
 	// as an expression* this runner is: `x=y; y=5; $((x+1))` is one level in
 	// while `y` is being looked up, and zero again once it has been.

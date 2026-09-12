@@ -403,6 +403,13 @@ func Dialect() syntax.Dialect {
 	// same text as a name with a leftover parenthesis after it and say so.
 	// See interp/mathfunc.go for what running one means (#1493).
 	d.ArithFunctionCall = true
+	// And a bracketed specifier says what base the *result* is written in:
+	// `$(( [#16] 255 ))` is `16#FF` and `$(( [##16] 255 ))` is `FF`, with the
+	// second `#` dropping the `base#` in front. Measured 2026-09-12 against
+	// the rest of the panel, every one of which reads the `[` as an operand
+	// it cannot have. A prompt theme reaches it to render a color as hex,
+	// where the refusal was not a wrong number but no value at all (#2095).
+	d.ArithOutputFormat = true
 	// `a |& b`, read exactly as bash 5.3 reads it: the left side's standard
 	// error joins its standard output on the pipe. Not the ksh93 reading of
 	// the same two characters, which is a coprocess and a different slot in
@@ -2041,6 +2048,14 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperandExpected:      "bad math expression: operand expected at `%[1]s'",
 		ArithExpressionRanOut:     "bad math expression: operand expected at end of string",
 		ArithOperatorExpected:     "bad math expression: operator expected at `%[1]s'",
+		// The output format's own two, neither of which opens with `bad math
+		// expression:` and neither of which names the text it refused —
+		// measured 2026-09-12, `zsh:1: bad output format specification` for
+		// `$(( [# 16] 1 ))` and `zsh:1: bad base syntax` for `$(( [16] 1 ))`.
+		// One character apart and worded apart, which is why the parser tells
+		// them apart rather than calling both a bad specifier.
+		ArithBadOutputFormat: "bad output format specification",
+		ArithBadBaseSyntax:   "bad base syntax",
 		// The math functions, which only this shell has. The three at the
 		// call stand alone rather than being wrapped as a bad math
 		// expression — measured 2026-09-08, `zsh:1: unknown function:

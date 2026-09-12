@@ -142,6 +142,77 @@ type declareFlags struct {
 	// the sign was written, and a record of the letters is not a second
 	// answer to it.
 	letters string
+	// letterSigns is the sign each letter of `letters` was written with,
+	// one byte per letter and in the same order: `-` or `+`.
+	//
+	// A parallel string rather than a map because declareFlags is compared
+	// with `==` — see withoutMatching — and a map field would make it
+	// uncomparable. Appended in lockstep with `letters` in the one place
+	// that grows either, so the *n*th rune of one is the *n*th byte of the
+	// other however wide the rune is.
+	//
+	// It exists because a letter's own last sign is a question the sign of
+	// the *word* cannot answer, and two readers need it: which marking
+	// letters a `-f` line refuses under a plus (see
+	// Diagnostics.MarkingLettersUnderPlus) and whether a narrowed function
+	// listing names its functions rather than writing them out. Measured
+	// 2026-09-12 on zsh 5.9.2, `typeset -fu +u nm` is `invalid option(s)`
+	// where `typeset +fu -u nm` marks — the same two words the other way
+	// round — and `typeset -f +U` names the U-marked functions where
+	// `typeset -fU` writes their bodies.
+	letterSigns string
+}
+
+// lastSign reports the sign the letter was last written with and whether it
+// was written at all. Last occurrence wins, which is the rule `readonlyOff`
+// already records for the `r` letter and is measured here too.
+func (f declareFlags) lastSign(c rune) (plus, written bool) {
+	i := 0
+	for _, got := range f.letters {
+		if got == c && i < len(f.letterSigns) {
+			plus, written = f.letterSigns[i] == '+', true
+		}
+		i++
+	}
+	return plus, written
+}
+
+// markingLetterUnderPlus reports the first letter of `refused` whose own last
+// sign was a plus. Empty when none was, which is every ordinary line.
+func (f declareFlags) markingLetterUnderPlus(refused string) (rune, bool) {
+	for _, c := range refused {
+		if plus, written := f.lastSign(c); written && plus {
+			return c, true
+		}
+	}
+	return 0, false
+}
+
+// markingLettersWritten is the marking letters this line carried, in the
+// order they were written and each at most once, together with whether any of
+// them was written under a plus.
+//
+// The set is what narrows a function listing with no operands, and the sign
+// is what decides between the two shapes it has. Measured 2026-09-12 on zsh
+// 5.9.2 with `f1` autoloaded plainly and `f2` with `-U`:
+//
+//	functions -u      both bodies      functions -U      f2's body
+//	functions +U      the name f2      functions -uU     both bodies
+//	functions -u +U   both names       typeset -f +U     the name f2
+//
+// So the letters are a union and any one of them under a plus makes the
+// listing a list of names — neither of which the sign of the last option
+// word answers, since `functions +U -u` names them too.
+func (f declareFlags) markingLettersWritten(marking string) (letters string, plus bool) {
+	for _, c := range marking {
+		gotPlus, written := f.lastSign(c)
+		if !written {
+			continue
+		}
+		letters += string(c)
+		plus = plus || gotPlus
+	}
+	return letters, plus
 }
 
 // declareOptionLetters is the set `declare` and `typeset` read where the
@@ -243,6 +314,11 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			f.added = f.added || !f.remove
 			if c != 'f' {
 				f.letters += string(c)
+				sign := byte('-')
+				if f.remove {
+					sign = '+'
+				}
+				f.letterSigns += string(sign)
 			}
 			if strings.ContainsRune(r.sem().DeclareOptionsWithoutEffect, c) {
 				f.inert = true
@@ -443,6 +519,22 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 // name with the integer attribute already decided, and a second copy of this
 // is the thing that would drift. See integerbuiltin.go.
 func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
+	if f.function || f.funcNames {
+		// A marking letter written under a plus, in the one shell that
+		// refuses it. Ahead of everything because it is a refusal of the
+		// *line* rather than of anything it went on to ask for: measured
+		// 2026-09-12 on zsh 5.9.2, `functions +u`, `typeset +fu` and
+		// `typeset +fu 'p*'` are all `invalid option(s)` at 1, with and
+		// without operands alike. See Diagnostics.MarkingLettersUnderPlus
+		// for why the refused set is written out rather than derived from
+		// the letters that mark.
+		if refusal := r.diag().MarkingUnderPlusRefusal; refusal != "" {
+			if _, under := f.markingLetterUnderPlus(r.diag().MarkingLettersUnderPlus); under {
+				r.diagf("%s: %s\n", r.builtinComplaintName(name), refusal)
+				return 1
+			}
+		}
+	}
 	if f.matching {
 		if len(args) == 0 {
 			// `-m` with nothing to match is *ignored*, which is measured
@@ -522,7 +614,34 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		if r.unspecified {
 			return r.status
 		}
-		return r.declareFunctions(args, namesOnly, f.funcNames)
+		narrowed := false
+		if len(args) == 0 {
+			// A listing carrying a marking letter and no operands is not the
+			// whole table: it is the functions holding that mark, which is
+			// the same set a bare `autoload` writes out in the shell with
+			// the notion. See Runner.SetMarkedFunctions for the measurements
+			// and for why the letters are a union.
+			//
+			// Only with no operands. With them the letters are attributes
+			// being *set* on the names rather than a filter over them —
+			// measured, `functions -U g` gives the ordinary function `g` the
+			// U mark, and `typeset -f +U f2` takes it off `f2` and writes
+			// nothing whatever `f2` holds. The minus half of that is the
+			// marking branch above; the plus half is not modeled here.
+			if marked, narrow, plus := r.markedFunctionListing(f); narrow {
+				args, narrowed = marked, true
+				if plus {
+					// A marking letter under a plus names its functions
+					// where a minus writes them out, and it does so however
+					// the `f` letter was signed: `typeset -f +U` is the name
+					// alone and `functions +U -u` names them too, so neither
+					// the `f` letter's sign nor the last option word's
+					// answers this.
+					namesOnly = true
+				}
+			}
+		}
+		return r.declareFunctions(args, narrowed, namesOnly, f.funcNames)
 	}
 
 	if len(args) == 0 && !f.tie {
@@ -1615,8 +1734,11 @@ func withoutListingLetters(f declareFlags) declareFlags {
 // no quotes in zsh 5.9.2, where the same shell's body listing writes
 // `'a b' () {`. A names-only listing is a list of names and not a program
 // that reads back (#1576).
-func (r *Runner) declareFunctions(names []string, namesOnly, asDeclarations bool) int {
-	named := len(names) > 0
+// narrowed says the caller has already chosen the population — a listing
+// filtered by the marks its letters named — so an empty slice is an empty
+// listing rather than a request for the whole table.
+func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclarations bool) int {
+	named := len(names) > 0 || narrowed
 	if !named {
 		// The script's own and not the prelude's: this listing is what a
 		// state capture reads, and the prelude's functions are the shell's

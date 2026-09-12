@@ -651,6 +651,49 @@ func (r *Runner) SetFunctionMarkedUndefined(mark func(r *Runner, names []string,
 	r.markUndefinedFunctions = mark
 }
 
+// SetMarkedFunctions is the third half of that seam, and the one a *listing*
+// needs: given the marking letters a line carried, the names that hold them.
+//
+// A `-f` listing with no operands is not the whole function table when it
+// carries one of [Semantics.FunctionLettersThatMarkUndefined] — it is the
+// functions holding that mark, which in the shell that has the notion is the
+// same set a bare `autoload` writes out. Measured 2026-09-12 on zsh 5.9.2,
+// with `f1` autoloaded plainly, `f2` autoloaded with `-U` and `g` an ordinary
+// function:
+//
+//	functions -u   f1 and f2      typeset -fu   f1 and f2, byte for byte
+//	functions -U   f2 alone       typeset -fU   f2 alone
+//	functions -uU  f1 and f2      functions     all three
+//
+// So the letters are a **union** and not an intersection — `-uU` is `-u`'s
+// answer and not `-U`'s — and the population is the dialect's to name,
+// because what a mark *is* here is a stub this engine cannot read the letters
+// out of. Handing the letters over rather than a digested question is the
+// same choice [Runner.SetFunctionMarkedUndefined] makes and for the same
+// reason: a set of options crossing the seam would be one shell's vocabulary
+// in the substrate.
+//
+// The names come back in the order the listing should write them, since
+// ordering a listing is the same shell's business as choosing it. Nil, or a
+// hook returning nothing, leaves the listing exactly as wide as it was.
+func (r *Runner) SetMarkedFunctions(marked func(r *Runner, letters string) []string) {
+	r.markedFunctions = marked
+}
+
+// markedFunctionListing is that hook asked for a line's letters: the names a
+// narrowed listing writes, and whether there was a narrowing at all.
+//
+// Both halves are needed and an empty slice is not the second: a dialect that
+// has the notion and holds no marked functions must write *nothing*, where a
+// dialect without the notion writes the whole table.
+func (r *Runner) markedFunctionListing(f declareFlags) (names []string, narrowed, namesOnly bool) {
+	letters, plus := f.markingLettersWritten(r.sem().FunctionLettersThatMarkUndefined)
+	if letters == "" || r.markedFunctions == nil {
+		return nil, false, false
+	}
+	return r.markedFunctions(r, letters), true, plus
+}
+
 // markingLetters reports the letters a `-f` line carried that this dialect
 // says turn it into a marking, and whether there is a hook to do it. Both
 // halves, because a dialect that names the letters and installs no hook has

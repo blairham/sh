@@ -1917,7 +1917,16 @@ func Semantics() interp.Semantics {
 	// all. Its presence in this set is what tells interp the dialect has the
 	// facility; the capability is interp/mathfunc.go and the name is here
 	// (#1493).
-	s.FunctionsOptions = "mM"
+	// `-u` and `-U` are the marking letters, and under this word they are
+	// what they are under `typeset -f`: with operands a declaration, with
+	// none the listing a bare `autoload` writes. Measured 2026-09-12 on zsh
+	// 5.9.2 with `f1` autoloaded plainly and `f2` with `-U`, `functions -u`
+	// is byte for byte what `autoload` with no operands writes, and
+	// `functions -U` is that listing narrowed to `f2` (#1996). See
+	// Semantics.FunctionLettersThatMarkUndefined, which already named them
+	// for the declaration word, and Diagnostics.MarkingLettersUnderPlus for
+	// the half of `-u` this shell refuses.
+	s.FunctionsOptions = "mMuU"
 	// `unfunction`'s whole set, and it really is one letter: every other
 	// letter of the alphabet is a bad option there in both cases, the `-f`
 	// this name stands for included.
@@ -2336,9 +2345,23 @@ func Diagnostics() interp.Diagnostics {
 			// shell the autoloaded file is read as, -t and -T trace, -x
 			// sets the listing's indent, -c makes one function another's
 			// copy and -W is the `zsh/parameter` writability flag. -m and
-			// -M are implemented, in FunctionsOptions above.
-			"functions": "ckstuxzTUW",
+			// -M are implemented, in FunctionsOptions above, and so are
+			// -u and -U: they mark, and with no operands they are the
+			// listing a bare `autoload` writes (#1996).
+			"functions": "ckstxzTW",
 		},
+		// `u` alone, and that is the measurement rather than an omission:
+		// `functions +u` and `typeset +fu` are `invalid option(s)` at 1
+		// where `functions +U` and `typeset +fU` are a listing at 0, though
+		// both letters mark. So the refused set is strictly narrower than
+		// Semantics.FunctionLettersThatMarkUndefined and cannot be derived
+		// from it (#1996).
+		MarkingLettersUnderPlus: "u",
+		// `functions`' own wording and not `autoload`'s `bad option: -Q`,
+		// because the line never reached a marking: `zsh:functions:1:
+		// invalid option(s)` and `zsh:typeset:1: invalid option(s)`, each
+		// naming the word that was written.
+		MarkingUnderPlusRefusal: "invalid option(s)",
 		// The builtin's name is stripped to the location prefix as ever:
 		// `zsh:read:1: -p: no coprocess`, measured with no coprocess to
 		// read, which is the only state this shell has.
@@ -2685,6 +2708,11 @@ func Apply(r *interp.Runner) {
 	// Not removed but replaced: zsh has an `enable`, and it is a different
 	// builtin from the one the core carries. See enable.go.
 	registerEnable(r)
+	// `log` is in the table for `disable log` to reach: macOS's `/etc/zshrc`
+	// writes that line to keep the builtin out of the way of `/usr/bin/log`,
+	// and a shell that reads the system-wide files meets it before the first
+	// prompt (#2325). See log.go for what it does and does not do.
+	r.Register("log", logBuiltin)
 	// How zsh scripts actually change options, and how they change shells.
 	// See setopt.go and emulate.go.
 	registerSetopt(r)

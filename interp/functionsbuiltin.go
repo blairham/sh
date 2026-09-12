@@ -167,7 +167,7 @@ func biUnfunction(r *Runner, _ context.Context, args []string) int {
 // gives.
 func (r *Runner) functionsMatching(patterns []string, namesOnly bool) int {
 	if len(patterns) == 0 {
-		return r.declareFunctions(nil, namesOnly, false)
+		return r.declareFunctions(nil, false, namesOnly, false)
 	}
 	for _, pattern := range patterns {
 		o := r.patternOpts(pattern)

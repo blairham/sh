@@ -254,6 +254,7 @@ func seedTables(r *Runner) {
 	r.fds = map[int]any{7: nil}
 	r.freezing = map[string]bool{"seed": true}
 	r.literalOperands = map[string]bool{"seed": true}
+	r.indexedLetterHere = map[string]bool{"seed": true}
 	r.funcFiles = map[string]string{"seed": "v"}
 	r.funcs = map[string]*syntax.FuncDecl{"seed": nil}
 	r.hidden = map[string]bool{"seed": true}

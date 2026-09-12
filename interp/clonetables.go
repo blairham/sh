@@ -103,6 +103,9 @@ func (c *Runner) ownTables(r *Runner) {
 	// change nobody would think to look at this file for.
 	c.freezing = maps.Clone(r.freezing)
 	c.literalOperands = maps.Clone(r.literalOperands)
+	// indexedLetterHere *is* written by key, one name at a time, so it is
+	// here on the stronger footing than the three above it.
+	c.indexedLetterHere = maps.Clone(r.indexedLetterHere)
 	c.declaring = maps.Clone(r.declaring)
 	c.precommands = maps.Clone(r.precommands)
 

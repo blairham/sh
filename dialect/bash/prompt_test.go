@@ -133,3 +133,20 @@ func TestNoHistoryCharacter(t *testing.T) {
 		t.Errorf("History = %q, want none", got)
 	}
 }
+
+// A uid the password database has no entry for is drawn in words.
+//
+// Measured 2026-09-12 at uid 99999 with no `/etc/passwd` entry, through `PS4`
+// with `set -x`: the `bash:5.3` image (5.3.15), the `bash:3.2` image (3.2.57)
+// and bash under an `argv[0]` of `sh` all draw `[I have no name!]` for
+// `PS4='[\u]'`. zsh in the same situation draws nothing for `%n` — see the
+// matching test in dialect/zsh — which is what puts the sentence on the
+// dialect's table rather than in interp's field.
+//
+// This is not the same as a Runner nobody told who it is running as; that one
+// is still refused by name, which interp's own tests hold. #1451.
+func TestAUidWithNoPasswordDatabaseEntryIsDrawnInWords(t *testing.T) {
+	if got, want := bash.PromptStyle().NoLoginName, "I have no name!"; got != want {
+		t.Errorf("NoLoginName = %q, want %q", got, want)
+	}
+}

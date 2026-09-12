@@ -273,3 +273,85 @@ func TestWhereACodesArgumentEnds(t *testing.T) {
 		})
 	}
 }
+
+// A count in front of a color code is the index it paints.
+//
+// Measured 2026-09-12 against zsh 5.9.2 with `TERM=xterm-256color`, through
+// `${(%%)…}`. The count uses the same reading `%F{N}` does, so the arithmetic
+// was already right and all that was missing was the count reaching it: `%2F`
+// is the second of the eight, `%9F` is in the bright run, `%30F` and `%200F`
+// are the extended one, and 256 and above take the default exactly as
+// `%F{256}` does.
+//
+// Braces win over a count, including empty ones, which is what says the two
+// are one argument arriving two ways rather than two things to combine. And
+// the letters after an unbraced count are still text — `%30Fx` paints and then
+// draws `x` — so reading the count did not take the rest of the prompt with it.
+//
+// This branch dropped the count until #2087, so every unbraced numeric color
+// painted the empty argument, which colorIndex reads as nought: black, at
+// status 0, with nothing said.
+func TestACountInFrontOfAColorCodeIsTheIndex(t *testing.T) {
+	style := PromptStyle{
+		Escape:          '%',
+		NumericArgument: true,
+		Colors:          map[rune]PromptColor{'F': Foreground, 'K': Background},
+	}
+	for _, tc := range []struct{ text, want string }{
+		{"%F", "\x1b[30m"},
+		{"%0F", "\x1b[30m"},
+		{"%1F", "\x1b[31m"},
+		{"%2F", "\x1b[32m"},
+		{"%9F", "\x1b[91m"},
+		{"%15F", "\x1b[97m"},
+		{"%16F", "\x1b[38;5;16m"},
+		{"%30F", "\x1b[38;5;30m"},
+		{"%200F", "\x1b[38;5;200m"},
+		{"%255F", "\x1b[38;5;255m"},
+		{"%256F", "\x1b[39m"},
+		{"%300F", "\x1b[39m"},
+		{"%2K", "\x1b[42m"},
+		{"%30K", "\x1b[48;5;30m"},
+		// The braces win, and an empty pair of them is still braces.
+		{"%2F{red}", "\x1b[31m"},
+		{"%2F{}", "\x1b[30m"},
+		// What follows an unbraced count is text.
+		{"%30Fx", "\x1b[38;5;30mx"},
+		{"%2Fabc", "\x1b[32mabc"},
+	} {
+		t.Run(tc.text, func(t *testing.T) {
+			got, refused, ok := ExpandPromptStyle(style, tc.text, func(PromptField, string, bool) (string, bool) {
+				return "", false
+			}, nil)
+			if !ok {
+				t.Fatalf("%q was refused at %q", tc.text, refused)
+			}
+			if got != tc.want {
+				t.Errorf("%q drew %q, want %q", tc.text, got, tc.want)
+			}
+		})
+	}
+}
+
+// And a dialect without the count does not reach the color code at all, which
+// is what keeps this a row of the table rather than a rule of the walker.
+//
+// bash spells its colors by writing the escape sequence out by hand and has no
+// numeric argument anywhere, so with NumericArgument off the digit *is* the
+// code: `%30F` is an escape in front of `3`, which no table has, and the rest
+// is text. The count is read where the dialect says it is and nowhere else.
+func TestWithoutANumericArgumentTheDigitIsTheCode(t *testing.T) {
+	style := PromptStyle{
+		Escape: '%',
+		Colors: map[rune]PromptColor{'F': Foreground},
+	}
+	got, refused, ok := ExpandPromptStyle(style, "%30F", func(PromptField, string, bool) (string, bool) {
+		return "", false
+	}, nil)
+	if ok {
+		t.Fatalf("drew %q, want the digit refused as a code of its own", got)
+	}
+	if refused != "3" {
+		t.Errorf("refused %q, want %q — the digit is the code where nothing reads it as a count", refused, "3")
+	}
+}

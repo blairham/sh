@@ -218,18 +218,60 @@ func TestThePromptUserIsAskedOnlyOnce(t *testing.T) {
 	}
 }
 
-// A question that answers nothing is refused exactly as being told nothing is.
+// A question that answers nothing is a different fact from never being asked,
+// and is answered with the dialect's word for it.
 //
-// The two are different facts — asked and empty, against never asked — and
-// neither is drawable, so they have to produce the same refusal. Getting this
-// wrong is how a lazily-asked name that failed to resolve would draw an empty
-// user at status 0, which is the wrong answer wearing a success that the
-// refusal above exists to prevent.
-func TestAPromptUserQuestionThatAnswersNothingIsRefused(t *testing.T) {
+// The two were one empty string until #1451 and both took the refusal above.
+// That reads right and is a measurement of nothing: a uid with no
+// password-database entry is a real state of a real machine — a container
+// started `--user 99999` — and the panel has an answer for it. Measured
+// 2026-09-12 at uid 99999, bash draws `I have no name!` for `\u` and zsh draws
+// nothing at all for `%n`, both at status 0. So this is PromptStyle's to say
+// and not the mechanism's, and a shell that refused here would refuse a prompt
+// that both real shells draw.
+//
+// Both halves in one test because what is being claimed is that the answer
+// comes from the table: a shell whose field was hard-wired to either sentence
+// would pass one row and fail the other.
+func TestAPromptUserQuestionThatAnswersNothingDrawsTheDialectsWord(t *testing.T) {
+	for _, tc := range []struct {
+		name, noLoginName, want string
+	}{
+		{"a dialect with words for it", "I have no name!", "[I have no name!]\nreached\n"},
+		{"a dialect with none", "", "[]\nreached\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const src = `echo "[${(%):-%n}]"; echo reached`
+			out, st := runGrammar(t, src, promptFlagged, func(r *Runner) {
+				table := promptEscapeTable()
+				table.NoLoginName = tc.noLoginName
+				r.SetPromptStyle(table)
+				r.SetPromptUserFunc(func() string { return "" })
+			})
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+			if st != 0 {
+				t.Errorf("status = %d, want 0 — the shell drew what it had to draw", st)
+			}
+		})
+	}
+}
+
+// And the refusal is still there for the other empty, which is what makes the
+// two separate answers worth having.
+//
+// The counter-case to the test above, and the one that says #1451 un-collapsed
+// the pair rather than dropping the refusal: a Runner nobody told is a gap in
+// how it was set up, not a fact about the machine, and drawing a dialect's
+// no-name sentence for it would be inventing a measurement. Asserted with the
+// same table that draws the sentence above, so only the *question* differs.
+func TestNobodyTellingTheRunnerIsStillARefusalEvenWithAWordForNoName(t *testing.T) {
 	const src = `echo "[${(%):-%n}]"; echo reached`
 	out, st := runGrammar(t, src, promptFlagged, func(r *Runner) {
-		r.SetPromptStyle(promptEscapeTable())
-		r.SetPromptUserFunc(func() string { return "" })
+		table := promptEscapeTable()
+		table.NoLoginName = "I have no name!"
+		r.SetPromptStyle(table)
 	})
 	want := "sh: ${(%):-%n}: the %n prompt escape is not implemented\n"
 	if out != want {

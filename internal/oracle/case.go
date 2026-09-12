@@ -16575,6 +16575,18 @@ echo "st=$?"`,
 		Why:     "what an *invalid* color draws, and the row that says there are two answers rather than one. The first eight arguments draw the default — the same `\\e[39m` that `%f` gives — and the seven on the second line draw the **first color**, `\\e[30m`, because a name that is no prefix of one of the eight is malformed where a string with no digits at the front of it is nought. An implementation with one answer for both passes half of this row and is a visibly wrong color on the other half, at status 0",
 	},
 	{
+		ID: "print/a-count-in-front-of-a-color-is-the-index", Category: "builtins",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `for a in %F %0F %1F %2F %9F %15F %16F %30F %200F %255F %256F %300F; do print -rnP "$a"; done | od -An -c | tr -s ' '; print -rnP '%2K%30K' | od -An -c | tr -s ' '; echo "st=$?"`,
+		Why:     "the digits between the escape and a color code are the index it paints — the same argument the braces carry, arriving unbraced — so `%2F` is the second of the eight, `%9F` is in the bright run, `%30F` and `%200F` are the extended one, and 256 and above take the default exactly as `%F{256}` does. Both layers, because the count is read where the code is looked up rather than per code. An implementation that read the digits and then dropped them paints the empty argument, which is nought: black, at status 0, for every one of these",
+	},
+	{
+		ID: "print/braces-win-over-a-count-in-front-of-a-color", Category: "builtins",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `print -rnP '%2F{red}' | od -An -c | tr -s ' '; print -rnP '%2F{}' | od -An -c | tr -s ' '; print -rP '%30Fx' | od -An -c | tr -s ' '; echo "st=$?"`,
+		Why:     "the counter-case that says a count and a brace group are one argument arriving two ways rather than two things to combine: where both are written the braces win, and an *empty* pair of them wins too — `%2F{}` is the first color and not the second. The third asks the other half, that reading a count does not eat what follows it: the `x` after `%30F` is still text. A shell that combined the two, or that took the count only when no braces were parsed at all, differs on exactly these three",
+	},
+	{
 		ID: "print/a-color-prompt-escape-names-match-by-prefix", Category: "builtins",
 		Env:     []string{"TERM=xterm-256color"},
 		Snippet: `for a in r re red b bl blu w 'red,bold' 'red bold'; do print -rnP "%F{$a}"; done | od -An -c | tr -s ' '; echo "st=$?"`,

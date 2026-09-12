@@ -79,6 +79,12 @@ func PromptStyle() interp.PromptStyle {
 		// `\q` draws `\q`.
 		Unknown:   interp.KeepBoth,
 		Privilege: "$",
+		// Measured 2026-09-12 at uid 99999 with no `/etc/passwd` entry,
+		// through `PS4` in the `bash:5.3` and `bash:3.2` images and under an
+		// `argv[0]` of `sh`: all three draw these words for `\u`. zsh draws
+		// nothing for `%n` in the same situation, which is why the sentence
+		// is here rather than in the mechanism. #1451.
+		NoLoginName: "I have no name!",
 		// The same numbers the prelude puts in BASH_VERSION. Measured: real
 		// bash drew 5.3 for \v and 5.3.15 for \V, and ours claims 5.3.15.
 		Version:     fmt.Sprintf("%d.%d", major, minor),

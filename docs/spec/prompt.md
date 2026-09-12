@@ -122,7 +122,7 @@ number — and never the code.
 
 | code | draws | measured |
 | --- | --- | --- |
-| `\u` | user name | `bhamilton` |
+| `\u` | user name, from the password database — `I have no name!` where the uid has no entry | `bhamilton`; `I have no name!` at uid 99999 in a container, in 5.3.15, in 3.2.57 and under an `argv[0]` of `sh` |
 | `\h` `\H` | host to the first dot, and all of it | `Blairs-MacBook-Pro-5`, `…-5.local` |
 | `\w` | directory, `$HOME` written `~` | `~`, `~/sub`, `/` |
 | `\W` | its last component | `~` at `$HOME`, `sub` below it, `/` at the root |
@@ -153,7 +153,7 @@ does.
 
 | code | draws | measured |
 | --- | --- | --- |
-| `%n` | user name | `bhamilton` |
+| `%n` | user name, from the password database — **nothing** where the uid has no entry | `bhamilton`; empty at uid 99999 in a container, where bash's `\u` draws `I have no name!` |
 | `%m` `%M` | host to the first dot, and all of it | as bash's `\h` `\H` |
 | `%~` | directory, `$HOME` written `~` | `~`, `~/sub`, `/` |
 | `%d` `%/` | directory, untouched | `/private/tmp/p808/home` |
@@ -178,6 +178,7 @@ does.
 | `%F{c}` `%f` | foreground color, and default | `\e[31m` for `red`, `\e[39m` |
 | `%K{c}` `%k` | background color, and default | `\e[44m` for `blue`, `\e[49m` |
 | `%F{#rrggbb}` | a direct color, under every `TERM` | `\e[38;2;255;136;0m` for `#ff8800` |
+| `%NF` `%NK` | a **count** in front of a color is the index it paints | `%2F` → `\e[32m`, `%30F` → `\e[38;5;30m`, `%2K` → `\e[42m` |
 | `%E` | clear to the end of the line | `\e[K` |
 | `%(x.a.b)` | a question, and one of two texts | `%(?.ok.bad)` drew `ok` |
 | `%x` | the file being read | `/opt/homebrew/bin/zsh` at a prompt, the sourced file's path in one |
@@ -293,6 +294,15 @@ halves, 39 and 49 the defaults, `38;5;n` / `48;5;n` everything from 16 to
 255, and `38;2;r;g;b` / `48;2;r;g;b` a direct color. Measured: `%F{2}` →
 `\e[32m`, `%F{9}` → `\e[91m`, `%F{200}` → `\e[38;5;200m`, `%K{5}` →
 `\e[45m`, `%F{#ff8800}` → `\e[38;2;255;136;0m`.
+
+The argument arrives in one of two spellings and they are the same
+argument. `%F{30}` is the braced one; `%30F` is a **count** in front of the
+code, the shape `%2~` already uses, and it is read exactly as the braces
+would be — measured, `%2F` is `\e[32m`, `%200F` is `\e[38;5;200m`, and
+`%256F` takes the default just as `%F{256}` does. Where both are written the
+braces win, and an *empty* pair of them wins too: `%2F{red}` is red and
+`%2F{}` is the first color. Reading the count does not consume what follows
+it, so `%30Fx` paints and then draws the `x` (#2087).
 
 **How the braces are read**, from 91 arguments measured in both layers on
 zsh 5.9.2 with `TERM=xterm-256color`. Four readings, and three of them are

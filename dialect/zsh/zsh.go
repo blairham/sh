@@ -1079,7 +1079,7 @@ func Semantics() interp.Semantics {
 	// variables untouched. zsh's -t may also stand alone as a poll; that
 	// spelling is not modeled, so here it reads the word after it as its
 	// seconds.
-	s.ReadOptions = "rsnpAd:t:u:"
+	s.ReadOptions = "rsnpAd:t:u:k#"
 	// `unset -m` reads its operands as patterns, which is this shell's
 	// alone; `-n` is not here, and that is measured rather than an
 	// omission — `unset -n x` is `bad option: -n` in zsh 5.9.2 where bash
@@ -2170,13 +2170,21 @@ func Diagnostics() interp.Diagnostics {
 			// all, which is a different sentence from a letter we have not
 			// built — see ImmovableOptionLetters below.
 			"set": "dgiklprswyBDEFGHIJKLMNOPQRSTUVWXYZ",
-			// read's letters about a terminal or the line editor — raw -k
-			// keys, -q's one keystroke, -e/-E echoing, -z and the zle pair
-			// -c/-l. The -p coprocess is implemented as its measured
-			// refusal — see ReadNoCoprocess. zsh's read also says nothing
-			// at all about a dead -u descriptor and reports 1, which is why
-			// no ReadBadFileDescriptor wording appears here.
-			"read": "kqeEzcl",
+			// read's letters about a terminal or the line editor — -q's one
+			// keystroke, -e/-E echoing, -z and the zle pair -c/-l. The -p
+			// coprocess is implemented as its measured refusal — see
+			// ReadNoCoprocess. zsh's read also says nothing at all about a
+			// dead -u descriptor and reports 1, which is why no
+			// ReadBadFileDescriptor wording appears here.
+			//
+			// `-k` has left this list and joined ReadOptions above, spelled
+			// `k#` — a number, optional — which is the one letter in the
+			// panel with that shape. It reads characters from the terminal;
+			// interp/readkeys.go carries what was measured. The two tables
+			// move together on purpose: a letter in the accepted set and
+			// still named here is refused as missing while it works, and a
+			// letter in neither is `bad option` for something zsh has.
+			"read": "qeEzcl",
 			// typeset's letters this engine does not hold: floats (-E -F),
 			// namerefs (-n), padding and alignment (-L -R -Z), and the
 			// rest. The same set under both names, and for `local` too.

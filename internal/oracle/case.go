@@ -4427,6 +4427,61 @@ echo "st=$?"`,
 		Why:     "-N is the count that means it: the delimiter stops counting for -n and is just another character for -N, so bash 5.3 and ksh93 read `ab`, the newline, and the `c` after it into one variable. bash 3.2 has no such letter and answers with its usage, and zsh has neither -N nor a usage to print",
 	},
 	{
+		ID: "read/keys-from-a-descriptor", Category: "builtins",
+		Snippet: `printf 'abcdef' | { read -k 2 -u 0 v; echo "st=$? [$v]"; }`,
+		Why:     "zsh's -k reads that many characters rather than a line. -u is what makes it testable without a terminal: the letter otherwise reads the terminal the shell holds and ignores the stream entirely. The other five have no such letter and say so their own way",
+	},
+	{
+		ID: "read/keys-without-a-count-is-one", Category: "builtins",
+		Snippet: `printf 'abcdef' | { read -k -u 0 v; echo "st=$? [$v]"; }`,
+		Why:     "the count is optional and defaults to one, which is the spelling a plugin waiting for a keystroke uses. It is also the shape that tells this letter from every other count in the panel: bash's -n and ksh93's -N refuse to be given without a number",
+	},
+	{
+		ID: "read/keys-counts-characters-not-bytes", Category: "builtins",
+		Snippet: `printf 'h\303\251llo' | { read -k 2 -u 0 v; echo "st=$? [$v] len=${#v}"; }`,
+		Why:     "two characters and not two bytes: the accented letter arrives as two bytes and counts as one, so the read ends after three. A byte count would hand back half a character",
+	},
+	{
+		ID: "read/keys-do-not-stop-at-a-newline", Category: "builtins",
+		Snippet: `printf 'a\nb' | { read -k 3 -u 0 v; echo "st=$? len=${#v}"; }`,
+		Why:     "nothing is a terminator for -k, the newline included, which is what separates it from every other spelling of read. The length is asserted rather than the value because the value contains the newline",
+	},
+	{
+		ID: "read/keys-short-read-keeps-what-came", Category: "builtins",
+		Snippet: `printf 'ab' | { read -k 5 -u 0 v; echo "st=$? [$v]"; }`,
+		Why:     "fewer characters than asked for is a failure that still assigns, which is the shape read's ordinary end of input has: the status says the count was not met and the variable says what did arrive",
+	},
+	{
+		ID: "read/keys-of-nought-reads-nothing", Category: "builtins",
+		Snippet: `printf 'abcdef' | { v=keep; read -k 0 -u 0 v; echo "st=$? [$v]"; }`,
+		Why:     "a count of nought is a failure and not a satisfied read of nothing, and it still clears the variable — the assignment happens before the status is decided, so `keep` does not survive it",
+	},
+	{
+		ID: "read/keys-fill-one-name-only", Category: "builtins",
+		Snippet: `printf 'a b c d' | { w=keep; read -k 5 -u 0 v w; echo "st=$? [$v] w=[$w]"; }`,
+		Why:     "three facts in one line: the five characters go into the first name whole with no field splitting, the names after it are left exactly as they were, and that is where -k differs from -N, which hands the text to the first name and clears the rest",
+	},
+	{
+		ID: "read/keys-default-to-reply", Category: "builtins",
+		Snippet: `printf 'abcdef' | { read -k 3 -u 0; echo "st=$? [$REPLY]"; }`,
+		Why:     "no name is the same default the rest of read has, which is worth pinning beside the count: `read -k 3` reads three characters and `read -k` reads one, so a bare word after the letter could plausibly have been either a count or a name",
+	},
+	{
+		ID: "read/keys-need-a-terminal", Category: "builtins",
+		Snippet: `printf 'abcdef' | { read -k v; echo "st=$? [$v]"; }`,
+		Why:     "without -u the letter reads the terminal the shell holds and not the stream in front of it, so a pipe is not a source at all — the refusal carries no location and no builtin name, which is the one complaint this builtin makes that way",
+	},
+	{
+		ID: "read/keys-ignore-a-redirected-input", Category: "builtins",
+		Snippet: `printf 'abcdef' > f; { read -k 2 v < f; echo "st=$? [$v]"; }`,
+		Why:     "the same fact from the other side and the sharper half of it: redirecting standard input does not redirect -k. The file is left unread and the refusal is the terminal one, where every other spelling of read would have taken two characters from it",
+	},
+	{
+		ID: "read/keys-attached-count-must-be-a-number", Category: "builtins",
+		Snippet: `read -k2v x; echo "st=$?"`,
+		Why:     "the attached spelling commits the whole remainder of the word to being the number, so `2v` is refused rather than read as a count of two and a letter v. `read -kv` is the other side of it and is a bad option, because a non-digit after the letter means the letter took no argument at all",
+	},
+	{
 		ID: "read/an-escaped-separator-closing-a-remainder", Category: "builtins",
 		Snippet: `printf 'a b c\\ \n' | { read x y; printf "[%s]" "$y"; }; printf 'a b c   \n' | { read x y; printf "[%s]" "$y"; }; echo`,
 		Why:     "whether the escape mask reaches the trim at the tail of a `read` value. Without `-r` a backslash makes the character after it data, and the splitter honors that everywhere else; the closing trim honors it in dash and ignores it in bash, bash 3.2, bash as `sh`, ksh93 and zsh. The second field is the control that says the trim itself still works — an unescaped closing run comes off in all six — so a fix that simply stopped trimming would answer the first field right and the second wrong. Answered by Semantics.ReadTrailingEscapedSeparator (#1360)",

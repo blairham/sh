@@ -695,6 +695,21 @@ type Diagnostics struct {
 	// untouched; the words differ: ksh93 says `no query process`, zsh says
 	// `-p: no coprocess`.
 	ReadNoCoprocess string
+	// ReadNoTerminal is `read -k` in a shell that holds no terminal to read
+	// characters from. One dialect has the letter and it is the only one, so
+	// there is one wording; it carries neither a location nor the builtin's
+	// name, which is measured — `printf abc | zsh -c 'read -k v'` writes the
+	// bare sentence and nothing else. Empty means the default, which is that
+	// sentence.
+	ReadNoTerminal string
+	// ReadBadOptionNumber is a `read` option whose argument had to be a
+	// number and was not. One letter reaches it — zsh's `-k`, and only in the
+	// attached spelling, since a separate word that is not a number was never
+	// the argument but the name to read into. Two verbs: the letter, then the
+	// word. Measured 2026-09-12: `read -k2v x` is `number expected after -k:
+	// 2v`, which is a different sentence from the same dialect's answer for a
+	// bad `-t`, so it is a wording of its own rather than ReadBadNumber.
+	ReadBadOptionNumber string
 
 	// CoprocessAlreadyRunning is a second `cmd |&` started while the first
 	// coprocess is still running, in the dialect that spells a coprocess as

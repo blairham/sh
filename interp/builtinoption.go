@@ -43,6 +43,28 @@ func (r *Runner) builtinOptions(name string, args []string, known string) (rest 
 // the same option everywhere. A letter whose argument never arrives is
 // refused. See docs/spec/semantics.md, "A bundle of option letters is one
 // word and several options".
+//
+// A `#` after a letter marks the third shape: **an argument that is a number,
+// and optional.** One letter in the panel has it — zsh's `read -k`, which
+// reads that many characters and one character when no count is given — and
+// it is a shape rather than a special case in `read`, because which letters a
+// builtin has and what each takes is the dialect's answer and the optstring is
+// where this tree writes such answers down.
+//
+// Measured 2026-09-12 against zsh 5.9.2, which is what the three branches
+// below are:
+//
+//	read -k -u 3 v     the letter alone: one character, and `v` is the name
+//	read -k 2 -u 3 v   the next word, when the whole of it is digits
+//	read -k2 -u 3 v    attached, when the character after the letter is one
+//	read -kv -u 3      `bad option: -v` — `v` is a letter, not an argument
+//	read -k2v -u 3     `number expected after -k: 2v` — the caller's refusal
+//
+// The last two are the reason the test is "is the next character a digit"
+// rather than "is there anything left in the word": a non-digit means the
+// letter took no argument and the bundle carries on, while a digit commits the
+// **whole** remainder to being the number, so `2v` is handed on to be refused
+// rather than being read as `2` and a letter `v`.
 func (r *Runner) builtinOptionsArg(name string, args []string, known string) (rest []string, opts string, optArg map[byte]string, code int) {
 	for len(args) > 0 {
 		a := args[0]
@@ -85,16 +107,32 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 			}
 		}
 		for i := start; i < len(a); i++ {
-			takesArg, ok := optionLetter(known, a[i])
+			takes, ok := optionLetter(known, a[i])
 			if !ok {
 				return nil, opts, optArg, r.refuseOption(name, a, known)
 			}
 			opts += string(a[i])
-			if !takesArg {
+			if takes == argNone {
 				continue
 			}
 			var value string
 			switch {
+			case takes == argNumber:
+				// Optional, so the two ways of not giving one leave the
+				// letter a bare flag and the bundle still being read. See
+				// the measurements in the doc comment.
+				if i+1 < len(a) {
+					if !isDigit(a[i+1]) {
+						continue
+					}
+					value = a[i+1:]
+					break
+				}
+				if len(args) > 1 && isANumber(args[1]) {
+					value, args = args[1], args[1:]
+					break
+				}
+				continue
 			case i+1 < len(a):
 				value = a[i+1:]
 			case len(args) > 1:
@@ -113,18 +151,49 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 	return args, opts, optArg, 0
 }
 
-// optionLetter says whether c is one of the letters in known, and whether it
-// takes an argument — a `:` after it in known, which is never a letter itself.
-func optionLetter(known string, c byte) (takesArg, ok bool) {
-	if c == ':' {
-		return false, false
+// optionArgument is what a letter in an optstring takes after it.
+type optionArgument int
+
+const (
+	// argNone is a bare flag, which is most of them.
+	argNone optionArgument = iota
+	// argRequired is a `:` after the letter: the rest of the word, or the
+	// next word, and a refusal when neither is there.
+	argRequired
+	// argNumber is a `#` after the letter: a number, optional. See
+	// builtinOptionsArg, which carries the measurements.
+	argNumber
+)
+
+// optionLetter says whether c is one of the letters in known, and what it
+// takes after it — a `:` or a `#` following it there, neither of which is ever
+// a letter itself.
+func optionLetter(known string, c byte) (takes optionArgument, ok bool) {
+	if c == ':' || c == '#' {
+		return argNone, false
 	}
 	i := strings.IndexByte(known, c)
 	if i < 0 {
-		return false, false
+		return argNone, false
 	}
-	return i+1 < len(known) && known[i+1] == ':', true
+	if i+1 < len(known) {
+		switch known[i+1] {
+		case ':':
+			return argRequired, true
+		case '#':
+			return argNumber, true
+		}
+	}
+	return argNone, true
 }
+
+// isANumber is what makes the *next word* a count rather than the name to read
+// into: measured, `read -k x v` reads one character into `x` rather than
+// complaining about a number, so a word that is not a number was never the
+// argument. Empty is not one — allDigits alone answers true for it, which is
+// right where it is used to tell a positional parameter from a name and wrong
+// here.
+func isANumber(s string) bool { return s != "" && allDigits(s) }
 
 // optionNeedsArgument is an argument-taking letter whose bundle ended the
 // argument list. Every shell refuses it the way it refuses an option it does

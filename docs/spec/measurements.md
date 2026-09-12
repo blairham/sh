@@ -7704,7 +7704,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   g() { local OPTIND=1; :; }; set -- -ab; getopts ab o; echo "1=$o"; g; getopts ab o; echo "2=[$o] st=$?"
   ```
-- `getopts/a-local-optind-scans-its-own-words-from-the-start` — both halves of the same declaration in one row, and the valueless spelling on purpose: with no `=1` there is no assignment to blame, and every column that has a local scope still hands the callee a cursor at the start of a word — `[c][d]` and not `[d]` — so entering the call is the core's answer rather than an axis. The way back is where they part, exactly as the row above. ksh93 has no `local`, so its `[d]` is the un-declared behaviour of `getopts/a-functions-cursor-inside-a-clustered-word` and the control on what the declaration is doing everywhere else
+- `getopts/a-local-optind-scans-its-own-words-from-the-start` — both halves of the same declaration in one row, and the valueless spelling on purpose: with no `=1` there is no assignment to blame, and every column that has a local scope still hands the callee a cursor at the start of a word — `[c][d]` and not `[d]` — so entering the call is the core's answer rather than an axis. The way back is where they part, exactly as the row above. ksh93 has no `local`, so its `[d]` is the un-declared behavior of `getopts/a-functions-cursor-inside-a-clustered-word` and the control on what the declaration is doing everywhere else
   ```sh
   g() { local OPTIND; set -- -cd; while getopts "cd" x; do printf "[%s]" "$x"; done; echo " g=$OPTIND"; }; set -- -ab; getopts "ab" o; echo "outer1=$o"; g; getopts "ab" o; st=$?; echo "outer2=[$o] st=$st"
   ```

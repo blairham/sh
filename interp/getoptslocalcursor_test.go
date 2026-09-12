@@ -20,7 +20,7 @@ import (
 func localCursorSem(restores Answer) Semantics {
 	s := getoptsSem()
 	s.GetoptsLocalOptindRestoresTheCursor = restores
-	// The neighbours these cases walk past, answered so that an unanswered
+	// The neighbors these cases walk past, answered so that an unanswered
 	// axis cannot be mistaken for the one under test — and answered the way
 	// the shell this reproduces answers them, because two of them decide
 	// whether these cases test anything.

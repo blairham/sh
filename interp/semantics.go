@@ -7911,6 +7911,12 @@ type Semantics struct {
 	// True only in bash. PATH is searched first everywhere, and wins over an
 	// identically named file in the current directory in all four — this is
 	// only about what happens when PATH does not have it.
+	//
+	// About `.`, and only about `.`. One shell's second name for the builtin
+	// answers differently: zsh's `source` looks in the current directory
+	// *before* PATH while its `.` never looks there at all, which is a
+	// disagreement inside one shell and so cannot be an axis at all — see
+	// Runner.DotLooksInCurrentDirectoryFirst.
 	DotFallsBackToCurrentDirectory Answer
 
 	// TestAcceptsDoubleEqual makes `==` a synonym for `=` in `test` and `[`,

@@ -496,6 +496,13 @@ func biEval(r *Runner, ctx context.Context, args []string) int {
 // and `command -v source` says so, which makes it a dialect's answer rather
 // than the substrate's. The dialects that have it add it in Apply.
 func biDot(r *Runner, ctx context.Context, args []string) int {
+	// A lookup a second name asked for belongs to *this* call and not to the
+	// file it reads: measured, a `.` inside a file that `source` found in the
+	// current directory is the ordinary builtin again and does not look there.
+	// Taken rather than read, so the flag cannot still be standing while the
+	// file runs. See DotLooksInCurrentDirectoryFirst.
+	here := r.dotCurrentDirectoryFirst
+	r.dotCurrentDirectoryFirst = false
 	if len(args) == 0 {
 		// Four answers in the panel, so this asks two questions rather than
 		// guessing. dash calls a missing operand success and does nothing at
@@ -521,7 +528,7 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 		return status
 	}
 
-	display, path, err := r.resolveDotPath(args[0])
+	display, path, err := r.resolveDotPath(args[0], here)
 	if err != nil {
 		return r.dotFailed(args[0], err)
 	}
@@ -717,6 +724,42 @@ var errNotOnPath = errors.New("no such file or directory")
 // with reason's capital on it.
 var errIsADirectory = errors.New("is a directory")
 
+// DotLooksInCurrentDirectoryFirst makes the next `.` resolve a bare operand
+// against the current directory *before* PATH, and returns the function that
+// puts the lookup back.
+//
+// It exists because one shell's second name for `.` is not a synonym for it.
+// Measured 2026-09-12 on zsh 5.9.2, in a directory holding `plain.sh` with a
+// different file of the same name on PATH:
+//
+//	source plain.sh   reads the copy in the current directory, status 0
+//	. plain.sh        reads the copy on PATH, status 0
+//
+// and with the file only in the current directory, `source` reads it while `.`
+// is `no such file or directory` at 127. So the current directory is not a
+// *fallback* there the way Semantics.DotFallsBackToCurrentDirectory is in
+// bash — it comes first, and wins over PATH — and the two names disagree about
+// it inside one shell.
+//
+// That last part is why this is not an axis. A Semantics field is one answer
+// per runner, so no value of one can make two builtins of the same runner
+// resolve the same operand differently.
+//
+// Nor is it something a dialect could wrap from outside: the search is inside
+// resolveDotPath, and a dialect that resolved the file itself and passed
+// `./name` on would change the spelling every diagnostic, `$0` and the source
+// stack use. Measured on the same shell, a current-directory hit is reported
+// as the bare operand — `bad.sh:4: parse error` — where `source ./bad.sh` is
+// `./bad.sh:4:` and a PATH hit is the joined path.
+//
+// The name stays the dialect's to choose. This says what the lookup is, not
+// which builtin has it.
+func (r *Runner) DotLooksInCurrentDirectoryFirst() (restore func()) {
+	outer := r.dotCurrentDirectoryFirst
+	r.dotCurrentDirectoryFirst = true
+	return func() { r.dotCurrentDirectoryFirst = outer }
+}
+
 // resolveDotPath finds the file `.` should read.
 //
 // An operand with a slash in it is a path and is used as written. Without one
@@ -726,7 +769,10 @@ var errIsADirectory = errors.New("is a directory")
 //
 // Only if PATH misses does the current directory come into it, and only in
 // bash: measured, `PATH=/usr/bin:/bin; . dotcwd.sh` finds the file in bash and
-// is "not found" in dash, ksh93 and zsh.
+// is "not found" in dash, ksh93 and zsh. A caller that passes
+// currentDirectoryFirst asks the opposite order for this one call, which is
+// what one dialect's second name for the builtin needs — see
+// Runner.DotLooksInCurrentDirectoryFirst.
 //
 // It returns two forms of the answer, because two callers want two different
 // things. path is the file to *read*, resolved against this runner's
@@ -737,9 +783,17 @@ var errIsADirectory = errors.New("is a directory")
 // current-directory fallback as the bare operand — the resolved absolute path
 // appears in none of them, and the shell asking its own source stack gets the
 // same spelling the diagnostics use.
-func (r *Runner) resolveDotPath(name string) (display, path string, err error) {
+func (r *Runner) resolveDotPath(name string, currentDirectoryFirst bool) (display, path string, err error) {
 	if strings.ContainsRune(name, filepath.Separator) {
 		return name, r.atDir(name), nil
+	}
+	if currentDirectoryFirst {
+		// Before PATH rather than after it, and reported as the bare operand
+		// exactly as the fallback below is. See
+		// DotLooksInCurrentDirectoryFirst for what was measured.
+		if candidate := r.atDir(name); r.readableFile(candidate) {
+			return name, candidate, nil
+		}
 	}
 	pathVar, _ := r.getVar("PATH")
 	for _, dir := range filepath.SplitList(pathVar) {

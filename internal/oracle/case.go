@@ -8708,6 +8708,21 @@ echo "st=$?"`,
 		Why:     "the pair, on one line and one starting value: the always-assign leaves `new` and the colon-assign leaves `old`. Written as a pair rather than as two values because a recorded value would pass for an implementation that had read `::=` as `:=` — which is exactly the reading a grammar without the operator falls back to",
 	},
 	{
+		ID: "param/an-assignment-through-an-expansion-reaches-the-positional", Category: "parameter expansion",
+		Snippet: `set --; printf "[%s]" "${1:=new}"; printf "[%s][%s]" "$1" "$#"; echo " st=$?"`,
+		Why:     "where the value actually lands in the one shell that allows the assignment: the positional list, so `$#` moves to 1. The other five refuse the name — four wordings and one status apiece, which is AssignThroughExpansionMayNameAPositional — and this row is the far side of that axis. Storing through the variable table instead left `$#` at 0 and `$1` reading back only because a variable named `1` shadowed an out-of-range positional (#1389)",
+	},
+	{
+		ID: "param/an-assignment-through-an-expansion-replaces-a-positional-that-is-there", Category: "parameter expansion",
+		Snippet: `set -- p q; printf "[%s]" "${1::=new}"; printf "[%s][%s][%s]" "$1" "$2" "$#"; echo " st=$?"`,
+		Why:     "the same store seen where the positional *is* there, which is the half a variable of that name cannot fake: the real `$1` wins over the variable on the read, so the value the expansion substituted and the value the parameter held used to disagree. Written with `::=` because that is the operator whose test cannot decline to fire",
+	},
+	{
+		ID: "param/an-assignment-through-an-expansion-widens-the-positional-list", Category: "parameter expansion",
+		Snippet: `set -- p; printf "[%s]" "${3:=new}"; printf "[%s][%s][%s][%s]" "$1" "$2" "$3" "$#"; echo " st=$?"`,
+		Why:     "a position past the end widens the list with empty parameters rather than being dropped, so `$#` becomes 3 and `$2` is an empty parameter that is nonetheless there. The row that says the store is the list and not a slot: an implementation that only replaced an existing element would answer this one with `$#` still 1",
+	},
+	{
 		ID: "param/only-the-equals-makes-the-always-assign", Category: "parameter expansion",
 		Snippet: `v=old; printf "[%s]" "${v::-D}" "${v::+D}" "$v"; echo`,
 		Why:     "the disambiguation is one character wide, and this is the row that says so: with a second colon in front of them `-` and `+` are *not* operators, they are an offset of nothing and a length of `-D`, so the answer is empty and `v` is untouched. A grammar that widened `::` by one character would answer `D` here and pass every row above",

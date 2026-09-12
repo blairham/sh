@@ -4008,16 +4008,31 @@ behind), `param/the-always-assign-operator-beside-the-conditional` (the
 pair, on one starting value) and
 `param/only-the-equals-makes-the-always-assign` (the two near-misses).
 
+An assignment to a **positional** reaches the positional list, and not a
+variable spelled with digits. Measured on zsh 5.9.2, which is the only
+shell in the panel that assigns one through an expansion at all:
+
+| probe | answer |
+| --- | --- |
+| `set --; ${1:=new}` | `$1` is `new` and `$#` is 1 |
+| `set --; ${3:=new}` | `$3` is `new`, `$1` and `$2` are empty, `$#` is 3 |
+| `set -- p q; ${1::=new}` | `$@` is `new q`, `$#` still 2 |
+| `set -- p q; ${0::=new}` | `$0` is `new`, `$#` still 2 |
+
+So a position past the end widens the list with empty parameters rather
+than being dropped, and `0` is a position the assignment may name even
+though it is the shell's own name rather than a member of the list. This
+was #1389: the store went through the variable table, so `$#` never moved
+and `$1` read back the substituted value only because a variable named `1`
+shadowed an out-of-range positional — while `set -- p q; ${1::=new}` left
+`$1` as `p`, the value the expansion substituted and the value the
+parameter held disagreeing.
+
 ### What this implementation does not match
 
-Both are older than this operator and are reached by it rather than caused
-by it — each has a second, simpler reproducer that has nothing to do with
-`::=`:
+Older than this operator and reached by it rather than caused by it, with
+a second, simpler reproducer that has nothing to do with `::=`:
 
-- An assignment to a **positional** does not reach the positional list.
-  `set --; ${1::=new}` leaves `$1` reading `new` and `$#` at 0 where the
-  shell says 1, and `set -- p q; ${1::=new}` leaves `$1` as `p`. The same
-  is true of `${1:=new}` and `${1=new}` when their test fires.
 - Assigning a **scalar over an existing indexed array** leaves the array
   standing: `a=(1 2 3); ${a::=x y}` substitutes `x y` and `a` is still the
   three elements, where the shell leaves the scalar `x y`. `read a` over

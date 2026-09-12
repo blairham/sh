@@ -1984,7 +1984,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			if !r.assignableTarget(e.Op, e.Name) {
 				return ""
 			}
-			r.setVar(e.Name, v)
+			r.storeThroughExpansion(e.Name, v)
 			return v
 		}
 		return value
@@ -2053,8 +2053,49 @@ func (r *Runner) assignAlways(e *syntax.ParamExpr, subscript bool) string {
 	if !r.assignableParamName(e.Name) {
 		return ""
 	}
-	r.setVar(e.Name, v)
+	r.storeThroughExpansion(e.Name, v)
 	return v
+}
+
+// storeThroughExpansion puts the value an assigning expansion produced where
+// its name points.
+//
+// A run of digits names a *positional parameter*, not a variable spelled with
+// digits, and the two are only the same thing until something reads `$#`.
+// Storing through setVar left `$#` where it was and put the value in a
+// variable that an out-of-range `$1` happened to shadow, so `set --;
+// ${1:=new}` read back `new` at `$#` of 0 — and where the positional was
+// really there, `set -- p q; ${1::=new}`, the parameter kept `p` while the
+// expansion had already substituted `new`. One store, two answers (#1389).
+//
+// Measured on zsh 5.9.2, the only shell in the panel that assigns a
+// positional through an expansion at all — the other five refuse the name,
+// which is Semantics.AssignThroughExpansionMayNameAPositional and is asked
+// before this is reached:
+//
+//	set --;      ${1:=new}    $1 is new and $# is 1
+//	set --;      ${3:=new}    $3 is new, $1 and $2 are empty, and $# is 3
+//	set -- p q;  ${1::=new}   $@ is `new q` and $# is still 2
+//	set -- p q;  ${0::=new}   $0 is new and $# is still 2
+//
+// So a position past the end *widens* the list with empty parameters rather
+// than being dropped, which is the half that moves `$#`; and `0` is a
+// position like any other to the assignment, though it is the shell's name
+// rather than a member of the list and leaves `$#` alone.
+func (r *Runner) storeThroughExpansion(name, v string) {
+	n, ok := atoi(name)
+	if !ok || !isPositional(name) {
+		r.setVar(name, v)
+		return
+	}
+	if n == 0 {
+		r.Name = v
+		return
+	}
+	for len(r.Params) < n {
+		r.Params = append(r.Params, "")
+	}
+	r.Params[n-1] = v
 }
 
 // assignableParamName reports whether an assignment written inside an

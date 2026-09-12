@@ -115,7 +115,7 @@ What both shells do:
 
 ## Where the two shells disagree
 
-Eight of them, and all eight are on the daily path. Each is a named field on
+Nine of them, and all nine are on the daily path. Each is a named field on
 `repl.EditorStyle`, with bash's answer as the zero value. One more field there
 is about completion rather than about a key, and `docs/spec/completion.md`
 owns it.
@@ -130,6 +130,7 @@ owns it.
 | `echo abcdef` typed a character at a time, then `^_` | the line is emptied | `echo abcde` | `UndoTakesBackOneKeystrokeAtATime` |
 | `echo one two`, `^A`, `^K`, `^_` | `echo one two`⎸ | ⎸`echo one two` | `UndoRestoresTheCursorToWhereItWas` |
 | three lines behind the prompt and four presses of `M-.` | the inserted word comes off the line | the oldest line's last word stays | `LastArgumentStaysOnTheOldestLine` |
+| `   ab` in vi command mode, `$`, `I` | ⎸`   ab` | `   `⎸`ab` | `ViInsertAtStartOfLineSkipsLeadingBlanks` |
 
 ### What one undo step is
 
@@ -302,6 +303,176 @@ good, so `SetReadDeadline` on it answers `ErrNoDeadline` afterwards. The
 terminal itself could supply one through `VMIN`/`VTIME`. Neither is worth
 building for behavior no measured shell has.
 
+**All of that is about emacs mode, and vi mode is the other way round.** There
+the Escape has a meaning of its own — it leaves insert — so waiting for the
+byte after it is waiting to find out whether a key that already means something
+meant something else, and all three shells put a timer on exactly that wait.
+Measured: `\e[D` typed as one burst moves the cursor left in bash 5.3.15 and in
+zsh 5.9.2 alike, and the same three bytes with 1.2 seconds after the Escape
+leave insert mode and are then read as two command-mode keys — `[` on nothing
+and `D` deleting to the end of the line. bash calls the wait `keyseq-timeout`
+and defaults it to half a second; zsh calls it `KEYTIMEOUT` and defaults it to
+four tenths. See the command-mode section below for what this implementation
+asks instead, and why it is not a number.
+
+## vi command mode
+
+The second state the editor can be in, where a letter is a motion rather than a
+character. `set -o vi` asks for it in bash; `bindkey -v` and `set -o vi` both
+ask for it in zsh, and **only the second of those sets the option** — measured,
+`bindkey -v` gives a working command mode and leaves `set -o` reporting
+`emacs off` and `vi off`. That is why the question repl asks is a dialect's
+(`Shell.ViEditing`) rather than interp's editing mode read directly.
+
+Measured 2026-09-12, the same way as everything else here and with one
+addition: the cursor is read back rather than reasoned about. Type a line,
+press Escape, press the keys under test, then `i` and an `X`, then Return, and
+`fc -ln -1` prints the line the shell accepted — so the `X` marks the character
+the cursor was on and the rest of the line says what the edit did. Each table
+cell below is such a line, with `⎸` in place of the marker. bash 3.2.57 agrees
+with bash 5.3.15 on every row asked of it.
+
+### Getting between the two states
+
+| keys | what happens |
+| --- | --- |
+| `Escape` in insert mode | leave insert, and **step the cursor back one**: `true alpha beta gamm`⎸`a`. At the start of the line it stays. |
+| `Escape` in command mode | nothing at all, and in particular no second step back |
+| `i` | insert at the cursor |
+| `a` | insert after the cursor; at the end of the line that is the end |
+| `A` | insert at the end of the line |
+| `I` | insert at the start — **and this is the one disagreement**, below |
+| Return | accept the line, from command mode as much as from insert |
+| `^C` | abandon the line, wherever in a command it arrives |
+
+### Motions
+
+On `true alpha beta gamma` unless another line is named.
+
+| keys | result |
+| --- | --- |
+| `0` | ⎸`true alpha beta gamma` |
+| `^` on `   true alpha beta gamma` | `   `⎸`true alpha beta gamma` |
+| `$` | `true alpha beta gamm`⎸`a` |
+| `l`, and `space`, from `0` | `t`⎸`rue alpha beta gamma` |
+| `3l` from `0` | `tru`⎸`e alpha beta gamma` |
+| `l` at the last character | does not move |
+| `h` from `$` | `true alpha beta gam`⎸`ma` |
+| `h` at the first character | does not move |
+| `3|` | `tr`⎸`ue alpha beta gamma` — the column, counted from 1 |
+| `w` from `0` | `true `⎸`alpha beta gamma` |
+| `3w` from `0` | `true alpha beta `⎸`gamma` |
+| `w` at the last word | does not move |
+| `b` from `$` | `true alpha beta `⎸`gamma` |
+| `e` from `0` | `tru`⎸`e alpha beta gamma` |
+| `fa` from `0` | `true `⎸`alpha beta gamma` |
+| `Fa` from `$` | `true alpha beta g`⎸`amma` |
+| `ta` from `0` | `true`⎸` alpha beta gamma` |
+| `Ta` from `$` | `true alpha beta ga`⎸`mma` |
+| `fa` then `;` | `true alph`⎸`a beta gamma` |
+| `fa`, `;`, `;`, `,` | `true alph`⎸`a beta gamma` |
+| a find of a character that is not there | nothing moves, and an operator in front of it takes nothing |
+
+A count goes in front of any of them, and `0` is a digit once one of the other
+nine has begun a count: `10l` from the start moves ten characters.
+
+**A word here is not the word the rest of this editor uses.** Every other word
+key asks a dialect, because the two shells disagree and one of them disagrees
+with itself; the vi motions ask nobody. Three runs: blanks, the letters and
+digits and `_`, and everything else. Measured on `true a-b.c def`:
+
+| keys | result |
+| --- | --- |
+| `ww` from `0` | `true a`⎸`-b.c def` |
+| `WW` from `0` | `true a-b.c `⎸`def` |
+| `bb` from `$` | `true a-b.`⎸`c def` |
+| `BB` from `$` | `true `⎸`a-b.c def` |
+| `ee` from `0` | `true `⎸`a-b.c def` |
+| `EE` from `0` | `true a-b.`⎸`c def` |
+
+`_` is inside a word — `ww` on `true a_b cd` reaches `cd` — and `$` and `/` are
+not. zsh's own `WORDCHARS` holds `-` and `.` and its `M-f` walks straight past
+them; its `w` still stops.
+
+### Edits, and the operator grammar
+
+| keys | result |
+| --- | --- |
+| `x` from `0` | ⎸`rue alpha beta gamma` |
+| `3x` from `0` | ⎸`e alpha beta gamma` |
+| `x` at the end | `true alpha beta gam`⎸`m` — the cursor cannot stay past the last character |
+| `x` with a count past the end of `abc`, from `l` | ⎸`a` |
+| `X` from `$` | `true alpha beta gam`⎸`a` |
+| `rZ` from `0` | ⎸`Zrue alpha beta gamma` |
+| `2rZ` from `0` | `Z`⎸`Zue alpha beta gamma` |
+| `r` then Escape | nothing at all |
+| `~` from `0` | `T`⎸`rue alpha beta gamma` |
+| `3~` from `0` | `TRU`⎸`e alpha beta gamma` |
+| `dw` from `0` | ⎸`alpha beta gamma` |
+| `d2w`, and `2dw` | ⎸`beta gamma` |
+| `dw` on `true   alpha` from `0` | ⎸`alpha` — the blanks go too |
+| `dw` at the last word | `true alpha beta gam`⎸`m` — **to the end of the line**, although a bare `w` there does not move |
+| `db` from `$` | `true alpha beta `⎸`a` |
+| `de` from `0` | ⎸` alpha beta gamma` — inclusive, where `dw` is not |
+| `d$` from `l` | ⎸`t` |
+| `d0` from `$` | ⎸`a` |
+| `dfa` from `0` | ⎸`lpha beta gamma` |
+| `dd` | the line is emptied |
+| `D` from `l` | ⎸`t` |
+| `d` then a key that is not a motion, or then Escape | nothing at all |
+| `cw` from `0` | ⎸` alpha beta gamma`, in insert mode — **`cw` is `ce`** |
+| `cw` on the last character | `true alpha beta gamm`⎸ |
+| `c$` from `l`, and `C` | `t`⎸ |
+| `cc`, and `S` | the line is emptied, in insert mode |
+| `yw` from `0`, then `$p` | `true alpha beta gammatrue`⎸` ` |
+| `yw` from `0`, then `$P` | `true alpha beta gammtrue`⎸` a` |
+| `x` then `p` | `r`⎸`tue alpha beta gamma` — the character swap |
+| `u` | take the last change back |
+
+A count may go in front of the operator as well as in front of the motion, and
+they multiply. What a delete or a yank took is what `p` and `P` put back, and
+it is the same buffer `^Y` holds: a word killed with `^W` is a word `p` puts
+back, and it outlives the line.
+
+**A key command mode has nothing on does nothing**, and above all does not type
+itself into the line: measured, `z` and `q` leave all three shells exactly as
+they were.
+
+### Where the shells disagree about it
+
+| line and keys | bash | zsh | where |
+| --- | --- | --- | --- |
+| `   ab`, `$`, `I` | ⎸`   ab` | `   `⎸`ab` | `ViInsertAtStartOfLineSkipsLeadingBlanks` |
+| `0`, `x`, `u` | `t`⎸`rue …` | ⎸`true …` | `UndoRestoresTheCursorToWhereItWas`, the field `^_` already had |
+| `0`, `fa`, `;` after a `t` rather than an `f` | does not move | moves to the next one | not a field — below |
+| `Y` and `yy`, then `p` | the characters go back on the same line | a new line is opened below | not built — below |
+| `o` and `O` | nothing | a new line is opened | not built |
+| `U` | the whole line comes back | nothing | not built |
+| `^R` | reverse history search | redo | not built |
+| `G` | fetches a history entry | nothing | not built |
+| `_` | the last argument of the line before | nothing | not built |
+| `^K`, `^U`, `^W` in command mode | kill, as in emacs mode | nothing | not built |
+
+### The Escape that is also the first byte of an arrow key
+
+This is the one question a command mode asks that an emacs one does not, and
+both shells answer it with a timer — the measurement is in the Escape section
+above. **This editor asks whether a byte is *there*, and waits no time at all
+for one.** A terminal writes an escape sequence in a single write, so the bytes
+after the Escape have already been delivered by the time the question is asked;
+a person pressing Escape delivers one byte and nothing follows it.
+
+Two sources, because input reaches the editor two ways: bytes already taken off
+the terminal and sitting in the editor's buffer, which `select` cannot see, and
+the descriptor itself. Missing the first is the same mistake the descriptor
+watcher documents having made once.
+
+No number was invented, and there is no honest one to invent: the two shells
+that have the wait disagree about its length. What this costs is a sequence
+split across two writes by something slow in between — a link with a stall in
+the middle of it — which the shells' timers cover and this does not. #1427
+records it.
+
 ## Characters wider than one cell
 
 Which characters a terminal draws in two cells is settled in `cellwidth.go`,
@@ -468,15 +639,29 @@ already drifted, and was missing `M-^H` and all four numbered spellings of Home
 and End. `dialect/zsh/bindkey.go` and `dialect/bash/bind.go` are the two
 vocabularies over it.
 
-**`vi` mode is a name and a keymap, and not a command mode.** `set -o vi` and
-`bindkey -v` are accepted, the mode is reported back, and it selects which
-keymap the shell's binding builtin acts on — `vi-insert` in bash, `viins` in
-zsh — so an rc file's `set -o vi` followed by `bind -m vi-insert` binds keys
-that are live afterwards. What is *not* built is the command mode itself:
-`Escape` does not leave insert, and `h`, `j`, `k`, `l`, `dw` and the rest
-insert themselves as they would in either mode here. Both dialects have the
-same gap and closing it would serve both at once, which is why it is filed on
-its own rather than carried by either.
+`repl/vi.go` — the command mode: the motions, the operator-and-motion grammar
+and the count in front of either. It is the editor's and not a dialect's, which
+is the same rule `repl/widgets.go` states: a motion is not a vocabulary, and
+written in one dialect it would have been written twice. What each dialect
+contributes is two questions only a shell can answer — whether this session
+edits the vi way, and what somebody bound into the command keymap.
+
+**The keymap is the structural half.** `repl.Keymap` is which of the editor's
+two tables is current, and `Shell.KeyBindings` is asked for one. Before that
+there was one table and it was the insert map, so a binding written with
+`bind -m vi-command` or `bindkey -M vicmd` was stored and could never fire —
+both dialects' code said so in their own comments. Measured under a pty in both
+shells: `^Xz` bound to `beginning-of-line` in the command map moves the cursor
+in command mode and does nothing in insert mode.
+
+`repl.Widget` gained three names and no more: `WidgetViCommandMode`,
+`WidgetViInsertMode` and `WidgetViAppendMode`, which both shells already name —
+`vi-movement-mode`, `vi-insertion-mode` and `vi-append-mode` in one,
+`vi-cmd-mode`, `vi-insert` and `vi-add-next` in the other — and which people
+already bind (`bindkey -M viins jk vi-cmd-mode`). The motions are deliberately
+not among them: a Widget is what one key does on its own, and a motion is half
+of an action whose other half is the operator reading the *range* it names.
+`repl/widgets.go` carries the whole of that decision.
 
 `repl/crlf.go` and `Shell.inLineDiscipline` are the two halves of one rule:
 **while the editor holds the terminal, nothing may reach it with a newline the
@@ -527,7 +712,7 @@ editor reads as a byte into a signal.
 
 ## Measured, and deliberately not a field
 
-Three places where the two shells differ and the difference is written down
+Four places where the two shells differ and the difference is written down
 here instead of being answered by every dialect ever added. The precedent is
 the `^W`, `^K`, `^W`, `^Y` join above; the test is whether anyone's fingers
 would notice.
@@ -546,6 +731,11 @@ would notice.
   insertion nor a removal and it is not worth a second field to say so.
 - **`\e` then Return.** bash swallows it and zsh puts a newline in the line.
   This drops it, which is bash's answer.
+- **`;` after a `t` rather than an `f`.** On `true alpha beta gamma`, `0`, `ta`
+  leaves the cursor at `true`⎸` alpha …` in both; the `;` after it does not
+  move in bash and steps to `true alp`⎸`ha …` in zsh. bash's answer is taken,
+  and it is also vi's own. A field would have to be answered by every dialect
+  ever added for a pair of keystrokes nobody presses expecting to stay put.
 
 ## What is still missing
 
@@ -571,3 +761,25 @@ was on this list and is not any more — `^R` is `repl/search.go` and
 - **`M-y`** — walk back through earlier kills. This keeps one kill rather
   than a ring, so there is nothing to walk.
 - **Case and other word operators** — `M-u`, `M-l`, `M-c`.
+- **The rest of vi command mode.** What is built is in the section above; these
+  are measured to exist and are not:
+  - `.`, which repeats the last change, and `U`, which takes the whole line
+    back. Both bash-only among the two, and `.` needs the last command
+    recorded as a value rather than performed and forgotten.
+  - `Y`, `yy`, `o` and `O`. All four are *line*-wise in zsh and need a buffer
+    that can hold more than one line before there is anything to put; bash has
+    neither `o` nor `O` at all.
+  - `/`, `?`, `n` and `N` — a search started from command mode. `^R` is built
+    and reaches the same history; this is the other way in, and in zsh the key
+    it shares with bash means something else (`^R` is redo there).
+  - `%`, the matching bracket, and `G`, which fetches a history entry by
+    number in bash and does nothing in zsh.
+  - `R`, overwrite mode, and `_`, which inserts the last argument of the line
+    before in bash.
+  - **What vi *insert* mode restricts.** Measured, the two shells narrow the
+    insert keymap when vi editing is on and they narrow it differently: bash
+    leaves `^A`, `^E`, `^B`, `^F` and `^K` doing nothing and keeps `^W`, `^U`,
+    `^T`, `^Y` and `^_`; zsh keeps `^W`, `^U` and `^L` and lets the rest
+    **insert themselves as literal control characters**. Here the insert map
+    is still the editor's emacs dispatch, so those keys go on working. That is
+    a whole keymap's worth of disagreement and its own change.

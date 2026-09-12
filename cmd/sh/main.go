@@ -554,9 +554,9 @@ func pickDialect(name string) (driver.Shell, error) {
 			Prelude: dash.Prelude(), PromptStyle: dash.PromptStyle(),
 		}, nil
 	case "ash":
-		// The fifth, and the one no instrument grades: there is no ash on a
-		// macOS machine, so it has no oracle column and no
-		// conformance-dialects row. docs/spec/ash.md says what that costs.
+		// The fifth, and the one whose oracle column is not a binary on this
+		// machine: there is no ash on macOS, so the panel reaches it through
+		// a container of a digest-pinned alpine image (#2263).
 		return driver.Shell{
 			Dialect: ash.Dialect(), Semantics: ash.Semantics(),
 			Diagnostics: ash.Diagnostics(), Register: ash.Apply,

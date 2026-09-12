@@ -121,6 +121,21 @@ func refused(r Result) bool {
 	return !r.TimedOut && (r.Status != 0 || r.Signal != 0) && r.Stderr != ""
 }
 
+// declined is the weaker claim: it complained and it produced nothing, but it
+// did not say so in its exit status.
+//
+// It is not a grading rule and must not become one — nothing in this file
+// calls it, and matchesRefusal deliberately still demands refused() on both
+// sides. It exists because the panel stopped being unanimous about the
+// *shape* of a refusal when ash joined: BusyBox answers an unknown `-o` name
+// with a diagnostic, no output, and status 0. See
+// TestGradedOnRefusalCasesAreActuallyRefused, which is the one caller, for
+// the measurement and for why the guard may take this reading where the
+// grade may not.
+func declined(r Result) bool {
+	return !r.TimedOut && r.Stdout == "" && r.Stderr != ""
+}
+
 // matchesRefusal grades a case on the refusal rather than on its wording.
 //
 // It forgives exactly one thing: the words of the diagnostic. Everything the

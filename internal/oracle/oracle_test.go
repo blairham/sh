@@ -952,6 +952,32 @@ func TestArgv0ReachesTheBinaryOnTheScriptRoute(t *testing.T) {
 // pass a case whose reference did not refuse, so a misused flag cannot make
 // conformance green; what it could do without this is sit in the corpus
 // looking like a claim that had been checked.
+//
+// # Why declined() is accepted here and not by matchesRefusal
+//
+// The panel stopped being unanimous about what a refusal *looks like* when
+// ash joined it. Measured by hand against the pinned image, not inferred:
+//
+//	$ ash -o nosuchoption -c 'echo hi'
+//	/bin/ash: illegal option -o nosuchoption
+//	$ echo $?
+//	0
+//
+// BusyBox declines the option, does not run the command string, and exits
+// zero anyway. So refused() — nonzero *and* a diagnostic — is false for a
+// column that plainly did not run the case, and the guard would fail on a
+// correctly marked row.
+//
+// What the guard is protecting is that no column *ran* the snippet, because a
+// case the panel runs would have the flag forgiving an ordinary difference.
+// Empty standard output with a diagnostic on standard error says that
+// precisely: every snippet in this corpus prints something when it runs, and
+// this one would print `hi`.
+//
+// The grading rule is deliberately not widened to match. matchesRefusal still
+// demands refused() on both sides, so against the ash column this case fails
+// rather than being forgiven — which is the right answer and the reason it is
+// safe to relax the *guard* alone.
 func TestGradedOnRefusalCasesAreActuallyRefused(t *testing.T) {
 	golden, err := Load(filepath.Join("testdata", "golden.json"))
 	if err != nil {
@@ -975,8 +1001,8 @@ func TestGradedOnRefusalCasesAreActuallyRefused(t *testing.T) {
 			if !ok {
 				continue
 			}
-			if !refused(res) {
-				t.Errorf("%s is GradedOnRefusal but %s did not refuse it: %s\n"+
+			if !refused(res) && !declined(res) {
+				t.Errorf("%s is GradedOnRefusal but %s ran it: %s\n"+
 					"\tthe flag forgives the wording of a refusal, so a case the panel runs must not carry it",
 					c.ID, shell.Name, describe(res))
 			}

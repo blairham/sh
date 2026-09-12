@@ -44,6 +44,14 @@ func main() {
 	)
 	flag.Parse()
 
+	// Whatever routes the panel opened are closed here, however this command
+	// returns. A container column is the only one that holds anything, and a
+	// stray container on a machine running a dozen sessions is exactly the
+	// kind of leftover nobody can tell from live work. The paths below that
+	// end in os.Exit close it themselves, since a deferred call does not run
+	// through one.
+	defer oracle.Shutdown()
+
 	if *gated {
 		if err := runGated(*bin, strings.Fields(*bargs), *pol, *vrb); err != nil {
 			fmt.Fprintln(os.Stderr, "oracle:", err)
@@ -61,12 +69,6 @@ func main() {
 		fmt.Print(rep.Summary(*vrb))
 		return
 	}
-
-	// Whatever routes the panel opened are closed here, once, however this
-	// command ends. A container column is the only one that holds anything,
-	// and a stray container on a machine running a dozen sessions is exactly
-	// the kind of leftover nobody can tell from live work.
-	defer oracle.Shutdown()
 
 	if err := run(*check, *golden, *doc); err != nil {
 		fmt.Fprintln(os.Stderr, "oracle:", err)
@@ -152,6 +154,7 @@ func run(check bool, goldenPath, docPath string) error {
 			fmt.Fprintln(os.Stderr, "  "+id)
 		}
 		fmt.Fprintln(os.Stderr, "\nRun `make oracle` to record them.")
+		oracle.Shutdown()
 		os.Exit(exitDrift)
 	}
 
@@ -195,6 +198,7 @@ func run(check bool, goldenPath, docPath string) error {
 			// command failed would otherwise have scrolled off the screen
 			// before it finished.
 			fmt.Fprintln(os.Stderr, "\nbut the committed files still disagree with each other: run `make oracle`.")
+			oracle.Shutdown()
 			os.Exit(exitDrift)
 		}
 		return nil
@@ -219,6 +223,7 @@ is reported rather than enforced in continuous integration: a runner does
 not have the same builds of the same shells. Locally, where the panel is
 the one that produced the record, it is the gate.
 `)
+	oracle.Shutdown()
 	os.Exit(exitDrift)
 	return nil
 }

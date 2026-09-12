@@ -18560,7 +18560,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   echo hi
   ```
-- `invoke/a-long-option-name-that-is-not-one` **(refusal)** — the same question one level in: `-o` is a valid letter and its operand is not a valid name, so the refusal comes from the option table rather than from the letter table. All six decline before running the command string, which is the part that matters — a shell that warned and carried on would print `hi` and standard output would catch it
+- `invoke/a-long-option-name-that-is-not-one` **(refusal)** — the same question one level in: `-o` is a valid letter and its operand is not a valid name, so the refusal comes from the option table rather than from the letter table. All seven decline before running the command string, which is the part that matters — a shell that warned and carried on would print `hi` and standard output would catch it. They do not agree on how to say so: BusyBox writes the diagnostic and then exits **0**, which is the one column where declining and a nonzero status come apart
   ```sh
   echo hi
   ```

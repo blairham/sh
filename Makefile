@@ -286,10 +286,12 @@ conformance-dialects: ## Grade each dialect binary against the shell it claims t
 	@go build -o $(BINDIR)/our-zsh ./cmd/zsh
 	@go build -o $(BINDIR)/our-dash ./cmd/dash
 	@go build -o $(BINDIR)/our-ksh ./cmd/ksh
+	@go build -o $(BINDIR)/our-ash ./cmd/ash
 	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-bash -against bash $(ARGS)
 	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-zsh -against zsh $(ARGS)
 	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-dash -against dash $(ARGS)
 	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-ksh -against ksh93 $(ARGS)
+	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-ash -against ash $(ARGS)
 
 acp-bench: ## Time the protocol's own costs in ns/op, against the process-per-command it replaces
 	@go test ./internal/acpcheck/ -run XXX -bench . -benchtime 50x -count 3 $(ARGS)

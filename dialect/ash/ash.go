@@ -19,6 +19,11 @@
 // *measured* but not *maintained*: nothing in `make check` notices when one
 // of them drifts. #2263 is the follow-on that fixes it.
 //
+// One thing `make check` does notice, since #2340: an axis this dialect has
+// no value for *at all*. That is absence rather than drift, it costs no shell
+// processes, and it is the shape #2272 shipped — so `make axis-coverage`
+// asks it of every dialect and the same check fails in `go test ./...`.
+//
 // Read a comment that cites a measurement as evidence; read the absence of
 // one as an unanswered question rather than as agreement with dash.
 package ash

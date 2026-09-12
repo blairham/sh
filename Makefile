@@ -56,7 +56,7 @@ SHELLS := sh bash zsh ksh dash ash
 FUNCSRC := share/sh/functions
 FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
 
 all: build
 
@@ -218,6 +218,15 @@ axis-sweep: ## Move every axis in interp.Semantics and report the ones nothing o
 	@mkdir -p $(BINDIR)
 	@go build -tags shaxissweep -o $(BINDIR)/axis-sh ./cmd/sh
 	@go run ./internal/cmd/axissweep -bin $(BINDIR)/axis-sh $(ARGS)
+
+# The other question, and the cheap one: not whether anything objects when an
+# axis moves, but whether each dialect answers it at all. No shell is run, so
+# unlike the sweep above this *is* gated -- as a test, in `go test ./...`, and
+# so in `make check`. This target is the same check with its report printed,
+# for reading and for `ARGS=-write` after an axis has been measured. See
+# internal/axissweep/coverage.go for why the ledger is committed (#2340).
+axis-coverage: ## Report every interp.Semantics axis a dialect does not answer, ash included (#2340)
+	@go run ./internal/cmd/axissweep -coverage $(ARGS)
 
 sandbox: ## Try every way a script has of reaching the filesystem, against the shipped binaries, and report what the boundary stopped
 	@mkdir -p $(BINDIR)

@@ -1603,7 +1603,34 @@ func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
 			out[i].Arith = p.parseArithLater(out[i].Value, out[i].Pos)
 		}
 	}
+	// A flag group the parser could not read reports the rest of the word it
+	// stands in, and this is the one place that knows where the word ends —
+	// scanParamFlags is called with the braces alone, halfway through.
+	// Gated on the failure, so the common word pays a nil check.
+	// See ParamExpr.FlagsErrTail for what the text is and why.
+	for i := range out {
+		if out[i].Kind == ParamExp && out[i].Param != nil && out[i].Param.FlagsErrPos > 0 {
+			out[i].Param.FlagsErrTail = p.sourceBetween(out[i].Pos, stop)
+		}
+	}
 	return &Word{Spans: out, Start: start, Stop: stop}
+}
+
+// sourceBetween is the input between two positions, or empty where they do
+// not name a piece of it.
+//
+// The guards are not defensive clutter: a word the grammar supplied stands
+// at a single position with nothing between its ends, and an alias body is
+// lexed apart from the input these offsets count in, so an offset pair that
+// does not describe a range of this lexer's source describes some other
+// string and must produce nothing rather than a slice of the wrong text.
+func (p *Parser) sourceBetween(from, to Pos) string {
+	src := p.lex.src
+	lo, hi := int(from.Offset), int(to.Offset)
+	if lo < 0 || hi > len(src) || lo >= hi {
+		return ""
+	}
+	return src[lo:hi]
 }
 
 // parseRedirect reads an optional IO number, an operator and its target.

@@ -149,7 +149,8 @@ func TestTheEscapeFlagRunsBeforeThePromptEscapes(t *testing.T) {
 func TestTheEscapeFlagsBadOptionLetterIsThisShellsFlagsError(t *testing.T) {
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, `v=x; print -rn -- "${(g:x:)v}"`)
-	want := "zsh:1: error in flags near position 6 in '${(g:x:)v}'\n"
+	// The rest of the word, closing quote and all — see ParamExpr.FlagsErrTail.
+	want := "zsh:1: error in flags near position 6 in '${(g:x:)v}\"'\n"
 	if out != want || st == 0 {
 		t.Errorf("got %q status %d, want %q at a non-zero status", out, st, want)
 	}

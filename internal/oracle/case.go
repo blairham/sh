@@ -5861,6 +5861,26 @@ echo "st=$?"`,
 		Why:     "where the step sits, in four answers that would each be different if it sat anywhere else: the operator has already run, so trimming `z` off `zb` puts it first; the case conversion has already run, so `(B a)` uppercased sorts as `A B` and not `B A`; a forced join has already made one word, which is in order however it was written; and the quoted join without `(@)` does the same. None of it is what the rule numbers suggest by name",
 	},
 	{
+		ID: "param/a-flag-group-error-names-the-rest-of-its-word", Category: "parameter expansion",
+		Snippet: `v=x; print -r -- A${(g:x:)v}B tail; echo done`,
+		Why:     "the text a flag-group error quotes is the rest of the **word**, and this one probe separates all three readings of what that means: the expansion alone would say `${(g:x:)v}`, the rest of the line would carry ` tail` with it, and the word carries the `B` and stops at the blank. Written unquoted on purpose — the quoted spellings elsewhere in this file end in a closing quote that a reading taking the expansion alone would also drop, so they cannot tell the word from the line. The other five columns have no flag group and refuse the construct at four wordings and three statuses; the error is fatal to the whole input in every one of them, which is why the probe is one line and not three (#1647)",
+	},
+	{
+		ID: "param/a-scalar-context-joins-a-flag-groups-words", Category: "parameter expansion",
+		Snippet: `f() { printf "b  b\na a\nc\n"; }; x=${$(f)}; printf "[%s]" "$x"; x=${(j:-:)$(f)}; printf "[%s]" "$x"; x=${(o)$(f)}; printf "[%s]" "$x"; x=${(q)$(f)}; printf "[%s]" "$x"; x=${(l:3::_:)$(f)}; printf "[%s]" "$x"; printf "[%s]" ${(o)$(f)}; echo`,
+		Why:     "an assignment has room for exactly one word, so the group's words are joined and every step below the join finds one. The double space is the instrument: a value left whole and a value split and rejoined are the same nine characters without it. The first two fields are the controls — the split happens and the separator the group named is honored — and the third is #1705, a sort with nothing left to order. The last field is that row's refutation: the same characters on a command line sort five fields, so it is the context and not the flag. Fields four and five fix the join from below, the quoting escaping the spaces the join made and the pad clipping the nine characters rather than measuring three of them",
+	},
+	{
+		ID: "param/a-scalar-context-does-not-split-a-flag-group", Category: "parameter expansion",
+		Snippet: `v=c,a,b; x=${(s:,:)v}; printf "[%s]" "$x"; printf "[%s]" ${(s:,:)v}; printf "[%s]" "${(s:,:)v}"; x=${(@s:,:)v}; printf "[%s]" "$x"; case ${(s:,:)v} in "c,a,b") printf "[case-unsplit]";; *) printf "[case-split]";; esac; [[ ${(s:,:)v} == "c,a,b" ]] && printf "[cond-unsplit]"; echo`,
+		Why:     "the same rule reaching the splitting flags, which the `=` spelling has always followed and which `f`, `s`, `0` and `p` follow with it. Fields two and three are the discriminating pair: a split the *quoting* turned off would answer one field in the third, and a split nothing turns off would answer three in the first. The `@` letter does not turn it back on, and the last two fields say it is the context rather than the assignment — a `case` subject and a `[[ ]]` operand read the same unsplit word",
+	},
+	{
+		ID: "param/where-a-scalar-contexts-join-sits", Category: "parameter expansion",
+		Snippet: `y=(ab ab); x=${(j:+:)y#ab}; printf "[%s]" "$x"; x="${(j:+:)y#ab}"; printf "[%s]" "$x"; x=${(j:+:)y}; printf "[%s]" "$x"; z=(x y); x=${(@)z:/x/Q}; printf "[%s]" "$x"; u='b a'; x=${(oZ+n+)u}; printf "[%s]" "$x"; printf "[%s]" ${(oZ+n+)u}; echo`,
+		Why:     "below the operator and above everything else, which the first two fields say together: the same characters in the same assignment, unquoted leaving only the separator because the trim emptied both elements, and quoted leaving `+ab` because the join at rule 5 ran first and the trim took one `ab` off the pair it made. The third field is the control with no trim at all. The element replacement is the same claim from the other side, running elementwise where a join ahead of it would have found one word. The last two are the shell split, which is the one step *below* the join that can make a list again — so the join is repeated after it, and the ordering finds one word where the same expansion on a command line sorts two",
+	},
+	{
 		ID: "param/the-index-is-an-ordering-key", Category: "parameter expansion",
 		Snippet: `a=(c a b); printf "[%s]" "${(@a)a}"; printf "[%s]" "${(@aO)a}"; printf "[%s]" "${(@oa)a}"; echo`,
 		Why:     "`a` is the sort *key* and not a sort: the element's own position, so ascending is the order it was written in and `O` reverses it. The third answer is the row that earns the case — `(oa)` on this data is `c a b`, so the index wins over the lexical comparison rather than joining it, and a reading where the two composed would give `a b c` there and pass the first two",

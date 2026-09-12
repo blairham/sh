@@ -162,17 +162,17 @@ func TestAnEscapeOptionLetterTheFlagLacksIsAFlagsError(t *testing.T) {
 		{
 			"a letter outside the set",
 			`v=x; printf "[%s]" "${(g:x:)v}"`,
-			"sh: error in flags near position 6 in '${(g:x:)v}'\n",
+			`sh: error in flags near position 6 in '${(g:x:)v}"'` + "\n",
 		},
 		{
 			"reported at its own position among letters that are in it",
 			`v=x; printf "[%s]" "${(g:oex:)v}"`,
-			"sh: error in flags near position 8 in '${(g:oex:)v}'\n",
+			`sh: error in flags near position 8 in '${(g:oex:)v}"'` + "\n",
 		},
 		{
 			"and the flag with no argument at all points at what arrived",
 			`v=x; printf "[%s]" "${(g)v}"`,
-			"sh: error in flags near position 5 in '${(g)v}'\n",
+			`sh: error in flags near position 5 in '${(g)v}"'` + "\n",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

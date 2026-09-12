@@ -163,19 +163,40 @@ func (r *Runner) nestedParamReference(span syntax.Span) (string, bool) {
 //
 // ok is false for the shapes this does not carry, each refused by name.
 func (r *Runner) nestedSubscriptSource(e *syntax.ParamExpr, span syntax.Span) (subscriptSource, bool) {
+	inner, _ := r.nestedInnerSpan(e)
 	if span.Kind != syntax.ParamExp || span.Param == nil {
 		// A command substitution and an arithmetic one stand in this
 		// position, and both are a *list* there even when they come to one
-		// word: measured, `${$(echo abc)[2]}` and `${$((6*7))[2]}` are both
-		// empty where a string would have answered `b` and `2`. This tree
-		// does not field-split an unquoted substitution in the name position
-		// yet (#976), so the fields it would count are not the shell's, and
-		// counting characters instead would answer a plausible one.
-		r.diagf("${%s}: a subscript on a nested %s is not implemented\n", e.Src, span.Kind)
-		r.expandErr = true
-		return subscriptSource{}, false
+		// word — which is the half a field count cannot guess, and which
+		// needed #976's field split before it could be read at all.
+		// Measured on zsh 5.9.2, 2026-09-12:
+		//
+		//	${$(echo a b c)[2]}    b     split into three, the second
+		//	${$(echo abc)[2]}      ``    a list of *one*, so there is none
+		//	${$(echo abc)[1]}      abc
+		//	${$(true)[(I)x]}       0     an empty list, searched
+		//	${$((6*7))[1]}         42    one word, and still a list
+		//	${$((6*7))[2]}         ``
+		//	${$(echo a b c)[2,3]}  b c   a range takes elements
+		//	${$(echo a b c)[-1]}   c
+		//	${$(echo a b c)[(r)b]} b
+		//
+		// Rows two and six are the discriminating ones: a source read as a
+		// string would answer `b` and `2` there, which is a plausible value
+		// at status 0 — the failure the refusal that used to stand here
+		// existed to prevent.
+		//
+		// Quoted it is a string, and that is the same rule the parameter
+		// inner beside it follows rather than one of its own: quoting joins
+		// the fields before the subscript sees them, so
+		// `${"$(echo abc)"[2]}` is `b` and `"${$(echo a b c)[2]}"` is the
+		// space in `a b c`.
+		words := r.nestedInnerFields(e)
+		if inner.Quoting != syntax.Unquoted {
+			return subscriptSource{elems: []string{strings.Join(words, "")}, scalar: true}, true
+		}
+		return subscriptSource{elems: words}, true
 	}
-	inner, _ := r.nestedInnerSpan(e)
 	words := r.nestedInnerFields(e)
 	if r.nestedResultIsAList(inner.Param, words, inner.Quoting != syntax.Unquoted) {
 		return subscriptSource{elems: words}, true

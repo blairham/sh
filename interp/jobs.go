@@ -394,6 +394,11 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// real shell's fork hands it, reconstructed. Released when the job
 	// finishes, however it finished. See substEnd for the measurement.
 	releasePipeEnd := sub.holdPipeEnd()
+	// And its own copy of the descriptor table, for the reason the hold
+	// above exists in the other direction: the shell carries straight on
+	// while the job runs, so a descriptor the script drops afterwards would
+	// otherwise be dropped underneath it. See ownDescriptors.
+	releaseFds := sub.ownDescriptors()
 	// A background job keeps the parent's trap listing in one shell fewer
 	// than a pipeline element does, so it is its own kind of boundary.
 	sub.retagTrapBoundary(trapContextBackground)
@@ -454,6 +459,7 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// observe a pipe that has ended while the job that was writing to
 		// it is still marked as running.
 		releasePipeEnd()
+		releaseFds()
 	})
 
 	// Wait for the PID to be known before returning, so `$!` on the next line

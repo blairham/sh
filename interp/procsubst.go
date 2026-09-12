@@ -91,7 +91,7 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 	// this path can happen consult.
 	action := r.act(Action{Kind: ActionOpen, Path: path, Write: kind != syntax.ProcSubstOut})
 
-	sub := r.substRunner(kind)
+	sub, releaseFds := r.substRunner(kind)
 	if kind == syntax.ProcSubstOut {
 		sub.Stdout = r.Stdout
 	}
@@ -142,6 +142,9 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 			// body backgrounded reads this same end and outlives the return.
 			// See substEnd.
 			keep.letGo()
+			// And the copies of the table this body was given, on the same
+			// terms and released by the same hand — see ownDescriptors.
+			releaseFds()
 		})
 	} else {
 		// What this direction's body *reads* was chosen in substRunner,
@@ -181,6 +184,7 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 			// delivers nothing, and would spin until the pipe was taken
 			// away. See substEnd.
 			keep.letGo()
+			releaseFds()
 		})
 	}
 
@@ -220,9 +224,19 @@ func (r *Runner) substBody(src string) (*syntax.File, bool) {
 // is the sharpest of them — #1830 is three weeks old — and a file-writing
 // body that had been given its own clone would have taken the terminal again
 // with nothing to say so.
-func (r *Runner) substRunner(kind syntax.SpanKind) *Runner {
+func (r *Runner) substRunner(kind syntax.SpanKind) (*Runner, func()) {
 	sub := r.clone()
 	sub.inheritJobs(jobBoundarySubstitution)
+	// The body runs beside the command that named it, so the descriptors it
+	// inherited are its own copies rather than the shell's — the half of a
+	// fork that a goroutine does not get. Released by whoever spawned it;
+	// see ownDescriptors, which carries the measurement (#2116).
+	//
+	// Here rather than in each branch for this helper's stated reason: the
+	// file spelling runs to completion with the shell waiting, so it races
+	// with nobody and needs no copy — and a preparation written out per
+	// spelling is the next fix one of them misses.
+	releaseFds := sub.ownDescriptors()
 	// **Which input the body reads is one question, asked once.** `<(cmd)`
 	// and `=(cmd)` keep what this chooses; `>(cmd)` replaces it in procSub
 	// with the reading end of its own pipe, which is what that spelling *is*
@@ -301,7 +315,7 @@ func (r *Runner) substRunner(kind syntax.SpanKind) *Runner {
 	// next.
 	sub.Stderr = r.lockedStderr()
 	r.Stderr, r.Stdout = sub.Stderr, r.lockedStdout()
-	return sub
+	return sub, releaseFds
 }
 
 // substStdin is the stream a substitution's body reads, guarded.
@@ -372,7 +386,8 @@ func (r *Runner) procSubToFile(ctx context.Context, body *syntax.File) (string, 
 	r.procSubs = append(r.procSubs, procSubPipe{path: path})
 	action := r.act(Action{Kind: ActionOpen, Path: path, Write: true})
 
-	sub := r.substRunner(syntax.ProcSubstFile)
+	sub, releaseFds := r.substRunner(syntax.ProcSubstFile)
+	defer releaseFds()
 	sub.Stdout = f
 	sub.emit(ctx, Event{Kind: EventAccess, Action: action})
 	if _, err := sub.Run(ctx, body); err != nil {

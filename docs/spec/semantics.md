@@ -481,6 +481,65 @@ above, which is what makes the pair worth measuring on one snippet.
   That is what separates this from the neighboring rule that `exit` in a
   startup file ends the shell and the files after it are not read.
 
+### Where the borrowed text is *named*, once something inside it fails
+
+A separate question from all of the above, and asked of a run-time failure
+rather than a parse failure. Measured 2026-09-12 with `env -i
+PATH=/usr/bin:/bin` and a scratch `HOME`, over a script file, with `./p.sh`
+failing on its third line under `set -u`:
+
+| | `. ./p.sh` from `s.sh` | `eval` in `e.sh` |
+| --- | --- | --- |
+| dash | `./s.sh: 3: ./p.sh: NOPE: …` | `./e.sh: 3: eval: NOPE: …` |
+| bash 5.3 | `./p.sh: line 3: NOPE: …` | `./e.sh: line 4: NOPE: …` (see below) |
+| ksh93 | `./s.sh[2]: .: line 3: NOPE: …` | `./e.sh[2]: eval: line 3: NOPE: …` |
+| zsh | `./p.sh:3: NOPE: …` | `(eval):3: NOPE: …` |
+
+The placements are already the `SourceNaming` enum that `SourceReport` reads
+for a parse failure, and three of the four rows are already answered by
+something else: zsh's and bash's `SourceReplacesShell` is what
+`LocationNamesTheCurrentFile` and `LocationNamesTheEvalText` do, and ksh93's
+`SourceBeforeLocation` is a *stack* rendered into the prefix rather than a
+name — #2461. **dash's `SourceAfterLocation` is the one this rule adds**,
+and `Runner.borrowedName` is where it is written.
+
+`Diagnostics.BorrowedTextIsNamedAtRunTime` is what turns it on, and it is a
+field of its own rather than the enum answering for itself. `SourceAfterLocation`
+is the enum's **zero value**, so riding it would have given dash's answer to
+the substrate's own preset and to every dialect written next, silently — the
+same reason an unanswered `Answer` must not quietly mean one shell's. It cost
+fifteen `interp` tests to find that out, each asserting the plain wording for
+a reason unrelated to naming.
+
+Which text is named is measured rather than reasoned, and the surprising half
+is that it is **the innermost text still being read, whether or not the
+failing line came from it**. Eleven arrangements against dash 0.5.12; four
+decide it:
+
+| arrangement | dash names |
+| --- | --- |
+| a file sourced from the script, failing in the file | the file |
+| text `eval` is running, failing in the text | `eval` |
+| a file sourced from the script, failing in a **function** it called whose body is in the outer script | **the file** |
+| a function *defined* in a sourced file, called after the source returned | **nothing** |
+
+So a frame standing above the borrowed text does not end it and the source
+returning does — which rules out the depth test
+`Runner.locationIsInsideEvalText` makes for zsh's `(eval)`, and rules it out
+in a way the two obvious arrangements cannot see: rows one and four pass
+under either rule.
+
+`Runner.borrowed` is the stack this reads, pushed in `runSourced` and
+cloned like `frames` for the reason `interp/clonetables.go` gives — a
+subshell started inside a sourced file would otherwise append into the
+parent's array.
+
+bash's `eval` row above is a fourth question and not this one: its `line 4`
+where every other shell says `line 3` is bash numbering the evaluated text on
+from the line the `eval` word is written on, `$LINENO` included. Measured with
+the whole `eval` on one physical line, which is what tells that reading from
+the physical one — #2462.
+
 ### The one operand that is not an error
 
 `${x?word}` is the exception, and it is the exception in one shell:

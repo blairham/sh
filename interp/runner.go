@@ -2026,6 +2026,23 @@ type Runner struct {
 	// only the innermost is ever asked, and `eval` inside `eval` overwrites
 	// the outer mark with an equal one.
 	evalTextFloor int
+	// borrowed is the stack of text the shell is reading from somewhere
+	// other than the file it was handed: a file `.` read, or the string
+	// `eval` was given, innermost last.
+	//
+	// It exists because one dialect names that text in a *run-time*
+	// diagnostic and not only in a parse failure — `dash: 3: ./p.sh: NOPE:
+	// parameter not set` — and by the time a run-time diagnostic is written
+	// the `sourced` value that knew the name is several calls up the Go
+	// stack. See Runner.borrowedAtLocation (#1128).
+	//
+	// A stack rather than a saved-and-restored single value, unlike
+	// evalTextFloor above: that one is asked only about the innermost, and
+	// this one is the chain a dialect renders. Nothing renders more than the
+	// innermost yet, and the stack is still what is kept, because the two
+	// answers differ the moment a sourced file sources another and a
+	// one-deep record would have to be rebuilt to say so.
+	borrowed []borrowedText
 	// depth bounds function recursion, because a shell script can recurse
 	// and a stack overflow is not a diagnostic anyone can act on.
 	depth int
@@ -2327,6 +2344,10 @@ func (r *Runner) locationPrefix() string {
 	name, line, inBody := r.locationNameAndLine(r.speaker == "")
 	if inBody {
 		if line > 0 {
+			// No borrowed name here: the function rule is the dialect
+			// that names a function in place of a file, and the one
+			// dialect that names borrowed text after the location does
+			// not have it.
 			return d.prefix(name, r.inBuiltin, r.builtinIsSpeaking(), line)
 		}
 		// Nothing to count, so nothing is written: `f: ` and not `f:0: `.
@@ -2335,7 +2356,73 @@ func (r *Runner) locationPrefix() string {
 	if r.speaker != "" {
 		line = r.speakerLine
 	}
-	return d.prefix(name, r.speaking(), r.builtinIsSpeaking(), line)
+	return d.prefix(name, r.speaking(), r.builtinIsSpeaking(), line) + r.borrowedName(d)
+}
+
+// borrowedText is one level of Runner.borrowed: what the text is called.
+//
+// A named type over `sourced` rather than `sourced` itself, so that the stack
+// says what it is a stack *of* — and so that the shape has somewhere to grow
+// when the dialect that renders the whole chain arrives (#2461).
+type borrowedText struct{ sourced }
+
+// borrowedAtLocation is the text a diagnostic's line was read from, when that
+// is text the shell borrowed rather than the file it was handed.
+//
+// **The innermost text still being read, with no test that the failing line
+// came from it.** That is measured rather than assumed, and it is the
+// surprising half. dash 0.5.12, `env -i` over a script file, four
+// arrangements:
+//
+//	a file sourced by the script, failing in the file      names the file
+//	a file sourced by the script, failing in a *function*
+//	  the file called, whose body is in the outer script    names the file
+//	text `eval` is running, failing in a function it called names `eval`
+//	a function *defined* in a sourced file and called
+//	  after the source returned                             names nothing
+//
+// So the third and fourth rows are what fix the rule: a function frame
+// standing above the borrowed text does not end it, and the source returning
+// does. A depth test like [Runner.locationIsInsideEvalText]'s would have got
+// the first and last right and the middle two wrong — which is the shape of
+// bug worth naming, because both halves of a wrong rule pass the obvious
+// case.
+func (r *Runner) borrowedAtLocation() (borrowedText, bool) {
+	if len(r.borrowed) == 0 {
+		return borrowedText{}, false
+	}
+	return r.borrowed[len(r.borrowed)-1], true
+}
+
+// borrowedName is the borrowed text's name where this dialect writes one
+// beside a run-time diagnostic, and empty where it does not.
+//
+// Two fields have to agree before anything is written.
+// [Diagnostics.BorrowedTextIsNamedAtRunTime] says the dialect names borrowed
+// text here at all — see there for why the placement enum cannot answer that
+// on its own — and the placement itself is [SourceNaming], the same enum the
+// parse path reads through [Diagnostics.SourceReport]. Only one of its three
+// values adds anything: SourceReplacesShell is already what
+// LocationNamesTheEvalText and LocationNamesTheCurrentFile do, from
+// locationNameAndLine above, so reaching for the name again would write it
+// twice; SourceBeforeLocation is ksh93's, and that shell also renders the
+// *caller's* line into the prefix (`./s.sh[2]: .: line 3:`), which is a stack
+// rather than a name and which nothing here models yet — see #2461.
+//
+// Measured 2026-09-12, dash 0.5.12, `env -i` over a script file: a failure on
+// line 3 of a file sourced from `./s.sh` is `./s.sh: 3: ./p.sh: NOPE:
+// parameter not set`, and the same failure inside an `eval` is `./e.sh: 3:
+// eval: NOPE: parameter not set` — the file by the path the script wrote, and
+// the builtin's own name for text that came from no file.
+func (r *Runner) borrowedName(d Diagnostics) string {
+	if !d.BorrowedTextIsNamedAtRunTime {
+		return ""
+	}
+	b, ok := r.borrowedAtLocation()
+	if !ok || b.naming(d) != SourceAfterLocation {
+		return ""
+	}
+	return b.sourceName(d) + ": "
 }
 
 // fatalExpansion ends the script because a parameter could not be expanded —

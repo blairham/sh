@@ -14,60 +14,10 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/blairham/sh/dialect/bash"
-	"github.com/blairham/sh/dialect/dash"
-	"github.com/blairham/sh/dialect/ksh"
-	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/internal/axismutate"
 	"github.com/blairham/sh/internal/oracle"
 	"github.com/blairham/sh/interp"
 )
-
-// Target is one dialect graded against the shell it claims to be.
-//
-// The unit is a dialect and not the struct, because an axis is answered per
-// dialect: the two that were caught by hand had the same field vacuous in zsh
-// *and* in bash, and one report for the pair would have hidden which.
-type Target struct {
-	// Dialect is the -dialect value, and Against is the panel column its
-	// answers are graded against.
-	Dialect string
-	Against string
-	// Semantics is the vector that dialect ships, which is what says what
-	// each axis currently holds and therefore which values are a flip.
-	Semantics interp.Semantics
-}
-
-// Targets are the four dialects that claim to be a panel member. core and
-// posix are deliberately absent: neither imitates a shell, so there is no
-// column to grade either against and no disagreement for a row to record.
-func Targets() []Target {
-	return []Target{
-		{Dialect: "bash", Against: "bash", Semantics: dialectSemantics("bash")},
-		{Dialect: "zsh", Against: "zsh", Semantics: dialectSemantics("zsh")},
-		{Dialect: "ksh", Against: "ksh93", Semantics: dialectSemantics("ksh")},
-		{Dialect: "dash", Against: "dash", Semantics: dialectSemantics("dash")},
-	}
-}
-
-// dialectSemantics is the vector a dialect ships.
-//
-// Named rather than taken as a value so that the four are listed in one
-// place, and so that a dialect gained tomorrow is a compile error here rather
-// than a column quietly missing from the sweep.
-func dialectSemantics(name string) interp.Semantics {
-	switch name {
-	case "bash":
-		return bash.Semantics()
-	case "zsh":
-		return zsh.Semantics()
-	case "ksh":
-		return ksh.Semantics()
-	case "dash":
-		return dash.Semantics()
-	}
-	panic("axissweep: no dialect named " + name)
-}
 
 // Outcome is what the sweep learned about one flip.
 type Outcome string

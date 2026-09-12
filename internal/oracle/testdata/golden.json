@@ -97538,6 +97538,50 @@
         "TimedOut": false
       }
     },
+    "pattern/a-tilde-at-the-front-of-a-pattern-expands": {
+      "bash": {
+        "Stdout": "[bare=Y][trim=/sub]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[bare=Y][trim=/sub]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[bare=Y][trim=/sub]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[bare=Y][trim=/sub]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[bare=Y][trim=/sub]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[bare=Y][trim=/sub]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pattern/an-escape-before-an-ordinary-character": {
       "bash": {
         "Stdout": "strips~no",
@@ -97576,6 +97620,50 @@
       },
       "zsh": {
         "Stdout": "keeps~literal",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pattern/the-text-after-an-expanded-tilde-is-still-a-pattern": {
+      "bash": {
+        "Stdout": "[tail=Y][star=N][inner=N]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[tail=Y][star=N][inner=N]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[tail=Y][star=N][inner=N]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[tail=Y][star=N][inner=N]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[tail=Y][star=N][inner=N]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[tail=Y][star=N][inner=N]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

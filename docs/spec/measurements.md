@@ -12312,8 +12312,18 @@ grades it and nothing drift-checks it either, for the same reason.
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
+| `pattern/a-tilde-at-the-front-of-a-pattern-expands` | `[bare=Y][trim=/sub]` | `[bare=Y][trim=/sub]` | `[bare=Y][trim=/sub]` | `[bare=Y][trim=/sub]` | `[bare=Y][trim=/sub]` | `[bare=Y][trim=/sub]` |
+| `pattern/the-text-after-an-expanded-tilde-is-still-a-pattern` | `[tail=Y][star=N][inner=N]` | `[tail=Y][star=N][inner=N]` | `[tail=Y][star=N][inner=N]` | `[tail=Y][star=N][inner=N]` | `[tail=Y][star=N][inner=N]` | `[tail=Y][star=N][inner=N]` |
 | `pattern/an-escape-before-an-ordinary-character` | `strips~no` | `strips~no` | `strips~no` | `strips~no` | `strips~no` | `keeps~literal` |
 
+- `pattern/a-tilde-at-the-front-of-a-pattern-expands` — a tilde is expanded before the word becomes a pattern, and every shell in the panel does it — in a `case` arm and in a trim alike. Neither half prints a path, so the row says the same thing on every machine. This implementation expanded the tilde in every *word* position and in none of the pattern ones, so a `case $HOME in ~)` arm was never taken; powerlevel10k tells a global tool version from a local override with exactly `[[ ${files[1]:h} == ~ ]]` and drew five segments the real shell does not (#2181)
+  ```sh
+  case $HOME in ~) printf "[bare=Y]";; *) printf "[bare=N]";; esac; x=$HOME/sub; printf "[trim=%s]" "${x#~}"; echo
+  ```
+- `pattern/the-text-after-an-expanded-tilde-is-still-a-pattern` — the two limits either side of the row above, and both are unanimous. The tail after the directory is a pattern like any other, so `~/a*` matches; and the tilde only expands where a tilde expands anywhere — `~*` names no user, so the segment stays as written and the arm does not match a home directory, and a tilde that is not at the front of the word is ordinary text. A reading that expanded every tilde in a pattern answers the second column `Y`, and one that escaped the whole word after expanding answers the first `N`
+  ```sh
+  case $HOME/abc in ~/a*) printf "[tail=Y]";; *) printf "[tail=N]";; esac; case $HOME in ~*) printf "[star=Y]";; *) printf "[star=N]";; esac; case a$HOME in a~) printf "[inner=Y]";; *) printf "[inner=N]";; esac; echo
+  ```
 - `pattern/an-escape-before-an-ordinary-character` — the pattern language's own answer, asked the only way it can be: quote removal spends an escape written in the source before the matcher sees it, so a `case` pattern spelled `bet\a` is `beta` in all six and says nothing. A *substituted* pattern asks it — five shells match the result of an expansion as a pattern, and the sixth does under the option this line sets. A backslash before a character that needed no escaping is spent in five and kept in zsh, where the pattern is five characters
   ```sh
   setopt globsubst 2>/dev/null; p='bet\a'; case beta in $p) echo strips;; *) echo keeps;; esac; case 'bet\a' in $p) echo literal;; *) echo no;; esac

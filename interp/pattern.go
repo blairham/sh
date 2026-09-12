@@ -5,6 +5,7 @@ package interp
 
 import (
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -117,7 +118,8 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 		return ""
 	}
 	var b strings.Builder
-	for _, s := range w.Spans {
+	spans := r.patternTilde(w, &b)
+	for _, s := range spans {
 		text, live := r.patternSpan(s)
 		if live {
 			b.WriteString(text)
@@ -128,6 +130,49 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 		b.WriteString(escapePatternMeta(text))
 	}
 	return b.String()
+}
+
+// patternTilde expands a leading tilde into the builder and gives back the
+// spans still to be read as a pattern.
+//
+// **A tilde is expanded before the word becomes a pattern**, which is
+// unanimous across the panel and was missing here entirely:
+//
+//	h=$HOME; [[ $h == ~ ]]            true in zsh, bash, bash 3.2, ksh93
+//	case $HOME in ~) …                taken in all six
+//	x=$HOME/sub; echo "${x#~}"        `/sub` in all six
+//
+// It belongs here rather than at `case` and `[[ ]]` and each trim, because
+// this is the one function that turns a word into a pattern — the same reason
+// #882 moved the rest of the expansion here. A tilde written anywhere but the
+// front of an unquoted word is ordinary text and never reached this.
+//
+// What the directory is worth once it is in the pattern is the other half:
+// zsh matches it as text, so this writes it escaped. See tildeSplit for the
+// measurement, and docs/spec/grammar/patterns.md for the panel's three
+// answers to a home directory that holds a metacharacter — a split entangled
+// with #1367, which is why only the tail is left live here.
+//
+// The spans come back rewritten rather than the word being edited: patternOf
+// is handed the syntax tree, and a `case` inside a loop reads the same arm on
+// every pass.
+func (r *Runner) patternTilde(w *syntax.Word, b *strings.Builder) []syntax.Span {
+	if len(w.Spans) == 0 {
+		return w.Spans
+	}
+	s := w.Spans[0]
+	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted ||
+		!strings.HasPrefix(s.Value, "~") {
+		return w.Spans
+	}
+	dir, tail, ok := r.tildeSplit(s.Value)
+	if !ok {
+		return w.Spans
+	}
+	b.WriteString(escapePatternMeta(dir))
+	spans := slices.Clone(w.Spans)
+	spans[0].Value = tail
+	return spans
 }
 
 // patternSpan expands one span of a pattern, reporting whether the

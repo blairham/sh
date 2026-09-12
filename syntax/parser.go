@@ -2716,6 +2716,24 @@ func (p *Parser) failRedirectAt(pos Pos, op Kind) {
 	}
 }
 
+// failGroupOpeningAPatternOperand records a `(` standing first in an
+// expansion's pattern operand, which one dialect refuses while reading — see
+// [Dialect.GroupOpeningAPatternOperandIsRefused].
+//
+// Its own recorder rather than the token path's, because there is no token:
+// the operand is text the brace scanner already took, and what is refused is
+// its first byte.
+func (p *Parser) failGroupOpeningAPatternOperand(pos Pos) {
+	if p.err != nil {
+		return
+	}
+	p.err = &Error{
+		Pos: pos, Kind: ErrUnexpected,
+		Token: "(", Class: ClassOperator,
+		Msg: "`(' unexpected",
+	}
+}
+
 // peekIsAnonBody reports whether `function` is followed straight by a body
 // rather than by a name, which is the keyword spelling of an anonymous
 // function.

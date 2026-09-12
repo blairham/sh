@@ -105062,6 +105062,50 @@
         "TimedOut": false
       }
     },
+    "pat/what-a-refused-leading-group-does-not-reach": {
+      "bash": {
+        "Stdout": "[aXb]~[aXb]~[aXb]~[(a)]~[(a)]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[aXb]~[aXb]~[aXb]~[(a)]~[(a)]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[aXb]~[aXb]~[aXb]~[(a)]~[(a)]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[aXb]~[aXb]~[aXb]~[(a)]~[(a)]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[Xb]~[aXb]~[b]~[(a)]~[(a)]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[aXb]~[aXb]~[aXb]~[(a)]~[(a)]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pat/which-split-a-backreference-reports": {
       "bash": {
         "Stdout": "",

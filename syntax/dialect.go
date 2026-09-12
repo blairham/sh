@@ -1928,6 +1928,35 @@ type Dialect struct {
 	// ArithExplicitBase enables the `base#digits` form. Absent from dash.
 	ArithExplicitBase bool
 
+	// GroupOpeningAPatternOperandIsRefused stops the parse at a `(` standing
+	// first in an expansion's *pattern* operand — `${v#(a)}`, `${v%(b)}`,
+	// `${v/(a)/Z}` — rather than reading it as part of the pattern.
+	//
+	// A refusal rather than a construct, which is the one shape a grammar
+	// flag here takes the other way round, and it is what the panel says:
+	// four columns accept the text and one refuses it. Measured 2026-09-12
+	// with `v=aXb`:
+	//
+	//	                dash   bash 5.3, 3.2, as sh   ksh93        zsh
+	//	${v#(a)}        aXb    aXb                    syntax error Xb
+	//	${v%(b)}        aXb    aXb                    syntax error aX
+	//	${v/(a)/Z}      —      aXb                    syntax error ZXb
+	//	${v#@(a)}       aXb    aXb                    Xb           aXb
+	//	${v#\(a\)}      aXb    aXb                    aXb          aXb
+	//
+	// The fourth row is the control that makes it the *bare* spelling: `@(`
+	// is that shell's own group and is read. The fifth is the other one: an
+	// escaped parenthesis is an ordinary character and passes.
+	//
+	// A **word** operand is not this question and is measured to be so:
+	// `${u:-(a)}`, `${u-(a)}` and `${u:=(a)}` all come to `(a)` in that
+	// shell. So it is the pattern's reader that refuses and not the brace.
+	//
+	// The refusal is a syntax error at the operand's position, naming `(`,
+	// and it takes the script with it — status 3 in the one shell that has
+	// it.
+	GroupOpeningAPatternOperandIsRefused bool
+
 	// ArithColonIsAToken reads `:` as a math token wherever it stands rather
 	// than as text no operator could be. zsh alone.
 	//

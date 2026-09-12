@@ -13653,7 +13653,12 @@ printf "[%s]" .@(hid); echo`,
 	{
 		ID: "pat/a-group-opening-a-pattern-operand", Category: "pattern matching",
 		Snippet: `setopt extendedglob 2>/dev/null; v=aXb; echo "[${v#((a))}]"; echo "[${v#((#s)a)}]"; echo "[${v//((#s)a|b)/}]"`,
-		Why:     "a pattern operand that *begins* with a group, which is where the operand lexer's command position did its damage: the shell with bare groups prints `[Xb]`, `[Xb]` and `[X]`, and the bash column prints the value back three times because `((a))` is five ordinary characters there. Ours trimmed in the bash column too — `[Xb]` — having matched the pattern `a`, and answered the anchored ones `bad pattern: #s)a`, both parens gone; see param/an-operand-is-not-a-command-position for the cause and the unanimous row (#1408). ksh93 refuses a leading `(` in an operand outright and takes the script with it, so that column is one syntax error, and dash reaches the third row before it meets a `/` it does not have",
+		Why:     "a pattern operand that *begins* with a group, which is where the operand lexer's command position did its damage: the shell with bare groups prints `[Xb]`, `[Xb]` and `[X]`, and the bash column prints the value back three times because `((a))` is five ordinary characters there. Ours trimmed in the bash column too — `[Xb]` — having matched the pattern `a`, and answered the anchored ones `bad pattern: #s)a`, both parens gone; see param/an-operand-is-not-a-command-position for the cause and the unanimous row (#1408). ksh93 refuses a leading `(` in an operand outright and takes the script with it, so that column is one syntax error — which is now a grammar flag rather than a known miss (#1430) — and dash reaches the third row before it meets a `/` it does not have",
+	},
+	{
+		ID: "pat/what-a-refused-leading-group-does-not-reach", Category: "pattern matching",
+		Snippet: `v=aXb; echo "[${v#@(a)}]"; echo "[${v#\(a\)}]"; echo "[${v#a@(X)}]"; unset u; echo "[${u:-(a)}]"; echo "[${u:=(a)}]"`,
+		Why:     "the four controls for the row above, and they are what make ksh93's refusal a rule about the *bare* spelling in a *pattern* rather than about parentheses. `@(` is that shell's own group and is read; an escaped parenthesis is an ordinary character; a group that does not open the operand was always read; and a **word** operand takes a leading `(` in every column, so it is the pattern's reader that refuses and not the brace. Without these a flag that refused every `(` inside `${ }` would pass the row above (#1430)",
 	},
 	{
 		ID: "pat/a-closure-over-a-character-class", Category: "pattern matching",

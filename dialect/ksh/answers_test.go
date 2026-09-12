@@ -28,10 +28,16 @@ import (
 // asserting the core's: `[[ $k == a(b|c) ]]` parsed here and then did not
 // match (#849, found closing #826). dialecttest.Preset.Runner is now the one
 // place that field is set, for every helper in this package.
+//
+// A directory of its own, too, which the zsh helper has had since #1221 and
+// this one did not: without it the runner works where the package's *source*
+// is, so a snippet that writes a file leaves it in the tree. A row added for
+// #770 wrote `ws.txt` and it was committed before anyone noticed -- the same
+// way `dialect/zsh/v5` was, which is what #1221 is.
 func answersRun(t *testing.T, src string) (string, int) {
 	t.Helper()
 	out, st, err := preset.Combined(t, dialecttest.Base{
-		Name: "sh", Env: []string{"PATH=/usr/bin:/bin"},
+		Name: "sh", Dir: t.TempDir(), Env: []string{"PATH=/usr/bin:/bin"},
 	}, src)
 	if err != nil {
 		return out + "unsupported: " + err.Error(), -1

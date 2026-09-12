@@ -5810,192 +5810,174 @@ type Semantics struct {
 	// option *off* is granted under every answer.
 	MonitorNeedsATerminal Answer
 
-	// InteractiveMonitorNeedsATerminal ties the monitor an *interactive*
-	// shell turns on for itself to having a terminal, which is a different
-	// question from the one above: that one is a script asking with `set -m`,
-	// and this one is nobody asking at all.
+	// InteractiveMonitorNeedsATerminal ties the monitor an *interactive* shell
+	// turns on for itself to having a terminal, which is a different question
+	// from the one above: that one is a script asking with `set -m`, and this
+	// one is nobody asking at all.
 	//
-	// The rule the answer qualifies is unanimous and is not an axis. Measured
-	// 2026-09-05 on `-i script.sh` with a scratch HOME and a pseudo-terminal:
-	// bash 5.3.15, dash, ksh93u+ and zsh 5.9.2 all report `monitor on` and
-	// all four put `m` in `$-`. So an interactive shell runs the monitor, and
-	// a front end that leaves it off is wrong on every route rather than in
-	// one dialect.
+	// The rule the answer qualifies is unanimous and is not an axis. On
+	// `-i script.sh` with a pseudo-terminal, every preset reports `monitor on`
+	// and puts `m` in `$-`. So an interactive shell runs the monitor, and a
+	// front end that leaves it off is wrong on every route rather than under one
+	// preset.
 	//
-	// What splits is the same invocation with no terminal anywhere: ksh93
-	// still reports `monitor on` and `imBE`, and bash, dash and zsh all
-	// report it off and leave `m` out. True in bash, dash and zsh; false in
-	// ksh93.
+	// What splits is the same invocation with no terminal anywhere: Yes reports
+	// it off and leaves `m` out, No reports it on regardless.
 	//
 	// The terminal that counts is a terminal on any of the three standard
-	// streams, and that is measured rather than assumed. A controlling
-	// terminal with all three redirected elsewhere is *not* enough — bash,
-	// dash and zsh all report the monitor off there — and a pseudo-terminal
-	// on any one of the three alone is enough for all three of them. So the
-	// question the front end has to answer is about the descriptors it was
-	// handed, which is the one it can answer.
+	// streams, and that is measured rather than assumed. A controlling terminal
+	// with all three redirected elsewhere is *not* enough, and a pseudo-terminal
+	// on any one of the three alone is enough. So the question the front end has
+	// to answer is about the descriptors it was handed, which is the one it can
+	// answer.
 	//
-	// It is not MonitorNeedsATerminal read a second time, and bash is what
-	// separates them: `bash -c 'set -m'` with no terminal turns the monitor
-	// on, and `bash -i script.sh` with no terminal leaves it off. One shell,
-	// two answers, so an explicit request and an automatic one are two
-	// questions.
+	// It is not MonitorNeedsATerminal read a second time: one implementation
+	// turns the monitor on for `-c 'set -m'` with no terminal and leaves it off
+	// for `-i script.sh` with no terminal. One shell, two answers, so an
+	// explicit request and an automatic one are two questions.
 	//
-	// The preset says a terminal *is* needed, and this is the rarer case
-	// where the text does not decide. XCU says of `-m` that it "shall be
-	// enabled by default for interactive shells" and puts no terminal in
-	// that sentence, but it also defines job control throughout in terms of
-	// a controlling terminal, so the sentence is silent about having none
-	// rather than permissive about it. Silent text gets the answer that
-	// claims less — a shell with no terminal does not report a monitor —
-	// which is three of the four as well.
+	// The preset says a terminal *is* needed, and this is the rarer case where
+	// the text does not decide. XCU says of `-m` that it "shall be enabled by
+	// default for interactive shells" and puts no terminal in that sentence, but
+	// it also defines job control throughout in terms of a controlling terminal,
+	// so the sentence is silent about having none rather than permissive about
+	// it. Silent text gets the answer that claims less — a shell with no
+	// terminal does not report a monitor.
 	//
 	// Read rather than `ask`ed, exactly as InteractiveOptionLetters is: the
 	// answer is wanted once at startup, before the program has run a line, so
-	// refusing over an unanswered field would put "the shells disagree here"
+	// refusing over an unanswered field would put "this is disagreed about"
 	// ahead of every `-i script.sh` under a preset that has not chosen. An
-	// unanswered field reads as Yes — a terminal is needed and the monitor
-	// stays off, which is the majority and the quiet answer.
+	// unanswered field reads as Yes — a terminal is needed and the monitor stays
+	// off, which is the quiet answer.
 	//
-	// zsh is worth knowing about and is not this axis. With a terminal it
-	// puts `m` in `$-` and announces its jobs while its own `set -o` still
-	// lists `monitor off` — it disagrees with itself, and what is recorded
-	// here is the state the other two readers report.
+	// One further state is worth knowing about and is not this axis: an
+	// implementation may put `m` in `$-` and announce its jobs while its own
+	// `set -o` still lists `monitor off` — disagreeing with itself. What is
+	// recorded here is the state the other two readers report.
 	InteractiveMonitorNeedsATerminal Answer
 
 	// InteractiveScriptAnnouncesJobs gives an interactive shell running a
-	// *named script file* somebody to tell about its jobs: the job number
-	// and pid as one starts, and the `Done` row as one ends. True in dash,
-	// ksh93 and zsh; false in bash.
+	// *named script file* somebody to tell about its jobs: the job number and
+	// pid as one starts, and the `Done` row as one ends.
 	//
-	// A different question from AnnouncesBackgroundJob, which asks whether
-	// the *start* is announced at all and is answered No by dash alone. Both
-	// are read on this route, and dash is why they cannot be one field: it
-	// announces the end of a job here and never the beginning.
+	// A different question from AnnouncesBackgroundJob, which asks whether the
+	// *start* is announced at all. Both are read on this route, and they cannot
+	// be one field: an implementation may announce the end of a job here and
+	// never the beginning.
 	//
-	// Measured 2026-09-05 through a pseudo-terminal, scratch HOME and scratch
-	// HISTFILE, on `sh -i script.sh` running `sleep 0.3 &` between two
-	// echoes:
-	//
-	//	bash 5.3.15   nothing         bash 3.2.57  nothing
-	//	bash as `sh`  nothing         dash         the `Done` row, no start
-	//	ksh93u+       both            zsh 5.9.2    both
+	// Measured through a pseudo-terminal, scratch HOME and scratch HISTFILE, on
+	// `sh -i script.sh` running `sleep 0.3 &` between two echoes.
 	//
 	// It is not the monitor asked a second time. The monitor is unanimous on
-	// this route with a terminal — InteractiveMonitorNeedsATerminal records
-	// that — and this is not, so a front end that turned both on together
-	// would give bash an announcement no bash makes.
+	// this route with a terminal — InteractiveMonitorNeedsATerminal records that
+	// — and this is not, so a front end that turned both on together would give
+	// a quiet preset an announcement it does not make.
 	//
-	// It is however *gated* on the monitor, which is measured: with no
-	// terminal anywhere, dash and zsh leave the monitor off and say nothing
-	// about the job either, and ksh93 runs the monitor without one and
-	// announces both ends. So the notice rides on the monitor and this axis
-	// is what the one dialect that runs a monitor and stays quiet anyway is
-	// for.
+	// It is however *gated* on the monitor, which is measured: with no terminal
+	// anywhere, a preset that leaves the monitor off says nothing about the job
+	// either, and one that runs a monitor without a terminal announces both
+	// ends. So the notice rides on the monitor, and this axis is what the preset
+	// that runs a monitor and stays quiet anyway is for.
 	//
-	// And bash's silence is not about where the commands come from, which is
-	// the reading the grid rules out: `bash -i < script` with the program on
-	// a *pipe* announces both, and so does `bash -i -c`. Measured, bash is
-	// silent on exactly one interactive route, the one whose program is a
-	// named file — which is why this axis names the route rather than the
-	// terminal.
+	// And the quiet answer is not about where the commands come from, which is
+	// the reading the grid rules out: the same interactive shell with the
+	// program on a *pipe* announces both, and so does `-i -c`. The silence falls
+	// on exactly one interactive route, the one whose program is a named file —
+	// which is why this axis names the route rather than the terminal.
 	//
-	// The preset says no. XCU has nothing to say about a notice on this
-	// route, and where the text is silent the preset takes the answer that
-	// claims less: a shell that has not been asked for a job report does not
-	// write one. It is also the intersection — the whole panel is quiet on
-	// this route only if bash is — and the core is the intersection rather
-	// than the majority.
+	// The preset says no. XCU has nothing to say about a notice on this route,
+	// and where the text is silent the preset takes the answer that claims less:
+	// a shell that has not been asked for a job report does not write one. It is
+	// also the intersection, and the core is the intersection rather than the
+	// majority.
 	//
-	// Read rather than `ask`ed, exactly as InteractiveMonitorNeedsATerminal
-	// is and for the same reason: the answer is wanted once at startup,
-	// before the program has run a line, so an unanswered field would put
-	// "the shells disagree here" ahead of every `-i script.sh` under a preset
-	// that has not chosen — including scripts that never mention a job.
+	// Read rather than `ask`ed, exactly as InteractiveMonitorNeedsATerminal is
+	// and for the same reason: the answer is wanted once at startup, so an
+	// unanswered field would put a disagreement ahead of every `-i script.sh`
+	// under a preset that has not chosen — including scripts that never mention
+	// a job.
 	//
-	// `-i -c` is a separate question and is deliberately not this one. On
-	// that route bash, ksh93 and zsh announce and dash does not, which is a
-	// different split and therefore a different axis; `docs/spec/invocation.md`
-	// has the grid.
+	// `-i -c` is a separate question and is deliberately not this one. That
+	// route splits differently and is therefore a different axis;
+	// docs/spec/invocation.md has the grid.
 	InteractiveScriptAnnouncesJobs Answer
 
-	// PunctuatedFunctionNameIsRefused stops the script when a function
-	// whose name carries `-` or `.` is defined. ksh93 alone: bash and zsh
-	// define and run it, and dash never parses the definition at all.
+	// PunctuatedFunctionNameIsRefused stops the script when a function whose
+	// name carries `-` or `.` is defined. Answering No defines and runs it; a
+	// grammar that never parses the definition at all does not reach the
+	// question.
 	PunctuatedFunctionNameIsRefused Answer
 
-	// DirectoryOnPathIsACandidate keeps a directory the PATH search found as
-	// the failed candidate when no later entry runs, so the report names the
+	// DirectoryOnPathIsACandidate keeps a directory the PATH search found as the
+	// failed candidate when no later entry runs, so the report names the
 	// directory rather than saying the command was never found.
 	//
-	// Every shell measured continues the search past the directory — that is
-	// unanimous, and is what makes a shim directory early on PATH work at
-	// all. They part ways only when nothing later matches: bash reports the
-	// name as not found at all (status 127), where dash, ksh93 and zsh
-	// report the directory they could not run. dash alone keeps 127 for the
-	// status even then, which is DirectoryOnPathStatus's question.
+	// The search continues past the directory under every answer — that is
+	// unanimous, and is what makes a shim directory early on PATH work at all.
+	// The answers part only when nothing later matches: No reports the name as
+	// not found at all, Yes reports the directory it could not run. What status
+	// that carries is DirectoryOnPathStatus's question.
 	DirectoryOnPathIsACandidate Answer
 
-	// ExecTakesOptions lets `exec` read options of its own, such as
-	// `-a name` to choose the argv[0] the command sees. True in bash, ksh93
-	// and zsh; false in dash, where a leading `-a` is the name of a command
-	// and is reported as not found.
+	// ExecTakesOptions lets `exec` read options of its own, such as `-a name` to
+	// choose the argv[0] the command sees. Answering No makes a leading `-a` the
+	// name of a command, reported as not found.
 	//
-	// The answer has to come before the command is looked up, because it
-	// decides which word the command is.
+	// The answer has to come before the command is looked up, because it decides
+	// which word the command is.
 	ExecTakesOptions Answer
 
-	// DotFallsBackToCurrentDirectory looks in the current directory for a
-	// `.` operand with no slash in it, after PATH has missed.
+	// DotFallsBackToCurrentDirectory looks in the current directory for a `.`
+	// operand with no slash in it, after PATH has missed.
 	//
-	// True only in bash. PATH is searched first everywhere, and wins over an
-	// identically named file in the current directory in all four — this is
-	// only about what happens when PATH does not have it.
+	// PATH is searched first under every answer, and wins over an identically
+	// named file in the current directory; this is only about what happens when
+	// PATH does not have it.
 	DotFallsBackToCurrentDirectory Answer
 
-	// TestAcceptsDoubleEqual makes `==` a synonym for `=` in `test` and `[`,
-	// so `test a == a` is a string comparison. True in bash, ksh93 and zsh.
+	// TestAcceptsDoubleEqual makes `==` a synonym for `=` in `test` and `[`, so
+	// `test a == a` is a string comparison.
 	//
-	// False in dash, and false does not mean "compares unequal": it means the
-	// word is not an operator at all, so `test a == b` is three words with no
-	// operator among them and is reported as one. The answer therefore has to
-	// come before the comparison, not after it.
+	// No does not mean "compares unequal": it means the word is not an operator
+	// at all, so `test a == b` is three words with no operator among them and is
+	// reported as one. The answer therefore has to come before the comparison,
+	// not after it.
 	//
-	// This is only about `test` and `[`. Inside `[[ ]]` the same spelling is
-	// a pattern match, which is a different question entirely.
+	// This is only about `test` and `[`. Inside `[[ ]]` the same spelling is a
+	// pattern match, which is a different question entirely.
 	TestAcceptsDoubleEqual Answer
 
 	// SignalDeathStatusIsTwoFiftySix encodes a command killed by a signal as
-	// 256 + the signal rather than 128 + the signal. True only in ksh93,
-	// which reports 265 for KILL and 271 for TERM where the other three
-	// report 137 and 143.
+	// 256 + the signal rather than 128 + the signal, so KILL is 265 and TERM 271
+	// instead of 137 and 143.
 	//
 	// Measured across eight signals; it is not a special case for any one of
-	// them. POSIX requires only "greater than 128", which decides nothing,
-	// so the preset follows the three that agree.
+	// them. POSIX requires only "greater than 128", which decides nothing, so
+	// the preset follows the more common encoding.
 	SignalDeathStatusIsTwoFiftySix Answer
 
 	// PipefailOption is whether `set -o pipefail` exists, making a pipeline
-	// report its last failing element rather than its last element. True in
-	// bash, ksh93 and zsh; absent from dash and from POSIX, where a pipeline
-	// is defined to report its last command and nothing offers to change it.
+	// report its last failing element rather than its last element. Absent from
+	// POSIX, where a pipeline is defined to report its last command and nothing
+	// offers to change it.
 	//
-	// Not a wording difference: where it is absent the name is not an option
-	// at all, so `set -o pipefail` fails and the pipeline goes on reporting
-	// its last element — which is the answer a script guarding against a
-	// failure upstream is specifically trying not to get.
+	// Not a wording difference: where it is absent the name is not an option at
+	// all, so `set -o pipefail` fails and the pipeline goes on reporting its
+	// last element — which is the answer a script guarding against a failure
+	// upstream is specifically trying not to get.
 	PipefailOption Answer
 
 	// ErrexitSeesPipefailFailure lets `set -e` stop for a failure that only
 	// pipefail produced — a pipeline whose last element succeeded and whose
-	// earlier one did not. True in bash and zsh; false in ksh93, which runs
-	// on.
+	// earlier one did not. Answering No runs on.
 	//
-	// Absent rather than false in dash, which has no pipefail, so the
-	// question cannot arise there and is never asked.
+	// Absent rather than false where there is no pipefail, so the question
+	// cannot arise and is never asked.
 	//
 	// Narrower than it looks: an ordinary failing pipeline — `true | false` —
-	// stops all three, and this is only about the failure the option adds.
+	// stops under both answers, and this is only about the failure the option
+	// adds.
 	ErrexitSeesPipefailFailure Answer
 
 	// PipefailSubstitutesTheBareSignal reports an element pipefail chose over
@@ -6003,57 +5985,52 @@ type Semantics struct {
 	// *number* rather than as the status a command killed by that signal
 	// reports.
 	//
-	// True in ksh93 alone, and it is not the same question as
-	// SignalDeathStatusIsTwoFiftySix. That axis is about every status a
-	// signal death produces, and ksh93 answers it consistently everywhere it
-	// was measured — a foreground command, a subshell, a command
-	// substitution, a `wait`, the shell dying by its own hand as its parent
-	// sees it, and the *last* element of a pipeline are all 256 + n there.
-	// This is the one place the convention stops: with `pipefail` set,
+	// Not the same question as SignalDeathStatusIsTwoFiftySix. That axis is
+	// about every status a signal death produces, and an implementation answers
+	// it consistently everywhere — a foreground command, a subshell, a command
+	// substitution, a `wait`, the shell dying by its own hand as its parent sees
+	// it, and the *last* element of a pipeline. This is the one place the
+	// convention stops. With `pipefail` set:
 	//
-	//	kill-me-with-TERM | cat     ksh93  15    bash/zsh  143
-	//	kill-me-with-PIPE | head -1  ksh93  13    bash/zsh  141
-	//	( exit 42 )       | cat      ksh93  42    bash/zsh   42
-	//	cat </dev/null | kill-me     ksh93 271    bash/zsh  143
+	//	kill-me-with-TERM | cat      Yes  15    No  143
+	//	kill-me-with-PIPE | head -1   Yes  13    No  141
+	//	( exit 42 )       | cat       Yes  42    No   42
+	//	cat </dev/null | kill-me      Yes 271    No  143
 	//
 	// The last row is why this is about the *substitution* and not about the
 	// pipeline: an element that fails in the position the pipeline reports
 	// anyway keeps the ordinary encoding, and only the status pipefail went
-	// looking for is bare. An ordinary non-zero exit is unchanged either way,
-	// so a signal is the whole of the difference.
+	// looking for is bare. An ordinary non-zero exit is unchanged either way, so
+	// a signal is the whole of the difference.
 	//
-	// Measured builtin and external, first and middle, in pipelines of two
-	// and of three, with SIGPIPE and SIGTERM. Absent rather than false in
-	// dash, which has no pipefail, and asked only where a substitution
-	// actually happened and actually was a signal death.
+	// Measured builtin and external, first and middle, in pipelines of two and
+	// of three, with SIGPIPE and SIGTERM. Absent rather than false where there
+	// is no pipefail, and asked only where a substitution actually happened and
+	// actually was a signal death.
 	PipefailSubstitutesTheBareSignal Answer
 
-	// PrintfAssignsWithV makes `printf -v name fmt args` put the formatted
-	// text in a variable and print nothing. True in bash and zsh; dash and
-	// ksh93 have no such option and reject it as an unknown one.
+	// PrintfAssignsWithV makes `printf -v name fmt args` put the formatted text
+	// in a variable and print nothing. Answering No has no such option and
+	// rejects it as an unknown one.
 	//
 	// It is how a script formats a value without a command substitution, so
 	// without it the text goes to stdout and the variable stays empty — two
 	// wrongs at once, and both silent.
 	PrintfAssignsWithV Answer
 
-	// PrintfRejectsUnknownOption treats any leading word starting with `-` as
-	// an option and refuses one it does not know. True in bash, dash and
-	// ksh93, where even `printf "-%s\n" x` is an error because the format
-	// itself begins with a dash.
+	// PrintfRejectsUnknownOption treats any leading word starting with `-` as an
+	// option and refuses one it does not know, so even `printf "-%s\n" x` is an
+	// error because the format itself begins with a dash.
 	//
-	// False in zsh, which recognizes the options it has and takes anything
-	// else as the format — so `printf -q x` prints `-q` there and is an error
-	// in the other three.
+	// Answering No recognizes the options it has and takes anything else as the
+	// format — so `printf -q x` prints `-q` there and is an error under Yes.
 	PrintfRejectsUnknownOption Answer
 
-	// TrapParsesOptions reads a leading `-` word as an option rather than as
-	// the action to run.
+	// TrapParsesOptions reads a leading `-` word as an option rather than as the
+	// action to run.
 	//
-	// Three of the four do. zsh does not, so `trap -p` sets a trap whose
-	// action is the word `-p` and the failure surfaces later, when it fires
-	// — which is what this shell did for every dialect before there were
-	// options here at all.
+	// Answering No makes `trap -p` set a trap whose action is the word `-p`, and
+	// the failure surfaces later, when it fires.
 	//
 	// Asked of the letters a dialect knows as much as of the ones it does
 	// not, because zsh takes `-p` as the action just as it takes `-Q`. A

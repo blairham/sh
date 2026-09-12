@@ -43,11 +43,46 @@ import (
 // the reason implementedParamFlags gives: the only thing worse than refusing
 // a flag is answering it wrong at status 0, and a subscript flag's wrong
 // answer is a plausible element rather than a visible failure.
-const implementedSubscriptFlags = "rRiIenb"
+const implementedSubscriptFlags = "rRiIenbkK"
 
-// searchSubscriptFlags are the four that select. Written in no particular
+// searchSubscriptFlags are the six that select. Written in no particular
 // order; only which of them came last matters.
-const searchSubscriptFlags = "rRiI"
+const searchSubscriptFlags = "rRiIkK"
+
+// orderedSearchLetter is the letter an *ordered* search runs under, which is
+// where `k` and `K` are `r` and `R` under another spelling.
+//
+// Measured on zsh 5.9.2, 2026-09-12, and unanimous over every surface a
+// search reaches:
+//
+//	a=(x y z x); ${a[(k)x]} ${a[(r)x]}     x   x     the same match
+//	a=(x y z x); ${a[(K)*]} ${a[(R)*]}     x   x     the same direction
+//	a=(x y z);   ${a[(k)q]} ${a[(r)q]}     ``  ``    the same miss
+//	a=(p q p);   ${a[(kn:2:)p]}            p         the same modifiers
+//	a=(p q r);   a[(k)q]=Z                 p Z r     the same element written
+//	a=(p q r);   unset 'a[(k)q]'           p   r     and the same one removed
+//	a=(p q r s); ${a[(k)q,3]}              q r       the same end of a range
+//	s=hello;     ${s[(k)l]}                l         and the same character
+//
+// So on everything but a table the pair is the pair above wearing two more
+// letters, and normalizing here is what keeps the direction from being
+// answered in one of the three places that ask it and not the others —
+// searchIndex, searchElements and scalarSearchIndex each test for a backward
+// walk on their own.
+//
+// A **table** is where they part and is not normalized: `k` looks a key up
+// exactly, with no pattern and no walk, so `${m[(k)aa]}` is the value under
+// `aa` where `${m[(r)aa]}` searches the values and finds nothing. See
+// searchAssoc, which is the one caller that keeps the letter (#1986).
+func orderedSearchLetter(search byte) byte {
+	switch search {
+	case 'k':
+		return 'r'
+	case 'K':
+		return 'R'
+	}
+	return search
+}
 
 // flaggedSubscript answers a subscript that carries a flag group, reporting
 // whether it answered at all.
@@ -70,7 +105,8 @@ func (r *Runner) flaggedSubscript(e *syntax.ParamExpr) ([]string, bool) {
 		// one-past-the-end an *empty* array answers with.
 		return nil, true
 	}
-	return r.searchSubscript(e, search, subscriptSource{name: e.Name, elems: elems, scalar: scalar})
+	return r.searchSubscript(e, orderedSearchLetter(search),
+		subscriptSource{name: e.Name, elems: elems, scalar: scalar})
 }
 
 // subscriptSearch reads the flag group and says which letter selects, having
@@ -476,6 +512,9 @@ func (r *Runner) searchNth(g *syntax.SubscriptFlags) int {
 // sequence. AssocArray.keys() says why a deterministic order is worth having
 // where the shells promise none.
 func (r *Runner) searchAssoc(e *syntax.ParamExpr, a AssocArray, g *syntax.SubscriptFlags, search byte) []string {
+	if search == 'k' || search == 'K' {
+		return r.assocKeyFlag(e, a, g)
+	}
 	matches := r.subscriptMatcher(g, false)
 	byKey := search == 'i' || search == 'I'
 	every := search == 'I' || search == 'R'
@@ -494,6 +533,33 @@ func (r *Runner) searchAssoc(e *syntax.ParamExpr, a AssocArray, g *syntax.Subscr
 		}
 	}
 	return assocSearchWords(e, a, found, byKey)
+}
+
+// assocKeyFlag is `(k)` and `(K)` over a table, which is the one place the
+// pair is not `(r)` and `(R)` under another spelling.
+//
+// It is a **lookup and not a search**: no pattern, no walk, no modifiers.
+// Measured on zsh 5.9.2, 2026-09-12, with `m=(aa 1 bb 2)`:
+//
+//	${m[(k)aa]}     1     the value under the key spelled exactly `aa`
+//	${m[(K)aa]}     1     and the case of the letter changes nothing
+//	${m[(k)a*]}     ``    a pattern is not a key, so it is a miss
+//	${m[(k)zz]}     ``    and so is a key the table has not got
+//	${m[(kn:1:)a*]} ``    the modifiers a search reads move nothing here
+//	${(kv)m[(k)aa]} aa 1  and the expansion's own letters still choose
+//
+// So the value is what comes back by default — where `(i)` over the same
+// table answers the *key* — and `${#m[(k)aa]}` is 1, the match count, which
+// is what puts this on the same list-shaped route as the searches.
+//
+// The exactness is the discriminator: a pattern reading would answer
+// `${m[(k)a*]}` with the 1 under `aa`, and it does not (#1986).
+func (r *Runner) assocKeyFlag(e *syntax.ParamExpr, a AssocArray, g *syntax.SubscriptFlags) []string {
+	key := r.assocKey(g.Arg)
+	if _, ok := a[key]; !ok {
+		return nil
+	}
+	return assocSearchWords(e, a, []string{key}, false)
 }
 
 // assocSearchWords is which half of each matched pair the expansion asked
@@ -687,6 +753,11 @@ func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int,
 		refuse(string(search), " for an associative array")
 		return 0, false
 	}
+	// `k` and `K` are `r` and `R` on everything but a table, which the branch
+	// above has just ruled out — see orderedSearchLetter. The letter as
+	// *written* is kept for the refusals below, which name it.
+	letter := string(search)
+	search = orderedSearchLetter(search)
 	elems, scalar, held := r.subscriptTarget(e)
 	if scalar && held {
 		// A search over a plain string names a *character* position, and it
@@ -723,7 +794,7 @@ func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int,
 		// is — so `i` and `r` take the answer below rather than the append
 		// they take from a start *above* the array, and neither of the two
 		// answers below is one this side can use (#1534).
-		refuse(string(search), " where the search began before the first element")
+		refuse(letter, " where the search began before the first element")
 		return 0, false
 	}
 	switch search {
@@ -739,7 +810,7 @@ func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int,
 	// first, which is what the read side answers and what an assignment
 	// cannot use. Refused by name rather than guessed at; see the issue the
 	// spec entry names.
-	refuse(string(search), " where nothing matched")
+	refuse(letter, " where nothing matched")
 	return 0, false
 }
 
@@ -873,7 +944,11 @@ func (r *Runner) rangeEnd(e *syntax.ParamExpr, end syntax.SubscriptEnd, src subs
 		r.expandErr = true
 		return 0, false
 	}
-	return r.searchIndex(g, search, src), true
+	// And `k` and `K` are the `r` and `R` this end already reads: measured,
+	// `${a[(k)q,3]}` and `${a[1,(k)r]}` are the spans `${a[(r)q,3]}` and
+	// `${a[1,(r)r]}` are. Neither is refused at the front, which is the
+	// other half of that — only the two index letters are.
+	return r.searchIndex(g, orderedSearchLetter(search), src), true
 }
 
 // endSubscriptValue evaluates one end of a range that no group selected,

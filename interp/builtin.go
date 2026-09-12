@@ -24,7 +24,6 @@ var builtins = map[string]Builtin{
 	":":        biTrue,
 	"true":     biTrue,
 	"false":    biFalse,
-	"set":      biSet,
 	"echo":     biEcho,
 	"pwd":      biPwd,
 	"wait":     biWait,
@@ -56,11 +55,19 @@ var builtins = map[string]Builtin{
 // dispatcher for exactly the reason `unset` does, through the arithmetic and
 // not through anything of `read`'s own.
 //
-// `cd` is the newest, and it is here for the plainest version of the same
-// reason: it *calls a shell function* — the directory-change hook — and a
-// function body is arbitrary shell. It was in the literal above while it could
-// only move the runner and print.
+// `cd` is here for the plainest version of the same reason: it *calls a shell
+// function* — the directory-change hook — and a function body is arbitrary
+// shell. It was in the literal above while it could only move the runner and
+// print.
+//
+// `set` is the newest and reaches the dispatcher two constructs further out:
+// `set -A a …` stores an array, a name carrying the integer attribute folds
+// every element through the arithmetic, and a subscript with a flag group in
+// it now searches — which expands the group's operand, and an operand may
+// hold a command substitution. The chain was already there and closed the
+// moment the arithmetic learned to read a group (#1986).
 func init() {
+	builtins["set"] = biSet
 	builtins["unset"] = biUnset
 	builtins["exit"] = biExit
 	builtins["return"] = biReturn

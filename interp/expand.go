@@ -2204,7 +2204,8 @@ func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
 		if !ok {
 			return
 		}
-		r.setArrayElem(e.Name, n, r.subscriptAsWritten(e.Subscript()), v)
+		r.setArrayElem(e.Name, n,
+			subscriptSubject(e.IndexText, r.subscriptAsWritten(e.Subscript())), v)
 		return
 	}
 	idx := r.subscriptText(e.Subscript())
@@ -2222,7 +2223,7 @@ func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
 	if !ok {
 		return
 	}
-	r.setArrayElem(e.Name, n, idx, v)
+	r.setArrayElem(e.Name, n, subscriptSubject(e.IndexText, idx), v)
 }
 
 // wholeArraySubscript reports whether a subscript names the whole array rather

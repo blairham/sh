@@ -62,10 +62,59 @@ func TestAppendingBelowTheFirstElementIsRefused(t *testing.T) {
 // A subscript written as an expression is named as it was written, not as the
 // number it came to — which is the one dialect that names it at all, and the
 // reason the text is carried this far.
+//
+// The rows holding an *expansion* are the discriminating ones. An expression
+// with no expansion in it is never touched by the interpreter, so it read
+// back as written whichever text the refusal was handed, and it is what made
+// the gap look closed: only `$i` can tell the source from the value (#1373).
 func TestARefusedSubscriptIsNamedAsWritten(t *testing.T) {
-	out, _ := runBelowBase(t, Yes, No, `x=1; a[x-2]=v; echo ok`)
-	if !strings.Contains(out, "a[x-2]") {
-		t.Errorf("got %q, want the subscript as written", out)
+	for _, tc := range []struct{ name, src, want string }{
+		{"an expression with no expansion in it", `x=1; a[x-2]=v`, `a[x-2]`},
+		{"a plain numeral", `a=(p q); a[-3]=v`, `a[-3]`},
+		{"an expansion", `i=-9; a=(x); a[$i]=q`, `a[$i]`},
+		{"an expansion with an operator behind it", `i=-9; a=(x); a[$i+0]=q`, `a[$i+0]`},
+		{"a braced expansion", `i=-9; a=(x); a[${i}]=q`, `a[${i}]`},
+		{"a command substitution", `a=(x); a[$(echo -9)]=q`, `a[$(echo -9)]`},
+		{"appending through one", `i=-9; a=(x); a[$i]+=q`, `a[$i]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := runBelowBase(t, Yes, No, tc.src)
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("%s = %q, want the subscript named %q", tc.src, out, tc.want)
+			}
+		})
+	}
+}
+
+// A subscript that reached the store as a **string** has no written text to
+// offer, and the same column names the number there — so the fallback is the
+// measured answer rather than a shortfall.
+//
+// Measured 2026-09-12 in bash 5.3.15: `typeset "a[$i]"=q` and `read "a[$i]"`
+// both say `a[-9]`, where the bare `a[$i]=q` beside them says `a[$i]`. The
+// operand was expanded by the caller before any of it was source text.
+func TestASubscriptThatArrivedAsAStringIsNamedByItsValue(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`i=-9; a=(x); typeset "a[$i]"=q`, `a[-9]`},
+		{`i=-9; a=(x); read "a[$i]" < /dev/null`, `a[-9]`},
+	} {
+		out, _ := runBelowBase(t, Yes, No, tc.src)
+		if !strings.Contains(out, tc.want) {
+			t.Errorf("%s = %q, want the subscript named %q", tc.src, out, tc.want)
+		}
+	}
+}
+
+// And an expression that will not *evaluate* is quoted back expanded, in every
+// column — so the written text reaches the boundary refusals and stops there.
+func TestASubscriptThatWillNotEvaluateIsNamedByItsValue(t *testing.T) {
+	const src = `i=1; a[$i/0]=x`
+	out, _ := runBelowBase(t, Yes, No, src)
+	if !strings.Contains(out, "division by zero") {
+		t.Errorf("%s = %q, want the arithmetic failure", src, out)
+	}
+	if strings.Contains(out, "$i/0") {
+		t.Errorf("%s = %q, want the written text kept out of an arithmetic failure", src, out)
 	}
 }
 

@@ -1347,6 +1347,15 @@ type Diagnostics struct {
 	// to, where ksh93 and zsh name the array alone.
 	BadArraySubscript string
 
+	// EmptyAssociativeKeyRead is what a *read* of a keyed table says when the
+	// key came out empty. One verb: the name, without the subscript — bash
+	// writes `m: bad array subscript` here, where the same column's *store*
+	// names the subscript as written and this one does not.
+	//
+	// Only a dialect answering Semantics.EmptyAssociativeKeyIsReportedWhenRead
+	// has anything to put here.
+	EmptyAssociativeKeyRead string
+
 	// BadArrayLiteralSubscript is the same refusal reached through an array
 	// literal, `a=([0]=p)`, which two of the three word differently from the
 	// plain form. Three verbs: the name, the subscript as written, and the
@@ -3012,6 +3021,18 @@ type Diagnostics struct {
 	// writes, and whether the expression survives it, is
 	// Semantics.EmptyArithSubscript; this is only the wording.
 	ArithEmptySubscript string
+
+	// ArithWholeArraySubscript is the complaint about a `*` or `@` subscript
+	// on an indexed name where an expression reads it — `$(( a[*] ))`. Two
+	// verbs: the name and the subscript.
+	//
+	// Its own field rather than ArithEmptySubscript's, which is the empty
+	// brackets one construct over: the sentences coincide in the column that
+	// writes both and the shapes do not, and a dialect that worded one
+	// differently would need them apart. Only a dialect answering
+	// Semantics.ArithWholeArraySubscriptIsReportedAsBad has anything to put
+	// here.
+	ArithWholeArraySubscript string
 	// EmptySubscriptTextExpanded is the complaint about a subscript whose
 	// *text* came out empty — `${a[$w]}` with an empty `$w` — where a
 	// parameter expansion or an assignment reads it. No verbs: the one shell

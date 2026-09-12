@@ -1474,6 +1474,10 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-12, both store and the table ends with two elements
 	// (#1938).
 	s.EmptyAssociativeKeyIsAnError = interp.No
+	// Nor is reading one reported: measured 2026-09-12, `typeset -A m;
+	// m[k]=v; w=; ${m[$w]}` is the empty string at status 0 and silent
+	// (#1972).
+	s.EmptyAssociativeKeyIsReportedWhenRead = interp.No
 	// An empty positional list is a **set** parameter here, with dash and
 	// against the four bash-and-ksh columns: measured 2026-09-12, `set --;
 	// "${@-word}"` is empty and `"${@+word}"` is `word` (#1941).
@@ -1484,6 +1488,11 @@ func Semantics() interp.Semantics {
 	// then read as an expression: measured 2026-09-11 on 5.9.2, `typeset -A
 	// m; m[k]=9; $(( m[*] ))` is 9 and `a=(1+1); $(( a[*] * 3 ))` is 6.
 	s.ArithWholeArraySubscriptIsTheSlice = interp.Yes
+	// So the question below it is never reached here: the slice is the
+	// answer before anything can call the subscript bad. Answered rather
+	// than left open because an unanswered axis is a refusal, and a reading
+	// this dialect cannot reach must not be able to produce one (#1978).
+	s.ArithWholeArraySubscriptIsReportedAsBad = interp.No
 	// A subscript whose text expanded to nothing is not read as an
 	// expression here at all: measured 2026-09-11 on 5.9.2, `a=(5 6 7); w=;
 	// ${a[$w]}` is `bad math expression: empty string` and the shell ends,

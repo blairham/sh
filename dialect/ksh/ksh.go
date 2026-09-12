@@ -950,6 +950,10 @@ func Semantics() interp.Semantics {
 	// leaves one element under the empty key here and is refused in bash
 	// (#1938).
 	s.EmptyAssociativeKeyIsAnError = interp.No
+	// And reading one says nothing either: measured 2026-09-12, `typeset -A
+	// m; m[k]=v; w=; ${m[$w]}` is the empty string at status 0 with no
+	// diagnostic, where bash names the table (#1972).
+	s.EmptyAssociativeKeyIsReportedWhenRead = interp.No
 	// The bash column's answer for whether an empty positional list is a set
 	// parameter: measured 2026-09-12, `set --; "${@-word}"` is `word` here
 	// and `${@=abc}` is `${@=abc}: bad substitution` because the operator
@@ -962,6 +966,11 @@ func Semantics() interp.Semantics {
 	// The same as the bash column: measured 2026-09-11 on ksh93u+,
 	// `typeset -A m; m[k]=9; $(( m[*] ))` is 0.
 	s.ArithWholeArraySubscriptIsTheSlice = interp.No
+	// And it is not reported either: the brackets hold a text that is no
+	// expression and the arithmetic says so, abandoning it. Measured
+	// 2026-09-12, `a=(3 4 5); $(( a[*] ))` is `*: arithmetic syntax error`
+	// at status 1, where bash reports and answers zero (#1978).
+	s.ArithWholeArraySubscriptIsReportedAsBad = interp.No
 	// And the same for a subscript that expanded to nothing, which this
 	// shell reads as the empty expression exactly as it reads the written
 	// `${a[]}`: measured 2026-09-11 on ksh93u+, both are element zero.

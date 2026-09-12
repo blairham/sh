@@ -11033,10 +11033,43 @@ first would answer the key and the two readings would collapse into one.
 That is the ordering a subscript that is not a number already follows,
 with this question inserted at its front.
 
-The two columns that answer no *report* the subscript on an indexed name
-— `a[*]: bad array subscript` in bash, a syntax error in ksh93 — and are
-silent on an associative one. That is a diagnostic of its own (#1978)
-rather than this axis, which is about the value.
+The two columns that answer no part over the *report*, and that is the
+axis below rather than this one, which is about the value.
+
+**`ArithWholeArraySubscriptIsReportedAsBad`** — bash yes · dash unspecified · ksh93 no · zsh no
+
+Reports a `*` or `@` subscript inside an expression and answers **zero**
+for it, so the expression survives — where the dialect does not read it
+as the slice above.
+
+Measured 2026-09-12, `-c`, on an *indexed* name:
+
+    a=(3 4 5); $(( a[*] ))     bash `a[*]: bad array subscript`, 0, st 0 · ksh93 `*: arithmetic syntax error`, st 1
+    a=(3); $(( a[*] + 1 ))     bash the sentence, then 1 · ksh93 the same refusal
+    a=(3); $(( a[@] + 1 ))     bash `a[@]: …`, then 1 · ksh93 the same refusal
+    $(( nodecl[*] ))           bash `nodecl[*]: …`, then 0 · ksh93 the same refusal
+    s=7; $(( s[*] ))           bash `s[*]: …`, then 0 · ksh93 the same refusal
+    (( a[*] = 5 ))             bash the sentence, nothing written, st 0 · ksh93 the same refusal
+
+So the two columns that agree about the value disagree about the report
+and about whether the expression survives. The refusing answer is the
+ordinary one: the brackets hold a text that is no expression and the
+arithmetic says so.
+
+It is the **indexed** reading alone. An association reads the brackets as
+the key `*`, finds nothing under it and answers zero silently in both
+columns, so the table is consulted first and this is never asked there.
+zsh never reaches it either, the slice being its answer one step earlier.
+
+**The spelling has to be exact.** `$(( a[ * ] ))` is an arithmetic syntax
+error in every column measured, bash and zsh alike — `operand expected at
+`* '` there — so the brackets are the whole-array spelling only when they
+hold the one character and nothing else. Trimming answered a different
+question, and answered it wrongly for the slice column too.
+
+Reported once per evaluation, and the write reports too: `(( a[*]++ ))`
+writes the sentence twice in the column that reports, once for the read
+and once for the store, and leaves every element as it was (#1978).
 
 **`ArithSubscriptSkippedWhenNameUnset`** — bash no · dash no · ksh93 no · zsh yes
 

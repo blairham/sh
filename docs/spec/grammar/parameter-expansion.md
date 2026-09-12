@@ -4043,7 +4043,7 @@ arithmetic are the flag set. There are thirteen and no others:
     w f p e i I r R k K        no argument
     b n s                      an argument, in any delimiter pair
 
-Four of them select, and they are mutually exclusive — the **last one
+Six of them select, and they are mutually exclusive — the **last one
 written** wins, `${a[(ri)be*]}` being `2` and `${a[(ir)be*]}` being
 `beta`:
 
@@ -4053,6 +4053,8 @@ written** wins, `${a[(ri)be*]}` being `2` and `${a[(ir)be*]}` being
 | `${a[(R)pat]}` | the last such element |
 | `${a[(i)pat]}` | the index of the first match, or one past the last element |
 | `${a[(I)pat]}` | the index of the last match, or one before the first |
+| `${a[(k)pat]}` | `(r)` under another letter — see below |
+| `${a[(K)pat]}` | and `(R)` under another letter |
 
 and three modify the search:
 
@@ -4066,6 +4068,47 @@ and three modify the search:
 to the operand. With `[[ -z … ]]` in front of it that is the idiom for
 "is this directory already on the path", which is what
 `~/.zi/bin/zi.zsh:161-193` is doing six times.
+
+### `(k)` and `(K)` are two readings, and the target decides which
+
+On **everything but a table** they are `(r)` and `(R)` wearing two more
+letters. Measured on zsh 5.9.2, 2026-09-12, over every surface a search
+reaches — and the pairs are the point, because one row could not tell a
+coincidence from a rule:
+
+| written | is | and so is |
+| --- | --- | --- |
+| `a=(x y z x); ${a[(k)x]}` | `x` | `${a[(r)x]}` |
+| `a=(x y z x); ${a[(K)*]}` | `x`, the last match | `${a[(R)*]}` |
+| `a=(x y z); ${a[(k)q]}` | empty | `${a[(r)q]}` |
+| `a=(p q p); ${a[(kn:2:)p]}` | `p`, the second match | `${a[(rn:2:)p]}` |
+| `a=(p q r); a[(k)q]=Z` | `p Z r` | `a[(r)q]=Z` |
+| `a=(p q r); unset 'a[(k)q]'` | `p  r` | `unset 'a[(r)q]'` |
+| `a=(p q r s); ${a[(k)q,3]}` | `q r` | `${a[(r)q,3]}` |
+| `a=(p q r s); ${a[1,(k)r]}` | `p q r` | `${a[1,(r)r]}` |
+| `s=hello; ${s[(k)l]}` | `l` | `${s[(r)l]}` |
+
+On a **table** they part, and they are a *lookup* rather than a search:
+the key exactly as written, no pattern, no walk, no modifiers, and the
+**value** is what comes back — where `(i)` over the same table answers
+the key.
+
+| written | is |
+| --- | --- |
+| `typeset -A m=(aa 1 bb 2); ${m[(k)aa]}` | `1` |
+| `${m[(K)aa]}` | `1` — the case of the letter changes nothing |
+| `${m[(k)a*]}` | empty — a pattern is not a key |
+| `${m[(k)zz]}` | empty — nor is a key the table has not got |
+| `${m[(kn:1:)a*]}` | empty — the modifiers move nothing here |
+| `${(kv)m[(k)aa]}` | `aa 1` — the expansion's own letters still choose |
+| `${#m[(k)aa]}` | `1` — the match count, as for every other search |
+
+The pattern row is the discriminator: a search reading would answer
+`${m[(k)a*]}` with the `1` under `aa`, and it does not.
+
+Because they are the same search everywhere but the table, the letter is
+normalized once rather than tested for in each of the three places that
+ask which way a walk runs — see `interp.orderedSearchLetter` (#1986).
 
 ### A group that selects nothing changes nothing
 
@@ -4170,9 +4213,28 @@ The blank row is the control that says this is emptiness and not
 whitespace: one space is an ordinary key wherever the brackets hold a key
 at all.
 
-**Reading an empty key is a fourth question** and is not this axis: bash
-writes `m: bad array subscript` there — a different subject — and still
-answers with the empty string at status 0, which is #1972.
+**Reading an empty key is a fourth question** and is not this axis. It is
+`Semantics.EmptyAssociativeKeyIsReportedWhenRead`, measured 2026-09-12
+with `typeset -A m; m[k]=v` and `w=`:
+
+| probe | bash 5.3.15 | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `${m[$w]}` | `m: bad array subscript`, then `` at 0 | `` at 0 | `` at 0 |
+| `${m[$w]-none}` | the same sentence, then `none` | `none` | `none` |
+| `${m[ ]}` | nothing at all | `` at 0 | `` at 0 |
+
+One column says the subscript is bad and two say nothing, and all three
+answer the same empty string at the same status — so this is a report and
+not a value. The subject is the **name alone**, where the store one
+paragraph up names the subscript as it was written, and the status stays
+0: the sentence is written once per read and the word is finished rather
+than abandoned, which is why the default in `${m[$w]-none}` still fires.
+
+The blank row is again the control. `${m[]}` — nothing between the
+brackets as written — is refused one construct earlier by
+`EmptyParamSubscriptIsAnError` and never reaches this, and an indexed
+name reads its subscript as an expression and asks
+`EmptySubscriptTextIsAMathError` instead (#1972).
 
 This needed the parser before it needed an axis. `m[""]=4` parsed with no
 subscript at all, because the empty quoted span between the brackets was

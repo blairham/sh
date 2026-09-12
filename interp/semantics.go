@@ -7646,6 +7646,48 @@ type Semantics struct {
 	// that is #1972 (#1938).
 	EmptyAssociativeKeyIsAnError Answer
 
+	// EmptyAssociativeKeyIsReportedWhenRead reports a *read* whose key came
+	// out empty — `typeset -A m; w=; ${m[$w]}` — and answers with the empty
+	// string anyway.
+	//
+	// The other face of EmptyAssociativeKeyIsAnError, and a different
+	// question rather than the same one seen from the read side: the store
+	// refuses and the read does not, the subject is the name alone rather
+	// than the subscript as written, and the status stays 0.
+	//
+	// Measured 2026-09-12, `-c`, with `typeset -A m; m[k]=v` and `w=`:
+	//
+	//	probe             bash 5.3.15                      ksh93u+   zsh 5.9.2
+	//	${m[$w]}          `m: bad array subscript`, ``, 0  ``, 0     ``, 0
+	//	${m[""]}          the same sentence                ``, 0     a two-character key
+	//	${m[$w]-none}     the same sentence, then `none`   `none`    `none`
+	//	${m[ ]}           nothing at all                   ``, 0     ``, 0
+	//
+	// So one column says the subscript is bad and two say nothing, and all
+	// three answer the same empty string at the same status — which is why
+	// this is a report and not a value. bash 3.2 has no such attribute to
+	// ask about, and dash reaches no subscript in an expansion at all.
+	//
+	// The blank row is the control that says this is emptiness and not
+	// whitespace: `${m[ ]}` looks up a one-space key and finds nothing,
+	// silently, in every column. `${m[]}` — nothing between the brackets as
+	// written — is refused one construct earlier by
+	// EmptyParamSubscriptIsAnError and never reaches this.
+	//
+	// It is the **key** and not the subscript, so an indexed name asks
+	// nothing here: `a=(1 2); ${a[$w]}` is the first element and silent
+	// everywhere, and the refusal an indexed name can earn from the same
+	// emptiness is EmptySubscriptTextIsAMathError, in another column again.
+	//
+	// Reported once per read, and the expansion carries on: measured,
+	// `"[${m[$w]}]${m[$w]}"` writes the sentence twice and prints `[]`, and
+	// a word that goes on to a conditional still gets its empty value. So
+	// nothing here sets the failed-expansion flag.
+	//
+	// The wording is Diagnostics.EmptyAssociativeKeyRead, whose one verb is
+	// the name (#1972).
+	EmptyAssociativeKeyIsReportedWhenRead Answer
+
 	// EmptyParamSubscriptIsAnError refuses `${a[]}` — a subscript written
 	// with nothing at all between the brackets — where a *parameter
 	// expansion* reads it. The same text one level over from
@@ -7735,6 +7777,49 @@ type Semantics struct {
 	// every column re-reads it (#1977). `$(( a[*] ))` over `a=(1+1)` is 6
 	// there and a refusal here for that reason and not for this one.
 	ArithWholeArraySubscriptIsTheSlice Answer
+
+	// ArithWholeArraySubscriptIsReportedAsBad reports a `*` or `@` subscript
+	// inside an expression and answers **zero** for it, where the dialect
+	// does not read it as the slice — so the expression survives instead of
+	// being abandoned.
+	//
+	// Measured 2026-09-11 and again 2026-09-12, `-c`, on an *indexed* name:
+	//
+	//	probe                       bash 5.3.15 / as-sh / 3.2      ksh93u+
+	//	a=(3 4 5); $(( a[*] ))      `a[*]: bad array subscript`, 0, st 0   `*: arithmetic syntax error`, st 1
+	//	a=(3); $(( a[*] + 1 ))      the same sentence, then 1              the same refusal
+	//	a=(3); $(( a[@] + 1 ))      `a[@]: …`, then 1                      the same refusal
+	//	$(( nodecl[*] ))            `nodecl[*]: …`, then 0                 the same refusal
+	//	s=7; $(( s[*] ))            `s[*]: …`, then 0                      the same refusal
+	//	(( a[*] = 5 ))              the sentence, nothing written, st 0    the same refusal
+	//
+	// So the two columns that agree about the *value* disagree about the
+	// report and about whether the expression survives, which is why this is
+	// an axis of its own rather than a wording. The refusing answer is the
+	// ordinary one: the brackets hold a text that is no expression and the
+	// arithmetic says so, which is what happens with no answer here at all.
+	//
+	// It is the **indexed** reading alone. An association reads the brackets
+	// as the key `*`, finds nothing under it and answers zero silently in
+	// both columns, so the table is consulted first and this is never asked
+	// there — the same ordering ArithWholeArraySubscriptIsTheSlice keeps, and
+	// asked one step behind it: a dialect that reads the slice never reaches
+	// this at all.
+	//
+	// **The spelling has to be exact.** `$(( a[ * ] ))` is an arithmetic
+	// syntax error in every column measured, bash and zsh alike, so the
+	// brackets are the whole-array spelling only when they hold the one
+	// character and nothing else. A blank subscript is a question of its own
+	// — BlankArithSubscriptIsTheEmptyExpression — and trimming here answered
+	// it wrongly for both.
+	//
+	// Reported once per evaluation, and the write reports too: `(( a[*]++ ))`
+	// writes the sentence twice in the column that reports, once for the read
+	// and once for the store, and leaves every element as it was.
+	//
+	// The wording is Diagnostics.ArithWholeArraySubscript, whose two verbs are
+	// the name and the subscript (#1978).
+	ArithWholeArraySubscriptIsReportedAsBad Answer
 
 	// EmptySubscriptTextIsAMathError refuses a subscript whose text is
 	// *empty or blank once it has been expanded* — `${a[$w]}` with an empty

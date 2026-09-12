@@ -226,6 +226,21 @@ type ArithIndex struct {
 	// position still: an *assignment target*, `(( a[] = 9 ))`, where the same
 	// three shells part again and part differently.
 	Empty bool
+	// Flags is the parenthesized flag group the subscript opened with, where
+	// the dialect has them — `$(( a[(r)20] ))` is the element whose value is
+	// `20`, exactly as `${a[(r)20]}` is.
+	//
+	// Index is nil when a group is present and Sub still holds the whole
+	// subscript as written, group included, so a diagnostic quotes back what
+	// the source said. The operand behind the group is Flags.Arg, and it is
+	// a *literal* word: an arithmetic expression has already been expanded
+	// once by the time it is parsed, so a `$` left in it is a `$` and not
+	// the start of anything.
+	//
+	// The group is carried here rather than resolved in the parser for the
+	// reason Sub is: what a group selects depends on whether the name is an
+	// association, which the parser cannot see.
+	Flags *SubscriptFlags
 	Start Pos
 	Stop  Pos
 }
@@ -275,7 +290,11 @@ type ArithAssign struct {
 	// `(( a[0] = 9 ))`, and nil when the target is a plain name.
 	Index ArithExpr
 	// Sub is the subscript as written, for the reason ArithIndex.Sub is.
-	Sub   string
+	Sub string
+	// Flags is the group the subscript opened with, for the reason
+	// ArithIndex.Flags is: `(( a[(r)20] = 9 ))` writes the element the same
+	// search reads.
+	Flags *SubscriptFlags
 	Op    string // = += -= *= /= %= <<= >>= &= ^= |=
 	Value ArithExpr
 	Start Pos
@@ -695,7 +714,10 @@ func (a *arithParser) assign() ArithExpr {
 					a.failArith(ErrArithOperandEnd, a.src[at:])
 					return nil
 				}
-				return &ArithAssign{Name: name, Index: sub.Index, Sub: sub.Text, Op: op, Value: v, Start: start}
+				return &ArithAssign{
+					Name: name, Index: sub.Index, Sub: sub.Text, Flags: sub.Flags,
+					Op: op, Value: v, Start: start,
+				}
 			}
 		}
 	}
@@ -949,7 +971,7 @@ func (a *arithParser) primary() ArithExpr {
 		if sub := a.subscript(true); sub.Present {
 			return &ArithIndex{
 				Name: name, Index: sub.Index, Sub: sub.Text, Empty: sub.Empty,
-				Start: start, Stop: start,
+				Flags: sub.Flags, Start: start, Stop: start,
 			}
 		}
 		return &ArithVar{Name: name, Start: start, Stop: start}
@@ -1224,6 +1246,9 @@ type arithSubscript struct {
 	Text string
 	// Empty says the brackets held nothing at all. See ArithIndex.Empty.
 	Empty bool
+	// Flags is the parenthesized flag group the subscript opened with, where
+	// the dialect has them. See ArithIndex.Flags.
+	Flags *SubscriptFlags
 }
 
 // subscript reads `[…]` after a name.
@@ -1271,6 +1296,22 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 				a.off++
 				if inner == "" && emptyOK {
 					return arithSubscript{Present: true, Empty: true}
+				}
+				if a.dial.ArraySubscriptFlags {
+					// A group decides how the subscript is *read*, so it is
+					// taken off before anything tries to read the text as an
+					// expression — `(r)20` is a search and not a sum, and
+					// leaving it to the expression reader is what made the
+					// whole group silently part of a key (#1986).
+					//
+					// The operand is a literal word rather than a lexed one:
+					// an arithmetic expression is expanded whole before it is
+					// parsed, so there is nothing left in it to expand and a
+					// second pass would perform a substitution twice.
+					if g, rest, ok := scanSubscriptFlags(inner); ok {
+						g.Arg = literalWord(rest, a.at)
+						return arithSubscript{Present: true, Text: inner, Flags: g}
+					}
 				}
 				// The inner parser shares the outer one's error slot, so a
 				// text that is not an expression would leave a refusal behind

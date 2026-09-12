@@ -263,6 +263,29 @@ func TestASubscriptSearchReachesThePositionalParameters(t *testing.T) {
 	}
 }
 
+// On everything but a table `(k)` and `(K)` are `(r)` and `(R)` under two more
+// letters, which is measured over every surface a search reaches rather than
+// assumed from one — see orderedSearchLetter, and the pairs below, each of
+// which asserts the two spellings answer the same thing.
+func TestTheKeyFlagsAreTheValueSearchOnAnOrderedTarget(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the same match", `a=(x y z x); printf "[%s]" "${a[(k)x]}" "${a[(r)x]}"`, "[x][x]"},
+		{"the same direction", `a=(x y z x); printf "[%s]" "${a[(K)*]}" "${a[(R)*]}"`, "[x][x]"},
+		{"the same miss", `a=(x y z); printf "[%s]" "${a[(k)q]}" "${a[(r)q]}"`, "[][]"},
+		{"the same modifiers", `a=(p q p); printf "[%s]" "${a[(kn:2:)p]}" "${a[(rn:2:)p]}"`, "[p][p]"},
+		{"the same element written", `a=(p q r); a[(k)q]=Z; printf "[%s]" "${a[@]}"`, "[p][Z][r]"},
+		{"the same one removed", `a=(p q r); unset 'a[(k)q]'; printf "[%s]" "${a[@]}"`, "[p][r]"},
+		{"the same character", `s=hello; printf "[%s]" "${s[(k)l]}" "${s[(r)l]}"`, "[l][l]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runSub(t, tc.src)
+			if out != tc.want || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, tc.want)
+			}
+		})
+	}
+}
+
 // The brace-less spelling reaches the same reading, which is the half a lexer
 // change carries: without it the parenthesis ends the word and the file does
 // not parse.
@@ -283,8 +306,6 @@ func TestASubscriptFlagThisImplementationDoesNotCarryIsRefusedByName(t *testing.
 		{`printf "[%s]" "${a[(w)beta]}"`, "(w)"},
 		{`printf "[%s]" "${a[(f)beta]}"`, "(f)"},
 		{`printf "[%s]" "${a[(p)beta]}"`, "(p)"},
-		{`printf "[%s]" "${a[(k)beta]}"`, "(k)"},
-		{`printf "[%s]" "${a[(K)beta]}"`, "(K)"},
 		{`printf "[%s]" "${a[(s:,:)beta]}"`, "(s)"},
 		{`printf "[%s]" "${a[(rw)beta]}"`, "(w)"},
 	} {
@@ -743,14 +764,9 @@ func TestWhatIsNotAnAssociationSearch(t *testing.T) {
 }
 
 // The letters this still does not carry over an association are still refused
-// by name. `(k)` and `(K)` are not searches at all there — measured, `${m[(k)a]}`
-// is the value at the key `a` and `${m[(k)*]}` is nothing, because the star is
-// a key nobody assigned — so building the search did not build them, and the
-// guarantee that says so is asserted rather than assumed.
+// by name, and the guarantee that says so is asserted rather than assumed.
 func TestTheSubscriptFlagsStillUnbuiltOverAnAssociation(t *testing.T) {
 	for _, tc := range []struct{ src, names string }{
-		{`typeset -A m=(a 1); printf "[%s]" "${m[(k)a]}"`, "(k)"},
-		{`typeset -A m=(a 1); printf "[%s]" "${m[(K)a]}"`, "(K)"},
 		{`typeset -A m=(a 1); printf "[%s]" "${m[(w)a]}"`, "(w)"},
 	} {
 		out, status := runAssoc(t, tc.src)
@@ -760,6 +776,46 @@ func TestTheSubscriptFlagsStillUnbuiltOverAnAssociation(t *testing.T) {
 		if status == 0 {
 			t.Errorf("%s: status 0, want a failure", tc.src)
 		}
+	}
+}
+
+// `(k)` and `(K)` over a table are a **lookup and not a search**: the key
+// exactly as written, no pattern and no walk, and the *value* is what comes
+// back — where `(i)` over the same table answers the key.
+//
+// Measured on zsh 5.9.2, 2026-09-12. The pattern row is the discriminator: a
+// search reading would answer it with the value under `aa`, and it does not.
+func TestTheKeyFlagOverAnAssociationIsALookup(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the key exactly", `typeset -A m=(aa 1 bb 2); printf "[%s]" "${m[(k)aa]}"`, "[1]"},
+		{
+			"and the case of the letter changes nothing",
+			`typeset -A m=(aa 1 bb 2); printf "[%s]" "${m[(K)aa]}"`, "[1]",
+		},
+		{"a pattern is not a key", `typeset -A m=(aa 1 bb 2); printf "[%s]" "${m[(k)a*]}"`, "[]"},
+		{
+			"nor is a key the table has not got",
+			`typeset -A m=(aa 1 bb 2); printf "[%s]" "${m[(k)zz]}"`, "[]",
+		},
+		{
+			"the modifiers a search reads move nothing here",
+			`typeset -A m=(aa 1 bb 2); printf "[%s]" "${m[(kn:1:)a*]}"`, "[]",
+		},
+		{
+			"the expansion's own letters still choose which half",
+			`typeset -A m=(aa 1 bb 2); printf "[%s]" ${(kv)m[(k)aa]}`, "[aa][1]",
+		},
+		{
+			"and the count is the match count",
+			`typeset -A m=(aa 1 bb 2); printf "[%s]" "${#m[(k)aa]}"`, "[1]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runAssoc(t, tc.src)
+			if out != tc.want || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, tc.want)
+			}
+		})
 	}
 }
 

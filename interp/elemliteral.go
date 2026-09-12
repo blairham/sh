@@ -28,7 +28,7 @@ func (r *Runner) assignElemLiteral(a *syntax.Assign) {
 		// by zero, so nothing is asked of the subscript on this route.
 		r.fatal("%s\n", Wording(r.diag().ArrayLiteralThroughASubscript,
 			"%[1]s[%[2]s]: cannot assign list to array member",
-			a.Name, r.subscriptAsWritten(a.Index)))
+			a.Name, subscriptSubject(a.IndexText, r.subscriptAsWritten(a.Index))))
 	case SubscriptedArrayLiteralSplices:
 		r.spliceElemLiteral(a)
 	}
@@ -54,6 +54,9 @@ func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
 		return
 	}
 	text := r.joinWord(a.Index)
+	// The subscript as written is what a boundary refusal quotes back, and it
+	// is not the text the arithmetic reads — see subscriptSubject (#1373).
+	subject := subscriptSubject(a.IndexText, text)
 	from, to, outcome := r.assignSpan(a, text)
 	if outcome == spanReported {
 		return
@@ -67,7 +70,7 @@ func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
 			return
 		}
 		elems, _ := r.arrayElemsOfTheName(a.Name)
-		r.spliceElementSpan(a.Name, text, elems, from, to, words)
+		r.spliceElementSpan(a.Name, subject, elems, from, to, words)
 		return
 	}
 	idx, err := r.subscriptValue(text)
@@ -98,7 +101,7 @@ func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
 			return
 		}
 		r.fatal("%s\n", Wording(r.diag().BadArraySubscript,
-			"%[1]s[%[2]s]: bad array subscript", a.Name, text))
+			"%[1]s[%[2]s]: bad array subscript", a.Name, subject))
 		return
 	}
 	// A subscript past the last element has to *become* one before it can be

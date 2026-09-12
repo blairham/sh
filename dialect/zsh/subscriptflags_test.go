@@ -70,7 +70,6 @@ func TestTheFlagGroupShapeAPluginManagerAsksWith(t *testing.T) {
 func TestASubscriptFlagThisDialectReadsAndDoesNotCarry(t *testing.T) {
 	for _, tc := range []struct{ src, names string }{
 		{`a=(x y); printf "[%s]" "${a[(w)y]}"`, "(w)"},
-		{`a=(x y); printf "[%s]" "${a[(k)y]}"`, "(k)"},
 	} {
 		out, st := runZsh(t, t.TempDir(), tc.src)
 		if !strings.Contains(out, tc.names+" subscript flag is not implemented") || st == 0 {
@@ -309,5 +308,35 @@ func TestTheArrayFlagIsThisDialects(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `printf "[%s]" "${(A)u=x y}"`)
 	if !strings.Contains(out, "(A) expansion flag is not implemented for an assignment") || st == 0 {
 		t.Errorf(`${(A)u=x y} = %q (status %d), want the assignment refused`, out, st)
+	}
+}
+
+// `(k)` and `(K)` are `(r)` and `(R)` on everything but a table, and a
+// **lookup** on one: the key exactly as written, with the value coming back.
+//
+// Measured on zsh 5.9.2, 2026-09-12. The range rows are here rather than in
+// the substrate's own suite because a range needs the comma reading this
+// dialect has and the core does not; the pattern row is the discriminator
+// that says the table's reading is exact and not a search.
+func TestTheKeyFlagsOverEverySurface(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"an ordered array", `a=(x y z x); printf "[%s]" "${a[(k)x]}" "${a[(K)*]}"`, "[x][x]"},
+		{"a miss", `a=(x y z); printf "[%s]" "${a[(k)q]}"`, "[]"},
+		{"the nth modifier", `a=(p q p); printf "[%s]" "${a[(kn:2:)p]}"`, "[p]"},
+		{"an assignment", `a=(p q r); a[(k)q]=Z; printf "[%s]" "${a[@]}"`, "[p][Z][r]"},
+		{"an unset", `a=(p q r); unset 'a[(k)q]'; printf "[%s]" "${a[@]}"`, "[p][][r]"},
+		{"the first end of a range", `a=(p q r s); printf "[%s]" "${a[(k)q,3]}"`, "[q r]"},
+		{"the second end", `a=(p q r s); printf "[%s]" "${a[1,(k)r]}"`, "[p q r]"},
+		{"both ends", `a=(p q r s); printf "[%s]" "${a[(k)q,(K)r]}"`, "[q r]"},
+		{"a string", `s=hello; printf "[%s]" "${s[(k)l]}" "${s[(K)l]}"`, "[l][l]"},
+		{"a table, which is a lookup", `typeset -A m=(aa 1 bb 2); printf "[%s]" "${m[(k)aa]}"`, "[1]"},
+		{"and not a search over one", `typeset -A m=(aa 1 bb 2); printf "[%s]" "${m[(k)a*]}"`, "[]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
 	}
 }

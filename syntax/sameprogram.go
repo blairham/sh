@@ -31,6 +31,8 @@ var (
 	stmtType        = reflect.TypeOf(Stmt{})
 	redirType       = reflect.TypeOf(Redirect{})
 	spanType        = reflect.TypeOf(Span{})
+	assignType      = reflect.TypeOf(Assign{})
+	paramExprType   = reflect.TypeOf(ParamExpr{})
 )
 
 // SameProgram reports whether two trees are the same program, and where they
@@ -51,12 +53,15 @@ func SameProgram(a, b *File) (string, bool) {
 // spellingOnly reports whether a field holds the source *spelling* of a node
 // rather than anything the program does.
 //
-// Four of them, and each exists because something has to quote the input
+// Five of them, and each exists because something has to quote the input
 // back long after it was read: a background statement's text is what a jobs
 // listing shows, a redirection's is what one grammar's ambiguous-redirect
-// diagnostic names, and a loop or `case` header's is what an execution trace
-// writes. All three are the input's spelling by definition, so a printer that
-// re-spelled the construct re-spells them with it.
+// diagnostic names, a subscript's is what a `bad array subscript` names, and
+// a loop or `case` header's is what an execution trace writes. All four are
+// the input's spelling by definition, so a printer that re-spelled the
+// construct re-spells them with it — `a[${i}]=v` printed back as `a[$i]=v`
+// is the same program, and the diagnostic it would earn names the spelling
+// that is now there.
 //
 // The fourth is a span's Bare, which says a parameter expansion was written
 // without braces. `${x}` and `$x` are one program and the printer moves
@@ -70,6 +75,9 @@ func SameProgram(a, b *File) (string, bool) {
 func spellingOnly(t reflect.Type, name string) bool {
 	if name == "Text" {
 		return t == stmtType || t == redirType
+	}
+	if name == "IndexText" {
+		return t == assignType || t == paramExprType
 	}
 	if name == "Bare" {
 		return t == spanType

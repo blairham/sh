@@ -5237,9 +5237,29 @@ echo "st=$?"`,
 		Why:     "what the refusal names, which is three answers: bash quotes the subscript back as it was written — `a[x-2]`, not the -1 it came to — ksh93 names the array alone, and zsh has nothing to refuse here because a negative subscript counts back from the last element there. The expression is what tells the written text from the evaluated number; a bare `-2` could not",
 	},
 	{
+		ID: "array/a-refused-subscript-holding-an-expansion", Category: "expansion",
+		Snippet: `i=-9; a=(x); a[$i]=q; echo "st=$?"`,
+		Why:     "the row above with an *expansion* in the subscript, which is the only spelling that can tell the source text from the value: bash quotes back `a[$i]`, what was typed, and not the `-9` the word came to. `a[x-2]` one row up passes under either reading, because an expression with no expansion in it is never touched, and that is why it took this shape to find that nothing in the tree remembered the spelling -- syntax.Assign.IndexText is where it lives now, on the same argument syntax.Redirect.Text is kept on. ksh93 names the array alone and zsh has nothing to refuse, a negative subscript counting back from the last element there (#1373)",
+	},
+	{
+		ID: "array/a-refused-subscripted-literal-holding-an-expansion", Category: "expansion",
+		Snippet: `i=1; a=(x y); a[$i]=(p q); echo "st=$?"; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "the same written-text question on the second sentence that quotes a subscript back, and the one that refuses *before* evaluating it: bash names `a[$i]` and not the 1 it came to. The three columns split as they do for the construct itself -- bash refuses the list, ksh93 takes the parentheses as an ordinary value and zsh splices the words into the array -- so the array is read back to say which happened, and only the refusing column has a subject at all (#1373)",
+	},
+	{
 		ID: "array/a-literal-subscript-below-the-first-element", Category: "expansion",
 		Snippet: `a=([0]=p); printf "[%s]" "${a[@]}"; echo " ok"`,
 		Why:     "the same refusal reached through a literal, which the shell that refuses it words differently from the plain form — naming the subscript and the kind of assignment rather than the array. Two spellings of one rule needing two sentences is why the wording is a field of its own rather than the plain one used twice",
+	},
+	{
+		ID: "arithmetic/a-whole-array-subscript-in-an-expression", Category: "expansion",
+		Snippet: `a=(3); echo $(( a[*] + 1 )); echo "st=$?"; echo $(( a[@] + 1 ))`,
+		Why:     "`*` and `@` inside an expression on an *indexed* name, which splits the panel three ways and needs two axes to say so. bash names the subscript back -- `a[*]: bad array subscript` -- answers **zero** for the operand and lets the expression finish at status 0, so the line prints 1; ksh93 refuses the whole expression as an arithmetic syntax error and ends the shell; zsh reads the brackets as the *slice* the same subscript takes in an expansion, so the operand is the element and the answer is 4. The `+ 1` is what tells the reported zero from a value: without it bash's answer and a genuine element could both be 0. The `@` row is the control that says the two spellings are one question here, there being no field splitting inside an expression for them to part over. dash has no arrays. Answered by Semantics.ArithWholeArraySubscriptIsTheSlice and, behind it, ArithWholeArraySubscriptIsReportedAsBad (#1978)",
+	},
+	{
+		ID: "arithmetic/a-whole-array-subscript-with-a-blank-beside-it", Category: "expansion",
+		Snippet: `a=(3); echo $(( a[ * ] )); echo after`,
+		Why:     "the row above with one space on each side of the star, and the discriminator that says the whole-array spelling is the character and not the character trimmed: every column that reads the brackets refuses this one as arithmetic -- `operand expected` in bash and in zsh alike -- where the untrimmed spelling is reported in bash and is the slice in zsh. Trimming the subscript before asking answered a different question and answered it wrongly for both (#1978)",
 	},
 	{
 		ID: "arithmetic/an-empty-subscript-on-a-name-that-is-set", Category: "expansion",
@@ -5496,6 +5516,27 @@ echo "st=$?"`,
 		ID: "array/a-subscript-search-matches-the-whole-element", Category: "expansion",
 		Snippet: `a=(alpha beta gamma); printf "[%s]" "${a[(r)be]}" "${a[(i)be]}" "${a[(r)be*]}"; echo`,
 		Why:     "where the ordered array's search draws its line, which is the *other* side of the line the search over a plain string draws: an element matches when the operand matches the whole of it, so a prefix is a miss and the index is one past the last element. The third field is the same prefix with a `*` on it, which does find the element — so the row separates \"the operand is a pattern\" from \"the match is anchored at both ends\", and an implementation that answered both searches with a prefix match would pass every other row in this file",
+	},
+	{
+		ID: "array/the-key-subscript-flags-on-an-ordered-target", Category: "expansion",
+		Snippet: `a=(x y z x); printf "[%s]" "${a[(k)x]}" "${a[(r)x]}" "${a[(K)*]}" "${a[(R)*]}" "${a[(k)q]}" "${a[(kn:2:)x]}"; echo`,
+		Why:     "`(k)` and `(K)` on anything that is not a table, paired with the `(r)` and `(R)` they turn out to be: the same match, the same direction, the same miss and the same nth modifier. The pairs are the point -- one field on its own could not tell a coincidence from a rule -- and the last one says the modifiers are read here too. Only one shell in the panel has subscript flag groups at all; the rest read the parentheses as text and the brackets as arithmetic, each in its own words",
+	},
+	{
+		ID: "array/the-key-subscript-flag-on-a-table-is-a-lookup", Category: "expansion",
+		Snippet: "typeset -A m 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`m[aa]=1; m[bb]=2; printf "[%s]" "${m[(k)aa]}" "${m[(K)aa]}" "${m[(k)a*]}" "${m[(k)zz]}" "${m[(i)aa]}" "${#m[(k)aa]}"; echo`,
+		Why: "the same two letters over a *table*, where they part from the search they otherwise are: a lookup of the key exactly as written, with no pattern and no walk, answering the **value** -- where `(i)` over the same table answers the key. The pattern field is the discriminator: a search reading would answer it with the 1 under `aa`, and it is empty. The last field is the match count, which is what puts a lookup on the same list-shaped route every other search is on. Only one shell has the construct; the two other columns with the attribute read the parentheses as part of a key and find nothing",
+	},
+	{
+		ID: "arithmetic/a-subscript-flag-group-inside-an-expression", Category: "expansion",
+		Snippet: `a=(10 20 30); echo $(( a[(r)20] )) $(( a[(i)20] )) $(( a[(i)99] )) $(( a[(r)99] )) $(( a[(e)2] )) $(( a[(r)20] + 1 ))`,
+		Why:     "a subscript's flag group read inside an *expression*, which is the same construct in a second position rather than a second construct: the search names the element, the value comes back and is read as a number the way every other element's value is. The six fields separate the readings that could be confused -- the value against the index, a hit against each kind of miss, a group that selects nothing (which leaves an ordinary arithmetic subscript behind it), and the whole thing standing as one operand of a larger expression. One shell has the groups; the rest read the parentheses as arithmetic and refuse them, each in its own words (#1986)",
+	},
+	{
+		ID: "arithmetic/a-flag-group-names-the-element-a-write-reaches", Category: "expansion",
+		Snippet: `a=(10 20 30); (( a[(r)20] = 9 )); printf "[%s]" "${a[@]}"; (( a[(r)9]++ )); printf "[%s]" "${a[@]}"; echo`,
+		Why:     "the write half of the row above, and the reason the two go through one function: an assignment through a flag group has to name the element the read names or the two spellings reach different elements and a script that writes and reads with the same subscript sees an array that forgot what it stored. The second statement steps what the first wrote, which is the read and the write in one expression. Only one shell in the panel has the construct (#1986)",
 	},
 	{
 		ID: "array/a-subscript-flag-group-exact-matching", Category: "expansion",
@@ -6751,6 +6792,12 @@ echo "st=$?"`,
 		ID: "assoc/a-quoted-key-keeps-its-quotes-or-does-not", Category: "expansion",
 		Snippet: `typeset -A m; m["k"]=W; kk='"k"'; printf '[%s]' "${m[$kk]}" "${m[k]}"; echo`,
 		Why:     "the two readings of a quoted subscript, told apart by storing under one spelling and reading with the other — a key that is one string under both would hide it. bash and ksh93 run the subscript through quote removal, so the key is `k` and the second read finds `W`; zsh takes it as written, so the key is the three characters and the *first* read finds it. dash has no attribute and refuses the line",
+	},
+	{
+		ID: "assoc/reading-an-empty-key", Category: "expansion",
+		Snippet: "typeset -A m 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`m[k]=v; w=; echo "[${m[$w]}]"; echo "after=$?"; echo "[${m[ ]}]"; echo "[${m[$w]-none}]"`,
+		Why: "reading a key that came out empty, which is the other face of the store one row down and a different question: bash writes `m: bad array subscript` -- the table alone, where the store names the subscript as written -- and then answers the empty string at status 0, once per read and with the word finished, so the default in the last field still fires. ksh93 and zsh say nothing at all and answer the same empty string at the same status, which is what makes this a report rather than a value. The blank field is the control that says this is emptiness and not whitespace: a one-space key is looked up and missed silently everywhere. bash 3.2 has no such attribute and dash reaches no subscript in an expansion at all. Answered by Semantics.EmptyAssociativeKeyIsReportedWhenRead (#1972)",
 	},
 	{
 		ID: "assoc/an-empty-key", Category: "expansion",

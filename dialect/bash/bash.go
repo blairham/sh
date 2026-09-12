@@ -902,6 +902,13 @@ func Semantics() interp.Semantics {
 	// one space in every column, so this is emptiness and not blankness
 	// (#1938).
 	s.EmptyAssociativeKeyIsAnError = interp.Yes
+	// And a *read* whose key comes out empty is reported too, with a
+	// different subject and a different outcome: measured 2026-09-12,
+	// `typeset -A m; m[k]=v; w=; ${m[$w]}` writes `m: bad array subscript` —
+	// the name alone — and still answers the empty string at status 0, once
+	// per read. `${m[ ]}` is the control and says nothing, so this is
+	// emptiness rather than blankness (#1972).
+	s.EmptyAssociativeKeyIsReportedWhenRead = interp.Yes
 	// `$@` with no positional parameters is **unset** here, so a colon-less
 	// conditional fires: measured 2026-09-12 after `set --`, `"${@-word}"`
 	// is `word` and `"${@+word}"` is empty in 5.3.15, 3.2.57 and as `sh`,
@@ -918,6 +925,14 @@ func Semantics() interp.Semantics {
 	// not one: measured 2026-09-11 on 5.3.15, `typeset -A m; m[k]=9;
 	// $(( m[*] ))` is 0, where the expansion `"${m[*]}"` is 9.
 	s.ArithWholeArraySubscriptIsTheSlice = interp.No
+	// It is *reported* instead, and the expression carries on with zero:
+	// measured 2026-09-12, `a=(3 4 5); $(( a[*] ))` writes `a[*]: bad array
+	// subscript` and answers 0 at status 0, and `$(( a[*] + 1 ))` on `(3)`
+	// answers 1. Identical in 3.2.57 and under argv[0] `sh`, and the write
+	// reports too — `(( a[*] = 5 ))` says it once and stores nothing. An
+	// association is silent and zero here and never reaches the question
+	// (#1978).
+	s.ArithWholeArraySubscriptIsReportedAsBad = interp.Yes
 	// A subscript that *expanded* to nothing is the expression that is zero,
 	// so `${a[$w]}` with an empty `$w` is element zero — measured 2026-09-11
 	// on 5.3.15, `a=(5 6 7); w=; ${a[$w]}` is `5` at status 0, and `${a[ ]}`
@@ -1322,7 +1337,9 @@ func Diagnostics() interp.Diagnostics {
 		// A subscript before the first element, named as it was written:
 		// `a[x-2]`, not the -1 it evaluated to. Identical in bash 3.2.
 		BadArraySubscript:             "%[1]s[%[2]s]: bad array subscript",
+		EmptyAssociativeKeyRead:       "%[1]s: bad array subscript",
 		ArithEmptySubscript:           "%[1]s[]: bad array subscript",
+		ArithWholeArraySubscript:      "%[1]s[%[2]s]: bad array subscript",
 		ArrayLiteralThroughASubscript: "%[1]s[%[2]s]: cannot assign list to array member",
 		// Through a literal the element is named as it stands between the
 		// parentheses, with no array name in front of it. bash 3.2 says the

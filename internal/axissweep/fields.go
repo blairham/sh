@@ -193,7 +193,7 @@ func intValues(f Field) ([]Value, error) {
 	}
 	named := consts[f.Type]
 	if len(named) == 0 {
-		return nil, fmt.Errorf("%s: no constants of type %s are declared in %s, so the sweep cannot enumerate its values", f.Path, f.Type, sourceDir)
+		return nil, fmt.Errorf("%s: no constants of type %s are declared in %s, so the sweep cannot enumerate its values", f.Path, f.Type, sourceDir())
 	}
 	return named, nil
 }
@@ -227,13 +227,32 @@ func At(v reflect.Value, path string) (reflect.Value, error) {
 	return v, nil
 }
 
-// sourceDir is the package whose declarations are read. It is a path relative
-// to the module root, and the sweep is run from there.
-var sourceDir = "interp"
+// moduleRoot is the checkout every source scan here reads from: the constants
+// and field comments under interp/, the dialect packages, and the coverage
+// ledger. The instruments run from the module root, so the default is right
+// for them; a test runs from its own package directory, which is the only
+// reason this can be moved.
+var moduleRoot = "."
 
-// SetSourceDir points the constant and comment scans at another checkout,
-// which only a test needs.
-func SetSourceDir(dir string) { sourceDir = dir }
+// SetModuleRoot points the source scans at another checkout, which only a
+// test needs.
+//
+// One knob rather than one per scan: the three paths below are all fixed
+// positions in the same tree, and a setter each is three chances to move two
+// of them and read a third out of the wrong checkout.
+func SetModuleRoot(dir string) { moduleRoot = dir }
+
+// sourceDir is the package whose declarations are read.
+func sourceDir() string { return filepath.Join(moduleRoot, "interp") }
+
+// dialectDir is one dialect package's directory, which coverage.go scans for
+// the reasons an axis was left unanswered.
+func dialectDir(name string) string { return filepath.Join(moduleRoot, "dialect", name) }
+
+// ledgerFile is the committed record of what each dialect does not answer.
+func ledgerFile() string {
+	return filepath.Join(moduleRoot, "internal", "axissweep", "testdata", "unanswered.txt")
+}
 
 // The three scans below are each done once and shared. They are behind a
 // sync.Once rather than a nil check because the callers are tests that run in
@@ -257,9 +276,10 @@ func readSource() {
 	// one package's ordinary source, and the alternative it points at —
 	// golang.org/x/tools/go/packages — would make a build-tool dependency
 	// direct for a constant scan.
-	entries, err := os.ReadDir(sourceDir)
+	dir := sourceDir()
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		parseErr = fmt.Errorf("reading %s: %w", sourceDir, err)
+		parseErr = fmt.Errorf("reading %s: %w", dir, err)
 		return
 	}
 	fset := token.NewFileSet()
@@ -269,7 +289,7 @@ func readSource() {
 		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		path := filepath.Join(sourceDir, name)
+		path := filepath.Join(dir, name)
 		f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if err != nil {
 			parseErr = fmt.Errorf("reading %s: %w", path, err)
@@ -278,7 +298,7 @@ func readSource() {
 		files[path] = f
 	}
 	if len(files) == 0 {
-		parseErr = fmt.Errorf("no Go files under %s", sourceDir)
+		parseErr = fmt.Errorf("no Go files under %s", dir)
 		return
 	}
 	parsedFiles = files
@@ -463,44 +483,57 @@ func readDocs() {
 // a marker.
 var markerLine = regexp.MustCompile(`^(?:(unanimous)|unexhibited ([A-Za-z_][A-Za-z0-9_]*)|unpinned(?: (bash|zsh|ksh|dash))?):[ \t]*(.*)$`)
 
-// parseNotes reads the triage lines out of one field's comment.
+// scanMarkers walks one comment's lines and hands each marker the pattern
+// matches to fn, together with the paragraph that follows it.
 //
 // A note runs to the end of its paragraph, so an explanation can be as long
 // as the measurement behind it needs — which is the point, since a one-line
-// "fine" is the thing this is meant to replace.
-func parseNotes(text string) Notes {
-	var out Notes
+// "fine" is the thing this is meant to replace. The body is the pattern's
+// last group plus the continuation lines.
+//
+// Shared with coverage.go rather than written twice. The two markers ask
+// different questions of different files, but "a line, then the rest of its
+// paragraph" is one rule, and this tree has four recorded instances of a
+// second helper being written without the fix the first one carries.
+func scanMarkers(text string, marker *regexp.Regexp, fn func(m []string, body string)) {
 	lines := strings.Split(text, "\n")
 	for i := 0; i < len(lines); i++ {
-		m := markerLine.FindStringSubmatch(strings.TrimSpace(lines[i]))
+		m := marker.FindStringSubmatch(strings.TrimSpace(lines[i]))
 		if m == nil {
 			continue
 		}
-		body := []string{m[4]}
+		body := []string{m[len(m)-1]}
 		for i+1 < len(lines) {
 			next := strings.TrimSpace(lines[i+1])
-			if next == "" || markerLine.MatchString(next) {
+			if next == "" || marker.MatchString(next) {
 				break
 			}
 			body = append(body, next)
 			i++
 		}
-		joined := strings.TrimSpace(strings.Join(body, " "))
+		fn(m, strings.TrimSpace(strings.Join(body, " ")))
+	}
+}
+
+// parseNotes reads the triage lines out of one field's comment.
+func parseNotes(text string) Notes {
+	var out Notes
+	scanMarkers(text, markerLine, func(m []string, body string) {
 		switch {
 		case m[1] != "":
-			out.Unanimous = joined
+			out.Unanimous = body
 		case m[2] != "":
 			if out.Value == nil {
 				out.Value = map[string]string{}
 			}
-			out.Value[m[2]] = joined
+			out.Value[m[2]] = body
 		default:
 			if out.Unpinned == nil {
 				out.Unpinned = map[string]string{}
 			}
-			out.Unpinned[m[3]] = joined
+			out.Unpinned[m[3]] = body
 		}
-	}
+	})
 	return out
 }
 

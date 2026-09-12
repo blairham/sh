@@ -2599,30 +2599,29 @@ type Diagnostics struct {
 	// NamesTheDuplicationTargetAsWritten makes that message quote the word
 	// the script wrote rather than what it expanded to.
 	//
-	// bash alone, and it is the word verbatim: `n=10; echo x >&$n` is
-	// `$n: Bad file descriptor` there, `${n}` and `"$n"` and `$((5+5))` each
-	// come back as themselves, and ksh93 and zsh both say `10`. Measured
-	// 2026-09-12.
+	// The word verbatim: under true, `n=10; echo x >&$n` is
+	// `$n: Bad file descriptor`, and `${n}`, `"$n"` and `$((5+5))` each come
+	// back as themselves; under false all of them say `10`.
 	//
-	// It is the naming and nothing else — #692 established that the refusal
-	// acts on the expanded word, since `n=10` is refused where `n=9` is not.
-	// The same shell names an *open* by what it expanded to, so this cannot
-	// be a rule about redirection targets in general: `n=nosuch; cat <$n` is
-	// `nosuch: No such file or directory` in bash (#734).
+	// It is the naming and nothing else — the refusal acts on the expanded word,
+	// since `n=10` is refused where `n=9` is not. The same preset names an
+	// *open* by what it expanded to, so this cannot be a rule about redirection
+	// targets in general: `n=nosuch; cat <$n` is
+	// `nosuch: No such file or directory`.
 	NamesTheDuplicationTargetAsWritten bool
 
 	// FdNumberOverLimit is a redirection whose descriptor number is at or
-	// above the process's limit on open files, where the dialect refuses one
-	// — see Semantics.FdNumberBoundedByOpenFileLimit. One verb: the number.
+	// above the process's limit on open files, where the preset refuses one —
+	// see Semantics.FdNumberBoundedByOpenFileLimit. One verb: the number.
 	//
 	// Empty leaves the shape every other bad descriptor takes, `N: Bad file
-	// descriptor`, which is what bash says here and is the shared wording
-	// rather than a special case. ksh93 names the thing instead of the number
-	// and quotes a different errno, so it says so.
+	// descriptor`, which is the shared wording rather than a special case. A
+	// preset that names the thing instead of the number and quotes a different
+	// errno says so.
 	FdNumberOverLimit string
 
-	// NoJobControl is `bg` or `fg` in a shell with none, for the dialects
-	// that say so before anything else. One verb: the builtin's name.
+	// NoJobControl is `bg` or `fg` in a shell with none, for a preset that says
+	// so before anything else. One verb: the builtin's name.
 	NoJobControl string
 
 	// NoJobControlAtStartup is what an *interactive* shell says because it
@@ -2632,92 +2631,83 @@ type Diagnostics struct {
 	// operand. This one is nobody asking: the shell decided for itself at
 	// startup and is reporting what it could not have.
 	//
-	// Measured 2026-09-05 with no terminal on any of the three standard
-	// streams, scratch HOME and scratch HISTFILE, on `-i script.sh`, `-i -c`
-	// and `-i -s` alike — the same line on all three, and on none of the
-	// non-interactive routes:
+	// Measured with no terminal on any of the three standard streams, scratch
+	// HOME and scratch HISTFILE, on `-i script.sh`, `-i -c` and `-i -s` alike —
+	// the same line on all three, and on none of the non-interactive routes:
 	//
-	//	bash 5.3.15   bash: no job control in this shell
-	//	bash 3.2.57   bash: no job control in this shell
-	//	bash as `sh`  sh: no job control in this shell
-	//	dash          <name>: 0: can't access tty; job control turned off
-	//	ksh93u+       nothing — it runs the monitor without a terminal
-	//	zsh 5.9.2     nothing
+	//	<shell>: no job control in this shell
+	//	<name>: 0: can't access tty; job control turned off
+	//	nothing — where the monitor runs without a terminal
 	//
-	// Empty says nothing, which is two of the four and is the base's answer:
-	// the standard does not have the shell remark on it.
+	// Empty says nothing, which is the base's answer: the standard does not have
+	// the shell remark on it.
 	//
-	// bash 5.3.15 writes a *second* line above this one — `bash: cannot set
-	// terminal process group (11143): Inappropriate ioctl for device` — and
-	// it is deliberately not reproduced. Three reasons, and the first is the
-	// one that settles it: bash 3.2.57 and bash 3.2 run as `sh` do not write
-	// it at all, so it is one version's extra line rather than bash's
-	// wording. It is also that shell reporting the failure of an ioctl this
-	// shell never makes, and there is nothing here whose failure it would be
-	// describing. And it carries the shell's own pid, which no script can act
-	// on and which no recording of would be the same twice.
+	// One build writes a *second* line above this one — `cannot set terminal
+	// process group (11143): Inappropriate ioctl for device` — and it is
+	// deliberately not reproduced. Three reasons, and the first settles it: an
+	// earlier build of the same implementation does not write it at all, so it
+	// is one version's extra line rather than that implementation's wording. It
+	// is also a report of an ioctl failure this shell never makes, and there is
+	// nothing here whose failure it would be describing. And it carries the
+	// shell's own pid, which no script can act on and no recording of would be
+	// the same twice.
 	NoJobControlAtStartup string
 
 	// NoJobControlAtStartupNamesTheScript puts `$0` in front of that remark
-	// rather than the shell's own name. dash and only dash, of the two that
-	// say anything: it writes `<script>: 0: can't access tty; job control
-	// turned off` on `-i script.sh` and `/bin/dash: 0: …` on `-i -c` and
-	// `-i -s`, which is `$0` on all three. bash writes its own name on all
-	// three, `-i script.sh` included, and never the script's.
+	// rather than the shell's own name. True writes `<script>: 0: can't access
+	// tty; job control turned off` on `-i script.sh` and `<shell>: 0: …` on
+	// `-i -c` and `-i -s`, which is `$0` on all three; false writes the shell's
+	// own name on all three, `-i script.sh` included, and never the script's.
 	//
-	// A field rather than a reading of InvocationNamesTheUnreadLine, which
-	// dash is also the only one to set. One shell answering two questions the
-	// same way is not evidence that they are one question.
+	// A field rather than a reading of InvocationNamesTheUnreadLine, which the
+	// same preset also sets. One preset answering two questions the same way is
+	// not evidence that they are one question.
 	NoJobControlAtStartupNamesTheScript bool
 
-	// FcNoSuchEvent is `fc` with no history, in the dialect that reports
-	// it. No verbs.
+	// FcNoSuchEvent is `fc` with no history, under a preset that reports it. No
+	// verbs.
 	FcNoSuchEvent string
 
-	// OptionListingHeader opens `set -o`'s table where the dialect has one:
-	// dash and ksh93 write "Current option settings" first.
+	// OptionListingHeader opens `set -o`'s table where the preset has one —
+	// "Current option settings" written first.
 	OptionListingHeader string
-	// OptionListingWidth pads the name column: bash 15, dash 16, ksh93 25,
-	// zsh 22. Zero means bash's.
+	// OptionListingWidth pads the name column — 15, 16, 22 and 25 are all
+	// measured. Zero means 15.
 	OptionListingWidth int
-	// OptionListingTabbed puts a tab between the name and the state, which
-	// bash alone does.
+	// OptionListingTabbed puts a tab between the name and the state.
 	OptionListingTabbed bool
-	// PlusOListsActive makes `set +o` one line naming only what is on, the
-	// --default form ksh93 writes, instead of re-inputtable per-option
-	// lines.
+	// PlusOListsActive makes `set +o` one line naming only what is on, instead
+	// of re-inputtable per-option lines.
 	PlusOListsActive bool
 	// KillListing is the shape of `kill -l` with no operands.
 	KillListing KillListingForm
 
-	// ReadArgCount is a bare `read` in the dialect that wants a name. No
-	// verbs.
+	// ReadArgCount is a bare `read` under a preset that wants a name. No verbs.
 	ReadArgCount string
 
-	// ArithInvalidBase refuses a base a `base#digits` literal may not name —
-	// one below two, or one above what the dialect goes up to. One verb: the
-	// base, as a decimal number rather than as written, which is what the
-	// shell that prints it prints: `$(( 064#10 ))` is `invalid base (must be
-	// 2 to 36 inclusive): 64` in zsh 5.9.2.
+	// ArithInvalidBase refuses a base a `base#digits` literal may not name — one
+	// below two, or one above what the preset goes up to. One verb: the base, as
+	// a decimal number rather than as written, which is what a preset that
+	// prints it prints: `$(( 064#10 ))` as
+	// `invalid base (must be 2 to 36 inclusive): 64`.
 	ArithInvalidBase string
-	// ArithEmptyExpression is `$(( ))` in the dialect that wants a primary
+	// ArithEmptyExpression is `$(( ))` under a preset that wants a primary
 	// there. No verbs.
 	ArithEmptyExpression string
 
 	// DigitTooGreatForBase is the reason when a literal carries a digit its
 	// base does not allow, such as `08` read as octal. No verbs. It is not
-	// InvalidNumber because it is a different diagnosis, and bash words the
-	// two differently: `08` is "value too great for base" where a name-shaped
-	// operand is an arithmetic syntax error.
+	// InvalidNumber because it is a different diagnosis, and a preset may word
+	// the two differently: `08` as "value too great for base" where a
+	// name-shaped operand is an arithmetic syntax error.
 	DigitTooGreatForBase string
 	// ArithByteIsNoDigit is the reason a literal holds a byte that is not a
-	// digit in *any* base — the `#` in `010#5`, which is no base marker in a
-	// dialect whose leading zero has already made the text an octal
-	// constant. No verbs.
+	// digit in *any* base — the `#` in `010#5`, which is no base marker under a
+	// preset whose leading zero has already made the text an octal constant. No
+	// verbs.
 	//
-	// bash alone parts it from DigitTooGreatForBase, and the line between
-	// them is the base-64 alphabet rather than the base in hand. Measured
-	// 2026-09-12 on bash 5.3.15:
+	// A preset may part it from DigitTooGreatForBase, and the line between them
+	// is the base-64 alphabet rather than the base in hand:
 	//
 	//	08#5    value too great for base    `8` is a digit, base eight has none
 	//	1@2     value too great for base    `@` is digit 62
@@ -2725,8 +2715,8 @@ type Diagnostics struct {
 	//	010#5   invalid number              `#` is no digit at all
 	//	0#5     invalid number              the same
 	//
-	// Empty means the dialect words both the same way, which ksh93 and dash
-	// do — and where it is empty DigitTooGreatForBase answers both.
+	// Empty means the preset words both the same way, and where it is empty
+	// DigitTooGreatForBase answers both.
 	ArithByteIsNoDigit string
 	// NumericArgument is a builtin given an argument that is not a number,
 	// such as `exit abc`. Two verbs, positional because the shells order them

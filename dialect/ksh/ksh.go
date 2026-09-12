@@ -393,6 +393,9 @@ func Semantics() interp.Semantics {
 	// of the first one: `16#ff`, `99#zz` and `1a#b` all list unquoted here
 	// and `a#b` and `#lead` do not (#1271).
 	s.ListedHashIsBareAfterANonName = interp.Yes
+	// And not the weaker position rule bash has: `a#b` is quoted here,
+	// which is what says the leading text is judged and not the offset.
+	s.ListedHashIsBareUnlessItOpensTheValue = interp.No
 	s.ListingControlEscape = interp.ControlEscapeHex
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord

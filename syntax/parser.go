@@ -38,6 +38,22 @@ type Parser struct {
 	// after it is eligible in turn.
 	pending       []Token
 	aliasNextWord bool
+	// pendingTouches runs beside pending: whether each token was written
+	// with nothing at all between it and the one in front of it *in the
+	// alias body*. It cannot be recovered from the tokens themselves,
+	// because every spliced token is given the position of the word it
+	// replaced — see spliceAlias — so their offsets say nothing about what
+	// stood between them.
+	//
+	// One question in the grammar asks it: `a=(x y)` is an array and
+	// `a= (x y)` is not, and the parenthesis has to touch the `=`. Without
+	// this an alias whose body is a compound assignment was refused outright
+	// — `alias f='a=(x y)'; f` is an unexpected `(` here and an array in
+	// bash, ksh93 and zsh (#2299).
+	pendingTouches []bool
+	// tokTouches is the same fact about the current token, and is false for
+	// a token read from the input, where the offsets answer directly.
+	tokTouches bool
 	// aliasSpliced counts the tokens of the current expansion still in hand,
 	// so the trailing-space rule can tell a word that *came from* the value
 	// from the word that follows it.
@@ -284,6 +300,7 @@ func (p *Parser) next() {
 		// An alias expansion is still being handed out. Nothing else about
 		// the input has moved, so the lexer is not touched.
 		p.tok, p.pending = p.pending[0], p.pending[1:]
+		p.tokTouches, p.pendingTouches = p.pendingTouches[0], p.pendingTouches[1:]
 		// A global alias inside an alias body is expanded in turn — measured
 		// `alias -g B=x; alias -g H='a B'` gives `a x` — so the tokens being
 		// handed out are asked as well as the ones being read. Not a fresh
@@ -293,6 +310,9 @@ func (p *Parser) next() {
 		return
 	}
 	p.tok = p.lex.Next()
+	// A token of the input answers the adjacency question from its own
+	// offset, so nothing here has to be remembered for it.
+	p.tokTouches = false
 	if p.err == nil && p.lex.Err() != nil {
 		p.err = p.lex.Err()
 	}
@@ -2328,6 +2348,21 @@ func (p *Parser) parseSimple() Command {
 	return c
 }
 
+// touchesPrevious reports whether the current token was written with nothing
+// between it and the position the token in front of it ended at.
+//
+// Two sources, one question. A token of the input answers from its own
+// offset. A token an alias expansion put in front of the input cannot: every
+// spliced token carries the position of the *word it replaced*, so their
+// offsets are all the same span and say nothing about the body's layout. For
+// those the answer was taken while the body was lexed — see spliceAlias.
+func (p *Parser) touchesPrevious(after Pos) bool {
+	if p.aliasSpliced > 0 {
+		return p.tokTouches
+	}
+	return p.tok.Pos.Offset == after.Offset
+}
+
 func (p *Parser) parseAssign(h assignHead) *Assign {
 	a := &Assign{Name: h.name, Start: p.tok.Pos, Append: h.append}
 	if h.index != nil {
@@ -2354,7 +2389,7 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 	// decides *which* error, and the non-adjacent form now falls through to
 	// the paren-after-a-word rule in parseSimple. Specified in the array
 	// assignment section of docs/spec/grammar/commands.md.
-	if a.Value == nil && p.at(TokLeftParen) && p.tok.Pos.Offset == a.Stop.Offset {
+	if a.Value == nil && p.at(TokLeftParen) && p.touchesPrevious(a.Stop) {
 		if !p.dialect.ArrayLiteral {
 			p.failUnexpected("")
 			return a
@@ -4152,9 +4187,20 @@ func (p *Parser) forNameIsUsable() bool {
 
 // forNameAsWritten is the word's source text, which is what a diagnostic
 // quotes and what the plainness check above compares against.
+//
+// Read from the token rather than from the input where an alias put it
+// there. A spliced token carries the position of the *word it replaced* —
+// see spliceAlias — so slicing the input for one gives the alias's name back
+// however the body was written, and the plainness check then compared a loop
+// variable against the word that expanded to it. `alias f='for i in 1; do
+// echo hi; done'; f` was refused for a loop variable named after the alias
+// here, and is a loop in bash, ksh93 and zsh (#2299).
 func (p *Parser) forNameAsWritten() string {
 	if p.tok.Kind != TokWord {
 		return p.tokenLiteral()
+	}
+	if p.aliasSpliced > 0 {
+		return p.tok.Text
 	}
 	return p.slice(p.tok.Pos, p.tok.End)
 }

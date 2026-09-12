@@ -760,12 +760,12 @@ func Semantics() interp.Semantics {
 	s.UnaliasReportsNotFound = interp.Yes
 	s.AliasNotFoundStatusCounts = interp.No
 	s.UnaliasAllRefusesOperands = interp.Yes
-	s.AliasQuoting = interp.ListingQuoteWhenNeededEscaped
+	s.AliasQuoting = interp.ListingQuoteWhenNeededRuns
 	s.TrapQuoting = interp.ListingQuoteWhenNeededPlain
 	// `typeset -p` writes `typeset v=1`, an exported scalar as `export e=E`
 	// — values in the alias style, keys in the trap one.
 	s.DeclareListing = interp.DeclareListingExportSpelled
-	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededEscaped
+	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededRuns
 	s.ListingControlEscape = interp.ControlEscapeCaret
 	// `export -p` is that same form narrowed to the exported names, not a
 	// listing that repeats its own command word: it writes the attribute
@@ -2035,7 +2035,7 @@ func Semantics() interp.Semantics {
 	// No array and no name: a coprocess here is reached by `print -p` and
 	// `read -p`, measured — `${COPROC[0]}` is empty after `coproc cat`.
 	s.CoprocEndsInAnArray = interp.No
-	s.SetListingQuoting = interp.ListingQuoteWhenNeededEscaped
+	s.SetListingQuoting = interp.ListingQuoteWhenNeededRuns
 
 	// A descriptor number the process cannot hold is not checked here: with
 	// `ulimit -n 6`, `exec 8>f` reports success and prints nothing, where

@@ -1954,12 +1954,13 @@ func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 		return l.scanDouble(), true
 
 	case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
-		// `$((` is arithmetic. A command substitution whose first construct
-		// is a subshell has to be written `$( (`, which is the only
-		// disambiguation available and is decided here: by the time the
+		// `$((` is arithmetic, unless the parentheses say otherwise: a
+		// command substitution whose first command is a subshell may be
+		// written with the two touching, and doubleParenKind is where the two
+		// readings are told apart. Decided here because by the time the
 		// parser sees tokens the choice has been made.
 		flush()
-		return []Span{l.scanParens(ArithSubst, Unquoted)}, true
+		return []Span{l.scanParens(l.doubleParenKind(), Unquoted)}, true
 
 	case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
 		// The older spelling of the case above. Where the flag is off this
@@ -2098,7 +2099,7 @@ func (l *Lexer) heredocSpans() []Span {
 		// blob of input, not a list of fields.
 		case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
 			flush()
-			out = append(out, l.scanParens(ArithSubst, DoubleQuoted))
+			out = append(out, l.scanParens(l.doubleParenKind(), DoubleQuoted))
 			litPos = l.pos()
 		case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
 			flush()
@@ -2215,7 +2216,7 @@ func (l *Lexer) scanDoubleBody(open Pos, closing bool) []Span {
 		// result is split afterwards, which is the only thing it changes.
 		case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
 			flush()
-			out = append(out, l.scanParens(ArithSubst, DoubleQuoted))
+			out = append(out, l.scanParens(l.doubleParenKind(), DoubleQuoted))
 			litPos = l.pos()
 		case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
 			flush()
@@ -2340,6 +2341,104 @@ func (l *Lexer) Tokens() []Token {
 			heredoc = 0
 		}
 	}
+}
+
+// doubleParenKind decides what a `$((` opens.
+//
+// Two constructs are spelled with the same three bytes. `$(( … ))` is an
+// arithmetic expansion, and `$( ( … ) )` — a command substitution whose first
+// command is a subshell — may be written with the two parentheses touching.
+// POSIX tells the *author* to separate them and says nothing about what a
+// shell does when they are not, so the answer is measured rather than
+// reasoned from.
+//
+// Measured 2026-09-12. bash 5.3.15, the 3.2.57 macOS ships, that build
+// invoked as `sh`, ksh93u+ and zsh 5.9.2 all run `echo $((echo ab cde) )` and
+// print `ab cde`; dash 0.5.12 and BusyBox ash 1.37.0 refuse it, saying the
+// `))` is missing. The same head count that put process substitution in the
+// core, so [Dialect.ArithSubstFallsBackToCommandSubst] is on in [Core] and
+// off in [POSIX].
+//
+// The rule the five agree on is positional and it is not "does the expression
+// parse". Counting from one after the `$((`, find the `)` that brings the
+// count back to zero: it is arithmetic when the very next byte is another
+// `)`, and a command substitution otherwise. That is why `$(( 1 ) + (2 ))` is
+// a command substitution in all five even though `(1) + (2)` is perfectly
+// good arithmetic — the first `)` closes the count, and a `+` follows it —
+// and why `$(( (1+2) ))` is 3 while `$(( (1+2)) )` runs `1+2` as a command.
+// Reading it as "try arithmetic, fall back on a parse failure" gets both of
+// those wrong.
+//
+// Quoting counts, so the scan is the same one scanParens does: `$(( "0)" ))`
+// is arithmetic in bash — it reports an arithmetic error rather than running
+// anything — because the `)` is inside a quoted string and closes nothing.
+//
+// Input that runs out is left to arithmetic, which is what the five say: an
+// unfinished `$((` is `unexpected EOF while looking for matching `)'` there,
+// and the command-substitution reading would blame a different construct for
+// text that never closed either one.
+func (l *Lexer) doubleParenKind() SpanKind {
+	if !l.dialect.ArithSubstFallsBackToCommandSubst {
+		return ArithSubst
+	}
+	if doubleParenIsArith(l.src, l.off) {
+		return ArithSubst
+	}
+	return CommandSubst
+}
+
+// doubleParenIsArith applies that rule to the `$((` at off in src.
+//
+// Taken apart from the method because the printer asks the same question of
+// text it is about to write: a command substitution whose body opens with a
+// parenthesis is written back without a space only where reading it again
+// gives the construct back. One rule, asked from both ends.
+func doubleParenIsArith(src string, off int) bool {
+	depth := 1
+	for i := off + 3; i < len(src); i++ {
+		switch src[i] {
+		case '\\':
+			i++
+		case '\'', '"', '`':
+			if j := skipQuotedFrom(src, i); j > i {
+				i = j
+			}
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i+1 < len(src) && src[i+1] == ')'
+			}
+		}
+	}
+	return true
+}
+
+// skipQuotedFrom returns the offset of the byte closing the quote that opens
+// at i, or i where nothing closes it.
+//
+// A plain scan rather than the lexer's own, because this one runs *ahead* of
+// the cursor to answer a question about text nobody has read yet: it may not
+// move the cursor, raise a remark or record a failure, and every one of those
+// is what the lexer's quote skippers exist to do. Single quotes hold
+// everything; double quotes and backticks let a backslash escape the next
+// byte, which is the whole of what either needs here — the question is only
+// where the quote ends, never what is inside it.
+func skipQuotedFrom(src string, i int) int {
+	quote := src[i]
+	escapes := quote != '\''
+	for j := i + 1; j < len(src); j++ {
+		switch src[j] {
+		case '\\':
+			if escapes {
+				j++
+			}
+		case quote:
+			return j
+		}
+	}
+	return i
 }
 
 // scanParens reads $( … ) or $(( … )).

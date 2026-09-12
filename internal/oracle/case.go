@@ -8607,7 +8607,22 @@ echo "st=$?"`,
 	{
 		ID: "subst/arith-vs-subshell", Category: "substitutions",
 		Snippet: `echo "[$((1+2))] [$( (echo sub) )]"`,
-		Why:     "$(( starts arithmetic, so a substitution beginning with a subshell needs the space — the only disambiguation available",
+		Why:     "the two constructs written apart, which is the spelling POSIX tells an author to use and the one every shell reads the same way. The rows below are what happens when they are written together",
+	},
+	{
+		ID: "subst/double-paren-is-a-subshell", Category: "substitutions",
+		Snippet: `echo "[$((echo ab cde) )]"`,
+		Why:     "the parentheses written together, and the row that says the space is not the only disambiguation after all: bash 5.3, bash 3.2, bash-as-sh, ksh93 and zsh all run the subshell, and dash and ash refuse the line for a missing `))`. The same head count that put process substitution in the core, so this is core and the two minimal shells turn it off. We read every `$((` as arithmetic and failed the expression instead (#2299)",
+	},
+	{
+		ID: "subst/double-paren-count-decides-not-the-expression", Category: "substitutions",
+		Snippet: `echo "[$(( (1+2) ))] [$(( (1+2)) )]"`,
+		Why:     "the same three bytes twice, parted only by where the blank sits, and the row that says the rule is positional rather than `try arithmetic and fall back`. Counting from one after the `$((`, the `)` that brings the count to zero opens arithmetic only when another `)` follows it immediately — so the first is 3 and the second runs `1+2` as a command. Read as a fallback on a failed parse, both would be 3",
+	},
+	{
+		ID: "subst/double-paren-closer-in-quotes", Category: "substitutions",
+		Snippet: `echo $(( '0)' + 1 ))`,
+		Why:     "whether the scan that tells the two constructs apart tracks quoting, and the panel splits on it: bash 5.3, 3.2 and bash-as-sh read the quoted `)` as closing nothing and report an arithmetic error, where ksh93 and zsh let it close the count and run `0)` as a command. Our bash follows bash; the two rows above are what the whole panel agrees on, and this is the edge it does not",
 	},
 	{
 		ID: "subst/backticks-nest-with-escaping", Category: "substitutions",
@@ -13116,6 +13131,21 @@ printf 'TWO=still-running\n'`,
 		Why:     "one listing, three spellings of the same three values: bare-until-needed with `'\\''` for the embedded quote, always-single-quoted with the quote doubled out, and `$'...'` — filtered to the script's own names because the rest of the listing is the machine's",
 	},
 	{
+		ID: "prefix/append-joins-the-value-that-is-there", Category: "commands",
+		Snippet: `v=1; v+=4; v+=5 env | grep "^v="; echo "after=[$v]"`,
+		Why:     "an assignment prefix written as an append joins what the name already holds, and unanimously: every column shows the child `v=145` and leaves the shell's own `v` at `14`. The operator is on the assignment either way, so a route that expands the value and stores it loses the append without failing anything — we handed the child the tail alone, which for the idiom the construct exists for, `PATH+=:/x cmd`, is a PATH of one entry (#2299)",
+	},
+	{
+		ID: "set/listed-value-with-a-quote-at-an-end", Category: "builtins",
+		Snippet: `v1="x'"; v2="'x"; v3="'"; set | grep "^v[123]"; echo "st=$?"`,
+		Why:     "where the two single-quoting listings part, and the only place they can: a quote at an *end* of the value. bash wraps the whole value in one pair and keeps the empty run its escape leaves behind, zsh cuts the value at each quote and wraps only the non-empty pieces, and bash 5 writes the lone-quote value with no quotes at all where 3.2 wraps it. All of them read back as the value, which is why a spelling belonging to neither survived here until a listing was compared byte for byte (#2299)",
+	},
+	{
+		ID: "set/listed-value-with-a-hash", Category: "builtins",
+		Snippet: `v1=ab#cd; v2=a#b#c; v3=1#b; v4=tail#; v5=#abcd; set | grep "^v[1-5]"; echo "st=$?"`,
+		Why:     "three shells and three rules for one character: bash quotes a `#` only where a comment could begin, so only the last of these is quoted; ksh93 quotes one a name stands in front of, so `1#b` joins it in staying bare and `ab#cd` does not; zsh quotes every one. We had bash on zsh's answer and listed `ab#cd` quoted where the shell lists it bare (#2299)",
+	},
+	{
 		ID: "set/bare-set-and-the-functions", Category: "builtins",
 		Snippet: `myfn() { echo hi; }; set | grep -c '^myfn'; echo "st=$?"`,
 		Why:     "exactly one shell follows the variables with every defined function; counted rather than shown, so the answer is 1 against three 0s whatever the body's layout",
@@ -16048,6 +16078,24 @@ echo "w=$w"`,
 trap 't' EXIT
 echo end`,
 		Why: "and the fourth door into the same room: a trap's action is read when it fires, by this shell, so the alias table it reads is this shell's. Unanimous among the three that expand aliases in a script, which is what makes it the control for the two rows above — a fix reaching `eval` and `.` and not this one would still leave the last `trap` on every exit path saying `command not found`",
+	},
+	{
+		ID: "alias/a-body-may-be-a-compound-assignment", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias t='a=(x y)'
+t
+echo "[${a[0]}][${a[1]}]"`,
+		Why:    "an alias body is a piece of program, and the grammar has to read one the way it reads the input. `a=(x y)` is an array only where the parenthesis touches the `=`, which is an offset comparison — and every spliced token carries the position of the *word it replaced*, so in a body the two never touched and the assignment was refused outright. Written from a file rather than `-c`, which is the route all three expanding shells take without an option (#2299)",
+		Script: true,
+	},
+	{
+		ID: "alias/a-body-may-be-a-loop", Category: "alias",
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias t='for i in 1 2; do echo hi$i; done'
+t
+echo end`,
+		Why:    "the same fault at the other question that reads the input between two tokens: a loop variable is compared against the source text to see whether it was written plainly, and for a spliced token that text is the alias's own name — so every loop in a body was refused for a variable it did not have. A different construct and a different check, which is what makes it a second row rather than a restatement (#2299)",
+		Script: true,
 	},
 	{
 		ID: "alias/nested-text-expands-where-the-command-string-did-not", Category: "alias",

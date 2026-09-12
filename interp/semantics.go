@@ -4254,6 +4254,35 @@ type Semantics struct {
 	// this question.
 	ListedHashIsBareAfterANonName Answer
 
+	// ListedHashIsBareUnlessItOpensTheValue leaves a `#` in a listed value
+	// unquoted wherever it stands except as the value's first byte. bash
+	// alone, and a weaker rule than the one above rather than a different
+	// one: what it quotes for is the position where a comment would begin,
+	// and nothing else.
+	//
+	// Measured 2026-09-12 on bash 5.3.15 and the 3.2.57 macOS ships, with a
+	// bare `set` over a scalar — its `typeset -p` cannot show this, because
+	// that listing double-quotes every value:
+	//
+	//	value     bash 5.3.15   zsh 5.9.2   ksh93u+
+	//	ab#cd     ab#cd         'ab#cd'     'ab#cd'
+	//	a#b#c     a#b#c         'a#b#c'     'a#b#c'
+	//	1#b       1#b           '1#b'       1#b
+	//	tail#     tail#         'tail#'     'tail#'
+	//	#abcd     '#abcd'       '#abcd'     '#abcd'
+	//
+	// So three shells and three rules: bash judges the position alone, ksh93
+	// judges what stands in front of the first `#` (see the axis above), and
+	// zsh quotes every one. We had bash on zsh's answer, which is a value
+	// quoted where the shell writes it bare — valid either way and read back
+	// the same, which is why it took a suite file comparing `set`'s output
+	// byte for byte to find it (#2299).
+	//
+	// Asked ahead of ListedHashIsBareAfterANonName and only where the two
+	// could differ: a value with no `#`, one whose `#` opens it, and one
+	// with something else in it needing quotes are all settled without it.
+	ListedHashIsBareUnlessItOpensTheValue Answer
+
 	// ExportListing is the shape `export -p` writes: bash spells each name
 	// as a clustered declaration (`declare -x V="1"`), and the other three
 	// repeat the command word (`export V='1'`).
@@ -9603,6 +9632,9 @@ func PosixSemantics() Semantics {
 		// answer is that a `#` is quoted like any other character a word
 		// cannot carry bare.
 		ListedHashIsBareAfterANonName: No,
+		// And the same for the position rule: POSIX says nothing, so the
+		// bare shell quotes a `#` wherever it stands.
+		ListedHashIsBareUnlessItOpensTheValue: No,
 		// And a descriptor the shell has nothing open at is not a terminal,
 		// however the number was spelled: no narrowing, and no value that
 		// answers true on its own.

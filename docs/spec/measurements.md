@@ -3117,6 +3117,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `mapfile/reads-a-descriptor` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x][y] n=2` | `[x][y] n=2` | `[] n=0` **2>** `<shell>: mapfile: command not found` | `[] n=0` **2>** `<shell>: mapfile: not found` | `[] n=0` **2>** `<shell>:1: command not found: mapfile` | **2>** `<shell>: mapfile: not found~<shell>: syntax error: bad substitution` *(status 2)* |
 | `set/bare-set-and-a-hidden-value` | `zzv='plain'~st=0` **2>** `<shell>: 1: typeset: not found` | `zzv=plain~st=0` **2>** `<shell>: line 1: typeset: -H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `zzv=plain~st=0` **2>** `<shell>: line 1: typeset: -H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `zzv=plain~st=0` **2>** `<shell>: line 0: typeset: -H: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `zzh=hid~zzv=plain~st=0` | `zzh~zzv=plain~st=0` | `zzv='plain'~st=0` **2>** `<shell>: typeset: not found` |
 | `set/bare-set-lists-the-variables` | `v1='plain'~v2='has space'~v3='quo'"'"'te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` | `v1=plain~v2='has space'~v3=$'quo\'te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` | `v1='plain'~v2='has space'~v3='quo'"'"'te'~st=0` |
+| `set/listed-value-with-a-quote-at-an-end` | `v1='x'"'"~v2=''"'"'x'~v3=''"'"~st=0` | `v1='x'\'''~v2=''\''x'~v3=\'~st=0` | `v1='x'\'''~v2=''\''x'~v3=\'~st=0` | `v1='x'\'''~v2=''\''x'~v3=''\'''~st=0` | `v1=$'x\''~v2=$'\'x'~v3=$'\''~st=0` | `v1='x'\'~v2=\''x'~v3=\'~st=0` | `v1='x'"'"~v2=''"'"'x'~v3=''"'"~st=0` |
+| `set/listed-value-with-a-hash` | `v1='ab#cd'~v2='a#b#c'~v3='1#b'~v4='tail#'~v5='#abcd'~st=0` | `v1=ab#cd~v2=a#b#c~v3=1#b~v4=tail#~v5='#abcd'~st=0` | `v1=ab#cd~v2=a#b#c~v3=1#b~v4=tail#~v5='#abcd'~st=0` | `v1=ab#cd~v2=a#b#c~v3=1#b~v4=tail#~v5='#abcd'~st=0` | `v1='ab#cd'~v2='a#b#c'~v3=1#b~v4='tail#'~v5='#abcd'~st=0` | `v1='ab#cd'~v2='a#b#c'~v3='1#b'~v4='tail#'~v5='#abcd'~st=0` | `v1='ab#cd'~v2='a#b#c'~v3='1#b'~v4='tail#'~v5='#abcd'~st=0` |
 | `set/bare-set-and-the-functions` | `0~st=1` | `1~st=0` | `0~st=1` | `1~st=0` | `0~st=1` | `0~st=1` | `0~st=1` |
 | `command/capital-v-says-a-sentence` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a keyword~st=0` | `echo is a shell builtin~if is a reserved word~st=0` | `echo is a shell builtin~if is a shell keyword~st=0` |
 | `command/capital-v-a-name-that-is-nothing` | `nosuchcmd_zz: not found~st=127` | `st=1` **2>** `<shell>: line 1: command: nosuchcmd_zz: not found` | `st=1` **2>** `<shell>: line 1: command: nosuchcmd_zz: not found` | `st=1` **2>** `<shell>: line 0: command: nosuchcmd_zz: not found` | `st=1` **2>** `<shell>: command: nosuchcmd_zz: not found` | `nosuchcmd_zz not found~st=1` | `nosuchcmd_zz: not found~st=127` |
@@ -4344,6 +4346,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `set/bare-set-lists-the-variables` — one listing, three spellings of the same three values: bare-until-needed with `'\''` for the embedded quote, always-single-quoted with the quote doubled out, and `$'...'` — filtered to the script's own names because the rest of the listing is the machine's
   ```sh
   v1=plain; v2='has space'; v3="quo'te"; set | grep "^v[123]"; echo "st=$?"
+  ```
+- `set/listed-value-with-a-quote-at-an-end` — where the two single-quoting listings part, and the only place they can: a quote at an *end* of the value. bash wraps the whole value in one pair and keeps the empty run its escape leaves behind, zsh cuts the value at each quote and wraps only the non-empty pieces, and bash 5 writes the lone-quote value with no quotes at all where 3.2 wraps it. All of them read back as the value, which is why a spelling belonging to neither survived here until a listing was compared byte for byte (#2299)
+  ```sh
+  v1="x'"; v2="'x"; v3="'"; set | grep "^v[123]"; echo "st=$?"
+  ```
+- `set/listed-value-with-a-hash` — three shells and three rules for one character: bash quotes a `#` only where a comment could begin, so only the last of these is quoted; ksh93 quotes one a name stands in front of, so `1#b` joins it in staying bare and `ab#cd` does not; zsh quotes every one. We had bash on zsh's answer and listed `ab#cd` quoted where the shell lists it bare (#2299)
+  ```sh
+  v1=ab#cd; v2=a#b#c; v3=1#b; v4=tail#; v5=#abcd; set | grep "^v[1-5]"; echo "st=$?"
   ```
 - `set/bare-set-and-the-functions` — exactly one shell follows the variables with every defined function; counted rather than shown, so the answer is 1 against three 0s whatever the body's layout
   ```sh
@@ -13509,6 +13519,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `signal/a-command-a-signal-ended-in-a-substitution` | `User defined signal N: N~after` | `after` | `after` | `after` | `<shell>: N: User signal N~after` | `after` | `User defined signal N~after` |
 | `signal/a-command-a-signal-ended` | `User defined signal N: N` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'` | *(no output, status 0)* | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'` | `<shell>: N: User signal N` | *(no output, status 0)* | `User defined signal N` |
 | `cmd/a-name-broken-by-an-expansion` | `rc=127` **2>** `<shell>: 1: aX=c: not found` | `rc=127` **2>** `<shell>: line 1: aX=c: command not found` | `rc=127` **2>** `<shell>: line 1: aX=c: command not found` | `rc=127` **2>** `<shell>: aX=c: command not found` | `rc=127` **2>** `<shell>: aX=c: not found` | `rc=127` **2>** `<shell>:1: command not found: aX=c` | `rc=127` **2>** `<shell>: aX=c: not found` |
+| `prefix/append-joins-the-value-that-is-there` | `after=[1]` **2>** `<shell>: 1: v+=4: not found~<shell>: 1: v+=5: not found` | `v=145~after=[14]` | `v=145~after=[14]` | `v=5~after=[14]` | `v=145~after=[14]` | `v=145~after=[14]` | `after=[1]` **2>** `<shell>: v+=4: not found~<shell>: v+=5: not found` |
 | `loop/no-word-in-an-item-list-is-reserved` | `1=do~2=done~3=a~3=b~after` | `1=do~2=done~3=a~3=b~after` | `1=do~2=done~3=a~3=b~after` | `1=do~2=done~3=a~3=b~after` | `1=do~2=done~3=a~3=b~after` | `1=do~2=done~3=a~3=b~after` | `1=do~2=done~3=a~3=b~after` |
 | `loop/an-item-list-with-no-separator-before-do` | **2>** `<shell>: 1: Syntax error: "done" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `done'~<shell>: -c: line 1: `for x in a b do echo "got=$x"; done; echo after'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `done'~<shell>: -c: line 1: `for x in a b do echo "got=$x"; done; echo after'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `done'~<shell>: -c: line 0: `for x in a b do echo "got=$x"; done; echo after'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `done' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `done'` *(status 1)* | **2>** `<shell>: syntax error: unexpected "done" (expecting "do")` *(status 2)* |
 | `jobs/bg-with-no-job-control` | `st=2` **2>** `<shell>: 1: bg: Illegal option --` | `st=1` **2>** `<shell>: line 1: bg: no job control` | `st=1` **2>** `<shell>: line 1: bg: no job control` | `st=1` **2>** `<shell>: line 0: bg: no job control` | `st=2` **2>** `<shell>: bg: --version: unknown option~Usage: bg [ options ] [job ...]` | `st=1` **2>** `<shell>:bg:1: no job control in this shell.` | `st=2` **2>** `<shell>: bg: line 0: illegal option --` |
@@ -13611,6 +13622,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cmd/a-name-broken-by-an-expansion` — a name interrupted by an expansion is not a name, unanimously in all five: the word is a command name and the expansion happens first, so the diagnostic reports `aX=c`. It is the boundary the subscript form has to stop at — a scan that follows the `=` across spans wherever it finds one would turn this into an assignment to `a`
   ```sh
   b=X; a$b=c; echo "rc=$?"
+  ```
+- `prefix/append-joins-the-value-that-is-there` — an assignment prefix written as an append joins what the name already holds, and unanimously: every column shows the child `v=145` and leaves the shell's own `v` at `14`. The operator is on the assignment either way, so a route that expands the value and stores it loses the append without failing anything — we handed the child the tail alone, which for the idiom the construct exists for, `PATH+=:/x cmd`, is a PATH of one entry (#2299)
+  ```sh
+  v=1; v+=4; v+=5 env | grep "^v="; echo "after=[$v]"
   ```
 - `loop/no-word-in-an-item-list-is-reserved` — the item list ends at a `;` or a newline and at nothing else — no word in it is a reserved word — and this is **unanimous across all six columns**, so it is core and not a dialect's. A loop over a list holding the word `done` is not exotic: `for f in $(ls)` reaches it the moment a file is called that. This engine read `do` and `done` as stop words here and refused all three of these lines (#1161)
   ```sh
@@ -13772,6 +13787,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `subst/brace-in-quotes-does-not-close` | `[a}b]` | `[a}b]` | `[a}b]` | `[a}b]` | `[a}b]` | `[a}b]` | `[a}b]` |
 | `subst/nesting` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` |
 | `subst/arith-vs-subshell` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` |
+| `subst/double-paren-is-a-subshell` | **2>** `<shell>: 1: Syntax error: Missing '))'` *(status 2)* | `[ab cde]` | `[ab cde]` | `[ab cde]` | `[ab cde]` | `[ab cde]` | **2>** `<shell>: syntax error: missing '))'` *(status 2)* |
+| `subst/double-paren-count-decides-not-the-expression` | **2>** `<shell>: 1: Syntax error: Missing '))'` *(status 2)* | `[3] []` **2>** `<shell>: line 1: 1+2: command not found` | `[3] []` **2>** `<shell>: line 1: 1+2: command not found` | `[3] []` **2>** `<shell>: 1+2: command not found` | `[3] []` **2>** `<shell>: 1+2: not found` | `[3] []` **2>** `<shell>:1: command not found: 1+2` | **2>** `<shell>: syntax error: missing '))'` *(status 2)* |
+| `subst/double-paren-closer-in-quotes` | **2>** `<shell>: 1: arithmetic expression: expecting primary: " '0)' + 1 "` *(status 2)* | **2>** `<shell>: line 1: '0)' + 1 : arithmetic syntax error: operand expected (error token is "'0)' + 1 ")` *(status 1)* | **2>** `<shell>: line 1: '0)' + 1 : arithmetic syntax error: operand expected (error token is "'0)' + 1 ")` *(status 127)* | **2>** `<shell>: '0)' + 1 : syntax error: operand expected (error token is "'0)' + 1 ")` *(status 1)* | **2>** `<shell>: 0): not found` | **2>** `<shell>:1: command not found: 0)` | **2>** `<shell>: arithmetic syntax error` *(status 2)* |
 | `subst/backticks-nest-with-escaping` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` |
 
 - `subst/does-not-end-the-word` — a substitution is part of a word, not a word of its own
@@ -13794,9 +13812,21 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   echo "[$(echo "$(echo deep)")]"
   ```
-- `subst/arith-vs-subshell` — $(( starts arithmetic, so a substitution beginning with a subshell needs the space — the only disambiguation available
+- `subst/arith-vs-subshell` — the two constructs written apart, which is the spelling POSIX tells an author to use and the one every shell reads the same way. The rows below are what happens when they are written together
   ```sh
   echo "[$((1+2))] [$( (echo sub) )]"
+  ```
+- `subst/double-paren-is-a-subshell` — the parentheses written together, and the row that says the space is not the only disambiguation after all: bash 5.3, bash 3.2, bash-as-sh, ksh93 and zsh all run the subshell, and dash and ash refuse the line for a missing `))`. The same head count that put process substitution in the core, so this is core and the two minimal shells turn it off. We read every `$((` as arithmetic and failed the expression instead (#2299)
+  ```sh
+  echo "[$((echo ab cde) )]"
+  ```
+- `subst/double-paren-count-decides-not-the-expression` — the same three bytes twice, parted only by where the blank sits, and the row that says the rule is positional rather than `try arithmetic and fall back`. Counting from one after the `$((`, the `)` that brings the count to zero opens arithmetic only when another `)` follows it immediately — so the first is 3 and the second runs `1+2` as a command. Read as a fallback on a failed parse, both would be 3
+  ```sh
+  echo "[$(( (1+2) ))] [$(( (1+2)) )]"
+  ```
+- `subst/double-paren-closer-in-quotes` — whether the scan that tells the two constructs apart tracks quoting, and the panel splits on it: bash 5.3, 3.2 and bash-as-sh read the quoted `)` as closing nothing and report an arithmetic error, where ksh93 and zsh let it close the count and run `0)` as a command. Our bash follows bash; the two rows above are what the whole panel agrees on, and this is the edge it does not
+  ```sh
+  echo $(( '0)' + 1 ))
   ```
 - `subst/backticks-nest-with-escaping` — the older form nests only with backslash escaping, which is why $( ) exists
   ```sh
@@ -18476,6 +18506,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/eval-uses-the-shells-aliases` | `EVAL~HIT~st=0` | `st=127` **2>** `<script>: line 3: e: command not found~<script>: line 4: t: command not found` | `EVAL~HIT~st=0` | `st=127` **2>** `<script>: line 5: e: command not found~<script>: line 6: t: command not found` | `HIT~st=0` **2>** `<script>[2]: eval: line 2: e: not found` | `HIT~st=0` **2>** `(eval):2: command not found: e` | `EVAL~HIT~st=0` |
 | `alias/a-substitution-uses-the-shells-aliases` | `v=SUB~w=BACK` | `v=~w=` **2>** `<script>: line 2: t: command not found~<script>: line 4: t: command not found` | `v=SUB~w=BACK` | `v=~w=` **2>** `<script>: line 2: t: command not found~<script>: line 4: t: command not found` | `v=SUB~w=BACK` | `v=SUB~w=BACK` | `v=SUB~w=BACK` |
 | `alias/a-trap-body-uses-the-shells-aliases` | `end~TRAP` | `end` **2>** `<script>: line 1: t: command not found` | `end~TRAP` | `end` **2>** `<script>: line 4: t: command not found` | `end~TRAP` | `end~TRAP` | `end~TRAP` |
+| `alias/a-body-may-be-a-compound-assignment` | **2>** `<script>: 3: Syntax error: "(" unexpected` *(status 2)* | `[x][y]` | `[x][y]` | `[x][y]` | `[x][y]` | `[][x]` | **2>** `<script>: line 3: syntax error: unexpected "("` *(status 2)* |
+| `alias/a-body-may-be-a-loop` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` | `hi1~hi2~end` |
 | `alias/nested-text-expands-where-the-command-string-did-not` | `E~v=` **2>** `<shell>: 1: t: not found` | `v=` **2>** `<shell>: line 1: t: command not found~<shell>: line 1: t: command not found` | `E~v=` **2>** `<shell>: line 1: t: command not found` | `v=` **2>** `<shell>: t: command not found~<shell>: t: command not found` | `E~v=S` | `E~v=S` | `E~v=` **2>** `<shell>: t: not found` |
 | `alias/a-trap-body-under-a-command-string-expands-too` | `end~TRAP` | `end` **2>** `<shell>: line 1: t: command not found` | `end~TRAP` | `end` **2>** `<shell>: t: command not found` | `end~TRAP` | `end~TRAP` | `end~TRAP` |
 | `alias/neither-kind-is-accepted-where-the-shell-has-not-got-it` | `ag=1~as=1~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=2~as=2~us=2` | `ag=0~as=0~us=1` | `ag=1~as=1~us=2` |
@@ -18723,6 +18755,20 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   alias t='echo TRAP'
   trap 't' EXIT
+  echo end
+  ```
+- `alias/a-body-may-be-a-compound-assignment` — an alias body is a piece of program, and the grammar has to read one the way it reads the input. `a=(x y)` is an array only where the parenthesis touches the `=`, which is an offset comparison — and every spliced token carries the position of the *word it replaced*, so in a body the two never touched and the assignment was refused outright. Written from a file rather than `-c`, which is the route all three expanding shells take without an option (#2299)
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias t='a=(x y)'
+  t
+  echo "[${a[0]}][${a[1]}]"
+  ```
+- `alias/a-body-may-be-a-loop` — the same fault at the other question that reads the input between two tokens: a loop variable is compared against the source text to see whether it was written plainly, and for a spliced token that text is the alias's own name — so every loop in a body was refused for a variable it did not have. A different construct and a different check, which is what makes it a second row rather than a restatement (#2299)
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias t='for i in 1 2; do echo hi$i; done'
+  t
   echo end
   ```
 - `alias/nested-text-expands-where-the-command-string-did-not` — zsh expands no alias in a `-c` string and expands one in `eval` and in a substitution reached from that same string. So its refusal under `-c` is not a rule about aliases: the option is the only gate on a nested text, and a `-c` string simply being read whole is what stops a definition on one line reaching the next. This is the row #2109 split `Dialect.ExpandAliases` in two for — one field held both the option's default and the route rule, and the front end derived the nested texts' answer from the route, which turned the table off for every `eval` and `$( )` under a zsh command string. The dash column is a *different* fault and still misses: that shell parses a substitution with the line that holds it, so its `$( )` here is read before the `alias` beside it has run — #2357

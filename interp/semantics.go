@@ -235,6 +235,50 @@ type Semantics struct {
 	// expansion and is not an option — see interp/tildeflag.go, where the two
 	// meet.
 	GlobExpansionResults Answer
+	// ValueBackslashQuotesWhatFollows takes the metacharacter status off the
+	// character behind a backslash that arrived in a **value**, where the
+	// field is then matched as a pattern. `No` says the backslash is data of
+	// its own and what follows it stays live.
+	//
+	// Measured 2026-09-12 from a script file, in a directory holding exactly
+	// `a\b` and `a*` so that either reading has a name to find — a directory
+	// holding neither prints the same word whichever rule is in force, which
+	// is what makes this arrangement discriminating rather than merely
+	// plausible:
+	//
+	//	v='a\*'; set -- $v; printf "[%s]" "$@"
+	//
+	//	dash, bash 5.3.15, bash-as-`sh`, bash 3.2.57   [a\*]
+	//	zsh 5.9.2                                      [a\*]
+	//	ksh93u+                                        [a\b]
+	//
+	// Five to one, and neither column matched `a*`, so nobody reads the
+	// backslash as a quote that is then *removed*: the two live readings are
+	// "quotes what follows and stays in the text" and "is an ordinary
+	// character and what follows is live" (#1367).
+	//
+	// **Asked only where a value's backslash stands directly before a
+	// metacharacter, and only in a dialect that globs the result of an
+	// expansion at all.** Everything around that shape is unanimous: a
+	// backslash before an ordinary character globs the same either way — the
+	// mark is invisible to the matcher — and a backslash at the end of a
+	// value, or before another backslash, is encoded identically under both
+	// readings. Asking on the common path would make the bare core refuse an
+	// ordinary line that all six shells agree about.
+	//
+	// GlobExpansionResults is *read* rather than asked here for the same
+	// reason: where the result is never globbed the two readings put the
+	// same text on the wire, so there is nothing to disagree about. That is
+	// not the same as zsh having no answer — `${~v}` globs one expansion in
+	// that shell, and measured 2026-09-12 in the same directory,
+	// `v='a\*'; print -r -- ${~v}` is `a\*`, which is Yes.
+	//
+	// A backslash before an *ordinary* character is a further question this
+	// does not settle: bash and dash want it to quote for the match and to
+	// come back in the text a failed match restores, which the escaped form
+	// cannot say (#1370). Both readings here get that row wrong the same way.
+	ValueBackslashQuotesWhatFollows Answer
+
 	// GlobNoMatchIsError makes a pattern matching nothing an error instead of
 	// passing it through. True only in zsh.
 	GlobNoMatchIsError Answer

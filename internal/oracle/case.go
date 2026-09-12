@@ -555,6 +555,16 @@ var Corpus = []Case{
 		Why:     "what a value's backslash does to the character behind it when the result is a pattern, and the panel divides: bash, bash 3.2, bash-as-sh, dash and zsh match neither name and leave the word as written, so the `*` is not a metacharacter and the backslash is still in the text; ksh93 reads the backslash as data and the `*` as live, and matches `a\\b` — the axis that split is #1367's. Both files are present so that either reading has something to find — a directory holding neither would print the same word for both",
 	},
 	{
+		ID: "expand/a-value-backslash-before-a-metacharacter-under-the-glob-flag", Category: "expansion",
+		Snippet: `mkdir -p bt && cd bt && : > 'a\b' && : > 'a*' && v='a\*' && u='a*' && set -- ${~v} ${~u} && printf "[%s]" "$@"`,
+		Why:     "the one route by which the shell that globs no expansion result reaches the question, which is what says its answer to it is measured rather than assumed: `${~spec}` globs this one expansion, and the backslash still takes the metacharacter status off the `*` — the word comes out as written and matches neither name. The second field is the control in the same directory, where the same `*` with no backslash in front of it matches both, so a row that had simply stopped globbing would answer the first field right and the second wrong. The other five columns have no such flag and record their refusal (#1367)",
+	},
+	{
+		ID: "expand/a-value-doubled-backslash-before-a-metacharacter", Category: "expansion",
+		Snippet: `mkdir -p bd && cd bd && : > 'a\b' && : > 'a*' && v='a\\*' && set -- $v && printf "[%s]" "$@"`,
+		Why:     "the control for the axis the row above holds, and it divides the panel the other way. The second backslash is what the first one quotes, so the `*` is live under both readings of a value's backslash and neither reading has anything to say: ksh93 and zsh answer `a\\*`, the pattern being two literal backslashes and a star that matches no name here. bash, bash 3.2, bash-as-`sh` and dash answer `a\b`, which is the *third* reading — the quoting backslash vanishing from the pattern while staying in the text — and is #1370's question rather than #1367's. Recorded so a fix to either one has a row that says which of them it moved",
+	},
+	{
 		ID: "expand/a-value-backslash-before-an-ordinary-character-in-a-pattern", Category: "expansion",
 		Snippet: `mkdir -p bq && cd bq && : > 'a\bc' && : > 'ab' && v='a\b*' && set -- $v && printf "[%s]" "$@"`,
 		Why:     "the residue the row above leaves, and it is a three-way split. bash, bash-as-`sh`, bash 3.2 and dash read the value's backslash as a quote that is *not itself matched*, so the pattern is `ab*` and the answer is `ab`; ksh93 reads it as data and matches `a\\bc`; zsh globs no expansion result at all and leaves the word. It needs a backslash before an *ordinary* character with a live metacharacter still beside it — before a metacharacter there is nothing live left to glob, which is the unanimous row above. Recorded rather than fixed: the escaped form carries one backslash meaning and the bash reading needs two, since the same byte has to quote for the match and survive into the text a failed match restores (#1370)",

@@ -44,10 +44,17 @@ import (
 // has to contain. The third is the same value with the flag that asks for
 // the other reading, which is where an alternation from a value does come
 // from.
+// markedByGlobEscape is the alphabet above, named because two readers need
+// it: globEscape, which puts the marks on, and
+// valueBackslashDisarmsAMetacharacter, which asks whether a mark on one of
+// these could change what a field means. A second spelling of the set is how
+// the two would come apart.
+const markedByGlobEscape = `*?[\<()|` + extendedPatternMeta
+
 func globEscape(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
-		if strings.IndexByte(`*?[\<()|`+extendedPatternMeta, s[i]) >= 0 {
+		if strings.IndexByte(markedByGlobEscape, s[i]) >= 0 {
 			b.WriteByte('\\')
 		}
 		b.WriteByte(s[i])
@@ -80,7 +87,12 @@ func globEscape(s string) string {
 // backslash to quote for the match and to reappear in the text a failed match
 // restores. One string cannot be both, since the fallback is the unescape of
 // the pattern — a backslash that quotes is removed by it, which was this bug.
-func escapeValueBackslashes(s string) string {
+//
+// quotes is Semantics.ValueBackslashQuotesWhatFollows, resolved by the caller
+// because the axis is asked only where the two readings part. False leaves
+// the character behind the backslash live, which is the one column that reads
+// a value's backslash as data.
+func escapeValueBackslashes(s string, quotes bool) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] != '\\' {
@@ -88,13 +100,48 @@ func escapeValueBackslashes(s string) string {
 			continue
 		}
 		b.WriteString(`\\`)
-		if i+1 < len(s) {
+		if quotes && i+1 < len(s) {
 			i++
 			b.WriteByte('\\')
 			b.WriteByte(s[i])
 		}
 	}
 	return b.String()
+}
+
+// valueBackslashDisarmsAMetacharacter reports whether s has a backslash
+// directly in front of a character the matcher would otherwise read as a
+// metacharacter — the one shape the two readings of a value's backslash
+// answer differently.
+//
+// Everything else is encoded identically or matches identically: an ordinary
+// character marked is that character, a backslash at the end of the value has
+// nothing behind it, and a backslash behind a backslash is consumed by the
+// pair before it under either reading. So this is the whole of where
+// Semantics.ValueBackslashQuotesWhatFollows may be asked.
+//
+// Walked in pairs, which is the quoting reading's own walk: in `a\\*` the
+// second backslash is what the first one quotes, so the `*` is not behind a
+// backslash at all and both readings leave it live.
+//
+// The alphabet is globEscape's rather than a per-dialect one, and that is a
+// *wider* question rather than a wrong one: a `(` is not a metacharacter in
+// every dialect, so the axis is occasionally asked where the two readings
+// would have agreed. Every preset that globs an expansion result answers it,
+// so the only consequence is which lines a vector with no answer refuses —
+// and a second, dialect-aware copy of the set is how two alphabets drift
+// apart, which costs more than the width does.
+func valueBackslashDisarmsAMetacharacter(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\\' || i+1 >= len(s) {
+			continue
+		}
+		if c := s[i+1]; c != '\\' && strings.IndexByte(markedByGlobEscape, c) >= 0 {
+			return true
+		}
+		i++
+	}
+	return false
 }
 
 // globUnescape removes the marks, giving the literal field.

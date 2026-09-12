@@ -2919,198 +2919,162 @@ type Semantics struct {
 	//     does any *other* extra letter, measured with `-t`. One command's
 	//     letters, not the name's standing attributes.
 	//
-	// bash yes (both builds), ksh93 no, zsh yes. dash has no declaration
-	// builtin with a type letter and never arrives.
+	// An implementation with no declaration builtin carrying a type letter never
+	// arrives at the question.
 	InheritedValueSurvivesADeclaredType Answer
-	// CompoundElementsGoThroughTheAttribute folds what is written to one
-	// element of an array or a keyed table through the attribute the *name*
-	// carries, the way a scalar assignment already does everywhere.
+	// CompoundElementsGoThroughTheAttribute folds what is written to one element
+	// of an array or a keyed table through the attribute the *name* carries, the
+	// way a scalar assignment already does.
 	//
-	// For a scalar this needs no dialect: `typeset -i n; n=3+4` is 7 and
-	// `typeset -u d; d=again` is AGAIN in every shell that spells the letter.
-	// An element is where the panel splits.
+	// For a scalar this needs no answer: `typeset -i n; n=3+4` is 7 and
+	// `typeset -u d; d=again` is AGAIN wherever the letter is spelled. An
+	// element is where the answers split:
 	//
-	//	typeset -ia a=(1 2); a[1]=3+4     bash, ksh93 `1 7`
-	//	typeset -ua q=(ab cd); q[1]=ef    bash, ksh93 `AB EF`   zsh `ef cd`
+	//	typeset -ia a=(1 2); a[1]=3+4     Yes `1 7`
+	//	typeset -ua q=(ab cd); q[1]=ef    Yes `AB EF`   No `ef cd`
 	//	typeset -A m; typeset -i m
-	//	m[k]=7+7                          bash, ksh93 `14`
+	//	m[k]=7+7                          Yes `14`
 	//
-	// bash and ksh93 fold every element write. zsh does not fold an array's
-	// elements at all: its case letters reach a scalar's expansion and stop
-	// there, and its integer letter never meets an array in the first place —
-	// see CompoundMeetingANewAttribute, where that letter replaces the array
-	// with a scalar. So the answer is read off the case letters, which are
-	// the only ones that dialect can be asked about here.
+	// A No may not fold an array's elements at all: its case letters reach a
+	// scalar's expansion and stop there, and its integer letter never meets an
+	// array in the first place — see CompoundMeetingANewAttribute, where that
+	// letter replaces the array with a scalar. So for such a preset the answer
+	// is read off the case letters, which are the only ones it can be asked
+	// about here.
 	//
 	// Asked only where a name with one of these attributes has an element
-	// written to it, so an array with no attribute needs no dialect.
+	// written to it, so an array with no attribute needs no answer.
 	CompoundElementsGoThroughTheAttribute Answer
 
-	// CaseAttributeFoldsWhenRead decides *when* the case attributes act:
-	// once, on the value being stored, or on every read of it.
+	// CaseAttributeFoldsWhenRead decides *when* the case attributes act: once,
+	// on the value being stored, or on every read of it.
 	//
-	// The difference is invisible in the value — `$v` is `ab` under both —
-	// and shows in the two places that see the store itself. Measured
-	// 2026-09-12, `env -i` with a scratch HOME and no startup files, over
-	// `typeset -l lo=AB`:
+	// The difference is invisible in the value — `$v` is `ab` under both — and
+	// shows in the two places that see the store itself. Over `typeset -l lo=AB`:
 	//
-	//	           $lo   typeset -p lo        typeset +l lo; $lo
-	//	bash 5.3   ab    declare -l lo="ab"   ab
-	//	ksh93u+    ab    typeset -l lo=ab     ab
-	//	zsh 5.9.2  ab    typeset -l lo=AB     AB
+	//	        $lo   typeset -p lo        typeset +l lo; $lo
+	//	store   ab    typeset -l lo=ab     ab
+	//	read    ab    typeset -l lo=AB     AB
 	//
-	// So the third column is the discriminating one: taking the attribute
-	// off reveals what the store really holds, and only one of these shells
-	// has anything left to reveal. The listing is what #1755 is about — a
-	// shell that folds on the way in has no way back to the text the
-	// assignment carried, and its `-p` cannot write the declaration it read.
+	// The third column is the discriminating one: taking the attribute off
+	// reveals what the store really holds, and only the folding-on-read answer
+	// has anything left to reveal. The listing is the other half — folding on
+	// the way in leaves no way back to the text the assignment carried, so `-p`
+	// cannot write the declaration it read.
 	//
-	// Two consequences of folding on the read, both measured on the same
-	// day and neither derivable from the row above:
+	// Two consequences of folding on the read, neither derivable from the row
+	// above:
 	//
-	//   - An append joins the *stored* text. `typeset -l lo=AB; lo+=CD`
-	//     lists as `ABCD` and reads as `abcd`.
+	//   - An append joins the *stored* text. `typeset -l lo=AB; lo+=CD` lists as
+	//     `ABCD` and reads as `abcd`.
 	//   - A pattern operator matches the *folded* text, because it is a read
-	//     like any other: `${v/A/x}` leaves `ab` alone where the shell that
-	//     stores `ab` never had an `A` to match either. The two answers agree
-	//     here and differ on `${v/a/x}`, which is `xb` in the storing shell.
+	//     like any other: `${v/A/x}` leaves `ab` alone, where the storing answer
+	//     never had an `A` to match either. The two agree there and differ on
+	//     `${v/a/x}`, which is `xb` under the storing answer.
 	//
-	// Arrays are outside this on both answers and for different reasons, so
-	// it is not asked of one: the shell that folds on the read does not fold
-	// an array's elements at all — `typeset -al arr=(AB Cd)` reads back `AB
-	// Cd` — and the shell that folds on the way in has
+	// Arrays are outside this on both answers and for different reasons, so it
+	// is not asked of one: folding on the read does not fold an array's elements
+	// at all, and folding on the way in has
 	// CompoundElementsGoThroughTheAttribute for the same question.
 	//
 	// Asked only where a name carries `-l` or `-u`, which is where the two
 	// answers can be told apart.
 	CaseAttributeFoldsWhenRead Answer
 	// ArrayLiteralAssignmentStartsTheNameOver makes `a=(x y)` *re-create* the
-	// name — the attributes it carries and all — rather than replacing only
-	// its elements.
+	// name — the attributes it carries and all — rather than replacing only its
+	// elements.
 	//
 	//	typeset -ia z=(1); z=(5+5 6+6); typeset -p z; z[0]=3+4
-	//	  bash    declare -ai z=([0]="10" [1]="12")   then `7 12`
-	//	  ksh93   typeset -a z=(5+5 6+6)              then `3+4 6+6`
+	//	  No    the letter stands, values `10 12`, then `7 12`
+	//	  Yes   the letter is gone, values `5+5 6+6`, then `3+4 6+6`
 	//
-	// ksh93 keeps neither the fold nor the letter: the listing has lost the
-	// `-i`, and the element write after it is not folded either, which is
-	// what says the attribute is *gone* rather than merely bypassed by that
-	// one assignment. The case letters answer the same way in both — bash
-	// keeps `-u` and folds, ksh93 lists `typeset -a q=(gh ij)` — and zsh,
-	// which can only be asked through a case letter, keeps it: `typeset -au
-	// q=( gh ij )`.
+	// Yes keeps neither the fold nor the letter: the listing has lost the `-i`,
+	// and the element write after it is not folded either, which is what says
+	// the attribute is *gone* rather than merely bypassed by that one
+	// assignment. The case letters may be answered the other way by the same
+	// preset, which is why this is read off whichever letter a preset can be
+	// asked about.
 	//
-	// The same idea `unset` is a rule about and that
+	// The same idea `unset` is a rule about, and that
 	// InheritedValueSurvivesADeclaredType is the other side of: a name whose
-	// whole value is replaced may be a *new* name in one of these shells.
+	// whole value is replaced may be a *new* name.
 	//
 	// Asked only for the plain assignment spelling, and this is where the
 	// spelling earns its own question: a declaration's own operand —
-	// `typeset -ia d=(5+5 6+6)` — folds to `10 12` in **both**, so the
-	// letters cannot have gone there. It is `syntax.Assign.Operand` that
-	// tells the two apart, and an append is not it either: `f+=(8+8)` is 16
-	// in both.
+	// `typeset -ia d=(5+5 6+6)` — folds under **both** answers, so the letters
+	// cannot have gone there. It is `syntax.Assign.Operand` that tells the two
+	// apart, and an append is not it either: `f+=(8+8)` folds under both.
 	//
-	// And asked only where the name has something to start over: the
-	// *first* array literal a declared name receives keeps the letter and
-	// folds in both — `typeset -ia b; b=(5+5 6+6)` is `10 12` and lists as
-	// `typeset -a -i b=(10 12)` — so what re-creates the name is replacing a
-	// value it is already holding.
+	// And asked only where the name has something to start over: the *first*
+	// array literal a declared name receives keeps the letter and folds under
+	// both, so what re-creates the name is replacing a value it is already
+	// holding.
 	//
-	// The shape that reading leaves out has an axis of its own now: `typeset
-	// -i a; a=(5+5 6+6)`, where the declaration named no array letter at
-	// all, drops the attribute in ksh93 and in zsh even though `a` was
-	// holding nothing. What that turns on is whether `-a` was *written*, so
-	// it is a different question from this one and the panel answers the two
-	// differently — see
-	// ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver and its append
-	// half (#1264).
+	// The shape that reading leaves out has an axis of its own: `typeset -i a;
+	// a=(5+5 6+6)`, where the declaration named no array letter at all. What
+	// that turns on is whether `-a` was *written*, so it is a different question
+	// and the two are answered differently — see
+	// ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver and its append half.
 	//
-	// And asked only for the *indexed* literal. A keyed one keeps the
-	// attribute in both: `typeset -A m; typeset -i m; m[k]=1; m=([j]=2+2)`
-	// lists as `typeset -A -i m=(…)` in ksh93 with the `2+2` folded to 4,
-	// where the indexed spelling on the same line loses the letter. So it is
-	// this spelling and not "replacing a compound value" in general — a
-	// wider reading would take the attribute off a table no shell takes it
-	// off.
+	// And asked only for the *indexed* literal. A keyed one keeps the attribute
+	// under both, where the indexed spelling on the same line loses it. So it is
+	// this spelling and not "replacing a compound value" in general — a wider
+	// reading would take the attribute off a table nothing takes it off.
 	ArrayLiteralAssignmentStartsTheNameOver Answer
-	// ScalarAppendedToAnArrayBecomesANewElement decides where `a+=x` puts
-	// the value when the name is holding an *array*: after the last element,
-	// or joined onto the first one.
+	// ScalarAppendedToAnArrayBecomesANewElement decides where `a+=x` puts the
+	// value when the name is holding an *array*: after the last element, or
+	// joined onto the first one.
 	//
-	// Measured 2026-09-08, panel and machine as docs/spec/oracle.md, with
-	// `a=(1 2); a+=x; typeset -p a`:
-	//
-	//	bash 5.3.15         declare -a a=([0]="1x" [1]="2")   n=2
-	//	bash 5.3.15 as sh   declare -a a=([0]="1x" [1]="2")   n=2
-	//	bash 3.2.57         declare -a a=([0]="1x" [1]="2")   n=2
-	//	ksh93               typeset -a a=(1x 2)               n=2
-	//	zsh 5.9.2           typeset -a a=( 1 2 x )            n=3
-	//
-	// So No in bash, bash as `sh`, bash 3.2 and ksh93, and Yes in zsh. dash
-	// has no arrays and reports the parenthesis, which is the absence rather
-	// than a sixth answer. The count is what tells the two apart from the
-	// outside; the listing is what says which element moved.
+	// With `a=(1 2); a+=x`, Yes leaves three elements `1 2 x` and No leaves two,
+	// `1x 2`. The count is what tells the two apart from the outside; the
+	// listing is what says which element moved. An implementation with no arrays
+	// reports the parenthesis, which is the absence rather than a third answer.
 	//
 	// The join is at the *base* rather than at the lowest subscript standing,
-	// which a sparse array is what shows: `a=([5]=q); a+=x` is
-	// `declare -a a=([0]="x" [5]="q")` in bash, so the value lands at the
-	// first element whether or not there is one there, and `q` is left where
-	// it was. The empty string is a value on both sides of the axis —
-	// `a=(1 2); a+=""` leaves bash's two elements alone and gives zsh a third
-	// that is empty — and the value joins whole however many words it looks
-	// like: `a+="p q"` is one element in every column.
+	// which a sparse array shows: under No, `a=([5]=q); a+=x` puts `x` at
+	// element 0 whether or not there is one there, and `q` is left where it was.
+	// The empty string is a value on both sides of the axis — `a+=""` leaves No
+	// alone and gives Yes a third element that is empty — and the value joins
+	// whole however many words it looks like: `a+="p q"` is one element under
+	// both.
 	//
-	// Asked only where the name is holding an array. An *unset* name and a
-	// name holding a scalar are the string append, which is unanimous and
-	// core: `unset a; a+=x` leaves a plain scalar in every column. The
-	// array-literal spelling `a+=(x)` is not this question either — it adds
-	// an element in every shell that has arrays, which is why that one has no
-	// field. See Runner.appendScalarToArray.
+	// Asked only where the name is holding an array. An *unset* name and a name
+	// holding a scalar are the string append, which is unanimous and core:
+	// `unset a; a+=x` leaves a plain scalar. The array-literal spelling `a+=(x)`
+	// is not this question either — it adds an element wherever arrays exist,
+	// which is why that one has no field. See Runner.appendScalarToArray.
 	ScalarAppendedToAnArrayBecomesANewElement Answer
-	// ScalarAssignedOverACompoundReplacesTheName decides what a plain `a=x`
-	// does to a name that is already holding an array or a table: the value
-	// becomes the whole of the name, or it lands on the compound's first
-	// element and the rest stays where it is.
+	// ScalarAssignedOverACompoundReplacesTheName decides what a plain `a=x` does
+	// to a name that is already holding an array or a table: the value becomes
+	// the whole of the name, or it lands on the compound's first element and the
+	// rest stays where it is.
 	//
-	// Measured 2026-09-09, panel and machine as docs/spec/oracle.md, with
-	// `a=(1 2 3); a=x; typeset -p a`:
+	// With `a=(1 2 3); a=x`, Yes leaves a scalar `x` — the type reads back
+	// `scalar` and the array is gone rather than merely hidden — and No leaves
+	// three elements `x 2 3`. An implementation with no arrays refuses the
+	// parenthesis, which is the absence rather than a third answer.
 	//
-	//	bash 5.3.15         declare -a a=([0]="x" [1]="2" [2]="3")   n=3
-	//	bash 5.3.15 as sh   declare -a a=([0]="x" [1]="2" [2]="3")   n=3
-	//	bash 3.2.57         declare -a a=([0]="x" [1]="2" [2]="3")   n=3
-	//	ksh93               typeset -a a=(x 2 3)                     n=3
-	//	zsh 5.9.2           typeset a=x                              n=1
-	//
-	// So No in bash, bash as `sh`, bash 3.2 and ksh93, and Yes in zsh, where
-	// `${(t)a}` reads `scalar` afterwards and the array is gone rather than
-	// merely hidden. dash has no arrays and refuses the parenthesis, which is
-	// the absence rather than a sixth answer.
-	//
-	// A **table** answers the same way in every column, so it is this one
-	// field and not two: `typeset -A m; m=([k]=v); m=x` is
-	// `declare -A m=([0]="x" [k]="v" )` in bash and `typeset -A m=([0]=x
-	// [k]=v)` in ksh93, and `typeset m=x` in zsh. Where the two kinds of
-	// compound part is a *declaration* adding an attribute, which is
-	// ScalarUnderAnArrayDeclaration against ScalarUnderATableDeclaration;
+	// A **table** answers the same way, so it is this one field and not two:
+	// `typeset -A m; m=([k]=v); m=x` splits exactly as the array does. Where the
+	// two kinds of compound part is a *declaration* adding an attribute, which
+	// is ScalarUnderAnArrayDeclaration against ScalarUnderATableDeclaration;
 	// nothing parts them here.
 	//
 	// The element written is the compound's *first* — the array base, and the
-	// key `0` — whether or not there is anything there already:
-	// `a=([5]=q); a=x` is `declare -a a=([0]="x" [5]="q")` in bash, so `q`
-	// does not move and the array grows. The same place `a+=x` joins, which
-	// is why the two axes read one arrayBase between them.
+	// key `0` — whether or not there is anything there already: under No,
+	// `a=([5]=q); a=x` leaves `q` where it is and the array grows. The same
+	// place `a+=x` joins, which is why the two axes read one arrayBase between
+	// them.
 	//
 	// Asked wherever a scalar is *stored* and not only at an assignment
 	// statement, which is the whole point of the field: `for a in x y z`,
-	// `read a`, `select`, `getopts`, `printf -v` and `${a::=x}` all set a
-	// name, and every one of them was leaving an array standing so the name
-	// read back as the array on every pass. zsh's own compinit reuses
-	// `_i_line` as an array and then as a loop variable, and all eight passes
-	// of its widget-rebinding loop saw the last file it had read (#1645).
+	// `read a`, `select`, `getopts`, `printf -v` and `${a::=x}` all set a name,
+	// and leaving an array standing at any of them makes the name read back as
+	// the array on every pass. A completion system that reuses one name as an
+	// array and then as a loop variable is where that shows.
 	//
-	// Not asked for the store that keeps `$a` answering for an array `a` —
-	// see assignedAsTheCompoundView, which is that write and no other.
+	// Not asked for the store that keeps `$a` answering for an array `a` — see
+	// assignedAsTheCompoundView, which is that write and no other.
 	ScalarAssignedOverACompoundReplacesTheName Answer
 	// CompoundAttribute is what an attribute a declaration has just added
 	// makes of a compound value the name is already holding — see
@@ -3123,39 +3087,38 @@ type Semantics struct {
 	ScalarUnderAnArrayDeclaration ScalarUnderACompoundPolicy
 	// ScalarUnderATableDeclaration is the same question asked of `typeset -A`.
 	//
-	// A second field and not a widening of the one above, because one shell
-	// answers the two letters differently: measured 2026-09-08, ksh93 leaves
-	// `b=1; typeset -a b` a plain scalar and takes `a=1; typeset -A a` to
-	// `typeset -A a=([0]=1)`. bash promotes under both letters and zsh
-	// discards under both, so ksh93 is the whole of why this is two questions
-	// — and one field would have had to give it an answer that is wrong for
-	// one of its letters whichever way it was set.
+	// A second field and not a widening of the one above, because the two
+	// letters can be answered differently: an implementation may leave
+	// `b=1; typeset -a b` a plain scalar and take `a=1; typeset -A a` to a table
+	// holding the old value. Presets that promote under both letters, or discard
+	// under both, would not need the split — the one that does is the whole of
+	// why this is two questions, and one field would have had to give it an
+	// answer that is wrong for one of its letters whichever way it was set.
 	ScalarUnderATableDeclaration ScalarUnderACompoundPolicy
 
-	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function
-	// hide any outer `u` — the local exists unset, so `${u-UNSET}` fires the
-	// default even when the caller had a value. Reached only when
-	// DeclaredNameWithoutValueIsEmpty said no: a name declared *empty* hides
-	// the outer value by having one of its own.
+	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function hide
+	// any outer `u` — the local exists unset, so `${u-UNSET}` fires the default
+	// even when the caller had a value.
 	//
-	// bash hides it, and so does ksh93's `typeset` in a keyword function;
-	// dash leaves the caller's value showing through until the first
-	// assignment. This is the shape used to declare a local before
-	// assigning it conditionally, so the difference is silent: the function
-	// reads the caller's value where it expected nothing.
+	// Reached only when DeclaredNameWithoutValueIsEmpty said no: a name declared
+	// *empty* hides the outer value by having one of its own.
+	//
+	// Answering No leaves the caller's value showing through until the first
+	// assignment. This is the shape used to declare a local before assigning it
+	// conditionally, so the difference is silent: the function reads the
+	// caller's value where it expected nothing.
 	ValuelessDeclarationHidesTheOuterValue Answer
 
-	// DeclarationAssignmentClearsTheExportAttribute takes the export
-	// attribute off a name a declaration utility assigns to. ksh93 does;
-	// bash 5.3, bash 3.2, bash as `sh` and zsh keep it, and dash has no
-	// declaration utility to ask with.
+	// DeclarationAssignmentClearsTheExportAttribute takes the export attribute
+	// off a name a declaration utility assigns to:
 	//
 	//	export FOO=bar; typeset FOO=baz; env | grep '^FOO='
 	//
-	// One shell tells the child nothing and goes on telling it nothing: the
-	// name keeps its value and is simply no longer exported, which
-	// `export -p` and `typeset -p` both confirm. `export FOO` afterwards
-	// puts the attribute back, so it is a reset rather than a refusal.
+	// Yes tells the child nothing and goes on telling it nothing: the name keeps
+	// its value and is simply no longer exported, which `export -p` and
+	// `typeset -p` both confirm. `export FOO` afterwards puts the attribute
+	// back, so it is a reset rather than a refusal. An implementation with no
+	// declaration utility cannot be asked.
 	//
 	// Asked only where the name being assigned was already exported, where
 	// the declaration does not name the attribute itself, and where the

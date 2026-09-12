@@ -2686,6 +2686,21 @@ func Apply(r *interp.Runner) {
 	// which is the name that would move it, remains recorded rather than
 	// acted on (see setopt.go).
 	r.SetMatchOption(interp.StarStarCrossesDirectories, true)
+	// And StarStarSeesLinkedDirectories stays off, which is the third
+	// question about the same component and is measured separately rather
+	// than assumed from the second. In a directory holding `r/x` and a
+	// symlink `s` to `r`, `echo **/` is `r/` here and `r/ s/` in bash 5.3.15
+	// under `shopt -s globstar`: the component stands for the levels the
+	// walk crossed, and a link is not one of them. Neither shell **enters**
+	// the link — `echo **/x` is `r/x` in both — so what splits is what `**/`
+	// lists and not where it goes (#2360).
+	//
+	// `***/`, which does follow links, is a construct of its own rather than
+	// this option turned on: pointed at a tree holding a link to its own
+	// ancestor it walks until the kernel refuses, and zsh reports `too many
+	// levels of symbolic links` once per link per level. That is the
+	// distinction being deliberate, written down where somebody would
+	// otherwise read the refusal above as an oversight.
 	// What `=~` matched is readable here, and under the *same* parameters a
 	// reporting pattern fills rather than under a record of its own: `$MATCH`
 	// is the whole match, `$match` the groups alone, and `$MBEGIN`/`$MEND`

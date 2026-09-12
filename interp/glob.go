@@ -693,12 +693,22 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		held = 0
 	}
 
+	// Where the walk may go on from, set by a `**` component and read by the
+	// gate below it — nil for every other component, which is what makes the
+	// restriction belong to `**` and not to descent in general.
+	//
+	// It is a set rather than a filter because what `**` **matched** and
+	// what the walk may **enter** are two different lists: a symbolic link
+	// to a directory is matched, so `**/` names it, and is never entered.
+	var onward map[string]bool
+
 	for i, part := range parts {
 		if part == "" {
 			held++
 			continue
 		}
 		flush()
+		onward = nil
 		var next []string
 		// The two questions a `**` component raises, and they are separate:
 		// whether it crosses levels at all, and whether it still does with
@@ -713,15 +723,22 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			// an ordinary component, where adjacent stars collapse to one.
 			crossed = true
 			last := lastComponent(parts, i)
+			onward = map[string]bool{}
 			for _, dir := range dirs {
 				next = append(next, dir)
+				// The directory the component starts from is always one the
+				// walk may go on from, however it was reached: measured,
+				// `s/**/x` through a symlink `s` is `s/x` in bash 5.3.15 and
+				// in zsh. The rule bounds where a `**` **descends to**, not
+				// where a pattern says to begin.
+				onward[dir] = true
 				if last {
 					if selfDirs == nil {
 						selfDirs = map[string]bool{}
 					}
 					selfDirs[dir] = true
 				}
-				next = r.appendDescendants(next, dir, seeHidden)
+				next = r.appendDescendants(next, dir, seeHidden, onward)
 			}
 			sortMatches(next)
 			next = compactSorted(next)
@@ -769,8 +786,21 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			// Through the gate, like every stat: a match the policy hides
 			// is not descended into, the same as a match that is no
 			// directory.
+			//
+			// A `**` component answers this itself, because the set it hands
+			// on is not the set it matched: it walked without following a
+			// symbolic link, and a link it listed is not a level the next
+			// component may look inside. Only where nothing real follows —
+			// `**/`, where this filter is producing the answer rather than
+			// choosing where to look next — does a link get through, and
+			// only where the dialect says it is one of the levels.
+			sees := onward == nil ||
+				(lastComponent(parts, i) && r.MatchOption(StarStarSeesLinkedDirectories))
 			var kept []string
 			for _, d := range dirs {
+				if !sees && !onward[d] {
+					continue
+				}
 				if info, err := r.stat(d); err == nil && info.IsDir() {
 					kept = append(kept, d)
 				}
@@ -952,10 +982,17 @@ func lastComponent(parts []string, i int) bool {
 // says otherwise. A symbolic link is listed and never followed: following one
 // is how a walk finds the same file twice and a looped link forever.
 //
+// onward collects the directories this walk actually entered, which is the
+// half the caller cannot reconstruct afterwards. Asking the filesystem again
+// gives the wrong answer by design: os.Stat follows a link, so a link to a
+// directory reads back as a directory and the whole restriction disappears.
+// The listing already holds the fact — a DirEntry answers from the name's own
+// type — so the set is recorded where it is known and never re-derived.
+//
 // A method so each directory read passes the gate — `echo /**` enumerates
 // whatever it can reach, which is exactly the walk a policy wants to see. A
 // denied directory reads as empty and the walk goes no deeper there.
-func (r *Runner) appendDescendants(out []string, dir string, seeHidden bool) []string {
+func (r *Runner) appendDescendants(out []string, dir string, seeHidden bool, onward map[string]bool) []string {
 	entries, err := r.readDir(dir)
 	if err != nil {
 		return out
@@ -968,7 +1005,8 @@ func (r *Runner) appendDescendants(out []string, dir string, seeHidden bool) []s
 		path := globJoin(dir, name)
 		out = append(out, path)
 		if e.IsDir() {
-			out = r.appendDescendants(out, path, seeHidden)
+			onward[path] = true
+			out = r.appendDescendants(out, path, seeHidden, onward)
 		}
 	}
 	return out

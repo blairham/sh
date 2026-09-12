@@ -174,6 +174,28 @@ program, and the panel divides on it — `${x:-"${y:-'"'}"}` is accepted by
 bash alone and refused by the other five — so it is a dialect question
 and not part of this rule.
 
+### Every scanner that has to find a closing bracket reads the same way
+
+The rule is not the expansion's; it is the *substitution's*, so it holds
+wherever one can be written. `(( … ))` is the site that had it wrong
+longest, and the C-style `for` header — which is that token cut on its
+own semicolons — inherited the mistake:
+
+| probe | bash 5.3 | ksh93 | zsh |
+| --- | --- | --- | --- |
+| `(( $(case q in q) echo 7;; esac) ))` | runs | runs | runs |
+| `for (( $(case q in q) echo 7;; esac) ;; ))` | runs | runs | runs |
+| `for (( ${ case q in q) true;; esac; };; ))` | runs | runs | `bad substitution` |
+
+Measured 2026-09-12; zsh's last row is that shell not having the brace
+form of a substitution at all, which is a different fact and is recorded
+in `parameter-expansion.md`. Counting parentheses stopped the arm at its
+pattern and left the rest of the arithmetic looking like a stray `)`, or — once
+the header was cut before it was read — like a header holding three
+separators. `$((` is the one shape left to the counting, deliberately: it
+holds an expression rather than a program, so its two opening parentheses
+balance against its two closers on their own.
+
 ## `${ cmd;}` — a substitution that runs in the current shell
 
 A space after the brace turns the same delimiters into a **command**

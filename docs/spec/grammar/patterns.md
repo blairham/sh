@@ -858,6 +858,70 @@ of the subject and upward. `${v#…}` is where the wrong answer is worst: it
 trimmed an `a` that the shells leave alone, so the *value* was wrong
 rather than a match being missed (#1083).
 
+### A quantified group may be written with no arms at all
+
+`+()`, `@()`, `*()`, `?()` and `!()` are groups, and by the rule above a
+group with no arms stands for nothing. Measured 2026-09-12, `shopt -s
+extglob` on a line of its own:
+
+| probe | bash 5.3 | ksh93 |
+| --- | --- | --- |
+| `case z in +()z)` | match | match |
+| `case "" in @())` | match | match |
+| `[[ pqr == *()pqr ]]` | true | true |
+| `echo +()z` | `+()z` | `+()z` |
+
+The empty spelling is worth a rule of its own because it collides with the
+one construct a parenthesis after a word means elsewhere:
+
+    a+() { echo fn; }
+
+With the quantified groups **in force** that is not a function definition in
+either shell — the `+(` opens a group, which leaves the name `a` standing on
+its own in front of a brace group, and both answer with a syntax error
+naming the `}`. With them off it defines a function called `a+` and both run
+it. So the option changes what a *definition* means and not only what a
+pattern means, and the group wins wherever it is read at all.
+
+The bare group of the other dialect is the opposite case and is why this
+needs saying: there a parenthesis is opened by nothing in front of it, so
+`a()` really is a definition and an empty group has no spelling. Pinned:
+`pat/an-empty-quantified-group` and
+`pat/an-empty-quantified-group-is-not-a-function-definition`.
+
+### A bracket expression inside a quantified group is the group's
+
+The four characters that end a word where they stand inside a group — `;`,
+`<`, `>` and `&`, the list under *A group is not a second language* — are
+pattern text inside a bracket expression. Measured the same day:
+
+| probe | bash 5.3 | ksh93 | zsh |
+| --- | --- | --- | --- |
+| `case "x;y" in x@([;])y)` | match | match | **parse error** |
+| `case "x<y" in x@([<])y)` | match | match | **parse error** |
+| `case "x&y" in x@([&])y)` | match | match | **parse error** |
+| `case "x;y" in x[;]y)` | **error** | **error** | **error** |
+
+The last row is what scopes the rule. The identical brackets *outside* a
+group are refused everywhere, so it is the group that protects them rather
+than the brackets, and a reading that let brackets protect anywhere would
+accept three lines no shell in the panel parses.
+
+zsh's column is a bare group and not a quantified one — it reads the `@` as
+an ordinary character — and it refuses the construct in a condition and in a
+`case` alike, with and without `extendedglob`. So the reading belongs to the
+quantified group, which the character in front of the parenthesis is what
+identifies.
+
+The extent of the bracket expression is POSIX XCU 2.13.1's and not "the next
+`]`": a `]` first — after the negation, where there is one — is the
+character rather than the closer, and `[:class:]`, `[.collating.]` and
+`[=equivalence=]` each hold a `]` that closes only themselves. A run that
+reaches a newline is not a bracket expression, which is what bounds how much
+an unpartnered `[` can take into the group. Pinned:
+`pat/a-bracket-expression-inside-a-quantified-group` and
+`pat/a-bracket-expression-outside-a-group-does-not-protect`.
+
 ## A numeric range is one dialect's, and it reaches the lexer
 
     <->      any number

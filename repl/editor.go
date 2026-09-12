@@ -106,10 +106,16 @@ type editor struct {
 	searchFailed string
 	searchBelow  bool
 
-	// pushed is the byte the search mode read and did not want, kept for the
-	// next turn of the loop below. See pushBack.
-	pushed    byte
-	hasPushed bool
+	// pushed is input this editor reads before it reads the terminal: the byte
+	// a search mode took and did not want, or characters an action outside the
+	// editor put back. First in the slice is read first. See pushBack and
+	// pushKeys.
+	//
+	// A queue rather than the one byte it used to be, because the second
+	// source can push more than one at a time and can push again before the
+	// first is read — measured, two pushes in one widget are read newest
+	// first, each in its own order. One byte could hold neither.
+	pushed []byte
 
 	// held is input the terminal has already delivered and this editor has
 	// not read yet, and the two indices into it.
@@ -160,7 +166,7 @@ type editor struct {
 	// front end gave this session a way to. Nil is a session with no such
 	// way, and a key bound to one then does nothing — see
 	// runShellWidget.
-	runFunc func(name string, in Line) (Line, bool)
+	runFunc func(name string, in Line, ed Actions) (Line, bool)
 
 	// watch is which descriptors the shell wants waited on beside the
 	// terminal, descriptorReady is how one that woke is answered, and inFd is
@@ -168,7 +174,7 @@ type editor struct {
 	// not one. Nil watch or nil descriptorReady is a session that waits on
 	// the terminal alone. See watchfd.go.
 	watch           func() []int
-	descriptorReady func(fd int, in Line) (Line, bool)
+	descriptorReady func(fd int, in Line, ed Actions) (Line, bool)
 	inFd            func() int
 
 	// width is how many columns the terminal has, asked each time it is
@@ -402,15 +408,17 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	}
 }
 
-// nextByte is the next byte of input, which is whatever the search mode handed
-// back before the byte the terminal has.
+// nextByte is the next byte of input, which is whatever was pushed back before
+// the byte the terminal has.
 //
-// The whole of the pushback: a mode that ends on a key which still means
-// something has to leave that key where the ordinary switch will see it, and
-// there is never more than one of them.
+// Two things push. A mode that ends on a key which still means something has
+// to leave that key where the ordinary switch will see it — that is pushBack,
+// and it is one byte. And an action outside the editor can put characters
+// back for the editor to read as though they were typed — that is pushKeys,
+// and it is however many the action had.
 func (e *editor) nextByte(buf []byte) (int, error) {
-	if e.hasPushed {
-		buf[0], e.hasPushed = e.pushed, false
+	if len(e.pushed) > 0 {
+		buf[0], e.pushed = e.pushed[0], e.pushed[1:]
 		return 1, nil
 	}
 	if e.heldPos == e.heldLen {
@@ -441,7 +449,7 @@ func (e *editor) nextByte(buf []byte) (int, error) {
 // Two other places have to ask it, and both are the same mistake in different
 // clothing — reading past this buffer to the descriptor underneath. See
 // serveDescriptors in watchfd.go, and the reads in search.go and complete.go.
-func (e *editor) inputPending() bool { return e.hasPushed || e.heldPos < e.heldLen }
+func (e *editor) inputPending() bool { return len(e.pushed) > 0 || e.heldPos < e.heldLen }
 
 // abandon ends a line the person gave up on with ^C.
 //

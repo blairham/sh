@@ -2977,6 +2977,18 @@ type Diagnostics struct {
 	// writes, and whether the expression survives it, is
 	// Semantics.EmptyArithSubscript; this is only the wording.
 	ArithEmptySubscript string
+
+	// ArithWholeArraySubscript is the complaint about a `*` or `@` subscript
+	// on an indexed name where an expression reads it — `$(( a[*] ))`. Two
+	// verbs: the name and the subscript.
+	//
+	// Its own field rather than ArithEmptySubscript's, which is the empty
+	// brackets one construct over: the sentences coincide in the column that
+	// writes both and the shapes do not, and a dialect that worded one
+	// differently would need them apart. Only a dialect answering
+	// Semantics.ArithWholeArraySubscriptIsReportedAsBad has anything to put
+	// here.
+	ArithWholeArraySubscript string
 	// EmptySubscriptTextExpanded is the complaint about a subscript whose
 	// *text* came out empty — `${a[$w]}` with an empty `$w` — where a
 	// parameter expansion or an assignment reads it. No verbs: the one shell

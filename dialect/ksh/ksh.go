@@ -945,6 +945,11 @@ func Semantics() interp.Semantics {
 	// The same as the bash column: measured 2026-09-11 on ksh93u+,
 	// `typeset -A m; m[k]=9; $(( m[*] ))` is 0.
 	s.ArithWholeArraySubscriptIsTheSlice = interp.No
+	// And it is not reported either: the brackets hold a text that is no
+	// expression and the arithmetic says so, abandoning it. Measured
+	// 2026-09-12, `a=(3 4 5); $(( a[*] ))` is `*: arithmetic syntax error`
+	// at status 1, where bash reports and answers zero (#1978).
+	s.ArithWholeArraySubscriptIsReportedAsBad = interp.No
 	// And the same for a subscript that expanded to nothing, which this
 	// shell reads as the empty expression exactly as it reads the written
 	// `${a[]}`: measured 2026-09-11 on ksh93u+, both are element zero.

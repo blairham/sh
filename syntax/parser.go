@@ -1501,6 +1501,12 @@ func (p *Parser) mergeStderr(cmd Command, pos Pos) {
 
 // literalWord is a word the grammar supplies rather than one the script
 // wrote, positioned at the operator it stands for.
+//
+// It is also what a flag group's operand is inside an *arithmetic*
+// expression: the text there has already been expanded once — `$(( ))`
+// substitutes into the whole expression before reading any of it — so lexing
+// it again would perform a substitution twice and read a leftover `$` as the
+// start of one.
 func literalWord(text string, pos Pos) *Word {
 	return &Word{
 		Spans: []Span{{Kind: Literal, Value: text, Quoting: Unquoted, Pos: pos}},

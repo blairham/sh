@@ -911,6 +911,14 @@ func Semantics() interp.Semantics {
 	// not one: measured 2026-09-11 on 5.3.15, `typeset -A m; m[k]=9;
 	// $(( m[*] ))` is 0, where the expansion `"${m[*]}"` is 9.
 	s.ArithWholeArraySubscriptIsTheSlice = interp.No
+	// It is *reported* instead, and the expression carries on with zero:
+	// measured 2026-09-12, `a=(3 4 5); $(( a[*] ))` writes `a[*]: bad array
+	// subscript` and answers 0 at status 0, and `$(( a[*] + 1 ))` on `(3)`
+	// answers 1. Identical in 3.2.57 and under argv[0] `sh`, and the write
+	// reports too — `(( a[*] = 5 ))` says it once and stores nothing. An
+	// association is silent and zero here and never reaches the question
+	// (#1978).
+	s.ArithWholeArraySubscriptIsReportedAsBad = interp.Yes
 	// A subscript that *expanded* to nothing is the expression that is zero,
 	// so `${a[$w]}` with an empty `$w` is element zero — measured 2026-09-11
 	// on 5.3.15, `a=(5 6 7); w=; ${a[$w]}` is `5` at status 0, and `${a[ ]}`
@@ -1317,6 +1325,7 @@ func Diagnostics() interp.Diagnostics {
 		BadArraySubscript:             "%[1]s[%[2]s]: bad array subscript",
 		EmptyAssociativeKeyRead:       "%[1]s: bad array subscript",
 		ArithEmptySubscript:           "%[1]s[]: bad array subscript",
+		ArithWholeArraySubscript:      "%[1]s[%[2]s]: bad array subscript",
 		ArrayLiteralThroughASubscript: "%[1]s[%[2]s]: cannot assign list to array member",
 		// Through a literal the element is named as it stands between the
 		// parentheses, with no array name in front of it. bash 3.2 says the

@@ -653,6 +653,68 @@ last row wrongly and the fifth row wrongly in the other direction — a
 plausible `1` where the real shell stops the script. A probe that only ever
 tries `x=abc` cannot tell the two apart.
 
+## A subscript inside an expression
+
+`a[i]` written inside `$(( ))` is the element `${a[i]}` is, and the
+brackets take the same three readings there they take in an expansion:
+an expression on an indexed name, a key on a table, and — where the
+grammar has them — a flag group that selects.
+
+### The whole-array spelling
+
+`$(( a[*] ))` and `$(( a[@] ))` split the panel three ways on an
+*indexed* name, and the three are two axes:
+
+| shell | `a=(3 4 5); $(( a[*] ))` |
+| --- | --- |
+| bash 5.3.15, as `sh`, 3.2.57 | `a[*]: bad array subscript`, then `0`, status 0 |
+| ksh93u+ | `*: arithmetic syntax error`, status 1 |
+| zsh 5.9.2 | the slice `3 4 5`, read as an expression and failing as one |
+
+`ArithWholeArraySubscriptIsTheSlice` is zsh's reading and
+`ArithWholeArraySubscriptIsReportedAsBad` is the split between the other
+two: bash reports and answers zero so the expression survives, ksh93
+lets the arithmetic refuse the whole thing.
+
+On an **association** every column is silent and answers zero, because
+the brackets are the key `*` and nothing is stored under it — so the
+table is consulted before either question is asked.
+
+The spelling has to be exact. `$(( a[ * ] ))` is an arithmetic syntax
+error in bash and in zsh alike, so a `*` with a blank beside it is an
+expression that will not read rather than the whole-array spelling
+(#1978).
+
+### A flag group
+
+Where the grammar has subscript flag groups, an expression reads one too
+— it is the same construct in a second position, not a second construct.
+Measured on zsh 5.9.2, 2026-09-12:
+
+| written | is |
+| --- | --- |
+| `a=(10 20 30); $(( a[(r)20] ))` | `20`, the value the search found |
+| `$(( a[(i)20] ))` | `2`, the index it found it at |
+| `$(( a[(i)99] ))` | `4`, the miss one past the end |
+| `$(( a[(r)99] ))` | `0` — the miss reads as nothing, which is zero |
+| `$(( a[(e)2] ))` | `20`; a group that selects nothing leaves an ordinary subscript |
+| `$(( a[(r)20] + 1 ))` | `21`, an operand like any other |
+| `typeset -A m; m[k]=9; $(( m[(k)k] ))` | `9` |
+| `s=hello; $(( s[(r)l] ))` | `0` — a character is no number |
+| `a=(10 20 30); (( a[(r)20] = 9 ))` | `10 9 30`; the write names the same element |
+
+The answer is the expansion's, joined and then read as a number by the
+same rule an element's value is read by — so a group matching several
+keys is usually a failure rather than a number, exactly as a slice of
+several elements is.
+
+The group's operand is a **literal**: an arithmetic expression is
+expanded whole before it is parsed, so there is nothing left in it to
+expand and a `$` still in it is a `$`. A letter the group is read with
+and this implementation does not carry is refused by name here as it is
+in an expansion, rather than becoming part of a key or of an expression
+(#1986).
+
 ## What this does not cover
 
 Integer width and overflow behavior, which POSIX leaves to the C

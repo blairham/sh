@@ -279,6 +279,19 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 		// which is exactly what a nil Index and an empty Sub already mean to
 		// the two paths that follow.
 	}
+	if x.Flags != nil {
+		// A flag group decides how the subscript is *read*, so it is asked
+		// before every reading below — before the whole-array spelling,
+		// which `(r)*` is not, and before the association, whose key would
+		// otherwise be the group's own letters.
+		if v, handled := r.arithFlaggedElement(x); handled {
+			return v, nil
+		}
+		// Not handled: the group selects nothing — `$(( a[(e)2] ))` is the
+		// second element — so the operand behind it is an ordinary subscript
+		// and every reading below applies to that instead.
+		x = arithIndexOfTheOperand(x, r.joinWord(x.Flags.Arg))
+	}
 	// A `*` or `@` is the whole array rather than a subscript at all where
 	// the dialect reads the slice here, and it is asked *before* the
 	// association below: the key `*` is what the other answer makes of it,
@@ -293,6 +306,11 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	// element and said nothing, which is the silent half of a wrong answer.
 	if a, ok := r.assocFor(x.Name); ok {
 		return r.arithElemValue(a[x.Sub])
+	}
+	if r.reportArithWholeArraySubscript(x) {
+		// Named and answered: the operand is zero and the expression keeps
+		// going, which is the whole difference from the refusal below.
+		return intNum(0), nil
 	}
 	idx, err := r.arithSubscriptIndex(x)
 	if err != nil {
@@ -312,6 +330,69 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 		return intNum(0), nil
 	}
 	return r.arithElemValue(v)
+}
+
+// arithFlaggedElement is a subscript that opened with a flag group, read
+// inside an expression.
+//
+// The same machinery the expansion route uses, because it is the same
+// construct: `$(( a[(r)20] ))` selects what `${a[(r)20]}` selects, and the
+// answer is then read as a number the way every other element's value is.
+// Measured on zsh 5.9.2, the one shell with the construct, 2026-09-12:
+//
+//	a=(10 20 30); $(( a[(r)20] ))       20   the value the search found
+//	a=(10 20 30); $(( a[(i)20] ))       2    the index it found it at
+//	a=(10 20 30); $(( a[(i)99] ))       4    and the miss, one past the end
+//	a=(10 20 30); $(( a[(r)99] ))       0    whose value is nothing, so zero
+//	a=(10 20 30); $(( a[(e)2] ))        20   no selecting letter, so a subscript
+//	a=(10 20 30); $(( a[(r)20] + 1 ))   21   an operand like any other
+//	typeset -A m; m[k]=9; $(( m[(k)k] ))  9  and the same over a table
+//	s=hello; $(( s[(r)l] ))             0    a character is no number
+//
+// handled is false for a group that selects nothing, which is the read
+// side's own rule: the operand behind it is then the subscript, and the
+// caller reads it as one.
+//
+// A refusal — a letter this does not carry, a search over a table on the
+// write side — has already been reported by name, and the operand is zero.
+// The expansion is marked failed, which is what abandons the word: an
+// arithmetic answer of zero and no complaint would be the silent wrong
+// answer this construct is worth having a reading for (#1986).
+func (r *Runner) arithFlaggedElement(x *syntax.ArithIndex) (arithNum, bool) {
+	e := &syntax.ParamExpr{Name: x.Name, Index: x.Flags.Arg, IndexFlags: x.Flags}
+	// The letters are read here rather than off flaggedSubscript's second
+	// return value, because that one folds two answers into one: a group with
+	// no selecting letter and a group carrying a letter this does not have
+	// both come back unhandled, and only the first of them is a subscript the
+	// caller should go on to read as arithmetic. Reading the second as one
+	// swallowed the refusal and answered a plausible element.
+	search, ok := r.subscriptSearch(e)
+	if !ok {
+		// Refused by name already, and the expansion is marked failed.
+		return intNum(0), true
+	}
+	if search == 0 {
+		return intNum(0), false
+	}
+	v, _ := r.flaggedSubscript(e)
+	n, err := r.arithElemValue(strings.Join(v, ifsFirst(r.ifs())))
+	if err != nil {
+		// Worded where every other subscript failure is worded, so the join
+		// of several matches complains as the text it is.
+		r.diagf("%s\n", r.arithFailure(x.Sub, err))
+		r.expandErr = true
+		return intNum(0), true
+	}
+	return n, true
+}
+
+// arithIndexOfTheOperand is the node a group that selects nothing leaves
+// behind: the same name with the operand behind the group as its subscript,
+// and no group.
+func arithIndexOfTheOperand(x *syntax.ArithIndex, sub string) *syntax.ArithIndex {
+	return &syntax.ArithIndex{
+		Name: x.Name, Sub: sub, Start: x.Start, Stop: x.Stop,
+	}
 }
 
 // arithWholeArraySlice is `$(( a[*] ))` and `$(( a[@] ))` where the dialect
@@ -339,7 +420,7 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 // `a=(3 4 5); $(( a[*] ))` is `operator expected at ` + "`4 5'" + ` there.
 // An empty array joins to nothing and is zero, and a scalar is its own value.
 func (r *Runner) arithWholeArraySlice(x *syntax.ArithIndex) (string, bool) {
-	if x.Index != nil || x.Empty || !wholeArraySubscript(strings.TrimSpace(x.Sub)) {
+	if !arithWholeArraySubscript(x) {
 		return "", false
 	}
 	if !r.ask(r.sem().ArithWholeArraySubscriptIsTheSlice,
@@ -347,6 +428,41 @@ func (r *Runner) arithWholeArraySlice(x *syntax.ArithIndex) (string, bool) {
 		return "", false
 	}
 	return strings.Join(r.wholeArrayElems(x.Name), ifsFirst(r.ifs())), true
+}
+
+// arithWholeArraySubscript reports whether the brackets hold the whole-array
+// spelling and nothing else.
+//
+// Untrimmed, which is measured rather than tidy: `$(( a[ * ] ))` is an
+// arithmetic syntax error in bash and in zsh alike — `operand expected at
+// `* '` there — so a `*` with a blank beside it is an expression that will
+// not read and not the spelling. Trimming answered a different question, and
+// answered it wrongly for both columns.
+func arithWholeArraySubscript(x *syntax.ArithIndex) bool {
+	return x.Index == nil && !x.Empty && wholeArraySubscript(x.Sub)
+}
+
+// reportArithWholeArraySubscript is the whole-array spelling on an indexed
+// name where the dialect neither reads it as the slice nor lets the
+// arithmetic refuse it: the subscript is named, the operand is zero, and the
+// expression carries on.
+//
+// The same shape emptyArithSubscript's reported answer takes, and for the
+// same reason — the report is written here rather than returned as an error,
+// because an error is what abandons the expression and this answer does not.
+// See Semantics.ArithWholeArraySubscriptIsReportedAsBad.
+func (r *Runner) reportArithWholeArraySubscript(x *syntax.ArithIndex) bool {
+	if !arithWholeArraySubscript(x) {
+		return false
+	}
+	if !r.ask(r.sem().ArithWholeArraySubscriptIsReportedAsBad,
+		"`$(( a[*] ))` on an indexed name, which one column reports and answers zero for") {
+		return false
+	}
+	r.errf("%s\n", r.diag().Report(r.name(), r.line,
+		Wording(r.diag().ArithWholeArraySubscript,
+			"%[1]s[%[2]s]: bad array subscript", x.Name, x.Sub)))
+	return true
 }
 
 // wholeArrayElems is every element a name holds, whichever of the three
@@ -511,6 +627,11 @@ type arithPlace struct {
 	// alone cannot say, since a plain name has no index either. Carried so
 	// the read the operator makes reaches the same answer `$(( a[] ))` does.
 	empty bool
+	// flags is the group the subscript opened with, where the dialect has
+	// them: `(( a[(r)20] = 9 ))` writes the element the same search reads,
+	// and the write has to name it by the same rule the read does or the two
+	// spellings write different elements.
+	flags *syntax.SubscriptFlags
 	// subscripted says brackets were written at all, which neither of the two
 	// above can say on its own: `(( m[.k]++ ))` has no index and is not
 	// empty, and so does a plain name. Without it a key that is not an
@@ -619,7 +740,7 @@ func arithPlaceOf(e syntax.ArithExpr) (arithPlace, bool) {
 	case *syntax.ArithIndex:
 		return arithPlace{
 			name: x.Name, index: x.Index, sub: x.Sub, empty: x.Empty,
-			subscripted: true,
+			flags: x.Flags, subscripted: true,
 		}, true
 	}
 	return arithPlace{}, false
@@ -630,7 +751,9 @@ func (r *Runner) readPlace(p arithPlace) (arithNum, error) {
 	if !p.subscripted {
 		return r.arithValueOf(p.name)
 	}
-	return r.arithElement(&syntax.ArithIndex{Name: p.name, Index: p.index, Sub: p.sub, Empty: p.empty})
+	return r.arithElement(&syntax.ArithIndex{
+		Name: p.name, Index: p.index, Sub: p.sub, Empty: p.empty, Flags: p.flags,
+	})
 }
 
 // writePlace stores a value back through a target, written the way the
@@ -692,9 +815,32 @@ func (r *Runner) writePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 	// call rather than a guard and an evaluation, so the number a subscript
 	// counts from cannot be worked out one way for the read and another for
 	// the write.
-	idx, err := r.arithSubscriptIndex(&syntax.ArithIndex{
-		Name: p.name, Index: p.index, Sub: p.sub, Empty: p.empty,
-	})
+	if p.flags != nil {
+		// A group names the element on this side too, by the same rule the
+		// read side names it: measured, `a=(10 20 30); (( a[(r)20] = 9 ))`
+		// leaves `10 9 30`, which is `${a[(r)20]}`'s element. Through
+		// flaggedTargetIndex, so an assignment's refusal is the fatal one and
+		// `unset`'s is not — the one thing the two sides do not share.
+		idx, ok := r.flaggedTargetIndex(&syntax.ParamExpr{
+			Name: p.name, Index: p.flags.Arg, IndexFlags: p.flags,
+		}, true)
+		if !ok {
+			// Reported by name already, and nothing written.
+			return nil
+		}
+		r.setArrayElem(p.name, idx, p.sub, text)
+		return nil
+	}
+	target := &syntax.ArithIndex{Name: p.name, Index: p.index, Sub: p.sub, Empty: p.empty}
+	if r.reportArithWholeArraySubscript(target) {
+		// Named and nothing written, and *not* an error: measured, `(( a[*] =
+		// 5 ))` reports, leaves every element as it was and ends at 0 in the
+		// column that reports — where an error here would fail the whole
+		// `(( ))`. `(( a[*]++ ))` writes the sentence twice, once for the
+		// read and once for this.
+		return nil
+	}
+	idx, err := r.arithSubscriptIndex(target)
 	if err != nil {
 		return err
 	}
@@ -824,7 +970,7 @@ func (r *Runner) addNum(n arithNum, step float64) arithNum {
 
 func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 	place := arithPlace{
-		name: x.Name, index: x.Index, sub: x.Sub,
+		name: x.Name, index: x.Index, sub: x.Sub, flags: x.Flags,
 		// An assignment target with an empty subscript is refused while
 		// parsing, so brackets here are exactly a subscript that held
 		// something — an expression the parser read, or a text it could not.

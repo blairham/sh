@@ -7716,6 +7716,49 @@ type Semantics struct {
 	// there and a refusal here for that reason and not for this one.
 	ArithWholeArraySubscriptIsTheSlice Answer
 
+	// ArithWholeArraySubscriptIsReportedAsBad reports a `*` or `@` subscript
+	// inside an expression and answers **zero** for it, where the dialect
+	// does not read it as the slice — so the expression survives instead of
+	// being abandoned.
+	//
+	// Measured 2026-09-11 and again 2026-09-12, `-c`, on an *indexed* name:
+	//
+	//	probe                       bash 5.3.15 / as-sh / 3.2      ksh93u+
+	//	a=(3 4 5); $(( a[*] ))      `a[*]: bad array subscript`, 0, st 0   `*: arithmetic syntax error`, st 1
+	//	a=(3); $(( a[*] + 1 ))      the same sentence, then 1              the same refusal
+	//	a=(3); $(( a[@] + 1 ))      `a[@]: …`, then 1                      the same refusal
+	//	$(( nodecl[*] ))            `nodecl[*]: …`, then 0                 the same refusal
+	//	s=7; $(( s[*] ))            `s[*]: …`, then 0                      the same refusal
+	//	(( a[*] = 5 ))              the sentence, nothing written, st 0    the same refusal
+	//
+	// So the two columns that agree about the *value* disagree about the
+	// report and about whether the expression survives, which is why this is
+	// an axis of its own rather than a wording. The refusing answer is the
+	// ordinary one: the brackets hold a text that is no expression and the
+	// arithmetic says so, which is what happens with no answer here at all.
+	//
+	// It is the **indexed** reading alone. An association reads the brackets
+	// as the key `*`, finds nothing under it and answers zero silently in
+	// both columns, so the table is consulted first and this is never asked
+	// there — the same ordering ArithWholeArraySubscriptIsTheSlice keeps, and
+	// asked one step behind it: a dialect that reads the slice never reaches
+	// this at all.
+	//
+	// **The spelling has to be exact.** `$(( a[ * ] ))` is an arithmetic
+	// syntax error in every column measured, bash and zsh alike, so the
+	// brackets are the whole-array spelling only when they hold the one
+	// character and nothing else. A blank subscript is a question of its own
+	// — BlankArithSubscriptIsTheEmptyExpression — and trimming here answered
+	// it wrongly for both.
+	//
+	// Reported once per evaluation, and the write reports too: `(( a[*]++ ))`
+	// writes the sentence twice in the column that reports, once for the read
+	// and once for the store, and leaves every element as it was.
+	//
+	// The wording is Diagnostics.ArithWholeArraySubscript, whose two verbs are
+	// the name and the subscript (#1978).
+	ArithWholeArraySubscriptIsReportedAsBad Answer
+
 	// EmptySubscriptTextIsAMathError refuses a subscript whose text is
 	// *empty or blank once it has been expanded* — `${a[$w]}` with an empty
 	// `$w`, and `${a[ ]}` beside it — where an expression reads it.

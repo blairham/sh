@@ -1074,6 +1074,13 @@ func Semantics() interp.Semantics {
 	// identifier` — so it is the positional alone that parts (#1541).
 	s.AssignThroughExpansionMayNameAPositional = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No
+	// And a prefix to a function is transient here too, and exported while
+	// the call runs: `f(){ echo "[$v]"; }; v=1; v=9 f` prints `[9]` with
+	// `v=9` in a child's environment, and leaves `1` behind. Measured
+	// 2026-09-12 in 5.9.2. `emulate sh` moves it to persisting, which is
+	// the off-panel reading that keeps the two questions apart (#2407).
+	s.AssignmentPrefixPersistsAfterAFunction = interp.No
+	s.PrefixToAFunctionIsExported = interp.Yes
 	// An assignment prefix to a frozen name is answered by the kind of
 	// command too, and on a different line from ksh93's: everything this
 	// shell runs itself ends the script, and an external one does not.

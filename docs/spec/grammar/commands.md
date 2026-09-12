@@ -492,6 +492,94 @@ so the `posix` preset says yes and the two shells that ship a POSIX mode
 switch to it there; recording that as a default of "no" would have
 inverted the standard's own answer.
 
+### A prefix to a function: visible in all seven, kept by one
+
+A **function** call is the third kind, and it parts from both of the
+above. The assignment is in effect *while the body runs* everywhere:
+
+    f(){ echo "[$v]"; }; v=1; v=9 f   →  [9]   in all seven
+
+That much is unanimous and is core. Two things about it are not, and
+POSIX 2.9.1 names both of them unspecified in its own words — the
+assignments affect the execution environment during the function, and
+whether they persist afterwards, whether the names gain the export
+attribute during it, and whether such an attribute survives the call are
+all left open.
+
+Measured 2026-09-12, with `f(){ env | grep '^v='; }`:
+
+| probe | dash | bash 5.3 | bash-as-`sh` | bash 3.2 | ksh93 | zsh | ash |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `v=1; v=9 f; echo "[$v]"` | `[1]` | `[1]` | `[1]` | `[1]` | **`[9]`** | `[1]` | `[1]` |
+| what the child is told | `v=9` | `v=9` | `v=9` | `v=9` | **nothing** | `v=9` | `v=9` |
+
+ksh93 is the holdout on both, and it is one departure seen twice: a
+prefix that becomes an ordinary assignment to the shell has no reason to
+be exported, and one that *is* the command's environment has no reason
+not to be. It holds for whatever the body left, too — a function that
+assigns over the name leaves the caller reading the body's value there,
+and the caller's own value everywhere else.
+
+**The export answer moves the attribute in both directions.** ksh93 does
+not merely decline to export the name; it takes the attribute *off* a
+name that already carried it, for the call and, since the assignment
+persists there, for good:
+
+    export v=1; f(){ typeset -p v; }; v=9 f
+
+    ksh93   v=9                 and the child is told nothing
+    bash    declare -x v="9"    and the child is told v=9
+
+So a prefix in front of a function is not a question only an unexported
+name raises. An implementation that skipped the question for a name that
+was exported already — on the reading that such a name reaches every
+child either way — gets the ksh93 column wrong on every name a script
+had exported before the call. That premise was in this shell's first fix
+and the row `axis/a-function-prefix-over-a-name-already-exported` is
+what disproves it.
+
+**They are still two axes, and the panel is not what separates them.**
+Off the panel, bash 3.2 under `set -o posix` and zsh under `emulate sh`
+both persist *and* export, which is a combination neither axis reaches
+on its own:
+
+| shell | persists | exported |
+| --- | --- | --- |
+| bash 3.2, `set -o posix` | yes | yes |
+| bash 3.2 invoked as `sh` | yes | yes |
+| zsh, `emulate sh` | yes | yes |
+| ksh93 | yes | no |
+| the other six | no | yes |
+
+bash 5.3 answers `[1]` with `set -o posix` and without it, so its POSIX
+switch is not a stand-in for either axis; 3.2 is the build that moves,
+and it moves under its own `sh` name as well — which is what macOS
+`/bin/sh` is.
+
+**That is not the panel's `bash-as-sh` column.** That column is bash
+**5.3** under an argv[0] of `sh`, and it answers `[1]` with the rest;
+the persisting one is 3.2 under that name, which the panel reaches only
+as plain `bash`. Any claim here that says "bash as sh" without saying
+which build is about neither of them.
+
+Semantics axes: `AssignmentPrefixPersistsAfterAFunction` — ksh93 yes,
+the rest no — and `PrefixToAFunctionIsExported` — ksh93 no, the rest
+yes. Both unanswered in the core **and in the `posix` preset**, since
+the standard declines to answer them; a script that depends on either is
+refused naming it.
+
+The persistence axis is asked at the end of the call and only where
+giving the name back would change what the shell holds, so `v=1; v=1 f`
+asks nothing. The comparison is of the whole state — the value, the
+array, and the *effective* export attribute — because the prefix is
+taken back whole or not at all; effective rather than recorded, since
+writing "not exported" over a name nobody had spoken about changes
+nothing a child could see. The export axis has no such exemption, for
+the reason above: it is asked on every name a prefix stands in front of.
+A frozen name in the prefix is not assigned at all and asks neither: the
+body runs with the value the shell holds, which is what every column
+shows for `readonly v=1; v=2 f`.
+
 ### Precommand modifiers
 
 zsh has words that may stand in front of a simple command, are taken away

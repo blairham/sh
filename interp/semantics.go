@@ -350,6 +350,77 @@ type Semantics struct {
 	// do not.
 	AssignmentPrefixPersistsOnSpecialBuiltin Answer
 
+	// AssignmentPrefixPersistsAfterAFunction keeps `v=9 f` set once `f` has
+	// returned, instead of giving the name back what it held before the call.
+	//
+	// That the prefix is *visible inside* the function is core and is not
+	// this question: `f(){ echo "[$v]"; }; v=1; v=9 f` prints `[9]` in dash,
+	// bash 5.3, bash-as-`sh`, bash 3.2, ksh93u+, zsh 5.9.2 and BusyBox ash
+	// alike. What splits them is the line after it. Measured 2026-09-12:
+	//
+	//	f(){ :; }; v=1; v=9 f; echo "[$v]"
+	//	    ksh93u+  [9]   ·  the other six  [1]
+	//
+	// POSIX names this one unspecified in as many words — 2.9.1 has the
+	// assignments affect the execution environment during the function and
+	// leaves it unspecified whether they persist after it — so
+	// PosixSemantics answers neither this nor the export question below, and
+	// that is the honest zero rather than an omission.
+	//
+	// Asked only where the two readings part: at the end of the call, and
+	// only when giving the name back would change what the shell holds. A
+	// prefix whose value is what the name already had asks nothing, and
+	// neither does one whose name was refused for being frozen — see
+	// Runner.takeBackFunctionPrefix. The comparison reads the *effective*
+	// export attribute rather than the recorded tri-state, so the
+	// un-exporting answer below does not raise this question on a name
+	// nobody had exported in the first place.
+	//
+	// A *second* axis rather than one question with two faces, and the
+	// panel's two columns are not what separates them — out of the panel,
+	// bash 3.2 under `set -o posix` (which is what macOS `/bin/sh` is) and
+	// zsh under `emulate sh` both persist *and* export, which is a
+	// combination neither of the two answers below can express on its own.
+	// Only bash 3.2 moves under its POSIX switch; bash 5.3 answers `[1]`
+	// with `set -o posix` and without it, so the switch is not a stand-in
+	// for this axis either (#2407).
+	AssignmentPrefixPersistsAfterAFunction Answer
+
+	// PrefixToAFunctionIsExported gives the name the export attribute for
+	// the length of the call, so a command the function starts is told about
+	// it and `export -p` run inside the function lists it.
+	//
+	//	f(){ env | grep '^v='; }; v=1; v=9 f
+	//	    ksh93u+  nothing  ·  the other six  v=9
+	//
+	// ksh93 is the holdout and it is the same column that persists above,
+	// which is not a coincidence — a prefix that becomes an ordinary
+	// assignment to the shell has no reason to be exported, and one that is
+	// the command's *environment* has no reason not to be. The two are still
+	// separate questions, for the combination named above that neither
+	// answer reaches alone.
+	//
+	// Unspecified in POSIX 2.9.1 beside the one above, in its own sentence:
+	// whether the variables gain the export attribute during the execution
+	// of the function is left open, and so is whether an attribute gained
+	// inside it survives.
+	//
+	// **The two answers move the attribute in opposite directions**, rather
+	// than one of them leaving it where it was, so this is asked on every
+	// name a prefix stands in front of. ksh93 takes the attribute *off* a
+	// name that carried it:
+	//
+	//	export v=1; f(){ typeset -p v; }; v=9 f
+	//	    ksh93u+  v=9  ·  bash  declare -x v="9"
+	//
+	// and since the assignment persists there, it stays off afterwards. An
+	// earlier reading asked only on a name that was not exported already, on
+	// the premise that one that was reaches every child under either answer;
+	// that premise is false in exactly the column this axis exists for, and
+	// the corpus row axis/a-function-prefix-over-a-name-already-exported is
+	// what says so (#2407).
+	PrefixToAFunctionIsExported Answer
+
 	// PrefixToARegularBuiltinIsRefused applies the readonly refusal to an
 	// assignment written in front of a *regular builtin* — `readonly x=1;
 	// x=2 true`.

@@ -2310,6 +2310,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expansion/an-at-list-joined-where-nothing-splits` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x y z]` | `[x y z]` | `[x y z]` | `[x y z]` | `[x-y-z]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `expansion/an-at-list-joined-in-a-here-document` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x y z]` | `[x y z]` | `[x y z]` | `[x y z]` | `[x-y-z]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `expansion/an-at-list-joined-into-a-pattern-operand` | `[Z]` | `[Zx-y]` | `[Zx-y]` | `[Zx-y]` | `[Zx-y]` | `[Z]` | `[Z]` |
+| `axis/whether-a-prefix-to-a-function-persists` | `[1]` | `[1]` | `[1]` | `[1]` | `[9]` | `[1]` | `[1]` |
+| `axis/a-persisting-function-prefix-over-an-unset-name` | `[absent]` | `[absent]` | `[absent]` | `[absent]` | `[9]` | `[absent]` | `[absent]` |
+| `axis/what-a-persisting-function-prefix-leaves-when-the-body-assigned` | `[1]` | `[1]` | `[1]` | `[1]` | `[inner]` | `[1]` | `[1]` |
+| `axis/whether-a-prefix-to-a-function-is-exported` | `YES` | `YES` | `YES` | `YES` | `NO` | `YES` | `YES` |
+| `axis/a-function-prefixs-export-attribute-does-not-outlive-the-call` | `NO` | `NO` | `NO` | `NO` | `NO` | `NO` | `NO` |
+| `axis/a-function-prefix-over-a-name-already-exported` | `YES` | `YES` | `YES` | `YES` | `NO` | `YES` | `YES` |
 | `readonly/an-associative-element-is-refused` | **2>** `<script>: 1: typeset: not found~<script>: 2: m[a]=1: not found~<script>: 3: typeset: not found~<script>: 4: m[k]=v: not found~<script>: 5: Bad substitution` *(status 2)* | `st=1 k=[unset] a=[1]~after` **2>** `<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: readonly variable` *(status 1)* | `st=1 k=[1] a=[1]~after` **2>** `<script>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: is read only` *(status 1)* | **2>** `<script>:4: read-only variable: m` *(status 1)* | **2>** `<script>: line 1: typeset: not found~<script>: line 2: m[a]=1: not found~<script>: line 3: typeset: not found~<script>: line 4: m[k]=v: not found~<script>: line 6: syntax error: bad substitution` *(status 2)* |
 | `readonly/an-indexed-element-is-not-written` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: readonly variable` *(status 1)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: is read only` *(status 1)* | **2>** `<script>:3: read-only variable: a` *(status 1)* | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 | `readonly/an-element-append-is-refused` | **2>** `<script>: 1: typeset: not found~<script>: 2: m[a]=1: not found~<script>: 3: typeset: not found~<script>: 4: m[a]+=Q: not found~<script>: 5: Bad substitution` *(status 2)* | `st=1 a=[1]~after` **2>** `<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: readonly variable` *(status 1)* | `st=1 a=[1]~after` **2>** `<script>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: is read only` *(status 1)* | **2>** `<script>:4: read-only variable: m` *(status 1)* | **2>** `<script>: line 1: typeset: not found~<script>: line 2: m[a]=1: not found~<script>: line 3: typeset: not found~<script>: line 4: m[a]+=Q: not found~<script>: line 6: syntax error: bad substitution` *(status 2)* |
@@ -2673,6 +2679,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expansion/an-at-list-joined-into-a-pattern-operand` — the quietest face of the join, because the joined string is a *pattern* and what it joins with decides whether it matches at all: on IFS the operand is the suffix `x-y` and the trim leaves `Z`, on a space it is `x y` and the trim silently does nothing. A trim that ran and changed nothing is indistinguishable from a pattern that did not match, and the status is 0 either way
   ```sh
   IFS=-; set -- x y; v="Zx-y"; echo "[${v%$@}]"
+  ```
+- `axis/whether-a-prefix-to-a-function-persists` — the first of the two splits, and POSIX 2.9.1 names it unspecified in as many words: ksh93 keeps the prefix — `[9]` — and the other six give the name back what it held. Semantics.AssignmentPrefixPersistsAfterAFunction. The body is `:` so that the row is about the prefix and nothing the function did
+  ```sh
+  f(){ :; }; v=1; v=9 f; echo "[$v]"
+  ```
+- `axis/a-persisting-function-prefix-over-an-unset-name` — the control that says the taking-back answer *unsets* the name rather than leaving it holding an empty string, which is a difference only a default-value operator can see: `[$v]` prints `[]` under either reading. ksh93 answers `[9]` here for the same reason it does above
+  ```sh
+  unset v; f(){ :; }; v=9 f; echo "[${v-absent}]"
+  ```
+- `axis/what-a-persisting-function-prefix-leaves-when-the-body-assigned` — the control for what the keeping answer keeps: whatever the *body* left, not the prefix's own value. ksh93 answers `[inner]` and the other six `[1]`, so an implementation that persisted by re-assigning the prefix after the call would answer `[9]` and match no column
+  ```sh
+  f(){ v=inner; }; v=1; v=9 f; echo "[$v]"
+  ```
+- `axis/whether-a-prefix-to-a-function-is-exported` — the second split, unspecified in the same POSIX paragraph and a separate question from the one above: ksh93 answers NO and the other six YES. Semantics.PrefixToAFunctionIsExported. Read off `export -p` rather than a child's environment because the substrate must not start a program to answer a question about an attribute, and matched with `case` so the probe starts none either; the name is a rare one because the listing is the whole environment and a one-letter pattern would match somebody else's
+  ```sh
+  f(){ case "$(export -p)" in *zqp*) echo YES;; *) echo NO;; esac; }; zqp=1; zqp=9 f
+  ```
+- `axis/a-function-prefixs-export-attribute-does-not-outlive-the-call` — the control that keeps the two axes apart, and unanimous: NO in all seven. ksh93 is in the unanimity from the other side — it keeps the *value* and never granted the attribute — so a shell that made either axis stand in for the other would still answer this cell right and get one of the two above wrong
+  ```sh
+  f(){ :; }; zqp=1; zqp=9 f; case "$(export -p)" in *zqp*) echo YES;; *) echo NO;; esac
+  ```
+- `axis/a-function-prefix-over-a-name-already-exported` — the control that says the export answer moves the attribute in *both* directions: ksh93 takes it **off** a name that carried it — NO here, against YES in the other six — so a prefix in front of a function is not a name the shell merely declines to export. The premise it disproves was in this shell's first fix for #2407, which skipped the axis for an already-exported name on the reading that such a name reaches every child either way
+  ```sh
+  export zqp=1; f(){ :; }; zqp=9 f; case "$(export -p)" in *zqp*) echo YES;; *) echo NO;; esac
   ```
 - `readonly/an-associative-element-is-refused` — the refusal on an *element* of a frozen name, which is the row #1012 is about. All three shells with the attribute refuse it and leave the table alone — bash 3.2 has no `-A` and dash has no arrays, so the panel's intersection here is the three that can be asked. Ours stored the element, said nothing and reported 0, which is a silent write to a table a script deliberately froze. Run from a script rather than `-c` because the two shells that end the script here would stop before the line that reads the table back
   ```sh
@@ -6861,6 +6891,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/assignment-prefix-is-transient` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
 | `cmd/assignment-prefix-special-builtin` | `[2]` | `[1]` | `[2]` | `[1]` | `[2]` | `[1]` | `[2]` |
 | `cmd/assignment-prefix-reaches-a-builtin` | `[a][b]~n=2` | `[a][b]~n=2` | `[a][b]~n=2` | `[a][b]~n=2` | `[a][b]~n=2` | `[a][b]~n=1` | `[a][b]~n=2` |
+| `cmd/assignment-prefix-to-a-function-is-visible` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` |
+| `cmd/assignment-prefix-to-a-function-reaches-a-nested-call` | `g=[9]~f=[9]` | `g=[9]~f=[9]` | `g=[9]~f=[9]` | `g=[9]~f=[9]` | `g=[9]~f=[9]` | `g=[9]~f=[9]` | `g=[9]~f=[9]` |
 | `cmd/subshell-isolates-state` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
 | `cmd/brace-group-shares-state` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` |
 | `cmd/subshell-isolates-a-function-definition` | `gone` | `gone` | `gone` | `gone` | `gone` | `gone` | `gone` |
@@ -7533,6 +7565,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cmd/assignment-prefix-reaches-a-builtin` — transient is not invisible: the prefix is in effect while the builtin runs — `IFS=: read` splits on the colon — and is taken back after, so the later unquoted expansion splits on whitespace again
   ```sh
   echo "a:b" | { IFS=: read x y; echo "[$x][$y]"; v="p q"; set -- $v; echo "n=$#"; }
+  ```
+- `cmd/assignment-prefix-to-a-function-is-visible` — the third command kind, and the one whose prefix this shell dropped on the floor: unanimous `[9]` across all seven columns, where we printed `[1]` because the function branch dispatched the call and never applied the assignment it had already expanded (#2407). Core rather than an axis — what happens on either side of the call is what splits the panel, and the rows below ask those separately
+  ```sh
+  f(){ echo "[$v]"; }; v=1; v=9 f
+  ```
+- `cmd/assignment-prefix-to-a-function-reaches-a-nested-call` — the control for the row above: the value is the shell's for the duration and not the called frame's alone, so a function the body calls reads it too. An implementation that handed the value to the call rather than assigning it would print `g=[1]` here and pass the row above
+  ```sh
+  g(){ echo "g=[$v]"; }; f(){ g; echo "f=[$v]"; }; v=1; v=9 f
   ```
 - `cmd/subshell-isolates-state` — ( ) runs in a subshell, so assignments do not escape
   ```sh

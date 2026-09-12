@@ -8324,6 +8324,46 @@ echo "st=$?"`,
 		Why:     "transient is not invisible: the prefix is in effect while the builtin runs — `IFS=: read` splits on the colon — and is taken back after, so the later unquoted expansion splits on whitespace again",
 	},
 	{
+		ID: "cmd/assignment-prefix-to-a-function-is-visible", Category: "command language",
+		Snippet: `f(){ echo "[$v]"; }; v=1; v=9 f`,
+		Why:     "the third command kind, and the one whose prefix this shell dropped on the floor: unanimous `[9]` across all seven columns, where we printed `[1]` because the function branch dispatched the call and never applied the assignment it had already expanded (#2407). Core rather than an axis — what happens on either side of the call is what splits the panel, and the rows below ask those separately",
+	},
+	{
+		ID: "cmd/assignment-prefix-to-a-function-reaches-a-nested-call", Category: "command language",
+		Snippet: `g(){ echo "g=[$v]"; }; f(){ g; echo "f=[$v]"; }; v=1; v=9 f`,
+		Why:     "the control for the row above: the value is the shell's for the duration and not the called frame's alone, so a function the body calls reads it too. An implementation that handed the value to the call rather than assigning it would print `g=[1]` here and pass the row above",
+	},
+	{
+		ID: "axis/whether-a-prefix-to-a-function-persists", Category: "semantics axes",
+		Snippet: `f(){ :; }; v=1; v=9 f; echo "[$v]"`,
+		Why:     "the first of the two splits, and POSIX 2.9.1 names it unspecified in as many words: ksh93 keeps the prefix — `[9]` — and the other six give the name back what it held. Semantics.AssignmentPrefixPersistsAfterAFunction. The body is `:` so that the row is about the prefix and nothing the function did",
+	},
+	{
+		ID: "axis/a-persisting-function-prefix-over-an-unset-name", Category: "semantics axes",
+		Snippet: `unset v; f(){ :; }; v=9 f; echo "[${v-absent}]"`,
+		Why:     "the control that says the taking-back answer *unsets* the name rather than leaving it holding an empty string, which is a difference only a default-value operator can see: `[$v]` prints `[]` under either reading. ksh93 answers `[9]` here for the same reason it does above",
+	},
+	{
+		ID: "axis/what-a-persisting-function-prefix-leaves-when-the-body-assigned", Category: "semantics axes",
+		Snippet: `f(){ v=inner; }; v=1; v=9 f; echo "[$v]"`,
+		Why:     "the control for what the keeping answer keeps: whatever the *body* left, not the prefix's own value. ksh93 answers `[inner]` and the other six `[1]`, so an implementation that persisted by re-assigning the prefix after the call would answer `[9]` and match no column",
+	},
+	{
+		ID: "axis/whether-a-prefix-to-a-function-is-exported", Category: "semantics axes",
+		Snippet: `f(){ case "$(export -p)" in *zqp*) echo YES;; *) echo NO;; esac; }; zqp=1; zqp=9 f`,
+		Why:     "the second split, unspecified in the same POSIX paragraph and a separate question from the one above: ksh93 answers NO and the other six YES. Semantics.PrefixToAFunctionIsExported. Read off `export -p` rather than a child's environment because the substrate must not start a program to answer a question about an attribute, and matched with `case` so the probe starts none either; the name is a rare one because the listing is the whole environment and a one-letter pattern would match somebody else's",
+	},
+	{
+		ID: "axis/a-function-prefixs-export-attribute-does-not-outlive-the-call", Category: "semantics axes",
+		Snippet: `f(){ :; }; zqp=1; zqp=9 f; case "$(export -p)" in *zqp*) echo YES;; *) echo NO;; esac`,
+		Why:     "the control that keeps the two axes apart, and unanimous: NO in all seven. ksh93 is in the unanimity from the other side — it keeps the *value* and never granted the attribute — so a shell that made either axis stand in for the other would still answer this cell right and get one of the two above wrong",
+	},
+	{
+		ID: "axis/a-function-prefix-over-a-name-already-exported", Category: "semantics axes",
+		Snippet: `export zqp=1; f(){ :; }; zqp=9 f; case "$(export -p)" in *zqp*) echo YES;; *) echo NO;; esac`,
+		Why:     "the control that says the export answer moves the attribute in *both* directions: ksh93 takes it **off** a name that carried it — NO here, against YES in the other six — so a prefix in front of a function is not a name the shell merely declines to export. The premise it disproves was in this shell's first fix for #2407, which skipped the axis for an already-exported name on the reading that such a name reaches every child either way",
+	},
+	{
 		ID: "cmd/subshell-isolates-state", Category: "command language",
 		Snippet: `x=1; (x=2); echo "[$x]"`,
 		Why:     "( ) runs in a subshell, so assignments do not escape",

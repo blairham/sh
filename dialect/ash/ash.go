@@ -124,6 +124,11 @@ func Semantics() interp.Semantics {
 	// `export a+=2` is `a+: bad variable name`, so the append operator is not
 	// an operand this shell's declarations take.
 	s.DeclarationTakesAnAppendOperand = interp.No
+	// A prefix to a function, both halves with its sibling: visible and
+	// exported for the length of the call, gone afterwards. Measured
+	// 2026-09-12 in the pinned alpine image (#2407).
+	s.AssignmentPrefixPersistsAfterAFunction = interp.No
+	s.PrefixToAFunctionIsExported = interp.Yes
 	// POSIX makes an unquoted `$@` behave as `$*` where nothing is split, and
 	// this shell complies: `IFS=-; set -- x y z; v=${@}` is `x-y-z`.
 	s.UnsplitAtListJoinsOnIFS = interp.Yes

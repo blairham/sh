@@ -22,6 +22,10 @@ func jobsSemantics(letters string) Semantics {
 	sem.JobsListNewestFirst = No
 	sem.JobsShowBackgroundCommand = Yes
 	sem.JobsOptions = letters
+	// The majority answer, so a test about a *letter* is not also a test
+	// about which listing finishes with a job. TestOnlyOneDialectFinishes…
+	// below asks that axis itself.
+	sem.PidListingFinishesWithAJob = No
 	return sem
 }
 
@@ -200,6 +204,47 @@ func TestJobsOnlyAStateListingForgetsAFinishedJob(t *testing.T) {
 			}
 		})
 	}
+}
+
+// **Whether a pid listing finishes with the job is a dialect's answer**, and
+// the axis is asked only where there is a finished job for it to be about.
+//
+// The `Yes` row is what one column of the panel does and the `No` row is what
+// two others do; the third row is why the axis cannot be inferred from the
+// listing form alone — a `jobs -p` over a job that is still running raises no
+// question in any of them, so a fix that asked unconditionally would refuse
+// every ordinary `jobs -p` in a shell with no answer (#602).
+func TestAPidListingMayFinishWithAJob(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		answer   Answer
+		wantKept bool
+	}{
+		{"kept for the next listing", No, true},
+		{"finished with, as a state listing would", Yes, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `sleep 0.05 & sleep 0.3; jobs -p; echo "---"; jobs`
+			out, _ := jobsRun(t, src, func(s *Semantics) {
+				s.JobsPidsOnlyOption = Yes
+				s.PidListingFinishesWithAJob = tc.answer
+			})
+			after := out[strings.Index(out, "---"):]
+			if kept := strings.Contains(after, "[1]"); kept != tc.wantKept {
+				t.Errorf("after = %q, want kept=%v", after, tc.wantKept)
+			}
+		})
+	}
+
+	t.Run("a running job asks nothing", func(t *testing.T) {
+		out, _ := jobsRun(t, `sleep 0.3 & jobs -p; wait`, func(s *Semantics) {
+			s.JobsPidsOnlyOption = Yes
+			s.PidListingFinishesWithAJob = Unspecified
+		})
+		if strings.Contains(out, "no dialect was chosen") {
+			t.Errorf("out = %q, want no question where no job has finished", out)
+		}
+	})
 }
 
 // Operands settle their own order and each row keeps the job's own number —

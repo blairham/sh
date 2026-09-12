@@ -2855,6 +2855,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `jobs/a-job-that-is-neither-current-nor-previous` | `[2][+] Done                       ~[1][+] Done(1)                    ` | `[1][ ] Exit 1                     false` | `[1][ ] Done(1)                    false` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `jobs/two-jobs-and-which-end-it-starts-from` | `[2] + Running                    ~[1] - Running                    ` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                 sleep 0.4 &~[2]+  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[1]  - running    sleep 0.4~[2]  + running    sleep 0.4` |
 | `jobs/dash-p-is-the-process-ids-alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `a listing with the id in it` |
+| `jobs/a-pid-listing-and-a-job-that-has-finished` | `--~[1] + Done                       ~--` | `--~[1]+  Done                       sleep 0.05~--` | `--~[1]+  Done                       sleep 0.05~--` | `--~--` | `--~--` | `--~--` |
 | `jobs/dash-l-puts-the-process-id-in-the-listing` | `[1] + PID Running ` | `[1]+ PID Running sleep 0.4 &` | `[1]+ PID Running sleep 0.4 &` | `[1]+ PID Running sleep 0.4 &` | `[1] + PID	 Running <command unknown>` | `[1] + PID running sleep 0.4` |
 | `jobs/dash-l-and-dash-p-the-last-one-wins` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: a listing` |
 | `jobs/dash-r-lists-the-running-ones` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -r` | `[1]+  Running                    sleep 0.4 &~st=0` | `[1]+  Running                    sleep 0.4 &~st=0` | `[1]+  Running                 sleep 0.4 &~st=0` | `st=2` **2>** `<shell>: jobs: -r: unknown option~Usage: jobs [-lnp] [job ...]` | `[1]  + running    sleep 0.4~st=0` |
@@ -3476,6 +3477,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `jobs/dash-p-is-the-process-ids-alone` — the `kill $(jobs -p)` idiom, and the one place the letter splits: dash, bash and ksh93 print process ids and nothing else, zsh reads the same letter as the job's process *group* and prints its ordinary rows. Compared against `$!` rather than printed, because a process id is not the same twice. Through a file rather than a pipe: a subshell has no job table in dash or zsh
   ```sh
   sleep 0.4 & jobs -p >p.txt; read x <p.txt; case $x in "$!") echo "the job's process id alone";; *"$!"*) echo "a listing with the id in it";; *) echo "neither: [$x]";; esac; wait
+  ```
+- `jobs/a-pid-listing-and-a-job-that-has-finished` — which listings *finish* with a job, which is not the same question as which listings show one. dash, bash 5.3 and bash-as-`sh` print the id and still report the job as Done to the next bare `jobs`; ksh93 forgets it there and the next listing is empty; zsh writes nothing for a job that is over, and bash 3.2 does not report a finished job in a non-interactive shell at all, so neither of those two has anything left to forget. We followed the two that agree and did not write down that we had picked, which made it read as an accident (#602). The ids go to /dev/null because a process id is not the same twice
+  ```sh
+  sleep 0.05 & sleep 0.4; jobs -p >/dev/null; echo "--"; jobs; echo "--"; jobs
   ```
 - `jobs/dash-l-puts-the-process-id-in-the-listing` — the one `jobs` letter all five have, and each puts the id somewhere different — after the marker, or eating one of the two spaces behind it, or with a tab after it. Runs of spaces are squeezed because dash narrows its state column by the width of the id, so the untouched line would depend on how many digits this machine's process ids have
   ```sh
@@ -7869,6 +7874,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/bad-number-diverges` | `[0]~st=1` **2>** `<shell>: 1: printf: abc: expected numeric value` | `[0]~st=1` **2>** `<shell>: line 1: printf: abc: invalid number` | `[0]~st=1` **2>** `<shell>: line 1: printf: abc: invalid number` | `[0]~st=1` **2>** `<shell>: line 0: printf: abc: invalid number` | `[0]~st=0` | `[0]~st=0` |
 | `printf/empty-operand-is-bash-only` | `[0]~st=0` | `[0]~st=1` **2>** `<shell>: line 1: printf: : invalid number` | `[0]~st=1` **2>** `<shell>: line 1: printf: : invalid number` | `[0]~st=0` | `[0]~st=0` | `[0]~st=0` |
 | `printf/quote-diverges` | `[st=2` **2>** `<shell>: 1: printf: %q: invalid directive` | `[a\ b]~st=0` | `[a\ b]~st=0` | `[a\ b]~st=0` | `['a b']~st=0` | `[a\ b]~st=0` |
+| `printf/quoting-a-newline-has-to-round-trip` | `[st=2` **2>** `<shell>: 1: printf: %q: invalid directive` | `[$'a\nb']~st=0` | `[$'a\nb']~st=0` | `[$'a\nb']~st=0` | `[$'a\nb']~st=0` | `[a$'\n'b]~st=0` |
+| `printf/quoting-a-byte-each-shell-spells-differently` | `[st=2` **2>** `<shell>: 1: printf: %q: invalid directive` | `[$'a\Eb\vc']~st=0` | `[$'a\Eb\vc']~st=0` | `[$'a\Eb\vc']~st=0` | `[$'a\Eb\x0bc']~st=0` | `[a$'\033'b$'\v'c]~st=0` |
+| `printf/quoting-a-value-with-nothing-unwritable-in-it` | `[st=2` **2>** `<shell>: 1: printf: %q: invalid directive` | `[a\ b][a\'b][a\!b][=ab]~st=0` | `[a\ b][a\'b][a\!b][=ab]~st=0` | `[a\ b][a\'b][a\!b][=ab]~st=0` | `['a b'][$'a\'b'][a!b]['=ab']~st=0` | `[a\ b][a\'b][a!b][\=ab]~st=0` |
+| `printf/a-date-string-where-the-other-takes-an-epoch` | `st=2~no such conversion` | `st=1~some other date: 1970-01-01 00:00:00` | `st=1~some other date: 1970-01-01 00:00:00` | `st=1~no such conversion` | `st=0~the epoch behind a hash` | `st=1~no such conversion` |
+| `printf/a-date-string-that-is-not-one` | `st=2` **2>** `<shell>: 1: printf: %(: invalid directive` | `st=0` | `st=0` | `st=1` **2>** `<shell>: line 0: printf: `(': invalid format character` | `st=1` **2>** `<shell>: printf: warning: invalid argument of type T` | `st=1` **2>** `<shell>:printf:1: %(: invalid directive` |
+| `printf/the-bare-time-conversion` | `st=2~no such conversion` | `st=1~no such conversion` | `st=1~no such conversion` | `st=1~no such conversion` | `st=0~the full date line` | `st=1~no such conversion` |
 | `printf/unknown-verb-diverges` | `[st=2` **2>** `<shell>: 1: printf: %z: invalid directive` | `[st=1` **2>** `<shell>: line 1: printf: `]': invalid format character` | `[st=1` **2>** `<shell>: line 1: printf: `]': invalid format character` | `[st=1` **2>** `<shell>: line 0: printf: `]': invalid format character` | `[st=1` **2>** `<shell>: printf: ]: unknown format specifier` | `[st=1` **2>** `<shell>:printf:1: %z: invalid directive` |
 | `printf/a-length-modifier-on-a-conversion` | `[st=2` **2>** `<shell>: 1: printf: %l: invalid directive` | `[42][   42][1.500000]~st=0` | `[42][   42][1.500000]~st=0` | `[42][   42][1.500000]~st=0` | `[42][   42][1.500000]~st=0` | `[42][   42][1.500000]~st=0` |
 | `printf/a-length-modifier-c99-added` | `[st=2` **2>** `<shell>: 1: printf: %z: invalid directive` | `[FF][42][42][42]~st=0` | `[FF][42][42][42]~st=0` | `[FF][42][42][42]~st=0` | `[FF][42][42][42]~st=0` | `[st=1` **2>** `<shell>:printf:1: %z: invalid directive` |
@@ -7958,6 +7969,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `printf/quote-diverges` — three answers and an absence: bash and zsh backslash-escape, ksh93 single-quotes, and dash has no %q at all
   ```sh
   printf "[%q]\n" "a b"; echo "st=$?"
+  ```
+- `printf/quoting-a-newline-has-to-round-trip` — the character `%q` exists to make visible, and the one it got wrong: a backslash before a newline is a *line continuation*, so `a\<newline>b` read back is `ab` and the output did not round-trip at all. Three answers here and no two alike — bash moves the whole word into `$'…'`, zsh wraps the one byte in a `$'…'` of its own, ksh93 writes bash's shape — and dash has no `%q`. The trailing `.` is trimmed rather than omitted because a command substitution eats a trailing newline (#1707)
+  ```sh
+  nl="$(printf "a\nb.")"; nl="${nl%.}"; printf "[%q]\n" "$nl"; echo "st=$?"
+  ```
+- `printf/quoting-a-byte-each-shell-spells-differently` — the two bytes that separate the three escape tables: escape is `\E` in bash and ksh93 and `\033` in zsh, and a vertical tab is `\v` in bash and zsh and `\x0b` in ksh93 — which is also the row that says ksh93 writes hex where the other two write octal. One value with both in it, so a table copied from either of the others fails here (#1707)
+  ```sh
+  esc="$(printf "a\033b\vc.")"; esc="${esc%.}"; printf "[%q]\n" "$esc"; echo "st=$?"
+  ```
+- `printf/quoting-a-value-with-nothing-unwritable-in-it` — the same conversion where every byte can be written as itself, which is where the three part company again: ksh93 quotes the whole value and the other two escape the byte, and the two that escape do not agree on which bytes — bash escapes `!` where zsh does not, and zsh escapes a leading `=` where bash does not. Four values in one row because a fix that borrowed one shell's table for another would pass on the first and fail on the last two. The quote is built with an octal escape rather than written, so the snippet has no quoting of its own to get wrong (#1707)
+  ```sh
+  sq=$(printf "a\047b"); printf "[%q][%q][%q][%q]\n" "a b" "$sq" "a!b" "=ab"; echo "st=$?"
+  ```
+- `printf/a-date-string-where-the-other-takes-an-epoch` — the same conversion letter under a different reading: ksh93's `%T` takes a date *string* and a `#` in front of a number is how an epoch is written there, where bash's operand is the number itself and a `#` is not a number at all. The one operand both readings can be asked about would be a bare integer, and that is exactly the one they answer differently — so this row pins the string reading and the epoch rows beside it pin the other (#602)
+  ```sh
+  export TZ=UTC; x=$(printf "%(%Y-%m-%d %H:%M:%S)T" "#1000000000" 2>/dev/null); echo "st=$?"; case $x in "2001-09-09 01:46:40") echo "the epoch behind a hash";; "") echo "no such conversion";; *) echo "some other date: $x";; esac
+  ```
+- `printf/a-date-string-that-is-not-one` — a bare number handed to the date-string reading: ksh93 warns that the argument is not one of type T, writes the current time anyway and reports 1 — a warning rather than a refusal, which is why the status is the only part a script can act on. bash reads the same operand as the epoch it is and succeeds, and the three without the conversion refuse the directive. The date itself is thrown away because it is the wall clock in one column (#602)
+  ```sh
+  export TZ=UTC; printf "%(%Y)T" 1000000000 >/dev/null; echo "st=$?"
+  ```
+- `printf/the-bare-time-conversion` — `%T` with no parentheses, which belongs to the date-string reading alone — bash calls `T` an invalid format character and dash an invalid directive. Its default format is the full `date` line rather than the time of day, which is `%()T`'s default there too. The zone abbreviation is matched with a wildcard on purpose: the shells do not agree on what to call UTC, and that is a fact about their zone tables rather than about this conversion (#602)
+  ```sh
+  export TZ=UTC; x=$(printf "%T" "#1000000000" 2>/dev/null); echo "st=$?"; case $x in "Sun Sep  9 01:46:40 "*" 2001") echo "the full date line";; "") echo "no such conversion";; *) echo "something else: $x";; esac
   ```
 - `printf/unknown-verb-diverges` — half the panel names the conversion character alone and half names the whole directive as written, with four wordings and three statuses between them. `z` is a length modifier in three of them, so the character they cannot read here is the `]`
   ```sh

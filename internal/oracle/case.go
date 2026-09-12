@@ -2475,6 +2475,36 @@ echo "reached-after st=$?"`,
 		Why:     "three answers and an absence: bash and zsh backslash-escape, ksh93 single-quotes, and dash has no %q at all",
 	},
 	{
+		ID: "printf/quoting-a-newline-has-to-round-trip", Category: "printf",
+		Snippet: `nl="$(printf "a\nb.")"; nl="${nl%.}"; printf "[%q]\n" "$nl"; echo "st=$?"`,
+		Why:     "the character `%q` exists to make visible, and the one it got wrong: a backslash before a newline is a *line continuation*, so `a\\<newline>b` read back is `ab` and the output did not round-trip at all. Three answers here and no two alike — bash moves the whole word into `$'…'`, zsh wraps the one byte in a `$'…'` of its own, ksh93 writes bash's shape — and dash has no `%q`. The trailing `.` is trimmed rather than omitted because a command substitution eats a trailing newline (#1707)",
+	},
+	{
+		ID: "printf/quoting-a-byte-each-shell-spells-differently", Category: "printf",
+		Snippet: `esc="$(printf "a\033b\vc.")"; esc="${esc%.}"; printf "[%q]\n" "$esc"; echo "st=$?"`,
+		Why:     "the two bytes that separate the three escape tables: escape is `\\E` in bash and ksh93 and `\\033` in zsh, and a vertical tab is `\\v` in bash and zsh and `\\x0b` in ksh93 — which is also the row that says ksh93 writes hex where the other two write octal. One value with both in it, so a table copied from either of the others fails here (#1707)",
+	},
+	{
+		ID: "printf/quoting-a-value-with-nothing-unwritable-in-it", Category: "printf",
+		Snippet: `sq=$(printf "a\047b"); printf "[%q][%q][%q][%q]\n" "a b" "$sq" "a!b" "=ab"; echo "st=$?"`,
+		Why:     "the same conversion where every byte can be written as itself, which is where the three part company again: ksh93 quotes the whole value and the other two escape the byte, and the two that escape do not agree on which bytes — bash escapes `!` where zsh does not, and zsh escapes a leading `=` where bash does not. Four values in one row because a fix that borrowed one shell's table for another would pass on the first and fail on the last two. The quote is built with an octal escape rather than written, so the snippet has no quoting of its own to get wrong (#1707)",
+	},
+	{
+		ID: "printf/a-date-string-where-the-other-takes-an-epoch", Category: "printf",
+		Snippet: `export TZ=UTC; x=$(printf "%(%Y-%m-%d %H:%M:%S)T" "#1000000000" 2>/dev/null); echo "st=$?"; case $x in "2001-09-09 01:46:40") echo "the epoch behind a hash";; "") echo "no such conversion";; *) echo "some other date: $x";; esac`,
+		Why:     "the same conversion letter under a different reading: ksh93's `%T` takes a date *string* and a `#` in front of a number is how an epoch is written there, where bash's operand is the number itself and a `#` is not a number at all. The one operand both readings can be asked about would be a bare integer, and that is exactly the one they answer differently — so this row pins the string reading and the epoch rows beside it pin the other (#602)",
+	},
+	{
+		ID: "printf/a-date-string-that-is-not-one", Category: "printf",
+		Snippet: `export TZ=UTC; printf "%(%Y)T" 1000000000 >/dev/null; echo "st=$?"`,
+		Why:     "a bare number handed to the date-string reading: ksh93 warns that the argument is not one of type T, writes the current time anyway and reports 1 — a warning rather than a refusal, which is why the status is the only part a script can act on. bash reads the same operand as the epoch it is and succeeds, and the three without the conversion refuse the directive. The date itself is thrown away because it is the wall clock in one column (#602)",
+	},
+	{
+		ID: "printf/the-bare-time-conversion", Category: "printf",
+		Snippet: `export TZ=UTC; x=$(printf "%T" "#1000000000" 2>/dev/null); echo "st=$?"; case $x in "Sun Sep  9 01:46:40 "*" 2001") echo "the full date line";; "") echo "no such conversion";; *) echo "something else: $x";; esac`,
+		Why:     "`%T` with no parentheses, which belongs to the date-string reading alone — bash calls `T` an invalid format character and dash an invalid directive. Its default format is the full `date` line rather than the time of day, which is `%()T`'s default there too. The zone abbreviation is matched with a wildcard on purpose: the shells do not agree on what to call UTC, and that is a fact about their zone tables rather than about this conversion (#602)",
+	},
+	{
 		ID: "printf/unknown-verb-diverges", Category: "printf",
 		Snippet: `printf "[%z]\n" x; echo "st=$?"`,
 		Why:     "half the panel names the conversion character alone and half names the whole directive as written, with four wordings and three statuses between them. `z` is a length modifier in three of them, so the character they cannot read here is the `]`",
@@ -3860,6 +3890,11 @@ echo "st=$?"`,
 		ID: "jobs/dash-p-is-the-process-ids-alone", Category: "builtins",
 		Snippet: `sleep 0.4 & jobs -p >p.txt; read x <p.txt; case $x in "$!") echo "the job's process id alone";; *"$!"*) echo "a listing with the id in it";; *) echo "neither: [$x]";; esac; wait`,
 		Why:     "the `kill $(jobs -p)` idiom, and the one place the letter splits: dash, bash and ksh93 print process ids and nothing else, zsh reads the same letter as the job's process *group* and prints its ordinary rows. Compared against `$!` rather than printed, because a process id is not the same twice. Through a file rather than a pipe: a subshell has no job table in dash or zsh",
+	},
+	{
+		ID: "jobs/a-pid-listing-and-a-job-that-has-finished", Category: "builtins",
+		Snippet: `sleep 0.05 & sleep 0.4; jobs -p >/dev/null; echo "--"; jobs; echo "--"; jobs`,
+		Why:     "which listings *finish* with a job, which is not the same question as which listings show one. dash, bash 5.3 and bash-as-`sh` print the id and still report the job as Done to the next bare `jobs`; ksh93 forgets it there and the next listing is empty; zsh writes nothing for a job that is over, and bash 3.2 does not report a finished job in a non-interactive shell at all, so neither of those two has anything left to forget. We followed the two that agree and did not write down that we had picked, which made it read as an accident (#602). The ids go to /dev/null because a process id is not the same twice",
 	},
 	{
 		ID: "jobs/dash-l-puts-the-process-id-in-the-listing", Category: "builtins",

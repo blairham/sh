@@ -735,8 +735,10 @@ func Semantics() interp.Semantics {
 	// `%(fmt)T`: an epoch through a date format, with -1 for now and -2 for
 	// when the shell started. This shell alone in the panel — 3.2 has it not
 	// either, which is why the two bash columns of the corpus differ here.
+	s.PidListingFinishesWithAJob = interp.No
 	s.PrintfTimeConversion = interp.Yes
-	s.PrintfQuote = interp.PrintfQuoteBackslash
+	s.PrintfTimeOperandIsADateString = interp.No
+	s.PrintfQuote = interp.PrintfQuoteAnsiCWord
 	// `$'\cA'` is 0x01 and `$'\c1'` is 0x11: the character uppercased and
 	// masked to five bits, with `\c?` reading as DEL since 5.x.
 	s.DollarSingleBackslashC = interp.DollarSingleControlMasked

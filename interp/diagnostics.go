@@ -324,6 +324,14 @@ type Diagnostics struct {
 	// four are fields rather than strings in the builtin.
 	TestMissingBracket string
 
+	// PrintfBadDateOperand is what the date-string `%T` says about an operand
+	// it cannot read. No verbs, and it is a *warning*: the conversion still
+	// writes the current time after it, and the status is 1.
+	//
+	// Only the dialect with that form has one — see
+	// Semantics.PrintfTimeOperandIsADateString.
+	PrintfBadDateOperand string
+
 	// GetoptsBadOption is an option `getopts` does not have in its string.
 	// One verb: the letter.
 	GetoptsBadOption string

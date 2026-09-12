@@ -4208,12 +4208,6 @@ func sortedKeys(m map[string]string) []string {
 	return out
 }
 
-// singleQuote renders text the way `trap` lists it, so the output could be
-// fed back in.
-func singleQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
 // badStatusArg reports a status operand `exit` will not take.
 //
 // The status is 2 in both shells that refuse, and it is not the fatal-error

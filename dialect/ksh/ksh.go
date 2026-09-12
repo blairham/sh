@@ -811,7 +811,9 @@ func Semantics() interp.Semantics {
 	// operand is a date *string* and a number earns a warning and the current
 	// time. Not the one bash has, and not modeled — see
 	// docs/spec/semantics.md.
-	s.PrintfTimeConversion = interp.No
+	s.PidListingFinishesWithAJob = interp.Yes
+	s.PrintfTimeConversion = interp.Yes
+	s.PrintfTimeOperandIsADateString = interp.Yes
 	s.PrintfQuote = interp.PrintfQuoteSingle
 	// The same `\c` as the printf format, and the arithmetic is bit 6
 	// toggled rather than bash's five-bit mask: `$'\c1'` is `q`, not 0x11.
@@ -1483,8 +1485,11 @@ func Diagnostics() interp.Diagnostics {
 		CdTooManyOperandsStatus:     2,
 		// `cd old new` where old is not in the current directory's path.
 		// The operand is not named.
-		CdBadSubstitution:         "cd: bad substitution",
-		CdOldpwdNotSet:            "cd: bad directory",
+		CdBadSubstitution: "cd: bad substitution",
+		CdOldpwdNotSet:    "cd: bad directory",
+		// A warning and not a refusal: `%T` still writes the current time
+		// after it, and only the status says anything went wrong.
+		PrintfBadDateOperand:      "printf: warning: invalid argument of type T",
 		PrintfBadVerb:             "printf: %[1]s: unknown format specifier",
 		PrintfBadOption:           "printf: %[1]s: unknown option",
 		TrapConditionRequired:     "trap: condition(s) required",

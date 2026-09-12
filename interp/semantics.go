@@ -1694,6 +1694,21 @@ type Semantics struct {
 	// (#2057).
 	PrintfEmptyIsNotANumber Answer
 
+	// PidListingFinishesWithAJob makes `jobs -p` forget a finished job the
+	// way a listing of states does.
+	//
+	// ksh93 alone. Measured 2026-09-12 with a background command that has
+	// already ended: `jobs -p` writes the process id in dash, bash and
+	// ksh93 — zsh writes nothing for a job that is over — and the *next*
+	// `jobs` reports it as Done in dash and bash and shows nothing in
+	// ksh93. So the pid listing is a listing that finishes with the job in
+	// one column and a peek that leaves it in two.
+	//
+	// Asked only where a pid listing met a finished job, so an ordinary
+	// `jobs` never raises it: that form finishes with the job everywhere and
+	// needs no dialect.
+	PidListingFinishesWithAJob Answer
+
 	// PrintfTimeConversion gives `printf` a `%(fmt)T`: an epoch through a
 	// date format, with the format written inside the conversion. bash 5.3's
 	// alone among the panel — dash and zsh call `%(` a directive they do not
@@ -1712,6 +1727,20 @@ type Semantics struct {
 	// Asked only where a format actually carries a `%(`, so a dialect
 	// without the conversion is never questioned about `%s`.
 	PrintfTimeConversion Answer
+
+	// PrintfTimeOperandIsADateString makes that conversion's operand a date
+	// *string* rather than a number of seconds, and gives the shell a plain
+	// `%T` with no parentheses as well.
+	//
+	// ksh93 alone, and asked only where PrintfTimeConversion already said
+	// yes — a dialect without the conversion is never questioned about its
+	// operand. See interp/printfdate.go for the strings, the subset taken
+	// and why the rest meet that shell's own warning rather than a guess.
+	//
+	// It moves the empty format too: `%()T` is the time of day where the
+	// operand is an epoch and the full `date` line where it is a string,
+	// which is the same default the bare `%T` writes.
+	PrintfTimeOperandIsADateString Answer
 
 	// PrintfQuote is how `%q` quotes, which is three answers and an absence
 	// rather than a switch — see PrintfQuoteStyle.
@@ -9030,9 +9059,16 @@ type PrintfQuoteStyle int
 const (
 	// PrintfQuoteUnspecified is no answer, and is refused like any other.
 	PrintfQuoteUnspecified PrintfQuoteStyle = iota
-	// PrintfQuoteBackslash escapes each character that needs it: bash, zsh.
-	PrintfQuoteBackslash
-	// PrintfQuoteSingle wraps the word in single quotes: ksh93.
+	// PrintfQuoteAnsiCWord moves the whole word into one `$'…'` as soon as a
+	// byte cannot be written as itself, and backslash-escapes otherwise:
+	// bash.
+	PrintfQuoteAnsiCWord
+	// PrintfQuoteAnsiCCharacter wraps each such byte in a `$'…'` of its own
+	// and leaves the rest backslash-escaped: zsh. It is the same answer that
+	// shell's `${(q)…}` gives, measured byte for byte.
+	PrintfQuoteAnsiCCharacter
+	// PrintfQuoteSingle has three shapes — bare, `'…'`, and `$'…'` with hex
+	// escapes — and picks by what the value holds: ksh93.
 	PrintfQuoteSingle
 	// PrintfQuoteAbsent is a dialect without `%q` at all: dash, which calls
 	// it an invalid directive like any other conversion it does not have.
@@ -9041,8 +9077,10 @@ const (
 
 func (p PrintfQuoteStyle) String() string {
 	switch p {
-	case PrintfQuoteBackslash:
-		return "backslash"
+	case PrintfQuoteAnsiCWord:
+		return "the whole word in $'…'"
+	case PrintfQuoteAnsiCCharacter:
+		return "each byte in its own $'…'"
 	case PrintfQuoteSingle:
 		return "single quoted"
 	case PrintfQuoteAbsent:

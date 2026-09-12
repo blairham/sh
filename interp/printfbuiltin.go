@@ -346,40 +346,28 @@ func (r *Runner) printfFloat(arg string, present bool) (float64, int) {
 
 // printfQuote is `%q`, which quotes so the shell can read it back.
 //
-// Three answers and one absence, which is why it is a policy: bash and zsh
-// escape each character that needs it, ksh93 wraps the whole word in single
-// quotes, and dash does not have the verb at all.
+// Three answers and one absence, and the three are in interp/printfquote.go
+// with the measurement that separates them. The one thing they agree on is
+// the contract: what comes out has to read back as what went in, which is why
+// a backslash before a newline is not one of the answers (#1707).
 func (r *Runner) printfQuote(spec, arg string) (string, int, bool) {
 	switch r.quoteStyle() {
-	case PrintfQuoteBackslash:
-		return fmt.Sprintf(spec+"s", backslashQuote(arg)), 0, false
+	case PrintfQuoteAnsiCWord:
+		return fmt.Sprintf(spec+"s", ansiCWordQuote(arg)), 0, false
+	case PrintfQuoteAnsiCCharacter:
+		// The same function `${(q)…}` uses, which is the same job: this
+		// shell's `%q` and its `q` flag were measured against each other over
+		// every printable byte at three positions and every control byte, and
+		// they agree everywhere.
+		return fmt.Sprintf(spec+"s", quoteWithBackslashes(arg, false)), 0, false
 	case PrintfQuoteSingle:
-		return fmt.Sprintf(spec+"s", singleQuote(arg)), 0, false
+		return fmt.Sprintf(spec+"s", kshSingleQuote(arg)), 0, false
 	case PrintfQuoteAbsent:
 		// A conversion the shell does not have stops the output where it is,
 		// as any other unknown one does.
 		return "", r.printfBadVerb("%q", "q"), true
 	}
 	return "", r.status, true
-}
-
-// backslashQuote escapes what the shell would otherwise read as syntax.
-func backslashQuote(s string) string {
-	if s == "" {
-		return "''"
-	}
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		switch c := s[i]; c {
-		case ' ', '\t', '\n', '"', '\'', '\\', '$', '`', '&', '|', ';',
-			'(', ')', '<', '>', '*', '?', '[', ']', '{', '}', '~', '!', '#', '^':
-			b.WriteByte('\\')
-			b.WriteByte(c)
-		default:
-			b.WriteByte(c)
-		}
-	}
-	return b.String()
 }
 
 // scanPrintfSpec reads one conversion, returning the flags-width-precision
@@ -423,6 +411,21 @@ func (r *Runner) scanPrintfSpec(s string) (string, byte, string, int, int) {
 		return "", 0, "", len(s), 0
 	}
 	verb := s[i]
+	if verb == 'T' {
+		// A `%T` with no parentheses, which is the date-string form's own
+		// spelling and belongs to no other dialect: bash calls `T` an
+		// invalid format character, dash an invalid directive. Asked here
+		// rather than beside the `(` above, so a dialect is questioned only
+		// when the letter is actually written.
+		if r.ask(r.sem().PrintfTimeConversion, "`printf '%(…)T'` writing a date") &&
+			r.ask(r.sem().PrintfTimeOperandIsADateString, "`printf '%T'` taking a date string") {
+			return spec, 'T', "", i + 1, 0
+		}
+		if r.unspecified {
+			return "", 0, "", i + 1, r.status
+		}
+		return spec, 0, "", i + 1, 0
+	}
 	if strings.IndexByte("sbcqdiouxXfeEgG%", verb) < 0 {
 		return spec, 0, "", i + 1, 0
 	}
@@ -512,6 +515,12 @@ func printfSpecPrefix(s string) int {
 // An empty format is the C locale's time of day, which is what the shell with
 // this conversion writes for `%()T`.
 func (r *Runner) printfTime(spec, format, arg string, present bool) (string, int, bool) {
+	if r.ask(r.sem().PrintfTimeOperandIsADateString, "`printf '%T'` taking a date string") {
+		return r.printfDate(spec, format, arg)
+	}
+	if r.unspecified {
+		return "", r.status, true
+	}
 	var t time.Time
 	code := 0
 	switch {
@@ -530,6 +539,28 @@ func (r *Runner) printfTime(spec, format, arg string, present bool) (string, int
 	}
 	// The width and the flags belong to the *result*, not to the date: a
 	// `%10(%Y)T` pads the four digits out to ten.
+	return fmt.Sprintf(spec+"s", strftime(format, t)), code, false
+}
+
+// printfDate is the other reading of `%T`: the operand is a date string, and
+// an operand it cannot read is a warning plus the current time rather than a
+// refusal — measured, and the status is still 1, so a script can tell.
+//
+// The default format is the full `date` line rather than the time of day,
+// and it is the default for `%()T` as well as for a bare `%T`: both write
+// `Sun Sep  9 01:46:40 GMT 2001` for the same instant where the epoch form
+// writes `01:46:40`.
+func (r *Runner) printfDate(spec, format, arg string) (string, int, bool) {
+	t, ok := kshDate(arg, r.Now().In(r.timeZone()))
+	code := 0
+	if !ok {
+		r.diagf("%s\n", Wording(r.diag().PrintfBadDateOperand,
+			"printf: warning: invalid argument of type T"))
+		code = 1
+	}
+	if format == "" {
+		format = "%a %b %e %H:%M:%S %Z %Y"
+	}
 	return fmt.Sprintf(spec+"s", strftime(format, t)), code, false
 }
 

@@ -23,6 +23,9 @@ import (
 func timeSemantics(has Answer) Semantics {
 	sem := CoreSemantics()
 	sem.PrintfTimeConversion = has
+	// The epoch reading, which is what every case in this file is about.
+	// printfdate_test.go asks the other one.
+	sem.PrintfTimeOperandIsADateString = No
 	return sem
 }
 

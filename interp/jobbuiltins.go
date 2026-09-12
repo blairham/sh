@@ -162,12 +162,34 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	// listing has still finished with it, and forgetting only the printed
 	// ones would keep them forever in exactly that dialect.
 	//
-	// A listing that was not a listing of states does not count. Measured:
-	// `jobs -p` and `jobs -r` in bash both leave the finished job for the
-	// next bare `jobs` to report, where `jobs` and `jobs -l` consume it. So
-	// only a form that showed the job's state, and only with nothing
-	// filtered out, finishes with it.
-	if form == jobsPidsAlone || wanted != anyJobState {
+	// A listing that was not a listing of states does not count — in three
+	// of the four. Measured: `jobs -p` and `jobs -r` in bash both leave the
+	// finished job for the next bare `jobs` to report, where `jobs` and
+	// `jobs -l` consume it. So only a form that showed the job's state, and
+	// only with nothing filtered out, finishes with it.
+	//
+	// ksh93 is the fourth, and it finishes with the job whichever form asked:
+	// `jobs -p` there prints the process id once and the next `jobs` shows
+	// nothing, where dash and bash print the id and then still report the
+	// job as Done. We followed the two that agree, which was defensible and
+	// unrecorded — so it read as an accident rather than as a choice (#602).
+	if wanted != anyJobState {
+		return 0
+	}
+	finished := false
+	for _, j := range jobs {
+		if j.Finished() {
+			finished = true
+			break
+		}
+	}
+	if !finished {
+		// Nothing to finish with, so no dialect is questioned: a `jobs -p`
+		// over running jobs answers the same way in every column.
+		return 0
+	}
+	if form == jobsPidsAlone &&
+		!r.ask(r.sem().PidListingFinishesWithAJob, "`jobs -p` finishing with a job the way a state listing does") {
 		return 0
 	}
 	for _, j := range jobs {

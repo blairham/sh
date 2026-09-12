@@ -1533,255 +1533,225 @@ type Semantics struct {
 	// NullCommandVariable names the parameter holding the command that a
 	// command consisting only of redirections runs.
 	//
-	// Empty is the core's answer and five of the six panel columns': `<f`
-	// opens the file, runs nothing and writes nothing, and `>g` truncates
-	// `g` the same way. One shell instead treats the redirections as
-	// arguments to a command named by this parameter, so `<f` at a prompt
-	// pages the file — measured by pointing the parameter at a function that
-	// prints a marker and watching the marker come out. Its own name for
-	// this is `NULLCMD` and it defaults to `cat`.
+	// Empty is the core's answer: `<f` opens the file, runs nothing and writes
+	// nothing, and `>g` truncates `g` the same way. A non-empty name instead
+	// treats the redirections as arguments to a command named by that
+	// parameter, so `<f` at a prompt pages the file — observed by pointing the
+	// parameter at a function that prints a marker and watching the marker come
+	// out.
 	//
 	// A name rather than a value, because the parameter is a script's to
 	// reassign at any moment and the answer has to be read when the command
-	// runs, not when the dialect is built.
+	// runs, not when the preset is built.
 	//
-	// The hook is off entirely while this is empty, which is what keeps the
-	// two readings apart: a shell without it runs nothing and *succeeds*,
-	// where a shell with it and an empty parameter refuses the command by
-	// name — see Diagnostics.RedirectionWithNoCommand. So "no hook" and "a
-	// hook with nothing in it" are different observable shells, and this
-	// field is the first of them.
+	// The hook is off entirely while this is empty, which is what keeps the two
+	// readings apart: without the hook the command runs nothing and *succeeds*,
+	// where the hook with an empty parameter refuses the command by name — see
+	// Diagnostics.RedirectionWithNoCommand. So "no hook" and "a hook with
+	// nothing in it" are different observable behaviors, and this field is the
+	// first of them.
 	//
 	// What it is not: the `$(<file)` form, whose whole body is one input
-	// redirection. That form does not consult this parameter — measured, and
-	// see readfilesubst.go — so a substitution reads the file even where the
-	// hook is pointed somewhere else. Two operands, two paths.
+	// redirection. That form does not consult this parameter — see
+	// readfilesubst.go — so a substitution reads the file even where the hook is
+	// pointed somewhere else. Two operands, two paths.
 	NullCommandVariable string
 
 	// ReadNullCommandVariable names the parameter consulted in place of
-	// NullCommandVariable when the command's *only* redirection is a plain
-	// input file redirection.
+	// NullCommandVariable when the command's *only* redirection is a plain input
+	// file redirection.
 	//
-	// One redirection and one operator: `<f` and `3<f` both take this route
-	// — the descriptor number does not matter — where `<f <g`, `<>f`, `<<<x`,
-	// `<&0`, `2>e` and `<f 2>e` all take the other. Measured a spelling at a
+	// One redirection and one operator: `<f` and `3<f` both take this route —
+	// the descriptor number does not matter — where `<f <g`, `<>f`, `<<<x`,
+	// `<&0`, `2>e` and `<f 2>e` all take the other. Established a spelling at a
 	// time with the two parameters pointed at two different marker functions,
-	// which is the only probe that can tell them apart: with both left at
-	// their defaults the two routes print the same file and the reading is
+	// which is the only probe that can tell them apart: with both left at their
+	// defaults the two routes print the same file and the reading is
 	// unfalsifiable.
 	//
 	// Empty — the parameter unset, or set to nothing — falls back to
 	// NullCommandVariable rather than refusing, so a script that clears the
-	// reader still pages nothing and cats instead. The shell that has it
-	// calls it `READNULLCMD` and defaults it to `more`.
+	// reader still pages nothing and concatenates instead.
 	ReadNullCommandVariable string
 
 	// NoclobberBlocksAppendCreate makes `set -C` stop `>>` from *creating* a
-	// file, so appending to a name that is not there is a refusal rather
-	// than a new file. Asked only under noclobber, which is the only place
-	// it decides anything.
+	// file, so appending to a name that is not there is a refusal rather than a
+	// new file. Asked only under noclobber, which is the only place it decides
+	// anything.
 	//
 	// POSIX puts noclobber on `>` alone — 2.7.2 makes `>` fail when the file
-	// exists and says nothing about `>>` — so the standard's answer is No,
-	// and it is dash's, bash 5.3's, bash 3.2's and ksh93's: `set -C; echo hi
-	// >> f` on a missing `f` creates it and reports 0 in all five, bash 5.3
-	// under an argv[0] of `sh` included. zsh 5.9.2 is the departure, and
-	// refuses at 1 with `no such file or directory`. Measured 2026-09-07,
-	// with appending to a file that *does* exist as the control: all six
-	// append and report 0.
+	// exists and says nothing about `>>` — so the standard's answer is No, and
+	// Yes is the departure, refusing at 1 with `no such file or directory`.
+	// Appending to a file that *does* exist is the control, and appends and
+	// reports 0 under both answers.
 	//
-	// It is the reason `>>|` exists. Where this is No the override has
-	// nothing to override, so a dialect that answers Yes here is the only
-	// one for which the append half of syntax.Dialect.ClobberOverrideMarker
-	// is observable — which is why the two were measured and added together.
+	// It is the reason `>>|` exists. Where this is No the override has nothing
+	// to override, so a preset that answers Yes here is the only one for which
+	// the append half of syntax.Dialect.ClobberOverrideMarker is observable —
+	// which is why the two belong together.
 	NoclobberBlocksAppendCreate Answer
 
-	// KillStatus is what `kill` reports when it was given several targets
-	// and they did not all agree. Three answers, and no two of them are the
+	// KillStatus is what `kill` reports when it was given several targets and
+	// they did not all agree. Three answers, and no two of them are the
 	// majority:
 	//
-	//	kill -0 $$ 999999    bash → 0   dash, ksh93 → 1   zsh → 1
-	//	kill 999998 999999   bash → 1   dash, ksh93 → 1   zsh → 2
+	//	kill -0 $$ 999999    0 · 1 · 1
+	//	kill 999998 999999   1 · 1 · 2
 	//
-	// bash reports success if it signaled anything at all, and zsh reports
-	// the number that failed — which is a status carrying a count rather
-	// than a verdict, and the reason this is a policy rather than a bool.
+	// One reading reports success if it signaled anything at all; another
+	// reports the number that failed — a status carrying a count rather than a
+	// verdict, and the reason this is a policy rather than a bool.
 	KillStatus KillStatusPolicy
-	// CommandNotFoundStatusIsNotFound makes `command -v` answer 127 for a
-	// name that is nothing, rather than a plain 1. dash alone says yes; the
-	// other three report a failure and leave 127 to mean a command that was
-	// looked for and run.
+	// CommandNotFoundStatusIsNotFound makes `command -v` answer 127 for a name
+	// that is nothing, rather than a plain 1. Answering No reports a failure and
+	// leaves 127 to mean a command that was looked for and run.
 	CommandNotFoundStatusIsNotFound Answer
 
-	// SubshellJobTable is what a subshell sees of the jobs its parent
-	// started. Three answers, and neither of the two-way splits it contains
-	// is the same pair:
+	// SubshellJobTable is what a subshell sees of the jobs its parent started.
+	// Three answers, and neither of the two-way splits it contains is the same
+	// pair:
 	//
-	//	sleep 1 & jobs -p | cat; echo T    bash, ksh93 → the pid   dash, zsh → nothing
-	//	sleep 1 & (jobs -p); echo T        ksh93 → the pid         bash, dash, zsh → nothing
+	//	sleep 1 & jobs -p | cat; echo T    the pid · the pid · nothing
+	//	sleep 1 & (jobs -p); echo T        the pid · nothing · nothing
 	//
-	// so no single yes-or-no can hold both rows for bash. See
-	// SubshellJobsKeptOutsideACompound for what bash is doing and for the
-	// part of it that is measured and not modeled.
+	// so no single yes-or-no can hold both rows. See
+	// SubshellJobsKeptOutsideACompound for the reading that separates them and
+	// for the part of it that is measured and not modeled.
 	SubshellJobTable SubshellJobTable
 
-	// InteractiveSelectsEmacs turns the `emacs` editing mode on when the
-	// shell becomes interactive, and leaves both mode names off otherwise.
-	// True in bash alone. Measured 2026-09-11, both without a terminal and
-	// at one: `bash -c 'set -o'` reports `emacs off` and `vi off`,
-	// `bash -i -c 'set -o'` reports `emacs on`, and bash 3.2 and bash
-	// invoked as `sh` agree. dash, ksh93 and zsh select neither at any point
-	// — ksh93 reports `emacs off` and `vi off` in an interactive session at
-	// a real terminal, and zsh answers 1 to both `[[ -o emacs ]]` and
-	// `[[ -o vi ]]` there.
+	// InteractiveSelectsEmacs turns the `emacs` editing mode on when the shell
+	// becomes interactive, and leaves both mode names off otherwise. Answering
+	// No selects neither mode at any point, reporting both off even in an
+	// interactive session at a real terminal.
 	//
-	// So the trigger is interactivity rather than a terminal, which is what
-	// makes it a question about *when a mode is chosen* rather than about
-	// which mode. A script that selects one is unaffected either way: this
-	// only says what an unasked shell reads.
+	// The trigger is interactivity rather than a terminal, which is what makes
+	// it a question about *when a mode is chosen* rather than about which mode.
+	// A script that selects one is unaffected either way: this only says what an
+	// unasked shell reads.
 	//
-	// Read rather than `ask`ed, as DefaultOptionLetters is: reporting an
-	// option is not the place to refuse a script over a disagreement, and a
-	// dialect that answers nothing gets the majority's no.
+	// Read rather than `ask`ed, as DefaultOptionLetters is: reporting an option
+	// is not the place to refuse a script over a disagreement, and a preset that
+	// answers nothing gets No.
 	InteractiveSelectsEmacs Answer
 
-	// SetFTurnsOffGlobbing makes `set -f` the short spelling of `set -o
-	// noglob`. True in bash, dash and ksh93. zsh spells that option the long
-	// way only: there `-f` is about startup files and leaves globbing alone,
-	// so `set -f; echo *.txt` lists the files.
+	// SetFTurnsOffGlobbing makes `set -f` the short spelling of `set -o noglob`.
+	// Answering No spells that option the long way only, and gives `-f` a
+	// different meaning that leaves globbing alone, so `set -f; echo *.txt`
+	// lists the files.
 	SetFTurnsOffGlobbing Answer
 
 	// SetBTurnsOffBraceExpansion makes `-B` the short spelling of the
 	// `braceexpand` option, so `set +B` stops `{a,b}` expanding and `set -B`
-	// puts it back. True in bash and ksh93. zsh has the letter and means
-	// something else by it — measured 2026-09-11, `set -B` there turns the
-	// terminal bell off and leaves braces alone, so that dialect keeps `B`
-	// among the letters it refuses. dash has no such letter at all.
+	// puts it back. Answering No either has no such letter or means something
+	// else by it, in which case the letter belongs among the ones that preset
+	// refuses.
 	//
 	// Asked only where the letter is written, like SetFTurnsOffGlobbing: the
-	// long name `braceexpand` raises no question, because a shell either
-	// declares it or has never heard of it.
+	// long name `braceexpand` raises no question, because an implementation
+	// either declares it or has never heard of it.
 	SetBTurnsOffBraceExpansion Answer
 
-	// NoglobLetterIsF puts `f` in `$-` while noglob is on, which is the
-	// letter POSIX gives it and what bash, dash and ksh93 report. False in
-	// zsh, which reports the capital: `-F` is the short option that means
-	// noglob there, `-f` being about startup files — the same split
+	// NoglobLetterIsF puts `f` in `$-` while noglob is on, which is the letter
+	// POSIX gives it. Answering No reports the capital instead, `-F` being the
+	// short option that means noglob there — the same split
 	// SetFTurnsOffGlobbing records, seen from the reading side.
 	NoglobLetterIsF Answer
 
-	// DefaultOptionLetters is what `$-` starts with before the script has
-	// set anything: the single-letter options a shell turns on at startup.
-	// Measured identical under `-c`, a script file and standard input —
-	// bash and ksh93 report `hB`, zsh `569X`, dash nothing at all.
+	// DefaultOptionLetters is what `$-` starts with before the script has set
+	// anything: the single-letter options a shell turns on at startup. The
+	// answer is the same under `-c`, a script file and standard input.
 	//
-	// The letters that describe the invocation *route* rather than an option
-	// a script could set — `c` and `s` — are not here either, for the reason
-	// `i` is not: they are facts about the invocation that the front end
-	// carries in, read off Runner.Route. Where the panel splits over them
-	// they have axes of their own, below.
+	// The letters that describe the invocation *route* rather than an option a
+	// script could set — `c` and `s` — are not here, for the reason `i` is not:
+	// they are facts about the invocation that the front end carries in, read
+	// off Runner.Route. Where the answers split over them they have axes of
+	// their own, below.
 	//
-	// The letters a shell turns on only *when* it is interactive are a
-	// second vector of their own; see InteractiveOptionLetters, which
-	// replaces this one rather than adding to it.
+	// The letters a shell turns on only *when* it is interactive are a second
+	// vector of their own; see InteractiveOptionLetters, which replaces this one
+	// rather than adding to it.
 	DefaultOptionLetters string
 
 	// InteractiveOptionLetters is DefaultOptionLetters for a shell that is
-	// interactive. It **replaces** the other rather than being appended to
-	// it, and that is the whole reason it is a second string instead of a
-	// field of letters to add.
+	// interactive. It **replaces** the other rather than being appended to it,
+	// and that is the whole reason it is a second string instead of a field of
+	// letters to add.
 	//
-	// ksh93 is what forces the shape: measured, its `$-` goes from `hB` for
-	// a script to `imBE` for `-i script.sh`, so it *drops* `h` — its
-	// command-tracking option, which is on for a script and off at a prompt.
-	// A "letters to add" field could not have said that, and a field that
-	// could only add would have recorded three shells correctly and one
-	// wrongly. bash goes `hB` to `hiBH` and zsh `569X` to `569XZi`, both of
-	// which a replacement expresses just as well.
+	// A preset forces that shape by *dropping* a letter when it becomes
+	// interactive — a command-tracking option that is on for a script and off at
+	// a prompt. A "letters to add" field could not have said that, and would
+	// have recorded most presets correctly and one wrongly.
 	//
-	// Empty means the shell has no separate answer and DefaultOptionLetters
-	// stands for both. dash is the panel member that leaves it so: its `$-`
-	// is empty either way, so there is nothing for a second string to say.
+	// Empty means there is no separate answer and DefaultOptionLetters stands
+	// for both, which is what a preset whose `$-` does not change leaves it at.
 	//
-	// Two letters are deliberately *not* in it, and both for the same reason
-	// the route letters are not in DefaultOptionLetters — they are facts the
-	// runner holds rather than a string it prints:
+	// Two letters are deliberately *not* in it, and both for the reason the
+	// route letters are not in DefaultOptionLetters — they are facts the runner
+	// holds rather than a string it prints:
 	//
 	//   - `i` itself, which is unanimous and comes from Runner.Interactive.
-	//   - `m`, the monitor. ksh93 is the only shell in the panel that turns
-	//     job control on for `-i script.sh` — measured, `set -o` reports
-	//     `monitor on` there, and off in bash and zsh, which is exactly why
-	//     the letter appears in its row and no other. Writing `m` into this
-	//     string would report a monitor that is not running. The letter comes
-	//     from Runner.monitor or it does not come at all; that ksh93 turns it
-	//     on for `-i script.sh` where the front end does not is measured and
-	//     recorded in docs/spec/invocation.md, and is a separate question
-	//     from this one.
+	//   - `m`, the monitor. Writing `m` into this string would report a monitor
+	//     that is not running. The letter comes from Runner.monitor or it does
+	//     not come at all; that a preset may turn job control on for
+	//     `-i script.sh` where the front end does not is recorded in
+	//     docs/spec/invocation.md, and is a separate question from this one.
 	//
-	// Read rather than `ask`ed, exactly as DefaultOptionLetters is: a dialect
-	// that answers nothing shows the letters it shows for a script, and
-	// refusing a whole `$-` expansion over an unanswered field would break
+	// Read rather than `ask`ed, exactly as DefaultOptionLetters is: a preset
+	// that answers nothing shows the letters it shows for a script, and refusing
+	// a whole `$-` expansion over an unanswered field would break
 	// `case $- in *e*)` in every script running under a preset that has not
 	// chosen.
 	InteractiveOptionLetters string
 
 	// CommandStringShowsCInDollarDash puts `c` in `$-` when the program came
-	// from `-c`. Two against two: bash and ksh93 do, dash and zsh do not, so
-	// there is no majority to follow and this is a switch.
+	// from `-c`. The answers split evenly, so there is no majority to follow and
+	// this is a switch.
 	//
-	// The POSIX preset says yes, from the text rather than from a vote: `$-`
-	// is defined as the option flags specified on invocation, and `-c` is
-	// one of them.
+	// The POSIX preset says yes, from the text rather than from a vote: `$-` is
+	// defined as the option flags specified on invocation, and `-c` is one of
+	// them.
 	//
-	// Read without asking, unlike most axes. A dialect that answers nothing
-	// shows no letter, which is the same thing an unanswered
-	// DefaultOptionLetters does; refusing a whole `$-` expansion over it
-	// would break `case $- in *e*)`, the ordinary errexit check, in every
-	// script that runs under a preset which has not chosen.
+	// Read without asking, unlike most axes. A preset that answers nothing shows
+	// no letter, which is the same thing an unanswered DefaultOptionLetters
+	// does; refusing a whole `$-` expansion over it would break
+	// `case $- in *e*)`, the ordinary errexit check.
 	CommandStringShowsCInDollarDash Answer
 
 	// CommandStringShowsSInDollarDash also puts `s` there under `-c`.
 	//
-	// ksh93 alone, and the shape of the disagreement is worth stating: `s`
-	// itself is unanimous for the standard-input route — with `-s` written
-	// or not, and at a prompt — so what splits the panel is only whether a
-	// command string counts. Read down ksh93's rows and its rule is "no
-	// script file was named" where the other three's is "the program came
-	// from standard input"; the two agree everywhere except here.
+	// The shape of the disagreement is worth stating: `s` itself is unanimous
+	// for the standard-input route — with `-s` written or not, and at a prompt —
+	// so what splits the answers is only whether a command string counts. Yes is
+	// the rule "no script file was named" and No is "the program came from
+	// standard input"; the two agree everywhere except here.
 	//
 	// Read without asking, for the reason above.
 	CommandStringShowsSInDollarDash Answer
 
-	// LoginShowsLInDollarDash puts `l` in `$-` when the shell was started as
-	// a login shell.
+	// LoginShowsLInDollarDash puts `l` in `$-` when the shell was started as a
+	// login shell. No majority to follow, so it is a switch.
 	//
-	// Four against two, so there is no majority to follow and this is a
-	// switch: ksh93 and zsh say yes, and dash and all three bash columns say
-	// no. bash's no is a deliberate one rather than an omission — it keeps
-	// the fact in `shopt login_shell`, which reads `on` for exactly the
-	// invocations this letter would mark, so the shell answers the question
-	// and answers it somewhere else.
+	// A No can be deliberate rather than an omission: an implementation may keep
+	// the fact in a shell option that reads `on` for exactly the invocations
+	// this letter would mark, answering the question somewhere else.
 	//
-	// Measured 2026-09-06 with the letters bundled (`-lc`), unbundled
-	// (`-l -c`), spelled long (`--login -c`) and inferred from a dashed
-	// `argv[0]` with no option at all: every column answers the same way on
-	// all four, so the split belongs to the shell and not to how the caller
-	// said it. Membership rather than the spelling in the cases that pin it
-	// — ksh93 writes `chsBl` and zsh `569Xl`, and no two shells in the panel
-	// order the string alike.
+	// The spelling of the invocation does not decide it. Bundled (`-lc`),
+	// unbundled (`-l -c`), long (`--login -c`) and inferred from a dashed
+	// `argv[0]` with no option at all all answer the same way, so the split
+	// belongs to the implementation and not to how the caller said it. It is
+	// membership rather than order: no two presets order `$-` alike.
 	//
-	// The fact itself is Runner.LoginShell, carried in from the front end:
-	// no `set` letter turns login-ness on in three of the four dialects, so
-	// there is no option field for the table to write. zsh is the exception
-	// and is recorded rather than implemented — see docs/spec/semantics.md,
-	// "the login letter": there `l` is a genuine `set` option, `set +l`
-	// takes it back out of `$-` and `set -l` puts it in, which this shell
-	// does not do.
+	// The fact itself is Runner.LoginShell, carried in from the front end: no
+	// `set` letter turns login-ness on in most presets, so there is no option
+	// field for the table to write. That an implementation may make `l` a
+	// genuine `set` option — `set +l` taking it back out of `$-` and `set -l`
+	// putting it in — is recorded in docs/spec/semantics.md rather than
+	// implemented here.
 	//
-	// The POSIX preset leaves it unanswered, which shows no letter: POSIX
-	// names no login option at all, so there is nothing for `$-` to report
-	// as one — unlike CommandStringShowsCInDollarDash, where `-c` *is* an
-	// invocation flag the text defines.
+	// The POSIX preset leaves it unanswered, which shows no letter: POSIX names
+	// no login option at all, so there is nothing for `$-` to report as one —
+	// unlike CommandStringShowsCInDollarDash, where `-c` *is* an invocation flag
+	// the text defines.
 	//
 	// Read without asking, for the reason above.
 	LoginShowsLInDollarDash Answer

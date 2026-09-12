@@ -309,8 +309,17 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 }
 
 // condOperand expands a word to a single string. Nothing inside `[[ ]]` is
-// split or globbed, so joining is the whole of it.
+// split or globbed, so joining is the whole of it — with the one exception
+// the vendor manual states, a word ending in a `(#q…)` group, which is
+// measured and explained in interp/condqualifier.go.
+//
+// The pattern-match operators' right-hand side does not come through here:
+// evalCondBinary reads it with patternOf, which is what keeps this exception
+// off the one side the manual says it does not apply to.
 func (r *Runner) condOperand(w *syntax.Word) string {
+	if r.condWordQualifies(w) {
+		return r.condGlobbedOperand(w)
+	}
 	return strings.Join(r.expandWordNoSplit(w), "")
 }
 

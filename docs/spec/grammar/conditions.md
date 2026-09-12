@@ -223,6 +223,60 @@ is the outlier here rather than the rule, so an entry that called its
 behavior the default would have named the one shell that disagrees with
 the other two.
 
+## An operand ending in `(#q…)` is matched against the filesystem
+
+Nothing inside `[[ … ]]` is split or globbed, which is why `[[ -z $u ]]`
+needs no quoting where the `[` builtin does. There is one exception, and
+the vendor manual states it as a rule rather than leaving it to be found:
+within conditions using the `[[` form, a parenthesized `(#q…)` expression
+at the end of a string says that globbing should be performed. The
+expression may hold glob qualifiers and is valid as a bare `(#q)`. It
+does **not** apply to the right-hand side of a pattern-match operator,
+where the syntax already means something else.
+
+Measured 2026-09-12 on zsh 5.9.2 with `extendedglob` on, in a directory
+holding `a.txt` and `b.txt` and nothing called `zz`:
+
+| probe | result |
+| --- | --- |
+| `[[ -n a.txt(#qN) ]]` | true |
+| `[[ -n zz(#qN) ]]` | **false** — the word came to nothing |
+| `[[ -n zz ]]` | true, the same word without the group |
+| `[[ -n zz(#q) ]]` | `no matches found`, the miss the dialect gives |
+| `[[ -e a.txt(#qN) ]]` | true, so a file test's operand is matched |
+| `[[ a.txt(#qN) == a.txt ]]` | true, so the *left* side is matched |
+| `[[ *.txt(#qN) == 'a.txt b.txt' ]]` | true — two matches are one operand, joined with a space |
+
+And five that say the group has to be **written**, at the end, and
+unquoted. Each is true, meaning the word stayed the text it was:
+
+| probe | why it does not glob |
+| --- | --- |
+| `[[ -n "zz(#qN)" ]]` | the word is quoted |
+| `[[ -n zz"(#qN)" ]]` | only the group is |
+| `V='zz(#qN)'; [[ -n $V ]]` | the group is a value, not written |
+| `[[ -n ${~V} ]]` | and the tilde flag does not change that |
+| `[[ -n zz(#qN)x ]]` | the group is not at the end |
+
+The `${~V}` row is the one that settles the shape. That flag makes a
+value's pattern characters live everywhere else, so a reading that looked
+at the expanded text would glob here; the group is read off the word as
+the script wrote it.
+
+It is gated on the dialect having glob qualifiers at all rather than on a
+semantics axis: a shell without `(#q…)` reads those six characters as
+text, which is the same answer it gives for the whole construct, so there
+is no disagreement for an axis to record.
+
+**This is how powerlevel10k's directory segment shortens.** Its
+`prompt_dir` asks `[[ -n $dir/${~MARKER}(#qN) ]]` of each component of
+the working directory to decide which components are *anchors* —
+directories holding `.git`, `go.mod` and the like — and an anchor is
+never shortened. A shell that reads the word as text answers true for
+every component, so every component is an anchor and the path is drawn at
+full length at every width, with no arithmetic anywhere having gone wrong
+(#2119).
+
 ## Unary and logical operators
 
     -n s   -z s                     non-empty, empty

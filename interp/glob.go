@@ -843,8 +843,7 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 	if err != nil {
 		return nil
 	}
-	literal := globUnescape(pattern)
-	hidden := seeHidden || strings.HasPrefix(literal, ".")
+	hidden := seeHidden || patternBeginsWithPeriod(pattern, o.group)
 
 	// Whether a unit is a character is a question about the subject as well
 	// as the pattern, and here the subjects are the names in this directory —

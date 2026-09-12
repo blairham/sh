@@ -1305,6 +1305,7 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(c)` | with `${#…}`: characters, joined | `a=(abc de f); ${(c)#a}` | `8` |
 | `(w)` | with `${#…}`: words | `v="a b  c"; ${(w)#v}` | `3` |
 | `(W)` | with `${#…}`: words, empties too | `v="a b  c"; ${(W)#v}` | `4` |
+| `(m)` | with `${#…}`: columns rather than characters | `w=$'日本'; ${(m)#w}` | `4` |
 | `(p)` | read the next flags' arguments with escapes | `a=(x y); ${(pj:\n:)a}` | `x`, newline, `y` |
 | `(Z:opts:)` | split a value as a command line | `v="a b  c"; ${(Z+n+)v}` | `a`, `b`, `c` |
 | `(l:n::f1::f2:)` | pad a word out to a width on the left | `v=ab; ${(l:5::-:)v}` | `---ab` |
@@ -1797,8 +1798,8 @@ Details, each measured:
   rule 14 does not say: `${(Qq)v}` and `${(qQ)v}` on `'a b'` are both
   `'a b'`, the round trip, where a `Q` that ran first would have left
   `a\ b`.
-- **`(c)`, `(w)` and `(W)` change what a length counts**, and do nothing
-  at all to a value — `${(@c)a}` is the plain expansion. The **last** of
+- **`(c)`, `(w)`, `(W)` and `(m)` change what a length counts**, and do
+  nothing at all to a value — `${(@c)a}` is the plain expansion. The **last** of
   the three written wins: `${(cw)#v}` on `a b` is 2 and `${(wc)#v}` is 3.
 
   `c` is the characters of the words joined, separators included, so
@@ -1840,6 +1841,57 @@ Details, each measured:
   `${(s.:.)#v}` on `:a:` is the value's 3 characters rather than the
   fields the separator would have made. This implementation answered 8
   to the first of those until #935's second change.
+
+  **`(m)` is the fourth, and it is not one of the three.** The other
+  three say *what* to count and the last one written wins; `m` says what
+  a **unit** is, so it composes with them rather than displacing one.
+  Measured on zsh 5.9.2 under `LC_ALL=en_US.UTF-8`, with `w=$'日本'`
+  (two East Asian wide characters), `c` an `e` and a combining acute,
+  `b=$'\x01'`, `a=($'日' de f)` and `s="a b  c"`:
+
+  | probe | result | |
+  | --- | --- | --- |
+  | `${#w}` | `2` | two characters |
+  | `${(m)#w}` | `4` | drawn in four columns |
+  | `${#c}` | `2` | |
+  | `${(m)#c}` | `1` | a combining mark is no column of its own |
+  | `${(m)#b}` | `1` | and a control character *is* one |
+  | `${(m)#s}` | `6` | all-ASCII, so the readings agree |
+  | `${(m)#a}` | `3` | a list is still counted in elements |
+  | `${(c)#a}` | `6` | |
+  | `${(mc)#a}` | `7` | `c`'s count, taken in columns |
+  | `${(mw)#s}` | `3` | a word has no width |
+
+  **The separator `c` counts is measured in characters whatever `m`
+  says.** `${(cj.日.)#a}` is 6 and `${(mcj.日.)#a}` is 7: the one column
+  the flag added is the wide *element*, and the two wide separators
+  counted one each in both readings. Measuring the separator the same way
+  as the words answers 9, which is a plausible length for a padding
+  calculation to be built on.
+
+  Where a length counts **bytes**, `m` counts bytes. Under `LC_ALL=C`,
+  and under a UTF-8 locale with `multibyte` off, `${(m)#w}` is 6 there —
+  the same answer `${#w}` gives, there being no characters for one to be
+  wider than another.
+
+  The control-character row is where the flag parts company with the
+  *line editor's* width, which counts a control character as no cell at
+  all. The prompt language's `%N(l.…)` column agrees with `(m)` and not
+  with the editor, which is measured — so this implementation shares one
+  width table between the two and repl's cell width is a third reader.
+  See `interp/displaywidth.go`; the two are subtracted from each other by
+  powerlevel10k, which measures a segment with `${(m)#…}` and the whole
+  prompt with `%N(l.…)` (#2119).
+
+  `(m)` beside `(l)` or `(r)` — a field measured in columns — is
+  **refused by name**. What that shell does when a wide character
+  straddles the edge of the field is measured and is not symmetrical:
+  with `w=$'日本'`, `${(ml:3:)w}` keeps what fits and `${(mr:3:)w}` keeps
+  what crosses, `${(ml:1:)w}` is empty where `${(mr:1:)w}` is one
+  character, and `${(ml:7::日:)w}` is empty where `${(mr:7::日:)w}` is
+  four characters wide. The last is that shell's own edge rather than a
+  rule, and a field of the wrong width at status 0 is a prompt drawing
+  off the end of a line with nothing saying which measurement was wrong.
 - **`(k)`/`(v)` order.** zsh yields hash order, which it does not promise;
   this implementation yields sorted key order, the same deterministic
   answer `${m[@]}` already gives. `(k)` on anything that is not an
@@ -2718,8 +2770,7 @@ signature it compares against.
 
 ### What this implementation refuses
 
-Flags zsh has and this slice does not — `(t)`, `(D)`, the width flag `(m)`,
-and the rest of the
+Flags zsh has and this slice does not — `(t)`, `(D)`, and the rest of the
 alphabet, plus `(q+)` (#1530), the signed-numeric sort flag `(-)` — which
 is every `-` that a `q` did not eat, #1531 — and
 `(qqq…)` beyond four — are refused at run time naming the flag, with the
@@ -2735,6 +2786,9 @@ the next change starts from it:
 
 - **`(A)`** is carried, and the half of it that is carried is the half
   that does nothing. See "The `(A)` flag is two halves" below.
+- **`(m)`** is carried for the length operator and refused beside the
+  padding pair, naming the composition rather than the letter (#2119).
+  See the width rows under the flag table above for both halves.
 
 `(z)` was on this list and is built (#1547), folded into the capital rather
 than answered beside it — see the split's own section above. `(e)` and

@@ -10,10 +10,11 @@ import (
 )
 
 // The expansion flags that change what `${#…}` counts: `c` counts characters,
-// `w` counts words and `W` counts words including the empty ones. They are
-// one file because they are one question — none of them does anything to a
-// value, and `${(c)a}` and `${(@c)a}` are the plain expansion — so what they
-// modify is the length step and nothing else.
+// `w` counts words, `W` counts words including the empty ones, and `m`
+// measures a character by how wide a terminal draws it rather than counting
+// it as one. They are one file because they are one question — none of them
+// does anything to a value, and `${(c)a}` and `${(@c)a}` are the plain
+// expansion — so what they modify is the length step and nothing else.
 //
 // Measured on zsh 5.9.2 under the C locale, with `a=(abc de f)` and
 // `v="a b  c"`:
@@ -26,12 +27,33 @@ import (
 //	${(w)#v}   3    its words
 //	${(W)#v}   4    and the empty one between the two spaces
 //
+// And `m` on top of those, measured under a UTF-8 locale with `w=$'日本'`,
+// `a=($'日' de f)` and `s="a b  c"`:
+//
+//	${#w}         2    two characters
+//	${(m)#w}      4    drawn in four columns
+//	${(m)#a}      3    a list is still counted in elements
+//	${(c)#a}      6    the characters of `日 de f`
+//	${(mc)#a}     7    and the columns it is drawn in
+//	${(m)#s}      6    all-ASCII, so the two readings agree
+//	${(mw)#s}     3    `w` counts words, which have no width
+//
+// **`m` measures the words and not the separator `c` puts between them.**
+// Measured, `${(cj.日.)#a}` is 6 and `${(mcj.日.)#a}` is 7: the one column the
+// flag added is the wide *element*, and the two wide separators counted one
+// each in both readings. A separator measured the same way as the words would
+// have answered 9, which is a plausible length for a padding calculation to
+// be built on.
+//
 // **The length is taken before the double-quoted join, which is not where
 // the rule numbers put it.** `"${(U)#a}"` is 3 and not 8, and `"${(Uj.-.)#a}"`
 // is 3 as well, so a `j` separator does not reach the count either — `c` is
 // the only flag that reads one.
 
-// lengthFlags are the letters this step answers.
+// lengthFlags are the letters that say *what* to count. `m` is deliberately
+// not among them: it says what a unit is, so it composes with the other three
+// rather than displacing them — `${(mc)#a}` is `c`'s count taken in columns —
+// and a letter in here is one that the last-written rule below can displace.
 const lengthFlags = "cwW"
 
 // lengthFlag is the one of them in force: the **last** written wins, which is
@@ -63,7 +85,25 @@ func (r *Runner) flaggedLength(e *syntax.ParamExpr, words []string, isList bool)
 	if isList {
 		return len(words)
 	}
-	return r.stringLength(words[0])
+	return r.measuredLength(e, words[0])
+}
+
+// measuredLength is one word's length in the units the group asked for:
+// columns where `m` was written and characters otherwise.
+//
+// The `m` half is asked through countsCharacters, which is the same guard
+// `${#x}` already passes: a value whose bytes are all ASCII is the same length
+// under every reading, so the flag reaches no axis for the strings a script
+// usually holds. Where that says bytes — a single-byte locale, or a dialect
+// with no decoder — `m` measures bytes too, which is measured: under `LC_ALL=C`
+// and under `unsetopt multibyte`, `${(m)#$'日'}` is 3 in that shell, the same
+// answer `${#…}` gives, so the flag is about the width of a *character* and
+// there are no characters to be wide.
+func (r *Runner) measuredLength(e *syntax.ParamExpr, v string) int {
+	if strings.ContainsRune(e.Flags, 'm') && r.countsCharacters(v) {
+		return displayColumns(v)
+	}
+	return r.stringLength(v)
 }
 
 // countCharacters is `c`: the characters of the words joined, separators
@@ -73,6 +113,9 @@ func (r *Runner) flaggedLength(e *syntax.ParamExpr, words []string, isList bool)
 // `IFS=:` leaves the same array at 8, which is the reading a shared
 // `flagJoinSep` would have got wrong. A `j` argument does replace it:
 // `${(cj.--.)#a}` is 10.
+//
+// A `m` beside it measures the words in columns and leaves the separator in
+// characters, which is measured rather than symmetrical.
 func (r *Runner) countCharacters(e *syntax.ParamExpr, words []string) int {
 	sep := " "
 	if strings.ContainsRune(e.Flags, 'j') {
@@ -80,9 +123,12 @@ func (r *Runner) countCharacters(e *syntax.ParamExpr, words []string) int {
 	}
 	n := 0
 	for _, w := range words {
-		n += r.stringLength(w)
+		n += r.measuredLength(e, w)
 	}
 	if len(words) > 1 {
+		// The separator is counted in characters whatever `m` says — see the
+		// `${(mcj.日.)#a}` row at the top of this file, which is the one probe
+		// that separates the two readings.
 		n += (len(words) - 1) * r.stringLength(sep)
 	}
 	return n

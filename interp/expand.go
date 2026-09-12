@@ -350,6 +350,33 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 // boundary. Doing it here is what lets mark see the text a script would, and
 // lets the marks it adds of its own survive to the caller.
 func (r *Runner) wordTextNoSplit(w *syntax.Word, mark func(string, syntax.Quoting) string) string {
+	return r.wordTextUnsplit(w, mark, false)
+}
+
+// wordTextGlobMarked is the same one word, the same one pass, with the glob
+// marks left **in**: the finished text still says which of its
+// metacharacters were written live and which came out of quotes.
+//
+// The one caller is a `[[ … ]]` operand that ends in a glob qualifier group,
+// which is the one word in a condition that goes on to match against the
+// filesystem — see interp/condqualifier.go. It needs the marked form for the
+// reason expandWordEscaped gives: an unmarked field has lost the difference
+// between an asterisk a script wrote and one a parameter held, and no amount
+// of escaping afterwards can put it back.
+//
+// Nested globbing stays suspended exactly as it is for every other unsplit
+// word. What is different here is only where the marks come off — at the
+// match, by the caller, rather than a span at a time on the way past.
+func (r *Runner) wordTextGlobMarked(w *syntax.Word) string {
+	if w == nil {
+		return ""
+	}
+	return r.wordTextUnsplit(w, nil, true)
+}
+
+// wordTextUnsplit is the loop both of those share. keepMarks says the glob
+// marks survive it, which is the whole of the difference.
+func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(string, syntax.Quoting) string, keepMarks bool) string {
 	r.expandTilde(w)
 	failed := r.expandErr
 	// "Without globbing" has to reach the *nested* expansions too, and it did
@@ -374,7 +401,9 @@ func (r *Runner) wordTextNoSplit(w *syntax.Word, mark func(string, syntax.Quotin
 		} else {
 			text, _ = r.expandSpan(s, splitNever, head)
 		}
-		text = globUnescape(text)
+		if !keepMarks {
+			text = globUnescape(text)
+		}
 		if mark != nil {
 			text = mark(text, s.Quoting)
 		}

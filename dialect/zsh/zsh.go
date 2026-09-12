@@ -438,6 +438,13 @@ func Dialect() syntax.Dialect {
 	// `.z}` arriving as literal text. The comma is not what does it:
 	// `${u:-a{b}c}` splits the panel the same way with no group in it at all.
 	d.BareBraceNestsInExpansion = true
+	// A single quote written inside a double-quoted `${ … }` quotes nothing
+	// here, in any operand, so the expansion always ends at the first `}`.
+	// Measured 2026-09-12: `v=Vx}y; echo "[${v#'a}b'}]"` is `[Vx}yb'}]` here
+	// where every other column answers `[Vx}y]` — this shell alone reads a
+	// *pattern* operand's quote as an ordinary character too. See
+	// Dialect.QuoteProtectsTheClosingBrace (#2399).
+	d.QuoteProtectsTheClosingBrace = syntax.BraceQuoteProtectsNothing
 	// A parameter written without braces carries a subscript here, and `$#a`
 	// is a count rather than `$#` with a letter after it. Measured 2026-09-05
 	// on zsh 5.9.2: `a=(x y z); echo $a[1]` prints `x` and `echo $#a` prints

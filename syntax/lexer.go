@@ -2951,6 +2951,13 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	// over, and the same fix.
 	brace := l.dialect.CurrentShellSubstitution && start < len(l.src) && isBraceCommandStart(l.src[start])
 	depth := 1
+	// Where the body of each open nesting level began. Only the innermost
+	// level's operand decides what a quote written there does — measured, and
+	// not assumed: `w=Wq}r; echo "[${v-${w#'W}'}}]"` is `[Wq}r]` in six of the
+	// seven columns, so the inner `#` governs a quote the outer `-` encloses.
+	// A level opened by a bare `{` repeats its enclosing level's start,
+	// because a brace opens no operand of its own.
+	bodies := []int{start}
 	for depth > 0 {
 		if l.eof() {
 			l.ranOut("${")
@@ -2993,8 +3000,20 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 		}
 		switch c := l.peek(); c {
 		case '\'':
-			l.skipQuoted('\'', false)
+			// Whether this quotes, or is a character the `}` after it closes
+			// the expansion behind. See Dialect.QuoteProtectsTheClosingBrace:
+			// the panel splits on the kind of operand it is written in, not
+			// on the shell, and the command form and the unquoted reading are
+			// each unanimous.
+			if brace || q != DoubleQuoted || l.quoteProtectsTheBrace(l.src[bodies[len(bodies)-1]:l.off]) {
+				l.skipQuoted('\'', false)
+			} else {
+				l.advance()
+			}
 		case '"':
+			// Unanimous in both operand kinds and in every column:
+			// `v=SET; echo "[${v-"a}b"}]"` is `[SET]` in all seven, so no
+			// flag is consulted here.
 			l.skipQuoted('"', true)
 		case '\\':
 			l.advance()
@@ -3036,6 +3055,7 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			if !l.eof() && l.peek() == '{' {
 				depth++
 				l.advance()
+				bodies = append(bodies, l.off)
 			}
 		case '{':
 			// A bare `{` inside a *double-quoted* expansion is an ordinary
@@ -3068,10 +3088,14 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			// is why the flag is not consulted for it.
 			if brace || (q != DoubleQuoted && l.dialect.BareBraceNestsInExpansion) {
 				depth++
+				bodies = append(bodies, bodies[len(bodies)-1])
 			}
 			l.advance()
 		case '}':
 			depth--
+			if len(bodies) > 1 {
+				bodies = bodies[:len(bodies)-1]
+			}
 			l.advance()
 		default:
 			// A substitution written in the body is stepped over whole, so
@@ -4000,6 +4024,67 @@ func braceNameStop(body string) (stop string, prefixed bool) {
 		return string(body[i]), prefixed
 	}
 	return "", prefixed
+}
+
+// quoteProtectsTheBrace reports whether a single quote standing at the end of
+// body — the text an expansion has read since its own `${` — quotes what
+// follows it, so that a `}` inside the quotes does not close the expansion.
+//
+// The caller has already settled the two readings that are unanimous: a quote
+// written outside double quotes protects in every column, and the `${ cmd;}`
+// command form holds a program whose quotes are the program's.
+func (l *Lexer) quoteProtectsTheBrace(body string) bool {
+	switch l.dialect.QuoteProtectsTheClosingBrace {
+	case BraceQuoteProtectsEveryOperand:
+		return true
+	case BraceQuoteProtectsNothing:
+		return false
+	}
+	return l.braceOperandIsAPattern(body)
+}
+
+// braceOperandIsAPattern reports whether what an expansion has read of its own
+// body so far leaves the scan inside a *pattern* operand rather than a word
+// one — which is to say, whether the operator after the parameter name is one
+// of `#`, `##`, `%`, `%%` or `/`.
+//
+// The distinction is the panel's, not an invention: a word operand is read in
+// the quoting that encloses the whole expansion, where a single quote stands
+// for itself, and a pattern is read on its own terms. `${x:1:2}` is on the
+// word side of it, measured in the one column that answers rather than
+// refusing the arithmetic.
+func (l *Lexer) braceOperandIsAPattern(body string) bool {
+	i := 0
+	// The same prefix run braceNameStop counts, and for the same reason:
+	// `${#x}` operates on a name and `${#}` is a parameter in its own right,
+	// so the last character of the run goes back to the name when the run has
+	// nothing to operate on.
+	for i < len(body) && (body[i] == '#' || body[i] == '!') {
+		i++
+	}
+	if i > 0 && braceName(body[i:]) == "" {
+		i--
+	}
+	i += len(braceName(body[i:]))
+	// A subscript belongs to the name: `${a[1]#p}` operates on one element,
+	// and the operator is what follows the `]`.
+	if i < len(body) && body[i] == '[' {
+		if j := strings.IndexByte(body[i:], ']'); j >= 0 {
+			i += j + 1
+		}
+	}
+	if i >= len(body) {
+		return false
+	}
+	switch body[i] {
+	case '#', '%':
+		return true
+	case '/':
+		// A dialect without the form has no `/` operator, so nothing there
+		// introduces a pattern. dash is the panel member that shows it.
+		return l.dialect.ParamSubstitution
+	}
+	return false
 }
 
 // braceName is the parameter name at the front of s: a run of name characters

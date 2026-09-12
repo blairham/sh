@@ -1505,7 +1505,73 @@ func (p *Parser) patternFrom(text string, at Pos) *Word {
 		p.failGroupOpeningAPatternOperand(at)
 		return &Word{Start: at, Stop: at}
 	}
-	return p.wordFrom(text, at, Unquoted)
+	return p.patternWordFrom(text, at)
+}
+
+// patternWordFrom reads a pattern's text, keeping a quote that never closes as
+// an ordinary character of the pattern rather than dropping it.
+//
+// Only one route arrives here with an unbalanced quote, and it is the reason
+// this exists: where Dialect.QuoteProtectsTheClosingBrace leaves a pattern
+// operand's quote unread, the scan ends at the `}` between the quotes and the
+// half-quote left behind is the pattern's. `s=a}b; printf '[%s]' "${s#'a}'}"`
+// is `a}b'}` in zsh 5.9.2 — the pattern `'a` matching nothing — where dropping
+// the quote makes it `a`, strips it, and answers `}b'}` with no diagnostic
+// anywhere. A lexer reading a word is right to call a quote with no closer
+// unterminated; an operand that a closing brace already ended is not that.
+func (p *Parser) patternWordFrom(text string, at Pos) *Word {
+	i := p.unterminatedQuote(text)
+	if i < 0 {
+		return p.wordFrom(text, at, Unquoted)
+	}
+	w := &Word{Start: at, Stop: at}
+	w.Spans = append(w.Spans, p.wordFrom(text[:i], at, Unquoted).Spans...)
+	w.Spans = append(w.Spans, Span{Kind: Literal, Value: text[i : i+1], Pos: at})
+	w.Spans = append(w.Spans, p.patternWordFrom(text[i+1:], at).Spans...)
+	return w
+}
+
+// unterminatedQuote is the offset of a quote in text that nothing closes, or
+// -1 when every quote in it is balanced.
+//
+// Lexed rather than counted, because a quote written inside a substitution
+// belongs to the program that substitution holds: `"${x%"$( echo 'a"b' )"}"`
+// has four quote characters and no unbalanced one, and a counter reading them
+// as text pairs the wrong two.
+func (p *Parser) unterminatedQuote(text string) int {
+	l := NewLexer(text, p.operandDialect())
+	for !l.eof() {
+		switch c := l.peek(); c {
+		case '\\':
+			l.advance()
+			if !l.eof() {
+				l.advance()
+			}
+		case '\'', '"':
+			at := l.off
+			l.skipQuoted(c, c == '"')
+			// It stops at the closing quote or at the end of the text, and
+			// the last byte it consumed is which. The length guard is the
+			// lone quote, where the byte before the end is the opener.
+			if l.off-1 <= at || l.src[l.off-1] != c {
+				return at
+			}
+		case '`':
+			l.skipBackticks()
+		case '$':
+			if l.skipSubstitution() {
+				continue
+			}
+			if l.peekAt(1) == '{' {
+				l.scanBraces(Unquoted)
+				continue
+			}
+			l.advance()
+		default:
+			l.advance()
+		}
+	}
+	return -1
 }
 
 // fillParamArgs splits the operand text according to the operator.
@@ -1661,10 +1727,14 @@ func indexUnquoted(s string, c byte) int {
 // Rolling back rather than not looking is also what keeps this to one
 // question. An operand that reads cleanly is indistinguishable from one that
 // never came through here.
+//
+// Unconditional, and it was gated on a dialect flag for one release: the
+// columns that refuse `"${v-'$('}"` outright refuse it **upstream of any
+// operand**, in the scan for the closing brace, where a quote that does not
+// quote leaves the `$(` for the scan itself to run out on. That is
+// Dialect.QuoteProtectsTheClosingBrace, and with it measured the gate was
+// recording one construct's mechanism twice (#2399).
 func (p *Parser) operandWordFrom(text string, at Pos, q Quoting) (*Word, error) {
-	if !p.dialect.OperandIsReadWhenTheExpansionReachesIt {
-		return p.wordFrom(text, at, q), nil
-	}
 	saved := p.err
 	w := p.wordFrom(text, at, q)
 	if p.err != saved {

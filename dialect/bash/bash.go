@@ -75,12 +75,13 @@ func Dialect() syntax.Dialect {
 	// expansion is reached.
 	d.ParamTransformations = true
 	d.ParamIndirection = true
-	// A `${ … }` operand is read the second time when the expansion reaches
-	// it, so `v=SET; echo "${v-'$('}"` is SET in silence and the unset
-	// spelling gives up its line rather than the file. bash 3.2 answers the
-	// same. See Dialect.OperandIsReadWhenTheExpansionReachesIt for the panel
-	// and for why the three that refuse are not a vote against it (#2380).
-	d.OperandIsReadWhenTheExpansionReachesIt = true
+	// A single quote written anywhere inside a double-quoted `${ … }` quotes
+	// what follows it, so the scan for the closing brace runs past a `}`
+	// standing between two quotes: `echo "[${v-'}'}]"` is `['}']` here and
+	// `[''}]` in the same build invoked as `sh`, in zsh, ksh93, dash and ash,
+	// where only a *pattern* operand's quote does that. bash 3.2 answers with
+	// 5.3. See Dialect.QuoteProtectsTheClosingBrace (#2399).
+	d.QuoteProtectsTheClosingBrace = syntax.BraceQuoteProtectsEveryOperand
 	// A syntax error between a compound assignment's parentheses ends that
 	// line and not the file: `a=(p & q)` is reported, the line is thrown away
 	// unrun, and the next one runs. bash 3.2 answers the same; `sh`, zsh,

@@ -94,7 +94,7 @@ func TestTheEmptyKeyReadAxisIsAskedOnlyOverAnEmptyKey(t *testing.T) {
 		{"an indexed name", `a=(1 2); w=; echo "[${a[$w]}]"`, false},
 		// The whole-array spellings are not keys at all.
 		{"the whole table", `typeset -A m; m[k]=v; echo "[${m[@]}]"`, false},
-		// And storing under one is the neighbouring question.
+		// And storing under one is the neighboring question.
 		{"storing under an empty key", `typeset -A m; w=; m[$w]=4`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -1297,6 +1297,11 @@ type Runner struct {
 	// is what a runner nobody told gets. Installed through SetPromptStyle;
 	// see interp/prompt.go.
 	promptStyle PromptStyle
+	// promptVisual is what the renderings this shell has already done left
+	// the terminal set to, so that a restoring code writes back a color an
+	// *earlier* rendering chose. The shell's, not one walk's — see
+	// promptVisualState in interp/prompt.go for the measurement.
+	promptVisual promptVisualState
 	// flagArgEscapes decodes the argument of an expansion flag the way the
 	// `(p)` flag in front of it asks for — `${(pj:\n:)a}` joining on a real
 	// newline rather than on a backslash and an `n`.

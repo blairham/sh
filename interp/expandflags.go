@@ -1291,7 +1291,13 @@ func (r *Runner) PromptExpand(text string) (string, bool) {
 // dialect, and a refusal has to stop both. Writing the order out again here
 // is how the two readers drift apart.
 func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr, subst bool) (string, bool) {
-	expand := ExpandPromptStyle
+	expand := func(st PromptStyle, text string, f PromptResolver, q PromptQuantityResolver) (string, string, bool) {
+		// Not the exported ExpandPromptStyle: the visual state a rendering
+		// leaves behind is the shell's, and a flag that started from an
+		// empty one would lose a color the rendering before it set. See
+		// promptVisualState in interp/prompt.go.
+		return expandPromptStyle(st, text, f, q, &r.promptVisual)
+	}
 	if subst {
 		expand = func(st PromptStyle, text string, f PromptResolver, q PromptQuantityResolver) (string, string, bool) {
 			return RenderPromptValue(st, r, text, f, q)

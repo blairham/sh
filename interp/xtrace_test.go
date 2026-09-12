@@ -86,12 +86,30 @@ func TestTraceQuotingIsAThreeWayAnswer(t *testing.T) {
 }
 
 func TestTraceStyleIsADialectAnswer(t *testing.T) {
-	// TraceNameLine names the script and the line, and the function and 0
-	// inside one.
+	// TraceNameLine makes the prefix a *location*, which is the same thing
+	// the diagnostics are and is read by the same code — so what stands in
+	// it is the other location fields' answer and not a second rule. With
+	// none of them, every line is the shell's name and the line.
 	sem := permissive()
 	got := traceOf(t, `set -x; f() { echo in; }; f`, sem, Diagnostics{TraceStyle: TraceNameLine})
-	if !strings.Contains(got, "+sh:1> f\n") || !strings.Contains(got, "+f:0> echo in\n") {
+	if !strings.Contains(got, "+sh:1> f\n") || !strings.Contains(got, "+sh:1> echo in\n") {
 		t.Errorf("TraceNameLine: got %q", got)
+	}
+	// And with LocationNamesTheFunction, the function and the offset within
+	// it — nought here, because the body is on the line the function was
+	// written on. The trace writes that nought where a diagnostic leaves it
+	// out, which is the one place the two part company (#2134).
+	got = traceOf(t, `set -x; f() { echo in; }; f`, sem,
+		Diagnostics{TraceStyle: TraceNameLine, LocationNamesTheFunction: true})
+	if !strings.Contains(got, "+sh:1> f\n") || !strings.Contains(got, "+f:0> echo in\n") {
+		t.Errorf("TraceNameLine with the function named: got %q", got)
+	}
+	// Two lines apart, so the offset is one rather than nought and a prefix
+	// that wrote a literal nought could not pass.
+	got = traceOf(t, "set -x\nf() {\n echo in\n}\nf\n", sem,
+		Diagnostics{TraceStyle: TraceNameLine, LocationNamesTheFunction: true})
+	if !strings.Contains(got, "+f:1> echo in\n") {
+		t.Errorf("TraceNameLine over a body of its own: got %q", got)
 	}
 	if got := traceOf(t, `set -x; echo a`, sem, Diagnostics{TraceStyle: TracePlain}); got != "+ echo a\n" {
 		t.Errorf("TracePlain: got %q", got)

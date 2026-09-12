@@ -2078,6 +2078,21 @@ echo "reached-after st=$?"`,
 		Why:     "the newline as the refused token with the input *not* run out, so no column can answer it as an unfinished construct and all five that name a token name this one. Three facts about that one token show together: dash, ksh93 and zsh blame the line the newline **ends** where bash blames the line it was written at the end of; dash writes it unquoted, `newline unexpected`, beside the `\";;\" unexpected` it writes for an operator; and zsh spells it `\\n` rather than by name. We answered bash's line in all four and quoted it in every one (#1364)",
 	},
 	{
+		ID: "core/a-separator-where-a-condition-begins", Category: "command language", SyntaxError: true,
+		Snippet: "if; then echo t; fi; echo done",
+		Why:     "a `;` where an `if`'s condition begins. Two of the panel step a `;` over where a command belongs, and only one of them does it here: zsh runs the line and ksh93 names the `;`, alongside dash and both bashes, which name it because they step over none at all. Ours read the leniency as reaching this position too and blamed the `then` that followed, which is a token ksh93 never names for this (#2023)",
+	},
+	{
+		ID: "core/a-separator-left-over-between-two-statements", Category: "command language", SyntaxError: true,
+		Snippet: "if :; ; then echo t; fi; echo done",
+		Why:     "the same `;` one statement further in, which says the rule is the *position where a statement begins* and not the token after the keyword: ksh93 names the second `;` here too and zsh runs it. All four dialects took this line, because the list stopped silently on the separator and the `then`'s own required separator then absorbed it — a leftover nobody was refusing",
+	},
+	{
+		ID: "unterminated/a-stepped-over-separator-is-what-ran-out", Category: "syntax errors", SyntaxError: true,
+		Snippet: "{ echo a || ;",
+		Why:     "an input that ran out after a `;` the dialect stepped over. ksh93 is the shell that names an *innermost keyword* when a construct is left open, and after such a separator the thing it names is the separator: `` `;' unmatched `` where `{ echo a` alone is `` `{' unmatched ``. Ours named the brace. Filed as the `;` that admitted an empty and-or operand, and measured wider — `{ ;` with no and-or in it answers the same, so it is the step-over (#1207)",
+	},
+	{
 		ID: "core/a-separator-where-a-loop-variable-belongs", Category: "command language", SyntaxError: true,
 		Snippet: `for ; in a b`,
 		Why:     "a token that is present and could never be a name, which separates the two questions the bare `for` runs together: there is no end of input here, so a shell answering it as an unfinished construct would be wrong. Three of the four name the `;` exactly as they name it anywhere else and dash gives the same bad-loop-variable sentence it gives `for` itself, which is what says the classification is the dialect's and not the token's",

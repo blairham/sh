@@ -6332,6 +6332,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/a-for-with-nothing-after-it` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `newline'~<shell>: -c: line 1: `for'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `newline'~<shell>: -c: line 1: `for'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `newline'~<shell>: -c: line 0: `for'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `for' unmatched` *(status 3)* | **2>** `<shell>:1: parse error near `for'` *(status 1)* |
 | `core/a-for-with-nothing-after-it-from-a-script` | **2>** `<script>: 2: Syntax error: Bad for loop variable` *(status 2)* | **2>** `<script>: line 1: syntax error near unexpected token `newline'~<script>: line 1: `for'` *(status 2)* | **2>** `<script>: line 1: syntax error near unexpected token `newline'~<script>: line 1: `for'` *(status 2)* | **2>** `<script>: line 1: syntax error near unexpected token `newline'~<script>: line 1: `for'` *(status 2)* | **2>** `<script>: syntax error at line 2: `newline' unexpected` *(status 3)* | **2>** `<script>:2: parse error near `\n'` *(status 1)* |
 | `core/a-newline-where-a-loop-variable-belongs` | **2>** `<shell>: 2: Syntax error: Bad for loop variable` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `newline'~<shell>: -c: line 1: `for'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `newline'~<shell>: -c: line 1: `for'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `newline'~<shell>: -c: line 0: `for'` *(status 2)* | **2>** `<shell>: syntax error at line 2: `newline' unexpected` *(status 3)* | **2>** `<shell>:2: parse error near `\n'` *(status 1)* |
+| `core/a-separator-where-a-condition-begins` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `if; then echo t; fi; echo done'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `if; then echo t; fi; echo done'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `if; then echo t; fi; echo done'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | `t~done` |
+| `core/a-separator-left-over-between-two-statements` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `if :; ; then echo t; fi; echo done'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `if :; ; then echo t; fi; echo done'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `if :; ; then echo t; fi; echo done'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | `t~done` |
 | `core/a-separator-where-a-loop-variable-belongs` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `for ; in a b'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `for ; in a b'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `for ; in a b'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `;'` *(status 1)* |
 | `core/a-select-with-nothing-after-it` | **2>** `<shell>: 1: select: not found` *(status 127)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `newline'~<shell>: -c: line 1: `select'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `newline'~<shell>: -c: line 1: `select'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `newline'~<shell>: -c: line 0: `select'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `select' unmatched` *(status 3)* | **2>** `<shell>:1: parse error near `select'` *(status 1)* |
 | `core/for-wants-a-name` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | **2>** `<shell>: line 1: `1x': not a valid identifier` *(status 1)* | **2>** `<shell>: line 1: `1x': not a valid identifier` *(status 2)* | **2>** `<shell>: `1x': not a valid identifier` *(status 1)* | **2>** `<shell>: 1x: invalid variable name` *(status 1)* | **2>** `<shell>:1: parse error near `1x'` *(status 1)* |
@@ -6790,6 +6792,14 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   for
   do :; done
+  ```
+- `core/a-separator-where-a-condition-begins` — a `;` where an `if`'s condition begins. Two of the panel step a `;` over where a command belongs, and only one of them does it here: zsh runs the line and ksh93 names the `;`, alongside dash and both bashes, which name it because they step over none at all. Ours read the leniency as reaching this position too and blamed the `then` that followed, which is a token ksh93 never names for this (#2023)
+  ```sh
+  if; then echo t; fi; echo done
+  ```
+- `core/a-separator-left-over-between-two-statements` — the same `;` one statement further in, which says the rule is the *position where a statement begins* and not the token after the keyword: ksh93 names the second `;` here too and zsh runs it. All four dialects took this line, because the list stopped silently on the separator and the `then`'s own required separator then absorbed it — a leftover nobody was refusing
+  ```sh
+  if :; ; then echo t; fi; echo done
   ```
 - `core/a-separator-where-a-loop-variable-belongs` — a token that is present and could never be a name, which separates the two questions the bare `for` runs together: there is no end of input here, so a shell answering it as an unfinished construct would be wrong. Three of the four name the `;` exactly as they name it anywhere else and dash gives the same bad-loop-variable sentence it gives `for` itself, which is what says the classification is the dialect's and not the token's
   ```sh
@@ -7354,6 +7364,100 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pre/an-ordinary-word-elsewhere` — neither word is reserved anywhere but in command position, so all six columns print both of them. The control that keeps a rule written for the whole word list from passing the rest of this group
   ```sh
   echo noglob nocorrect
+  ```
+
+## syntax errors
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `unterminated/a-stepped-over-separator-is-what-ran-out` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `{ echo a \|\| ;'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `{ echo a \|\| ;'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `{ echo a \|\| ;'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unmatched` *(status 3)* | **2>** `<shell>:1: parse error near `;'` *(status 1)* |
+| `unterminated/a-quoted-word-longer-than-the-shell-prints` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `v=$(echo one two thr...'` *(status 1)* |
+| `unterminated/an-arithmetic-substitution-that-never-closes` | **2>** `<script>: 4: Syntax error: Missing '))'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `$((1+2'` *(status 1)* |
+| `unterminated/an-arithmetic-substitution-in-the-older-spelling` | `$[1+2~after` | **2>** `<script>: line 1: unexpected EOF while looking for matching `]'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `]'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `]'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | `$[1+2~after` | **2>** `<script>:4: parse error near `$[1+2'` *(status 1)* |
+| `unterminated/a-quote-inside-a-substitution-that-never-closes` | **2>** `<script>: 4: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `"'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `"' unmatched` *(status 3)* | **2>** `<script>:4: unmatched "~<script>:4: parse error near `$( echo "hi'` *(status 1)* |
+| `unterminated/a-substitution-inside-a-quote-that-never-closes` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: unmatched "` *(status 1)* |
+| `unterminated/a-substitution-in-an-expansions-body` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: closing brace expected` *(status 1)* |
+| `unterminated/a-process-substitution-that-never-closes` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 4: `end of file' unexpected` *(status 3)* | **2>** `<script>:4: parse error near `<(echo hi'` *(status 1)* |
+| `unterminated/an-output-process-substitution-that-never-closes` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 4: `end of file' unexpected` *(status 3)* | **2>** `<script>:4: parse error near `>(echo hi'` *(status 1)* |
+| `unterminated/a-quote-is-blamed-where-it-opened-or-where-input-ran-out` | `one` **2>** `<script>: 7: Syntax error: Unterminated quoted string` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''~<script>: line 7: syntax error: unexpected end of file` *(status 2)* | `one` **2>** `<script>: syntax error at line 2: `'' unmatched` *(status 3)* | `one` **2>** `<script>:7: unmatched '` *(status 1)* |
+| `unterminated/a-dollar-single-quote-is-a-quote-that-never-closed` | `one` **2>** `<script>: 5: Syntax error: Unterminated quoted string` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''~<script>: line 5: syntax error: unexpected end of file` *(status 2)* | `one` **2>** `<script>: syntax error at line 2: `'' unmatched` *(status 3)* | `one` **2>** `<script>:5: unmatched '` *(status 1)* |
+| `unterminated/a-dollar-single-quote-at-the-end-of-a-command-string` | `one` **2>** `<shell>: 3: Syntax error: Unterminated quoted string` *(status 2)* | `one` **2>** `<shell>: -c: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<shell>: -c: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `''~<shell>: -c: line 3: syntax error: unexpected end of file` *(status 2)* | `one` | **2>** `<shell>:3: unmatched '` *(status 1)* |
+| `unterminated/a-brace-command-substitution-blamed-where-the-input-ran-out` | **2>** `<script>: 4: Syntax error: Missing '}'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `{' unmatched` *(status 3)* | **2>** `<script>:4: closing brace expected` *(status 1)* |
+| `unterminated/a-parameter-expansion-blamed-at-the-brace` | **2>** `<script>: 3: Syntax error: Missing '}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `newline' unexpected` *(status 3)* | **2>** `<script>:4: closing brace expected` *(status 1)* |
+
+- `unterminated/a-stepped-over-separator-is-what-ran-out` — an input that ran out after a `;` the dialect stepped over. ksh93 is the shell that names an *innermost keyword* when a construct is left open, and after such a separator the thing it names is the separator: `` `;' unmatched `` where `{ echo a` alone is `` `{' unmatched ``. Ours named the brace. Filed as the `;` that admitted an empty and-or operand, and measured wider — `{ ;` with no and-or in it answers the same, so it is the step-over (#1207)
+  ```sh
+  { echo a || ;
+  ```
+- `unterminated/a-quoted-word-longer-than-the-shell-prints` — the word a construct ran out inside, made long enough to reach the limit the one shell that quotes it back cuts at. Thirty-one bytes against a limit of twenty, so that shell prints twenty and marks them and the other four are unmoved — two of them print the whole word in their own sentence and two name no text at all, which is what says the limit belongs to the rendering of this one dialect's `near` and not to every quoted text. Measured 2026-09-07: the mark is appended at exactly twenty as well, where nothing has been cut, so a row at the boundary is worth more than a row far past it and the unit test carries that one
+  ```sh
+  v=$(echo one two three four five
+  echo after
+  ```
+- `unterminated/an-arithmetic-substitution-that-never-closes` — the construct whose parentheses hold an *expression* rather than a program, which #1023 left worded by the lexer. All four dialects said the lexer's own sentence and none said what its shell says, and the panel gives four: the closer echoed back at the opener's line, `Missing '))'` at the line the input ran out on, the parenthesis blamed at the opener's line, and the word quoted at the end. The line is the reason this row exists rather than following from the `$(` one — the shell that reports `$(` at the line after the input's last reports this at line 1, so the two constructs disagree inside one column and a row that measured only the sentence would not have seen it
+  ```sh
+  echo $((1+2
+  echo after
+  ```
+- `unterminated/an-arithmetic-substitution-in-the-older-spelling` — the same failure from the same helper in the spelling only two of the panel have, and it is the row that says the closer belongs to the construct rather than to the wording: the shell that echoes the closer says `]` here and `)` for `$((`, so one sentence with the closer as a verb serves both and a sentence with `)` written into it would be wrong on this line. The other columns are the interesting half — the two shells without the construct do not refuse the line at all, one running it silently and the other accepting it with a warning about the `$`, which is a status of 0 where the two that have it stop
+  ```sh
+  echo $[1+2
+  echo after
+  ```
+- `unterminated/a-quote-inside-a-substitution-that-never-closes` — which construct is blamed when they nest, with the quote *inside* the substitution — the arrangement that tells the two readings apart, since the row below has them the other way round and a rule of "always the quote" or "always the substitution" satisfies one and not the pair. bash, dash and ksh93 name the innermost here and the innermost there; zsh names the enclosing one in both, and prints a second line about the outer construct that we still do not. Ours blamed the substitution in every dialect because the scan that steps over a quote returned quietly when the input ran out (#1151)
+  ```sh
+  echo $( echo "hi
+  echo after
+  ```
+- `unterminated/a-substitution-inside-a-quote-that-never-closes` — the same question with the nesting reversed and one construct deeper: a `$( )` inside a quote inside a `${ }`. Three of the four blame the substitution — exactly what they say for the un-nested `echo "$( echo hi` — and the fourth blames the quote, which is what it says for that one too. So every column answers both shapes alike and ours answered them differently, which is the whole of the issue: the skip through the expansion's body reached end of input and said nothing, so the `${` scan blamed its own opener (#1151)
+  ```sh
+  echo "${x:-"$( echo hi
+  echo after
+  ```
+- `unterminated/a-substitution-in-an-expansions-body` — the same nesting without the quote around it, which is what says the body of a `${ }` holds a substitution rather than text: the three that name the innermost name the `$(` here as well, and a scan that counted only braces reached the end of the file with the `${` still open and blamed that. It is also the row that guards the other half of the same change — a `}` written inside the substitution must not close the expansion
+  ```sh
+  echo ${x:-$( echo hi
+  echo after
+  ```
+- `unterminated/a-process-substitution-that-never-closes` — the plainly unterminated shape of the construct the here-document rows reach the long way round. Every panel member words it, and no two alike: the two that read a program in parentheses either way say exactly what they say for `$(`, the third names the end of the file where it names an unmatched parenthesis for `$(`, the fourth quotes the word the construct began, and the one without the construct at all refuses the `(` on line 1. A refusal the lexer worded could be none of those
+  ```sh
+  cat <(echo hi
+  echo after
+  ```
+- `unterminated/an-output-process-substitution-that-never-closes` — the other direction, which no shell in the panel distinguishes — the same sentence and the same line from all six. It is the row that says the opener is carried into the diagnostic for what it is rather than as the one spelling somebody tested
+  ```sh
+  cat >(echo hi
+  echo after
+  ```
+- `unterminated/a-quote-is-blamed-where-it-opened-or-where-input-ran-out` — the plainest unterminated quote, written across enough lines that the opener and the end of input are different places — which is the whole question, and the panel splits on it. bash 5.3, the same bash called `sh`, bash 3.2 and ksh93 blame **line 2**, where the quote opened; dash and zsh blame the last line, where the input ran out. So there is no single right location and a dialect that borrowed the other one is wrong for a reader trying to find the cause. This row exists because #1397's user-visible symptom was a location 214 lines from the fault, and it was worth pinning that the location rule itself is sound and only the misparse moved the blame: a fix to the parse that let this drift would put the confusing half of that bug back. `echo one` runs first in every column, which is what says the shells read and refuse rather than refusing before they start. Ours: all four agree with their shells. Our ksh accepted this file silently and ran to `one` with a status of 0 when this row was written — a separate defect, and #1424 is where it was fixed
+  ```sh
+  echo one
+  x='never closed
+  echo two
+  echo three
+  echo four
+  ```
+- `unterminated/a-dollar-single-quote-is-a-quote-that-never-closed` — the same unterminated quote written `$'…'`, and every shell in the panel that has the construct calls it a plain `'`: the `$` opens it and the quote is what never closed. bash and ksh93 blame the line it opened on and dash and zsh the line the input ran out on, exactly as they do for `'` — the row above, in the other spelling. The lexer wrote its own `unterminated $' quote` here instead, which is a sentence no shell in the panel says, at a line two of them do not name (#1468)
+  ```sh
+  echo one
+  x=$'never closed
+  echo three
+  ```
+- `unterminated/a-dollar-single-quote-at-the-end-of-a-command-string` — the same text through `-c`, which is the route where ksh93 **closes** what never closed and runs the file: `one` at status 0 there, against a refusal from every other column. It is the sixth caller of the rule #1424 folded into one place, and the one that did not ask it — the plain `'` and `$"…"` spellings of this row already answered ksh93's way. Also the control for the row above: the two differ only in how the text was read
+  ```sh
+  echo one
+  x=$'never closed
+  echo three
+  ```
+- `unterminated/a-brace-command-substitution-blamed-where-the-input-ran-out` — `${ cmd;}` left open. bash 5.3 blames the line after the input's last, the way it blames `$( )` and unlike the `${x}` form below, which it blames at the brace — same two characters, same sentence, and only the line moves. bash 3.2 has the construct and blames the brace, a third answer with no dialect here to hold it; ksh93 reaches a different diagnosis and dash, which has no such form, reads the braces as an ordinary expansion. Ours blamed the brace for both forms (#1425)
+  ```sh
+  echo ${ echo hi
+  echo after
+  ```
+- `unterminated/a-parameter-expansion-blamed-at-the-brace` — the control for the row above and the reason the difference belongs to the *form* rather than to the brace: the parameter spelling of the same unterminated `${` is blamed at the brace in every bash column, where the command form is blamed at the end of the input. dash and ksh93 answer this one differently again, which is recorded rather than modeled
+  ```sh
+  echo ${x
+  echo after
   ```
 
 ## getopts
@@ -12608,95 +12712,6 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pattern/an-escape-before-an-ordinary-character` — the pattern language's own answer, asked the only way it can be: quote removal spends an escape written in the source before the matcher sees it, so a `case` pattern spelled `bet\a` is `beta` in all six and says nothing. A *substituted* pattern asks it — five shells match the result of an expansion as a pattern, and the sixth does under the option this line sets. A backslash before a character that needed no escaping is spent in five and kept in zsh, where the pattern is five characters
   ```sh
   setopt globsubst 2>/dev/null; p='bet\a'; case beta in $p) echo strips;; *) echo keeps;; esac; case 'bet\a' in $p) echo literal;; *) echo no;; esac
-  ```
-
-## syntax errors
-
-| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- | --- |
-| `unterminated/a-quoted-word-longer-than-the-shell-prints` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `v=$(echo one two thr...'` *(status 1)* |
-| `unterminated/an-arithmetic-substitution-that-never-closes` | **2>** `<script>: 4: Syntax error: Missing '))'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `$((1+2'` *(status 1)* |
-| `unterminated/an-arithmetic-substitution-in-the-older-spelling` | `$[1+2~after` | **2>** `<script>: line 1: unexpected EOF while looking for matching `]'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `]'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `]'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | `$[1+2~after` | **2>** `<script>:4: parse error near `$[1+2'` *(status 1)* |
-| `unterminated/a-quote-inside-a-substitution-that-never-closes` | **2>** `<script>: 4: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `"'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `"' unmatched` *(status 3)* | **2>** `<script>:4: unmatched "~<script>:4: parse error near `$( echo "hi'` *(status 1)* |
-| `unterminated/a-substitution-inside-a-quote-that-never-closes` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: unmatched "` *(status 1)* |
-| `unterminated/a-substitution-in-an-expansions-body` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: closing brace expected` *(status 1)* |
-| `unterminated/a-process-substitution-that-never-closes` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 4: `end of file' unexpected` *(status 3)* | **2>** `<script>:4: parse error near `<(echo hi'` *(status 1)* |
-| `unterminated/an-output-process-substitution-that-never-closes` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 4: `end of file' unexpected` *(status 3)* | **2>** `<script>:4: parse error near `>(echo hi'` *(status 1)* |
-| `unterminated/a-quote-is-blamed-where-it-opened-or-where-input-ran-out` | `one` **2>** `<script>: 7: Syntax error: Unterminated quoted string` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''~<script>: line 7: syntax error: unexpected end of file` *(status 2)* | `one` **2>** `<script>: syntax error at line 2: `'' unmatched` *(status 3)* | `one` **2>** `<script>:7: unmatched '` *(status 1)* |
-| `unterminated/a-dollar-single-quote-is-a-quote-that-never-closed` | `one` **2>** `<script>: 5: Syntax error: Unterminated quoted string` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''~<script>: line 5: syntax error: unexpected end of file` *(status 2)* | `one` **2>** `<script>: syntax error at line 2: `'' unmatched` *(status 3)* | `one` **2>** `<script>:5: unmatched '` *(status 1)* |
-| `unterminated/a-dollar-single-quote-at-the-end-of-a-command-string` | `one` **2>** `<shell>: 3: Syntax error: Unterminated quoted string` *(status 2)* | `one` **2>** `<shell>: -c: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<shell>: -c: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `''~<shell>: -c: line 3: syntax error: unexpected end of file` *(status 2)* | `one` | **2>** `<shell>:3: unmatched '` *(status 1)* |
-| `unterminated/a-brace-command-substitution-blamed-where-the-input-ran-out` | **2>** `<script>: 4: Syntax error: Missing '}'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `{' unmatched` *(status 3)* | **2>** `<script>:4: closing brace expected` *(status 1)* |
-| `unterminated/a-parameter-expansion-blamed-at-the-brace` | **2>** `<script>: 3: Syntax error: Missing '}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `newline' unexpected` *(status 3)* | **2>** `<script>:4: closing brace expected` *(status 1)* |
-
-- `unterminated/a-quoted-word-longer-than-the-shell-prints` — the word a construct ran out inside, made long enough to reach the limit the one shell that quotes it back cuts at. Thirty-one bytes against a limit of twenty, so that shell prints twenty and marks them and the other four are unmoved — two of them print the whole word in their own sentence and two name no text at all, which is what says the limit belongs to the rendering of this one dialect's `near` and not to every quoted text. Measured 2026-09-07: the mark is appended at exactly twenty as well, where nothing has been cut, so a row at the boundary is worth more than a row far past it and the unit test carries that one
-  ```sh
-  v=$(echo one two three four five
-  echo after
-  ```
-- `unterminated/an-arithmetic-substitution-that-never-closes` — the construct whose parentheses hold an *expression* rather than a program, which #1023 left worded by the lexer. All four dialects said the lexer's own sentence and none said what its shell says, and the panel gives four: the closer echoed back at the opener's line, `Missing '))'` at the line the input ran out on, the parenthesis blamed at the opener's line, and the word quoted at the end. The line is the reason this row exists rather than following from the `$(` one — the shell that reports `$(` at the line after the input's last reports this at line 1, so the two constructs disagree inside one column and a row that measured only the sentence would not have seen it
-  ```sh
-  echo $((1+2
-  echo after
-  ```
-- `unterminated/an-arithmetic-substitution-in-the-older-spelling` — the same failure from the same helper in the spelling only two of the panel have, and it is the row that says the closer belongs to the construct rather than to the wording: the shell that echoes the closer says `]` here and `)` for `$((`, so one sentence with the closer as a verb serves both and a sentence with `)` written into it would be wrong on this line. The other columns are the interesting half — the two shells without the construct do not refuse the line at all, one running it silently and the other accepting it with a warning about the `$`, which is a status of 0 where the two that have it stop
-  ```sh
-  echo $[1+2
-  echo after
-  ```
-- `unterminated/a-quote-inside-a-substitution-that-never-closes` — which construct is blamed when they nest, with the quote *inside* the substitution — the arrangement that tells the two readings apart, since the row below has them the other way round and a rule of "always the quote" or "always the substitution" satisfies one and not the pair. bash, dash and ksh93 name the innermost here and the innermost there; zsh names the enclosing one in both, and prints a second line about the outer construct that we still do not. Ours blamed the substitution in every dialect because the scan that steps over a quote returned quietly when the input ran out (#1151)
-  ```sh
-  echo $( echo "hi
-  echo after
-  ```
-- `unterminated/a-substitution-inside-a-quote-that-never-closes` — the same question with the nesting reversed and one construct deeper: a `$( )` inside a quote inside a `${ }`. Three of the four blame the substitution — exactly what they say for the un-nested `echo "$( echo hi` — and the fourth blames the quote, which is what it says for that one too. So every column answers both shapes alike and ours answered them differently, which is the whole of the issue: the skip through the expansion's body reached end of input and said nothing, so the `${` scan blamed its own opener (#1151)
-  ```sh
-  echo "${x:-"$( echo hi
-  echo after
-  ```
-- `unterminated/a-substitution-in-an-expansions-body` — the same nesting without the quote around it, which is what says the body of a `${ }` holds a substitution rather than text: the three that name the innermost name the `$(` here as well, and a scan that counted only braces reached the end of the file with the `${` still open and blamed that. It is also the row that guards the other half of the same change — a `}` written inside the substitution must not close the expansion
-  ```sh
-  echo ${x:-$( echo hi
-  echo after
-  ```
-- `unterminated/a-process-substitution-that-never-closes` — the plainly unterminated shape of the construct the here-document rows reach the long way round. Every panel member words it, and no two alike: the two that read a program in parentheses either way say exactly what they say for `$(`, the third names the end of the file where it names an unmatched parenthesis for `$(`, the fourth quotes the word the construct began, and the one without the construct at all refuses the `(` on line 1. A refusal the lexer worded could be none of those
-  ```sh
-  cat <(echo hi
-  echo after
-  ```
-- `unterminated/an-output-process-substitution-that-never-closes` — the other direction, which no shell in the panel distinguishes — the same sentence and the same line from all six. It is the row that says the opener is carried into the diagnostic for what it is rather than as the one spelling somebody tested
-  ```sh
-  cat >(echo hi
-  echo after
-  ```
-- `unterminated/a-quote-is-blamed-where-it-opened-or-where-input-ran-out` — the plainest unterminated quote, written across enough lines that the opener and the end of input are different places — which is the whole question, and the panel splits on it. bash 5.3, the same bash called `sh`, bash 3.2 and ksh93 blame **line 2**, where the quote opened; dash and zsh blame the last line, where the input ran out. So there is no single right location and a dialect that borrowed the other one is wrong for a reader trying to find the cause. This row exists because #1397's user-visible symptom was a location 214 lines from the fault, and it was worth pinning that the location rule itself is sound and only the misparse moved the blame: a fix to the parse that let this drift would put the confusing half of that bug back. `echo one` runs first in every column, which is what says the shells read and refuse rather than refusing before they start. Ours: all four agree with their shells. Our ksh accepted this file silently and ran to `one` with a status of 0 when this row was written — a separate defect, and #1424 is where it was fixed
-  ```sh
-  echo one
-  x='never closed
-  echo two
-  echo three
-  echo four
-  ```
-- `unterminated/a-dollar-single-quote-is-a-quote-that-never-closed` — the same unterminated quote written `$'…'`, and every shell in the panel that has the construct calls it a plain `'`: the `$` opens it and the quote is what never closed. bash and ksh93 blame the line it opened on and dash and zsh the line the input ran out on, exactly as they do for `'` — the row above, in the other spelling. The lexer wrote its own `unterminated $' quote` here instead, which is a sentence no shell in the panel says, at a line two of them do not name (#1468)
-  ```sh
-  echo one
-  x=$'never closed
-  echo three
-  ```
-- `unterminated/a-dollar-single-quote-at-the-end-of-a-command-string` — the same text through `-c`, which is the route where ksh93 **closes** what never closed and runs the file: `one` at status 0 there, against a refusal from every other column. It is the sixth caller of the rule #1424 folded into one place, and the one that did not ask it — the plain `'` and `$"…"` spellings of this row already answered ksh93's way. Also the control for the row above: the two differ only in how the text was read
-  ```sh
-  echo one
-  x=$'never closed
-  echo three
-  ```
-- `unterminated/a-brace-command-substitution-blamed-where-the-input-ran-out` — `${ cmd;}` left open. bash 5.3 blames the line after the input's last, the way it blames `$( )` and unlike the `${x}` form below, which it blames at the brace — same two characters, same sentence, and only the line moves. bash 3.2 has the construct and blames the brace, a third answer with no dialect here to hold it; ksh93 reaches a different diagnosis and dash, which has no such form, reads the braces as an ordinary expansion. Ours blamed the brace for both forms (#1425)
-  ```sh
-  echo ${ echo hi
-  echo after
-  ```
-- `unterminated/a-parameter-expansion-blamed-at-the-brace` — the control for the row above and the reason the difference belongs to the *form* rather than to the brace: the parameter spelling of the same unterminated `${` is blamed at the brace in every bash column, where the command form is blamed at the end of the input. dash and ksh93 answer this one differently again, which is recorded rather than modeled
-  ```sh
-  echo ${x
-  echo after
   ```
 
 ## substitutions

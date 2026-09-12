@@ -42,7 +42,7 @@ func Dialect() syntax.Dialect {
 	// pair is the same asymmetry #1115 found, and it is what says the bar is
 	// a separate question from the and-or rather than one rule about control
 	// operators.
-	d.SeparatorWhereACommandBelongs = syntax.OneSeparatorExceptAfterABar
+	d.SeparatorWhereACommandBelongs = syntax.OneSeparatorExceptAfterABarOrBeforeACondition
 	// And where a separator was stepped over and nothing came after it at
 	// all, an empty command stands there and succeeds: `false || ;` answers
 	// 0 here and 1 in zsh, which drops the operator instead. The `&&` row

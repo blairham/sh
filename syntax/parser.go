@@ -104,6 +104,53 @@ type Parser struct {
 	// `for i (a b) echo $i; echo end` and refuses
 	// `for i (a b) { echo $i; } echo end`.
 	bodyTookTerm Pos
+
+	// separatorStood is where a `;` the dialect stepped over stands, while
+	// it is still the innermost thing the parse is inside.
+	//
+	// Measured on ksh93u+ 2026-09-12, `-n` over a script file ending where
+	// it is shown. A separator that was stepped over becomes the token that
+	// shell names when the input then runs out, in place of the keyword it
+	// otherwise names:
+	//
+	//	{ :                     `{' unmatched
+	//	{ : ;                   `{' unmatched   — a *terminator* is not this
+	//	{ ;                     `;' unmatched
+	//	{ ; :                   `;' unmatched   — and more input does not clear it
+	//	( ;                     `;' unmatched
+	//	if :; then ;            `;' unmatched
+	//	while :; do ;           `;' unmatched
+	//	x() { ; 	        `;' unmatched
+	//	{ false || ;            `;' unmatched
+	//	{ false && ;            `;' unmatched
+	//	{ : |& ;                `;' unmatched
+	//	if false || ; then      `;' unmatched   — a clause does not displace it
+	//	{ ; } ; if :; then      `then' unmatched — but its construct closing does
+	//
+	// #1207 filed this as the `;` that admitted an empty **and-or** operand.
+	// It is not: `{ ; ` has no and-or in it and answers the same, so it is
+	// the step-over and not the operator.
+	//
+	// **A `case` arm is the exception and is measured, not assumed.**
+	// `case x in x) ;` and `case x in x) false || ;` both answer
+	// `` `case' unmatched `` there. Two neighbors of that are left
+	// unmodeled deliberately: once the arm's `;;` has been read the `;` is
+	// named again, and with a newline between them the `;;` is named — and
+	// that last answer comes back for `case x in x) : ;` + newline + `;;`,
+	// which has no stepped-over separator in it at all, so it is a fact
+	// about the terminator rather than about this.
+	//
+	// **Diagnostic only.** It is deliberately not an entry on p.open, so it
+	// never reaches Parser.Open() and never reaches a continuation prompt.
+	// That shell has no open-state prompt escape, so what it prompts here
+	// cannot be measured, and #1207 is explicit that guessing both halves at
+	// once is how a wrong rule gets into the tables.
+	separatorStood Pos
+
+	// inCondition says the list about to be read is a keyword's condition,
+	// where one dialect refuses the `;` it steps over elsewhere. Set by
+	// parseCondition and cleared by the parseList that reads it.
+	inCondition bool
 }
 
 // maxParamDepth is how far `${x:-${y:-…}}` may nest before the parser stops.
@@ -388,8 +435,16 @@ type opener struct {
 // stack out of step with the parse.
 func (p *Parser) opens(word string) func() {
 	depth := len(p.open)
+	// A separator stood over inside this construct belongs to it and goes
+	// with it. `{ ; } ; if :; then` names the `then` in the shell that names
+	// one of these, where `{ ; ` on its own names the `;` — measured.
+	stood := p.separatorStood
+	p.separatorStood = Pos{}
 	p.open = append(p.open, opener{word: word, line: int(p.tok.Pos.Line), construct: true})
-	return func() { p.open = p.open[:depth] }
+	return func() {
+		p.open = p.open[:depth]
+		p.separatorStood = stood
+	}
 }
 
 // opensClause records a keyword that is itself awaiting a partner.
@@ -468,6 +523,14 @@ func (p *Parser) unterminated(expected string) *Error {
 	}
 	if n := len(p.open); n > 0 {
 		e.Innermost = p.open[n-1].word
+		if p.separatorStood.IsValid() {
+			// A `;` this dialect stepped over is what the one shell naming
+			// an innermost keyword names instead, and it outlasts a clause:
+			// `if false || ; then` with the input ending there is
+			// `` `;' unmatched `` in ksh93u+ where `if :; then` is
+			// `` `then' unmatched ``. See Parser.separatorStood.
+			e.Innermost = ";"
+		}
 		for i := n - 1; i >= 0; i-- {
 			if p.open[i].construct {
 				e.Construct, e.ConstructLine = p.open[i].word, p.open[i].line
@@ -701,7 +764,7 @@ func (p *Parser) NextLine() (*File, bool) {
 		// A `;` where a command belongs, for the dialects that step over one:
 		// `; echo two` and `true ; ; echo two` alike, since the second
 		// statement of a line begins here as much as the first does.
-		if p.skipSeparators(false) {
+		if p.skipSeparators(false, false) {
 			p.skipNewlines()
 		}
 		st := p.parseStmt()
@@ -779,13 +842,15 @@ func (p *Parser) skipNewlines() {
 // only the wider value steps over what follows.
 //
 // afterBar says the caller is a pipeline looking for the command after its
-// bar, which is the one position ksh93 will not take.
-func (p *Parser) skipSeparators(afterBar bool) bool {
+// bar, and inCondition that it is a keyword's condition list looking for a
+// statement of its own. Those are the two positions ksh93 will not take, and
+// they are both the caller's to know: the wider value takes them both.
+func (p *Parser) skipSeparators(afterBar, inCondition bool) bool {
 	limit := 0
 	crossNewlines := false
 	switch p.dialect.SeparatorWhereACommandBelongs {
-	case OneSeparatorExceptAfterABar:
-		if afterBar {
+	case OneSeparatorExceptAfterABarOrBeforeACondition:
+		if afterBar || inCondition {
 			return false
 		}
 		limit = 1
@@ -797,6 +862,12 @@ func (p *Parser) skipSeparators(afterBar bool) bool {
 	}
 	skipped := false
 	for limit != 0 && p.at(TokSemi) {
+		if !p.insideACaseArm() {
+			// What the dialect that names an innermost keyword names from
+			// here on. See Parser.separatorStood, where the arm exception is
+			// measured too.
+			p.separatorStood = p.tok.Pos
+		}
 		p.next()
 		if crossNewlines {
 			p.skipNewlines()
@@ -827,9 +898,16 @@ func (p *Parser) skipSeparators(afterBar bool) bool {
 // entirely, since its words absorb whatever follows — `true echo x` is one
 // command with an argument — so this only ever shows after a compound.
 func (p *Parser) parseList() []*Stmt {
+	// Read and cleared at the top, so a list nested inside a condition — a
+	// brace group written as one, a substitution in one — is an ordinary
+	// list again. Only the two calls in this function are what the rule is
+	// about: an and-or's right-hand side and a pipeline's are their own
+	// positions, and ksh93 answers those differently. Measured.
+	inCondition := p.inCondition
+	p.inCondition = false
 	var out []*Stmt
 	p.skipNewlines()
-	if p.skipSeparators(false) {
+	if p.skipSeparators(false, inCondition) {
 		// A newline after the separator ends nothing here: between two
 		// statements it is an ordinary terminator, which every shell takes.
 		// It is only where an and-or's right-hand side belongs that one shell
@@ -839,6 +917,20 @@ func (p *Parser) parseList() []*Stmt {
 	for p.err == nil && !p.at(TokEOF) && !p.atStopWord() && !p.at(TokRightParen) {
 		st := p.parseStmt()
 		if st == nil {
+			if p.err == nil && len(out) > 0 && p.at(TokSemi) {
+				// A `;` the dialect would not step over, standing where the
+				// *next* statement of this list begins. The list stopped
+				// silently and left it for whatever the caller wanted a
+				// separator before, which took it: `if :; ; then :; fi`
+				// parsed in all four dialects where dash, bash 5.3 and ksh93
+				// each name the second `;` and only zsh runs it (#2023).
+				//
+				// Only once the list has something in it. An empty one is
+				// [Parser.requireBody]'s question — the dialect that allows
+				// an empty body allows `if ; then :; fi` with it — and
+				// failing here would answer it twice and differently.
+				p.failUnexpected("")
+			}
 			break
 		}
 		out = append(out, st)
@@ -846,7 +938,7 @@ func (p *Parser) parseList() []*Stmt {
 			break
 		}
 		p.skipNewlines()
-		if p.skipSeparators(false) {
+		if p.skipSeparators(false, inCondition) {
 			p.skipNewlines()
 		}
 	}
@@ -870,6 +962,34 @@ func (p *Parser) parseList() []*Stmt {
 // parseGroup already draws for a reserved word it cannot use.
 func (p *Parser) parseBody() []*Stmt {
 	return p.requireBody(p.parseList())
+}
+
+// insideACaseArm reports whether the innermost construct the parse is inside
+// is a `case`. See Parser.separatorStood for why one position is excepted.
+func (p *Parser) insideACaseArm() bool {
+	for i := len(p.open) - 1; i >= 0; i-- {
+		if p.open[i].construct {
+			return p.open[i].word == "case"
+		}
+	}
+	return false
+}
+
+// parseCondition is parseBody for the list a keyword takes as its *condition*
+// — `if`, `elif`, `while`, `until` — where one dialect will not step over a
+// `;` that it steps over everywhere else.
+//
+// Measured on ksh93u+ 2026-09-12: `if; then :; fi` and `if :; ; then :; fi`
+// are both “ `;' unexpected “ there, while `if :; then : ; ; fi` and
+// `if false || ; then :; fi` run — so the position is where a *statement of
+// the condition list* begins, and neither the header as a whole nor the token
+// after the keyword. See Dialect.SeparatorWhereACommandBelongs, where the
+// nine rows are (#2023).
+func (p *Parser) parseCondition() []*Stmt {
+	p.inCondition = true
+	list := p.parseBody()
+	p.inCondition = false
+	return list
 }
 
 // requireBody is parseBody for a caller that read its list some other way —
@@ -982,7 +1102,7 @@ func (p *Parser) parseAndOr() Expr {
 		p.open = append(p.open, opener{word: op.String(), line: int(pos.Line)})
 		p.next()
 		p.skipNewlines()
-		skipped := p.skipSeparators(false)
+		skipped := p.skipSeparators(false, false)
 		right := p.parsePipeline()
 		if right == nil {
 			if skipped && p.dialect.AbsentAndOrOperandIsAnEmptyCommand &&
@@ -1140,7 +1260,7 @@ func (p *Parser) parsePipeline() Expr {
 		// And a `;` written where the command after the bar belongs, for the
 		// one dialect that steps over one there. ksh93 will not: it takes
 		// `a || ; b` and refuses `a | ; b`, which is why this asks.
-		p.skipSeparators(true)
+		p.skipSeparators(true, false)
 	}
 }
 
@@ -3002,7 +3122,7 @@ func (p *Parser) parseIf() Command {
 	c := &IfClause{Start: p.tok.Pos}
 	defer p.opens("if")()
 	p.next()
-	c.Cond = p.parseBody()
+	c.Cond = p.parseCondition()
 	// A condition that ended itself may be followed straight by the body,
 	// exactly as a loop's header may — the rule ShortForm stands for, which
 	// says nothing about looping. `if [[ -n x ]] { … }` and
@@ -3026,7 +3146,7 @@ func (p *Parser) parseIf() Command {
 		e := &Elif{Start: p.tok.Pos}
 		p.opensClause("elif")
 		p.next()
-		e.Cond = p.parseBody()
+		e.Cond = p.parseCondition()
 		p.requireSep("then")
 		p.expectWord("then")
 		e.Then = p.parseBody()
@@ -3074,7 +3194,7 @@ func (p *Parser) shortElse(c *IfClause) {
 		e := &Elif{Start: p.tok.Pos}
 		p.opensClause("elif")
 		p.next()
-		e.Cond = p.parseBody()
+		e.Cond = p.parseCondition()
 		if !condEndedItself(e.Cond) {
 			p.failUnexpected("")
 			return
@@ -3160,7 +3280,9 @@ func (p *Parser) parseLoop() Command {
 	c := &LoopClause{Until: p.atWord("until"), Start: p.tok.Pos}
 	defer p.opens(loopWord(c.Until))()
 	p.next()
+	p.inCondition = true
 	c.Cond = p.requireBody(p.parseList())
+	p.inCondition = false
 	// Where the body may be short, the condition list is the whole header and
 	// it has just ended: what stands here is either `do`, or the body, or
 	// nothing. The list is what decides — a `;` kept it going, so anything

@@ -7,7 +7,7 @@ import "testing"
 
 func withOneSeparator() Dialect {
 	d := Core()
-	d.SeparatorWhereACommandBelongs = OneSeparatorExceptAfterABar
+	d.SeparatorWhereACommandBelongs = OneSeparatorExceptAfterABarOrBeforeACondition
 	d.AbsentAndOrOperandIsAnEmptyCommand = true
 	return d
 }

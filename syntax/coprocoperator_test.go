@@ -71,9 +71,9 @@ func TestTheCoprocessOperatorTerminatesRatherThanJoins(t *testing.T) {
 	// from #1142 beside this one: a `;` may follow the operator and may not
 	// follow a bar. Both halves are needed — the first alone would be
 	// satisfied by a grammar that took a `;` anywhere, and
-	// OneSeparatorExceptAfterABar is the value that does not.
+	// OneSeparatorExceptAfterABarOrBeforeACondition is the value that does not.
 	lenient := d
-	lenient.SeparatorWhereACommandBelongs = OneSeparatorExceptAfterABar
+	lenient.SeparatorWhereACommandBelongs = OneSeparatorExceptAfterABarOrBeforeACondition
 	mustParse(t, `echo one |& ; echo two`, lenient, "a `;` may follow the operator")
 	if _, err := Parse(`echo one | ; echo two`, lenient); err == nil {
 		t.Error("`echo one | ; echo two` parsed, want a bar with no command refused")

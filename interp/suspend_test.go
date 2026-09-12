@@ -67,7 +67,8 @@ func jobSessionShaped(t *testing.T, f *fakeJobs, src string, jobControl bool, sh
 	if jobControl {
 		r.SetInteractiveMonitor()
 	}
-	r.WaitForCommand = func(int) (Wait, error) { return f.next(), nil }
+	t.Cleanup(func() { f.reapSaidStopped(t) })
+	r.WaitForCommand = f.waitFor
 	r.SignalGroup = func(int, syscall.Signal) error { return nil }
 	r.Foreground = func(pgid int) error {
 		f.foreground = append(f.foreground, pgid)

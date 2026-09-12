@@ -225,3 +225,42 @@ func captureStderr(t *testing.T, f func()) string {
 	_ = r.Close()
 	return out
 }
+
+// TestOnlyThisRunsZombiesAreReported. The zombie census has no marker to tell
+// a leak from something meant, so the descendant walk is the whole of what
+// makes it this run's: several agents run these suites at once, and another
+// binary's unreaped child is not ours to report.
+func TestOnlyThisRunsZombiesAreReported(t *testing.T) {
+	all := []Process{
+		{PID: 100, PPID: 1, Command: "interp.test"},
+		{PID: 200, PPID: 100, Command: "<defunct>"},
+		{PID: 300, PPID: 200, Command: "[true] <defunct>"}, // Linux's spelling
+		{PID: 400, PPID: 1, Command: "<defunct>"},          // somebody else's
+	}
+	got := unreaped(all, 100)
+	if len(got) != 2 || got[0].PID != 200 || got[1].PID != 300 {
+		t.Errorf("unreaped = %v, want the two below 100 in either spelling", got)
+	}
+	if n := len(unreaped(all, 999)); n != 0 {
+		t.Errorf("%d zombies under a pid that is nobody's parent, want none", n)
+	}
+}
+
+// TestALiveJobIsNotAZombie is why the census needs no marker of its own.
+//
+// Holding has one because several tests mean to leave a process *running* and
+// a guard that reported those would be turned off. That cannot happen here: a
+// background job that is still running is not defunct, and a job that has
+// exited and been waited for is not in the table at all. Only the one case is
+// left, and it is always a leak.
+func TestALiveJobIsNotAZombie(t *testing.T) {
+	all := []Process{
+		{PID: 200, PPID: 100, Command: "/bin/sleep 30"},
+		{PID: 201, PPID: 100, Command: "cat /tmp/sh-procsub9/sub1"},
+		{PID: 202, PPID: 100, Command: "<defunct>"},
+	}
+	got := unreaped(all, 100)
+	if len(got) != 1 || got[0].PID != 202 {
+		t.Errorf("unreaped = %v, want only the defunct one", got)
+	}
+}

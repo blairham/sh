@@ -78,7 +78,17 @@ func TestPollingReportsAStopOnce(t *testing.T) {
 		t.Skipf("could not start a child to poll: %v", err)
 	}
 	pid := cmd.Process.Pid
-	t.Cleanup(func() { _ = syscall.Kill(-pid, syscall.SIGKILL) })
+	t.Cleanup(func() {
+		_ = syscall.Kill(-pid, syscall.SIGKILL)
+		// And reaped. This test's whole subject is a poll that answers
+		// without waiting, so nothing here has waited for the child, and a
+		// killed child nobody waits for is a zombie until the test binary
+		// exits (#1006). The other test in this file needs no such line: its
+		// poll loop runs to the exit, and the poll that reports an exit is
+		// the wait that reaps it.
+		var ws syscall.WaitStatus
+		_, _ = syscall.Wait4(pid, &ws, 0, nil)
+	})
 
 	// SIGTSTP rather than SIGSTOP, and the difference is the platform's
 	// rather than a preference. On a BSD a continued child is reported as

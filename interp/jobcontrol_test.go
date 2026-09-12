@@ -5,10 +5,12 @@ package interp_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	. "github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -52,6 +54,70 @@ type fakeJobs struct {
 	// waiting on — what `bg` let go of. Empty means nothing has changed,
 	// which is the answer for a job that is still running.
 	polls []Wait
+	// saidStopped is every process this fake claimed had stopped. See
+	// waitFor and reapSaidStopped: the claim is a lie about a process that
+	// has in fact exited, and something has to reap it.
+	saidStopped []int
+}
+
+// waitFor is this fake standing in for the front end's `waitpid`.
+//
+// The signature is Runner.WaitForCommand's, and the difference from the real
+// thing is the whole of #1006. A front end's wait *reaps*: it is a waitpid,
+// and the child is gone from the process table when it returns. This one
+// returns a canned answer and calls nothing, so the child is only reaped by
+// whatever runs afterwards.
+//
+// For every answer but a stop, that is the shell: runWatched calls cmd.Wait
+// once the wait it was given says the command ended. A stop is the one answer
+// where it deliberately does not, and it is right not to — a stopped job is
+// still alive and is waited for again when it resumes. But the child here did
+// not stop. It ran `true` and exited, so declining to reap it leaves a zombie,
+// and a clean `go test ./interp/` ended with dozens of them.
+//
+// So the fake reaps what the fake lied about. Recorded here and waited for in
+// reapSaidStopped rather than reaped on the spot, because a real waitpid
+// returns when the child changes state and this call is on the shell's own
+// thread of control — blocking it would be modeling something no front end
+// does.
+func (f *fakeJobs) waitFor(pid int) (Wait, error) {
+	w := f.next()
+	if w.Stopped {
+		f.saidStopped = append(f.saidStopped, pid)
+	}
+	return w, nil
+}
+
+// reapSaidStopped waits for the children this fake told the shell were
+// stopped, so the run does not end with a process table full of them.
+//
+// Polled rather than blocking. Every command these tests start is `true`, so
+// the wait is over before the first look; a blocking wait4 on a child that
+// somehow had not exited would turn a leak into a ten-minute test timeout,
+// which is a worse failure than the one being fixed.
+func (f *fakeJobs) reapSaidStopped(t *testing.T) {
+	t.Helper()
+	for _, pid := range f.saidStopped {
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			var ws syscall.WaitStatus
+			got, err := syscall.Wait4(pid, &ws, syscall.WNOHANG, nil)
+			if got == pid || errors.Is(err, syscall.ECHILD) {
+				// Reaped, or somebody else already had it.
+				break
+			}
+			if err != nil && !errors.Is(err, syscall.EINTR) {
+				t.Errorf("waiting for %d, which this fake said had stopped: %v", pid, err)
+				break
+			}
+			if !time.Now().Before(deadline) {
+				t.Errorf("process %d, which this fake said had stopped, is still running", pid)
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+	f.saidStopped = nil
 }
 
 func (f *fakeJobs) next() Wait {
@@ -98,7 +164,8 @@ func jobRun(t *testing.T, f *fakeJobs, src string) (string, int, *Runner) {
 	dg := Diagnostics{}
 	r := newTestRunner(t, &Runner{Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	if f != nil {
-		r.WaitForCommand = func(int) (Wait, error) { return f.next(), nil }
+		t.Cleanup(func() { f.reapSaidStopped(t) })
+		r.WaitForCommand = f.waitFor
 		r.SignalGroup = func(pgid int, sig syscall.Signal) error {
 			f.signals = append(f.signals, struct {
 				pgid int
@@ -201,9 +268,12 @@ func TestTheStatusOfAStoppedCommand(t *testing.T) {
 	dg := Diagnostics{}
 	out := sink(t)
 	r := newTestRunner(t, &Runner{Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg})
-	r.WaitForCommand = func(int) (Wait, error) {
-		return Wait{Signal: syscall.SIGTSTP, Stopped: true}, nil
-	}
+	// Through a fakeJobs rather than a closure of its own, so that this half
+	// reaps what it claims stopped like the other half does. Written inline it
+	// was the last zombie left in the package after #1006.
+	countsFrom256 := &fakeJobs{waits: []Wait{{Signal: syscall.SIGTSTP, Stopped: true}}}
+	t.Cleanup(func() { countsFrom256.reapSaidStopped(t) })
+	r.WaitForCommand = countsFrom256.waitFor
 	if _, err := r.Run(context.Background(), file); err != nil {
 		t.Fatal(err)
 	}

@@ -82,9 +82,15 @@ func stoppedSession(t *testing.T, script string) (Shell, *strings.Builder) {
 		t.Fatalf("jobs = %+v, want one stopped job to leave behind", jobs)
 	}
 	t.Cleanup(func() {
-		// The wait was a fake, so the process is real and still running.
+		// The wait was a fake, so the process is real and nothing has reaped
+		// it. The kill is for the case where it is still running; the wait is
+		// what is needed either way, because `/usr/bin/true` has long since
+		// exited and a child nobody waits for stays in the process table as a
+		// zombie until this binary does (#1006).
 		if pid := jobs[0].PID; pid > 0 {
 			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			var ws syscall.WaitStatus
+			_, _ = syscall.Wait4(pid, &ws, 0, nil)
 		}
 	})
 	return sh, errs

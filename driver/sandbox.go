@@ -40,7 +40,7 @@ import (
 //
 // # Why the long form shadows nothing, measured
 //
-// The rule above is not a licence to add any flag. What makes these two safe
+// The rule above is not a license to add any flag. What makes these two safe
 // is a measurement rather than a principle — every real shell in the panel
 // refuses both spellings outright, so there is no behavior to shadow:
 //

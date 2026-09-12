@@ -135,6 +135,7 @@ ash   SubscriptedArrayLiteral
 ash   SubscriptedOperandCarriesTheAttributes
 ash   SubscriptedOperandTakesALocalDeclaration
 ash   SubscriptedOperandTakesTheIntegerAttribute
+ash   TableLetterReachesItsOwnOperandsSubscript
 ash   TableUnderAnArrayDeclaration
 ash   TestAndArithmeticUpdatePipelineStatus
 ash   TransformLetterCheckedOnlyWhenValued
@@ -157,7 +158,6 @@ bash  ExitTrapFiresPastTheEnd
 bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
 bash  PrintfOutputPrecedesComplaint
-bash  ReadonlyElement
 bash  SetArrayBadNameLeavesZeroFromCommandString
 bash  SetArrayLetter
 bash  SetArrayOptionsContinuePastTheName
@@ -284,6 +284,7 @@ dash  SubscriptedArrayLiteral
 dash  SubscriptedOperandCarriesTheAttributes
 dash  SubscriptedOperandTakesALocalDeclaration
 dash  SubscriptedOperandTakesTheIntegerAttribute
+dash  TableLetterReachesItsOwnOperandsSubscript
 dash  TableUnderAnArrayDeclaration
 dash  TestAndArithmeticUpdatePipelineStatus
 dash  TransformLetterCheckedOnlyWhenValued
@@ -337,6 +338,7 @@ zsh   ReadCountJudgesTheNamesAfterTheFirst
 zsh   ReadExactCountKeepsPartial
 zsh   ReadPartialCountSucceeds
 zsh   ReportsAKilledCommandInACommandSubstitution
+zsh   TableLetterReachesItsOwnOperandsSubscript
 zsh   TransformLetterCheckedOnlyWhenValued
 zsh   TrapListsSignalsWithL
 zsh   TrapPrintsBareWithConditions

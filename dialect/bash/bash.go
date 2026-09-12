@@ -323,6 +323,12 @@ func Semantics() interp.Semantics {
 	s.ArrayNameWithoutSubscriptIsTheList = interp.No
 	// A subscript inside a literal is an expression: `a=([1+1]=c)` lands at 2.
 	s.ArrayLiteralSubscriptIsAKey = interp.No
+	// `typeset -A m[k]=v` — see Semantics.TableLetterReachesItsOwnOperandsSubscript.
+	s.TableLetterReachesItsOwnOperandsSubscript = interp.Yes
+	// `typeset -r a[1]=v` freezes the array and then loses the element write
+	// to the freeze — see Semantics.ReadonlyElement. `readonly a[1]=v` never
+	// reaches it here: that spelling is refused as a bad name first.
+	s.ReadonlyElement = interp.ReadonlyElementFrozenFirst
 	// The `@` family's letter is checked against the value rather than
 	// against the spelling: `${u@QQ}` on an unset name is empty at status 0
 	// and the same word on a set one is a bad substitution. Measured on

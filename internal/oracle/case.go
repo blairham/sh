@@ -12343,6 +12343,26 @@ printf 'TWO=still-running\n'`,
 		Why:     "the third, and the one with three answers of its own: ksh93 writes the element and freezes the array over it, zsh refuses it (`can't create readonly array elements`) and stops, and bash never reaches the question — it refuses `readonly a[1]=v` as a bad *name*, which is the split `export` and `typeset` already have here. The `typeset -r` spelling is what makes bash's third answer visible and is deliberately not modeled (#1203)",
 	},
 	{
+		ID: "declare/a-readonly-element-declaration-by-the-letter", Category: "builtins",
+		Snippet: `typeset -r a[1]=v; echo "st=$?"; typeset -p a 2>&1; echo after`,
+		Why:     "the `typeset -r` spelling of the row above, which is where bash's third answer becomes visible: `readonly a[1]=v` never reaches the question there because it refuses the operand as a bad name first. bash freezes the array and then loses the element write to the freeze it has just applied — `a: readonly variable` at status 0, `declare -ar a=()`, and the script carries on — where ksh93 writes the element and freezes over it and zsh refuses and stops. Three answers, and the `after` is what says which of the three ended the script",
+	},
+	{
+		ID: "declare/a-readonly-element-declaration-over-an-array", Category: "builtins",
+		Snippet: `a=(x y z); typeset -r a[1]=v; echo "st=$?"; typeset -p a 2>&1`,
+		Why:     "the same declaration where the array is already populated, which is the discriminator the empty case above cannot supply: bash's answer looks like `create it frozen and empty` from a fresh name and is not — all three elements stand here with `y` unreplaced, so what happened is the freeze landing *before* the write rather than instead of the array. ksh93 replaces the element and freezes; zsh still refuses",
+	},
+	{
+		ID: "declare/a-table-letter-beside-its-own-operand", Category: "builtins",
+		Snippet: `k=7; typeset -A m[k]=v; echo "st=$?"; typeset -p m 2>&1; echo "k=[${m[k]}] seven=[${m[7]}]"`,
+		Why:     "whether the table letter reaches the subscript of an operand on its own command. bash stores under the key `k`; ksh93 evaluates the subscript as an expression, because the attribute has not landed when the operand is read, and stores under `7`; zsh refuses the shape outright. `k=7` rather than an unset name is the whole point of the row — with `k` unset both readings put the value where `${m[0]}` and `${m[k]}` each find it, and #1380 was measured that way and recorded ksh93 as *discarding* the subscript",
+	},
+	{
+		ID: "declare/a-table-letter-on-an-earlier-command", Category: "builtins",
+		Snippet: `k=7; typeset -A m; typeset m[k]=v; echo "st=$?"; typeset -p m 2>&1`,
+		Why:     "the control for the row above, and what keeps it an axis about the *letter* rather than about tables: a table declared on an earlier command takes the key in bash and ksh93 alike, so the two readings part only over the letter written beside the operand it would decide",
+	},
+	{
 		ID: "declare/an-exported-subscripted-operand", Category: "declarations",
 		Snippet: `export a[1]=v; echo "st=$? [${a[1]}]"`,
 		Why:     "the export attribute is the one of the four that no shell refuses on an element: ksh93 and zsh both write it and report success, and bash and dash refuse the operand as a bad name long before. It is the control for the three rows above — without it, `typeset -x` and `export` would look like they were refused for the same reason the others are",

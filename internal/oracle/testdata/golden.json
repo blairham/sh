@@ -56437,6 +56437,108 @@
         "TimedOut": false
       }
     },
+    "declare/a-readonly-element-declaration-by-the-letter": {
+      "ash": {
+        "Stdout": "st=127~\u003cshell\u003e: typeset: not found~after",
+        "Stderr": "\u003cshell\u003e: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=0~declare -ar a=()~after",
+        "Stderr": "\u003cshell\u003e: line 1: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~declare -ar a=()~after",
+        "Stderr": "\u003cshell\u003e: line 1: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~declare -ar a='()'~after",
+        "Stderr": "\u003cshell\u003e: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~\u003cshell\u003e: 1: typeset: not found~after",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~typeset -r -a a=([1]=v)~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:typeset:1: a[1]: can't create readonly array elements",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-readonly-element-declaration-over-an-array": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=0~declare -ar a=([0]=\"x\" [1]=\"y\" [2]=\"z\")",
+        "Stderr": "\u003cshell\u003e: line 1: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~declare -ar a=([0]=\"x\" [1]=\"y\" [2]=\"z\")",
+        "Stderr": "\u003cshell\u003e: line 1: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~declare -ar a='([0]=\"x\" [1]=\"y\" [2]=\"z\")'",
+        "Stderr": "\u003cshell\u003e: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~typeset -r -a a=(x v z)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:typeset:1: a[1]: can't create readonly array elements",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-readonly-subscripted-operand": {
       "ash": {
         "Stdout": "",
@@ -57094,6 +57196,108 @@
       },
       "zsh": {
         "Stdout": "n=1 [][v]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-table-letter-beside-its-own-operand": {
+      "ash": {
+        "Stdout": "st=127~\u003cshell\u003e: typeset: not found",
+        "Stderr": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=0~declare -A m=([k]=\"v\" )~k=[v] seven=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~declare -A m=([k]=\"v\" )~k=[v] seven=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2~\u003cshell\u003e: line 0: typeset: m: not found~k=[] seven=[]",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~\u003cshell\u003e: 1: typeset: not found",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~typeset -A m=([7]=v)~k=[] seven=[v]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:typeset:1: m[k]: inconsistent type for assignment",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-table-letter-on-an-earlier-command": {
+      "ash": {
+        "Stdout": "st=127~\u003cshell\u003e: typeset: not found",
+        "Stderr": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=0~declare -A m=([k]=\"v\" )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~declare -A m=([k]=\"v\" )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~declare -a m='([7]=\"v\")'",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~\u003cshell\u003e: 1: typeset: not found",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~typeset -A m=([k]=v)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~typeset -A m=( [k]=v )",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

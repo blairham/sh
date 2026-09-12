@@ -8493,17 +8493,51 @@ type Semantics struct {
 	// level never reaches it.
 	SubscriptedOperandTakesALocalDeclaration Answer
 
+	// TableLetterReachesItsOwnOperandsSubscript reads a subscripted operand's
+	// subscript as a *key* when the table letter that would make it one is
+	// written on the same command — `typeset -A m[k]=v`.
+	//
+	// Yes in bash 5.3, which stores under `k`; no in ksh93u+, where the
+	// attribute has not landed when the operand is read and `k` is evaluated
+	// as the expression it looks like. Measured 2026-09-12 with a
+	// discriminator the shorter probe hides: `k=7; typeset -A m[k]=v` is
+	// `[k]=v` in bash and `[7]=v` in ksh93, and `typeset -A m[1+1]=v` is
+	// `[1+1]` against `[2]`. #1380 recorded ksh93 as discarding the subscript
+	// and storing under `0`, which is what an unset `k` evaluates to.
+	//
+	// Not asked of a table declared on an *earlier* command: `typeset -A m;
+	// typeset m[k]=v` stores under `k` in both, so the two readings part only
+	// over the letter's own operand.
+	//
+	// zsh 5.9.2 refuses the shape outright — `m[k]: inconsistent type for
+	// assignment` — and so reaches no answer here.
+	TableLetterReachesItsOwnOperandsSubscript Answer
+
 	// ReadonlyElement is what a declaration does when it would freeze the
 	// array whose element its operand names — `readonly a[1]=v` and
 	// `typeset -r a[1]=v`.
 	//
 	// Three answers rather than two, which is why it is not an Answer:
 	// ksh93u+ writes the element and freezes the array over it, zsh 5.9.2
-	// refuses the operand, and bash 5.3 does a third thing — it creates the
-	// array frozen and *empty* and then reports the element write it has just
-	// made impossible, at status 0. The third is measured and recorded and
-	// deliberately not implemented here; bash reaches this by `typeset -r`
-	// alone, since it refuses `readonly a[1]=v` as a bad name long before.
+	// refuses the operand, and bash 5.3 does a third thing — it freezes the
+	// array *first* and then reports the element write it has just made
+	// impossible, at status 0. bash reaches this by `typeset -r` alone, since
+	// it refuses `readonly a[1]=v` as a bad name long before.
+	//
+	// The third answer is the order and not the emptiness, which the array
+	// being empty in the shortest probe hides: measured 2026-09-12 on bash
+	// 5.3.15, `a=(x y z); typeset -r a[1]=v` leaves all three elements
+	// standing with `y` unreplaced, `a=scalar` is promoted to element 0, and
+	// `typeset -Ar m[k]=v` freezes an empty *table*. So the container the
+	// letters name is declared, the freeze lands on it, and only the element
+	// write is lost.
+	//
+	// It reports at status 0 through the *store's* refusal rather than the
+	// builtin's, which is visible in the wording: `typeset -r a[1]=v` says
+	// `a: readonly variable` where `readonly a; typeset a[1]=v` says
+	// `typeset: a: readonly variable` at 1. Later operands on the same
+	// command are unaffected — `typeset -r a[1]=v b=2` still freezes `b` at
+	// 2.
 	ReadonlyElement ReadonlyElementPolicy
 
 	// BadSubscriptToUnsetFatal ends the script when an `unset` operand's
@@ -11719,12 +11753,18 @@ const (
 	// ReadonlyElementRefused refuses the operand and ends the script,
 	// because an element cannot carry the attribute a name carries: zsh.
 	ReadonlyElementRefused
+	// ReadonlyElementFrozenFirst declares the container the letters name,
+	// freezes it, and then loses the element write to the freeze it has just
+	// applied — reporting it at status 0 and carrying on.
+	ReadonlyElementFrozenFirst
 )
 
 func (p ReadonlyElementPolicy) String() string {
 	switch p {
 	case ReadonlyElementWritten:
 		return "the element is written and the array frozen over it"
+	case ReadonlyElementFrozenFirst:
+		return "the array is frozen first and the element write lost to it"
 	case ReadonlyElementRefused:
 		return "the operand is refused"
 	}

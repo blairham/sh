@@ -34,6 +34,11 @@ func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows
 	if r.elementDeclarationRefused(base, sub, f, shadows) {
 		return
 	}
+	// Before the attributes land, because whether the table letter on *this*
+	// command reaches *this* command's subscript is a dialect's answer and
+	// not an ordering the engine may pick — see
+	// Semantics.TableLetterReachesItsOwnOperandsSubscript.
+	tableBefore := r.assocDeclared(base)
 	fresh := false
 	if shadows && !f.global {
 		// The array the element belongs to is what becomes local, and it has
@@ -90,9 +95,22 @@ func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows
 	outer := r.inBuiltin
 	r.inBuiltin = ""
 	defer func() { r.inBuiltin = outer }()
-	if r.assocDeclared(base) {
-		r.setAssocElem(base, sub, value)
-	} else {
+	key, evaluated, isKey := r.subscriptedOperandKey(base, sub, tableBefore)
+	switch {
+	case r.unspecified:
+		return
+	case isKey && !evaluated:
+		r.setAssocElem(base, key, value)
+	case isKey:
+		// A table whose letter arrived too late to be read: the subscript was
+		// evaluated as an expression and the number it came to is the key.
+		idx, err := r.subscriptValue(sub)
+		if err != nil {
+			r.fatal("%s\n", r.subscriptFailure(sub, err))
+			return
+		}
+		r.setAssocElem(base, itoa(idx), value)
+	default:
 		idx, err := r.subscriptValue(sub)
 		if err != nil {
 			r.fatal("%s\n", r.subscriptFailure(sub, err))
@@ -123,6 +141,9 @@ func (r *Runner) elementDeclarationRefused(base, sub string, f declareFlags, sha
 		case ReadonlyElementRefused:
 			r.refuseElementDeclaration(base, sub, d.ReadonlyElementRefusal)
 			return true
+		case ReadonlyElementFrozenFirst:
+			r.freezeBeforeTheElementWrite(base, f)
+			return true
 		case ReadonlyElementWritten:
 		default:
 			return true
@@ -145,6 +166,82 @@ func (r *Runner) elementDeclarationRefused(base, sub string, f declareFlags, sha
 		return true
 	}
 	return false
+}
+
+// subscriptedOperandKey is the key a subscripted operand's element goes under,
+// where the base names a table — the text between the brackets, or the number
+// the text evaluates to.
+//
+// A table declared *earlier* takes the key everywhere: `typeset -A m; typeset
+// m[k]=v` stores under `k` in bash and ksh93 alike. The question is only about
+// the letter written on the same command as the operand, and there the two
+// part — measured 2026-09-12 on bash 5.3.15 and ksh93u+ 2012-08-01:
+//
+//	typeset -A m[k]=v      bash declare -A m=([k]="v")   ksh93 typeset -A m=([0]=v)
+//	k=7; typeset -A m[k]=v bash declare -A m=([k]="v")   ksh93 typeset -A m=([7]=v)
+//	typeset -A m[1+1]=v    bash declare -A m=([1+1]="v") ksh93 typeset -A m=([2]=v)
+//
+// #1380's re-measurement read the first row as ksh93 *discarding* the
+// subscript and storing under `0`. The second and third rows say otherwise and
+// cannot agree by accident: `0` was the value of the unset name `k`, and with
+// `k=7` the key is `7`. The subscript is evaluated because the letter has not
+// landed yet, which is the same ordering answer ReadonlyElement records for
+// the freeze and not a rule about tables at all.
+//
+// Asked only where the letter is what made the difference. A base that was
+// already a table, and a base that is not one either way, raise no question
+// between the two readings.
+// The three results are the key, whether it had to be *evaluated* to become
+// one, and whether the base is a table at all.
+func (r *Runner) subscriptedOperandKey(base, sub string, tableBefore bool) (key string, evaluated, isKey bool) {
+	if tableBefore {
+		return sub, false, true
+	}
+	if !r.assocDeclared(base) {
+		return "", false, false
+	}
+	if r.ask(r.sem().TableLetterReachesItsOwnOperandsSubscript,
+		"a table letter reaching the subscript of an operand on its own command") {
+		return sub, false, true
+	}
+	// Still a table — the letter did land — so the element goes in it under
+	// the number rather than beside it in an indexed array the name does not
+	// have. ksh93 lists `typeset -A m=([7]=v)` for `k=7; typeset -A m[k]=v`,
+	// which is the table holding the key `7`.
+	return "", true, !r.unspecified
+}
+
+// freezeBeforeTheElementWrite is ReadonlyElementFrozenFirst: the container the
+// letters name is declared, the freeze lands on it, and the element write is
+// then lost to the freeze the same declaration has just applied.
+//
+// The order is the whole of it. Every other declaration here writes and then
+// freezes, which is why this cannot be reached by moving a line: the write has
+// to be *given up* rather than deferred, and the container still has to exist
+// afterwards.
+//
+// f.array unless a table was asked for, because bash makes a subscripted
+// operand's base an indexed array whether or not a container letter was
+// written — `typeset -r a[1]=v` lists `declare -ar a=()` — and promotes a
+// scalar it finds into element 0 rather than discarding it.
+//
+// Reported through the store's refusal rather than the builtin's, and at
+// status 0: `typeset -r a[1]=v` says `a: readonly variable` where an
+// already-frozen `typeset a[1]=v` says `typeset: a: readonly variable` at 1.
+func (r *Runner) freezeBeforeTheElementWrite(base string, f declareFlags) {
+	if !f.assoc {
+		f.array = true
+	}
+	r.applyAttributes(base, f)
+	r.markDeclaredCompound(base, false, f, true)
+	if r.unspecified {
+		return
+	}
+	r.markReadonly(base)
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	r.diagf("%s\n", Wording(r.diag().ReadonlyVariable, "%s: readonly variable", base))
 }
 
 // refuseElementDeclaration reports the refusal and ends the script.

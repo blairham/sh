@@ -254,8 +254,35 @@ ${(%%)'%F{red}%B%U%Sa%s%u%b'}
 pair of segments, so a shell that emits the reset alone loses the color of
 every segment after the first — eight places in one real `${(%%)PROMPT}`, all
 of them a missing `\e[38;5;NNm` or `\e[30m` directly after an `\e[0m` (#2075).
-The state is per expansion: it starts empty at every walk, so nothing one
-prompt set reaches the next.
+
+**The state is the shell's, not the rendering's.** It was written down here as
+per-expansion and that was wrong — measured on zsh 5.9.2, a `%b` alone in its
+own rendering writes back a color a *previous* rendering set:
+
+```
+v='%F{070}'; w='%b'
+print -rn -- "${(%%)v}"; print -rn -- "${(%%)w}"
+\e[38;5;70m  \e[0m\e[38;5;70m
+```
+
+It accumulates across every rendering the shell has done — `%F{070}` in one
+and `%K{021}` in another are both written back by a `%b` in a third — and what
+takes an entry out of it is a code that clears that attribute, so a `%f`
+between the two renderings above leaves the reset alone. The single `%` flag,
+the double one and `print -P` all share it. A subshell is handed a copy, so
+the shell's state reaches a rendering inside one and a rendering inside one
+never reaches back out:
+
+| | drew |
+| --- | --- |
+| `print -rn -- "${(%%)v}"; (print -rn -- "${(%%)w}")` | `\e[38;5;70m` `\e[0m\e[38;5;70m` |
+| `(print -rn -- "${(%%)v}"); print -rn -- "${(%%)w}"` | `\e[38;5;70m` `\e[0m` |
+
+This is not an edge of the language. p10k binary-searches its own prompt width
+through `${(%%)…}` many times before the prompt is drawn, so the state is
+never empty by the time it matters, and a walk that started empty wrote
+`\e[0m\e[49m\e[38;5;NNNm` where zsh writes four escapes — one color short at
+every segment boundary of the drawn prompt (#2113).
 
 ### The colors
 

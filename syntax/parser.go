@@ -526,7 +526,8 @@ func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 	}
 	p.err = &Error{
 		Pos: tok.Pos, Kind: ErrUnexpected,
-		Token: tokenLiteral(tok), Class: tokenClass(tok, plain), Expected: expected,
+		Token: tokenLiteral(tok), TokenOpener: tokenOpener(tok),
+		Class: tokenClass(tok, plain), Expected: expected,
 		Redirect: tok.Kind.IsRedirect(),
 		Msg:      tokenText(tok) + " unexpected",
 	}
@@ -537,10 +538,27 @@ func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 func (p *Parser) tokenLiteral() string { return tokenLiteral(p.tok) }
 
 func tokenLiteral(tok Token) string {
-	if tok.Kind == TokWord {
+	switch tok.Kind {
+	case TokWord:
 		return tok.Literal()
+	case TokArithCmd:
+		// The expression the construct held, blanks and all — ` 2 ` for
+		// `(( 2 ))` — which is what two of the panel's four quote back.
+		// Kind.String() answers `arithmetic command`, a description written
+		// for prose, and standing it where a diagnostic quotes what it read
+		// produced a sentence no shell writes (#2013).
+		return tok.Text
 	}
 	return tok.Kind.String()
+}
+
+// tokenOpener is the second spelling of a token whose text is not what it was
+// written as. See Error.TokenOpener; only the arithmetic command has one.
+func tokenOpener(tok Token) string {
+	if tok.Kind == TokArithCmd {
+		return "(("
+	}
+	return ""
 }
 
 func (p *Parser) tokenClass(plain bool) TokenClass { return tokenClass(p.tok, plain) }

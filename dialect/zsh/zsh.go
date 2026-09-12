@@ -2097,6 +2097,7 @@ func Diagnostics() interp.Diagnostics {
 		UnrecognizedModifierAlone: "unrecognized modifier",
 		ArithIllegalByte:          "bad math expression: illegal character: %[1]s",
 		ArithOperandExpected:      "bad math expression: operand expected at `%[1]s'",
+		ArithBadFloatConstant:     "bad floating point constant",
 		ArithExpressionRanOut:     "bad math expression: operand expected at end of string",
 		ArithOperatorExpected:     "bad math expression: operator expected at `%[1]s'",
 		// The output format's own two, neither of which opens with `bad math

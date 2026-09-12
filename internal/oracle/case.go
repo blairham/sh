@@ -5073,6 +5073,26 @@ echo "st=$?"`,
 		Why:     "the same text where the name is an indexed array, which is where the subscript really is an expression. Every column that reaches it refuses, and no two of the three agree on what to say: bash names an operand and the error token, ksh93 calls `.k` a parameter that is not set, and zsh a bad floating point constant. So this is three refusals rather than one, and a reading that took every unreadable subscript as a key would lose all of them. The pair with the row above is what says the answer depends on the name's attribute and not on the text",
 	},
 	{
+		ID: "arithmetic/an-operand-that-opens-with-a-point", Category: "arithmetic",
+		Snippet: `echo "[$(( .foo ))]"; echo "st=$?"`,
+		Why:     "a point that begins something the reader cannot finish as a number. zsh alone words it as a third refusal — `bad floating point constant`, with no expression quoted and none of the `bad math expression:` its other math failures open with — where bash calls it an operand it expected and ksh93, which has floats too, reads `.foo` as an ordinary unset name and answers 0. So the sentence is one dialect's value and not an axis, and the ksh93 cell is what says so",
+	},
+	{
+		ID: "arithmetic/a-point-where-an-operator-belonged", Category: "arithmetic",
+		Snippet: `echo "[$(( 1..2 ))]"; echo "st=$?"`,
+		Why:     "the same point in the other position, which is what says the *point* decides and not which operand was missing: zsh gives the identical float sentence where it would otherwise have said an operator was expected. The pair is what makes the rule statable — a token beginning with a point commits that reader to a floating literal — and the row below is the control for it",
+	},
+	{
+		ID: "arithmetic/a-float-whose-exponent-is-not-a-number", Category: "arithmetic",
+		Snippet: `echo "[$(( 1.e ))]"; echo "st=$?"`,
+		Why:     "the control: `1.` reads as a float and the token left standing is `e`, which does *not* begin with a point — so zsh gives its ordinary operator complaint here and the float sentence never appears. Without it, `a token beginning with a point` and `the float reader was entered` are the same rule, and only one of them is what was measured",
+	},
+	{
+		ID: "arith/an-arithmetic-command-where-none-may-stand", Category: "arithmetic",
+		Snippet: "x=1\n(( 1 )) (( 2 ))", Script: true, SyntaxError: true,
+		Why: "what a shell calls an arithmetic command it will not take, and it is three answers: bash 5.3 and zsh quote the *expression* it held with its blanks — ` 2 ` — ksh93 names the `((` that opened it, and bash 3.2 names a bare `(`. Ours called it `arithmetic command`, which is the token kind's prose description standing where a diagnostic quotes what it read, and is a sentence no column writes (#2013). From a file rather than -c because that is the route whose diagnostic carries the offending line back",
+	},
+	{
 		ID: "arithmetic/a-key-that-is-no-expression-as-an-assignment-target", Category: "expansion",
 		Snippet: `typeset -A m; (( m[.k] = 3 )); echo "[${m[.k]}]"; echo after`,
 		Why:     "the write through such a key, which is not the same question as the read: with no expression to evaluate the target carries only text, and a store that decides by asking whether there is an index writes the *name* and leaves the element alone — a wrong answer with nothing printed. All three columns with the attribute store 3 under the key. The element is echoed rather than the status, because that is the only thing that can tell the two stores apart",

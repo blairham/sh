@@ -2087,6 +2087,27 @@ type Diagnostics struct {
 	// because it keeps them everywhere else.
 	CondSyntaxUnexpected string
 
+	// SyntaxUnexpectedNamesTheOpener writes the *operator* an unexpected
+	// token began with rather than the text it held, where the two differ.
+	//
+	// One construct differs at all: an arithmetic command standing where the
+	// grammar has no command. Measured 2026-09-11 on a script holding `x=1`
+	// and `(( 1 )) (( 2 ))`,
+	//
+	//	bash 5.3   syntax error near unexpected token ` 2 '
+	//	zsh 5.9.2  parse error near ` 2 '
+	//	ksh93u+    syntax error at line 2: `((' unexpected
+	//
+	// so two of the three quote the expression with its blanks and ksh93
+	// names `((`. bash 3.2 names `(`, which is a third answer and has no
+	// dialect here to hold it.
+	//
+	// A flag rather than a wording because the sentence around it is already
+	// SyntaxUnexpected's and only the verb changes; and on the Diagnostics
+	// rather than on the parser because both spellings are facts about the
+	// token, which is why [syntax.Error] carries both (#2013).
+	SyntaxUnexpectedNamesTheOpener bool
+
 	// CondSyntaxPreamble is a line one dialect writes *before* that one,
 	// naming the construct rather than the token: bash's `syntax error in
 	// conditional expression: unexpected token `-z'`. Two verbs: %[1]s the
@@ -2530,6 +2551,33 @@ type Diagnostics struct {
 	// because the kind is only produced where Dialect.ArithBytesRefusedOutright
 	// names the byte.
 	ArithIllegalByte string
+	// ArithBadFloatConstant is what a dialect with floating point says about
+	// a refused token that *begins with a point*, where it says something
+	// other than either operand complaint.
+	//
+	// A whole sentence rather than a reason: the one shell that has it writes
+	// it instead of the wrapper its other math refusals get. Measured
+	// 2026-09-11 and 2026-09-12 on zsh 5.9.2, where `$(( .foo ))` is
+	//
+	//	bad floating point constant
+	//
+	// against `bad math expression: operand expected at `%'` for a refusal in
+	// the same position on a token that does not begin with a point. No
+	// verbs: the text is not named at all.
+	//
+	// The point is the whole of the rule, and it is measured rather than
+	// assumed — `$(( .foo ))`, `$(( 1 + .foo ))`, `$(( 1..2 ))`, `$(( . ))`,
+	// `$(( 1 . 2 ))`, `$(( a.b ))`, `$(( .5.5 ))`, `$(( 0x.f ))` and
+	// `$(( a[.k] ))` all answer this way, while `$(( 1.e ))`, whose refused
+	// token is `e `, gets the ordinary operator complaint. So a point that
+	// begins a token commits that shell to reading a floating literal, and
+	// failing to is a *third* refusal rather than a wording of either
+	// (#1889).
+	//
+	// Empty is every other dialect, including the other one in the panel
+	// with floats: ksh93 answers the same expressions with its operand
+	// complaints, so this is a value one dialect holds and not an axis.
+	ArithBadFloatConstant string
 	// ArithExpressionRanOut is the reason when an expression wanted a value
 	// and reached the end of the text instead: `$((1+))`, `$((~))`. One verb,
 	// the operator that was left wanting, which only the shell that names one
@@ -3200,6 +3248,13 @@ func (d Diagnostics) ParseFailureLine(err error) int {
 // as `1+:2` where the parser was handed `1+`. Every other caller passes what
 // the parser saw.
 func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
+	if d.ArithBadFloatConstant != "" && strings.HasPrefix(se.Token, ".") {
+		// A point that begins a refused token is a floating literal this
+		// dialect committed to reading and could not, which it words as
+		// neither operand complaint and quotes nothing in. See
+		// ArithBadFloatConstant.
+		return d.ArithBadFloatConstant
+	}
 	reason, fallback := d.ArithOperandExpected, "operand expected"
 	switch se.Kind {
 	case syntax.ErrArithOperandEnd:
@@ -3299,6 +3354,10 @@ func readOn(se *syntax.Error, expr string) bool {
 // an operand a conditional operator could not take in a dialect with no
 // sentence of its own for that.
 func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
+	token := se.Token
+	if d.SyntaxUnexpectedNamesTheOpener && se.TokenOpener != "" {
+		token = se.TokenOpener
+	}
 	form := d.SyntaxUnexpected
 	if se.Class == syntax.ClassWord && d.SyntaxUnexpectedWord != "" {
 		form = d.SyntaxUnexpectedWord
@@ -3312,7 +3371,7 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 		// something shorter than it says anywhere else.
 		form = d.CondSyntaxUnexpected
 	}
-	msg := Wording(form, `"%[1]s" unexpected`, se.Token, se.Expected, se.Pos.Line)
+	msg := Wording(form, `"%[1]s" unexpected`, token, se.Expected, se.Pos.Line)
 	if se.Expected != "" && d.SyntaxExpecting != "" {
 		msg += Wording(d.SyntaxExpecting, "", se.Expected)
 	}

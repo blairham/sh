@@ -190,6 +190,24 @@ type Error struct {
 	LastToken string
 	// Class is what sort of token Token is, when the kind is ErrUnexpected.
 	Class TokenClass
+	// TokenOpener is the operator the unexpected token *began* with, where
+	// the token is a construct whose text is not its own spelling. Empty for
+	// everything else, which is nearly everything.
+	//
+	// One construct needs it. An arithmetic command standing where the
+	// grammar has no command is named two ways in the panel — measured
+	// 2026-09-11 on a script holding `x=1` and `(( 1 )) (( 2 ))`:
+	//
+	//	bash 5.3   syntax error near unexpected token ` 2 '
+	//	zsh 5.9.2  parse error near ` 2 '
+	//	ksh93u+    syntax error at line 2: `((' unexpected
+	//	bash 3.2   syntax error near unexpected token `('
+	//
+	// So two of them quote the expression the construct held, blanks and
+	// all, and one quotes the operator that opened it. Token cannot say
+	// both, and which is written is the dialect's answer rather than the
+	// parser's — see Diagnostics.SyntaxUnexpectedNamesTheOpener.
+	TokenOpener string
 
 	// Redirect says the unexpected token was itself a redirection operator.
 	//

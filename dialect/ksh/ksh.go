@@ -1552,6 +1552,10 @@ func Diagnostics() interp.Diagnostics {
 // step, and the rule relating them is exactly one clause.
 func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	d.SyntaxUnexpected, d.PromptSyntaxUnexpected = parseWording(3, "`%[1]s' unexpected")
+	// An arithmetic command in a position the grammar has none for is named
+	// by the `((` that opened it here, where bash and zsh name the expression
+	// it held — see Diagnostics.SyntaxUnexpectedNamesTheOpener.
+	d.SyntaxUnexpectedNamesTheOpener = true
 	d.Unterminated, d.PromptUnterminated = parseWording(6, "`%[3]s' unmatched")
 	// Nothing is unmatched when nothing was open, so the end of input is
 	// named as the thing that was unexpected instead.

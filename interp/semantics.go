@@ -6128,14 +6128,14 @@ type Semantics struct {
 	// carry DEBUG into the child and not ERR.
 	DebugTrapRunsInSubshells Answer
 
-	// A subshell starts with the parent's handled traps back at their
-	// defaults and only an ignored signal still ignored — POSIX, and
-	// unanimous in the working state. What `trap` *lists* in the child is
-	// where the panel splits, and it splits by the kind of boundary, so the
-	// question is asked once per kind rather than once. The listing survives
-	// until the child modifies a trap, at which point every shell that kept
-	// it shows the child's own state instead — `(trap '' USR2; trap)` lists
-	// USR2 and nothing the parent had.
+	// A subshell starts with the parent's handled traps back at their defaults
+	// and only an ignored signal still ignored — POSIX, and unanimous in the
+	// working state. What `trap` *lists* in the child is what is disagreed
+	// about, and it is disagreed about per kind of boundary, so the question is
+	// asked once per kind rather than once. The listing survives until the child
+	// modifies a trap, at which point every answer that kept it shows the
+	// child's own state instead — `(trap '' USR2; trap)` lists USR2 and nothing
+	// the parent had.
 
 	// SubshellKeepsTrapListing makes `trap` inside `( … )` or `$( … )` still
 	// list the traps the parent had, though a handled one no longer fires — the
@@ -6171,120 +6171,116 @@ type Semantics struct {
 	// instead; a preset with no `local` at all never reaches the question.
 	LocalOutsideAFunctionIsAnError Answer
 
-	// LocalOutsideAFunctionIsFatal ends the script rather than carrying on
-	// after that refusal. dash does; bash says the same thing and runs the
-	// next command.
+	// LocalOutsideAFunctionIsFatal ends the script rather than carrying on after
+	// that refusal. Answering No says the same thing and runs the next command.
 	LocalOutsideAFunctionIsFatal Answer
 
 	// UmaskPrintsFourDigits writes the mask as four digits, always — `0022`
-	// against zsh's `022`. True in bash, dash and ksh93.
+	// against `022`.
 	//
-	// False is not "three digits". zsh writes a C octal literal with a
-	// minimum of three, so the leading zero comes back as soon as the owner
-	// group denies anything: `022` and `077`, but `0333` and `0777`. Reading
-	// this as a flat three printed `333` where zsh prints `0333`.
+	// No is not "three digits". It is a C octal literal with a minimum of three,
+	// so the leading zero comes back as soon as the owner group denies anything:
+	// `022` and `077`, but `0333` and `0777`. Reading it as a flat three prints
+	// `333` where the shell prints `0333`.
 	//
-	// Only about printing: all four read `022` and `0022` alike, and the
-	// symbolic form `umask -S` is identical in every one of them.
+	// Only about printing: `022` and `0022` are read alike under both, and the
+	// symbolic form `umask -S` is identical under both.
 	UmaskPrintsFourDigits Answer
 
-	// UmaskSetWithSPrints echoes the new mask when `umask -S mask` both sets
-	// and is asked for the symbolic form. True only in bash, which prints
-	// `u=rwx,g=,o=` after setting; the other three set and say nothing.
+	// UmaskSetWithSPrints echoes the new mask when `umask -S mask` both sets and
+	// is asked for the symbolic form, printing `u=rwx,g=,o=` after setting.
+	// Answering No sets and says nothing.
 	//
-	// Only for that combination: `umask mask` is silent in all four, and
-	// `umask -S` with no mask prints in all four.
+	// Only for that combination: `umask mask` is silent under both, and
+	// `umask -S` with no mask prints under both.
 	UmaskSetWithSPrints Answer
 
 	// UlimitBlockIsKilobyte counts `ulimit -c` and `-f` in 1024-byte blocks
-	// rather than POSIX's 512. True only in bash.
+	// rather than POSIX's 512.
 	//
 	// Measured rather than read: `ulimit -f 1` then writing until the kernel
-	// objected. bash allowed 1000 bytes and refused 1200; dash, ksh93 and zsh
-	// refused 600. The probe lives in docs/spec/semantics.md rather than in
-	// the corpus — bash and ksh93 announce the killed writer by process id,
-	// which no golden record can hold.
+	// objected — Yes allows 1000 bytes and refuses 1200, No refuses 600. The
+	// probe lives in docs/spec/semantics.md rather than in the corpus, because
+	// announcing the killed writer by process id is something no golden record
+	// can hold.
 	UlimitBlockIsKilobyte Answer
 
-	// UlimitHasResidentSet is `ulimit -m`. True in bash, dash and ksh93; zsh
-	// has no such letter and reports it as a bad option. Recorded as
+	// UlimitHasResidentSet is `ulimit -m`. Answering No has no such letter and
+	// reports it as a bad option. Recorded as
 	// `ulimit/a-letter-zsh-does-not-have`.
 	UlimitHasResidentSet Answer
 
-	// UlimitHasProcessCount is `ulimit -u`. True in bash, ksh93 and zsh; dash
-	// has no such letter. Recorded as `ulimit/a-letter-dash-does-not-have`.
+	// UlimitHasProcessCount is `ulimit -u`. Answering No has no such letter.
+	// Recorded as `ulimit/a-letter-dash-does-not-have`.
 	UlimitHasProcessCount Answer
 
 	// UlimitSetsBothLimits lowers the hard limit along with the soft one when
 	// neither -H nor -S was given — which is what makes `ulimit -t 3600`
-	// irreversible. True in bash, dash and ksh93.
+	// irreversible.
 	//
-	// False in zsh, which sets only the soft limit and leaves the hard one
-	// where it was, so the same line there can be undone.
+	// Answering No sets only the soft limit and leaves the hard one where it
+	// was, so the same line can be undone.
 	UlimitSetsBothLimits Answer
 
 	// BadOptionToSpecialBuiltinFatal ends the script when a special builtin is
-	// given an option it does not have. True in dash and ksh93, which is the
-	// POSIX rule that a special builtin's failure is fatal; bash and zsh
-	// report it and carry on.
+	// given an option it does not have — the POSIX rule that a special builtin's
+	// failure is fatal. Answering No reports it and carries on.
 	//
 	// A different question from BuiltinSyntaxErrorFatal, which is about text
-	// that would not *parse* and is true for dash alone. Measured across
-	// `export`, `readonly` and `unset`.
+	// that would not *parse* and is answered by a different set of presets.
+	// Measured across `export`, `readonly` and `unset`.
 	BadOptionToSpecialBuiltinFatal Answer
 
-	// MultiDigitDuplicationTargetIsAnError refuses `>&10` — a duplication
-	// whose *target* is written with more than one digit. True in dash
-	// alone; the other four read the number and fail at run time with `10:
-	// Bad file descriptor` if nothing is open there, at status 1, and the
-	// script carries on.
+	// MultiDigitDuplicationTargetIsAnError refuses `>&10` — a duplication whose
+	// *target* is written with more than one digit. Answering No reads the
+	// number and fails at run time with `10: Bad file descriptor` if nothing is
+	// open there, at status 1, and the script carries on.
 	//
-	// The companion question, how many digits may stand *before* the
-	// operator, is the grammar's and has the opposite dissenter: bash alone
-	// reads `exec 10>f` as a redirection where the other three run a command
-	// called `10` (Dialect.MultiDigitFdNumber). Two questions that split the
-	// panel the other way round cannot be one flag read from both ends.
+	// The companion question, how many digits may stand *before* the operator,
+	// is the grammar's and has the opposite dissenter —
+	// Dialect.MultiDigitFdNumber. Two questions that split the presets the other
+	// way round cannot be one flag read from both ends.
 	//
-	// It is not a parse refusal, though the shell that has it words it as a
-	// syntax error: `sh -n -c 'echo hi >&10'` accepts the input and exits 0,
-	// and a script prints its earlier lines before stopping on this one. The
-	// grammar takes the construct everywhere, so this is a semantics axis.
+	// It is not a parse refusal, though a Yes words it as a syntax error:
+	// `sh -n -c 'echo hi >&10'` accepts the input and exits 0, and a script
+	// prints its earlier lines before stopping on this one. The grammar takes
+	// the construct under both answers, so this is a semantics axis.
 	//
-	// The width is what is refused and not the value — `>&08` names
-	// descriptor 8 and is refused too — which is what keeps this separate
-	// from FdNumberBoundedByOpenFileLimit. And it is the *expanded* word:
-	// `n=10; echo hi >&$n` is refused where `n=9` is not.
+	// The width is what is refused and not the value — `>&08` names descriptor 8
+	// and is refused too — which is what keeps this separate from
+	// FdNumberBoundedByOpenFileLimit. And it is the *expanded* word: `n=10; echo
+	// hi >&$n` is refused where `n=9` is not.
 	//
 	// The refusal ends the script, which travels with the answer rather than
-	// being an axis of its own — one shell refuses and that shell stops. The
-	// status is FatalErrorStatusIsOne's, as every fatal error's is.
+	// being an axis of its own — the preset that refuses is the preset that
+	// stops. The status is FatalErrorStatusIsOne's, as every fatal error's is.
 	//
 	// Asked only where a target really is wider than one digit; `>&2` is
 	// nobody's question.
 	MultiDigitDuplicationTargetIsAnError Answer
 
-	// GreatAmpTarget is what `>&word` does with a word that is not a
-	// descriptor number — refuse it, or open it as a file for both output
-	// streams, which is the csh spelling of `&>word`. A form rather than a
-	// flag because two of the shells that keep the form disagree about a
-	// word that expanded to nothing; see GreatAmpTargetForm.
+	// GreatAmpTarget is what `>&word` does with a word that is not a descriptor
+	// number — refuse it, or open it as a file for both output streams, which is
+	// the csh spelling of `&>word`.
+	//
+	// A form rather than a flag because presets that keep the form can still
+	// disagree about a word that expanded to nothing; see GreatAmpTargetForm.
 	GreatAmpTarget GreatAmpTargetForm
 
-	// DuplicationTargetErrorOnABuiltinIsFatal ends a non-interactive shell
-	// when `<&word` names something that is not a descriptor and the command
-	// it is written on runs *in* the shell.
+	// DuplicationTargetErrorOnABuiltinIsFatal ends a non-interactive shell when
+	// `<&word` names something that is not a descriptor and the command it is
+	// written on runs *in* the shell.
 	//
-	// zsh alone, and the boundary is the command rather than the redirection.
-	// Measured 2026-09-06: `cat <&""` and `/bin/echo hi <&""` complain and
-	// carry on, while `read x <&""`, `echo hi <&""`, `true <&""` and `: <&""`
-	// end the shell — the same word, the same complaint, and a builtin on the
-	// left.
+	// The boundary is the command rather than the redirection: `cat <&""` and
+	// `/bin/echo hi <&""` complain and carry on, while `read x <&""`,
+	// `echo hi <&""`, `true <&""` and `: <&""` end the shell — the same word,
+	// the same complaint, and a builtin on the left.
 	//
-	// Not RedirectErrorOnSpecialBuiltinFatal, which zsh answers No and which
-	// would not reach `read` or `echo` in any case. Nor is it redirection
-	// failure in general: an ordinary one on a zsh builtin — `read x
-	// 3>/nope/x`, `read x <&9` — complains and carries on there too. It is
-	// this refusal, on a builtin.
+	// Not RedirectErrorOnSpecialBuiltinFatal, which would not reach `read` or
+	// `echo` in any case, and which a preset may answer the other way. Nor is it
+	// redirection failure in general: an ordinary one on a builtin —
+	// `read x 3>/nope/x`, `read x <&9` — complains and carries on. It is this
+	// refusal, on a builtin.
 	DuplicationTargetErrorOnABuiltinIsFatal Answer
 
 	// RedirectErrorOnSpecialBuiltinFatal ends a non-interactive shell when a
@@ -6306,112 +6302,105 @@ type Semantics struct {
 	// a special builtin's. Inside a subshell it ends the subshell alone and
 	// the parent runs on; inside a function it ends the shell.
 	//
-	// **This axis is POSIX mode, not a shell.** The panel splits three to
-	// two — dash, ksh93 and bash-as-`sh` stop; bash and zsh carry on — and
-	// the bash column and the bash-as-`sh` column are the same binary. The
-	// flip is reachable at runtime in both shells that have such a mode, and
-	// that is what makes this an axis rather than a quirk of an invocation:
-	// `set -o posix` makes bash 5.3 and bash 3.2 stop, `set +o posix` makes
-	// bash invoked as `sh` carry on, and `emulate sh` or `emulate ksh` makes
-	// zsh stop where `emulate zsh` does not. zsh invoked as `sh` stops too,
-	// so the same argv[0] moves two different binaries the same way.
+	// **This axis is POSIX mode, not an implementation.** The flip is reachable
+	// at run time in every implementation that has such a mode, and that is what
+	// makes it an axis rather than a quirk of an invocation: the standard's own
+	// posix option turns it on, clearing that option turns it off, and an
+	// emulation word does the same. The same argv[0] moves two different
+	// binaries the same way, and one binary answers both ways depending only on
+	// the mode.
 	//
-	// So a dialect's field here is where the shell *starts*, and the shell's
-	// own posix knob moves it — see dialect/bash's `posix` option and
-	// dialect/zsh's `emulate`. Nothing is attached to argv[0]: naming the
-	// invocation would record the accident and lose the rule.
+	// So a preset's field here is where the shell *starts*, and the shell's own
+	// posix knob moves it — see dialect/bash's `posix` option and dialect/zsh's
+	// `emulate`. Nothing is attached to argv[0]: naming the invocation would
+	// record the accident and lose the rule.
 	RedirectErrorOnSpecialBuiltinFatal Answer
 
 	// BadNameToDeclarationFatal ends the script when `export` or `readonly` is
-	// given an operand that is not a name. True in dash, ksh93 and zsh; bash
-	// reports every bad operand, exports the well-formed ones and carries on
-	// with a status of 1.
+	// given an operand that is not a name. Answering No reports every bad
+	// operand, exports the well-formed ones and carries on with a status of 1.
 	BadNameToDeclarationFatal Answer
 
-	// BadNameToUnsetFatal is that question again for `unset`, and is a
-	// separate field because ksh93 answers the two differently: `export 1x`
-	// ends the script there where `unset 1x` prints the same kind of
-	// complaint, returns 1 and carries on.
+	// BadNameToUnsetFatal is that question again for `unset`, and is a separate
+	// field because an implementation may answer the two differently: `export 1x`
+	// ending the script where `unset 1x` prints the same kind of complaint,
+	// returns 1 and carries on.
 	//
-	// Not a question about `unset` being less special than the other two — a
-	// bad *option* to ksh93's `unset` is fatal, which is what makes the split
-	// about the kind of failure rather than about the builtin.
+	// Not a question about `unset` being less special than the other two — a bad
+	// *option* to the same `unset` can still be fatal, which is what makes the
+	// split about the kind of failure rather than about the builtin.
 	BadNameToUnsetFatal Answer
 
-	// BadNameToReadFatal ends the script when `read` is given an operand that
-	// is not a name. zsh alone: `read 1bad; echo after` prints the refusal
-	// and nothing else there, and prints `after` in the other five.
+	// BadNameToReadFatal ends the script when `read` is given an operand that is
+	// not a name: `read 1bad; echo after` prints the refusal and nothing else
+	// under Yes, and prints `after` under No.
 	//
 	// A third field rather than either of the two above, and not because the
-	// panel splits differently — it does, but that alone would only make it a
-	// separate *value*. `read` is not a special builtin in any shell, so no
-	// dialect's rule about special builtins reaches it: dash and ksh93 stop
-	// the script for `export 1x` and carry on past `read 1x`, which is the
-	// same shell answering the same kind of failure two ways depending on the
-	// builtin. zsh is the one that stops here, and it stops for `export` too.
+	// answers group differently — they do, but that alone would only make it a
+	// separate *value*. `read` is not a special builtin anywhere, so no preset's
+	// rule about special builtins reaches it: an implementation can stop the
+	// script for `export 1x` and carry on past `read 1x`, which is the same
+	// shell answering the same kind of failure two ways depending on the
+	// builtin.
 	BadNameToReadFatal Answer
 
-	// UnsetReadonlyFatal ends a non-interactive shell when `unset` is asked
-	// to remove a readonly name. True in dash and zsh; bash and ksh93 report
-	// it, leave the value standing and carry on with a status of 1.
+	// UnsetReadonlyFatal ends a non-interactive shell when `unset` is asked to
+	// remove a readonly name. Answering No reports it, leaves the value standing
+	// and carries on with a status of 1.
 	//
-	// The refusal itself is not the axis. Every shell in the panel refuses,
-	// keeps the value, and says so — `readonly x=1; unset x` leaves `x` as 1
-	// in all six — so *that* is the core answer and only what follows the
-	// refusal splits.
+	// The refusal itself is not the axis. Every preset refuses, keeps the value,
+	// and says so — `readonly x=1; unset x` leaves `x` as 1 throughout — so
+	// *that* is the core answer and only what follows the refusal splits.
 	//
-	// A field of its own rather than BadNameToUnsetFatal, which it agrees
-	// with on all four dialect defaults. They are separable because bash's
-	// POSIX mode moves this one and not that one: `set -o posix` makes bash
-	// 5.3 stop here, and it makes no difference to `unset 1x` — a name bash
-	// 5.3 accepts in silence whatever the mode. That is the shape
+	// A field of its own rather than BadNameToUnsetFatal, which it agrees with
+	// on every preset default. They are separable because a POSIX mode moves
+	// this one and not that one: turning the mode on makes the shell stop here,
+	// and makes no difference to `unset 1x`. That is the shape
 	// FatalErrorStatusIsOne's note describes, where *which* errors are fatal
-	// stays per-error even when two errors happen to split the panel alike.
+	// stays per-error even when two errors happen to split alike.
 	//
-	// Like RedirectErrorOnSpecialBuiltinFatal, a dialect's field is where the
-	// shell *starts* and its own posix knob moves it — see SetPosixMode. zsh
-	// is the difference between the two: it carries on past a failed
-	// redirection on a special builtin and stops here, under every
-	// `emulate`, so the two axes cannot be one flag. ksh93 is the same
-	// difference the other way round.
+	// Like RedirectErrorOnSpecialBuiltinFatal, a preset's field is where the
+	// shell *starts* and its own posix knob moves it — see SetPosixMode. The two
+	// axes cannot be one flag: an implementation may carry on past a failed
+	// redirection on a special builtin and stop here under every emulation, and
+	// another does the same difference the other way round.
 	//
-	// bash 3.2 is fatal in neither mode, so this is bash 5's rule and not
-	// bash's; the preset carries the version that measured it.
+	// Builds of one implementation answer it differently, so this is a rule of a
+	// version and not of a name; the preset carries the version that measured
+	// it.
 	UnsetReadonlyFatal Answer
 
-	// DeclarationNameOperands says what may stand where `export` and
-	// `readonly` want a name, beyond a plain name itself.
+	// DeclarationNameOperands says what may stand where `export` and `readonly`
+	// want a name, beyond a plain name itself.
 	//
-	// zsh is the only one that takes anything more: the special parameters
-	// are names to it, which is why `export -` is a complaint in three of the
-	// four and not in the fourth.
+	// A preset that takes the special parameters as names is why `export -` is a
+	// complaint under some answers and not under others.
 	DeclarationNameOperands NameOperands
 
 	// UnsetNameOperands is that question for `unset`, and is a separate field
-	// because two dialects answer it differently from the declarations. zsh
-	// answers the two with *disjoint* sets — `export ?` is fine there and
-	// `unset ?` is not, while `unset 12` is fine and `export 12` is not — and
-	// bash 5.3 checks a name for `export` and nothing at all for `unset`. One
-	// field could not say either.
+	// because presets answer it differently from the declarations. One may
+	// answer the two with *disjoint* sets — `export ?` fine and `unset ?` not,
+	// while `unset 12` is fine and `export 12` is not — and another may check a
+	// name for `export` and nothing at all for `unset`. One field could not say
+	// either.
 	UnsetNameOperands NameOperands
 
-	// ReadNameOperands is that question for `read`, and is a third field
-	// because `read` answers it differently again from the declarations:
-	// `read 1` fills `$1` in zsh, where `export 1` is refused.
+	// ReadNameOperands is that question for `read`, and is a third field because
+	// `read` answers it differently again from the declarations: `read 1` may
+	// fill `$1` where `export 1` is refused.
 	//
-	// **`read ?` is not evidence either way, and this comment used to cite
-	// it.** Measured 2026-09-12: a leading `?` argument is a *prompt* in
-	// that shell, so `echo hi | zsh -c "read '?'; print -r -- $REPLY"`
-	// prints `hi` — the word never stood where a name belongs and the line
-	// landed in REPLY. What discriminates is `read 'a-b'`, which is `not an
-	// identifier` there, against `read '1'`, which is taken. The quoting is
-	// load-bearing too: an unquoted `?` is a glob in zsh and fails as `no
+	// **`read ?` is not evidence either way.** A leading `?` argument is a
+	// *prompt* under the presets that have that form, so `echo hi | sh -c "read
+	// '?'; print -r -- $REPLY"` prints `hi` — the word never stood where a name
+	// belongs and the line landed in REPLY. What discriminates is `read 'a-b'`,
+	// which is `not an identifier`, against `read '1'`, which is taken. The
+	// quoting is load-bearing too: an unquoted `?` is a glob and fails as `no
 	// matches found` before any builtin sees the word, which makes every
 	// unquoted probe of this axis a measurement of globbing.
 	//
-	// Every shell in the panel refuses a word that is not a name — this is
-	// not the axis, and the refusal itself is the core's (#1440). What splits
-	// them is only how far the set reaches past a plain name.
+	// A word that is not a name is refused under every answer — this is not the
+	// axis, and the refusal itself is the core's. What splits the answers is
+	// only how far the set reaches past a plain name.
 	ReadNameOperands NameOperands
 
 	// DeclarationTakesASubscript accepts `export a[0]` and `readonly a[0]`,

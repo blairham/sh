@@ -185,7 +185,7 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	// a T that no real shell prints.
 	r.status = status
 	r.exitTrap = nil
-	r.ctl = controlExit
+	r.stopTheShell()
 	return status
 }
 
@@ -274,7 +274,7 @@ func (r *Runner) execEnds(status int) int {
 		r.exitTrap = nil
 	}
 	r.status = status
-	r.ctl = controlExit
+	r.stopTheShell()
 	return status
 }
 

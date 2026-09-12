@@ -186,5 +186,5 @@ func (r *Runner) refuseCodePoint(status int) {
 	r.errf("%s\n", r.diag().Report(r.name(), r.line,
 		Wording(r.diag().CodePointOutsideTheLocale, "character not in range")))
 	r.status = status
-	r.ctl = controlExit
+	r.stopTheShell()
 }

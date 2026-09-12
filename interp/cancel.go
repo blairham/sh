@@ -124,7 +124,7 @@ func (r *Runner) canceled() bool {
 	w.hit.Store(true)
 	if r.ctl != controlExit {
 		r.status = r.signalDeathStatus(syscall.SIGINT)
-		r.ctl, r.abandon = controlExit, abandonRequested
+		r.ctl, r.abandon, r.errexitStopped = controlExit, abandonRequested, false
 	}
 	return true
 }
@@ -160,7 +160,7 @@ func (r *Runner) releaseCancellation() {
 		return
 	}
 	if r.ctl == controlExit && r.abandon == abandonRequested {
-		r.ctl = controlNone
+		r.ctl, r.errexitStopped = controlNone, false
 	}
 	r.cancelWatch = nil
 	r.canceledChunk = true

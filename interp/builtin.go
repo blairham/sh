@@ -4263,7 +4263,7 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 			// No dialect answered; statusArgument has already said so, and
 			// the script stops rather than exiting with a status it just
 			// refused to choose.
-			r.ctl = controlExit
+			r.stopTheShell()
 			return r.status
 		default:
 			return r.badStatusArg("exit", args[0])
@@ -4276,7 +4276,11 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 		// four.
 		r.status = r.exitTrapEntryStatus
 	}
-	r.ctl = controlExit
+	// Not `set -e` firing, and said so rather than left: this is the
+	// producer a try-always block has to tell that one apart from, and the
+	// two reach the same field. `exit` runs the cleanup halves it unwinds
+	// through and `set -e` does not (#1238).
+	r.stopTheShell()
 	return r.status
 }
 
@@ -4414,6 +4418,6 @@ func sortedKeys(m map[string]string) []string {
 func (r *Runner) badStatusArg(builtin, arg string) int {
 	r.diagf("%s\n", Wording(r.diag().NumericArgument, "%[1]s: invalid number: %[2]s", builtin, arg))
 	r.status = 2
-	r.ctl = controlExit
+	r.stopTheShell()
 	return r.status
 }

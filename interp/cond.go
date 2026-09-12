@@ -189,7 +189,7 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		// //(a|b)/ ]]` all answer the same sentence.
 		r.diagf("%s\n", Wording(r.diag().CompletionConditionOutsideCompletion,
 			"condition can only be used in completion function"))
-		r.ctl = controlExit
+		r.stopTheShell()
 		return false, condStatus{code: 1}
 	case "-e", "-f", "-d", "-s", "-r", "-w", "-x",
 		"-b", "-c", "-p", "-S", "-g", "-u", "-k", "-L", "-h":
@@ -462,7 +462,7 @@ func (r *Runner) condProcSubAllowed(w *syntax.Word) error {
 		// — which is neither the 1 a condition that simply did not hold
 		// gives nor the status this dialect gives an ordinary fatal error,
 		// so it is written here rather than routed through either.
-		r.ctl = controlExit
+		r.stopTheShell()
 		return condStatus{code: condProcSubRefusal(s.Kind)}
 	}
 	return nil

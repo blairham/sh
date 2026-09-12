@@ -139,7 +139,7 @@ func (r *Runner) refuseForName(word string, redirected bool) {
 // hold two values for bash at once.
 func (r *Runner) endTheScriptAt(status int) {
 	r.status = status
-	r.ctl, r.abandon = controlExit, abandonError
+	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
 }
 
 // forNameStatus is the status the refusal itself carries, which both shells

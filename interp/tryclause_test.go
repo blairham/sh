@@ -418,3 +418,63 @@ func stripComplaint(out string) string {
 	}
 	return strings.Join(kept, "\n")
 }
+
+// `set -e` firing is not a script's own `exit`, and the difference shows only
+// inside a function.
+//
+// Both end the shell, and #1216 carried both as one controlExit with
+// abandonRequested — so the construct could not tell them apart and took the
+// `exit` answer for both, running a cleanup half the shell with the construct
+// skips. Measured against zsh 5.9.2 on 2026-09-07 and again 2026-09-12
+// (#1238).
+//
+// The top-level rows are the reason a probe has to enter a function: there
+// both answers agree, so a test written outside one grades nothing.
+func TestErrexitFiringSkipsACleanupHalfWhereAnExitRunsIt(t *testing.T) {
+	for _, tc := range []struct {
+		src, want string
+		status    int
+	}{
+		// An `exit` unwinds the frames and runs the cleanup halves on the
+		// way out. The control for every row below it.
+		{`f(){ { echo t; exit 7; } always { echo A; }; }; f`, "t\nA", 7},
+		// `set -e` ends things where it stands: no cleanup half runs, and
+		// nothing after the call does either.
+		{`set -e; f(){ { echo t; false; } always { echo A; }; echo after-f; }; f; echo tail`, "t", 1},
+		// Not even the ones further out — the frames are not unwound, they
+		// are abandoned.
+		{`set -e; f(){ { echo t; false; } always { echo A; }; }; ` +
+			`g(){ { f; } always { echo B; }; }; g`, "t", 1},
+		// The failure may come from anywhere the statement's status does: a
+		// called function, or a subshell.
+		{`set -e; g(){ false; }; f(){ { echo t; g; } always { echo A; }; echo after-f; }; f`, "t", 1},
+		{`set -e; f(){ { echo t; ( exit 3 ); } always { echo A; }; echo after-f; }; f`, "t", 3},
+		// At the top level the two answers agree, which is why the rows
+		// above are written inside a function.
+		{`set -e; { echo t; false; } always { echo A; }`, "t", 1},
+		// The controls that keep this from being "with `set -e` on, no
+		// cleanup half ever runs": a statement that succeeded, one whose
+		// failure was tested, and one that failed inside an `||`.
+		{
+			`set -e; f(){ { echo t; true; } always { echo A; }; echo after-f; }; f; echo tail`,
+			"t\nA\nafter-f\ntail", 0,
+		},
+		{
+			`set -e; f(){ { echo t; false; } always { echo A; }; echo after-f; }; f || echo caught`,
+			"t\nA\nafter-f", 0,
+		},
+		{
+			`set -e; f(){ { echo t; false || true; } always { echo A; }; echo after-f; }; f`,
+			"t\nA\nafter-f", 0,
+		},
+		// And an `exit` written in the *cleanup* half of a run `set -e`
+		// stopped is unreachable — the half never runs, so the status stays
+		// the failing command's rather than becoming the one it names.
+		{`set -e; f(){ { echo t; false; } always { exit 5; }; }; f`, "t", 1},
+	} {
+		out, st := runTry(t, tc.src)
+		if out != tc.want || st != tc.status {
+			t.Errorf("%s: said %q status %d, want %q status %d", tc.src, out, st, tc.want, tc.status)
+		}
+	}
+}

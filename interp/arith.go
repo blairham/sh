@@ -1906,7 +1906,7 @@ func (r *Runner) arithCmdFailed(otherwise int) int {
 // well, and both of these constructs have a status of their own that the
 // caller has already worked out.
 func (r *Runner) abandonOverArithmetic() {
-	r.ctl, r.abandon = controlExit, abandonError
+	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
 }
 
 // wordInvalidNumber words "this is not a number" the way the dialect does.

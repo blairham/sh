@@ -240,7 +240,7 @@ func (r *Runner) namesAfterARefusal(builtin string, kept, remaining []string, ta
 	// it is what lets the caller's loop run at all — every step of it stops
 	// on controlExit, which is right for a failure of its own and wrong for
 	// one that has already happened.
-	r.ctl, r.abandon = controlNone, abandonRequested
+	r.ctl, r.abandon, r.errexitStopped = controlNone, abandonRequested, false
 	if !r.ask(r.sem().BadNameDeclaresTheOperandsAfterIt,
 		"a fatal bad name leaving the operands after it declared") {
 		return kept

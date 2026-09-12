@@ -2169,6 +2169,30 @@ var Corpus = []Case{
 		Why:     "the neighbor #1220 left: a failed expansion in a *heading* inside the try half stops the loop before its body, the cleanup half still runs, and its own expansion is not poisoned by the flag the failure left — `A2` rather than a second complaint. The construct has no heading of its own, so this is the row that says it needs none",
 	},
 	{
+		ID: "core/errexit-firing-skips-a-cleanup-half", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `set -e; f(){ { echo t; false; } always { echo A; }; echo after-f; }; f; echo tail`,
+		Why:     "`set -e` firing inside a try half ends the shell where it stands: no cleanup half runs, the rest of the function does not, and neither does the line after the call. It is inside a *function* on purpose — that is the only place this differs from an `exit`, and the row below is the control that says so. The six shells without the construct refuse the keyword",
+	},
+	{
+		ID: "core/an-exit-in-a-try-half-runs-the-cleanup-half", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `f(){ { echo t; exit 7; } always { echo A; }; }; f; echo tail`,
+		Why:     "the control for the row above, and the pair is the whole finding: a script's own `exit` unwinds the function frames and runs the cleanup halves on the way out — `t`, `A`, status 7 — where `set -e` firing in the same place runs neither. Carried as one kind of stop the two cannot be told apart, and this tree took this row's answer for both (#1238)",
+	},
+	{
+		ID: "core/errexit-firing-at-the-top-level-skips-it-too", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `set -e; { echo t; false; } always { echo A; }; echo tail`,
+		Why:     "the row that says why the two above are written inside a function: outside one the answers agree, because there is no frame for an `exit` to be caught by either. A probe that stayed at the top level would have found the pair identical and concluded there was nothing to model",
+	},
+	{
+		ID: "core/errexit-that-does-not-fire-runs-the-cleanup-half", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `set -e; f(){ { echo t; false || true; } always { echo A; }; echo after-f; }; f; echo tail`,
+		Why:     "the other control, and the one that keeps the rule from being \"with `set -e` on, no cleanup half runs\": the failure is accounted for by the `||`, so nothing fires and the whole line runs. A reading that skipped the cleanup whenever the option was set matches the first row of this group and fails here",
+	},
+	{
 		ID: "core/a-try-always-block-ends-a-condition", Category: "command language",
 		Script: true, SyntaxError: true,
 		Snippet: "if { true; } always { :; } { echo A; }; echo after",

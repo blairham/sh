@@ -1396,12 +1396,6 @@ type Semantics struct {
 	// way it reads a format's.
 	//
 	// Asked only where a `%b` argument actually carries a `\u` or a `\U`.
-	//
-	// unexhibited PrintfUnicodeEscapeCodePointOrTruncate:
-	// PrintfUnicodeEscape holds it, for ksh93; at this site ksh93u+ is
-	// Absent. Re-measured 2026-09-12: `printf '%b\n' 'a\u0041Z'` writes
-	// the escape as written in dash, bash 3.2.57 and ksh93u+, and `aAZ` in
-	// bash 5.3.15 and zsh 5.9.2. Nothing truncates here (#2060).
 	PrintfBUnicodeEscape PrintfUnicodeEscapePolicy
 	// PrintfBEscEscape admits `\e` in a `%b` argument for the escape
 	// character: bash and zsh do, dash and ksh93 write the two characters.
@@ -1470,28 +1464,11 @@ type Semantics struct {
 	// is `[` then the complaint there and the complaint then `[` in the other
 	// three, whose output is still sitting in a buffer when the complaint
 	// goes out.
-	//
-	// unexhibited No: five of the six columns. Re-measured 2026-09-12 with
-	// both streams arriving at one place: `printf "[%z]"` writes the
-	// complaint and then `[` in dash, bash 5.3.15, bash-as-`sh`, bash
-	// 3.2.57 and zsh 5.9.2, and `[` and then the complaint in ksh93u+. No
-	// preset writes it because the axis is read (`== Yes`) and not asked,
-	// so `No` and silence reach the same code (#2060).
 	PrintfOutputPrecedesComplaint Answer
 	// PrintfEmptyIsNotANumber complains about a numeric conversion given an
 	// operand that is present and empty. bash alone: `printf '%d' ""` is an
 	// error there and a zero in the other three, all of which print the zero
 	// anyway. An argument that is *missing* is never an error in any of them.
-	//
-	// unpinned zsh: reached, and both answers print the same thing there.
-	// Measured 2026-09-12: moving it to `Unspecified` in the zsh dialect
-	// *does* change `printf '%d' ""`, so the axis is consulted — but `Yes`
-	// only sends the empty operand on to the bad-number complaint, and
-	// zsh's `PrintfReportsBadNumber` is `No`, so the complaint is
-	// swallowed and the bare `0` comes out either way. `printf '%d' abc`
-	// is a silent `0` in real zsh too, which is the same fact from the
-	// other side. No row can separate the two until that second axis moves
-	// (#2057).
 	PrintfEmptyIsNotANumber Answer
 
 	// PidListingFinishesWithAJob makes `jobs -p` forget a finished job the
@@ -1695,15 +1672,6 @@ type Semantics struct {
 	// Asked only where the letter is written, like SetFTurnsOffGlobbing: the
 	// long name `braceexpand` raises no question, because a shell either
 	// declares it or has never heard of it.
-	//
-	// unpinned zsh: every row that reaches it fails at baseline, so none
-	// can pin it. This dialect refuses the `B` letter as unimplemented —
-	// the bell it means there is not built (#1856) — while real zsh takes
-	// `set +B` silently and goes on expanding braces. Measured 2026-09-12:
-	// `set +B; echo {a,b}` is `a b` at 0 in zsh 5.9.2 and `+B is not
-	// implemented yet` at 1 here, so a corpus row would record a
-	// divergence this axis is not about. It pins in bash and ksh, where
-	// the letter is real (#2057).
 	SetBTurnsOffBraceExpansion Answer
 
 	// NoglobLetterIsF puts `f` in `$-` while noglob is on, which is the
@@ -2059,16 +2027,6 @@ type Semantics struct {
 	// rather than a sentence to parse. True in bash alone; ksh93 and zsh
 	// refuse the letter the way they refuse any option they do not have,
 	// and dash reads it as a name like the rest of its operands.
-	//
-	// unpinned bash: never reached, so no row could catch it however it
-	// was written. The letter is already in bash's `TypeOptions`
-	// (`afpPt`), and this axis — which predates the optstring — is
-	// consulted only where the optstring does *not* carry a `t`. Measured
-	// 2026-09-12 by moving it in the bash dialect: `type -t f`, `type -t
-	// while` and `type -t nosuch` answer the same under `Yes`, under `No`
-	// and under `Unspecified` alike. The three dialects that do reach it
-	// all answer `No`, so the `Yes` this one holds is a value nothing
-	// consults — see #2180 (#2057).
 	TypeNamesTheKindWithDashT Answer
 
 	// TypeOptions is the rest of `type`'s letters, in the getopts spelling
@@ -3418,14 +3376,6 @@ type Semantics struct {
 	// discards under both, so ksh93 is the whole of why this is two questions
 	// — and one field would have had to give it an answer that is wrong for
 	// one of its letters whichever way it was set.
-	//
-	// unexhibited ScalarUnderACompoundStaysAScalar:
-	// ScalarUnderAnArrayDeclaration holds it, for ksh93 — which is the
-	// whole reason these are two fields. Re-measured 2026-09-12: `a=1;
-	// typeset -A a` lists as `typeset -A a=([0]=1)` in ksh93u+ while `b=1;
-	// typeset -a b` leaves `b=1`. bash promotes under both letters and zsh
-	// discards under both; dash has no `typeset` and bash 3.2.57 has no
-	// `-A`, so no column answers *this* letter with the scalar (#2060).
 	ScalarUnderATableDeclaration ScalarUnderACompoundPolicy
 
 	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function
@@ -3439,14 +3389,6 @@ type Semantics struct {
 	// assignment. This is the shape used to declare a local before
 	// assigning it conditionally, so the difference is silent: the function
 	// reads the caller's value where it expected nothing.
-	//
-	// unpinned zsh: never reached. It is asked only where
-	// `DeclaredNameWithoutValueIsEmpty` said no, and this dialect says yes
-	// — a `local u` there exists holding the empty string, so there is no
-	// outer value left to hide. Measured 2026-09-12: `u=out; f() { local
-	// u; echo "[${u-UNSET}]"; }; f` is `[]` in zsh 5.9.2 and here, and
-	// moving this axis to `Yes` or to `Unspecified` changes neither
-	// (#2057).
 	ValuelessDeclarationHidesTheOuterValue Answer
 
 	// DeclarationAssignmentClearsTheExportAttribute takes the export
@@ -3514,79 +3456,25 @@ type Semantics struct {
 	// the axis is absent rather than false there.
 	//
 	// It asks about `typeset` and not about `local` because `local` is
-	//
-	// unanimous: every shell that has it — all but ksh93, which does not —
-	// makes it local in a function defined either way.
 	TypesetLocalNeedsKeywordFunction Answer
 
 	// DeclareListing is the shape of what `declare -p` and `typeset -p`
 	// write back. Three engines rather than two answers — see
 	// DeclarationListingForm.
-	//
-	// unexhibited DeclareListingCommandWord: ExportListing and
-	// ReadonlyListing hold it, for dash, ksh93 and zsh. No `declare -p` or
-	// `typeset -p` in the panel repeats its own command word: re-measured
-	// 2026-09-12, the three shells that have the builtin write `declare -x
-	// V="a b"`, `typeset -x V=E` and `export V='a b'`, and bash keeps the
-	// clustered form even under `set -o posix` where its `export -p` does
-	// not (#2154, #2060).
-	//
-	// unexhibited DeclareListingPlainAssignment: BareDeclarationListing
-	// holds it, for ksh93 and zsh. The value's own comment is the
-	// measurement: no `-p` anywhere writes a bare assignment, because a
-	// listing with no command word could not be read back as a declaration
-	// (#2060).
 	DeclareListing DeclarationListingForm
 
 	// DeclareValueQuoting is how a listed declaration spells its value. A
 	// field of its own over the shared vocabulary because it does not follow
 	// the dialect's other listings: the engine that single-quotes its
 	// aliases and traps double-quotes its declarations.
-	//
-	// unexhibited ListingQuoteAlwaysDoubled: SetListingQuoting and
-	// AliasQuoting hold it, for dash — which has no `typeset` at all, so
-	// it never answers this field. Re-measured 2026-09-12: a bare `set`
-	// writes `Q='a'"'"'b'` there (#2060).
-	//
-	// unexhibited ListingQuoteWhenNeededPlain: TrapQuoting holds it, for
-	// zsh. zsh's `typeset -p` reaches for `$'...'` where its `trap`
-	// listing never does, which is why the two are separate fields
-	// (#2060).
 	DeclareValueQuoting ListingQuotingStyle
 
 	// ExportListing is the shape `export -p` writes: bash spells each name
 	// as a clustered declaration (`declare -x V="1"`), and the other three
 	// repeat the command word (`export V='1'`).
-	//
-	// unexhibited DeclareListingExportSpelled: ReadonlyListing holds it,
-	// for zsh — measured 2026-09-12, `readonly -p` writes `typeset -r R=2`
-	// there where `export -p` writes `export V='a b'`, which is why the
-	// two are separate fields (#2060).
-	//
-	// unexhibited DeclareListingBareAssignments: DeclareListing holds it,
-	// for ksh93. `export -p` in ksh93u+ repeats the command word (`export
-	// V='a b'`) where `typeset -p` drops it for an unattributed name
-	// (#2060).
-	//
-	// unexhibited DeclareListingPlainAssignment: BareDeclarationListing
-	// holds it, for ksh93 and zsh, which drop the command word for the
-	// bare form alone. Note what is *not* a fifth reading: bash in POSIX
-	// mode writes `export V="a b"`, which is DeclareListingCommandWord — a
-	// value this axis already carries, reached by a mode no preset holds
-	// and [Runner.SetPosixMode] does not move. Measured 2026-09-12 on both
-	// bash builds and filed as #2154 (#2060).
 	ExportListing DeclarationListingForm
 	// ReadonlyListing is the same question from `readonly -p`, where zsh
 	// parts ways with its own export listing and writes `typeset -r R=2`.
-	//
-	// unexhibited DeclareListingBareAssignments: DeclareListing holds it,
-	// for ksh93, whose `readonly -p` repeats the command word instead —
-	// `readonly R=2`, measured 2026-09-12 (#2060).
-	//
-	// unexhibited DeclareListingPlainAssignment: BareDeclarationListing
-	// holds it, for ksh93 and zsh. bash in POSIX mode writes `readonly
-	// R="2"` here, which is DeclareListingCommandWord and already carried;
-	// see #2154 (#2060).
 	ReadonlyListing DeclarationListingForm
 
 	// CoprocEndsInAnArray publishes a started coprocess's near ends as the
@@ -3615,17 +3503,6 @@ type Semantics struct {
 	// writes `declare -x e="1"` for both, and ksh93 and zsh drop the command
 	// word for both, `e=1`. So the filter chooses the names and this chooses
 	// the row, and neither builtin needs a form of its own.
-	//
-	// unexhibited DeclareListingExportSpelled: ReadonlyListing holds it,
-	// for zsh. zsh spells the bare form as a plain assignment and the `-p`
-	// form as `typeset -r`, which is the split this field records (#2060).
-	//
-	// unexhibited DeclareListingBareAssignments: DeclareListing holds it,
-	// for ksh93. Re-measured 2026-09-12 over one exported and one readonly
-	// name: the bare `export` writes `V='a b'` in ksh93u+ and zsh 5.9.2,
-	// `export V='a b'` in dash, and `declare -x V="a b"` in both bash
-	// builds — and `export V="a b"` in bash under `set -o posix`, which is
-	// DeclareListingCommandWord and filed as #2154 (#2060).
 	BareDeclarationListing DeclarationListingForm
 
 	// DeclarationListingFilter is how a `declare` or `typeset` with attribute
@@ -4015,16 +3892,6 @@ type Semantics struct {
 	// already in place is that shell's own real words. Asking an axis there
 	// would replace a correct answer with a complaint about a missing
 	// dialect.
-	//
-	// unexhibited No: nobody writes it, and the paragraph above is why:
-	// the axis is read (`== Yes`) rather than asked, so where the answer
-	// is not yes the letter is somebody else's invalid option and that
-	// shell's own refusal already stands. Measured 2026-09-12: `set -A arr
-	// x y` is `set: -A: invalid option` in bash 5.3.15, bash-as-`sh` and
-	// bash 3.2.57 and `set: Illegal option -A` in dash, each in the
-	// shell's own words, and is taken by ksh93u+ and zsh 5.9.2. Writing
-	// `No` into those two presets would record no fact the refusal does
-	// not already carry (#2060).
 	SetArrayLetter Answer
 
 	// SetArrayOptionsContinuePastTheName decides whether the words behind
@@ -4161,19 +4028,6 @@ type Semantics struct {
 	// every variable the shell holds rather than the running function's
 	// locals. Only zsh's answer is a value this form already carries, so the
 	// others stay unanswered and are refused by name rather than guessed at.
-	//
-	// unexhibited BareLocalListsLocals: BareLocalListing holds it, for
-	// bash's bare `local`. It is not this builtin's answer anywhere:
-	// measured 2026-09-12, bash's bare `declare` is every variable the
-	// shell holds *and then every function* — `f(){ :; }` lists as `f ()`
-	// — which is a fourth reading this form does not carry, and is why
-	// bash is unanswered here rather than approximated. Recorded as #1754
-	// (#2060).
-	//
-	// unexhibited BareLocalListsNothing: BareLocalListing holds it, for
-	// dash's and ksh93's bare `local`. Neither shell reaches this field:
-	// dash has no `typeset` and ksh93u+ has no `local`, so both are
-	// unanswered rather than silent-by-measurement (#2060).
 	BareTypesetListing BareLocalListingForm
 
 	// SetListing is what `set` with no arguments writes — see
@@ -4192,20 +4046,6 @@ type Semantics struct {
 	// the shared listing vocabulary: bash quotes only where it must and
 	// closes-reopens with a backslash, dash single-quotes everything, and
 	// ksh93 reaches for `$'...'`.
-	//
-	// unexhibited ListingQuoteAlwaysEscaped: AliasQuoting holds it, for
-	// bash — whose bare `set` quotes only where it must, which is the
-	// split these two fields record. Re-measured 2026-09-12 over
-	// `Q="a'b"`: a bare `set` writes `Q='a'\''b'` in bash 5.3.15, bash-
-	// as-`sh`, bash 3.2.57 and zsh 5.9.2 (#2060).
-	//
-	// unexhibited ListingQuoteAlwaysDouble: DeclareValueQuoting holds it,
-	// for bash's `declare -p`, which is not the style its own `set`
-	// listing uses (#2060).
-	//
-	// unexhibited ListingQuoteWhenNeededPlain: TrapQuoting holds it, for
-	// zsh's `trap`. The bare `set` in zsh 5.9.2 reaches for the escaped
-	// style instead, measured with the same probe (#2060).
 	SetListingQuoting ListingQuotingStyle
 
 	// SelectLayout is how `select` draws its menu. Three engines rather than
@@ -4363,35 +4203,12 @@ type Semantics struct {
 
 	// AliasQuoting is how a value is spelled in a listing — four engines, no
 	// two alike. See ListingQuotingStyle.
-	//
-	// unexhibited ListingQuoteAlwaysDouble: DeclareValueQuoting holds it,
-	// for bash's `declare -p` — the engine that double-quotes its
-	// declarations single-quotes its aliases, which is the whole reason
-	// that field is separate. Re-measured 2026-09-12: `alias al="echo
-	// a'b"` lists as `al='echo a'\''b'` in the three bash columns and zsh
-	// 5.9.2, `al='echo a'"'"'b'` in dash and `al=$'echo a\'b'` in ksh93u+
-	// (#2060).
-	//
-	// unexhibited ListingQuoteWhenNeededPlain: TrapQuoting holds it, for
-	// zsh, whose trap listing never reaches for `$'...'` where its alias
-	// listing does — the paragraph on TrapQuoting is the measurement
-	// (#2060).
 	AliasQuoting ListingQuotingStyle
 
 	// TrapQuoting is that same question asked of `trap`, and it is a
 	// separate field because one dialect answers the two differently: zsh
 	// writes an alias holding a tab as `$'a\tb'` and a trap holding one as
 	// a plainly quoted `'a<tab>b'`.
-	//
-	// unexhibited ListingQuoteWhenNeededEscaped: AliasQuoting and
-	// DeclareValueQuoting hold it, for zsh, which is the split this field
-	// exists to record: the same shell writes an alias holding a tab as
-	// `$'a\tb'` and a trap holding one plainly (#2060).
-	//
-	// unexhibited ListingQuoteAlwaysDouble: DeclareValueQuoting holds it,
-	// for bash's `declare -p`. bash's own `trap -p` uses the escaped
-	// single-quote style instead — measured 2026-09-12, `trap -- 'echo
-	// a'\''b' SIGUSR2` (#2060).
 	TrapQuoting ListingQuotingStyle
 
 	// TrapActionIsParsedWhenSet reads a trap's action when the trap is set
@@ -4849,14 +4666,6 @@ type Semantics struct {
 	// the pattern `x[1]` — which is the point of saying no at all, since it
 	// is what leaves a `$dir[0-9]*` written in a script for another shell
 	// the glob its author meant.
-	//
-	// unexhibited No: zsh under `setopt ksharrays`, at run time — the same
-	// shape FunctionLocalTraps has, and wired in dialect/zsh/ksharrays.go
-	// rather than in the preset. Measured 2026-09-12: `a=(x y z); echo
-	// "$a[1]"` is `x` in zsh 5.9.2 and `x[1]` under `ksharrays`. The other
-	// five columns print `x[1]` too and do *not* hold this value: with the
-	// grammar flag off the brackets were never part of the expansion, so
-	// they never answer the axis at all (#2060).
 	BareSubscriptIsASubscript Answer
 
 	// SubscriptCommaIsARange reads the comma in `${a[1,3]}` as the separator
@@ -6511,15 +6320,6 @@ type Semantics struct {
 	// table (see the zsh dialect's singleCommandOption). A name with nothing
 	// to apply is refused at the invocation exactly as it is refused in a
 	// script.
-	//
-	// unexhibited No: nobody, and nothing in the panel can reach it.
-	// Measured 2026-09-12: zsh 5.9.2 is the only column with an option a
-	// running script may not change, so it is the only one the axis is
-	// consulted in, and it answers Yes. bash's `-r` is not this shape —
-	// `set -r` is taken inside a script in all three bash columns and in
-	// ksh93u+, and only `set +r` is refused, which is a latch and not a
-	// fixed option. `No` is the other side of a binary Answer, read (`==
-	// Yes`) rather than asked (#2060).
 	ImmovableOptionsSetAtInvocation Answer
 
 	// OneCommandStopsACommandString extends `set -t` to `-c`, and it is the
@@ -7162,18 +6962,6 @@ type Semantics struct {
 	// zsh is the only one that takes anything more: the special parameters
 	// are names to it, which is why `export -` is a complaint in three of the
 	// four and not in the fourth.
-	//
-	// unexhibited NamesAndPositionals: UnsetNameOperands holds it, for
-	// zsh. Re-measured 2026-09-12 **with the operands quoted**, because an
-	// unquoted `?` is a glob in zsh and fails as `no matches found` before
-	// the builtin sees it: `export '1'` and `export '12'` are refused in
-	// all six columns, so nothing takes a positional where a declaration
-	// wants a name (#2060).
-	//
-	// unexhibited AnythingIsAName: UnsetNameOperands holds it, for bash
-	// 5.3. The same quoted probe: `export 'a-b'` is refused everywhere,
-	// and zsh reaches no further than its special parameters — `export
-	// '?'` and `export '-'` are 0 there and 1 in the other five (#2060).
 	DeclarationNameOperands NameOperands
 
 	// UnsetNameOperands is that question for `unset`, and is a separate field
@@ -7182,16 +6970,6 @@ type Semantics struct {
 	// `unset ?` is not, while `unset 12` is fine and `export 12` is not — and
 	// bash 5.3 checks a name for `export` and nothing at all for `unset`. One
 	// field could not say either.
-	//
-	// unexhibited NamesAndSpecialParameters: DeclarationNameOperands holds
-	// it, for zsh — and the disjointness is this field's reason to exist.
-	// Re-measured 2026-09-12 with the operands quoted (an unquoted `?` is
-	// a glob in zsh): `unset '?'` and `unset '-'` are refused in zsh 5.9.2
-	// while `unset '1'` and `unset '12'` are taken, the mirror image of
-	// `export`. Worth knowing about the value this preset *does* hold:
-	// bash 3.2.57 refuses all four where bash 5.3.15 takes all four, so
-	// AnythingIsAName is bash 5's reading and the older build's column is
-	// PlainNamesOnly (#2060).
 	UnsetNameOperands NameOperands
 
 	// ReadNameOperands is that question for `read`, and is a third field
@@ -7211,16 +6989,6 @@ type Semantics struct {
 	// Every shell in the panel refuses a word that is not a name — this is
 	// not the axis, and the refusal itself is the core's (#1440). What splits
 	// them is only how far the set reaches past a plain name.
-	//
-	// unexhibited NamesAndSpecialParameters: DeclarationNameOperands holds
-	// it, for zsh's `export`. `read` does not reach it: measured
-	// 2026-09-12, `read 'a-b'` is `not an identifier` in zsh 5.9.2
-	// (#2060).
-	//
-	// unexhibited AnythingIsAName: UnsetNameOperands holds it, for bash
-	// 5.3. `read` reaches positionals and stops: `echo hello | read '1'`
-	// fills `$1` in zsh 5.9.2 and is refused in the other five columns,
-	// measured 2026-09-12 (#2060).
 	ReadNameOperands NameOperands
 
 	// DeclarationTakesASubscript accepts `export a[0]` and `readonly a[0]`,

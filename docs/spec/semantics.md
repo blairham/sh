@@ -13843,11 +13843,16 @@ shell was called `sh` is a fact about an *invocation*, and the front end
 does not read it yet; recording it as the axis would have written the
 accident down and lost the rule.
 
-**`BuiltinWriteErrorFailsTheCommand`** — bash yes · dash yes · ksh93 yes · zsh no
+**`BuiltinWriteErrorFailsTheCommand`** — bash yes · dash yes · ksh93 yes · ash yes · zsh no
 
 Makes a builtin whose output write failed — into a descriptor closed
-with `>&-`, most plainly — report status 1. True in bash, dash and
-ksh93; zsh keeps the builtin's own status and quietly loses the text.
+with `>&-`, most plainly — report status 1. True in bash, dash, ksh93
+and ash; zsh keeps the builtin's own status and quietly loses the text.
+
+**This axis is about a closed descriptor and not about every failed
+write.** The other errno is
+`BrokenPipeWriteErrorFailsTheCommand` below, and it exists because two
+dialects answer the pair in opposite directions.
 
 Whether anything is *said* about it is the dialect's wording rather than
 a second axis. Asked only when a write has actually failed, so `echo hi`
@@ -13873,9 +13878,46 @@ sentence even after `exec` parked one, and a close written on a group or
 on a function call does not silence the commands inside it. What decides
 is whether **this command's own redirection list** closed the stream it
 writes to. That is `Diagnostics.InheritedClosedStreamWriteError`,
-emitted before the axis is asked — moving `BuiltinWriteError` in front
-of the axis instead would make zsh speak for `echo hi >&-` as well,
-which is the row that is right today.
+said whether or not the axis failed the command — putting it *behind*
+the axis instead would silence zsh on `exec 1>&-; echo hi`, which is the
+row that is right today.
+
+**`BrokenPipeWriteErrorFailsTheCommand`** — bash yes · dash yes · ash yes · zsh yes · ksh93 no
+
+The same question for a write into a **broken pipe** with SIGPIPE
+disarmed: a reader that has gone, where the script trapped or ignored
+the signal, so the errno comes back to a writer that is still running
+rather than killing it. A default SIGPIPE is a death and never reaches
+either axis.
+
+A second axis rather than a reading of the first, because two dialects
+swap places on it. Measured 2026-09-12, a builtin writing 256 KiB into a
+reader that has exited, against `echo hi >&-` for the same shells:
+
+| | closed descriptor | broken pipe |
+| --- | --- | --- |
+| dash | 1, `echo: echo: I/O error` | 1, `echo: echo: I/O error` |
+| bash 5.3 | 1, `write error: Bad file descriptor` | 1, `write error: Broken pipe` |
+| bash 3.2 | 1, the same | 1, the same |
+| ash | 1, `write error: Bad file descriptor` | 1, `write error: Broken pipe` |
+| **ksh93** | **1**, silent | **0**, silent |
+| **zsh** | **0**, silent | **1**, and it speaks twice |
+
+Five columns give one answer twice; ksh93 fails the command for a
+descriptor that was closed and shrugs at a pipe nobody is reading, and
+zsh does the reverse. So the status is the errno's question rather than
+the shell's, which is what a single axis could not say (#770).
+
+zsh's two sentences are both of the ones above, in this order:
+
+    zsh:echo:N: write error: broken pipe     the builtin's own
+    zsh:N: write error: broken pipe          the stream's
+
+Measured for `printf` as well as `echo`, so the first is the builtin
+generally and not a quirk of one. The builtin's own is
+`Diagnostics.BuiltinWriteError`, which this dialect can now fill without
+making the quiet route speak: the closed-descriptor axis answers no and
+returns before that wording is read, so one value serves both errnos.
 
 The control is a write that did not fail: `exec 1>&-; true` says nothing
 in all six. A write that failed on a stream *nobody* closed does reach

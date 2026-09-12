@@ -855,6 +855,12 @@ func Semantics() interp.Semantics {
 	s.DollarSingleBackslashC = interp.DollarSingleControlToggled
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
 	s.DollarSingleNulTruncates = interp.Yes
+	// `\x` here takes every hexadecimal digit that follows and a run past
+	// two is a code point, so `$'\x00b'` is the one byte 0x0b where the
+	// other shells read `\x00` and truncate. A run with no digit at all is
+	// a zero byte, which this shell's truncation then makes into nothing.
+	s.DollarSingleHexReadsEveryDigit = interp.Yes
+	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	// Reached through `typeset` in a function defined with the `function`

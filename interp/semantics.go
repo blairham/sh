@@ -528,6 +528,62 @@ type Semantics struct {
 	// character no escape claims — `$'\q'` — see DollarSingleUnknownPolicy.
 	// Asked only when such an escape is actually there.
 	DollarSingleUnknownEscape DollarSingleUnknownPolicy
+	// DollarSingleHexReadsEveryDigit lets `\x` inside `$'…'` take a run of
+	// hexadecimal digits of any length, where the other readings stop at
+	// two. Up to two digits are a byte either way; a longer run is a *code
+	// point*, written in UTF-8.
+	//
+	// ksh93 alone. Measured 2026-09-12 under `LC_ALL=C`, by `od`, so the
+	// answer is bytes rather than what a terminal made of them:
+	//
+	//	                bash 5.3, bash 3.2, zsh    ksh93
+	//	$'\x00b'         00 (truncating) then b   0b
+	//	$'\x4'           04                       04
+	//	$'\x414'         41 then `4`              d0 94, which is U+0414
+	//	$'\x0041'        41 then `41`             41
+	//	$'\x00FF'        00 (truncating) then FF  c3 bf, which is U+00FF
+	//	$'\xFF'          ff                       ff
+	//
+	// The fifth row and the sixth are the pair that says the *digit count*
+	// decides and not the value: 0xFF written with two digits is the byte
+	// and written with four is the code point. The locale does not enter
+	// into it — the same bytes come back under `LC_ALL=C` and under a UTF-8
+	// locale.
+	//
+	// A run past the last code point is encoded rather than refused, in the
+	// extended form UTF-8 has room for: `$'\x41414141'` is the six bytes
+	// fd 81 90 94 85 81 there, which is what EncodeCodePoint writes.
+	//
+	// Asked only for a run of three digits or more, since a shorter one is
+	// the same byte under both readings. The same escape in a `printf`
+	// format is PrintfHexEscape, which has this reading as one of its four
+	// values; the two are separate fields because a shell answers the two
+	// sites differently.
+	//
+	// Silent and wrong either way it is answered wrongly: `$'\x00b'` is one
+	// character under one reading and a truncated word under the other,
+	// with nothing said about it.
+	DollarSingleHexReadsEveryDigit Answer
+	// DollarSingleDigitlessEscapeIsAZeroByte makes `\x`, `\u` and `\U`
+	// with no hexadecimal digit after them a zero byte, rather than the two
+	// characters they were written as.
+	//
+	// Measured 2026-09-12 under `LC_ALL=C`:
+	//
+	//	              bash 5.3, bash 3.2   ksh93         zsh
+	//	$'\xzz'       \xzz                 00 then zz    00 then zz
+	//	$'\x'         \x                   00            00
+	//	$'\uZ'        \uZ                  00 then Z     00 then Z
+	//
+	// ksh93 and zsh look different in a terminal and are the same answer:
+	// the zero byte truncates the span in ksh93, which is
+	// DollarSingleNulTruncates and not this, so what is left there is
+	// nothing at all.
+	//
+	// One answer for the three escapes, which is measured rather than
+	// assumed — no column splits them. Asked only where such an escape has
+	// no digits, so an ordinary `$'\x41'` never meets it.
+	DollarSingleDigitlessEscapeIsAZeroByte Answer
 	// DollarSingleNulTruncates ends the decoded text at the first NUL an
 	// escape produces, which is C-string semantics: `$'a\0b'` is `a` in
 	// bash and ksh93 and the three bytes `a`, NUL, `b` in zsh.

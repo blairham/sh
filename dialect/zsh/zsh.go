@@ -1351,6 +1351,12 @@ func Semantics() interp.Semantics {
 	s.DollarSingleBackslashC = interp.DollarSingleControlAbsent
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
 	s.DollarSingleNulTruncates = interp.No
+	// Two digits after `\x` and no more, as in bash — but a run with no
+	// digit at all is a zero byte here, where bash keeps the two characters
+	// it was written as. This shell keeps the zero, so `$'\xzz'` is three
+	// bytes.
+	s.DollarSingleHexReadsEveryDigit = interp.No
+	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
 	s.DollarSingleCaretMeta = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.No
 	// OPTIND is local to a shell function here: the call starts at 1 and the

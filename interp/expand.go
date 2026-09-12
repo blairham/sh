@@ -4399,15 +4399,28 @@ func (r *Runner) expandDollarSingle(s string) string {
 		}
 		switch c := s[i+1]; {
 		case c == 'x':
-			n, used := scanBase(s[i+2:], 16, 2)
+			n, used := hexEscapeRun(s[i+2:], r.dollarSingleHexEveryDigit(s[i+2:]))
 			if used == 0 {
-				b.WriteString(`\x`)
+				if !r.digitlessEscape(&b, `\x`) {
+					return b.String()
+				}
 				i += 2
 				continue
 			}
-			if !r.writeDecodedByte(&b, byte(n)) {
-				return b.String()
+			if used <= 2 {
+				// One or two digits are a byte in every reading, which is
+				// the road to a NUL that DollarSingleNulTruncates answers.
+				if !r.writeDecodedByte(&b, byte(n)) {
+					return b.String()
+				}
+				i += 2 + used
+				continue
 			}
+			// A longer run is a code point, in the one reading that takes
+			// one. The encoder is the shell's own — a value past the last
+			// code point is written in the extended form UTF-8 has room
+			// for rather than refused, which is measured.
+			b.WriteString(EncodeCodePoint(n))
 			i += 2 + used
 		case c == 'u' || c == 'U':
 			width := 4
@@ -4416,8 +4429,9 @@ func (r *Runner) expandDollarSingle(s string) string {
 			}
 			n, used := scanBase(s[i+2:], 16, width)
 			if used == 0 {
-				b.WriteByte('\\')
-				b.WriteByte(c)
+				if !r.digitlessEscape(&b, `\`+string(c)) {
+					return b.String()
+				}
 				i += 2
 				continue
 			}
@@ -4686,6 +4700,42 @@ func (r *Runner) writeDecodedByte(b *strings.Builder, c byte) bool {
 	return true
 }
 
+// dollarSingleHexEveryDigit is whether a `\x` inside `$'…'` takes every
+// hexadecimal digit that follows rather than stopping at two — see
+// Semantics.DollarSingleHexReadsEveryDigit.
+//
+// Asked only where the two readings can differ, which is a run of three
+// digits or more: `$'\x41'` and `$'\x4z'` are the same byte either way, and
+// a `$'…'` with no long run in it puts no question to the dialect.
+func (r *Runner) dollarSingleHexEveryDigit(digits string) bool {
+	if len(digits) < 3 {
+		return false
+	}
+	for i := range 3 {
+		if digitValue(digits[i]) < 0 {
+			return false
+		}
+	}
+	return r.ask(r.sem().DollarSingleHexReadsEveryDigit,
+		"a `\\x` escape reading past two hexadecimal digits")
+}
+
+// digitlessEscape writes what `\x`, `\u` or `\U` with no digit after it
+// comes to, reporting whether decoding carries on.
+//
+// Two answers and they are a conflict: one keeps the two characters as they
+// were written and the other reads a zero byte and goes on with the text —
+// see Semantics.DollarSingleDigitlessEscapeIsAZeroByte. The zero goes through
+// writeDecodedByte, so the shell that ends a span at a NUL ends it here too.
+func (r *Runner) digitlessEscape(b *strings.Builder, written string) bool {
+	if r.ask(r.sem().DollarSingleDigitlessEscapeIsAZeroByte,
+		"a `\\x` escape with no hexadecimal digit after it") {
+		return r.writeDecodedByte(b, 0)
+	}
+	b.WriteString(written)
+	return true
+}
+
 // writeUnknownEscape writes a backslash before a character no escape claims.
 func (r *Runner) writeUnknownEscape(b *strings.Builder, c byte) {
 	if r.dollarSingleUnknown() == DollarSingleUnknownKeepsBackslash {
@@ -4719,6 +4769,22 @@ func controlByte(p DollarSingleControlPolicy, x byte) byte {
 
 // scanBase reads up to max digits in the given base, reporting how many it
 // used so the caller can tell "no digits at all" from a zero.
+// hexEscapeRun reads the digit run of a `\x`, under the two readings the
+// panel has: two digits at most, or every digit that follows.
+//
+// One reader for the two sites that have the escape — a `printf` format and
+// `$'…'` — because there is one hexadecimal escape and not two, which is the
+// lesson #556 left. A run longer than two is a code point and the value is
+// allowed to overflow: ksh93 keeps the low bits of a run past what an integer
+// holds, so `$'\x41414141414141414141'` and `$'\x41414141'` are the same six
+// bytes there.
+func hexEscapeRun(digits string, everyDigit bool) (int, int) {
+	if !everyDigit {
+		return scanBase(digits, 16, 2)
+	}
+	return scanBase(digits, 16, len(digits))
+}
+
 func scanBase(s string, base, maxDigits int) (int, int) {
 	n, used := 0, 0
 	for used < maxDigits && used < len(s) {

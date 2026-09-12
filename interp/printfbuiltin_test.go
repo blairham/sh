@@ -52,7 +52,13 @@ func TestPrintfHexEscapeIsFourReadings(t *testing.T) {
 		{"a third digit makes it a code point", PrintfHexEscapeCodePoint, `printf '[\x0ff]'`, "[ÿ]"},
 		{"every digit is taken", PrintfHexEscapeCodePoint, `printf '[\x0041]'`, "[A]"},
 		{"a code point reads an empty run as a zero", PrintfHexEscapeCodePoint, `printf 'a\xZ'`, "a\x00Z"},
-		{"past the last code point there is, nothing", PrintfHexEscapeCodePoint, `printf '[\xffffffffffffffffffffff]'`, "[]"},
+		// Past the last code point there is, the extended form UTF-8 has
+		// room for — re-measured 2026-09-12 under `LC_ALL=C`, where ksh93u+
+		// writes six bytes for `\x41414141` rather than the nothing this
+		// row used to assert. A run too long for the value to hold keeps
+		// the low bits, which is why the two below are the same six bytes.
+		{"past the last code point there is, the extended encoding", PrintfHexEscapeCodePoint, `printf '[\x41414141]'`, "[\xfd\x81\x90\x94\x85\x81]"},
+		{"a run too long to hold keeps the low bits", PrintfHexEscapeCodePoint, `printf '[\x41414141414141414141]'`, "[\xfd\x81\x90\x94\x85\x81]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := printfSem()

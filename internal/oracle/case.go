@@ -9687,6 +9687,66 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Snippet: `echo "echo cwd-hit" > fb.sh; PATH=/usr/bin:/bin; . fb.sh; echo st=$?`,
 		Why:     "only bash looks in the current directory once PATH has missed; the other three call it not found, so a script relying on it is bash-only",
 	},
+	// --- what an error inside a prompt rendering costs (#2053) ---------
+	//
+	// The fifth site of the boundary the section above is about — `.` and
+	// `eval` are the first, a startup file the second, a typed line the
+	// third, a hook chain the fourth — and the first one that is not a *text
+	// the shell was given*. `${(%%)v}`, `print -P` and `${v@P}` render a
+	// prompt parameter in the middle of a word of a command that is still
+	// going to run, so an error inside one has no statement of its own to
+	// cost and used to cost the whole script.
+	//
+	// The operand is a math function nobody registered, because it is a
+	// failure in both shells that have a prompt language and is a failure at
+	// *expansion* time rather than a syntax error the parser would refuse
+	// first. It is also the shape a real prompt has: powerlevel10k's `PROMPT`
+	// opens with `${$((_p9k_on_expand()))+}`, which is exactly this until the
+	// theme's own `functions -M` has run.
+	{
+		ID: "prompt/a-failed-rendering-costs-the-rendering-not-the-script", Category: "expansion",
+		Snippet: `setopt promptsubst
+s='${$((nofunc()))+}X'
+printf 'ONE=[%s]\n' "${(%%)s}"
+printf 'TWO=still-running\n'`,
+		Script: true,
+		Why:    "the whole divergence on one row: zsh reports the unknown function naming the script and the line, renders the failed expansion as nothing, prints the command's own output `ONE=[]`, runs the next command and exits 0. The diagnostic was already byte-identical here and the three facts after it were not — the `print` was swallowed, the script abandoned and the status 1 (#2053). A script file rather than `-c` because #1104 fixed this shape for a *sourced* file and it survived on the route a person actually runs",
+	},
+	{
+		ID: "prompt/a-failed-rendering-costs-the-rendering-not-the-command-string", Category: "expansion",
+		Snippet: `setopt promptsubst; s='${$((nofunc()))+}X'; printf 'ONE=[%s]\n' "${(%%)s}"; printf 'TWO=still-running\n'`,
+		Why:     "the same shape down the `-c` route, which is a different boundary in this shell's own terms — a `-c` string has no file to name and its errors are fatal in shapes a script file survives — and answers identically. The pair is what says the catch is at the *rendering* and not at whatever is reading the text",
+	},
+	{
+		ID: "prompt/a-given-up-rendering-is-worth-what-it-drew", Category: "expansion",
+		Snippet: `setopt promptsubst; s='PRE-$((nofunc()))-POST'; printf 'ONE=[%s]\n' "${(%%)s}"; printf 'TWO=still-running\n'`,
+		Why:     "a given-up rendering is not empty and is not the value either: zsh draws `PRE-`, the text in front of the substitution that failed, and drops the rest. The row above cannot see this — its value begins with the substitution, so what it drew and nothing at all are the same string",
+	},
+	{
+		ID: "prompt/a-given-up-rendering-drops-a-substitution-that-had-succeeded", Category: "expansion",
+		Snippet: `setopt promptsubst; V=MID; s='PRE-${V}-$((nofunc()))-POST'; printf 'ONE=[%s]\n' "${(%%)s}"; printf 'TWO=still-running\n'`,
+		Why:     "what is kept is the text in front of the **first** substitution rather than everything that had worked: `${V}` expands to `MID` and is thrown away with the rest, so the answer is `PRE-` and not `PRE-MID-`. Recorded because an implementation that simply stopped its walk at the failing span would answer `PRE-MID-` and pass the row above",
+	},
+	{
+		ID: "prompt/the-escape-table-still-reads-what-a-given-up-rendering-drew", Category: "expansion",
+		Snippet: `setopt promptsubst; s='PRE-%%-$((nofunc()))-POST'; printf 'ONE=[%s]\n' "${(%%)s}"; printf 'TWO=still-running\n'`,
+		Why:     "the two passes of a prompt rendering are not both given up: the escape table reads what the abandoned expansion left, so the doubled percent still draws one and the answer is `PRE-%-`. An implementation that returned early from the whole rendering would write `PRE-%%-`",
+	},
+	{
+		ID: "prompt/the-error-operator-ends-the-shell-at-a-rendering", Category: "expansion",
+		Snippet: `setopt promptsubst; s='PRE-${NOPEV?gone}-POST'; printf 'ONE=[%s]\n' "${(%%)s}"; printf 'TWO=still-running\n'`,
+		Why:     "`${x?word}` parts company with every other failure here exactly as it does at a sourced file: zsh reports and ends the shell before the `printf`, at 1, because its own manual documents the operand as exiting rather than as complaining. So this boundary asks the same axis the file boundary does rather than catching whatever is unwinding",
+	},
+	{
+		ID: "prompt/print-P-is-the-same-boundary", Category: "expansion",
+		Snippet: `setopt promptsubst; print -P 'PRE-$((nofunc()))-POST'; printf 'TWO=still-running\n'`,
+		Why:     "the other spelling of the same rendering reaches the same boundary: `print -P` writes `PRE-`, the line after it runs, and the status is 0. Worth a row because the two spellings are one expansion here by construction and a boundary written at the `${(%%)…}` reader alone would leave this one abandoning the script. The location is where this shell is still short — zsh writes `<shell>:1:` and we name the builtin as well, which is #2131",
+	},
+	{
+		ID: "prompt/at-P-keeps-the-text-a-given-up-rendering-was-handed", Category: "expansion",
+		Snippet: `v='PRE-$((nofunc()))-POST'; printf 'ONE=[%s]\n' "${v@P}"; printf 'TWO=still-running\n'`,
+		Why:     "the same boundary in the other shell that has a prompt language, and the row that makes what a given-up rendering is worth an *answer* rather than a rule: bash reports the arithmetic failure and hands back `PRE-$((nofunc()))-POST`, the text as it stood with the substitutions simply not performed, where zsh hands back what it drew. Both carry on and both exit 0, so the boundary is unanimous and only its value divides them",
+	},
 	// --- test and [ : a command, not a construct ---------------------
 	{
 		ID: "test/argument-count-decides", Category: "test",
@@ -12495,6 +12555,11 @@ echo "st=$? alive"`,
 		Unfinished: true,
 		Snippet:    "cat <<X\nbody",
 		Why:        "`heredoc/no-delimiter-and-a-warning` with the final newline taken away, which is the only way to write a here-document body that does not end in one. What moves is where the remark is located: the line the input ran out on is 2 here and 3 there, so it is the line the last character sat on rather than the count of lines the file has. The body and the status are the same in all six. It is the shape that found #962 — the printer wrote the delimiter onto that unfinished last line and the body became `bodyEND` — and it is the round trip's only case of a here-document with no delimiter of its own",
+	},
+	{
+		ID: "heredoc/a-body-is-abandoned-at-its-first-failed-expansion", Category: "redirection",
+		Snippet: "cat <<END\na $((nofunc())) b $((nofunc2())) c\nEND\nprintf 'after\\n'",
+		Why:     "unanimous, and it is the rule a *word* has always followed one construct over: a body holding two failures is **one** diagnostic in all six columns, not two, so the body is given up at the first of them. The command does not run and the line after it does, in every column. Ours diagnosed both, because the body's walk was the one expansion loop with no stop in it (#2053)",
 	},
 	{
 		ID: "arith/expansion-happens-before-reading", Category: "arithmetic",

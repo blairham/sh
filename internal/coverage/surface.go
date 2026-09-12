@@ -53,11 +53,13 @@
 //
 // # What is deliberately not in the denominator
 //
-// The `Semantics` axes. `make axis-sweep` already enumerates them and answers
-// a strictly better question — it *moves* each one and reports what fails to
-// object — and a count of cases mentioning an axis could not be computed at
-// all, since an axis leaves no mark in the text. Listing them here with a
-// made-up numerator would be the overstatement this package warns about.
+// The `Semantics` axes, which have two instruments of their own already:
+// `make axis-coverage` names every axis a dialect leaves unanswered, and
+// `make axis-sweep` moves each answered one and reports what fails to object.
+// Both ask strictly better questions than a count of cases mentioning an
+// axis — which could not be computed anyway, since an axis leaves no mark in
+// the text. Listing them here with a made-up numerator would be the
+// overstatement this package warns about.
 package coverage
 
 import (

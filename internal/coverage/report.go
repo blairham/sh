@@ -221,10 +221,12 @@ const caveat = `  What this counts, and what it does not
     is correct and is not a work item. An element no column mentions is
     the one with no such excuse, which is why it is reported separately.
 
-    The Semantics axes are deliberately absent. ` + "`make axis-sweep`" + ` already
-    moves each one and reports what fails to object, which is a strictly
-    better question than counting cases that mention it — and an axis
-    leaves no mark in the text, so there is nothing here to count.
+    The Semantics axes are deliberately absent, and they are not
+    unmeasured: ` + "`make axis-coverage`" + ` names every axis a dialect leaves
+    unanswered and ` + "`make axis-sweep`" + ` moves each answered one and reports
+    what fails to object. Both are better questions than counting the
+    cases that mention an axis — which could not be counted anyway, since
+    an axis leaves no mark in the text.
 
     Report only. Nothing here gates anything.
 `

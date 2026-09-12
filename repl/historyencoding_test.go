@@ -164,14 +164,20 @@ func TestABlankLineInsideAnEntrySurvives(t *testing.T) {
 // The blanks are dropped after the decoding, and that ordering is a property
 // of load rather than of decodeEntries — so it is asserted through a file.
 //
-// A mutation run asked for this one: swapping the two in load broke nothing,
-// because every other test here calls the decoder directly.
+// A mutation run asked for this one twice. Swapping the two in load broke
+// nothing, because every other test here calls the decoder directly; and the
+// first version of *this* test did not catch it either, because the "blank"
+// line inside its entry was a lone backslash, which is not blank. A blank line
+// inside a multi-line command is never bare in the file — it is written as `\`
+// like every other continued line.
+//
+// Where a genuinely blank line appears is at the *end* of an entry: a command
+// whose last line is empty. Dropping it first leaves the backslash before it
+// dangling, and the entry swallows the next one.
 func TestLoadDropsBlanksAfterDecodingAndNotBefore(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "hist")
-	// A `for` loop with an empty line inside it. Dropping blanks first would
-	// join `for i in 1 2` to `done` and hand back a line nobody typed.
-	if err := os.WriteFile(path, []byte("echo one\nfor i in 1 2\\\n\\\ndone\n\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("echo one\nfor i in 1 2\\\n\necho two\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	h := historyFile{
@@ -179,7 +185,9 @@ func TestLoadDropsBlanksAfterDecodingAndNotBefore(t *testing.T) {
 		encoding: historyEncoding{continuesOnABackslash: true},
 	}
 	got := h.load(t.Context())
-	want := []string{"echo one", "for i in 1 2\n\ndone"}
+	// Three entries. Dropping the blank first gives two, the second of which
+	// is `for i in 1 2\necho two` — a line nobody typed.
+	want := []string{"echo one", "for i in 1 2\n", "echo two"}
 	if !slices.Equal(got, want) {
 		t.Errorf("load = %q, want %q", got, want)
 	}

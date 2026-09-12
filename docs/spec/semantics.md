@@ -1389,6 +1389,34 @@ status, so the behavioral score counts them as agreeing and every other
 view calls it wording. A shell that writes to the wrong file is not a
 wording difference.
 
+## A here-document the input cut short
+
+**`UnterminatedHeredocGainsATrailingNewline`** — bash **yes** · dash no ·
+ksh93 no · zsh no
+
+A here-document whose delimiter never arrived takes the body to the end
+of the input, unanimously, and runs the command. Whether the body then
+*ends in a newline* is not unanimous. Measured 2026-09-12 with `od -c`
+on the raw output, from a script file and again through `-c`:
+
+| shell | `cat <<X` / `body` writes | bytes |
+| --- | --- | --- |
+| bash 5.3, bash 3.2, bash-as-`sh` | `body` + newline | 5 |
+| dash, ksh93, zsh | `body` | 4 |
+
+It is reachable no other way: a here-document closed by its delimiter
+always has a body ending in a newline, so this is the only shape in
+which the question exists. That is also why the corpus cannot ask it —
+`$( )` strips trailing newlines and the harness trims them, so
+`heredoc/a-body-that-never-ended-its-last-line` records `body` in all
+six columns and could never show the byte. The check is a Go test on the
+runner's bytes.
+
+The parser records the fact — `syntax.Redirect.HeredocAtEOF`, that the
+body ran to the end of the input — and the interpreter answers the
+question, because the two shells read the same text and hand the command
+different bytes.
+
 ## Where a redirection is expanded, and what that costs
 
 A redirection on a command the shell runs as a process of its own is set up
@@ -11184,6 +11212,33 @@ it — two of the three that have the grammar; ksh93 takes it back with
 the command's other redirections, so the number the variable holds is
 already dead.
 
+**`FirstAllocatedDescriptor`** — bash from ten · dash from ten · ksh93 from
+ten · zsh **from eleven**
+
+The number the shell counts up from when it picks a descriptor for
+itself. Measured 2026-09-12, `exec {fd}< /etc/hosts; echo $fd`: bash
+5.3.15 and ksh93 say 10, zsh 5.9.2 says 11; dash and bash 3.2 have no
+`{name}` token. The same number is what `zsocket` reports in `$REPLY`
+and what `sysopen -u name` writes, so it is visible from three builtins
+as well as from the redirection.
+
+**The one axis with no unanswered value.** Every other field can be left
+unanswered and refused by name at the disagreement; there is no shape in
+which a shell declines to pick a number, so a zero value that refused
+would refuse a construct every shell performs.
+
+**`ReadFailureInAFileSubstitutionFailsIt`** — bash no · dash no · ksh93
+no · zsh **yes**
+
+`$(<file)` whose *read* fails after the open worked — a directory is the
+reachable shape. Measured 2026-09-12, `mkdir dir; v=$(<dir)`: zsh is
+status 1 with `error when reading dir: is a directory`, bash 3.2 is
+status 1 in silence, and bash 5.3 and ksh93 leave the status at 0 with
+nothing said. bash 3.2 is what makes the status and the sentence two
+questions rather than one; the sentence is
+`Diagnostics.FileSubstitutionReadError`. An open that fails is a
+different event and is already `redirectFailureStatus`.
+
 **`FdNumberBoundedByOpenFileLimit`** — bash yes · dash no · ksh93 yes · zsh no
 
 Refuses a redirection whose descriptor number is at or above the
@@ -12878,11 +12933,38 @@ Makes a builtin whose output write failed — into a descriptor closed
 with `>&-`, most plainly — report status 1. True in bash, dash and
 ksh93; zsh keeps the builtin's own status and quietly loses the text.
 
-Whether anything is *said* about it is the dialect's wording —
-Diagnostics.BuiltinWriteError — not a second axis: bash and dash
-complain, ksh93 fails silently, and zsh has nothing to word because it
-does not fail. Asked only when a write has actually failed, so `echo hi`
+Whether anything is *said* about it is the dialect's wording rather than
+a second axis. Asked only when a write has actually failed, so `echo hi`
 on an open stream needs no dialect.
+
+It takes **two** wordings, and zsh is why. bash and dash complain
+through `Diagnostics.BuiltinWriteError`, which is reached only after
+this axis answers yes, and ksh93 fails silently. zsh answers this axis
+no and still says something — on every route but one:
+
+| written, zsh 5.9.2 | said | status |
+| --- | --- | --- |
+| `echo hi >&-` | — | 0 |
+| `exec 1>&-; echo hi` | `write error: bad file descriptor` | 0 |
+| `exec 1>&-; echo hi >&-` | — | 0 |
+| `{ echo a; echo b; } >&-` | the sentence, twice | 0 |
+| `f(){ echo hi; }; f >&-` | `f: write error: …` | 0 |
+| `exec 1>&-; echo hi 3>&-` | the sentence | 0 |
+
+Measured 2026-09-12. The line is not `exec` against a per-command
+redirection: a close the writing command *restates* silences the
+sentence even after `exec` parked one, and a close written on a group or
+on a function call does not silence the commands inside it. What decides
+is whether **this command's own redirection list** closed the stream it
+writes to. That is `Diagnostics.InheritedClosedStreamWriteError`,
+emitted before the axis is asked — moving `BuiltinWriteError` in front
+of the axis instead would make zsh speak for `echo hi >&-` as well,
+which is the row that is right today.
+
+The control is a write that did not fail: `exec 1>&-; true` says nothing
+in all six. A write that failed on a stream *nobody* closed does reach
+the sentence — with SIGPIPE arranged away, zsh says `write error: broken
+pipe` for a builtin writing into a pipe whose reader has gone.
 
 **`ErrexitSeesPipefailFailure`** — bash yes · dash unspecified · ksh93 no · zsh yes
 

@@ -3266,6 +3266,10 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 			// The body ran to the end of the input, so the last line there
 			// was is the last line this command occupied.
 			l.markHeredocEnd(lastLine)
+			// And the body may not end in a newline, which no terminated
+			// here-document's can — recorded so the interpreter can ask the
+			// one question that shape raises. See Redirect.HeredocAtEOF.
+			r.HeredocAtEOF = true
 			break
 		}
 		linePos := l.pos()

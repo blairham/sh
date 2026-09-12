@@ -3112,6 +3112,50 @@ type Diagnostics struct {
 	// so silence here is a wording rather than a behavior.
 	BuiltinWriteError string
 
+	// InheritedClosedStreamWriteError is a builtin's failed write to a stream
+	// that *this command's own redirection list* did not close — the sentence
+	// one shell has on a route where it says nothing about the other.
+	//
+	// Two verbs, positional and the same pair BuiltinWriteError takes: %[1]s
+	// is the builtin's name and %[2]s the reason. zsh names neither the
+	// builtin nor the number, so its format uses only the reason.
+	//
+	// Measured 2026-09-12 through `-c`, zsh 5.9.2:
+	//
+	//	echo hi >&-                 silent
+	//	exec 1>&-; echo hi          zsh:1: write error: bad file descriptor
+	//	exec 1>&-; echo hi >&-      silent
+	//	{ echo a; echo b; } >&-     the sentence, twice
+	//	f(){ echo hi; }; f >&-      f: write error: bad file descriptor
+	//
+	// So the line is not `exec` against a per-command redirection, which is
+	// how #1363 read it from two probes: it is whether the *writing command*
+	// closed the stream itself. A close it restated silences the sentence
+	// even after `exec` parked one, and a close on a group or a function call
+	// does not silence the commands inside.
+	//
+	// Emitted before BuiltinWriteErrorFailsTheCommand is asked, which is the
+	// whole reason it is a second field. zsh answers that axis No and returns
+	// before BuiltinWriteError is reached; moving the emission in front of
+	// the axis instead would make zsh speak on `echo hi >&-` as well, which
+	// is the row #770 recorded and which is right today.
+	//
+	// Empty everywhere else, and it has to be: the three shells that word a
+	// failed write word both routes the same way through BuiltinWriteError,
+	// so a second sentence here would be a second copy of it.
+	InheritedClosedStreamWriteError string
+
+	// FileSubstitutionReadError is `$(<file)` whose read failed after the
+	// open worked, which a directory is the reachable shape of. Two verbs:
+	// %[1]s is the name as the script named it and %[2]s the reason.
+	//
+	//	zsh    error when reading dir: is a directory
+	//
+	// Empty in the other three that have the form — bash 5.3, bash 3.2 and
+	// ksh93 all read a directory in silence. The status is the separate
+	// question; see Semantics.ReadFailureInAFileSubstitutionFailsIt (#1778).
+	FileSubstitutionReadError string
+
 	// DirectoryNotFound is FileNotFound for a write rather than a read.
 	//
 	// dash alone again, and a different string from its own FileNotFound:

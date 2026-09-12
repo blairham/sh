@@ -5648,6 +5648,74 @@ type Semantics struct {
 	// so the number the variable holds is already dead.
 	FdVariableOutlivesTheCommand Answer
 
+	// FirstAllocatedDescriptor is the number the shell counts up from when it
+	// picks a descriptor for itself — `exec {fd}< file`, and the two zsh
+	// builtins that hand a number back the same way.
+	//
+	// Measured 2026-09-12, `<shell> -c 'exec {fd}< /etc/hosts; echo $fd'`:
+	// bash 5.3.15 and ksh93 (AJM 93u+) say 10, zsh 5.9.2 says 11. dash and
+	// bash 3.2 have no such grammar. The same number is what `zsocket`
+	// reports in `$REPLY` and what `sysopen -u name` writes, so a corpus row
+	// about either builtin either avoids printing the number or is wrong in
+	// one column (#1752).
+	//
+	// **The one axis with no unanswered state**, and that is measured rather
+	// than an omission: there is no shape in which a shell declines to pick a
+	// number. A `{name}<file` that reached the allocation is going to be
+	// given one, and so is an embedder calling Runner.OpenDescriptor, so
+	// there is nothing for a refusal to protect and a zero value that refused
+	// would refuse a construct every shell performs. The zero value is
+	// therefore an answer — the one four of the five shells with the
+	// construct give — and every preset states it anyway.
+	FirstAllocatedDescriptor DescriptorAllocationBase
+
+	// UnterminatedHeredocGainsATrailingNewline adds the newline a
+	// here-document body never got, where the delimiter never arrived and
+	// the input ended mid-line.
+	//
+	// Measured 2026-09-12, `printf 'cat <<X\nbody' > u.sh` read back with
+	// `od -c`, and again through `-c` with the same two lines:
+	//
+	//	bash 5.3, bash 3.2, bash-as-sh   body\n   5 bytes
+	//	dash, ksh93, zsh                 body     4 bytes
+	//
+	// An earlier reading of #1020 put bash 3.2 with the four; it is not, and
+	// the two bash builds agree.
+	//
+	// It is reachable no other way, which is why it is worth a field at all:
+	// a here-document closed by its delimiter always has a body ending in a
+	// newline, so this is the only shape in which the question exists. The
+	// corpus cannot see it either — `$( )` strips trailing newlines and the
+	// harness trims them — so it is checked by a Go test on the runner's
+	// bytes.
+	//
+	// Asked only where the two answers differ, which is what
+	// syntax.Redirect.HeredocAtEOF marks: an ordinary here-document never
+	// reaches the question.
+	UnterminatedHeredocGainsATrailingNewline Answer
+
+	// ReadFailureInAFileSubstitutionFailsIt is `$(<file)` where the *read*
+	// fails after the open worked — a directory is the shape that reaches it.
+	//
+	// Measured 2026-09-12, `mkdir dir; v=$(<dir); echo "st=$? v=[$v]"`:
+	//
+	//	zsh 5.9.2   st=1, and `error when reading dir: is a directory`
+	//	bash 3.2    st=1, silent
+	//	bash 5.3    st=0, silent
+	//	ksh93       st=0, silent
+	//	dash        no such form
+	//
+	// The status and the sentence are separate questions and the panel is
+	// what separates them: bash 3.2 fails the substitution and says nothing,
+	// so a dialect could hold either answer with either wording. The sentence
+	// is Diagnostics.FileSubstitutionReadError.
+	//
+	// An open that fails is a different event and is already answered by
+	// redirectFailureStatus. This one is the read after a successful open,
+	// which is why it cannot ride on that: `$(<nosuch)` and `$(<dir)` are
+	// status 1 and status 0 in the same shell (#1778).
+	ReadFailureInAFileSubstitutionFailsIt Answer
+
 	// ExecOpenedFdReachesACommand hands a descriptor that `exec`'s own
 	// redirection list opened to whatever the shell runs next — the flock
 	// and shared-log idioms, and every script that gives a child a logging
@@ -8223,7 +8291,16 @@ func PosixSemantics() Semantics {
 		StoppedJobsHoldTheExit:       No,
 		CdpathAnnouncesTheDirectory:  Yes,
 		FdVariableOutlivesTheCommand: Yes,
-		FdVariableBadCloseIsAnError:  Yes,
+		// The standard has the here-document end at the delimiter and says
+		// nothing about a body the input cut short, so this follows the
+		// panel: three of the five leave the last line as it was written and
+		// only bash supplies the newline (#1020).
+		UnterminatedHeredocGainsATrailingNewline: No,
+		// The standard has no `$(<file)` form at all, so this follows the
+		// panel: bash 5.3 and ksh93 read a directory to status 0, and only
+		// zsh and bash 3.2 fail (#1778).
+		ReadFailureInAFileSubstitutionFailsIt: No,
+		FdVariableBadCloseIsAnError:           Yes,
 		// The standard says nothing about a ceiling, so this follows the
 		// panel: bash and ksh93 hand the kernel's refusal back, dash and zsh
 		// report success on a number the process cannot hold.
@@ -9337,6 +9414,32 @@ func (r *Runner) emptyMatchDeclined() EmptyMatchDeclinedPolicy {
 // ReadTrailingEscapedSeparatorPolicy is what `read` does with an escaped IFS
 // whitespace character closing the last name's value. See
 // Semantics.ReadTrailingEscapedSeparator for the measurements.
+// DescriptorAllocationBase is the number a shell counts up from when it picks
+// a descriptor for itself. See Semantics.FirstAllocatedDescriptor, which is
+// the only reader and which records why this type has no unanswered value.
+type DescriptorAllocationBase int
+
+const (
+	// AllocateDescriptorsFromTen is bash 5.3 and ksh93, and is the zero value
+	// because it is the answer this shell gave everywhere before the axis
+	// existed.
+	AllocateDescriptorsFromTen DescriptorAllocationBase = iota
+	// AllocateDescriptorsFromEleven is zsh 5.9.2.
+	AllocateDescriptorsFromEleven
+)
+
+// number is the descriptor the base stands for.
+func (b DescriptorAllocationBase) number() int {
+	if b == AllocateDescriptorsFromEleven {
+		return 11
+	}
+	return 10
+}
+
+func (b DescriptorAllocationBase) String() string {
+	return "from " + itoa(b.number())
+}
+
 type ReadTrailingEscapedSeparatorPolicy int
 
 const (

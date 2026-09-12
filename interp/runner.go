@@ -1154,6 +1154,32 @@ type Runner struct {
 	// so far. See Runner.KeepDescriptorFromChildren, which is the only
 	// writer, and childFiles, which is the only reader.
 	cloexecFds map[int]bool
+	// outputClosedByThisCommand says the redirection list now in effect for
+	// this command closed the stream its output goes to — `echo hi >&-` and
+	// not `exec 1>&-; echo hi`.
+	//
+	// One dialect needs the distinction to word a failed write: it says
+	// `write error: bad file descriptor` for a write to a stream something
+	// *else* closed and says nothing when the writing command closed it
+	// itself, and both routes keep the same status. Measured — a close
+	// restated on the command silences it even after `exec` parked one, and
+	// a close on a group or a function call does not silence the commands
+	// inside, so the question is neither `exec` nor the value at the stream
+	// but who wrote the redirection. See
+	// Diagnostics.InheritedClosedStreamWriteError, which is the only reader.
+	//
+	// Cleared at the top of every applyRedirs, which is what scopes it to one
+	// command: a group's close does not travel to the commands in its body,
+	// because each of those reaches applyRedirs of its own.
+	outputClosedByThisCommand bool
+	// openedName is the name the redirection just applied opened, as the
+	// script named it rather than as the filesystem was asked for it — the
+	// join with the working directory is not what a shell prints. Written by
+	// applyRedirs on every open and read by readFileSubst, which is the only
+	// reader: `$(<dir)` words a read that failed *after* a successful open,
+	// and by then the word has been expanded and nothing else remembers what
+	// it came to.
+	openedName string
 	// redirFds are the numbers beyond the named streams that the command
 	// being set up has just written, in the order it wrote them. The caller
 	// reads it once, to learn what to mark when a command's redirections

@@ -1223,6 +1223,14 @@ func Semantics() interp.Semantics {
 	s.KillListAcceptsName = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsUseEveryTarget = interp.Yes
+	// `exec {fd}< /etc/hosts; echo $fd` says 11 here and 10 in bash 5.3 and
+	// ksh93 — measured 2026-09-12. The same number comes back from `zsocket`
+	// in `$REPLY` and from `sysopen -u name` (#1752).
+	s.FirstAllocatedDescriptor = interp.AllocateDescriptorsFromEleven
+	// A read that fails after the open worked fails the substitution here:
+	// `mkdir dir; v=$(<dir)` is status 1 with a sentence, where bash 5.3 and
+	// ksh93 are status 0 in silence (#1778).
+	s.ReadFailureInAFileSubstitutionFailsIt = interp.Yes
 	// The null-command hook: a command that is only redirections runs
 	// `$NULLCMD`, or `$READNULLCMD` where its one redirection is a plain
 	// `<file`. The names, not the values — a script reassigns them at will,
@@ -2193,6 +2201,14 @@ func Diagnostics() interp.Diagnostics {
 		FcNoSuchEvent:                      "no such event: 1",
 		NoJobControl:                       "no job control in this shell.",
 		FdVariableWithoutADescriptor:       "parameter %[1]s does not contain a file descriptor",
+		// `mkdir dir; v=$(<dir)` — the read after a successful open, which
+		// this shell alone words. The name is the word as it expanded, not
+		// the path the working directory made of it (#1778).
+		FileSubstitutionReadError: "error when reading %[1]s: %[2]s",
+		// A failed write to a stream this command did not itself close.
+		// Neither the builtin nor the number is named, so the format has one
+		// verb where the others have two (#1363).
+		InheritedClosedStreamWriteError: "write error: %[2]s",
 		// A conditional with no `:` is its own sentence; a conditional
 		// missing either value is the ordinary end of input, so
 		// ArithConditionalThen and ArithConditionalElse stay empty and fall

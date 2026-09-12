@@ -293,6 +293,16 @@ type Redirect struct {
 	// not a here-document — including `<<<`, which shares a prefix with `<<`
 	// and nothing else: a here-string's input is its Word, on the same line.
 	Heredoc *Word
+	// HeredocAtEOF says the body ran to the end of the input because the
+	// delimiter never arrived. It is a fact about the text rather than a
+	// dialect's choice — every shell in the panel takes the body as
+	// everything to the end and runs the command — and it is recorded
+	// because one thing about that body is *not* unanimous: whether it gains
+	// the newline its last line never had. See
+	// interp.Semantics.UnterminatedHeredocGainsATrailingNewline, which is the
+	// only reader; a terminated here-document's body always ends in one, so
+	// this is the only shape where the question exists (#1020).
+	HeredocAtEOF bool
 
 	// PipeBoth records a redirection nobody wrote: the `2>&1` that a `|&`
 	// after this command stands for. The operator is the source text and

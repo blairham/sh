@@ -276,6 +276,55 @@ substitution. It has a deadline now: a hundred milliseconds of repeating a
 transition whose race is between two system calls, after which a reader that
 is still there is one holding the pipe for its own reasons.
 
+### When a writing body's output lands
+
+`>(cmd)` is the direction whose body has nobody waiting for it. `<(cmd)`
+writes into the pipe, so the command that named the path reads it to an
+end; `=(cmd)` has run to completion before the path exists at all. A
+writing body writes into the **shell's own output**, which nothing
+downstream ends and nothing in the shell reads.
+
+**No shell in the panel loses it.** Measured 2026-09-12 on Linux with
+
+    printf "PIPE\n" | tee >(read -r v; printf "[%s]" "$v") >/dev/null
+
+bash 5.2, zsh 5.9 and ksh93 all answer `[PIPE]` — 200 runs each, idle
+and again with the machine oversubscribed two to one, 1200 answers and
+no empty one. In a forking shell that costs nothing: the body is a
+process holding the shell's standard output, so whatever is reading that
+stream reads until the body has closed it too.
+
+**When the shell stops is a disagreement.** With a body that outlives
+its input, zsh waits for it and bash and ksh93 do not:
+
+| probe | bash 5.2 | ksh93 | zsh 5.9 |
+| --- | --- | --- | --- |
+| `printf x \| tee >(sleep 3) >/dev/null` | 0s | 0s | **3s** |
+| `echo >(sleep 3)` | 0s | 0s | **3s** |
+| `echo hi > >(sleep 3)` | 0s | 0s | **3s** |
+| `exec > >(cat); echo hi` | 0s | 0s | 0s |
+| `…; printf AFTER` after the first row | `AFTER[PIPE]` | `AFTER[PIPE]` | **`[PIPE]AFTER`** |
+
+**This implementation waits, in every dialect**, which is zsh's answer
+and is not a preference: here the body is a goroutine and the output is
+the caller's `io.Writer`, so a body cannot outlive the shell the way
+bash's and ksh93's process does. The choice is between zsh's timing and
+losing the bytes, and the bytes are the part the whole panel agrees on.
+Before the wait this shell answered the empty string in 49 runs in 300
+of the binary under that load, and in 4 of 60 of the test covering it
+(#2183). The ordering the wait costs — `[PIPE]AFTER` where bash and
+ksh93 say `AFTER[PIPE]` — is a real disagreement and is filed as an axis
+to add rather than left unrecorded.
+
+**Except where the script is itself still holding the pipe.** `exec >
+>(cat)` hands the shell's output to a body that reads until that end
+closes, and the end is now the shell's: waiting there is waiting for a
+descriptor only this shell can close. zsh does not wait for that shape
+either — the one 0s row above among its 3s ones — so the exception is
+the construct's rather than this implementation's. It is the same clause
+that keeps the pipe's *name* while one of this shell's own descriptors
+is open on it, above.
+
 ### Which standard input the body reads — an axis
 
 A substitution's body is a shell of its own and has to read *something*.

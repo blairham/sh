@@ -512,8 +512,12 @@ func TestAnErrorInASourcedFileEndsTheShellHere(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, st := runDash(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n")
+	// The sourced file is named after the location, which is this shell
+	// alone in the panel and which this expectation was missing until #1128
+	// — real dash writes `./p.sh: ` here and this said the bare message.
+	// See borrowedlocation_test.go for the rule and its measurement.
 	const want = "IN-BEFORE\n" +
-		"dash: 3: NOPE: parameter not set\n"
+		"dash: 3: ./p.sh: NOPE: parameter not set\n"
 	if out != want {
 		t.Errorf("output = %q, want %q", out, want)
 	}

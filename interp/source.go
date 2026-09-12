@@ -245,6 +245,10 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// them. See Runner.tracePrefixDepth.
 	r.indirection++
 	defer func() { r.indirection-- }()
+	// What this text is called, for a run-time diagnostic raised inside it:
+	// the value that knows is here and the diagnostic is written far away.
+	r.borrowed = append(r.borrowed, borrowedText{sourced: s})
+	defer func() { r.borrowed = r.borrowed[:len(r.borrowed)-1] }()
 	if !s.eval {
 		// Inside a *file*, which stops a prompt's wording from reaching the
 		// diagnostics of the lines in it: a sourced file is a file however

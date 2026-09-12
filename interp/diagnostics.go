@@ -2473,6 +2473,30 @@ type Diagnostics struct {
 	// SourceFileIsTheBuiltin names the builtin that read a file rather than
 	// the file: ksh93 reports `.` where the other three report the path.
 	SourceFileIsTheBuiltin bool
+	// BorrowedTextIsNamedAtRunTime extends the two fields above from a parse
+	// failure to a failure while the text is *running*: `dash: 3: ./p.sh:
+	// NOPE: parameter not set`, where a shell that leaves this off writes
+	// `dash: 3: NOPE: parameter not set` and names nothing.
+	//
+	// A field of its own rather than the enums answering for themselves,
+	// because the enums cannot: SourceAfterLocation is their zero value, so
+	// a dialect that has never considered the question — the substrate's own
+	// preset, and any dialect written next — would silently acquire dash's
+	// answer. It is the same rule Answer follows for a semantics axis:
+	// unanswered must not quietly mean one shell's answer.
+	//
+	// Off is also right rather than merely safe for two of the four. bash
+	// and zsh name a sourced file *instead* of the shell, which
+	// LocationNamesTheCurrentFile and LocationNamesTheEvalText already do
+	// from the location itself — turning this on there would write the name
+	// twice. ksh93 is the one that will want it and does not have it yet:
+	// that shell renders the whole call stack into the prefix
+	// (`./s.sh[2]: .: line 3:`), which is more than a name and is #2452.
+	//
+	// Where the name goes is still EvalNaming's and SourceFileNaming's to
+	// say, and what it is still EvalSourceName's and SourceFileIsTheBuiltin's
+	// — this says only that a run-time diagnostic asks them at all.
+	BorrowedTextIsNamedAtRunTime bool
 	// UnterminatedEndsOnNextLine puts the end of input on the line after the
 	// text rather than on its last: `eval "if"` is line 2 in bash and line 1
 	// in the other three.

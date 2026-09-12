@@ -606,6 +606,15 @@ func Semantics() interp.Semantics {
 // Diagnostics is how dash reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// This shell names the text a failure came out of in a *run-time*
+		// diagnostic and not only in a parse failure, which is the panel's
+		// fourth answer to that question and the only one the placement enum
+		// below has to be asked for: `./s.sh: 3: ./p.sh: NOPE: parameter not
+		// set` for a sourced file, and `./e.sh: 3: eval: …` for text `eval`
+		// is running. EvalNaming and SourceFileNaming are left at their zero
+		// value, SourceAfterLocation, which is where this shell puts it and
+		// is already what its parse failures use (#1128).
+		BorrowedTextIsNamedAtRunTime: true,
 		// A duplication target wider than one digit is refused before the
 		// descriptor is looked at, and worded as a syntax error even though
 		// the parse succeeded — no number, no file, one sentence.

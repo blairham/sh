@@ -204,6 +204,10 @@ func (c *Runner) ownTables(r *Runner) {
 	// slices.Clone keeps a nil slice nil, so the same seeding trap applies as
 	// for the tables and the test seeds these too.
 	c.frames = slices.Clone(r.frames)
+	// The same reason, for the same shape: `runSourced` appends to this and
+	// truncates it back, so a subshell started from inside a sourced file
+	// would share the array and both would write [len-1].
+	c.borrowed = slices.Clone(r.borrowed)
 	c.scopes = cloneScopes(r.scopes)
 	// Appended to in place as well, so each needs an array of its own. Their
 	// *elements* stay shared on purpose: a `*Job` is one job to whoever holds

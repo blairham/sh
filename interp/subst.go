@@ -69,7 +69,20 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 		// time, so the same outcome has to be produced deliberately. Without
 		// it the diagnostic appeared and the next command ran regardless,
 		// which is the shape this package keeps finding.
-		r.diagf("%v\n", err)
+		// Worded by the dialect, and located in the *script* rather than in
+		// the body. `%v` on a *syntax.Error prints the parser's own
+		// coordinates — `1:3: ";" unexpected` — which is an internal
+		// position string arriving in front of a user, inside a message
+		// whose prefix has already named the right line in the file (#2460).
+		// Its sibling helper for the other two substitution spellings has
+		// asked the dialect since it was written; this one never did.
+		//
+		// The shift is the same one the body's runner gets below: the span
+		// starts at its opening delimiter, so the body's line 1 is the
+		// script's line for the span. Without it the one dialect that writes
+		// the line *into* its sentence — `syntax error at line N:` — counted
+		// from the body and disagreed with its own prefix.
+		r.diagf("%s\n", r.diag().ParseFailure(shiftParseError(err, r.lineBase+int(span.Pos.Line)-1)))
 		r.status = r.diag().SyntaxStatus()
 		r.stopTheShell()
 		return ""

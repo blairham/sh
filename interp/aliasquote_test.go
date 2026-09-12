@@ -40,12 +40,31 @@ func TestTheFourAliasQuotingEngines(t *testing.T) {
 		{ListingQuoteWhenNeededDollar, "a\tb", `$'a\tb'`, "when-needed-dollar, tab"},
 
 		// Quotes only when needed, escapes a quote the way ListingQuoteAlwaysEscaped does, and
-		// reaches for $'...' only for a control character.
+		// reaches for $'...' only for a control character. The whole value goes
+		// inside one pair of quotes, so a value ending in one keeps the empty
+		// pair that its escape leaves behind — measured on bash 5.3.15 with a
+		// bare `set`, which is where the style is used.
 		{ListingQuoteWhenNeededEscaped, `ls`, `ls`, "when-needed-escaped, bare"},
 		{ListingQuoteWhenNeededEscaped, `echo x`, `'echo x'`, "when-needed-escaped, space"},
 		{ListingQuoteWhenNeededEscaped, `it's`, `'it'\''s'`, "when-needed-escaped, quote"},
-		{ListingQuoteWhenNeededEscaped, `echo 'hi'`, `'echo '\''hi'\'`, "when-needed-escaped, trailing quote"},
+		{ListingQuoteWhenNeededEscaped, `echo 'hi'`, `'echo '\''hi'\'''`, "when-needed-escaped, trailing quote"},
+		// And the value that is one quote and nothing else, which that
+		// build writes with no quotes around it at all.
+		{ListingQuoteWhenNeededEscaped, `'`, `\'`, "when-needed-escaped, a lone quote"},
+		{ListingQuoteAlwaysEscaped, `'`, `\'`, "always-escaped, a lone quote"},
 		{ListingQuoteWhenNeededEscaped, "a\tb", `$'a\tb'`, "when-needed-escaped, tab"},
+
+		// The same decision spelled in runs: a non-empty piece either side of
+		// each quote gets its own pair, so no empty pair is ever written.
+		// Measured on zsh 5.9.2, over `set`, `alias` and `typeset -p`.
+		{ListingQuoteWhenNeededRuns, `ls`, `ls`, "when-needed-runs, bare"},
+		{ListingQuoteWhenNeededRuns, `echo x`, `'echo x'`, "when-needed-runs, space"},
+		{ListingQuoteWhenNeededRuns, `it's`, `'it'\''s'`, "when-needed-runs, quote"},
+		{ListingQuoteWhenNeededRuns, `echo 'hi'`, `'echo '\''hi'\'`, "when-needed-runs, trailing quote"},
+		{ListingQuoteWhenNeededRuns, `'x`, `\''x'`, "when-needed-runs, leading quote"},
+		{ListingQuoteWhenNeededRuns, `'`, `\'`, "when-needed-runs, a lone quote"},
+		{ListingQuoteWhenNeededRuns, `''`, `\'\'`, "when-needed-runs, two quotes"},
+		{ListingQuoteWhenNeededRuns, "a\tb", `$'a\tb'`, "when-needed-runs, tab"},
 
 		// The characters that do not force quotes in the two that ask.
 		{ListingQuoteWhenNeededDollar, `a-b.c/d:e@f`, `a-b.c/d:e@f`, "when-needed-dollar, punctuation that is safe"},

@@ -349,6 +349,12 @@ func Semantics() interp.Semantics {
 	s.DeclareListing = interp.DeclareListingClustered
 	s.DeclareValueQuoting = interp.ListingQuoteAlwaysDouble
 	s.ListingControlEscape = interp.ControlEscapeOctal
+	// A `#` in a listed value is quoted only where a comment could begin —
+	// as the value's first byte — and nowhere else. Measured 2026-09-12 with
+	// a bare `set`: `ab#cd`, `a#b#c`, `1#b` and `tail#` all list unquoted and
+	// `#abcd` does not. It shows in `set` and not in `declare -p`, whose
+	// values are double-quoted whatever is in them (#2299).
+	s.ListedHashIsBareUnlessItOpensTheValue = interp.Yes
 	s.ExportListing = interp.DeclareListingClustered
 	s.ReadonlyListing = interp.DeclareListingClustered
 	// The bare form is this shell's `-p` form exactly, in both builds and in

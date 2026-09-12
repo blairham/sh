@@ -45,10 +45,30 @@ const (
 	// ListingQuoteWhenNeededDollar leaves a plain value bare and reaches for
 	// `$'...'` where a quote or a control character appears: ksh93.
 	ListingQuoteWhenNeededDollar
-	// ListingQuoteWhenNeededEscaped leaves a plain value bare, writes an
-	// embedded quote as `'\''`, and reaches for `$'...'` only for a control
-	// character: zsh's `alias`.
+	// ListingQuoteWhenNeededEscaped leaves a plain value bare, wraps
+	// everything else in one pair of single quotes with each embedded quote
+	// written `'\''`, and reaches for `$'...'` only for a control character:
+	// bash's bare `set`.
 	ListingQuoteWhenNeededEscaped
+	// ListingQuoteWhenNeededRuns is the same decision spelled the other way:
+	// the value is cut at each quote, every non-empty run gets its own pair
+	// of single quotes, and each quote is written outside them with a
+	// backslash in front. zsh.
+	//
+	// The two part only where a quote stands at an *end* of the value, which
+	// is why one style stood for both until it was measured there. With a
+	// variable holding `x'`, a bare `set` writes six characters in bash —
+	// the run quoted, the escaped quote, then an empty pair — and four in
+	// zsh, which writes no empty pair. Holding `'x` the empty pair is at the
+	// front instead, and bash writes it and zsh does not.
+	//
+	// Both spellings read back as the value, so nothing downstream notices —
+	// which is what let a spelling belonging to neither shell survive here.
+	// We wrapped the whole value like bash and then dropped the trailing
+	// empty pair like zsh, so a value of one quote came out with a leading
+	// empty pair that neither shell writes (#2299). Measured 2026-09-12 on
+	// bash 5.3.15 and zsh 5.9.2, over `set`, `alias` and `typeset -p`.
+	ListingQuoteWhenNeededRuns
 	// ListingQuoteAlwaysDouble always double-quotes, escaping an embedded
 	// backslash, backquote, dollar or double quote, and replaces the double
 	// quotes with `$'...'` when the value holds a control character: bash's
@@ -77,6 +97,8 @@ func (a ListingQuotingStyle) String() string {
 		return "ListingQuoteWhenNeededDollar"
 	case ListingQuoteWhenNeededEscaped:
 		return "ListingQuoteWhenNeededEscaped"
+	case ListingQuoteWhenNeededRuns:
+		return "ListingQuoteWhenNeededRuns"
 	case ListingQuoteAlwaysDouble:
 		return "ListingQuoteAlwaysDouble"
 	case ListingQuoteWhenNeededPlain:
@@ -91,7 +113,7 @@ func (a ListingQuotingStyle) String() string {
 func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) string {
 	switch style {
 	case ListingQuoteAlwaysEscaped:
-		return singleQuoted(v, `'\''`, false)
+		return singleQuotedEscaped(v)
 	case ListingQuoteAlwaysDoubled:
 		return singleQuoted(v, `'"'"'`, true)
 	case ListingQuoteWhenNeededDollar:
@@ -111,7 +133,15 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 		case r.valueListsBare(v):
 			return v
 		}
-		return singleQuoted(v, `'\''`, true)
+		return singleQuotedEscaped(v)
+	case ListingQuoteWhenNeededRuns:
+		switch {
+		case hasControl(v):
+			return r.dollarQuoted(v)
+		case r.valueListsBare(v):
+			return v
+		}
+		return singleQuotedInRuns(v)
 	case ListingQuoteWhenNeededPlain:
 		if r.valueListsBare(v) {
 			return v
@@ -160,11 +190,35 @@ func (r *Runner) valueListsBare(v string) bool {
 	if listedValueIsBare(v) {
 		return true
 	}
+	if hashDoesNotOpenTheValue(v) && r.ask(r.sem().ListedHashIsBareUnlessItOpensTheValue,
+		"a `#` in a listed value that does not open it") {
+		return true
+	}
 	if !hashIsAllThatNeedsQuoting(v) {
 		return false
 	}
 	return r.ask(r.sem().ListedHashIsBareAfterANonName,
 		"a `#` in a listed value with no name in front of it")
+}
+
+// hashDoesNotOpenTheValue reports whether the only reason this value is not
+// bare is a `#`, and no `#` in it is the first byte.
+//
+// The weaker of the two `#` predicates and the reason they are two: the one
+// below asks what stands in front of the first `#`, and this one asks only
+// whether anything does. `a#b` is quoted under that rule and bare under this
+// one, which is exactly where the two shells part.
+func hashDoesNotOpenTheValue(v string) bool {
+	hash := strings.IndexByte(v, '#')
+	if hash <= 0 {
+		return false
+	}
+	for i := 0; i < len(v); i++ {
+		if v[i] != '#' && !listedByteIsOrdinary(v[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // hashIsAllThatNeedsQuoting reports whether the only reason this value is not
@@ -216,6 +270,36 @@ func hasControl(v string) bool {
 //
 // Only a value ending in a quote can show it, which is why it took a probe
 // written to end in one.
+// singleQuotedEscaped is bash's spelling: the whole value inside one pair of
+// single quotes, with each embedded quote written as a closing quote, an
+// escaped quote and a reopening one.
+//
+// The exception is the value that is *nothing but* one quote, which bash 5
+// writes as an escaped quote alone — measured 2026-09-12 in 5.3.15, over a
+// bare `set` and over `alias`, and it is the one-byte value alone: a value of
+// two quotes comes back fully wrapped, empty pairs and all. The 3.2.57 macOS
+// ships has no exception and wraps the single quote too, so this is a version
+// line inside one lineage — the shape ArithDoubleQuote already has — and the
+// preset follows the current build.
+func singleQuotedEscaped(v string) string {
+	if v == "'" {
+		return `\'`
+	}
+	return singleQuoted(v, `'\''`, false)
+}
+
+// singleQuotedInRuns is zsh's spelling: the value cut at each quote, every
+// non-empty run wrapped on its own, and each quote written with a backslash
+// outside any quoting.
+//
+// It is the shape quoteInRuns already writes for the `q` modifiers, asked
+// with the predicate pinned true: this value has already been found to need
+// quoting, so the question those ask of each run separately is settled for
+// all of them at once.
+func singleQuotedInRuns(v string) string {
+	return quoteInRuns(v, func(string, int) bool { return true })
+}
+
 func singleQuoted(v, escape string, trimEmptyTail bool) string {
 	quoted := "'" + strings.ReplaceAll(v, "'", escape) + "'"
 	if trimEmptyTail && strings.HasSuffix(v, "'") {

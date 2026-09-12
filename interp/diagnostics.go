@@ -836,46 +836,42 @@ type Diagnostics struct {
 
 	// OptionNeedsArgument is an argument-taking letter whose bundle ended
 	// the argument list — `read -p` with nothing after it. Two verbs: the
-	// builtin's name and the letter without its dash. The status is
-	// BuiltinBadOptionStatus's, which is measured: every shell reports this
-	// the way it reports an option it does not have, 2 everywhere but zsh's
-	// 1, and bash and ksh93 print the same usage line after either.
+	// builtin's name and the letter without its `-`. The status is
+	// BuiltinBadOptionStatus's, which is measured: this is reported the way an
+	// option that does not exist is reported, and a preset that prints a usage
+	// line after one prints it after the other.
 	//
-	// The fallback is bash's own wording — `read: -p: option requires an
-	// argument` — which the substrate had said before any dialect was
-	// measured saying it. ksh93 names the argument it wanted per letter
-	// (`-d: delim argument expected`), which one string per dialect does
-	// not carry; it keeps the fallback.
+	// The fallback is `read: -p: option requires an argument`. A preset that
+	// names the argument it wanted per letter — `-d: delim argument expected` —
+	// is not something one string per preset can carry; it keeps the fallback.
 	OptionNeedsArgument string
 
 	// BuiltinBadName is what a builtin says about an operand that is not a
 	// name, by builtin name. Two verbs: the builtin and the operand.
 	//
-	// A map where BuiltinBadOption is one string, because two of the four
-	// word this one per builtin where they word that one per dialect: ksh93
-	// says `export: 1x: is not an identifier` and `readonly: 1x: invalid
-	// variable name`, and zsh writes the reason before the operand for
-	// `export` and `readonly` and after it for `unset`.
+	// A map where BuiltinBadOption is one string, because a preset may word this
+	// one per builtin where it words that one per preset: `export: 1x: is not an
+	// identifier` beside `readonly: 1x: invalid variable name`, or the reason
+	// written before the operand for two builtins and after it for a third.
 	BuiltinBadName map[string]string
 
 	// BuiltinBadNameNumeric is that wording where the operand begins with a
-	// digit, for the one dialect that tells the two apart: zsh says `not an
-	// identifier: 1x` for `1x` and `not valid in this context: a-b` for
-	// `a-b`. An empty entry means the dialect says the same to both.
+	// digit, for a preset that tells the two apart: `not an identifier: 1x` for
+	// `1x` against `not valid in this context: a-b` for `a-b`. An empty entry
+	// means the preset says the same to both.
 	BuiltinBadNameNumeric map[string]string
 
 	// BuiltinBadNameStatus is what that reports where it is not fatal. Zero
-	// means 1 — dash says 2.
+	// means 1; 2 is also measured.
 	BuiltinBadNameStatus int
 
 	// BuiltinBadNameKeepsValue quotes the operand back as written, `1x=v` and
-	// all, rather than the name in front of the `=`. True in bash and ksh93;
-	// dash and zsh name `1x`.
+	// all, rather than the name in front of the `=`.
 	BuiltinBadNameKeepsValue bool
 
-	// BuiltinUsage is the usage line that follows, by builtin name. bash and
-	// ksh93 print one and word it per builtin, which is why this is a map
-	// where the complaint above is a single string. dash and zsh print none.
+	// BuiltinUsage is the usage line that follows, by builtin name. A preset
+	// that prints one words it per builtin, which is why this is a map where the
+	// complaint above is a single string. Printing none is the other answer.
 	BuiltinUsage map[string]string
 
 	// BuiltinHelp is what a builtin answers `--help` with, by builtin name.
@@ -883,9 +879,9 @@ type Diagnostics struct {
 	// what tells this apart from every neighbor here: a refusal is a
 	// diagnostic and this is not one.
 	//
-	// A name with no entry has no such answer, and `--help` is then an
-	// option the builtin does not have — which is the ordinary refusal
-	// above, and is what one whole dialect does for every builtin it has.
+	// A name with no entry has no such answer, and `--help` is then an option
+	// the builtin does not have — which is the ordinary refusal above, and is
+	// what a preset without the option does for every builtin it has.
 	// So the map answers "does this builtin answer --help" as well as
 	// "with what", and no separate axis says whether the shell has the
 	// option at all.
@@ -914,177 +910,167 @@ type Diagnostics struct {
 	// One verb each — the name — except TypeExternal, which takes the path
 	// as a second.
 	//
-	//	bash   if is a shell keyword     ls is /bin/ls
-	//	dash   if is a shell keyword     ls is /bin/ls
-	//	ksh93  if is a keyword           ls is a tracked alias for /bin/ls
-	//	zsh    if is a reserved word     ls is /bin/ls
+	//	if is a shell keyword     ls is /bin/ls
+	//	if is a keyword           ls is a tracked alias for /bin/ls
+	//	if is a reserved word     ls is /bin/ls
 	//
-	// A function is the same story again: "a function" in two of them, "a
-	// shell function" in a third, and a fourth that names itself in the line.
+	// A function is the same story again: "a function", "a shell function", and
+	// a wording that names the shell itself in the line.
 	TypeKeyword  string
 	TypeBuiltin  string
 	TypeFunction string
-	// TypeFunctionFrom is that sentence for a dialect that names *where* the
+	// TypeFunctionFrom is that sentence for a preset that names *where* the
 	// function was defined. Two verbs: the name and the origin — the path of
 	// the file it was read from, or the shell's own name where the shell
 	// itself defined it.
 	//
-	// Empty means the dialect does not name an origin, which is three of the
-	// four; TypeFunction answers for them. It is a separate field rather than
-	// a second verb on that one because a one-verb format handed two verbs
-	// would silently drop the second, and the point here is that the second
-	// is the part that was missing.
+	// Empty means the preset does not name an origin, and TypeFunction answers
+	// for it. It is a separate field rather than a second verb on that one
+	// because a one-verb format handed two verbs would silently drop the second,
+	// and the point here is that the second is the part that was missing.
 	//
-	// Measured 2026-09-12 on zsh 5.9.2 with `qf` on `$fpath` and `lib.zsh`
-	// holding `sf() { :; }`:
+	// Measured with a function on the function search path and another in a
+	// sourced file:
 	//
 	//	autoload -Uz qf; qf; whence -v qf   qf is a shell function from /…/qf
 	//	source lib.zsh; whence -v sf        sf is a shell function from /…/lib.zsh
-	//	g(){ :; }; whence -v g              g is a shell function from zsh
+	//	g(){ :; }; whence -v g              g is a shell function from <shell>
 	//
-	// The third row is what the fixed string used to give all three, which is
-	// why nothing noticed: every test that defines its function in the
-	// snippet it runs is on that row. There is a fourth — a program on
-	// standard input, where the clause is absent altogether — and
-	// Runner.functionOrigin is where that is decided.
+	// The third row is what a fixed string gives all three, which is why nothing
+	// notices: every test that defines its function in the snippet it runs is on
+	// that row. There is a fourth — a program on standard input, where the
+	// clause is absent altogether — and Runner.functionOrigin is where that is
+	// decided.
 	TypeFunctionFrom string
 	TypeExternal     string
 
-	// TypeUndefinedFunction is that line again for a function whose body has
-	// not been read yet, in the two shells that have such a thing. One verb,
-	// the name, and empty in a shell where a function is a function:
+	// TypeUndefinedFunction is that line again for a function whose body has not
+	// been read yet, under a preset that has such a thing. One verb, the name,
+	// and empty where a function is a function:
 	//
-	//	zsh    myfn is an autoload shell function
-	//	ksh93  myfn is an undefined function
+	//	myfn is an autoload shell function
+	//	myfn is an undefined function
 	//
 	// Which name is one is [Runner.SetUndefinedFunctions], asked in the same
 	// place and by the same rule that decides how it lists.
 	TypeUndefinedFunction string
 
-	// TypeNotFound is a name `type` could not account for. One verb: the
-	// name. Two of the four write it with no shell name or location in
-	// front, which TypeNotFoundUnprefixed says.
+	// TypeNotFound is a name `type` could not account for. One verb: the name.
+	// Some presets write it with no shell name or location in front, which
+	// TypeNotFoundUnprefixed says.
 	//
-	//	bash   bash: line 1: type: nope: not found
-	//	dash   nope: not found
-	//	ksh93  ksh: whence: nope: not found
-	//	zsh    nope not found
+	//	<shell>: line 1: type: nope: not found
+	//	nope: not found
+	//	<shell>: whence: nope: not found
+	//	nope not found
 	TypeNotFound           string
 	TypeNotFoundUnprefixed bool
 
-	// TypeNotFoundOnStdout writes that line to standard output rather than
-	// to standard error, which is half the panel:
+	// TypeNotFoundOnStdout writes that line to standard output rather than to
+	// standard error, which the presets split evenly on.
 	//
-	//	bash   standard error
-	//	dash   standard output
-	//	ksh93  standard error
-	//	zsh    standard output
-	//
-	// It is a question of its own and not a consequence of the wording. Two
-	// shells treat a name they could not account for as a *report* — part of
-	// what the reader asked `type` for, and so an answer — and two treat it
-	// as a complaint about the request. Nothing else about the builtin
+	// It is a question of its own and not a consequence of the wording. One
+	// reading treats a name it could not account for as a *report* — part of
+	// what the reader asked `type` for, and so an answer — and the other treats
+	// it as a complaint about the request. Nothing else about the builtin
 	// follows from which: the status is settled separately by
 	// TypeNotFoundStatus, and the prefix by TypeNotFoundUnprefixed.
 	//
-	// The stream is visible in ways the wording is not. On the two shells
-	// that report it, `type nope 2>/dev/null` still prints the line and
-	// `p=$(type -p nope)` captures it; on the two that complain, both are
-	// silent. It is also why a multi-name invocation reads in order there —
-	// `type -t f cd if ls` puts every line, found or not, in one stream.
+	// The stream is visible in ways the wording is not. Where it is reported,
+	// `type nope 2>/dev/null` still prints the line and `p=$(type -p nope)`
+	// captures it; where it is a complaint, both are silent. It is also why a
+	// multi-name invocation reads in order there — `type -t f cd if ls` puts
+	// every line, found or not, in one stream.
 	//
-	// A dialect that both prefixes the line and reports it on standard
-	// output is not in the panel, but the two fields do not constrain each
-	// other: the prefix is chosen first and the stream carries whatever
-	// results.
+	// No measured preset both prefixes the line and reports it on standard
+	// output, but the two fields do not constrain each other: the prefix is
+	// chosen first and the stream carries whatever results.
 	TypeNotFoundOnStdout bool
 
-	// TypeNotFoundStatus is what `type` reports when a name was not
-	// accounted for. Zero means 1, which is three of the four; dash answers
-	// with a missing command's 127.
+	// TypeNotFoundStatus is what `type` reports when a name was not accounted
+	// for. Zero means 1, the common answer; a missing command's 127 is also
+	// measured.
 	TypeNotFoundStatus int
 
 	// CommandVNotFound is what `command -V` says about a name that is
-	// nothing, which is `type`'s complaint with a different name in front:
-	// two shells blame `command`, and the two that keep the shell's name off
-	// the line here keep it off there too — TypeNotFoundUnprefixed,
-	// TypeNotFoundOnStdout and TypeNotFoundStatus speak for both builtins.
-	// One verb, the name.
+	// nothing, which is `type`'s complaint with a different name in front: a
+	// preset may blame `command`, and one that keeps the shell's name off the
+	// line here keeps it off there too — TypeNotFoundUnprefixed,
+	// TypeNotFoundOnStdout and TypeNotFoundStatus speak for both builtins. One
+	// verb, the name.
 	CommandVNotFound string
 
 	// FunctionListingHeader is how a function said back whole begins —
 	// `declare -f`, and the `type` that follows its sentence with the body.
-	// Two verbs: the name, and the laid-out body, which starts at its
-	// opening brace. bash gives the brace a line of its own and zsh keeps it
-	// on the header's, which is why the join is the dialect's to word; the
-	// layout inside the braces is the dialect's function layout.
+	// Two verbs: the name, and the laid-out body, which starts at its opening
+	// brace. A preset may give the brace a line of its own or keep it on the
+	// header's, which is why the join is the preset's to word; the layout inside
+	// the braces is the preset's function layout.
 	FunctionListingHeader string
 
-	// FunctionListingKeywordHeader is that header for a function declared
-	// with the `function` word, where the dialect writes the word back.
-	// Empty means the dialect writes one header for both spellings, which
-	// is three of the four.
+	// FunctionListingKeywordHeader is that header for a function declared with
+	// the `function` word, where the preset writes the word back. Empty means
+	// the preset writes one header for both spellings.
 	//
-	// It exists because in one shell the two spellings are two *programs*.
-	// ksh93's `typeset` declares a local in a `function f { … }` body and
+	// It exists because under one preset the two spellings are two *programs*:
+	// its declaration keyword declares a local in a `function f { … }` body and
 	// assigns the global in an `f() { … }` one — see
 	// Semantics.TypesetLocalNeedsKeywordFunction — so a listing that wrote
-	// `f () ` back for a keyword function hands over a program whose
-	// variables are global where the original's were local. That is #1406's
-	// failure one layer up: the body goes through syntax.Print, which does
-	// keep FuncDecl.Keyword, and the header does not go through it at all.
+	// `f () ` back for a keyword function hands over a program whose variables
+	// are global where the original's were local. The body goes through
+	// syntax.Print, which does keep FuncDecl.Keyword; the header does not go
+	// through it at all.
 	//
-	// Measured 2026-09-08 and again 2026-09-12 on ksh93u+ 2012-08-01:
-	// `functions g` writes `function g { typeset x=1; }` for the keyword
-	// form and `f(){ :; }` for the other. bash 5.3, bash 3.2 and zsh 5.9.2
-	// write `f () ` back for either spelling, which they may because
-	// `typeset` declares a local in both bodies there.
+	// Measured: `functions g` writes `function g { typeset x=1; }` for the
+	// keyword form and `f(){ :; }` for the other. A preset whose declaration
+	// keyword is local in both bodies may write `f () ` back for either
+	// spelling.
 	FunctionListingKeywordHeader string
 
 	// FunctionNameListing is how a **names-only** function listing spells
 	// one name — `typeset +f`, `declare -F` with an operand. One verb, the
-	// name. Empty is the bare name, which is what two of the three shells
-	// with the shape write.
+	// name. Empty is the bare name, which is the common answer among presets
+	// with the shape.
 	//
-	// A wording rather than a plain print because ksh93 writes the spelling
-	// the function was *declared* with: measured, `f()` for a parenthesised
-	// declaration. The name is written **raw** in every dialect — a listing
-	// of names is a list and not a program that reads back — so what this
-	// carries is punctuation and never quoting.
+	// A wording rather than a plain print because a preset may write the
+	// spelling the function was *declared* with — `f()` for a parenthesised
+	// declaration. The name is written **raw** under every preset — a listing of
+	// names is a list and not a program that reads back — so what this carries
+	// is punctuation and never quoting.
 	FunctionNameListing string
 
-	// FunctionNameListingKeyword is that spelling for a function declared
-	// with the `function` word. Empty falls back to FunctionNameListing,
-	// which is every dialect that does not tell the two apart.
+	// FunctionNameListingKeyword is that spelling for a function declared with
+	// the `function` word. Empty falls back to FunctionNameListing, which is
+	// every preset that does not tell the two apart.
 	//
-	// Measured on ksh93u+: `f() { :; }; function g { :; }; typeset +f`
-	// writes `f()` and then `g`. The pair in one listing is what makes it
-	// visible — a row with one declaration form reads as a fixed suffix.
+	// Measured with `f() { :; }; function g { :; }; typeset +f`, which writes
+	// `f()` and then `g`. The pair in one listing is what makes it visible — a
+	// row with one declaration form reads as a fixed suffix.
 	FunctionNameListingKeyword string
 
 	// BuiltinUsageUnprefixed writes it with no location and no shell name in
-	// front, which is what ksh93 does with every usage line.
+	// front, which is what a preset that treats a usage line as not-a-diagnostic
+	// does with every one.
 	BuiltinUsageUnprefixed bool
 
 	// JobLine is one row of a `jobs` listing. Four verbs: the number, the
 	// marker that says which job `%%` means, the state and the command.
 	//
-	// All four are filled in, and none of them agrees with another about any
-	// of it — measured to the byte:
+	// Every preset fills this in, and no two agree about any of it — measured to
+	// the byte:
 	//
-	//	bash   [1]-  Running                    sleep 0.3 &
-	//	dash   [2] + Running
-	//	ksh93  [2] +  Running                 <command unknown>
-	//	zsh    [1]  - running    sleep 0.3
+	//	[1]-  Running                    sleep 0.3 &
+	//	[2] + Running
+	//	[2] +  Running                 <command unknown>
+	//	[1]  - running    sleep 0.3
 	//
-	// The marker spacing, the width of the state column and the case of the
-	// word are all this string's business. Whether the command is there is
-	// not: dash and ksh93 kept no text for a `&` job, which
-	// JobsShowBackgroundCommand answers, and JobUnknownCommand is only what
-	// to print in its place.
+	// The marker spacing, the width of the state column and the case of the word
+	// are all this string's business. Whether the command is there is not: a
+	// preset that kept no text for a `&` job is what JobsShowBackgroundCommand
+	// answers, and JobUnknownCommand is only what to print in its place.
 	//
-	// ksh93's running state carries a leading space of its own, so that its
-	// stopped and running lines end in the same column. Odd, and exactly
+	// One of those running states carries a leading space of its own, so that
+	// its stopped and running lines end in the same column. Odd, and exactly
 	// what it does.
 	JobLine string
 

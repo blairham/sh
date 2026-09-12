@@ -442,12 +442,11 @@ type Dialect struct {
 	ForBraceBody bool
 
 	// ShortForm is the family of compound commands whose body may be written
-	// without the words that ordinarily open and close it. One shell in the
-	// panel has it; the other four refuse every shape below.
+	// without the words that ordinarily open and close it. A preset that lacks
+	// it refuses every shape below.
 	//
-	// It was called ShortLoop, and the name was the reason its coverage
-	// stopped where it did: `if` is not a loop, and the rule the flag stands
-	// for has nothing to do with looping (#827).
+	// Naming it for loops is what narrows its coverage wrongly: `if` is not a
+	// loop, and the rule the flag stands for has nothing to do with looping.
 	//
 	// Two productions, and they are one flag because they are one feature —
 	// a loop header that has ended may be followed by its body directly:
@@ -482,33 +481,33 @@ type Dialect struct {
 	ShortForm bool
 
 	// Repeat is `repeat N`, a loop over a count rather than over a list or a
-	// condition. One shell in the panel has it; the other four read the word
-	// as an ordinary command name.
+	// condition. A preset that lacks it reads the word as an ordinary command
+	// name.
 	//
 	// It is a separate flag from ShortForm because the two are separate
-	// questions — a shell could have the construct and spell its body only
-	// as `do … done` — and because the word is a keyword only where a
-	// command may begin: `repeat=5` is an ordinary assignment there.
+	// questions — a preset could have the construct and spell its body only as
+	// `do … done` — and because the word is a keyword only where a command may
+	// begin: `repeat=5` is an ordinary assignment there.
 	Repeat bool
 
-	// Foreach is `foreach name (a b) … end`, the same loop a `for` is under
-	// a different pair of words. One shell in the panel has it.
+	// Foreach is `foreach name (a b) … end`, the same loop a `for` is under a
+	// different pair of words.
 	//
 	// `end` is the whole of what it adds: the list is the parenthesized one
 	// ShortForm already reads, and `for name (a b); …; end` is refused —
-	// measured — so the terminator belongs to the opening word rather than
-	// to the list.
+	// measured — so the terminator belongs to the opening word rather than to
+	// the list.
 	Foreach bool
 
 	// TryAlways is `{ … } always { … }`: a brace group whose second half runs
-	// however the first half ended. One shell in the panel has it; the other
-	// five call the word a syntax error where it stands.
+	// however the first half ended. A preset that lacks it calls the word a
+	// syntax error where it stands.
 	//
 	// **It is positional and not a reserved word, which is the whole of the
-	// grammar.** Measured 2026-09-07 against zsh 5.9.2: `always` alone is
-	// `command not found`, `always() { :; }` defines a function, `echo
-	// always` prints it and `x=always` assigns it — so the word may not join
-	// stopWords or reservedWords. It is read only where a brace group has
+	// grammar.** Where it exists, `always` alone is `command not found`,
+	// `always() { :; }` defines a function, `echo always` prints it and
+	// `x=always` assigns it — so the word may not join stopWords or
+	// reservedWords. It is read only where a brace group has
 	// just closed, and nothing else there will do:
 	//
 	//	{ echo t; } always { echo a; }     the construct
@@ -523,9 +522,9 @@ type Dialect struct {
 	//	for i in a; { :; } always { … }    including a loop's brace body
 	//	f() { :; } always { … }            nor a function definition's
 	//
-	// Every one of those is a parse error in the shell that has the
-	// construct, and the first two run there as two commands. So the flag
-	// gates one production hanging off the brace group and never the lexer.
+	// Every one of those is a parse error under the preset that has the
+	// construct, and the first two run there as two commands. So the flag gates
+	// one production hanging off the brace group and never the lexer.
 	//
 	// Redirections belong to the whole construct rather than to either half:
 	// `{ echo t; } always { echo a; } > /dev/null` prints nothing at all.
@@ -533,38 +532,36 @@ type Dialect struct {
 	TryAlways bool
 
 	// AnonymousFunction is `() { … }` and `function { … }`: a function with
-	// no name, defined and run where it stands, with the words after it as
-	// its positional parameters. One shell in the panel has it; in the other
-	// four a `(` where a command begins opens a subshell and `()` is a
-	// syntax error.
+	// no name, defined and run where it stands, with the words after it as its
+	// positional parameters. Where it is off, a `(` where a command begins opens
+	// a subshell and `()` is a syntax error.
 	AnonymousFunction bool
 
-	// AppendAssign enables `name+=value`, which appends rather than
-	// replacing. Absent from dash, where `x+=b` is a command called `x+=b`.
+	// AppendAssign enables `name+=value`, which appends rather than replacing.
+	// Where it is off, `x+=b` is a command called `x+=b`.
 	AppendAssign bool
 
 	// PositionalAssignment lets an assignment's *name* half be a run of
 	// decimal digits, so `1=abc` writes the first positional parameter.
 	//
-	// A grammar flag rather than an axis, because the difference is in what
-	// the word *is* and not in what is then done with it. Measured
-	// 2026-09-07 with `set -- x; 1=abc; echo $1`: bash 5.3.15, that binary
-	// as `sh`, bash 3.2.57, dash and ksh93 all take the word as a command
-	// name and answer `1=abc: command not found` at 127, and zsh 5.9.2
-	// prints `abc`. The two readings are told apart by what the word is
-	// *subjected to*, which is the discriminating probe: `set -- x; 1=*`
-	// leaves `$1` holding a literal `*` in zsh — an assignment's value is
-	// neither globbed nor split — where bash globs the whole word and
-	// complains about `1=*`, and `v="a b"; 1=$v` leaves one parameter
-	// holding `a b` in zsh where bash splits and complains about `1=a`. A
-	// word that is expanded one way in one shell and another way in another
-	// is a difference in the parse, so it belongs here.
+	// A grammar flag rather than an axis, because the difference is in what the
+	// word *is* and not in what is then done with it. With `set -- x; 1=abc;
+	// echo $1`, a false preset takes the word as a command name and answers
+	// `1=abc: command not found` at 127, and a true one prints `abc`. The two
+	// readings are told apart by what the word is *subjected to*, which is the
+	// discriminating probe: `set -- x; 1=*` leaves `$1` holding a literal `*`
+	// under true — an assignment's value is neither globbed nor split — where
+	// false globs the whole word and complains about `1=*`, and
+	// `v="a b"; 1=$v` leaves one parameter holding `a b` under true where false
+	// splits and complains about `1=a`. A word that is expanded one way under
+	// one preset and another way under another is a difference in the parse, so
+	// it belongs here.
 	//
 	// Only a bare run of digits. A subscript on one is not this construct:
-	// `1[0]=v` is a command name in zsh too, and globs as one. And the
+	// `1[0]=v` is a command name under true too, and globs as one. And the
 	// grammar is where it ends — a *declaration* still refuses the digits it
 	// admits, because `local 1=abc`, `typeset 1=(a b)`, `export 1=x` and
-	// `readonly 1` are each `not an identifier: 1` in the same shell. So the
+	// `readonly 1` are each `not an identifier: 1` under the same preset. So the
 	// declaration path reads the operand and the utility refuses the name,
 	// which is where that complaint is already worded.
 	//

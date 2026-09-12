@@ -479,3 +479,37 @@ func TestViEditingIsTheOption(t *testing.T) {
 		}
 	}
 }
+
+// TestTheCommandKeymapIsTheChangesAndNothingElse is the guard on the bug that
+// only the shipped binary showed.
+//
+// The table handed to the editor is an *override layer*, and the command map
+// has nothing to be an override of: what the editor does with a key there is
+// the mode itself. Built from the same defaults as the typing map, it handed
+// the editor an override for every key in that table — and Return stopped
+// accepting the line, because `accept-line` is the editor's own control flow
+// and has no widget for an override to carry.
+func TestTheCommandKeymapIsTheChangesAndNothingElse(t *testing.T) {
+	var buf strings.Builder
+	r := preset.Runner(dialecttest.Base{Stdout: &buf, Stderr: &buf})
+	r.Interactive = true
+	if _, err := r.Run(t.Context(), preset.Parse(t, "set -o vi")); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got := bash.KeyBindings(r, repl.KeymapViCommand); len(got) != 0 {
+		t.Errorf("with nothing bound into it the command keymap = %v, want empty", got)
+	}
+	// Return above all: a key with no widget behind it, present in the table,
+	// is a key bound to nothing.
+	if _, present := bash.KeyBindings(r, repl.KeymapViCommand)["\r"]; present {
+		t.Errorf("Return is in the command keymap, and nobody put it there")
+	}
+	// And the control: one binding written into it is one entry.
+	if _, err := r.Run(t.Context(), preset.Parse(t, `bind -m vi-command '"\C-g": clear-screen'`)); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	got := bash.KeyBindings(r, repl.KeymapViCommand)
+	if len(got) != 1 || got["\a"] != (repl.Binding{Widget: repl.WidgetClearScreen}) {
+		t.Errorf("command keymap = %v, want only the key that was bound", got)
+	}
+}

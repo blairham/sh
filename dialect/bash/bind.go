@@ -297,7 +297,7 @@ func registerBind(r *interp.Runner) {
 // listing says so plainly by showing the text back — see bindMacro.
 func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 	out := map[string]repl.Binding{}
-	for seq, bound := range readBindings(r, keymapFor(r, km)) {
+	for seq, bound := range keymapBindings(r, km) {
 		if bound.command {
 			// A key `bind -x` put a shell command on. The command text rides
 			// Function, which repl does not look inside — see
@@ -309,16 +309,46 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 		if km == repl.KeymapMain {
 			// A key whose binding is the editor's own default is left out, so
 			// that the table stays the override layer repl/bindings.go
-			// describes. Only for the typing map: defaultBindings is what
-			// *this* editor does with a key while a line is being typed, and
-			// in command mode the same key means something else entirely — so
-			// comparing against it there would drop a binding a person wrote
-			// on the grounds that an unrelated map agrees with it.
+			// describes. There is nothing to compare against in the command
+			// map — see keymapBindings.
 			if def, standard := defaultBindings[seq]; standard && def == bound.target {
 				continue
 			}
 		}
 		out[seq] = repl.Binding{Widget: bindFunctions[bound.target]}
+	}
+	return out
+}
+
+// keymapBindings is what the editor is told about one of its two states.
+//
+// **The command map is the changes and nothing else**, and that is the whole
+// of the difference. What the editor does with a key while a line is being
+// typed is defaultBindings, which is why the typing map starts from it and
+// then drops whatever still matches; what the editor does with a key in
+// command mode is the *mode*, a dispatch rather than a table, and there is no
+// table here that describes it. Starting from defaultBindings there would
+// hand the editor an override for every key in it, each one either dead or
+// meaning what it means while typing — measured in the shipped binary,
+// Return in command mode stopped accepting the line, because `accept-line` is
+// the editor's own control flow and has no widget to be overridden with.
+//
+// A key the command map *removes* is present and bound to nothing, so it does
+// nothing rather than reaching the mode's own dispatch. That is what removing
+// a binding means, and it is the answer the other dialect's `bindkey -r`
+// already gives.
+func keymapBindings(r *interp.Runner, km repl.Keymap) map[string]bindEntry {
+	if km != repl.KeymapViCommand {
+		return readBindings(r, currentKeymap(r))
+	}
+	out := map[string]bindEntry{}
+	flat, _ := r.GetArray(bindStore)
+	for i := 0; i+bindRecord <= len(flat); i += bindRecord {
+		if flat[i] != "vi-command" {
+			continue
+		}
+		seq, target, kind := flat[i+1], flat[i+2], flat[i+3]
+		out[seq] = bindEntry{target: target, command: kind == bindKindCommand}
 	}
 	return out
 }
@@ -394,19 +424,6 @@ func currentKeymap(r *interp.Runner) string {
 		return "vi-insert"
 	}
 	return "emacs"
-}
-
-// keymapFor is the table behind one of the editor's two states.
-//
-// The command map is not "whichever map is current" — it is the one map this
-// shell keeps for command mode, under all three of the names `bind -m` takes
-// for it. Asking currentKeymap for it would answer `vi-insert`, which is the
-// map for typing and the reason a command binding never fired.
-func keymapFor(r *interp.Runner, km repl.Keymap) string {
-	if km == repl.KeymapViCommand {
-		return "vi-command"
-	}
-	return currentKeymap(r)
 }
 
 // bindUsage is the line a refused option prints after the complaint, which

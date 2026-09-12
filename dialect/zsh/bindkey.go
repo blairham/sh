@@ -231,15 +231,12 @@ func registerBindkey(r *interp.Runner) {
 // which a plugin's wrapper around a standard widget can work. See zle.go.
 func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 	out := map[string]repl.Binding{}
-	for seq, widget := range readBindings(r, keymapFor(r, km)) {
+	for seq, widget := range keymapBindings(r, km) {
 		if km == repl.KeymapMain {
 			// A key left at the editor's own default is left out, so that the
-			// table stays the override layer repl/bindings.go describes. Only
-			// for the typing map: defaultBindings is what this editor does
-			// with a key while a line is being typed, and in command mode the
-			// same key means something else — so comparing against it there
-			// would drop a `bindkey -M vicmd` a person wrote because an
-			// unrelated map happens to agree with it.
+			// table stays the override layer repl/bindings.go describes.
+			// There is nothing to compare against in the command map — see
+			// keymapBindings.
 			if def, standard := defaultBindings[seq]; standard && def == widget {
 				continue
 			}
@@ -249,6 +246,36 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 			continue
 		}
 		out[seq] = repl.Binding{Widget: bindkeyWidgets[widget]}
+	}
+	return out
+}
+
+// keymapBindings is what the editor is told about one of its two states.
+//
+// **`vicmd` is the changes and nothing else**, and that is the whole of the
+// difference. defaultBindings is what this editor does with a key while a line
+// is being *typed*; what it does with a key in command mode is the mode — a
+// dispatch rather than a table — and there is no table here that describes it.
+// Starting from defaultBindings there would hand the editor an override for
+// every key in it, each one either dead or meaning what it means while typing.
+// Measured in the shipped binary: Return in command mode stopped accepting the
+// line, because `accept-line` is the editor's own control flow and has no
+// widget to be overridden with.
+//
+// A key `bindkey -M vicmd -r` removed is still present and bound to nothing,
+// which is how a removal reaches the editor here and is why the store is read
+// as it stands.
+func keymapBindings(r *interp.Runner, km repl.Keymap) map[string]string {
+	if km != repl.KeymapViCommand {
+		return readBindings(r, currentKeymap(r))
+	}
+	out := map[string]string{}
+	flat, _ := r.GetArray(bindkeyStore)
+	for i := 0; i+3 <= len(flat); i += 3 {
+		if flat[i] != "vicmd" {
+			continue
+		}
+		out[flat[i+1]] = flat[i+2]
 	}
 	return out
 }
@@ -284,18 +311,6 @@ func readBindings(r *interp.Runner, keymap string) map[string]string {
 		out[flat[i+1]] = flat[i+2]
 	}
 	return out
-}
-
-// keymapFor is the table behind one of the editor's two states.
-//
-// `vicmd` is not "whichever keymap is current": it is the one map this shell
-// keeps for command mode, and asking currentKeymap for it would answer `viins`
-// — the map for typing, and the reason a `bindkey -M vicmd` never fired.
-func keymapFor(r *interp.Runner, km repl.Keymap) string {
-	if km == repl.KeymapViCommand {
-		return "vicmd"
-	}
-	return currentKeymap(r)
 }
 
 // changeBinding records one change against the current keymap, replacing any

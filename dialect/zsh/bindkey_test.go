@@ -354,3 +354,27 @@ func TestViEditingIsAskedOfTwoCommands(t *testing.T) {
 		}
 	}
 }
+
+// TestTheCommandKeymapIsTheChangesAndNothingElse is the guard on the bug that
+// only the shipped binary showed.
+//
+// The table handed to the editor is an *override layer*, and `vicmd` has
+// nothing to be an override of: what the editor does with a key there is the
+// mode itself. Built from the same defaults as the typing map, it handed the
+// editor an override for every key in that table — and Return stopped
+// accepting the line, because `accept-line` is the editor's own control flow
+// and has no widget for an override to carry.
+func TestTheCommandKeymapIsTheChangesAndNothingElse(t *testing.T) {
+	r := bindkeyRunner(t, "bindkey -v\n")
+	if got := zsh.KeyBindings(r, repl.KeymapViCommand); len(got) != 0 {
+		t.Errorf("with nothing bound into it, vicmd = %v, want empty", got)
+	}
+	if _, present := zsh.KeyBindings(r, repl.KeymapViCommand)["\r"]; present {
+		t.Errorf("Return is in vicmd, and nobody put it there")
+	}
+	r = bindkeyRunner(t, "bindkey -v\nbindkey -M vicmd '^G' clear-screen\n")
+	got := zsh.KeyBindings(r, repl.KeymapViCommand)
+	if len(got) != 1 || got["\a"] != (repl.Binding{Widget: repl.WidgetClearScreen}) {
+		t.Errorf("vicmd = %v, want only the key that was bound", got)
+	}
+}

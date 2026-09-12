@@ -216,6 +216,10 @@ func Semantics() interp.Semantics {
 	// counts, -d, -t, -u) is refused as unknown here.
 	s.ReadOptions = "rp:"
 	// dash has the two POSIX letters and calls anything else illegal.
+	// unanswered UnsetReferenceLetterRemovesANonReference: this shell has no
+	// `-n` on `unset` to ask it with. Measured 2026-09-12, `unset -n x` is
+	// `unset: Illegal option -n` and the operand is never read, so there is no
+	// name for the question to be about (#932).
 	s.UnsetOptions = "vf"
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
@@ -300,6 +304,9 @@ func Semantics() interp.Semantics {
 	// can be asked. An answer here would be an invention.
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
+	// Measured 2026-09-12: `OLDPWD=/nonexistent dash -c 'echo $OLDPWD'` answers
+	// the path it was given, and `cd -` then answers `can't cd to` it at 2.
+	s.InheritedOldpwd = interp.InheritedOldpwdTaken
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.No

@@ -641,6 +641,37 @@ type Semantics struct {
 	// one, is zsh's alone. Measured 2026-09-05 across the panel. Empty means
 	// `vf`, which is what POSIX gives the builtin.
 	UnsetOptions string
+	// UnsetReferenceLetterRemovesANonReference decides `unset -n name` where
+	// the name is an ordinary variable rather than a name reference.
+	//
+	// `-n` means "unset the reference itself rather than what it points at",
+	// and both shells that have the letter agree about a real one: measured
+	// 2026-09-12, `typeset -n r=x; x=1; unset -n r` leaves `r` gone and `x`
+	// standing in bash 5.3.15 and ksh93u+ alike, where `unset r` without the
+	// letter follows the reference and takes `x`.
+	//
+	// What splits them is a name that is not a reference. ksh93 removes it
+	// like any other name; bash reads it as naming nothing at all and removes
+	// nothing, reporting 0 either way:
+	//
+	//	x=1; unset -n x; echo "st=$? [${x-gone}]"
+	//	bash 5.3, bash-as-`sh`  st=0 [1]      ksh93  st=0 [gone]
+	//
+	// Only those two reach it. bash 3.2 answers `unset: -n: invalid option`
+	// at 2, dash `Illegal option -n`, and zsh `bad option: -n` at 1, so the
+	// letter is refused before there is a name to ask about — see
+	// UnsetOptions, which is where that refusal comes from.
+	//
+	// bash's reading reaches further than the value. `unset -n 1x` is silent
+	// at 0 where plain `unset 1x` refuses the name, so the letter skips the
+	// identifier check as well; a readonly name is still refused, in the same
+	// words and at the same status as without the letter.
+	//
+	// This shell has no name references at all — `typeset -n` is refused as
+	// unimplemented — so *every* name reaches this question today. When
+	// references arrive, the axis stays what it is and the reference case
+	// joins it as the unanimous half.
+	UnsetReferenceLetterRemovesANonReference Answer
 	// ReadZeroTimeout is what `read -t 0` asks of the stream — a poll, a
 	// read of what is already waiting, or a read that commits once it has
 	// begun. Asked only where `-t 0` is actually written; every other
@@ -1530,6 +1561,11 @@ type Semantics struct {
 	// `${OPTARG-}` can tell the two apart.
 	GetoptsClearsOptarg Answer
 
+	// InheritedOldpwd is what becomes of an `OLDPWD` the shell was handed in
+	// its environment: taken as it stands, taken only when it names a
+	// directory, or not read at all. See InheritedOldpwdPolicy, which carries
+	// the measurements and the reason this is not a question about `cd`.
+	InheritedOldpwd InheritedOldpwdPolicy
 	// CdWithoutHomeIsAnError makes `cd` with no operand and no HOME a
 	// failure. True in bash and ksh93; dash and zsh stay where they are and
 	// report success, which is the quieter answer and the surprising one.

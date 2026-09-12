@@ -577,6 +577,11 @@ func TestCdAnswers(t *testing.T) {
 	if got, want := s.CdWithoutHomeIsAnError, interp.No; got != want {
 		t.Errorf("CdWithoutHomeIsAnError = %v, want %v", got, want)
 	}
+	// And it reads no inherited OLDPWD, which is why `cd -` with an unusable
+	// one is silent at 0 rather than a refusal it declines to print (#1490).
+	if got, want := s.InheritedOldpwd, interp.InheritedOldpwdIgnored; got != want {
+		t.Errorf("InheritedOldpwd = %v, want %v", got, want)
+	}
 	if got, want := d.CdCannotChange, "%[2]s: %[1]s"; got != want {
 		t.Errorf("CdCannotChange = %q, want %q", got, want)
 	}

@@ -432,6 +432,12 @@ func Semantics() interp.Semantics {
 	// `unset -n x` is an invalid option there and under `--posix` — so
 	// this is 5.3's set, which is the binary the panel measures.
 	s.UnsetOptions = "vfn"
+	// Measured 2026-09-12: `x=1; unset -n x` leaves `x` at 1 and reports 0,
+	// where ksh93 removes it. `-n` names the reference and this shell reads a
+	// name that is not one as naming nothing at all — far enough that
+	// `unset -n 1x` is silent at 0 while plain `unset 1x` refuses the
+	// identifier, though a readonly name is still refused (#932).
+	s.UnsetReferenceLetterRemovesANonReference = interp.No
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
@@ -821,6 +827,12 @@ func Semantics() interp.Semantics {
 	// the newer answer and the one `getopts ab o; g; getopts ab o` reads `b`
 	// from (#2226).
 	s.GetoptsLocalOptindRestoresTheCursor = interp.Yes
+	// Measured 2026-09-12: `OLDPWD=/nonexistent bash -c 'echo ${OLDPWD-UNSET}'`
+	// answers UNSET, and the same with a directory answers the directory. A
+	// plain file is dropped and a mode-000 directory is kept, so the test is a
+	// stat rather than the one `cd` makes. bash 3.2 drops an inherited OLDPWD
+	// whatever it names, which is a fourth answer and not this dialect's.
+	s.InheritedOldpwd = interp.InheritedOldpwdTakenIfADirectory
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.Yes

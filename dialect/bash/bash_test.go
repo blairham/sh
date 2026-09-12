@@ -392,6 +392,12 @@ func TestCdAnswers(t *testing.T) {
 	if got, want := s.CdDashPrintsTheDirectory, interp.Yes; got != want {
 		t.Errorf("CdDashPrintsTheDirectory = %v, want %v", got, want)
 	}
+	// Not a `cd` answer at all, which is the point of pinning it beside
+	// them: `cd -` says `OLDPWD not set` for `OLDPWD=/nonexistent` because
+	// this shell drops such a value before the first command runs (#1490).
+	if got, want := s.InheritedOldpwd, interp.InheritedOldpwdTakenIfADirectory; got != want {
+		t.Errorf("InheritedOldpwd = %v, want %v", got, want)
+	}
 	if got, want := d.CdCannotChange, "cd: %[1]s: %[2]s"; got != want {
 		t.Errorf("CdCannotChange = %q, want %q", got, want)
 	}

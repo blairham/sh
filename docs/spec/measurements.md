@@ -5965,6 +5965,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `unset/takes-away-an-environment-name` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` |
 | `unset/the-m-option-unsets-by-pattern` | **2>** `<shell>: 1: unset: Illegal option -m` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` | **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 0: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]` | **2>** `<shell>: unset: -m: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `st=0 [gone][gone][3]` | **2>** `<shell>: unset: line 0: illegal option -m` *(status 2)* |
 | `unset/the-n-option-splits-the-panel` | **2>** `<shell>: 1: unset: Illegal option -n` *(status 2)* | `st=0` | `st=0` | `st=2` **2>** `<shell>: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]` | `st=0` | `st=1` **2>** `<shell>:unset:1: bad option: -n` | **2>** `<shell>: unset: line 0: illegal option -n` *(status 2)* |
+| `unset/the-n-letter-on-a-name-that-is-not-a-reference` | **2>** `<shell>: 1: unset: Illegal option -n` *(status 2)* | `st=0 [1]` | `st=0 [1]` | `st=2 [1]` **2>** `<shell>: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]` | `st=0 [gone]` | `st=1 [1]` **2>** `<shell>:unset:1: bad option: -n` | **2>** `<shell>: unset: line 0: illegal option -n` *(status 2)* |
+| `unset/the-n-letter-skips-the-identifier-check` | **2>** `<shell>: 1: unset: Illegal option -n` *(status 2)* | `st=0` | `st=0` | `st=2` **2>** `<shell>: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]` | `st=1` **2>** `<shell>: unset: 1x: invalid variable name` | `st=1` **2>** `<shell>:unset:1: bad option: -n` | **2>** `<shell>: unset: line 0: illegal option -n` *(status 2)* |
+| `unset/the-n-letter-still-refuses-a-readonly` | **2>** `<shell>: 1: unset: Illegal option -n` *(status 2)* | `st=1 [1]` **2>** `<shell>: line 1: unset: r: cannot unset: readonly variable` | **2>** `<shell>: line 1: unset: r: cannot unset: readonly variable` *(status 1)* | `st=2 [1]` **2>** `<shell>: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]` | `st=1 [1]` **2>** `<shell>: unset: warning: r: is read only` | `st=1 [1]` **2>** `<shell>:unset:1: bad option: -n` | **2>** `<shell>: unset: line 0: illegal option -n` *(status 2)* |
 | `special/lineno-in-a-function-diverges` | `2` | `2` | `2` | `2` | `2` | `1` | `2` |
 | `special/lineno-in-a-file-a-function-sourced` | `a=0~b=1` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` | `a=1~b=2` |
 | `param/an-unbraced-flag-sigil-before-a-name` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[1]~[hello]~[hello]~[5]` | `[$+v]~[$=v]~[$~v]~[0v]` |
@@ -6128,9 +6131,21 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   x=1 xy=2 z=3; unset -m "x*"; echo "st=$? [${x-gone}][${xy-gone}][${z-gone}]"
   ```
-- `unset/the-n-option-splits-the-panel` — the letter beside it, and the row that says `unset`'s options are the dialect's rather than one set: bash 5.3 and ksh93 take `-n` where bash 3.2, bash-as-`sh`, dash and zsh refuse it, at three statuses and in four wordings. The *value* is deliberately not printed: what `-n` then does to a name that is not a reference splits the two shells that have the letter — bash removes nothing at all and ksh93 removes the variable — which is a second question, and one this shell does not yet answer
+- `unset/the-n-option-splits-the-panel` — the letter beside it, and the row that says `unset`'s options are the dialect's rather than one set: bash 5.3, bash-as-`sh` and ksh93 take `-n` where bash 3.2, dash and zsh refuse it, at three statuses and in three wordings
   ```sh
   x=1; unset -n x; echo "st=$?"
+  ```
+- `unset/the-n-letter-on-a-name-that-is-not-a-reference` — the value the row above leaves out, and it splits the shells that have the letter: `-n` names the reference rather than what it points at, and bash reads a name that is not a reference as naming nothing at all — removing nothing, at 0 — where ksh93 removes the variable like any other name, also at 0. Both report success, which is what makes the value the only way to see it (#932)
+  ```sh
+  x=1; unset -n x; echo "st=$? [${x-gone}]"
+  ```
+- `unset/the-n-letter-skips-the-identifier-check` — how far the reading above reaches: in bash the letter skips the name check too, so a digit-led operand is silent at 0 where plain `unset 1x` refuses it, while ksh93 — which removes the name — still refuses to be handed one that is not an identifier
+  ```sh
+  unset -n 1x; echo "st=$?"
+  ```
+- `unset/the-n-letter-still-refuses-a-readonly` — the one thing the letter does not excuse in either shell that has it: a readonly name is refused in the same words and at the same status as without it, so `-n` is not a quiet way to ask whether a name can be unset
+  ```sh
+  readonly r=1; unset -n r; echo "st=$? [${r-gone}]"
   ```
 - `special/lineno-in-a-function-diverges` — zsh numbers a function's lines from the line the function was written on; the other three count from the file
   ```sh
@@ -8050,6 +8065,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cd/two-operands-rewrite-the-first-occurrence` | `st=2~/private<tmp>/q/w/q/e` **2>** `<shell>: 1: cd: can't cd to w` | `st=2~/private<tmp>/q/w/q/e` **2>** `<shell>: line 1: cd: too many arguments` | `st=2~/private<tmp>/q/w/q/e` **2>** `<shell>: line 1: cd: too many arguments` | `st=1~/private<tmp>/q/w/q/e` **2>** `<shell>: line 0: cd: w: No such file or directory` | `st=1~<tmp>/q/w/q/e` **2>** `<shell>: cd: <tmp>/q/Z/q/e: [No such file or directory]` | `st=1~/private<tmp>/q/w/q/e` **2>** `<shell>:cd:1: no such file or directory: /private<tmp>/q/Z/q/e` | `st=2~<tmp>/q/w/q/e` **2>** `<shell>: cd: line 0: can't cd to w: No such file or directory` |
 | `cd/three-operands` | `st=2~/private<tmp>/x/alpha` **2>** `<shell>: 1: cd: can't cd to alpha` | `st=2~/private<tmp>/x/alpha` **2>** `<shell>: line 1: cd: too many arguments` | `st=2~/private<tmp>/x/alpha` **2>** `<shell>: line 1: cd: too many arguments` | `st=1~/private<tmp>/x/alpha` **2>** `<shell>: line 0: cd: alpha: No such file or directory` | `st=2~<tmp>/x/alpha` **2>** `Usage: cd [-LP] [directory]~   Or: cd [ options ] old new` | `st=1~/private<tmp>/x/alpha` **2>** `<shell>:cd:1: too many arguments` | `st=2~<tmp>/x/alpha` **2>** `<shell>: cd: line 0: can't cd to alpha: No such file or directory` |
 | `cd/no-home-diverges` | `st=0` | `st=1` **2>** `<shell>: line 1: cd: HOME not set` | `st=1` **2>** `<shell>: line 1: cd: HOME not set` | `st=1` **2>** `<shell>: line 0: cd: HOME not set` | `st=1` **2>** `<shell>: cd: bad directory` | `st=0` | `st=0` |
+| `cd/an-inherited-oldpwd-that-is-not-a-directory` | `kept` | `unset` | `unset` | `unset` | `kept` | `pwd` | `kept` |
+| `cd/an-inherited-oldpwd-that-is-a-directory` | `kept` | `kept` | `kept` | `unset` | `kept` | `pwd` | `kept` |
+| `cd/dash-with-an-inherited-oldpwd-that-is-not-a-directory` | `st=2` **2>** `<shell>: 1: cd: can't cd to /nonexistent-oldpwd` | `st=1` **2>** `<shell>: line 1: cd: OLDPWD not set` | `st=1` **2>** `<shell>: line 1: cd: OLDPWD not set` | `st=1` **2>** `<shell>: line 0: cd: OLDPWD not set` | `st=1` **2>** `<shell>: cd: /nonexistent-oldpwd: [No such file or directory]` | `st=0` | `st=2` **2>** `<shell>: cd: line 0: can't cd to /nonexistent-oldpwd: No such file or directory` |
+| `cd/an-oldpwd-set-in-the-shell-that-is-not-a-directory` | `st=2` **2>** `<shell>: 1: cd: can't cd to /nonexistent-oldpwd` | `st=1` **2>** `<shell>: line 1: cd: /nonexistent-oldpwd: No such file or directory` | `st=1` **2>** `<shell>: line 1: cd: /nonexistent-oldpwd: No such file or directory` | `st=1` **2>** `<shell>: line 0: cd: /nonexistent-oldpwd: No such file or directory` | `st=1` **2>** `<shell>: cd: /nonexistent-oldpwd: [No such file or directory]` | `st=0` | `st=2` **2>** `<shell>: cd: line 0: can't cd to /nonexistent-oldpwd: No such file or directory` |
 | `cd/dash-announces-where-it-went` | `printed` | `printed` | `printed` | `printed` | `printed` | `silent` | `printed` |
 | `cd/cdpath-may-announce-the-move` | `announced` | `announced` | `announced` | `announced` | `announced` | `silent` | `announced` |
 | `cd/a-directory-change-hook` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `CHPWDMARK~st=0` | `st=0` |
@@ -8107,6 +8126,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cd/no-home-diverges` — bash and ksh93 call this an error and dash and zsh stay where they are and report success, which is the quieter answer and the surprising one
   ```sh
   unset HOME; cd; echo "st=$?"
+  ```
+- `cd/an-inherited-oldpwd-that-is-not-a-directory` — an OLDPWD handed to the shell in its environment is judged before the first command runs, and the panel gives three answers: dash and ksh93 keep whatever they were given, bash drops a value that does not name a directory, and zsh reads none of it and starts the name at $PWD
+  ```sh
+  case ${OLDPWD-UNSET} in UNSET) echo unset;; /nonexistent-oldpwd) echo kept;; "$PWD") echo pwd;; *) echo other;; esac
+  ```
+- `cd/an-inherited-oldpwd-that-is-a-directory` — the other half, and the one that separates the two bashes: 5.3 honors an inherited OLDPWD that names a directory and 3.2 ignores an inherited one whatever it names, which is a dated answer rather than a disputed one. zsh still reads none of it
+  ```sh
+  case ${OLDPWD-UNSET} in UNSET) echo unset;; /) echo kept;; "$PWD") echo pwd;; *) echo other;; esac
+  ```
+- `cd/dash-with-an-inherited-oldpwd-that-is-not-a-directory` — the row #1490 was filed from, and it follows from the case above rather than from anything in `cd`: bash says `OLDPWD not set` because by now it is unset, zsh has nothing unusable to refuse and reports 0, and dash and ksh93 name the path they kept
+  ```sh
+  cd -; echo "st=$?"
+  ```
+- `cd/an-oldpwd-set-in-the-shell-that-is-not-a-directory` — the contrast that shows the case above is not a branch in `cd`: given the same value by an assignment rather than by the environment, all three bash columns name the path exactly as dash and ksh93 do. zsh is the one column that differs from its own row above, because its `cd -` follows the shell's own directory history rather than the variable
+  ```sh
+  cd /; OLDPWD=/nonexistent-oldpwd; cd -; echo "st=$?"
   ```
 - `cd/dash-announces-where-it-went` — `cd -` prints where it went in three of the four; zsh alone moves silently, so a script that pipes it gets an extra line everywhere but there
   ```sh

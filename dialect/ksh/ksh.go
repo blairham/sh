@@ -637,6 +637,10 @@ func Semantics() interp.Semantics {
 	s.ReadOptions = "rspAd:n:N:t:u:"
 	// ksh93 takes `-n` and refuses `-m`, with its own usage line after it.
 	s.UnsetOptions = "vfn"
+	// Measured 2026-09-12: `x=1; unset -n x` leaves `x` gone at 0, which is
+	// what `unset x` does — the letter changes nothing for a name that is not
+	// a reference, where bash removes nothing at all (#932).
+	s.UnsetReferenceLetterRemovesANonReference = interp.Yes
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutTakesWhatIsWaiting
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No
@@ -895,6 +899,10 @@ func Semantics() interp.Semantics {
 	// word, this shell having no `local`: the caller's position inside a
 	// clustered word comes back with the number.
 	s.GetoptsLocalOptindRestoresTheCursor = interp.Yes
+	// Measured 2026-09-12: `OLDPWD=/nonexistent ksh -c 'echo $OLDPWD'` answers
+	// the path it was given, and `cd -` then names it — this shell judges the
+	// value when something tries to use it and not before.
+	s.InheritedOldpwd = interp.InheritedOldpwdTaken
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.No

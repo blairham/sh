@@ -144,6 +144,7 @@ ash   TypesetLocalNeedsKeywordFunction
 ash   UnicodeEscapeOutsideTheLocale
 ash   UnsetArraySpan
 ash   UnsetEndsTheProducedPipelineStatus
+ash   UnsetReferenceLetterRemovesANonReference
 
 bash  ArithIntegerOperatorRefusesFloat
 bash  ArithSubscriptSkippedWhenNameUnset
@@ -287,6 +288,7 @@ dash  TypesetLocalNeedsKeywordFunction
 dash  UnicodeEscapeOutsideTheLocale
 dash  UnsetArraySpan
 dash  UnsetEndsTheProducedPipelineStatus
+dash  UnsetReferenceLetterRemovesANonReference
 dash  ValuelessDeclarationOfAHeldNameListsIt
 
 ksh   ArithSubscriptSkippedWhenNameUnset
@@ -331,3 +333,4 @@ zsh   TrapPrintsBareWithConditions
 zsh   TrapPrintsBareWithP
 zsh   TrapPrintsWithP
 zsh   TrapSingleUnknownConditionIsUsage
+zsh   UnsetReferenceLetterRemovesANonReference

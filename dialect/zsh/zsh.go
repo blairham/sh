@@ -1151,6 +1151,9 @@ func Semantics() interp.Semantics {
 	// alone; `-n` is not here, and that is measured rather than an
 	// omission — `unset -n x` is `bad option: -n` in zsh 5.9.2 where bash
 	// 5.3 and ksh93 take it.
+	// unanswered UnsetReferenceLetterRemovesANonReference: `-n` is not one of
+	// this shell's letters. Measured 2026-09-12, `unset -n x` is
+	// `unset: bad option: -n` at 1 and `x` keeps its value (#932).
 	s.UnsetOptions = "vfm"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutFinishesWhatItStarted
 	s.ReadTimeoutKeepsWhatArrived = interp.No
@@ -1413,6 +1416,12 @@ func Semantics() interp.Semantics {
 	// thing that loses the caller's place.
 	s.GetoptsLocalOptindRestoresTheCursor = interp.Yes
 	s.GetoptsClearsOptarg = interp.Yes
+	// Measured 2026-09-12: `OLDPWD=/usr zsh -c 'echo $OLDPWD'` answers `$PWD`,
+	// so an inherited value never arrives at all — the name is this shell's own
+	// record of where it has been, and it starts where the shell started. That
+	// is why `OLDPWD=/nonexistent zsh -c 'cd -'` says nothing and reports 0:
+	// there is no unusable value to refuse.
+	s.InheritedOldpwd = interp.InheritedOldpwdIgnored
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.No
 	s.PrintfAssignsWithV = interp.Yes

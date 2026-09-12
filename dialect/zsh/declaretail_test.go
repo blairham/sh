@@ -444,14 +444,22 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // parameters`, and a produced table without the attribute would take an
 // assignment into a stored table that then stands in front of the view. It
 // lists as `typeset -Ar parameters` there too.
+//
+// `OLDPWD` is on both listings because this shell exports it from the first
+// command, which is InheritedOldpwdIgnored's other half: measured 2026-09-12,
+// `env -i zsh -c "export V='a b'; export -p"` writes `export OLDPWD=$PWD`
+// beside `export PWD=$PWD` and `export -i10 SHLVL=1`. Only the first of the
+// three is answered here, so this row is one name closer to the real shell's
+// listing rather than equal to it (#1490).
 func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(),
+	dir := t.TempDir()
+	out, st := runZsh(t, dir,
 		`export V='a b'; readonly R=2; export; readonly; export -p; readonly -p`)
-	want := "V='a b'\nARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nR=2\n" +
+	want := "OLDPWD=" + dir + "\nV='a b'\nARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
 		"errnos\nkeymaps\nlanginfo\nparameters\nsysparams\ntermcap\nterminfo\n" +
 		"widgets\nzsh_scheduled_events\n" +
-		"export V='a b'\n" +
+		"export OLDPWD=" + dir + "\nexport V='a b'\n" +
 		"typeset -r ARGC=0\ntypeset -r EPOCHREALTIME\ntypeset -r EPOCHSECONDS\n" +
 		"typeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +

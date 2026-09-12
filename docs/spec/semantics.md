@@ -9175,6 +9175,74 @@ because the hook *sites* are on both sides of that line: `precmd` fires
 in a prompt loop and `chpwd` fires inside `cd`. One home for the suffix,
 one `Runner.HookChain` that applies it.
 
+**`InheritedOldpwd`** — bash taken if a directory · dash taken · ksh93
+taken · zsh ignored · ash taken
+
+What becomes of an `OLDPWD` the shell was handed in its environment. It
+looks like a question about `cd -` and is not: `cd -` reads OLDPWD in
+every shell measured and reports the same way about a value it cannot
+use, so the branch inside `cd` is unanimous, and what splits the panel is
+whether the value is still there to read. Measured 2026-09-12 in a
+directory that exists, with `${OLDPWD-UNSET}` as the whole probe:
+
+|                       | `OLDPWD=/nonexistent` | `OLDPWD=/usr` | no OLDPWD |
+| --- | --- | --- | --- |
+| dash, ksh93, ash      | `/nonexistent` | `/usr` | unset |
+| bash 5.3, bash-as-sh  | unset          | `/usr` | unset |
+| bash 3.2              | unset          | unset  | unset |
+| zsh                   | `$PWD`         | `$PWD` | `$PWD` |
+
+That is what #1490 saw from the far end and read as a branch:
+`OLDPWD=/nope bash -c 'cd -'` says `cd: OLDPWD not set` — the sentence for
+a genuinely unset OLDPWD — because by then it genuinely is unset. Set the
+same value *inside* the shell and bash names the path like everyone else,
+`cd: /nope: No such file or directory`, in 5.3, as `sh` and in 3.2 alike.
+A fix inside `cd` would have made the two spellings disagree in bash and
+matched neither.
+
+zsh's silence is the same misreading twice over. It reports nothing
+because there is nothing to report: an inherited value never arrives, the
+name starts at the directory the shell started in, and it is exported
+from the first command — `env | grep OLDPWD` answers `OLDPWD=$PWD` there
+and nothing in the other four.
+
+bash's test is a stat rather than the one `cd` makes: a mode-000
+directory is kept and a plain file is dropped, and a relative value is
+resolved against the startup directory and kept if that names one. bash
+3.2's fourth answer — no inherited OLDPWD at all, usable or not — is a
+column in the record rather than a dialect, so it has no constant.
+
+**`UnsetReferenceLetterRemovesANonReference`** — bash no · dash
+unanswered · ksh93 yes · zsh unanswered · ash unanswered
+
+Decides `unset -n name` where the name is an ordinary variable rather
+than a name reference. `-n` means "unset the reference itself rather than
+what it points at", and both shells that have the letter agree about a
+real one: `typeset -n r=x; x=1; unset -n r` leaves `r` gone and `x`
+standing in bash 5.3.15 and ksh93u+ alike, where `unset r` without the
+letter follows the reference and takes `x`.
+
+What splits them is a name that is not a reference. ksh93 removes it like
+any other name; bash reads it as naming nothing at all and removes
+nothing, both reporting 0 — so the *value* is the only way to see the
+difference:
+
+    x=1; unset -n x; echo "st=$? [${x-gone}]"
+    bash 5.3, bash-as-sh  st=0 [1]      ksh93  st=0 [gone]
+
+bash's reading reaches further than the value: `unset -n 1x` is silent at
+0 where plain `unset 1x` refuses the name, so the letter skips the
+identifier check too. A readonly name is still refused in both, in the
+same words and at the same status as without the letter.
+
+Only those two reach the axis. bash 3.2 answers `unset: -n: invalid
+option` at 2, dash `Illegal option -n`, BusyBox ash `illegal option -n`
+and zsh `bad option: -n` at 1, so the letter is refused before there is a
+name to ask about — see `UnsetOptions`, which is where that refusal comes
+from. This shell has no name references of its own yet, so every name
+reaches the question today; when references arrive the axis stays what it
+is and the reference case joins it as the unanimous half. #932.
+
 **`CdWithoutHomeIsAnError`** — bash yes · dash no · ksh93 yes · zsh no
 
 Makes `cd` with no operand and no HOME a failure. True in bash and

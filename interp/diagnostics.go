@@ -1709,47 +1709,44 @@ type Diagnostics struct {
 	// JobRunningShowsAmpersand puts the `&` back on the command of a job
 	// that is still running.
 	//
-	// bash alone, and only while it runs: the same job listed after it ends
-	// has no `&`. So it is part of rendering the line rather than part of
-	// the text that was kept.
+	// Only while it runs: the same job listed after it ends has no `&`. So it is
+	// part of rendering the line rather than part of the text that was kept.
 	JobRunningShowsAmpersand bool
 
 	// DisownNoCurrentJob is a bare `disown` with nothing to let go of, as
-	// one line with no verbs — the two shells that speak here agree on
-	// nothing about its shape. Empty means silence with the failing status,
-	// which is the third shell's answer and the substrate's.
+	// one line with no verbs — the presets that speak here agree on nothing
+	// about its shape. Empty means silence with the failing status, which is the
+	// other answer and the substrate's.
 	DisownNoCurrentJob string
 
 	// NoSuchJob is a job spec that names nothing. Two verbs: the builtin and
 	// the spec as written.
 	//
-	// Measured 2026-09-05 on `jobs %9`, which is the one of the three
-	// builtins that reaches this in a script — `fg` and `bg` refuse for want
-	// of job control first in bash and zsh:
+	// Measured on `jobs %9`, which is the one of the three builtins that reaches
+	// this in a script — `fg` and `bg` may refuse for want of job control first:
 	//
-	//	bash (all three)  jobs: %9: no such job
-	//	dash              jobs: No such job: %9
-	//	ksh93u+           jobs: no such job — no spec at all
-	//	zsh 5.9.2         jobs: %9: no such job
+	//	jobs: %9: no such job
+	//	jobs: No such job: %9
+	//	jobs: no such job — no spec at all
 	//
-	// So the shared default is bash's and zsh's, and the two that differ say
-	// so. ksh93's format uses neither verb, which Wording allows.
+	// The first is the shared default and the rest say so. One of those formats
+	// uses neither verb, which Wording allows.
 	NoSuchJob string
 
-	// NoSuchJobStatus is what that reports. Zero means 1, which is bash's
-	// and ksh93's.
+	// NoSuchJobStatus is what that reports. Zero means 1, the common answer.
 	//
 	// Measured on the same probe, and it is the field that makes a slot
-	// answerable without reading a listing: `jobs %2 >/dev/null 2>&1; echo
-	// $?` is a yes/no about one slot with no text to race, and it grades
-	// nothing at all while the number is wrong. dash reports 2 and zsh
-	// reports 127 — the status of a command that is not there, which is what
-	// zsh takes a job that is not there to be, and the same number its `wait`
+	// answerable without reading a listing: `jobs %2 >/dev/null 2>&1; echo $?`
+	// is a yes/no about one slot with no text to race, and it grades nothing at
+	// all while the number is wrong. 2 is also measured, and so is 127 — the
+	// status of a command that is not there, which is what a preset that takes a
+	// job that is not there to be one reports, and the same number its `wait`
 	// uses for the same question.
 	NoSuchJobStatus int
 
 	PrintfUsage string
-	// PrintfUsageUnprefixed prints it bare, as ksh93 prints every usage.
+	// PrintfUsageUnprefixed prints it bare, as a preset that treats a usage line
+	// as not-a-diagnostic prints every one.
 	PrintfUsageUnprefixed bool
 	// PrintfUsageStatus is what that reports. Zero means 2.
 	PrintfUsageStatus int
@@ -1757,46 +1754,43 @@ type Diagnostics struct {
 	// TrapBadSignal is what `trap` says about a condition that names no
 	// signal it knows. One verb: the condition as written.
 	//
-	// The status is not a field beside it: all four report 1, which is the
+	// The status is not a field beside it: every preset reports 1, which is the
 	// only part of this any two of them agree on.
 	TrapBadSignal string
 	// TrapBadSignalUnprefixed prints that complaint with no location and no
-	// shell name in front of it. dash alone, and only for `trap`: its `kill`
-	// diagnostics carry the prefix like anyone's. bash does the same thing to
-	// `trap`'s *usage* line and not to this one, which is why the flag is on
-	// the message rather than on the builtin.
+	// shell name in front of it. A preset may do it only for `trap` while its
+	// `kill` diagnostics carry the prefix, and another may do it to `trap`'s
+	// *usage* line and not to this one — which is why the flag is on the message
+	// rather than on the builtin.
 	TrapBadSignalUnprefixed bool
 
 	// TrapBarePrintNeedsCondition is `trap -P` with nothing to print, taking
-	// nothing. bash only, since bash is the only dialect with `-P`.
+	// nothing. Only a preset with `-P` has one.
 	TrapBarePrintNeedsCondition string
-	// TrapPrintsSignalPrefix goes in front of a signal's name when printing
-	// what is trapped: bash writes `trap -- : SIGINT` where the other three
-	// write `INT`. Empty in three of the four, and never used for EXIT,
-	// which is not a signal.
-	// LocalOutsideAFunction is the refusal of `local` at the top level,
-	// taking nothing: bash says it can only be used in a function and dash
-	// says it is not in one.
+	// TrapPrintsSignalPrefix goes in front of a signal's name when printing what
+	// is trapped: `trap -- : SIGINT` against `INT`. Empty is the common answer,
+	// and it is never used for EXIT, which is not a signal.
+	// LocalOutsideAFunction is the refusal of `local` at the top level, taking
+	// nothing: "can only be used in a function" and "not in a function" are both
+	// measured.
 	LocalOutsideAFunction string
-	// TrapCouldNotParse follows the parse failure when a dialect reads a
-	// trap's action as the trap is set, taking nothing. zsh only, since zsh
-	// is the only dialect that reads it then.
+	// TrapCouldNotParse follows the parse failure when a preset reads a trap's
+	// action as the trap is set, taking nothing. Only such a preset has one.
 	TrapCouldNotParse      string
 	TrapPrintsSignalPrefix string
-	// TrapConditionRequired is the refusal of `trap EXIT`, taking nothing.
-	// ksh93 only, since ksh93 is the only dialect that refuses the form.
+	// TrapConditionRequired is the refusal of `trap EXIT`, taking nothing. Only
+	// a preset that refuses the form has one.
 	TrapConditionRequired string
 
 	// KillNoSuchProcess is a target that is not there. One verb: the pid.
 	//
-	// The four are worth reading together, because they are the same fact
-	// four ways and only one of them names the process the way a script
-	// could parse:
+	// The four are worth reading together, because they are the same fact four
+	// ways and only one of them names the process the way a script could parse:
 	//
-	//	bash   kill: (999999) - No such process
-	//	dash   kill: No such process
-	//	ksh93  kill: 999999: no such process
-	//	zsh    kill 999999 failed: no such process
+	//	kill: (999999) - No such process
+	//	kill: No such process
+	//	kill: 999999: no such process
+	//	kill 999999 failed: no such process
 	KillNoSuchProcess string
 	// KillNotPermitted is a target that exists and is not ours. One verb.
 	KillNotPermitted string
@@ -1805,26 +1799,25 @@ type Diagnostics struct {
 	KillInvalidSignal string
 	// KillIllegalOption is that same failure spelled as a flag: `kill -Q`.
 	//
-	// Two verbs, positional: %[1]s is the specification as written and %[2]s
-	// its first character alone. dash names only the character — `kill -99`
-	// is "Illegal option -9" and `kill -SIGCONT` is "Illegal option -S" —
+	// Two verbs, positional: %[1]s is the specification as written and %[2]s its
+	// first character alone. A preset may name only the character — `kill -99`
+	// as "Illegal option -9" and `kill -SIGCONT` as "Illegal option -S" —
 	// because it stopped reading at the first thing that was not an option.
 	//
-	// Two fields because two dialects answer "what did you just give me" by
-	// where it appeared rather than by what it was — dash calls `-Q` an
-	// illegal *option* and `-s Q` an invalid *signal*, and ksh93 an unknown
-	// option against an unknown signal name. bash and zsh set both to the
-	// same string, which is the same shape as the two `test` operator
-	// wordings and for the same reason.
+	// Two fields because some presets answer "what did you just give me" by
+	// where it appeared rather than by what it was — `-Q` an illegal *option*
+	// against `-s Q` an invalid *signal*, or an unknown option against an
+	// unknown signal name. Others set both to the same string, which is the same
+	// shape as the two `test` operator wordings and for the same reason.
 	KillIllegalOption string
 	// KillNotAPid is an operand that is not a number. One verb: the operand.
 	KillNotAPid string
 
 	// KillNoSuchJob is a `%` spec that names no job — a different complaint
-	// from a number that names no process, in every shell that speaks here.
-	// One verb: the spec as written. (ksh93 dies on this one — a fault, not
-	// a wording — which is deliberately not reproduced; it falls back to
-	// the substrate's own line there.)
+	// from a number that names no process, under every preset that speaks here.
+	// One verb: the spec as written. (One implementation dies on this one — a
+	// fault, not a wording — which is deliberately not reproduced; it falls back
+	// to the substrate's own line there.)
 	KillNoSuchJob string
 	// KillUsage is `kill` with nothing to signal. No verbs.
 	KillUsage string

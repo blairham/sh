@@ -19053,6 +19053,108 @@
         "TimedOut": false
       }
     },
+    "array/unsetting-a-range-whose-end-will-not-evaluate": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1,x+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1,x+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1,x+: syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~[x][y][z] n=3~[x][y][z] n=3",
+        "Stderr": "\u003cshell\u003e: unset: 1,x+: more tokens expected~\u003cshell\u003e: unset: 2,x+: more tokens expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~[][x][y][z] n=4~[x][][y][z] n=4",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operand expected at end of string~\u003cshell\u003e:1: bad math expression: operand expected at end of string",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/unsetting-a-range-whose-start-will-not-evaluate": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x+,2: arithmetic syntax error: operand expected (error token is \",2\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x+,2: arithmetic syntax error: operand expected (error token is \",2\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: x+,2: syntax error: operand expected (error token is \",2\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~[x][y][z] n=3~st=1~[x][y][z] n=3",
+        "Stderr": "\u003cshell\u003e: unset: x+,2: arithmetic syntax error~\u003cshell\u003e: unset: 0,x+: more tokens expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~[x][y][z] n=3~st=1~[x][y][z] n=3",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operand expected at end of string~\u003cshell\u003e:1: bad math expression: operand expected at end of string",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/unsetting-a-reversed-range": {
       "ash": {
         "Stdout": "",

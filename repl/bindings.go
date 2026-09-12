@@ -31,6 +31,12 @@ package repl
 //     as part of the key, which is the wedge escape.go describes: a sequence
 //     that has begun and cannot finish is the one failure that makes an editor
 //     look broken rather than incomplete.
+//   - **A prefix that leads nowhere asks the editor's own table before giving
+//     up.** This layer is consulted *before* the editor's dispatch, so a
+//     partial match here would otherwise shadow a complete match there — and
+//     it did, on every macOS machine, the moment this shell started reading
+//     `/etc/zshrc`. See the give-up branch below, which is where the up arrow
+//     went.
 //   - **An exact match wins immediately over a longer one that might follow.**
 //     Bind both `^X` and `^X^T` and `^X` acts at once. A shell with a timer
 //     waits to see which was meant; this reader blocks, so waiting is not
@@ -59,24 +65,59 @@ func (e *editor) matchBinding(first byte) (Binding, bool, keyRead) {
 		if b, bound := table[seq]; bound {
 			return b, true, keyContinues
 		}
-		// Nothing is bound to what has been read, but something longer starts
-		// with it, or the check above would have failed. So there is a byte
-		// worth waiting for.
-		next, got := e.readByte()
-		if got != keyContinues {
-			// The key is claimed either way: the bytes behind it are gone, so
-			// handing the first one back to the dispatch would run a key
-			// nobody finished pressing.
-			return Binding{}, true, got
+		// Nothing the person rebound answers to what has been read. Two
+		// questions decide whether to read on, and they are asked of two
+		// tables because this one is an **override layer**: a partial match
+		// here must not shadow a complete match in the editor's own.
+		//
+		// That shadowing is the bug this shape exists to stop (#2435). macOS's
+		// `/etc/zshrc` binds the arrows by `$terminfo[kcuu1]`, which is the
+		// application-cursor spelling `\eOA`, while a terminal in normal
+		// cursor mode sends `\e[A`. Reading `\e`, then `[`, then giving up
+		// dropped what it had read and left the `A` to be typed into the line
+		// — and the `\e[A` in defaultkeys.go, which walks history, was never
+		// reached. The up arrow printed `A` on every macOS machine from the
+		// day this shell started reading the system rc files.
+		//
+		// In zsh nothing is shadowed because its keymap holds both spellings
+		// and the rc file replaces only one of them. This asks for that
+		// completeness rather than copying it, which is what keeps the
+		// override layer empty in the ordinary case — see the file comment.
+		if anyBindingStartsWith(table, seq) {
+			// A rebinding is still reachable, and it wins: a longer sequence
+			// somebody bound is what they meant by pressing this prefix.
+			next, got := e.readByte()
+			if got != keyContinues {
+				// The key is claimed either way: the bytes behind it are
+				// gone, so handing the first one back to the dispatch would
+				// run a key nobody finished pressing.
+				return Binding{}, true, got
+			}
+			seq += string(next)
+			continue
 		}
-		seq += string(next)
-		if !anyBindingStartsWith(table, seq) {
-			// The sequence turned into one nothing is waiting for. The bytes
-			// are dropped rather than typed into the line, which is what the
-			// editor does with any escape sequence it does not recognize —
+		// The override layer has given up. An **exact** entry in the editor's
+		// own table runs, and only an exact one — falling back on the first
+		// byte alone would be wrong and was tried: binding `^A^B` makes `^A` a
+		// prefix and takes its single-key meaning away, so `^A` followed by a
+		// byte nothing continues to must leave the line alone rather than run
+		// beginning-of-line. Measured in zsh, and pinned by
+		// TestAnAbandonedSequenceDoesNotRunItsFirstKey.
+		if w, known := defaultKeys[seq]; known {
+			return Binding{Widget: w}, true, keyContinues
+		}
+		if !anyDefaultStartsWith(seq) {
+			// Nothing anywhere answers to it, and nothing longer could. The
+			// bytes are dropped rather than typed into the line, which is what
+			// the editor does with any escape sequence it does not recognize —
 			// see escape.go, where reading a key whole is the point.
 			return Binding{}, true, keyContinues
 		}
+		next, got := e.readByte()
+		if got != keyContinues {
+			return Binding{}, true, got
+		}
+		seq += string(next)
 	}
 }
 
@@ -92,6 +133,21 @@ func (e *editor) keymap() Keymap {
 		return KeymapViCommand
 	}
 	return KeymapMain
+}
+
+// anyDefaultStartsWith is anyBindingStartsWith over the editor's own table.
+//
+// Separate rather than one function over two maps because the maps hold
+// different things — a Binding can name an action of the *shell's*, and a
+// default never can — and a single generic walker would have to be told which
+// it was looking at anyway.
+func anyDefaultStartsWith(seq string) bool {
+	for bound := range defaultKeys {
+		if len(bound) >= len(seq) && bound[:len(seq)] == seq {
+			return true
+		}
+	}
+	return false
 }
 
 // anyBindingStartsWith reports whether the table holds a sequence beginning

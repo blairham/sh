@@ -115,6 +115,12 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnterminatedBracket, interp.BracketNoMatch; got != want {
 		t.Errorf("UnterminatedBracket = %v, want %v", got, want)
 	}
+	// The one column where an escaped separator closing a `read` value is
+	// data the trim leaves alone (#1360).
+	if got, want := s.ReadTrailingEscapedSeparator,
+		interp.ReadTrailingEscapedSeparatorKept; got != want {
+		t.Errorf("ReadTrailingEscapedSeparator = %v, want %v", got, want)
+	}
 	if got, want := s.BackgroundJobInput, interp.BackgroundJobInputEmpty; got != want {
 		t.Errorf("BackgroundJobInput = %v, want %v", got, want)
 	}

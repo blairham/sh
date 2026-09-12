@@ -100,12 +100,11 @@ func TestTheLastNameOnAReadTakesTheRemainderOfTheLine(t *testing.T) {
 // between the fields of the remainder is text.
 //
 // Unanimous across the panel, measured 2026-09-07 — with one exception, which
-// is the escaped closing space. The trim honors the escape mask here, on the
-// same reasoning the splitter honors it: a backslashed space is data. That
-// matches dash and not the other five, which trim it anyway; the divergence
-// predates the remainder and is #1360 rather than an answer here,
-// because five against one is a question for the semantics vector and not a
-// majority to be counted.
+// is the escaped closing space. Whether the mask reaches the trim is
+// Semantics.ReadTrailingEscapedSeparator and is asserted both ways in
+// readescapedseparator_test.go; the rows here are the ones the panel agrees
+// about, and every one of them is written with `-r` or with no backslash in
+// it so that none of them reaches the axis.
 func TestAReadRemainderLosesOnlyItsClosingIFSWhitespace(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -123,10 +122,6 @@ func TestAReadRemainderLosesOnlyItsClosingIFSWhitespace(t *testing.T) {
 		{
 			"a closing run ending in a separator is kept whole",
 			`printf 'a:b:c ::\n' | { IFS=': ' read -r x y; echo "[$y]"; }`, `[b:c ::]`,
-		},
-		{
-			"an escaped closing space is data and is not trimmed",
-			`printf 'a b c\\ \n' | { read x y; echo "[$y]"; }`, "[b c ]",
 		},
 		{
 			"whitespace inside the remainder is text",

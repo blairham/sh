@@ -4236,6 +4236,16 @@ echo "st=$?"`,
 		Why:     "-N is the count that means it: the delimiter stops counting for -n and is just another character for -N, so bash 5.3 and ksh93 read `ab`, the newline, and the `c` after it into one variable. bash 3.2 has no such letter and answers with its usage, and zsh has neither -N nor a usage to print",
 	},
 	{
+		ID: "read/an-escaped-separator-closing-a-remainder", Category: "builtins",
+		Snippet: `printf 'a b c\\ \n' | { read x y; printf "[%s]" "$y"; }; printf 'a b c   \n' | { read x y; printf "[%s]" "$y"; }; echo`,
+		Why:     "whether the escape mask reaches the trim at the tail of a `read` value. Without `-r` a backslash makes the character after it data, and the splitter honors that everywhere else; the closing trim honors it in dash and ignores it in bash, bash 3.2, bash as `sh`, ksh93 and zsh. The second field is the control that says the trim itself still works — an unescaped closing run comes off in all six — so a fix that simply stopped trimming would answer the first field right and the second wrong. Answered by Semantics.ReadTrailingEscapedSeparator (#1360)",
+	},
+	{
+		ID: "read/an-escaped-separator-closing-a-field", Category: "builtins",
+		Snippet: `printf 'a b\\ c\\ \n' | { read x y; printf "[%s]" "$y"; }; printf 'a b \\ \n' | { read x y; printf "[%s]" "$y"; }; printf 'a x b\\ \\ \n' | { read x y; printf "[%s]" "$y"; }; echo`,
+		Why:     "the same question where the last name takes its own **field** rather than a remainder, and the row that makes the axis three-valued rather than two. The escaped space in the first field's middle joins `b` and `c`, so the line holds one field per name: bash keeps the closing space there and trims it from the remainder above, ksh93 and zsh trim it in both places, dash keeps it in both. The second field is the row that says dash's reading is about the *field* and not about the character before the space — an escaped space with a separator in front of it is a field of its own, is not content, and goes in every column. The third says the same from the other side: two escaped spaces closing a field that has content stay, both of them, and only in dash (#1360)",
+	},
+	{
 		ID: "read/an-initial-value-for-the-line", Category: "builtins",
 		Snippet: `printf "x\n" | { l=keep; read -i pre -r l; echo "st=$? l=[$l]"; }`,
 		Why:     "-i seeds the line editor and is therefore about a terminal, and this is what it does when there is not one: bash takes the option, ignores the seed, and reads the line — three others refuse the letter in three wordings, and only one of them refuses at 1. Worth pinning because the tempting reading of the manual is that the seed is a *default* for an empty line, and no shell here does that",

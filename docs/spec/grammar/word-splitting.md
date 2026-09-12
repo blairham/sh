@@ -234,8 +234,51 @@ before the first field starts, which is why `read -r line` on `'  a b  '`
 is `a b`.
 
 An **escaped** IFS whitespace character at the end is where the panel
-parts company, five to one — bash, bash 3.2, bash as `sh`, ksh93 and zsh
-trim it, dash keeps it — and that is #1360 rather than an answer here.
+parts company, and three ways rather than two.
+`Semantics.ReadTrailingEscapedSeparator` is the answer.
+
+Without `-r` a backslash makes the character after it data, and `read`
+carries that as a mask into the splitter; the trim at the tail does not
+agree about whether the mask reaches it. Measured 2026-09-12 from a
+script file with the default IFS:
+
+| line, `read x y` | dash | bash 5.3.15 | ksh93u+, zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `a b c\ ` | `b c ` | `b c` | `b c` |
+| `a b\ c\ ` | `b c ` | `b c ` | `b c` |
+| `a x b\ \ ` | `x b  ` | `x b` | `x b` |
+| `a b \ ` | `b` | `b` | `b` |
+
+Row two is what makes it three answers. The escaped space in the middle
+joins `b` and `c` into one field, so the line holds one field per name and
+the last name takes its own field — bash has no remainder to trim there
+and keeps the space, while ksh93 and zsh trim the last name's value
+whichever way it was reached.
+
+Row four says dash's reading is about the **field** and not about the
+character: an escaped space with a separator in front of it is a field of
+its own, is not content, and goes in every column. Row three is the same
+claim from the other side — two escaped spaces closing a field that *has*
+content stay, both of them.
+
+So, stated once each:
+
+- **dash** — the remainder ends where the last field with content of its
+  own ends, so a field's escaped trailing whitespace survives and a field
+  made of nothing but escaped separators does not;
+- **bash** — the trim ignores the mask, and only a value that took a
+  remainder is trimmed;
+- **ksh93 and zsh** — the trim ignores the mask for the last name's value
+  however it was reached.
+
+Two neighboring questions are unanimous and the axis does not carry them.
+A **non-whitespace** separator is never trimmed, escaped or not: with
+`IFS=:`, `a:b:c\:` gives `b:c:` in all six, and so does `a:b:c:`. And a
+non-default *whitespace* IFS splits exactly as the default one does, so
+the answer is about the trim and not about which character it takes.
+
+The rows are `read/an-escaped-separator-closing-a-remainder` and
+`read/an-escaped-separator-closing-a-field` (#1360).
 
 ### It is a remainder only past the count
 

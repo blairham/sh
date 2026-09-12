@@ -624,6 +624,14 @@ func Semantics() interp.Semantics {
 	// `*` was not live and the backslash was not removed. ksh93 is the one
 	// column that reads it the other way (#1367).
 	s.ValueBackslashQuotesWhatFollows = interp.Yes
+	// An escaped IFS whitespace character closing a `read` value is trimmed
+	// off a value that took the *remainder* of the line and left alone on a
+	// value that was its own field. Measured 2026-09-12 on 5.3.15, 3.2.57
+	// and as `sh`: `printf 'a b c\\ \n' | read x y` leaves `b c` where
+	// `printf 'a b\\ c\\ \n' | read x y` leaves `b c ` — the escaped space
+	// in the middle joins the two words into one field, so there is one
+	// field per name and no remainder to trim (#1360).
+	s.ReadTrailingEscapedSeparator = interp.ReadTrailingEscapedSeparatorTrimmedFromARemainder
 	// A longest match over an alternation takes the longest arm, whichever
 	// order the arms were written in. Measured 2026-09-11 with extended
 	// patterns on, `x=abc`: `${x##@(a|ab)}` and `${x##@(ab|a)}` are both `c`

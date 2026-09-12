@@ -507,6 +507,14 @@ func Semantics() interp.Semantics {
 	// that type: `declare -ia z=(1 2)` is `declare -ai z=([0]="1" [1]="2")`,
 	// and `declare -i z=(1 2)` with no array letter is the same line.
 	s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = interp.No
+	// A container letter and a numeric one stand together too: `declare -ai
+	// z` is `declare -ai z`, an array of integers.
+	s.NumericAttributeReplacesTheArrayAttribute = interp.No
+	// And an array literal over a name that is not an array types its
+	// elements rather than re-creating the name, assigned or appended alike:
+	// `declare -i a; a=(5+5 6+6)` is `declare -ai a=([0]="10" [1]="12")`.
+	s.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = interp.No
+	s.AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = interp.No
 	// The letters that say what a name's values are stand together here in
 	// both orders: `declare -l z; declare -i z` and the reverse are both
 	// `declare -il z="1"`.

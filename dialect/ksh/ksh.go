@@ -472,6 +472,18 @@ func Semantics() interp.Semantics {
 	// `typeset -a -i z=(1 2)`, and `typeset -Fa z=(1 2)` is the float
 	// spelling of the same line.
 	s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = interp.No
+	// A container letter and a numeric one stand together: `typeset -ia z` is
+	// `typeset -a -i z`, an array of integers.
+	s.NumericAttributeReplacesTheArrayAttribute = interp.No
+	// But an array literal *assigned* to a name the array letter was never
+	// written for re-creates it, dropping the letter and storing the words
+	// unread: `typeset -i a; a=(5+5 6+6)` is `typeset -a a=(5+5 6+6)`, where
+	// `typeset -a -i c; c=(5+5 6+6)` is `typeset -a -i c=(10 12)`.
+	s.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = interp.Yes
+	// An **append** over the same name keeps it, which is the half that
+	// makes the two separate axes: `typeset -i p=3; p+=(5+5)` is `typeset -a
+	// -i p=(3 10)`, the scalar promoted and the join evaluated.
+	s.AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = interp.No
 	// A name carries one letter saying what its values are, and the last one
 	// written speaks: `typeset -l z; typeset -i z` is `typeset -i z=1`, and
 	// `typeset -i y; typeset -l y` is `typeset -l y=1`. This is the one

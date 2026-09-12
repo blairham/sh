@@ -42223,6 +42223,50 @@
         "TimedOut": false
       }
     },
+    "declare/a-numeric-letter-and-the-array-letter-on-one-line": {
+      "bash": {
+        "Stdout": "declare -ai z~n=0~declare -Ai m",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -ai z~n=0~declare -Ai m",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -ai z='()'~n=0",
+        "Stderr": "\u003cscript\u003e: line 4: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cscript\u003e: line 5: typeset: m: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: typeset: not found~\u003cscript\u003e: 3: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -a -i z~n=0~typeset -A -i m=()",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -i z=0~n=1~typeset -i m=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-numeric-letter-does-not-reach-a-later-local-array": {
       "bash": {
         "Stdout": "in=[/some/dir/file.zsh]",
@@ -43851,6 +43895,50 @@
         "TimedOut": false
       }
     },
+    "declare/an-appended-array-literal-over-a-typed-scalar": {
+      "bash": {
+        "Stdout": "declare -ai p=([0]=\"3\" [1]=\"10\")~[3 10]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -ai p=([0]=\"3\" [1]=\"10\")~[3 10]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -ai p='([0]=\"3\" [1]=\"10\")'~[3 10]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -a -i p=(3 10)~[3 10]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -a p=( 3 5+5 )~[3 5+5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/an-array-assigned-after-an-unset-lists-again": {
       "bash": {
         "Stdout": "declare -a a=([0]=\"3\" [1]=\"4\")~1 st=0~declare -A m=([j]=\"w\" )~2 st=0",
@@ -44153,6 +44241,50 @@
       },
       "zsh": {
         "Stdout": "n=0~[9] n=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-array-literal-over-a-name-that-is-not-an-array": {
+      "bash": {
+        "Stdout": "declare -al e=([0]=\"ab\" [1]=\"cd\")~declare -al f=([0]=\"ab\" [1]=\"cd\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -al e=([0]=\"ab\" [1]=\"cd\")~declare -al f=([0]=\"ab\" [1]=\"cd\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -a e='([0]=\"AB\" [1]=\"Cd\")'~declare -a f='([0]=\"AB\" [1]=\"Cd\")'",
+        "Stderr": "\u003cscript\u003e: line 1: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cscript\u003e: line 4: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -a e=(AB Cd)~typeset -a -l f=(ab cd)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -a e=( AB Cd )~typeset -al f=( AB Cd )",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -15492,6 +15492,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/an-exported-name-of-a-numeric-type-with-no-value` | `read=[UNSET]~(nothing)` **2>** `<script>: 1: typeset: not found` | `read=[UNSET]~(nothing)` | `read=[UNSET]~(nothing)` | `read=[]~Z=` | `read=[UNSET]~Z=0` | `read=[0]~(nothing)` |
 | `declare/which-letters-put-a-valueless-exported-name-in-the-environment` | `0` **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found` *(status 1)* | `0` *(status 1)* | `0` *(status 1)* | `1` **2>** `<script>: line 1: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `0` *(status 1)* | `2` |
 | `declare/a-second-declaration-owns-the-empty-a-first-one-left` | `1 (nothing)~2 (nothing)~3 (nothing)` **2>** `<script>: 1: typeset: not found~<script>: 3: typeset: not found~<script>: 6: typeset: not found~<script>: 7: typeset: not found` | `1 (nothing)~2 (nothing)~3 (nothing)` | `1 (nothing)~2 (nothing)~3 (nothing)` | `F1=~F2=~F3=` | `1 (nothing)~2 (nothing)~3 (nothing)` | `1 (nothing)~F2=~3 (nothing)` |
+| `declare/a-numeric-letter-and-the-array-letter-on-one-line` | **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found~<script>: 3: Bad substitution` *(status 2)* | `declare -ai z~n=0~declare -Ai m` | `declare -ai z~n=0~declare -Ai m` | `declare -ai z='()'~n=0` **2>** `<script>: line 4: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 5: typeset: m: not found` *(status 1)* | `typeset -a -i z~n=0~typeset -A -i m=()` | `typeset -i z=0~n=1~typeset -i m=0` |
+| `declare/an-array-literal-over-a-name-that-is-not-an-array` | **2>** `<script>: 1: typeset: not found~<script>: 2: Syntax error: "(" unexpected` *(status 2)* | `declare -al e=([0]="ab" [1]="cd")~declare -al f=([0]="ab" [1]="cd")` | `declare -al e=([0]="ab" [1]="cd")~declare -al f=([0]="ab" [1]="cd")` | `declare -a e='([0]="AB" [1]="Cd")'~declare -a f='([0]="AB" [1]="Cd")'` **2>** `<script>: line 1: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 4: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -a e=(AB Cd)~typeset -a -l f=(ab cd)` | `typeset -a e=( AB Cd )~typeset -al f=( AB Cd )` |
+| `declare/an-appended-array-literal-over-a-typed-scalar` | **2>** `<script>: 1: typeset: not found~<script>: 2: Syntax error: word unexpected (expecting ")")` *(status 2)* | `declare -ai p=([0]="3" [1]="10")~[3 10]` | `declare -ai p=([0]="3" [1]="10")~[3 10]` | `declare -ai p='([0]="3" [1]="10")'~[3 10]` | `typeset -a -i p=(3 10)~[3 10]` | `typeset -a p=( 3 5+5 )~[3 5+5]` |
 | `declare/listing-a-control-byte` | `st=127` **2>** `<shell>: 1: typeset: not found` | `declare -- v=$'a\001b'~st=0` | `declare -- v=$'a\001b'~st=0` | `declare -- v="ab"~st=0` | `v=$'a\x01b'~st=0` | `typeset v=$'a\C-Ab'~st=0` |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
@@ -16900,6 +16903,30 @@ grades it and nothing drift-checks it either, for the same reason.
   typeset -x F3
   typeset F3 >/dev/null
   env | grep '^F3=' || echo '3 (nothing)'
+  ```
+- `declare/a-numeric-letter-and-the-array-letter-on-one-line` — a declaration writing a container letter and a numeric type letter at once. zsh makes the name a *scalar* of that type and declares no container at all — `typeset -i z=0` with one element under `${#z[@]}`, and `typeset -i m=0` for the keyed spelling — where bash and ksh93 declare an array of integers and count none. Within one word the numeric letter wins in either order there, so it is not the last-one-speaks rule the case letters follow; the valued form of the same pairing is a refusal rather than a collapse. The count is printed as well as the listing because a shell that recorded the letter and then wrote a scalar listing would pass on the words alone
+  ```sh
+  typeset -ia z
+  typeset -p z
+  echo "n=${#z[@]}"
+  typeset -iA m
+  typeset -p m
+  ```
+- `declare/an-array-literal-over-a-name-that-is-not-an-array` — the same two lines over the same words, differing only in whether the declaration wrote the array letter — which is the whole of what the answer turns on, since neither name is holding anything for a value to decide it. ksh93 and zsh drop the case letter from `e` and keep it on `f`; bash keeps it on both and folds both. It is why the letter has to be recorded at all: an array is otherwise dynamic, and `typeset -a arr` needs no record to work (#1264). The lower-case pair rather than the integer one because zsh's `typeset -ia` is a scalar there and would make the row about the axis above instead
+  ```sh
+  typeset -l e
+  e=(AB Cd)
+  typeset -p e
+  typeset -la f
+  f=(AB Cd)
+  typeset -p f
+  ```
+- `declare/an-appended-array-literal-over-a-typed-scalar` — the append half of the row above, and a second answer rather than the same one: ksh93 *keeps* the letter on a join — `typeset -a -i p=(3 10)`, the scalar promoted to the first element and the joined word evaluated — where it drops it on a store, and zsh drops it either way and leaves `5+5` unread. bash keeps and folds as it does everywhere. An attribute's answer on the way in is not its answer on a join, which is the shape #1755 recorded from the other side
+  ```sh
+  typeset -i p=3
+  p+=(5+5)
+  typeset -p p
+  echo "[${p[*]}]"
   ```
 - `declare/listing-a-control-byte` — how a listing spells a byte below 0x20 inside `$'...'`: an octal escape, a hex one, and a caret pair are three answers from three columns that otherwise quote alike, which is why the control escape is a field of its own rather than part of the quoting style. The fourth has no such builtin (#2057)
   ```sh

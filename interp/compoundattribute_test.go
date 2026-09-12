@@ -285,3 +285,110 @@ echo "[${a[@]}] st=$?"`, set, Diagnostics{})
 		t.Errorf("got %q (stderr %q, status %d), want %q with no axis asked", out, errs, st, want)
 	}
 }
+
+// The array letter and a numeric type letter on **one declaration**: one
+// answer declares an array of that type, the other a scalar of it and no
+// array at all. See Semantics.NumericAttributeReplacesTheArrayAttribute.
+func TestANumericLetterTakingTheArrayLetterIsAnAxis(t *testing.T) {
+	const src = `typeset -ia z
+typeset -p z
+echo "n=${#z[@]}"`
+	replaces := func(a Answer) func(*Semantics) {
+		return func(s *Semantics) {
+			withCompound(CompoundAttributeKeepsTheElements, Yes, No)(s)
+			s.NumericAttributeReplacesTheArrayAttribute = a
+		}
+	}
+	out, errs, st := declRun(t, src, replaces(Yes), Diagnostics{})
+	if want := "typeset -i z=\"0\"\nn=1\n"; out != want || st != 0 || errs != "" {
+		t.Errorf("yes: got %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+	out, errs, st = declRun(t, src, replaces(No), Diagnostics{})
+	if want := "typeset -ai z=(  )\nn=0\n"; out != want || st != 0 || errs != "" {
+		t.Errorf("no: got %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}
+
+// The table letter is the same question, which is what makes it one answer
+// and not one per container letter.
+func TestTheTableLetterLosesToANumericLetterTheSameWay(t *testing.T) {
+	out, errs, st := declRun(t, "typeset -iA m\ntypeset -p m", func(s *Semantics) {
+		withCompound(CompoundAttributeKeepsTheElements, Yes, No)(s)
+		s.NumericAttributeReplacesTheArrayAttribute = Yes
+	}, Diagnostics{})
+	if want := "typeset -i m=\"0\"\n"; out != want || st != 0 || errs != "" {
+		t.Errorf("got %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}
+
+// An array literal over a name the array letter was **never written for**:
+// one answer re-creates the name and drops the letters, the other types the
+// elements. It is a separate axis from the one about replacing an array the
+// name is already holding — see
+// Semantics.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver.
+func TestAnArrayLiteralOverANameThatIsNotAnArrayIsAnAxis(t *testing.T) {
+	const src = `typeset -i a
+a=(5+5 6+6)
+typeset -p a
+echo "[${a[@]}]"`
+	starts := func(a Answer) func(*Semantics) {
+		return func(s *Semantics) {
+			withCompound(CompoundAttributeKeepsTheElements, Yes, No)(s)
+			s.NumericAttributeReplacesTheArrayAttribute = No
+			s.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = a
+		}
+	}
+	out, errs, st := declRun(t, src, starts(Yes), Diagnostics{})
+	if want := "typeset -a a=( \"5+5\" \"6+6\" )\n[5+5 6+6]\n"; out != want || st != 0 || errs != "" {
+		t.Errorf("yes: got %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+	out, errs, st = declRun(t, src, starts(No), Diagnostics{})
+	if want := "typeset -ai a=( \"10\" \"12\" )\n[10 12]\n"; out != want || st != 0 || errs != "" {
+		t.Errorf("no: got %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}
+
+// Whether the *letter* was written is the whole of what it turns on, and the
+// pair below is what says so: the same two lines over the same words, one
+// with the array letter on the declaration and one without. Neither name is
+// holding anything, so nothing about the value can be the difference.
+func TestTheArrayLetterIsWhatSavesTheNameFromBeingReCreated(t *testing.T) {
+	out, errs, st := declRun(t, `typeset -l e
+e=(AB Cd)
+typeset -p e
+typeset -la f
+f=(AB Cd)
+typeset -p f`, func(s *Semantics) {
+		withCompound(CompoundAttributeKeepsTheElements, Yes, No)(s)
+		s.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = Yes
+	}, Diagnostics{})
+	want := "typeset -a e=( \"AB\" \"Cd\" )\ntypeset -al f=( \"ab\" \"cd\" )\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("got %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}
+
+// And the append is its own axis, because one shell keeps on a join what it
+// drops on a store. Both sides are run with the *assign* answer fixed at yes,
+// so only the append answer can be what moves.
+func TestAnAppendedArrayLiteralOverAScalarIsItsOwnAxis(t *testing.T) {
+	const src = `typeset -i p=3
+p+=(5+5)
+typeset -p p
+echo "[${p[@]}]"`
+	appends := func(a Answer) func(*Semantics) {
+		return func(s *Semantics) {
+			withCompound(CompoundAttributeKeepsTheElements, Yes, No)(s)
+			s.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = Yes
+			s.AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = a
+		}
+	}
+	out, errs, st := declRun(t, src, appends(Yes), Diagnostics{})
+	if want := "typeset -a p=( \"3\" \"5+5\" )\n[3 5+5]\n"; out != want || st != 0 || errs != "" {
+		t.Errorf("yes: got %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+	out, errs, st = declRun(t, src, appends(No), Diagnostics{})
+	if want := "typeset -ai p=( \"3\" \"10\" )\n[3 10]\n"; out != want || st != 0 || errs != "" {
+		t.Errorf("no: got %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}

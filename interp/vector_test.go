@@ -99,6 +99,9 @@ func testSemantics() Semantics {
 	s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = No
 	s.NumericAttributeReplacesTheCaseAttribute = No
 	s.CaseAttributeReplacesTheNumericAttribute = No
+	s.NumericAttributeReplacesTheArrayAttribute = No
+	s.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = No
+	s.AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = No
 	s.DeclarePrintReportsAMissingName = Yes
 	s.TypesetLocalNeedsKeywordFunction = No
 	s.ReadonlyReassignmentFatal = No

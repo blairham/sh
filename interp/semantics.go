@@ -3558,161 +3558,157 @@ type Semantics struct {
 	// a name a variable holds — the thing `name=(…)` cannot do, because the
 	// name is a literal there.
 	//
-	// ksh93 and zsh have the letter; bash refuses it as an invalid option and
-	// dash as an illegal one. Which makes it a dialect's answer rather than
-	// an axis, and it is **read rather than asked**: where the answer is not
-	// yes the letter is somebody else's invalid option, and the refusal
-	// already in place is that shell's own real words. Asking an axis there
-	// would replace a correct answer with a complaint about a missing
-	// dialect.
+	// Which makes it a preset's answer rather than an axis, and it is **read
+	// rather than asked**: where the answer is not yes the letter is somebody
+	// else's invalid option, and the refusal already in place is that preset's
+	// own real words. Asking an axis there would replace a correct answer with a
+	// complaint about a missing preset.
 	SetArrayLetter Answer
 
 	// SetArrayOptionsContinuePastTheName decides whether the words behind
-	// `set -A name` are more options or the array's values.
+	// `set -A name` are more options or the array's values:
 	//
-	// Measured 2026-09-06, and the two shells that have the letter answer
-	// opposite ways:
+	//	set -A ff -x -y     Yes `-y: unknown option`   No `[-x -y]`
+	//	set -A dd -- 1 2    Yes `[1 2]`                No `[-- 1 2]`
 	//
-	//	set -A ff -x -y     ksh93 -y: unknown option    zsh [-x -y]
-	//	set -A dd -- 1 2    ksh93 [1 2]                 zsh [-- 1 2]
+	// Yes keeps parsing, so the values are whatever the option parse does not
+	// claim — exactly the words that would have become the positional parameters
+	// — and a `--` among them still ends the options. No stops at the name and
+	// every word behind it is a value, dash words and `--` included.
 	//
-	// ksh93 keeps parsing, so the values are whatever the option parse does
-	// not claim — exactly the words that would have become the positional
-	// parameters — and a `--` among them still ends the options. zsh stops at
-	// the name and every word behind it is a value, dash words and `--`
-	// included.
-	//
-	// **One question, not two.** Both rows above move together, because
-	// whether `--` is an operand *is* whether options are still being read.
-	// Asked only once the letter is taken, so a shell without it never meets
-	// the question.
+	// **One question, not two.** Both rows move together, because whether `--`
+	// is an operand *is* whether options are still being read. Asked only once
+	// the letter is taken, so a preset without it never meets the question.
 	SetArrayOptionsContinuePastTheName Answer
 
-	// SetArrayWithNoValuesUnsetsTheName is `set -A name` with nothing after
-	// the name: ksh93 unsets it and zsh leaves an array with no elements.
+	// SetArrayWithNoValuesUnsetsTheName is `set -A name` with nothing after the
+	// name: Yes unsets it and No leaves an array with no elements.
 	//
 	//	set -A a 1 2 3; set -A a; typeset -p a
-	//	  ksh93  nothing at all — the name is gone
-	//	  zsh    typeset -a a=(  )
+	//	  Yes  nothing at all — the name is gone
+	//	  No   typeset -a a=(  )
 	//
-	// Both answer `${#a[@]}` as 0, so the difference shows only through
-	// `${a+x}` and a listing — which is exactly what makes it worth a field:
-	// a script that tests whether the name is set gets opposite answers.
+	// Both answer `${#a[@]}` as 0, so the difference shows only through `${a+x}`
+	// and a listing — which is exactly what makes it worth a field: a script
+	// that tests whether the name is set gets opposite answers.
 	//
-	// The *plus* form is not this question and needs no field: `set +A a`
-	// with no values leaves the array exactly as it was in both, which is
+	// The *plus* form is not this question and needs no field: `set +A a` with
+	// no values leaves the array exactly as it was under both, which is
 	// unanimous and is a different operation.
 	SetArrayWithNoValuesUnsetsTheName Answer
 
-	// JobSpecsByName resolves `%name` — the job whose command begins with
-	// the text — and `%?text`, the one whose command contains it. POSIX
-	// gives both spellings; dash answers "no such job" to every spec that
-	// is not a number, `%%`, `%+` or `%-`.
+	// JobSpecsByName resolves `%name` — the job whose command begins with the
+	// text — and `%?text`, the one whose command contains it. POSIX gives both
+	// spellings; answering No says "no such job" to every spec that is not a
+	// number, `%%`, `%+` or `%-`.
 	JobSpecsByName Answer
-	// AmbiguousJobNameIsRefused is `%name` matching more than one job: bash
-	// refuses it as an ambiguous job spec where ksh93 and zsh take the most
-	// recent match. Asked only on a second match.
+	// AmbiguousJobNameIsRefused is `%name` matching more than one job: Yes
+	// refuses it as an ambiguous job spec, No takes the most recent match. Asked
+	// only on a second match.
 	AmbiguousJobNameIsRefused Answer
 	// WaitReportsAMissingJob says a job spec `wait` cannot resolve earns a
 	// complaint — see Diagnostics.WaitNoSuchJob — and a failing status.
-	// ksh93 says nothing at all and reports 0.
+	// Answering No says nothing at all and reports 0.
 	WaitReportsAMissingJob Answer
-	// WaitNWaitsForTheNextJob gives `wait` a `-n`: block until whichever
-	// job finishes first and report its status, 127 with no jobs at all.
-	// bash's letter alone; the other three refuse or misread it.
+	// WaitNWaitsForTheNextJob gives `wait` a `-n`: block until whichever job
+	// finishes first and report its status, 127 with no jobs at all. Answering
+	// No refuses or misreads the letter.
 	WaitNWaitsForTheNextJob Answer
 	// WaitForAJobFailsWhenInterrupted has a `wait` that names a job report a
-	// plain 1 when a trapped signal cuts it short, rather than the status
-	// that signal encodes. True in ksh93 alone, and only with an operand:
-	// `wait $!` and `wait %1` both report 1 there where its *bare* `wait`
-	// reports 286 for USR1 — 256 plus the signal, its own encoding for a
-	// command a signal killed.
+	// plain 1 when a trapped signal cuts it short, rather than the status that
+	// signal encodes.
 	//
-	// bash 3.2, bash 5.3, dash and zsh make no distinction between the two
-	// forms and report 158 for either, so the preset follows the four that
-	// agree. Measured with a background job outliving the signal, so the
-	// answer is about the interruption and not about the job's own status.
+	// Only with an operand: under Yes, `wait $!` and `wait %1` both report 1
+	// where the *bare* `wait` reports that preset's own encoding for a command a
+	// signal killed. Answering No makes no distinction between the two forms.
+	//
+	// The preset follows the answer the majority agree on. Measured with a
+	// background job outliving the signal, so the answer is about the
+	// interruption and not about the job's own status.
 	WaitForAJobFailsWhenInterrupted Answer
-	// DisownRemovesTheJob makes `disown` take the job out of the table, so
-	// a later `jobs` no longer lists it: bash and zsh. ksh93's disown only
-	// shields the job from the HUP an exiting shell would send — a signal
-	// this engine never forwards — and its `jobs` goes on listing the job.
+	// DisownRemovesTheJob makes `disown` take the job out of the table, so a
+	// later `jobs` no longer lists it.
+	//
+	// Answering No gives `disown` a narrower meaning — shielding the job from
+	// the HUP an exiting shell would send, a signal this engine never forwards —
+	// and goes on listing the job.
 	DisownRemovesTheJob Answer
 
 	// JobsOptions is the set of letters `jobs` takes, spelled the way
-	// ReadOptions is. The letters are the dialect's own and the sets are
-	// not nested: POSIX and dash have `-l` and `-p` alone, bash adds
-	// `-n -r -s -x`, ksh93 adds only `-n`, and zsh adds `-r -s` plus three
-	// of its own. Empty means `lp`, which is POSIX's pair and the only one
-	// every shell in the panel has.
+	// ReadOptions is. The letters belong to the preset and the sets are not
+	// nested: some add state filters, some a listing letter, some several of
+	// their own. Empty means `lp`, which is POSIX's pair and the only one
+	// everything has.
 	//
 	// It is a semantics field rather than a constant because a letter one
-	// shell has and another has never heard of is a *refusal* in the second
-	// one: `jobs -r` lists the running jobs in bash and is an illegal
-	// option in dash, and a shared letter set would have this engine accept
-	// it everywhere and answer dash's scripts differently from dash.
+	// implementation has and another has never heard of is a *refusal* in the
+	// second one: `jobs -r` lists the running jobs under one preset and is an
+	// illegal option under another, and a shared letter set would have this
+	// engine accept it everywhere and answer those scripts differently from the
+	// shell they were written for.
 	JobsOptions string
 	// JobsPidsOnlyOption makes `jobs -p` print one process id per line and
-	// nothing else — no number, no marker, no state, no command. dash, bash
-	// and ksh93 all do; zsh reads the same letter as "put the job's process
-	// *group* id in the listing" and prints its ordinary rows, so a
-	// `kill $(jobs -p)` written for one of the first three kills nothing
-	// there.
+	// nothing else — no number, no marker, no state, no command.
 	//
-	// Asked only where the letter was given, and only in a dialect that has
-	// it, so a listing with no `-p` never reaches it.
+	// Answering No reads the same letter as "put the job's process *group* id in
+	// the listing" and prints the ordinary rows, so a `kill $(jobs -p)` written
+	// against Yes kills nothing there.
+	//
+	// Asked only where the letter was given, and only in a preset that has it,
+	// so a listing with no `-p` never reaches it.
 	JobsPidsOnlyOption Answer
-	// JobsStateFiltersAccumulate decides `jobs -r -s`, where both of the
-	// state filters are named at once: zsh lists a job matching *either*
-	// state, bash lets the last letter given decide and lists only the jobs
-	// in that state — so `jobs -rs` there is `jobs -s`.
+	// JobsStateFiltersAccumulate decides `jobs -r -s`, where both of the state
+	// filters are named at once: Yes lists a job matching *either* state, No
+	// lets the last letter given decide and lists only the jobs in that state,
+	// so `jobs -rs` is `jobs -s`.
 	//
-	// Asked only when both letters arrive together. One of them alone means
-	// the same thing in both shells, and the two dialects without the
-	// letters cannot reach the question at all.
+	// Asked only when both letters arrive together. One of them alone means the
+	// same thing under both answers, and a preset without the letters cannot
+	// reach the question at all.
 	JobsStateFiltersAccumulate Answer
 
 	// DeclareGlobalReachesPastALocal is `declare -g x=new` with a `local x`
-	// standing in front of the name: bash writes the global cell and leaves
-	// the local untouched, zsh assigns the visible cell — the local — and
-	// leaves the global alone. Asked only there: with no local in front,
-	// both write the global, which is what the letter is for.
+	// standing in front of the name: Yes writes the global cell and leaves the
+	// local untouched, No assigns the visible cell — the local — and leaves the
+	// global alone.
+	//
+	// Asked only there: with no local in front, both write the global, which is
+	// what the letter is for.
 	DeclareGlobalReachesPastALocal Answer
 
-	// LocalOptions is the same question asked of `local`, whose answers do
-	// not follow `typeset`'s: dash has `local` and gives it no options at
-	// all, so `local -r x` declares a variable named `-r` there — and then
-	// refuses it as a bad name. Empty means none, dash's answer and the
-	// substrate's old behavior.
+	// LocalOptions is the same question asked of `local`, whose answers do not
+	// follow `typeset`'s: an implementation may have `local` and give it no
+	// options at all, so `local -r x` declares a variable named `-r` there — and
+	// then refuses it as a bad name. Empty means none.
 	LocalOptions string
 
-	// BareLocalListing is what `local` with no operands writes — three
-	// shapes from the three shells that can reach it, so it is a form
-	// rather than a flag. See BareLocalListingForm.
+	// BareLocalListing is what `local` with no operands writes — several shapes
+	// among the presets that can reach it, so it is a form rather than a flag.
+	// See BareLocalListingForm.
 	BareLocalListing BareLocalListingForm
 
-	// BareTypesetListing is what `typeset` or `declare` with no operands
-	// and no letters writes.
+	// BareTypesetListing is what `typeset` or `declare` with no operands and no
+	// letters writes.
 	//
 	// An axis of its own even though it shares the form type with
-	// BareLocalListing, because the
-	// shells that have both words do not answer the two the same: zsh writes
-	// the identical parameter table either way, and bash's bare `declare` is
-	// every variable the shell holds rather than the running function's
-	// locals. Only zsh's answer is a value this form already carries, so the
-	// others stay unanswered and are refused by name rather than guessed at.
+	// BareLocalListing, because an implementation with both words need not
+	// answer the two the same: one writes the identical parameter table either
+	// way, another's bare `declare` is every variable the shell holds rather
+	// than the running function's locals. Only some of those answers are values
+	// this form already carries; the rest stay unanswered and are refused by
+	// name rather than guessed at.
 	BareTypesetListing BareLocalListingForm
 
-	// SetListing is what `set` with no arguments writes — see
-	// SetListingForm. All four list, but not the same things: one follows
-	// the variables with every defined function, and one lists special
-	// parameters and tied arrays no other shell has.
+	// SetListing is what `set` with no arguments writes — see SetListingForm.
+	// Every preset lists, but not the same things: one follows the variables
+	// with every defined function, and one lists special parameters and tied
+	// arrays no other has.
 	SetListing SetListingForm
 
-	// ListingControlEscape is how a `$'...'` listing spells a control byte —
-	// see ControlEscapeStyle. A field of its own rather than a part of the
-	// quoting style, because two dialects that quote the same way spell a
-	// control byte differently.
+	// ListingControlEscape is how a `$'...'` listing spells a control byte — see
+	// ControlEscapeStyle. A field of its own rather than a part of the quoting
+	// style, because two presets that quote the same way may spell a control
+	// byte differently.
 	ListingControlEscape ControlEscapeStyle
 
 	// SetListingQuoting is how that listing spells a value. The styles are

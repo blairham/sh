@@ -970,6 +970,13 @@ func (l *Lexer) enabled(k Kind) bool {
 	case TokAmpBang, TokAmpPipe:
 		return l.dialect.BackgroundAndDisown
 	case TokPipeAmp:
+		if l.inCaseParenList && l.dialect.CasePatternListPipeIsOnlyASeparator {
+			// Inside a `case` arm's parentheses one dialect reads the `|` as
+			// the alternation separator and stops, so the `&` after it is a
+			// token of its own. See
+			// Dialect.CasePatternListPipeIsOnlyASeparator.
+			return false
+		}
 		// Either reading lexes the two bytes as one token; which construct
 		// they are is the parser's. Where neither is set the operator table
 		// falls back to `|` then `&`, which is what bash 3.2 and dash lex.

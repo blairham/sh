@@ -845,6 +845,16 @@ var Corpus = []Case{
 		Why:     "the control: where there is a function to be local to, three of the four agree and ksh93 still has no `local`",
 	},
 	{
+		ID: "diagnostics/a-refused-word-is-echoed-as-it-was-written", Category: "diagnostics", SyntaxError: true,
+		Snippet: "if true; then echo t; fi \"zzz\"",
+		Why:     "a word the grammar cannot take, once the `fi` has closed the `if`. Every bash column and zsh echo the characters that were written — `\"zzz\"`, quotes and all — where ksh93 names what the word comes to and dash names no word at all. Ours named the bare `zzz` in three of the four, which is a sentence two of them never write (#1239)",
+	},
+	{
+		ID: "diagnostics/a-refused-word-holding-an-expansion", Category: "diagnostics", SyntaxError: true,
+		Snippet: "if true; then echo t; fi \"$x\"",
+		Why:     "the same position with an expansion inside the quotes, which is the row that parts ksh93 from the bash columns rather than joining it to them: one expansion anywhere in the word makes ksh93 echo the source too, quotes included, where the row above has it dropping them. Nothing is expanded by any of them — the refusal is at the parse — and ours answered the bare parameter *name*, `x`, in three dialects",
+	},
+	{
 		ID: "axis/trap-body-line-exit", Category: "diagnostics",
 		Script:  true,
 		Snippet: "echo one\ntrap 'echo a\nnosuchcmd-xyz' EXIT\necho two",
@@ -10315,6 +10325,21 @@ printf 'TWO=still-running\n'`,
 		ID: "case/a-newline-before-the-separator", Category: "compound shapes",
 		Snippet: "case a in (a\n|b) echo m;; *) echo no;; esac",
 		Why:     "the same newline on the other side of the `|`, and the row that says the rule is not about the separator: it joins the *first* alternative there, so the subject `a` matches neither and zsh answers `no` where a rule about the `|` alone would answer `m`",
+	},
+	{
+		ID: "case/empty-parens-do-not-open-an-arm", Category: "compound shapes", SyntaxError: true,
+		Snippet: "case a in () echo m;; esac",
+		Why:     "`()` where an arm begins: zsh names the *pair* where the other five name the `)` alone, because the two characters are one token to that shell's lexer and the `(` therefore never opens an arm at all. It is the row that says the refusal is lexical rather than a rule about an empty pattern list, since the same two characters with a blank between them parse there — see the row below (#1111)",
+	},
+	{
+		ID: "case/a-pattern-list-written-as-nothing", Category: "compound shapes", SyntaxError: true,
+		Snippet: "case \"\" in ( ) echo em;; (*) echo star;; esac",
+		Why:     "the discriminator for the row above, and a fact about the grammar rather than about a diagnostic: zsh takes an arm whose whole pattern list is written as nothing and matches the empty subject with it, where the other five refuse the line. A subject of one blank answers `star` there, so what the arm holds is the empty string and not the character between the parentheses",
+	},
+	{
+		ID: "case/a-pipe-in-a-pattern-list-does-not-join-what-follows", Category: "compound shapes", SyntaxError: true,
+		Snippet: "case a in (a|&&b) echo m;; esac",
+		Why:     "inside an arm's parentheses zsh reads the `|` as the alternation separator and stops, so the `&&` after it is a token of its own and is what the refusal names; bash 5.3 and ksh93 lex `|&` and name that, and bash 3.2, which has no `|&`, names `&&` for the other reason. It is the row that puts the rule on the pipe rather than on the ampersand — `(a|&b)` alone cannot tell the two apart (#1111)",
 	},
 	{
 		ID: "case/a-newline-with-no-separator-in-the-list", Category: "compound shapes",

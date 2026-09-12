@@ -208,6 +208,33 @@ type Error struct {
 	// both, and which is written is the dialect's answer rather than the
 	// parser's — see Diagnostics.SyntaxUnexpectedNamesTheOpener.
 	TokenOpener string
+	// TokenSource is the unexpected token as it was **written** — quotes,
+	// backslashes and the text of an expansion included — where Token is
+	// what the word comes to once the quoting is off.
+	//
+	// Two spellings because the panel splits three ways over the same word,
+	// measured 2026-09-12 on a script holding `if true; then echo t; fi W`:
+	//
+	//	W          bash 5.3 / bash32 / bash-as-sh / zsh   ksh93
+	//	"zzz"      `"zzz"`                                `zzz`
+	//	'a b'      `'a b'`                                `a b`
+	//	a\"b       `a\"b`                                 `a"b`
+	//	$x         `$x`                                   `$x`
+	//	"$x"       `"$x"`                                 `"$x"`
+	//
+	// so bash and zsh echo the source always, ksh93 echoes it only where the
+	// word holds an expansion, and dash names no word at all. Which of the
+	// two is written is the dialect's answer rather than the parser's — see
+	// Diagnostics.UnexpectedWordNaming — so both travel, the way
+	// TokenOpener does.
+	//
+	// Set for a word token and empty for everything else, whose source and
+	// whose spelling are the same characters.
+	TokenSource string
+	// TokenHoldsExpansion says the unexpected word carried an expansion —
+	// `$x`, `${x}`, `$(…)`, `` `…` `` or `$((…))`. One dialect reads it as
+	// the question of which of the two spellings above to write.
+	TokenHoldsExpansion bool
 
 	// Redirect says the unexpected token was itself a redirection operator.
 	//

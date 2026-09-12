@@ -1273,6 +1273,9 @@ func Diagnostics() interp.Diagnostics {
 		ArithBadOperator:      "arithmetic syntax error: invalid arithmetic operator",
 		ArithFailureStatus:    1,
 		SyntaxUnexpected:      "syntax error near unexpected token `%[1]s'",
+		// A refused word is echoed as it was written: `"zzz"` keeps its
+		// quotes and `$x` is not the name `x`. See UnexpectedWordNaming.
+		UnexpectedWordNaming: interp.UnexpectedWordIsSourceText,
 		// Inside `[[ ]]` the same token gets two lines and neither is the
 		// one above: a sentence about the construct at the `[[`'s line, then
 		// a shorter `near` at the token's. Measured on bash 5.3.15 —

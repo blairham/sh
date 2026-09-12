@@ -166,6 +166,10 @@ func Dialect() syntax.Dialect {
 	// matches one of those schemes or none at all. `~/.zi/bin/lib/zsh/install.zsh`
 	// is written that way and the other four shells refuse the line.
 	d.CasePatternMayBeEmpty = true
+	// And inside the arm's parentheses the `|` is only ever the separator:
+	// `(a|&b)` is blamed on the `&` there where every other shell with the
+	// operator blames `|&` (#1111).
+	d.CasePatternListPipeIsOnlyASeparator = true
 	// `;|` is this shell's spelling of bash's `;;&`: the arm runs and the
 	// later patterns keep being tested. The two are mutually exclusive —
 	// `;;&` is ``parse error near `&'`` here, which CaseContinue staying off
@@ -2140,6 +2144,9 @@ func Diagnostics() interp.Diagnostics {
 		// was written: `$((#\))` says `after ##` as readily as `$((##))`.
 		ArithCharacterMissing: "bad math expression: character missing after ##",
 		SyntaxUnexpected:      "parse error near `%[1]s'",
+		// The same echo bash gives, in this shell's sentence: `"zzz"` and
+		// `'a b'` come back with their quotes on (#1239).
+		UnexpectedWordNaming: interp.UnexpectedWordIsSourceText,
 		// zsh names itself and stops when a function's body never began.
 		// `f() ;` reports as zsh: parse error near `;' where `if true` — an
 		// input that ran out just as much — reports the line as well, as

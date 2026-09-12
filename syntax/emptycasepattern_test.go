@@ -71,15 +71,65 @@ func TestASeparatorMayHaveNoPatternOnEitherSideOfIt(t *testing.T) {
 	}
 }
 
-// `()` is not this, and the shell that accepts every line above refuses it —
-// which is what says the emptiness is read off the separator and not off the
-// position. A list with no separator has nothing to read it from.
-func TestAPatternListWithNoSeparatorAtAllIsStillRefused(t *testing.T) {
+// The list may also be written as nothing at all, where the arm's parentheses
+// are there to hold it — so the emptiness is the *list's* rather than
+// something read off a separator, which is what this file used to say.
+//
+// Measured 2026-09-12 on zsh 5.9.2 over a script file: `case "" in ( ) echo
+// em;; (*) echo star;; esac` prints `em`, and the same line with a subject of
+// one blank prints `star`. So the pattern is the empty string and not the
+// blank between the parentheses, which that dialect trims either side of a
+// list.
+func TestTheWholeListMayBeWrittenAsNothingInsideTheArmsParens(t *testing.T) {
+	for _, src := range []string{
+		"case a in ( ) echo m;; esac",
+		"case a in (  ) echo m;; esac",
+	} {
+		got := casePatterns(t, src, emptyAlt())
+		if want := ""; strings.Join(got, ",") != want {
+			t.Errorf("%q: patterns = %q, want one empty alternative", src, got)
+		}
+		mustFailHere(t, src, syntax.Core(), "without the flag")
+	}
+}
+
+// And nowhere else: written without the arm's parentheses there is nothing to
+// hold an empty list, and the shell that accepts every line above refuses it.
+func TestAPatternListMayNotBeEmptyWithoutTheArmsParens(t *testing.T) {
+	mustFailHere(t, "case a in ) echo m;; esac", emptyAlt(), "no parens to hold an empty list")
+}
+
+// `()` is refused there, and not for the emptiness: the pair is one token to
+// the dialect that reads it as one, so the `(` never opens an arm at all and
+// the refusal names both characters. `( )` — the same two with a blank
+// between them — is the arm above and parses.
+//
+// Measured 2026-09-12 on zsh 5.9.2: `case a in () echo m;; esac` is “parse
+// error near `()' “ and `case a in (a) echo m;; () esac` is the same, where
+// this parser named the `)' alone (#1111).
+func TestEmptyParensDoNotOpenAnArm(t *testing.T) {
+	d := emptyAlt()
+	d.EmptyParensAreOneToken = true
 	for _, src := range []string{
 		"case a in () echo m;; esac",
-		"case a in ) echo m;; esac",
+		"case a in (a) echo m;; () esac",
 	} {
-		mustFailHere(t, src, emptyAlt(), "no separator to read the emptiness off")
+		_, err := syntax.Parse(src, d)
+		if err == nil {
+			t.Fatalf("parse %q: no error, want the pair refused", src)
+		}
+		var se *syntax.Error
+		if !errors.As(err, &se) {
+			t.Fatalf("parse %q: err = %v, want a *syntax.Error", src, err)
+		}
+		if se.Token != "()" {
+			t.Errorf("parse %q: blamed %q, want %q — the pair, which is one token here", src, se.Token, "()")
+		}
+	}
+	// Without the pair being one token the `(` opens an arm as it always
+	// did, and the empty list above is what stands inside it.
+	if got := casePatterns(t, "case a in () echo m;; esac", emptyAlt()); strings.Join(got, ",") != "" {
+		t.Errorf("without the flag: patterns = %q, want one empty alternative", got)
 	}
 }
 

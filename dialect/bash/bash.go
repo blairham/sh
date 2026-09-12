@@ -68,6 +68,12 @@ func Dialect() syntax.Dialect {
 	// expansion is reached.
 	d.ParamTransformations = true
 	d.ParamIndirection = true
+	// A `${ … }` operand is read the second time when the expansion reaches
+	// it, so `v=SET; echo "${v-'$('}"` is SET in silence and the unset
+	// spelling gives up its line rather than the file. bash 3.2 answers the
+	// same. See Dialect.OperandIsReadWhenTheExpansionReachesIt for the panel
+	// and for why the three that refuse are not a vote against it (#2380).
+	d.OperandIsReadWhenTheExpansionReachesIt = true
 	// `$"..."`, the locale-translatable string: with no catalog it is a
 	// plain double-quoted string with the `$` stripped. Not core, because
 	// dash and zsh keep the `$` as a literal.

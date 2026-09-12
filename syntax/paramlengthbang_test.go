@@ -25,7 +25,7 @@ func TestALengthOverTheBangName(t *testing.T) {
 	if e := firstParam(t, `echo ${#!}`, d); !e.Bad {
 		t.Errorf("refusing the bang name: read as %+v, want a bad substitution", e)
 	}
-	// The neighbours the flag must leave alone.
+	// The neighbors the flag must leave alone.
 	for _, src := range []string{`echo ${#$}`, `echo ${#?}`, `echo ${#-}`} {
 		if e := firstParam(t, src, d); e.Bad || !e.Length {
 			t.Errorf("%s: read as %+v, want a length", src, e)

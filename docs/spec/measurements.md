@@ -2222,7 +2222,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   set -- p q r s t; printf '[%s]' "${#$w}"; echo after
   ```
-- `length/a-bare-hash-then-the-bang-name` — the one special name behind a `${#` that a shell will not have at all. Six columns answer `[][0]` — `$!` is empty with no background job, and its length is `0` — and zsh refuses the whole line, so `after` never prints there. Printing `$!` beside the length is what makes the row self-checking and what rules out `there is nothing to measure` as the reason: `$!` reads in zsh too and is `0` there rather than empty, which is a *different* cell from the six and would make the length `1` if the shape existed. The neighbouring rows hold `${#$}` and `${#?}`, which are lengths in all seven, so this is not a rule about special names either (#2415)
+- `length/a-bare-hash-then-the-bang-name` — the one special name behind a `${#` that a shell will not have at all. Six columns answer `[][0]` — `$!` is empty with no background job, and its length is `0` — and zsh refuses the whole line, so `after` never prints there. Printing `$!` beside the length is what makes the row self-checking and what rules out `there is nothing to measure` as the reason: `$!` reads in zsh too and is `0` there rather than empty, which is a *different* cell from the six and would make the length `1` if the shape existed. The neighboring rows hold `${#$}` and `${#?}`, which are lengths in all seven, so this is not a rule about special names either (#2415)
   ```sh
   printf '[%s]' "$!" "${#!}"; echo after
   ```

@@ -37,7 +37,7 @@ func TestALengthOverTheBangNameIsRefusedHere(t *testing.T) {
 		// `$!` itself still reads, and is `0` here with no background job.
 		{src: `echo "[$!]"`, out: "[0]\n"},
 		{src: `echo "[${!}]"`, out: "[0]\n"},
-		// The neighbours: a special that is not `!` is a length as ever, and
+		// The neighbors: a special that is not `!` is a length as ever, and
 		// `$$` is five digits in this process, so the row is self-checking.
 		{src: `echo "[${#?}]"`, out: "[1]\n"},
 		// Deferred, not fatal: the refusal belongs to the run, so a branch

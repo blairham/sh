@@ -86,6 +86,14 @@ func Reason(err error) string {
 		return "bad substitution"
 	case syntax.ErrForName:
 		return "for: not a name"
+	case syntax.ErrForArithHeader:
+		// The header itself is per-file; the count is the cause, and the two
+		// directions are two gaps rather than one — a script missing a
+		// separator and a script carrying a spare one have nothing in common
+		// but the construct.
+		return "for ((…)): fewer than two separators"
+	case syntax.ErrForArithSeparator:
+		return "for ((…)): more than two separators"
 	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd,
 		syntax.ErrArithOperator, syntax.ErrArithBadOperator:
 		// The expression itself is per-file; which of the four arithmetic

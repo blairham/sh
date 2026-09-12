@@ -256,6 +256,24 @@ func (r *Runner) pseudoTrapInherited(name string) bool {
 // bash 3.2, ksh93 and zsh: `( trap 'echo T >&2' EXIT; true ) 2>file` puts the
 // line in the file everywhere, and `( trap 'echo T' EXIT; exit 5 ) | cat`
 // sends it down the pipe.
+// The dialect's exit hook fires here too, and by a **narrower** rule than the
+// trap's: only when the subshell left through `exit`. Measured 2026-09-12
+// against zsh 5.9.2, the one shell in the panel that has a hook at all —
+// `( exit 2 )` and `{ exit 2; } | cat` each ran `zshexit` inside the subshell
+// and again at the end of the shell, `( true )` and `( false )` ran it only at
+// the end, and `x=$(exit 3)` ran it only at the end as well. The status is not
+// what decides it: `( exit 0 )` fires. `$?` in the hook is the status the
+// subshell is leaving with, which the last of those makes visible — with the
+// hook printing `$?`, `( exit 2 )` writes `HOOK=2` from in there and `HOOK=0`
+// at the end.
+//
+// A trap that exits counts as the subshell exiting:
+// `( trap 'exit 5' EXIT; true )` fires it and `( trap 'echo T' EXIT; true )`
+// does not, which is the pair runExitTrap's return value exists for. One shape
+// measured and deliberately not modeled: `( trap 'return 5' EXIT; true )`
+// fires the hook and reports 5, so a bare `return` from an EXIT trap ends that
+// subshell the way `exit` does — a fact about `return` in a trap body rather
+// than about the hook, and nothing here reaches it.
 func (r *Runner) endSubshell(ctx context.Context) {
 	if r.canceledChunk {
 		// The caller stopped this shell rather than the script ending, and
@@ -263,5 +281,13 @@ func (r *Runner) endSubshell(ctx context.Context) {
 		// grounds and in the same words.
 		return
 	}
-	r.runExitTrap(ctx)
+	// Read before the trap runs, because runExitTrap forces the flag to
+	// controlExit on its way out and there would be nothing left to read.
+	exited := r.ctl == controlExit
+	if r.runExitTrap(ctx) {
+		exited = true
+	}
+	if exited {
+		r.fireExitHook(ctx)
+	}
 }

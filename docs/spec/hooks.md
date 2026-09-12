@@ -310,6 +310,33 @@ arguments**. Measured 2026-09-12, zsh 5.9.2:
 | after a fatal signal | neither this nor the EXIT trap runs: a script killed by SIGTERM wrote nothing and exited 143 |
 | in a subshell | a subshell that calls `exit` explicitly fires it — `(exit 7)` ran it with `$ZSH_SUBSHELL` of 1 — where one that falls off its end does not |
 
+**The subshell firing is a second site, and its rule is narrower than the
+trap's.** The EXIT trap fires at every subshell boundary in every shell; the
+hook wants an `exit`. Measured 2026-09-12, zsh 5.9.2:
+
+| snippet | what fires |
+| --- | --- |
+| `( exit 2 )` | the hook, in the subshell, then again at the end of the shell |
+| `( exit 0 )` | the same — the *status* is not what decides it |
+| `( true )`, `( false )` | only at the end of the shell |
+| `x=$(exit 3)` | only at the end of the shell: a command substitution is excluded even though it exits |
+| `{ exit 2; } \| cat` | a pipeline element is a subshell too, and its hook writes **down the pipe** |
+| `( exit 2 ) &` | the same as `( exit 2 )` |
+| `( ( exit 2 ) )` | once: the inner parentheses exit, the outer ones fall off their end |
+| `( trap 'exit 5' EXIT; true )` | the hook — an EXIT trap that exits counts as the subshell exiting |
+| `( trap 'echo T' EXIT; true )` | not the hook, which is what makes the row above say something |
+
+`$?` in the hook is the status the subshell is leaving with, and that is the
+discriminating row: with the hook printing `$?`, `( exit 2 )` writes `HOOK=2`
+from inside and `HOOK=0` at the end, so the two firings are both visible and
+are told different statuses.
+
+One shape measured and deliberately **not** modeled:
+`( trap 'return 5' EXIT; true )` fires the hook and reports 5, so a bare
+`return` at the top of an EXIT trap ends that subshell the way `exit` does.
+That is a fact about `return` in a trap body rather than about the hook, and
+nothing here reaches it.
+
 The exit rule is the single place this chain parts company with every other
 one here, and it follows from the site rather than being a special case: at a
 prompt hook, `exit` ends the session, so the chain has nothing left to do; on
@@ -319,10 +346,18 @@ status.
 The site is **the end of the session**, which every route out of a shell
 reaches and no prompt loop reaches at all — a script run with no prompt in
 sight fires it too. So it is `Semantics.ExitHook`, fired from `interp`'s
-`Finish`, for the same reason `chpwd` is `Semantics.DirectoryChangeHook`. The
-subshell firing is written down and not modeled: a subshell here does not pass
-through `Finish`, so nothing reaches it, and a guess would be a plausible
-wrong answer. #2111.
+`Finish`, for the same reason `chpwd` is `Semantics.DirectoryChangeHook`.
+#2111.
+
+The subshell firing is the **second** site, and it is `Runner.endSubshell` —
+the one place `( … )`, a pipeline element, a background job and a coprocess
+end, added by #2349 so the EXIT trap could reach them. A subshell here does
+not pass through `Finish` at all, which is why the hook needed a site of its
+own rather than a relaxed guard. Telling `( trap 'exit 5' EXIT; true )` from
+`( trap 'echo T' EXIT; true )` is what makes `Runner.runExitTrap` report
+whether the *body* exited: it clears the control flag before running the body
+and forces it back on the way out, so a caller reading the flag on either side
+of the call cannot tell the two apart. #2375.
 
 ## The hooks that are named and not fired
 

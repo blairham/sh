@@ -2438,15 +2438,23 @@ func (r *Runner) Finish(ctx context.Context) int {
 // after `false` sees 1, and in a subshell it sees the status the subshell is
 // about to report. If the body exits with a status of its own, that wins,
 // which is why the control flag is cleared first and consulted after.
-func (r *Runner) runExitTrap(ctx context.Context) {
+//
+// It reports whether the *body* left through `exit`, which is a question only
+// this function can answer: it clears the control flag before running the body
+// and forces it back to controlExit afterwards, so a caller reading the flag
+// on either side of the call cannot tell `( trap 'exit 5' EXIT; true )` from
+// `( trap 'echo T' EXIT; true )`. Runner.endSubshell needs exactly that
+// distinction for zsh's exit hook, which fires for the first and not the
+// second.
+func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	if r.exitTrap == nil {
-		return
+		return false
 	}
 	// A shell that was killed rather than ended is a two-two split: bash and
 	// ksh93 treat dying as exiting and run the trap, dash and zsh do not.
 	// Asked only where there is a trap and a death to disagree about.
 	if r.killedBy != "" && !r.ask(r.sem().ExitTrapRunsOnSignalDeath, "the EXIT trap after a fatal signal") {
-		return
+		return false
 	}
 	body := *r.exitTrap
 	// Cleared before running so the body cannot fire it again, and so a
@@ -2461,12 +2469,14 @@ func (r *Runner) runExitTrap(ctx context.Context) {
 	// Cleared for hygiene rather than for effect: the EXIT trap is the last
 	// thing a shell runs, so nothing reads this afterwards.
 	r.inExitTrap = false
-	if r.ctl != controlExit {
+	exitedInTheBody = r.ctl == controlExit
+	if !exitedInTheBody {
 		// The body ran to the end without exiting, so the script keeps the
 		// status it already had.
 		r.status = before
 	}
 	r.ctl = controlExit
+	return exitedInTheBody
 }
 
 // runExitHook runs the dialect's exit hook — zsh's `zshexit` — as the shell
@@ -2485,8 +2495,19 @@ func (r *Runner) runExitTrap(ctx context.Context) {
 // `exit 11` in that member is what the shell exited with. So the flag is
 // cleared around each call and the last status an item asked for is kept.
 func (r *Runner) runExitHook(ctx context.Context) {
+	if r.inSubshell {
+		// A subshell's ending is a boundary of its own, with a narrower rule
+		// — see Runner.fireExitHook, which Runner.endSubshell calls there.
+		return
+	}
+	r.fireExitHook(ctx)
+}
+
+// fireExitHook is the whole of running the hook, at whichever of the two
+// boundaries reached it.
+func (r *Runner) fireExitHook(ctx context.Context) {
 	name := r.sem().ExitHook
-	if name == "" || r.inSubshell || r.killedBy != "" {
+	if name == "" || r.killedBy != "" {
 		return
 	}
 	// The status the shell is leaving with. FireChain hands it to every item

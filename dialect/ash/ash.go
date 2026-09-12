@@ -17,7 +17,7 @@
 // ELF — so ash has no column in the golden record and `make
 // conformance-dialects` has no row for it. The answers here are therefore
 // *measured* but not *maintained*: nothing in `make check` notices when one
-// of them drifts. #2262 is the follow-on that fixes it.
+// of them drifts. #2263 is the follow-on that fixes it.
 //
 // Read a comment that cites a measurement as evidence; read the absence of
 // one as an unanswered question rather than as agreement with dash.

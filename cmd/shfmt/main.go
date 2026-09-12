@@ -51,6 +51,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/blairham/sh/dialect/ash"
 	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/dialect/dash"
 	"github.com/blairham/sh/dialect/ksh"
@@ -64,7 +65,7 @@ import (
 const name = "shfmt"
 
 var (
-	lang  = flag.String("dialect", "auto", "which shell to read as: auto, core, posix, bash, zsh, ksh, dash")
+	lang  = flag.String("dialect", "auto", "which shell to read as: auto, core, posix, bash, zsh, ksh, dash, ash")
 	write = flag.Bool("w", false, "write the result back to each file instead of to standard output")
 	list  = flag.Bool("l", false, "list the files whose layout differs, and exit 1 if any do")
 	diffM = flag.Bool("d", false, "print a unified diff where the layout differs, and exit 1 if any does")
@@ -249,7 +250,9 @@ func named(which string) (syntax.Dialect, syntax.Style, error) {
 		return ksh.Dialect(), ksh.Style(), nil
 	case "dash":
 		return dash.Dialect(), dash.Style(), nil
+	case "ash":
+		return ash.Dialect(), ash.Style(), nil
 	}
 	return syntax.Dialect{}, syntax.Style{}, errors.New("unknown dialect " + which +
-		" (want one of: auto, core, posix, bash, zsh, ksh, dash)")
+		" (want one of: auto, core, posix, bash, zsh, ksh, dash, ash)")
 }

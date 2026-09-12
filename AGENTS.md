@@ -72,9 +72,13 @@ refuses what every real shell accepts is a core nobody can write against.
     dialect/zsh/      …
     dialect/ksh/      …
     dialect/dash/     …
+    dialect/ash/      …
     cmd/sh            the substrate's driver, with -dialect
     cmd/bash cmd/zsh  dialect binaries, as proof the library goal holds
     cmd/dash cmd/ksh  …
+    cmd/ash           the fifth, and the one no instrument grades — there is
+                      no BusyBox ash on a macOS machine, so it has no oracle
+                      column; docs/spec/ash.md says what that costs
     cmd/shfmt         the formatter: the first thing that consumes the
                       parser as a product rather than as test scaffolding
     internal/cmd/     the instruments: not shipped, and under internal/
@@ -266,12 +270,12 @@ meant to be low and climbing, and a boundary is meant to hold.
 
 ## Installing, and the name collision
 
-`make install` builds all five binaries and puts them in
+`make install` builds all six binaries and puts them in
 `$(PREFIX)/libexec/sh`, keeping their plain names. `docs/install.md` is
 the user-facing half; the rule to hold on to is this one:
 
-**The binaries are called `bash`, `zsh`, `ksh`, `dash` and `sh`, and the
-name collision is both the point and the hazard.** A shebang, `chsh` and
+**The binaries are called `bash`, `zsh`, `ksh`, `dash`, `ash` and `sh`, and
+the name collision is both the point and the hazard.** A shebang, `chsh` and
 `login` all name a shell — by path, or by an `argv[0]` of `-bash` that
 `driver.LoginShell` reads — so renaming them to `sh-bash` would break the
 login route, `$0` in diagnostics, and every shebang. What moves instead
@@ -290,7 +294,7 @@ tidy-up.
 
 GoReleaser on a `v*` tag, per the parent tree: green CI on `main` → tag →
 `.github/workflows/release.yml` → `blairham/homebrew-tap` updated. One
-archive per platform carrying all five binaries, Linux and macOS only —
+archive per platform carrying all six binaries, Linux and macOS only —
 every route into this program is a POSIX one. The first tag is `v0.0.0`.
 
 `cmd/sh`'s `version` is a var rather than a const so the tag can be

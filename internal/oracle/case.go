@@ -982,6 +982,24 @@ var Corpus = []Case{
 		Why:     "the same body on a signal: ksh93 counts it from where it fired and zsh names only where it fired",
 	},
 	{
+		ID: "axis/trap-body-line-debug", Category: "diagnostics",
+		Script:  true,
+		Snippet: "trap 'echo at=$LINENO\nnosuchcmd-xyz' DEBUG\necho two\necho three",
+		Why:     "the same two-line body on the condition that fires *at a command*, and the row that says the trap-body line question is two questions rather than one: every bash column counts a DEBUG body from the line the trap fired before — `at=2` and the failure on line 3 — where the signal row above has them counting the body's own lines. ksh93 counts every body from where it fired and zsh names only where it fired, so neither has a second answer to give and dash has no DEBUG condition at all. Written with two `echo`s after the trap so the second firing moves the number: a body that reported the same line twice would be a pin rather than an offset. The CommandTrapBodyLine axis",
+	},
+	{
+		ID: "axis/trap-body-line-err", Category: "diagnostics",
+		Script:  true,
+		Snippet: "trap 'echo at=$LINENO\nnosuchcmd-xyz' ERR\necho two\nfalse\necho four",
+		Why:     "ERR asked the same way, because the axis is about the two conditions that fire at a command rather than about DEBUG alone: the bash columns report the *failing* line and the body's second line one past it. The `echo four` is there so a shell that ended the script over the failure is visible as a missing line rather than as a status",
+	},
+	{
+		ID: "axis/trap-body-line-return", Category: "diagnostics",
+		Script:  true,
+		Snippet: "f() {\n  trap 'echo at=$LINENO\nnosuchcmd-xyz' RETURN\n  echo in-f\n}\necho one\nf\necho two",
+		Why:     "and the control that keeps the axis from being read as \"the pseudo-conditions\": RETURN is one of them and the bash columns count its body from the body's own first line, exactly as they count a signal's. So the split is measured rather than reasoned — a rule written for the three would have taken this row with it. ksh93, dash and zsh have no RETURN condition and refuse the trap",
+	},
+	{
 		ID: "axis/trap-body-will-not-parse", Category: "semantics axes",
 		Script:  true,
 		Snippet: "trap 'if' EXIT\necho after",

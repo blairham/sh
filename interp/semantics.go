@@ -5278,6 +5278,36 @@ type Semantics struct {
 	// names. See TrapBodyLineStyle.
 	TrapBodyLine TrapBodyLineStyle
 
+	// CommandTrapBodyLine is the same question asked of the two conditions
+	// that fire *at a command* — DEBUG and ERR — where one dialect answers
+	// it differently than it answers TrapBodyLine.
+	//
+	// bash counts a signal body, an EXIT body and a RETURN body from the
+	// body's own first line, and counts a DEBUG or ERR body from the line
+	// the condition fired on: with the body
+	//
+	//	echo $LINENO
+	//	nosuchcmd
+	//
+	// set on a DEBUG trap and fired before a command on line 4, bash 5.3,
+	// bash-as-sh and bash 3.2 all print 4 and locate the failure on line 5,
+	// where the same body on a signal trap prints 1 and locates it on line
+	// 2. ksh93 counts every body from where it fired and zsh names where it
+	// fired for every line of every body, so neither has a second answer
+	// here; dash has no DEBUG or ERR condition at all and never asks.
+	//
+	// A separate field rather than a conditional inside the first, because
+	// the two are a conflict and not a refinement: knowing a dialect's
+	// TrapBodyLine tells you nothing about this one. It was measured with a
+	// two-line body for the reason TrapBodyLineStyle gives — a one-line body
+	// cannot tell "the body's first line" from "wherever it fired", and a
+	// one-line probe is exactly why this looked like one question.
+	//
+	// RETURN is *not* one of these: bash prints 1 for the same body on a
+	// RETURN trap, so it goes with the signals. Measured rather than
+	// reasoned — a rule of "the pseudo-conditions" would have taken it.
+	CommandTrapBodyLine TrapBodyLineStyle
+
 	// ExitTrapFiresPastTheEnd counts the EXIT trap as having fired on the
 	// line after the script's last, rather than on its first.
 	//

@@ -112,11 +112,20 @@ func (r *Runner) setPseudoTrap(name, body string) {
 // measurements say it sees, and puts the script's state back afterwards
 // unless the action set control flow of its own — an `exit` in the body
 // wins, which is the same rule every other trap here follows.
-func (r *Runner) runPseudoTrapBody(ctx context.Context, body string, sees int) {
+//
+// name is the condition, which the line rules need: DEBUG and ERR fire at a
+// command and one dialect numbers their bodies from that command's line,
+// where RETURN goes with the signals and is numbered from the body's own
+// first line. Measured rather than reasoned from "these are the
+// pseudo-conditions" — see Semantics.CommandTrapBodyLine.
+func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees int) {
 	st, ctl, raised := r.status, r.ctl, r.pipefailRaised
 	r.status = sees
 	r.ctl = controlNone
+	outer := r.inCommandTrap
+	r.inCommandTrap = name == "DEBUG" || name == "ERR"
 	r.runTrapBody(ctx, body)
+	r.inCommandTrap = outer
 	if r.ctl == controlNone {
 		r.status, r.ctl = st, ctl
 	}
@@ -147,7 +156,7 @@ func (r *Runner) runErrTrap(ctx context.Context) {
 		return
 	}
 	r.inErrTrap = true
-	r.runPseudoTrapBody(ctx, *body, r.status)
+	r.runPseudoTrapBody(ctx, "ERR", *body, r.status)
 	r.inErrTrap = false
 }
 
@@ -176,7 +185,7 @@ func (r *Runner) runDebugTrap(ctx context.Context) {
 		return
 	}
 	r.inDebugTrap = true
-	r.runPseudoTrapBody(ctx, *body, r.status)
+	r.runPseudoTrapBody(ctx, "DEBUG", *body, r.status)
 	r.inDebugTrap = false
 }
 
@@ -208,7 +217,7 @@ func (r *Runner) runReturnTrap(ctx context.Context, serial int) {
 		sees = r.returnSeenStatus
 	}
 	r.inReturnTrap = true
-	r.runPseudoTrapBody(ctx, *body, sees)
+	r.runPseudoTrapBody(ctx, "RETURN", *body, sees)
 	r.inReturnTrap = false
 }
 

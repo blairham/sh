@@ -402,6 +402,15 @@ func Semantics() interp.Semantics {
 	s.GetoptsRejectsUnknownOption = interp.Yes
 	s.ShiftCountIsArithmetic = interp.No
 	s.TrapBodyRunsWhatParsed = interp.Yes
+	// A signal body, an EXIT body and a RETURN body count from their own
+	// first line — the zero value, and what TrapBodyLine leaves alone —
+	// while a DEBUG or ERR body counts from the line the condition fired
+	// on. Measured with a two-line body: fired before a command on line
+	// 4, `echo $LINENO` on the body's first line prints 4 and a failure
+	// on its second is located at line 5, where the same body on a signal
+	// trap prints 1 and locates the failure at line 2. bash 5.3,
+	// bash-as-sh and bash 3.2 all answer this way.
+	s.CommandTrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired
 	s.ReportsAKilledCommandInACommandSubstitution = interp.No
 	s.SelectAssumesUnboundedWidth = interp.No
 	s.SelectEofEndsPromptLine = interp.No

@@ -441,6 +441,10 @@ func Semantics() interp.Semantics {
 	s.TrapBodyRunsWhatParsed = interp.No
 	s.ReportsAKilledCommandInACommandSubstitution = interp.Yes
 	s.TrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired
+	// And the same for the two conditions that fire at a command: this
+	// shell counts every trap body from where it fired, so the second
+	// question has the same answer as the first.
+	s.CommandTrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired
 	s.ExitTrapFiresPastTheEnd = interp.No
 	s.SelectEofEndsPromptLine = interp.No
 	s.SelectEofIsSuccess = interp.No

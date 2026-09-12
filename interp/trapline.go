@@ -63,16 +63,34 @@ func (r *Runner) firedAt() int {
 	return 1
 }
 
+// bodyLineStyle is which of the two questions this body is: the one every
+// trap asks, or the one the two conditions that fire at a command ask.
+//
+// Read from a flag the firing site sets rather than from the condition's
+// name, because the name is not in scope here — one entry point runs every
+// body, which is what keeps the line rules in one place.
+func (r *Runner) bodyLineStyle() TrapBodyLineStyle {
+	if r.inCommandTrap {
+		return r.sem().CommandTrapBodyLine
+	}
+	return r.sem().TrapBodyLine
+}
+
 // enterTrapBody sets the lines a trap body's diagnostics will name, and
 // returns what puts them back.
 func (r *Runner) enterTrapBody() func() {
-	base, pin := r.lineBase, r.linePin
-	restore := func() { r.lineBase, r.linePin = base, pin }
-	switch r.sem().TrapBodyLine {
+	base, pin, command := r.lineBase, r.linePin, r.inCommandTrap
+	restore := func() { r.lineBase, r.linePin, r.inCommandTrap = base, pin, command }
+	switch r.bodyLineStyle() {
 	case TrapBodyLineOffsetFromWhereItFired:
 		r.lineBase = r.firedAt() - 1
 	case TrapBodyLineWhereItFired:
 		r.linePin = r.firedAt()
 	}
+	// Cleared for the run of the body itself. The flag says which condition
+	// *this* body belongs to, and a trap that fires while it runs is a
+	// question of its own — without this, a signal delivered inside a DEBUG
+	// body would be numbered by the rule the DEBUG body was given.
+	r.inCommandTrap = false
 	return restore
 }

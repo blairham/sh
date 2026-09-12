@@ -117,14 +117,23 @@ func wait(pid, flags int) (interp.Wait, bool, error) {
 // is Linux's WIFCONTINUED, 0xFFFF, which is excluded rather than reasoned
 // about.
 func stoppedBy(ws syscall.WaitStatus) (syscall.Signal, bool) {
-	if ws.Stopped() {
-		return ws.StopSignal(), true
-	}
 	const (
 		stopped   = 0x7f
 		continued = 0xffff
 	)
-	if ws == continued || ws&stopped != stopped {
+	// Before the standard library's own question and not after it, which is
+	// the order the test found: `Stopped` reads 0xffff as a stop by signal
+	// 255 on both platforms, so a guard placed behind it never runs. It
+	// cannot arrive either way — neither call above asks for WCONTINUED, and
+	// a continued child is only ever reported to a wait that did — so this is
+	// the belt to that reasoning's braces, and it has to be first to be one.
+	if ws == continued {
+		return 0, false
+	}
+	if ws.Stopped() {
+		return ws.StopSignal(), true
+	}
+	if ws&stopped != stopped {
 		return 0, false
 	}
 	return syscall.Signal(ws>>8) & 0xff, true

@@ -2074,11 +2074,53 @@ parameter reference and every other inner is a value, so `${#${(P)h}}` is
 `${#arr}` and not the width of the text its fields join to. See #1639,
 #1638 and #1543.
 
-**Not carried here:** a resolved text whose subscript this shell cannot take
-apart — `x[@]` naming a whole array, a subscript over a scalar read as a
-character, a subscript flag read as a search — falls through to the
-plain-name lookup, which finds nothing. See the paragraph at the end of the
-next section.
+**The resolved text is a full reference**, so every subscript this shell
+answers on a name it answers here. Measured 2026-09-12 on zsh 5.9.2 with
+`x=(p q r)`, `s=abc` and `a=(P Q)`:
+
+    v='x[@]';    ${(P)v}   →  p q r  a whole-array subscript
+    v='x[*]';    ${(P)v}   →  p q r
+    v='x[1,2]';  ${(P)v}   →  p q    a range
+    v='s[2]';    ${(P)v}   →  b      a character of a scalar
+    v='s[2,4]';  ${(P)v}   →  bc     a range of one
+    v='a[(r)Q]'; ${(P)v}   →  Q      a search
+    v='a[(i)Q]'; ${(P)v}   →  2      and its index form
+    v='x[1]';    ${(P)v}   →  p      the control, which already worked
+
+The subscript is **live text and not a literal**, which is what the reading
+being a parse buys: `i=2; v='x[$i]'` and `v='x[$(echo 2)]'` both read the
+second element, so a substitution written into a resolved reference is
+performed when the reference is read.
+
+A quoted whole-array reference keeps its **fields**, exactly as `"${x[@]}"`
+does, and the written `@` is what carries it rather than the list-ness:
+`"${(P)v}"` is two fields for `v='x[@]'` and one joined field for `v='x[*]'`,
+for `v='x[1,2]'` and for a `v` naming the array outright.
+
+The nested spellings reach the same reference, with the text's own subscript
+as the link *before* the outer one: `${#${(P)v}}` is 3 and `${${(P)v}[2]}` is
+`q` for `v='x[@]'`.
+
+`k` and `v` reach it too, which follows from the rule above about *which*
+lookup answers them — a reference is the second lookup. With
+`typeset -A tab=(k1 v1)`, `v='tab[k1]'; ${(kP)v}` is `k1` where `${(P)v}` is
+`v1`, `v='tab[@]'; ${(kP)v}` is the keys, and `v='x[2]'; ${(kP)v}` is `2`,
+the index an ordinary array reads that letter as. The rest of the group is
+not the lookup's and acts on what came out: `${(UP)v}` is `Q`.
+
+Taken apart by hand into a name plus one arithmetic index, every one of those
+fell through to the plain-name lookup and found nothing — empty at status 0,
+which is a plausible value for a real element (#1852).
+
+**The index no element has resolves the whole base.** The base's *own*
+subscript has one value that is not read as an index, and it is measured
+rather than derived: with `n=(x y z)` and `x=(p q)`, `${(P)n[0]}` is `p q`
+where `${n[0]}` beside it is empty, and `${(P)n[1-1]}` answers alike, so it
+is the value the expression comes to and not the numeral. Every other
+subscript naming nothing is no name — `${(P)n[4]}` and `${(P)n[-4]}` are
+empty — and an **association** is outside it, `[0]` being a key there like
+any other. A corner no script can depend on, reproduced because the
+alternative is an empty at status 0.
 
 ### `(P)` beside an operator that assigns
 
@@ -2131,13 +2173,19 @@ a function called with one argument then read the leftover, a
 functions were looked for in a directory assembled from the wrong halves
 of a plugin id (#1672).
 
-**What this shell does not carry here.** zsh reads the resolved text as a
-full reference, so a subscript over a *scalar* is a character
-(`s=abc; x='s[2]'; ${(P)x}` is `b`) and a subscript flag is a search
-(`a=(p q); x='a[(r)q]'` is `q`). Neither is read here: a resolved text
-this shell cannot take apart falls through to the plain-name lookup it
-already got, so the read is empty and the write goes to the name check,
-which refuses it by name rather than answering something plausible.
+**What this shell does not carry here.** The *read* takes the resolved text
+apart as the reference it is; this side still splits it into a name and one
+arithmetic subscript. Measured:
+
+| written | zsh 5.9.2 | here |
+| --- | --- | --- |
+| `x=(p q); v='x[@]'; ${(P)v::=Z}` | `x` is `Z` | `bad math expression: illegal character: @` |
+| `a=(p q); v='a[(r)q]'; ${(P)v::=Z}` | `a` is `p Z` | `bad math expression: operator expected at` `q` |
+| `x=(p q r); v='x[1,2]'; ${(P)v::=Z}` | `x` is `Z r` | **`p Z r`**, at status 0 |
+| `s=abc; v='s[2]'; ${(P)v::=Z}` | `s` is `aZc` | the same |
+
+Two of the four refuse loudly and the range is silent, which is what makes
+it worth filing rather than leaving: #2169.
 
 ### What the corpus pins
 
@@ -2253,9 +2301,9 @@ Five shapes are outside it, each measured:
   `${(k)a[1][-1]}`, which is not monotonic in anything and so is an
   artifact rather than a rule to write down.
 
-`${(kP)v}` with `v="x[2]"` is `2` there and the element here, because the
-indirection does not yet take the resolved text apart as the reference it
-is. That is #1852's, which the same paragraph's other two rows belong to.
+`${(kP)v}` with `v="x[2]"` is `2`: the letters belong to the lookup the
+indirection makes, and that lookup reads a reference. See "What `(P)` reads
+as the name, and what it comes to".
 
 ### The `(A)` flag is two halves
 
@@ -4132,9 +4180,42 @@ so the value was at least not wrong — but a script testing `$?` after one
 of these was told it had succeeded, which is the opposite of the point of
 refusing by name (#1536).
 
-`unset 'b[(r)y]'` is the one direction still unread: the subscript arrives
-as a *runtime string* rather than as a parsed word, so the group has
-nowhere to hang its operand. Filed rather than guessed (#1275).
+### On `unset`'s operand
+
+The third side of the group, and the one where the subscript arrives as a
+**runtime string** rather than as a word the parser lexed — so the group had
+nowhere to hang its operand and the whole of `(r)y` went to the arithmetic as
+`bad math expression`. It is read as the reference it is now: one parse, from
+which the group, its operand and the plain arithmetic reading all come.
+
+Measured 2026-09-12 on zsh 5.9.2 with `b=(x y z)`:
+
+| probe | leaves |
+| --- | --- |
+| `unset 'b[(r)y]'` | `x`, an empty element, `z` — three long |
+| `unset 'b[(re)y]'` | the same |
+| `unset 'b[(r)y*]'` | the same — the operand is a pattern |
+| `unset 'b[(i)y]'` | the same — the index form names that element |
+| `unset 'b[(R)x]'` on `(x y x)` | `x y`, then an empty — the last match |
+| `unset 'b[(r)nomatch]'` | nothing removed: the miss is one past the last |
+| `unset 'b[(e)2]'` | no selecting flag, so an ordinary subscript |
+| `w=y; unset 'b[(r)$w]'` | the same as the first — the operand is expanded |
+| `unset 's[(r)l]'` on `hello` | `helo` — a search over a string is a character |
+
+What is left behind is the dialect's answer and not this construct's —
+`UnsetArraySpanLeavesOneEmptyElement` — so all the group decides is *which*
+element, exactly as it does on the left of an assignment.
+
+An **association** is answered before the group is reached, and is measured
+to want that: `unset 'm[(r)v]'` changes nothing there, the brackets being a
+key.
+
+A refusal on this side does **not** end the line, which is where the two
+sides part company: an assignment's is fatal because nothing was written and
+the line must not report the status of whatever came before it, while `unset`
+writes one complaint per operand and goes on to the rest — the same shape it
+already has for a subscript that will not evaluate, and what the shell does
+(#1275).
 
 ### A flag group in each end of a range
 

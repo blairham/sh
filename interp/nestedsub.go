@@ -49,9 +49,7 @@ func (r *Runner) nestedSubscript(e *syntax.ParamExpr) (words []string, set, isLi
 		// the inner resolved to: `${${(P)h}[(I)x]}` with `h=arr` is
 		// `${arr[(I)x]}`, and Src is carried so a refusal from inside names
 		// what the script wrote rather than what it resolved to.
-		ref := &syntax.ParamExpr{
-			Name: name, Index: e.Index, IndexFlags: e.IndexFlags, Src: e.Src,
-		}
+		ref := r.referenceNode(name, e, e.Src)
 		elems, _ := r.arraySubscript(ref)
 		// The reference *is* that parameter, so the subscript's shape is the
 		// one it would have on the name itself.

@@ -317,8 +317,12 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// separator does not reach the count either — `"${(Uj.-.)#a}"` is 3 as
 	// well — so the join is skipped rather than undone, and `(c)` reads a
 	// separator of its own where it wants one.
+	// A `(P)` whose resolved text is an `[@]` subscript keeps its fields
+	// here for the same reason `"${a[@]}"` does — the `@` is written, and
+	// the reference is that expansion. See referenceKeepsFields.
+	refFields := indirect != nil && r.referenceKeepsFields(indirectName(indirect.text))
 	joined := false
-	if quoted && isList && !e.Length && !r.flagKeepsFields(e) && !markJoin {
+	if quoted && isList && !e.Length && !r.flagKeepsFields(e) && !markJoin && !refFields {
 		words = []string{strings.Join(words, r.flagJoinSep(e))}
 		isList = false
 		joined = true

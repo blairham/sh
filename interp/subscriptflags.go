@@ -557,6 +557,16 @@ func (r *Runner) refuseSubscriptFlag(e *syntax.ParamExpr, flag, where string) {
 	r.expandErr = true
 }
 
+// reportSubscriptFlag is the same refusal where it reaches its caller as a
+// *status* rather than through either of the two roads below: `unset` writes
+// one complaint per operand and goes on to the next, so a flag on the
+// expansion path would fail a later word that has nothing wrong with it, and
+// ending the line would stop a builtin the shell lets run on.
+func (r *Runner) reportSubscriptFlag(e *syntax.ParamExpr, flag, where string) {
+	r.diagf("${%s}: the (%s) subscript flag is not implemented%s\n",
+		r.paramSubject(e), flag, where)
+}
+
 // refuseAssignSubscriptFlag is the same refusal on the left of `=`, where the
 // failure has to reach a caller by a different road.
 //
@@ -612,11 +622,41 @@ func lastOf(s, set string) byte {
 // after the last and `I` the one before the first. `I` missing is the index
 // no element has, and writing there is refused rather than guessed.
 func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
-	g := a.IndexFlags
-	e := &syntax.ParamExpr{Name: a.Name, Index: a.Index, IndexFlags: g}
+	return r.flaggedTargetIndex(&syntax.ParamExpr{
+		Name: a.Name, Index: a.Index, IndexFlags: a.IndexFlags,
+	}, true)
+}
+
+// flaggedTargetIndex is flaggedAssignIndex over the node rather than over an
+// assignment, so that `unset 'a[(r)y]'` names its element by the same rule
+// `a[(r)y]=Q` names one.
+//
+// Both sides want the *index* — the read side is the one that answers with a
+// value for `r` and `R` — so there is one function and not two. `unset`
+// reaches it through a runtime parse of its operand, which is what gives the
+// group's operand a word to hang on (#1275); the assignment reaches it with
+// the word the parser already made.
+//
+// endsTheLine is the one thing the two sides do not share. A refusal on the
+// left of `=` is fatal, because nothing was written and the line must not
+// report the status of whatever came before it (#1536). `unset` reports per
+// operand and goes on to the rest of them — measured, the shell with the
+// construct complains about `unset 'b[(w)y]'` and runs the next command —
+// which is the same shape it already has for a subscript that will not
+// evaluate.
+func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int, bool) {
+	g := e.IndexFlags
+	a := &syntax.Assign{Name: e.Name, Index: e.Index, IndexFlags: g}
+	refuse := func(flag, where string) {
+		if endsTheLine {
+			r.refuseAssignSubscriptFlag(e, flag, where)
+			return
+		}
+		r.reportSubscriptFlag(e, flag, where)
+	}
 	for _, c := range g.Flags {
 		if !strings.ContainsRune(implementedSubscriptFlags, c) {
-			r.refuseAssignSubscriptFlag(e, string(c), "")
+			refuse(string(c), "")
 			return 0, false
 		}
 	}
@@ -630,7 +670,11 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 		idx, err := r.subscriptValue(r.joinWord(g.Arg))
 		if err != nil {
 			text := r.subscriptAsWritten(a.Index)
-			r.fatal("%s\n", r.subscriptFailure(text, err))
+			if endsTheLine {
+				r.fatal("%s\n", r.subscriptFailure(text, err))
+			} else {
+				r.badSubscriptToUnset(text, err)
+			}
 			return 0, false
 		}
 		return idx, true
@@ -640,7 +684,7 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 		// letters mean something else over a table, and answering with the
 		// ordered array's rule would write to a plausible wrong key. The
 		// shell refuses it too, as `attempt to set slice`.
-		r.refuseAssignSubscriptFlag(e, string(search), " for an associative array")
+		refuse(string(search), " for an associative array")
 		return 0, false
 	}
 	elems, scalar, held := r.subscriptTarget(e)
@@ -679,7 +723,7 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 		// is — so `i` and `r` take the answer below rather than the append
 		// they take from a start *above* the array, and neither of the two
 		// answers below is one this side can use (#1534).
-		r.refuseAssignSubscriptFlag(e, string(search), " where the search began before the first element")
+		refuse(string(search), " where the search began before the first element")
 		return 0, false
 	}
 	switch search {
@@ -695,7 +739,7 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 	// first, which is what the read side answers and what an assignment
 	// cannot use. Refused by name rather than guessed at; see the issue the
 	// spec entry names.
-	r.refuseAssignSubscriptFlag(e, string(search), " where nothing matched")
+	refuse(string(search), " where nothing matched")
 	return 0, false
 }
 

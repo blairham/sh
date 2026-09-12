@@ -3770,6 +3770,23 @@ func (p *Parser) ParseParamExpFor(src string, at Pos) *ParamExpr {
 	return p.parseParamExp(src, at, DoubleQuoted, false)
 }
 
+// ParseReference parses text that names a parameter and perhaps one of its
+// elements — `x`, `x[@]`, `s[2]`, `a[(r)q]` — into the node every reading of
+// a subscript already answers.
+//
+// It is the shape a *value* takes where a construct reads one as a reference
+// at run time rather than at the parse: a `(P)` group's resolved text, and
+// `unset`'s operand. Those arrive as strings with the subscript unlexed, so
+// the group has nowhere to hang its operand and a range has no two ends —
+// which is why the answer was a name plus one arithmetic index and nothing
+// else.
+//
+// Unquoted, unlike ParseParamExpFor: a here-document body is inside quotes
+// and a resolved value is not.
+func (p *Parser) ParseReference(src string, at Pos) *ParamExpr {
+	return p.parseParamExp(src, at, Unquoted, false)
+}
+
 // ParseArithFor is ParseParamExpFor for `$(( ))`.
 func (p *Parser) ParseArithFor(src string, at Pos) ArithExpr {
 	return p.parseArith(src, at)

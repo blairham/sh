@@ -83,15 +83,15 @@ type UnexpectedWordNaming uint8
 
 const (
 	// UnexpectedWordIsWhatItComesTo writes the word with its quoting off,
-	// which is the substrate's own answer and what a dialect gets by saying
+	// which is the substrate's own answer and what a preset gets by saying
 	// nothing.
 	UnexpectedWordIsWhatItComesTo UnexpectedWordNaming = iota
 	// UnexpectedWordIsSourceText writes the characters the word was written
-	// with. bash in all three of its spellings, and zsh.
+	// with.
 	UnexpectedWordIsSourceText
 	// UnexpectedWordIsSourceTextWhenItExpands writes the source only where
-	// the word holds an expansion and the quoting off otherwise. ksh93
-	// alone, and the last two rows above are what part it from the value
+	// the word holds an expansion and the quoting off otherwise. The last two
+	// rows above are what part it from the value
 	// before it: one expansion anywhere in the word keeps every quote in it.
 	UnexpectedWordIsSourceTextWhenItExpands
 )
@@ -100,12 +100,12 @@ type Diagnostics struct {
 	// TiedNamesRequired, TieToItself, AlreadyTiedScalar and TieWithAValue are
 	// what `typeset -T` says when it cannot make a tie — see tiedscalar.go.
 	//
-	// One shell in the panel has the letter with this meaning, so its words
-	// are the defaults and no dialect overrides them: bash refuses `-T`
-	// outright and ksh93's `-T` declares a *type*, which is a different
-	// builtin's worth of thing and stays refused by name. The fields are
-	// here rather than inline so that a dialect which grows the letter has
-	// somewhere to say it, which is the rule every other refusal follows.
+	// One preset has the letter with this meaning, so its words are the defaults
+	// and no other overrides them: another refuses `-T` outright, and a third
+	// gives `-T` a *type* declaration, which is a different builtin's worth of
+	// thing and stays refused by name. The fields are here rather than inline so
+	// that a preset which grows the letter has somewhere to say it, which is the
+	// rule every other refusal follows.
 	TiedNamesRequired string
 	TieToItself       string
 	AlreadyTiedScalar string
@@ -205,9 +205,8 @@ type Diagnostics struct {
 	// NamesResolvedPath makes a failed `exec` name the absolute path it
 	// tried rather than the operand as written.
 	//
-	// bash alone, and only for `exec`: `exec ./ne.sh` in /tmp reports
-	// "/tmp/ne.sh: Permission denied" there, where dash, ksh93 and zsh all
-	// report "./ne.sh". The same preset reports `. ./nosuch.sh` as written, so
+	// True only for `exec`: `exec ./ne.sh` in /tmp reports
+	// "/tmp/ne.sh: Permission denied", where false reports "./ne.sh". The same preset reports `. ./nosuch.sh` as written, so
 	// this is not a general habit and cannot be shared with the `.` wording.
 	NamesResolvedPath bool
 
@@ -252,8 +251,8 @@ type Diagnostics struct {
 	TimesArguments string
 
 	// NamesBuiltinInLocation puts the reporting builtin's name between the
-	// shell's name and the line number: `zsh:shift:1: …` rather than
-	// `zsh:1: …`.
+	// shell's name and the line number: `<shell>:shift:1: …` rather than
+	// `<shell>:1: …`.
 	//
 	// A rule rather than a handful of special cases — measured across `.`,
 	// `times`, `shift`, `cd`, `unset`, `read`, `trap` and `break`, every one of
@@ -275,9 +274,9 @@ type Diagnostics struct {
 	TestNamesFirstOperand bool
 
 	// TestUnknownLongOperator is how `test` reads a word spelled like an
-	// operator this shell does not have — a dash and at least one character
-	// after it — when it stands at the head of a primary in an expression
-	// too long for the argument-count rules to decide.
+	// operator this shell does not have — a `-` and at least one character after
+	// it — when it stands at the head of a primary in an expression too long for
+	// the argument-count rules to decide.
 	//
 	// The short forms already name it, because they never reach a grammar:
 	// two words go straight to the unary evaluation and three to the binary
@@ -436,8 +435,9 @@ type Diagnostics struct {
 	// it to name.
 	//
 	// It is a separate wording and not the bad-conversion one with an empty
-	// name. bash has a second complaint for it, `missing format character`,
-	// and names the directive in it where its ordinary one names the character;
+	// name. A preset may have a second complaint for it, `missing format
+	// character`, naming the directive in it where its ordinary one names the
+	// character;
 	// another reuses `invalid directive`; a third names nothing at all, so its
 	// wording takes no verb.
 	PrintfMissingVerb string
@@ -683,17 +683,17 @@ type Diagnostics struct {
 	CoprocessAlreadyRunning string
 
 	// BuiltinComplaintName is the name a builtin's complaints call it, by
-	// the name it was invoked as, for a dialect whose complaint names a
-	// different one. ksh93's `type` is `whence -v` and its refusals say so:
-	// `type -t echo` there answers `whence: -t: unknown option`, with
-	// `whence`'s usage line under it. Lookups keyed by builtin —
+	// the name it was invoked as, for a preset whose complaint names a different
+	// one — where `type` is really another builtin under a second name, and its
+	// refusals say so: `type -t echo` answering `whence: -t: unknown option`,
+	// with that builtin's usage line under it. Lookups keyed by builtin —
 	// UnimplementedOptionLetters, BuiltinUsage — still use the invoked
 	// name; only the wording changes.
 	BuiltinComplaintName map[string]string
 	// ShiftBadNumber is an operand to `shift` that is not one, taking the
-	// word. Only reached in a dialect that reads the operand as a count
-	// rather than as an option: bash names it and asks for a number, dash
-	// calls it an illegal one.
+	// word. Only reached under a preset that reads the operand as a count rather
+	// than as an option: one names it and asks for a number, another calls it an
+	// illegal one.
 	ShiftBadNumber string
 
 	// BuiltinBadSubscript is what a declaration says about a subscripted
@@ -933,7 +933,7 @@ type Diagnostics struct {
 	// sourced file:
 	//
 	//	autoload -Uz qf; qf; whence -v qf   qf is a shell function from /…/qf
-	//	source lib.zsh; whence -v sf        sf is a shell function from /…/lib.zsh
+	//	source lib.sh; whence -v sf         sf is a shell function from /…/lib.sh
 	//	g(){ :; }; whence -v g              g is a shell function from <shell>
 	//
 	// The third row is what a fixed string gives all three, which is why nothing
@@ -1502,8 +1502,8 @@ type Diagnostics struct {
 	// SetImmovableOptionName is a long `set -o` name this shell *has* and
 	// will not move. One verb: the name, as the script spelled it.
 	//
-	//	default   set: chaselinks: not implemented
-	//	zsh       set: can't change option: chaselinks
+	//	default     set: chaselinks: not implemented
+	//	immovable   set: can't change option: chaselinks
 	//
 	// Not the same answer as SetInvalidOptionName, and the difference is the
 	// one a script can act on: the first is a shell that is missing
@@ -1582,10 +1582,10 @@ type Diagnostics struct {
 	// the one that drifted.
 	SetInvalidOptionStatus int
 
-	// MonitorDenied is `set -m` asked for by a shell the dialect says needs
-	// a terminal for it (Semantics.MonitorNeedsATerminal), in the dialect's
-	// words. One verb: the spelling the script used, `-m` or `monitor`,
-	// which is the piece zsh echoes back.
+	// MonitorDenied is `set -m` asked for by a shell the preset says needs a
+	// terminal for it (Semantics.MonitorNeedsATerminal), in the preset's words.
+	// One verb: the spelling the script used, `-m` or `monitor`, which is the
+	// piece a preset that echoes one back writes.
 	//
 	//	set: can't access tty; job control turned off
 	//	set: can't change option: -m
@@ -1821,8 +1821,8 @@ type Diagnostics struct {
 	KillNoSuchJob string
 	// KillUsage is `kill` with nothing to signal. No verbs.
 	KillUsage string
-	// KillUsageUnprefixed prints that usage with no location and no shell
-	// name in front of it. ksh93 alone.
+	// KillUsageUnprefixed prints that usage with no location and no shell name
+	// in front of it.
 	KillUsageUnprefixed bool
 	// KillTargetUnprefixed does the same for a target that could not be
 	// signaled. The two are separate fields because they are separate questions
@@ -3372,14 +3372,14 @@ type Diagnostics struct {
 	PromptBuiltinLocation LocationStyle
 
 	// The wordings below replace their unprefixed namesakes for a line typed
-	// at a prompt. Empty — the common answer, and every field for three of
-	// the four dialects — leaves the wording alone.
+	// at a prompt. Empty — the common answer, and every field for most presets —
+	// leaves the wording alone.
 	//
-	// They exist for one shell and one rule: ksh93 writes the line **inside**
-	// its sentence rather than in the location, so a route that names no line
-	// cannot be expressed by the location alone. Measured 2026-09-11 at its
-	// prompt, every sentence it writes about a parse failure is its script
-	// sentence with ` at line N` taken out:
+	// They exist for one preset and one rule: it writes the line **inside** its
+	// sentence rather than in the location, so a route that names no line cannot
+	// be expressed by the location alone. Measured at its prompt, every sentence
+	// it writes about a parse failure is its script sentence with ` at line N`
+	// taken out:
 	//
 	//	if; then          syntax error: `;' unexpected
 	//	if true; then     syntax error: `then' unmatched
@@ -3411,40 +3411,40 @@ type Diagnostics struct {
 type LocationStyle int
 
 const (
-	// LocationNone names the shell and stops: `ksh: msg`. Also the
+	// LocationNone names the shell and stops: `<shell>: msg`. Also the
 	// substrate's own.
 	LocationNone LocationStyle = iota
-	// LocationColonLine is `dash: 1: msg`.
+	// LocationColonLine is `<shell>: 1: msg`.
 	LocationColonLine
-	// LocationLineWord is `bash: line 1: msg`.
+	// LocationLineWord is `<shell>: line 1: msg`.
 	LocationLineWord
-	// LocationTightLine is `zsh:1: msg`.
+	// LocationTightLine is `<shell>:1: msg`.
 	LocationTightLine
-	// LocationLineWordAfterFirst is `ksh: line 2: msg`, and `ksh: msg` on
-	// line 1 — the line is named only once there is a line worth naming.
+	// LocationLineWordAfterFirst is `<shell>: line 2: msg`, and `<shell>: msg`
+	// on line 1 — the line is named only once there is a line worth naming.
 	//
-	// ksh93's answer for `-c`, and only for `-c`: a script file names line 1
+	// A preset's answer for `-c`, and only for `-c`: a script file names line 1
 	// like any other, which ScriptLocation already carries. Measuring only
 	// `sh -c 'one-liner'` cannot tell this from LocationNone, and that is how
 	// LocationNone got here.
 	LocationLineWordAfterFirst
-	// LocationBracketLine is `ksh: script[1]: msg` — the line in brackets,
+	// LocationBracketLine is `<shell>: script[1]: msg` — the line in brackets,
 	// against the shell's name rather than after it.
 	//
-	// ksh93 uses it for the messages a *builtin* speaks, and the word form
+	// A preset may use it for the messages a *builtin* speaks and the word form
 	// for everything else, which is what BuiltinLocation selects between.
 	LocationBracketLine
 	// LocationBracketLineAfterFirst is LocationBracketLine with the line
 	// left out on line 1, the same way LocationLineWordAfterFirst leaves it
-	// out — ksh93's answer for `-c`, where line 1 names no line at all.
+	// out — a preset's answer for `-c`, where line 1 names no line at all.
 	LocationBracketLineAfterFirst
-	// LocationNameOnly is the shell's name and nothing more: `zsh: msg`,
+	// LocationNameOnly is the shell's name and nothing more: `<shell>: msg`,
 	// with no line however deep in the input the failure was. Distinct from
 	// LocationNone so the Stdin fields can choose it — their zero already
 	// means "the same as Location".
 	LocationNameOnly
 	// LocationBuiltinNameOnly is the *builtin's* name alone: `shift: msg`,
-	// no shell and no line — zsh's answer for a builtin's complaint when
+	// no shell and no line — a preset's answer for a builtin's complaint when
 	// the script arrived on standard input. A message the shell itself
 	// speaks falls back to the shell's name.
 	LocationBuiltinNameOnly
@@ -3456,17 +3456,15 @@ type BadOptionName int
 
 const (
 	// BadOptionFirstCharacter names the first letter the builtin cannot use,
-	// dashes not skipped — so `--version` is `--`, and `read -rx` is `-x`
-	// because `r` is an option it has. bash and dash, and the substrate's
-	// own.
+	// leading `-`s not skipped — so `--version` is `--`, and `read -rx` is `-x`
+	// because `r` is an option it has. Also the substrate's own.
 	BadOptionFirstCharacter BadOptionName = iota
-	// BadOptionWholeWord names a `--` word as written: `--version`. A
-	// single-dash bundle still names the letter — `read -rx` is `-x` here
-	// too. ksh93.
+	// BadOptionWholeWord names a `--` word as written: `--version`. A bundle
+	// behind a single `-` still names the letter — `read -rx` is `-x` here too.
 	BadOptionWholeWord
-	// BadOptionFirstUnknownLetter skips every leading dash and names the
-	// first letter the builtin does not know: `--version` is `-v`, and `-e`
-	// where `v` is an option it has. zsh.
+	// BadOptionFirstUnknownLetter skips every leading `-` and names the first
+	// letter the builtin does not know: `--version` is `-v`, and `-e` where `v`
+	// is an option it has.
 	BadOptionFirstUnknownLetter
 )
 
@@ -3483,40 +3481,40 @@ func (b BadOptionName) String() string {
 // TestUnknownOperatorReport is what a long `test` expression says about a
 // word spelled like an operator the shell does not have.
 //
-// Measured 2026-09-12 against `[ -Q x -a -n x ]`, with `-Q` chosen because no
-// dialect has it, so the answer is about the *spelling* rather than about one
-// missing operator:
+// Measured against `[ -Q x -a -n x ]`, with `-Q` chosen because no preset has
+// it, so the answer is about the *spelling* rather than about one missing
+// operator:
 //
-//	dash    [: -Q: unexpected operator
-//	bash    [: too many arguments
-//	bash32  [: -Q: unary operator expected
-//	ksh93   [: x: unknown operator
-//	zsh     zsh:[:1: unknown condition: -Q
+//	[: -Q: unexpected operator
+//	[: too many arguments
+//	[: -Q: unary operator expected
+//	[: x: unknown operator
+//	<shell>:[:1: unknown condition: -Q
 //
 // A bare `-` is not such a word in any of them — `[ - x -a -n x ]` falls back
-// to each shell's plain-word complaint — and the spelling rule is nothing
-// narrower than "a dash with something after it": `-QQ`, `-1`, `--f`, `-+`
-// and `-Q=` are all named the same way.
+// to each preset's plain-word complaint — and the spelling rule is nothing
+// narrower than "a `-` with something after it": `-QQ`, `-1`, `--f`, `-+` and
+// `-Q=` are all named the same way.
 type TestUnknownOperatorReport int
 
 const (
 	// TestUnknownOperatorCounted reads the word as an ordinary operand and
 	// reports the argument count when the expression runs out with words
-	// left over: bash 5.3, and the substrate's own. It is the answer that
-	// hides which word was the problem, and it is bash's, so it must not be
-	// swept up by a fix aimed at the other three.
+	// left over, which is also the substrate's own. It is the answer that hides
+	// which word was the problem, and it is a real one, so it must not be swept
+	// up by a fix aimed at the others.
 	TestUnknownOperatorCounted TestUnknownOperatorReport = iota
 	// TestUnknownOperatorLeavesAnOperand also declines to read the word as
 	// an operator, but complains about the *primary* rather than the count:
 	// the word and the one after it are two operands with no operator
 	// between them, which is the three-word complaint's shape and takes the
-	// three-word complaint's wording and blame. dash names the first of the
-	// two and ksh93 the second, which is exactly what TestNamesFirstOperand
-	// already decides, so nothing further is needed here.
+	// three-word complaint's wording and blame. Which of the two is named is
+	// exactly what TestNamesFirstOperand already decides, so nothing further is
+	// needed here.
 	TestUnknownOperatorLeavesAnOperand
 	// TestUnknownOperatorNamed reads it as an operator and says it has never
-	// heard of it, which is the only answer that names the word the reader
-	// has to change: zsh.
+	// heard of it, which is the only answer that names the word the reader has
+	// to change.
 	TestUnknownOperatorNamed
 )
 
@@ -3541,11 +3539,10 @@ func Wording(custom, fallback string, args ...any) string {
 		custom = fallback
 	}
 	if !strings.Contains(custom, "%") {
-		// A format is allowed to ignore what it is given. dash's `shift`
-		// message names no count where ksh93's does, and passing the count
-		// to both is simpler than deciding per dialect which to pass —
-		// provided the unused one does not become "%!(EXTRA int=5)", which
-		// is exactly what it did.
+		// A format is allowed to ignore what it is given. One `shift` message
+		// names no count where another's does, and passing the count to both is
+		// simpler than deciding per preset which to pass — provided the unused
+		// one does not become "%!(EXTRA int=5)".
 		return custom
 	}
 	return fmt.Sprintf(custom, args...)
@@ -3567,9 +3564,9 @@ func escapeToken(s string) string {
 // given, or a file `.` read — with the source named the way this dialect
 // names it.
 //
-// Three shapes, and the shells split three ways over one question: dash names
-// the source after the location, bash and ksh93 before it, and zsh puts it
-// where the shell's own name goes and prints no label.
+// Three shapes, and the presets split three ways over one question: naming the
+// source after the location, before it, or where the shell's own name goes
+// with no label at all.
 func (d Diagnostics) SourceReport(naming SourceNaming, shell, source string, line int, msg string) string {
 	switch naming {
 	case SourceReplacesShell:
@@ -3587,14 +3584,14 @@ func (d Diagnostics) SourceReport(naming SourceNaming, shell, source string, lin
 type SourceNaming int
 
 const (
-	// SourceAfterLocation names it last: dash's `dash: 3: ./f.sh: …`. The
-	// zero value, and the substrate's own.
+	// SourceAfterLocation names it last: `<shell>: 3: ./f.sh: …`. The zero
+	// value, and the substrate's own.
 	SourceAfterLocation SourceNaming = iota
-	// SourceBeforeLocation names it between the shell and the line: bash's
-	// `bash: eval: line 2: …`, and ksh93 for both kinds.
+	// SourceBeforeLocation names it between the shell and the line:
+	// `<shell>: eval: line 2: …`.
 	SourceBeforeLocation
-	// SourceReplacesShell names it *instead* of the shell: zsh's
-	// `(eval):1: …`, and bash for a sourced file.
+	// SourceReplacesShell names it *instead* of the shell: `(eval):1: …`, and
+	// the same shape for a sourced file.
 	SourceReplacesShell
 )
 
@@ -3786,10 +3783,10 @@ func readOn(se *syntax.Error, expr string) bool {
 // It lives here rather than in the front end because the front end is not the
 // only one reporting parse failures: `eval` and `.` parse borrowed text and
 // have to say the same thing about the same failure. The kind is what
-// decides, never the message text — dash says "Bad substitution" for anything
-// wrong inside `${ }` and "Syntax error: …" for everything else, and matching
-// on our own phrasing to tell those apart would break the first time the
-// phrasing changed.
+// decides, never the message text — a preset may say "Bad substitution" for
+// anything wrong inside `${ }` and "Syntax error: …" for everything else, and
+// matching on our own phrasing to tell those apart would break the first time
+// the phrasing changed.
 // newlineLine is the line a refused newline is blamed on in this dialect, and
 // whether that is anywhere other than where the token stands.
 //
@@ -3926,11 +3923,11 @@ func (d Diagnostics) ParseFailure(err error) string {
 			// All three spellings of the construct, and the third is here
 			// because leaving it out is silent: an opener with no case of
 			// its own falls through to UnmatchedQuote, so `cat =(echo hi`
-			// reported `unmatched =(` — a sentence about a quote, for a
-			// script with no quote in it — where the other two spellings
-			// give the dialect's own `parse error near \`=(echo hi'`. Found
-			// by comparing the three against zsh 5.9.2 rather than by a
-			// test, which is why there is now a test.
+			// reported `unmatched =(` — a sentence about a quote, for a script
+			// with no quote in it — where the other two spellings give the
+			// preset's own `parse error near \`=(echo hi'`. Found by comparing
+			// the three rather than by a test, which is why there is now a
+			// test.
 			form = d.UnmatchedProcSubst
 			if form == "" {
 				form = d.UnmatchedCmdSubst
@@ -3978,8 +3975,8 @@ func (d Diagnostics) Remark(r syntax.Remark) string {
 // ForScript returns the diagnostics a script read from a file should use.
 //
 // A shell reports the *script's* name rather than its own once it is running
-// one, and ksh93 also changes how it names the line. Both are properties of
-// the invocation rather than of the dialect, which is why this returns a
+// one, and a preset may also change how it names the line. Both are properties
+// of the invocation rather than of the preset, which is why this returns a
 // value instead of being another field somebody has to remember to set.
 func (d Diagnostics) ForScript() Diagnostics {
 	if d.ScriptLocation != LocationNone {
@@ -3994,9 +3991,9 @@ func (d Diagnostics) ForScript() Diagnostics {
 // ForStdin returns the diagnostics a script arriving on standard input
 // should use.
 //
-// There is no $0 to name on that route, and two of the four change shape
-// rather than substituting a name: zsh trims its prefixes and ksh93 brackets
-// the line. A property of the invocation, like ForScript.
+// There is no $0 to name on that route, and some presets change shape rather
+// than substituting a name: trimming the prefixes, or bracketing the line. A
+// property of the invocation, like ForScript.
 func (d Diagnostics) ForStdin() Diagnostics {
 	if d.StdinLocation != LocationNone {
 		d.Location = d.StdinLocation
@@ -4072,12 +4069,12 @@ func (d Diagnostics) ScriptDiagnostic(shell, path string, err error) string {
 // and empty for the dialects that say nothing.
 //
 // Rendered here for the reason ScriptDiagnostic is: which words a shell uses,
-// and whether it writes a line it has not reached, are the dialect's answers.
+// and whether it writes a line it has not reached, are the preset's answers.
 // The caller owns only the fact that there was no terminal.
 //
 // shell is what the shell calls itself, which on the script route is the
-// script — measured, dash names the script here and names itself everywhere
-// else, which is the same rule its other invocation diagnostics follow.
+// script — a preset may name the script here and name itself everywhere else,
+// which is the same rule its other invocation diagnostics follow.
 func (d Diagnostics) JobControlDiagnostic(shell string) string {
 	if d.NoJobControlAtStartup == "" {
 		return ""
@@ -4088,11 +4085,11 @@ func (d Diagnostics) JobControlDiagnostic(shell string) string {
 // ScriptStatus is what a shell exits with when the script operand would not
 // open.
 //
-// Two numbers rather than one, and the pair is the point: bash and ksh93
-// answer 127 for a path that is not there and 126 for one that is there and
-// will not open — a missing command's number against an unrunnable one's.
-// zsh gives 127 to both and dash 2 to both, which they say by setting the two
-// fields to one value rather than by this asking a different question of them.
+// Two numbers rather than one, and the pair is the point: a preset may answer
+// 127 for a path that is not there and 126 for one that is there and will not
+// open — a missing command's number against an unrunnable one's. A preset that
+// gives one number to both says so by setting the two fields to one value
+// rather than by this asking a different question of it.
 func (d Diagnostics) ScriptStatus(err error) int {
 	if errors.Is(err, fs.ErrNotExist) {
 		if d.ScriptNotFoundStatus != 0 {
@@ -4200,9 +4197,9 @@ func missingFuncBody(err error) bool {
 // inside `[[ ]]`, or empty for the three that write none.
 //
 // It carries its own location, and that is the whole reason it is a line of
-// its own rather than a longer wording: bash points it at the `[[` and points
-// the line after it at the token, so a condition opened on line 1 and refused
-// on line 2 names both.
+// its own rather than a longer wording: it points at the `[[` while the line
+// after it points at the token, so a condition opened on line 1 and refused on
+// line 2 names both.
 func (d Diagnostics) condPreamble(name, input string, err error) string {
 	var se *syntax.Error
 	if !errors.As(err, &se) || se.Construct != "[[" {
@@ -4270,9 +4267,9 @@ func (d Diagnostics) SourceEcho(naming SourceNaming, shell, source string, line 
 // text it echoes is the *header* rather than the line, so a header written
 // over four lines comes back over four lines and the sentence carries its own
 // opening words. That text came from the parser rather than from the source,
-// so it survives where there is no source to index — measured 2026-09-12 on a
-// pseudo-terminal, where bash writes both lines for `for ((i=0))` with no line
-// number in front of either (#2225).
+// so it survives where there is no source to index — measured on a
+// pseudo-terminal, where both lines are written for `for ((i=0))` with no line
+// number in front of either.
 func (d Diagnostics) offendingLine(line int, err error, src string) string {
 	var se *syntax.Error
 	if !errors.As(err, &se) {
@@ -4377,11 +4374,12 @@ func (d Diagnostics) StatusForParseError(err error) int {
 // runtimeRefusal reports whether the dialect refuses this at *run* time rather
 // than while parsing, and with what status.
 //
-// `for 1x in a; do :; done` is the case: bash parses it and complains when it
-// reaches it, so the complaint carries the status of a failed command and none
-// of the decoration a parse failure gets — no naming of where the script came
-// from, and no echoed source line. We find it while parsing, which is why the
-// difference has to be said here rather than emerging from when it is noticed.
+// `for 1x in a; do :; done` is the case: a preset may parse it and complain
+// when it reaches it, so the complaint carries the status of a failed command
+// and none of the decoration a parse failure gets — no naming of where the
+// script came from, and no echoed source line. We find it while parsing, which
+// is why the difference has to be said here rather than emerging from when it
+// is noticed.
 //
 // The dialect having given the failure a status of its own is the signal, so
 // there is one list and not two that could drift.
@@ -4399,10 +4397,10 @@ func (d Diagnostics) runtimeRefusal(err error) (int, bool) {
 		syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing,
 		syntax.ErrArithIllegalByte, syntax.ErrArithBadOutputFormat,
 		syntax.ErrArithBadBaseSyntax:
-		// A malformed expression is found while expanding in bash, so the
-		// command fails rather than the script failing to parse. The same
-		// three consequences follow as for `for` with a bad name, which is
-		// what makes this one predicate rather than three special cases.
+		// A malformed expression may be found while expanding, so the command
+		// fails rather than the script failing to parse. The same three
+		// consequences follow as for `for` with a bad name, which is what makes
+		// this one predicate rather than three special cases.
 		if d.ArithFailureStatus != 0 {
 			return d.ArithFailureStatus, true
 		}
@@ -4418,7 +4416,7 @@ func (d Diagnostics) SyntaxStatus() int {
 }
 
 // sourcedSyntaxStatus is SyntaxStatus for text `.` read from a file, which is
-// the same number in every dialect but zsh.
+// the same number under all but one preset.
 func (d Diagnostics) sourcedSyntaxStatus() int {
 	if d.SourcedSyntaxErrorStatus == 0 {
 		return d.SyntaxStatus()
@@ -4436,8 +4434,9 @@ func (d Diagnostics) dotNoOperandStatus() int {
 // reasonText renders a strerror string the way this dialect quotes one.
 //
 // The substrate capitalizes, because that is what the C string says and what
-// three of the four print. zsh lowercases everything, so it is one flag here
-// rather than a lowercase spelling in every format that carries a reason.
+// most presets print. A preset that lowercases everything says so with one
+// flag here rather than a lowercase spelling in every format that carries a
+// reason.
 func (d Diagnostics) reasonText(s string) string {
 	if !d.LowercaseReason || s == "" {
 		return s
@@ -4477,7 +4476,7 @@ func (d Diagnostics) dotCannotOpenStatus() int {
 	return d.DotCannotOpenStatus
 }
 
-// PosixDiagnostics is dash's, which is also the substrate's own.
+// PosixDiagnostics is the standard's, which is also the substrate's own.
 func PosixDiagnostics() Diagnostics { return Diagnostics{SyntaxErrorStatus: 2} }
 
 // CoreDiagnostics is the substrate's own. Unlike [CoreSemantics] it refuses
@@ -4497,20 +4496,20 @@ func (r *Runner) diag() Diagnostics {
 		// a sourced file, and only this package knows when the shell is in
 		// one.
 		//
-		// A file is a file however it was reached, which is measured and is
-		// not what a session does to everything else it runs: zsh 5.9.2
-		// sourcing a file at a prompt reports `f.sh:cd:1: no such file or
-		// directory`, keeping both the name and the line, where the same
-		// `cd` typed at the prompt is `cd: no such file or directory`. Text
-		// handed to `eval` is the other way and needs no exception — bash
-		// 5.3.15 answers `bash: cd: …` for `eval "cd /nope"` at a prompt,
+		// A file is a file however it was reached, which is measured and is not
+		// what a session does to everything else it runs: sourcing a file at a
+		// prompt reports `f.sh:cd:1: no such file or directory`, keeping both
+		// the name and the line, where the same `cd` typed at the prompt is
+		// `cd: no such file or directory`. Text handed to `eval` is the other
+		// way and needs no exception — `<shell>: cd: …` for `eval "cd /nope"`
+		// at a prompt,
 		// with no line, exactly as for the line itself (#2024).
 		//
 		// A function *defined* in a file is the same fact reached one step
 		// later, and it needs a question of its own because the file is no
 		// longer open by the time the call happens: borrowedFiles has already
 		// gone back to zero, so only where the body came from can say.
-		// Measured on zsh 5.9.2 with `myfunc` defined in a sourced `lib.zsh`
+		// Measured with `myfunc` defined in a sourced `lib.sh`
 		// and called at a prompt: `myfunc:setopt:1: can't change option:
 		// monitor`, keeping both the name and the line, exactly as the same
 		// script reports it non-interactively. A function *typed* at the
@@ -4541,22 +4540,21 @@ type RedirectLine uint8
 
 const (
 	// LineOfCommand is the line the command began on, which is where every
-	// other diagnostic about it is reported. dash and zsh, always.
+	// other diagnostic about it is reported.
 	//
-	// It is also what every dialect does for a *simple* command, so this axis
+	// It is also what every preset does for a *simple* command, so this axis
 	// only ever answers about a compound one. That took a command split by
-	// backslash continuations to see: with `cat` on line 2 and its
-	// `< missing` two lines below, all four name line 2, and reading the
-	// redirect's own position there gave bash line 4.
+	// backslash continuations to see: with `cat` on line 2 and its `< missing`
+	// two lines below, every preset names line 2, and reading the redirect's own
+	// position there gave line 4.
 	LineOfCommand RedirectLine = iota
 	// LineOfRedirect is the redirect's own line, and applies to a compound
-	// command: bash, whose `done < missing` on line 5 says 5 where the loop
-	// opened on line 2.
+	// command: `done < missing` on line 5 says 5 where the loop opened on line
+	// 2.
 	LineOfRedirect
-	// LineBeforeRedirect is the line before that, and also applies to a
-	// compound command: ksh93, which says 4 for that same loop — and says
-	// line 1 for a compound written entirely on line 2, which prints no line
-	// at all there.
+	// LineBeforeRedirect is the line before that, and also applies to a compound
+	// command: 4 for that same loop — and line 1 for a compound written entirely
+	// on line 2, which prints no line at all there.
 	LineBeforeRedirect
 )
 
@@ -4564,13 +4562,12 @@ const (
 type KillListingForm int
 
 const (
-	// KillListingPerLine is one name per line — ksh93's shape.
+	// KillListingPerLine is one name per line.
 	KillListingPerLine KillListingForm = iota
-	// KillListingNumbered is bash's: ` N) SIGNAME`, tab-separated, five to
-	// a row.
+	// KillListingNumbered is ` N) SIGNAME`, tab-separated, five to a row.
 	KillListingNumbered
-	// KillListingSpaceJoined is zsh's single space-joined line.
+	// KillListingSpaceJoined is a single space-joined line.
 	KillListingSpaceJoined
-	// KillListingZeroFirst is dash's: a 0, then one name per line.
+	// KillListingZeroFirst is a 0, then one name per line.
 	KillListingZeroFirst
 )

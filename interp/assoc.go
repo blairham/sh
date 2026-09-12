@@ -250,6 +250,48 @@ func (r *Runner) assocKey(w *syntax.Word) string {
 	return asWritten
 }
 
+// assocAssignKey is assocKey for a caller that is about to *store* under the
+// key, and it is the one place an empty one is refused.
+//
+// Splitting the store from the read is what the panel asks for rather than a
+// convenience: one column refuses to store under an empty key and still
+// *reads* one, with a different sentence and a different subject — `m[""]:
+// bad array subscript` on the way in and `m: bad array subscript` on the way
+// out. The second is #1972 and is not asked here, so a read of a key nothing
+// holds stays the ordinary miss it is in the other two columns.
+//
+// The subject is the subscript **as it was written**, which is the printer's
+// job and not an expansion's: bash names `m[$w]` and not the empty text that
+// word came to, so both of the renderings a *key* has — quotes off, quotes
+// kept — are the wrong one here. syntax.PrintWord is the one that remembers
+// the spelling, and a diagnostic about how a line was typed is what it is
+// for.
+func (r *Runner) assocAssignKey(name string, w *syntax.Word) (string, bool) {
+	key := r.assocKey(w)
+	if key != "" {
+		return key, true
+	}
+	if !r.ask(r.sem().EmptyAssociativeKeyIsAnError, "an empty key on a keyed table") {
+		return key, true
+	}
+	r.diagf("%s\n", Wording(r.diag().BadArraySubscript,
+		"%[1]s[%[2]s]: bad array subscript", name, syntax.PrintWord(w)))
+	// assignFailed and not the status alone: an assignment statement decides
+	// its own status after the right-hand sides have run, and writes 0 over
+	// anything set here unless it is told the assignment did not happen.
+	// Measured, `declare -A m; m[""]=4; echo $?` is 1 in the column that
+	// refuses.
+	r.status, r.assignFailed = 1, true
+	// And the rest of the *list* is given up, which is the same thing a
+	// refused reassignment does in the one column that reaches either:
+	// measured 2026-09-12, `declare -A m` then `m[""]=4; echo A` on one line
+	// prints no `A` and the line after it runs. No axis, because only one
+	// column refuses at all — see refuseReadonly, where the same two fields
+	// carry the same behavior for the neighboring refusal.
+	r.ctl, r.abandonLine = controlAbandon, r.line
+	return "", false
+}
+
 // expandKeyQuoted is the key under the reading that removes quotes: the
 // subscript expanded as a word, joined, and not trimmed.
 func (r *Runner) expandKeyQuoted(w *syntax.Word) string {

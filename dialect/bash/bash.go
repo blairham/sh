@@ -881,6 +881,13 @@ func Semantics() interp.Semantics {
 	// naming the quoting run — where the arithmetic site reports and carries
 	// on with zero. Identical in 3.2.57 and under argv[0] of `sh` (#1763).
 	s.EmptyParamSubscriptIsAnError = interp.Yes
+	// An empty key is refused rather than stored: measured 2026-09-12 with
+	// `declare -A m`, `m[""]=4` and `m[$w]=4` with an empty `$w` are both
+	// `bad array subscript`, the table is untouched and the status is 1,
+	// where ksh93 and zsh store. `m[ ]=7` is the control and stores under
+	// one space in every column, so this is emptiness and not blankness
+	// (#1938).
+	s.EmptyAssociativeKeyIsAnError = interp.Yes
 	// `$@` with no positional parameters is **unset** here, so a colon-less
 	// conditional fires: measured 2026-09-12 after `set --`, `"${@-word}"`
 	// is `word` and `"${@+word}"` is empty in 5.3.15, 3.2.57 and as `sh`,

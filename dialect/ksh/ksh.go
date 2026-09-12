@@ -925,6 +925,10 @@ func Semantics() interp.Semantics {
 	// `a=(5 6 7); ${a[]}` is `5`, `s=hi; ${s[]}` is `hi` and `${m[]}` is the
 	// value under the empty key (#1763).
 	s.EmptyParamSubscriptIsAnError = interp.No
+	// An empty key is a key: measured 2026-09-12, `typeset -A m; m[""]=4`
+	// leaves one element under the empty key here and is refused in bash
+	// (#1938).
+	s.EmptyAssociativeKeyIsAnError = interp.No
 	// The bash column's answer for whether an empty positional list is a set
 	// parameter: measured 2026-09-12, `set --; "${@-word}"` is `word` here
 	// and `${@=abc}` is `${@=abc}: bad substitution` because the operator

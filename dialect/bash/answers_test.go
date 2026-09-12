@@ -116,6 +116,8 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"PrefixToAFrozenNameIsCheckedFirst", s.PrefixToAFrozenNameIsCheckedFirst, interp.Yes},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.No},
 		{"EmptyParamSubscriptIsAnError", s.EmptyParamSubscriptIsAnError, interp.Yes},
+		// The one column that refuses to store under an empty key (#1938).
+		{"EmptyAssociativeKeyIsAnError", s.EmptyAssociativeKeyIsAnError, interp.Yes},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.No},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},

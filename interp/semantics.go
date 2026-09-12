@@ -7551,6 +7551,39 @@ type Semantics struct {
 	// spelled `@` is an array and answers elsewhere (#1941).
 	PositionalListWithNoneIsSet Answer
 
+	// EmptyAssociativeKeyIsAnError refuses to *store* under a key that is
+	// empty once the subscript has been read — `typeset -A m; m[""]=4`, and
+	// `m[$w]=4` with an empty `$w` beside it.
+	//
+	// Measured 2026-09-12 from a script file, with the name declared:
+	//
+	//	                   m[""]=4    m[$w]=4    m[ ]=7
+	//	bash 5.3.15        refused    refused    stored under one space
+	//	ksh93u+            stored     stored     stored
+	//	zsh 5.9.2          stored     stored     a bad pattern
+	//
+	// bash names the subscript as it was written — `m[""]: bad array
+	// subscript` and `m[$w]: bad array subscript` — leaves the table
+	// untouched, reports 1 and carries on; the same build under argv[0] `sh`
+	// ends the script instead. The blank column is the control that says
+	// this is emptiness and not whitespace: one space is a key everywhere
+	// that reads the brackets as a key at all.
+	//
+	// The two columns that store are not storing the same key, and that is
+	// SubscriptIsAQuotingContext rather than this axis: ksh93 reads the
+	// quotes off and holds the empty key, zsh keeps them and holds a
+	// two-character one, so `typeset -A m; m[""]=4; m[$w]=4` leaves ksh93
+	// with one element and zsh with two. Both are measured and both are
+	// right for their column.
+	//
+	// Asked only where an association is about to be stored under a key that
+	// came out empty. A key with anything in it asks nothing, an indexed name
+	// reads its subscript as an expression and asks EmptySubscriptText…
+	// instead, and *reading* an empty key is a third question again — bash
+	// writes `m: bad array subscript` there, with a different subject, and
+	// that is #1972 (#1938).
+	EmptyAssociativeKeyIsAnError Answer
+
 	// EmptyParamSubscriptIsAnError refuses `${a[]}` — a subscript written
 	// with nothing at all between the brackets — where a *parameter
 	// expansion* reads it. The same text one level over from

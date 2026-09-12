@@ -1440,6 +1440,12 @@ func Semantics() interp.Semantics {
 	// arithmetic site is a silent zero on a name nothing declared. The
 	// expansion is refused and the input ends (#1763).
 	s.EmptyParamSubscriptIsAnError = interp.Yes
+	// An empty key is a key here too, though `m[""]` is not the way to reach
+	// one: the subscript is not a quoting context, so those brackets hold a
+	// two-character key and `m[$w]` with an empty `$w` holds the empty one.
+	// Measured 2026-09-12, both store and the table ends with two elements
+	// (#1938).
+	s.EmptyAssociativeKeyIsAnError = interp.No
 	// An empty positional list is a **set** parameter here, with dash and
 	// against the four bash-and-ksh columns: measured 2026-09-12, `set --;
 	// "${@-word}"` is empty and `"${@+word}"` is `word` (#1941).

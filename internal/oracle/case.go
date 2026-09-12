@@ -6647,6 +6647,12 @@ echo "st=$?"`,
 		Why:     "the two readings of a quoted subscript, told apart by storing under one spelling and reading with the other — a key that is one string under both would hide it. bash and ksh93 run the subscript through quote removal, so the key is `k` and the second read finds `W`; zsh takes it as written, so the key is the three characters and the *first* read finds it. dash has no attribute and refuses the line",
 	},
 	{
+		ID: "assoc/an-empty-key", Category: "expansion",
+		Snippet: "typeset -A m 2>/dev/null || { echo no-attribute; exit 0; }\n" +
+			`w=; m[""]=4; echo "st=$?"; m[$w]=5; echo "st2=$?"; m[" "]=7; echo "st3=$? n=${#m[@]}"; printf '[%s][%s]' "${m[""]}" "${m[" "]}"; echo`,
+		Why: "an empty key, written and reached through a parameter, on the three columns that have the attribute -- and they answer three different ways. bash refuses to store under one at all, names the subscript **as it was written** (the quotation, or the `$w`, and not what either came to), leaves the table untouched, reports 1 and gives up the rest of the line, so nothing after the first refusal on it runs. ksh93 stores, and the two spellings are one key because its subscript is a quoting context, so the table ends with two elements and the empty key holds the second value. zsh stores too and the spellings are two keys, because its subscript is not a quoting context and an empty quotation is a two-character key there -- three elements, and the quotation still holds the 4. The one-space field is the control that says this is emptiness and not blankness: a blank is an ordinary key in every column. dash has no such attribute. Answered by Semantics.EmptyAssociativeKeyIsAnError, with SubscriptIsAQuotingContext deciding which key the storing columns hold (#1938)",
+	},
+	{
 		ID: "assoc/a-substituted-key-keeps-its-backslash", Category: "expansion",
 		Snippet: `typeset -A m; kk='a\b'; m[$kk]=ESC; m[ab]=PLAIN; printf "%d" "${#m[@]}"`,
 		Why:     "two keys or one, which is the associative face of a value's backslash surviving a word: the substituted key is three characters in the three shells with the attribute, so the array holds two elements. Where the backslash is eaten on its way in the two keys collide and the array holds one — an array given two keys and holding one, at status 0 (#1222). dash and bash 3.2 have no such attribute and refuse the line",

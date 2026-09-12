@@ -197,6 +197,11 @@ func Dialect() syntax.Dialect {
 	d.ExtendedPattern = true
 	// And inside `[[ ]]`, which is the only place bash reads them.
 	d.ExtendedPatternInCondition = true
+	// A **bare** group is not one of them, and in an expansion's pattern
+	// operand it is refused while reading: `${v#(a)}` is `syntax error at
+	// line 1: ` + "`" + `(' unexpected` here and takes the script with it, where
+	// `${v#@(a)}` — this shell's own spelling of a group — is read (#1430).
+	d.GroupOpeningAPatternOperandIsRefused = true
 	// `[[ -v name ]]`. Measured on ksh93u+, which has the operator and reads
 	// fewer kinds of name through it than the other two; see
 	// interp.Semantics.ParameterIsSetSeesPositionals.

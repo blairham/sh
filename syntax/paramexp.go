@@ -1438,6 +1438,18 @@ func elementSelectOp(c byte) ParamOp {
 	return ParamExclude
 }
 
+// patternFrom is wordFrom for an operand read as a *pattern*, which has one
+// refusal a word operand does not: a `(` standing first in it, in the dialect
+// that will not take one. See [Dialect.GroupOpeningAPatternOperandIsRefused],
+// where the measurement is.
+func (p *Parser) patternFrom(text string, at Pos) *Word {
+	if p.dialect.GroupOpeningAPatternOperandIsRefused && strings.HasPrefix(text, "(") {
+		p.failGroupOpeningAPatternOperand(at)
+		return &Word{Start: at, Stop: at}
+	}
+	return p.wordFrom(text, at, Unquoted)
+}
+
 // fillParamArgs splits the operand text according to the operator.
 func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) {
 	// Only a *word* operand takes the enclosing quoting; a pattern does not.
@@ -1453,7 +1465,7 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 		// The separator is an unquoted slash, so a slash inside quotes or
 		// after a backslash belongs to the pattern.
 		if i := indexUnquoted(rest, '/'); i >= 0 {
-			e.Arg = p.wordFrom(rest[:i], start, Unquoted)
+			e.Arg = p.patternFrom(rest[:i], start)
 			e.Arg2 = p.wordFrom(rest[i+1:], start, Unquoted)
 			// And the same text read as content of the quoting around the
 			// expansion, where that could come to something else. See
@@ -1463,7 +1475,7 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 			}
 		} else {
 			// Omitting the replacement deletes the match.
-			e.Arg = p.wordFrom(rest, start, Unquoted)
+			e.Arg = p.patternFrom(rest, start)
 		}
 	case ParamSubstring:
 		// The two operands are kept as source as well as as words: a
@@ -1489,7 +1501,7 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 		ParamExclude, ParamSetDifference, ParamSetIntersection,
 		ParamZip, ParamZipCycle:
 		if rest != "" {
-			e.Arg = p.wordFrom(rest, start, Unquoted)
+			e.Arg = p.patternFrom(rest, start)
 		}
 	default:
 		if rest != "" {

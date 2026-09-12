@@ -515,6 +515,35 @@ metacharacters, no for the extended constructs — and this implementation
 gives bash's answer in ksh93's dialect on both rows. The second of them
 answered that way before #1331 and the first now joins it.
 
+### A `(` opening an expansion's pattern operand is refused in one dialect
+
+`${v#(a)}` does not parse in ksh93. Measured 2026-09-12 with `v=aXb`:
+
+| written | dash | bash 5.3, 3.2, as `sh` | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `${v#(a)}` | `aXb` | `aXb` | **syntax error** | `Xb` |
+| `${v%(b)}` | `aXb` | `aXb` | **syntax error** | `aX` |
+| `${v/(a)/Z}` | — | `aXb` | **syntax error** | `ZXb` |
+| `${v#@(a)}` | `aXb` | `aXb` | `Xb` | `aXb` |
+| `${v#\(a\)}` | `aXb` | `aXb` | `aXb` | `aXb` |
+| `${u:-(a)}` | `(a)` | `(a)` | `(a)` | `(a)` |
+
+The refusal is at **parse** time and takes the script with it — status 3
+there — so it is a grammar flag,
+`Dialect.GroupOpeningAPatternOperandIsRefused`, and the one place a flag
+here says what a dialect *will not* read rather than what it adds. Four
+columns take the text and one refuses it, so the core takes it.
+
+The last three rows are the controls, and each rules out a wider reading:
+`@(` is that shell's own spelling of a group and is read, an escaped
+parenthesis is an ordinary character, and a **word** operand takes a
+leading `(` in every column — so it is the pattern's reader that refuses
+and not the brace. A group that does not *open* the operand — `${v#a@(X)}`
+— was always read.
+
+Corpus: `pat/a-group-opening-a-pattern-operand`,
+`pat/what-a-refused-leading-group-does-not-reach`.
+
 ### A live bar outside a group is an alternation in one dialect
 
 The same `|`, one level out. In the shell with bare groups a bar that

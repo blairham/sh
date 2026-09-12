@@ -4767,22 +4767,51 @@ func (r *Runner) assignOperands(c *syntax.SimpleCmd) {
 // rather than replacing its elements, having asked the dialect.
 //
 // Asked only where the answer could be seen: the name has to be carrying one
-// of the attributes there is something to lose, the literal has to be the
-// plain assignment spelling rather than a declaration's own operand, and it
-// must not be an append. Each of those was measured — see the field.
+// of the attributes there is something to lose, and the literal has to be the
+// plain assignment spelling rather than a declaration's own operand. Each of
+// those was measured — see the fields.
+//
+// **Three questions, not one**, and the panel answers them differently:
+//
+//   - The name is already holding an array, and the literal replaces it.
+//     ArrayLiteralAssignmentStartsTheNameOver — ksh93 yes, zsh and bash no.
+//   - The name is not an array at all, and the literal makes it one.
+//     ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver — ksh93 and zsh
+//     yes, bash no.
+//   - The same as the second, appended rather than assigned.
+//     AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver — zsh yes,
+//     ksh93 and bash no.
+//
+// The middle one is #1264 and the last is its append half, which is a
+// separate axis because ksh93 keeps on a join what it drops on a store.
 func (r *Runner) arrayLiteralStartsTheNameOver(a *syntax.Assign) bool {
-	if a.Append || a.Operand {
+	if a.Operand {
 		return false
 	}
 	if !r.integer[a.Name] && !r.lowered[a.Name] && !r.uppered[a.Name] {
 		return false
 	}
-	if !r.compoundNameHolds(a.Name) {
-		// No compound value to start over. The *first* array literal a
-		// declared name receives keeps the letter and folds — measured,
-		// `typeset -ia b; b=(5+5 6+6)` is `10 12` and lists as `typeset -a
-		// -i b=(10 12)` — so what re-creates the name is replacing an array
-		// it is already holding.
+	if !r.nameIsAnArray(a.Name) {
+		// Never declared an array and not holding one, so the literal is
+		// what makes the name one — and two of the three shells re-create it
+		// rather than typing the elements. The `-l` pair is what says the
+		// *letter* is the question and not the value: `typeset -l e; e=(AB
+		// Cd)` loses the letter in both and `typeset -la f; f=(AB Cd)` keeps
+		// it in both, over the same words.
+		if a.Append {
+			return r.ask(r.sem().AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver,
+				"an appended array literal re-creating a name that is not an array")
+		}
+		return r.ask(r.sem().ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver,
+			"an array literal re-creating a name that is not an array")
+	}
+	if a.Append || !r.compoundNameHolds(a.Name) {
+		// An array the declaration declared, holding nothing yet: the *first*
+		// literal a declared name receives keeps the letter and folds —
+		// measured, `typeset -a -i c; c=(5+5 6+6)` is `10 12` and lists as
+		// `typeset -a -i c=(10 12)` — so what re-creates the name is
+		// replacing an array it is already holding. An append never does,
+		// which every column agrees about.
 		//
 		// The array and not "anything", deliberately: a valueless
 		// declaration gives the name the empty string in one dialect and
@@ -4794,6 +4823,26 @@ func (r *Runner) arrayLiteralStartsTheNameOver(a *syntax.Assign) bool {
 	}
 	return r.ask(r.sem().ArrayLiteralAssignmentStartsTheNameOver,
 		"a whole-array assignment re-creating the name it writes")
+}
+
+// nameIsAnArray reports whether the name is an array at all — declared with
+// the letter, built by an element assignment, or produced.
+//
+// The store *is* the record of the array letter, which is what makes #1264's
+// "the letter is recorded nowhere" out of date rather than wrong: markIndexed
+// puts an empty array under the name, and compoundNameHolds documents that as
+// the reason it asks for `len(a) > 0` instead of membership. So the two
+// questions are membership and length of one table, and a second map of
+// letters beside it would be a copy that could drift.
+func (r *Runner) nameIsAnArray(name string) bool {
+	if _, ok := r.Arrays[name]; ok {
+		return true
+	}
+	if _, ok := r.DynamicArrays[name]; ok {
+		return true
+	}
+	_, ok := r.assocFor(name)
+	return ok
 }
 
 // clearTypeAttributes takes off the letters that say what a name's values

@@ -68,6 +68,9 @@ func declRunWith(t *testing.T, src string, set func(*Semantics), dg Diagnostics,
 	sem.TypeLetterAndAnArrayLiteralIsAnInconsistentType = No
 	sem.NumericAttributeReplacesTheCaseAttribute = No
 	sem.CaseAttributeReplacesTheNumericAttribute = No
+	sem.NumericAttributeReplacesTheArrayAttribute = No
+	sem.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = No
+	sem.AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = No
 	if set != nil {
 		set(&sem)
 	}

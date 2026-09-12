@@ -3157,6 +3157,86 @@ type Semantics struct {
 	//
 	// Silent where it is answered wrongly, and only a real child can see it.
 	NumericTypeWithNoValueReachesAChildAsZero Answer
+	// NumericAttributeReplacesTheArrayAttribute makes the integer and float
+	// letters take the *array* letter off a declaration that writes both, so
+	// the name is a scalar of that type rather than an array of it.
+	//
+	// Measured 2026-09-12 from a script file:
+	//
+	//	typeset -ia z; typeset -p z
+	//
+	//	zsh 5.9.2    typeset -i z=0        the array letter is gone
+	//	ksh93u+      typeset -a -i z       both stand
+	//	bash 5.3.15  declare -ai z         both stand
+	//
+	// Within one word the numeric letter wins whichever order it is written
+	// in — `typeset -ai z` is the same `typeset -i z=0` — so this is not the
+	// last-one-speaks rule the case letters follow. Across two words it is:
+	// `typeset -a z; typeset -i z` is `typeset -i z=0` there and `typeset -i
+	// z; typeset -a z` is `typeset -a z=(  )`, which the compound axes
+	// already answer from the other side.
+	//
+	// The *valued* form of the same combination is a refusal rather than a
+	// collapse — see TypeLetterAndAnArrayLiteralIsAnInconsistentType — so the
+	// two together are the whole of what the shell that says yes does with
+	// the pairing.
+	//
+	// It is also what makes the array letter worth recording at all: a name
+	// this answer left a scalar must not count as declared-an-array when a
+	// later array literal decides whether to start it over.
+	NumericAttributeReplacesTheArrayAttribute Answer
+	// ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver makes `a=(x y)`
+	// re-create a name whose declaration never wrote the array letter,
+	// dropping the letters that say what its values are — where a name the
+	// letter *was* written for keeps them and the literal simply fills it.
+	//
+	// Measured 2026-09-12 from a script file, with `typeset -p` after each:
+	//
+	//	                                        ksh93u+           zsh 5.9.2
+	//	typeset -i a;    a=(5+5 6+6)   the letter goes       the letter goes
+	//	typeset -ia b;   b=(5+5 6+6)   -a -i, values 10 12   (b is a scalar
+	//	                                                     there; see
+	//	                                                     the axis above)
+	//	typeset -a -i c; c=(5+5 6+6)   -a -i, values 10 12   the letter goes
+	//	typeset -l e;    e=(AB Cd)     the letter goes       the letter goes
+	//	typeset -la f;   f=(AB Cd)     -a -l, folded         -al, kept
+	//
+	// bash keeps the letter under every one of those and evaluates through
+	// it: `declare -ai a=([0]="10" [1]="12")`.
+	//
+	// The `-l` pair is the discriminating one, because it is the same two
+	// lines differing only in the array letter: whether the name was
+	// *declared* an array is the whole of what it turns on, and neither the
+	// value the name holds nor the kind it currently is can answer it. That
+	// is why the letter has to be recorded — and it already is: markIndexed
+	// puts an empty array under the name, which is exactly the state
+	// compoundNameHolds documents its `len(a) > 0` guard against. See
+	// Runner.nameIsAnArray and #1264, whose "recorded nowhere" is out of
+	// date rather than wrong.
+	//
+	// Distinct from ArrayLiteralAssignmentStartsTheNameOver, which asks the
+	// same thing of a name that is *already holding* an array. A name may be
+	// one and not the other in either direction, and the panel answers them
+	// differently: zsh says yes here and no there.
+	ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver Answer
+	// AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver is the same
+	// question asked of `a+=(x y)`, and it is a second axis because one shell
+	// answers the two differently.
+	//
+	// Measured 2026-09-12 from a script file:
+	//
+	//	typeset -i p=3; p+=(5+5); typeset -p p
+	//
+	//	ksh93u+      typeset -a -i p=(3 10)   kept, and the append evaluated
+	//	zsh 5.9.2    typeset -a p=( 3 5+5 )   the letter goes with the store
+	//	bash 5.3.15  declare -ai p=([0]="3" [1]="10")
+	//
+	// `typeset -l t=A; t+=(B)` is the same split — `typeset -a -l t=(a b)` in
+	// ksh93 — so it is the operator and not the letter that parts them. The
+	// assign form is unanimous between those two shells and the append form
+	// is not, which is exactly the shape #1755 warned about: an attribute's
+	// answer on the way in is not its answer on a join.
+	AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver Answer
 	// NumericAttributeReplacesTheCaseAttribute makes the integer and float
 	// letters take a case attribute off the name they are given, rather than
 	// standing beside it.
@@ -3383,14 +3463,14 @@ type Semantics struct {
 	// `typeset -a -i b=(10 12)` — so what re-creates the name is replacing a
 	// value it is already holding.
 	//
-	// One measured shape is left out by that reading and is recorded rather
-	// than modeled: `typeset -i a; a=(5+5 6+6)`, where the declaration named
-	// no array letter at all, drops the attribute in ksh93 (`typeset -a
-	// a=(5+5 6+6)`) even though `a` was holding nothing. What ksh93 turns on
-	// there is whether `-a` was written, and this engine does not record that
-	// letter — an array is dynamic here, so `typeset -a arr` needs no record
-	// to work. Recording it to reach this one shape is a change to that
-	// decision rather than part of this one; #1120's follow-up has it.
+	// The shape that reading leaves out has an axis of its own now: `typeset
+	// -i a; a=(5+5 6+6)`, where the declaration named no array letter at
+	// all, drops the attribute in ksh93 and in zsh even though `a` was
+	// holding nothing. What that turns on is whether `-a` was *written*, so
+	// it is a different question from this one and the panel answers the two
+	// differently — see
+	// ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver and its append
+	// half (#1264).
 	//
 	// And asked only for the *indexed* literal. A keyed one keeps the
 	// attribute in both: `typeset -A m; typeset -i m; m[k]=1; m=([j]=2+2)`

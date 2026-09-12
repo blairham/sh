@@ -775,6 +775,18 @@ func Semantics() interp.Semantics {
 	// letter is not what triggers it and the case letters do not: `typeset
 	// -i z=(1 2)` is the same refusal and `typeset -ua q=(ab cd)` is taken.
 	s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = interp.Yes
+	// A numeric type letter takes the container letter off the same
+	// declaration: `typeset -ia z` is `typeset -i z=0` here and `typeset -iA
+	// m` is `typeset -i m=0`, a scalar of that type either way. The valued
+	// form of the same pairing is the refusal above rather than a collapse.
+	s.NumericAttributeReplacesTheArrayAttribute = interp.Yes
+	// And an array literal over a name that is not an array re-creates it,
+	// dropping the letters that say what its values are — assigned and
+	// appended alike, which is where this shell parts from ksh93: `typeset
+	// -i p=3; p+=(5+5)` is `typeset -a p=( 3 5+5 )` here and `typeset -a -i
+	// p=(3 10)` there.
+	s.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = interp.Yes
+	s.AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = interp.Yes
 	// A numeric letter takes a case attribute off — `typeset -l z; typeset
 	// -i z` is `typeset -i z=1` — and the case letter does not take the
 	// numeric one off: `typeset -i y; typeset -l y` keeps both, `typeset -il

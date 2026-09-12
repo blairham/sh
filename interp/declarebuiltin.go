@@ -824,6 +824,15 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags) {
 	if f.remove {
 		return
 	}
+	if r.typeLetterTakesTheCompoundLetter(f) {
+		// The declaration wrote both a numeric type letter and a container
+		// one, and in this dialect the type wins: the name is a scalar of
+		// that type and no compound is declared at all.
+		return
+	}
+	if r.unspecified {
+		return
+	}
 	if f.array {
 		v, p := r.declaredCompoundOverAScalar(name, f, r.sem().ScalarUnderAnArrayDeclaration,
 			"an array declaration over a name already holding a scalar")
@@ -859,6 +868,27 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags) {
 			// ksh93 answers them differently.
 		}
 	}
+}
+
+// typeLetterTakesTheCompoundLetter reports whether a declaration writing both
+// a numeric type letter and a container letter declares no container at all —
+// see Semantics.NumericAttributeReplacesTheArrayAttribute.
+//
+// Asked only where both were written, which is the narrowest point the
+// answers differ: `typeset -a arr` and `typeset -i n` raise no question
+// between them.
+//
+// Both container letters, because the shell that says yes says it of both:
+// `typeset -ia z` and `typeset -iA m` are each `typeset -i …=0` there.
+func (r *Runner) typeLetterTakesTheCompoundLetter(f declareFlags) bool {
+	if !f.array && !f.assoc {
+		return false
+	}
+	if !f.integer && !f.float {
+		return false
+	}
+	return r.ask(r.sem().NumericAttributeReplacesTheArrayAttribute,
+		"a numeric type letter taking the array letter off the same declaration")
 }
 
 // declaredCompoundOverAScalar resolves ScalarUnderAnArrayDeclaration or

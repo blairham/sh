@@ -7294,6 +7294,67 @@ and an output base does not reach the child either: `typeset -i8 D; export
 D` is `D=0` there where zsh, by the other route, writes `D=8#0`.
 
 
+## The array letter beside a letter that says what the values are
+
+Measured 2026-09-12 from a script file, `env -i PATH=/usr/bin:/bin` with a
+scratch `HOME`: zsh 5.9.2, ksh93u+ and bash 5.3.15. dash has no arrays.
+
+Three questions, and the panel gives them three different splits.
+
+### On one declaration, one of the letters may lose
+
+    typeset -ia z; typeset -p z; echo "n=${#z[@]}"
+
+    zsh 5.9.2    typeset -i z=0     n=1
+    ksh93u+      typeset -a -i z    n=0
+    bash 5.3.15  declare -ai z      n=0
+
+zsh makes the name a scalar of that type and declares no array at all, and
+the keyed letter goes the same way — `typeset -iA m` is `typeset -i m=0`
+there. Within one word the numeric letter wins whichever order it is
+written in, so this is not the last-one-speaks rule the case letters
+follow. The *valued* form of the same pairing is a refusal rather than a
+collapse; see the section on type letters and array literals.
+
+### An array literal over a name the array letter was never written for
+
+    typeset -l e;  e=(AB Cd); typeset -p e
+    typeset -la f; f=(AB Cd); typeset -p f
+
+    zsh 5.9.2    typeset -a e=( AB Cd )    typeset -al f=( AB Cd )
+    ksh93u+      typeset -a e=(AB Cd)      typeset -a -l f=(ab cd)
+    bash 5.3.15  declare -al e=([0]="ab" [1]="cd")   the same for f
+
+The same two lines over the same words, differing only in the array
+letter. Neither name is holding anything, so no fact about the value can
+be what decides it: **whether `-a` was written** is the whole of the
+question. That is why the letter has to be recorded, and it already is —
+declaring an array puts an empty array under the name, which is exactly
+the state the "already holding an array" question guards against with a
+length test rather than a membership one.
+
+The integer letter behaves the same way in ksh93 — `typeset -i a; a=(5+5
+6+6)` is `typeset -a a=(5+5 6+6)`, the words stored unread — and cannot be
+used to show it in zsh, because `typeset -ia` is a scalar there.
+
+This is a different question from replacing an array the name is *already*
+holding, and the panel answers the two differently: zsh re-creates here
+and not there.
+
+### And the append is a third answer
+
+    typeset -i p=3; p+=(5+5); typeset -p p
+
+    ksh93u+      typeset -a -i p=(3 10)     kept, and the join evaluated
+    zsh 5.9.2    typeset -a p=( 3 5+5 )     dropped, and `5+5` left unread
+    bash 5.3.15  declare -ai p=([0]="3" [1]="10")
+
+ksh93 keeps on a join what it drops on a store. `typeset -l t=A; t+=(B)`
+is the same split — `typeset -a -l t=(a b)` there — so it is the operator
+and not the letter that parts them. An attribute's answer on the way in is
+not its answer on a join.
+
+
 ## `typeset -f` that marks rather than lists
 
 Measured 2026-09-12, `env -i` with a scratch `HOME`, zsh 5.9.2 `-f` and

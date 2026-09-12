@@ -38,6 +38,16 @@ type Outcome struct {
 	// killed run has no result, and scoring one would put a number on a file
 	// nobody finished.
 	TimedOut bool
+	// Failed says the shell never started — the binary is missing, is not
+	// executable, or the path given was wrong. It is kept apart from Status
+	// for the reason TimedOut is: a shell that did not run disagreed with
+	// nothing, and grading it would report a harness fault as a defect in
+	// the shell. That is not hypothetical. Before [Shell] existed, a
+	// relative -bin path was resolved against the per-run directory rather
+	// than against the caller's, every run of every column failed to start,
+	// and the report read "0/10 strict" for four dialects — a wrong answer
+	// with no sign in it that nothing had been measured.
+	Failed bool
 }
 
 // runFile runs one suite file under one shell, in dir, and returns what came
@@ -61,7 +71,7 @@ func runFile(ctx context.Context, shell, dir, name string, env []string, timeout
 	setProcessGroup(cmd)
 
 	if err := cmd.Start(); err != nil {
-		return Outcome{Output: err.Error(), Status: -1}
+		return Outcome{Output: err.Error(), Status: -1, Failed: true}
 	}
 
 	done := make(chan error, 1)

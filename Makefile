@@ -56,7 +56,7 @@ SHELLS := sh bash zsh ksh dash ash
 FUNCSRC := share/sh/functions
 FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage coverage wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage coverage wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
 
 all: build
 
@@ -279,6 +279,28 @@ ksh-suite: ## Run ksh93's own tests through real ksh93 and through cmd/ksh (not 
 
 dash-suite: ## dash has no suite of its own; prints why
 	@go run ./internal/cmd/suitecheck -dialect dash $(ARGS)
+
+# Our own conformance suite, in the shape of a shell's own tests/, committed
+# under share/suite and readable — which is the whole difference between it
+# and anything fetched above. Same instrument, same grader, same three
+# numbers: a native column is a suite.Suite with Ours set and its files on
+# disk instead of in an archive. A second scorer that drifted from the first
+# is a failure this repository has made before, so there is only one.
+#
+# Every column at once, because the point is the four dialects that can never
+# get a column from somebody else's work. No expected output is checked in:
+# the reference shell on the machine is the expectation, exactly as it is for
+# the corpus, and a .right file of ours would let us record our own bug as
+# correct.
+suite: ## Run our own conformance suite in every dialect and report the per-dialect baseline
+	@mkdir -p $(BINDIR)
+	@for s in bash zsh ksh dash ash; do go build -o $(BINDIR)/own-$$s ./cmd/$$s || exit 1; done
+	@go run ./internal/cmd/suitecheck -own -timeout 30s \
+		-own-bin bash=$(BINDIR)/own-bash \
+		-own-bin zsh=$(BINDIR)/own-zsh \
+		-own-bin ksh=$(BINDIR)/own-ksh \
+		-own-bin dash=$(BINDIR)/own-dash \
+		-own-bin ash=$(BINDIR)/own-ash $(ARGS)
 
 conformance-dialects: ## Grade each dialect binary against the shell it claims to be
 	@mkdir -p $(BINDIR)

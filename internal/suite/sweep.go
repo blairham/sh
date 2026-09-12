@@ -5,6 +5,7 @@ package suite
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -51,6 +52,15 @@ type Result struct {
 	// killed dialect binary is a hang we published, and a killed reference is
 	// the harness's fault — the shell that wrote the file does not hang on it.
 	OracleHung, DialectHung bool
+	// OracleFailed and DialectFailed say the shell never started at all: the
+	// binary is missing, is not executable, or the harness could not lay out
+	// a directory to run it in. Neither is a finding about a shell, and both
+	// are kept out of the score for the same reason a hung run is — a run
+	// that did not happen agreed with nothing and disagreed with nothing.
+	// The pair is kept apart from the hung pair because the cause is
+	// different: a hang is something the shell did, a failure to start is
+	// something the harness or the machine did before the shell was reached.
+	OracleFailed, DialectFailed bool
 	// Unstable says the reference did not produce the same run twice, so the
 	// file says nothing about either shell.
 	Unstable bool
@@ -96,12 +106,35 @@ type Report struct {
 	// bound and were compared on their first lines.
 	LineCapped int
 
-	OracleHung  int
-	DialectHung int
-	Unstable    int
+	OracleHung    int
+	DialectHung   int
+	OracleFailed  int
+	DialectFailed int
+	Unstable      int
 
 	Causes      []Cause
 	StatusPairs []StatusPair
+
+	// Cases is every file's result, in the order they were run. The name is
+	// filled in only for our own suite — see [Suite.attribute] — so a
+	// fetched column's cases are a list of anonymous outcomes and a native
+	// column's is a work list.
+	Cases []NamedResult
+}
+
+// NotStrict is the cases that ran and disagreed, named.
+//
+// Empty for a fetched column whatever happened, because there is nothing
+// there to name. That is the rule doing its job rather than a shortfall.
+func (r Report) NotStrict() []NamedResult {
+	var out []NamedResult
+	for _, c := range r.Cases {
+		if c.Name == "" || c.Result.Strict {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 // StrictRate, ParseRate and LineRate are the three numbers, as fractions.
@@ -162,33 +195,23 @@ func (o Options) jobs() int {
 // instrument never unpacks them.
 func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Options) (Report, error) {
 	rep := Report{Suite: s, Reference: reference, Ours: ours}
-	tests := filepath.Join(dir, filepath.FromSlash(s.TestDir))
-	names, err := Files(tests, s.Ext)
+	files, err := plan(s, dir, opts)
 	if err != nil {
 		return rep, err
 	}
-	if opts.Only != nil {
-		var kept []string
-		for _, n := range names {
-			if opts.Only[n] {
-				kept = append(kept, n)
-			}
-		}
-		names = kept
-	}
-	rep.Files = len(names)
+	rep.Files = len(files)
 
 	dial, haveDialect := s.Syntax()
-	results := make([]Result, len(names))
+	results := make([]Result, len(files))
 	sem := make(chan struct{}, opts.jobs())
 	var wg sync.WaitGroup
-	for i, name := range names {
+	for i, f := range files {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			results[i] = grade(ctx, s, tests, name, ours, reference, dial, haveDialect, opts.timeout())
+			results[i] = grade(ctx, s, f.Dir, f.Name, ours, reference, dial, haveDialect, opts.timeout())
 		}()
 	}
 	wg.Wait()
@@ -196,7 +219,8 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 	causes := map[string]int{}
 	statuses := map[[2]int]int{}
 	var meanSum float64
-	for _, res := range results {
+	for i, res := range results {
+		rep.Cases = append(rep.Cases, NamedResult{Name: s.attribute(files[i].Name), Result: res})
 		switch {
 		case res.Parsed:
 			rep.Parsed++
@@ -204,6 +228,10 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 			causes[res.Cause]++
 		}
 		switch {
+		case res.OracleFailed:
+			rep.OracleFailed++
+		case res.DialectFailed:
+			rep.DialectFailed++
 		case res.OracleHung:
 			rep.OracleHung++
 		case res.DialectHung:
@@ -235,6 +263,43 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 	return rep, nil
 }
 
+// file is one runnable case: the directory it is run from and its name.
+//
+// The directory travels with the name because our own suite has two of them —
+// the shared core/ and the dialect's own — and a run copies the directory it
+// came from. A fetched suite has one and reaches here the same way.
+type file struct {
+	Dir, Name string
+}
+
+// plan is every file a column runs, in a stable order.
+//
+// A directory a column claims and does not have is an error rather than an
+// omission: a column that quietly ran core/ alone would report a healthy
+// number for half a suite, which is the same mistake as a silent skip one
+// level down.
+func plan(s Suite, dir string, opts Options) ([]file, error) {
+	dirs := s.Dirs
+	if len(dirs) == 0 {
+		dirs = []string{s.TestDir}
+	}
+	var files []file
+	for _, d := range dirs {
+		tests := filepath.Join(dir, filepath.FromSlash(d))
+		names, err := Files(tests, s.Ext)
+		if err != nil {
+			return nil, err
+		}
+		for _, n := range names {
+			if opts.Only != nil && !opts.Only[n] {
+				continue
+			}
+			files = append(files, file{Dir: tests, Name: n})
+		}
+	}
+	return files, nil
+}
+
 // grade is one file, both ways.
 func grade(ctx context.Context, s Suite, tests, name, ours, reference string, dial syntax.Dialect, haveDialect bool, timeout time.Duration) Result {
 	var res Result
@@ -258,12 +323,20 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 	}
 
 	ref := runIn(ctx, s, tests, name, reference, timeout)
-	if ref.TimedOut {
+	switch {
+	case ref.Failed:
+		res.OracleFailed = true
+		return res
+	case ref.TimedOut:
 		res.OracleHung = true
 		return res
 	}
 	own := runIn(ctx, s, tests, name, ours, timeout)
-	if own.TimedOut {
+	switch {
+	case own.Failed:
+		res.DialectFailed = true
+		return res
+	case own.TimedOut:
 		res.DialectHung = true
 		return res
 	}
@@ -317,12 +390,12 @@ type placed struct {
 func runIn(ctx context.Context, s Suite, tests, name, shell string, timeout time.Duration) placed {
 	dir, err := os.MkdirTemp("", "suite")
 	if err != nil {
-		return placed{Outcome: Outcome{Output: err.Error(), Status: -1}}
+		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}}
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 	run := filepath.Join(dir, "t")
 	if err := copyTree(tests, run); err != nil {
-		return placed{Outcome: Outcome{Output: err.Error(), Status: -1}, Dir: run}
+		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}, Dir: run}
 	}
 	out := runFile(ctx, shell, run, name, environ(s, run, shell), timeout)
 	return placed{Outcome: out, Dir: run}
@@ -451,6 +524,36 @@ func rankStatuses(counts map[[2]int]int) []StatusPair {
 		return pairs[i].Reference < pairs[j].Reference
 	})
 	return pairs
+}
+
+// Shell is the path a run may be handed a shell by, resolved once, where the
+// person naming it is.
+//
+// Absolute, because [runIn] gives every run a directory of its own and runs
+// the file from inside it — so a relative path to the binary under test is
+// resolved against that directory and not against the caller's. It resolves
+// to nothing, every run fails to start, and the column reports a score. The
+// cost of that being caught late is on record: `make suite` passes absolute
+// paths and worked, while the same command typed by hand with `-own-bin
+// bash=build/own-bash` reported 0/10 strict for four dialects, which is a
+// wrong answer rather than an error.
+//
+// Existence is checked here for the same reason. A missing binary is a fact
+// about the invocation and belongs in the invocation's diagnostic, not spread
+// across a per-file column of failures.
+func Shell(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("%s is a directory, not a shell", abs)
+	}
+	return abs, nil
 }
 
 // Locate is the first of a suite's reference paths that exists.

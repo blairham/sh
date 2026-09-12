@@ -60,7 +60,9 @@
 package suite
 
 import (
+	"github.com/blairham/sh/dialect/ash"
 	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/dialect/dash"
 	"github.com/blairham/sh/dialect/ksh"
 	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/syntax"
@@ -125,6 +127,17 @@ type Suite struct {
 	// NotYet, when set, is why this column is a row rather than a run. It is
 	// printed.
 	NotYet string
+
+	// Ours says the suite is this repository's own, committed and readable,
+	// rather than another project's fetched at test time. It is what scopes
+	// the no-path rule: see [Suite.attribute].
+	Ours bool
+	// Dirs are the directories, relative to the suite's root, whose files are
+	// run. A fetched suite has one directory and names it in TestDir; ours
+	// has two — the shared core/ and the dialect's own — because a core file
+	// runs in every column and is the common-denominator claim made
+	// executable.
+	Dirs []string
 }
 
 // Panel is every column, built and unbuilt.
@@ -230,6 +243,10 @@ func (s Suite) Syntax() (syntax.Dialect, bool) {
 		return zsh.Dialect(), true
 	case "ksh":
 		return ksh.Dialect(), true
+	case "dash":
+		return dash.Dialect(), true
+	case "ash":
+		return ash.Dialect(), true
 	default:
 		return syntax.Dialect{}, false
 	}

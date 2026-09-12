@@ -1,0 +1,143 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The builtins POSIX XCU 2.14 and 1.6 require, asked for what they do rather
+# than for how they announce it.
+#
+# `echo` is absent on purpose and is asked per dialect instead: whether it
+# interprets a backslash escape, and what it does with -n, is the most
+# divergent thing in any shell's builtin set. `printf` is the portable
+# spelling and is what every case here uses.
+
+# test, in both spellings, over the operators POSIX lists.
+[ a = a ]; printf 'string equal=%s\n' "$?"
+[ a = b ]; printf 'string unequal=%s\n' "$?"
+[ a != b ]; printf 'string ne=%s\n' "$?"
+[ -n abc ]; printf 'non-empty=%s\n' "$?"
+[ -n '' ]; printf 'non-empty on empty=%s\n' "$?"
+[ -z '' ]; printf 'empty=%s\n' "$?"
+test 2 -eq 2; printf 'numeric eq=%s\n' "$?"
+test 2 -ne 2; printf 'numeric ne=%s\n' "$?"
+test 1 -lt 2; printf 'lt=%s\n' "$?"
+test 2 -le 2; printf 'le=%s\n' "$?"
+test 3 -gt 2; printf 'gt=%s\n' "$?"
+test 1 -ge 2; printf 'ge=%s\n' "$?"
+[ a = a ] && [ b = b ]; printf 'and=%s\n' "$?"
+[ a = b ] || [ b = b ]; printf 'or=%s\n' "$?"
+[ ! a = b ]; printf 'not=%s\n' "$?"
+[ ]; printf 'empty test=%s\n' "$?"
+[ '' ]; printf 'one empty word=%s\n' "$?"
+[ abc ]; printf 'one word=%s\n' "$?"
+
+: > afile
+mkdir -p adir
+[ -e afile ]; printf 'exists=%s\n' "$?"
+[ -f afile ]; printf 'regular=%s\n' "$?"
+[ -d adir ]; printf 'directory=%s\n' "$?"
+[ -d afile ]; printf 'directory on file=%s\n' "$?"
+[ -r afile ]; printf 'readable=%s\n' "$?"
+[ -s afile ]; printf 'non-empty file=%s\n' "$?"
+printf 'x\n' > afile
+[ -s afile ]; printf 'non-empty file now=%s\n' "$?"
+[ -e nosuch ]; printf 'missing=%s\n' "$?"
+
+# printf itself: the conversions POSIX defines, and the way it reuses the
+# format until the arguments run out.
+printf '%s|%s|\n' one two
+printf '[%s]' a b c; printf '\n'
+printf '%d %i\n' 42 -7
+printf '%5s|%-5s|\n' ab ab
+printf '%c\n' xyz
+printf '%%\n'
+printf 'no newline'; printf '\n'
+printf '%s\n' 'a\tb'
+printf 'a\tb\n'
+printf '%b\n' 'a\tb'
+
+# The shell's own no-ops and their statuses.
+:; printf 'colon=%s\n' "$?"
+true; printf 'true=%s\n' "$?"
+false; printf 'false=%s\n' "$?"
+
+# set -- replaces the positional parameters; set -- with nothing clears them.
+set -- a b c
+printf 'set: %s [%s]\n' "$#" "$*"
+set --
+printf 'cleared: %s\n' "$#"
+set -- 'one word' 'two words'
+printf 'set kept quoting: %s [%s]\n' "$#" "$1"
+
+# shift, including past the end.
+set -- a b c d
+shift; printf 'shift 1: %s [%s]\n' "$#" "$1"
+shift 2; printf 'shift 2: %s [%s]\n' "$#" "$1"
+# Shifting past the end: in a subshell, because ksh93 and dash treat it as a
+# fatal error and end the shell, while bash and zsh only return non-zero.
+# What every shell agrees on is that it is not success.
+( shift 5 ) 2> /dev/null
+rc=$?
+printf 'shift past the end is nonzero: '
+if [ "$rc" -ne 0 ]; then printf 'yes\n'; else printf 'no\n'; fi
+
+# unset removes a variable, and an unset one is not the same as an empty one.
+v=x
+unset v
+printf 'unset: [%s] [%s]\n' "${v-absent}" "${v:-absent}"
+v=
+printf 'empty: [%s] [%s]\n' "${v-absent}" "${v:-absent}"
+unset v
+
+# export puts a variable in a child's environment; a plain assignment does not.
+exported=yes
+export exported
+plain=yes
+printf 'child sees exported=[%s] plain=[%s]\n' \
+	"$(sh -c 'printf %s "$exported"')" "$(sh -c 'printf %s "$plain"')"
+# An assignment prefixed to a command is in that command's environment only.
+prefixed=outer
+printf 'prefixed child=[%s] after=[%s]\n' \
+	"$(prefixed=inner sh -c 'printf %s "$prefixed"')" "$prefixed"
+
+# read splits on IFS, honours -r, and reports end of file.
+printf 'alpha beta gamma\n' > readme
+read -r a b c < readme
+printf 'read: [%s] [%s] [%s]\n' "$a" "$b" "$c"
+printf 'one two three four\n' > readme
+read -r a b < readme
+printf 'read leftovers: [%s] [%s]\n' "$a" "$b"
+printf 'a\\tb\n' > readme
+read -r line < readme
+printf 'read -r kept the backslash: [%s]\n' "$line"
+read line < readme
+printf 'read without -r: [%s]\n' "$line"
+: > readme
+read -r line < readme
+printf 'read at end of file=%s [%s]\n' "$?" "$line"
+
+# cd and pwd move the shell, and a subshell's move does not escape it.
+mkdir -p adir/deeper
+here=$(pwd)
+cd adir || exit 1
+printf 'cd went down: %s\n' "$(pwd | sed "s|.*/||")"
+cd "$here" || exit 1
+printf 'cd came back: %s\n' "$( [ "$(pwd)" = "$here" ] && printf yes || printf no )"
+( cd adir || exit 1 )
+printf 'subshell cd did not escape: %s\n' "$( [ "$(pwd)" = "$here" ] && printf yes || printf no )"
+
+# eval runs the result of an expansion as a command.
+word='printf "evaluated %s\n" twice'
+eval "$word"
+n=1
+eval 'n=$((n + 1))'
+printf 'eval assigned n=%s\n' "$n"
+
+# command reaches past a function of the same name.
+pwd() { printf '%s\n' 'shadowed pwd'; }
+pwd
+command pwd > /dev/null; printf 'command pwd status=%s\n' "$?"
+unset -f pwd
+
+# exit status of the last command is $?, and it survives being read.
+false
+rc=$?
+printf 'saved status=%s then $?=%s\n' "$rc" "$?"

@@ -70,7 +70,7 @@ echo "$line"`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := runWithRendezvous(t, tc.src); got != "seen:kept\n" {
+			if got := runWithRendezvous(t, tc.src, nil); got != "seen:kept\n" {
 				t.Errorf("got %q, want %q", got, "seen:kept\n")
 			}
 		})
@@ -78,21 +78,28 @@ echo "$line"`,
 }
 
 // runWithRendezvous runs src in a directory holding `data`, a file with one
-// line in it, already open on the descriptor `$a` — and `sync`, a named pipe
-// the script uses to hold one shell still while the other one closes.
+// line in it, already open on the descriptor `$a` — and `sync` and `sync2`,
+// named pipes the script uses to hold one shell still while the other one
+// closes, and to learn that a shell which outlived its caller has finished.
 //
 // The rendezvous is what makes a race into a question. Opening a named pipe
 // for reading waits for a writer and opening one for writing waits for a
 // reader, so the close in one shell is ordered before the read in the other
 // however the goroutines are scheduled.
-func runWithRendezvous(t *testing.T, src string) string {
+//
+// tweak, when it is not nil, moves the axes a case depends on. The preset is
+// the standard's, which leaves unanswered every axis this file's subject is
+// reachable through.
+func runWithRendezvous(t *testing.T, src string, tweak func(*Semantics)) string {
 	t.Helper()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "data"), []byte("kept\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := syscall.Mkfifo(filepath.Join(dir, "sync"), 0o600); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"sync", "sync2"} {
+		if err := syscall.Mkfifo(filepath.Join(dir, name), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	// The descriptor is opened by the script rather than handed in, so the
 	// table entry is the one an `exec` makes and the close below is the one
@@ -108,6 +115,9 @@ func runWithRendezvous(t *testing.T, src string) string {
 	defer func() { _ = out.Close() }()
 	sem := PosixSemantics()
 	sem.RedirectErrorOnSpecialBuiltinFatal = No
+	if tweak != nil {
+		tweak(&sem)
+	}
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 		Stdout: out, Stderr: &strings.Builder{},
@@ -120,4 +130,61 @@ func runWithRendezvous(t *testing.T, src string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// The same ownership one number lower: descriptor 0.
+//
+// A pipeline element's input is the pipe, and runPipeline closes it the
+// moment the element finishes — so a substitution's body that reads the
+// element's input and outlives the element was reading a descriptor that had
+// already gone. It is the same bug as the table above and it was left behind
+// by it, because the named three streams are fields on the Runner rather than
+// entries in `fds` and the copy only walked the map (#2144).
+//
+// The shape is measured rather than argued: `printf "PIPE\n" | { exec 3<
+// <(sleep 0.4; cat >out); }` writes `PIPE` in bash 5.3 and wrote
+// `cat: stdin: Bad file descriptor` here. The sleep is what made that
+// reproduce, and a sleep is a window rather than a question — so the case
+// below parks the body on `sync` instead, which the shell cannot write until
+// the pipeline it is waiting for has ended.
+//
+// Both answers to whether the last element runs in the current shell, because
+// they are two code paths: one hands the element a clone whose descriptors
+// this copies, and the other runs it on the shell itself where there is no
+// clone at all and the substitution's own copy is the only one.
+func TestASubstitutionsBodyKeepsTheInputItsPipelineElementCloses(t *testing.T) {
+	// `exec 3<` parks the substitution's pipe so the body may write without
+	// anybody reading, which is what lets the element finish first. The body
+	// then waits on `sync`, reads the input the element no longer holds, and
+	// reports through `sync2` that it is done.
+	const src = `printf "PIPE\n" | { exec 3< <(read -r sig <sync
+read -r v
+echo "seen:$v" >out
+echo done >sync2); }
+echo go >sync
+read -r ack <sync2
+read -r line <out
+echo "$line"`
+
+	for _, last := range []struct {
+		name   string
+		answer Answer
+	}{
+		{"last element on a copy", No},
+		{"last element on the shell itself", Yes},
+	} {
+		t.Run(last.name, func(t *testing.T) {
+			got := runWithRendezvous(t, src, func(sem *Semantics) {
+				// The body reads the input of the command its word stands
+				// in, which is the answer under which the element's pipe is
+				// what it holds — and so the only one this is reachable
+				// under. See ProcessSubstitutionBodyReadsTheShellsInput.
+				sem.ProcessSubstitutionBodyReadsTheShellsInput = No
+				sem.LastPipelineElementInCurrentShell = last.answer
+			})
+			if want := "seen:PIPE\n"; got != want {
+				t.Errorf("got %q, want %q", got, want)
+			}
+		})
+	}
 }

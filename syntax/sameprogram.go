@@ -25,11 +25,12 @@ import (
 // a printer whose output nobody re-reads character by character.
 
 var (
-	posType   = reflect.TypeOf(Pos{})
-	wordType  = reflect.TypeOf(Word{})
-	stmtType  = reflect.TypeOf(Stmt{})
-	redirType = reflect.TypeOf(Redirect{})
-	spanType  = reflect.TypeOf(Span{})
+	posType         = reflect.TypeOf(Pos{})
+	arithBinaryType = reflect.TypeOf(ArithBinary{})
+	wordType        = reflect.TypeOf(Word{})
+	stmtType        = reflect.TypeOf(Stmt{})
+	redirType       = reflect.TypeOf(Redirect{})
+	spanType        = reflect.TypeOf(Span{})
 )
 
 // SameProgram reports whether two trees are the same program, and where they
@@ -72,6 +73,14 @@ func spellingOnly(t reflect.Type, name string) bool {
 	}
 	if name == "Bare" {
 		return t == spanType
+	}
+	if name == "YStart" {
+		// A position, spelled as an offset rather than as a Pos because it
+		// indexes one expression's own text. It is skipped for the reason
+		// every Pos is skipped: printed source has its own offsets, and
+		// `1/(0)` reprinted with a space somewhere else is the same program
+		// written down differently.
+		return t == arithBinaryType
 	}
 	// Header, which only the clauses that keep one have.
 	return name == "Header"

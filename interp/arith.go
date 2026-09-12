@@ -24,6 +24,25 @@ import (
 type arithError struct {
 	msg   string
 	token string
+	// blameTail says the blamed text runs from where the failing operand was
+	// written to the *end* of the expression, rather than being the operand
+	// alone. Measured 2026-09-12 on bash 5.3.15, which parts the two by where
+	// the failure was raised:
+	//
+	//	$(( 1/0 + 2 ))   1/0 + 2 : division by 0 (error token is "0 + 2 ")
+	//	$(( 8#9 + 1 ))   8#9: value too great for base (error token is "8#9")
+	//
+	// An *evaluation* failure names the tail; a literal the number reader
+	// refused names the literal, and the expression stops there. So it is a
+	// property of the failure and not of the dialect — the other five columns
+	// quote no token at all, and the one that does quotes both shapes.
+	blameTail bool
+	// from is where that tail begins, as a byte offset into the expression's
+	// own text, and -1 where only the token's text is known. The tree cannot
+	// always answer it: `1/(0)` is blamed on `(0) ` and the parenthesised
+	// divisor has no text of its own, so the offset comes from the parser —
+	// see [syntax.ArithBinary].YStart.
+	from int
 	// complete says the message is the whole diagnostic and must not be
 	// wrapped. Measured: dash wraps a division by zero — `arithmetic
 	// expression: division by zero: "1/0"` — but reports a non-numeric
@@ -50,6 +69,11 @@ func (r *Runner) arithFailure(text string, err error) string {
 	ae, _ := err.(arithError)
 	token := ae.token
 	expr := r.diag().arithBlamedText(text)
+	if ae.blameTail {
+		if at := ae.tailStart(text, token); at >= 0 {
+			token = text[at:]
+		}
+	}
 	if token == "" {
 		// bash blames the whole expression when the failing part is the whole
 		// expression, which is also the honest answer when the tree cannot
@@ -67,6 +91,22 @@ func (r *Runner) arithFailure(text string, err error) string {
 		}
 	}
 	return Wording(r.diag().ArithError, "%[2]s", expr, err.Error(), token)
+}
+
+// tailStart is where the blamed tail begins in text, or -1 when nothing in
+// the failure locates it.
+//
+// The recorded offset is preferred over a search because a search cannot tell
+// two identical operands apart: `$(( 0/0 ))` is blamed on the *divisor*, and
+// the first `0` in the text is the dividend.
+func (e arithError) tailStart(text, token string) int {
+	if e.from >= 0 && e.from <= len(text) {
+		return e.from
+	}
+	if token == "" {
+		return -1
+	}
+	return strings.Index(text, token)
 }
 
 // arithToken names the part of an expression a failure should be blamed on.
@@ -748,6 +788,22 @@ func (r *Runner) evalBinary(x *syntax.ArithBinary) (arithNum, error) {
 		// failure is named here where the tree is still in hand. `5/y` with
 		// y unset is blamed on `y` rather than on the zero it became.
 		ae.token = arithToken(x.Y)
+		// And the blame runs from there to the end of the expression, which
+		// is the shape an evaluation failure takes in the one column that
+		// quotes a token at all. Where that text begins splits by operator,
+		// measured 2026-09-12 on bash 5.3.15:
+		//
+		//	$(( 1/((0)) ))   division by 0 (error token is "((0)) ")
+		//	$(( 2**-1 ))     exponent less than 0 (error token is "1 ")
+		//
+		// A division names the *divisor as written*, so the parser's offset
+		// is what answers it; the exponent names the last operand read, which
+		// is the leaf the tree already hands back and which the sign is not
+		// part of. -1 asks for the second.
+		ae.blameTail, ae.from = true, -1
+		if x.Op == "/" || x.Op == "%" {
+			ae.from = x.YStart
+		}
 		err = ae
 	}
 	return v, err
@@ -1398,7 +1454,7 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 			// reported `division by 0` with nothing to say which iteration
 			// or which expression had done it — where the expansion route
 			// for the identical failure quoted it back (#1985).
-			r.diagf("%s\n", r.diag().arithConstructFailure("((", r.arithFailure(c.Expr, err)))
+			r.diagf("%s\n", r.diag().arithConstructFailure("((", r.arithFailure(text, err)))
 			r.status = r.arithCmdFailed(1)
 			return nil
 		}

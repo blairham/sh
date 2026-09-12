@@ -2928,6 +2928,46 @@ echo "reached-after st=$?"`,
 		Why:     "three expressions in one header, so a complaint with no expression in it cannot say which of them failed: bash and ksh93 name `i<1/0`. The loop body must not run either, which is the half a diagnostic alone would not show",
 	},
 	{
+		ID: "arith/an-evaluation-failure-blames-the-rest-of-the-expression", Category: "arithmetic",
+		Snippet: `q=$(( 1/0 + 2 )); echo "st=$?"`,
+		Why:     "how far the blame runs. bash 5.3 names the text from the failing operand to the *end* of the expression — `error token is \"0 + 2 \"` — where ours named the operand alone, and because the same shell quotes the expression back up to and including the token, the quoted expression carried the tail with it. bash 3.2 draws the line one token further along and names `+ 2 `, which is what says the rule is the version's rather than the family's; ksh93 quotes the whole expression and names no token, zsh names neither, and dash calls it a division by zero over the text as written",
+	},
+	{
+		ID: "arith/an-evaluation-failure-blames-a-parenthesised-divisor-whole", Category: "arithmetic",
+		Snippet: `q=$(( 1/(0) )); echo "st=$?"`,
+		Why:     "the divisor as *written*, parentheses included: bash 5.3 names `(0) ` where the tree has only the `0` inside to offer, so the blame is a position in the source rather than a node — which is the half of the row above that a reconstructed token cannot reach. bash 3.2 names a bare blank here, and the other four are unchanged from the plain spelling",
+	},
+	{
+		ID: "arith/an-evaluation-failure-blames-the-divisor-and-not-the-dividend", Category: "arithmetic",
+		Snippet: `q=$(( 0/0 )); echo "st=$?"`,
+		Why:     "the control that says the position is read and not searched for: both operands are spelled `0`, and bash blames the second. Finding the token's first occurrence in the text answers with the dividend and quotes the whole expression as the prefix, which looks right until the two operands differ",
+	},
+	{
+		ID: "arith/a-literal-the-reader-refused-blames-itself", Category: "arithmetic",
+		Snippet: `q=$(( 8#9 + 1 )); echo "st=$?"`,
+		Why:     "the other half of the same question, and why it is one rule per *failure* rather than one per dialect: a digit the base does not have is refused while the number is being read, and bash names the literal alone and stops the expression there — `8#9`, with the `+ 1` dropped — where the division above ran the blame to the end. ksh93 and zsh read `8#9` as two tokens and complain about the second, and dash has no based literals at all",
+	},
+	{
+		ID: "arith/an-operand-that-ran-out-is-blamed-from-its-operator", Category: "arithmetic",
+		Snippet: `q=$(( 1 + )); echo "st=$?"`,
+		Why:     "the parse-side half: bash names `+ ` with the trailing blank, because the blame runs from the operator to the end of the expression here too. Ours named the operator alone, so the two halves of one sentence were trimmed in opposite directions — the leading blank came off the expression and the trailing one off the token. ksh93 quotes ` 1 + ` untouched, zsh says the operand was expected at end of string and names nothing, dash quotes the whole text in quotes",
+	},
+	{
+		ID: "arith/a-condition-operand-is-blamed-as-it-was-written", Category: "arithmetic",
+		Snippet: `[[ " 1/0 " -eq 1 ]]; echo "st=$?"`,
+		Why:     "the operand reached the complaint already trimmed, and only one column can see it: ksh93 quotes an expression back exactly, so ` 1/0 : divide by zero` there against `1/0:` here, while bash skips the leading blanks anyway and agrees either way. The trim is still needed — an all-blank operand is zero before anything parses it — so it had to move rather than go",
+	},
+	{
+		ID: "arith/a-subscript-is-blamed-as-it-was-written", Category: "arithmetic",
+		Snippet: `a=(1 2); echo "[${a[ 1/0 ]}]"; echo "st=$?"`,
+		Why:     "the same blanks on the other route that trimmed them. The trim stays where it decides anything — a key, a range, the whole-array spellings — and the text handed to the arithmetic is the one the subscript was written with, so the complaint can quote it. zsh reads the subscript one-based and fails on the same division",
+	},
+	{
+		ID: "arith/a-complaint-quotes-the-expression-after-expansion", Category: "arithmetic",
+		Snippet: `d=0; (( 1/$d )); echo "st=$?"`,
+		Why:     "an expression nobody wrote down: the tree is built from the *expanded* text and the complaint quoted the unexpanded one, so `1/$d ` stood where every shell in the panel writes `1/0 `. Loud on its own and load-bearing besides — a blame carried as an offset into the expression is an offset into whichever string the tree came from, and two different strings make it point at the wrong characters",
+	},
+	{
 		ID: "let/a-math-complaint-names-the-builtin-or-does-not", Category: "arithmetic",
 		Snippet: `let '1+'`,
 		Why:     "who the complaint belongs to. bash and ksh93 put the builtin in front of the sentence — `let: 1+: …` — and zsh puts it nowhere, writing `zsh:1:` where the same shell's `cd` writes `zsh:cd:1:` and where its own `let` with no operand writes `zsh:let:1:`. So a math failure is the shell's there rather than the builtin's, the way a division by zero and an unset parameter already are, and the blanket rule that puts a builtin's name in that shell's location needed something to say which messages it does not cover",

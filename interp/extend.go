@@ -1238,7 +1238,7 @@ func (r *Runner) ArithValue(text string) (int, bool) {
 	outer := r.inBuiltin
 	r.inBuiltin = ""
 	defer func() { r.inBuiltin = outer }()
-	tree, err := r.arithTree(nil, text)
+	tree, text, err := r.arithTreeOver(nil, text)
 	if err != nil {
 		r.diagf("%s\n", r.diag().ParseFailure(err))
 		r.fatalQuiet()

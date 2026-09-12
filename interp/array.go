@@ -1482,7 +1482,8 @@ type subscriptSource struct {
 // and reading it as characters would be wrong however short it is.
 func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]string, bool) {
 	elems, scalar := src.elems, src.scalar
-	idx := r.subscriptText(e.Subscript())
+	written := r.subscriptTextAsWritten(e.Subscript())
+	idx := trimSubscript(written)
 	if r.wholeArrayIndex(e) {
 		return elems, true
 	}
@@ -1508,7 +1509,11 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 	// An expression, not a numeral: `${a[1+1]}` and `${a[i+1]}` name the
 	// element `${a[2]}` names. It took a numeral and nothing else, so
 	// every other spelling silently expanded to nothing.
-	n, ok := r.subscriptIndex(idx)
+	//
+	// Read from the text as written, blanks and all, because a complaint
+	// quotes it back and one column quotes the blanks with it (#2010). The
+	// value is the same either way — the expression reader skips them.
+	n, ok := r.subscriptIndex(written)
 	if !ok {
 		return nil, true
 	}
@@ -2008,10 +2013,24 @@ func (r *Runner) elemAt(name string, elems []string, n int) (string, bool) {
 // reachable as soon as a subscript could hold a group, since `(` is a
 // metacharacter in the grammar that has both.
 func (r *Runner) subscriptText(w *syntax.Word) string {
+	return trimSubscript(r.subscriptTextAsWritten(w))
+}
+
+// subscriptTextAsWritten is the same text before the blanks come off it.
+//
+// A caller that needs both takes this one and trims it itself, because
+// expanding the word twice would run a command substitution in it twice — the
+// mistake #1915 was. What needs the untrimmed text is the complaint about a
+// subscript that would not evaluate: ksh93 quotes it back as written, so
+// `${a[ 1/0 ]}` is ` 1/0 : divide by zero` there and the trimmed text could
+// not say the blanks had been there (#2010). Nothing that *decides* anything
+// reads it — a key, a range and the whole-array spellings are all settled on
+// the trimmed text, which is what the panel matches.
+func (r *Runner) subscriptTextAsWritten(w *syntax.Word) string {
 	if w != nil && len(w.Spans) == 1 && w.Spans[0].Kind == syntax.Literal {
-		return trimSubscript(w.Spans[0].Value)
+		return w.Spans[0].Value
 	}
-	return trimSubscript(strings.Join(r.expandWordNoSplit(w), ""))
+	return strings.Join(r.expandWordNoSplit(w), "")
 }
 
 // trimSubscript takes the blanks off a subscript, and leaves a subscript that
@@ -2115,10 +2134,15 @@ func (r *Runner) refusesEmptySubscriptText(text string) bool {
 // the shell that refuses the same emptiness in a subscript — so the question
 // is asked where a subscript is read and not here.
 func (r *Runner) expressionValue(text string) (int, error) {
-	text = strings.TrimSpace(text)
-	if n, err := strconv.Atoi(text); err == nil {
+	if n, err := strconv.Atoi(strings.TrimSpace(text)); err == nil {
 		return n, nil
 	}
+	// Read as written, blanks and all. The complaint quotes the text back and
+	// the caller has only the untrimmed one to quote, so trimming here made
+	// the two disagree: ksh93 answers `${a[ 1/0 ]}` with ` 1/0 : divide by
+	// zero` and the trimmed text could not say the spaces had been there
+	// (#2010). It also kept the offsets the parser records from lining up
+	// with the text a diagnostic slices.
 	tree, err := r.arithTree(nil, text)
 	if err != nil {
 		return 0, err

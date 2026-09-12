@@ -67,7 +67,9 @@ func TestNoglobSwitchesTheMatchOffForTheWordsBehindIt(t *testing.T) {
 		// It ends with the command. A function called through it globs in
 		// its own body, and an `eval` globs in what it reads.
 		{`f() { echo a[b]c; }; noglob f`, "f: no matches found: a[b]c"},
-		{`noglob eval 'echo a[b]c'`, "zsh:1: no matches found: a[b]c"},
+		// Located at the evaluated text and not at the shell, which is this
+		// shell's answer for anything `eval` reads (#2133).
+		{`noglob eval 'echo a[b]c'`, "(eval):1: no matches found: a[b]c"},
 		// A substitution inside the word is its own command and globs.
 		{`noglob echo "$(echo a[b]c)"`, "zsh:1: no matches found: a[b]c"},
 		// The words alone: a redirection target is expanded by another

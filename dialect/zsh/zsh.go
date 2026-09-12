@@ -2414,6 +2414,9 @@ func Diagnostics() interp.Diagnostics {
 		// file — `./inc.sh:1: command not found: nosuch` — while one inside
 		// a function still names the function, which the answer above wins.
 		LocationNamesTheCurrentFile: true,
+		// And text `eval` is running is named for itself over both — see
+		// Diagnostics.LocationNamesTheEvalText, where the nine rows are.
+		LocationNamesTheEvalText: true,
 		// zsh does not quote the expression, where the other three do.
 		ArithError:          "%[2]s",
 		ArithInvalidBase:    "invalid base (must be 2 to 36 inclusive): %[1]s",

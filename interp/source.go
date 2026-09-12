@@ -242,6 +242,14 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		// its line at a prompt. See Runner.diag and Runner.AtPrompt (#2024).
 		r.borrowedFiles++
 		defer func() { r.borrowedFiles-- }()
+	} else {
+		// And text handed to `eval` is a place of its own to one dialect,
+		// which names it rather than the file or the function around it.
+		// The mark is the frame count, so anything the text calls stands
+		// above it — see Runner.evalTextFloor.
+		outerFloor := r.evalTextFloor
+		r.evalTextFloor = len(r.frames) + 1
+		defer func() { r.evalTextFloor = outerFloor }()
 	}
 	d := r.dialect().On(s.route())
 	// With this shell's alias tables, because borrowed text is text this

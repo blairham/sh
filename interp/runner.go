@@ -1908,6 +1908,25 @@ type Runner struct {
 	// Not r.indirection, which counts every kind of re-read including `eval`
 	// and a command substitution.
 	borrowedFiles int
+	// evalTextFloor is one more than the number of frames that stood when
+	// the innermost `eval` began reading its text, and zero where no `eval`
+	// is reading any. It is what tells a line the *evaluated text* holds
+	// from a line something the text called holds, for the dialect that
+	// gives that text a location of its own — see
+	// Diagnostics.LocationNamesTheEvalText.
+	//
+	// A depth rather than a flag, and a frame count rather than a counter of
+	// its own, because `eval` pushes no frame: everything it calls does, so
+	// the frames standing above the mark are exactly the function bodies and
+	// sourced files between the text and the failure. A function called from
+	// evaluated text is named as the function, and the mark comes back into
+	// force when it returns, without anything having to be saved and
+	// restored at each call.
+	//
+	// Saved and restored around the read rather than pushed onto a stack:
+	// only the innermost is ever asked, and `eval` inside `eval` overwrites
+	// the outer mark with an equal one.
+	evalTextFloor int
 	// depth bounds function recursion, because a shell script can recurse
 	// and a stack overflow is not a diagnostic anyone can act on.
 	depth int
@@ -2141,8 +2160,31 @@ func (r *Runner) builtinIsSpeaking() bool {
 // sources a file is still the innermost function while the file runs, so
 // asking the name gave that dialect's function rule to a line the function
 // never contained (#2037).
+// locationIsInsideEvalText reports whether the line a diagnostic is about was
+// read from text `eval` is running rather than from a file or a function body
+// below it. See Runner.evalTextFloor.
+//
+// It counts from the same depth [Runner.locationFile] and
+// [Runner.locationIsInsideAFunctionBody] name theirs at, so a message located
+// at the call it came from is asked about the frame it is located in and the
+// three cannot disagree.
+func (r *Runner) locationIsInsideEvalText() bool {
+	return r.evalTextFloor > 0 && r.evalTextFloor-1 == len(r.frames)-r.outsideCall
+}
+
 func (r *Runner) locationPrefix() string {
 	d := r.diag()
+	if d.LocationNamesTheEvalText && d.EvalSourceName != "" && r.locationIsInsideEvalText() {
+		// Text `eval` is reading is named for itself, over both the file it
+		// was written in and the function it was called from — see
+		// Diagnostics.LocationNamesTheEvalText. The builtin and the line are
+		// unchanged: this replaces the name and nothing else.
+		line := r.line
+		if r.speaker != "" {
+			line = r.speakerLine
+		}
+		return d.prefix(d.EvalSourceName, r.speaking(), r.builtinIsSpeaking(), line)
+	}
 	// The dialect's own function is located the way a builtin is: at the line
 	// the script called it on, and never as a function — the dialect that
 	// names a function in place of a file names the builtin there instead,

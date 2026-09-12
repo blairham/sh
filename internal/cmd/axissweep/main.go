@@ -14,13 +14,16 @@
 //	make axis-sweep ARGS='-only Replacement' # one axis while triaging it
 //	make axis-sweep ARGS='-dialects zsh'     # one column
 //	make axis-sweep ARGS='-json out.json'    # the flips, for a later pass
+//	make axis-sweep ARGS=-presets            # the two lists, no shell run
 //
 // It is **not** in `make check` and must not be: it is thousands of shell
 // processes, and this repository already deleted a gate for costing every
 // commit too much. It runs on demand, and its output is a backlog.
 //
 // The exit status is 1 when anything came out unpinned, because "fail if
-// nothing fails" is the whole instrument. A clean struct exits 0.
+// nothing fails" is the whole instrument. A clean struct exits 0. Under
+// -presets the same rule applies to the thing that half finds: an entry no
+// field comment has answered yet (#2060).
 package main
 
 import (
@@ -54,6 +57,13 @@ func main() {
 	}
 	if *presets {
 		fmt.Print(axissweep.PresetReport(uses))
+		// Same rule as the corpus half: the instrument exits nonzero when
+		// it has found something, and what it finds here is an entry no
+		// field comment has answered. A struct whose every preset-list
+		// entry carries its verdict exits 0.
+		if len(axissweep.Untriaged(uses)) > 0 {
+			os.Exit(1)
+		}
 		return
 	}
 

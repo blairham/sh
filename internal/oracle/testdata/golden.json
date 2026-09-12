@@ -115707,6 +115707,57 @@
         "TimedOut": false
       }
     },
+    "pat/a-class-name-this-shell-has-not-got": {
+      "ash": {
+        "Stdout": "a=Y b=Y q=n ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "a=Y b=Y q=n ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=Y b=Y q=n ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a=Y b=n q=n ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a=Y b=n q=n ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a=n b=n q=n ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a=Y b=Y q=n ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pat/a-class-that-never-closes-is-not-one": {
       "ash": {
         "Stdout": "[cape[X]",
@@ -119328,6 +119379,57 @@
         "TimedOut": false
       }
     },
+    "pat/an-empty-class-name-is-an-unknown-one": {
+      "ash": {
+        "Stdout": "a=Y b=Y a=Y b=Y ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "a=Y b=Y a=Y b=Y ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=Y b=Y a=Y b=Y ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a=Y b=n a=Y b=n ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a=Y b=n a=Y b=n ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a=n b=n a=n b=n ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a=Y b=Y a=Y b=Y ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pat/an-empty-group-is-a-function": {
       "ash": {
         "Stdout": "hi",
@@ -120597,6 +120699,57 @@
       },
       "zsh": {
         "Stdout": "no no",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/an-unknown-class-name-after-a-known-one": {
+      "ash": {
+        "Stdout": "a=Y A=Y b=Y a=Y q=n a=n q=Y ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "a=Y A=Y b=Y a=Y q=n a=n q=Y ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=Y A=Y b=Y a=Y q=n a=n q=Y ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a=Y A=Y b=n a=n q=n a=n q=n ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a=Y A=Y b=n a=n q=n a=n q=n ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a=n A=n b=n a=n q=n a=n q=n ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a=Y A=Y b=Y a=Y q=n a=n q=Y ",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

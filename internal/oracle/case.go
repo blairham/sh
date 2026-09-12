@@ -5419,7 +5419,7 @@ echo "st=$?"`,
 	{
 		ID: "array/the-key-subscript-flag-on-a-table-is-a-lookup", Category: "expansion",
 		Snippet: "typeset -A m 2>/dev/null || { echo no-attribute; exit 0; }\n" +
-			`m=(aa 1 bb 2); printf "[%s]" "${m[(k)aa]}" "${m[(K)aa]}" "${m[(k)a*]}" "${m[(k)zz]}" "${m[(i)aa]}" "${#m[(k)aa]}"; echo`,
+			`m[aa]=1; m[bb]=2; printf "[%s]" "${m[(k)aa]}" "${m[(K)aa]}" "${m[(k)a*]}" "${m[(k)zz]}" "${m[(i)aa]}" "${#m[(k)aa]}"; echo`,
 		Why: "the same two letters over a *table*, where they part from the search they otherwise are: a lookup of the key exactly as written, with no pattern and no walk, answering the **value** -- where `(i)` over the same table answers the key. The pattern field is the discriminator: a search reading would answer it with the 1 under `aa`, and it is empty. The last field is the match count, which is what puts a lookup on the same list-shaped route every other search is on. Only one shell has the construct; the two other columns with the attribute read the parentheses as part of a key and find nothing",
 	},
 	{

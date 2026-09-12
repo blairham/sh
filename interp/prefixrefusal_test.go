@@ -42,6 +42,9 @@ func prefixCostRun(t *testing.T, c prefixCost, src string) (stdout, stderr strin
 	sem.PrefixToARegularBuiltinIsRefused = c.refusedBeforeARegularBuiltin
 	sem.PrefixRefusalFatality = c.fatality
 	sem.PrefixRefusalCostsTheCommand = c.costsTheCommand
+	// Not this table's question — see TestWhenAFrozenPrefixIsChecked, which
+	// asserts both orders. Answered so a row here reports the cost alone.
+	sem.PrefixToAFrozenNameIsCheckedFirst = No
 	var out, errs bytes.Buffer
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem,

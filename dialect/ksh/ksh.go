@@ -895,6 +895,10 @@ func Semantics() interp.Semantics {
 	// and `${@=abc}` is `${@=abc}: bad substitution` because the operator
 	// fires at all (#1941).
 	s.PositionalListWithNoneIsSet = interp.No
+	// dash's and zsh's order for a frozen name in a prefix: whatever the
+	// command was going to do first happens first, and only bash checks the
+	// name ahead of it (#1943).
+	s.PrefixToAFrozenNameIsCheckedFirst = interp.No
 	// The same as the bash column: measured 2026-09-11 on ksh93u+,
 	// `typeset -A m; m[k]=9; $(( m[*] ))` is 0.
 	s.ArithWholeArraySubscriptIsTheSlice = interp.No

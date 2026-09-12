@@ -111,6 +111,9 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ValueBackslashQuotesWhatFollows", s.ValueBackslashQuotesWhatFollows, interp.Yes},
 		{"PositionalListWithNoneIsSet", s.PositionalListWithNoneIsSet, interp.No},
+		// The one column that checks a frozen name in a prefix before the
+		// command's values and redirections (#1943).
+		{"PrefixToAFrozenNameIsCheckedFirst", s.PrefixToAFrozenNameIsCheckedFirst, interp.Yes},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.No},
 		{"EmptyParamSubscriptIsAnError", s.EmptyParamSubscriptIsAnError, interp.Yes},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},

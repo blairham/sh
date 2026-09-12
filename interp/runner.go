@@ -898,6 +898,13 @@ type Runner struct {
 	// number that is not one. The command does not run, which is what every
 	// shell in the panel does and what the exit status has to say.
 	expandErr bool
+	// prefixCheckedFirst records that this command's assignment prefix has
+	// already been checked for a frozen name, ahead of its values and its
+	// redirections — the order Semantics.PrefixToAFrozenNameIsCheckedFirst
+	// answers. Set for one command and cleared when it is over, so the
+	// dispatch routes skip the value of a frozen name and the ordinary check
+	// does not report the same names a second time.
+	prefixCheckedFirst bool
 	// expandingWord is the word being expanded and expandingSpan which of
 	// its spans, so a diagnostic about an expansion can name the text around
 	// it: two dialects blame the word rather than the `${…}`, and by the
@@ -3082,6 +3089,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			r.redirectForBuiltin = argv[0]
 		}
 	}
+	// A frozen name in the prefix, in the dialect that checks it before
+	// anything else this command does. Ahead of the redirections because
+	// that is exactly what the order is about: the same shell reports the
+	// name and then the file where the others report the file alone. Cleared
+	// when the command is over so the flag never outlives it.
+	defer func() { r.prefixCheckedFirst = false }()
+	if r.refusePrefixesEarly(c.Assigns, argv) {
+		return nil
+	}
+
 	// And whether the command is one this shell runs itself, which decides
 	// where a here-document body is expanded — see heredocprocess.go.
 	closers, err := r.applyRedirs(ctx, c.Redirs, false, !r.commandRunsInThisShell(argv))
@@ -3159,9 +3176,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// the two routes answering it differently — a prefix to a function is
 		// otherwise discarded, so its value was never expanded and bash's
 		// answer fell out of a gap rather than a choice (#1219).
-		for _, a := range c.Assigns {
-			if !a.Operand && r.readonly[a.Name] {
-				r.expandWord(a.Value)
+		if !r.prefixCheckedFirst {
+			for _, a := range c.Assigns {
+				if !a.Operand && r.readonly[a.Name] {
+					r.expandWord(a.Value)
+				}
 			}
 		}
 		if _, stop := r.refusePrefixes(c.Assigns, prefixCommand{kind: prefixBeforeFunction}, !r.expandErr); stop {
@@ -3329,6 +3348,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			// /bin/echo hi` leaves `a b`, and `1=X /usr/bin/env` shows the
 			// child no `1`. Not applied and not exported, which is both
 			// halves of that.
+			continue
+		}
+		if r.prefixCheckedFirst && r.readonly[a.Name] {
+			// Refused before anything was expanded, which is what the order
+			// axis buys: the value is never evaluated, so `x=$((1/0)) cmd`
+			// says nothing about the division in the column that checks
+			// first. The name keeps its value and the child sees that, the
+			// same as below.
 			continue
 		}
 		value := strings.Join(r.expandWord(a.Value), " ")

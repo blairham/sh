@@ -433,6 +433,43 @@ func TestShoptGlobstarThroughTheBuiltin(t *testing.T) {
 	}
 }
 
+// TestShoptGlobstarAndSymbolicLinks is the dialect's half of #2360: what
+// `globstar` turns on here is a `**` that names a symbolic link to a
+// directory and never goes inside one.
+//
+// Measured 2026-09-12 against bash 5.3.15 in a directory holding `r/x` and a
+// symlink `s` to `r`: with the option, `echo **/x` is `r/x` and `echo **/` is
+// `r/ s/`. Without it `**` is an ordinary `*` and `**/x` is `r/x s/x`, so the
+// no-option row is what says the refusal is the option's doing rather than
+// something the walk does everywhere.
+//
+// The `**/` row is where this dialect and zsh part — see the zsh side, which
+// answers `r/` — so it belongs in a dialect test rather than in the core.
+func TestShoptGlobstarAndSymbolicLinks(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "r"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "r", "x"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("r", filepath.Join(dir, "s")); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, src, want string }{
+		{"a link is not entered", `shopt -s globstar; echo **/x`, "r/x"},
+		{"a link is listed", `shopt -s globstar; echo **/`, "r/ s/"},
+		{"without the option it is an ordinary star", `echo **/x`, "r/x s/x"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := runBash(t, dir, tc.src)
+			if got := strings.TrimSpace(out); got != tc.want {
+				t.Errorf("%s gave %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
 // `shopt -s expand_aliases` is implemented and not merely recognized: the
 // word really expands afterwards, and really stops expanding after `-u`.
 //

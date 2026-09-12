@@ -80,3 +80,59 @@ func TestBareStarStarIsAnOrdinaryPattern(t *testing.T) {
 		}
 	}
 }
+
+// TestStarStarSlashListsTheLevelsItWalked is this shell's half of #2360, and
+// it is the row where the panel splits.
+//
+// `**/` here stands for the directory levels the walk crossed, and a symbolic
+// link to a directory is not one of them: measured 2026-09-12 on zsh 5.9.2 in
+// a tree holding `r/x`, a symlink `s` to `r` and a symlink `up` to the
+// directory itself, `echo **/` is `r/` — where bash 5.3.15 under `shopt -s
+// globstar` and ksh93 under `set -o globstar` both answer `r/ s/ up/`.
+//
+// What does **not** split is where the component goes: no shell in the panel
+// enters a link, so `**/x` is `r/x` everywhere and the walk is bounded even
+// though `up` points at its own parent. The two rows are here together
+// because reading the first as the second is the mistake the option exists to
+// prevent.
+//
+// `***/` is the construct that does follow links, and it is separate on
+// purpose rather than this reading turned on — pointed at this tree zsh walks
+// it until the kernel refuses and reports `too many levels of symbolic
+// links`. It is not implemented, and the row below says so by measuring what
+// `**/` does instead.
+func TestStarStarSlashListsTheLevelsItWalked(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "r"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "r", "x"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("r", filepath.Join(dir, "s")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(".", filepath.Join(dir, "up")); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ src, want string }{
+		{`print -r -- **/`, "r/"},
+		{`print -r -- **/x`, "r/x"},
+		// The starting directory is still the pattern's to name, however it
+		// was reached: measured, `s/**/x` is `s/x` here and in bash.
+		{`print -r -- s/**/x`, "s/x"},
+		// Two controls, and both are needed. An ordinary component goes
+		// through a link — `*/x` is `r/x s/x`, so the fixture does have
+		// something to find that way — and an ordinary component with the
+		// same trailing slash lists every link as a directory: `*/` is
+		// `r/ s/ up/`, measured, which is what makes the `**/` row above a
+		// statement about `**` rather than about trailing slashes.
+		{`print -r -- */x`, "r/x s/x"},
+		{`print -r -- */`, "r/ s/ up/"},
+	} {
+		out, st := runZsh(t, dir, "cd "+dir+"\n"+tc.src)
+		if got := strings.TrimSpace(out); got != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, got, st, tc.want)
+		}
+	}
+}

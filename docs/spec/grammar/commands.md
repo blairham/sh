@@ -845,6 +845,56 @@ name rather than by an assignment prefix (`DeclarationUtilities`;
 measured: `decl/an-array-assignment-as-an-operand`,
 `decl/a-local-array-stays-local`, `decl/readonly-takes-its-array-first`).
 
+#### A syntax error between the parentheses ends the line, not the file
+
+The parentheses of a compound assignment belong to a **word**, and what
+stands between them is a list read on its own. That is what separates a
+failure there from every other syntax error: the file around it parsed,
+and only the list did not. One shell family acts on the distinction.
+
+Measured 2026-09-12 from a script file, with `echo one` above the
+construct and `echo two` below it:
+
+| probe | bash 5.3.15 / 3.2.57 | bash as `sh` | zsh 5.9.2 | ksh93u+ | dash |
+| --- | --- | --- | --- | --- | --- |
+| `a=(p & q)` | names `&`, then `two`, status 0 | names `&`, stops, 1 | `parse error near \`&'`, 1 | `\`&' unexpected`, 3 | `"(" unexpected`, 2 |
+| `a=( [0]=p [1]=> )` | names `>`, then `two`, 0 | names `>`, stops, 1 | names `>`, 1 | names `>`, 3 | the same as above |
+| `a=(p q` | `unexpected EOF while looking for matching )`, stops, 1 | the same | `parse error near \`q'`, 1 | `\`end of file' unexpected`, 3 | stops |
+
+Three facts come out of that, and each is load-bearing:
+
+- **It is not about when the error is found.** `bash -n` reports it in
+  every column, so the list is read while the file is read. What the two
+  bash columns do differently is carry on afterwards.
+- **The line is thrown away unrun.** `f() { a=(p & q); }` draws the
+  complaint and leaves `f` undefined, and after `a=(p & q)` the array is
+  unset and `$?` is 1 — a failed command's status, not a refused file's.
+  A script whose last line is the bad one exits 1, and `set -e` makes it
+  the file's after all, at the parse-failure status.
+- **The input running out is a different failure.** bash words that one
+  against the parenthesis and stops, which is right: the same text with
+  more after it is an unfinished construct rather than a bad one.
+
+Nor is it a property of nested reading in general — `echo $(if)` is
+fatal at status 2 in bash — so it is the assignment's parentheses and
+nothing else. The appending spelling `a+=( … )` and the operand form
+`declare -a d=( … )` are both this.
+
+The refusal **names the token it stopped on**, which is what all three
+shells with the construct do and what this shell's ordinary
+unexpected-token wording already produces in each of their spellings.
+
+`CompoundAssignmentErrorGivesUpTheLine`, on in bash alone. The parser is
+what recovers — it reads past the array's closing parenthesis so that
+there is a next line to reach — and hands the failure back on the line
+rather than on itself (`syntax.File.Refused`). A read of the **whole
+file**, which runs nothing and has no next line, still takes the refusal
+as its answer, which is what `bash -n` reports and exits 1 for. Measured:
+`array/an-operator-between-a-literal-s-elements`,
+`array/a-redirection-operator-in-a-literal-s-element`,
+`array/a-literal-holding-an-operator-in-a-function-body`,
+`array/a-literal-that-runs-out-of-input` (#2380).
+
 #### What a refusal calls the subscript
 
 A refusal that quotes a subscript back quotes what was **written**, not

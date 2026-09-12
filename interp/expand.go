@@ -1975,6 +1975,14 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamAlternate, syntax.ParamError:
 		fires = r.conditionalFires(e, value, set)
 	}
+	// An operand the parser could not read is this expansion's failure and
+	// not the file's, and it is a failure only where the expansion **reaches**
+	// the operand — which is why it is asked after the test above and not
+	// before it. See ParamExpr.OperandUnreadable.
+	if e.OperandUnreadable != nil && reachesItsOperand(e, fires) {
+		r.refuseUnreadableOperand(e)
+		return ""
+	}
 
 	switch e.Op {
 	case syntax.ParamNone:
@@ -2047,6 +2055,45 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	}
 	// Anything else is left empty rather than guessed at.
 	return ""
+}
+
+// reachesItsOperand reports whether an expansion whose test has already been
+// taken will go on to read its operand.
+//
+// Only the operators whose operand is a *word* are here, because they are the
+// only ones an unreadable operand can belong to: a pattern and a substring
+// offset are read as words of their own, where a quote quotes and the second
+// reading never happens. `${v#'$('}` and `${v/'$('/x}` are `xay` in bash 5.3,
+// bash 3.2 and ksh93 alike, which is what says those two are not this.
+func reachesItsOperand(e *syntax.ParamExpr, fires bool) bool {
+	switch e.Op {
+	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamError:
+		return fires
+	case syntax.ParamAlternate:
+		// The one that reads its operand when the test does *not* fire.
+		return !fires
+	case syntax.ParamAssignAlways:
+		// No test at all — see assignAlways.
+		return true
+	}
+	// The replacement is not here, and that is deliberate rather than an
+	// omission: whether its second reading is the one that applies is an
+	// axis, so the question is asked where that axis already is. See
+	// replacementWord.
+	return false
+}
+
+// refuseUnreadableOperand reports the operand's failed second read as the
+// failed expansion it is.
+//
+// The same pair arithSpanValue raises for an expression it cannot read, and
+// worded through the same formatter, because it is the same kind of failure:
+// a read that could only happen once the run reached the text. What it ends is
+// then Semantics.FailedExpansionAbandonsTheLine's to say — bash gives up the
+// line and runs the next one, and the other three end the shell.
+func (r *Runner) refuseUnreadableOperand(e *syntax.ParamExpr) {
+	r.diagf("%s\n", r.diag().ParseFailure(e.OperandUnreadable))
+	r.expandErr = true
 }
 
 // assignAlways is `${name::=word}`: the word is expanded, stored, and
@@ -3878,11 +3925,20 @@ func escapeAmpersand(text string) string {
 // one being derived from the other: the trees are not the same shape, so the
 // choice has to be made before either is expanded.
 func (r *Runner) replacementWord(e *syntax.ParamExpr) *syntax.Word {
-	if e.Arg2Enclosed == nil {
+	if e.Arg2Enclosed == nil && e.OperandUnreadable == nil {
 		return e.Arg2
 	}
 	if r.ask(r.sem().ReplacementOperandTakesTheEnclosingQuoting,
 		"a quote in a quoted replacement operand") {
+		if e.OperandUnreadable != nil {
+			// The enclosed reading is the one that applies and it is the one
+			// the parser could not read — so this is where that failure
+			// finally belongs. A dialect taking the *word* reading never
+			// arrives here, which is why `"${v/a/'$('}"` is `x$(y` in bash
+			// 5.3 and ksh93 and a complaint in bash 3.2, from one tree.
+			r.refuseUnreadableOperand(e)
+			return nil
+		}
 		return e.Arg2Enclosed
 	}
 	return e.Arg2

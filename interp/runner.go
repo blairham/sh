@@ -2053,6 +2053,11 @@ func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body fun
 // Verbose reports `set -v`, for the front end that holds the raw lines.
 func (r *Runner) Verbose() bool { return r.verbose }
 
+// ErrExit reports `set -e`, for the front end that has one thing to decide by
+// it: a line the parser refused ends the script under the option and only the
+// line without it. See syntax.File.Refused.
+func (r *Runner) ErrExit() bool { return r.errexit }
+
 // NoExec reports `set -n`: the program is read and never run.
 //
 // Exported for the front end, which has one thing to decide by it that the
@@ -2682,6 +2687,15 @@ func (r *Runner) runTrapBody(ctx context.Context, body string) {
 func (r *Runner) runTrapBodyByLine(ctx context.Context, p *syntax.Parser, body string) {
 	for {
 		f, ok := p.NextLine()
+		if f != nil && f.Refused != nil {
+			// A line of the body the reader could not finish, where only
+			// that line goes — see syntax.File.Refused. Reported where this
+			// body's other parse failures are reported, and then the next
+			// line of the body runs, which is what the shell does with a
+			// trap whose text holds one.
+			r.reportTrapParseFailure(f.Refused, body)
+			continue
+		}
 		if f != nil && !r.runTrapStmts(ctx, f) {
 			return
 		}

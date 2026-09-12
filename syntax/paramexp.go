@@ -258,6 +258,46 @@ type ParamExpr struct {
 	// Empty for a node the parser did not fill, where the reconstruction is
 	// all there is. See interp/modifier.go.
 	ArgText, Arg2Text string
+	// OperandUnreadable is the failure of the operand's **second read**, kept
+	// here instead of refusing the file, and nil for every expansion anybody
+	// writes.
+	//
+	// A `${ … }` written inside double quotes is read twice. The scan for the
+	// closing brace honors the quotes inside the braces, so `"${v-'$('}"`
+	// closes at its own `}` and the line parses; the operand between the `-`
+	// and the `}` is then read *again*, and in that read the two single
+	// quotes are characters rather than quoting, so the `$(` is a command
+	// substitution with nothing to close it. That the quotes stop quoting on
+	// the second read is not new and is not this: `"${v+'bar}"` is the same
+	// complaint here and in bash alike.
+	//
+	// What is this is **when** the second read happens. Measured 2026-09-12
+	// against bash 5.3.15 and bash 3.2.57, from a script file and through
+	// `-c` alike:
+	//
+	//	v=SET; echo "${v-'$('}"        SET, and nothing is said
+	//	unset v; echo "${v-'$('}"      the complaint, and the line is given up
+	//	f() { echo "${v-'$('}"; }      defined, silently
+	//	bash -n                        takes both
+	//
+	// So the operand is read when the expansion **reaches** it, and a branch
+	// nothing takes is never read at all. A failure there is not the file's
+	// to report — the same rule [Parser.parseArithLater] applies to an
+	// expression, one operand over — and the run reports it as the failed
+	// expansion it is.
+	//
+	// The panel does not divide on this, because only one column gets far
+	// enough to ask: bash 5.3 and bash 3.2 defer, and zsh, ksh93 and dash
+	// end the expansion at the first `}` instead, so the construct is a
+	// stray quote to them long before an operand exists. bash in POSIX mode
+	// is the same three-way — it does not honor the quotes in the brace
+	// scan either, and refuses the file at parse time.
+	//
+	// The error is kept rather than the text re-read later because nothing
+	// expands in between: the second read of the same characters cannot come
+	// out any other way, so recording it is the whole of the deferral.
+	OperandUnreadable error
+
 	// Arg2Enclosed is the *replacement* operand read a second way: as
 	// content of the quoting around the expansion, rather than as a word of
 	// its own. Nil unless the two readings could differ, which is what makes
@@ -1478,7 +1518,7 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 			// expansion, where that could come to something else. See
 			// ParamExpr.Arg2Enclosed.
 			if q == DoubleQuoted && replacementReadingsCanDiffer(rest[i+1:]) {
-				e.Arg2Enclosed = p.wordFrom(rest[i+1:], start, q)
+				e.Arg2Enclosed, e.OperandUnreadable = p.operandWordFrom(rest[i+1:], start, q)
 			}
 		} else {
 			// Omitting the replacement deletes the match.
@@ -1512,7 +1552,7 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 		}
 	default:
 		if rest != "" {
-			e.Arg = p.wordFrom(rest, start, word)
+			e.Arg, e.OperandUnreadable = p.operandWordFrom(rest, start, word)
 		}
 	}
 }
@@ -1599,6 +1639,31 @@ func indexUnquoted(s string, c byte) int {
 
 // wordFrom lexes text as a word, so an operand keeps its structure: the word
 // in `${x:-word}` is itself expanded, and `${u:-$(echo sub)}` yields sub.
+// operandWordFrom is wordFrom for an operand of `${ … }`, where a failure
+// belongs to the expansion rather than to the file.
+//
+// Same shape as parseArithLater and for the same reason: the read has to
+// happen either way — a successful one builds the word the run will expand —
+// and the error is the only part of it that was ever the file's. See
+// ParamExpr.OperandUnreadable for what the run does with it.
+//
+// Rolling back rather than not looking is also what keeps this to one
+// question. An operand that reads cleanly is indistinguishable from one that
+// never came through here.
+func (p *Parser) operandWordFrom(text string, at Pos, q Quoting) (*Word, error) {
+	if !p.dialect.OperandIsReadWhenTheExpansionReachesIt {
+		return p.wordFrom(text, at, q), nil
+	}
+	saved := p.err
+	w := p.wordFrom(text, at, q)
+	if p.err != saved {
+		err := p.err
+		p.err = saved
+		return nil, err
+	}
+	return w, nil
+}
+
 func (p *Parser) wordFrom(text string, at Pos, q Quoting) *Word {
 	if text == "" {
 		return &Word{Start: at, Stop: at}

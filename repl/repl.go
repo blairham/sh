@@ -1182,6 +1182,15 @@ func collect(p *syntax.Parser) ([]*syntax.File, error) {
 		if err := p.Err(); err != nil {
 			return nil, err
 		}
+		if line.Refused != nil {
+			// A construct the reader gave up on, which ends the line and not
+			// the shell — see syntax.File.Refused. A prompt has no next line
+			// of its own to go on to: the person types one. So the refusal
+			// is handed back as the failure of this input, which is what the
+			// caller reports and what keeps a line nobody can run from
+			// running silently.
+			return nil, line.Refused
+		}
 		stmts = append(stmts, line)
 	}
 }

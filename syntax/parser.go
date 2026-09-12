@@ -53,6 +53,10 @@ type Parser struct {
 	// is the one place that knows where the word ends. Zero when no flag
 	// group has been refused. See Error.FlagGroupWordTail.
 	flagTailFrom int32
+	// refused is a failure that gives up the line being read rather than the
+	// file, held here from the moment it is raised until NextLine hands it
+	// back on the File. See File.Refused.
+	refused error
 	// aliasDone are the names already expanded in the command being read. It
 	// is a field rather than a local because the command word is not always
 	// reached from one place: assignment prefixes stand in front of it, so
@@ -767,9 +771,26 @@ func (p *Parser) Parse() *File {
 		if !ok {
 			break
 		}
+		if line.Refused != nil {
+			// The line is thrown away unrun, here as everywhere: what was
+			// read of it is not appended. Reading carries on so that the
+			// lines after it are still read — this is the route `-n` takes —
+			// and the refusal is kept for the end.
+			if f.Refused == nil {
+				f.Refused = line.Refused
+			}
+			continue
+		}
 		f.Stmts = append(f.Stmts, line.Stmts...)
 	}
 	f.Last = p.tok.Pos
+	if p.err == nil && f.Refused != nil {
+		// Reading the whole file at once has no next line to go on to, so a
+		// refusal here *is* the answer — which is what `bash -n` reports, and
+		// what it exits non-zero for. The incremental route keeps it on the
+		// line instead; see File.Refused.
+		p.err = f.Refused
+	}
 	return f
 }
 
@@ -831,6 +852,7 @@ func (p *Parser) NextLine() (*File, bool) {
 		}
 	}
 	f.Last = p.lineEnd()
+	f.Refused, p.refused = p.refused, nil
 	return f, true
 }
 
@@ -2329,6 +2351,9 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 			a.Elems = append(a.Elems, p.word())
 			p.skipNewlines()
 		}
+		if !p.at(TokRightParen) && p.giveUpOnTheArray(saved) {
+			return a
+		}
 		p.lex.inArgument = saved
 		if !p.at(TokRightParen) {
 			p.fail("expected ) to close an array assignment")
@@ -2338,6 +2363,61 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		p.next()
 	}
 	return a
+}
+
+// giveUpOnTheArray is the recovery for a syntax error inside a compound
+// assignment's parentheses, and reports whether it took it.
+//
+// The shell that has arrays reads `a=( … )` as **one word**: the parentheses
+// belong to the assignment and what stands between them is a list of its own,
+// so a `&`, a `|`, a `;;` or a `>` in there is a complaint about that list and
+// not about the file. Measured 2026-09-12 from a script file, bash 5.3.15 and
+// bash 3.2.57, with `echo one` before and `echo two` after:
+//
+//	a=(p & q)              syntax error near unexpected token `&', then `two`
+//	a=( [0]=p [1]=> )      the same with `>`
+//	declare -a d=(p & q)   the same, so an operand form is this too
+//	a+=(p & q)             and the appending one
+//	echo $(if)             *fatal*, status 2 — a substitution is not this
+//
+// The line the error fell on is thrown away unrun, which is visible: with
+// `f() { a=(p & q); }` the complaint is made and `f` is not defined. So the
+// recovery is "read past this construct so the next line can be reached", and
+// never "read the rest of the line as though it had parsed".
+//
+// The input running out is **not** this and is deliberately excluded. bash
+// words that one against the parenthesis — `unexpected EOF while looking for
+// matching )` — and stops, because there is no next line for a shell to go on
+// to; the same text with more after it has not been seen yet, which is the
+// ordinary unfinished-construct case the caller already handles.
+//
+// inArgument is put back before anything else, because the skip reads the
+// remaining elements the way the loop above read them, and what follows the
+// array is not an argument either way.
+func (p *Parser) giveUpOnTheArray(savedInArgument bool) bool {
+	if !p.dialect.CompoundAssignmentErrorGivesUpTheLine || p.at(TokEOF) || p.err != nil {
+		return false
+	}
+	p.failUnexpected("")
+	// Moved off the parser before the skip, because a parser holding an error
+	// reads nothing more and the whole point here is to read to the `)`.
+	p.refused, p.err = p.err, nil
+	// Past the parenthesis that closes the array, counting the ones the
+	// elements opened so that `a=(p & (q) )` is not called closed by the
+	// inner one. A token that holds a `(` inside a word — a substitution, a
+	// quantified group — is one token here and never reaches the count.
+	depth := 1
+	for depth > 0 && !p.at(TokEOF) && p.err == nil {
+		switch p.tok.Kind {
+		case TokLeftParen:
+			depth++
+		case TokRightParen:
+			depth--
+		}
+		p.next()
+	}
+	p.lex.inArgument = savedInArgument
+	return true
 }
 
 // declarationArray reads `name=(x y)` written as an operand of a utility that

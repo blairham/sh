@@ -12168,6 +12168,57 @@
         "TimedOut": false
       }
     },
+    "array/a-literal-holding-an-operator-in-a-function-body": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error: unexpected \"(\" (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~defined~two",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `\u0026'~\u003cscript\u003e: line 2: `f() { a=(p \u0026 q); }'~\u003cscript\u003e: line 4: f: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `\u0026'~\u003cscript\u003e: line 2: `f() { a=(p \u0026 q); }'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~defined~two",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `\u0026'~\u003cscript\u003e: line 2: `f() { a=(p \u0026 q); }'~\u003cscript\u003e: line 4: f: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: Syntax error: \"(\" unexpected (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: syntax error at line 2: `\u0026' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:2: parse error near `\u0026'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/a-literal-leaves-a-gap": {
       "ash": {
         "Stdout": "",
@@ -12470,6 +12521,57 @@
         "Stdout": "[][d] n=2",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/a-literal-that-runs-out-of-input": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: unexpected EOF while looking for matching `)'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: unexpected EOF while looking for matching `)'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: unexpected EOF while looking for matching `)'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: syntax error at line 5: `end of file' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:5: parse error near `\\n'",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -13133,6 +13235,57 @@
         "Stdout": "[1][0][1][0][1][1][0][n=1][0][0]",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/a-redirection-operator-in-a-literal-s-element": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~two",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `\u003e'~\u003cscript\u003e: line 2: `a=( [0]=p [1]=\u003e )'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `\u003e'~\u003cscript\u003e: line 2: `a=( [0]=p [1]=\u003e )'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `\u003e'~\u003cscript\u003e: line 2: `a=( [0]=p [1]=\u003e )'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: syntax error at line 2: `\u003e' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:2: parse error near `\u003e'",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -16651,6 +16804,57 @@
       "zsh": {
         "Stdout": "[p q r][q r][p q r][q]",
         "Stderr": "\u003cshell\u003e:1: invalid subscript",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/an-operator-between-a-literal-s-elements": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~st=1~a=UNSET~two",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `\u0026'~\u003cscript\u003e: line 2: `a=(p \u0026 q)'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `\u0026'~\u003cscript\u003e: line 2: `a=(p \u0026 q)'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~st=1~a=UNSET~two",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `\u0026'~\u003cscript\u003e: line 2: `a=(p \u0026 q)'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: syntax error at line 2: `\u0026' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:2: parse error near `\u0026'",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false
@@ -46794,6 +46998,159 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: unmatched '~\u003cshell\u003e:1: unmatched \"",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/an-unreadable-operand-a-branch-does-not-take": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 6: syntax error: unterminated quoted string",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~SET~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 3: unexpected EOF while looking for matching `''",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~SET~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 6: Syntax error: Unterminated quoted string",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error at line 3: `'' unmatched",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:6: unmatched '~\u003cscript\u003e:6: unmatched \"",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/an-unreadable-operand-a-branch-takes": {
+      "ash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 5: syntax error: unterminated quoted string",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one~two",
+        "Stderr": "\u003cscript\u003e: command substitution: line 3: unexpected EOF while looking for matching `''",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: unexpected EOF while looking for matching `''",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two",
+        "Stderr": "\u003cscript\u003e: line 2: bad substitution: no closing `)' in '$('",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 5: Syntax error: Unterminated quoted string",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: syntax error at line 2: `'' unmatched",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:5: unmatched '~\u003cscript\u003e:5: unmatched \"",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/an-unreadable-operand-with-nothing-to-defer-behind": {
+      "ash": {
+        "Stdout": "one~~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: unexpected EOF while looking for matching `''",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: unexpected EOF while looking for matching `''~\u003cscript\u003e: line 5: syntax error: unexpected end of file",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~~two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~~two",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }

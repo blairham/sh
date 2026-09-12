@@ -1919,6 +1919,84 @@ type Dialect struct {
 	// written in one has to balance the way the program's braces do.
 	BareBraceNestsInExpansion bool
 
+	// OperandIsReadWhenTheExpansionReachesIt defers the **second read** of a
+	// `${ … }` operand from the parse to the run, so that a branch nothing
+	// takes is never read and a failure there gives up the line rather than
+	// the file.
+	//
+	// The second read is not new. A `${ … }` written inside double quotes is
+	// scanned once for its closing brace, with the quotes inside the braces
+	// honored, and the operand is then read again with those quotes standing
+	// for themselves — which is why `"${v+'bar}"` is `unexpected EOF while
+	// looking for matching '` here and in every column that has the reading.
+	// This flag says **when** the second read happens.
+	//
+	// Measured 2026-09-12 with `echo "${v-'$('}"`, where the first read
+	// closes the braces and the second finds a `$(` nothing closes:
+	//
+	//	                        v set                v unset
+	//	bash 5.3.15             SET, nothing said    a run-time complaint, next line runs
+	//	bash 3.2.57             SET, nothing said    a run-time complaint, next line runs
+	//	bash 5.3.15 as `sh`     refused at parse     refused at parse
+	//	zsh 5.9.2               refused              refused
+	//	ksh93u+                 refused              refused
+	//	dash                    refused              refused
+	//
+	// So the panel splits two against four, and `bash -n` takes what bash
+	// takes: a function body holding one is defined in silence.
+	//
+	// The three that refuse do it for a reason **upstream of any operand**:
+	// their brace scan does not honor the quotes either, so the expansion
+	// ends at the first `}` and what is left is a stray quote. That is a
+	// difference of its own and this shell does not have it yet — every
+	// dialect here honors the quotes in the scan — so the flag records the
+	// observable the columns actually produce rather than the mechanism each
+	// reaches it by. Without it, turning the deferral on everywhere would
+	// answer `SET` where zsh, ksh93 and dash all refuse the line.
+	//
+	// A grammar flag rather than a semantics axis for the reason
+	// NestedParamExpansion is one: it settles whether the *file* parses, and
+	// a file that does not parse has no tree for a semantics vector to be
+	// consulted over. The `sh` row is therefore recorded and not modeled:
+	// POSIX mode is a Semantics question here — see Runner.SetPosixMode for
+	// the four axes it moves — and `set -o posix` cannot reach a grammar flag
+	// through it.
+	OperandIsReadWhenTheExpansionReachesIt bool
+
+	// CompoundAssignmentErrorGivesUpTheLine makes a syntax error inside
+	// `a=( … )` end the line it was written on rather than the file, so the
+	// shell reports it, throws that line away unrun, and reads on.
+	//
+	// The parentheses of a compound assignment are part of a *word*, and what
+	// stands between them is a list read on its own. That is what separates
+	// this from every other syntax error: the file around it parsed, and only
+	// the list did not.
+	//
+	// Measured 2026-09-12 from a script file, `echo one` above and `echo two`
+	// below, with `a=(p & q)` between them:
+	//
+	//	bash 5.3.15           one · the complaint · two, status 0
+	//	bash 3.2.57           one · the complaint · two, status 0
+	//	bash 5.3.15 as `sh`   one · the complaint, status 1
+	//	zsh 5.9.2             one · parse error near `&', status 1
+	//	ksh93u+               one · `&' unexpected, status 3
+	//	dash                  one · "(" unexpected, status 2 — it has no arrays
+	//
+	// So two columns carry on and four stop, and `bash -n` reports it in
+	// every one of them: this is not about *when* the error is found but
+	// about how much it ends. `$?` on the line after is 1 in the two that
+	// carry on, and a script whose last line is the bad one exits 1 — the
+	// status a failed command leaves, not the status a refused file leaves.
+	//
+	// It is not a property of nested parsing in general. `echo $(if)` is
+	// fatal at status 2 in bash, so a substitution's contents are the file's
+	// and an assignment's elements are not.
+	//
+	// A grammar flag rather than a semantics axis because the parser is what
+	// recovers: it has to read past the construct for there to be a next line
+	// at all. See Parser.giveUpOnTheArray and File.Refused.
+	CompoundAssignmentErrorGivesUpTheLine bool
+
 	// ParamIndirection enables `${!x}` to *parse*. bash and ksh93 accept it;
 	// dash and zsh reject it outright.
 	//

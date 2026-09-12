@@ -297,6 +297,57 @@ inside: a single quote in a double-quoted operand is still an ordinary
 character by the rule above, so `"${x:-"${y:-'"'}"}"` is still refused
 by five of the six and still refused here.
 
+### When the second read happens
+
+A `${ … }` written inside double quotes is read **twice**, and the two
+reads do not agree about the quotes inside it. The scan for the closing
+brace honors them — `"${v-'}'}"` is the three characters `'}'` in bash
+5.3.15 and 3.2.57, where zsh, ksh93 and dash end the expansion at the
+first `}` and answer `''}`. The operand is then read again as content of
+the quoting around the expansion, where a single quote is an ordinary
+character. So an operand may close its braces on the first read and
+refuse to read on the second:
+
+    echo "${v-'$('}"
+
+Which of the two reads happens *when* is the question, and the answer is
+measured rather than reasoned. From a script file, with `echo one` above
+and `echo two` below:
+
+| probe | bash 5.3.15 / 3.2.57 | bash as `sh` | zsh 5.9.2 | ksh93u+ | dash |
+| --- | --- | --- | --- | --- | --- |
+| `v=SET`, then the line | `SET`, nothing said, 0 | refused, 2 | refused, 1 | refused, 3 | refused, 2 |
+| `v` unset, then the line | a complaint, then `two`, 0 | refused, 2 | refused, 1 | refused, 3 | refused, 2 |
+| `f() { … ; }` holding it | defined, silently | refused | refused | refused | refused |
+| `-n` over the file | accepted | refused | — | — | — |
+
+So the two bash columns read the operand **when the expansion reaches
+it**: a branch nothing takes is never read at all, and what a taken
+branch raises is a run-time failure — the wording carries the run-time
+prefix `command substitution:` or `bad substitution` — which gives up its
+line and lets the next one run. The three that refuse do it for a reason
+*upstream of any operand*: their brace scan does not honor the quotes
+either, so there is no operand by the time this question could be asked.
+
+The same deferral covers the backquote and brace spellings —
+`"${v-'\`'}"` and `"${v-'${'}"` — and stops at the operands that are
+read as words of their own, where a quote quotes and there is no second
+read: `"${v#'$('}"` and `"${v/'$('/x}"` are the unchanged value in bash
+5.3, bash 3.2 and ksh93 alike.
+
+It is not a license to accept an operand nothing can read. `"${v+'bar}"`
+is refused by every column and refused here, because there the quote is
+unbalanced *inside* the braces too, so the first read runs off the end
+and there is no operand to defer.
+
+`OperandIsReadWhenTheExpansionReachesIt`, on in bash alone; the failure
+is kept on the node (`syntax.ParamExpr.OperandUnreadable`) and raised
+where something asks for the operand's value, which puts it under
+`FailedExpansionAbandonsTheLine`. Measured:
+`core/an-unreadable-operand-a-branch-does-not-take`,
+`core/an-unreadable-operand-a-branch-takes`,
+`core/an-unreadable-operand-with-nothing-to-defer-behind` (#2380).
+
 ### Where a word operand is matched
 
 A word operand is part of the word it is written in, and it is matched

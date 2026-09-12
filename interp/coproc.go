@@ -111,9 +111,10 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 	}
 
 	job := &Job{
-		done:    make(chan struct{}),
-		ready:   make(chan struct{}),
-		Command: name,
+		done:     make(chan struct{}),
+		ready:    make(chan struct{}),
+		stopNote: make(chan struct{}),
+		Command:  name,
 	}
 	sub := r.clone()
 	sub.inheritJobs(jobBoundaryBackground)

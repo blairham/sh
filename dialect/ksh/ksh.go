@@ -797,6 +797,11 @@ func Semantics() interp.Semantics {
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes
+	// And a signal written onto the option with no space: `kill -n9` and
+	// `kill -sKILL` both send. Measured 2026-09-12. This shell is looser
+	// still — it takes `kill -s9` too, which the axis records and does not
+	// follow (#2227).
+	s.KillReadsASignalJoinedToItsOption = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsUseEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnyFailure

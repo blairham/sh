@@ -653,6 +653,18 @@ type Diagnostics struct {
 	// which is how the engine writes it.
 	AmbiguousJobSpec string
 
+	// WaitJobStopped is what a *bare* `wait` says about a job it has given
+	// up on because the job stopped — Semantics.WaitGivesUpOnAStoppedJob.
+	// Two verbs: the job's number and its process id. Empty means nothing is
+	// said, which is every dialect that does not give up at all.
+	WaitJobStopped string
+	// WaitForJobStopped is the same thing said by a `wait` that *named* the
+	// job, which bash words differently and from the other side of its own
+	// machinery. One verb: the job's number. The status is not a wording —
+	// it is 128 plus the stop signal, the number a command that signal
+	// killed reports.
+	WaitForJobStopped string
+
 	// WaitNotOurChild is a number that is a plausible process id and is not
 	// one of this shell's children, taking the number. Empty means nothing
 	// is said, which is two of the four — the status is 127 in all of them

@@ -433,6 +433,16 @@ func Semantics() interp.Semantics {
 	// and the next attempt leaves. Measured through a pseudo-terminal for
 	// `exit` and for ^D alike.
 	s.StoppedJobsHoldTheExit = interp.Yes
+	// And a `wait` for one gives up rather than waiting on a process that is
+	// not going to finish. Measured 2026-09-12 under `set -m`: a bare `wait`
+	// warns and reports 0, and a `wait` naming the job or its process id
+	// reports 145 — 128 plus SIGSTOP. See the axis for what the rest of the
+	// panel does, and for why the monitor is the condition (#2227).
+	s.WaitGivesUpOnAStoppedJob = interp.Yes
+	// And `kill` reads a signal written onto its option with no space:
+	// `kill -n9` and `kill -sKILL` both send. Measured 2026-09-12; bash 3.2
+	// refuses both, which is why this is an axis and not the engine (#2227).
+	s.KillReadsASignalJoinedToItsOption = interp.Yes
 	// And writes the job table under the sentence while `checkjobs` is on —
 	// measured, `[1]+  Stopped ./ticker` and `[2]-  Running sleep 40 &`
 	// below `There are stopped jobs.`, and nothing below it with the option
@@ -1622,6 +1632,11 @@ func Diagnostics() interp.Diagnostics {
 		DisownNoCurrentJob: "disown: current: no such job",
 		WaitBadJobStatus:   1,
 		WaitNotOurChild:    "wait: pid %[1]d is not a child of this shell",
+		// A job given up on because it stopped, in the two wordings bash has
+		// for it: the bare `wait` names the job and its process, and the one
+		// that named a job speaks from inside its own wait (#2227).
+		WaitJobStopped:    "wait: warning: job %[1]d[%[2]d] stopped",
+		WaitForJobStopped: "warning: wait_for_job: job %[1]d is stopped",
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters bash has and this shell does not: -b job
 			// notices, -k assignment-anywhere, -p privileged, -B brace

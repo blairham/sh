@@ -6222,6 +6222,54 @@ type Semantics struct {
 	// `exit` still warns; and a job stopping afterwards starts it over.
 	StoppedJobsHoldTheExit Answer
 
+	// WaitGivesUpOnAStoppedJob ends a `wait` for a background job that has
+	// stopped, instead of going on waiting for a process that is not going to
+	// finish until something outside the shell resumes it.
+	//
+	// bash 5.x, and only while the monitor is on. Measured 2026-09-12 with
+	// `set -m; sleep 97 & p=$!; sleep 0.3; kill -STOP $p; sleep 0.3; wait`:
+	// bash 5.3.15 and the same binary as `sh` come back inside the first
+	// second, warning `wait: warning: job 1[pid] stopped` and reporting 0 for
+	// the bare form; `wait %1` and `wait $p` report 145 there — 128 plus
+	// SIGSTOP, the status of a command that signal killed. bash 3.2.57 and
+	// ksh93u+ sit until the bound, and ksh93 prints `wait: pid: Stopped
+	// (SIGSTOP)` on its way into a wait it does not come back from, which is
+	// a wording rather than a different answer. zsh cannot be asked: `set -m`
+	// is `can't change option: -m` in a non-interactive zsh.
+	//
+	// With the monitor *off* the panel is unanimous and this is never asked:
+	// the same script without `set -m` blocks in all five, so the base's No
+	// is what every column does on the ordinary route, and the axis is only
+	// about the shell that has been told it is watching jobs.
+	//
+	// It is what #2227 was: a job-control file of bash's own suite ran three
+	// times slower here than under bash, and the whole of the difference was
+	// one wait for a job this shell had no way of knowing had stopped.
+	WaitGivesUpOnAStoppedJob Answer
+	// KillReadsASignalJoinedToItsOption takes `kill -n9` and `kill -sKILL`,
+	// where the signal is written onto the option with no space between.
+	//
+	// bash 5.x and ksh93; bash 3.2 and zsh refuse both, reading the whole
+	// word as a signal called `n9` or `SIGN9`. Measured 2026-09-12 against a
+	// background `sleep`: `kill -n9 $!` and `kill -sKILL $!` kill it at
+	// status 0 in bash 5.3.15, in that binary as `sh` and in ksh93u+, and
+	// are `kill: n9: invalid signal specification` at status 1 in bash
+	// 3.2.57 and `unknown signal: SIGN9` in zsh 5.9.2.
+	//
+	// Which way round the digits go is part of the answer rather than a
+	// detail of it, and joinedKillSignal has the measurement: `-n` joins a
+	// number and `-s` joins a name, so `kill -nKILL` and `kill -s9` are
+	// refused by the shells that read the other two. ksh93 is looser — it
+	// takes `-s9` as well — and that remains a divergence rather than
+	// something this answer claims, because every word the rule here accepts
+	// ksh93 accepts too.
+	//
+	// It is what #2227 was. A script that kills a job it is about to wait
+	// for wrote `kill -n9`; the kill was refused into a stderr the script
+	// had redirected, nothing died, and the `wait` after it then ran for as
+	// long as the job would have.
+	KillReadsASignalJoinedToItsOption Answer
+
 	// HeldExitListsTheJobs follows that warning with the job table — the
 	// same rows `jobs` writes. bash does and zsh does not: measured through a
 	// pseudo-terminal, `shopt -s checkjobs` then `exit` writes
@@ -8963,9 +9011,17 @@ func PosixSemantics() Semantics {
 		// The standard describes `exit` as exiting and says nothing about a
 		// job left stopped, so the base leaves; bash and zsh, which stay and
 		// warn, override.
-		StoppedJobsHoldTheExit:       No,
-		CdpathAnnouncesTheDirectory:  Yes,
-		FdVariableOutlivesTheCommand: Yes,
+		StoppedJobsHoldTheExit: No,
+		// The standard has `wait` wait, and says nothing about a job that
+		// stopped; bash 5.x alone gives up on one, so the base goes on
+		// waiting and that dialect overrides.
+		WaitGivesUpOnAStoppedJob: No,
+		// POSIX gives `kill` only `-s signal` with the signal as a separate
+		// operand, so the base reads nothing joined to the option; bash 5.x
+		// and ksh93 override.
+		KillReadsASignalJoinedToItsOption: No,
+		CdpathAnnouncesTheDirectory:       Yes,
+		FdVariableOutlivesTheCommand:      Yes,
 		// The standard has the here-document end at the delimiter and says
 		// nothing about a body the input cut short, so this follows the
 		// panel: three of the five leave the last line as it was written and

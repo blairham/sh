@@ -67,6 +67,53 @@ type Job struct {
 	// there: the two are one fact about one process, and a reader that saw
 	// the pid without knowing which kind of target it is would have to guess.
 	ownGroup bool
+
+	// stopNote is closed by the goroutine waiting on this job's process, the
+	// first time that process is seen to have *stopped* rather than ended.
+	//
+	// A channel and not a field, because the two ends are different
+	// goroutines: the job's own runs the command and does the waiting, and
+	// the shell carries straight on to the next statement. Closing it is the
+	// publication, so stopSig may be written plainly on the near side and
+	// read plainly on the far side with nothing else synchronizing them.
+	//
+	// nil is a job nobody could ever say that about — every one built by
+	// [Runner.background] and by `coproc` has one — and it is safe rather
+	// than merely unused: a receive on a nil channel is never ready, so a
+	// job without one is a job that never stopped, in the poll below and in
+	// the select `wait` makes over it alike.
+	stopNote chan struct{}
+	stopOnce sync.Once
+	stopSig  syscall.Signal
+	// noticedStop says the shell has already taken that note into the job's
+	// own Stopped and StopSig. Written only on the shell's own goroutine,
+	// which is what keeps `bg` from being undone: a job the script resumed
+	// is running again, and a note that fired before it was resumed must not
+	// put it back to stopped the next time anything looks.
+	noticedStop bool
+}
+
+// noteStopped records that this job's process stopped, and does it once.
+//
+// Called on the job's own goroutine — the one blocked on the process — and
+// read on the shell's. See Job.stopNote for why closing the channel is the
+// whole of the synchronization.
+func (j *Job) noteStopped(sig syscall.Signal) {
+	j.stopOnce.Do(func() {
+		j.stopSig = sig
+		close(j.stopNote)
+	})
+}
+
+// sawStop reports the stop the goroutine waiting on this job's process saw,
+// if it saw one. It does not block.
+func (j *Job) sawStop() (syscall.Signal, bool) {
+	select {
+	case <-j.stopNote:
+		return j.stopSig, true
+	default:
+		return 0, false
+	}
 }
 
 // settlePID records the process this job is answered by, and does it once.
@@ -372,8 +419,9 @@ func (j *Job) finish(status int) {
 // visible the moment anything tries to signal it.
 func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	job := &Job{
-		done:  make(chan struct{}),
-		ready: make(chan struct{}),
+		done:     make(chan struct{}),
+		ready:    make(chan struct{}),
+		stopNote: make(chan struct{}),
 		// What was typed. The words are about to be expanded and the
 		// process started, and after that nothing else remembers how the
 		// command was spelled — which is what a `jobs` listing shows.
@@ -574,16 +622,59 @@ func (r *Runner) FinishedJobNotices() []string {
 // The handler is *not* run here. It runs where every other handler does, at
 // the top of the next statement, which is what keeps `wait; echo $?` printing
 // the trap's output first and the signal's status second in that order.
-func (r *Runner) waitFor(j *Job) (status int, sig syscall.Signal, interrupted bool) {
+func (r *Runner) waitFor(j *Job) (status int, sig syscall.Signal, interrupted, stopped bool) {
 	// A job nothing is waiting on has to be waited for here, or this would
 	// block on a channel no goroutine is ever going to close. That is what ^Z
 	// leaves behind — see reapJobs — and between commands this shell is the
 	// only waiter, so blocking on the process is not racing anything.
 	r.waitOutPolledJob(j)
-	if sig, hit := r.awaitOrTrap(j.done); hit {
-		return 0, sig, true
+	giveUp := r.stoppedJobEndsAWait(j)
+	if r.unspecified {
+		// The axis went unanswered and this shell has said so. Waiting after
+		// that would be picking one of the two answers anyway — and the one
+		// that can wait for ever.
+		return 0, 0, false, false
 	}
-	return j.Status, 0, false
+	if giveUp != nil && r.noticeStoppedJob(j) {
+		// Already standing stopped when the wait was asked for, which is the
+		// ordinary shape: a script stops a job and then waits for it.
+		return 0, 0, false, true
+	}
+	sig, hit, gaveUp := r.awaitOrTrap(j.done, giveUp)
+	if hit {
+		return 0, sig, true, false
+	}
+	if gaveUp {
+		r.noticeStoppedJob(j)
+		return 0, 0, false, true
+	}
+	return j.Status, 0, false, false
+}
+
+// stoppedJobEndsAWait is what ends a wait for this job because the job
+// stopped, or nil where this shell goes on waiting for it.
+//
+// nil in three cases and each is a different reason. The dialect may simply
+// wait — the base answer, and what four of the five columns do. The monitor
+// may be off, which is where the panel is unanimous about waiting and where
+// a `&` job does not even have a process group of its own to be stopped as.
+// And a job with no process of its own — a background builtin, a compound
+// command — has nothing that can stop, so there is nothing to be told.
+func (r *Runner) stoppedJobEndsAWait(j *Job) <-chan struct{} {
+	if !r.monitor || j.PID == 0 {
+		return nil
+	}
+	if !r.ask(r.sem().WaitGivesUpOnAStoppedJob, "a `wait` given up because the job stopped") {
+		return nil
+	}
+	return j.stopNote
+}
+
+// stoppedWaitStatus is what a `wait` that named a job reports when it gave up
+// because the job stopped: the status of a command that signal killed, which
+// is what bash answers — 145 for the SIGSTOP it was measured with.
+func (r *Runner) stoppedWaitStatus(j *Job) int {
+	return r.signalDeathStatus(syscall.Signal(j.StopSig))
 }
 
 // waitOutPolledJob blocks on the process of a job the shell has been asking
@@ -629,10 +720,22 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 	}
 	if len(args) == 0 {
 		for _, j := range r.jobs {
-			if _, sig, hit := r.waitFor(j); hit {
+			_, sig, hit, stopped := r.waitFor(j)
+			if r.unspecified {
+				return r.status
+			}
+			if hit {
 				// The jobs are left alone: the wait did not finish, so a
 				// later `wait` still has them to wait for.
 				return r.interruptedWaitStatus(sig, false)
+			}
+			if stopped {
+				// Said and stepped over rather than returned on: a bare
+				// `wait` is for every job, and giving up on one of them is
+				// not giving up on the rest. Measured — with a stopped job
+				// and a running one, bash warns and then waits out the
+				// running one before coming back at 0.
+				r.reportStoppedWait(j, r.diag().WaitJobStopped, j.PID)
 			}
 		}
 		// The jobs stay where they are, because a job a bare `wait` reaped
@@ -668,9 +771,19 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		found := false
 		for _, j := range r.jobs {
 			if j.PID == pid {
-				st, sig, hit := r.waitFor(j)
+				st, sig, hit, stopped := r.waitFor(j)
+				if r.unspecified {
+					return r.status
+				}
 				if hit {
 					return r.interruptedWaitStatus(sig, true)
+				}
+				if stopped {
+					// Nothing said on this route — measured, `wait $!` for a
+					// stopped job is 145 in silence where `wait %1` warns —
+					// and the job stays in the table, because a job that
+					// stopped is not a job that finished.
+					return r.stoppedWaitStatus(j)
 				}
 				last = st
 				found = true
@@ -753,6 +866,17 @@ func (r *Runner) waitNext() int {
 	return st
 }
 
+// reportStoppedWait says a wait gave up because the job stopped, in whichever
+// of the two wordings the caller is. Nothing is said where the dialect has no
+// wording, which is every dialect that does not give up at all.
+func (r *Runner) reportStoppedWait(j *Job, wording string, extra ...any) {
+	if wording == "" {
+		return
+	}
+	args := append([]any{r.jobNumber(j) + 1}, extra...)
+	r.diagf("%s\n", Wording(wording, "", args...))
+}
+
 // interruptedWaitStatus is what `wait` reports when a trapped signal cut it
 // short. named says the wait had an operand rather than being a bare one.
 //
@@ -784,11 +908,21 @@ func (r *Runner) waitJobSpec(spec string) int {
 	j, code := r.findJobQuietly(spec)
 	switch code {
 	case jobFound:
-		st, sig, hit := r.waitFor(j)
+		st, sig, hit, stopped := r.waitFor(j)
+		if r.unspecified {
+			return r.status
+		}
 		if hit {
 			// The wait did not finish, so the job is not finished with
 			// either and stays in the table for the next one.
 			return r.interruptedWaitStatus(sig, true)
+		}
+		if stopped {
+			// Kept for the same reason, and said out loud on this route:
+			// the wait gave up, the job is still there stopped, and `fg`
+			// and `bg` can still name it.
+			r.reportStoppedWait(j, r.diag().WaitForJobStopped)
+			return r.stoppedWaitStatus(j)
 		}
 		r.Forget(j)
 		return st
@@ -839,6 +973,12 @@ func (r *Runner) addStoppedJob(pid int, argv []string, sig syscall.Signal) {
 		polled:  true,
 		done:    make(chan struct{}),
 		ready:   make(chan struct{}),
+		// Already stopped and already noticed: this job was built *from* the
+		// stop, so there is no note for the shell to take later. Nothing is
+		// waiting on its process either — that is what `polled` says — so
+		// nothing would ever close the channel.
+		stopNote:    make(chan struct{}),
+		noticedStop: true,
 	}
 	// Through settlePID rather than as a field, so that the field's one write
 	// is the one the channel publishes. A job stopped in the foreground has
@@ -906,6 +1046,13 @@ func (r *Runner) announceStopped(j *Job) {
 // this shell is waiting for anything, so there is no race over who collects
 // the status.
 func (r *Runner) reapJobs() {
+	// Before the poll and outside its guard, because it is a different
+	// question: this is not asking the kernel anything, only taking what the
+	// goroutine waiting on a `&` job's process has already been told. A
+	// Runner with no PollCommand still has those goroutines.
+	for _, j := range r.jobs {
+		r.noticeStoppedJob(j)
+	}
 	if r.PollCommand == nil {
 		return
 	}
@@ -934,6 +1081,30 @@ func (r *Runner) reapJobs() {
 		j.Stopped = false
 		j.finish(status)
 	}
+}
+
+// noticeStoppedJob takes into the job what the goroutine waiting on its
+// process saw, and reports whether the job is standing stopped now.
+//
+// The other half of Job.stopNote. The goroutine may only say that it happened;
+// recording it is the shell's, on the shell's own thread of control, because
+// Stopped and StopSig are read all over this package by a shell that is
+// between statements and would otherwise be racing the job.
+//
+// Once, which is what keeps `bg` from being undone: a job the script resumed
+// is running again, and a note that fired before it was resumed must not put
+// it back to stopped the next time anything looks.
+func (r *Runner) noticeStoppedJob(j *Job) bool {
+	if j.noticedStop || j.Finished() {
+		return j.Stopped && !j.Finished()
+	}
+	sig, saw := j.sawStop()
+	if !saw {
+		return false
+	}
+	j.noticedStop = true
+	j.Stopped, j.StopSig = true, int(sig)
+	return true
 }
 
 // HoldsExitForJobs reports whether this shell should stay rather than exit,

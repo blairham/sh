@@ -500,8 +500,8 @@ for a parse failure, and three of the four rows are already answered by
 something else: zsh's and bash's `SourceReplacesShell` is what
 `LocationNamesTheCurrentFile` and `LocationNamesTheEvalText` do, and ksh93's
 `SourceBeforeLocation` is a *stack* rendered into the prefix rather than a
-name — #2461. **dash's `SourceAfterLocation` is the one this rule adds**,
-and `Runner.borrowedName` is where it is written.
+name — the section below. **dash's `SourceAfterLocation` is the one this rule
+adds**, and `Runner.borrowedName` is where it is written.
 
 `Diagnostics.BorrowedTextIsNamedAtRunTime` is what turns it on, and it is a
 field of its own rather than the enum answering for itself. `SourceAfterLocation`
@@ -539,6 +539,58 @@ where every other shell says `line 3` is bash numbering the evaluated text on
 from the line the `eval` word is written on, `$LINENO` included. Measured with
 the whole `eval` on one physical line, which is what tells that reading from
 the physical one — #2462.
+
+### ksh93 renders the whole chain of borrowed texts into the location
+
+The fourth row of the table above is not a placement at all. ksh93 puts one
+component in front of a diagnostic for **every** `.` and `eval` the shell is
+currently inside, in call order, and only the innermost carries the failing
+line. Measured 2026-09-12, ksh93u+ 2012-08-01, `env -i PATH=/usr/bin:/bin`
+with a scratch `HOME`:
+
+| arrangement | ksh93 writes |
+| --- | --- |
+| a script failing at its own top level | `./top.sh: line 2: …` |
+| a script sourcing a file that fails | `./outer1.sh[2]: .: line 1: …` |
+| a script sourcing a file that sources one | `./outer2.sh[2]: .[2]: .: line 1: …` |
+| an `eval` inside a sourced file | `./e.sh[2]: .[2]: eval: line 1: …` |
+| a builtin complaining inside a sourced file | `./b.sh[2]: .[2]: cd: …` |
+| `-c` whose `eval` is on its first line | `/bin/ksh: eval: line 1: …` |
+| `-c` whose `eval` is on its second | `/bin/ksh[2]: eval: line 1: …` |
+| `-c` with an `eval` inside that `eval` | `/bin/ksh: eval[1]: eval: line 1: …` |
+| a parse failure in a file a sourced file sourced | `./n.sh[3]: .[1]: .: syntax error at line 3: …` |
+
+Read as one rule it is two halves:
+
+- **Every component but the innermost** is written the way this dialect writes
+  a *builtin's* location — `NAME[line]: ` — where the line is the one **in
+  that component's own text** that entered the component after it. Row three
+  is `outer2.sh` entering a file at its line 2, and *that file* entering
+  another at its line 2.
+- **The innermost component** is located the way an ordinary diagnostic is, so
+  a message the shell speaks takes the word form (`.: line 1: `), a builtin's
+  own complaint takes the bracket (`.[2]: `), and a parse failure takes
+  neither, because `ParseFailureNamesItsOwnLine` already put the line in the
+  sentence.
+
+The last three rows are what pin the suppression. `LocationLineWordAfterFirst`
+and `LocationBracketLineAfterFirst` leave line 1 unwritten, and that belongs to
+the **shell's own name** — the first component — rather than to every frame: a
+frame entered after it names line 1 anyway, which is why `/bin/ksh: eval[1]:
+eval: line 1:` says `1` twice from a shell whose own name carried none. A rule
+applying the suppression everywhere, or nowhere, gets exactly one of the last
+two rows right, and neither row can tell the two readings apart alone.
+
+A **function adds nothing** to the chain. Text `eval` is running that defines a
+function and calls it reports `./f.sh[2]: eval: line 1: …`, which is the same
+answer as without the call — the innermost borrowed text answers with no test
+that the failing line came from it, exactly as the dash rule above.
+
+`Diagnostics.LocationRendersTheBorrowedStack` turns it on and only ksh93 sets
+it; `Runner.borrowedFrameChain` renders it, from the `callerLine` each
+`borrowedText` records at its push. It reaches the parse path as well as the
+run-time one, because those are different code and the shell says the same
+thing through both.
 
 ### The one operand that is not an error
 

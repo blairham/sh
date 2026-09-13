@@ -737,7 +737,7 @@ func Semantics() interp.Semantics {
 	// And no caret or meta spelling either: `$'\C-A'`, `$'\CA'`, `$'\M-x'`
 	// and `$'\M-\C-?'` are all kept as written, so the escape vocabulary
 	// this shell's `$'…'` has is neither zsh's nor ksh93's (#2272).
-	s.DollarSingleCaretMeta = interp.No
+	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaAbsent
 
 	// `$((2**-1))` is `exponent less than 0` — no float answer, which is
 	// bash's side of the split (#2272).

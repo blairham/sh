@@ -31,7 +31,7 @@ func dollarSingleSem(c DollarSingleControlPolicy, u DollarSingleUnknownPolicy, n
 
 // caretMetaSem is the fourth axis on its own, with the other three answered
 // so that nothing else in a snippet asks a question.
-func caretMetaSem(a Answer) Semantics {
+func caretMetaSem(a DollarSingleCaretMetaPolicy) Semantics {
 	s := dollarSingleSem(DollarSingleControlAbsent, DollarSingleUnknownDropsBackslash, DollarSingleNulIsAByte)
 	s.DollarSingleCaretMeta = a
 	return s
@@ -81,7 +81,7 @@ func TestDollarSingleCaretAndMeta(t *testing.T) {
 		{"a meta with no argument", `printf '%s' $'x\M-'`, "x"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, st := run(t, tc.src, withSem(caretMetaSem(Yes)))
+			got, st := run(t, tc.src, withSem(caretMetaSem(DollarSingleCaretMetaMaskedWithAnOptionalDash)))
 			if got != tc.want || st != 0 {
 				t.Errorf("got %q (status %d), want %q", got, st, tc.want)
 			}
@@ -94,7 +94,7 @@ func TestDollarSingleCaretAndMeta(t *testing.T) {
 // `\c` gets. Measured: bash keeps both characters, so `$'\C-A'` there is the
 // four characters it was written as.
 func TestDollarSingleCaretAndMetaAbsent(t *testing.T) {
-	sem := caretMetaSem(No)
+	sem := caretMetaSem(DollarSingleCaretMetaAbsent)
 	sem.DollarSingleUnknownEscape = DollarSingleUnknownKeepsBackslash
 	for _, tc := range []struct{ src, want string }{
 		{`printf '%s' $'\C-A'`, `\C-A`},
@@ -102,6 +102,77 @@ func TestDollarSingleCaretAndMetaAbsent(t *testing.T) {
 	} {
 		if got, st := run(t, tc.src, withSem(sem)); got != tc.want || st != 0 {
 			t.Errorf("%s: got %q (status %d), want %q", tc.src, got, st, tc.want)
+		}
+	}
+}
+
+// The third reading, which is a different escape vocabulary under the same
+// two letters rather than the pair above spelled loosely — see
+// DollarSingleCaretMetaFoldedWithNoDash. Every row below is one the masked
+// reading answers differently, which is the point of having a third value
+// instead of a yes: `$'\C-A'` is two bytes here and one there.
+//
+// Measured 2026-09-13 on ksh93u+ 2012-08-01 through `od -c`.
+func TestDollarSingleCaretAndMetaFoldedWithNoDash(t *testing.T) {
+	sem := caretMetaSem(DollarSingleCaretMetaFoldedWithNoDash)
+	sem.DollarSingleUnknownEscape = DollarSingleUnknownDropsBackslash
+	for _, tc := range []struct{ name, src, want string }{
+		// No dash in the spelling, so the dash is the argument.
+		{"the dash is the argument", `printf '%s' $'\C-A'`, "mA"},
+		{"and the letter after it is a letter", `printf '%s' $'\C-1'`, "m1"},
+		{"the argument is the very next character", `printf '%s' $'\CA'`, "\x01"},
+		// Folded up and then exclusive-ored, which is one rule with no
+		// exceptions — the masked reading needs a special case for `?`.
+		{"a lowercase letter folds up first", `printf '%s' $'\Ca'`, "\x01"},
+		{"a digit is not masked", `printf '%s' $'\C1'`, "q"},
+		{"a question mark falls out of the rule", `printf '%s' $'\C?'`, "\x7f"},
+		{"a tilde too", `printf '%s' $'\C~'`, ">"},
+		{"an at sign is the zero byte", `printf '%s' $'\C@x'`, "\x00x"},
+		// The argument may be a further escape, including another one of
+		// these.
+		{"a hexadecimal escape", `printf '%s' $'\C\x41'`, "\x01"},
+		{"an octal one", `printf '%s' $'\C\101'`, "\x01"},
+		{"a named one", `printf '%s' $'\C\n'`, "J"},
+		{"and a nested control", `printf '%s' $'\C\C-A'`, "\rA"},
+		{"with nothing after it, nothing at all", `printf '%s' $'x\C'`, "x"},
+		// `\M` is not an escape unless a dash follows, and `\M-` is the
+		// escape byte taking no argument.
+		{"a meta with no dash is not an escape", `printf '%s' $'\Mx'`, "Mx"},
+		{"nor on its own", `printf '%s' $'\M'`, "M"},
+		{"the two characters are the escape byte", `printf '%s' $'\M-'`, "\x1b"},
+		{"and take nothing after them", `printf '%s' $'\M-x'`, "\x1bx"},
+		{"a dash after it is a dash", `printf '%s' $'\M--'`, "\x1b-"},
+		{"they compose in either order", `printf '%s' $'\M-\C-x'`, "\x1bmx"},
+		{"and the other way", `printf '%s' $'\C-\M-x'`, "m\x1bx"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, st := run(t, tc.src, withSem(sem))
+			if got != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q", got, st, tc.want)
+			}
+		})
+	}
+}
+
+// The two readings over the same spellings, side by side, which is the whole
+// reason the axis is three values rather than a yes: every row here is one
+// text and two different answers.
+func TestTheTwoCaretReadingsPartOverTheSameSpelling(t *testing.T) {
+	for _, tc := range []struct{ src, masked, folded string }{
+		{`printf '%s' $'\C-A'`, "\x01", "mA"},
+		{`printf '%s' $'\C-1'`, "\x11", "m1"},
+		{`printf '%s' $'\M-x'`, "\xf8", "\x1bx"},
+		{`printf '%s' $'\Mx'`, "\xf8", "Mx"},
+		{`printf '%s' $'\C-\M-?'`, "\x9f", "m\x1b?"},
+		{`printf '%s' $'\C-\x7f'`, "\x1f", "m\x7f"},
+	} {
+		got, _ := run(t, tc.src, withSem(caretMetaSem(DollarSingleCaretMetaMaskedWithAnOptionalDash)))
+		if got != tc.masked {
+			t.Errorf("masked %s: got %q, want %q", tc.src, got, tc.masked)
+		}
+		got, _ = run(t, tc.src, withSem(caretMetaSem(DollarSingleCaretMetaFoldedWithNoDash)))
+		if got != tc.folded {
+			t.Errorf("folded %s: got %q, want %q", tc.src, got, tc.folded)
 		}
 	}
 }

@@ -342,7 +342,6 @@ ksh   BareTypesetListing
 ksh   CompoundPipelineStatusRecord
 ksh   CoprocEndsInAnArray
 ksh   DeclareGlobalReachesPastALocal
-ksh   DollarSingleCaretMeta
 ksh   EchoLastEscapeFlagWins
 ksh   HeldExitListsTheJobs
 ksh   ImmovableOptionsSetAtInvocation

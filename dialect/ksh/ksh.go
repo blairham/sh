@@ -1064,6 +1064,15 @@ func Semantics() interp.Semantics {
 	// The same `\c` as the printf format, and the arithmetic is bit 6
 	// toggled rather than bash's five-bit mask: `$'\c1'` is `q`, not 0x11.
 	s.DollarSingleBackslashC = interp.DollarSingleControlToggled
+	// `\C` is the same arithmetic under a second spelling, and it takes **no
+	// dash**: `$'\CA'` is 01, `$'\Ca'` is 01 too, and `$'\C-A'` is the
+	// escape applied to `-` — `m` — followed by a literal `A`. zsh writes
+	// those same five characters and means 01 by them, so a yes/no field
+	// could not hold both and this shell sat unanswered instead. `\M` is not
+	// an escape by itself and `\M-` is the escape byte, taking nothing after
+	// it: `$'\M-x'` is 1b then `x`. Measured 2026-09-13 through `od -c`
+	// (#2345).
+	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaFoldedWithNoDash
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
 	s.DollarSingleNul = interp.DollarSingleNulEndsTheSpan
 	// `\x` here takes every hexadecimal digit that follows and a run past

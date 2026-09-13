@@ -4416,6 +4416,60 @@ actually runs out of digits. It is the same split `PrintfHexEscapePolicy`
 records at the two `printf` sites, where it is one of the three details that
 made a policy out of a bool.
 
+## Two shells spell `\C-A` alike and mean different bytes by it
+
+Inside a `$'…'`, `\C` and `\M` are **three** things across the panel, and
+for a while they were modeled as two: an on/off field said zsh had them
+and bash did not, and ksh93 — which writes the same five characters and
+answers something else — sat unanswered rather than wrong.
+`Semantics.DollarSingleCaretMeta` is a `DollarSingleCaretMetaPolicy` now.
+
+    $'\C-A'   bash 5.3, bash 3.2, bash as sh   the four characters, as written
+              ash                              the same
+              dash                             no `$'…'` at all
+              zsh 5.9.2                        01
+              ksh93u+                          `m` then `A`
+
+**zsh's pair** — `DollarSingleCaretMetaMaskedWithAnOptionalDash`. `\C-X` is
+a control character and `\M-X` the same byte with the high bit set; the
+separating `-` is optional in both, so `\CA` and `\C-A` are one byte
+apiece, and either may take the other as its argument. The mask keeps a
+high bit it finds, and a written `?` is `7f` rather than masked — which a
+meta bit takes it back out of, so `$'\C-\M-?'` is `9f` and not `ff`.
+
+**ksh93's** — `DollarSingleCaretMetaFoldedWithNoDash`. `\C` takes exactly
+one argument and **no dash**, and answers it folded up and exclusive-ored
+with `0x40`. So `$'\C-A'` is the escape applied to `-` — `m` — and then a
+literal `A`, two bytes where zsh writes one. Measured 2026-09-13 on
+ksh93u+ 2012-08-01 through `od -c`:
+
+    $'\CA'  01     $'\Ca'  01     $'\C?'  7f     $'\C1'  q
+    $'\Cx'  18     $'\C['  1b     $'\C~'  3e     $'\C@'  the zero byte
+    $'\C\x41'  01  $'\C\101'  01  $'\C\n'  J   $'\C\C-A'  0d then `A`
+    $'x\C'  x — with nothing after it the escape produces nothing at all
+
+One rule with no exceptions, where the masked reading needs a special
+case for `?`: `?` is `3f`, and `3f ^ 40` is `7f` without being asked for.
+
+`\M` is **not an escape by itself** there — `$'\Mx'` is `Mx` and `$'\M'`
+is `M`, both by way of the unknown-escape rule — and the two characters
+`\M-` are the **escape byte**, taking nothing after them: `$'\M-x'` is
+`1b` then `x`, `$'\M-'` alone is `1b`, and `$'\M--'` is `1b` then a dash.
+The two compose in either order, each still reading its own way:
+`$'\M-\C-x'` is `1b m x` and `$'\C-\M-x'` is `m 1b x`.
+
+**`\c` is the complementary escape**, and the vocabularies interlock:
+zsh has the caret pair and no `\c`, bash has `\c` and no caret pair, and
+ksh93 has both — its `\c` being the same arithmetic as its `\C` under
+another spelling (`Semantics.DollarSingleBackslashC`,
+`DollarSingleControlToggled`).
+
+Pinned by `core/dollar-single-caret-and-meta`,
+`core/dollar-single-caret-and-meta-compose`, `interp`'s
+`TestTheTwoCaretReadingsPartOverTheSameSpelling` — which asserts both
+readings over one text, row by row — and `dialect/ksh`'s
+`TestTheControlEscapeTakesNoDash` (#2345).
+
 ## A function file that defines the function it is named after
 
 A file on `$fpath` may hold the function's **body**, or it may hold a
@@ -10678,7 +10732,7 @@ type's own values are documented beside it in `interp/semantics.go`:
 `StatusArgumentPolicy`, `TrapBodyLineStyle`, `SelectMenuLayout`,
 `DeclarationListingForm`, `KillStatusStyle`, `BracketPolicy`,
 `DollarSingleControlPolicy`, `DollarSingleUnknownPolicy`,
-`UnsetArraySpanPolicy`. Where an entry below says "see X", X is one of
+`DollarSingleCaretMetaPolicy`, `UnsetArraySpanPolicy`. Where an entry below says "see X", X is one of
 those.
 
 **This catalog is not the whole of the vector.** The axes with their own

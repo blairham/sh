@@ -1603,7 +1603,11 @@ func Semantics() interp.Semantics {
 	// bytes.
 	s.DollarSingleHexReadsEveryDigit = interp.No
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
-	s.DollarSingleCaretMeta = interp.Yes
+	// `\C-X` is a control character and `\M-X` the same byte with the high
+	// bit set, the dash optional in both and either able to take the other as
+	// its argument. ksh93 writes `\C-A` too and means `m` then `A` by it, so
+	// the value names the reading rather than saying yes (#2345).
+	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaMaskedWithAnOptionalDash
 	s.GetoptsAssignmentRestartsWord = interp.No
 	// OPTIND is local to a shell function here: the call starts at 1 and the
 	// caller's position — words and the place inside a clustered word alike —

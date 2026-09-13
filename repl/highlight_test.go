@@ -194,7 +194,7 @@ func TestAColoredLineReachesTheTerminalAndTheCursorStillLandsRight(t *testing.T)
 		sh.Highlighter = UnclosedQuote{Style: "\x1b[31m"}
 	})
 
-	// Stopped with the quotation still open, which is the state the colour is
+	// Stopped with the quotation still open, which is the state the color is
 	// for and the one a keystroke-by-keystroke redraw has to get right in the
 	// middle of a line rather than at the end of it.
 	s.typeLine("cho \"one two")

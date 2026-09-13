@@ -77,7 +77,7 @@ func styledLine(hl Highlighter, line string) string {
 // checkEdits drives one editor through the edits and checks the screen after
 // each of them.
 //
-// The screen *with its colours*. What a terminal is showing includes which
+// The screen *with its colors*. What a terminal is showing includes which
 // cells are red, and a comparison that dropped the attributes first would pass
 // for a redraw that put the right characters in the right cells under the
 // wrong style — which is the shape of #2627 and is what this file's own quote

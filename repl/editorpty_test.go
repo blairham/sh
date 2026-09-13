@@ -117,7 +117,7 @@ func (s *session) typeKeys(keys string) {
 	}
 }
 
-// shown is what a terminal of the fixture's size would be showing, colours and
+// shown is what a terminal of the fixture's size would be showing, colors and
 // all, after everything the session has drawn.
 //
 // **The screen and not the bytes.** An incremental redraw writes whichever of
@@ -128,7 +128,7 @@ func (s *session) typeKeys(keys string) {
 // (#2627). See screenmodel_test.go.
 func (s *session) shown() *screen { return shownBy(fixtureCols, s.screen.String()) }
 
-// row is one line of what the screen is showing, with the colours written back
+// row is one line of what the screen is showing, with the colors written back
 // into it.
 func (s *session) row(n int) string {
 	s.t.Helper()

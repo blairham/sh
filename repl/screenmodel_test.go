@@ -29,11 +29,11 @@ import (
 // else, and an unknown one is ignored rather than guessed at — a model that
 // invented an answer would fail a test for a reason that is not in the editor.
 //
-// **It records the colour of every cell as well as the character in it**, and
+// **It records the color of every cell as well as the character in it**, and
 // that is not decoration. A model that kept only the characters said a screen
 // was right while the highlighting on it was wrong, and for as long as it did,
 // TestReopeningAQuoteRecolorsWhatWasAlreadyDrawn was green over a redraw that
-// left the recoloured word plain — the defect in #2627, in the test written
+// left the recolored word plain — the defect in #2627, in the test written
 // for exactly that case. Stripping the styling before looking is the same
 // blind spot as stripping ANSI before asserting on output: what the test is
 // about is the first thing thrown away.
@@ -45,7 +45,7 @@ type screen struct {
 	style [][]string
 	// sgr is what is in force now. A terminal keeps one of these for the
 	// whole screen and a cursor move does not touch it, which is the whole of
-	// why a redraw cannot resume inside a coloured run.
+	// why a redraw cannot resume inside a colored run.
 	sgr string
 	row int
 	col int
@@ -130,7 +130,7 @@ func (s *screen) control(out string) int {
 		// Select Graphic Rendition. No parameters and a lone zero are both
 		// "everything back to default"; anything else adds to what is in
 		// force, because that is how a terminal composes them and how a
-		// highlighter emitting a colour and a weight expects them to compose.
+		// highlighter emitting a color and a weight expects them to compose.
 		if params := out[2:j]; params == "" || params == "0" {
 			s.sgr = ""
 		} else {
@@ -183,7 +183,7 @@ func (s *screen) eraseRow() {
 	for i := min(s.col, s.cols); i < s.cols; i++ {
 		s.rows[s.row][i] = ' '
 		// An erased cell is blank and carries no attributes. A terminal with
-		// background-colour erase would paint it with whatever is in force,
+		// background-color erase would paint it with whatever is in force,
 		// which is why the redraw writes a reset before erasing; a model that
 		// kept the old attributes here would be asserting the opposite.
 		s.style[s.row][i] = ""
@@ -215,10 +215,10 @@ func (s *screen) text() string {
 	return strings.Join(out, "\n")
 }
 
-// styledText is what is on the screen with the colours in it, one row per
+// styledText is what is on the screen with the colors in it, one row per
 // line, written back out as the shortest escapes that would produce them.
 //
-// Canonical rather than a replay: two ways of saying one colour compare equal
+// Canonical rather than a replay: two ways of saying one color compare equal
 // here, which is the point — a redraw is free to emit whichever sequence is
 // shorter, and what is being asserted is the screen it produced.
 func (s *screen) styledText() string {

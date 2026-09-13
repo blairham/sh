@@ -38,12 +38,12 @@ import (
 // keystroke and neither does this.
 //
 // Those figures predate [styleInForce], which is a correction and not free: a
-// keystroke landing *inside* a coloured run now carries the run's escape as
+// keystroke landing *inside* a colored run now carries the run's escape as
 // well as the character, because the terminal has to be put back into a state
 // the shared prefix does not leave it in. Measured 2026-09-13 on the built
 // shell under `-highlight`, typing the eight characters of `"one two` into an
 // unclosed quotation: 80 bytes, against 45 for the draws that were losing the
-// colour and 130 for redrawing the run from its opening sequence. A keystroke
+// color and 130 for redrawing the run from its opening sequence. A keystroke
 // outside a run — which is every keystroke on a line with no highlighting on
 // it, and the rows above — is untouched.
 //
@@ -63,7 +63,7 @@ type drawnLine struct {
 	// characters in the same cells whatever produced them.
 	//
 	// **They do not leave the terminal in the same *style*, and that is not
-	// what the shared prefix says.** The colour in force is whatever the last
+	// what the shared prefix says.** The color in force is whatever the last
 	// byte of the *previous whole draw* set, not whatever the shared prefix
 	// would have set had it been written on its own — the cursor came back
 	// over the line afterwards and a cursor move carries no attributes. A
@@ -128,7 +128,7 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	row, col := d.row, d.col
 	if tail := styled[at:]; tail != "" {
 		moveCursor(&b, row, col, resRow, resCol)
-		// The colour the tail was written expecting, said again. See
+		// The color the tail was written expecting, said again. See
 		// styleInForce: the shared prefix names a cell, not a state, and the
 		// state the terminal is actually in is the one the last whole draw
 		// left.
@@ -155,7 +155,7 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 		// to the end of the row: what is left over may be several rows of it.
 		//
 		// The reset first because the erase paints with the current
-		// attributes on a terminal with background-colour erase, and the
+		// attributes on a terminal with background-color erase, and the
 		// cursor may be sitting inside a highlighted run whose style the
 		// shared prefix left in force.
 		moveCursor(&b, row, col, endRow, endCol)
@@ -231,7 +231,7 @@ func pastEdge(row, col, cols int) (int, int) {
 // bytes, and how many of the line's own characters those bytes drew.
 //
 // Bytes rather than runs, because byte-identical output leaves the terminal in
-// an identical state — the same colour in force, the same cell under the
+// an identical state — the same color in force, the same cell under the
 // cursor — so a redraw may resume in the middle of a highlighted run without
 // re-stating the run. The count of characters is what turns the byte offset
 // back into a place on the screen, and escape sequences do not contribute to
@@ -264,7 +264,7 @@ func sharedPrefix(old, cur string) (bytes, chars int) {
 // draw wrote the whole line and then walked the cursor back over it, and a
 // cursor move carries no attributes — so what is in force is whatever its last
 // byte left, which is the terminal's default, because styled closes every run
-// it opens. A shared prefix ending inside a coloured run therefore names a
+// it opens. A shared prefix ending inside a colored run therefore names a
 // position where the run is over as far as the terminal is concerned, and the
 // bytes after it were written expecting it to be in force.
 //
@@ -281,8 +281,8 @@ func sharedPrefix(old, cur string) (bytes, chars int) {
 // mark was red and the whole unclosed word after it was plain. Not a corner:
 // driver/interactive.go installs a highlighter for every interactive shell and
 // a real terminal always has a width, so this is the path a person is on, and
-// with a highlighter that colours words it was every word — only the first
-// character of each kept its colour (#2627).
+// with a highlighter that colors words it was every word — only the first
+// character of each kept its color (#2627).
 //
 // **Re-stating the style rather than redrawing the run.** The other repair is
 // to walk the resume point back to where no run is open and write the run
@@ -296,8 +296,8 @@ func sharedPrefix(old, cur string) (bytes, chars int) {
 // The scan is token by token for the reason sharedPrefix's is: a cut inside an
 // escape sequence would name a state that does not exist. Everything since the
 // last reset is kept rather than only the last sequence, because a terminal
-// composes them — a highlighter emitting a colour and then a weight has both
-// in force, and re-stating only the weight would resume in the wrong colour.
+// composes them — a highlighter emitting a color and then a weight has both
+// in force, and re-stating only the weight would resume in the wrong color.
 func styleInForce(cur string, at int) string {
 	var open []string
 	for i := 0; i < at; {

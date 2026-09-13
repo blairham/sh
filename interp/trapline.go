@@ -80,7 +80,21 @@ func (r *Runner) bodyLineStyle() TrapBodyLineStyle {
 // returns what puts them back.
 func (r *Runner) enterTrapBody() func() {
 	base, pin, command := r.lineBase, r.linePin, r.inCommandTrap
-	restore := func() { r.lineBase, r.linePin, r.inCommandTrap = base, pin, command }
+	// The line the shell had reached is part of what a body borrows and has
+	// to give back. A trap body is a script of its own, so running it walks
+	// `r.line` through the body's lines — and through the lines of anything
+	// the body calls — which leaves the *next* reader of `$LINENO` reading
+	// the trap's last line instead of its own.
+	//
+	// DEBUG is where that is certain rather than likely: it fires before the
+	// command it traces, so the next reader is that very command. Measured on
+	// bash 5.3.15, the traced command reports its own line; this engine
+	// reported the last line the body ran.
+	line := r.line
+	restore := func() {
+		r.lineBase, r.linePin, r.inCommandTrap = base, pin, command
+		r.line = line
+	}
 	switch r.bodyLineStyle() {
 	case TrapBodyLineOffsetFromWhereItFired:
 		r.lineBase = r.firedAt() - 1

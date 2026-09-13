@@ -544,8 +544,14 @@ func TestAnErrorInASourcedFileEndsThatFileAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, st := runKsh(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n")
+	// The builtin is named in front of the location, because this shell
+	// renders the borrowed text it is inside into the prefix — measured
+	// 2026-09-12, `ksh -u -c '. ./p.sh'` is `/bin/ksh: .: line 3: …`, with no
+	// bracket on the outermost component because a `-c` shell names no line
+	// of its own (#2461). This expectation used to be `ksh: line 3:`, which
+	// was this shell's answer written down as ksh93's.
 	const want = "IN-BEFORE\n" +
-		"ksh: line 3: NOPE: parameter not set\n" +
+		"ksh: .: line 3: NOPE: parameter not set\n" +
 		"OUT-AFTER st=1\n"
 	if out != want {
 		t.Errorf("output = %q, want %q", out, want)
@@ -567,7 +573,7 @@ func TestTheErrorOperatorIsAnOrdinaryErrorHere(t *testing.T) {
 	}
 	out, st := runKsh(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n")
 	const want = "IN-BEFORE\n" +
-		"ksh: line 2: NOPE: msg\n" +
+		"ksh: .: line 2: NOPE: msg\n" +
 		"OUT-AFTER st=1\n"
 	if out != want {
 		t.Errorf("output = %q, want %q", out, want)

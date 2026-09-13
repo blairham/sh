@@ -16571,6 +16571,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `eval/runs-in-the-calling-shell` | `2` | `2` | `2` | `2` | `2` | `2` | `2` |
 | `eval/expands-twice` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `eval/joins-arguments-with-a-space` | `a b c` | `a b c` | `a b c` | `a b c` | `a b c` | `a b c` | `a b c` |
+| `eval/where-the-texts-lines-are` | `diff=-1` | `diff=1` | `diff=1` | `diff=1` | `diff=-1` | `diff=-1` | `diff=1` |
+| `dot/the-borrowed-text-in-the-prefix` | `one` **2>** `<shell>: 2: ./p.sh: NOPE: parameter not set` *(status 2)* | `one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 127)* | `one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 127)* | `one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 127)* | `one` **2>** `<shell>: .: line 2: NOPE: parameter not set` *(status 1)* | `one` **2>** `./p.sh:2: NOPE: parameter not set` *(status 126)* | `one` **2>** `<shell>: ./p.sh: line 2: NOPE: parameter not set` *(status 2)* |
+| `dot/the-borrowed-chain-two-levels-down` | `s1~one` **2>** `<shell>: 2: ./p.sh: NOPE: parameter not set` *(status 2)* | `s1~one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 127)* | `s1~one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 127)* | `s1~one` **2>** `./p.sh: line 2: NOPE: unbound variable` *(status 127)* | `s1~one` **2>** `<shell>: .[2]: .: line 2: NOPE: parameter not set` *(status 1)* | `s1~one` **2>** `./p.sh:2: NOPE: parameter not set` *(status 126)* | `s1~one` **2>** `<shell>: ./p.sh: line 2: NOPE: parameter not set` *(status 2)* |
 | `eval/nothing-to-run-reports-success` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `eval/text-sees-the-callers-status` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
 | `dot/text-sees-the-callers-status` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
@@ -16630,6 +16633,21 @@ grades it and nothing drift-checks it either, for the same reason.
 - `eval/joins-arguments-with-a-space` — eval rejoins its arguments before parsing, so the word boundaries the shell made are not preserved
   ```sh
   eval echo a b c
+  ```
+- `eval/where-the-texts-lines-are` — whether the lines of eval's text continue the caller's or start at one, which is `$LINENO` and not a wording — Semantics.EvalTextContinuesTheCallersLines (#2462). bash and BusyBox ash continue and answer `diff=1`; ksh93, zsh and dash number the text from one and answer `diff=-1`. The row is the *difference* between a read inside the text and one just outside it rather than either number, and that is the measurement rather than a tidy-up: BusyBox ash numbers a `-c` program from **0** where every other column starts at 1, so a row recording the raw number would have shown ash agreeing with dash for a reason that has nothing to do with this question. The obvious probe cannot decide it either — an `eval` spread over several physical lines makes the continued reading and the physical one the same number — so the whole `eval` is on one line here
+  ```sh
+  pad=1
+  o=$LINENO
+  eval 'i=$LINENO'
+  echo "diff=$((i-o))"
+  ```
+- `dot/the-borrowed-text-in-the-prefix` — what a run-time failure inside a sourced file is located and named as, which splits four ways: bash and zsh put the file's own path where the shell's name goes, dash names it after the location, and ksh93 names the *builtin* — `<shell>: .: line 2:` — in front of a location the shell's own name would otherwise carry. It is the one-level case of Diagnostics.BorrowedTextRendersTheCallStack (#2461)
+  ```sh
+  printf "echo one\necho \$NOPE\n" > p.sh; set -u; . ./p.sh
+  ```
+- `dot/the-borrowed-chain-two-levels-down` — the row above with one more level, which is what separates a *name* from a chain: ksh93 writes `<shell>: .[2]: .: line 2:` — a component for each borrowed text, each carrying the line in it that entered the next — where every other column writes exactly what it wrote one level up, the innermost text and nothing about the way in. Turning ksh93's naming on without the brackets would give `<shell>: .: line 2:` here, which is closer and still wrong, and only this row can tell the two apart (#2461)
+  ```sh
+  printf "echo one\necho \$NOPE\n" > p.sh; printf "echo s1\n. ./p.sh\n" > s.sh; set -u; . ./s.sh
   ```
 - `eval/nothing-to-run-reports-success` — reads like it should leave the status alone and does not: an eval with no commands clears a failure rather than preserving it
   ```sh

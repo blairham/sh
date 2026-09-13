@@ -11794,6 +11794,21 @@ echo unreachable`,
 		Why:     "eval rejoins its arguments before parsing, so the word boundaries the shell made are not preserved",
 	},
 	{
+		ID: "eval/where-the-texts-lines-are", Category: "eval and dot",
+		Snippet: "pad=1\no=$LINENO\neval 'i=$LINENO'\necho \"diff=$((i-o))\"",
+		Why:     "whether the lines of eval's text continue the caller's or start at one, which is `$LINENO` and not a wording — Semantics.EvalTextContinuesTheCallersLines (#2462). bash and BusyBox ash continue and answer `diff=1`; ksh93, zsh and dash number the text from one and answer `diff=-1`. The row is the *difference* between a read inside the text and one just outside it rather than either number, and that is the measurement rather than a tidy-up: BusyBox ash numbers a `-c` program from **0** where every other column starts at 1, so a row recording the raw number would have shown ash agreeing with dash for a reason that has nothing to do with this question. The obvious probe cannot decide it either — an `eval` spread over several physical lines makes the continued reading and the physical one the same number — so the whole `eval` is on one line here",
+	},
+	{
+		ID: "dot/the-borrowed-text-in-the-prefix", Category: "eval and dot",
+		Snippet: `printf "echo one\necho \$NOPE\n" > p.sh; set -u; . ./p.sh`,
+		Why:     "what a run-time failure inside a sourced file is located and named as, which splits four ways: bash and zsh put the file's own path where the shell's name goes, dash names it after the location, and ksh93 names the *builtin* — `<shell>: .: line 2:` — in front of a location the shell's own name would otherwise carry. It is the one-level case of Diagnostics.BorrowedTextRendersTheCallStack (#2461)",
+	},
+	{
+		ID: "dot/the-borrowed-chain-two-levels-down", Category: "eval and dot",
+		Snippet: `printf "echo one\necho \$NOPE\n" > p.sh; printf "echo s1\n. ./p.sh\n" > s.sh; set -u; . ./s.sh`,
+		Why:     "the row above with one more level, which is what separates a *name* from a chain: ksh93 writes `<shell>: .[2]: .: line 2:` — a component for each borrowed text, each carrying the line in it that entered the next — where every other column writes exactly what it wrote one level up, the innermost text and nothing about the way in. Turning ksh93's naming on without the brackets would give `<shell>: .: line 2:` here, which is closer and still wrong, and only this row can tell the two apart (#2461)",
+	},
+	{
 		ID: "eval/nothing-to-run-reports-success", Category: "eval and dot",
 		Snippet: `false; eval ""; echo st=$?`,
 		Why:     "reads like it should leave the status alone and does not: an eval with no commands clears a failure rather than preserving it",

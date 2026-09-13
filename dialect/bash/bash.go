@@ -364,6 +364,11 @@ func Semantics() interp.Semantics {
 	// on 5.3.15 and 3.2.57 alike (#2016).
 	s.CompoundPipelineStatusRecord = interp.CompoundPipelineStatusFromWhatRan
 	s.UnsetEndsTheProducedPipelineStatus = interp.No
+	// The lines of `eval`'s text continue the line the `eval` is written on,
+	// and `$LINENO` moves with them — measured with the whole `eval` on one
+	// physical line, which is the only arrangement that can tell this from
+	// the physical reading (#2462).
+	s.EvalTextContinuesTheCallersLines = interp.Yes
 	s.SelectLayout = interp.SelectMenuVerticalThenColumns
 	s.SelectPromptNeedsTerminal = interp.No
 	s.AliasParsesOptions = interp.Yes

@@ -26,6 +26,12 @@ func extendedQuotingSem() Semantics {
 	s := CoreSemantics()
 	s.DollarSingleCaretMeta = Yes
 	s.DollarSingleNulTruncates = No
+	// The round trip below reads its answers back through `eval`, on a line
+	// that is not the first — which is where EvalTextContinuesTheCallersLines
+	// is asked. Either answer does the same thing here, since nothing in the
+	// text reports a line; the axis is answered so that the suite is refused
+	// for a question it is actually about.
+	s.EvalTextContinuesTheCallersLines = No
 	return s
 }
 

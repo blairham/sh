@@ -1671,6 +1671,14 @@ func Diagnostics() interp.Diagnostics {
 		EvalNaming:             interp.SourceBeforeLocation,
 		SourceFileNaming:       interp.SourceBeforeLocation,
 		SourceFileIsTheBuiltin: true,
+		// And the whole chain of borrowed texts in front of it, each with
+		// the line that entered the next: `./n.sh[2]: .[2]: .: line 3: …`.
+		// Measured 2026-09-12 over six arrangements, which are one rule —
+		// see the field. It is what the two naming fields above could not
+		// say on their own: turning BorrowedTextIsNamedAtRunTime on here
+		// without the brackets writes `./s.sh: .: line 3:`, which is closer
+		// and still wrong (#2461).
+		BorrowedTextRendersTheCallStack: true,
 		// A failing offset is blamed together with what follows it in the
 		// range: `${x:1+:2}` names `1+:2`. A failing length has nothing after
 		// it and is named on its own.

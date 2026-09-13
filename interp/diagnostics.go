@@ -2543,6 +2543,43 @@ type Diagnostics struct {
 	// say, and what it is still EvalSourceName's and SourceFileIsTheBuiltin's
 	// — this says only that a run-time diagnostic asks them at all.
 	BorrowedTextIsNamedAtRunTime bool
+	// BorrowedTextRendersTheCallStack writes the whole chain of borrowed
+	// texts into the prefix rather than only the innermost one's name:
+	// ksh93's `./n.sh[2]: .[2]: .: line 3: NOPE: parameter not set`.
+	//
+	// Measured 2026-09-12, ksh93u+ 2012-08-01, `env -i PATH=/usr/bin:/bin`
+	// with a scratch HOME, over a script file. Six arrangements, and they are
+	// one rule rather than six shapes:
+	//
+	//	s.sh line 2 sources p.sh          ./s.sh[2]: .: line 3: …
+	//	t.sh line 1 defines f, f sources  ./t.sh[1]: .: line 3: …
+	//	n.sh sources s.sh sources p.sh    ./n.sh[2]: .[2]: .: line 3: …
+	//	e.sh line 2 runs a 4-line eval    ./e.sh[2]: eval: line 3: …
+	//	bs.sh line 2 sources a bad file   ./bs.sh[2]: .: syntax error at line 2: …
+	//	be.sh line 2 evals bad text       ./be.sh[2]: eval: syntax error at line 2: …
+	//
+	// Read as one rule it is a chain of frames, each written
+	// `<name>[<the line in it that entered the next>]: `, with the innermost
+	// written differently: `<name>: <the location>: ` for a failure while the
+	// text runs, and `<name>: ` for a parse failure, where the message
+	// already carries `at line N` and this shell does not say it twice.
+	//
+	// **A function frame is not a component.** The `t.sh` row is what says
+	// so: a function that sources a file contributes no `f[…]`, and the
+	// bracket is the line the `.` was written on — which inside a one-line
+	// function is that function's own line. So the chain is over borrowed
+	// texts and not over the call stack the name suggests.
+	//
+	// It needs [Runner.borrowed] and the caller's line beside each entry,
+	// which is why it is a Runner rendering rather than something
+	// [Diagnostics.prefix] could do: a prefix here is one name and one line,
+	// and a chain has nowhere to go in it.
+	//
+	// Separate from BorrowedTextIsNamedAtRunTime above rather than implied by
+	// it: that field turns the *name* on, and turning it on for this shell
+	// without the brackets writes `./s.sh: .: line 3:` — closer and still
+	// wrong, which a corpus row cannot tell from right (#2461).
+	BorrowedTextRendersTheCallStack bool
 	// UnterminatedEndsOnNextLine puts the end of input on the line after the
 	// text rather than on its last: `eval "if"` is line 2 in bash and line 1
 	// in the other three.

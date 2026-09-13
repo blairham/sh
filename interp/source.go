@@ -217,13 +217,32 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 	// that sources a file whose `if` never closes is reported at the
 	// line in *that file* by every shell in the panel, and this reported
 	// line 1 for all of them.
+	// The failure's own line, moved the way every other diagnostic from
+	// inside this text is moved. It is a no-op for a sourced file and for the
+	// three dialects that number `eval`'s text from one; in the two that
+	// continue the caller's lines it is what keeps the two numbers in one
+	// sentence agreeing, since `syntax error: unexpected end of file from
+	// \`if\' command on line N` carries a second one that has to shift with
+	// the first (#2462).
 	line, own := r.line, r.diag().ParseFailureLine(err)
 	if own > 0 {
-		line = own
+		line = own + r.lineBase
+		err = shiftParseError(err, r.lineBase)
 	}
 	d := r.diag()
-	r.errf("%s\n", d.SourceReport(s.naming(d), r.name(), s.sourceName(d),
-		line, d.ParseFailure(err)))
+	if d.BorrowedTextRendersTheCallStack {
+		// The chain, and then the innermost text's name with no location
+		// after it: the message this shell writes already carries `at line
+		// N`, and it does not say the number twice. See
+		// Diagnostics.BorrowedTextRendersTheCallStack — the run-time half is
+		// Runner.locationPrefix, and the two render one rule from the two
+		// places a diagnostic about borrowed text is written.
+		chain, innermost := r.borrowedStack(d, r.locationFileOrName())
+		r.errf("%s%s: %s\n", chain, innermost, d.ParseFailure(err))
+	} else {
+		r.errf("%s\n", d.SourceReport(s.naming(d), r.name(), s.sourceName(d),
+			line, d.ParseFailure(err)))
+	}
 	// And the offending line quoted back, for the dialect that writes
 	// one. Only when the failure said where it was: `own` is an offset
 	// into this text, and the fallback above is the *caller's* line,
@@ -232,6 +251,10 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		r.errf("%s", d.SourceEcho(s.naming(d), r.name(), s.sourceName(d), own, err, src))
 	}
 }
+
+// evalLinesAxis is the one sentence both askers use, so a refusal reads the
+// same whichever of them met it first.
+const evalLinesAxis = "the lines of `eval`'s text continuing the caller's"
 
 // runSourced parses src and runs it on this runner.
 //
@@ -245,9 +268,40 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// them. See Runner.tracePrefixDepth.
 	r.indirection++
 	defer func() { r.indirection-- }()
+	// Where this text's lines sit, which is a question every borrowed text
+	// has to answer and none of them used to: whatever offset was in force
+	// stayed in force, so a `. f.sh` inside a command substitution reported
+	// the file's first line as the substitution's line — measured 2026-09-12,
+	// `x=$(. ./inc.sh)` on line 3 read `$LINENO` as 3 where bash and zsh both
+	// say 1.
+	//
+	// A sourced file's lines are its own in every shell in the panel, so the
+	// offset is nothing. `eval`'s text is the axis: three dialects number it
+	// from one and two continue the caller's lines, which moves a
+	// diagnostic's line and `$LINENO` together — see
+	// Semantics.EvalTextContinuesTheCallersLines. The offset there is the
+	// line the `eval` word is on, less one, so the text's first line *is*
+	// that line. It is the same lineBase a command substitution's body runs
+	// under, and for the same reason, so nothing downstream has to know which
+	// kind of borrowed text it is inside.
+	outerBase := r.lineBase
+	r.lineBase = 0
+	defer func() { r.lineBase = outerBase }()
+	if s.eval && r.line > 1 {
+		// Asked at the disagreement and nowhere else: on the shell's first
+		// line the two readings are the same offset — nothing — so an `eval`
+		// there has nothing to disagree about, and that is the shape most
+		// `-c` text has.
+		if r.ask(r.sem().EvalTextContinuesTheCallersLines, evalLinesAxis) {
+			r.lineBase = r.line - 1
+		}
+		if r.unspecified {
+			return 2
+		}
+	}
 	// What this text is called, for a run-time diagnostic raised inside it:
 	// the value that knows is here and the diagnostic is written far away.
-	r.borrowed = append(r.borrowed, borrowedText{sourced: s})
+	r.borrowed = append(r.borrowed, borrowedText{sourced: s, callerLine: r.line})
 	defer func() { r.borrowed = r.borrowed[:len(r.borrowed)-1] }()
 	if !s.eval {
 		// Inside a *file*, which stops a prompt's wording from reaching the

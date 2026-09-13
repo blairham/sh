@@ -5019,10 +5019,22 @@ func (d Diagnostics) offendingLine(line int, err error, src string) string {
 		}
 		return Wording(d.ForArithHeaderEcho, "", se.Token) + "\n"
 	}
-	if !d.EchoesTheOffendingLine || src == "" {
+	if !d.EchoesTheOffendingLine {
 		return ""
 	}
 	if se.Kind != syntax.ErrUnexpected {
+		return ""
+	}
+	if se.AliasSource != "" {
+		// The text an alias put there, and not the line the script wrote.
+		// Measured: with `alias f='a= (x y)'`, the line `echo hi; f; echo
+		// bye` is echoed back as `a= (x y)` — the borrowed text alone, with
+		// nothing the script wrote around the alias word. A spliced token
+		// carries the position of the word it replaced, so indexing the
+		// source below would give the alias word's line instead (#2413).
+		return "`" + se.AliasSource + "'\n"
+	}
+	if src == "" {
 		return ""
 	}
 	lines := strings.Split(src, "\n")

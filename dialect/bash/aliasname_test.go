@@ -71,3 +71,45 @@ func TestARefusedAliasNameDoesNotEndTheScript(t *testing.T) {
 		t.Errorf("errs %q, want the one complaint", errs)
 	}
 }
+
+// And the *other* place an alias's text reaches a diagnostic: when a
+// construct inside an alias body is refused, the line echoed back is the
+// alias's own text and not the line the script wrote.
+//
+// Measured on bash 5.3.15, 2026-09-12. The three arrangements below are what
+// says it is the borrowed text alone rather than the line reconstructed with
+// the expansion in it: nothing the script wrote around the alias word appears
+// in any of them, not the commands beside it and not the arguments after it.
+// Ours echoed the script's line, which for a line holding nothing but the
+// alias word looks like the alias word (#2413).
+func TestARefusedConstructInAnAliasEchoesTheAliasText(t *testing.T) {
+	const head = "shopt -s expand_aliases\nalias f=\"a= (x y)\"\n"
+	for _, c := range []struct {
+		name, last string
+	}{
+		{"the alias alone", "f\n"},
+		{"commands beside it", "echo hi; f; echo bye\n"},
+		{"arguments after it", "f arg1 arg2\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, errs, code := runAlias(t, head+c.last)
+			want := "bash: -c: line 3: syntax error near unexpected token `('\n" +
+				"bash: -c: line 3: `a= (x y)'\n"
+			if errs != want || code != 2 {
+				t.Errorf("errs %q status %d, want %q status 2", errs, code, want)
+			}
+		})
+	}
+}
+
+// The control, and it is the row that says the change did not simply replace
+// one text with another everywhere: a failure with no alias in it still
+// echoes the line the script wrote.
+func TestARefusedConstructWithNoAliasEchoesTheLine(t *testing.T) {
+	_, errs, _ := runAlias(t, "echo one\necho two; a= (x y)\n")
+	want := "bash: -c: line 2: syntax error near unexpected token `('\n" +
+		"bash: -c: line 2: `echo two; a= (x y)'\n"
+	if errs != want {
+		t.Errorf("errs %q, want %q", errs, want)
+	}
+}

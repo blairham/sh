@@ -59,6 +59,10 @@ type Parser struct {
 	// so the trailing-space rule can tell a word that *came from* the value
 	// from the word that follows it.
 	aliasSpliced int
+	// aliasSource is the body of the expansion those tokens came from, for
+	// the diagnostic that echoes the text a failure was inside rather than
+	// the line the script wrote. See Error.AliasSource.
+	aliasSource string
 	// aliasLineShift totals the lines every expansion so far has added to
 	// the input, where the dialect counts an alias body's newlines. Reported
 	// by LineShift, for a caller that parses a program in pieces and has to
@@ -330,6 +334,9 @@ func (p *Parser) next() {
 	}
 	if p.aliasSpliced > 0 {
 		p.aliasSpliced--
+		if p.aliasSpliced == 0 {
+			p.aliasSource = ""
+		}
 	}
 	if len(p.pending) > 0 {
 		// An alias expansion is still being handed out. Nothing else about
@@ -711,8 +718,9 @@ func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 		Token: literal, TokenOpener: tokenOpener(tok),
 		TokenSource: source, TokenHoldsExpansion: tokenHoldsAnExpansion(tok),
 		Class: tokenClass(tok, plain), Expected: expected,
-		Redirect: tok.Kind.IsRedirect(),
-		Msg:      text + " unexpected",
+		Redirect:    tok.Kind.IsRedirect(),
+		AliasSource: p.aliasSource,
+		Msg:         text + " unexpected",
 	}
 }
 

@@ -4,7 +4,6 @@
 package interp_test
 
 import (
-	"os/signal"
 	"syscall"
 	"testing"
 
@@ -25,10 +24,13 @@ import (
 // path records a death that DieBySignal — nil for a Runner that is not a
 // shell — never carries out.
 func TestAResetRestoresTheDefaultOnAnIgnoredSignal(t *testing.T) {
-	// `trap '' QUIT` calls signal.Ignore for the whole test binary, and one
-	// case below needs it to say that a later ignore undoes the reset.
-	t.Cleanup(func() { signal.Reset(syscall.SIGQUIT) })
-
+	// `trap '' QUIT` here is the *process's* disposition, because that is
+	// what a shell at the top level is, and one test binary runs the whole
+	// package. Nothing is undone here any more: a shell gives back the
+	// dispositions it borrowed when it finishes (#2446), which is a promise
+	// every in-process caller gets rather than one each test remembers. The
+	// signal.Reset that stood here would not have kept it anyway — measured,
+	// Reset does not undo an Ignore.
 	const quitKilled = 128 + int(syscall.SIGQUIT)
 	for _, c := range []struct {
 		name       string

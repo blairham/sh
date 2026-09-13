@@ -6,8 +6,12 @@ package interp_test
 import (
 	"bytes"
 	"context"
+	"os"
+	"os/signal"
+	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/blairham/sh/internal/oracle"
@@ -40,6 +44,9 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 			continue
 		}
 		t.Run(c.ID, func(t *testing.T) {
+			// Before the parse, so a case that changed the process is named
+			// here rather than felt by whatever ran next. See processState.
+			defer processStateNow(t).unchangedBy(t)
 			f, err := syntax.Parse(c.Snippet, corpusGrammar())
 			if err != nil {
 				unread++
@@ -232,4 +239,85 @@ func runUnderBash(t *testing.T, src string) (string, int) {
 		return text + "refused: " + rerr.Error(), -1
 	}
 	return text, status
+}
+
+// processState is the state a corpus case could change that is not the
+// Runner's, taken before a case runs and checked after it.
+//
+// This loop runs every corpus snippet in the test binary's own process, so
+// anything a case leaves behind is inherited by every test after it — and by
+// every child those tests exec. The failure has no locality at all: the
+// symptom is four SIGPIPE errors in unrelated tests hours of reading later,
+// which is how #2446 was first written off as a load-dependent flake.
+//
+// A guard rather than a scrub, and deliberately. Signal dispositions are
+// prevented at the source now — a `trap` borrows one and Finish gives it back
+// (restoreDispositions) — so nothing here has to be undone. What this catches
+// is the *next* thing, whatever it turns out to be, at the case that did it
+// and by name. A scrub around the loop would have hidden that case instead.
+//
+// The three things checked are the three a snippet can still reach in
+// principle. The working directory and the environment are already the
+// Runner's own — `cd` declines to call os.Chdir and nothing calls os.Setenv,
+// both by design — so those two are expected to be silent forever, and their
+// silence is the evidence rather than an oversight. umask and the resource
+// limits are absent because interp cannot reach them at all without the
+// SetUmask and SetRlimit hooks, which this test does not supply: a case that
+// runs `umask 077` changes the Runner's idea of the mask and not the
+// process's.
+type processState struct {
+	ignored []os.Signal
+	dir     string
+	env     []string
+}
+
+// leakableSignals are the signals whose ignored-ness the runtime will report,
+// which is the disposition that survives exec and therefore the one a case
+// can hand to a later test's children.
+//
+// SIGKILL and SIGSTOP cannot be ignored. SIGURG and SIGPROF belong to the Go
+// runtime. The four job-control signals are left out for the reason
+// internal/oracle leaves them out of its own list: the runtime keeps an
+// inherited SIG_IGN for them and does not report it, so watching them would
+// be watching an answer known to be wrong.
+var leakableSignals = []os.Signal{
+	syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGILL,
+	syscall.SIGTRAP, syscall.SIGABRT, syscall.SIGFPE, syscall.SIGBUS,
+	syscall.SIGSEGV, syscall.SIGSYS, syscall.SIGPIPE, syscall.SIGALRM,
+	syscall.SIGTERM, syscall.SIGCHLD, syscall.SIGXCPU, syscall.SIGXFSZ,
+	syscall.SIGVTALRM, syscall.SIGWINCH, syscall.SIGUSR1, syscall.SIGUSR2,
+}
+
+func processStateNow(t *testing.T) processState {
+	t.Helper()
+	var st processState
+	for _, sig := range leakableSignals {
+		if signal.Ignored(sig) {
+			st.ignored = append(st.ignored, sig)
+		}
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("reading the working directory: %v", err)
+	}
+	st.dir = dir
+	st.env = os.Environ()
+	slices.Sort(st.env)
+	return st
+}
+
+// unchangedBy reports what this case left behind, named as such: the point is
+// that the case which caused it is the one that fails.
+func (before processState) unchangedBy(t *testing.T) {
+	t.Helper()
+	after := processStateNow(t)
+	if !slices.Equal(before.ignored, after.ignored) {
+		t.Errorf("this case changed the process's ignored signals from %v to %v, which every test after it inherits", before.ignored, after.ignored)
+	}
+	if before.dir != after.dir {
+		t.Errorf("this case changed the process's working directory from %s to %s", before.dir, after.dir)
+	}
+	if !slices.Equal(before.env, after.env) {
+		t.Errorf("this case changed the process's environment")
+	}
 }

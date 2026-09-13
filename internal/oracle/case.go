@@ -12084,6 +12084,16 @@ echo unreachable`,
 		Why:     "the neighboring refusal, and the reason the row above is about zero rather than about small bases: `1#0` *is* read as a base in bash and refused with a third sentence, `invalid arithmetic base`, where `0#5` gets the numeral reader's. zsh names the range it takes and ksh93 says what it says about everything",
 	},
 	{
+		ID: "arith/a-base-of-one-with-a-digit-it-has-no-room-for", Category: "arithmetic",
+		Snippet: `echo $((1#5)); echo "st=$?"`,
+		Why:     "the row above with a digit base one could not hold under any reading, and the pair is what makes either of them evidence. `1#0` is matched by an implementation that never checks the base at all — zero is the one byte whose value is below one, so the digit run is not empty and the numeral ends where it should by accident — and this one is not. zsh refuses the base where it reads it and never consults the digits, so it names `1` here exactly as it names `37`; ours ended the numeral at the `#` and complained about the `5` (#2575)",
+	},
+	{
+		ID: "arith/a-base-of-one-with-a-byte-the-reader-refuses-alone", Category: "arithmetic",
+		Snippet: `echo $((1#@)); echo "st=$?"`,
+		Why:     "the same base with the byte one shell will not take as any part of a token: `$((@))` there is `illegal character: @`, and after a base of one it is `invalid base` instead. So a base nothing can use is refused before the bytes after it are judged, which is the half `arith/a-base-of-one-with-a-digit-it-has-no-room-for` cannot show — a reader that merely widened its alphabet for the bad base would still stop at this byte and blame it (#2575)",
+	},
+	{
 		ID: "arith/a-base-above-thirty-six-written-padded", Category: "arithmetic",
 		Snippet: `echo $((064#10)); echo "st=$?"`,
 		Why:     "the base that is both padded and out of one shell's range, which is what pins the *number* in zsh's refusal: it writes `64` where the script wrote `064`, so the sentence names the base it read rather than the text. bash reads no base here and ksh93's cap has already taken `06`",

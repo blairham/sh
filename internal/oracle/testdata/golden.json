@@ -111069,6 +111069,57 @@
         "TimedOut": false
       }
     },
+    "opt/a-set-o-name-welded-to-the-letter": {
+      "ash": {
+        "Stdout": "st=1~p1=[]~e=off",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -o zzznosuch",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=2~p1=[]~e=off",
+        "Stderr": "\u003cshell\u003e: line 1: set: zzznosuch: invalid option name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: set: zzznosuch: invalid option name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~p1=[]~e=off",
+        "Stderr": "\u003cshell\u003e: line 0: set: zzznosuch: invalid option name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o zzznosuch",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~p1=[zzznosuch]~e=on",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~p1=[zzznosuch]~e=on",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "opt/a-subshells-errexit-is-readable-in-the-subshell": {
       "ash": {
         "Stdout": "after=2",
@@ -111218,6 +111269,108 @@
         "Stdout": "in=0~out=1",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/a-welded-set-o-reads-the-rest-as-letters": {
+      "ash": {
+        "Stdout": "st=0~e=on",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=0~e=on",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~e=on",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~e=on",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0~e=on",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: e: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: e",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/a-welded-set-o-with-no-word-behind-it": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: line 0: illegal option -z",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1~after",
+        "Stderr": "\u003cshell\u003e: line 1: set: -z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~after",
+        "Stderr": "\u003cshell\u003e: line 1: set: -z: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~after",
+        "Stderr": "\u003cshell\u003e: line 0: set: -z: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -z",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: zzznosuch: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: zzznosuch",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

@@ -3227,6 +3227,37 @@ type Semantics struct {
 	// four presets with nothing to put in it.
 	BadSetOptionLetterFatal Answer
 
+	// BadSetOptionNameAtInvocationExitsZero makes a refused `set -o` **name**
+	// on the command line that started the shell report success. The shell
+	// still declines — the command string or script never runs — and then
+	// exits 0.
+	//
+	// Yes in BusyBox ash alone; No in bash, dash, ksh93 and zsh. Measured
+	// 2026-09-13, `<shell> -o zzznosuch -c "echo after"`: `after` is printed
+	// by nobody, dash, all three bash columns and ksh93 exit 2, zsh exits 1,
+	// and ash writes `illegal option -o zzznosuch` and exits **0**.
+	//
+	// Not a fact about this shell's front end. Every other refusal on the
+	// same route reports a failure there — a refused option *letter* is 2,
+	// a `-c` with no operand is 2, a script that does not exist is 2, an
+	// unknown `--long` is 2, and a command nobody has is 127 — so it is this
+	// one refusal on this one route, which is why it is an axis beside the
+	// pair above rather than something about invocations.
+	//
+	// An axis rather than a third status field, and the reason is what the
+	// value would have to be. Diagnostics.SetInvalidOptionNameStatus holds
+	// what the *builtin* reports, and the invocation would want 0 — which is
+	// the zero value every `int` in Diagnostics reads as "not stated", so
+	// the one column that needs the field could not fill it in. And 0 here
+	// is not a number the refusal happens to report: it is the refusal not
+	// counting as a failure, which is the thing to write down (#2639).
+	//
+	// Read on the invocation route only. A `set -o zzznosuch` in a script
+	// reports Diagnostics.SetInvalidOptionNameStatus as it always did — 1 in
+	// this shell — and the two are measurably different numbers in the same
+	// binary, which is what the field could not hold.
+	BadSetOptionNameAtInvocationExitsZero Answer
+
 	// CdLastPathOptionWins lets the last of `cd -L` and `cd -P` decide.
 	// True in bash, dash and ksh93 — `cd -P -L` is logical there. zsh gives
 	// `-P` the answer wherever it appears, so both orders resolve.
@@ -5544,6 +5575,47 @@ type Semantics struct {
 	// Asked only for a plus word on `integer`, which is the only place the
 	// two readings differ — every other spelling is parsed identically.
 	IntegerPlusFormTakesAttributesOff Answer
+
+	// SetOLetterAttachesItsName reads `set -oNAME` — the `-o` letter with its
+	// operand welded to the same word — as the long name NAME, instead of as
+	// a bare `-o` followed by more option letters.
+	//
+	// Yes in ksh93 and zsh; No in the three bash columns, dash and BusyBox
+	// ash. Measured 2026-09-13 across all seven columns, at the builtin and
+	// at the invocation, which answer alike:
+	//
+	//	set -oerrexit zzznosuch    ksh93, zsh  errexit on, `zzznosuch` is $1
+	//	                           the other five  `zzznosuch` refused as the name
+	//	sh -oerrexit -c 'echo hi'  ksh93, zsh  errexit on, prints `hi`
+	//	                           the other five  `-c` refused as the name
+	//
+	// So the seam is not "welded or not". The five that answer No give `-o`
+	// the **next word** whether or not characters follow the letter, and read
+	// those characters as further option letters afterwards. With no word
+	// behind it, `set -oe` lists the options — which is what a bare `-o` does
+	// — and then turns errexit on, in all five. That listing is not
+	// incidental: `set -ozzznosuch` writes the whole option table to standard
+	// output before it complains.
+	//
+	// Ours matched no column at all. It cut the word at a *trailing* `o`
+	// only, so `-o` anywhere else in a word fell through to the letter table
+	// and was refused as `set: -o: invalid option`, with the rest of the word
+	// never read (#2640). The front end said as much in a comment and took
+	// neither side, so `sh -oerrexit` was `unknown option "-oerrexit"` in
+	// every dialect.
+	//
+	// Asked only where characters follow the `o`. `set -o name`, `set -euo
+	// pipefail` and a bare `set -o` are read alike in all seven and consult
+	// nothing.
+	//
+	// Not folded in: bash reports the letter it refuses *after* the listing
+	// at 1 and survivably, where its own `set -Z` is 2 and ends an `sh`
+	// script. That is not a third value of this axis — `set -oe -Q` in bash
+	// applies neither `e` nor the listing and reports the *later* word's
+	// error, so bash validates every option word before applying any, which
+	// no per-refusal status can express. Filed with its measurement rather
+	// than guessed at here.
+	SetOLetterAttachesItsName Answer
 
 	// SetArrayLetter is `set -A name value …`, which assigns an array through
 	// a name a variable holds — the thing `name=(…)` cannot do, because the

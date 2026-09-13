@@ -12227,8 +12227,9 @@ and the attached form is the probe that separates the two readings. In ash,
 `-o`, which prints the option listing, followed by the letters of
 `zzznosuch`, and refuses the `z`. An `-o` is present in all three spellings,
 so "the `-o` route is the gentle one" predicts 1 for the third and is
-falsified. (Where our own parse lands for that word is a separate
-divergence, #2640.)
+falsified. (Where our own parse lands for that word was a separate
+divergence — it refused the `-o` itself as an invalid option letter, which
+no column does — and is `SetOLetterAttachesItsName` below, #2640.)
 
 **The status splits in a different column from the fatality**, which is why
 `Diagnostics.SetInvalidOptionNameStatus` and `SetInvalidOptionLetterStatus`
@@ -12244,6 +12245,69 @@ and prints `after` here, and `set +o posix` puts it back. That is #2641,
 left out of the split deliberately — bash is the only panel column with a
 POSIX mode to measure, so the `…InPosixMode` pair it wants would have four
 presets holding a value no shell was ever asked for.
+
+**`BadSetOptionNameAtInvocationExitsZero`** — bash no · dash no · ksh93 no ·
+zsh no · ash **yes**
+
+Makes a refused `set -o` **name** on the command line that started the
+shell report success. The shell still declines — the command string or
+script never runs — and then exits 0.
+
+Measured 2026-09-13, `<shell> -o zzznosuch -c "echo after"`: `after` is
+printed by nobody, dash and all three bash columns and ksh93 exit 2, zsh
+exits 1, and BusyBox ash writes `illegal option -o zzznosuch` and exits
+**0**. `Diagnostics.SetInvalidOptionNameStatus` is one number for the
+builtin and the invocation alike, so it held 1 — right for a script's own
+`set -o zzznosuch` in this shell, and wrong here.
+
+Not a fact about that front end. Every other refusal on the same route
+reports a failure there: a refused option *letter* is 2, a `-c` with no
+operand is 2, a script that does not exist is 2, an unknown `--long` is 2,
+and a command nobody has is 127. So it is one refusal on one route, which
+is why it is an axis beside the pair above rather than something about
+invocations.
+
+An axis rather than a third status field, and the reason is what the value
+would have to be: 0 is the zero value every `int` in `Diagnostics` reads as
+"not stated", so the one column that needs the field could not fill it in.
+And 0 here is not a number the refusal happens to report — it is the refusal
+not counting as a failure, which is the thing to write down (#2639).
+
+**`SetOLetterAttachesItsName`** — bash no · dash no · ksh93 **yes** · zsh
+**yes** · ash no
+
+Reads `set -oNAME` — the `-o` letter with its operand welded to the same
+word — as the long name NAME, instead of as a bare `-o` followed by more
+option letters.
+
+Measured 2026-09-13 across all seven columns, at the builtin and at the
+invocation, which answer alike:
+
+| | `set -oerrexit zzznosuch` | `sh -oerrexit -c 'echo hi'` |
+| --- | --- | --- |
+| ksh93, zsh | errexit on, `zzznosuch` is `$1` | errexit on, prints `hi` |
+| the other five | `zzznosuch` refused as the name | `-c` refused as the name |
+
+So the seam is not "welded or not". The five that answer No give `-o` the
+**next word** whether or not characters follow the letter, and read those
+characters as further option letters afterwards. With no word behind it,
+`set -oe` lists the options — which is what a bare `-o` does — and then
+turns errexit on, in all five; the listing is not incidental, since
+`set -ozzznosuch` writes the whole option table to standard output before it
+complains.
+
+Ours matched no column at all: it cut the word at a *trailing* `o` only, so
+an `-o` anywhere else fell through to the letter table — where `o` is
+nobody's option letter — and came back `set: -o: invalid option` with the
+rest of the word never read (#2640). Asked only where characters follow the
+`o`; `set -o name`, `set -euo pipefail` and a bare `set -o` are read alike in
+all seven and consult nothing.
+
+Not folded in: bash reports the letter it refuses *after* the listing at 1
+and survivably, where its own `set -Z` is 2 and ends an `sh` script. That is
+not a third value of this axis — `set -oe -Q` in bash applies neither the `e`
+nor the listing and reports the *later* word's error, so bash validates every
+option word before applying any, which no per-refusal status can express.
 
 **It is `set`'s fatality and not the option's**, which a dialect with a
 second option builtin makes visible. Measured on a pipe in zsh 5.9.2,

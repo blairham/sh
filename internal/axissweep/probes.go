@@ -383,6 +383,60 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field: "BadSetOptionNameAtInvocationExitsZero",
+			Cases: []string{"opt/an-unknown-long-name-at-an-invocation"},
+			// The one axis here whose row is an *invocation* rather than a
+			// snippet, and it needs the same control for the same reason: a
+			// shell that owned `zzznosuch` would run `echo hi` and leave at
+			// 0, which is the exact pair of observations a Yes is. The
+			// stderr guard and the `hi` guard together are what tell the two
+			// zeros apart.
+			Reading: "`<shell> -o zzznosuch -c 'echo hi'` refuses the name and runs nothing in all seven; the status it leaves with is 0 in the shell where declining is not a failure, and nonzero in the rest",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["opt/an-unknown-long-name-at-an-invocation"]
+				if strings.TrimSpace(r.Stderr) == "" {
+					return "", "this shell refused nothing — the recorded cell holds no refusal, so the row says nothing about what one would report"
+				}
+				if strings.Contains(r.Stdout, "hi") {
+					return "", "the command string ran, so the shell did not decline and the row is not about a refusal"
+				}
+				if r.Status == 0 {
+					return "Yes", ""
+				}
+				return "No", ""
+			},
+		},
+		{
+			Field: "SetOLetterAttachesItsName",
+			Cases: []string{"opt/a-set-o-name-welded-to-the-letter"},
+			// The welded characters spell `errexit` — a name every column
+			// has — so that the two readings part on *behavior* rather than
+			// on wording. A name nobody owns would be refused under both,
+			// and the row could then be read only by comparing four
+			// different complaints.
+			//
+			// The empty-stderr control is the same one the two axes below
+			// carry, pointing the other way: a cell that said nothing and
+			// did not turn errexit on has not answered the question, and
+			// scoring it `No` would make silence agree with whatever the
+			// preset already held.
+			Reading: "`set -oerrexit zzznosuch; …; case $- in *e*)` leaves errexit **on** and says nothing in a shell that reads `errexit` as the name, and refuses `zzznosuch` as the name with errexit still off in one that gives `-o` the next word instead",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				r := cells["opt/a-set-o-name-welded-to-the-letter"]
+				on := strings.Contains(r.Stdout, "e=on")
+				if strings.TrimSpace(r.Stderr) == "" {
+					if on {
+						return "Yes", ""
+					}
+					return "", "this shell refused nothing and turned errexit on for nothing — the recorded cell holds neither reading"
+				}
+				if on {
+					return "", "the cell holds a refusal *and* errexit on, which neither reading produces"
+				}
+				return "No", ""
+			},
+		},
+		{
 			Field: "BadSetOptionLetterFatal",
 			Cases: []string{"opt/an-unknown-letter-is-refused"},
 			// The mirror, and the reason the two are separate axes at all:

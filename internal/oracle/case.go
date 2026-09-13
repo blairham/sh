@@ -16609,6 +16609,21 @@ echo "st=$? alive"`,
 		Why:     "the letter half of the question the long name asks, and **not** the same answer — which is what this row said for a year and what #2629 measured out of it. `-q`, `-j`, `-z` and `-A` are letters all seven refuse, and comparing them against each other is what the #483 measurement did; comparing one of them against a refused *name* in the same shell is what it never did. bash 5.3 and bash 3.2 carry on at 2 where their names are 2 and **1**; bash-as-`sh`, dash, ksh93 and BusyBox ash stop at 2 and zsh at 1, and ash's name is 1 and survivable. So the letter is the harsher spelling in two columns and the same in five. The letter had no dialect answer at all until #483 — it reported 2 everywhere and never stopped a script — and it had the *name's* answer until #2629",
 	},
 	{
+		ID: "opt/a-set-o-name-welded-to-the-letter", Category: "shell options",
+		Snippet: `set -oerrexit zzznosuch; echo "st=$?"; echo "p1=[$1]"; case $- in *e*) echo "e=on";; *) echo "e=off";; esac`,
+		Why:     "`-o` with its operand welded to the letter, and the panel splits two ways with nothing in between. ksh93 and zsh read the rest of the word as the long name: errexit goes on, `zzznosuch` is left as an ordinary operand and becomes `$1`, and nothing is said. The three bash columns, dash and BusyBox ash give `-o` the **next word** regardless — so the name they refuse is `zzznosuch`, errexit never goes on, and each says so in its own words at its own status. The row the `SetOLetterAttachesItsName` probe reads, and the welded characters spell a real option name deliberately: a name no shell has would be refused under *both* readings and could tell them apart only by wording. Ours refused the `-o` itself as an invalid option letter and never looked at the rest of the word, which is an answer no column gives (#2640)",
+	},
+	{
+		ID: "opt/a-welded-set-o-with-no-word-behind-it", Category: "shell options",
+		Snippet: `set -ozzznosuch >/dev/null; echo "st=$?"; echo after`,
+		Why:     "the same spelling with nothing for `-o` to take, which is where the five that do not weld show what they do with the rest of the word: it is more option **letters**, read after a bare `-o` has written the whole option table — the listing this row sends to /dev/null so that the record holds the refusal rather than seven option tables. dash, BusyBox ash and the bash columns stop at `-z`, ksh93 and zsh refuse `zzznosuch` as a name. It is also the probe that settled #2629: an `-o` is present here and ash still gives it the letter's answer, so the gentle answer belongs to the spelling refused and not to the `-o` route. bash reports the letter it refuses after a listing at 1 and survivably where its own `set -Z` is 2 and ends an `sh` script, which no field holds and which is not this axis — `set -oe -Q` there applies neither the `e` nor the listing and reports the later word, so bash validates every option word before applying any",
+	},
+	{
+		ID: "opt/a-welded-set-o-reads-the-rest-as-letters", Category: "shell options",
+		Snippet: `set -oe >/dev/null; echo "st=$?"; case $- in *e*) echo "e=on";; *) echo "e=off";; esac`,
+		Why:     "the half the row above cannot show, because a refusal looks the same whichever way the word was cut: here the welded character is a letter every shell has. The five that do not weld list the options, turn errexit on and report 0; ksh93 and zsh read `e` as a long name, have no option by that name, and stop. So `set -oe` is a success in five columns and a fatal refusal in two, from one word with no bad spelling in it",
+	},
+	{
 		ID: "opt/a-refused-letter-echoes-the-sign", Category: "shell options",
 		Snippet: `set +q; echo "st=$?"`,
 		Why:     "the other half of the letter's spelling: bash and ksh93 echo the `+` back where dash and zsh write `-q` whichever way they were asked, so the sign is a verb in two of the wordings and a literal in the other two",

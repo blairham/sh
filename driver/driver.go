@@ -1165,12 +1165,28 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			// The long spelling, whose name is the next word — read at the
 			// end of a bundle exactly as `set` reads it, so `sh -euo
 			// pipefail script` works the way the line at the top of so many
-			// scripts does. Elsewhere in a word it is refused: measured,
-			// the panel splits over `-oNAME` — zsh and ksh93 read the rest
-			// of the word as the name, bash and dash read it as more
-			// letters — so the core takes neither side.
-			if k != len(body)-1 {
-				return nil, fmt.Errorf("unknown option %q", a)
+			// scripts does.
+			//
+			// Elsewhere in a word it used to be refused outright, on the
+			// grounds that the panel splits over `-oNAME` and the core takes
+			// neither side. It does split, and the dialect answers it:
+			// Semantics.SetOLetterAttachesItsName, measured on this route as
+			// well as on the builtin's. ksh93 and zsh read the rest of the
+			// word as the name, so `ksh -oerrexit -c cmd` is errexit and a
+			// command string; the other five give `-o` the **next word**
+			// regardless and read the rest as more letters, so the same line
+			// refuses `-c` as an option name. The core still answers neither
+			// and still refuses the word.
+			rest := body[k+1:]
+			if rest != "" {
+				switch sh.Semantics.SetOLetterAttachesItsName {
+				case interp.Yes:
+					flush()
+					inv.opts = append(inv.opts, optionSpec{spec: rest, isName: true, on: on})
+					return args, nil
+				case interp.Unspecified:
+					return nil, fmt.Errorf("unknown option %q", a)
+				}
 			}
 			flush()
 			if len(args) < 1 {
@@ -1182,7 +1198,11 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 				return nil, fmt.Errorf("%s requires an argument", a)
 			}
 			inv.opts = append(inv.opts, optionSpec{spec: args[0], isName: true, on: on})
-			return args[1:], nil
+			args = args[1:]
+			// Whatever was welded behind the `o` is more option letters, and
+			// the loop reads them next. They land in a spec of their own,
+			// after the name's, because that is the order the shells apply
+			// them in.
 		default:
 			// A set option's letter, ours to carry and the dialect's to
 			// judge. An unknown one is refused before anything runs, just
@@ -1856,6 +1876,14 @@ func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 			apply = r.SetNamedOption
 		}
 		if code := apply(o.spec, o.on); code != 0 {
+			if o.isName && sh.Semantics.BadSetOptionNameAtInvocationExitsZero == interp.Yes {
+				// One shell declines the option, refuses to run what it was
+				// given, and then reports **success**. The `false` is what
+				// makes that two facts rather than one: nothing runs, and
+				// the status is 0 anyway. See the axis for the measurement
+				// and for why the status field could not hold it (#2639).
+				return 0, false
+			}
 			return code, false
 		}
 	}

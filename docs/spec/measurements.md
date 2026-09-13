@@ -11358,6 +11358,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `xtrace/a-pattern-metacharacter-is-quoted` | `[1] a*b a?b {a,b}` **2>** `+ echo [1] a*b a?b {a,b}` | `[1] a*b a?b {a,b}` **2>** `+ echo '[1]' 'a*b' 'a?b' '{a,b}'` | `[1] a*b a?b {a,b}` **2>** `+ echo '[1]' 'a*b' 'a?b' '{a,b}'` | `[1] a*b a?b {a,b}` **2>** `+ echo '[1]' 'a*b' 'a?b' '{a,b}'` | `[1] a*b a?b {a,b}` **2>** `+ echo '[1]' 'a*b' 'a?b' '{a,b}'` | `[1] a*b a?b {a,b}` **2>** `+<shell>:1> echo '[1]' 'a*b' 'a?b' '{a,b}'` | `[1] a*b a?b {a,b}` **2>** `+ echo '[1]' 'a*b' 'a?b' '{a,b}'` |
 | `xtrace/a-tilde-or-hash-is-quoted-by-position` | `~a a~b #a a#b` **2>** `+ echo ~a a~b #a a#b` | `~a a~b #a a#b` **2>** `+ echo '~a' a~b '#a' a#b` | `~a a~b #a a#b` **2>** `+ echo '~a' a~b '#a' a#b` | `~a a~b #a a#b` **2>** `+ echo '~a' a~b '#a' a#b` | `~a a~b #a a#b` **2>** `+ echo '~a' 'a~b' '#a' 'a#b'` | `~a a~b #a a#b` **2>** `+<shell>:1> echo '~a' 'a~b' '#a' 'a#b'` | `~a a~b #a a#b` **2>** `+ echo '~a' 'a~b' '#a' 'a#b'` |
 | `xtrace/the-caret-bang-and-equals-split-three-ways` | `^ab !ab =ab ab= a=b` **2>** `+ echo ^ab !ab =ab ab= a=b` | `^ab !ab =ab ab= a=b` **2>** `+ echo '^ab' '!ab' =ab ab= a=b` | `^ab !ab =ab ab= a=b` **2>** `+ echo '^ab' '!ab' =ab ab= a=b` | `^ab !ab =ab ab= a=b` **2>** `+ echo '^ab' '!ab' =ab ab= a=b` | `^ab !ab =ab ab= a=b` **2>** `+ echo ^ab !ab '=ab' ab= a=b` | `^ab !ab =ab ab= a=b` **2>** `+<shell>:1> echo '^ab' !ab '=ab' 'ab=' 'a=b'` | `^ab !ab =ab ab= a=b` **2>** `+ echo ^ab '!ab' '=ab' 'ab=' 'a=b'` |
+| `xtrace/the-percent-and-the-closing-bracket-split-four-ways` | `a%b a]b a^b` **2>** `+ echo a%b a]b a^b` | `a%b a]b a^b` **2>** `+ echo a%b 'a]b' 'a^b'` | `a%b a]b a^b` **2>** `+ echo a%b 'a]b' 'a^b'` | `a%b a]b a^b` **2>** `+ echo a%b 'a]b' 'a^b'` | `a%b a]b a^b` **2>** `+ echo a%b 'a]b' a^b` | `a%b a]b a^b` **2>** `+<shell>:1> echo a%b 'a]b' 'a^b'` | `a%b a]b a^b` **2>** `+ echo 'a%b' a]b a^b` |
+| `xtrace/an-empty-field-diverges` | ` a` **2>** `+ echo  a` | ` a` **2>** `+ echo '' a` | ` a` **2>** `+ echo '' a` | ` a` **2>** `+ echo '' a` | ` a` **2>** `+ echo '' a` | ` a` **2>** `+<shell>:1> echo '' a` | ` a` **2>** `+ echo  a` |
+| `xtrace/a-control-character-diverges` | `a	b` **2>** `+ printf a\tb~+ x=a	b~+ echo a	b` | `a	b` **2>** `++ printf 'a\tb'~+ x=$'a\tb'~+ echo $'a\tb'` | `a	b` **2>** `++ printf 'a\tb'~+ x=$'a\tb'~+ echo $'a\tb'` | `a	b` **2>** `++ printf 'a\tb'~+ x='a	b'~+ echo 'a	b'` | `a	b` **2>** `+ printf 'a\tb'~+ x=$'a\tb'~+ echo $'a\tb'` | `a	b` **2>** `+<shell>:1> x=+zsh:1> printf 'a\tb'~+<shell>:1> x=$'a\tb' ~+<shell>:1> echo $'a\tb'` | `a	b` **2>** `+ printf 'a\tb'~+ x='a	b'~+ echo 'a	b'` |
 | `xtrace/the-brackets-of-a-test-are-exempt` | `] [ a[b` **2>** `+ [ 1 -lt 2 ]~+ echo ] [ a[b` | `] [ a[b` **2>** `+ '[' 1 -lt 2 ']'~+ echo ']' '[' 'a[b'` | `] [ a[b` **2>** `+ '[' 1 -lt 2 ']'~+ echo ']' '[' 'a[b'` | `] [ a[b` **2>** `+ '[' 1 -lt 2 ']'~+ echo ']' '[' 'a[b'` | `] [ a[b` **2>** `+ [ 1 -lt 2 ]~+ echo ']' '[' 'a[b'` | `] [ a[b` **2>** `+<shell>:1> [ 1 -lt 2 ']'~+<shell>:1> echo ']' '[' 'a[b'` | `] [ a[b` **2>** `+ '[' 1 -lt 2 ]~+ echo ] '[' 'a[b'` |
 | `xtrace/an-interior-closing-bracket-is-not-the-closer` | **2>** `+ [ -n ] ]~+ [ 1 -lt 2 x~<shell>: 1: [: missing ]` *(status 2)* | **2>** `+ '[' -n ']' ']'~+ '[' 1 -lt 2 x~<shell>: line 1: [: missing `]'` *(status 2)* | **2>** `+ '[' -n ']' ']'~+ '[' 1 -lt 2 x~<shell>: line 1: [: missing `]'` *(status 2)* | **2>** `+ '[' -n ']' ']'~+ '[' 1 -lt 2 x~<shell>: line 0: [: missing `]'` *(status 2)* | **2>** `+ [ -n ']' ]~+ [ 1 -lt 2 x~<shell>: [: ']' missing` *(status 2)* | **2>** `+<shell>:1> [ -n ']' ']'~+<shell>:1> [ 1 -lt 2 x~<shell>:[:1: ']' expected` *(status 2)* | **2>** `+ '[' -n ] ]~+ '[' 1 -lt 2 x~<shell>: missing ]` *(status 2)* |
 | `xtrace/embedded-quote-diverges` | `it's` **2>** `+ x=it's~+ echo it's` | `it's` **2>** `+ x='it'\''s'~+ echo 'it'\''s'` | `it's` **2>** `+ x='it'\''s'~+ echo 'it'\''s'` | `it's` **2>** `+ x='it'\''s'~+ echo 'it'\''s'` | `it's` **2>** `+ x=$'it\'s'~+ echo $'it\'s'` | `it's` **2>** `+<shell>:1> x='it'\''s' ~+<shell>:1> echo 'it'\''s'` | `it's` **2>** `+ x='it'"'"'s'~+ echo 'it'"'"'s'` |
@@ -11552,23 +11555,35 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   set -x; echo a b
   ```
-- `xtrace/quoting-diverges` — dash prints an expanded field with a space in it unquoted, so two arguments and one are indistinguishable; the others quote
+- `xtrace/quoting-diverges` — dash prints an expanded field with a space in it unquoted, so two arguments and one are indistinguishable; the other four quote — including ash, which is where dash's own sibling parts from it. `dialect/ash` wrote no answer here and took dash's by default for as long as ash had a column (#2443)
   ```sh
   set -x; x="hello wor"; echo "$x"
   ```
-- `xtrace/a-pattern-metacharacter-is-quoted` — the unanimous half of which words a trace quotes, beyond the whitespace and operators every quoting shell agrees on: bash, bash 3.2, ksh93 and zsh all quote a word holding a pattern or brace metacharacter, so `echo '[1]'` traces as `echo '[1]'` and not as `echo [1]`, which would read back as a pattern. dash quotes none of it, which is its one answer for everything (#2141)
+- `xtrace/a-pattern-metacharacter-is-quoted` — the unanimous half of which words a trace quotes, beyond the whitespace and operators every quoting shell agrees on: bash, bash 3.2, ksh93, zsh and ash all quote a word holding a pattern or brace metacharacter, so `echo '[1]'` traces as `echo '[1]'` and not as `echo [1]`, which would read back as a pattern. dash quotes none of it, which is its one answer for everything (#2141). Unanimous among the quoting shells is as far as this row goes: `a]b` is the one metacharacter of the group they do *not* all agree on, and it is the next row but two
   ```sh
   set -x; echo '[1]' 'a*b' 'a?b' '{a,b}'
   ```
-- `xtrace/a-tilde-or-hash-is-quoted-by-position` — the row that says a character *list* cannot hold this question: bash quotes the two words that begin with the character and leaves the two that carry it in the middle bare, where ksh93 and zsh quote all four. So bash's answer is not a smaller alphabet, it is the same characters under a leading-only rule — Diagnostics.TraceMetacharacters is two strings for this reason and not one. bash 3.2 agrees with 5.3 here as everywhere in this group
+- `xtrace/a-tilde-or-hash-is-quoted-by-position` — the row that says a character *list* cannot hold this question: bash quotes the two words that begin with the character and leaves the two that carry it in the middle bare, where ksh93, zsh and ash quote all four. So bash's answer is not a smaller alphabet, it is the same characters under a leading-only rule — Diagnostics.TraceMetacharacters is two strings for this reason and not one, and bash is the only panel member that needs the second. bash 3.2 agrees with 5.3 here as everywhere in this group
   ```sh
   set -x; echo '~a' 'a~b' '#a' 'a#b'
   ```
-- `xtrace/the-caret-bang-and-equals-split-three-ways` — three more splits in one line, and no two shells agree on all of them: bash quotes `^` and `!` anywhere and `=` nowhere, ksh93 quotes neither `^` nor `!` and quotes `=` only at the front, and zsh quotes `^` anywhere, `!` nowhere and `=` anywhere. `ab=` and `a=b` are there to separate zsh's reading from ksh93's, which the leading word alone cannot
+- `xtrace/the-caret-bang-and-equals-split-three-ways` — three more splits in one line, and no two shells agree on all of them: bash quotes `^` and `!` anywhere and `=` nowhere, ksh93 quotes neither `^` nor `!` and quotes `=` only at the front, zsh quotes `^` anywhere, `!` nowhere and `=` anywhere, and ash is a fourth reading again — `!` and `=` anywhere and `^` nowhere, which is no other member's answer. The ID says three ways because it was written before ash had one; the row is four now. `ab=` and `a=b` are there to separate zsh's reading from ksh93's, which the leading word alone cannot
   ```sh
   set -x; echo '^ab' '!ab' '=ab' 'ab=' 'a=b'
   ```
-- `xtrace/the-brackets-of-a-test-are-exempt` — the one exemption from the row above, and the three words after it are what say it is *not* "a command word is never quoted": bash traces `'[' 1 -lt 2 ']'`, ksh93 `[ 1 -lt 2 ]` and zsh `[ 1 -lt 2 ']'`, while all three quote a bare `]`, a bare `[` and `a[b` handed to `echo`. Diagnostics.TraceBareBracket holds the three answers
+- `xtrace/the-percent-and-the-closing-bracket-split-four-ways` — the three characters that say ash's alphabet is a fourth and not a copy of anyone's, and the only row where the fifth dialect is the sole shell that quotes something: ash quotes `a%b` and nobody else does, ash leaves `a]b` bare and the other three quote it, and `a^b` is quoted by bash and zsh and bare in ksh93 and ash. So `]` being bare in ash's trace of `[ 1 -lt 2 ]` is its alphabet and not an exemption — see `xtrace/the-brackets-of-a-test-are-exempt`, where the same character is bare for a different reason in ksh93. Measured 2026-09-13 over every printable ASCII punctuation character in three positions (#2443)
+  ```sh
+  set -x; echo 'a%b' 'a]b' 'a^b'
+  ```
+- `xtrace/an-empty-field-diverges` — an argument that is the empty string, and the two shells that print nothing where it was: bash, ksh93 and zsh write `echo '' a`, and dash and ash write `echo  a` with two spaces and no way to tell an empty field from a stray blank. `a` is there so the field can be seen to still be counted — the trailing space alone would not say whether the argument survived
+  ```sh
+  set -x; echo '' a
+  ```
+- `xtrace/a-control-character-diverges` — the fallback a trace reaches for when single quotes cannot spell the value, and ash has none: bash 5.3, ksh93 and zsh all write `$'a\tb'`, ash writes the tab byte itself inside plain single quotes, and dash writes it bare. bash 3.2.57 is with ash on this one row and with 5.3 on a byte with no letter for it — `$'a\001b'` — which is a fifth reading and has no dialect here to hold it. Diagnostics.TraceQuoting is the field; interp.QuoteSingleOnly is the value the absence of `$'…'` needed
+  ```sh
+  set -x; x="$(printf 'a\tb')"; echo "$x"
+  ```
+- `xtrace/the-brackets-of-a-test-are-exempt` — the one exemption from the row above, and the three words after it are what say it is *not* "a command word is never quoted": bash traces `'[' 1 -lt 2 ']'`, ksh93 `[ 1 -lt 2 ]` and zsh `[ 1 -lt 2 ']'`, while all three quote a bare `]`, a bare `[` and `a[b` handed to `echo`. Diagnostics.TraceBareBracket holds those three answers, and ash is a fourth that needs none of them: `'[' 1 -lt 2 ]` and `echo ] '[' 'a[b'`, where the opening `[` is quoted like any other word and every `]` is bare because `]` is not in that shell's alphabet at all. So a bare closing bracket reads two ways in this panel, and only one of them is an exemption
   ```sh
   set -x; [ 1 -lt 2 ]; echo ']' '[' 'a[b'
   ```
@@ -11576,7 +11591,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   set -x; [ -n ']' ]; [ 1 -lt 2 x
   ```
-- `xtrace/embedded-quote-diverges` — ksh93 reaches for $'…' where bash and zsh close, escape and reopen
+- `xtrace/embedded-quote-diverges` — the spelling once something has decided a word needs quoting, and it is a four-way answer: bash and zsh close the quote, backslash-escape one and reopen — `'it'\''s'` — ksh93 reaches for `$'it\'s'`, ash closes the quote and puts the run inside *double* quotes, `'it'"'"'s'`, and dash quotes nothing at all. ash's is the reading interp.QuoteSingleOnly was added for: that shell has no `$'…'` in its trace anywhere, which is also why a control character and an empty field diverge two rows up
   ```sh
   set -x; x="it's"; echo "$x"
   ```

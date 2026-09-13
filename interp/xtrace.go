@@ -193,6 +193,22 @@ const (
 	// QuoteDollar is ksh93, which reaches for `$'…'` for an embedded quote
 	// where bash and zsh write `'it'\''s'`.
 	QuoteDollar
+	// QuoteSingleOnly is BusyBox ash, which has no `$'…'` in its trace at
+	// all: a single quote is the only device it reaches for.
+	//
+	// Three consequences, and each is a separate measurement rather than a
+	// restatement of the others (2026-09-13, BusyBox v1.37.0, script file
+	// under `env -i PATH=/usr/bin:/bin`):
+	//
+	//	x="it's"; echo "$x"    + echo 'it'"'"'s'
+	//	a tab in the word      + echo 'a<TAB>b' — the byte, inside the quotes
+	//	echo ''                + echo — with nothing where the argument was
+	//
+	// The first is the spelling this value is named for: where bash closes
+	// the quote, backslash-escapes one and reopens, this shell closes the
+	// quote and puts the run inside *double* quotes. See traceSingleQuote
+	// for why a run and not one at a time.
+	QuoteSingleOnly
 )
 
 // TraceMetacharacters is the characters that make an expanded word need
@@ -758,9 +774,21 @@ func traceQuote(s string, q TraceQuoting, meta TraceMetacharacters) string {
 		return s
 	}
 	if s == "" {
+		// An empty field is `''` in the three shells that have a `$'…'` and
+		// nothing at all in the one that does not: `echo ''` traces as
+		// `+ echo ` in BusyBox ash, so the argument leaves no mark. Measured
+		// 2026-09-13 on `echo '' a` and `echo a '' b` as well, which is what
+		// says it is an empty field and not a dropped one.
+		if q == QuoteSingleOnly {
+			return ""
+		}
 		return "''"
 	}
 	if ctl := strings.IndexFunc(s, func(c rune) bool { return c < 0x20 }); ctl >= 0 {
+		// The one place a shell without `$'…'` has to write the byte itself.
+		if q == QuoteSingleOnly {
+			return traceSingleQuote(s)
+		}
 		return dollarQuote(s)
 	}
 	if !traceNeedsQuoting(s, meta) {
@@ -769,9 +797,54 @@ func traceQuote(s string, q TraceQuoting, meta TraceMetacharacters) string {
 	if strings.Contains(s, "'") && q == QuoteDollar {
 		return dollarQuote(s)
 	}
+	if q == QuoteSingleOnly {
+		return traceSingleQuote(s)
+	}
 	// A single quote cannot appear inside single quotes, so it is closed,
 	// escaped and reopened — which is what `'it'\''s'` is.
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// traceSingleQuote renders a word the way a shell with no `$'…'` does: single
+// quotes, and a run of single quotes smuggled through inside double quotes.
+//
+// A run and not one quote at a time, and the segments emitted lazily — both
+// measured 2026-09-13 on BusyBox v1.37.0, and both separate a rule that
+// replaces each quote with a fixed string from the one this shell has:
+//
+//	it's      'it'"'"'s'    the common case, which either rule gets right
+//	a''b      'a'"''"'b'    two quotes share one pair of double quotes
+//	ab'       'ab'"'"       nothing reopens after the last run
+//	'ab       ''"'"'ab'     but the first segment is opened even when empty
+//	'         ''"'"         both of the above at once
+func traceSingleQuote(s string) string {
+	var b strings.Builder
+	b.WriteByte('\'')
+	open := true
+	for i := 0; i < len(s); {
+		if s[i] != '\'' {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		j := i
+		for j < len(s) && s[j] == '\'' {
+			j++
+		}
+		b.WriteString(`'"`)
+		b.WriteString(s[i:j])
+		b.WriteByte('"')
+		open = false
+		if j < len(s) {
+			b.WriteByte('\'')
+			open = true
+		}
+		i = j
+	}
+	if open {
+		b.WriteByte('\'')
+	}
+	return b.String()
 }
 
 // dollarQuote renders a word with `$'…'`, where a control character has a

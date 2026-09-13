@@ -198684,6 +198684,57 @@
         "TimedOut": false
       }
     },
+    "xtrace/a-control-character-diverges": {
+      "ash": {
+        "Stdout": "a\tb",
+        "Stderr": "+ printf 'a\\tb'~+ x='a\tb'~+ echo 'a\tb'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "a\tb",
+        "Stderr": "++ printf 'a\\tb'~+ x=$'a\\tb'~+ echo $'a\\tb'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a\tb",
+        "Stderr": "++ printf 'a\\tb'~+ x=$'a\\tb'~+ echo $'a\\tb'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a\tb",
+        "Stderr": "++ printf 'a\\tb'~+ x='a\tb'~+ echo 'a\tb'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a\tb",
+        "Stderr": "+ printf a\\tb~+ x=a\tb~+ echo a\tb",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a\tb",
+        "Stderr": "+ printf 'a\\tb'~+ x=$'a\\tb'~+ echo $'a\\tb'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a\tb",
+        "Stderr": "+\u003cshell\u003e:1\u003e x=+zsh:1\u003e printf 'a\\tb'~+\u003cshell\u003e:1\u003e x=$'a\\tb' ~+\u003cshell\u003e:1\u003e echo $'a\\tb'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "xtrace/a-pattern-metacharacter-is-quoted": {
       "ash": {
         "Stdout": "[1] a*b a?b {a,b}",
@@ -198781,6 +198832,57 @@
       "zsh": {
         "Stdout": "~a a~b #a a#b",
         "Stderr": "+\u003cshell\u003e:1\u003e echo '~a' 'a~b' '#a' 'a#b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/an-empty-field-diverges": {
+      "ash": {
+        "Stdout": " a",
+        "Stderr": "+ echo  a",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": " a",
+        "Stderr": "+ echo '' a",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " a",
+        "Stderr": "+ echo '' a",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " a",
+        "Stderr": "+ echo '' a",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " a",
+        "Stderr": "+ echo  a",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " a",
+        "Stderr": "+ echo '' a",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " a",
+        "Stderr": "+\u003cshell\u003e:1\u003e echo '' a",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -201178,6 +201280,57 @@
       "zsh": {
         "Stdout": "^ab !ab =ab ab= a=b",
         "Stderr": "+\u003cshell\u003e:1\u003e echo '^ab' !ab '=ab' 'ab=' 'a=b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/the-percent-and-the-closing-bracket-split-four-ways": {
+      "ash": {
+        "Stdout": "a%b a]b a^b",
+        "Stderr": "+ echo 'a%b' a]b a^b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "a%b a]b a^b",
+        "Stderr": "+ echo a%b 'a]b' 'a^b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a%b a]b a^b",
+        "Stderr": "+ echo a%b 'a]b' 'a^b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a%b a]b a^b",
+        "Stderr": "+ echo a%b 'a]b' 'a^b'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a%b a]b a^b",
+        "Stderr": "+ echo a%b a]b a^b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a%b a]b a^b",
+        "Stderr": "+ echo a%b 'a]b' a^b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a%b a]b a^b",
+        "Stderr": "+\u003cshell\u003e:1\u003e echo a%b 'a]b' 'a^b'",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

@@ -4266,27 +4266,42 @@ echo "reached-after st=$?"`,
 	{
 		ID: "xtrace/quoting-diverges", Category: "shell options",
 		Snippet: `set -x; x="hello wor"; echo "$x"`,
-		Why:     "dash prints an expanded field with a space in it unquoted, so two arguments and one are indistinguishable; the others quote",
+		Why:     "dash prints an expanded field with a space in it unquoted, so two arguments and one are indistinguishable; the other four quote — including ash, which is where dash's own sibling parts from it. `dialect/ash` wrote no answer here and took dash's by default for as long as ash had a column (#2443)",
 	},
 	{
 		ID: "xtrace/a-pattern-metacharacter-is-quoted", Category: "shell options",
 		Snippet: `set -x; echo '[1]' 'a*b' 'a?b' '{a,b}'`,
-		Why:     "the unanimous half of which words a trace quotes, beyond the whitespace and operators every quoting shell agrees on: bash, bash 3.2, ksh93 and zsh all quote a word holding a pattern or brace metacharacter, so `echo '[1]'` traces as `echo '[1]'` and not as `echo [1]`, which would read back as a pattern. dash quotes none of it, which is its one answer for everything (#2141)",
+		Why:     "the unanimous half of which words a trace quotes, beyond the whitespace and operators every quoting shell agrees on: bash, bash 3.2, ksh93, zsh and ash all quote a word holding a pattern or brace metacharacter, so `echo '[1]'` traces as `echo '[1]'` and not as `echo [1]`, which would read back as a pattern. dash quotes none of it, which is its one answer for everything (#2141). Unanimous among the quoting shells is as far as this row goes: `a]b` is the one metacharacter of the group they do *not* all agree on, and it is the next row but two",
 	},
 	{
 		ID: "xtrace/a-tilde-or-hash-is-quoted-by-position", Category: "shell options",
 		Snippet: `set -x; echo '~a' 'a~b' '#a' 'a#b'`,
-		Why:     "the row that says a character *list* cannot hold this question: bash quotes the two words that begin with the character and leaves the two that carry it in the middle bare, where ksh93 and zsh quote all four. So bash's answer is not a smaller alphabet, it is the same characters under a leading-only rule — Diagnostics.TraceMetacharacters is two strings for this reason and not one. bash 3.2 agrees with 5.3 here as everywhere in this group",
+		Why:     "the row that says a character *list* cannot hold this question: bash quotes the two words that begin with the character and leaves the two that carry it in the middle bare, where ksh93, zsh and ash quote all four. So bash's answer is not a smaller alphabet, it is the same characters under a leading-only rule — Diagnostics.TraceMetacharacters is two strings for this reason and not one, and bash is the only panel member that needs the second. bash 3.2 agrees with 5.3 here as everywhere in this group",
 	},
 	{
 		ID: "xtrace/the-caret-bang-and-equals-split-three-ways", Category: "shell options",
 		Snippet: `set -x; echo '^ab' '!ab' '=ab' 'ab=' 'a=b'`,
-		Why:     "three more splits in one line, and no two shells agree on all of them: bash quotes `^` and `!` anywhere and `=` nowhere, ksh93 quotes neither `^` nor `!` and quotes `=` only at the front, and zsh quotes `^` anywhere, `!` nowhere and `=` anywhere. `ab=` and `a=b` are there to separate zsh's reading from ksh93's, which the leading word alone cannot",
+		Why:     "three more splits in one line, and no two shells agree on all of them: bash quotes `^` and `!` anywhere and `=` nowhere, ksh93 quotes neither `^` nor `!` and quotes `=` only at the front, zsh quotes `^` anywhere, `!` nowhere and `=` anywhere, and ash is a fourth reading again — `!` and `=` anywhere and `^` nowhere, which is no other member's answer. The ID says three ways because it was written before ash had one; the row is four now. `ab=` and `a=b` are there to separate zsh's reading from ksh93's, which the leading word alone cannot",
+	},
+	{
+		ID: "xtrace/the-percent-and-the-closing-bracket-split-four-ways", Category: "shell options",
+		Snippet: `set -x; echo 'a%b' 'a]b' 'a^b'`,
+		Why:     "the three characters that say ash's alphabet is a fourth and not a copy of anyone's, and the only row where the fifth dialect is the sole shell that quotes something: ash quotes `a%b` and nobody else does, ash leaves `a]b` bare and the other three quote it, and `a^b` is quoted by bash and zsh and bare in ksh93 and ash. So `]` being bare in ash's trace of `[ 1 -lt 2 ]` is its alphabet and not an exemption — see `xtrace/the-brackets-of-a-test-are-exempt`, where the same character is bare for a different reason in ksh93. Measured 2026-09-13 over every printable ASCII punctuation character in three positions (#2443)",
+	},
+	{
+		ID: "xtrace/an-empty-field-diverges", Category: "shell options",
+		Snippet: `set -x; echo '' a`,
+		Why:     "an argument that is the empty string, and the two shells that print nothing where it was: bash, ksh93 and zsh write `echo '' a`, and dash and ash write `echo  a` with two spaces and no way to tell an empty field from a stray blank. `a` is there so the field can be seen to still be counted — the trailing space alone would not say whether the argument survived",
+	},
+	{
+		ID: "xtrace/a-control-character-diverges", Category: "shell options",
+		Snippet: `set -x; x="$(printf 'a\tb')"; echo "$x"`,
+		Why:     "the fallback a trace reaches for when single quotes cannot spell the value, and ash has none: bash 5.3, ksh93 and zsh all write `$'a\\tb'`, ash writes the tab byte itself inside plain single quotes, and dash writes it bare. bash 3.2.57 is with ash on this one row and with 5.3 on a byte with no letter for it — `$'a\\001b'` — which is a fifth reading and has no dialect here to hold it. Diagnostics.TraceQuoting is the field; interp.QuoteSingleOnly is the value the absence of `$'…'` needed",
 	},
 	{
 		ID: "xtrace/the-brackets-of-a-test-are-exempt", Category: "shell options",
 		Snippet: `set -x; [ 1 -lt 2 ]; echo ']' '[' 'a[b'`,
-		Why:     "the one exemption from the row above, and the three words after it are what say it is *not* \"a command word is never quoted\": bash traces `'[' 1 -lt 2 ']'`, ksh93 `[ 1 -lt 2 ]` and zsh `[ 1 -lt 2 ']'`, while all three quote a bare `]`, a bare `[` and `a[b` handed to `echo`. Diagnostics.TraceBareBracket holds the three answers",
+		Why:     "the one exemption from the row above, and the three words after it are what say it is *not* \"a command word is never quoted\": bash traces `'[' 1 -lt 2 ']'`, ksh93 `[ 1 -lt 2 ]` and zsh `[ 1 -lt 2 ']'`, while all three quote a bare `]`, a bare `[` and `a[b` handed to `echo`. Diagnostics.TraceBareBracket holds those three answers, and ash is a fourth that needs none of them: `'[' 1 -lt 2 ]` and `echo ] '[' 'a[b'`, where the opening `[` is quoted like any other word and every `]` is bare because `]` is not in that shell's alphabet at all. So a bare closing bracket reads two ways in this panel, and only one of them is an exemption",
 	},
 	{
 		ID: "xtrace/an-interior-closing-bracket-is-not-the-closer", Category: "shell options",
@@ -4296,7 +4311,7 @@ echo "reached-after st=$?"`,
 	{
 		ID: "xtrace/embedded-quote-diverges", Category: "shell options",
 		Snippet: `set -x; x="it's"; echo "$x"`,
-		Why:     "ksh93 reaches for $'…' where bash and zsh close, escape and reopen",
+		Why:     "the spelling once something has decided a word needs quoting, and it is a four-way answer: bash and zsh close the quote, backslash-escape one and reopen — `'it'\\''s'` — ksh93 reaches for `$'it\\'s'`, ash closes the quote and puts the run inside *double* quotes, `'it'\"'\"'s'`, and dash quotes nothing at all. ash's is the reading interp.QuoteSingleOnly was added for: that shell has no `$'…'` in its trace anywhere, which is also why a control character and an empty field diverge two rows up",
 	},
 	{
 		ID: "xtrace/prefix-diverges", Category: "shell options",

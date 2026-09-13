@@ -457,6 +457,19 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 		r.diagf("%s: assigning to the whole of a produced association is not implemented yet\n", name)
 		return
 	}
+	if literalHoldsBareWords(parsed) {
+		// A shape one column refuses outright, asked before anything is
+		// written: the table this would have replaced is still standing when
+		// the refusal lands, which is where the shell that refuses leaves it.
+		if !r.ask(r.sem().KeyedLiteralBareWordsArePairs,
+			"a keyed literal's unkeyed words being alternating keys and values") {
+			if !r.unspecified {
+				r.fatal("%s\n", Wording(r.diag().KeyedLiteralBareWords,
+					"%s: a keyed literal may not hold unkeyed words", name))
+			}
+			return
+		}
+	}
 	// Written to, so the name leaves the declared-only set. Here rather than
 	// only in setAssocElem below, because an empty literal — `m=()`, the very
 	// case the listing tells apart — writes no element and would otherwise
@@ -499,6 +512,22 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 		}
 		r.setAssocElem(name, pairs[i], value)
 	}
+}
+
+// literalHoldsBareWords reports whether any element of a compound assignment
+// arrived without a `[key]=` head.
+//
+// The fields rather than the words: an element that expanded to nothing
+// contributes no pair and is not the shape being asked about, so `m=($empty)`
+// is an empty literal in the columns that take the form and must not be
+// refused by the column that does not.
+func literalHoldsBareWords(parsed []literalElem) bool {
+	for _, e := range parsed {
+		if !e.subscripted && len(e.fields) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // replacedElems is what the append elements of a *replacing* keyed literal

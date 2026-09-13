@@ -8450,6 +8450,26 @@ echo "st=$?"`,
 		Why:     "the matching `]` ends the *subscript* and not the word, so ksh93 names one file `pre[1 2]post` rather than stopping at the bracket. bash cuts at the blank and reaches `2]post` as a command. Without it the rule would read as `the target is the bracketed text`, which is a narrower claim than the shell makes",
 	},
 	{
+		ID: "assoc/a-keyed-literal-of-unkeyed-words", Category: "expansion",
+		Snippet: `typeset -A m=(alpha one); typeset -p m; echo after`,
+		Why:     "the shape a script reaches for when it wants a table in one line, and the three columns with the attribute do not agree that it is one. bash and zsh both read the unkeyed words as alternating keys and values and list a one-element table; ksh93 refuses it — `cannot append index array to associative array m`, status 1, and the shell ends without reaching `after`. The sentence names an index array where the line mentions none, which is kept as written because it is the diagnostic a script's log will hold (#2611)",
+	},
+	{
+		ID: "assoc/a-keyed-literal-of-unkeyed-words-over-a-table-with-elements", Category: "expansion",
+		Snippet: `typeset -A m=([x]=1); m=(a b); typeset -p m; echo after`,
+		Why:     "the same shape onto a table that already holds something, and the refusing column does not refuse it: ksh93 takes the words and *demotes* the name, listing `typeset -a m=(a b)` with the associative attribute gone, where the identical line on a table with no elements is the refusal one row up. The discriminator is whether the table happens to be empty, which is a state rather than a shape — recorded here so the divergence is visible, and deliberately not implemented",
+	},
+	{
+		ID: "assoc/a-keyed-literal-appending-unkeyed-words", Category: "expansion",
+		Snippet: `typeset -A m=([x]=1); m+=(a b); typeset -p m; echo after`,
+		Why:     "the append spelling of the row above, and it is the one that says the demotion belongs to replacement rather than to the words: the same table and the same words are refused here in the shell that took them with `=`. The two rows together are what keep a fix for either from being written as a rule about unkeyed words alone",
+	},
+	{
+		ID: "assoc/a-keyed-literal-of-keyed-elements", Category: "expansion",
+		Snippet: `typeset -A m=([a]=1 [b]=2); echo "[${m[a]}][${m[b]}]"; echo after`,
+		Why:     "the control the three rows above need: written with `[key]=value` heads the same literal is the table in every column that has the attribute, so what one of them refuses is the *unkeyed* shape and not compound assignment to a table. Without it the refusal reads as a shell with no literal syntax for a table at all",
+	},
+	{
 		ID: "assoc/a-missing-key-quoted-is-one-field", Category: "expansion",
 		Snippet: `typeset -A m; m[k]=v; set -- "${m[nokey]}"; echo "n=$#"`,
 		Why:     "the same guarantee where the subscript is a key rather than an index: a key nothing was stored under is one empty field in quotes, in all three that have the attribute. The declared path had its own reading of an absent element and gave no field either",

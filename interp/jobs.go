@@ -22,8 +22,25 @@ type Job struct {
 	// PID is the process, or 0 where the job is not one — a background
 	// builtin or compound command has no process of its own, which is stated
 	// rather than papered over.
+	//
+	// It is what has to be *signaled* and what has to be *waited for*, so it
+	// stays the kernel's answer and nothing else: a number invented here
+	// would be handed to `kill` and to the front end's wait hook. What a
+	// script reads is Job.Ident, which falls back to an invented number
+	// exactly where this is 0.
 	PID    int
 	Status int
+
+	// ident is the number a *script* names this job by: `$!`, `wait <n>`,
+	// `kill <n>`, and the id a `jobs -l` or `jobs -p` listing prints. It is
+	// the process id where the job has one, and a number this shell invented
+	// where it does not — see jobident.go for why a job with no process of
+	// its own still has to answer to one, and why the invented numbers start
+	// where they do.
+	//
+	// Assigned when the job is built, before anything can run, so that it is
+	// settled before `&` returns whether or not a process ever appears.
+	ident int
 
 	// Stopped says the process is still there and waiting to be told to go
 	// on — what ^Z leaves behind. A stopped job is not a finished one, and
@@ -483,6 +500,24 @@ func (r *Runner) backgroundStdin() io.Reader {
 	return emptyReader{}
 }
 
+// Ident is the number a script names this job by.
+//
+// The process id where the job has one, and the number this shell invented for
+// it where it has none. One reader's question — "which number does `$!` give
+// for this job, and which number does `wait` take back" — asked in one place,
+// so that a caller cannot answer half of it: `$!`, `wait <n>`, `kill <n>`, the
+// `[n] pid` announcement and a `jobs -l` row all read this.
+//
+// Read after the job's pid has settled, which every caller is: starting a job
+// blocks on Job.ready, and the field PID is written inside the same Once that
+// closes it.
+func (j *Job) Ident() int {
+	if j.PID != 0 {
+		return j.PID
+	}
+	return j.ident
+}
+
 // Finished reports whether the job has ended, without waiting for it.
 //
 // Not the same question as Stopped: a stopped job has not ended and is
@@ -524,6 +559,12 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		ready:    make(chan struct{}),
 		started:  make(chan struct{}),
 		stopNote: make(chan struct{}),
+		// The number a script will name it by if no process ever answers for
+		// it. Taken here rather than where the pid settles, because that
+		// happens on the job's own goroutine and `$!` is read on the shell's
+		// — and because a job the shell never gets a process for must still
+		// have an answer by the time `&` returns. See jobident.go.
+		ident: inventJobIdent(),
 		// The job body itself, released when its pid settles either way. It
 		// is raised here rather than inside the goroutine so that nothing can
 		// read the count before it is there.
@@ -695,7 +736,7 @@ func (r *Runner) announceJob(job *Job) {
 		// rather than assumed either way — see the axis (#1738).
 		return
 	}
-	r.errf("%s\n", Wording(r.diag().JobStarted, "[%[1]d] %[2]d", job.num, job.PID))
+	r.errf("%s\n", Wording(r.diag().JobStarted, "[%[1]d] %[2]d", job.num, job.Ident()))
 }
 
 // FinishedJobNotices is what to say about the jobs that have ended since it
@@ -873,7 +914,7 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 				// not giving up on the rest. Measured — with a stopped job
 				// and a running one, bash warns and then waits out the
 				// running one before coming back at 0.
-				r.reportStoppedWait(j, r.diag().WaitJobStopped, j.PID)
+				r.reportStoppedWait(j, r.diag().WaitJobStopped, j.Ident())
 			}
 		}
 		// The jobs stay where they are, because a job a bare `wait` reaped
@@ -915,26 +956,35 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		if !ok {
 			return r.waitBadJob(a)
 		}
+		waitable := r.waitableByIdent(pid)
+		if r.unspecified {
+			// The axis above went unanswered, so this shell has refused
+			// rather than reported. Saying `no such process` on top of that
+			// would be answering it after all.
+			return r.status
+		}
 		found := false
-		for _, j := range r.jobs {
-			if j.PID == pid {
-				st, sig, hit, stopped := r.waitFor(j)
-				if r.unspecified {
-					return r.status
-				}
-				if hit {
-					return r.interruptedWaitStatus(sig, true)
-				}
-				if stopped {
-					// Nothing said on this route — measured, `wait $!` for a
-					// stopped job is 145 in silence where `wait %1` warns —
-					// and the job stays in the table, because a job that
-					// stopped is not a job that finished.
-					return r.stoppedWaitStatus(j)
-				}
-				last, named = st, j
-				found = true
+		for _, j := range waitable {
+			st, sig, hit, stopped := r.waitFor(j)
+			if r.unspecified {
+				return r.status
 			}
+			if hit {
+				return r.interruptedWaitStatus(sig, true)
+			}
+			if stopped {
+				// Nothing said on this route — measured, `wait $!` for a
+				// stopped job is 145 in silence where `wait %1` warns —
+				// and the job stays in the table, because a job that
+				// stopped is not a job that finished.
+				return r.stoppedWaitStatus(j)
+			}
+			last, named = st, j
+			found = true
+			// And the job is finished with, exactly as the `%` spec route
+			// finishes with the job it waited out: its number goes back to
+			// the table. See Runner.reap.
+			r.reap(j)
 		}
 		if !found {
 			// A number that is not one of this shell's children. Unanimous
@@ -1097,7 +1147,7 @@ func (r *Runner) waitNext(args []string, opts waitOpts) int {
 	j := <-first
 	st := j.Status
 	r.storeWaitedPID(opts, j)
-	r.Forget(j)
+	r.reap(j)
 	return st
 }
 
@@ -1141,11 +1191,13 @@ func (r *Runner) waitNextJobs(args []string) ([]*Job, int) {
 			return nil, r.waitBadJob(a)
 		}
 		found := false
-		for _, j := range r.jobs {
-			if j.PID == pid {
-				jobs = append(jobs, j)
-				found = true
-			}
+		waitable := r.waitableByIdent(pid)
+		if r.unspecified {
+			return nil, r.status
+		}
+		for _, j := range waitable {
+			jobs = append(jobs, j)
+			found = true
 		}
 		if !found {
 			if w := r.diag().WaitNotOurChild; w != "" {
@@ -1170,7 +1222,7 @@ func (r *Runner) storeWaitedPID(opts waitOpts, j *Job) {
 	}
 	value := ""
 	if j != nil {
-		value = strconv.Itoa(j.PID)
+		value = strconv.Itoa(j.Ident())
 	}
 	r.storeThroughOperand(opts.pvar, value)
 }
@@ -1238,7 +1290,7 @@ func (r *Runner) waitJobSpecNaming(spec string) (int, *Job) {
 			r.reportStoppedWait(j, r.diag().WaitForJobStopped)
 			return r.stoppedWaitStatus(j), nil
 		}
-		r.Forget(j)
+		r.reap(j)
 		return st, j
 	case jobSpecAmbiguous:
 		r.diagf("%s\n", Wording(r.diag().AmbiguousJobSpec,
@@ -1555,7 +1607,7 @@ func (r *Runner) LastCommandWasInterrupted() bool { return r.diedOfSig == syscal
 // of these and not the other: it is the most recent background job for `$!`
 // and is in no table for `%%` to find.
 func (r *Runner) setLastJob(j *Job) {
-	r.lastJobPID, r.lastJobPIDSet = j.PID, true
+	r.lastJobPID, r.lastJobPIDSet = j.Ident(), true
 }
 
 // addJob puts a job in the table under a number of its own.
@@ -1725,6 +1777,126 @@ func (r *Runner) currentJob() *Job { current, _ := r.markedJobs(); return curren
 // was running can still wait for it after the table has forgotten it, which is
 // the question a caller holding a job is asking.
 func (r *Runner) Jobs() []*Job { return slices.Clone(r.jobs) }
+
+// reap is Forget for a job a `wait` has just reported the status of: the job
+// leaves the table, and is kept where a later `wait` naming the same id can
+// still find it.
+//
+// **The leaving is the point, and it is unanimous.** `%1` is a slot in the
+// table the shell holds *now*, not the first job it ever started, and a job
+// that has been waited out is not in it. Measured 2026-09-13 across the seven
+// columns — bash 5.3.15, that bash invoked as `sh`, bash 3.2.57, zsh 5.9.2,
+// ksh93u+ 2012-08-01, dash and BusyBox ash 1.37.0 — on
+//
+//	/bin/sh -c 'exit 7' & p=$!
+//	wait "$p"
+//	/bin/sh -c 'exit 4' &
+//	wait %1
+//
+// every one of them answers 4, and every one of them answers `wait %2` with
+// its no-such-job status: the new job took the number the reaped one had. This
+// shell answered 7 and numbered the new job `%2`, because waiting by process
+// id left the finished job sitting in the table forever (#2651). Waiting by
+// `%` spec already dropped it, which is why the same script written `wait %1`
+// throughout was right and the ordinary one was wrong.
+//
+// **The keeping is a second question with a second answer.** A job reaped by
+// name is still waitable by id in six of those seven columns — measured on
+// `/bin/sh -c 'exit 7' & p=$!; wait %1; wait "$p"`, which answers 7 everywhere
+// but ksh93u+, where it is 127. See Semantics.WaitRemembersAReapedJob, and the
+// narrower reading two columns hold that is not modelled here.
+func (r *Runner) reap(j *Job) {
+	r.Forget(j)
+	if slices.Contains(r.reaped, j) {
+		// Already remembered: a second `wait` for the same id reaches this
+		// through the memory itself, and a job listed twice would only push
+		// an older one out sooner.
+		return
+	}
+	// Ahead of the older ones, so that the bound below drops the oldest.
+	r.reaped = append(r.reaped, j)
+	if extra := len(r.reaped) - reapedJobsKept; extra > 0 {
+		// Cleared as they go, so that a job nobody can name again is not held
+		// alive by the slice that has already let go of it.
+		for i := range r.reaped[:extra] {
+			r.reaped[i] = nil
+		}
+		r.reaped = append(r.reaped[:0], r.reaped[extra:]...)
+	}
+}
+
+// reapedJobsKept bounds that memory.
+//
+// bash does not appear to bound it at all: measured 2026-09-13, `wait "$first"`
+// still answers 7 after five thousand further jobs have been started and
+// reaped. A bound is taken here anyway, because a session that starts a job a
+// second would otherwise grow a list for as long as it runs, and a script that
+// waits on an id it reaped a thousand jobs ago is past anything the panel was
+// measured doing. dash and BusyBox ash need none of it: their memory is the
+// table entry itself, which the next job's number evicts.
+const reapedJobsKept = 1024
+
+// waitableByIdent is the jobs a `wait` naming a process id may report: the
+// ones the table holds under that number, and the reaped one where the dialect
+// still remembers it.
+//
+// Several rather than one, because a number can name more than one job here
+// and used to name many: every job with no process of its own answered to 0,
+// so `wait 0` reached all of them at once and reported whichever came last.
+// Job.Ident is what closed that, and the shape stays because a caller must not
+// have to know it did.
+func (r *Runner) waitableByIdent(pid int) []*Job {
+	var jobs []*Job
+	for _, j := range r.jobs {
+		if j.Ident() == pid {
+			jobs = append(jobs, j)
+		}
+	}
+	if len(jobs) > 0 {
+		return jobs
+	}
+	// The memory, and the axis asked *at the disagreement and nowhere else*:
+	// only a number this shell has actually reaped a job under is a number
+	// the columns answer differently, so a `wait` for a process that was
+	// never this shell's is the same complaint it always was rather than a
+	// refusal over a question the script never reached.
+	var kept []*Job
+	for _, j := range r.reaped {
+		if j.Ident() == pid {
+			kept = append(kept, j)
+		}
+	}
+	if len(kept) == 0 {
+		return nil
+	}
+	if !r.ask(r.sem().WaitRemembersAReapedJob, "`wait` on the id of a job it has already reported") {
+		return nil
+	}
+	return kept
+}
+
+// jobByIdent is the job a plain number names, where that number is one this
+// shell invented for a job with no process of its own.
+//
+// Only an invented one. A real process id is not looked up here at all: it may
+// be this shell's child and it may be anything else on the machine, and a
+// `kill` aimed at it is aimed at the process whatever this shell thinks of it.
+// The invented numbers are out above every id a kernel can issue precisely so
+// that this test is a test and not a guess — see jobident.go.
+//
+// The table only. A job that has been reaped has no processes left to signal,
+// so finding it would change nothing about what `kill` does.
+func (r *Runner) jobByIdent(n int) *Job {
+	if n < inventedJobIdentBase {
+		return nil
+	}
+	for _, j := range r.jobs {
+		if j.Ident() == n {
+			return j
+		}
+	}
+	return nil
+}
 
 // Forget drops a job the shell has finished with — one that has been resumed
 // into the foreground and ended, or reported as done.

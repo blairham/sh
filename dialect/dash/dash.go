@@ -492,6 +492,8 @@ func Semantics() interp.Semantics {
 	// status, and there is no -n and no disown at all.
 	s.JobSpecsByName = interp.No
 	s.WaitReportsAMissingJob = interp.Yes
+	// And a job it has already reported stays waitable by its process id.
+	s.WaitRemembersAReapedJob = interp.Yes
 	s.WaitNWaitsForTheNextJob = interp.No
 	// Nor `-p`: `wait: Illegal option -p`. Measured 2026-09-13.
 	s.WaitPNamesTheFinishedJob = interp.No

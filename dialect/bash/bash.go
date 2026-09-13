@@ -470,6 +470,12 @@ func Semantics() interp.Semantics {
 	s.JobSpecsByName = interp.Yes
 	s.AmbiguousJobNameIsRefused = interp.Yes
 	s.WaitReportsAMissingJob = interp.Yes
+	// And a job it has already reported stays waitable by its process id
+	// once the job has left the table — measured on both routes into it,
+	// `wait %1; wait "$p"` and `wait "$p"` twice, in 5.3.15 and 3.2.57
+	// alike. See the axis for the narrower answer this same binary gives
+	// when it is invoked as `sh`.
+	s.WaitRemembersAReapedJob = interp.Yes
 	s.WaitNWaitsForTheNextJob = interp.Yes
 	// And `-p var` beside it, which names the job the status came from.
 	// bash 5's letter alone: the 3.2 build answers `wait: -p: invalid

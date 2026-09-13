@@ -481,3 +481,64 @@ func (s Shell) openState() string {
 	}
 	return strings.Join(words, " ")
 }
+
+// freshRow puts the prompt on a row of its own when output stopped part-way
+// along the one the cursor is on.
+//
+// Measured 2026-09-12 through a pseudo-terminal, with an rc file whose last
+// act is `printf 'LEFTOVER'`. The two shells with a line editor disagree
+// completely:
+//
+//	bash   LEFTOVERP>      the prompt runs straight on
+//	zsh    LEFTOVER%       a marker, and the prompt below
+//	       P>
+//
+// **The sequence is written unconditionally and erases itself when there was
+// nothing to mark**, which is the part worth understanding, because it is what
+// makes this possible at all: a shell cannot ask a terminal where the cursor
+// is, so a version that only marked a row it *knew* was unfinished would need
+// to track every write anything ever made to the screen.
+//
+//	the mark      in inverse, wherever the cursor happens to be
+//	cols-1 spaces so the row is exactly filled from column 0
+//	\r            the start of the row the cursor is now on
+//	a space       over the column the mark would occupy there
+//	\r            back to its start, which is where the prompt goes
+//
+// Follow it from column 0: the mark takes column 0, the padding fills to the
+// right-hand edge and the terminal has not wrapped — it wraps lazily, when
+// there is another character to put — so `\r` returns to the *same* row and
+// the space paints over the mark. Nothing is left behind.
+//
+// Follow it from column c: the padding overflows by c, so the terminal does
+// wrap, and `\r` returns to the start of the *next* row. The mark at column c
+// of the row above is never painted over, and the prompt begins below it.
+//
+// One sequence, two outcomes, and the terminal decides which by whether it had
+// to wrap. Without the padding there is no wrap and the prompt would be drawn
+// over the output it had just marked.
+//
+// The two answers behind it are separate and are **not** independent, which is
+// measured rather than assumed: with the return turned off the mark is not
+// written either, though the marking option is still on. So the return is the
+// outer of the two, and a dialect naming only the mark gets neither.
+func (e *editor) freshRow() {
+	var b strings.Builder
+	if e.returnsFirst {
+		if cols := e.cols(); e.unfinishedMark != "" && cols > 1 {
+			// Without a width there is no way to fill the row, so no way to
+			// make the terminal wrap, and the mark would be painted over by
+			// the prompt rather than marking anything.
+			b.WriteString(e.unfinishedMark)
+			b.WriteString(strings.Repeat(" ", cols-1))
+			b.WriteString("\r \r")
+		}
+		b.WriteString("\r")
+	}
+	if e.clearsBelow {
+		// Not part of either option: measured, this is written with both of
+		// them turned off. See EditorStyle.ClearsBelowThePrompt.
+		b.WriteString("\x1b[J")
+	}
+	e.write(b.String())
+}

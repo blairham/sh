@@ -51,6 +51,60 @@ type EditorStyle struct {
 	// to the screen. zsh does; bash does not.
 	ListQueryEchoesTheKey bool
 
+	// What to do about a line of output that never ended.
+	//
+	// A command — or a plugin loading — can leave the cursor part-way along a
+	// row, and the next prompt has to go somewhere. The two shells with a line
+	// editor disagree completely, measured 2026-09-12 through a
+	// pseudo-terminal with an rc file whose last act is `printf 'LEFTOVER'`:
+	//
+	//	bash   LEFTOVERP>                        the prompt runs straight on
+	//	zsh    LEFTOVER%                         a marker, and the prompt below
+	//	       P>
+	//
+	// zsh writes the marker in inverse at the cursor, pads with spaces to the
+	// end of the row so the terminal wraps, and returns — which leaves the
+	// unfinished output on the screen with a mark saying it was unfinished,
+	// and puts the prompt on a row of its own. This is what keeps the
+	// gitstatusd progress line powerlevel10k prints from being drawn over by
+	// the prompt (#2477).
+	//
+	// Both are named for the *options* that control them rather than given as
+	// values, because both are options a person turns off — see
+	// HistoryStyle.IgnoreSpaceOption, which is the same shape and the reason
+	// it is that shape. An empty name is a dialect with no such option, and
+	// the behavior is off.
+	//
+	// **The two are not independent, and the dependence is measured rather
+	// than assumed.** With `nopromptcr` the marker is not written *either*,
+	// though `promptsp` is still on — so the return is what the marking is
+	// built on, and a dialect that named only the marker would get neither.
+	// zsh's own documentation says as much; this is the check.
+	MarkUnfinishedOutputOption string
+
+	// ReturnBeforeThePromptOption names the option that puts the cursor at the
+	// start of the row before the prompt is drawn. See above for why it is
+	// also what makes the marking possible.
+	ReturnBeforeThePromptOption string
+
+	// UnfinishedOutputMark is what the marker looks like, written where the
+	// output stopped. zsh draws a bold, inverse `%`; a dialect with no such
+	// option leaves this empty and nothing is drawn.
+	//
+	// The text is the dialect's whole answer, escape sequences included, for
+	// the reason Interrupt above is: what a shell puts on the screen is not
+	// something the substrate should be choosing.
+	UnfinishedOutputMark string
+
+	// ClearsBelowThePrompt erases from the cursor to the end of the screen
+	// before the prompt is drawn.
+	//
+	// A third answer and not part of either option, which is measured: with
+	// **both** turned off zsh still writes `\e[J` and bash still writes
+	// nothing. So it is what this editor does about the rows below a prompt
+	// rather than something a person asked for, and it moves on its own.
+	ClearsBelowThePrompt bool
+
 	// ListQueryAcceptsOnlyYesOrNo keeps asking until one of them arrives,
 	// ringing the bell at anything else. bash does. zsh takes the first key
 	// whatever it is and treats everything but `y` as no.

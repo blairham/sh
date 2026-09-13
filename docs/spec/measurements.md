@@ -5164,7 +5164,7 @@ grades it and nothing drift-checks it either, for the same reason.
   echo "st=$?"
   wait
   ```
-- `jobs/wait-n-with-nothing-after-it-takes-the-first` — the control for the row above, and the pair is the whole of the rule: the same two jobs with no operands give 4, the job the narrowed form deliberately steps over. The two rows differ by two words and by which job is reported
+- `jobs/wait-n-with-nothing-after-it-takes-the-first` — the control for the row above, and the pair is the whole of the rule: the same two jobs with no operands give 4 in both bash 5 columns, the job the narrowed form deliberately steps over. The two rows differ by two words and by which job is reported. BusyBox ash has the letter and answers 129 here against 5 above, so it narrows too and reports a bare `-n` its own way
   ```sh
   { sleep 0.2; exit 4; } &
   { sleep 0.6; exit 5; } &
@@ -20589,6 +20589,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/an-assignment-prefix-does-not-move-the-command-word` | `HI~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `HI~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `HI~st=0` | `HI~st=0` | `HI~st=0` |
 | `alias/a-self-reference-through-a-prefix-does-not-loop` | `st=127` **2>** `<script>: 2: a: not found` | `st=127` **2>** `<script>: line 2: a: command not found` | `st=127` **2>** `<script>: line 2: a: command not found` | `st=127` **2>** `<script>: line 2: a: command not found` | `st=127` **2>** `<script>: line 2: a: not found` | `st=127` **2>** `<script>:2: command not found: a` | `st=127` **2>** `<script>: line 2: a: not found` |
 | `alias/a-self-reference-does-not-loop` | `x hi` | `hi` | `x hi` | `hi` | `x hi` | `hi` | `x hi` |
+| `alias/a-self-reference-past-a-separator-does-not-loop` | `took~st=127` **2>** `<script>: 3: a: not found` | `took~st=127` **2>** `<script>: line 3: a: command not found` | `took~st=127` **2>** `<script>: line 3: a: command not found` | `took~st=127` **2>** `<script>: line 3: a: command not found` | `took~st=127` **2>** `<script>: line 3: a: not found` | `took~st=127` **2>** `<script>:3: command not found: a` | `took~st=127` **2>** `<script>: line 3: a: not found` |
+| `alias/a-self-reference-two-names-away-past-a-separator` | `A~B~st=127` **2>** `<script>: 4: a: not found` | `A~B~st=127` **2>** `<script>: line 4: a: command not found` | `A~B~st=127` **2>** `<script>: line 4: a: command not found` | `A~B~st=127` **2>** `<script>: line 4: a: command not found` | `A~B~st=127` **2>** `<script>: line 4: a: not found` | `A~B~st=127` **2>** `<script>:4: command not found: a` | `A~B~st=127` **2>** `<script>: line 4: a: not found` |
+| `alias/a-name-the-body-has-finished-with-expands-again` | `X~Y` | `X~Y` | `X~Y` | `X~Y` | `X~Y` | `X~Y` | `X~Y` |
 | `alias/not-on-the-line-that-defines-it` | `st=127` **2>** `<shell>: 1: a: not found` | `st=127` **2>** `<shell>: line 1: a: command not found` | `st=127` **2>** `<shell>: line 1: a: command not found` | `st=127` **2>** `<shell>: a: command not found` | `st=127` **2>** `<shell>: a: not found` | `st=127` **2>** `<shell>:1: command not found: a` | `st=127` **2>** `<shell>: a: not found` |
 | `alias/a-diagnostic-names-the-use-site` | **2>** `<shell>: 2: nosuchcmd: not found` *(status 127)* | **2>** `<shell>: line 2: bad: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 1: bad: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: not found` *(status 127)* | **2>** `<shell>:2: command not found: bad` *(status 127)* | **2>** `<shell>: nosuchcmd: not found` *(status 127)* |
 | `alias/a-script-file-is-a-different-route` | `hit` | **2>** `<script>: line 2: a: command not found` *(status 127)* | `hit` | **2>** `<script>: line 2: a: command not found` *(status 127)* | `hit` | `hit` | `hit` |
@@ -20633,7 +20636,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `alias/a-pattern-character-in-an-alias-name` | `st=0~two` | `st=0~two` | `st=0~two` | `st=0~two` | **2>** `alias: a*b=echo: invalid alias name` *(status 1)* | `st=0~two` | `st=0~two` |
 | `alias/the-name-of-a-bare-lookup` | `st=1~two` **2>** `alias: a$b not found` | `st=1~two` **2>** `<shell>: line 1: alias: a$b: not found` | `st=1~two` **2>** `<shell>: line 1: alias: a$b: not found` | `st=1~two` **2>** `<shell>: line 0: alias: a$b: not found` | **2>** `alias: a$b: invalid alias name` *(status 1)* | `st=1~two` | `st=1~two` **2>** `alias: a$b not found` |
 | `alias/a-reserved-word-is-read-the-way-the-grammar-reads-it` | `[a]` | `took~[a]` | `[a]` | `took~[a]` | `[a]` | `took~[a]` | `[a]` |
-| `alias/a-reserved-word-after-an-alias-ending-in-a-blank` | `[a]` | `took~[a]` | `[a]` | `took~[a]` | `[a]` | `took~[a]` | `[a]` |
+| `alias/a-reserved-word-after-an-alias-ending-in-a-blank` | `st=1` | `took~st=0` | `st=1` | `took~st=0` | `st=1` | `took~st=0` | `st=1` |
 | `alias/a-reserved-word-alias-in-posix-mode` | **2>** `<script>: 3: set: Illegal option -o posix` *(status 2)* | `[a]` | `[a]` | `[a]` | **2>** `<script>[3]: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<script>:set:3: no such option: posix` *(status 1)* | `[a]` **2>** `<script>: set: line 3: illegal option -o posix` |
 | `alias/leaving-posix-mode-hands-the-reserved-word-back` | **2>** `<script>: 3: set: Illegal option -o posix` *(status 2)* | `took~[a]` | `took~[a]` | `took~[a]` | **2>** `<script>[3]: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<script>:set:3: no such option: posix` *(status 1)* | `[a]` **2>** `<script>: set: line 3: illegal option -o posix~<script>: set: line 4: illegal option +o posix` |
 | `alias/a-word-the-grammar-does-not-reserve-expands-in-posix-mode` | **2>** `<script>: 2: set: Illegal option -o posix` *(status 2)* | `took there` | `took there` | `took there` | **2>** `<script>[2]: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<script>:set:2: no such option: posix` *(status 1)* | `took there` **2>** `<script>: set: line 2: illegal option -o posix` |
@@ -20669,6 +20672,28 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   alias echo='echo x'
   echo hi
+  ```
+- `alias/a-self-reference-past-a-separator-does-not-loop` — a body may hold a separator, so it may hold more than one command — and the name is spent for every one of them. Unanimous across all seven columns: `took`, then the shell's own words for `a: not found`, at 127. We expanded it again in the second command and did that forever, which is a shell that hangs on a line every member of the panel answers (#2299)
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias a='echo took;a'
+  a
+  echo "st=$?"
+  ```
+- `alias/a-self-reference-two-names-away-past-a-separator` — the same fact through two names, which is what says the spent set is the *chain* of expansions still open around the word rather than the one body it came out of: `A`, `B`, and then the first name as an ordinary word nobody has
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias a='echo A;b'
+  alias b='echo B;a'
+  a
+  echo "st=$?"
+  ```
+- `alias/a-name-the-body-has-finished-with-expands-again` — the other side of the row above, and the control that stops a fix from over-reaching: a name the body expanded and *finished with* is spendable again in the body's next command, so this is `X` and `Y` rather than `X` and a command not found. Keeping the spent set for the whole body would pass the two rows above and fail this one
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias e=echo
+  alias a='e X; e Y'
+  a
   ```
 - `alias/not-on-the-line-that-defines-it` — expansion happens when a line is *read*, and the whole line was read before the `alias` ran — so this is a command not found in every shell, including the two that expand
   ```sh
@@ -20936,16 +20961,15 @@ grades it and nothing drift-checks it either, for the same reason.
   do echo "[$x]"
   done
   ```
-- `alias/a-reserved-word-after-an-alias-ending-in-a-blank` — the same question one position further in: a value ending in a space makes the next word eligible, and the word made eligible that way is judged by the same rule. The control for the row above, and the same split — the protection is about the name and not about where the lexer found it
+- `alias/a-reserved-word-after-an-alias-ending-in-a-blank` — the same question one position further in: a value ending in a space makes the next word eligible — the rule `alias/a-trailing-space-carries-on` pins on an ordinary name — and the word made eligible that way is judged by the same reservation. Same split as the row above and on two visible things at once: `took` and status 0 where the alias won, silence and 1 where `! true` stayed a negation. `!` rather than `for` because every corpus snippet has to be a program on its own, and `!` is the one reserved word that is an ordinary argument in this position: `sp for x in a` followed by `do` does not parse until the substitution has already happened, so a row spelled that way would be asking the parser a question only the answer can pose
   ```sh
   shopt -s expand_aliases 2>/dev/null
   alias sp=' '
-  alias for='echo took;for'
-  sp for x in a
-  do echo "[$x]"
-  done
+  alias '!'='echo took;'
+  sp ! true
+  echo "st=$?"
   ```
-- `alias/a-reserved-word-alias-in-posix-mode` — the mode moves it: the two bash builds print only the loop here where they print `took` above. The other three have no `posix` option at all and say so in three different ways — an illegal option, bad option(s) with the usage line, and no such option — which is the same taxonomy this corpus records everywhere the name is bash's
+- `alias/a-reserved-word-alias-in-posix-mode` — the mode moves it: the two bash builds print only the loop here where they print `took` above. The other four have no `posix` option at all and say so in three different ways — an illegal option, bad option(s) with the usage line, and no such option — which is the same taxonomy this corpus records everywhere the name is bash's. dash and ksh93 end the script over it and BusyBox ash reports it and carries on, which is why ash still reaches the loop and prints `[a]`
   ```sh
   shopt -s expand_aliases 2>/dev/null
   alias for='echo took;for'
@@ -21088,7 +21112,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `startup/the-interactive-file-is-read-at-a-prompt-by-name` | `main` **2>** `<shell>: 0: can't access tty; job control turned off` | `.bashrc~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `.bashrc~main` **2>** `<shell>: no job control in this shell` | `main` | `.zshrc~main` | `main` **2>** `<shell>: can't access tty; job control turned off` |
 | `startup/an-option-names-the-interactive-file` | **2>** `<shell>: 0: Illegal option --` *(status 2)* | `named-rc-file~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `named-rc-file~main` **2>** `<shell>: no job control in this shell` | **2>** `<shell>: rcfile: bad option(s)~Usage: <shell> [ options ] [arg ...]` *(status 2)* | **2>** `<shell>: no such option: rcfile` *(status 1)* | **2>** `<shell>: bad option '--rcfile'` *(status 2)* |
 
-- `invoke/posix-mode-from-the-invocation-reaches-the-first-line` — the mode asked for on the command line, which is the same axis as the `set -o posix` row and a different route to it. It is a row of its own because the routes are not the same code: the mode is entered before a line of the program has been read, and a front end that seeded its watch with what the runner already held would hand the parser the mode for every *later* line and not for the program's own. Both bash builds print only the loop; the other three have no such option
+- `invoke/posix-mode-from-the-invocation-reaches-the-first-line` — the mode asked for on the command line, which is the same axis as the `set -o posix` row and a different route to it. It is a row of its own because the routes are not the same code: the mode is entered before a line of the program has been read, and a front end that seeded its watch with what the runner already held would hand the parser the mode for every *later* line and not for the program's own. Both bash builds print only the loop; the other four have no such option, and refuse the invocation rather than the line — nothing runs at all in those columns, which is the difference between an option refused at startup and one refused by `set`
   ```sh
   shopt -s expand_aliases 2>/dev/null
   alias for='echo took;for'

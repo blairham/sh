@@ -17664,6 +17664,34 @@ echo hi`,
 		Why: "an alias is not expanded twice in one command, which is what stops `alias echo='echo x'` from recurring forever — the second `echo` is an ordinary word and runs the builtin",
 	},
 	{
+		ID: "alias/a-self-reference-past-a-separator-does-not-loop", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias a='echo took;a'
+a
+echo "st=$?"`,
+		Why: "a body may hold a separator, so it may hold more than one command — and the name is spent for every one of them. Unanimous across all seven columns: `took`, then the shell's own words for `a: not found`, at 127. We expanded it again in the second command and did that forever, which is a shell that hangs on a line every member of the panel answers (#2299)",
+	},
+	{
+		ID: "alias/a-self-reference-two-names-away-past-a-separator", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias a='echo A;b'
+alias b='echo B;a'
+a
+echo "st=$?"`,
+		Why: "the same fact through two names, which is what says the spent set is the *chain* of expansions still open around the word rather than the one body it came out of: `A`, `B`, and then the first name as an ordinary word nobody has",
+	},
+	{
+		ID: "alias/a-name-the-body-has-finished-with-expands-again", Category: "alias",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias e=echo
+alias a='e X; e Y'
+a`,
+		Why: "the other side of the row above, and the control that stops a fix from over-reaching: a name the body expanded and *finished with* is spendable again in the body's next command, so this is `X` and `Y` rather than `X` and a command not found. Keeping the spent set for the whole body would pass the two rows above and fail this one",
+	},
+	{
 		ID: "alias/not-on-the-line-that-defines-it", Category: "alias",
 		Snippet: `alias a='echo hit'; a
 echo "st=$?"`,
@@ -18006,11 +18034,10 @@ done`,
 		Script: true,
 		Snippet: `shopt -s expand_aliases 2>/dev/null
 alias sp=' '
-alias for='echo took;for'
-sp for x in a
-do echo "[$x]"
-done`,
-		Why: "the same question one position further in: a value ending in a space makes the next word eligible, and the word made eligible that way is judged by the same rule. The control for the row above, and the same split — the protection is about the name and not about where the lexer found it",
+alias '!'='echo took;'
+sp ! true
+echo "st=$?"`,
+		Why: "the same question one position further in: a value ending in a space makes the next word eligible — the rule `alias/a-trailing-space-carries-on` pins on an ordinary name — and the word made eligible that way is judged by the same reservation. Same split as the row above and on two visible things at once: `took` and status 0 where the alias won, silence and 1 where `! true` stayed a negation. `!` rather than `for` because every corpus snippet has to be a program on its own, and `!` is the one reserved word that is an ordinary argument in this position: `sp for x in a` followed by `do` does not parse until the substitution has already happened, so a row spelled that way would be asking the parser a question only the answer can pose",
 	},
 	{
 		ID: "alias/a-reserved-word-alias-in-posix-mode", Category: "alias",
@@ -18021,7 +18048,7 @@ set -o posix
 for x in a
 do echo "[$x]"
 done`,
-		Why: "the mode moves it: the two bash builds print only the loop here where they print `took` above. The other three have no `posix` option at all and say so in three different ways — an illegal option, bad option(s) with the usage line, and no such option — which is the same taxonomy this corpus records everywhere the name is bash's",
+		Why: "the mode moves it: the two bash builds print only the loop here where they print `took` above. The other four have no `posix` option at all and say so in three different ways — an illegal option, bad option(s) with the usage line, and no such option — which is the same taxonomy this corpus records everywhere the name is bash's. dash and ksh93 end the script over it and BusyBox ash reports it and carries on, which is why ash still reaches the loop and prints `[a]`",
 	},
 	{
 		ID: "alias/leaving-posix-mode-hands-the-reserved-word-back", Category: "alias",
@@ -18054,7 +18081,7 @@ alias for='echo took;for'
 for x in a
 do echo "[$x]"
 done`,
-		Why: "the mode asked for on the command line, which is the same axis as the `set -o posix` row and a different route to it. It is a row of its own because the routes are not the same code: the mode is entered before a line of the program has been read, and a front end that seeded its watch with what the runner already held would hand the parser the mode for every *later* line and not for the program's own. Both bash builds print only the loop; the other three have no such option",
+		Why: "the mode asked for on the command line, which is the same axis as the `set -o posix` row and a different route to it. It is a row of its own because the routes are not the same code: the mode is entered before a line of the program has been read, and a front end that seeded its watch with what the runner already held would hand the parser the mode for every *later* line and not for the program's own. Both bash builds print only the loop; the other four have no such option, and refuse the invocation rather than the line — nothing runs at all in those columns, which is the difference between an option refused at startup and one refused by `set`",
 	},
 	{
 		ID:       "invoke/called-sh-protects-a-reserved-word-alias",
@@ -18086,7 +18113,7 @@ wait`,
 wait -n
 echo "st=$?"
 wait`,
-		Why: "the control for the row above, and the pair is the whole of the rule: the same two jobs with no operands give 4, the job the narrowed form deliberately steps over. The two rows differ by two words and by which job is reported",
+		Why: "the control for the row above, and the pair is the whole of the rule: the same two jobs with no operands give 4 in both bash 5 columns, the job the narrowed form deliberately steps over. The two rows differ by two words and by which job is reported. BusyBox ash has the letter and answers 129 here against 5 above, so it narrows too and reports a bare `-n` its own way",
 	},
 	{
 		ID: "jobs/wait-p-names-the-job-the-status-came-from", Category: "builtins",

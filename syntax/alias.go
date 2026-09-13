@@ -73,7 +73,10 @@ func (p *Parser) expandCommandWord(done map[string]bool) {
 func (p *Parser) expandAlias(done map[string]bool, look Aliases) {
 	for p.aliasable(look) {
 		name := p.tok.Text
-		if done[name] {
+		if done[name] || p.aliasChain[name] {
+			// Spent in this command, or spent by an expansion this token is
+			// still inside — `alias a='echo took;a'` reaches the second
+			// reading and nothing else does. See Parser.pendingChains.
 			return
 		}
 		if !p.dialect.AliasesExpandReservedWords && p.reservedInDialect(name) {
@@ -90,7 +93,7 @@ func (p *Parser) expandAlias(done map[string]bool, look Aliases) {
 			return
 		}
 		done[name] = true
-		p.spliceAlias(value)
+		p.spliceAlias(name, value)
 	}
 }
 
@@ -177,7 +180,7 @@ func (p *Parser) expandSuffixAlias(done map[string]bool) {
 		return
 	}
 	done[word] = true
-	p.spliceAlias(value + " " + word)
+	p.spliceAlias(word, value+" "+word)
 }
 
 // aliasable reports whether the current token could name an alias that look
@@ -207,7 +210,15 @@ func (p *Parser) aliasable(look Aliases) bool {
 // which is the rule behind `alias sudo='sudo '`: the command after `sudo` is
 // itself expanded. Unanimous, and it is why this is not simply "expand the
 // command word".
-func (p *Parser) spliceAlias(value string) {
+func (p *Parser) spliceAlias(name, value string) {
+	// The chain this body's tokens are inside: whatever the alias word was
+	// already inside, plus this name. Built fresh rather than written
+	// through, because the tokens already handed out hold the old one.
+	chain := make(map[string]bool, len(p.aliasChain)+1)
+	for n := range p.aliasChain {
+		chain[n] = true
+	}
+	chain[name] = true
 	at := p.tok.Pos
 	end := p.tok.End
 	sub := NewLexer(value, p.dialect)
@@ -256,6 +267,12 @@ func (p *Parser) spliceAlias(value string) {
 	p.aliasSource = value
 	p.pending = append(toks[1:], p.pending...)
 	p.pendingTouches = append(touches[1:], p.pendingTouches...)
+	chains := make([]map[string]bool, len(toks)-1)
+	for i := range chains {
+		chains[i] = chain
+	}
+	p.pendingChains = append(chains, p.pendingChains...)
+	p.aliasChain = chain
 	p.aliasSpliced = len(toks)
 	p.tok = toks[0]
 	// The first token of a body replaces the alias word, which stood where

@@ -253,6 +253,28 @@ func Probes() []Probe {
 			},
 		},
 		{
+			// The sibling of the function probe below, and the axis it is
+			// easiest to read the wrong answer off: the shells that answer
+			// `No` here are the two with a POSIX mode, and both move to
+			// `Yes` under it. This row asks each shell under its **own
+			// name** with no mode on, which is what makes it the preset's
+			// default rather than the shell's whole answer — the mode's half
+			// is the `set/` and `invoke/` rows, and this instrument grades
+			// presets (#2659).
+			Field:   "AssignmentPrefixPersistsOnSpecialBuiltin",
+			Cases:   []string{"cmd/assignment-prefix-special-builtin"},
+			Reading: "`x=1; x=2 export y=3` leaves `x` holding 2 in a shell that keeps a prefix written in front of a special builtin and 1 in one that takes it back",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				switch strings.TrimSpace(cells["cmd/assignment-prefix-special-builtin"].Stdout) {
+				case "[2]":
+					return "Yes", ""
+				case "[1]":
+					return "No", ""
+				}
+				return "", "the row printed neither value, so the prefix never reached the builtin"
+			},
+		},
+		{
 			Field:   "AssignmentPrefixPersistsAfterAFunction",
 			Cases:   []string{"axis/whether-a-prefix-to-a-function-persists"},
 			Reading: "`v=9 f` leaves `v` holding 9 in a shell where the prefix persists and 1 in one that takes it back",

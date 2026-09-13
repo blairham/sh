@@ -474,23 +474,50 @@ it has to strip them out of the word list wherever they occur.
 
 The assignment applies to that command's environment only. But POSIX
 requires assignments preceding a **special builtin** to persist, and the
-panel splits:
+panel splits — **on the default, not on the behavior**. Measured
+2026-09-13 over `FOO=1 : ; echo "[$FOO]"`, with the same answer from
+`FOO=1 export -p`, `FOO=1 . /dev/null` and `FOO=1 source /dev/null`:
 
-| probe | dash | bash | ksh93 | zsh |
-| --- | --- | --- | --- | --- |
-| `x=1; x=2 export y=3; echo $x` | **2** | 1 | **2** | 1 |
+| shell | default | its own POSIX mode | called `sh` |
+| --- | --- | --- | --- |
+| bash 5.3 | `[]` | `[1]` — `-o posix` | `[1]` |
+| bash 3.2 | `[]` | `[1]` — `-o posix` | `[1]` |
+| zsh 5.9 | `[]` | `[1]` — `-o posixbuiltins` | `[1]` |
+| dash | `[1]` | no such mode | `[1]` |
+| ksh93u+ | `[1]` | no such mode | `[1]` |
+| BusyBox ash | `[1]` | no such mode | `[1]` |
 
-dash and ksh93 follow POSIX; bash and zsh do not outside POSIX mode. The
-set of special builtins is fixed and small — `break`, `:`, `continue`,
-`.`, `eval`, `exec`, `exit`, `export`, `readonly`, `return`, `set`,
-`shift`, `times`, `trap`, `unset` — and it also governs whether a failure
-is fatal, so it is one concept with two consequences.
+Every shell with a POSIX mode moves to the standard's answer, and every
+shell without one already holds it. `x=2 true` is the control and stays
+transient in all six under either mode: what the mode moves is the
+special-builtin rule, not the prefix rule as a whole.
 
-Semantics axis: `AssignmentPrefixPersistsOnSpecialBuiltin` — dash and
-ksh93 yes, bash and zsh no. Unanswered in the core. POSIX requires yes,
-so the `posix` preset says yes and the two shells that ship a POSIX mode
-switch to it there; recording that as a default of "no" would have
-inverted the standard's own answer.
+The set of special builtins is fixed and small — `break`, `:`,
+`continue`, `.`, `eval`, `exec`, `exit`, `export`, `readonly`, `return`,
+`set`, `shift`, `times`, `trap`, `unset`, and `source` where a shell has
+that spelling — and it also governs whether a failure is fatal, so it is
+one concept with two consequences.
+
+Semantics axis: `AssignmentPrefixPersistsOnSpecialBuiltin` — dash,
+ksh93 and ash yes, bash and zsh no. Unanswered in the core. POSIX
+requires yes, so the `posix` preset says yes and recording that as a
+default of "no" would have inverted the standard's own answer.
+
+The mode is where the two halves of the table meet, and it reaches the
+axis through two doors rather than one. `Runner.SetPosixMode` — the
+core's mode, which bash's `set -o posix` and *every* dialect's `sh` name
+enter — swaps in the standard's `Yes`, with the dialect's own answer
+saved for the way out. The zsh dialect's `posixbuiltins` swaps it too,
+because that option is zsh's only door: a zsh called `sh` has
+POSIX_BUILTINS on, and `unsetopt posixbuiltins` there makes the prefix
+transient again.
+
+Writing the standard's answer into the core's mode is safe here only
+because of the table's second half. That mode is entered by dash, ksh93
+and ash alike under the name `sh`, so a written-in `Yes` imposes nothing
+on them — `Yes` is what all three say under every name. The contrast is
+`BadOptionToSpecialBuiltinFatal`, where zsh's mode leaves the axis alone
+and the answer had to come from a `…InPosixMode` twin instead.
 
 ### A prefix to a function: visible in all seven, kept by one
 

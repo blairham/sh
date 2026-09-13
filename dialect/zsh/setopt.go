@@ -538,22 +538,44 @@ var zshOptions = []zshOption{
 	recorded("posixaliases", false),
 	recorded("posixargzero", false),
 	{
-		// zsh's POSIX_BUILTINS, and the one thing it does that this shell
-		// can speak about: with it on, `command name` reaches the builtin of
-		// that name, which is what `command` means in POSIX and in the other
-		// four dialects. With it off — a plain zsh — the word asks for an
+		// zsh's POSIX_BUILTINS, and the two things it does that this shell
+		// can speak about.
+		//
+		// The first: with it on, `command name` reaches the builtin of that
+		// name, which is what `command` means in POSIX and in the other four
+		// dialects. With it off — a plain zsh — the word asks for an
 		// external program alone, so `command set -o globstar` is `command
 		// not found: set` at 127 and the option is never set.
 		//
-		// Read off the axis rather than off a stored bit, which is what
-		// makes `(setopt posixbuiltins)` stay in the subshell — the same
-		// arrangement `shwordsplit` and `globsubst` use.
+		// The second: an assignment written in front of a special builtin is
+		// still set on the next line. Measured 2026-09-13 —
+		// `zsh -o posixbuiltins -c 'FOO=1 : ; echo "[$FOO]"'` is `[1]` where
+		// a plain zsh prints `[]`, and `unsetopt posixbuiltins` puts the
+		// transient reading back. This option is the *only* door to it in
+		// zsh: a zsh invoked as `sh` has POSIX_BUILTINS on, and turning it
+		// off there makes the prefix transient again, so the name is a
+		// starting position for this option rather than a second mechanism
+		// beside it. `FOO=1 true` is the control and stays transient either
+		// way, which is what keeps this the special-builtin rule and not the
+		// prefix rule as a whole (#2659).
+		//
+		// Both read off their axis rather than off a stored bit, which is
+		// what makes `(setopt posixbuiltins)` stay in the subshell — the
+		// same arrangement `shwordsplit` and `globsubst` use. The state is
+		// reported from the first of the two because a shell invoked as `sh`
+		// reaches the second through interp.Runner.SetPosixMode without
+		// passing through here, and an option reporting itself on from a
+		// field somebody else wrote would say `setopt` had run when it had
+		// not.
 		base: "posixbuiltins", def: false,
 		get: func(r *interp.Runner) bool {
 			return r.Semantics.CommandReachesABuiltin == interp.Yes
 		},
 		set: func(r *interp.Runner, on bool) int {
-			swapAxes(r, func(s *interp.Semantics) { s.CommandReachesABuiltin = answer(on) })
+			swapAxes(r, func(s *interp.Semantics) {
+				s.CommandReachesABuiltin = answer(on)
+				s.AssignmentPrefixPersistsOnSpecialBuiltin = answer(on)
+			})
 			return 0
 		},
 	},

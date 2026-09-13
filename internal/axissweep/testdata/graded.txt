@@ -21,6 +21,7 @@ ash    AliasInvalidNameFatal                                -
 ash    ArithShortCircuitEvaluatesTheRightOperand            Yes
 ash    ArrayBaseIsZero                                      -
 ash    AssignmentPrefixPersistsAfterAFunction               No
+ash    AssignmentPrefixPersistsOnSpecialBuiltin             Yes
 ash    BadSetOptionLetterFatal                              Yes
 ash    BadSetOptionNameAtInvocationExitsZero                Yes
 ash    BadSetOptionNameFatal                                No
@@ -47,6 +48,7 @@ bash   AliasInvalidNameFatal                                No
 bash   ArithShortCircuitEvaluatesTheRightOperand            No
 bash   ArrayBaseIsZero                                      Yes
 bash   AssignmentPrefixPersistsAfterAFunction               No
+bash   AssignmentPrefixPersistsOnSpecialBuiltin             No
 bash   BadSetOptionLetterFatal                              No
 bash   BadSetOptionNameAtInvocationExitsZero                No
 bash   BadSetOptionNameFatal                                No
@@ -73,6 +75,7 @@ dash   AliasInvalidNameFatal                                -
 dash   ArithShortCircuitEvaluatesTheRightOperand            No
 dash   ArrayBaseIsZero                                      -
 dash   AssignmentPrefixPersistsAfterAFunction               No
+dash   AssignmentPrefixPersistsOnSpecialBuiltin             Yes
 dash   BadSetOptionLetterFatal                              Yes
 dash   BadSetOptionNameAtInvocationExitsZero                No
 dash   BadSetOptionNameFatal                                Yes
@@ -99,6 +102,7 @@ ksh    AliasInvalidNameFatal                                Yes
 ksh    ArithShortCircuitEvaluatesTheRightOperand            No
 ksh    ArrayBaseIsZero                                      Yes
 ksh    AssignmentPrefixPersistsAfterAFunction               Yes
+ksh    AssignmentPrefixPersistsOnSpecialBuiltin             Yes
 ksh    BadSetOptionLetterFatal                              Yes
 ksh    BadSetOptionNameAtInvocationExitsZero                No
 ksh    BadSetOptionNameFatal                                Yes
@@ -125,6 +129,7 @@ zsh    AliasInvalidNameFatal                                -
 zsh    ArithShortCircuitEvaluatesTheRightOperand            No
 zsh    ArrayBaseIsZero                                      No
 zsh    AssignmentPrefixPersistsAfterAFunction               No
+zsh    AssignmentPrefixPersistsOnSpecialBuiltin             No
 zsh    BadSetOptionLetterFatal                              Yes
 zsh    BadSetOptionNameAtInvocationExitsZero                No
 zsh    BadSetOptionNameFatal                                Yes

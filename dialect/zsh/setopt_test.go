@@ -564,3 +564,35 @@ func TestPosixBuiltinsDecidesWhetherCommandReachesABuiltin(t *testing.T) {
 		t.Errorf("out %q, want the name in the deviation listing", out)
 	}
 }
+
+// The second thing `posixbuiltins` decides: whether an assignment written in
+// front of a special builtin is still set on the next line.
+//
+// Measured 2026-09-13 — `zsh -o posixbuiltins -c 'FOO=1 : ; echo "[$FOO]"'` is
+// `[1]` where a plain zsh prints `[]`, and `unsetopt posixbuiltins` puts the
+// transient reading back. This option is zsh's only door to the axis: a zsh
+// invoked as `sh` has POSIX_BUILTINS on and turning it off *there* makes the
+// prefix transient again, so the name is a starting position for the option
+// rather than a mechanism beside it.
+//
+// `v=2 true` is the control and it stays transient with the option on, which is
+// what keeps this the special-builtin rule and not the prefix rule as a whole
+// (#2659).
+func TestPosixBuiltinsDecidesWhetherAPrefixOnASpecialBuiltinPersists(t *testing.T) {
+	const probe = `v=1; v=2 export w=3; echo "[$v]"; x=1; x=2 true; echo "[$x]"`
+
+	out, _ := runZsh(t, t.TempDir(), probe)
+	if out != "[1]\n[1]\n" {
+		t.Errorf("off: out %q, want both prefixes taken back", out)
+	}
+
+	out, _ = runZsh(t, t.TempDir(), `setopt posixbuiltins; `+probe)
+	if out != "[2]\n[1]\n" {
+		t.Errorf("on: out %q, want the special builtin's prefix kept and the ordinary one taken back", out)
+	}
+
+	out, _ = runZsh(t, t.TempDir(), `setopt posixbuiltins; unsetopt posixbuiltins; `+probe)
+	if out != "[1]\n[1]\n" {
+		t.Errorf("round trip: out %q, want the transient reading back", out)
+	}
+}

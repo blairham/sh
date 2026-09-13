@@ -1844,12 +1844,16 @@ func (l *Lexer) scanGroupSpans() []Span {
 
 		case c == '\\':
 			escPos := l.pos()
+			atStart := lit.Len() == 0 && len(spans) == 0
 			l.advance()
 			if l.eof() {
-				l.ranOut("pattern")
-				l.fail(escPos, "input ends after a backslash")
+				// The same word rule scanWord reads, from the same place.
+				// The group is unterminated too, and that is the refusal
+				// the panel gives here — reporting the backslash instead
+				// named the wrong thing and got in front of it.
 				flush()
-				return spans
+				spans = append(spans, l.endOfInputBackslashSpan(escPos, atStart))
+				continue
 			}
 			// Its own span, for the reason the same case in scanWord gives:
 			// the protection has to outlive the lexer, because a later stage
@@ -1979,6 +1983,34 @@ func (l *Lexer) inAssignmentValue() bool {
 	return isNameIn(head, l.dialect.DottedName)
 }
 
+// endOfInputBackslashSpan is what an unquoted backslash the input ends
+// immediately after leaves in the word being read.
+//
+// One home for the rule, called from both scans that can reach it — a word's
+// and a pattern group's — because a decision written twice is a decision that
+// can be changed once. It always returns a span, including for the reading
+// that drops the backslash: a word that was nothing but the backslash is
+// still a word there, and zsh prints the empty field to prove it.
+//
+// alone says the backslash is the first thing in the word, which only
+// [EndOfInputBackslashIsLiteralOnlyAtAWordStart] asks about.
+func (l *Lexer) endOfInputBackslashSpan(escPos Pos, alone bool) Span {
+	value := "\\"
+	switch l.dialect.BackslashAtEndOfInput {
+	case EndOfInputBackslashIsDropped:
+		value = ""
+	case EndOfInputBackslashIsLiteralOnlyAtAWordStart:
+		if !alone {
+			value = ""
+		}
+	}
+	// BackslashQuoted rather than plain literal text, for the reason the
+	// ordinary escape below gives: the character is protected, and a field
+	// that forgot that would take the backslash back as an escape the next
+	// time something read it.
+	return Span{Kind: Literal, Value: value, Quoting: BackslashQuoted, Pos: escPos}
+}
+
 // scanWord reads a word as a sequence of spans, one per run of uniform
 // quoting. The spans are the point: a"b c"d is one word of three spans, and
 // only the unquoted ones are subject to splitting and globbing later.
@@ -2044,11 +2076,14 @@ func (l *Lexer) scanWord(start Pos) Token {
 
 		case c == '\\':
 			escPos := l.pos()
+			atStart := lit.Len() == 0 && len(spans) == 0
 			l.advance()
 			if l.eof() {
-				// A trailing backslash is unfinished rather than wrong.
-				l.ranOut("\\")
-				l.fail(l.pos(), "input ends after a backslash")
+				// A trailing backslash is neither unfinished nor wrong: it
+				// is a word that ends in one, and what it leaves behind is
+				// the dialect's. See [Dialect.BackslashAtEndOfInput].
+				flush()
+				spans = append(spans, l.endOfInputBackslashSpan(escPos, atStart))
 				break
 			}
 			// Its own span: the protection must outlive the lexer, because a

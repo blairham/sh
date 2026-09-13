@@ -305,6 +305,55 @@ const (
 	BareNegationAtEitherPlace
 )
 
+// EndOfInputBackslash is what an unquoted backslash the input ends
+// immediately after becomes — a line continuation with no line to continue.
+// See [Dialect.BackslashAtEndOfInput].
+//
+// No shell refuses it, which is the half of this with no axis in it: all
+// eight columns run the line and exit 0. What the backslash *becomes* is
+// where they part, and they part three ways among the dialects, so a bool
+// could be given a value for neither ksh93 nor the pair it sits between.
+//
+// Measured 2026-09-13 over `-c`, and over a script file with no trailing
+// newline, which answer alike. A file that *ends* in a newline is a
+// different question with one answer: the backslash is then an ordinary
+// continuation, and every column drops it and prints `[x]` and `[]`.
+//
+//	written                bash 5.3  bash as sh  bash 3.2  dash    ksh93   zsh     zsh as sh  ash
+//	printf "[%s]" x\       [x\]      [x\]        [x]       [x\]    [x]     [x]     [x]        [x\]
+//	printf "[%s]" \        [\]       [\]         []        [\]     [\]     []      []         [\]
+//	printf "[%s][%s]" a \  [a][\]    [a][\]      [a]       [a][\]  [a][\]  [a][]   [a][]      [a][\]
+//
+// bash 3.2 holds a fourth reading and it is recorded rather than given a
+// value: it drops the *word* along with the backslash, where zsh keeps an
+// empty one — `[a]` against `[a][]` on the third row. No dialect preset is
+// bash 3.2, so inventing a value for it would put a reading in the vector
+// that nothing could ask for. See docs/spec/semantics.md.
+type EndOfInputBackslash uint8
+
+const (
+	// EndOfInputBackslashIsLiteral keeps it: the word ends with a protected
+	// backslash, wherever in the word it stood. bash 5.3, bash as `sh`,
+	// dash and BusyBox ash, and the core answer because it is what four of
+	// the six columns that are a dialect do and because it is the reading
+	// that loses nothing — the text the writer typed is still in the field.
+	EndOfInputBackslashIsLiteral EndOfInputBackslash = iota
+
+	// EndOfInputBackslashIsDropped removes it and keeps the word, which is
+	// an empty field when the backslash was all of it. zsh 5.9.2, as itself
+	// and as `sh`.
+	EndOfInputBackslashIsDropped
+
+	// EndOfInputBackslashIsLiteralOnlyAtAWordStart keeps it where the
+	// backslash is the first thing in the word and drops it anywhere else.
+	// ksh93u+, and measured rather than guessed at: `printf "[%s]" "x"\`
+	// and `printf "[%s]" 'q'\` are both `[x]`/`[q]` there, so it is having
+	// read *anything* into the word that decides it and not the character
+	// in front of the backslash. `printf "[%s]" \\\` is `[\]` — the escaped
+	// pair is read first, so the trailing one is no longer at a start.
+	EndOfInputBackslashIsLiteralOnlyAtAWordStart
+)
+
 // Dialect says which constructs the lexer accepts.
 //
 // Fields are named for the construct rather than for the shell that wants it,
@@ -4021,6 +4070,21 @@ type Dialect struct {
 	// or refusing. The lexer marks the input incomplete before it asks this
 	// at all, which is what leaves that answer to the front end.
 	CloseQuotesAtEOF ProgramRoutes
+
+	// BackslashAtEndOfInput is what an unquoted backslash the input ends
+	// immediately after becomes. See [EndOfInputBackslash], where the rows
+	// are.
+	//
+	// It is a word rule rather than a route rule, which is the difference
+	// from [Dialect.CloseQuotesAtEOF] just above: a script file with no
+	// trailing newline and a `-c` string answer identically in every column,
+	// so nothing here asks how the program arrived. It is also not a
+	// *refusal* — nothing in the panel refuses, and this shell did, which
+	// ended the script at the line and discarded everything after it
+	// (#2680). The older substitution is where that was found: its body is
+	// unescaped and re-lexed, so `` `echo \\` `` hands the inner parse the
+	// text `echo \`, and the refusal came back out as the whole line's.
+	BackslashAtEndOfInput EndOfInputBackslash
 
 	// ProgramRoute is which of those ways the program *now being parsed*
 	// arrived, for the rules above that ask.

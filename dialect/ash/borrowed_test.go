@@ -69,7 +69,7 @@ func TestBorrowedTextIsNamedInFrontOfTheLocation(t *testing.T) {
 				"*digit* is deliberately not pinned here: this runner is on " +
 				"no invocation route, and ash numbers a `-c` program from 0 " +
 				"where a script starts at 1, so a number written down here " +
-				"would be one route's answer labelled as the dialect's. It " +
+				"would be one route's answer labeled as the dialect's. It " +
 				"is Semantics.EvalTextContinuesTheCallersLines' question " +
 				"and the corpus row `eval/the-borrowed-text-in-the-prefix` " +
 				"grades it against the record, from a script",

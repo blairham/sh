@@ -1505,6 +1505,18 @@ func Semantics() interp.Semantics {
 	// interp/declaremove.go holds the whole measurement and
 	// interp.DeclareMatchingLetterPolicy is the axis.
 	s.DeclareMatchingLetter = interp.DeclareMatchingLetterMoves
+	// A bare `typeset` is a listing here, and a third one: not every
+	// parameter and not the running scope's, but every name that carries an
+	// **attribute**, in this shell's own vocabulary and with no value on the
+	// line — `export ex`, `integer n`, `toupper up`, and nothing at all for
+	// a name that was only assigned. Measured 2026-09-13 on ksh93u+ with
+	// `env -i`; interp.BareLocalListsAttributedNames holds the measurement
+	// and Runner.attributePhraseHead the words (#2345).
+	//
+	// There is no `local` here to give the other half of the pair to, which
+	// is why only this field moves: `local` is not a builtin in this shell
+	// and the word is a command that was not found.
+	s.BareTypesetListing = interp.BareLocalListsAttributedNames
 	// `-M` is here too, and it is the same shape: the letter names a
 	// *character mapping* — `typeset -M tolower v`, which lists back as
 	// `typeset -l v` — where zsh's `functions -M` registers a math function.

@@ -5720,8 +5720,9 @@ type Semantics struct {
 	// shells that have both words do not answer the two the same: zsh writes
 	// the identical parameter table either way, and bash's bare `declare` is
 	// every variable the shell holds rather than the running function's
-	// locals. Only zsh's answer is a value this form already carries, so the
-	// others stay unanswered and are refused by name rather than guessed at.
+	// locals. ksh93 writes a third thing again — the names that carry an
+	// attribute, in its own vocabulary and with no value — which is
+	// BareLocalListsAttributedNames and was measured for #2345.
 	//
 	// unexhibited BareLocalListsLocals: BareLocalListing holds it, for
 	// bash's bare `local`. It is not this builtin's answer anywhere:
@@ -5732,9 +5733,9 @@ type Semantics struct {
 	// (#2060).
 	//
 	// unexhibited BareLocalListsNothing: BareLocalListing holds it, for
-	// dash's and ksh93's bare `local`. Neither shell reaches this field:
-	// dash has no `typeset` and ksh93u+ has no `local`, so both are
-	// unanswered rather than silent-by-measurement (#2060).
+	// dash's and ksh93's bare `local`. Neither of those is this field's
+	// answer — dash has no `typeset` to reach it with, and ksh93 reaches it
+	// and is not silent (#2060, #2345).
 	BareTypesetListing BareLocalListingForm
 
 	// SetListing is what `set` with no arguments writes — see

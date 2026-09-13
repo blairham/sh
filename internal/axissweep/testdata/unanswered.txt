@@ -338,7 +338,6 @@ ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution
 ksh   BareSubscriptIsASubscript
-ksh   BareTypesetListing
 ksh   CompoundPipelineStatusRecord
 ksh   CoprocEndsInAnArray
 ksh   DeclareGlobalReachesPastALocal

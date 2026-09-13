@@ -13335,9 +13335,15 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		quantified:   r.readsQuantifiedGroups(condition),
 		numericRange: r.dialect().NumericRangePattern,
 		// The run-time option folds exactly the two consumers this function
-		// serves — `case` and `[[ ]]` — and neither of the others: pathname
-		// expansion has a fold of its own, and parameter expansion stays
-		// exact. Which is why the fold sits here and not in patternOpts.
+		// serves — `case` and the *pattern* operators of `[[ ]]` — and
+		// neither of the others: pathname expansion has a fold of its own,
+		// and parameter expansion stays exact. Which is why the fold sits
+		// here and not in patternOpts.
+		//
+		// `=~` is not one of the two. It never reaches this function at all —
+		// its operand is a regular expression — and it has RegexFoldsCase,
+		// which bash's `nocasematch` turns on beside this one and zsh's turns
+		// on instead of it.
 		fold:         r.MatchOption(MatchFoldsCase),
 		chars:        r.patternCountsCharacters(pattern, s),
 		escapes:      r.sem().PatternEscapeReaches,
